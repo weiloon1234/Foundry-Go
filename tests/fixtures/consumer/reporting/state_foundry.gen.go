@@ -13,6 +13,7 @@ import (
 )
 
 // StateValues returns declared values in source order, with independent slice ownership.
+// Example: StateValues()
 func StateValues() []State { return []State{Active, Disabled} }
 
 // EnumDescriptor describes this enum type independently of the receiver's value.
@@ -43,6 +44,7 @@ func (v State) Validate() error {
 }
 
 // ParseState decodes and validates an enum's text representation.
+// Example: ParseState(text)
 func ParseState(text string) (State, error) {
 	v := State(text)
 	if err := v.Validate(); err != nil {
@@ -50,12 +52,16 @@ func ParseState(text string) (State, error) {
 	}
 	return v, nil
 }
+
+// MarshalText encodes a validated enum as text.
 func (v State) MarshalText() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return []byte(string(v)), nil
 }
+
+// UnmarshalText decodes validated enum text and changes the receiver only on success.
 func (v *State) UnmarshalText(data []byte) error {
 	parsed, err := ParseState(string(data))
 	if err != nil {
@@ -64,12 +70,16 @@ func (v *State) UnmarshalText(data []byte) error {
 	*v = parsed
 	return nil
 }
+
+// MarshalJSON encodes a validated enum as JSON.
 func (v State) MarshalJSON() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(string(v))
 }
+
+// UnmarshalJSON decodes validated JSON and rejects null.
 func (v *State) UnmarshalJSON(data []byte) error {
 	var raw *string
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -87,6 +97,7 @@ func (v *State) UnmarshalJSON(data []byte) error {
 }
 
 // StateCodec applies the generated membership rule at both SQL boundaries.
+// Example: StateCodec()
 func StateCodec() codec.Codec[State] { return codec.String[State]().Validated(State.Validate) }
 
 // Value implements database/sql/driver.Valuer through the shared typed codec.

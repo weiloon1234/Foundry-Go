@@ -29,8 +29,8 @@ func Query() rows.Query[rows.Alias[side, models.User], Result] {
 	source := rows.As[side](models.Users.Query(), "u")
 	name := expr.At(rows.Scope(source), orm.TextExpr(models.Users.Email))
 	nickname := expr.At(rows.Scope(source), orm.NullableTextExpr(models.Users.Nickname))
-	choice := expr.When(nickname.IsNull(), name).When(name.Eq(""), expr.Row(name).Value().Param("fallback")).Else(name)
-	nullable := expr.When(name.Ne(""), choice).ElseNull()
-	missing := expr.NullIfNullable(expr.CoalesceNullable(nullable, nickname), expr.NullableRow(name).Param(value.Null[string]()))
-	return rows.OrderBy(rows.Select(source, schema, rows.MapSelected(schema.Required, expr.Coalesce(expr.NullIf(choice, name), choice).Value()), rows.MapSelected(schema.Missing, missing.Value())).Where(choice.Ne("")), choice.Asc())
+	choice := expr.When(expr.IsNull(nickname), name).When(expr.Eq(name, ""), expr.ParamOf(expr.AsSelected(expr.Row(name)), "fallback")).Else(name)
+	nullable := expr.When(expr.Ne(name, ""), choice).ElseNull()
+	missing := expr.NullIfNullable(expr.CoalesceNullable(nullable, nickname), expr.ParamOf(expr.NullableRow(name), value.Null[string]()))
+	return rows.OrderBy(rows.Select(source, schema, rows.MapSelected(schema.Required, expr.AsSelected(expr.Coalesce(expr.NullIf(choice, name), choice))), rows.MapSelected(schema.Missing, expr.AsSelected(missing))).Where(expr.Ne(choice, "")), expr.Asc(choice))
 }

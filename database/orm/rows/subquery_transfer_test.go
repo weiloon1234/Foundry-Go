@@ -20,15 +20,15 @@ func TestSubqueriesShareScopesAndParameterOrder(t *testing.T) {
 	d := declareMembers()
 	id := expr.Value(orm.KeyExpr(d.ID))
 	base := rows.From(d.Query())
-	inner := rows.LimitScalar(rows.OrderScalar(rows.WhereScalar(rows.SelectScalar(base, expr.Row(id).Value()), expr.OrderRow(id).Gt(2)), id.Asc()), 3)
-	scalar := rows.ScalarRowQuery(base, inner).Value()
-	q := rows.LimitScalar(rows.OrderScalar(rows.WhereScalar(rows.SelectScalar(rows.From(d.Query().Where(orm.KeyNe(d.ID, 9))), scalar), rows.InQuery(id, inner)), scalar.Asc()), 4)
+	inner := rows.LimitScalar(rows.OrderScalar(rows.WhereScalar(rows.SelectScalar(base, expr.AsSelected(expr.Row(id))), expr.Gt(expr.OrderRow(id), 2)), expr.Asc(id)), 3)
+	scalar := expr.AsSelected(rows.ScalarRowQuery(base, inner))
+	q := rows.LimitScalar(rows.OrderScalar(rows.WhereScalar(rows.SelectScalar(rows.From(d.Query().Where(orm.KeyNe(d.ID, 9))), scalar), rows.InQuery(id, inner)), expr.AscValue(scalar)), 4)
 	s, e := rows.CompileRead(rows.ReadScalar(q))
 	if e != nil || strings.Count(s.SQL(), `SELECT "members"."id" AS "value" FROM "members" WHERE ("members"."id" > `) != 3 || !strings.Contains(s.SQL(), `("members"."id" IN (SELECT`) || !reflect.DeepEqual(s.Arguments(), []any{int64(2), int64(3), int64(9), int64(2), int64(3), int64(2), int64(3), int64(4)}) {
 		t.Fatal(s.SQL(), s.Arguments(), e)
 	}
 	before, _ := rows.CompileRead(rows.ReadScalar(inner))
-	_, _ = rows.CompileRead(rows.ReadScalar(rows.LimitScalar(rows.WhereScalar(inner, expr.OrderRow(id).Lt(7)), 1)))
+	_, _ = rows.CompileRead(rows.ReadScalar(rows.LimitScalar(rows.WhereScalar(inner, expr.Lt(expr.OrderRow(id), 7)), 1)))
 	after, _ := rows.CompileRead(rows.ReadScalar(inner))
 	if before.SQL() != after.SQL() || !reflect.DeepEqual(before.Arguments(), after.Arguments()) {
 		t.Fatal("inner query mutated")
@@ -43,14 +43,14 @@ func TestSubqueryInvalidSourcesAndScalarCycle(t *testing.T) {
 	d := declareMembers()
 	base := rows.From(d.Query())
 	id := expr.Value(orm.KeyExpr(d.ID))
-	valid := rows.SelectScalar(base, expr.Row(id).Value())
+	valid := rows.SelectScalar(base, expr.AsSelected(expr.Row(id)))
 	var missing *rows.Input[member]
 	for _, p := range []expr.Predicate[member]{rows.ExistsQuery(base, missing), rows.ExistsQuery(base, rows.Input[member]{}), rows.InQuery(id, rows.Scalar[member, int64]{})} {
 		if _, e := rows.CompileRead(rows.ReadScalar(rows.WhereScalar(valid, p))); !errors.Is(e, fault.Invalid) {
 			t.Fatal("invalid subquery source", e)
 		}
 	}
-	for _, v := range []expr.Selected[member, value.Nullable[int64]]{rows.ScalarRowQuery(base, rows.Scalar[member, int64]{}).Value(), rows.ScalarRowQuery(missing, valid).Value(), rows.ScalarRowQuery(base, rows.LimitScalar(valid, -1)).Value()} {
+	for _, v := range []expr.Selected[member, value.Nullable[int64]]{expr.AsSelected(rows.ScalarRowQuery(base, rows.Scalar[member, int64]{})), expr.AsSelected(rows.ScalarRowQuery(missing, valid)), expr.AsSelected(rows.ScalarRowQuery(base, rows.LimitScalar(valid, -1)))} {
 		if s, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(base, v))); !errors.Is(e, fault.Invalid) || s.SQL() != "" {
 			t.Fatal("invalid scalar", e)
 		}
@@ -73,21 +73,21 @@ func TestSubqueryScopesAndExistsPreserveSelectLevels(t *testing.T) {
 	base := rows.From(d.Query())
 	id := expr.Value(orm.KeyExpr(d.ID))
 	outer := rows.As[left](d.Query(), "outer_record")
-	inner := rows.SelectScalar(base, expr.Row(id).Value())
+	inner := rows.SelectScalar(base, expr.AsSelected(expr.Row(id)))
 	rows.ScalarSource(&inner).Node.Predicates = []querycore.Expression{querycore.BinaryComparison{Left: querycore.FieldRef{Table: "members", Column: "id"}, Right: querycore.FieldRef{Table: "outer_record", Column: "id"}, Operator: querycore.Equal}}
-	if _, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(outer, rows.ScalarRowQuery(outer, inner).Value()))); !errors.Is(e, fault.Invalid) {
+	if _, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(outer, expr.AsSelected(rows.ScalarRowQuery(outer, inner))))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("accidental correlation", e)
 	}
 	same := rows.As[left](d.Query(), "members")
 	sid := expr.At(rows.Scope(same), orm.KeyExpr(d.ID))
-	scalar := rows.ScalarRowQuery(same, rows.LimitScalar(rows.SelectScalar(base, expr.Row(id).Value()), 1)).Value()
-	s, e := rows.CompileRead(rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(same, scalar), sid.Eq(4))))
+	scalar := expr.AsSelected(rows.ScalarRowQuery(same, rows.LimitScalar(rows.SelectScalar(base, expr.AsSelected(expr.Row(id))), 1)))
+	s, e := rows.CompileRead(rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(same, scalar), expr.Eq(sid, 4))))
 	if e != nil || !strings.Contains(s.SQL(), `WHERE ("members"."id" = $2)`) {
 		t.Fatal("inner scope leaked", s.SQL(), e)
 	}
 	count := expr.Count[member]()
-	grouped := rows.LimitScalar(rows.HavingScalar(rows.SelectScalar(base, count.Value()), count.Eq(0)), 0)
-	s, e = rows.CompileRead(rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(base, expr.Row(id).Value()), expr.Not(rows.ExistsQuery(base, grouped)))))
+	grouped := rows.LimitScalar(rows.HavingScalar(rows.SelectScalar(base, expr.AsSelected(count)), expr.EqValue(count, 0)), 0)
+	s, e = rows.CompileRead(rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(base, expr.AsSelected(expr.Row(id))), expr.Not(rows.ExistsQuery(base, grouped)))))
 	if e != nil || !strings.Contains(s.SQL(), `NOT EXISTS(SELECT COUNT(*) AS "value" FROM "members" HAVING (COUNT(*) = $1) LIMIT $2)`) {
 		t.Fatal("EXISTS lost grouped/window semantics", s.SQL(), e)
 	}

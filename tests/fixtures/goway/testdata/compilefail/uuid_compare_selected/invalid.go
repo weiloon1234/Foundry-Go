@@ -8,4 +8,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-var _ = expr.UUIDGreater(expr.Row(expr.Value(orm.KeyExpr(models.Orders.ID))).Value(), model.ID[models.Order]{})
+var _ = expr.UUIDGreater(expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(models.Orders.ID)))), model.ID[models.Order]{})

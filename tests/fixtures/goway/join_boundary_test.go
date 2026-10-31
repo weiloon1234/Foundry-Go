@@ -50,7 +50,7 @@ func requireRejectedJoin[S any](t *testing.T, source rowset.Source[S]) {
 	capture := &goldenCapture{}
 	db := capture.open(t.Context())
 	defer db.Close(t.Context())
-	q := rowset.Select(source, boundaryRows, rowset.MapSelected(boundaryRows.Count, expr.Count[S]().Value()))
+	q := rowset.Select(source, boundaryRows, rowset.MapSelected(boundaryRows.Count, expr.AsSelected(expr.Count[S]())))
 	got, err := rowset.Read(q).All(t.Context(), db)
 	if !errors.Is(err, fault.Invalid) || got != nil || capture.statements != 0 {
 		t.Fatalf("unwrapped source reached execution: err=%v rows=%v statements=%d", err, got, capture.statements)
@@ -60,7 +60,7 @@ func requireRejectedJoin[S any](t *testing.T, source rowset.Source[S]) {
 func TestJoinRejectsBorrowedMarkersAndPromotedAdapters(t *testing.T) {
 	q := models.Users.Query().Where(orm.NumberGt(models.Users.Age, 18)).Limit(1).Offset(1)
 	input := rowset.From(q)
-	scalar := rowset.SelectScalar(input, expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))).Value())
+	scalar := rowset.SelectScalar(input, expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age)))))
 	right := rowset.As[joinB](models.Users.Query(), "boundary_right")
 	on := rowset.OnEqual(expr.Value(orm.NumberExpr(models.Users.Age)), expr.At(rowset.Scope(right), orm.NumberExpr(models.Users.Age)))
 	for _, item := range []struct {
@@ -86,7 +86,7 @@ func TestJoinRejectsBorrowedRightTableMarker(t *testing.T) {
 	left := rowset.As[joinA](models.Users.Query(), "boundary_left")
 	right := rowset.As[joinB](models.Users.Query(), "boundary_right")
 	type rightScope = rowset.Alias[joinB, models.User]
-	projected := rowset.Select(right, boundaryRows, rowset.MapSelected(boundaryRows.Count, expr.Count[rightScope]().Value()))
+	projected := rowset.Select(right, boundaryRows, rowset.MapSelected(boundaryRows.Count, expr.AsSelected(expr.Count[rightScope]())))
 	input := rowset.FromRows(projected)
 	on := rowset.OnEqual(expr.At(rowset.Scope(left), orm.NumberExpr(models.Users.Age)), expr.At(rowset.Scope(right), orm.NumberExpr(models.Users.Age)))
 	for _, item := range []struct {
@@ -112,7 +112,7 @@ func TestJoinAllowsPromotedAliasBoundary(t *testing.T) {
 	capture := &goldenCapture{scriptedColumns: []string{"count"}, scriptedBatches: [][][]driver.Value{{{int64(2)}}}}
 	db := capture.open(t.Context())
 	defer db.Close(t.Context())
-	got, err := rowset.Read(rowset.Select(joined, boundaryRows, rowset.MapSelected(boundaryRows.Count, expr.Count[joinedScope]().Value()))).All(t.Context(), db)
+	got, err := rowset.Read(rowset.Select(joined, boundaryRows, rowset.MapSelected(boundaryRows.Count, expr.AsSelected(expr.Count[joinedScope]())))).All(t.Context(), db)
 	if err != nil || len(got) != 1 || got[0].Count != 2 || capture.statements != 1 {
 		t.Fatalf("valid promoted alias rejected: err=%v rows=%v statements=%d", err, got, capture.statements)
 	}

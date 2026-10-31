@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.RelationOrder(models.UserRelations.Orders, expr.Count[models.Order]().Desc())
+var _ = expr.RelationOrder(models.UserRelations.Orders, expr.DescValue(expr.Count[models.Order]()))

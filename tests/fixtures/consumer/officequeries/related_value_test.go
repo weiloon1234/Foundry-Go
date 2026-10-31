@@ -21,20 +21,20 @@ func TestOfficeRelatedValueSQLParity(t *testing.T) {
 	}
 	count := expr.RelatedValue(RegionLinks.Employees, expr.Count[Employee]())
 
-	got, err := rows.CompileRead(rows.WithValue(expr.OrderBy(Regions.Query(), count.Desc()), count))
+	got, err := rows.CompileRead(rows.WithValue(expr.OrderBy(Regions.Query(), expr.Desc(count)), count))
 	check(got, err)
 	headcount := expr.RelatedValue(OfficeLinks.Colleagues, expr.Count[Employee]())
 	payroll := expr.RelatedValue(OfficeLinks.Colleagues, expr.Sum(orm.NumberExpr(Employees.Salary)))
 
-	got, err = rows.CompileRead(rows.WithValue(expr.OrderBy(Offices.Query().Where(orm.TextNe(Offices.Name, "closed")).With(OfficeLinks.Colleagues).Limit(3).Offset(1), headcount.Desc(), expr.Value(orm.TextExpr(Offices.Name)).Asc()), payroll))
+	got, err = rows.CompileRead(rows.WithValue(expr.OrderBy(Offices.Query().Where(orm.TextNe(Offices.Name, "closed")).With(OfficeLinks.Colleagues).Limit(3).Offset(1), expr.Desc(headcount), expr.Asc(expr.Value(orm.TextExpr(Offices.Name)))), payroll))
 	check(got, err)
-	got, err = orm.Compile(expr.Where(Offices.Query(), expr.OrderRow(headcount).Gte(2)))
+	got, err = orm.Compile(expr.Where(Offices.Query(), expr.Gte(expr.OrderRow(headcount), 2)))
 	check(got, err)
 	labels := expr.RelatedValue(OfficeLinks.Labels.Where(orm.TextNe(Labels.Name, "hidden")), expr.Count[Label]())
 
 	got, err = rows.CompileRead(rows.WithValue(Offices.Query(), labels))
 	check(got, err)
-	filtered := expr.RelatedValue(OfficeLinks.Colleagues.Where(orm.TextNe(Employees.Name, "hidden")), expr.Count[Employee]().Filter(expr.OrderRow(expr.Value(orm.NumberExpr(Employees.Salary))).Gt(10)))
+	filtered := expr.RelatedValue(OfficeLinks.Colleagues.Where(orm.TextNe(Employees.Name, "hidden")), expr.Filter(expr.Count[Employee](), expr.Gt(expr.OrderRow(expr.Value(orm.NumberExpr(Employees.Salary))), 10)))
 
 	got, err = rows.CompileRead(rows.WithValue(Offices.Query(), filtered))
 	check(got, err)

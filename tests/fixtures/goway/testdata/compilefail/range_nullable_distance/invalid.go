@@ -9,4 +9,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-var _ = expr.NullableNumericRange(expr.WindowFor(rows.ModelScope(models.Users.Query())), expr.Nullable(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))).Value())).Preceding(value.Of(1))
+var _ = expr.NullableNumericRange(expr.WindowFor(rows.ModelScope(models.Users.Query())), expr.Nullable(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age)))))).Preceding(value.Of(1))

@@ -9,4 +9,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-var _ = expr.Sum(orm.NumberExpr(models.Orders.TotalCents)).Filter(expr.Value(orm.NumberExpr(models.Orders.TotalCents)).Eq(0)).Gt(value.Of(decimal.FromInt64(1)))
+var _ = expr.GtValue(expr.Filter(expr.Sum(orm.NumberExpr(models.Orders.TotalCents)), expr.Eq(expr.Value(orm.NumberExpr(models.Orders.TotalCents)), 0)), value.Of(decimal.FromInt64(1)))

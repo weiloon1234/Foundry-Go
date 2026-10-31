@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var invalid = expr.Sum(orm.NumberExpr(models.Orders.TotalCents)).Filter(expr.ModelPredicate(orm.NumberGt(models.Users.Age, 18)))
+var invalid = expr.Filter[models.User](expr.Sum(orm.NumberExpr(models.Orders.TotalCents)), expr.ModelPredicate(orm.NumberGt(models.Users.Age, 18)))

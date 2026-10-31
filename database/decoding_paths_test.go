@@ -32,7 +32,7 @@ func TestJSONScalarDecodingRedactsInORM(t *testing.T) {
 		}
 		db := open(t, state, nil)
 		selected := expr.JSONScalar(expr.JSONRoot(expr.Value(orm.JSONExpr(fields.Payload))), c)
-		result, err := rows.ReadScalar(rows.SelectScalar(rows.From(fields.Query()), selected.Value())).All(t.Context(), db)
+		result, err := rows.ReadScalar(rows.SelectScalar(rows.From(fields.Query()), expr.AsSelected(selected))).All(t.Context(), db)
 		if len(result) != 0 {
 			t.Fatal("partial scalar results published")
 		}

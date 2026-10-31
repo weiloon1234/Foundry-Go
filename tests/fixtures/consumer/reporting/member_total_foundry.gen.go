@@ -15,6 +15,7 @@ import (
 // MemberTotalJSON describes the concrete MemberTotal JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: MemberTotalJSON()
 func MemberTotalJSON() foundrycontract.JSON[MemberTotal] { return foundryMemberTotalJSON() }
 
 var foundryMemberTotalJSON = sync.OnceValue(func() foundrycontract.JSON[MemberTotal] {
@@ -43,6 +44,7 @@ var foundryMemberTotalJSON = sync.OnceValue(func() foundrycontract.JSON[MemberTo
 })
 
 // MemberTotalValidationFieldSet retains concrete DTO and value types for validation.
+// Example: MemberTotalValidationFields()
 type MemberTotalValidationFieldSet struct {
 	// Count validates the declared JSON property "count".
 	Count foundryvalidation.Field[MemberTotal, int64]
@@ -53,6 +55,7 @@ type MemberTotalValidationFieldSet struct {
 }
 
 // MemberTotalValidationFields returns typed field descriptors.
+// Example: MemberTotalValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func MemberTotalValidationFields() MemberTotalValidationFieldSet {
 	return *foundryMemberTotalValidationFields()

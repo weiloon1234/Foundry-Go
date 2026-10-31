@@ -59,7 +59,7 @@ func TestPostgresRetrievalCompositionAndProjectionBoundaries(t *testing.T) {
 				return err
 			}},
 			{"declared-dto", 0, func(ctx context.Context) error {
-				labels, err := rows.Read(rows.OrderBy(projection, expr.Value(orm.InputTextExpr(f.Name)).Asc())).All(ctx, tx)
+				labels, err := rows.Read(rows.OrderBy(projection, expr.Asc(expr.Value(orm.InputTextExpr(f.Name))))).All(ctx, tx)
 				if err == nil && (len(labels) != 2 || labels[0].Name != "child" || labels[1].Name != "root") {
 					return errors.New("DTO selection silently evaluated getters or changed stored fields")
 				}

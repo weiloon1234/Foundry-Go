@@ -15,5 +15,5 @@ type Other struct{}
 
 func invalid() {
 	var q orm.Query[Other]
-	_ = expr.Where(q, expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(root(), jsonpaths.Theme)), codec.String[string]()).Eq("dark"))
+	_ = expr.Where(q, expr.NullableEq(expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(root(), jsonpaths.Theme)), codec.String[string]()), "dark"))
 }

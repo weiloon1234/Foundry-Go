@@ -18,4 +18,4 @@ var selected = rows.SelectTransactionRecord(source, rows.TransactionScope(source
 var _ context.Context
 var _ *database.Tx
 
-var _ = rows.SelectScalar(source, expr.Row(expr.At(rows.TransactionScope(source), orm.KeyExpr(f.Records.ID))).Value())
+var _ = rows.SelectScalar(source, expr.AsSelected(expr.Row(expr.At(rows.TransactionScope(source), orm.KeyExpr(f.Records.ID)))))

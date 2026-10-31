@@ -9,4 +9,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-var invalid = datatable.DefineColumn[reporting.Order](validation.DefineField("state", func(r reporting.Member) reporting.State { return r.State }), "reports.state").SortBy(expr.CompareRow(expr.Value(orm.EnumExpr(reporting.Members.State))).Value())
+var invalid = datatable.DefineColumn[reporting.Order, reporting.Member, reporting.State](validation.DefineField("state", func(r reporting.Member) reporting.State { return r.State }), "reports.state", datatable.SortBy(expr.AsSelected(expr.CompareRow(expr.Value(orm.EnumExpr(reporting.Members.State))))))

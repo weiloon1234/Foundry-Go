@@ -34,7 +34,7 @@ func inferredPivotOrder[M, N, P, O, K any](f func(orm.ThroughRelation[M, N, P], 
 func TestComputedRelationOrdersFailClosed(t *testing.T) {
 	r := models.UserRelations.Orders
 	forged := forgedOrderRelation{Relation: r}
-	bad := expr.RelationOrder[models.User, models.User](forged, expr.Negate(expr.Value(orm.NumberExpr(models.Users.Age))).Asc())
+	bad := expr.RelationOrder[models.User, models.User](forged, expr.Asc(expr.Negate(expr.Value(orm.NumberExpr(models.Users.Age)))))
 	if _, err := orm.Compile(models.Users.Query().OrderBy(bad)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("forged relation target accepted", err)
 	}
@@ -54,10 +54,10 @@ func TestComputedRelationOrdersFailClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, order := range []orm.Order[j.Target]{
-		expr.RelationOrder(j.Peers, expr.Negate(expr.Value(orm.NumberExpr(foreign.Rank))).Asc()),
-		expr.RelationOrder(j.Peers, expr.Param(orm.NumberExpr(foreign.Rank), 2).Asc()),
+		expr.RelationOrder(j.Peers, expr.Asc(expr.Negate(expr.Value(orm.NumberExpr(foreign.Rank))))),
+		expr.RelationOrder(j.Peers, expr.Asc(expr.Param(orm.NumberExpr(foreign.Rank), 2))),
 		expr.RelationOrder(j.Peers, expr.Order[j.Target]{}),
-		expr.RelationOrder(orm.ThroughRelation[j.Parent, j.Target, j.Pivot]{}, expr.Value(orm.NumberExpr(j.Targets.Rank)).Asc()),
+		expr.RelationOrder(orm.ThroughRelation[j.Parent, j.Target, j.Pivot]{}, expr.Asc(expr.Value(orm.NumberExpr(j.Targets.Rank)))),
 	} {
 		if _, err := orm.Compile(j.Parents.Query().With(j.Peers.OrderBy(order))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid relation order accepted", err)
@@ -71,7 +71,7 @@ func TestComputedRelationOrdersFailClosed(t *testing.T) {
 	if err := orm.Check(foreignPivot); err != nil {
 		t.Fatal(err)
 	}
-	for _, order := range []orm.Order[j.Pivot]{expr.RelationPivotOrder(j.Peers, expr.Lower(expr.Value(orm.TextExpr(foreignPivot.Role))).Asc()), expr.RelationPivotOrder(j.Peers, expr.Order[j.Pivot]{}), expr.RelationPivotOrder(orm.ThroughRelation[j.Parent, j.Target, j.Pivot]{}, expr.Value(orm.TextExpr(j.Pivots.Role)).Asc())} {
+	for _, order := range []orm.Order[j.Pivot]{expr.RelationPivotOrder(j.Peers, expr.Asc(expr.Lower(expr.Value(orm.TextExpr(foreignPivot.Role))))), expr.RelationPivotOrder(j.Peers, expr.Order[j.Pivot]{}), expr.RelationPivotOrder(orm.ThroughRelation[j.Parent, j.Target, j.Pivot]{}, expr.Asc(expr.Value(orm.TextExpr(j.Pivots.Role))))} {
 		if _, err := orm.Compile(j.Parents.Query().With(j.Peers.OrderByPivot(order))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid pivot order accepted", err)
 		}

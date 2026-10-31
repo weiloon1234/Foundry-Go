@@ -40,6 +40,8 @@ const (
 
 // DateUnit identifies a calendar boundary. Clock units cannot be supplied to
 // TruncateDate without an explicit invalid conversion.
+//
+// Example: expr.DateMonth
 type DateUnit uint8
 
 const (
@@ -54,6 +56,8 @@ const (
 )
 
 // TimestampUnit identifies a timestamp boundary, including fractional seconds.
+//
+// Example: expr.TimestampDay
 type TimestampUnit uint8
 
 const (
@@ -73,19 +77,29 @@ const (
 )
 
 // TimeZone names an explicitly selected IANA timezone; its zero value is invalid.
+//
+// Example: expr.UTCZone()
 type TimeZone struct{ name string }
 
-// LoadTimeZone validates an explicit IANA timezone. Example: LoadTimeZone("Asia/Kuala_Lumpur").
+// LoadTimeZone validates an explicit IANA timezone.
+//
+// Example: expr.LoadTimeZone(name)
 func LoadTimeZone(name string) (TimeZone, error) {
 	zone, err := querycore.LoadTimeZone(name)
 	return TimeZone{name: zone}, err
 }
 
-// UTCZone selects UTC without a session default. Example: UTCZone().
-func UTCZone() TimeZone           { return TimeZone{name: "UTC"} }
+// UTCZone selects UTC without a session default.
+//
+// Example: expr.UTCZone()
+func UTCZone() TimeZone { return TimeZone{name: "UTC"} }
+
+// String returns the explicitly selected IANA timezone name.
 func (z TimeZone) String() string { return z.name }
 
 // LocalResolution explicitly selects PostgreSQL's DST gap/overlap policy.
+//
+// Example: expr.PostgresStandardTime
 type LocalResolution uint8
 
 const PostgresStandardTime LocalResolution = LocalResolution(querycore.PostgresStandardTime)

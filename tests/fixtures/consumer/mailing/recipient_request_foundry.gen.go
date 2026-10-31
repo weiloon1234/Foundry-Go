@@ -13,6 +13,7 @@ import (
 // RecipientRequestJSON describes the concrete RecipientRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: RecipientRequestJSON()
 func RecipientRequestJSON() foundrycontract.JSON[RecipientRequest] {
 	return foundryRecipientRequestJSON()
 }
@@ -29,12 +30,14 @@ var foundryRecipientRequestJSON = sync.OnceValue(func() foundrycontract.JSON[Rec
 })
 
 // RecipientRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: RecipientRequestValidationFields()
 type RecipientRequestValidationFieldSet struct {
 	// Recipient validates the declared JSON property "recipient".
 	Recipient foundryvalidation.Field[RecipientRequest, email.Address]
 }
 
 // RecipientRequestValidationFields returns typed field descriptors.
+// Example: RecipientRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func RecipientRequestValidationFields() RecipientRequestValidationFieldSet {
 	return *foundryRecipientRequestValidationFields()

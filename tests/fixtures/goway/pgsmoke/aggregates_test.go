@@ -91,29 +91,29 @@ func TestStage6a3AggregatesGroupsAndDistinct(t *testing.T) {
 		bucket := expr.At(scope, orm.NumberExpr(table.Bucket))
 		required := expr.OrderRow(expr.At(scope, orm.NumberExpr(table.Required)))
 		count := expr.Count[rows.Alias[aggregateSide, aggregateSample]]()
-		bucketValue := expr.Row(bucket).Value()
+		bucketValue := expr.AsSelected(expr.Row(bucket))
 		if !grouped {
-			bucketValue = expr.OrderRow(bucket).Param(0).Value()
+			bucketValue = expr.AsSelected(expr.ParamOf(expr.OrderRow(bucket), 0))
 		}
 		q := rows.Select(source, schema,
 			rows.MapSelected(schema.Bucket, bucketValue),
-			rows.MapSelected(schema.Count, count.Value()),
-			rows.MapSelected(schema.Present, expr.CountFieldAt(scope, orm.NullableNumberExpr(table.Exact)).Value()),
-			rows.MapSelected(schema.Distinct, expr.CountDistinctFieldAt(scope, orm.NullableNumberExpr(table.Exact)).Value()),
-			rows.MapSelected(schema.Total, expr.SumAt(scope, orm.NullableNumberExpr(table.Exact)).Value()),
-			rows.MapSelected(schema.Average, expr.AvgAt(scope, orm.NullableNumberExpr(table.Exact)).Value()),
-			rows.MapSelected(schema.FloatTotal, expr.SumFloatAt(scope, orm.NullableNumberExpr(table.Approx)).Value()),
-			rows.MapSelected(schema.FloatAverage, expr.AvgFloatAt(scope, orm.NullableNumberExpr(table.Approx)).Value()),
-			rows.MapSelected(schema.PeriodTotal, expr.SumIntervalAt(scope, orm.NullableIntervalExpr(table.Period)).Value()),
-			rows.MapSelected(schema.PeriodAverage, expr.AvgIntervalAt(scope, orm.NullableIntervalExpr(table.Period)).Value()),
-			rows.MapSelected(schema.Min, expr.MinAt(scope, orm.NullableTextExpr(table.Label)).Value()),
-			rows.MapSelected(schema.Max, expr.MaxAt(scope, orm.NullableTextExpr(table.Label)).Value()),
-			rows.MapSelected(schema.Filtered, count.Filter(required.Gt(1)).Value()),
-			rows.MapSelected(schema.FilteredTotal, expr.SumAt(scope, orm.NullableNumberExpr(table.Exact)).Filter(required.Gt(1)).Value()),
+			rows.MapSelected(schema.Count, expr.AsSelected(count)),
+			rows.MapSelected(schema.Present, expr.AsSelected(expr.CountFieldAt(scope, orm.NullableNumberExpr(table.Exact)))),
+			rows.MapSelected(schema.Distinct, expr.AsSelected(expr.CountDistinctFieldAt(scope, orm.NullableNumberExpr(table.Exact)))),
+			rows.MapSelected(schema.Total, expr.AsSelected(expr.SumAt(scope, orm.NullableNumberExpr(table.Exact)))),
+			rows.MapSelected(schema.Average, expr.AsSelected(expr.AvgAt(scope, orm.NullableNumberExpr(table.Exact)))),
+			rows.MapSelected(schema.FloatTotal, expr.AsSelected(expr.SumFloatAt(scope, orm.NullableNumberExpr(table.Approx)))),
+			rows.MapSelected(schema.FloatAverage, expr.AsSelected(expr.AvgFloatAt(scope, orm.NullableNumberExpr(table.Approx)))),
+			rows.MapSelected(schema.PeriodTotal, expr.AsSelected(expr.SumIntervalAt(scope, orm.NullableIntervalExpr(table.Period)))),
+			rows.MapSelected(schema.PeriodAverage, expr.AsSelected(expr.AvgIntervalAt(scope, orm.NullableIntervalExpr(table.Period)))),
+			rows.MapSelected(schema.Min, expr.AsSelected(expr.MinAt(scope, orm.NullableTextExpr(table.Label)))),
+			rows.MapSelected(schema.Max, expr.AsSelected(expr.MaxAt(scope, orm.NullableTextExpr(table.Label)))),
+			rows.MapSelected(schema.Filtered, expr.AsSelected(expr.Filter(count, expr.Gt(required, 1)))),
+			rows.MapSelected(schema.FilteredTotal, expr.AsSelected(expr.Filter(expr.SumAt(scope, orm.NullableNumberExpr(table.Exact)), expr.Gt(required, 1)))),
 		)
 		if grouped {
 			q = rows.GroupBy(q, expr.Group(bucket))
-			q = rows.OrderBy(q, bucket.Asc())
+			q = rows.OrderBy(q, expr.Asc(bucket))
 		}
 		return q
 	}
@@ -162,13 +162,13 @@ func TestStage6a3AggregatesGroupsAndDistinct(t *testing.T) {
 		t.Fatal("empty aggregate", empty)
 	}
 	count := expr.Count[rows.Alias[aggregateSide, aggregateSample]]()
-	filtered, err := rows.Read(rows.Having(build(table.Query(), true), count.Gt(1))).All(ctx, db)
+	filtered, err := rows.Read(rows.Having(build(table.Query(), true), expr.GtValue(count, 1))).All(ctx, db)
 	must(t, err)
 	if len(filtered) != 1 || filtered[0].Bucket != 1 {
 		t.Fatal("HAVING", filtered)
 	}
 	modelBucket, id := expr.Value(orm.NumberExpr(table.Bucket)), expr.Value(orm.KeyExpr(table.Key()))
-	distinct := rows.OrderBy(rows.DistinctOn(rows.FromModel(table.Query()), expr.Group(modelBucket)), modelBucket.Asc(), id.Desc())
+	distinct := rows.OrderBy(rows.DistinctOn(rows.FromModel(table.Query()), expr.Group(modelBucket)), expr.Asc(modelBucket), expr.Desc(id))
 	chosen, err := rows.Read(distinct).All(ctx, db)
 	must(t, err)
 	if len(chosen) != 2 || chosen[0].ID != 2 || chosen[1].ID != 3 {
@@ -180,7 +180,7 @@ func TestStage6a3AggregatesGroupsAndDistinct(t *testing.T) {
 		t.Fatal("DISTINCT values", values)
 	}
 	// Selected aggregate keys/order remain read-only and obey grouping rules.
-	single, err := rows.Read(rows.DistinctOnValues(build(table.Query().Where(orm.NumberEq(table.Bucket, 1)), false), count.Value().Key())).All(ctx, db)
+	single, err := rows.Read(rows.DistinctOnValues(build(table.Query().Where(orm.NumberEq(table.Bucket, 1)), false), expr.Key(expr.AsSelected(count)))).All(ctx, db)
 	must(t, err)
 	if len(single) != 1 || single[0].Count != 2 {
 		t.Fatal(single)

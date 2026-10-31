@@ -11,6 +11,7 @@ import (
 // FileViewJSON describes the concrete FileView JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: FileViewJSON()
 func FileViewJSON() foundrycontract.JSON[FileView] { return foundryFileViewJSON() }
 
 var foundryFileViewJSON = sync.OnceValue(func() foundrycontract.JSON[FileView] {

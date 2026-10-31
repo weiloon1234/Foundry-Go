@@ -13,6 +13,7 @@ import (
 // RuleArgsJSON describes the concrete RuleArgs JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: RuleArgsJSON()
 func RuleArgsJSON() foundrycontract.JSON[RuleArgs] { return foundryRuleArgsJSON() }
 
 var foundryRuleArgsJSON = sync.OnceValue(func() foundrycontract.JSON[RuleArgs] {
@@ -28,6 +29,7 @@ var foundryRuleArgsJSON = sync.OnceValue(func() foundrycontract.JSON[RuleArgs] {
 })
 
 // RuleArgsValidationFieldSet retains concrete DTO and value types for validation.
+// Example: RuleArgsValidationFields()
 type RuleArgsValidationFieldSet struct {
 	// Attribute validates the declared JSON property "attribute".
 	Attribute foundryvalidation.Field[RuleArgs, string]
@@ -36,6 +38,7 @@ type RuleArgsValidationFieldSet struct {
 }
 
 // RuleArgsValidationFields returns typed field descriptors.
+// Example: RuleArgsValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func RuleArgsValidationFields() RuleArgsValidationFieldSet { return *foundryRuleArgsValidationFields() }
 

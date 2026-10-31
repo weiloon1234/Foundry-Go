@@ -110,6 +110,26 @@ func TestExportedTypesPreventPhaseConversions(t *testing.T) {
 			t.Errorf("stale conversion exception: %s", pair)
 		}
 	}
+	// The family sweep above also needs same-family, different-scope witnesses.
+	for _, pkg := range pkgs {
+		if pkg.Name() != "expr" {
+			continue
+		}
+		for _, name := range []string{"CompareFilterAdapter", "NullableCompareFilterAdapter", "OrderFilterAdapter", "NullableOrderFilterAdapter", "TextFilterAdapter", "NullableTextFilterAdapter"} {
+			typ := pkg.Scope().Lookup(name).Type()
+			first, err := types.Instantiate(nil, typ, []types.Type{types.Typ[types.Int], types.Typ[types.String]}, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			second, err := types.Instantiate(nil, typ, []types.Type{types.Typ[types.Bool], types.Typ[types.String]}, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if types.ConvertibleTo(first, second) || types.ConvertibleTo(second, first) {
+				t.Errorf("%s permits a filter scope conversion", name)
+			}
+		}
+	}
 }
 
 // D2 adapters intentionally retain exactly their own handle's layout. A value

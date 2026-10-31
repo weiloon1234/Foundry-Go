@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    "environment_foundry.gen.go": "7dfbd70f41268e99a814c939a2ff39137a1db17eb70bec581a2f6c7f04749736",
+    "environment_foundry.gen.go": "f48bfcdcdabb5d16b378fcd597e2e39307ab7702bb6bf156d3c50ff3d237531a",
     "settings_foundry.gen.go": "70aad5fde966b8769a28e267d981dcb1506b8524187a90e31a07472b0d41f8ee"
   }
 }

@@ -13,6 +13,7 @@ import (
 // PaymentRequestJSON describes the concrete PaymentRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: PaymentRequestJSON()
 func PaymentRequestJSON() foundrycontract.JSON[PaymentRequest] { return foundryPaymentRequestJSON() }
 
 var foundryPaymentRequestJSON = sync.OnceValue(func() foundrycontract.JSON[PaymentRequest] {
@@ -70,6 +71,7 @@ var foundryPaymentRequestJSON = sync.OnceValue(func() foundrycontract.JSON[Payme
 })
 
 // PaymentRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: PaymentRequestValidationFields()
 type PaymentRequestValidationFieldSet struct {
 	// Maybe validates the declared JSON property "maybe".
 	Maybe foundryvalidation.Field[PaymentRequest, foundryvalue.Optional[foundryvalue.Nullable[PaymentMethod]]]
@@ -80,6 +82,7 @@ type PaymentRequestValidationFieldSet struct {
 }
 
 // PaymentRequestValidationFields returns typed field descriptors.
+// Example: PaymentRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func PaymentRequestValidationFields() PaymentRequestValidationFieldSet {
 	return *foundryPaymentRequestValidationFields()

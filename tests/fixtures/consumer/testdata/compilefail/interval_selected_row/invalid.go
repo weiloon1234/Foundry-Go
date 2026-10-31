@@ -8,5 +8,5 @@ import (
 )
 
 func invalid() {
-	_ = expr.NegateInterval(expr.SumInterval(orm.IntervalExpr(intervalqueries.Samples.Period)).Value())
+	_ = expr.NegateInterval(expr.AsSelected(expr.SumInterval(orm.IntervalExpr(intervalqueries.Samples.Period))))
 }

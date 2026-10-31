@@ -29,4 +29,4 @@ var txSource = rows.AsTransaction[tag](rows.LockedRecord(orm.Lock(models.Users.Q
 var txScope = rows.TransactionScope(txSource)
 var selected = rows.SelectTransactionRecord(txSource, txScope)
 
-var invalid = rows.SelectRecord(alias, rows.Scope(alias)).Where(expr.Value(orm.TextExpr(models.Users.Email)).Eq("x"))
+var invalid = rows.SelectRecord(alias, rows.Scope(alias)).Where(expr.Eq(expr.Value(orm.TextExpr(models.Users.Email)), "x"))

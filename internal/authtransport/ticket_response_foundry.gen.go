@@ -12,6 +12,7 @@ import (
 // TicketResponseJSON describes the concrete TicketResponse JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: TicketResponseJSON()
 func TicketResponseJSON() foundrycontract.JSON[TicketResponse] { return foundryTicketResponseJSON() }
 
 var foundryTicketResponseJSON = sync.OnceValue(func() foundrycontract.JSON[TicketResponse] {
@@ -31,6 +32,7 @@ var foundryTicketResponseJSON = sync.OnceValue(func() foundrycontract.JSON[Ticke
 })
 
 // TicketResponseValidationFieldSet retains concrete DTO and value types for validation.
+// Example: TicketResponseValidationFields()
 type TicketResponseValidationFieldSet struct {
 	// ExpiresIn validates the declared JSON property "expires_in".
 	ExpiresIn foundryvalidation.Field[TicketResponse, int64]
@@ -39,6 +41,7 @@ type TicketResponseValidationFieldSet struct {
 }
 
 // TicketResponseValidationFields returns typed field descriptors.
+// Example: TicketResponseValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func TicketResponseValidationFields() TicketResponseValidationFieldSet {
 	return *foundryTicketResponseValidationFields()

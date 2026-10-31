@@ -37,7 +37,7 @@ func TestExplainResultShapesAndCursor(t *testing.T) {
 			case "projection":
 				plan, err = Explain(ctx, db, Read(projection))
 			case "scalar":
-				plan, err = Explain(ctx, db, ReadScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value())))
+				plan, err = Explain(ctx, db, ReadScalar(SelectScalar(From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID)))))))
 			case "set":
 				plan, err = ExplainAnalyze(ctx, db, ReadSet(Union(ModelRecord(m.Query()), ModelRecord(m.Query()))))
 			case "cursor":
@@ -45,7 +45,7 @@ func TestExplainResultShapesAndCursor(t *testing.T) {
 				c = c.UniqueBy(expr.Group(expr.At(c.Scope(), orm.KeyExpr(m.ID))))
 				plan, err = ExplainCursor(ctx, db, c)
 			case "value_cursor":
-				c := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value())))
+				c := ValueCursorFor(Values(SelectScalar(From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID)))))))
 				plan, err = ExplainAnalyzeValueCursor(ctx, db, c.UniqueBy(expr.Group(c.Value())))
 			case "locked":
 				err = db.Transaction(ctx, func(tx *database.Tx) error {
@@ -60,7 +60,7 @@ func TestExplainResultShapesAndCursor(t *testing.T) {
 			case "transaction_value":
 				err = db.Transaction(ctx, func(tx *database.Tx) error {
 					source := AsTransaction[left](LockedRecord(orm.Lock(m.Query())), "locked")
-					plan, err = ExplainTransactionValue(ctx, tx, SelectTransactionValue(source, expr.Row(expr.At(TransactionScope(source), orm.KeyExpr(m.ID))).Value()))
+					plan, err = ExplainTransactionValue(ctx, tx, SelectTransactionValue(source, expr.AsSelected(expr.Row(expr.At(TransactionScope(source), orm.KeyExpr(m.ID))))))
 					return err
 				})
 			}
@@ -103,7 +103,7 @@ func TestExplainCodecFailuresAreRedacted(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close(context.Background())
-	_, err = Explain(t.Context(), db, ReadScalar(SelectScalar(From(f.Query().Where(orm.TextEq(f.Name, cause.value))), expr.Row(expr.Value(orm.TextExpr(f.Name))).Value())))
+	_, err = Explain(t.Context(), db, ReadScalar(SelectScalar(From(f.Query().Where(orm.TextEq(f.Name, cause.value))), expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(f.Name)))))))
 	var typed *privateExplainError
 	if !errors.Is(err, cause) || !errors.As(err, &typed) || typed != cause || state.sql != "" {
 		t.Fatal("lost codec error identity", err)
@@ -120,7 +120,7 @@ type privateExplainError struct{ value string }
 func (e *privateExplainError) Error() string { return e.value }
 func TestExplainRejectsInvalidSourceBeforeDeclarationCallbacks(t *testing.T) {
 	m := declareMembers()
-	q := ReadScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()))
+	q := ReadScalar(SelectScalar(From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))))
 	called := 0
 	q.core.Source.Checks = []func() error{func() error { called++; return nil }}
 	q.core.Transaction = true

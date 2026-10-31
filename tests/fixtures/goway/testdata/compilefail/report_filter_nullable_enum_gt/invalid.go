@@ -8,4 +8,4 @@ import (
 
 var field orm.NullableEnum[models.User, models.Status]
 
-var _ = expr.CompareNullableRow(expr.Value(orm.NullableEnumExpr(field))).Gt(models.StatusActive)
+var _ = expr.NullableGt[models.User, models.Status](expr.CompareNullableRow(expr.Value(orm.NullableEnumExpr(field))), models.StatusActive)

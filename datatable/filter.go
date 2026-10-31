@@ -8,6 +8,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// FilterPhase identifies whether declared predicates apply before or after grouping.
+//
+// Example: datatable.WherePhase
 type FilterPhase string
 
 const (
@@ -17,6 +20,8 @@ const (
 
 // FilterInfo describes the exact scalar codec and supported operations. The
 // declaration's owner/value types are erased only for inspection metadata.
+//
+// Example: source.Description()
 type FilterInfo struct {
 	Phase     FilterPhase               `json:"phase"`
 	Scalar    foundryhttp.URLScalarInfo `json:"scalar"`
@@ -45,7 +50,7 @@ func (c condition[S]) sqlNot() condition[S] {
 	if len(c.where) > 0 {
 		return rowCondition(expr.Not(expr.And(c.where...)))
 	}
-	return groupCondition(expr.HavingAnd(c.having...).Not())
+	return groupCondition(expr.HavingNot(expr.HavingAnd(c.having...)))
 }
 
 // anyOf ORs single-phase conditions of the same phase.
@@ -93,6 +98,8 @@ func leaf[S any](c condition[S], unknown *condition[S]) condition[S] {
 // Construct with Where/Having or their nullable counterparts. Constructors
 // infer supported comparisons from the supplied typed field/expression. The
 // SQL pattern operator `like` is discovered but disabled until AllowLike.
+//
+// Example: datatable.Where(foundryhttp.StringQuery[string](), expr.TextFilter(name))
 type FilterSource[S, V any] struct {
 	_       [0]*V
 	info    FilterInfo
@@ -101,6 +108,7 @@ type FilterSource[S, V any] struct {
 	err     error
 }
 
+// Validate reports a missing or invalid filter declaration.
 func (s FilterSource[S, V]) Validate() error {
 	if s.err != nil {
 		return s.err
@@ -110,6 +118,8 @@ func (s FilterSource[S, V]) Validate() error {
 	}
 	return nil
 }
+
+// Description returns an owned snapshot of the validated filter metadata.
 func (s FilterSource[S, V]) Description() (FilterInfo, error) {
 	if err := s.Validate(); err != nil {
 		return FilterInfo{}, err
@@ -122,24 +132,49 @@ func (s FilterSource[S, V]) Description() (FilterInfo, error) {
 	return result, err
 }
 
+// RowEquality requires exact typed equality and membership predicates in the row phase.
+//
+// Example: expr.TextFilter(name)
 type RowEquality[S, V any] interface {
+	// Eq compares equality within the declared row scope.
 	Eq(V) expr.Predicate[S]
+	// Ne compares inequality within the declared row scope.
 	Ne(V) expr.Predicate[S]
+	// In tests membership within the declared row scope.
 	In(...V) expr.Predicate[S]
 }
+
+// RowNullable adds SQL null tests to exact typed row comparisons.
+//
+// Example: expr.NullableTextFilter(nickname)
 type RowNullable[S, V any] interface {
 	RowEquality[S, V]
+	// IsNull tests SQL nullness within the declared row scope.
 	IsNull() expr.Predicate[S]
+	// IsNotNull tests SQL presence within the declared row scope.
 	IsNotNull() expr.Predicate[S]
 }
+
+// GroupEquality requires exact typed equality and membership predicates in HAVING.
+//
+// Example: expr.OrderValueFilter(expr.Count[User]())
 type GroupEquality[S, V any] interface {
+	// Eq compares equality within the declared HAVING scope.
 	Eq(V) expr.HavingPredicate[S]
+	// Ne compares inequality within the declared HAVING scope.
 	Ne(V) expr.HavingPredicate[S]
+	// In tests membership within the declared HAVING scope.
 	In(...V) expr.HavingPredicate[S]
 }
+
+// GroupNullable adds SQL null tests to exact typed HAVING comparisons.
+//
+// Example: expr.NullableOrderValueFilter(expr.Sum(orm.NumberExpr(Orders.Total)))
 type GroupNullable[S, V any] interface {
 	GroupEquality[S, V]
+	// IsNull tests SQL nullness within the declared HAVING scope.
 	IsNull() expr.HavingPredicate[S]
+	// IsNotNull tests SQL presence within the declared HAVING scope.
 	IsNotNull() expr.HavingPredicate[S]
 }
 
@@ -244,16 +279,32 @@ func makeFilter[S, V, P any](codec foundryhttp.QueryCodec[V], source comparisons
 	}
 	return result
 }
+
+// Where declares a non-null row filter with its typed transport codec and comparison adapter.
+//
+// Example: datatable.Where(codec, source)
 func Where[S, V any](codec foundryhttp.QueryCodec[V], source RowEquality[S, V]) FilterSource[S, V] {
 	return makeFilter(codec, source, WherePhase, false, rowCondition[S])
 }
+
+// Having declares a non-null HAVING filter with its typed transport codec and comparison adapter.
+//
+// Example: datatable.Having(codec, source)
 func Having[S, V any](codec foundryhttp.QueryCodec[V], source GroupEquality[S, V]) FilterSource[S, V] {
 	return makeFilter(codec, source, HavingPhase, false, groupCondition[S])
 }
+
+// NullableWhere declares a nullable row filter whose codec parses present values.
+//
+// Example: datatable.NullableWhere(codec, source)
 func NullableWhere[S, V any](codec foundryhttp.QueryCodec[V], source RowNullable[S, V]) FilterSource[S, value.Nullable[V]] {
 	base := makeFilter(codec, source, WherePhase, true, rowCondition[S])
 	return FilterSource[S, value.Nullable[V]]{info: base.info, build: base.build, pattern: base.pattern, err: base.err}
 }
+
+// NullableHaving declares a nullable HAVING filter whose codec parses present values.
+//
+// Example: datatable.NullableHaving(codec, source)
 func NullableHaving[S, V any](codec foundryhttp.QueryCodec[V], source GroupNullable[S, V]) FilterSource[S, value.Nullable[V]] {
 	base := makeFilter(codec, source, HavingPhase, true, groupCondition[S])
 	return FilterSource[S, value.Nullable[V]]{info: base.info, build: base.build, pattern: base.pattern, err: base.err}
@@ -316,6 +367,8 @@ func (s FilterSource[S, V]) enabled() func(Operator, []string) (condition[S], er
 // as child.Where(predicate).Exists(). It cannot lift HAVING into a row filter.
 // The callback is server-owned; the table operation owns its isolation/lifetime.
 // The lifted comparison is never unknown, so its negation is NOT EXISTS.
+//
+// Example: datatable.Related(source, exists)
 func Related[S, C, V any](source FilterSource[C, V], exists func(expr.Predicate[C]) expr.Predicate[S]) FilterSource[S, V] {
 	result := FilterSource[S, V]{info: source.info, err: source.Validate()}
 	if result.err != nil {

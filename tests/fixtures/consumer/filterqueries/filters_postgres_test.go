@@ -23,13 +23,13 @@ func TestPostgresFilteredGroupsAndWindows(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		o := models.Orders
 		base := models.Orders.Query()
-		filtered := expr.Sum(orm.NumberExpr(o.TotalCents)).Filter(expr.ModelPredicate(orm.NumberGt(o.TotalCents, 1)))
+		filtered := expr.Filter(expr.Sum(orm.NumberExpr(o.TotalCents)), expr.ModelPredicate(orm.NumberGt(o.TotalCents, 1)))
 		q := rowset.Having(rowset.GroupBy(rowset.Select(rowset.From(base), reports.BuyerTotalRows.Row,
 			rowset.Map(reports.BuyerTotalRows.BuyerID, expr.Value(orm.ColumnExpr(o.BuyerID))),
-			rowset.MapSelected(reports.BuyerTotalRows.Total, filtered.Value()),
-			rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.Count[models.Order]().Value()),
-			rowset.MapSelected(reports.BuyerTotalRows.Average, expr.Avg(orm.NumberExpr(o.TotalCents)).Filter(expr.ModelPredicate(orm.NumberLt(o.TotalCents, 3))).Value()),
-		), expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID)))), filtered.Gt(decimal.FromInt64(1)))
+			rowset.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(filtered)),
+			rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.AsSelected(expr.Count[models.Order]())),
+			rowset.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.Filter(expr.Avg(orm.NumberExpr(o.TotalCents)), expr.ModelPredicate(orm.NumberLt(o.TotalCents, 3))))),
+		), expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID)))), expr.GtValue(filtered, decimal.FromInt64(1)))
 		rows, err := rowset.Read(q).All(t.Context(), tx)
 		if err != nil {
 			return err
@@ -50,13 +50,13 @@ func TestPostgresFilteredGroupsAndWindows(t *testing.T) {
 				t.Fatal("empty filtered average did not remain NULL", row)
 			}
 		}
-		w := expr.WindowFor(rowset.ModelScope(base)).OrderBy(expr.Value(orm.NumberExpr(o.TotalCents)).Asc()).RowsBetween(expr.UnboundedPreceding(), expr.CurrentRow())
+		w := expr.WindowFor(rowset.ModelScope(base)).OrderBy(expr.Asc(expr.Value(orm.NumberExpr(o.TotalCents)))).RowsBetween(expr.UnboundedPreceding(), expr.CurrentRow())
 		window := rowset.OrderBy(rowset.Select(rowset.From(base), windowqueries.WindowTotals.Row,
 			rowset.Map(windowqueries.WindowTotals.Amount, expr.Value(orm.NumberExpr(o.TotalCents))),
 			rowset.MapSelected(windowqueries.WindowTotals.Running, expr.Over(filtered, w)),
-			rowset.MapSelected(windowqueries.WindowTotals.Count, expr.Over(expr.Count[models.Order]().Filter(expr.ModelPredicate(orm.NumberGt(o.TotalCents, 1))), w)),
-			rowset.MapSelected(windowqueries.WindowTotals.Any, expr.Over(expr.Exists[models.Order]().Filter(expr.ModelPredicate(orm.NumberGt(o.TotalCents, 2))), w)),
-		), expr.Value(orm.NumberExpr(o.TotalCents)).Asc())
+			rowset.MapSelected(windowqueries.WindowTotals.Count, expr.Over(expr.Filter(expr.Count[models.Order](), expr.ModelPredicate(orm.NumberGt(o.TotalCents, 1))), w)),
+			rowset.MapSelected(windowqueries.WindowTotals.Any, expr.Over(expr.Filter(expr.Exists[models.Order](), expr.ModelPredicate(orm.NumberGt(o.TotalCents, 2))), w)),
+		), expr.Asc(expr.Value(orm.NumberExpr(o.TotalCents))))
 		values, err := rowset.Read(window).All(t.Context(), tx)
 		if err != nil {
 			return err
@@ -71,7 +71,7 @@ func TestPostgresFilteredGroupsAndWindows(t *testing.T) {
 			}
 		}
 		// A FILTER over grouped window input may inspect only grouped columns.
-		grouped := expr.Over(expr.Count[models.Order]().Filter(expr.ModelPredicate(orm.ColumnEq(o.BuyerID, users[0].ID))), expr.WindowFor(rowset.ModelScope(base)))
+		grouped := expr.Over(expr.Filter(expr.Count[models.Order](), expr.ModelPredicate(orm.ColumnEq(o.BuyerID, users[0].ID))), expr.WindowFor(rowset.ModelScope(base)))
 		if got, err := rowset.ReadScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(base), grouped), expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID))))).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{1, 1}) {
 			t.Fatal("grouped filtered window", got, err)
 		}
@@ -84,11 +84,11 @@ func TestPostgresFilteredNullsAndRelations(t *testing.T) {
 		u, o := models.Users, models.Orders
 		people := models.Users.Query()
 		for name, computation := range map[string]expr.OrderedAggregate[models.User, int64]{
-			"non-null": expr.CountField(orm.NullableTextExpr(u.Nickname)).Filter(expr.ModelPredicate(orm.NullableTextLike(u.Nickname, "B%"))),
-			"distinct": expr.CountDistinctField(orm.NullableTextExpr(u.Nickname)).Filter(expr.ModelPredicate(orm.NumberGt(u.Age, 0))),
-			"unknown":  expr.Count[models.User]().Filter(expr.ModelPredicate(orm.NullableTextLike(u.Nickname, "Z%"))),
+			"non-null": expr.Filter(expr.CountField(orm.NullableTextExpr(u.Nickname)), expr.ModelPredicate(orm.NullableTextLike(u.Nickname, "B%"))),
+			"distinct": expr.Filter(expr.CountDistinctField(orm.NullableTextExpr(u.Nickname)), expr.ModelPredicate(orm.NumberGt(u.Age, 0))),
+			"unknown":  expr.Filter(expr.Count[models.User](), expr.ModelPredicate(orm.NullableTextLike(u.Nickname, "Z%"))),
 		} {
-			got, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(people), computation.Value())).RequireFirst(t.Context(), tx)
+			got, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(people), expr.AsSelected(computation))).RequireFirst(t.Context(), tx)
 			want := int64(1)
 			if name == "unknown" {
 				want = 0
@@ -97,15 +97,15 @@ func TestPostgresFilteredNullsAndRelations(t *testing.T) {
 				t.Fatal(name, got, err)
 			}
 		}
-		if got, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(people), expr.Min(orm.NumberExpr(u.Age)).Filter(expr.ModelPredicate(orm.NumberLt(u.Age, 0))).Value())).RequireFirst(t.Context(), tx); err != nil || !got.IsNull() {
+		if got, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(people), expr.AsSelected(expr.Filter(expr.Min(orm.NumberExpr(u.Age)), expr.ModelPredicate(orm.NumberLt(u.Age, 0)))))).RequireFirst(t.Context(), tx); err != nil || !got.IsNull() {
 			t.Fatal("filtered empty extrema", got, err)
 		}
-		if got, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(people), expr.Exists[models.User]().Filter(expr.ModelPredicate(orm.NumberLt(u.Age, 0))).Value())).RequireFirst(t.Context(), tx); err != nil || got {
+		if got, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(people), expr.AsSelected(expr.Filter(expr.Exists[models.User](), expr.ModelPredicate(orm.NumberLt(u.Age, 0)))))).RequireFirst(t.Context(), tx); err != nil || got {
 			t.Fatal("filtered empty existence", err)
 		}
 		aggregates, relations := models.Users, models.UserLinks
-		count := aggregates.OrderCount.Using(expr.Related(relations.Orders, expr.Count[models.Order]().Filter(expr.ModelPredicate(orm.NumberGt(o.TotalCents, 2)))))
-		total := aggregates.OrderTotal.Using(expr.Related(relations.Orders, expr.Sum(orm.NumberExpr(o.TotalCents)).Filter(expr.ModelPredicate(orm.NumberGt(o.TotalCents, 2)))))
+		count := aggregates.OrderCount.Using(expr.Related(relations.Orders, expr.Filter(expr.Count[models.Order](), expr.ModelPredicate(orm.NumberGt(o.TotalCents, 2)))))
+		total := aggregates.OrderTotal.Using(expr.Related(relations.Orders, expr.Filter(expr.Sum(orm.NumberExpr(o.TotalCents)), expr.ModelPredicate(orm.NumberGt(o.TotalCents, 2)))))
 		rows, err := orm.All(t.Context(), tx, people.With(count, total).OrderBy(orm.TextAsc(u.Email)))
 		if err != nil {
 			return err
@@ -138,8 +138,8 @@ func TestPostgresFilteredCTEsAndCorrelations(t *testing.T) {
 		base, o := models.Orders.Query(), models.Orders
 		common := rowset.AsRecord[orderAlias](rowset.CTE("eligible", rowset.ModelRecord(base.Where(orm.NumberGt(o.TotalCents, 1)))), "eligible_source")
 		f := rowset.Scope(common)
-		eligible := rowset.InQuery(expr.Value(orm.KeyExpr(o.ID)), rowset.SelectScalar(common, expr.Row(expr.At(f, orm.KeyExpr(models.Orders.ID))).Value()))
-		if count, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(base), expr.Count[models.Order]().Filter(eligible).Value())).RequireFirst(t.Context(), tx); err != nil || count != 2 {
+		eligible := rowset.InQuery(expr.Value(orm.KeyExpr(o.ID)), rowset.SelectScalar(common, expr.AsSelected(expr.Row(expr.At(f, orm.KeyExpr(models.Orders.ID))))))
+		if count, err := rowset.ReadScalar(rowset.SelectScalar(rowset.From(base), expr.AsSelected(expr.Filter(expr.Count[models.Order](), eligible)))).RequireFirst(t.Context(), tx); err != nil || count != 2 {
 			t.Fatal("CTE dependency only in FILTER", count, err)
 		}
 		people := models.Users.Query()
@@ -147,14 +147,14 @@ func TestPostgresFilteredCTEsAndCorrelations(t *testing.T) {
 		link := rowset.Correlate(rowset.From(people), orders)
 		p, child := rowset.OuterScope(link, rowset.ModelScope(people)), rowset.InnerScope(link, rowset.Scope(orders))
 		count := expr.Count[rowset.Correlation[models.User, rowset.Alias[orderAlias, models.Order]]]()
-		filtered := rowset.SelectCorrelatedScalar(link, count.Filter(expr.Equal(expr.At(child, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(p, orm.KeyExpr(models.Users.ID)))).Value())
-		got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(people), rowset.CorrelatedScalarRowQuery(filtered).Value()), expr.Value(orm.TextExpr(models.Users.Email)).Asc())).All(t.Context(), tx)
+		filtered := rowset.SelectCorrelatedScalar(link, expr.AsSelected(expr.Filter(count, expr.Equal(expr.At(child, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(p, orm.KeyExpr(models.Users.ID))))))
+		got, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(rowset.From(people), expr.AsSelected(rowset.CorrelatedScalarRowQuery(filtered))), expr.Asc(expr.Value(orm.TextExpr(models.Users.Email))))).All(t.Context(), tx)
 		if err != nil || !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of[int64](2), value.Of[int64](1), value.Of[int64](0)}) {
 			t.Fatal("correlated filter count", got, err)
 		}
 		// PostgreSQL would move this aggregate to the parent SELECT; reject it before execution.
-		invalid := rowset.SelectCorrelatedScalar(link, count.Filter(expr.OrderRow(expr.At(p, orm.NumberExpr(models.Users.Age))).Gt(0)).Value())
-		if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.From(people), rowset.CorrelatedScalarRowQuery(invalid).Value()))); !errors.Is(err, fault.Invalid) {
+		invalid := rowset.SelectCorrelatedScalar(link, expr.AsSelected(expr.Filter(count, expr.Gt(expr.OrderRow(expr.At(p, orm.NumberExpr(models.Users.Age))), 0))))
+		if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.From(people), expr.AsSelected(rowset.CorrelatedScalarRowQuery(invalid))))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("outer-only filter silently changed query ownership", err)
 		}
 		return nil

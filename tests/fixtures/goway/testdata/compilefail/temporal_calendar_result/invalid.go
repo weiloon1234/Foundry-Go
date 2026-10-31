@@ -11,5 +11,5 @@ import (
 type other struct{}
 
 func invalid() {
-	_ = expr.AddDateInterval(expr.Value(orm.TimeExpr(scalars.Records.Date)), temporal.Days(1)).Eq(temporal.Date{})
+	_ = expr.Eq(expr.AddDateInterval(expr.Value(orm.TimeExpr(scalars.Records.Date)), temporal.Days(1)), temporal.Date{})
 }

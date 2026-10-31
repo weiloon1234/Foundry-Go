@@ -33,10 +33,10 @@ func TestCSVQuotesTextAndNeutralizesSpreadsheetFormulas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := writer.Row(textCells(input...)); err != nil {
+	if err := writer.writeRow(textCells(input...)); err != nil {
 		t.Fatal(err)
 	}
-	if err := writer.Finish(); err != nil {
+	if err := writer.finish(); err != nil {
 		t.Fatal(err)
 	}
 	reader := csv.NewReader(bytes.NewReader(output.Bytes()))
@@ -61,16 +61,16 @@ func TestCSVFinalizationReportsBufferedWriteFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := writer.Row(textCells("buffered")); err != nil {
+	if err := writer.writeRow(textCells("buffered")); err != nil {
 		t.Fatal(err)
 	}
 	if output.calls != 0 {
 		t.Fatal("small fixture did not exercise buffered finalization")
 	}
-	if err := writer.Finish(); !errors.Is(err, stop) {
+	if err := writer.finish(); !errors.Is(err, stop) {
 		t.Fatal("flush failure was hidden", err)
 	}
-	writer.Abort()
+	writer.abort()
 	if _, err := newReportWriter(io.Discard, reportLayout{format: "other"}, nil); err == nil {
 		t.Fatal("unknown export format accepted")
 	}
@@ -115,10 +115,10 @@ func TestCSVByteOrderMarkPrefixesTheCompleteFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := writer.Row(textCells("Zoë")); err != nil {
+	if err := writer.writeRow(textCells("Zoë")); err != nil {
 		t.Fatal(err)
 	}
-	if err := writer.Finish(); err != nil {
+	if err := writer.finish(); err != nil {
 		t.Fatal(err)
 	}
 	if output.String() != "\uFEFFName\nZoë\n" {

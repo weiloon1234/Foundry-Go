@@ -13,6 +13,7 @@ import (
 // WelcomeArgsJSON describes the concrete WelcomeArgs JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: WelcomeArgsJSON()
 func WelcomeArgsJSON() foundrycontract.JSON[WelcomeArgs] { return foundryWelcomeArgsJSON() }
 
 var foundryWelcomeArgsJSON = sync.OnceValue(func() foundrycontract.JSON[WelcomeArgs] {
@@ -27,12 +28,14 @@ var foundryWelcomeArgsJSON = sync.OnceValue(func() foundrycontract.JSON[WelcomeA
 })
 
 // WelcomeArgsValidationFieldSet retains concrete DTO and value types for validation.
+// Example: WelcomeArgsValidationFields()
 type WelcomeArgsValidationFieldSet struct {
 	// Name validates the declared JSON property "name".
 	Name foundryvalidation.Field[WelcomeArgs, string]
 }
 
 // WelcomeArgsValidationFields returns typed field descriptors.
+// Example: WelcomeArgsValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func WelcomeArgsValidationFields() WelcomeArgsValidationFieldSet {
 	return *foundryWelcomeArgsValidationFields()

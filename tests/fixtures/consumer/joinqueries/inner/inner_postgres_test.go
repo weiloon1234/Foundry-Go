@@ -31,7 +31,7 @@ func TestPostgresInnerJoinsAndGrouping(t *testing.T) {
 			rows.Map(reports.OrderBuyerRows.OrderID, expr.At(order, orm.KeyExpr(models.Orders.ID))),
 			rows.Map(reports.OrderBuyerRows.BuyerID, expr.At(buyer, orm.KeyExpr(models.Users.ID))),
 			rows.Map(reports.OrderBuyerRows.BuyerEmail, expr.At(buyer, orm.TextExpr(models.Users.Email))),
-			rows.Map(reports.OrderBuyerRows.TotalCents, expr.At(order, orm.NumberExpr(models.Orders.TotalCents)))), expr.At(order, orm.NumberExpr(models.Orders.TotalCents)).Asc())
+			rows.Map(reports.OrderBuyerRows.TotalCents, expr.At(order, orm.NumberExpr(models.Orders.TotalCents)))), expr.Asc(expr.At(order, orm.NumberExpr(models.Orders.TotalCents))))
 		orders, err := rows.Read(orderReport).All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -43,9 +43,9 @@ func TestPostgresInnerJoinsAndGrouping(t *testing.T) {
 		count := expr.CountFieldAt(order, orm.KeyExpr(models.Orders.ID))
 		totals := rows.OrderBy(rows.Having(rows.GroupBy(rows.Select(inner, reports.BuyerTotalRows,
 			rows.Map(reports.BuyerTotalRows.BuyerID, expr.At(buyer, orm.KeyExpr(models.Users.ID))),
-			rows.MapSelected(reports.BuyerTotalRows.Total, total.Value()),
-			rows.MapSelected(reports.BuyerTotalRows.Orders, count.Value()),
-			rows.MapSelected(reports.BuyerTotalRows.Average, expr.AvgAt(order, orm.NumberExpr(models.Orders.TotalCents)).Value())), expr.Group(expr.At(buyer, orm.KeyExpr(models.Users.ID)))), count.Gt(1)), total.Desc())
+			rows.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(total)),
+			rows.MapSelected(reports.BuyerTotalRows.Orders, expr.AsSelected(count)),
+			rows.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.AvgAt(order, orm.NumberExpr(models.Orders.TotalCents))))), expr.Group(expr.At(buyer, orm.KeyExpr(models.Users.ID)))), expr.GtValue(count, 1)), expr.DescValue(total))
 		groups, err := rows.Read(totals).All(t.Context(), counter)
 		if err != nil {
 			return err

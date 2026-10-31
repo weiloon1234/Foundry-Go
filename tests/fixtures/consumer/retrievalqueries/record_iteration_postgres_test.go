@@ -28,7 +28,7 @@ func TestPostgresCompleteRecordIterationClosesBoundedBatches(t *testing.T) {
 		base := q.Where(orm.InputTextLike(f.Name, "stream %"))
 		alias := rows.AsRecord[selectedMember](rows.CTE("iteration_members", rows.ModelRecord(base)), "selected")
 		name := expr.At(rows.Scope(alias), orm.InputTextExpr(f.Name))
-		record := rows.SelectRecord(alias, rows.Scope(alias)).OrderBy(name.Asc()).Offset(1).Limit(orm.DefaultChunkSize + 1)
+		record := rows.SelectRecord(alias, rows.Scope(alias)).OrderBy(expr.Asc(name)).Offset(1).Limit(orm.DefaultChunkSize + 1)
 		for _, test := range []struct {
 			name string
 			run  func(context.Context, database.Executor, func(retrievalqueries.Member) error) error

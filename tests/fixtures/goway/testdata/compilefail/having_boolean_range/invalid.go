@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.Exists[models.Order]().Gt(true)
+var _ = expr.GtValue(expr.Exists[models.Order](), true)

@@ -39,10 +39,10 @@ func TestReportProjectionGolden(t *testing.T) {
 					defer db.Close(t.Context())
 
 					f := expr.Value(orm.NumberExpr(models.Orders.TotalCents))
-					q := rowset.OrderBy(rowset.Select(rowset.From(models.Orders.Query()), reportSchema, rowset.Map(reportSchema.Amount, f)).Where(expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 100))), f.Desc())
+					q := rowset.OrderBy(rowset.Select(rowset.From(models.Orders.Query()), reportSchema, rowset.Map(reportSchema.Amount, f)).Where(expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 100))), expr.Desc(f))
 					switch shape {
 					case "group":
-						q = rowset.Having(rowset.GroupBy(q, expr.Group(f)), expr.Count[models.Order]().Gt(0))
+						q = rowset.Having(rowset.GroupBy(q, expr.Group(f)), expr.GtValue(expr.Count[models.Order](), 0))
 					case "distinct":
 						q = rowset.Distinct(q)
 					case "window":
@@ -51,7 +51,7 @@ func TestReportProjectionGolden(t *testing.T) {
 						q = rowset.DistinctOn(q, expr.Group(f))
 					}
 					if shape != "window" && shape != "distinct_on" {
-						q = rowset.ReorderUnwindowed(q, f.Asc())
+						q = rowset.ReorderUnwindowed(q, expr.Asc(f))
 					}
 					switch operation {
 					case "compile":
@@ -86,13 +86,13 @@ func TestReportFilterAdaptersGolden(t *testing.T) {
 	enum := expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status)))
 
 	newPs := []expr.Predicate[models.User]{
-		expr.Or(expr.Not(text.Eq("Ada")), text.IsNull()),
-		expr.Or(text.Ne("Ada"), text.IsNull()),
-		expr.Or(expr.Not(text.In("Ada", "Bob")), text.IsNull()),
-		text.Contains(`A%_`), text.IContains(`A%_`), text.Like("A%"),
-		enum.In(models.StatusActive, models.StatusDisabled),
-		expr.CompareNullableRow(expr.Value(orm.NullableTextExpr(models.Users.Nickname))).Eq("Ada"),
-		expr.TextRow(orm.TextExpr(models.Users.Email)).Contains("Ada"), expr.TextRow(orm.TextExpr(models.Users.Email)).Like("A%"), expr.TextRow(orm.TextExpr(models.Users.Email)).Gt("Ada"), text.Gt("Ada"),
+		expr.Or(expr.Not(expr.NullableEq(text, "Ada")), expr.IsNull(text)),
+		expr.Or(expr.NullableNe(text, "Ada"), expr.IsNull(text)),
+		expr.Or(expr.Not(expr.NullableIn(text, "Ada", "Bob")), expr.IsNull(text)),
+		expr.NullableTextContains(text, `A%_`), expr.NullableTextIContains(text, `A%_`), expr.NullableTextLike(text, "A%"),
+		expr.In(enum, models.StatusActive, models.StatusDisabled),
+		expr.NullableEq(expr.CompareNullableRow(expr.Value(orm.NullableTextExpr(models.Users.Nickname))), "Ada"),
+		expr.TextContains(expr.TextRow(orm.TextExpr(models.Users.Email)), "Ada"), expr.TextLike(expr.TextRow(orm.TextExpr(models.Users.Email)), "A%"), expr.Gt(expr.TextRow(orm.TextExpr(models.Users.Email)), "Ada"), expr.NullableGt(text, "Ada"),
 		expr.Has(models.UserRelations.Orders, expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 100))),
 	}
 

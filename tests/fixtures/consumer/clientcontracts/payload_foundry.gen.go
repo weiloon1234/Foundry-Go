@@ -20,6 +20,7 @@ import (
 // PayloadJSON describes the concrete Payload JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: PayloadJSON()
 func PayloadJSON() foundrycontract.JSON[Payload] { return foundryPayloadJSON() }
 
 var foundryPayloadJSON = sync.OnceValue(func() foundrycontract.JSON[Payload] {
@@ -107,6 +108,7 @@ var foundryPayloadJSON = sync.OnceValue(func() foundrycontract.JSON[Payload] {
 })
 
 // PayloadValidationFieldSet retains concrete DTO and value types for validation.
+// Example: PayloadValidationFields()
 type PayloadValidationFieldSet struct {
 	// Amount validates the declared JSON property "amount".
 	Amount foundryvalidation.Field[Payload, decimal.Decimal]
@@ -154,6 +156,7 @@ type PayloadValidationFieldSet struct {
 }
 
 // PayloadValidationFields returns typed field descriptors.
+// Example: PayloadValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func PayloadValidationFields() PayloadValidationFieldSet { return *foundryPayloadValidationFields() }
 

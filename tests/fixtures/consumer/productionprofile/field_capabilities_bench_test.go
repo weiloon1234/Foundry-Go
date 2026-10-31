@@ -19,7 +19,7 @@ func BenchmarkProfileFieldSelection(b *testing.B) {
 	f := productionprofile.Records.Name
 	b.ReportAllocs()
 	for b.Loop() {
-		selectedField = expr.Row(expr.Value(orm.TextExpr(f))).Value()
+		selectedField = expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(f))))
 	}
 }
 func BenchmarkProfileFieldParameter(b *testing.B) {

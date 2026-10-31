@@ -23,21 +23,21 @@ func TestWindowsBindingsNamesAndImmutability(t *testing.T) {
 	d := declareAggregateRecords()
 	source := rows.FromModel(d.Query())
 	v := expr.Value(orm.NumberExpr(d.Exact))
-	w := expr.WindowFor(rows.ModelScope(d.Query())).PartitionBy(expr.Group(v)).OrderBy(v.Desc()).RowsBetween(expr.Preceding(2), expr.CurrentRow()).ExcludeTies()
-	previous := expr.LagOr(expr.Row(v).Value(), 1, int64(99), w)
-	q := rows.OrderBy(rows.Distinct(expressionQuery(source, previous, codec.Signed[int64]()).Where(v.Ne(7))), previous.Asc())
+	w := expr.WindowFor(rows.ModelScope(d.Query())).PartitionBy(expr.Group(v)).OrderBy(expr.Desc(v)).RowsBetween(expr.Preceding(2), expr.CurrentRow()).ExcludeTies()
+	previous := expr.LagOr(expr.AsSelected(expr.Row(v)), 1, int64(99), w)
+	q := rows.OrderBy(rows.Distinct(expressionQuery(source, previous, codec.Signed[int64]()).Where(expr.Ne(v, 7))), expr.AscValue(previous))
 	q = rows.Limit(q, 4)
 	s := expressionSQL(t, q)
 	want := `SELECT DISTINCT LAG("aggregate_records"."exact", $1, $2) OVER (PARTITION BY "aggregate_records"."exact" ORDER BY "aggregate_records"."exact" DESC ROWS BETWEEN $3 PRECEDING AND CURRENT ROW EXCLUDE TIES) AS "value" FROM "aggregate_records" WHERE ("aggregate_records"."exact" <> $4) ORDER BY 1 ASC LIMIT $5`
 	if s.SQLText != want || !reflect.DeepEqual(s.Bindings, []any{int64(1), int64(99), int64(2), int64(7), int64(4)}) {
 		t.Fatal(s.SQLText, s.Bindings)
 	}
-	_ = w.PartitionBy(expr.Group(expr.Value(orm.TextExpr(d.Name)))).RowsBetween(expr.CurrentRow(), expr.Following(1)).ExcludeNone().OrderBy(v.Asc())
+	_ = w.PartitionBy(expr.Group(expr.Value(orm.TextExpr(d.Name)))).RowsBetween(expr.CurrentRow(), expr.Following(1)).ExcludeNone().OrderBy(expr.Asc(v))
 	again := expressionSQL(t, q)
 	if !reflect.DeepEqual(s, again) {
 		t.Fatal("window derivation mutated its source")
 	}
-	named := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(v.Asc()).Named("ranked")
+	named := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Asc(v)).Named("ranked")
 	same := expr.AddValue(expr.RowNumber(named), expr.Rank(named))
 	ns := expressionSQL(t, expressionQuery(source, same, codec.Signed[int64]()))
 	if strings.Count(ns.SQLText, `"ranked" AS (`) != 1 || strings.Count(ns.SQLText, `OVER "ranked"`) != 2 {
@@ -54,14 +54,14 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 	source := rows.FromModel(d.Query())
 	v := expr.Value(orm.NumberExpr(d.Exact))
 	base := expr.WindowFor(rows.ModelScope(d.Query()))
-	w := base.OrderBy(v.Asc())
-	r := expr.NumericRange(base, expr.Row(v).Value())
-	fr := expr.NumericRange(base, expr.Row(expr.Value(orm.NumberExpr(d.Approx))).Value())
+	w := base.OrderBy(expr.Asc(v))
+	r := expr.NumericRange(base, expr.AsSelected(expr.Row(v)))
+	fr := expr.NumericRange(base, expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(d.Approx)))))
 	invalid := map[string]expr.Window[aggregateRecord]{
 		"missing scope":              expr.WindowFor(expr.Scope[aggregateRecord, aggregateRecord]{}),
 		"foreign declaration":        expr.WindowFor(rows.ModelScope(other.Query())),
 		"foreign partition":          base.PartitionBy(expr.Group(expr.Value(orm.NumberExpr(other.Exact)))),
-		"foreign selected partition": base.PartitionByValues(expr.Sum(orm.NumberExpr(other.Exact)).Value().Key()),
+		"foreign selected partition": base.PartitionByValues(expr.Key(expr.AsSelected(expr.Sum(orm.NumberExpr(other.Exact))))),
 		"zero partition":             w.PartitionBy(expr.GroupKey[aggregateRecord]{}),
 		"duplicate partition":        w.PartitionBy(expr.Group(v), expr.Group(v)),
 		"nil order":                  w.OrderBy(nil),
@@ -73,16 +73,16 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 		"oversized order":            w.OrderBy(make([]expr.ProjectionOrder[aggregateRecord], querycore.MaxExpressionNodes+1)...),
 		"invalid start":              w.RowsBetween(expr.UnboundedFollowing(), expr.CurrentRow()),
 		"groups need order":          base.GroupsBetween(expr.CurrentRow(), expr.CurrentRow()),
-		"nested order":               w.OrderBy(expr.RowNumber(base).Asc()),
-		"nested partition":           base.PartitionByValues(expr.RowNumber(base).Key()),
+		"nested order":               w.OrderBy(expr.AscValue(expr.RowNumber(base))),
+		"nested partition":           base.PartitionByValues(expr.Key(expr.RowNumber(base))),
 		"bad name":                   w.Named("bad name"),
-		"framed inheritance":         w.RowsBetween(expr.CurrentRow(), expr.CurrentRow()).Named("framed").OrderBy(v.Desc()),
-		"replace named order":        w.Named("ordered").OrderBy(v.Desc()),
+		"framed inheritance":         w.RowsBetween(expr.CurrentRow(), expr.CurrentRow()).Named("framed").OrderBy(expr.Desc(v)),
+		"replace named order":        w.Named("ordered").OrderBy(expr.Desc(v)),
 		"add named partition":        w.Named("ordered").PartitionBy(expr.Group(v)),
 		"negative range":             r.Between(r.Preceding(-1), r.CurrentRow()),
 		"nonfinite range":            fr.Between(fr.Preceding(math.Inf(1)), fr.CurrentRow()),
-		"extra range order":          r.Between(r.CurrentRow(), r.Following(2)).OrderBy(v.Asc()),
-		"preexisting range order":    expr.NumericRange(w, expr.Row(v).Value()).Between(r.CurrentRow(), r.CurrentRow()),
+		"extra range order":          r.Between(r.CurrentRow(), r.Following(2)).OrderBy(expr.Asc(v)),
+		"preexisting range order":    expr.NumericRange(w, expr.AsSelected(expr.Row(v))).Between(r.CurrentRow(), r.CurrentRow()),
 		"zero range":                 (expr.RangeWindow[aggregateRecord, int64]{}).Between(r.CurrentRow(), r.CurrentRow()),
 	}
 	for name, window := range invalid {
@@ -111,9 +111,9 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 		})
 	}
 	// Grouped keys are accepted, but an ungrouped row field mixed into aggregate ordering is invalid.
-	grouped := base.PartitionByValues(expr.Count[aggregateRecord]().Value().Key()).OrderBy(expr.Count[aggregateRecord]().Desc())
+	grouped := base.PartitionByValues(expr.Key(expr.AsSelected(expr.Count[aggregateRecord]()))).OrderBy(expr.DescValue(expr.Count[aggregateRecord]()))
 	expressionSQL(t, expressionQuery(source, expr.RowNumber(grouped), codec.Signed[int64]()))
-	bad := expressionQuery(source, expr.RowNumber(grouped.OrderBy(v.Asc())), codec.Signed[int64]())
+	bad := expressionQuery(source, expr.RowNumber(grouped.OrderBy(expr.Asc(v))), codec.Signed[int64]())
 	if _, err := querycore.CompileRead(rows.SourceOf(bad).Node, t.Context(), false, rows.SourceOf(bad).Err, true); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}
@@ -122,9 +122,9 @@ func TestWindowsRejectInvalidDescriptorsBeforeExecution(t *testing.T) {
 func TestWindowsResultFamiliesAndHydration(t *testing.T) {
 	d := declareAggregateRecords()
 	source := rows.FromModel(d.Query())
-	w := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Value(orm.NumberExpr(d.Exact)).Asc())
-	v := expr.Row(expr.Value(orm.NumberExpr(d.Exact))).Value()
-	n := expr.Row(expr.Value(orm.NullableNumberExpr(d.MaybeExact))).Value()
+	w := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Asc(expr.Value(orm.NumberExpr(d.Exact))))
+	v := expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(d.Exact))))
+	n := expr.AsSelected(expr.Row(expr.Value(orm.NullableNumberExpr(d.MaybeExact))))
 	for name, e := range map[string]expr.Selected[aggregateRecord, value.Nullable[int64]]{
 		"lag": expr.Lag(v, 1, w), "lead": expr.Lead(v, -1, w), "first": expr.FirstValue(v, w), "last": expr.LastValue(v, w), "nth": expr.NthValue(v, 2, w),
 		"lag nullable": expr.LagNullable(n, 1, w), "lead nullable": expr.LeadNullable(n, 1, w), "first nullable": expr.FirstNullableValue(n, w), "last nullable": expr.LastNullableValue(n, w), "nth nullable": expr.NthNullableValue(n, 2, w),
@@ -142,7 +142,7 @@ func TestWindowsResultFamiliesAndHydration(t *testing.T) {
 			}
 		})
 	}
-	for _, e := range []expr.Selected[aggregateRecord, int64]{expr.RowNumber(w), expr.Rank(w), expr.DenseRank(w), expr.LeadOr(v, 1, int64(0), w), expr.Over(expr.CountField(orm.NumberExpr(d.Exact)).Filter(expr.Value(orm.NumberExpr(d.Exact)).Ne(0)), w)} {
+	for _, e := range []expr.Selected[aggregateRecord, int64]{expr.RowNumber(w), expr.Rank(w), expr.DenseRank(w), expr.LeadOr(v, 1, int64(0), w), expr.Over(expr.Filter(expr.CountField(orm.NumberExpr(d.Exact)), expr.Ne(expr.Value(orm.NumberExpr(d.Exact)), 0)), w)} {
 		expressionSQL(t, expressionQuery(source, e, codec.Signed[int64]()))
 	}
 	for _, e := range []expr.Selected[aggregateRecord, float64]{expr.PercentRank(w), expr.CumeDist(w)} {

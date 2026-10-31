@@ -41,9 +41,9 @@ func runWindows(t *testing.T, check func(*database.Tx, []models.User) error) {
 func ranking() rows.Query[models.Order, windowqueries.RankingRow] {
 	base := models.Orders.Query()
 	o := models.Orders
-	peers := expr.WindowFor(rows.ModelScope(base)).PartitionBy(expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID)))).OrderBy(expr.Value(orm.NumberExpr(o.TotalCents)).Asc())
-	ordered := peers.OrderBy(expr.Value(orm.KeyExpr(o.ID)).Asc())
-	return rows.OrderBy(rows.Select(rows.From(base), windowqueries.Rankings, rows.MapSelected(windowqueries.Rankings.ID, expr.Row(expr.Value(orm.KeyExpr(o.ID))).Value()), rows.MapSelected(windowqueries.Rankings.BuyerID, expr.Row(expr.Value(orm.ColumnExpr(o.BuyerID))).Value()), rows.MapSelected(windowqueries.Rankings.Number, expr.RowNumber(ordered)), rows.MapSelected(windowqueries.Rankings.Rank, expr.Rank(peers)), rows.MapSelected(windowqueries.Rankings.Dense, expr.DenseRank(peers)), rows.MapSelected(windowqueries.Rankings.Percent, expr.PercentRank(peers)), rows.MapSelected(windowqueries.Rankings.Cumulative, expr.CumeDist(peers)), rows.MapSelected(windowqueries.Rankings.Bucket, expr.NTile(2, ordered))), expr.Value(orm.ColumnExpr(o.BuyerID)).Asc(), expr.Value(orm.NumberExpr(o.TotalCents)).Asc(), expr.Value(orm.KeyExpr(o.ID)).Asc())
+	peers := expr.WindowFor(rows.ModelScope(base)).PartitionBy(expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID)))).OrderBy(expr.Asc(expr.Value(orm.NumberExpr(o.TotalCents))))
+	ordered := peers.OrderBy(expr.Asc(expr.Value(orm.KeyExpr(o.ID))))
+	return rows.OrderBy(rows.Select(rows.From(base), windowqueries.Rankings, rows.MapSelected(windowqueries.Rankings.ID, expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(o.ID))))), rows.MapSelected(windowqueries.Rankings.BuyerID, expr.AsSelected(expr.Row(expr.Value(orm.ColumnExpr(o.BuyerID))))), rows.MapSelected(windowqueries.Rankings.Number, expr.RowNumber(ordered)), rows.MapSelected(windowqueries.Rankings.Rank, expr.Rank(peers)), rows.MapSelected(windowqueries.Rankings.Dense, expr.DenseRank(peers)), rows.MapSelected(windowqueries.Rankings.Percent, expr.PercentRank(peers)), rows.MapSelected(windowqueries.Rankings.Cumulative, expr.CumeDist(peers)), rows.MapSelected(windowqueries.Rankings.Bucket, expr.NTile(2, ordered))), expr.Asc(expr.Value(orm.ColumnExpr(o.BuyerID))), expr.Asc(expr.Value(orm.NumberExpr(o.TotalCents))), expr.Asc(expr.Value(orm.KeyExpr(o.ID))))
 }
 
 func TestPostgresWindowRankingAndComposition(t *testing.T) {
@@ -72,7 +72,7 @@ func TestPostgresWindowRankingAndComposition(t *testing.T) {
 		common := rows.CTE("ranked_orders", rows.RecordOf(q))
 		a := rows.AsRecord[rankedAlias](common, "ranked")
 		fields := rows.Scope(a)
-		top := rows.SelectRecord(a, rows.Scope(a)).Where(rows.At(fields, windowqueries.Rankings.Number).Eq(1))
+		top := rows.SelectRecord(a, rows.Scope(a)).Where(expr.Eq(rows.At(fields, windowqueries.Rankings.Number), 1))
 		if n, err := rows.ReadRecord(top).Count(t.Context(), tx); err != nil || n != 2 {
 			t.Fatal("outer filter did not consume typed window output", err)
 		}
@@ -97,14 +97,14 @@ func TestPostgresWindowRankingAndComposition(t *testing.T) {
 		}
 		// DISTINCT ordering reuses the selected window, including NTILE parameters.
 		base := models.Orders.Query()
-		bucket := expr.NTile(2, expr.WindowFor(rows.ModelScope(base)).OrderBy(expr.Value(orm.NumberExpr(models.Orders.TotalCents)).Asc()))
-		if result, err := rows.ReadScalar(rows.SelectScalar(rows.OrderBy(rows.Distinct(rows.FromModel(base)), bucket.Asc()), bucket)).All(t.Context(), tx); err != nil || !reflect.DeepEqual(result, []int32{1, 2}) {
+		bucket := expr.NTile(2, expr.WindowFor(rows.ModelScope(base)).OrderBy(expr.Asc(expr.Value(orm.NumberExpr(models.Orders.TotalCents)))))
+		if result, err := rows.ReadScalar(rows.SelectScalar(rows.OrderBy(rows.Distinct(rows.FromModel(base)), expr.AscValue(bucket)), bucket)).All(t.Context(), tx); err != nil || !reflect.DeepEqual(result, []int32{1, 2}) {
 			t.Fatal("distinct window value lost bindings", err)
 		}
 		// Window ordering may consume an ordinary aggregate over grouped rows.
 		count := expr.Count[models.Order]()
-		rank := expr.Rank(expr.WindowFor(rows.ModelScope(base)).OrderBy(count.Desc()))
-		if result, err := rows.ReadScalar(rows.SelectScalar(rows.OrderBy(rows.GroupBy(rows.FromModel(base), expr.Group(expr.Value(orm.ColumnExpr(models.Orders.BuyerID)))), rank.Asc()), rank)).All(t.Context(), tx); err != nil || !reflect.DeepEqual(result, []int64{1, 2}) {
+		rank := expr.Rank(expr.WindowFor(rows.ModelScope(base)).OrderBy(expr.DescValue(count)))
+		if result, err := rows.ReadScalar(rows.SelectScalar(rows.OrderBy(rows.GroupBy(rows.FromModel(base), expr.Group(expr.Value(orm.ColumnExpr(models.Orders.BuyerID)))), expr.AscValue(rank)), rank)).All(t.Context(), tx); err != nil || !reflect.DeepEqual(result, []int64{1, 2}) {
 			t.Fatal("rank of grouped counts failed", err)
 		}
 		return nil
@@ -115,8 +115,8 @@ func TestPostgresWindowFramesAndAggregates(t *testing.T) {
 	runWindows(t, func(tx *database.Tx, users []models.User) error {
 		o := models.Orders
 		base := models.Orders.Query().Where(orm.ColumnEq(o.BuyerID, users[0].ID))
-		peers := expr.WindowFor(rows.ModelScope(base)).OrderBy(expr.Value(orm.NumberExpr(o.TotalCents)).Asc())
-		ordered := peers.OrderBy(expr.Value(orm.KeyExpr(o.ID)).Asc())
+		peers := expr.WindowFor(rows.ModelScope(base)).OrderBy(expr.Asc(expr.Value(orm.NumberExpr(o.TotalCents))))
+		ordered := peers.OrderBy(expr.Asc(expr.Value(orm.KeyExpr(o.ID))))
 		for _, test := range []struct {
 			name   string
 			window expr.Window[models.Order]
@@ -134,7 +134,7 @@ func TestPostgresWindowFramesAndAggregates(t *testing.T) {
 			{"restore exclusion", peers.ExcludeTies().ExcludeNone(), []string{"1", "5", "5", "8"}, []int64{1, 3, 3, 4}},
 			{"legal empty frame", ordered.RowsBetween(expr.Preceding(7), expr.Preceding(8)), []string{"", "", "", ""}, []int64{0, 0, 0, 0}},
 		} {
-			q := rows.OrderBy(rows.Select(rows.From(base), windowqueries.WindowTotals, rows.MapSelected(windowqueries.WindowTotals.Amount, expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))).Value()), rows.MapSelected(windowqueries.WindowTotals.Running, expr.Over(expr.Sum(orm.NumberExpr(o.TotalCents)), test.window)), rows.MapSelected(windowqueries.WindowTotals.Count, expr.Over(expr.Count[models.Order](), test.window)), rows.MapSelected(windowqueries.WindowTotals.Any, expr.Over(expr.Exists[models.Order](), test.window))), expr.Value(orm.NumberExpr(o.TotalCents)).Asc(), expr.Value(orm.KeyExpr(o.ID)).Asc())
+			q := rows.OrderBy(rows.Select(rows.From(base), windowqueries.WindowTotals, rows.MapSelected(windowqueries.WindowTotals.Amount, expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))))), rows.MapSelected(windowqueries.WindowTotals.Running, expr.Over(expr.Sum(orm.NumberExpr(o.TotalCents)), test.window)), rows.MapSelected(windowqueries.WindowTotals.Count, expr.Over(expr.Count[models.Order](), test.window)), rows.MapSelected(windowqueries.WindowTotals.Any, expr.Over(expr.Exists[models.Order](), test.window))), expr.Asc(expr.Value(orm.NumberExpr(o.TotalCents))), expr.Asc(expr.Value(orm.KeyExpr(o.ID))))
 			items, err := rows.Read(q).All(t.Context(), tx)
 			if err != nil {
 				return err
@@ -162,10 +162,10 @@ func TestPostgresWindowNavigationAndNullability(t *testing.T) {
 	runWindows(t, func(tx *database.Tx, users []models.User) error {
 		o := models.Orders
 		base := models.Orders.Query().Where(orm.ColumnEq(o.BuyerID, users[0].ID))
-		ordered := expr.WindowFor(rows.ModelScope(base)).OrderBy(expr.Value(orm.NumberExpr(o.TotalCents)).Asc(), expr.Value(orm.KeyExpr(o.ID)).Asc())
+		ordered := expr.WindowFor(rows.ModelScope(base)).OrderBy(expr.Asc(expr.Value(orm.NumberExpr(o.TotalCents))), expr.Asc(expr.Value(orm.KeyExpr(o.ID))))
 		whole := ordered.RowsBetween(expr.UnboundedPreceding(), expr.UnboundedFollowing())
 		single := ordered.RowsBetween(expr.CurrentRow(), expr.CurrentRow())
-		q := rows.OrderBy(rows.Select(rows.From(base), windowqueries.Navigation, rows.MapSelected(windowqueries.Navigation.Amount, expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))).Value()), rows.MapSelected(windowqueries.Navigation.Previous, expr.Lag(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))).Value(), 1, single)), rows.MapSelected(windowqueries.Navigation.Next, expr.Lead(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))).Value(), 1, single)), rows.MapSelected(windowqueries.Navigation.Fallback, expr.LagOr(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))).Value(), 1, int64(99), single)), rows.MapSelected(windowqueries.Navigation.First, expr.FirstValue(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))).Value(), whole)), rows.MapSelected(windowqueries.Navigation.Last, expr.LastValue(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))).Value(), whole)), rows.MapSelected(windowqueries.Navigation.Nth, expr.NthValue(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))).Value(), 2, whole))), expr.Value(orm.NumberExpr(o.TotalCents)).Asc(), expr.Value(orm.KeyExpr(o.ID)).Asc())
+		q := rows.OrderBy(rows.Select(rows.From(base), windowqueries.Navigation, rows.MapSelected(windowqueries.Navigation.Amount, expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))))), rows.MapSelected(windowqueries.Navigation.Previous, expr.Lag(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents)))), 1, single)), rows.MapSelected(windowqueries.Navigation.Next, expr.Lead(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents)))), 1, single)), rows.MapSelected(windowqueries.Navigation.Fallback, expr.LagOr(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents)))), 1, int64(99), single)), rows.MapSelected(windowqueries.Navigation.First, expr.FirstValue(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents)))), whole)), rows.MapSelected(windowqueries.Navigation.Last, expr.LastValue(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents)))), whole)), rows.MapSelected(windowqueries.Navigation.Nth, expr.NthValue(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents)))), 2, whole))), expr.Asc(expr.Value(orm.NumberExpr(o.TotalCents))), expr.Asc(expr.Value(orm.KeyExpr(o.ID))))
 		items, err := rows.Read(q).All(t.Context(), tx)
 		if err != nil {
 			return err
@@ -180,17 +180,17 @@ func TestPostgresWindowNavigationAndNullability(t *testing.T) {
 				t.Fatal("navigation ignored partition/frame/absence distinction", row)
 			}
 		}
-		if values, err := rows.ReadScalar(rows.SelectScalar(rows.From(base), expr.Lag(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents))).Value(), -1, ordered))).OrderBy(expr.Value(orm.NumberExpr(o.TotalCents)).Asc(), expr.Value(orm.KeyExpr(o.ID)).Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(values, []value.Nullable[int64]{value.Of[int64](2), value.Of[int64](2), value.Of[int64](3), value.Null[int64]()}) {
+		if values, err := rows.ReadScalar(rows.SelectScalar(rows.From(base), expr.Lag(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(o.TotalCents)))), -1, ordered))).OrderBy(expr.Asc(expr.Value(orm.NumberExpr(o.TotalCents))), expr.Asc(expr.Value(orm.KeyExpr(o.ID)))).All(t.Context(), tx); err != nil || !reflect.DeepEqual(values, []value.Nullable[int64]{value.Of[int64](2), value.Of[int64](2), value.Of[int64](3), value.Null[int64]()}) {
 			t.Fatal("negative lag offset changed direction", err)
 		}
 		u := models.Users
 		people := models.Users.Query().OrderBy(orm.TextAsc(u.Email))
-		w := expr.WindowFor(rows.ModelScope(people)).OrderBy(expr.Value(orm.TextExpr(u.Email)).Asc())
-		fallback := expr.LagOr(expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname))).Value(), 1, value.Of("missing"), w)
+		w := expr.WindowFor(rows.ModelScope(people)).OrderBy(expr.Asc(expr.Value(orm.TextExpr(u.Email))))
+		fallback := expr.LagOr(expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname)))), 1, value.Of("missing"), w)
 		if values, err := rows.ReadScalar(rows.SelectScalar(rows.From(people), fallback)).All(t.Context(), tx); err != nil || !reflect.DeepEqual(values, []value.Nullable[string]{value.Of("missing"), value.Null[string](), value.Of("Bee")}) {
 			t.Fatal("fallback replaced an existing NULL", err)
 		}
-		if values, err := rows.ReadScalar(rows.SelectScalar(rows.From(people), expr.LeadNullable(expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname))).Value(), 1, w))).All(t.Context(), tx); err != nil || !reflect.DeepEqual(values, []value.Nullable[string]{value.Of("Bee"), value.Null[string](), value.Null[string]()}) {
+		if values, err := rows.ReadScalar(rows.SelectScalar(rows.From(people), expr.LeadNullable(expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname)))), 1, w))).All(t.Context(), tx); err != nil || !reflect.DeepEqual(values, []value.Nullable[string]{value.Of("Bee"), value.Null[string](), value.Null[string]()}) {
 			t.Fatal("nullable lead lost single NULL wrapper", err)
 		}
 		return nil
@@ -205,7 +205,7 @@ func TestPostgresCorrelatedAndRecursiveWindows(t *testing.T) {
 		p := rows.OuterScope(link, rows.ModelScope(people))
 		o := rows.InnerScope(link, rows.Scope(orders))
 		counts := rows.SelectCorrelatedScalar(link, expr.Over(expr.CountFieldAt(p, orm.KeyExpr(models.Users.ID)), expr.WindowFor(p).PartitionBy(expr.Group(expr.At(p, orm.EnumExpr(models.Users.Status)))))).Where(expr.Equal(expr.At(o, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(p, orm.KeyExpr(models.Users.ID)))).Limit(1)
-		if items, err := rows.ReadScalar(rows.SelectScalar(rows.From(people), rows.CorrelatedScalarRowQuery(counts).Value())).OrderBy(expr.Value(orm.TextExpr(models.Users.Email)).Asc()).All(t.Context(), tx); err != nil || !reflect.DeepEqual(items, []value.Nullable[int64]{value.Of[int64](4), value.Of[int64](1), value.Null[int64]()}) {
+		if items, err := rows.ReadScalar(rows.SelectScalar(rows.From(people), expr.AsSelected(rows.CorrelatedScalarRowQuery(counts)))).OrderBy(expr.Asc(expr.Value(orm.TextExpr(models.Users.Email)))).All(t.Context(), tx); err != nil || !reflect.DeepEqual(items, []value.Nullable[int64]{value.Of[int64](4), value.Of[int64](1), value.Null[int64]()}) {
 			t.Fatal("correlated window changed aggregate ownership", err)
 		}
 		tree := rows.RecursiveCTE("window_tree", rows.ModelRecord(people.Where(orm.KeyEq(models.Users.ID, users[0].ID))), func(self rows.RecursiveSelf[models.User]) rows.RecordSource[models.User] {
@@ -214,7 +214,7 @@ func TestPostgresCorrelatedAndRecursiveWindows(t *testing.T) {
 			pf, cf := rows.Scope(parent), rows.Scope(child)
 			joined := rows.InnerJoin(child, parent, rows.On(expr.At(cf, orm.NullableColumnExpr(models.Users.IntroducerID)), expr.At(pf, orm.KeyExpr(models.Users.ID))))
 			scope := rows.LeftScope(joined, rows.Scope(child))
-			return rows.SelectRecord(joined, scope).OrderBy(expr.Over(expr.CountFieldAt(scope, orm.KeyExpr(models.Users.ID)), expr.WindowFor(scope)).Asc())
+			return rows.SelectRecord(joined, scope).OrderBy(expr.AscValue(expr.Over(expr.CountFieldAt(scope, orm.KeyExpr(models.Users.ID)), expr.WindowFor(scope))))
 		})
 		a := rows.AsRecord[rankedAlias](tree, "tree_result")
 		if n, err := rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a))).Count(t.Context(), tx); err != nil || n != 2 {
@@ -227,13 +227,13 @@ func TestPostgresCorrelatedAndRecursiveWindows(t *testing.T) {
 func TestInvalidWindowsNeverExecute(t *testing.T) {
 	u := models.Users
 	base := models.Users.Query()
-	w := expr.WindowFor(rows.ModelScope(base)).OrderBy(expr.Value(orm.TextExpr(u.Email)).Asc())
-	for _, expression := range []expr.Selected[models.User, int64]{expr.RowNumber(w.OrderBy(expr.RowNumber(w).Asc())), expr.RowNumber(w.RowsBetween(expr.Preceding(-1), expr.CurrentRow())), expr.Over(expr.CountDistinctField(orm.KeyExpr(u.ID)), w)} {
+	w := expr.WindowFor(rows.ModelScope(base)).OrderBy(expr.Asc(expr.Value(orm.TextExpr(u.Email))))
+	for _, expression := range []expr.Selected[models.User, int64]{expr.RowNumber(w.OrderBy(expr.AscValue(expr.RowNumber(w)))), expr.RowNumber(w.RowsBetween(expr.Preceding(-1), expr.CurrentRow())), expr.Over(expr.CountDistinctField(orm.KeyExpr(u.ID)), w)} {
 		if items, err := rows.ReadScalar(rows.SelectScalar(rows.From(base), expression)).All(t.Context(), queryfixture.NoQueries(t)); items != nil || !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid window reached executor", err)
 		}
 	}
-	bad := expr.LagOr(expr.Row(expr.Value(orm.EnumExpr(u.Status))).Value(), 1, models.Status("invalid"), w)
+	bad := expr.LagOr(expr.AsSelected(expr.Row(expr.Value(orm.EnumExpr(u.Status)))), 1, models.Status("invalid"), w)
 	if items, err := rows.ReadScalar(rows.SelectScalar(rows.From(base), bad)).All(t.Context(), queryfixture.NoQueries(t)); items != nil || !errors.Is(err, fault.Invalid) {
 		t.Fatal("invalid enum fallback reached executor", err)
 	}

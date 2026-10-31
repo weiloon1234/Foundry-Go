@@ -12,9 +12,9 @@ type a struct{}
 type b struct{}
 
 var source = rows.AsTransaction[a](rows.TransactionOf(rows.ModelRecord(models.Users.Query())), "users_alias")
-var selected = rows.SelectTransactionValue(source, expr.Row(expr.At(rows.TransactionScope(source), orm.KeyExpr(models.Users.ID))).Value())
+var selected = rows.SelectTransactionValue(source, expr.AsSelected(expr.Row(expr.At(rows.TransactionScope(source), orm.KeyExpr(models.Users.ID)))))
 var c = rows.CursorFor(rows.ModelRecord(models.Users.Query()))
 var normal = rows.Read(rows.SelectValue(models.Users.Query(), orm.TextExpr(models.Users.Email)))
 var input = rows.As[a](models.Users.Query(), "u")
 var other = rows.As[b](models.Orders.Query(), "o")
-var invalid = c.Where(expr.Value(orm.TextExpr(models.Users.Email)).Eq("Ada"))
+var invalid = c.Where(expr.Eq(expr.Value(orm.TextExpr(models.Users.Email)), "Ada"))

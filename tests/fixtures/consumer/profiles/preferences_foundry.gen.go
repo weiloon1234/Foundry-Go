@@ -12,6 +12,7 @@ import (
 // PreferencesJSON describes the concrete Preferences JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: PreferencesJSON()
 func PreferencesJSON() foundrycontract.JSON[Preferences] { return foundryPreferencesJSON() }
 
 var foundryPreferencesJSON = sync.OnceValue(func() foundrycontract.JSON[Preferences] {
@@ -31,6 +32,7 @@ var foundryPreferencesJSON = sync.OnceValue(func() foundrycontract.JSON[Preferen
 })
 
 // PreferencesValidationFieldSet retains concrete DTO and value types for validation.
+// Example: PreferencesValidationFields()
 type PreferencesValidationFieldSet struct {
 	// Dark validates the declared JSON property "dark".
 	Dark foundryvalidation.Field[Preferences, bool]
@@ -39,6 +41,7 @@ type PreferencesValidationFieldSet struct {
 }
 
 // PreferencesValidationFields returns typed field descriptors.
+// Example: PreferencesValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func PreferencesValidationFields() PreferencesValidationFieldSet {
 	return *foundryPreferencesValidationFields()

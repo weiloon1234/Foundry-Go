@@ -33,7 +33,7 @@ func TestPostgresIntervalOutputStyles(t *testing.T) {
 				return err
 			}
 			for _, want := range cases {
-				if got := intervalOne(t, tx, expr.Param(orm.IntervalExpr(f.Period), want).Value()); got != want {
+				if got := intervalOne(t, tx, expr.AsSelected(expr.Param(orm.IntervalExpr(f.Period), want))); got != want {
 					t.Fatal(style, got, want)
 				}
 			}
@@ -76,7 +76,7 @@ func TestPostgresIntervalWritesAndDecodeFailure(t *testing.T) {
 		if rows, err := orm.All(t.Context(), tx, q.OrderBy(orm.KeyAsc(f.ID))); err == nil || rows != nil {
 			t.Fatal("bad later row published partial models", rows, err)
 		}
-		if rows, err := rows.ReadScalar(rows.SelectScalar(rows.From(q.OrderBy(orm.KeyAsc(f.ID))), expr.Row(expr.Value(orm.IntervalExpr(f.Period))).Value())).All(t.Context(), tx); err == nil || rows != nil {
+		if rows, err := rows.ReadScalar(rows.SelectScalar(rows.From(q.OrderBy(orm.KeyAsc(f.ID))), expr.AsSelected(expr.Row(expr.Value(orm.IntervalExpr(f.Period)))))).All(t.Context(), tx); err == nil || rows != nil {
 			t.Fatal("bad later row published partial values", rows, err)
 		}
 		return nil

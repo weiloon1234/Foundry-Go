@@ -12,6 +12,7 @@ import (
 // ManageLabelJSON describes the concrete ManageLabel JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ManageLabelJSON()
 func ManageLabelJSON() foundrycontract.JSON[ManageLabel] { return foundryManageLabelJSON() }
 
 var foundryManageLabelJSON = sync.OnceValue(func() foundrycontract.JSON[ManageLabel] {
@@ -21,10 +22,12 @@ var foundryManageLabelJSON = sync.OnceValue(func() foundrycontract.JSON[ManageLa
 })
 
 // ManageLabelValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ManageLabelValidationFields()
 type ManageLabelValidationFieldSet struct {
 }
 
 // ManageLabelValidationFields returns typed field descriptors.
+// Example: ManageLabelValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ManageLabelValidationFields() ManageLabelValidationFieldSet {
 	return *foundryManageLabelValidationFields()

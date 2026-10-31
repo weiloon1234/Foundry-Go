@@ -47,16 +47,16 @@ var filterTestTable = orm.Define("filter_test_records", func(b orm.Builder[filte
 
 func TestRowComparisonValue(t *testing.T) {
 	cmp := expr.CompareRow(expr.Value(orm.EnumExpr(filterTestTable.State)))
-	val := cmp.Value()
+	val := expr.AsSelected(cmp)
 
 	var _ expr.Selected[filterTestRecord, recordState] = val
 
-	asc := val.Asc()
-	desc := val.Desc()
+	asc := expr.AscValue(val)
+	desc := expr.DescValue(val)
 	var _ expr.ProjectionOrder[filterTestRecord] = asc
 	var _ expr.ProjectionOrder[filterTestRecord] = desc
 
-	key := val.Key()
+	key := expr.Key(val)
 	var _ expr.ProjectionKey[filterTestRecord] = key
 
 	core := expr.FoundrySelected(val, sqlowner.Expressions())
@@ -68,7 +68,7 @@ func TestRowComparisonValue(t *testing.T) {
 	}
 
 	var zero expr.RowComparison[filterTestRecord, recordState]
-	zeroVal := zero.Value()
+	zeroVal := expr.AsSelected(zero)
 	zeroCore := expr.FoundrySelected(zeroVal, sqlowner.Expressions())
 	if zeroCore.Node != nil {
 		t.Fatal("expected nil node on zero-value RowComparison.Value()")
@@ -77,16 +77,16 @@ func TestRowComparisonValue(t *testing.T) {
 
 func TestNullableRowComparisonValue(t *testing.T) {
 	cmp := expr.CompareNullableRow(expr.Value(orm.NullableEnumExpr(filterTestTable.Nullable)))
-	val := cmp.Value()
+	val := expr.AsSelected(cmp)
 
 	var _ expr.Selected[filterTestRecord, value.Nullable[recordState]] = val
 
-	asc := val.Asc()
-	desc := val.Desc()
+	asc := expr.AscValue(val)
+	desc := expr.DescValue(val)
 	var _ expr.ProjectionOrder[filterTestRecord] = asc
 	var _ expr.ProjectionOrder[filterTestRecord] = desc
 
-	key := val.Key()
+	key := expr.Key(val)
 	var _ expr.ProjectionKey[filterTestRecord] = key
 
 	core := expr.FoundrySelected(val, sqlowner.Expressions())
@@ -98,7 +98,7 @@ func TestNullableRowComparisonValue(t *testing.T) {
 	}
 
 	var zero expr.NullableRowComparison[filterTestRecord, recordState]
-	zeroVal := zero.Value()
+	zeroVal := expr.AsSelected(zero)
 	zeroCore := expr.FoundrySelected(zeroVal, sqlowner.Expressions())
 	if zeroCore.Node != nil {
 		t.Fatal("expected nil node on zero-value NullableRowComparison.Value()")

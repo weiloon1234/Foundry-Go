@@ -14,6 +14,7 @@ import (
 // ConfirmationRequestJSON describes the concrete ConfirmationRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ConfirmationRequestJSON()
 func ConfirmationRequestJSON() foundrycontract.JSON[ConfirmationRequest] {
 	return foundryConfirmationRequestJSON()
 }
@@ -41,6 +42,7 @@ var foundryConfirmationRequestJSON = sync.OnceValue(func() foundrycontract.JSON[
 })
 
 // ConfirmationRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ConfirmationRequestValidationFields()
 type ConfirmationRequestValidationFieldSet struct {
 	// Code validates the declared JSON property "code".
 	Code foundryvalidation.Field[ConfirmationRequest, mfa.TOTPCode]
@@ -51,6 +53,7 @@ type ConfirmationRequestValidationFieldSet struct {
 }
 
 // ConfirmationRequestValidationFields returns typed field descriptors.
+// Example: ConfirmationRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ConfirmationRequestValidationFields() ConfirmationRequestValidationFieldSet {
 	return *foundryConfirmationRequestValidationFields()

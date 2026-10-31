@@ -11,5 +11,5 @@ import (
 type other struct{}
 
 func invalid() {
-	_ = expr.Where(models.Users.Query(), expr.Year(expr.Value(orm.TimeExpr(scalars.Records.Date))).Eq(2024))
+	_ = expr.Where(models.Users.Query(), expr.Eq(expr.Year(expr.Value(orm.TimeExpr(scalars.Records.Date))), 2024))
 }

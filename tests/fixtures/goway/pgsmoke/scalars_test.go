@@ -35,53 +35,53 @@ func TestStage6d2Scalars(t *testing.T) {
 	must(t, err)
 	d := scalars.Records
 	name := expr.Lower(expr.Trim(expr.Value(orm.TextExpr(d.Name))))
-	if got := readScalar(t, db, name.Value(), codec.String[string]()); got != "héllo_世界%" {
+	if got := readScalar(t, db, expr.AsSelected(name), codec.String[string]()); got != "héllo_世界%" {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.Length(name).Value(), codec.Signed[int64]()); got != 9 {
+	if got := readScalar(t, db, expr.AsSelected(expr.Length(name)), codec.Signed[int64]()); got != 9 {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.Substring(name, 7, 2).Value(), codec.String[string]()); got != "世界" {
+	if got := readScalar(t, db, expr.AsSelected(expr.Substring(name, 7, 2)), codec.String[string]()); got != "世界" {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.LowerNullable(expr.Value(orm.NullableTextExpr(d.MaybeName))).Value(), codec.Nullable(codec.String[string]())); !got.IsNull() {
+	if got := readScalar(t, db, expr.AsSelected(expr.LowerNullable(expr.Value(orm.NullableTextExpr(d.MaybeName)))), codec.Nullable(codec.String[string]())); !got.IsNull() {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.ConcatWSNullable("/", expr.Value(orm.NullableTextExpr(d.MaybeName))).Value(), codec.String[string]()); got != "" {
+	if got := readScalar(t, db, expr.AsSelected(expr.ConcatWSNullable("/", expr.Value(orm.NullableTextExpr(d.MaybeName)))), codec.String[string]()); got != "" {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.Year(expr.Value(orm.TimeExpr(d.Date))).Value(), codec.Signed[int64]()); got != 2024 {
+	if got := readScalar(t, db, expr.AsSelected(expr.Year(expr.Value(orm.TimeExpr(d.Date)))), codec.Signed[int64]()); got != 2024 {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.Second(expr.Value(orm.TimeExpr(d.Clock))).Value(), codec.Decimal()); got.String() != "59.123456" {
+	if got := readScalar(t, db, expr.AsSelected(expr.Second(expr.Value(orm.TimeExpr(d.Clock)))), codec.Decimal()); got.String() != "59.123456" {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.AddDateInterval(expr.Value(orm.TimeExpr(d.Date)), temporal.Days(1)).Value(), codec.LocalDateTime()); got.String() != "2024-03-01T00:00:00" {
+	if got := readScalar(t, db, expr.AsSelected(expr.AddDateInterval(expr.Value(orm.TimeExpr(d.Date)), temporal.Days(1))), codec.LocalDateTime()); got.String() != "2024-03-01T00:00:00" {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.AddClockElapsed(expr.Value(orm.TimeExpr(d.Clock)), time.Second).Value(), codec.WallTime()); got.String() != "00:00:00.123456" {
+	if got := readScalar(t, db, expr.AsSelected(expr.AddClockElapsed(expr.Value(orm.TimeExpr(d.Clock)), time.Second)), codec.WallTime()); got.String() != "00:00:00.123456" {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.IntervalMonths(expr.Value(orm.IntervalExpr(d.Period))).Value(), codec.Signed[int32]()); got != 1 {
+	if got := readScalar(t, db, expr.AsSelected(expr.IntervalMonths(expr.Value(orm.IntervalExpr(d.Period)))), codec.Signed[int32]()); got != 1 {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.IntervalDays(expr.Value(orm.IntervalExpr(d.Period))).Value(), codec.Signed[int32]()); got != 2 {
+	if got := readScalar(t, db, expr.AsSelected(expr.IntervalDays(expr.Value(orm.IntervalExpr(d.Period)))), codec.Signed[int32]()); got != 2 {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.IntervalElapsed(expr.Value(orm.IntervalExpr(d.Period))).Value(), codec.Signed[time.Duration]()); got != 3*time.Second {
+	if got := readScalar(t, db, expr.AsSelected(expr.IntervalElapsed(expr.Value(orm.IntervalExpr(d.Period)))), codec.Signed[time.Duration]()); got != 3*time.Second {
 		t.Fatal(got)
 	}
 	zone, err := expr.LoadTimeZone("America/New_York")
 	must(t, err)
 	shifted := expr.AddInstantInterval(expr.Value(orm.TimeExpr(d.Instant)), temporal.Days(1), zone)
-	if got := readScalar(t, db, expr.IntervalElapsed(expr.InstantDifference(shifted, expr.Value(orm.TimeExpr(d.Instant)))).Value(), codec.Signed[time.Duration]()); got != 23*time.Hour {
+	if got := readScalar(t, db, expr.AsSelected(expr.IntervalElapsed(expr.InstantDifference(shifted, expr.Value(orm.TimeExpr(d.Instant))))), codec.Signed[time.Duration]()); got != 23*time.Hour {
 		t.Fatal(got)
 	}
-	if got := readScalar(t, db, expr.SphericalDistance(expr.Value(orm.NumberExpr(d.Latitude)), expr.Value(orm.NumberExpr(d.Latitude)), expr.GeographicPoint{}).Value(), codec.Float[float64]()); got != 0 {
+	if got := readScalar(t, db, expr.AsSelected(expr.SphericalDistance(expr.Value(orm.NumberExpr(d.Latitude)), expr.Value(orm.NumberExpr(d.Latitude)), expr.GeographicPoint{})), codec.Float[float64]()); got != 0 {
 		t.Fatal(got)
 	}
 	must(t, db.Transaction(ctx, func(tx *database.Tx) error {
-		clock := expr.TransactionTime(rows.ModelScope(d.Query())).Value()
+		clock := expr.AsSelected(expr.TransactionTime(rows.ModelScope(d.Query())))
 		a := readScalar(t, tx, clock, codec.DateTime())
 		b := readScalar(t, tx, clock, codec.DateTime())
 		if a != b {

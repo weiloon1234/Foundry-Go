@@ -12,6 +12,7 @@ import (
 // ResponseJSON describes the concrete Response JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ResponseJSON()
 func ResponseJSON() foundrycontract.JSON[Response] { return foundryResponseJSON() }
 
 var foundryResponseJSON = sync.OnceValue(func() foundrycontract.JSON[Response] {
@@ -26,12 +27,14 @@ var foundryResponseJSON = sync.OnceValue(func() foundrycontract.JSON[Response] {
 })
 
 // ResponseValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ResponseValidationFields()
 type ResponseValidationFieldSet struct {
 	// Email validates the declared JSON property "email".
 	Email foundryvalidation.Field[Response, string]
 }
 
 // ResponseValidationFields returns typed field descriptors.
+// Example: ResponseValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ResponseValidationFields() ResponseValidationFieldSet { return *foundryResponseValidationFields() }
 

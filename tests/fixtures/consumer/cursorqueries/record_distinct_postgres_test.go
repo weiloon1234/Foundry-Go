@@ -21,7 +21,7 @@ func TestPostgresCompleteRecordDistinctOnCursor(t *testing.T) {
 		buyerScope := rows.LeftScope(joinedSource, rows.Scope(buyerSource))
 		orderScope := rows.RightScope(joinedSource, rows.Scope(orderSource))
 		buyerID, orderID := expr.At(buyerScope, orm.KeyExpr(models.Users.ID)), expr.At(orderScope, orm.KeyExpr(models.Orders.ID))
-		winners := rows.DistinctOnRecord(rows.SelectRecord(joinedSource, buyerScope), expr.Group(buyerID)).OrderBy(buyerID.Asc(), orderID.Desc())
+		winners := rows.DistinctOnRecord(rows.SelectRecord(joinedSource, buyerScope), expr.Group(buyerID)).OrderBy(expr.Asc(buyerID), expr.Desc(orderID))
 		winnerCursor := rows.CursorFor(winners)
 		wf := expr.At(winnerCursor.Scope(), orm.KeyExpr(models.Users.ID))
 		winnerWant, err := rows.ReadRecord(winners).All(t.Context(), tx)

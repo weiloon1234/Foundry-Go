@@ -28,10 +28,10 @@ func TestStage6b4TransactionComposition(t *testing.T) {
 		c := rows.TransactionCorrelate(a, b)
 		os, is := rows.TransactionOuterScope(c, rows.TransactionScope(a)), rows.TransactionInnerScope(c, rows.TransactionScope(b))
 		c = c.Where(expr.Equal(expr.At(is, orm.NumberExpr(table.ParentID)), expr.At(os, orm.KeyExpr(table.Key()))))
-		record := rows.SelectTransactionCorrelatedRecord(c, is).OrderBy(expr.At(is, orm.KeyExpr(table.Key())).Desc()).Limit(1).ForUpdate().Of(rows.Target(is)).SkipLocked()
+		record := rows.SelectTransactionCorrelatedRecord(c, is).OrderBy(expr.Desc(expr.At(is, orm.KeyExpr(table.Key())))).Limit(1).ForUpdate().Of(rows.Target(is)).SkipLocked()
 		lat := rows.AsTransactionLateral[joinThird](record, "latest")
 		joined := rows.TransactionLeftJoinLateral(a, lat)
-		selected := rows.SelectTransactionValue(joined, expr.Row(expr.AtNullable(rows.NullableRightScope(joined, rows.TransactionLateralScope(lat)), orm.KeyExpr(table.Key()))).Value()).OrderBy(expr.At(rows.LeftScope(joined, rows.TransactionScope(a)), orm.KeyExpr(table.Key())).Asc())
+		selected := rows.SelectTransactionValue(joined, expr.AsSelected(expr.Row(expr.AtNullable(rows.NullableRightScope(joined, rows.TransactionLateralScope(lat)), orm.KeyExpr(table.Key()))))).OrderBy(expr.Asc(expr.At(rows.LeftScope(joined, rows.TransactionScope(a)), orm.KeyExpr(table.Key()))))
 		got, err := selected.All(ctx, tx)
 		if err != nil {
 			return err
@@ -39,15 +39,15 @@ func TestStage6b4TransactionComposition(t *testing.T) {
 		if !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(3)), value.Null[int64]()}) {
 			t.Fatal(got)
 		}
-		scalar := rows.SelectTransactionCorrelatedScalar(c, expr.Row(expr.At(is, orm.KeyExpr(table.Key()))).Value()).OrderBy(expr.At(is, orm.KeyExpr(table.Key())).Asc()).Limit(1).ForShare()
-		got, err = rows.SelectTransactionValue(a, rows.TransactionCorrelatedScalarRowQuery(scalar).Value()).Where(c.Exists()).All(ctx, tx)
+		scalar := rows.SelectTransactionCorrelatedScalar(c, expr.AsSelected(expr.Row(expr.At(is, orm.KeyExpr(table.Key()))))).OrderBy(expr.Asc(expr.At(is, orm.KeyExpr(table.Key())))).Limit(1).ForShare()
+		got, err = rows.SelectTransactionValue(a, expr.AsSelected(rows.TransactionCorrelatedScalarRowQuery(scalar))).Where(c.Exists()).All(ctx, tx)
 		if err != nil {
 			return err
 		}
 		if !reflect.DeepEqual(got, []value.Nullable[int64]{value.Of(int64(2))}) {
 			t.Fatal(got)
 		}
-		ids := rows.SelectTransactionValue(b, expr.Row(expr.At(rows.TransactionScope(b), orm.NumberExpr(table.ParentID))).Value()).Where(expr.Greater(expr.At(rows.TransactionScope(b), orm.NumberExpr(table.ParentID)), expr.Row(expr.At(rows.TransactionScope(b), orm.NumberExpr(table.ParentID))).Value().Param(0)))
+		ids := rows.SelectTransactionValue(b, expr.AsSelected(expr.Row(expr.At(rows.TransactionScope(b), orm.NumberExpr(table.ParentID))))).Where(expr.Greater(expr.At(rows.TransactionScope(b), orm.NumberExpr(table.ParentID)), expr.ParamOf(expr.AsSelected(expr.Row(expr.At(rows.TransactionScope(b), orm.NumberExpr(table.ParentID)))), 0)))
 		independent := rows.TransactionScalarOf(ids).ForShare()
 		parents, err := rows.SelectTransactionRecord(a, rows.TransactionScope(a)).Where(rows.TransactionInQuery(expr.At(rows.TransactionScope(a), orm.KeyExpr(table.Key())), independent), rows.TransactionExistsQuery(a, independent)).All(ctx, tx)
 		if err != nil {

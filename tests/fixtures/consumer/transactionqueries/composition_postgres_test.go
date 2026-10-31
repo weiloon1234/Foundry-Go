@@ -145,7 +145,7 @@ func TestPostgresTransactionDerivedAndNestedJoinLocks(t *testing.T) {
 	left := rows.AsTransaction[claimedAlias](nested, "candidate")
 	right := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyEq(Records.ID, 2)))), "other")
 	a, b := recordAt(rows.TransactionScope(left)), recordAt(rows.TransactionScope(right))
-	joined := rows.TransactionInnerJoin(left, right, rows.OnEqual(expr.Add(a.ID, expr.Row(a.ID).Value().Param(1)), b.ID))
+	joined := rows.TransactionInnerJoin(left, right, rows.OnEqual(expr.Add(a.ID, expr.ParamOf(expr.AsSelected(expr.Row(a.ID)), 1)), b.ID))
 	leftScope, rightScope := rows.LeftScope(joined, rows.TransactionScope(left)), rows.RightScope(joined, rows.TransactionScope(right))
 	q := rows.ForKeyShare(rows.SelectTransactionRecord(joined, leftScope)).Of(rows.Target(rightScope))
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {

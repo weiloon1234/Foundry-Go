@@ -41,7 +41,7 @@ func TestResultCursorWindowAndBidirectionalNavigation(t *testing.T) {
 		t.Fatal(previous, err, state.sql)
 	}
 	state.sql = ""
-	changed := c.Where(id.Ne(99))
+	changed := c.Where(expr.Ne(id, 99))
 	if _, err := changed.Paginate(t.Context(), db, orm.CursorRequest[member]{Size: 1, After: page.Next}); !errors.As(err, new(*orm.CursorInputError)) || state.sql != "" {
 		t.Fatal(err, state.sql)
 	}
@@ -49,7 +49,7 @@ func TestResultCursorWindowAndBidirectionalNavigation(t *testing.T) {
 
 func TestResultCursorNullableValueAndInvalidDeclarations(t *testing.T) {
 	m := declareMembers()
-	c := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value())))
+	c := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname)))))))
 	c = c.UniqueBy(expr.Group(c.Value()))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"nick"}}}
 	db := openTest(t, state)
@@ -68,7 +68,7 @@ func TestResultCursorNullableValueAndInvalidDeclarations(t *testing.T) {
 	base := rows.CursorFor(rows.ModelRecord(m.Query()))
 	id := expr.At(base.Scope(), orm.KeyExpr(m.ID))
 	foreign := rows.CursorFor(rows.ModelRecord(declareMembers().Query()))
-	cases := []rows.CursorQuery[member]{base, base.UniqueBy(expr.Group(id), expr.Group(id)), base.UniqueBy(expr.Group(id)).OrderBy(id.Asc(), id.Desc()), base.UniqueBy(expr.Group(expr.At(foreign.Scope(), orm.KeyExpr(m.ID)))), base.UniqueBy(expr.Group(id)).OrderBy(id.Asc().NullsLast()), {}, base.UniqueBy(expr.Group(id)).OrderBy(expr.AddValue(expr.Row(id).Value(), expr.Row(id).Value()).Asc())}
+	cases := []rows.CursorQuery[member]{base, base.UniqueBy(expr.Group(id), expr.Group(id)), base.UniqueBy(expr.Group(id)).OrderBy(expr.Asc(id), expr.Desc(id)), base.UniqueBy(expr.Group(expr.At(foreign.Scope(), orm.KeyExpr(m.ID)))), base.UniqueBy(expr.Group(id)).OrderBy(expr.Asc(id).NullsLast()), {}, base.UniqueBy(expr.Group(id)).OrderBy(expr.AscValue(expr.AddValue(expr.AsSelected(expr.Row(id)), expr.AsSelected(expr.Row(id)))))}
 	for i, bad := range cases {
 		if _, err := bad.Paginate(t.Context(), db, orm.CursorRequest[member]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 			t.Fatal(i, err, state.sql)
@@ -97,7 +97,7 @@ func TestResultCursorFailureDiscardsPageAndRejectsSensitiveKeys(t *testing.T) {
 	table := orm.Define("secrets", func(b orm.Builder[secret], s *secret) secretFields {
 		return secretFields{orm.TableOf(b, &s.ID), orm.ColumnOf(b, &s.Name, orm.Codec(codec.String[string]().WithSensitiveValues()))}
 	})
-	scalar := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(table.Query()), expr.Row(expr.Value(orm.ColumnExpr(table.Name))).Value())))
+	scalar := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(table.Query()), expr.AsSelected(expr.Row(expr.Value(orm.ColumnExpr(table.Name)))))))
 	state := &driverState{}
 	if _, err := scalar.UniqueBy(expr.Group(scalar.Value())).Paginate(t.Context(), openTest(t, state), orm.CursorRequest[string]{Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 		t.Fatal(err, state.sql)

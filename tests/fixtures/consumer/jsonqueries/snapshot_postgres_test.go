@@ -16,9 +16,9 @@ func checkSnapshotKind(t *testing.T, tx *database.Tx, original []jsonqueries.Doc
 	filter := document(t, jsonqueries.Preferences{Theme: value.Set("dark")})
 	selected := rowset.Select(rowset.From(f.Query().OrderBy(orm.KeyAsc(f.Key()))), r.Row,
 		rowset.Map(r.ID, expr.Value(orm.KeyExpr(f.Key()))), rowset.Map(r.Settings, expr.Value(orm.JSONExpr(f.Settings))),
-		rowset.MapSelected(r.Kind, expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))).Value()),
-		rowset.MapSelected(r.BackupKind, expr.JSONTypeNullable(expr.Value(orm.NullableJSONExpr(f.Backup))).Value()),
-		rowset.MapSelected(r.Matches, expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))).Value()))
+		rowset.MapSelected(r.Kind, expr.AsSelected(expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))))),
+		rowset.MapSelected(r.BackupKind, expr.AsSelected(expr.JSONTypeNullable(expr.Value(orm.NullableJSONExpr(f.Backup))))),
+		rowset.MapSelected(r.Matches, expr.AsSelected(expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))))))
 	rows, err := rowset.Read(selected).All(t.Context(), tx)
 	if err != nil || len(rows) != 3 {
 		t.Fatal(rows, err)

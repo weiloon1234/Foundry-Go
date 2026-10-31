@@ -29,4 +29,4 @@ type fields struct {
 
 var schema = rows.Define(func(b rows.Builder[result], r *result) fields { return fields{b.Row(), rows.NumberOf(b, &r.Count)} })
 
-var _ = rows.ProjectCorrelated(link, schema, rows.MapSelected(schema.Count, expr.Count[rows.Correlation[rows.Alias[parentTag, models.User], rows.Alias[childTag, models.Order]]]().Value())).All
+var _ = rows.ProjectCorrelated(link, schema, rows.MapSelected(schema.Count, expr.AsSelected(expr.Count[rows.Correlation[rows.Alias[parentTag, models.User], rows.Alias[childTag, models.Order]]]()))).All

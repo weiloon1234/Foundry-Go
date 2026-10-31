@@ -9,5 +9,5 @@ import (
 )
 
 func invalid() {
-	_ = rows.MapSelected(intervalqueries.Summaries.Count, expr.SumInterval(orm.IntervalExpr(intervalqueries.Samples.Period)).Value())
+	_ = rows.MapSelected(intervalqueries.Summaries.Count, expr.AsSelected(expr.SumInterval(orm.IntervalExpr(intervalqueries.Samples.Period))))
 }

@@ -16,7 +16,7 @@ first, second := rowset.AsRecord[eligibleAlias](eligible, "first_user"), rowset.
 a, b := rowset.Scope(first), rowset.Scope(second)
 joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, orm.KeyExpr(models.Users.ID)), expr.At(b, orm.KeyExpr(models.Users.ID))))
 fields := rowset.LeftScope(joined, rowset.Scope(first))
-names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.Row(expr.At(fields, orm.TextExpr(models.Users.Email))).Value()), expr.At(fields, orm.TextExpr(models.Users.Email)).Asc())
+names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, orm.TextExpr(models.Users.Email))))), expr.Asc(expr.At(fields, orm.TextExpr(models.Users.Email))))
 ```
 
 The `rowset` import names `database/orm/rows`; the linked package declares both

@@ -74,15 +74,15 @@ func TestTableRejectsMissingAuthorityAndConflictingDeclarations(t *testing.T) {
 		"unknown sort": func(s *Spec[reportRecord, ReportRow, reportActor]) { s.DefaultSort[0].Column = "not_a_column" },
 		"wrong scalar metadata": func(s *Spec[reportRecord, ReportRow, reportActor]) {
 			_, name, _, _ := reportFields()
-			s.Columns[0] = DefineColumn[reportRecord](validation.DefineField("id", func(ReportRow) string { return "forged" }), "reports.id").FilterBy(Where(foundryhttp.StringQuery[string](), name)).Registration()
+			s.Columns[0] = DefineColumn[reportRecord](validation.DefineField("id", func(ReportRow) string { return "forged" }), "reports.id", FilterBy(Where(foundryhttp.StringQuery[string](), expr.TextFilter(name))))
 		},
 		"no exportable column": func(s *Spec[reportRecord, ReportRow, reportActor]) {
-			s.Columns = []ColumnRegistration[reportRecord, ReportRow]{DefineColumn[reportRecord](validation.DefineField("id", func(row ReportRow) int64 { return row.ID }), "reports.id").Registration()}
+			s.Columns = []ColumnRegistration[reportRecord, ReportRow]{DefineColumn[reportRecord](validation.DefineField("id", func(row ReportRow) int64 { return row.ID }), "reports.id")}
 			s.DefaultSort = nil
 		},
 		"overlapping extra filter": func(s *Spec[reportRecord, ReportRow, reportActor]) {
 			id, _, _, _ := reportFields()
-			s.Filters = []FilterRegistration[reportRecord]{DefineFilter("id", "reports.id", Where(foundryhttp.IntegerQuery[int64](), id))}
+			s.Filters = []FilterRegistration[reportRecord]{DefineFilter("id", "reports.id", Where(foundryhttp.IntegerQuery[int64](), expr.OrderFilter(id)))}
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -175,7 +175,7 @@ func TestSearchableColumnsCannotSpanWhereAndHavingPhases(t *testing.T) {
 
 func TestTableOwnsNestedFilterDeclarations(t *testing.T) {
 	spec := reportSpec()
-	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), expr.Count[reportRecord]()))}
+	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), expr.OrderValueFilter(expr.Count[reportRecord]())))}
 	table := Define(spec)
 	before, err := table.Description()
 	if err != nil {

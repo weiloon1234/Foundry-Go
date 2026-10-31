@@ -32,7 +32,7 @@ These are predicates, separate from result DISTINCT clauses.
 q := models.Users.Query()
 younger, older := rowset.As[youngerAlias](q, "younger"), rowset.As[olderAlias](q, "older")
 y, o := rowset.Scope(younger), rowset.Scope(older)
-adjacent := rowset.OnEqual(expr.Add(expr.At(y, orm.NumberExpr(models.Users.Age)), expr.Row(expr.At(y, orm.NumberExpr(models.Users.Age))).Value().Param(1)), expr.At(o, orm.NumberExpr(models.Users.Age)))
+adjacent := rowset.OnEqual(expr.Add(expr.At(y, orm.NumberExpr(models.Users.Age)), expr.ParamOf(expr.AsSelected(expr.Row(expr.At(y, orm.NumberExpr(models.Users.Age)))), 1)), expr.At(o, orm.NumberExpr(models.Users.Age)))
 ```
 
 The `rowset` import is `database/orm/rows`; alias tags are in the linked package.

@@ -13,7 +13,7 @@ import (
 type tag struct{}
 
 func Run(ctx context.Context, ex database.Executor, yield func(int64) error) error {
-	q := rows.ReadScalar(rows.SelectScalar(rows.From(models.Orders.Query()), expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Value()))
+	q := rows.ReadScalar(rows.SelectScalar(rows.From(models.Orders.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))))))
 	if _, err := rows.CompileRead(q); err != nil {
 		return err
 	}

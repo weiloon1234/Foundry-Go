@@ -14,6 +14,7 @@ import (
 // OrderPlacedJSON describes the concrete OrderPlaced JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: OrderPlacedJSON()
 func OrderPlacedJSON() foundrycontract.JSON[OrderPlaced] { return foundryOrderPlacedJSON() }
 
 var foundryOrderPlacedJSON = sync.OnceValue(func() foundrycontract.JSON[OrderPlaced] {
@@ -32,6 +33,7 @@ var foundryOrderPlacedJSON = sync.OnceValue(func() foundrycontract.JSON[OrderPla
 })
 
 // OrderPlacedValidationFieldSet retains concrete DTO and value types for validation.
+// Example: OrderPlacedValidationFields()
 type OrderPlacedValidationFieldSet struct {
 	// OrderID validates the declared JSON property "order_id".
 	OrderID foundryvalidation.Field[OrderPlaced, model.ID[models.Order]]
@@ -40,6 +42,7 @@ type OrderPlacedValidationFieldSet struct {
 }
 
 // OrderPlacedValidationFields returns typed field descriptors.
+// Example: OrderPlacedValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func OrderPlacedValidationFields() OrderPlacedValidationFieldSet {
 	return *foundryOrderPlacedValidationFields()

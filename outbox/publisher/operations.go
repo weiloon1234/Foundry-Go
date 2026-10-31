@@ -110,7 +110,7 @@ func (p *Publisher) Prune(ctx context.Context, cutoff time.Time, limit int) (int
 		// One bounded DELETE ... WHERE id IN (SELECT id ... LIMIT n): no row
 		// (payload included) is loaded to choose the batch. A concurrent prune
 		// of the same rows waits, then deletes none of them twice.
-		oldest := rows.SelectScalar(rows.FromModel(outboxstore.Messages.Query().Where(orm.TextEq(fields.PublishState, outbox.Published), orm.NullableTimeLt(fields.PublishedAt, before)).OrderBy(orm.NullableTimeAsc(fields.PublishedAt), orm.KeyAsc(fields.ID)).Limit(limit)), expr.Row(expr.Value(orm.KeyExpr(fields.ID))).Value())
+		oldest := rows.SelectScalar(rows.FromModel(outboxstore.Messages.Query().Where(orm.TextEq(fields.PublishState, outbox.Published), orm.NullableTimeLt(fields.PublishedAt, before)).OrderBy(orm.NullableTimeAsc(fields.PublishedAt), orm.KeyAsc(fields.ID)).Limit(limit)), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(fields.ID)))))
 		removed, err := orm.DeleteAll(ctx, tx, expr.Where(outboxstore.Messages.Query(), rows.InQuery(expr.Value(orm.KeyExpr(fields.ID)), oldest)).Where(orm.TextEq(fields.PublishState, outbox.Published)))
 		deleted = int(removed)
 		return err

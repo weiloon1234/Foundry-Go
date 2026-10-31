@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// CorrelatedScalar keeps one value bound to its enclosing scope. Example: rows.SelectCorrelatedScalar(c,expr.Row(childID).Value()).
+// CorrelatedScalar keeps one value bound to its enclosing scope. Example: rows.SelectCorrelatedScalar(c,expr.AsSelected(expr.Row(childID))).
 type CorrelatedScalar[O, I, V any] struct {
 	_      [0]*O
 	_      [0]*I
@@ -16,7 +16,7 @@ type CorrelatedScalar[O, I, V any] struct {
 	column ormcore.Column[V]
 }
 
-// SelectCorrelatedScalar selects one lifted value without an execution escape. Example: rows.SelectCorrelatedScalar(c,expr.Count[rows.Correlation[User,Order]]().Value()).
+// SelectCorrelatedScalar selects one lifted value without an execution escape. Example: rows.SelectCorrelatedScalar(c,expr.AsSelected(expr.Count[rows.Correlation[User, Order]]())).
 func SelectCorrelatedScalar[O, I, V any](c CorrelatedSource[O, I], v expr.Selected[Correlation[O, I], V]) CorrelatedScalar[O, I, V] {
 	s := SelectScalar(selectionAdapter[Correlation[O, I]]{c.core.Source}, v)
 	c.core.Source = s.source
@@ -29,7 +29,7 @@ func (s CorrelatedScalar[O, I, V]) Where(ps ...expr.Predicate[Correlation[O, I]]
 	return s
 }
 
-// OrderBy appends inner ordering. Example: selected.OrderBy(childID.Desc()).
+// OrderBy appends inner ordering. Example: selected.OrderBy(expr.Desc(childID)).
 func (s CorrelatedScalar[O, I, V]) OrderBy(os ...expr.Order[Correlation[O, I]]) CorrelatedScalar[O, I, V] {
 	s.core.Source = orderSource(s.core.Source, os)
 	return s

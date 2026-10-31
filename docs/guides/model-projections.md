@@ -69,9 +69,9 @@ no model mutations or eager loading. For a reusable query source, wrap it in
 o := models.Orders
 totals := rowset.GroupBy(rowset.Select(rowset.From(models.Orders.Query()), reports.BuyerTotalRows.Row,
 	rowset.Map(reports.BuyerTotalRows.BuyerID, expr.Value(orm.ColumnExpr(o.BuyerID))),
-	rowset.MapSelected(reports.BuyerTotalRows.Total, expr.Sum(orm.NumberExpr(o.TotalCents)).Value()),
-	rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.Count[models.Order]().Value()),
-	rowset.MapSelected(reports.BuyerTotalRows.Average, expr.Avg(orm.NumberExpr(o.TotalCents)).Value()),
+	rowset.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(expr.Sum(orm.NumberExpr(o.TotalCents)))),
+	rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.AsSelected(expr.Count[models.Order]())),
+	rowset.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.Avg(orm.NumberExpr(o.TotalCents)))),
 ), expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID))))
 ```
 

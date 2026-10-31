@@ -2,7 +2,7 @@
 
 <!-- compiled-examples -->
 
-An aggregate's `Filter` restricts its own contributing rows. Source WHERE filters
+`expr.Filter(aggregate, predicates...)` restricts one aggregate's contributing rows. Source WHERE filters
 all calculations; `rows.Having` filters completed groups. Adapt model predicates
 with `expr.ModelPredicate`; aliased operands already produce expression predicates.
 
@@ -11,13 +11,13 @@ with `expr.ModelPredicate`; aliased operands already produce expression predicat
 <!-- go-source: tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go -->
 ```go
 predicate := expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 0))
-total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents)).Filter(predicate)
-count := expr.Count[models.Order]().Filter(predicate)
-exists := expr.Exists[models.Order]().Filter(predicate)
+total := expr.Filter(expr.Sum(orm.NumberExpr(models.Orders.TotalCents)), predicate)
+count := expr.Filter(expr.Count[models.Order](), predicate)
+exists := expr.Filter(expr.Exists[models.Order](), predicate)
 selected := rows.Select(rows.From(models.Orders.Query()), reports.OrderSummaries,
-	rows.MapSelected(reports.OrderSummaries.Total, total.Value()),
-	rows.MapSelected(reports.OrderSummaries.Count, count.Value()))
-got, err := rows.CompileRead(rows.Read(rows.Having(selected, expr.HavingAnd(count.Gt(0), total.Gt(decimal.FromInt64(1)), exists.Eq(true)))))
+	rows.MapSelected(reports.OrderSummaries.Total, expr.AsSelected(total)),
+	rows.MapSelected(reports.OrderSummaries.Count, expr.AsSelected(count)))
+got, err := rows.CompileRead(rows.Read(rows.Having(selected, expr.HavingAnd(expr.GtValue(count, 0), expr.GtValue(total, decimal.FromInt64(1)), expr.EqValue(exists, true)))))
 ```
 
 Chained `Filter` calls append with AND, leaving previous descriptors unchanged.

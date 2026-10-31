@@ -38,18 +38,18 @@ func TestStage6a2Conditionals(t *testing.T) {
 	source := rows.As[arithmeticSide](table.Query(), "r")
 	amount := expr.OrderRow(expr.At(rows.Scope(source), orm.NumberExpr(table.Amount)))
 	missing := expr.At(rows.Scope(source), orm.NullableNumberExpr(table.Missing))
-	zero := expr.OrderRow(amount).Param(0)
+	zero := expr.ParamOf(expr.OrderRow(amount), 0)
 	fields := rows.Define(func(b rows.Builder[conditionalRecordResult], r *conditionalRecordResult) conditionalRecordFields {
 		return conditionalRecordFields{b.Row(), rows.NumberOf(b, &r.Required), rows.NumberOf(b, &r.Choice), rows.NullableNumberOf(b, &r.NullChoice), rows.NullableNumberOf(b, &r.Equal), rows.NullableNumberOf(b, &r.Missing)}
 	})
-	choice := expr.When(amount.Gt(5), amount).When(amount.Eq(0), zero).Else(expr.OrderRow(amount).Param(10))
+	choice := expr.When(expr.Gt(amount, 5), amount).When(expr.Eq(amount, 0), zero).Else(expr.ParamOf(expr.OrderRow(amount), 10))
 	q := rows.OrderBy(rows.Select(source, fields,
-		rows.MapSelected(fields.Required, expr.Coalesce(missing, amount).Value()),
-		rows.MapSelected(fields.Choice, choice.Value()),
-		rows.MapSelected(fields.NullChoice, expr.When(amount.Gt(5), amount).ElseNull().Value()),
-		rows.MapSelected(fields.Equal, expr.NullIf(choice, zero).Value()),
-		rows.MapSelected(fields.Missing, expr.NullIfNullable(expr.CoalesceNullable(missing, expr.NullableRow(amount).Param(value.Null[int64]())), expr.NullableRow(zero)).Value()),
-	), expr.At(rows.Scope(source), orm.KeyExpr(table.Key())).Asc())
+		rows.MapSelected(fields.Required, expr.AsSelected(expr.Coalesce(missing, amount))),
+		rows.MapSelected(fields.Choice, expr.AsSelected(choice)),
+		rows.MapSelected(fields.NullChoice, expr.AsSelected(expr.When(expr.Gt(amount, 5), amount).ElseNull())),
+		rows.MapSelected(fields.Equal, expr.AsSelected(expr.NullIf(choice, zero))),
+		rows.MapSelected(fields.Missing, expr.AsSelected(expr.NullIfNullable(expr.CoalesceNullable(missing, expr.ParamOf(expr.NullableRow(amount), value.Null[int64]())), expr.NullableRow(zero)))),
+	), expr.Asc(expr.At(rows.Scope(source), orm.KeyExpr(table.Key()))))
 	got, err := rows.Read(q).All(ctx, db)
 	must(t, err)
 	if len(got) != 2 || got[0].Required != 7 || got[0].Choice != 7 || !got[0].Missing.IsNull() || got[1].Required != 0 || got[1].Choice != 0 || !got[1].NullChoice.IsNull() || !got[1].Equal.IsNull() || !got[1].Missing.IsNull() {
@@ -81,9 +81,9 @@ func TestStage6a2Conditionals(t *testing.T) {
 		}
 		a := rows.As[arithmeticSide](input, "r")
 		count := expr.Count[rows.Alias[arithmeticSide, arithmeticRecord]]()
-		selected := expr.WhenValue(count.Gt(0), count.Value()).Else(count.Param(0).Value())
-		result := expr.CoalesceValue(expr.NullIfValue(selected, count.Param(0).Value()), count.Param(0).Value())
-		nullable := expr.CoalesceNullableValue(expr.WhenValue(count.Gt(0), count.Value()).ElseNull())
+		selected := expr.WhenValue(expr.GtValue(count, 0), expr.AsSelected(count)).Else(expr.AsSelected(expr.ParamOf(count, 0)))
+		result := expr.CoalesceValue(expr.NullIfValue(selected, expr.AsSelected(expr.ParamOf(count, 0))), expr.AsSelected(expr.ParamOf(count, 0)))
+		nullable := expr.CoalesceNullableValue(expr.WhenValue(expr.GtValue(count, 0), expr.AsSelected(count)).ElseNull())
 		out, e := rows.Read(rows.Select(a, summaryRows, rows.MapSelected(summaryRows.Count, result), rows.MapSelected(summaryRows.Missing, expr.NullIfNullableValue(nullable, nullable)))).All(ctx, ex)
 		must(t, e)
 		if len(out) != 1 || !out[0].Missing.IsNull() {

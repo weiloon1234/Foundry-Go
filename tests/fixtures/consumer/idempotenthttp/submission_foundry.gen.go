@@ -13,6 +13,7 @@ import (
 // SubmissionJSON describes the concrete Submission JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: SubmissionJSON()
 func SubmissionJSON() foundrycontract.JSON[Submission] { return foundrySubmissionJSON() }
 
 var foundrySubmissionJSON = sync.OnceValue(func() foundrycontract.JSON[Submission] {
@@ -35,6 +36,7 @@ var foundrySubmissionJSON = sync.OnceValue(func() foundrycontract.JSON[Submissio
 })
 
 // SubmissionValidationFieldSet retains concrete DTO and value types for validation.
+// Example: SubmissionValidationFields()
 type SubmissionValidationFieldSet struct {
 	// Failure validates the declared JSON property "failure".
 	Failure foundryvalidation.Field[Submission, string]
@@ -45,6 +47,7 @@ type SubmissionValidationFieldSet struct {
 }
 
 // SubmissionValidationFields returns typed field descriptors.
+// Example: SubmissionValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func SubmissionValidationFields() SubmissionValidationFieldSet {
 	return *foundrySubmissionValidationFields()

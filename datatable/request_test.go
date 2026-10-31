@@ -116,22 +116,22 @@ func TestRequestAllowlistBoundsAndStableOrdering(t *testing.T) {
 func TestLikeRequiresExplicitOptIn(t *testing.T) {
 	_, name, note, _ := reportFields()
 	text := foundryhttp.StringQuery[string]()
-	plain := Where(text, name)
+	plain := Where(text, expr.TextFilter(name))
 	if info, err := plain.Description(); err != nil || slices.Contains(info.Operators, Like) || !slices.Contains(info.Operators, Contains) {
 		t.Fatal("like was enabled without an explicit opt-in", info.Operators, err)
 	}
 	if plain.Restrict(Like).Validate() == nil {
 		t.Fatal("restriction enabled a disabled pattern operator")
 	}
-	allowed := Where(text, name).AllowLike()
+	allowed := Where(text, expr.TextFilter(name)).AllowLike()
 	if info, err := allowed.Description(); err != nil || !slices.Contains(info.Operators, Like) {
 		t.Fatal("AllowLike did not enable like", err)
 	}
-	if info, err := NullableWhere(text, note).AllowLike().Restrict(Like, IsNull).Description(); err != nil || !reflect.DeepEqual(info.Operators, []Operator{IsNull, Like}) {
+	if info, err := NullableWhere(text, expr.NullableTextFilter(note)).AllowLike().Restrict(Like, IsNull).Description(); err != nil || !reflect.DeepEqual(info.Operators, []Operator{IsNull, Like}) {
 		t.Fatal("nullable like could not be restricted after opt-in", info.Operators, err)
 	}
 	id, _, _, _ := reportFields()
-	if Where(foundryhttp.IntegerQuery[int64](), id).AllowLike().Validate() == nil {
+	if Where(foundryhttp.IntegerQuery[int64](), expr.OrderFilter(id)).AllowLike().Validate() == nil {
 		t.Fatal("like enabled on a source without pattern comparisons")
 	}
 	spec := reportSpec()
@@ -139,7 +139,7 @@ func TestLikeRequiresExplicitOptIn(t *testing.T) {
 	if _, err := table.definition.prepare(Request{Filters: []Filter{{Op: Like, Column: "name", Values: []string{"A%"}}}}, DefaultConfig()); !errors.Is(err, fault.Invalid) {
 		t.Fatal("request used an undeclared like filter", err)
 	}
-	spec.Columns[1] = DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name").SortBy(name.Value()).FilterBy(Where(text, name).AllowLike()).Registration()
+	spec.Columns[1] = DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name", SortBy(expr.AsSelected(name)), FilterBy(Where(text, expr.TextFilter(name)).AllowLike()))
 	table = Define(spec)
 	if err := table.Validate(); err != nil {
 		t.Fatal(err)
@@ -213,7 +213,7 @@ func TestRequestValidatesEntireShapeBeforeCallingScalarExtensions(t *testing.T) 
 	calls := 0
 	codec := foundryhttp.DescribeURL[int64](countingIntegerCodec{&calls}, contract.DefineScalar[int64](contract.Type{ID: "int64", Kind: contract.IntegerKind, Bits: 64, Signed: true}))
 	id, _, _, _ := reportFields()
-	spec.Columns[0] = DefineColumn[reportRecord](validation.DefineField("id", func(row ReportRow) int64 { return row.ID }), "reports.id").FilterBy(Where(codec, id)).Registration()
+	spec.Columns[0] = DefineColumn[reportRecord](validation.DefineField("id", func(row ReportRow) int64 { return row.ID }), "reports.id", FilterBy(Where(codec, expr.OrderFilter(id))))
 	table := Define(spec)
 	if err := table.Validate(); err != nil {
 		t.Fatal(err)
@@ -230,7 +230,7 @@ func TestRequestValidatesEntireShapeBeforeCallingScalarExtensions(t *testing.T) 
 
 func TestFilterGroupsPreserveWhereAndHavingPhases(t *testing.T) {
 	spec := reportSpec()
-	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), expr.Count[reportRecord]()))}
+	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), expr.OrderValueFilter(expr.Count[reportRecord]())))}
 	table := Define(spec)
 	if err := table.Validate(); err != nil {
 		t.Fatal(err)
@@ -322,7 +322,7 @@ func FuzzDatatableRequestBounds(f *testing.F) {
 
 func TestNestedFilterCallbacksKeepDeclarationOrderAndPhaseErrors(t *testing.T) {
 	spec := reportSpec()
-	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), expr.Count[reportRecord]()))}
+	spec.Filters = []FilterRegistration[reportRecord]{DefineFilter("count", "reports.count", Having(foundryhttp.IntegerQuery[int64](), expr.OrderValueFilter(expr.Count[reportRecord]())))}
 	var calls []string
 	for _, index := range []int{0, 1, 2} {
 		declaration := spec.Columns[index].declaration

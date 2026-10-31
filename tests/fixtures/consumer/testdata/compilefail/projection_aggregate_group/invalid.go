@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var invalid = expr.Group(expr.Sum(orm.NumberExpr(models.Orders.TotalCents)).Value())
+var invalid = expr.Group(expr.AsSelected(expr.Sum(orm.NumberExpr(models.Orders.TotalCents))))

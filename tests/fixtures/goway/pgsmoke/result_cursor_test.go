@@ -23,7 +23,7 @@ func TestStage6c3ResultCursorAndReadTerminals(t *testing.T) {
 		return treeTable{orm.TableOf(b, &r.ID), orm.NumberOf(b, &r.ParentID)}
 	})
 	c := rows.CursorFor(rows.ModelRecord(table.Query()))
-	c = c.OrderBy(expr.At(c.Scope(), orm.NumberExpr(table.ParentID)).Asc()).UniqueBy(expr.Group(expr.At(c.Scope(), orm.KeyExpr(table.Key()))))
+	c = c.OrderBy(expr.Asc(expr.At(c.Scope(), orm.NumberExpr(table.ParentID)))).UniqueBy(expr.Group(expr.At(c.Scope(), orm.KeyExpr(table.Key()))))
 	first, err := c.Paginate(ctx, db, orm.CursorRequest[treeNode]{Size: 1})
 	must(t, err)
 	next, err := c.Paginate(ctx, db, orm.CursorRequest[treeNode]{Size: 1, After: first.Next})
@@ -33,13 +33,13 @@ func TestStage6c3ResultCursorAndReadTerminals(t *testing.T) {
 	if first.Items[0].ID != 1 || next.Items[0].ID != 2 || !reflect.DeepEqual(previous.Items, first.Items) {
 		t.Fatal(first, next, previous)
 	}
-	scalar := rows.Read(rows.SelectValue(table.Query(), orm.NumberExpr(table.ParentID))).OrderBy(expr.Value(orm.KeyExpr(table.Key())).Asc())
+	scalar := rows.Read(rows.SelectValue(table.Query(), orm.NumberExpr(table.ParentID))).OrderBy(expr.Asc(expr.Value(orm.KeyExpr(table.Key()))))
 	page, err := scalar.Paginate(ctx, db, orm.PageRequest{Number: 2, Size: 2})
 	must(t, err)
 	if page.Total != 3 || !reflect.DeepEqual(page.Items, []int64{1}) {
 		t.Fatal(page)
 	}
-	nullable := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(table.Query()), expr.Nullable(expr.Row(expr.Value(orm.KeyExpr(table.Key()))).Value()))))
+	nullable := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(table.Query()), expr.Nullable(expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(table.Key()))))))))
 	nullable = nullable.UniqueBy(expr.Group(nullable.Value()))
 	p, err := nullable.Paginate(ctx, db, orm.CursorRequest[value.Nullable[int64]]{Size: 2})
 	must(t, err)
@@ -48,8 +48,8 @@ func TestStage6c3ResultCursorAndReadTerminals(t *testing.T) {
 	}
 	must(t, db.Transaction(ctx, func(tx *database.Tx) error {
 		a := rows.AsTransaction[joinLeft](rows.TransactionOf(rows.ModelRecord(table.Query())), "nodes")
-		q := rows.SelectTransactionValue(a, expr.Row(expr.At(rows.TransactionScope(a), orm.KeyExpr(table.Key()))).Value())
-		got, err := rows.ForUpdate(q).Of(rows.Target(rows.TransactionScope(a))).OrderBy(expr.At(rows.TransactionScope(a), orm.KeyExpr(table.Key())).Asc()).Limit(1).All(ctx, tx)
+		q := rows.SelectTransactionValue(a, expr.AsSelected(expr.Row(expr.At(rows.TransactionScope(a), orm.KeyExpr(table.Key())))))
+		got, err := rows.ForUpdate(q).Of(rows.Target(rows.TransactionScope(a))).OrderBy(expr.Asc(expr.At(rows.TransactionScope(a), orm.KeyExpr(table.Key())))).Limit(1).All(ctx, tx)
 		if err != nil {
 			return err
 		}

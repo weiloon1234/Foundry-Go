@@ -23,7 +23,7 @@ import (
 
 func parameterRoundTrip[V any](t *testing.T, tx *database.Tx, c codec.Codec[V], input, want V) {
 	t.Helper()
-	actual, err := rows.ReadScalar(rows.SelectScalar(rows.From(recursionTable.Query()), expr.Constant[recursionRecord](c, input).Value())).RequireFirst(t.Context(), tx)
+	actual, err := rows.ReadScalar(rows.SelectScalar(rows.From(recursionTable.Query()), expr.AsSelected(expr.Constant[recursionRecord](c, input)))).RequireFirst(t.Context(), tx)
 	if err != nil || !reflect.DeepEqual(actual, want) {
 		t.Fatalf("parameter %T: got %v, want %v: %v", want, actual, want, err)
 	}

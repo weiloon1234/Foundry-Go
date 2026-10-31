@@ -8,4 +8,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.DistinctOnScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))).Value()), expr.Group(expr.Value(orm.KeyExpr(models.Orders.ID))))
+var _ = rows.DistinctOnScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))))), expr.Group(expr.Value(orm.KeyExpr(models.Orders.ID))))

@@ -3,7 +3,7 @@
 <!-- compiled-examples -->
 
 `expr.Group(rowValue)` constructs a row grouping key. A selected expression's
-`.Key()` constructs an `expr.ProjectionKey[S]` for selected DISTINCT ON and window
+`expr.Key(selected)` constructs an `expr.ProjectionKey[S]` for selected DISTINCT ON and window
 partitioning. Neither operation erases scope or makes an aggregate a row operand.
 
 ## Group by a computed value
@@ -16,9 +16,9 @@ func buckets() rowset.Query[models.User, keyqueries.BucketCount] {
 	u := models.Users
 	bucket := expr.When(expr.ModelPredicate(orm.NumberGt(u.Age, 20)), expr.Param(orm.NumberExpr(u.Age), 1)).Else(expr.Param(orm.NumberExpr(u.Age), 0))
 	return rowset.OrderBy(rowset.GroupBy(rowset.Select(rowset.From(models.Users.Query()), keyqueries.BucketCounts.Row,
-		rowset.MapSelected(keyqueries.BucketCounts.Bucket, bucket.Value()),
-		rowset.MapSelected(keyqueries.BucketCounts.Count, expr.Count[models.User]().Value()),
-	), expr.Group(bucket)), bucket.Asc())
+		rowset.MapSelected(keyqueries.BucketCounts.Bucket, expr.AsSelected(bucket)),
+		rowset.MapSelected(keyqueries.BucketCounts.Count, expr.AsSelected(expr.Count[models.User]())),
+	), expr.Group(bucket)), expr.Asc(bucket))
 }
 ```
 

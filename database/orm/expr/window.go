@@ -9,14 +9,18 @@ import (
 )
 
 // Window is an immutable scope-owned partition, order and frame. Its zero value
-// means OVER (). Example: expr.Window[User]{}.OrderBy(expr.Value(orm.KeyExpr(Users.ID)).Asc()).
+// means OVER ().
+//
+// Example: expr.Window[User]{}.OrderBy(expr.Asc(expr.Value(orm.KeyExpr(Users.ID))))
 type Window[S any] struct {
 	_    [0]*S
 	data ormcore.Window
 }
 
 // WindowFor infers ownership from a concrete model/join/alias scope; it does not
-// copy query ordering or pagination. Example: expr.WindowFor(rows.ModelScope(Users.Query())).
+// copy query ordering or pagination.
+//
+// Example: expr.WindowFor(scope)
 func WindowFor[S, M any](scope Scope[S, M]) Window[S] {
 	err := scope.core.Err
 	if scope.core.Owner == nil || scope.core.Table == "" {
@@ -33,7 +37,9 @@ func ownedWindow[S any](w Window[S]) ormcore.Window {
 	return data
 }
 
-// PartitionBy appends row keys without grouping the result. Example: w.PartitionBy(expr.Group(buyer)).
+// PartitionBy appends row keys without grouping the result.
+//
+// Example: w.PartitionBy(expr.Group(buyer))
 func (w Window[S]) PartitionBy(keys ...GroupKey[S]) Window[S] {
 	inputs := make([]ormcore.Expression, len(keys))
 	for i, k := range keys {
@@ -43,7 +49,9 @@ func (w Window[S]) PartitionBy(keys ...GroupKey[S]) Window[S] {
 	return w
 }
 
-// PartitionByValues appends selected keys, including aggregates. Example: w.PartitionByValues(count.Value().Key()).
+// PartitionByValues appends selected keys, including aggregates.
+//
+// Example: w.PartitionByValues(expr.Key(expr.AsSelected(count)))
 func (w Window[S]) PartitionByValues(keys ...ProjectionKey[S]) Window[S] {
 	inputs := make([]ormcore.Expression, len(keys))
 	for i, k := range keys {
@@ -53,7 +61,9 @@ func (w Window[S]) PartitionByValues(keys ...ProjectionKey[S]) Window[S] {
 	return w
 }
 
-// OrderBy appends row/selected ordering; it does not order the final result. Example: w.OrderBy(amount.Desc()).
+// OrderBy appends row/selected ordering; it does not order the final result.
+//
+// Example: w.OrderBy(expr.Desc(amount))
 func (w Window[S]) OrderBy(orders ...ProjectionOrder[S]) Window[S] {
 	inputs := make([]ormcore.Order, len(orders))
 	for i, o := range orders {
@@ -67,36 +77,52 @@ func (w Window[S]) OrderBy(orders ...ProjectionOrder[S]) Window[S] {
 	return w
 }
 
-// FrameBoundary is a sealed ROWS/GROUPS position or offset. Example: w.RowsBetween(expr.Preceding(1),expr.CurrentRow()).
+// FrameBoundary is a sealed ROWS/GROUPS position or offset.
+//
+// Example: w.RowsBetween(expr.Preceding(1), expr.CurrentRow())
 type FrameBoundary interface{ frameBoundary() querycore.FrameBound }
 
-// FramePosition is a current/unbounded position, with an invalid zero value. Example: expr.CurrentRow().
+// FramePosition is a current/unbounded position, with an invalid zero value.
+//
+// Example: expr.CurrentRow()
 type FramePosition struct{ kind querycore.FrameBoundKind }
 
 func (p FramePosition) frameBoundary() querycore.FrameBound {
 	return querycore.FrameBound{Kind: p.kind}
 }
 
-// FrameOffset counts rows/groups, not RANGE value distance. Example: expr.Preceding(2).
+// FrameOffset counts rows/groups, not RANGE value distance.
+//
+// Example: expr.Preceding(2)
 type FrameOffset struct{ bound querycore.FrameBound }
 
 func (p FrameOffset) frameBoundary() querycore.FrameBound { return p.bound }
 
-// UnboundedPreceding identifies the partition's first row. Example: w.RowsBetween(expr.UnboundedPreceding(),expr.CurrentRow()).
+// UnboundedPreceding identifies the partition's first row.
+//
+// Example: expr.UnboundedPreceding()
 func UnboundedPreceding() FramePosition { return FramePosition{kind: querycore.UnboundedPreceding} }
 
-// CurrentRow identifies the current row or peers. Example: w.RangeBetween(expr.CurrentRow(),expr.CurrentRow()).
+// CurrentRow identifies the current row or peers.
+//
+// Example: expr.CurrentRow()
 func CurrentRow() FramePosition { return FramePosition{kind: querycore.CurrentRow} }
 
-// UnboundedFollowing identifies the partition's last row. Example: w.RowsBetween(expr.CurrentRow(),expr.UnboundedFollowing()).
+// UnboundedFollowing identifies the partition's last row.
+//
+// Example: expr.UnboundedFollowing()
 func UnboundedFollowing() FramePosition { return FramePosition{kind: querycore.UnboundedFollowing} }
 
-// Preceding counts nonnegative rows/groups before the current row. Example: expr.Preceding(2).
+// Preceding counts nonnegative rows/groups before the current row.
+//
+// Example: expr.Preceding(count)
 func Preceding(count int64) FrameOffset {
 	return FrameOffset{bound: querycore.FrameBound{Kind: querycore.PrecedingBound, Offset: querycore.RetainOffset(count)}}
 }
 
-// Following counts nonnegative rows/groups after the current row. Example: expr.Following(2).
+// Following counts nonnegative rows/groups after the current row.
+//
+// Example: expr.Following(count)
 func Following(count int64) FrameOffset {
 	return FrameOffset{bound: querycore.FrameBound{Kind: querycore.FollowingBound, Offset: querycore.RetainOffset(count)}}
 }
@@ -109,44 +135,60 @@ func (w Window[S]) between(kind querycore.FrameKind, start, end FrameBoundary) W
 	return w
 }
 
-// RowsBetween replaces the physical-row frame. Example: w.RowsBetween(expr.Preceding(1),expr.CurrentRow()).
+// RowsBetween replaces the physical-row frame.
+//
+// Example: w.RowsBetween(expr.Preceding(1), expr.CurrentRow())
 func (w Window[S]) RowsBetween(start, end FrameBoundary) Window[S] {
 	return w.between(querycore.RowsFrame, start, end)
 }
 
-// GroupsBetween replaces the peer-group frame; ordering is required. Example: w.GroupsBetween(expr.Preceding(1),expr.CurrentRow()).
+// GroupsBetween replaces the peer-group frame; ordering is required.
+//
+// Example: w.GroupsBetween(expr.Preceding(1), expr.CurrentRow())
 func (w Window[S]) GroupsBetween(start, end FrameBoundary) Window[S] {
 	return w.between(querycore.GroupsFrame, start, end)
 }
 
-// RangeBetween defines a peer/unbounded frame without value distances. Example: w.RangeBetween(expr.CurrentRow(),expr.UnboundedFollowing()).
+// RangeBetween defines a peer/unbounded frame without value distances.
+//
+// Example: w.RangeBetween(expr.CurrentRow(), expr.UnboundedFollowing())
 func (w Window[S]) RangeBetween(start, end FramePosition) Window[S] {
 	return w.between(querycore.RangeFrame, start, end)
 }
 
-// ExcludeCurrentRow excludes the current row. Example: w.ExcludeCurrentRow().
+// ExcludeCurrentRow excludes the current row.
+//
+// Example: w.ExcludeCurrentRow()
 func (w Window[S]) ExcludeCurrentRow() Window[S] {
 	w.data = ormcore.WindowExclude(w.data, querycore.ExcludeCurrent)
 	return w
 }
 
-// ExcludeGroup excludes the current row and peers. Example: w.ExcludeGroup().
+// ExcludeGroup excludes the current row and peers.
+//
+// Example: w.ExcludeGroup()
 func (w Window[S]) ExcludeGroup() Window[S] {
 	w.data = ormcore.WindowExclude(w.data, querycore.ExcludeGroup)
 	return w
 }
 
-// ExcludeTies excludes peers but retains the current row. Example: w.ExcludeTies().
+// ExcludeTies excludes peers but retains the current row.
+//
+// Example: w.ExcludeTies()
 func (w Window[S]) ExcludeTies() Window[S] {
 	w.data = ormcore.WindowExclude(w.data, querycore.ExcludeTies)
 	return w
 }
 
-// ExcludeNone restores the default exclusion. Example: w.ExcludeNone().
+// ExcludeNone restores the default exclusion.
+//
+// Example: w.ExcludeNone()
 func (w Window[S]) ExcludeNone() Window[S] {
 	w.data = ormcore.WindowExclude(w.data, querycore.ExcludeNone)
 	return w
 }
 
-// Named registers a reusable definition emitted once per SELECT. Example: w.Named("by_buyer").
+// Named registers a reusable definition emitted once per SELECT.
+//
+// Example: w.Named("by_buyer")
 func (w Window[S]) Named(name string) Window[S] { w.data = ormcore.WindowNamed(w.data, name); return w }

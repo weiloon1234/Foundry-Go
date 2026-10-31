@@ -14,25 +14,30 @@ import (
 )
 
 // NullableOrderedAggregate retains a nullable aggregate with present-value comparisons.
-// Example: expr.Sum(orm.NumberExpr(Orders.Total)).Gt(decimal.FromInt64(1)).
-type NullableOrderedAggregate[S any, V orderedScalar] struct {
+//
+// Example: expr.GtValue(expr.Sum(orm.NumberExpr(Orders.Total)), decimal.FromInt64(1))
+type NullableOrderedAggregate[S any, V orderedScalar] = nullableOrderedAggregate[*S, V]
+
+type nullableOrderedAggregate[S any, V orderedScalar] struct {
 	selectedPhase [0]struct{}
-	_             [0]*S
+	_             [0]S
 	data          rowData[value.Nullable[V]]
 	present       ormcore.Column[V]
 }
 
 // AggregateExpression is the reusable, sealed aggregate descriptor for relation slots.
 // It retains the input scope and exact result/codec, including nullable results.
-// Example: func use[S,V any](a expr.AggregateExpression[S,V]).
+//
+// Example: var aggregate expr.AggregateExpression[User, int64] = expr.Count[User]()
 type AggregateExpression[S, V any] interface{ aggregateValue(*S) rowData[V] }
 
-func (a Aggregate[S, V]) aggregateValue(*S) rowData[V]                                { return a.data }
-func (a OrderedAggregate[S, V]) aggregateValue(*S) rowData[V]                         { return a.data }
-func (a NullableOrderedAggregate[S, V]) aggregateValue(*S) rowData[value.Nullable[V]] { return a.data }
+func (a aggregate[S, V]) aggregateValue(S) rowData[V]                                { return a.data }
+func (a orderedAggregate[S, V]) aggregateValue(S) rowData[V]                         { return a.data }
+func (a nullableOrderedAggregate[S, V]) aggregateValue(S) rowData[value.Nullable[V]] { return a.data }
 
 // FoundryAggregate supplies validated descriptor metadata and codec to relation loaders.
-// Example: expr.FoundryAggregate(a,sqlowner.Expressions()).
+//
+// Example: expr.FoundryAggregate(a, seal)
 func FoundryAggregate[S, V any](a AggregateExpression[S, V], seal sqlowner.ExpressionSeal) (ormcore.Expression, ormcore.Column[V]) {
 	if !seal.Valid() || ormcore.NilDescriptor(a) {
 		err := ormcore.Invalid("invalid aggregate capability or descriptor")
@@ -63,197 +68,166 @@ func nullableAggregateField[S, V any, R orderedScalar](input ormcore.Column[V], 
 }
 
 // Sum returns nullable decimal.Decimal; empty/all-NULL input is NULL.
-// Example: expr.Sum(orm.NumberExpr(Records.Amount)).
+//
+// Example: expr.Sum(column)
 func Sum[S any, V interface{ exactNumber }, P any, C orderedColumn[S, V, P]](column C) NullableOrderedAggregate[S, decimal.Decimal] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return nullableAggregateField[S](c, querycore.SumValues, querycore.ExactNumberCast, columnCodec(codec.Decimal()))
 }
 
 // SumAt returns nullable decimal.Decimal; empty/all-NULL input is NULL.
-// Example: expr.SumAt(scope,Records.Amount).
+//
+// Example: expr.SumAt(scope, column)
 func SumAt[S, M any, V interface{ exactNumber }, P any, C orderedColumn[M, V, P]](scope Scope[S, M], column C) NullableOrderedAggregate[S, decimal.Decimal] {
 	c := scopedAggregateColumn(scope, column)
 	return nullableAggregateField[S](c, querycore.SumValues, querycore.ExactNumberCast, columnCodec(codec.Decimal()))
 }
 
 // Avg returns nullable decimal.Decimal; empty/all-NULL input is NULL.
-// Example: expr.Avg(Records.Amount).
+//
+// Example: expr.Avg(column)
 func Avg[S any, V interface{ exactNumber }, P any, C orderedColumn[S, V, P]](column C) NullableOrderedAggregate[S, decimal.Decimal] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return nullableAggregateField[S](c, querycore.AverageValues, querycore.ExactNumberCast, columnCodec(codec.Decimal()))
 }
 
 // AvgAt returns nullable decimal.Decimal; empty/all-NULL input is NULL.
-// Example: expr.AvgAt(scope,Records.Amount).
+//
+// Example: expr.AvgAt(scope, column)
 func AvgAt[S, M any, V interface{ exactNumber }, P any, C orderedColumn[M, V, P]](scope Scope[S, M], column C) NullableOrderedAggregate[S, decimal.Decimal] {
 	c := scopedAggregateColumn(scope, column)
 	return nullableAggregateField[S](c, querycore.AverageValues, querycore.ExactNumberCast, columnCodec(codec.Decimal()))
 }
 
 // SumFloat returns nullable float64; empty/all-NULL input is NULL.
-// Example: expr.SumFloat(Records.Amount).
+//
+// Example: expr.SumFloat(column)
 func SumFloat[S any, V interface{ ~float32 | ~float64 }, P any, C orderedColumn[S, V, P]](column C) NullableOrderedAggregate[S, float64] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return nullableAggregateField[S](c, querycore.SumValues, querycore.FloatNumberCast, columnCodec(codec.Float[float64]()))
 }
 
 // SumFloatAt returns nullable float64; empty/all-NULL input is NULL.
-// Example: expr.SumFloatAt(scope,Records.Amount).
+//
+// Example: expr.SumFloatAt(scope, column)
 func SumFloatAt[S, M any, V interface{ ~float32 | ~float64 }, P any, C orderedColumn[M, V, P]](scope Scope[S, M], column C) NullableOrderedAggregate[S, float64] {
 	c := scopedAggregateColumn(scope, column)
 	return nullableAggregateField[S](c, querycore.SumValues, querycore.FloatNumberCast, columnCodec(codec.Float[float64]()))
 }
 
 // AvgFloat returns nullable float64; empty/all-NULL input is NULL.
-// Example: expr.AvgFloat(Records.Amount).
+//
+// Example: expr.AvgFloat(column)
 func AvgFloat[S any, V interface{ ~float32 | ~float64 }, P any, C orderedColumn[S, V, P]](column C) NullableOrderedAggregate[S, float64] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return nullableAggregateField[S](c, querycore.AverageValues, querycore.FloatNumberCast, columnCodec(codec.Float[float64]()))
 }
 
 // AvgFloatAt returns nullable float64; empty/all-NULL input is NULL.
-// Example: expr.AvgFloatAt(scope,Records.Amount).
+//
+// Example: expr.AvgFloatAt(scope, column)
 func AvgFloatAt[S, M any, V interface{ ~float32 | ~float64 }, P any, C orderedColumn[M, V, P]](scope Scope[S, M], column C) NullableOrderedAggregate[S, float64] {
 	c := scopedAggregateColumn(scope, column)
 	return nullableAggregateField[S](c, querycore.AverageValues, querycore.FloatNumberCast, columnCodec(codec.Float[float64]()))
 }
 
 // SumInterval returns nullable temporal.Interval; empty/all-NULL input is NULL.
-// Example: expr.SumInterval(Records.Amount).
+//
+// Example: expr.SumInterval(column)
 func SumInterval[S, P any, C orderedColumn[S, temporal.Interval, P]](column C) NullableOrderedAggregate[S, temporal.Interval] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return nullableAggregateField[S](c, querycore.SumValues, querycore.IntervalValueCast, columnCodec(codec.Interval()))
 }
 
 // SumIntervalAt returns nullable temporal.Interval; empty/all-NULL input is NULL.
-// Example: expr.SumIntervalAt(scope,Records.Amount).
+//
+// Example: expr.SumIntervalAt(scope, column)
 func SumIntervalAt[S, M, P any, C orderedColumn[M, temporal.Interval, P]](scope Scope[S, M], column C) NullableOrderedAggregate[S, temporal.Interval] {
 	c := scopedAggregateColumn(scope, column)
 	return nullableAggregateField[S](c, querycore.SumValues, querycore.IntervalValueCast, columnCodec(codec.Interval()))
 }
 
 // AvgInterval returns nullable temporal.Interval; empty/all-NULL input is NULL.
-// Example: expr.AvgInterval(Records.Amount).
+//
+// Example: expr.AvgInterval(column)
 func AvgInterval[S, P any, C orderedColumn[S, temporal.Interval, P]](column C) NullableOrderedAggregate[S, temporal.Interval] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return nullableAggregateField[S](c, querycore.AverageValues, querycore.IntervalValueCast, columnCodec(codec.Interval()))
 }
 
 // AvgIntervalAt returns nullable temporal.Interval; empty/all-NULL input is NULL.
-// Example: expr.AvgIntervalAt(scope,Records.Amount).
+//
+// Example: expr.AvgIntervalAt(scope, column)
 func AvgIntervalAt[S, M, P any, C orderedColumn[M, temporal.Interval, P]](scope Scope[S, M], column C) NullableOrderedAggregate[S, temporal.Interval] {
 	c := scopedAggregateColumn(scope, column)
 	return nullableAggregateField[S](c, querycore.AverageValues, querycore.IntervalValueCast, columnCodec(codec.Interval()))
 }
 
 // Min returns the nullable input type; empty/all-NULL input is NULL.
-// Example: expr.Min(Records.Amount).
+//
+// Example: expr.Min(column)
 func Min[S any, V orderedScalar, P any, C orderedColumn[S, V, P]](column C) NullableOrderedAggregate[S, V] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return nullableAggregateField[S](c, querycore.MinimumValue, querycore.NativeNumber, c)
 }
 
 // MinAt returns the nullable input type; empty/all-NULL input is NULL.
-// Example: expr.MinAt(scope,Records.Amount).
+//
+// Example: expr.MinAt(scope, column)
 func MinAt[S, M any, V orderedScalar, P any, C orderedColumn[M, V, P]](scope Scope[S, M], column C) NullableOrderedAggregate[S, V] {
 	c := scopedAggregateColumn(scope, column)
 	return nullableAggregateField[S](c, querycore.MinimumValue, querycore.NativeNumber, c)
 }
 
 // Max returns the nullable input type; empty/all-NULL input is NULL.
-// Example: expr.Max(Records.Amount).
+//
+// Example: expr.Max(column)
 func Max[S any, V orderedScalar, P any, C orderedColumn[S, V, P]](column C) NullableOrderedAggregate[S, V] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return nullableAggregateField[S](c, querycore.MaximumValue, querycore.NativeNumber, c)
 }
 
 // MaxAt returns the nullable input type; empty/all-NULL input is NULL.
-// Example: expr.MaxAt(scope,Records.Amount).
+//
+// Example: expr.MaxAt(scope, column)
 func MaxAt[S, M any, V orderedScalar, P any, C orderedColumn[M, V, P]](scope Scope[S, M], column C) NullableOrderedAggregate[S, V] {
 	c := scopedAggregateColumn(scope, column)
 	return nullableAggregateField[S](c, querycore.MaximumValue, querycore.NativeNumber, c)
 }
 
 // CountField counts non-NULL stored values; empty input is zero.
-// Example: expr.CountField(Records.Amount).
+//
+// Example: expr.CountField(column)
 func CountField[S any, V, P any](column orm.ExpressionColumn[S, V, P]) OrderedAggregate[S, int64] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return OrderedAggregate[S, int64]{data: aggregateField[S](c, querycore.CountValues, querycore.NativeNumber, columnCodec(codec.Signed[int64]()))}
 }
 
 // CountFieldAt counts non-NULL stored values; empty input is zero.
-// Example: expr.CountFieldAt(scope,Records.Amount).
+//
+// Example: expr.CountFieldAt(scope, column)
 func CountFieldAt[S, M any, V, P any](scope Scope[S, M], column orm.ExpressionColumn[M, V, P]) OrderedAggregate[S, int64] {
 	c := scopedAggregateColumn(scope, column)
 	return OrderedAggregate[S, int64]{data: aggregateField[S](c, querycore.CountValues, querycore.NativeNumber, columnCodec(codec.Signed[int64]()))}
 }
 
 // CountDistinctField counts non-NULL stored values; empty input is zero.
-// Example: expr.CountDistinctField(orm.NumberExpr(Records.Amount)).
+//
+// Example: expr.CountDistinctField(column)
 func CountDistinctField[S any, V, P any](column orm.ExpressionColumn[S, V, P]) OrderedAggregate[S, int64] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return OrderedAggregate[S, int64]{data: aggregateField[S](c, querycore.CountDistinct, querycore.NativeNumber, columnCodec(codec.Signed[int64]()))}
 }
 
 // CountDistinctFieldAt counts non-NULL stored values; empty input is zero.
-// Example: expr.CountDistinctFieldAt(scope,Records.Amount).
+//
+// Example: expr.CountDistinctFieldAt(scope, column)
 func CountDistinctFieldAt[S, M any, V, P any](scope Scope[S, M], column orm.ExpressionColumn[M, V, P]) OrderedAggregate[S, int64] {
 	c := scopedAggregateColumn(scope, column)
 	return OrderedAggregate[S, int64]{data: aggregateField[S](c, querycore.CountDistinct, querycore.NativeNumber, columnCodec(codec.Signed[int64]()))}
 }
 
-// Filter appends same-scope row predicates joined by AND, for this aggregate only.
-// Example: aggregate.Filter(expr.Value(orm.NumberExpr(Orders.Total)).Eq(1)).
-func (a Aggregate[S, V]) Filter(predicates ...Predicate[S]) Aggregate[S, V] {
-	a.data.core = filterAggregate(a.data.core, predicates)
-	return a
-}
-
-// Asc orders selected aggregate results. Example: aggregate.Asc().
-func (a Aggregate[S, V]) Asc() SelectedOrder[S] {
-	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, false)}
-}
-
-// Desc orders selected aggregate results. Example: aggregate.Desc().
-func (a Aggregate[S, V]) Desc() SelectedOrder[S] {
-	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, true)}
-}
-
-// Filter appends same-scope row predicates joined by AND, for this aggregate only.
-// Example: aggregate.Filter(expr.Value(orm.NumberExpr(Orders.Total)).Eq(1)).
-func (a OrderedAggregate[S, V]) Filter(predicates ...Predicate[S]) OrderedAggregate[S, V] {
-	a.data.core = filterAggregate(a.data.core, predicates)
-	return a
-}
-
-// Asc orders selected aggregate results. Example: aggregate.Asc().
-func (a OrderedAggregate[S, V]) Asc() SelectedOrder[S] {
-	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, false)}
-}
-
-// Desc orders selected aggregate results. Example: aggregate.Desc().
-func (a OrderedAggregate[S, V]) Desc() SelectedOrder[S] {
-	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, true)}
-}
-
-// Filter appends same-scope row predicates joined by AND, for this aggregate only.
-// Example: aggregate.Filter(expr.Value(orm.NumberExpr(Orders.Total)).Eq(1)).
-func (a NullableOrderedAggregate[S, V]) Filter(predicates ...Predicate[S]) NullableOrderedAggregate[S, V] {
-	a.data.core = filterAggregate(a.data.core, predicates)
-	return a
-}
-
-// Asc orders selected aggregate results. Example: aggregate.Asc().
-func (a NullableOrderedAggregate[S, V]) Asc() SelectedOrder[S] {
-	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, false)}
-}
-
-// Desc orders selected aggregate results. Example: aggregate.Desc().
-func (a NullableOrderedAggregate[S, V]) Desc() SelectedOrder[S] {
-	return SelectedOrder[S]{core: ormcore.OrderExpression(a.data.core, true)}
-}
-
-func filterAggregate[S any](input ormcore.Expression, predicates []Predicate[S]) ormcore.Expression {
+func filterAggregatePointer[S any](input ormcore.Expression, predicates []predicate[S]) ormcore.Expression {
 	if len(predicates) > 0 {
 		if err := querycore.ValidateAggregateFilterCount(len(predicates)); err != nil {
 			input.Err = safeerror.Join("operation failed", input.Err, err)
@@ -265,60 +239,4 @@ func filterAggregate[S any](input ormcore.Expression, predicates []Predicate[S])
 		ps[i] = p.core
 	}
 	return ormcore.FilterAggregate(input, ps)
-}
-
-// Value preserves empty-input nullability. Example: expr.Sum(orm.NumberExpr(Orders.Total)).Value().
-func (a NullableOrderedAggregate[S, V]) Value() Selected[S, value.Nullable[V]] {
-	return Selected[S, value.Nullable[V]]{data: a.data}
-}
-
-// Param captures a present value for a required fallback without evaluating the aggregate.
-// Example: expr.CoalesceValue(total.Value(),total.Param(decimal.FromInt64(0)).Value()).
-func (a NullableOrderedAggregate[S, V]) Param(v V) RowExpression[S, V] {
-	return parameter[S](rowData[V]{core: a.data.core, column: a.present}, v)
-}
-
-// Eq compares groups with present values or SQL nullness. Example: aggregate.Eq(value).
-func (a NullableOrderedAggregate[S, V]) Eq(v V) HavingPredicate[S] {
-	return HavingPredicate[S]{core: rowCompare(a.data, querycore.Equal, presentValues([]V{v})...)}
-}
-
-// Ne compares groups with present values or SQL nullness. Example: aggregate.Ne(value).
-func (a NullableOrderedAggregate[S, V]) Ne(v V) HavingPredicate[S] {
-	return HavingPredicate[S]{core: rowCompare(a.data, querycore.NotEqual, presentValues([]V{v})...)}
-}
-
-// In compares groups with present values or SQL nullness. Example: aggregate.In(value).
-func (a NullableOrderedAggregate[S, V]) In(vs ...V) HavingPredicate[S] {
-	return HavingPredicate[S]{core: rowCompare(a.data, querycore.In, presentValues(vs)...)}
-}
-
-// Lt compares groups with present values or SQL nullness. Example: aggregate.Lt(value).
-func (a NullableOrderedAggregate[S, V]) Lt(v V) HavingPredicate[S] {
-	return HavingPredicate[S]{core: rowCompare(a.data, querycore.Less, presentValues([]V{v})...)}
-}
-
-// Lte compares groups with present values or SQL nullness. Example: aggregate.Lte(value).
-func (a NullableOrderedAggregate[S, V]) Lte(v V) HavingPredicate[S] {
-	return HavingPredicate[S]{core: rowCompare(a.data, querycore.LessOrEqual, presentValues([]V{v})...)}
-}
-
-// Gt compares groups with present values or SQL nullness. Example: aggregate.Gt(value).
-func (a NullableOrderedAggregate[S, V]) Gt(v V) HavingPredicate[S] {
-	return HavingPredicate[S]{core: rowCompare(a.data, querycore.Greater, presentValues([]V{v})...)}
-}
-
-// Gte compares groups with present values or SQL nullness. Example: aggregate.Gte(value).
-func (a NullableOrderedAggregate[S, V]) Gte(v V) HavingPredicate[S] {
-	return HavingPredicate[S]{core: rowCompare(a.data, querycore.GreaterOrEqual, presentValues([]V{v})...)}
-}
-
-// IsNull compares groups with present values or SQL nullness. Example: aggregate.IsNull().
-func (a NullableOrderedAggregate[S, V]) IsNull() HavingPredicate[S] {
-	return HavingPredicate[S]{core: rowCompare(a.data, querycore.IsNull)}
-}
-
-// IsNotNull compares groups with present values or SQL nullness. Example: aggregate.IsNotNull().
-func (a NullableOrderedAggregate[S, V]) IsNotNull() HavingPredicate[S] {
-	return HavingPredicate[S]{core: rowCompare(a.data, querycore.IsNotNull)}
 }

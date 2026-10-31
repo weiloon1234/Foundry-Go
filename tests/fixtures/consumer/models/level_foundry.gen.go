@@ -14,6 +14,7 @@ import (
 )
 
 // LevelValues returns declared values in source order, with independent slice ownership.
+// Example: LevelValues()
 func LevelValues() []Level { return []Level{LevelBasic, LevelAdvanced} }
 
 // EnumDescriptor describes this enum type independently of the receiver's value.
@@ -44,6 +45,7 @@ func (v Level) Validate() error {
 }
 
 // ParseLevel decodes and validates an enum's text representation.
+// Example: ParseLevel(text)
 func ParseLevel(text string) (Level, error) {
 	raw, err := strconv.ParseUint(text, 10, 8)
 	if err != nil {
@@ -55,12 +57,16 @@ func ParseLevel(text string) (Level, error) {
 	}
 	return v, nil
 }
+
+// MarshalText encodes a validated enum as text.
 func (v Level) MarshalText() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return []byte(strconv.FormatUint(uint64(v), 10)), nil
 }
+
+// UnmarshalText decodes validated enum text and changes the receiver only on success.
 func (v *Level) UnmarshalText(data []byte) error {
 	parsed, err := ParseLevel(string(data))
 	if err != nil {
@@ -69,12 +75,16 @@ func (v *Level) UnmarshalText(data []byte) error {
 	*v = parsed
 	return nil
 }
+
+// MarshalJSON encodes a validated enum as JSON.
 func (v Level) MarshalJSON() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(uint8(v))
 }
+
+// UnmarshalJSON decodes validated JSON and rejects null.
 func (v *Level) UnmarshalJSON(data []byte) error {
 	var raw *uint8
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -92,6 +102,7 @@ func (v *Level) UnmarshalJSON(data []byte) error {
 }
 
 // LevelCodec applies the generated membership rule at both SQL boundaries.
+// Example: LevelCodec()
 func LevelCodec() codec.Codec[Level] { return codec.Unsigned[Level]().Validated(Level.Validate) }
 
 // Value implements database/sql/driver.Valuer through the shared typed codec.

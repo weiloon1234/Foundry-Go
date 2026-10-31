@@ -12,6 +12,7 @@ import (
 // AccessTokenResponseJSON describes the concrete AccessTokenResponse JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: AccessTokenResponseJSON()
 func AccessTokenResponseJSON() foundrycontract.JSON[AccessTokenResponse] {
 	return foundryAccessTokenResponseJSON()
 }
@@ -41,6 +42,7 @@ var foundryAccessTokenResponseJSON = sync.OnceValue(func() foundrycontract.JSON[
 })
 
 // AccessTokenResponseValidationFieldSet retains concrete DTO and value types for validation.
+// Example: AccessTokenResponseValidationFields()
 type AccessTokenResponseValidationFieldSet struct {
 	// MFARequired validates the declared JSON property "mfa_required".
 	MFARequired foundryvalidation.Field[AccessTokenResponse, bool]
@@ -49,6 +51,7 @@ type AccessTokenResponseValidationFieldSet struct {
 }
 
 // AccessTokenResponseValidationFields returns typed field descriptors.
+// Example: AccessTokenResponseValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func AccessTokenResponseValidationFields() AccessTokenResponseValidationFieldSet {
 	return *foundryAccessTokenResponseValidationFields()

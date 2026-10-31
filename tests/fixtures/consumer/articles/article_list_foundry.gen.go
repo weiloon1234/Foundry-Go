@@ -11,6 +11,7 @@ import (
 // ArticleListJSON describes the concrete ArticleList JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ArticleListJSON()
 func ArticleListJSON() foundrycontract.JSON[ArticleList] { return foundryArticleListJSON() }
 
 var foundryArticleListJSON = sync.OnceValue(func() foundrycontract.JSON[ArticleList] {

@@ -12,6 +12,7 @@ import (
 // SortJSON describes the concrete Sort JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: SortJSON()
 func SortJSON() foundrycontract.JSON[Sort] { return foundrySortJSON() }
 
 var foundrySortJSON = sync.OnceValue(func() foundrycontract.JSON[Sort] {
@@ -28,6 +29,7 @@ var foundrySortJSON = sync.OnceValue(func() foundrycontract.JSON[Sort] {
 })
 
 // SortValidationFieldSet retains concrete DTO and value types for validation.
+// Example: SortValidationFields()
 type SortValidationFieldSet struct {
 	// Column validates the declared JSON property "column".
 	Column foundryvalidation.Field[Sort, string]
@@ -36,6 +38,7 @@ type SortValidationFieldSet struct {
 }
 
 // SortValidationFields returns typed field descriptors.
+// Example: SortValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func SortValidationFields() SortValidationFieldSet { return *foundrySortValidationFields() }
 

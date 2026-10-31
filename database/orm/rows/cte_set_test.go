@@ -68,7 +68,7 @@ func TestRecursiveScopeRestrictions(t *testing.T) {
 	step := func(self RecursiveSelf[member]) RecordSource[member] {
 		captured = self
 		a := AsRecord[left](self, "parent")
-		return SelectRecord(a, Scope(a)).Where(expr.At(Scope(a), orm.KeyExpr(m.ID)).Ne(0))
+		return SelectRecord(a, Scope(a)).Where(expr.Ne(expr.At(Scope(a), orm.KeyExpr(m.ID)), 0))
 	}
 	c := RecursiveCTE("tree", ModelRecord(m.Query().Where(orm.KeyEq(m.ID, 1))), step)
 	a := AsRecord[left](c, "tree_rows")
@@ -103,7 +103,7 @@ func TestRecordSetsPreserveWindowsAndDecoder(t *testing.T) {
 	m := declareMembers()
 	a, b := ModelRecord(m.Query().Where(orm.KeyEq(m.ID, 1)).Limit(2)), ModelRecord(m.Query().Where(orm.KeyEq(m.ID, 2)).Offset(1))
 	for i, q := range []SetQuery[member]{Union(a, b), UnionAll(a, b), Intersect(a, b), IntersectAll(a, b), Except(a, b), ExceptAll(a, b)} {
-		q = q.Where(expr.At(q.Scope(), orm.KeyExpr(m.ID)).Ne(0)).OrderBy(expr.At(q.Scope(), orm.KeyExpr(m.ID)).Asc()).Limit(3).Offset(2)
+		q = q.Where(expr.Ne(expr.At(q.Scope(), orm.KeyExpr(m.ID)), 0)).OrderBy(expr.Asc(expr.At(q.Scope(), orm.KeyExpr(m.ID)))).Limit(3).Offset(2)
 		state := &driverState{columns: []string{"id", "name", "nickname"}, rows: [][]driver.Value{{int64(1), "Ada", nil}}}
 		got, err := ReadSet(q).All(t.Context(), openTest(t, state))
 		op := []string{" UNION ", " UNION ALL ", " INTERSECT ", " INTERSECT ALL ", " EXCEPT ", " EXCEPT ALL "}[i]
@@ -133,23 +133,23 @@ func TestRecordSetsPreserveWindowsAndDecoder(t *testing.T) {
 
 func TestScalarSetsKeepCodecAndNullability(t *testing.T) {
 	m := declareMembers()
-	a := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()))
-	b := Values(SelectScalar(From(m.Query().Limit(1)), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()))
+	a := Values(SelectScalar(From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))))
+	b := Values(SelectScalar(From(m.Query().Limit(1)), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))))
 	for _, q := range []ValueSetQuery[int64]{UnionValues(a, b), UnionAllValues(a, b), IntersectValues(a, b), IntersectAllValues(a, b), ExceptValues(a, b), ExceptAllValues(a, b)} {
-		q = q.Where(q.Value().Ne(0)).OrderBy(q.Value().Asc()).Limit(2).Offset(1)
+		q = q.Where(expr.Ne(q.Value(), 0)).OrderBy(expr.Asc(q.Value())).Limit(2).Offset(1)
 		state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(4)}}}
 		got, err := ReadValues(q).All(t.Context(), openTest(t, state))
 		if err != nil || !reflect.DeepEqual(got, []int64{4}) {
 			t.Fatal(got, err)
 		}
-		inner := SelectScalar(q, expr.Row(q.Value()).Value())
+		inner := SelectScalar(q, expr.AsSelected(expr.Row(q.Value())))
 		alias := AsRecord[left](ModelRecord(m.Query()), "m")
 		selected := SelectRecord(alias, Scope(alias)).Where(InQuery(expr.At(Scope(alias), orm.KeyExpr(m.ID)), inner))
 		if _, err := compileComposition(selected.core); err != nil {
 			t.Fatal(err)
 		}
 	}
-	n := Values(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value()))
+	n := Values(SelectScalar(From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))))))
 	nullable := UnionAllValues(n, n)
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"Ada"}}}
 	got, err := ReadValues(nullable).All(t.Context(), openTest(t, state))

@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.Not(expr.Count[models.User]().Gt(0))
+var _ = expr.Not(expr.GtValue(expr.Count[models.User](), 0))

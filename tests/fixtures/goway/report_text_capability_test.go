@@ -51,7 +51,7 @@ func (nullableForged) Contains(models.Status) orm.Predicate[reportNullableEnum] 
 func TestReportTextNestedEmbedding(t *testing.T) {
 	input := forged{EnumAdapter: orm.EnumExpr(models.Users.Status)}
 	// Keep the exact reviewed call, including explicit type arguments and Gt.
-	p := expr.TextRow[models.User, models.Status](input).Gt(models.StatusActive)
+	p := expr.Gt(expr.TextRow[models.User, models.Status](input), models.StatusActive)
 	_, err := rowset.CompileRead(rowset.Read(rowset.FromModel(models.Users.Query()).Where(p)))
 	assertReportTextRejected(t, err)
 	for name, column := range map[string]orm.TextExpressionColumn[models.User, models.Status, models.Status]{"value": input, "pointer": &input} {
@@ -63,13 +63,13 @@ func TestReportTextNestedEmbedding(t *testing.T) {
 			})
 			q := rowset.FromModel(models.Users.Query())
 			checks := map[string]expr.Predicate[models.User]{
-				"selected":       rowset.ExistsQuery(q, rowset.SelectScalar(q, text.Value())),
-				"param":          text.Param(models.StatusActive).Eq(models.StatusActive),
-				"selected_param": text.Value().Param(models.StatusActive).Eq(models.StatusActive),
-				"nullable":       expr.NullableRow(text).Eq(value.Of(models.StatusActive)),
-				"computed":       expr.Lower(text).Gt("active"),
-				"not":            expr.Not(text.Gt(models.StatusActive)),
-				"or":             expr.Or(text.Eq(models.StatusActive), expr.ModelPredicate(orm.NumberGt(models.Users.Age, 1))),
+				"selected":       rowset.ExistsQuery(q, rowset.SelectScalar(q, expr.AsSelected(text))),
+				"param":          expr.Eq(expr.ParamOf(text, models.StatusActive), models.StatusActive),
+				"selected_param": expr.Eq(expr.ParamOf(expr.AsSelected(text), models.StatusActive), models.StatusActive),
+				"nullable":       expr.Eq(expr.NullableRow(text), value.Of(models.StatusActive)),
+				"computed":       expr.Gt(expr.Lower(text), "active"),
+				"not":            expr.Not(expr.Gt(text, models.StatusActive)),
+				"or":             expr.Or(expr.Eq(text, models.StatusActive), expr.ModelPredicate(orm.NumberGt(models.Users.Age, 1))),
 			}
 			for name, p := range checks {
 				t.Run(name, func(t *testing.T) {
@@ -79,7 +79,7 @@ func TestReportTextNestedEmbedding(t *testing.T) {
 			}
 			_, err := rowset.CompileRead(rowset.Read(rowset.GroupBy(q, expr.Group(text))))
 			assertReportTextRejected(t, err)
-			_, err = rowset.CompileRead(rowset.Read(rowset.DistinctOnValues(q, text.Value().Key())))
+			_, err = rowset.CompileRead(rowset.Read(rowset.DistinctOnValues(q, expr.Key(expr.AsSelected(text)))))
 			assertReportTextRejected(t, err)
 		})
 	}
@@ -93,19 +93,19 @@ func TestReportNullableTextNestedEmbedding(t *testing.T) {
 	for name, column := range map[string]orm.TextExpressionColumn[reportNullableEnum, models.Status, value.Nullable[models.Status]]{"value": input, "pointer": &input} {
 		t.Run(name, func(t *testing.T) {
 			text := expr.TextNullableRow(column)
-			assertReportTextOperationsRejected(t, f.Query(), text)
+			assertReportNullableTextOperationsRejected(t, f.Query(), text)
 			t.Run("scoped", func(t *testing.T) {
-				assertReportTextOperationsRejected(t, f.Query(), expr.TextNullableRowAt(rowset.ModelScope(f.Query()), column))
+				assertReportNullableTextOperationsRejected(t, f.Query(), expr.TextNullableRowAt(rowset.ModelScope(f.Query()), column))
 			})
 			q := rowset.FromModel(f.Query())
 			checks := map[string]expr.Predicate[reportNullableEnum]{
-				"selected":       rowset.ExistsQuery(q, rowset.SelectScalar(q, text.Value())),
-				"param":          text.Param(value.Of(models.StatusActive)).Eq(value.Of(models.StatusActive)),
-				"selected_param": text.Value().Param(value.Of(models.StatusActive)).Eq(value.Of(models.StatusActive)),
-				"null_param":     text.Param(value.Null[models.Status]()).IsNull(),
-				"computed":       expr.LowerNullable(text).Gt("active"),
-				"not":            expr.Not(text.Gt(models.StatusActive)),
-				"or":             expr.Or(text.Eq(models.StatusActive), expr.ModelPredicate(orm.NullableEnumIsNull(f.State))),
+				"selected":       rowset.ExistsQuery(q, rowset.SelectScalar(q, expr.AsSelected(text))),
+				"param":          expr.Eq(expr.ParamOf(text, value.Of(models.StatusActive)), value.Of(models.StatusActive)),
+				"selected_param": expr.Eq(expr.ParamOf(expr.AsSelected(text), value.Of(models.StatusActive)), value.Of(models.StatusActive)),
+				"null_param":     expr.IsNull(expr.ParamOf(text, value.Null[models.Status]())),
+				"computed":       expr.NullableGt(expr.LowerNullable(text), "active"),
+				"not":            expr.Not(expr.NullableGt(text, models.StatusActive)),
+				"or":             expr.Or(expr.NullableEq(text, models.StatusActive), expr.ModelPredicate(orm.NullableEnumIsNull(f.State))),
 			}
 			for name, p := range checks {
 				t.Run(name, func(t *testing.T) {
@@ -115,33 +115,10 @@ func TestReportNullableTextNestedEmbedding(t *testing.T) {
 			}
 			_, err := rowset.CompileRead(rowset.Read(rowset.GroupBy(q, expr.Group(text))))
 			assertReportTextRejected(t, err)
-			_, err = rowset.CompileRead(rowset.Read(rowset.DistinctOnValues(q, text.Value().Key())))
+			_, err = rowset.CompileRead(rowset.Read(rowset.DistinctOnValues(q, expr.Key(expr.AsSelected(text)))))
 			assertReportTextRejected(t, err)
 		})
 	}
-}
-
-// Both wrappers expose these operations with the same present enum value type.
-type reportTextOperations[M any] interface {
-	Eq(models.Status) expr.Predicate[M]
-	Ne(models.Status) expr.Predicate[M]
-	In(...models.Status) expr.Predicate[M]
-	Lt(models.Status) expr.Predicate[M]
-	Lte(models.Status) expr.Predicate[M]
-	Gt(models.Status) expr.Predicate[M]
-	Gte(models.Status) expr.Predicate[M]
-	IsNull() expr.Predicate[M]
-	IsNotNull() expr.Predicate[M]
-	Like(models.Status) expr.Predicate[M]
-	ILike(models.Status) expr.Predicate[M]
-	Contains(models.Status) expr.Predicate[M]
-	IContains(models.Status) expr.Predicate[M]
-	StartsWith(models.Status) expr.Predicate[M]
-	EndsWith(models.Status) expr.Predicate[M]
-	IStartsWith(models.Status) expr.Predicate[M]
-	IEndsWith(models.Status) expr.Predicate[M]
-	Asc() expr.Order[M]
-	Desc() expr.Order[M]
 }
 
 func assertReportTextRejected(t *testing.T, err error) {
@@ -151,23 +128,40 @@ func assertReportTextRejected(t *testing.T, err error) {
 	}
 }
 
-func assertReportTextOperationsRejected[M any](t *testing.T, source orm.Query[M], text reportTextOperations[M]) {
+func assertReportTextOperationsRejected[M any](t *testing.T, source orm.Query[M], text expr.TextRowExpression[M, models.Status]) {
+	t.Helper()
+	v := models.StatusActive
+	assertReportTextPredicatesRejected(t, source, map[string]expr.Predicate[M]{
+		"eq": expr.Eq(text, v), "ne": expr.Ne(text, v), "in": expr.In(text, v), "empty_in": expr.In(text),
+		"lt": expr.Lt(text, v), "lte": expr.Lte(text, v), "gt": expr.Gt(text, v), "gte": expr.Gte(text, v),
+		"null": expr.IsNull(text), "not_null": expr.IsNotNull(text),
+		"like": expr.TextLike(text, v), "ilike": expr.TextILike(text, v), "contains": expr.TextContains(text, v), "icontains": expr.TextIContains(text, v),
+		"starts": expr.TextStartsWith(text, v), "ends": expr.TextEndsWith(text, v), "istarts": expr.TextIStartsWith(text, v), "iends": expr.TextIEndsWith(text, v),
+	}, map[string]expr.Order[M]{"asc": expr.Asc(text), "desc": expr.Desc(text), "nulls_first": expr.Asc(text).NullsFirst(), "nulls_last": expr.Desc(text).NullsLast()})
+}
+
+func assertReportNullableTextOperationsRejected[M any](t *testing.T, source orm.Query[M], text expr.NullableTextRowExpression[M, models.Status]) {
+	t.Helper()
+	v := models.StatusActive
+	assertReportTextPredicatesRejected(t, source, map[string]expr.Predicate[M]{
+		"eq": expr.NullableEq(text, v), "ne": expr.NullableNe(text, v), "in": expr.NullableIn(text, v), "empty_in": expr.NullableIn(text),
+		"lt": expr.NullableLt(text, v), "lte": expr.NullableLte(text, v), "gt": expr.NullableGt(text, v), "gte": expr.NullableGte(text, v),
+		"null": expr.IsNull(text), "not_null": expr.IsNotNull(text),
+		"like": expr.NullableTextLike(text, v), "ilike": expr.NullableTextILike(text, v), "contains": expr.NullableTextContains(text, v), "icontains": expr.NullableTextIContains(text, v),
+		"starts": expr.NullableTextStartsWith(text, v), "ends": expr.NullableTextEndsWith(text, v), "istarts": expr.NullableTextIStartsWith(text, v), "iends": expr.NullableTextIEndsWith(text, v),
+	}, map[string]expr.Order[M]{"asc": expr.Asc(text), "desc": expr.Desc(text), "nulls_first": expr.Asc(text).NullsFirst(), "nulls_last": expr.Desc(text).NullsLast()})
+}
+
+func assertReportTextPredicatesRejected[M any](t *testing.T, source orm.Query[M], predicates map[string]expr.Predicate[M], orders map[string]expr.Order[M]) {
 	t.Helper()
 	q := rowset.FromModel(source)
-	v := models.StatusActive
-	for name, p := range map[string]expr.Predicate[M]{
-		"eq": text.Eq(v), "ne": text.Ne(v), "in": text.In(v), "empty_in": text.In(),
-		"lt": text.Lt(v), "lte": text.Lte(v), "gt": text.Gt(v), "gte": text.Gte(v),
-		"null": text.IsNull(), "not_null": text.IsNotNull(),
-		"like": text.Like(v), "ilike": text.ILike(v), "contains": text.Contains(v), "icontains": text.IContains(v),
-		"starts": text.StartsWith(v), "ends": text.EndsWith(v), "istarts": text.IStartsWith(v), "iends": text.IEndsWith(v),
-	} {
+	for name, p := range predicates {
 		t.Run(name, func(t *testing.T) {
 			_, err := rowset.CompileRead(rowset.Read(q.Where(p)))
 			assertReportTextRejected(t, err)
 		})
 	}
-	for name, order := range map[string]expr.Order[M]{"asc": text.Asc(), "desc": text.Desc(), "nulls_first": text.Asc().NullsFirst(), "nulls_last": text.Desc().NullsLast()} {
+	for name, order := range orders {
 		t.Run(name, func(t *testing.T) {
 			_, err := rowset.CompileRead(rowset.Read(rowset.OrderBy(q, order)))
 			assertReportTextRejected(t, err)
@@ -176,7 +170,7 @@ func assertReportTextOperationsRejected[M any](t *testing.T, source orm.Query[M]
 	capture := &goldenCapture{}
 	db := capture.open(t.Context())
 	defer db.Close(t.Context())
-	bad := q.Where(text.Gt(v))
+	bad := q.Where(predicates["gt"])
 	_, err := rowset.Read(bad).Count(t.Context(), db)
 	assertReportTextRejected(t, err)
 	called := false
@@ -188,11 +182,11 @@ func assertReportTextOperationsRejected[M any](t *testing.T, source orm.Query[M]
 }
 
 func TestReportTextSupportedFamilies(t *testing.T) {
-	ordinary := rowset.FromModel(models.Users.Query()).Where(expr.TextRow(orm.TextExpr(models.Users.Email)).Gt("ada@example.test"), expr.TextNullableRow(orm.NullableTextExpr(models.Users.Nickname)).Contains("Ada"))
+	ordinary := rowset.FromModel(models.Users.Query()).Where(expr.Gt(expr.TextRow(orm.TextExpr(models.Users.Email)), "ada@example.test"), expr.NullableTextContains(expr.TextNullableRow(orm.NullableTextExpr(models.Users.Nickname)), "Ada"))
 	if _, err := rowset.CompileRead(rowset.Read(ordinary)); err != nil {
 		t.Fatal(err)
 	}
-	input := rowset.FromModel(mutators.Members.Query()).Where(expr.TextRow(orm.InputTextExpr(mutators.Members.Email)).Gt("ada@example.test"), expr.TextNullableRow(orm.NullableInputTextExpr(mutators.Members.Note)).Contains("Ada"))
+	input := rowset.FromModel(mutators.Members.Query()).Where(expr.Gt(expr.TextRow(orm.InputTextExpr(mutators.Members.Email)), "ada@example.test"), expr.NullableTextContains(expr.TextNullableRow(orm.NullableInputTextExpr(mutators.Members.Note)), "Ada"))
 	if _, err := rowset.CompileRead(rowset.Read(input)); err != nil {
 		t.Fatal(err)
 	}

@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status))).Gt(models.StatusActive)
+var _ = expr.Gt[models.User, models.Status](expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status))), models.StatusActive)

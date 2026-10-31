@@ -43,6 +43,7 @@ var foundryProfileInputDescriptor = sync.OnceValue(func() foundryhttp.Multipart[
 })
 
 // ProfileInputValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ProfileInputValidationFields()
 type ProfileInputValidationFieldSet struct {
 	// Attachment validates the declared multipart part "document".
 	Attachment foundryvalidation.Field[ProfileInput, foundryhttp.UploadedFile]
@@ -57,6 +58,7 @@ type ProfileInputValidationFieldSet struct {
 }
 
 // ProfileInputValidationFields returns typed field descriptors.
+// Example: ProfileInputValidationFields()
 // Compose rules with these fields; multipart names and selectors are generated.
 func ProfileInputValidationFields() ProfileInputValidationFieldSet {
 	return *foundryProfileInputValidationFields()

@@ -64,7 +64,7 @@ func TestStage6a3AggregateGolden(t *testing.T) {
 	defer newDB.Close(ctx)
 
 	newBuyer, newAmount := expr.Value(orm.ColumnExpr(models.Orders.BuyerID)), expr.Value(orm.NumberExpr(models.Orders.TotalCents))
-	newQ := rowset.OrderBy(rowset.DistinctOn(rowset.FromModel(models.Orders.Query()), expr.Group(newBuyer)), newBuyer.Asc(), newAmount.Desc())
+	newQ := rowset.OrderBy(rowset.DistinctOn(rowset.FromModel(models.Orders.Query()), expr.Group(newBuyer)), expr.Asc(newBuyer), expr.Desc(newAmount))
 
 	fmt.Fprintln(&after.output, oracleSnapshot([]any{must(rowset.Read(newQ).All(ctx, newDB))}))
 
@@ -82,11 +82,11 @@ func runAggregateNew(g *goldenCapture) {
 	scope := rowset.Scope(a)
 	amount := expr.OrderRow(expr.At(scope, orm.NumberExpr(models.Orders.TotalCents)))
 	buyer := expr.At(scope, orm.ColumnExpr(models.Orders.BuyerID))
-	count := expr.Count[rowset.Alias[expressionSide, models.Order]]().Filter(amount.Gt(0))
-	total := expr.SumAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Filter(amount.Gt(100))
+	count := expr.Filter(expr.Count[rowset.Alias[expressionSide, models.Order]](), expr.Gt(amount, 0))
+	total := expr.Filter(expr.SumAt(scope, orm.NumberExpr(models.Orders.TotalCents)), expr.Gt(amount, 100))
 	s := aggregateBuyerRows
-	q := rowset.Select(a, s, rowset.Map(s.Buyer, buyer), rowset.MapSelected(s.Count, count.Value()), rowset.MapSelected(s.Distinct, expr.CountDistinctFieldAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Value()), rowset.MapSelected(s.Total, total.Value()), rowset.MapSelected(s.Average, expr.AvgAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Value()), rowset.MapSelected(s.Min, expr.MinAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Value()), rowset.MapSelected(s.Max, expr.MaxAt(scope, orm.NumberExpr(models.Orders.TotalCents)).Value()))
-	q = rowset.OrderBy(rowset.Having(rowset.GroupBy(q, expr.Group(buyer)), expr.HavingAnd(count.Gt(0), expr.HavingOr(total.IsNull(), total.Gt(decimal.FromInt64(1))))), count.Desc(), buyer.Asc())
+	q := rowset.Select(a, s, rowset.Map(s.Buyer, buyer), rowset.MapSelected(s.Count, expr.AsSelected(count)), rowset.MapSelected(s.Distinct, expr.AsSelected(expr.CountDistinctFieldAt(scope, orm.NumberExpr(models.Orders.TotalCents)))), rowset.MapSelected(s.Total, expr.AsSelected(total)), rowset.MapSelected(s.Average, expr.AsSelected(expr.AvgAt(scope, orm.NumberExpr(models.Orders.TotalCents)))), rowset.MapSelected(s.Min, expr.AsSelected(expr.MinAt(scope, orm.NumberExpr(models.Orders.TotalCents)))), rowset.MapSelected(s.Max, expr.AsSelected(expr.MaxAt(scope, orm.NumberExpr(models.Orders.TotalCents)))))
+	q = rowset.OrderBy(rowset.Having(rowset.GroupBy(q, expr.Group(buyer)), expr.HavingAnd(expr.GtValue(count, 0), expr.HavingOr(expr.IsNullValue(total), expr.GtValue(total, decimal.FromInt64(1))))), expr.DescValue(count), expr.Asc(buyer))
 	got := must(rowset.Read(q).All(ctx, db))
 	// Owners differ between APIs; compare the same concrete printable row shape.
 	normalized := make([]aggregateGoldenResult, len(got))

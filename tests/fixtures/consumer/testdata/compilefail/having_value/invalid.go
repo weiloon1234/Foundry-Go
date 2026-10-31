@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var invalid = expr.Count[models.Order]().Gt("two")
+var invalid = expr.GtValue(expr.Count[models.Order](), "two")

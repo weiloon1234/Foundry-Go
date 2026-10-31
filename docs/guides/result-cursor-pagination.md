@@ -7,10 +7,10 @@
 ```go
 u, r := models.Users, reports.UserSummaries
 report := rows.Select(rows.From(u.Query()), r.Row,
-    rows.Map(r.ID, expr.Value(u.Key())), rows.Map(r.Email, expr.Value(u.Email)),
-    rows.Map(r.Nickname, expr.Value(u.Nickname)), rows.Map(r.Status, expr.Value(u.Status)))
+    rows.Map(r.ID, expr.Value(orm.KeyExpr(u.Key()))), rows.Map(r.Email, expr.Value(orm.TextExpr(u.Email))),
+    rows.Map(r.Nickname, expr.Value(orm.NullableTextExpr(u.Nickname))), rows.Map(r.Status, expr.Value(orm.EnumExpr(u.Status))))
 cursor := rows.CursorFor(rows.RecordOf(report))
-ordered := cursor.OrderBy(rows.At(cursor.Scope(), r.Nickname).Asc()).
+ordered := cursor.OrderBy(expr.Asc(rows.At(cursor.Scope(), r.Nickname))).
     UniqueBy(expr.Group(rows.At(cursor.Scope(), r.ID)))
 page, err := ordered.Paginate(ctx, db, orm.CursorRequest[reports.UserSummary]{Size: 20})
 ```
@@ -29,15 +29,15 @@ The cursor adds a derived-result boundary around its source. Inner filters, join
 
 The outer order is explicit and independent of an inner order. An inner order may still choose `DistinctOn` winners or a bounded input dataset. Calling `rows.CursorFor(rows.RecordOf(rows.Limit(report, 100)))` intentionally pages only that bounded input; specify a deterministic inner order when choosing those 100 rows. Existing model `CursorPaginate` instead operates at the model query level and rejects an existing limit/offset. See [model pagination](model-pagination.md).
 
-`cursor.Where(rows.At(cursor.Scope(), r.Email).Ne(""))` filters completed output rows. Domain or authorization filters that belong to input models go on the source query before `CursorFor`. No filter is inferred from the presence of a cursor token.
+`cursor.Where(expr.Ne(rows.At(cursor.Scope(), r.Email), ""))` filters completed output rows. Domain or authorization filters that belong to input models go on the source query before `CursorFor`. No filter is inferred from the presence of a cursor token.
 
 ## Nullable values and navigation
 
 ```go
 values := rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()),
-    expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))).Value()))
+    expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))))))
 cursor := rows.ValueCursorFor(values)
-ordered := cursor.OrderBy(cursor.Value().Asc()).UniqueBy(expr.Group(cursor.Value()))
+ordered := cursor.OrderBy(expr.Asc(cursor.Value())).UniqueBy(expr.Group(cursor.Value()))
 page, err := ordered.Paginate(ctx, db, orm.CursorRequest[value.Nullable[string]]{Size: 20})
 ```
 

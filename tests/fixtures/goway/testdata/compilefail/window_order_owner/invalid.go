@@ -8,4 +8,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = expr.WindowFor(rows.ModelScope(models.Users.Query())).OrderBy(expr.Value(orm.NumberExpr(models.Orders.TotalCents)).Desc())
+var _ = expr.WindowFor(rows.ModelScope(models.Users.Query())).OrderBy(expr.Desc(expr.Value(orm.NumberExpr(models.Orders.TotalCents))))

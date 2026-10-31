@@ -28,27 +28,27 @@ func TestPostgresTypedTemporalExtraction(t *testing.T) {
 			expression expr.Selected[temporalqueries.Sample, int64]
 			expected   func(temporalqueries.Sample) int64
 		}{
-			{"year", expr.Year(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { return int64(s.Date.Year()) }},
-			{"local year", expr.Year(expr.Value(orm.TimeExpr(f.Local))).Value(), func(s temporalqueries.Sample) int64 { return int64(s.Local.Date().Year()) }},
-			{"month", expr.Month(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { return int64(s.Date.Month()) }},
-			{"day", expr.Day(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { return int64(s.Date.Day()) }},
-			{"weekday", expr.DayOfWeek(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { return int64(calendar(s).Weekday()) }},
-			{"ISO weekday", expr.ISODayOfWeek(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { return int64((calendar(s).Weekday()+6)%7) + 1 }},
-			{"year day", expr.DayOfYear(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { return int64(calendar(s).YearDay()) }},
-			{"ISO week", expr.ISOWeek(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { _, week := calendar(s).ISOWeek(); return int64(week) }},
-			{"ISO year", expr.ISOYear(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { year, _ := calendar(s).ISOWeek(); return int64(year) }},
-			{"quarter", expr.Quarter(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { return int64((s.Date.Month()-1)/3) + 1 }},
-			{"century", expr.Century(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { return int64((s.Date.Year()-1)/100) + 1 }},
-			{"decade", expr.Decade(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { return int64(s.Date.Year() / 10) }},
-			{"millennium", expr.Millennium(expr.Value(orm.TimeExpr(f.Date))).Value(), func(s temporalqueries.Sample) int64 { return int64((s.Date.Year()-1)/1000) + 1 }},
-			{"hour", expr.Hour(expr.Value(orm.TimeExpr(f.Clock))).Value(), func(s temporalqueries.Sample) int64 { return int64(s.Clock.Hour()) }},
-			{"local hour", expr.Hour(expr.Value(orm.TimeExpr(f.Local))).Value(), func(s temporalqueries.Sample) int64 { return int64(s.Local.Time().Hour()) }},
-			{"minute", expr.Minute(expr.Value(orm.TimeExpr(f.Clock))).Value(), func(s temporalqueries.Sample) int64 { return int64(s.Clock.Minute()) }},
-			{"microseconds", expr.Microseconds(expr.Value(orm.TimeExpr(f.Clock))).Value(), func(s temporalqueries.Sample) int64 {
+			{"year", expr.AsSelected(expr.Year(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { return int64(s.Date.Year()) }},
+			{"local year", expr.AsSelected(expr.Year(expr.Value(orm.TimeExpr(f.Local)))), func(s temporalqueries.Sample) int64 { return int64(s.Local.Date().Year()) }},
+			{"month", expr.AsSelected(expr.Month(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { return int64(s.Date.Month()) }},
+			{"day", expr.AsSelected(expr.Day(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { return int64(s.Date.Day()) }},
+			{"weekday", expr.AsSelected(expr.DayOfWeek(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { return int64(calendar(s).Weekday()) }},
+			{"ISO weekday", expr.AsSelected(expr.ISODayOfWeek(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { return int64((calendar(s).Weekday()+6)%7) + 1 }},
+			{"year day", expr.AsSelected(expr.DayOfYear(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { return int64(calendar(s).YearDay()) }},
+			{"ISO week", expr.AsSelected(expr.ISOWeek(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { _, week := calendar(s).ISOWeek(); return int64(week) }},
+			{"ISO year", expr.AsSelected(expr.ISOYear(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { year, _ := calendar(s).ISOWeek(); return int64(year) }},
+			{"quarter", expr.AsSelected(expr.Quarter(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { return int64((s.Date.Month()-1)/3) + 1 }},
+			{"century", expr.AsSelected(expr.Century(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { return int64((s.Date.Year()-1)/100) + 1 }},
+			{"decade", expr.AsSelected(expr.Decade(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { return int64(s.Date.Year() / 10) }},
+			{"millennium", expr.AsSelected(expr.Millennium(expr.Value(orm.TimeExpr(f.Date)))), func(s temporalqueries.Sample) int64 { return int64((s.Date.Year()-1)/1000) + 1 }},
+			{"hour", expr.AsSelected(expr.Hour(expr.Value(orm.TimeExpr(f.Clock)))), func(s temporalqueries.Sample) int64 { return int64(s.Clock.Hour()) }},
+			{"local hour", expr.AsSelected(expr.Hour(expr.Value(orm.TimeExpr(f.Local)))), func(s temporalqueries.Sample) int64 { return int64(s.Local.Time().Hour()) }},
+			{"minute", expr.AsSelected(expr.Minute(expr.Value(orm.TimeExpr(f.Clock)))), func(s temporalqueries.Sample) int64 { return int64(s.Clock.Minute()) }},
+			{"microseconds", expr.AsSelected(expr.Microseconds(expr.Value(orm.TimeExpr(f.Clock)))), func(s temporalqueries.Sample) int64 {
 				return int64(s.Clock.Second())*1000000 + int64(s.Clock.Nanosecond()/1000)
 			}},
-			{"Unix millis", expr.UnixMilliseconds(expr.Value(orm.TimeExpr(f.At))).Value(), func(s temporalqueries.Sample) int64 { return s.At.UnixMilli() }},
-			{"Foundry instant millis", expr.UnixMilliseconds(expr.Value(orm.TimeExpr(f.Instant))).Value(), func(s temporalqueries.Sample) int64 { return s.Instant.UTC().UnixMilli() }},
+			{"Unix millis", expr.AsSelected(expr.UnixMilliseconds(expr.Value(orm.TimeExpr(f.At)))), func(s temporalqueries.Sample) int64 { return s.At.UnixMilli() }},
+			{"Foundry instant millis", expr.AsSelected(expr.UnixMilliseconds(expr.Value(orm.TimeExpr(f.Instant)))), func(s temporalqueries.Sample) int64 { return s.Instant.UTC().UnixMilli() }},
 		} {
 			t.Run(test.name, func(t *testing.T) {
 				want := make([]int64, len(samples))
@@ -83,21 +83,21 @@ func TestPostgresTypedTemporalExtraction(t *testing.T) {
 				nullableYears = append(nullableYears, value.Null[int64]())
 			}
 		}
-		temporalValues(t, tx, expr.Second(expr.Value(orm.TimeExpr(f.Clock))).Value(), seconds)
-		temporalValues(t, tx, expr.Milliseconds(expr.Value(orm.TimeExpr(f.Clock))).Value(), milliseconds)
-		temporalValues(t, tx, expr.UnixSeconds(expr.Value(orm.TimeExpr(f.At))).Value(), epochs)
-		temporalValues(t, tx, expr.JulianDay(expr.Value(orm.TimeExpr(f.Date))).Value(), julian)
-		temporalValues(t, tx, expr.YearNullable(expr.Value(orm.NullableTimeExpr(f.MaybeDate))).Value(), nullableYears)
+		temporalValues(t, tx, expr.AsSelected(expr.Second(expr.Value(orm.TimeExpr(f.Clock)))), seconds)
+		temporalValues(t, tx, expr.AsSelected(expr.Milliseconds(expr.Value(orm.TimeExpr(f.Clock)))), milliseconds)
+		temporalValues(t, tx, expr.AsSelected(expr.UnixSeconds(expr.Value(orm.TimeExpr(f.At)))), epochs)
+		temporalValues(t, tx, expr.AsSelected(expr.JulianDay(expr.Value(orm.TimeExpr(f.Date)))), julian)
+		temporalValues(t, tx, expr.AsSelected(expr.YearNullable(expr.Value(orm.NullableTimeExpr(f.MaybeDate)))), nullableYears)
 		q := temporalqueries.Samples.Query()
 		year := expr.Year(expr.Value(orm.TimeExpr(f.Date)))
-		if items, err := orm.All(t.Context(), tx, expr.Where(q, year.Eq(2024))); err != nil || len(items) != 2 {
+		if items, err := orm.All(t.Context(), tx, expr.Where(q, expr.Eq(year, 2024))); err != nil || len(items) != 2 {
 			t.Fatal(items, err)
 		}
-		counts := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(q), temporalqueries.CalendarSummaries, rows.MapSelected(temporalqueries.CalendarSummaries.Year, year.Value()), rows.MapSelected(temporalqueries.CalendarSummaries.Rows, expr.Count[temporalqueries.Sample]().Value()), rows.MapSelected(temporalqueries.CalendarSummaries.Latest, expr.Max(orm.TimeExpr(f.Date)).Value())), expr.Group(year)), year.Asc())
+		counts := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(q), temporalqueries.CalendarSummaries, rows.MapSelected(temporalqueries.CalendarSummaries.Year, expr.AsSelected(year)), rows.MapSelected(temporalqueries.CalendarSummaries.Rows, expr.AsSelected(expr.Count[temporalqueries.Sample]())), rows.MapSelected(temporalqueries.CalendarSummaries.Latest, expr.AsSelected(expr.Max(orm.TimeExpr(f.Date))))), expr.Group(year)), expr.Asc(year))
 		if items, err := rows.Read(counts).All(t.Context(), tx); err != nil || len(items) != 3 || items[2].Rows != 2 {
 			t.Fatal(items, err)
 		}
-		latest := expr.YearNullableValue(expr.Max(orm.TimeExpr(f.Date)).Value())
+		latest := expr.YearNullableValue(expr.AsSelected(expr.Max(orm.TimeExpr(f.Date))))
 		if v := temporalOne(t, tx, latest); v != value.Of(int64(2024)) {
 			t.Fatal(v)
 		}
@@ -116,18 +116,18 @@ func TestPostgresExactUnixMillisConversion(t *testing.T) {
 			}
 			expected = append(expected, v)
 		}
-		temporalValues(t, tx, expr.FromUnixMillis(expr.Value(orm.NumberExpr(f.Millis))).Value(), expected)
+		temporalValues(t, tx, expr.AsSelected(expr.FromUnixMillis(expr.Value(orm.NumberExpr(f.Millis)))), expected)
 		for _, millis := range []int64{-62135596800000, -86400001, -86400000, -1, 0, 1, 86400001, 253402300799999} {
 			converted := expr.FromUnixMillis(expr.Param(orm.NumberExpr(f.Millis), millis))
-			if got := temporalOne(t, tx, converted.Value()).UTC(); !got.Equal(time.UnixMilli(millis)) {
+			if got := temporalOne(t, tx, expr.AsSelected(converted)).UTC(); !got.Equal(time.UnixMilli(millis)) {
 				t.Fatal("exact millisecond conversion", millis, got)
 			}
-			if got := temporalOne(t, tx, expr.UnixMilliseconds(converted).Value()); got != millis {
+			if got := temporalOne(t, tx, expr.AsSelected(expr.UnixMilliseconds(converted))); got != millis {
 				t.Fatal("millisecond round trip", got, millis)
 			}
 		}
 		before, _ := time.Parse(time.RFC3339Nano, "1969-12-31T23:59:59.999500Z")
-		if got := temporalOne(t, tx, expr.UnixMilliseconds(expr.Param(orm.TimeExpr(f.At), before)).Value()); got != -1 {
+		if got := temporalOne(t, tx, expr.AsSelected(expr.UnixMilliseconds(expr.Param(orm.TimeExpr(f.At), before)))); got != -1 {
 			t.Fatal("negative submillisecond floor", got)
 		}
 		return nil

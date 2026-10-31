@@ -12,6 +12,7 @@ import (
 // RefreshRequestJSON describes the concrete RefreshRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: RefreshRequestJSON()
 func RefreshRequestJSON() foundrycontract.JSON[RefreshRequest] { return foundryRefreshRequestJSON() }
 
 var foundryRefreshRequestJSON = sync.OnceValue(func() foundrycontract.JSON[RefreshRequest] {
@@ -26,12 +27,14 @@ var foundryRefreshRequestJSON = sync.OnceValue(func() foundrycontract.JSON[Refre
 })
 
 // RefreshRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: RefreshRequestValidationFields()
 type RefreshRequestValidationFieldSet struct {
 	// RefreshToken validates the declared JSON property "refresh_token".
 	RefreshToken foundryvalidation.Field[RefreshRequest, RefreshCredential]
 }
 
 // RefreshRequestValidationFields returns typed field descriptors.
+// Example: RefreshRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func RefreshRequestValidationFields() RefreshRequestValidationFieldSet {
 	return *foundryRefreshRequestValidationFields()

@@ -91,7 +91,7 @@ func TestSourceWritesPersistScopesConventionsAndRollback(t *testing.T) {
 			t.Fatal(m)
 		}
 	}
-	zero, e := r.DeleteUsing(d.Query(), r.From(s.Query())).Match(r.MatchNullableSource(orm.KeyExpr(d.Key()), expr.NullableRow(expr.Value(orm.NumberExpr(s.Target))).Param(value.Null[int64]()))).Exec(ctx, db)
+	zero, e := r.DeleteUsing(d.Query(), r.From(s.Query())).Match(r.MatchNullableSource(orm.KeyExpr(d.Key()), expr.ParamOf(expr.NullableRow(expr.Value(orm.NumberExpr(s.Target))), value.Null[int64]()))).Exec(ctx, db)
 	must(t, e)
 	if zero != 0 {
 		t.Fatal("NULL source key matched a destination", zero)

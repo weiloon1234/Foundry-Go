@@ -45,7 +45,7 @@ func TestPostgresConflictCalculationsDefaultsAndTriggers(t *testing.T) {
 			rows.SetConflictValue(orm.NumberExpr(f.Amount), expr.Add(expr.At(stored, orm.NumberExpr(f.Amount)), expr.At(proposed, orm.NumberExpr(f.Amount)))),
 			rows.SetConflictValue(orm.NullableTextExpr(f.Note), expr.CoalesceNullable(expr.At(proposed, orm.NullableTextExpr(f.Note)), expr.At(stored, orm.NullableTextExpr(f.Note)))),
 		).Where(orm.ColumnEq(f.Enabled, true))
-		policy = rows.ConflictWhereRows(policy, expr.At(proposed, orm.ColumnExpr(f.Enabled)).Eq(true))
+		policy = rows.ConflictWhereRows(policy, expr.Eq(expr.At(proposed, orm.ColumnExpr(f.Enabled)), true))
 		result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.TextSet(models.WriteRecords.Name, "counter"), orm.NumberSet(models.WriteRecords.Amount, conflictDecimal(t, "0.2")))
 		if err != nil {
 			return err
@@ -103,7 +103,7 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 		link := rows.Correlate(roles, lookup)
 		outer := rows.OuterScope(link, roles.Stored())
 		inner := rows.InnerScope(link, rows.Scope(lookup))
-		selected := rows.SelectCorrelatedScalar(link, expr.Row(expr.At(inner, orm.NumberExpr(f.Amount))).Value()).Where(expr.Greater(expr.At(inner, orm.NumberExpr(f.Amount)), expr.At(outer, orm.NumberExpr(f.Amount)))).Limit(1)
+		selected := rows.SelectCorrelatedScalar(link, expr.AsSelected(expr.Row(expr.At(inner, orm.NumberExpr(f.Amount))))).Where(expr.Greater(expr.At(inner, orm.NumberExpr(f.Amount)), expr.At(outer, orm.NumberExpr(f.Amount)))).Limit(1)
 		policy := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(rows.SetConflictValue(orm.NumberExpr(f.Amount), expr.Coalesce(rows.CorrelatedScalarRowQuery(selected), expr.At(proposed, orm.NumberExpr(f.Amount)))))
 		result, err := orm.Upsert(t.Context(), tx, q.Query(), policy, orm.TextSet(models.WriteRecords.Name, "counter"))
 		if err != nil {
@@ -126,7 +126,7 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 		// A scalar with multiple results must preserve the database error and roll back.
 		allLink := rows.Correlate(roles, rows.From(q.Query()))
 		allFields := rows.InnerScope(allLink, rows.ModelScope(q.Query()))
-		multiple := rows.SelectCorrelatedScalar(allLink, expr.Row(expr.At(allFields, orm.NumberExpr(f.Amount))).Value())
+		multiple := rows.SelectCorrelatedScalar(allLink, expr.AsSelected(expr.Row(expr.At(allFields, orm.NumberExpr(f.Amount)))))
 		invalid := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(rows.SetConflictValue(orm.NumberExpr(f.Amount), expr.Coalesce(rows.CorrelatedScalarRowQuery(multiple), expr.At(proposed, orm.NumberExpr(f.Amount)))))
 		_, err = orm.Upsert(t.Context(), tx, q.Query(), invalid, orm.TextSet(models.WriteRecords.Name, "counter"))
 		var dbErr *database.Error
@@ -141,8 +141,8 @@ func TestPostgresConflictScalarAndCorrelatedAssignments(t *testing.T) {
 		if !present || kept.Amount.String() != "2.5" {
 			t.Fatal("failed calculation persisted")
 		}
-		independent := rows.ConflictScalarRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(orm.TextEq(f.Name, "reference"))), expr.Row(expr.Value(orm.NumberExpr(f.Amount))).Value()))
-		nullable := rows.ConflictScalarNullableRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(orm.TextEq(f.Name, "reference"))), expr.Row(expr.Value(orm.NullableTextExpr(f.Note))).Value()))
+		independent := rows.ConflictScalarRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(orm.TextEq(f.Name, "reference"))), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(f.Amount))))))
+		nullable := rows.ConflictScalarNullableRowQuery(roles, rows.SelectScalar(rows.From(q.Query().Where(orm.TextEq(f.Name, "reference"))), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(f.Note))))))
 		result, err = orm.Upsert(t.Context(), tx, q.Query(),
 			orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(rows.SetConflictValue(orm.NumberExpr(f.Amount), expr.Coalesce(independent, expr.At(proposed, orm.NumberExpr(f.Amount)))), rows.SetConflictValue(orm.NullableTextExpr(f.Note), nullable)), orm.TextSet(models.WriteRecords.Name, "counter"))
 		if err != nil {

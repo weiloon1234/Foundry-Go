@@ -23,12 +23,14 @@ var foundryMultipartInputDescriptor = sync.OnceValue(func() foundryhttp.Multipar
 })
 
 // MultipartInputValidationFieldSet retains concrete DTO and value types for validation.
+// Example: MultipartInputValidationFields()
 type MultipartInputValidationFieldSet struct {
 	// Name validates the declared multipart part "name".
 	Name foundryvalidation.Field[MultipartInput, string]
 }
 
 // MultipartInputValidationFields returns typed field descriptors.
+// Example: MultipartInputValidationFields()
 // Compose rules with these fields; multipart names and selectors are generated.
 func MultipartInputValidationFields() MultipartInputValidationFieldSet {
 	return *foundryMultipartInputValidationFields()

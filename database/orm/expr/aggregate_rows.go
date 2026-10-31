@@ -33,112 +33,130 @@ func nullableRowAggregate[S, V any, R orderedScalar](input RowExpression[S, V], 
 }
 
 // SumRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.SumRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.SumRow(input)
 func SumRow[S any, V exactNumber](input RowExpression[S, V]) NullableOrderedAggregate[S, decimal.Decimal] {
 	return nullableRowAggregate(input, querycore.SumValues, querycore.ExactNumberCast, columnCodec(codec.Decimal()))
 }
 
 // SumNullableRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.SumNullableRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.SumNullableRow(input)
 func SumNullableRow[S any, V exactNumber](input RowExpression[S, value.Nullable[V]]) NullableOrderedAggregate[S, decimal.Decimal] {
 	return nullableRowAggregate(input, querycore.SumValues, querycore.ExactNumberCast, columnCodec(codec.Decimal()))
 }
 
 // AvgRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.AvgRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.AvgRow(input)
 func AvgRow[S any, V exactNumber](input RowExpression[S, V]) NullableOrderedAggregate[S, decimal.Decimal] {
 	return nullableRowAggregate(input, querycore.AverageValues, querycore.ExactNumberCast, columnCodec(codec.Decimal()))
 }
 
 // AvgNullableRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.AvgNullableRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.AvgNullableRow(input)
 func AvgNullableRow[S any, V exactNumber](input RowExpression[S, value.Nullable[V]]) NullableOrderedAggregate[S, decimal.Decimal] {
 	return nullableRowAggregate(input, querycore.AverageValues, querycore.ExactNumberCast, columnCodec(codec.Decimal()))
 }
 
 // SumFloatRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.SumFloatRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.SumFloatRow(input)
 func SumFloatRow[S any, V interface{ ~float32 | ~float64 }](input RowExpression[S, V]) NullableOrderedAggregate[S, float64] {
 	return nullableRowAggregate(input, querycore.SumValues, querycore.FloatNumberCast, columnCodec(codec.Float[float64]()))
 }
 
 // SumFloatNullableRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.SumFloatNullableRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.SumFloatNullableRow(input)
 func SumFloatNullableRow[S any, V interface{ ~float32 | ~float64 }](input RowExpression[S, value.Nullable[V]]) NullableOrderedAggregate[S, float64] {
 	return nullableRowAggregate(input, querycore.SumValues, querycore.FloatNumberCast, columnCodec(codec.Float[float64]()))
 }
 
 // AvgFloatRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.AvgFloatRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.AvgFloatRow(input)
 func AvgFloatRow[S any, V interface{ ~float32 | ~float64 }](input RowExpression[S, V]) NullableOrderedAggregate[S, float64] {
 	return nullableRowAggregate(input, querycore.AverageValues, querycore.FloatNumberCast, columnCodec(codec.Float[float64]()))
 }
 
 // AvgFloatNullableRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.AvgFloatNullableRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.AvgFloatNullableRow(input)
 func AvgFloatNullableRow[S any, V interface{ ~float32 | ~float64 }](input RowExpression[S, value.Nullable[V]]) NullableOrderedAggregate[S, float64] {
 	return nullableRowAggregate(input, querycore.AverageValues, querycore.FloatNumberCast, columnCodec(codec.Float[float64]()))
 }
 
 // SumIntervalRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.SumIntervalRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.SumIntervalRow(input)
 func SumIntervalRow[S any, V temporal.Interval](input RowExpression[S, V]) NullableOrderedAggregate[S, temporal.Interval] {
 	return nullableRowAggregate(input, querycore.SumValues, querycore.IntervalValueCast, columnCodec(codec.Interval()))
 }
 
 // SumIntervalNullableRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.SumIntervalNullableRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.SumIntervalNullableRow(input)
 func SumIntervalNullableRow[S any, V temporal.Interval](input RowExpression[S, value.Nullable[V]]) NullableOrderedAggregate[S, temporal.Interval] {
 	return nullableRowAggregate(input, querycore.SumValues, querycore.IntervalValueCast, columnCodec(codec.Interval()))
 }
 
 // AvgIntervalRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.AvgIntervalRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.AvgIntervalRow(input)
 func AvgIntervalRow[S any, V temporal.Interval](input RowExpression[S, V]) NullableOrderedAggregate[S, temporal.Interval] {
 	return nullableRowAggregate(input, querycore.AverageValues, querycore.IntervalValueCast, columnCodec(codec.Interval()))
 }
 
 // AvgIntervalNullableRow aggregates a declared derived field; empty/all-NULL input remains NULL.
-// Example: expr.AvgIntervalNullableRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.AvgIntervalNullableRow(input)
 func AvgIntervalNullableRow[S any, V temporal.Interval](input RowExpression[S, value.Nullable[V]]) NullableOrderedAggregate[S, temporal.Interval] {
 	return nullableRowAggregate(input, querycore.AverageValues, querycore.IntervalValueCast, columnCodec(codec.Interval()))
 }
 
 // MinRow retains the input codec with exactly one nullable layer.
-// Example: expr.MinRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.MinRow(input)
 func MinRow[S any, V orderedScalar](input RowExpression[S, V]) NullableOrderedAggregate[S, V] {
 	return nullableRowAggregate(input, querycore.MinimumValue, querycore.NativeNumber, input.data.column)
 }
 
 // MinNullableRow retains the input codec with exactly one nullable layer.
-// Example: expr.MinNullableRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.MinNullableRow(input)
 func MinNullableRow[S any, V orderedScalar](input RowExpression[S, value.Nullable[V]]) NullableOrderedAggregate[S, V] {
 	data := aggregateRowData(input, querycore.MinimumValue, querycore.NativeNumber, true)
 	return NullableOrderedAggregate[S, V]{data: data, present: presentAggregateColumn(data.column)}
 }
 
 // MaxRow retains the input codec with exactly one nullable layer.
-// Example: expr.MaxRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.MaxRow(input)
 func MaxRow[S any, V orderedScalar](input RowExpression[S, V]) NullableOrderedAggregate[S, V] {
 	return nullableRowAggregate(input, querycore.MaximumValue, querycore.NativeNumber, input.data.column)
 }
 
 // MaxNullableRow retains the input codec with exactly one nullable layer.
-// Example: expr.MaxNullableRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.MaxNullableRow(input)
 func MaxNullableRow[S any, V orderedScalar](input RowExpression[S, value.Nullable[V]]) NullableOrderedAggregate[S, V] {
 	data := aggregateRowData(input, querycore.MaximumValue, querycore.NativeNumber, true)
 	return NullableOrderedAggregate[S, V]{data: data, present: presentAggregateColumn(data.column)}
 }
 
 // CountRow counts non-NULL derived field values, returning zero for empty input.
-// Example: expr.CountRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.CountRow(input)
 func CountRow[S, V any](input RowExpression[S, V]) OrderedAggregate[S, int64] {
 	data := aggregateRowData(input, querycore.CountValues, querycore.NativeNumber, false)
 	return OrderedAggregate[S, int64]{data: rowData[int64]{core: data.core, column: columnCodec(codec.Signed[int64]())}}
 }
 
 // CountDistinctRow counts non-NULL derived field values, returning zero for empty input.
-// Example: expr.CountDistinctRow(rows.At(scope, Report.Amount)).
+//
+// Example: expr.CountDistinctRow(input)
 func CountDistinctRow[S, V any](input RowExpression[S, V]) OrderedAggregate[S, int64] {
 	data := aggregateRowData(input, querycore.CountDistinct, querycore.NativeNumber, false)
 	return OrderedAggregate[S, int64]{data: rowData[int64]{core: data.core, column: columnCodec(codec.Signed[int64]())}}
@@ -161,7 +179,7 @@ func presentAggregateColumn[V any](c ormcore.Column[value.Nullable[V]]) ormcore.
 		return result
 	}
 	out.Scan = func(dst *V) any {
-		return aggregateScanner(func(src any) error {
+		return ormcore.ScannerFunc(func(src any) error {
 			if c.Scan == nil || dst == nil {
 				return ormcore.Invalid("uninitialized aggregate codec")
 			}
@@ -183,7 +201,3 @@ func presentAggregateColumn[V any](c ormcore.Column[value.Nullable[V]]) ormcore.
 	}
 	return out
 }
-
-type aggregateScanner func(any) error
-
-func (scan aggregateScanner) Scan(src any) error { return scan(src) }

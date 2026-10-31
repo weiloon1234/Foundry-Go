@@ -12,6 +12,7 @@ import (
 // NameLabelJSON describes the concrete NameLabel JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: NameLabelJSON()
 func NameLabelJSON() foundrycontract.JSON[NameLabel] { return foundryNameLabelJSON() }
 
 var foundryNameLabelJSON = sync.OnceValue(func() foundrycontract.JSON[NameLabel] {
@@ -21,10 +22,12 @@ var foundryNameLabelJSON = sync.OnceValue(func() foundrycontract.JSON[NameLabel]
 })
 
 // NameLabelValidationFieldSet retains concrete DTO and value types for validation.
+// Example: NameLabelValidationFields()
 type NameLabelValidationFieldSet struct {
 }
 
 // NameLabelValidationFields returns typed field descriptors.
+// Example: NameLabelValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func NameLabelValidationFields() NameLabelValidationFieldSet {
 	return *foundryNameLabelValidationFields()

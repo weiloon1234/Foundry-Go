@@ -13,6 +13,7 @@ import (
 // LiteralArgsJSON describes the concrete LiteralArgs JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: LiteralArgsJSON()
 func LiteralArgsJSON() foundrycontract.JSON[LiteralArgs] { return foundryLiteralArgsJSON() }
 
 var foundryLiteralArgsJSON = sync.OnceValue(func() foundrycontract.JSON[LiteralArgs] {
@@ -35,6 +36,7 @@ var foundryLiteralArgsJSON = sync.OnceValue(func() foundrycontract.JSON[LiteralA
 })
 
 // LiteralArgsValidationFieldSet retains concrete DTO and value types for validation.
+// Example: LiteralArgsValidationFields()
 type LiteralArgsValidationFieldSet struct {
 	// Enabled validates the declared JSON property "enabled".
 	Enabled foundryvalidation.Field[LiteralArgs, bool]
@@ -43,6 +45,7 @@ type LiteralArgsValidationFieldSet struct {
 }
 
 // LiteralArgsValidationFields returns typed field descriptors.
+// Example: LiteralArgsValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func LiteralArgsValidationFields() LiteralArgsValidationFieldSet {
 	return *foundryLiteralArgsValidationFields()

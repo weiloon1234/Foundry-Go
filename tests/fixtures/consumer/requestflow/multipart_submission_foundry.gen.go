@@ -23,12 +23,14 @@ var foundryMultipartSubmissionDescriptor = sync.OnceValue(func() foundryhttp.Mul
 })
 
 // MultipartSubmissionValidationFieldSet retains concrete DTO and value types for validation.
+// Example: MultipartSubmissionValidationFields()
 type MultipartSubmissionValidationFieldSet struct {
 	// Name validates the declared multipart part "name".
 	Name foundryvalidation.Field[MultipartSubmission, string]
 }
 
 // MultipartSubmissionValidationFields returns typed field descriptors.
+// Example: MultipartSubmissionValidationFields()
 // Compose rules with these fields; multipart names and selectors are generated.
 func MultipartSubmissionValidationFields() MultipartSubmissionValidationFieldSet {
 	return *foundryMultipartSubmissionValidationFields()

@@ -25,4 +25,4 @@ type fields struct {
 }
 
 var schema = rows.Define(func(b rows.Builder[result], r *result) fields { return fields{b.Row(), rows.TextOf(b, &r.Email)} })
-var _ = rows.Select(j, schema, rows.Map(schema.Email, expr.At(rows.LeftScope(j, rows.Scope(a)), orm.TextExpr(models.Users.Email)))).Where(expr.Value(orm.TextExpr(models.Users.Email)).Eq("x"))
+var _ = rows.Select(j, schema, rows.Map(schema.Email, expr.At(rows.LeftScope(j, rows.Scope(a)), orm.TextExpr(models.Users.Email)))).Where(expr.Eq(expr.Value(orm.TextExpr(models.Users.Email)), "x"))

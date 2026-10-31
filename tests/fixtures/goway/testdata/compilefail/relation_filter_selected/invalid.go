@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.RelationFilter(models.UserRelations.Orders, expr.Count[models.Order]().Gt(0))
+var _ = expr.RelationFilter(models.UserRelations.Orders, expr.GtValue(expr.Count[models.Order](), 0))

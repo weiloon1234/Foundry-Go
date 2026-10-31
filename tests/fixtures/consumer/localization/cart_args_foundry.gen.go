@@ -14,6 +14,7 @@ import (
 // CartArgsJSON describes the concrete CartArgs JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: CartArgsJSON()
 func CartArgsJSON() foundrycontract.JSON[CartArgs] { return foundryCartArgsJSON() }
 
 var foundryCartArgsJSON = sync.OnceValue(func() foundrycontract.JSON[CartArgs] {
@@ -32,6 +33,7 @@ var foundryCartArgsJSON = sync.OnceValue(func() foundrycontract.JSON[CartArgs] {
 })
 
 // CartArgsValidationFieldSet retains concrete DTO and value types for validation.
+// Example: CartArgsValidationFields()
 type CartArgsValidationFieldSet struct {
 	// Count validates the declared JSON property "count".
 	Count foundryvalidation.Field[CartArgs, decimal.Decimal]
@@ -40,6 +42,7 @@ type CartArgsValidationFieldSet struct {
 }
 
 // CartArgsValidationFields returns typed field descriptors.
+// Example: CartArgsValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func CartArgsValidationFields() CartArgsValidationFieldSet { return *foundryCartArgsValidationFields() }
 

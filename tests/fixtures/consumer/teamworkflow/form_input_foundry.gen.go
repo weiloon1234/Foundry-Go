@@ -22,12 +22,14 @@ var foundryFormInputDescriptor = sync.OnceValue(func() foundryhttp.Query[FormInp
 })
 
 // FormInputValidationFieldSet retains concrete DTO and value types for validation.
+// Example: FormInputValidationFields()
 type FormInputValidationFieldSet struct {
 	// Name validates the declared form field "name".
 	Name foundryvalidation.Field[FormInput, string]
 }
 
 // FormInputValidationFields returns typed field descriptors.
+// Example: FormInputValidationFields()
 // Compose rules with these fields; form names and selectors are generated.
 func FormInputValidationFields() FormInputValidationFieldSet {
 	return *foundryFormInputValidationFields()

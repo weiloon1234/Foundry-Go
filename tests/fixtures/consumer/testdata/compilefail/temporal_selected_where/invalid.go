@@ -9,5 +9,5 @@ import (
 
 func invalid() {
 	f := temporalqueries.Samples
-	_ = expr.Where(temporalqueries.Samples.Query(), expr.OrderNullableValue(expr.YearNullableValue(expr.Max(orm.TimeExpr(f.Date)).Value())).Gt(2024))
+	_ = expr.Where(temporalqueries.Samples.Query(), expr.GtValue(expr.OrderNullableValue(expr.YearNullableValue(expr.AsSelected(expr.Max(orm.TimeExpr(f.Date))))), 2024))
 }

@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var invalid = expr.OrderBy(models.Orders.Query(), expr.Count[models.Order]().Desc())
+var invalid = expr.OrderBy(models.Orders.Query(), expr.DescValue(expr.Count[models.Order]()))

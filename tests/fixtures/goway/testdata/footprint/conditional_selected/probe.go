@@ -26,9 +26,9 @@ var schema = rows.Define(func(b rows.Builder[Result], r *Result) fields {
 func Query() rows.Query[rows.Alias[side, models.Order], Result] {
 	source := rows.As[side](models.Orders.Query(), "o")
 	count := expr.Count[rows.Alias[side, models.Order]]()
-	choice := expr.WhenValue(count.Gt(0), count.Value()).When(count.Gt(10), count.Param(10).Value()).Else(count.Param(0).Value())
-	nullable := expr.WhenValue(count.Gt(0), count.Value()).ElseNull()
-	required := expr.CoalesceValue(expr.NullIfValue(choice, count.Param(0).Value()), count.Param(0).Value())
+	choice := expr.WhenValue(expr.GtValue(count, 0), expr.AsSelected(count)).When(expr.GtValue(count, 10), expr.AsSelected(expr.ParamOf(count, 10))).Else(expr.AsSelected(expr.ParamOf(count, 0)))
+	nullable := expr.WhenValue(expr.GtValue(count, 0), expr.AsSelected(count)).ElseNull()
+	required := expr.CoalesceValue(expr.NullIfValue(choice, expr.AsSelected(expr.ParamOf(count, 0))), expr.AsSelected(expr.ParamOf(count, 0)))
 	missing := expr.NullIfNullableValue(expr.CoalesceNullableValue(nullable), nullable)
 	return rows.Select(source, schema, rows.MapSelected(schema.Required, required), rows.MapSelected(schema.Missing, missing))
 }

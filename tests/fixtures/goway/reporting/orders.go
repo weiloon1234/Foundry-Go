@@ -43,5 +43,5 @@ func SelectOrders(tenant int64) rows.Query[OrderScope, OrderRow] {
 	id := expr.At(order, orm.KeyExpr(Orders.ID))
 	return rows.OrderBy(rows.Select(joined, OrderRows,
 		rows.Map(OrderRows.ID, id), rows.Map(OrderRows.MemberName, expr.At(member, orm.TextExpr(Members.Name))), rows.Map(OrderRows.Label, expr.At(order, orm.TextExpr(Orders.Label))), rows.Map(OrderRows.Amount, expr.At(order, orm.NumberExpr(Orders.Amount))),
-	).Where(expr.At(member, orm.NumberExpr(Members.TenantID)).Eq(tenant), expr.At(order, orm.NumberExpr(Orders.TenantID)).Eq(tenant)), id.Asc())
+	).Where(expr.Eq(expr.At(member, orm.NumberExpr(Members.TenantID)), tenant), expr.Eq(expr.At(order, orm.NumberExpr(Orders.TenantID)), tenant)), expr.Asc(id))
 }

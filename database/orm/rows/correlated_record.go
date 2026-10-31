@@ -34,7 +34,7 @@ func (r CorrelatedRecord[O, I, R]) Where(ps ...expr.Predicate[Correlation[O, I]]
 	return r
 }
 
-// OrderBy appends inner result ordering. Example: record.OrderBy(childID.Desc()).
+// OrderBy appends inner result ordering. Example: record.OrderBy(expr.Desc(childID)).
 func (r CorrelatedRecord[O, I, R]) OrderBy(os ...expr.Order[Correlation[O, I]]) CorrelatedRecord[O, I, R] {
 	r.core.Correlation.Source = orderSource(r.core.Correlation.Source, os)
 	return r

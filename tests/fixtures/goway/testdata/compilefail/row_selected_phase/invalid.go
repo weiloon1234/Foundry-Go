@@ -6,4 +6,4 @@ import (
 
 type A struct{}
 
-var _ = expr.Row(expr.Count[A]().Value())
+var _ = expr.Row(expr.AsSelected(expr.Count[A]()))

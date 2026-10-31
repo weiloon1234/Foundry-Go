@@ -9,5 +9,5 @@ import (
 
 func invalid() {
 	f := temporalqueries.Samples
-	_ = expr.Second(expr.Value(orm.TimeExpr(f.Clock))).Eq(1)
+	_ = expr.Eq(expr.Second(expr.Value(orm.TimeExpr(f.Clock))), 1)
 }

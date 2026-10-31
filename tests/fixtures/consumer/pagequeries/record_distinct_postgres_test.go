@@ -20,7 +20,7 @@ func TestPostgresCompleteRecordDistinctOnPage(t *testing.T) {
 		buyerScope := rows.LeftScope(joinedSource, rows.Scope(buyerSource))
 		orderScope := rows.RightScope(joinedSource, rows.Scope(orderSource))
 		buyerID, orderID := expr.At(buyerScope, orm.KeyExpr(models.Users.ID)), expr.At(orderScope, orm.KeyExpr(models.Orders.ID))
-		winners := rows.DistinctOnRecord(rows.SelectRecord(joinedSource, buyerScope), expr.Group(buyerID)).OrderBy(buyerID.Asc(), orderID.Desc())
+		winners := rows.DistinctOnRecord(rows.SelectRecord(joinedSource, buyerScope), expr.Group(buyerID)).OrderBy(expr.Asc(buyerID), expr.Desc(orderID))
 		if p, err := rows.ReadRecord(winners).Paginate(t.Context(), tx, orm.PageRequest{Number: 1, Size: 1}); err != nil || p.Total != 2 {
 			t.Fatal("distinct-on page lost winner ordering", err)
 		}

@@ -33,7 +33,7 @@ func TestLateralModelNullabilityAndWindows(t *testing.T) {
 	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
 	c := Correlate(a, b)
 	parent, child := expr.At(OuterScope(c, Scope(a)), orm.KeyExpr(m.ID)), expr.At(InnerScope(c, Scope(b)), orm.KeyExpr(m.ID))
-	record := SelectCorrelatedRecord(c.Where(expr.Less(child, parent)), InnerScope(c, Scope(b))).OrderBy(child.Desc()).Limit(1)
+	record := SelectCorrelatedRecord(c.Where(expr.Less(child, parent)), InnerScope(c, Scope(b))).OrderBy(expr.Desc(child)).Limit(1)
 	latest := AsLateral[latestTag](record, "latest")
 	j := LeftJoinLateral(a, latest)
 	nullable := NullableRightScope(j, LateralScope(latest))
@@ -73,13 +73,13 @@ func TestLateralProjectionFieldsAndOwnership(t *testing.T) {
 	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
 	c := Correlate(a, b)
 	totals := lateralTotalSchema()
-	record := ProjectCorrelated(c, totals, MapSelected(totals.Count, expr.Count[Correlation[Alias[left, member], Alias[right, member]]]().Value()))
+	record := ProjectCorrelated(c, totals, MapSelected(totals.Count, expr.AsSelected(expr.Count[Correlation[Alias[left, member], Alias[right, member]]]())))
 	latest := AsLateral[latestTag](record, "latest")
 	j := LeftJoinLateral(a, latest)
 	field := AtNullable(NullableRightScope(j, LateralScope(latest)), totals.Count)
 	schema := correlationCountSchema()
 	state := &driverState{columns: []string{"count"}, rows: [][]driver.Value{{nil}, {int64(2)}}}
-	got, err := Read(Select(j, schema, MapSelected(schema.Count, expr.Row(field).Value()))).All(t.Context(), openTest(t, state))
+	got, err := Read(Select(j, schema, MapSelected(schema.Count, expr.AsSelected(expr.Row(field))))).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || !got[0].Count.IsNull() {
 		t.Fatal(got, err)
 	}

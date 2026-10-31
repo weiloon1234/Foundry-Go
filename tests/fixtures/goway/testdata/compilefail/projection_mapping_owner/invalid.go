@@ -40,4 +40,4 @@ var otherFields = rows.Define(func(b rows.Builder[other], r *other) struct {
 		Count rows.Field[other, int64]
 	}{b.Row(), rows.NumberOf(b, &r.Count)}
 })
-var invalid = rows.Select(input, fields, rows.MapSelected(otherFields.Count, expr.Count[models.User]().Value()))
+var invalid = rows.Select(input, fields, rows.MapSelected(otherFields.Count, expr.AsSelected(expr.Count[models.User]())))

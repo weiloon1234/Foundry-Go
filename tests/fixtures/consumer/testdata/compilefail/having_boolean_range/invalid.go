@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var invalid = expr.Exists[models.Order]().Gt(true)
+var invalid = expr.GtValue(expr.Exists[models.Order](), true)

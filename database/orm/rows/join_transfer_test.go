@@ -17,9 +17,9 @@ func TestJoinSourceWindowsAndParameterOrder(t *testing.T) {
 	a := As[left](m.Query().Where(orm.NumberKeyGt(orm.NumberKey(m.Key()), 1)).Limit(2), "a")
 	b := As[right](m.Query().Where(orm.NumberKeyLt(orm.NumberKey(m.Key()), 9)).OrderBy(orm.KeyDesc(m.ID)).Offset(1), "b")
 	x, y := expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))
-	j := LeftJoin(a, b, On(x, y).WhereLeft(x.Ne(5)).WhereRight(y.Ne(6)))
+	j := LeftJoin(a, b, On(x, y).WhereLeft(expr.Ne(x, 5)).WhereRight(expr.Ne(y, 6)))
 	id := expr.At(LeftScope(j, Scope(a)), orm.KeyExpr(m.ID))
-	q := LimitScalar(OrderScalar(WhereScalar(SelectScalar(j, expr.Row(id).Value()), id.Ne(7)), id.Asc()), 4)
+	q := LimitScalar(OrderScalar(WhereScalar(SelectScalar(j, expr.AsSelected(expr.Row(id))), expr.Ne(id, 7)), expr.Asc(id)), 4)
 	s, e := CompileRead(ReadScalar(q))
 	if e != nil {
 		t.Fatal(e)
@@ -36,7 +36,7 @@ func TestJoinSourceWindowsAndParameterOrder(t *testing.T) {
 	c := As[third](m.Query(), "c")
 	rightID := expr.AtNullable(NullableRightScope(j, Scope(b)), orm.KeyExpr(m.ID))
 	chain := InnerJoin(j, c, On(rightID, expr.At(Scope(c), orm.KeyExpr(m.ID))))
-	if _, e := CompileRead(ReadScalar(SelectScalar(chain, expr.Row(expr.AtNullable(LeftNullableScope(chain, NullableRightScope(j, Scope(b))), orm.KeyExpr(m.ID))).Value()))); e != nil {
+	if _, e := CompileRead(ReadScalar(SelectScalar(chain, expr.AsSelected(expr.Row(expr.AtNullable(LeftNullableScope(chain, NullableRightScope(j, Scope(b))), orm.KeyExpr(m.ID))))))); e != nil {
 		t.Fatal(e)
 	}
 	again, _ := CompileRead(ReadScalar(q))
@@ -62,10 +62,10 @@ func TestJoinInvalidAliasesScopesAndDescriptors(t *testing.T) {
 	}
 	j := InnerJoin(a, b, On(x, y))
 	wrong := expr.At(LeftScope(j, Scope(duplicate)), orm.KeyExpr(m.ID))
-	if _, e := CompileRead(ReadScalar(SelectScalar(j, expr.Row(wrong).Value()))); !errors.Is(e, fault.Invalid) {
+	if _, e := CompileRead(ReadScalar(SelectScalar(j, expr.AsSelected(expr.Row(wrong))))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("foreign alias scope", e)
 	}
-	if _, e := CompileRead(ReadScalar(WhereScalar(SelectScalar(a, expr.Row(x).Value()), expr.At(Scope(duplicate), orm.KeyExpr(m.ID)).Eq(1)))); !errors.Is(e, fault.Invalid) {
+	if _, e := CompileRead(ReadScalar(WhereScalar(SelectScalar(a, expr.AsSelected(expr.Row(x))), expr.Eq(expr.At(Scope(duplicate), orm.KeyExpr(m.ID)), 1)))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("foreign alias predicate", e)
 	}
 }
@@ -73,7 +73,7 @@ func TestComputedJoinAndCrossBoundaries(t *testing.T) {
 	m := declareMembers()
 	a, b := As[left](m.Query(), "a"), As[right](m.Query(), "b")
 	x, y := expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))
-	j := LeftJoin(a, b, OnAnd(OnLess(expr.Add(x, expr.Row(x).Param(1)), y), OnNotEqual(x, y)))
+	j := LeftJoin(a, b, OnAnd(OnLess(expr.Add(x, expr.ParamOf(expr.Row(x), 1)), y), OnNotEqual(x, y)))
 	s, e := CompileRead(ReadRecord(SelectRecord(j, LeftScope(j, Scope(a)))))
 	if e != nil || !strings.Contains(s.SQL(), ` < "b"."id"`) || !reflect.DeepEqual(s.Arguments(), []any{int64(1)}) {
 		t.Fatal(s.SQL(), s.Arguments(), e)

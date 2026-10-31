@@ -16,7 +16,7 @@ func TestGeographicExpressionFromConsumer(t *testing.T) {
 		t.Fatal(err)
 	}
 	distance := expr.SphericalDistance(expr.Value(orm.NumberExpr(f.Amount)), expr.Value(orm.NumberExpr(f.Amount)), origin)
-	if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.From(expr.OrderBy(expr.Where(scalarqueries.Samples.Query(), distance.Lte(5000)), distance.Asc(), expr.Value(orm.NumberKeyExpr(f.ID)).Asc())), distance.Value()))); err != nil {
+	if _, err := rowset.CompileRead(rowset.ReadScalar(rowset.SelectScalar(rowset.From(expr.OrderBy(expr.Where(scalarqueries.Samples.Query(), expr.Lte(distance, 5000)), expr.Asc(distance), expr.Asc(expr.Value(orm.NumberKeyExpr(f.ID))))), expr.AsSelected(distance)))); err != nil {
 		t.Fatal(err)
 	}
 }

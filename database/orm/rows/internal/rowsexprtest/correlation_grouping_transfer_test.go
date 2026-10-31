@@ -23,7 +23,7 @@ func TestNestedCorrelationRetainsGrandparentGrouping(t *testing.T) {
 	grandparentID := expr.At(rows.OuterScope(nested, rows.OuterScope(parent, rows.Scope(a))), orm.KeyExpr(m.ID))
 	childID := expr.At(rows.InnerScope(nested, rows.Scope(child)), orm.KeyExpr(m.ID))
 	exists := parent.Where(nested.Where(expr.Equal(childID, grandparentID)).Exists()).Exists()
-	q := rows.Having(expressionQuery(a, expr.Count[rows.Alias[left, member]]().Value(), codec.Signed[int64]()), expr.Grouped(exists))
+	q := rows.Having(expressionQuery(a, expr.AsSelected(expr.Count[rows.Alias[left, member]]()), codec.Signed[int64]()), expr.Grouped(exists))
 	if _, err := rows.CompileRead(rows.Read(q)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("ungrouped grandparent accepted", err)
 	}

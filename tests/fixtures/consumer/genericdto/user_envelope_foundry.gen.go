@@ -12,6 +12,7 @@ import (
 // UserEnvelopeJSON describes the concrete UserEnvelope JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: UserEnvelopeJSON()
 func UserEnvelopeJSON() foundrycontract.JSON[UserEnvelope] { return foundryUserEnvelopeJSON() }
 
 var foundryUserEnvelopeJSON = sync.OnceValue(func() foundrycontract.JSON[UserEnvelope] {
@@ -48,6 +49,7 @@ var foundryUserEnvelopeJSON = sync.OnceValue(func() foundrycontract.JSON[UserEnv
 })
 
 // UserEnvelopeValidationFieldSet retains concrete DTO and value types for validation.
+// Example: UserEnvelopeValidationFields()
 type UserEnvelopeValidationFieldSet struct {
 	// Data validates the declared JSON property "data".
 	Data foundryvalidation.Field[UserEnvelope, UserDTO]
@@ -56,6 +58,7 @@ type UserEnvelopeValidationFieldSet struct {
 }
 
 // UserEnvelopeValidationFields returns typed field descriptors.
+// Example: UserEnvelopeValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func UserEnvelopeValidationFields() UserEnvelopeValidationFieldSet {
 	return *foundryUserEnvelopeValidationFields()

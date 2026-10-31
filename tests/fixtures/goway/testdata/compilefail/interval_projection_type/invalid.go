@@ -29,4 +29,4 @@ type resultFields struct {
 var result = rows.Define(func(b rows.Builder[output], r *output) resultFields {
 	return resultFields{b.Row(), rows.NumberOf(b, &r.Value)}
 })
-var invalid = rows.MapSelected(result.Value, expr.SumInterval(orm.IntervalExpr(table.Value)).Value())
+var invalid = rows.MapSelected(result.Value, expr.AsSelected(expr.SumInterval(orm.IntervalExpr(table.Value))))

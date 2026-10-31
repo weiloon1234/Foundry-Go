@@ -26,6 +26,7 @@ var foundrySubmissionDescriptor = sync.OnceValue(func() foundryhttp.Query[Submis
 })
 
 // SubmissionValidationFieldSet retains concrete DTO and value types for validation.
+// Example: SubmissionValidationFields()
 type SubmissionValidationFieldSet struct {
 	// Blocked validates the declared form field "blocked".
 	Blocked foundryvalidation.Field[Submission, foundryvalue.Optional[string]]
@@ -38,6 +39,7 @@ type SubmissionValidationFieldSet struct {
 }
 
 // SubmissionValidationFields returns typed field descriptors.
+// Example: SubmissionValidationFields()
 // Compose rules with these fields; form names and selectors are generated.
 func SubmissionValidationFields() SubmissionValidationFieldSet {
 	return *foundrySubmissionValidationFields()

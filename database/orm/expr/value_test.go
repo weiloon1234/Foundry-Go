@@ -72,7 +72,7 @@ func TestRowPreservesProjectionAndScope(t *testing.T) {
 	if !reflect.DeepEqual(row.data.core, scoped.core) {
 		t.Fatal("row changed expression")
 	}
-	param := row.Param(value.Null[string]())
+	param := ParamOf(row, value.Null[string]())
 	if param.data.core.Err != nil || !param.data.column.Nullable {
 		t.Fatal("projection type/codec lost")
 	}

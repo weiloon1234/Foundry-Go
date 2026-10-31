@@ -9,7 +9,7 @@ columns do not need a separate summary-method family for each owner/value pair.
 | Purpose | Function |
 | --- | --- |
 | Row operand / bound parameter | `expr.Value(column)` / `expr.Param(column, value)` |
-| Select a row operand | `expr.Row(row).Value()` |
+| Select a row operand | `expr.AsSelected(expr.Row(row))` |
 | Count non-NULL / distinct non-NULL | `expr.CountField(column)` / `expr.CountDistinctField(column)` |
 | Ordered extrema | `expr.Min(column)` / `expr.Max(column)` |
 | Exact summaries | `expr.Sum(column)` / `expr.Avg(column)` |
@@ -22,7 +22,7 @@ columns do not need a separate summary-method family for each owner/value pair.
 ```go
 orders := models.Orders.Query()
 total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents))
-computed := expr.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())
+computed := expr.CoalesceValue(expr.AsSelected(total), expr.AsSelected(expr.ParamOf(total, decimal.FromInt64(0))))
 ```
 
 `expr.Count[S]()` counts rows. Alias operands use `expr.At(scope, column)`;

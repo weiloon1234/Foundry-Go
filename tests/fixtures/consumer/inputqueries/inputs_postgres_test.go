@@ -171,7 +171,7 @@ func TestPostgresMutationInputFailuresRollBack(t *testing.T) {
 		if unchanged.Email != member.Email {
 			return errors.New("failed input write escaped its savepoint")
 		}
-		bad := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoUpdate(rows.SetConflictValue(orm.InputTextExpr(f.Email), expr.Row(expr.At(rows.ConflictRowsOf(q.Query()).Proposed(), orm.InputTextExpr(f.Email))).Value().Param(inputqueries.StoredEmail("already stored"))))
+		bad := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(f.Key()))).DoUpdate(rows.SetConflictValue(orm.InputTextExpr(f.Email), expr.ParamOf(expr.AsSelected(expr.Row(expr.At(rows.ConflictRowsOf(q.Query()).Proposed(), orm.InputTextExpr(f.Email)))), inputqueries.StoredEmail("already stored"))))
 		if _, err := orm.Upsert(t.Context(), tx, q.Query(), bad, orm.KeySet(inputqueries.Members.Key(), member.ID), orm.InputTextSet(inputqueries.Members.Email, inputqueries.EmailInput{Address: "fresh@example.test"})); !errors.Is(err, fault.Invalid) {
 			return errors.New("explicit stored-value conflict bypassed the input boundary")
 		}

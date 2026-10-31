@@ -1,22 +1,29 @@
 package expr
 
 import (
-	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// TextRowExpression is a row text calculation with typed comparisons. Example: Lower(name).Like("a%").
-type TextRowExpression[S any, V ~string] struct {
+// TextRowExpression is a row text calculation with typed comparisons.
+//
+// Example: expr.TextLike(expr.Lower(name), "a%")
+type TextRowExpression[S any, V ~string] = textRowExpression[*S, V]
+
+type textRowExpression[S any, V ~string] struct {
 	rowPhase [0]struct{}
-	_        [0]*S
+	_        [0]S
 	data     rowData[V]
 }
 
-// NullableTextRowExpression preserves NULL and compares present text values. Example: LowerNullable(name).Like("a%").
-type NullableTextRowExpression[S any, V ~string] struct {
+// NullableTextRowExpression preserves NULL and compares present text values.
+//
+// Example: expr.NullableTextLike(expr.LowerNullable(name), "a%")
+type NullableTextRowExpression[S any, V ~string] = nullableTextRowExpression[*S, V]
+
+type nullableTextRowExpression[S any, V ~string] struct {
 	rowPhase [0]struct{}
-	_        [0]*S
+	_        [0]S
 	data     rowData[value.Nullable[V]]
 }
 
@@ -26,213 +33,120 @@ func textRow[S any](v Selected[S, string]) TextRowExpression[S, string] {
 func nullableTextRow[S any](v Selected[S, value.Nullable[string]]) NullableTextRowExpression[S, string] {
 	return NullableTextRowExpression[S, string]{data: v.data}
 }
-func (e TextRowExpression[S, V]) rowValue(*S) rowData[V] { return e.data }
+func (e textRowExpression[S, V]) rowValue(S) rowData[V] { return e.data }
+func (e textRowExpression[S, V]) orderedRowValue(S)     {}
 
-// Value selects the computed value. Example: expression.Value().
-func (e TextRowExpression[S, V]) Value() Selected[S, V] { return Selected[S, V]{data: e.data} }
-
-// Param captures the exact result type. Example: expression.Param(value).
-func (e TextRowExpression[S, V]) Param(v V) RowExpression[S, V] {
-	return parameter[S](e.data, v)
-}
-
-// Eq compares row values before grouping. Example: expression.Eq(value).
-func (e TextRowExpression[S, V]) Eq(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Equal, v)}
-}
-
-// Ne compares row values before grouping. Example: expression.Ne(value).
-func (e TextRowExpression[S, V]) Ne(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.NotEqual, v)}
-}
-
-// In compares row values before grouping. Example: expression.In(value).
-func (e TextRowExpression[S, V]) In(vs ...V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.In, vs...)}
-}
-
-// Lt compares row values before grouping. Example: expression.Lt(value).
-func (e TextRowExpression[S, V]) Lt(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Less, v)}
-}
-
-// Lte compares row values before grouping. Example: expression.Lte(value).
-func (e TextRowExpression[S, V]) Lte(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.LessOrEqual, v)}
-}
-
-// Gt compares row values before grouping. Example: expression.Gt(value).
-func (e TextRowExpression[S, V]) Gt(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Greater, v)}
-}
-
-// Gte compares row values before grouping. Example: expression.Gte(value).
-func (e TextRowExpression[S, V]) Gte(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.GreaterOrEqual, v)}
-}
-
-// IsNull tests SQL nullness. Example: expression.IsNull().
-func (e TextRowExpression[S, V]) IsNull() Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.IsNull)}
-}
-
-// IsNotNull tests SQL nullness. Example: expression.IsNotNull().
-func (e TextRowExpression[S, V]) IsNotNull() Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.IsNotNull)}
-}
-
-// Asc orders a computed row value. Example: expression.Asc().
-func (e TextRowExpression[S, V]) Asc() Order[S] {
-	return Order[S]{core: ormcore.OrderExpression(e.data.core, false)}
-}
-
-// Desc orders a computed row value. Example: expression.Desc().
-func (e TextRowExpression[S, V]) Desc() Order[S] {
-	return Order[S]{core: ormcore.OrderExpression(e.data.core, true)}
-}
-func (e NullableTextRowExpression[S, V]) rowValue(*S) rowData[value.Nullable[V]] { return e.data }
-
-// Value selects the computed value. Example: expression.Value().
-func (e NullableTextRowExpression[S, V]) Value() Selected[S, value.Nullable[V]] {
-	return Selected[S, value.Nullable[V]]{data: e.data}
-}
-
-// Param captures the exact result type. Example: expression.Param(value).
-func (e NullableTextRowExpression[S, V]) Param(v value.Nullable[V]) RowExpression[S, value.Nullable[V]] {
-	return parameter[S](e.data, v)
-}
-
-// Eq compares row values before grouping. Example: expression.Eq(value).
-func (e NullableTextRowExpression[S, V]) Eq(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Equal, presentValues([]V{v})...)}
-}
-
-// Ne compares row values before grouping. Example: expression.Ne(value).
-func (e NullableTextRowExpression[S, V]) Ne(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.NotEqual, presentValues([]V{v})...)}
-}
-
-// In compares row values before grouping. Example: expression.In(value).
-func (e NullableTextRowExpression[S, V]) In(vs ...V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.In, presentValues(vs)...)}
-}
-
-// Lt compares row values before grouping. Example: expression.Lt(value).
-func (e NullableTextRowExpression[S, V]) Lt(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Less, presentValues([]V{v})...)}
-}
-
-// Lte compares row values before grouping. Example: expression.Lte(value).
-func (e NullableTextRowExpression[S, V]) Lte(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.LessOrEqual, presentValues([]V{v})...)}
-}
-
-// Gt compares row values before grouping. Example: expression.Gt(value).
-func (e NullableTextRowExpression[S, V]) Gt(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Greater, presentValues([]V{v})...)}
-}
-
-// Gte compares row values before grouping. Example: expression.Gte(value).
-func (e NullableTextRowExpression[S, V]) Gte(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.GreaterOrEqual, presentValues([]V{v})...)}
-}
-
-// IsNull tests SQL nullness. Example: expression.IsNull().
-func (e NullableTextRowExpression[S, V]) IsNull() Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.IsNull)}
-}
-
-// IsNotNull tests SQL nullness. Example: expression.IsNotNull().
-func (e NullableTextRowExpression[S, V]) IsNotNull() Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.IsNotNull)}
-}
-
-// Asc orders a computed row value. Example: expression.Asc().
-func (e NullableTextRowExpression[S, V]) Asc() Order[S] {
-	return Order[S]{core: ormcore.OrderExpression(e.data.core, false)}
-}
-
-// Desc orders a computed row value. Example: expression.Desc().
-func (e NullableTextRowExpression[S, V]) Desc() Order[S] {
-	return Order[S]{core: ormcore.OrderExpression(e.data.core, true)}
-}
-
-// Like compares typed text using the database collation. Example: expression.Like("a").
-func (e TextRowExpression[S, V]) Like(v V) Predicate[S] {
+// TextLike compares typed text using the database collation.
+//
+// Example: expr.TextLike(e, v)
+func TextLike[S any, V ~string](e TextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.Like, v)}
 }
 
-// Contains compares typed text using the database collation. Example: expression.Contains("a").
-func (e TextRowExpression[S, V]) Contains(v V) Predicate[S] {
+// TextContains compares typed text using the database collation.
+//
+// Example: expr.TextContains(e, v)
+func TextContains[S any, V ~string](e TextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.Contains, v)}
 }
 
-// IContains compares typed text using the database collation. Example: expression.IContains("a").
-func (e TextRowExpression[S, V]) IContains(v V) Predicate[S] {
+// TextIContains compares typed text using the database collation.
+//
+// Example: expr.TextIContains(e, v)
+func TextIContains[S any, V ~string](e TextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.InsensitiveContains, v)}
 }
 
-// StartsWith compares typed text using the database collation. Example: expression.StartsWith("a").
-func (e TextRowExpression[S, V]) StartsWith(v V) Predicate[S] {
+// TextStartsWith compares typed text using the database collation.
+//
+// Example: expr.TextStartsWith(e, v)
+func TextStartsWith[S any, V ~string](e TextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.StartsWith, v)}
 }
 
-// EndsWith compares typed text using the database collation. Example: expression.EndsWith("a").
-func (e TextRowExpression[S, V]) EndsWith(v V) Predicate[S] {
+// TextEndsWith compares typed text using the database collation.
+//
+// Example: expr.TextEndsWith(e, v)
+func TextEndsWith[S any, V ~string](e TextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.EndsWith, v)}
 }
 
-// IStartsWith compares typed text using the database collation. Example: expression.IStartsWith("a").
-func (e TextRowExpression[S, V]) IStartsWith(v V) Predicate[S] {
+// TextIStartsWith compares typed text using the database collation.
+//
+// Example: expr.TextIStartsWith(e, v)
+func TextIStartsWith[S any, V ~string](e TextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.InsensitiveStartsWith, v)}
 }
 
-// IEndsWith compares typed text using the database collation. Example: expression.IEndsWith("a").
-func (e TextRowExpression[S, V]) IEndsWith(v V) Predicate[S] {
+// TextIEndsWith compares typed text using the database collation.
+//
+// Example: expr.TextIEndsWith(e, v)
+func TextIEndsWith[S any, V ~string](e TextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.InsensitiveEndsWith, v)}
 }
 
-// ILike compares typed text using the database collation. Example: expression.ILike("a").
-func (e TextRowExpression[S, V]) ILike(v V) Predicate[S] {
+// TextILike compares typed text using the database collation.
+//
+// Example: expr.TextILike(e, v)
+func TextILike[S any, V ~string](e TextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.InsensitiveLike, v)}
 }
 
-// Like compares typed text using the database collation. Example: expression.Like("a").
-func (e NullableTextRowExpression[S, V]) Like(v V) Predicate[S] {
+// NullableTextLike compares nullable text using the database collation.
+//
+// Example: expr.NullableTextLike(e, v)
+func NullableTextLike[S any, V ~string](e NullableTextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.Like, presentValues([]V{v})...)}
 }
 
-// Contains compares typed text using the database collation. Example: expression.Contains("a").
-func (e NullableTextRowExpression[S, V]) Contains(v V) Predicate[S] {
+// NullableTextContains compares nullable text using the database collation.
+//
+// Example: expr.NullableTextContains(e, v)
+func NullableTextContains[S any, V ~string](e NullableTextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.Contains, presentValues([]V{v})...)}
 }
 
-// IContains compares typed text using the database collation. Example: expression.IContains("a").
-func (e NullableTextRowExpression[S, V]) IContains(v V) Predicate[S] {
+// NullableTextIContains compares nullable text using the database collation.
+//
+// Example: expr.NullableTextIContains(e, v)
+func NullableTextIContains[S any, V ~string](e NullableTextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.InsensitiveContains, presentValues([]V{v})...)}
 }
 
-// StartsWith compares typed text using the database collation. Example: expression.StartsWith("a").
-func (e NullableTextRowExpression[S, V]) StartsWith(v V) Predicate[S] {
+// NullableTextStartsWith compares nullable text using the database collation.
+//
+// Example: expr.NullableTextStartsWith(e, v)
+func NullableTextStartsWith[S any, V ~string](e NullableTextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.StartsWith, presentValues([]V{v})...)}
 }
 
-// EndsWith compares typed text using the database collation. Example: expression.EndsWith("a").
-func (e NullableTextRowExpression[S, V]) EndsWith(v V) Predicate[S] {
+// NullableTextEndsWith compares nullable text using the database collation.
+//
+// Example: expr.NullableTextEndsWith(e, v)
+func NullableTextEndsWith[S any, V ~string](e NullableTextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.EndsWith, presentValues([]V{v})...)}
 }
 
-// IStartsWith compares typed text using the database collation. Example: expression.IStartsWith("a").
-func (e NullableTextRowExpression[S, V]) IStartsWith(v V) Predicate[S] {
+// NullableTextIStartsWith compares nullable text using the database collation.
+//
+// Example: expr.NullableTextIStartsWith(e, v)
+func NullableTextIStartsWith[S any, V ~string](e NullableTextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.InsensitiveStartsWith, presentValues([]V{v})...)}
 }
 
-// IEndsWith compares typed text using the database collation. Example: expression.IEndsWith("a").
-func (e NullableTextRowExpression[S, V]) IEndsWith(v V) Predicate[S] {
+// NullableTextIEndsWith compares nullable text using the database collation.
+//
+// Example: expr.NullableTextIEndsWith(e, v)
+func NullableTextIEndsWith[S any, V ~string](e NullableTextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.InsensitiveEndsWith, presentValues([]V{v})...)}
 }
 
-// ILike compares typed text using the database collation. Example: expression.ILike("a").
-func (e NullableTextRowExpression[S, V]) ILike(v V) Predicate[S] {
+// NullableTextILike compares nullable text using the database collation.
+//
+// Example: expr.NullableTextILike(e, v)
+func NullableTextILike[S any, V ~string](e NullableTextRowExpression[S, V], v V) Predicate[S] {
 	return Predicate[S]{core: rowCompare(e.data, querycore.InsensitiveLike, presentValues([]V{v})...)}
 }
+
+func (e nullableTextRowExpression[S, V]) rowValue(S) rowData[value.Nullable[V]] { return e.data }
+func (e nullableTextRowExpression[S, V]) orderedRowValue(S)                     {}

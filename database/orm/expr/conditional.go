@@ -9,13 +9,15 @@ import (
 )
 
 // Coalesce removes nullability with a required fallback of the same owner/type.
-// Example: expr.Coalesce(expr.Value(orm.NullableTextExpr(Users.Nickname)),expr.Value(orm.TextExpr(Users.Name))).
+//
+// Example: expr.Coalesce(first, fallback)
 func Coalesce[S, V any](first RowValue[S, value.Nullable[V]], fallback RowValue[S, V]) RowExpression[S, V] {
-	return RowExpression[S, V]{data: CoalesceValue(Row(first).Value(), Row(fallback).Value()).data}
+	return RowExpression[S, V]{data: CoalesceValue(AsSelected(Row(first)), AsSelected(Row(fallback))).data}
 }
 
 // CoalesceValue composes selected values with a required fallback.
-// Example: expr.CoalesceValue(expr.Nullable(expr.Count[User]().Value()),expr.Count[User]().Param(0).Value()).
+//
+// Example: expr.CoalesceValue(first, fallback)
 func CoalesceValue[S, V any](first Selected[S, value.Nullable[V]], fallback Selected[S, V]) Selected[S, V] {
 	out := conditionalData(querycore.CoalesceValues, fallback.data.column, first.data.core, fallback.data.core)
 	if value.IsNullableType[V]() {
@@ -25,7 +27,8 @@ func CoalesceValue[S, V any](first Selected[S, value.Nullable[V]], fallback Sele
 }
 
 // CoalesceNullable retains one nullable layer when all inputs may be NULL.
-// Example: expr.CoalesceNullable(expr.Value(orm.NullableTextExpr(Users.Nickname)),expr.NullableRow(expr.Value(orm.TextExpr(Users.Name))).Param(value.Null[string]())).
+//
+// Example: expr.CoalesceNullable(first, rest...)
 func CoalesceNullable[S, V any](first RowValue[S, value.Nullable[V]], rest ...RowValue[S, value.Nullable[V]]) RowExpression[S, value.Nullable[V]] {
 	initial := rowInput(first).data
 	if len(rest) >= querycore.MaxExpressionNodes {
@@ -41,7 +44,8 @@ func CoalesceNullable[S, V any](first RowValue[S, value.Nullable[V]], rest ...Ro
 }
 
 // CoalesceNullableValue combines selected nullable inputs without nesting wrappers.
-// Example: expr.CoalesceNullableValue(expr.Nullable(expr.Count[User]().Value())).
+//
+// Example: expr.CoalesceNullableValue(first, rest...)
 func CoalesceNullableValue[S, V any](first Selected[S, value.Nullable[V]], rest ...Selected[S, value.Nullable[V]]) Selected[S, value.Nullable[V]] {
 	if len(rest) >= querycore.MaxExpressionNodes {
 		first.data.core.Err = safeerror.Join("operation failed", first.data.core.Err, ormcore.Invalid("COALESCE exceeds its argument bound"))
@@ -56,26 +60,30 @@ func CoalesceNullableValue[S, V any](first Selected[S, value.Nullable[V]], rest 
 }
 
 // NullIf adds one nullable layer to matching required row values.
-// Example: expr.NullIf(expr.Value(orm.TextExpr(Users.Name)),expr.Param(orm.TextExpr(Users.Name), "")).
+//
+// Example: expr.NullIf(first, second)
 func NullIf[S, V any](first, second RowValue[S, V]) RowExpression[S, value.Nullable[V]] {
-	return RowExpression[S, value.Nullable[V]]{data: NullIfValue(Row(first).Value(), Row(second).Value()).data}
+	return RowExpression[S, value.Nullable[V]]{data: NullIfValue(AsSelected(Row(first)), AsSelected(Row(second))).data}
 }
 
 // NullIfValue adds one nullable layer to matching required selected values.
-// Example: expr.NullIfValue(expr.Count[User]().Value(),expr.Count[User]().Param(0).Value()).
+//
+// Example: expr.NullIfValue(first, second)
 func NullIfValue[S, V any](first, second Selected[S, V]) Selected[S, value.Nullable[V]] {
 	data := nullableData(first.data)
 	return Selected[S, value.Nullable[V]]{data: conditionalData(querycore.NullIfValues, data.column, data.core, second.data.core)}
 }
 
 // NullIfNullable compares nullable row values while retaining one nullable layer.
-// Example: expr.NullIfNullable(expr.Value(orm.NullableTextExpr(Users.Nickname)),expr.NullableRow(expr.Value(orm.TextExpr(Users.Name))).Param(value.Null[string]())).
+//
+// Example: expr.NullIfNullable(first, second)
 func NullIfNullable[S, V any](first, second RowValue[S, value.Nullable[V]]) RowExpression[S, value.Nullable[V]] {
-	return RowExpression[S, value.Nullable[V]]{data: NullIfNullableValue(Row(first).Value(), Row(second).Value()).data}
+	return RowExpression[S, value.Nullable[V]]{data: NullIfNullableValue(AsSelected(Row(first)), AsSelected(Row(second))).data}
 }
 
 // NullIfNullableValue compares selected nullable values without nesting wrappers.
-// Example: expr.NullIfNullableValue(a,b).
+//
+// Example: expr.NullIfNullableValue(first, second)
 func NullIfNullableValue[S, V any](first, second Selected[S, value.Nullable[V]]) Selected[S, value.Nullable[V]] {
 	return Selected[S, value.Nullable[V]]{data: conditionalData(querycore.NullIfValues, first.data.column, first.data.core, second.data.core)}
 }
@@ -87,7 +95,8 @@ func conditionalData[V any](kind querycore.ConditionalKind, column ormcore.Colum
 }
 
 // Case is unfinished row CASE; Else or ElseNull must finish it before use.
-// Example: expr.When(age.Gt(18),name).Else(fallback).
+//
+// Example: expr.When(expr.Gt(age, 18), name).Else(fallback)
 type Case[S, V any] struct {
 	rowCasePhase [0]struct{}
 	_            [0]*S
@@ -96,7 +105,8 @@ type Case[S, V any] struct {
 }
 
 // ValueCase is unfinished selected CASE with group predicates and selected results.
-// Example: expr.WhenValue(count.Gt(0),count.Value()).Else(count.Param(0).Value()).
+//
+// Example: expr.WhenValue(expr.GtValue(count, 0), expr.AsSelected(count)).Else(expr.AsSelected(expr.ParamOf(count, 0)))
 type ValueCase[S, V any] struct {
 	selectedCasePhase [0]struct{}
 	_                 [0]*S
@@ -105,13 +115,15 @@ type ValueCase[S, V any] struct {
 }
 
 // When starts row CASE with a same-owner row condition and result.
-// Example: expr.When(age.Gt(18),name).
+//
+// Example: expr.When(condition, result)
 func When[S, V any](condition Predicate[S], result RowValue[S, V]) Case[S, V] {
 	return (Case[S, V]{}).When(condition, result)
 }
 
 // When appends an independent row CASE branch with the exact result type.
-// Example: choice.When(age.Gt(65),seniorName).
+//
+// Example: choice.When(expr.Gt(age, 65), seniorName)
 func (c Case[S, V]) When(condition Predicate[S], result RowValue[S, V]) Case[S, V] {
 	data := rowInput(result).data
 	if c.builder.Empty() {
@@ -122,26 +134,30 @@ func (c Case[S, V]) When(condition Predicate[S], result RowValue[S, V]) Case[S, 
 }
 
 // Else finishes row CASE with a matching fallback.
-// Example: choice.Else(name).
+//
+// Example: choice.Else(name)
 func (c Case[S, V]) Else(result RowValue[S, V]) RowExpression[S, V] {
 	data := rowInput(result).data
 	return RowExpression[S, V]{data: caseData(c.builder, c.column, data.core)}
 }
 
 // ElseNull finishes required-valued row CASE with one nullable result layer.
-// Example: expr.When(age.Gt(18),name).ElseNull().
+//
+// Example: expr.When(expr.Gt(age, 18), name).ElseNull()
 func (c Case[S, V]) ElseNull() RowExpression[S, value.Nullable[V]] {
 	return RowExpression[S, value.Nullable[V]]{data: caseNullData(c.builder, c.column)}
 }
 
 // WhenValue starts selected CASE using group predicates and selected results.
-// Example: expr.WhenValue(count.Gt(0),count.Value()).
+//
+// Example: expr.WhenValue(condition, result)
 func WhenValue[S, V any](condition HavingPredicate[S], result Selected[S, V]) ValueCase[S, V] {
 	return (ValueCase[S, V]{}).When(condition, result)
 }
 
 // When appends an independent selected CASE branch.
-// Example: choice.When(count.Gt(10),count.Value()).
+//
+// Example: choice.When(expr.GtValue(count, 10), expr.AsSelected(count))
 func (c ValueCase[S, V]) When(condition HavingPredicate[S], result Selected[S, V]) ValueCase[S, V] {
 	if c.builder.Empty() {
 		c.column = result.data.column
@@ -151,19 +167,22 @@ func (c ValueCase[S, V]) When(condition HavingPredicate[S], result Selected[S, V
 }
 
 // Else finishes selected CASE with a matching selected fallback.
-// Example: choice.Else(count.Param(0).Value()).
+//
+// Example: choice.Else(expr.AsSelected(expr.ParamOf(count, 0)))
 func (c ValueCase[S, V]) Else(result Selected[S, V]) Selected[S, V] {
 	return Selected[S, V]{data: caseData(c.builder, c.column, result.data.core)}
 }
 
 // ElseNull finishes required-valued selected CASE with one nullable layer.
-// Example: expr.WhenValue(count.Gt(0),count.Value()).ElseNull().
+//
+// Example: expr.WhenValue(expr.GtValue(count, 0), expr.AsSelected(count)).ElseNull()
 func (c ValueCase[S, V]) ElseNull() Selected[S, value.Nullable[V]] {
 	return Selected[S, value.Nullable[V]]{data: caseNullData(c.builder, c.column)}
 }
 
 // Grouped lifts a row predicate into the group phase; SQL grouping still applies.
-// Example: expr.WhenValue(expr.Grouped(age.Gt(18)),count.Value()).
+//
+// Example: expr.Grouped(condition)
 func Grouped[S any](condition Predicate[S]) HavingPredicate[S] {
 	return HavingPredicate[S]{core: condition.core}
 }

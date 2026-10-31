@@ -32,7 +32,7 @@ func TestRelativeTimeWindowBindsStableValues(t *testing.T) {
 	}
 	compile := func() orm.Statement {
 		since := expr.SubtractInstantInterval(expr.TransactionTime(rows.ModelScope(m.Query())), elapsed, expr.UTCZone())
-		q := rows.WhereScalar(rows.SelectScalar(rows.From(m.Query()), expr.Row(expr.Value(orm.TimeExpr(m.At))).Value()), expr.Greater(expr.Value(orm.TimeExpr(m.At)), since))
+		q := rows.WhereScalar(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(m.At))))), expr.Greater(expr.Value(orm.TimeExpr(m.At)), since))
 		s, err := rows.CompileRead(rows.ReadScalar(q))
 		if err != nil {
 			t.Fatal(err)

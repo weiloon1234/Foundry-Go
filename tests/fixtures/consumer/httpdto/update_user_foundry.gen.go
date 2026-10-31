@@ -14,6 +14,7 @@ import (
 // UpdateUserJSON describes the concrete UpdateUser JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: UpdateUserJSON()
 func UpdateUserJSON() foundrycontract.JSON[UpdateUser] { return foundryUpdateUserJSON() }
 
 var foundryUpdateUserJSON = sync.OnceValue(func() foundrycontract.JSON[UpdateUser] {
@@ -43,6 +44,7 @@ var foundryUpdateUserJSON = sync.OnceValue(func() foundrycontract.JSON[UpdateUse
 })
 
 // UpdateUserValidationFieldSet retains concrete DTO and value types for validation.
+// Example: UpdateUserValidationFields()
 type UpdateUserValidationFieldSet struct {
 	// Email validates the declared JSON property "email".
 	Email foundryvalidation.Field[UpdateUser, foundryvalue.Optional[string]]
@@ -53,6 +55,7 @@ type UpdateUserValidationFieldSet struct {
 }
 
 // UpdateUserValidationFields returns typed field descriptors.
+// Example: UpdateUserValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func UpdateUserValidationFields() UpdateUserValidationFieldSet {
 	return *foundryUpdateUserValidationFields()

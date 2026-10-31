@@ -39,4 +39,4 @@ var statuses = rows.Define(func(b rows.Builder[statusRow], r *statusRow) statusF
 	return statusFields{b.Row(), rows.EnumOf(b, &r.Status)}
 })
 var statusAlias = rows.AsRecord[tag](rows.RecordOf(rows.Select(input, statuses, rows.Map(statuses.Status, expr.Value(orm.EnumExpr(models.Users.Status))))), "statuses")
-var invalid = rows.At(rows.Scope(statusAlias), statuses.Status).Like("active")
+var invalid = expr.TextLike[rows.Alias[tag, statusRow], models.Status](rows.At(rows.Scope(statusAlias), statuses.Status), "active")

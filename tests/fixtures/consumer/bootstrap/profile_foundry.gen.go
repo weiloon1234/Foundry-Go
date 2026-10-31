@@ -12,6 +12,7 @@ import (
 // ProfileJSON describes the concrete Profile JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ProfileJSON()
 func ProfileJSON() foundrycontract.JSON[Profile] { return foundryProfileJSON() }
 
 var foundryProfileJSON = sync.OnceValue(func() foundrycontract.JSON[Profile] {
@@ -27,6 +28,7 @@ var foundryProfileJSON = sync.OnceValue(func() foundrycontract.JSON[Profile] {
 })
 
 // ProfileValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ProfileValidationFields()
 type ProfileValidationFieldSet struct {
 	// Kind validates the declared JSON property "kind".
 	Kind foundryvalidation.Field[Profile, string]
@@ -35,6 +37,7 @@ type ProfileValidationFieldSet struct {
 }
 
 // ProfileValidationFields returns typed field descriptors.
+// Example: ProfileValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ProfileValidationFields() ProfileValidationFieldSet { return *foundryProfileValidationFields() }
 

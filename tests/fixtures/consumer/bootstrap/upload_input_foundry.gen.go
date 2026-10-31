@@ -23,12 +23,14 @@ var foundryUploadInputDescriptor = sync.OnceValue(func() foundryhttp.Multipart[U
 })
 
 // UploadInputValidationFieldSet retains concrete DTO and value types for validation.
+// Example: UploadInputValidationFields()
 type UploadInputValidationFieldSet struct {
 	// Image validates the declared multipart part "image".
 	Image foundryvalidation.Field[UploadInput, foundryhttp.UploadedFile]
 }
 
 // UploadInputValidationFields returns typed field descriptors.
+// Example: UploadInputValidationFields()
 // Compose rules with these fields; multipart names and selectors are generated.
 func UploadInputValidationFields() UploadInputValidationFieldSet {
 	return *foundryUploadInputValidationFields()

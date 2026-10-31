@@ -64,7 +64,7 @@ func TestLockClauseStrengthsAndOwnedInputs(t *testing.T) {
 			t.Fatal(s, e)
 		}
 	}
-	scalar := LockRows(ReadScalar(SelectScalar(a, expr.Row(expr.At(Scope(a), orm.KeyExpr(m.ID))).Value())), KeyShareLock(target))
+	scalar := LockRows(ReadScalar(SelectScalar(a, expr.AsSelected(expr.Row(expr.At(Scope(a), orm.KeyExpr(m.ID)))))), KeyShareLock(target))
 	if s, e := ormcore.CompileRecord(t.Context(), scalar.core); e != nil || !strings.HasSuffix(s.SQLText, ` FOR KEY SHARE OF "a"`) {
 		t.Fatal(s, e)
 	}
@@ -82,8 +82,8 @@ func TestLockClausesRejectWindowsInsideCalculations(t *testing.T) {
 	id := expr.Value(orm.KeyExpr(m.ID))
 	rank := expr.RowNumber(expr.WindowFor(ModelScope(m.Query())))
 	calculation := expr.AddValue(rank, rank)
-	conditional := expr.WhenValue(expr.EqualValue(rank, rank), expr.Row(id).Value()).Else(expr.Row(id).Value())
-	for _, q := range []Scalar[member, int64]{SelectScalar(source, calculation), SelectScalar(source, conditional), OrderScalar(SelectScalar(source, expr.Row(id).Value()), calculation.Asc())} {
+	conditional := expr.WhenValue(expr.EqualValue(rank, rank), expr.AsSelected(expr.Row(id))).Else(expr.AsSelected(expr.Row(id)))
+	for _, q := range []Scalar[member, int64]{SelectScalar(source, calculation), SelectScalar(source, conditional), OrderScalar(SelectScalar(source, expr.AsSelected(expr.Row(id))), expr.AscValue(calculation))} {
 		read := ReadScalar(q)
 		if _, e := CompileRead(read); e != nil {
 			t.Fatal(e)
@@ -95,7 +95,7 @@ func TestLockClausesRejectWindowsInsideCalculations(t *testing.T) {
 		}
 	}
 	inner := LimitScalar(SelectScalar(source, calculation), 1)
-	outer := ReadScalar(SelectScalar(source, ScalarRowQuery(source, inner).Value()))
+	outer := ReadScalar(SelectScalar(source, expr.AsSelected(ScalarRowQuery(source, inner))))
 	if _, e := ormcore.CompileRecord(t.Context(), LockRows(outer, UpdateLock(Target(ModelScope(m.Query())))).core); e != nil {
 		t.Fatal("independent inner window blocked outer lock", e)
 	}
@@ -139,8 +139,8 @@ func TestLockedProjectionScopesAndDerivedSourceValidation(t *testing.T) {
 	}
 	source := From(m.Query())
 	id := expr.Value(orm.KeyExpr(m.ID))
-	scalar := SelectScalar(source, expr.Row(id).Value())
-	for _, q := range []Scalar[member, int64]{DistinctScalar(scalar), GroupByScalar(scalar, expr.Group(id)), SelectScalar(source, expr.Count[member]().Value()), SelectScalar(source, expr.RowNumber(expr.WindowFor(ModelScope(m.Query())).OrderBy(id.Asc())))} {
+	scalar := SelectScalar(source, expr.AsSelected(expr.Row(id)))
+	for _, q := range []Scalar[member, int64]{DistinctScalar(scalar), GroupByScalar(scalar, expr.Group(id)), SelectScalar(source, expr.AsSelected(expr.Count[member]())), SelectScalar(source, expr.RowNumber(expr.WindowFor(ModelScope(m.Query())).OrderBy(expr.Asc(id))))} {
 		if _, e := ormcore.CompileRecord(t.Context(), ForUpdate(ReadScalar(q)).core); !errors.Is(e, fault.Invalid) {
 			t.Fatal("non-row projection locked", e)
 		}

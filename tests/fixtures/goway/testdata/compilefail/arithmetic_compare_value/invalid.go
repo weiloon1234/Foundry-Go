@@ -9,4 +9,4 @@ import (
 
 var age = expr.Value(orm.NumberExpr(models.Users.Age))
 var email = expr.Value(orm.TextExpr(models.Users.Email))
-var _ = expr.Add(age, age).Eq("two")
+var _ = expr.Eq[models.User, int](expr.Add(age, age), "two")

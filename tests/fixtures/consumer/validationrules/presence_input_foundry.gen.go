@@ -13,6 +13,7 @@ import (
 // PresenceInputJSON describes the concrete PresenceInput JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: PresenceInputJSON()
 func PresenceInputJSON() foundrycontract.JSON[PresenceInput] { return foundryPresenceInputJSON() }
 
 var foundryPresenceInputJSON = sync.OnceValue(func() foundrycontract.JSON[PresenceInput] {
@@ -57,6 +58,7 @@ var foundryPresenceInputJSON = sync.OnceValue(func() foundrycontract.JSON[Presen
 })
 
 // PresenceInputValidationFieldSet retains concrete DTO and value types for validation.
+// Example: PresenceInputValidationFields()
 type PresenceInputValidationFieldSet struct {
 	// Active validates the declared JSON property "active".
 	Active foundryvalidation.Field[PresenceInput, foundryvalue.Optional[bool]]
@@ -73,6 +75,7 @@ type PresenceInputValidationFieldSet struct {
 }
 
 // PresenceInputValidationFields returns typed field descriptors.
+// Example: PresenceInputValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func PresenceInputValidationFields() PresenceInputValidationFieldSet {
 	return *foundryPresenceInputValidationFields()

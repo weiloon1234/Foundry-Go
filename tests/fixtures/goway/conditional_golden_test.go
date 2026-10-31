@@ -63,11 +63,11 @@ func runConditionalNew(g *goldenCapture) {
 	age := expr.OrderRow(expr.At(rowset.Scope(a), orm.NumberExpr(models.Users.Age)))
 	email := expr.At(rowset.Scope(a), orm.TextExpr(models.Users.Email))
 	nickname := expr.At(rowset.Scope(a), orm.NullableTextExpr(models.Users.Nickname))
-	fallback := expr.Row(email).Value().Param("")
-	choice := expr.When(age.Gt(18), expr.Coalesce(nickname, email)).When(age.Gt(10), fallback).Else(email)
-	nullable := expr.When(age.Gt(0), choice).ElseNull()
+	fallback := expr.ParamOf(expr.AsSelected(expr.Row(email)), "")
+	choice := expr.When(expr.Gt(age, 18), expr.Coalesce(nickname, email)).When(expr.Gt(age, 10), fallback).Else(email)
+	nullable := expr.When(expr.Gt(age, 0), choice).ElseNull()
 	s := conditionalRows
-	q := rowset.OrderBy(rowset.Select(a, s, rowset.MapSelected(s.Required, choice.Value()), rowset.MapSelected(s.Missing, expr.NullIfNullable(expr.CoalesceNullable(nullable, nickname), expr.NullableRow(fallback)).Value())).Where(expr.NullIf(choice, fallback).IsNotNull()), choice.Asc())
+	q := rowset.OrderBy(rowset.Select(a, s, rowset.MapSelected(s.Required, expr.AsSelected(choice)), rowset.MapSelected(s.Missing, expr.AsSelected(expr.NullIfNullable(expr.CoalesceNullable(nullable, nickname), expr.NullableRow(fallback))))).Where(expr.IsNotNull(expr.NullIf(choice, fallback))), expr.Asc(choice))
 	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(q).All(ctx, db))}))
 }
 
@@ -77,9 +77,9 @@ func runSelectedConditionalNew(g *goldenCapture) {
 	defer db.Close(ctx)
 	a := rowset.As[expressionSide](models.Orders.Query(), "o")
 	count := expr.Count[rowset.Alias[expressionSide, models.Order]]()
-	choice := expr.WhenValue(count.Gt(0), count.Value()).Else(count.Param(0).Value())
-	result := expr.CoalesceValue(expr.NullIfValue(choice, count.Param(0).Value()), count.Param(0).Value())
+	choice := expr.WhenValue(expr.GtValue(count, 0), expr.AsSelected(count)).Else(expr.AsSelected(expr.ParamOf(count, 0)))
+	result := expr.CoalesceValue(expr.NullIfValue(choice, expr.AsSelected(expr.ParamOf(count, 0))), expr.AsSelected(expr.ParamOf(count, 0)))
 	s := expressionRows
-	q := rowset.Select(a, s, rowset.MapSelected(s.Number, result), rowset.MapSelected(s.Exact, expr.DecimalValue(result)), rowset.MapSelected(s.Approx, expr.FloatValue(result)), rowset.MapSelected(s.Missing, expr.WhenValue(count.Gt(10), count.Value()).ElseNull()))
+	q := rowset.Select(a, s, rowset.MapSelected(s.Number, result), rowset.MapSelected(s.Exact, expr.DecimalValue(result)), rowset.MapSelected(s.Approx, expr.FloatValue(result)), rowset.MapSelected(s.Missing, expr.WhenValue(expr.GtValue(count, 10), expr.AsSelected(count)).ElseNull()))
 	fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(q).All(ctx, db))}))
 }

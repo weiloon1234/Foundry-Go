@@ -13,6 +13,7 @@ import (
 // ProjectDTOJSON describes the concrete ProjectDTO JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ProjectDTOJSON()
 func ProjectDTOJSON() foundrycontract.JSON[ProjectDTO] { return foundryProjectDTOJSON() }
 
 var foundryProjectDTOJSON = sync.OnceValue(func() foundrycontract.JSON[ProjectDTO] {
@@ -31,6 +32,7 @@ var foundryProjectDTOJSON = sync.OnceValue(func() foundrycontract.JSON[ProjectDT
 })
 
 // ProjectDTOValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ProjectDTOValidationFields()
 type ProjectDTOValidationFieldSet struct {
 	// ID validates the declared JSON property "id".
 	ID foundryvalidation.Field[ProjectDTO, model.ID[Project]]
@@ -39,6 +41,7 @@ type ProjectDTOValidationFieldSet struct {
 }
 
 // ProjectDTOValidationFields returns typed field descriptors.
+// Example: ProjectDTOValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ProjectDTOValidationFields() ProjectDTOValidationFieldSet {
 	return *foundryProjectDTOValidationFields()

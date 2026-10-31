@@ -110,19 +110,17 @@ func TestEnumRowSortAndShortStableSpelling(t *testing.T) {
 		Row:     enumSortJSON(),
 		Exports: false,
 		Columns: []ColumnRegistration[enumSortRecord, EnumSortRow]{
-			DefineColumn[enumSortRecord](validation.DefineField("id", func(r EnumSortRow) int64 { return r.ID }), "test.id").Registration(),
-			DefineColumn[enumSortRecord](validation.DefineField("status", func(r EnumSortRow) enumSortStatus { return r.Status }), "test.status").
-				SortBy(statusCmp.Value()).
-				FilterBy(Where(statusCodec, statusCmp)).
-				ExportAs(ScalarCell(statusCodec)).
-				Registration(),
-			DefineColumn[enumSortRecord](validation.DefineField("opt_status", func(r EnumSortRow) value.Nullable[enumSortStatus] { return r.OptStatus }), "test.opt_status").
-				SortBy(optStatusCmp.Value()).
-				FilterBy(NullableWhere(statusCodec, optStatusCmp)).
-				ExportAs(NullableCell(statusCodec)).
-				Registration(),
+			DefineColumn[enumSortRecord](validation.DefineField("id", func(r EnumSortRow) int64 { return r.ID }), "test.id"),
+			DefineColumn[enumSortRecord](validation.DefineField("status", func(r EnumSortRow) enumSortStatus { return r.Status }), "test.status",
+				SortBy(expr.AsSelected(statusCmp)),
+				FilterBy(Where(statusCodec, expr.CompareFilter(statusCmp))),
+				ExportAs(expr.AsSelected(statusCmp), ScalarCell(statusCodec))),
+			DefineColumn[enumSortRecord](validation.DefineField("opt_status", func(r EnumSortRow) value.Nullable[enumSortStatus] { return r.OptStatus }), "test.opt_status",
+				SortBy(expr.AsSelected(optStatusCmp)),
+				FilterBy(NullableWhere(statusCodec, expr.NullableCompareFilter(optStatusCmp))),
+				ExportAs(expr.AsSelected(optStatusCmp), NullableCell(statusCodec))),
 		},
-		Stable: []expr.ProjectionOrder[enumSortRecord]{expr.Value(orm.KeyExpr(enumSortModels.Key())).Asc()},
+		Stable: []expr.ProjectionOrder[enumSortRecord]{expr.Asc(expr.Value(orm.KeyExpr(enumSortModels.Key())))},
 		Source: func(ctx context.Context, actor enumSortActor) (rows.Query[enumSortRecord, EnumSortRow], error) {
 			return rows.Select(rows.From(enumSortModels.Query()), enumSortRows,
 				rows.Map(enumSortRows.ID, expr.Value(orm.KeyExpr(enumSortModels.Key()))),

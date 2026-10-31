@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Changed (breaking): Row, selected, and aggregate expression operations move to
+  typed `expr` package functions, including `AsSelected`, `ParamOf`, `Key`, `Filter`,
+  and the `Value` comparison and ordering functions. Public expression aliases
+  retain pointer-shaped source scopes. `Order` and `SelectedOrder` are exported
+  non-alias types retaining `NullsFirst` and `NullsLast` methods. Datatable filters
+  use explicit typed adapters in both phases. `DefineColumn` accepts
+  `ColumnOption[S, V]` and returns `ColumnRegistration[S, R]` directly;
+  `Searchable(row)` and `ExportAs(selected, cell)` infer both types.
+  Public DSL operations are visible in `go doc`; see the
+  [v0.3 migration table](docs/guides/orm-migration.md#v030-expression-and-datatable-migration).
 - Changed (breaking): `Codec.CloneOptional` → `codec.CloneOptional`. Pass the codec as the first argument; the method is removed.
 - Changed (internal compile footprint): HTTP request execution now carries only path, query and body types; typed response completion and endpoint metadata retain the response type. Generated non-generic validation field sets cache pointers with `sync.OnceValue` and return value copies. Generic DTO construction is unchanged.
 

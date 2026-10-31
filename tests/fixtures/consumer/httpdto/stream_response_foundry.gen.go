@@ -13,6 +13,7 @@ import (
 // StreamResponseJSON describes the concrete StreamResponse JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: StreamResponseJSON()
 func StreamResponseJSON() foundrycontract.JSON[StreamResponse] { return foundryStreamResponseJSON() }
 
 var foundryStreamResponseJSON = sync.OnceValue(func() foundrycontract.JSON[StreamResponse] {
@@ -38,6 +39,7 @@ var foundryStreamResponseJSON = sync.OnceValue(func() foundrycontract.JSON[Strea
 })
 
 // StreamResponseValidationFieldSet retains concrete DTO and value types for validation.
+// Example: StreamResponseValidationFields()
 type StreamResponseValidationFieldSet struct {
 	// History validates the declared JSON property "History".
 	History foundryvalidation.Field[StreamResponse, []StreamLabel]
@@ -48,6 +50,7 @@ type StreamResponseValidationFieldSet struct {
 }
 
 // StreamResponseValidationFields returns typed field descriptors.
+// Example: StreamResponseValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func StreamResponseValidationFields() StreamResponseValidationFieldSet {
 	return *foundryStreamResponseValidationFields()

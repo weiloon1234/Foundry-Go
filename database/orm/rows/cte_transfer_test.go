@@ -16,11 +16,11 @@ import (
 func TestCTESharedDefinitionsAndBindings(t *testing.T) {
 	base := recursionSource()
 	id := recursionID(ModelScope(recursionTable.Query()))
-	definition := CTE("eligible", base.Where(id.Eq(2))).Materialized()
+	definition := CTE("eligible", base.Where(expr.Eq(id, 2))).Materialized()
 	a, b := AsRecord[left](definition, "a"), AsRecord[right](definition, "b")
 	j := InnerJoin(a, b, On(recursionID(Scope(a)), recursionID(Scope(b))))
 	field := recursionID(LeftScope(j, Scope(a)))
-	q := WhereScalar(SelectScalar(j, expr.Row(field).Value()), field.Ne(9))
+	q := WhereScalar(SelectScalar(j, expr.AsSelected(expr.Row(field))), expr.Ne(field, 9))
 	s, err := CompileRead(ReadScalar(q))
 	if err != nil || !strings.HasPrefix(s.SQL(), `WITH "eligible" ("id", "rank") AS MATERIALIZED (`) || strings.Count(s.SQL(), `FROM "records"`) != 1 || !strings.Contains(s.SQL(), `FROM "eligible" AS "a" INNER JOIN "eligible" AS "b"`) || !reflect.DeepEqual(s.Arguments(), []any{int64(2), int64(9)}) {
 		t.Fatal(s.SQL(), s.Arguments(), err)
@@ -45,7 +45,7 @@ func TestCTECyclesAndSharedParameterBound(t *testing.T) {
 	base := recursionSource()
 	definition := CTE("wide", base.Where(recursionWide(scope, querycore.MaxParameters/2+1)))
 	a := AsRecord[left](definition, "a")
-	inner := SelectScalar(a, expr.Row(recursionID(Scope(a))).Value())
+	inner := SelectScalar(a, expr.AsSelected(expr.Row(recursionID(Scope(a)))))
 	q := base.Where(InQuery(recursionID(scope), inner), recursionWide(scope, querycore.MaxParameters/2+1))
 	if s, err := CompileRead(q); !errors.Is(err, fault.Invalid) || s.SQL() != "" || len(s.Arguments()) != 0 {
 		t.Fatal("CTE bypassed shared parameter budget", err)
@@ -56,7 +56,7 @@ func TestCTEDependenciesAndValidation(t *testing.T) {
 	first := CTE("first_rows", recursionSource()).NotMaterialized()
 	second := CTE("second_rows", first)
 	a := AsRecord[left](second, "result")
-	q := ReadScalar(SelectScalar(a, expr.Row(recursionID(Scope(a))).Value()))
+	q := ReadScalar(SelectScalar(a, expr.AsSelected(expr.Row(recursionID(Scope(a))))))
 	s, err := CompileRead(q)
 	if err != nil {
 		t.Fatal(err)
@@ -66,14 +66,14 @@ func TestCTEDependenciesAndValidation(t *testing.T) {
 	}
 	for _, cte := range []CommonTable[recursionRecord]{{}, CTE[recursionRecord]("empty", nil), CTE("bad.name", recursionSource()), CTE("records", recursionSource())} {
 		alias := AsRecord[left](cte, "a")
-		s, e := CompileRead(ReadScalar(SelectScalar(alias, expr.Row(recursionID(Scope(alias))).Value())))
+		s, e := CompileRead(ReadScalar(SelectScalar(alias, expr.AsSelected(expr.Row(recursionID(Scope(alias)))))))
 		if !errors.Is(e, fault.Invalid) || s.SQL() != "" {
 			t.Fatal("invalid CTE", s, e)
 		}
 	}
 	l, r := AsRecord[left](first, "a"), AsRecord[right](first.Materialized(), "b")
 	j := InnerJoin(l, r, On(recursionID(Scope(l)), recursionID(Scope(r))))
-	if _, e := CompileRead(ReadScalar(SelectScalar(j, expr.Row(recursionID(LeftScope(j, Scope(l)))).Value()))); !errors.Is(e, fault.Invalid) {
+	if _, e := CompileRead(ReadScalar(SelectScalar(j, expr.AsSelected(expr.Row(recursionID(LeftScope(j, Scope(l)))))))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("conflicting definitions", e)
 	}
 	type model struct {

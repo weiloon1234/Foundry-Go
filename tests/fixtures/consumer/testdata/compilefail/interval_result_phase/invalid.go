@@ -9,5 +9,5 @@ import (
 )
 
 func invalid() {
-	_ = intervalqueries.Samples.Query().Where(expr.SumInterval(orm.IntervalExpr(intervalqueries.Samples.Period)).Gt(temporal.Days(1)))
+	_ = intervalqueries.Samples.Query().Where(expr.GtValue(expr.SumInterval(orm.IntervalExpr(intervalqueries.Samples.Period)), temporal.Days(1)))
 }

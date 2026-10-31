@@ -14,6 +14,7 @@ import (
 // OrderCardJSON describes the concrete OrderCard JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: OrderCardJSON()
 func OrderCardJSON() foundrycontract.JSON[OrderCard] { return foundryOrderCardJSON() }
 
 var foundryOrderCardJSON = sync.OnceValue(func() foundrycontract.JSON[OrderCard] {
@@ -32,6 +33,7 @@ var foundryOrderCardJSON = sync.OnceValue(func() foundrycontract.JSON[OrderCard]
 })
 
 // OrderCardValidationFieldSet retains concrete DTO and value types for validation.
+// Example: OrderCardValidationFields()
 type OrderCardValidationFieldSet struct {
 	// OrderID validates the declared JSON property "order_id".
 	OrderID foundryvalidation.Field[OrderCard, model.ID[models.Order]]
@@ -40,6 +42,7 @@ type OrderCardValidationFieldSet struct {
 }
 
 // OrderCardValidationFields returns typed field descriptors.
+// Example: OrderCardValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func OrderCardValidationFields() OrderCardValidationFieldSet {
 	return *foundryOrderCardValidationFields()

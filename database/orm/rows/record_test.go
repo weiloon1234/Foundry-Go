@@ -19,9 +19,9 @@ import (
 func TestCompleteRecordAliasesAndWindows(t *testing.T) {
 	m := declareMembers()
 	schema := declareRows()
-	q := Limit(Offset(OrderBy(Select(From(m.Query().Where(orm.KeyNe(m.ID, 0))), schema, Map(schema.Name, expr.Value(orm.TextExpr(m.Name))), Map(schema.ID, expr.Value(orm.KeyExpr(m.ID)))), expr.Value(orm.KeyExpr(m.ID)).Desc()), 2), 3)
+	q := Limit(Offset(OrderBy(Select(From(m.Query().Where(orm.KeyNe(m.ID, 0))), schema, Map(schema.Name, expr.Value(orm.TextExpr(m.Name))), Map(schema.ID, expr.Value(orm.KeyExpr(m.ID)))), expr.Desc(expr.Value(orm.KeyExpr(m.ID)))), 2), 3)
 	a := AsRecord[left](RecordOf(q), "report")
-	selected := SelectRecord(a, Scope(a)).Where(At(Scope(a), schema.ID).Ne(0)).Limit(1)
+	selected := SelectRecord(a, Scope(a)).Where(expr.Ne(At(Scope(a), schema.ID), 0)).Limit(1)
 	state := &driverState{columns: []string{"id", "name"}, rows: [][]driver.Value{{int64(3), "Ada"}}}
 	got, err := ReadRecord(selected).All(t.Context(), openTest(t, state))
 	if err != nil || !reflect.DeepEqual(got, []record{{3, "Ada"}}) {

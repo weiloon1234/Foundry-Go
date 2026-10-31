@@ -54,9 +54,9 @@ func runCorrelationNew(g *goldenCapture, kind string) {
 		uid := expr.At(rowset.OuterScope(c, rowset.ModelScope(u)), orm.KeyExpr(models.Users.ID))
 		buyer := expr.At(rowset.InnerScope(c, rowset.ModelScope(o)), orm.ColumnExpr(models.Orders.BuyerID))
 		c = c.Where(expr.Equal(buyer, uid))
-		count := rowset.SelectCorrelatedScalar(c, expr.Count[rowset.Correlation[models.User, models.Order]]().Value())
-		ids := rowset.SelectCorrelatedScalar(c, expr.Row(buyer).Value())
-		q := rowset.Select(outer, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, rowset.CorrelatedScalarRowQuery(count).Value())).Where(c.Exists(), rowset.InCorrelatedQuery(expr.Value(orm.KeyExpr(models.Users.ID)), ids))
+		count := rowset.SelectCorrelatedScalar(c, expr.AsSelected(expr.Count[rowset.Correlation[models.User, models.Order]]()))
+		ids := rowset.SelectCorrelatedScalar(c, expr.AsSelected(expr.Row(buyer)))
+		q := rowset.Select(outer, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.AsSelected(rowset.CorrelatedScalarRowQuery(count)))).Where(c.Exists(), rowset.InCorrelatedQuery(expr.Value(orm.KeyExpr(models.Users.ID)), ids))
 		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(q).All(ctx, db))}))
 		return
 	}
@@ -72,21 +72,21 @@ func runCorrelationNew(g *goldenCapture, kind string) {
 		parent := expr.At(rowset.OuterScope(nested, rowset.OuterScope(c, rowset.Scope(a))), orm.KeyExpr(models.Users.ID))
 		child := expr.At(rowset.InnerScope(nested, rowset.Scope(d)), orm.ColumnExpr(models.Orders.BuyerID))
 		c = c.Where(nested.Where(expr.Equal(child, parent)).Limit(1).Exists())
-		count := rowset.SelectCorrelatedScalar(c, expr.Count[rowset.Correlation[rowset.Alias[joinA, models.User], rowset.Alias[joinB, models.Order]]]().Value())
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(rowset.Select(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, rowset.CorrelatedScalarRowQuery(count).Value()))).All(ctx, db))}))
+		count := rowset.SelectCorrelatedScalar(c, expr.AsSelected(expr.Count[rowset.Correlation[rowset.Alias[joinA, models.User], rowset.Alias[joinB, models.Order]]]()))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(rowset.Select(a, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.AsSelected(rowset.CorrelatedScalarRowQuery(count))))).All(ctx, db))}))
 		return
 	}
-	record := rowset.SelectCorrelatedRecord(c, inner).OrderBy(expr.At(inner, orm.NumberExpr(models.Orders.TotalCents)).Desc()).Limit(1)
+	record := rowset.SelectCorrelatedRecord(c, inner).OrderBy(expr.Desc(expr.At(inner, orm.NumberExpr(models.Orders.TotalCents)))).Limit(1)
 	latest := rowset.AsLateral[joinC](record, "latest")
 	switch kind {
 	case "cross":
 		j := rowset.CrossJoinLateral(a, latest)
 		v := expr.At(rowset.RightScope(j, rowset.LateralScope(latest)), orm.NumberExpr(models.Orders.TotalCents))
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(v).Value())))).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.AsSelected(expr.Row(v)))))).All(ctx, db))}))
 	case "inner":
 		j := rowset.InnerJoinLateral(a, latest)
 		v := expr.At(rowset.RightScope(j, rowset.LateralScope(latest)), orm.NumberExpr(models.Orders.TotalCents))
-		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.Row(v).Value())))).All(ctx, db))}))
+		fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.Read(rowset.Select(j, correlationGoldenRows, rowset.MapSelected(correlationGoldenRows.Amount, expr.Nullable(expr.AsSelected(expr.Row(v)))))).All(ctx, db))}))
 	case "left":
 		j := rowset.LeftJoinLateral(a, latest)
 		v := expr.AtNullable(rowset.NullableRightScope(j, rowset.LateralScope(latest)), orm.NumberExpr(models.Orders.TotalCents))

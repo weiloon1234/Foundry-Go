@@ -12,5 +12,5 @@ func root() expr.JSONPath[jsonpaths.Document, jsonpaths.Preferences] {
 	return expr.JSONRoot(expr.Value(orm.JSONExpr(jsonpaths.Documents.Settings)))
 }
 func invalid() {
-	_ = expr.OrderNullableRow(expr.JSONScalar(expr.JSONOptional(expr.JSONProperty(root(), jsonpaths.Quota)), codec.Decimal())).Like("%")
+	_ = expr.NullableTextLike[jsonpaths.Document, string](expr.OrderNullableRow(expr.JSONScalar(expr.JSONOptional(expr.JSONProperty(root(), jsonpaths.Quota)), codec.Decimal())), "%")
 }

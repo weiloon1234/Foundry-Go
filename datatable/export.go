@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"hash"
 	"io"
 	"math"
 	"os"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+	"github.com/weiloon1234/Foundry-Go/datatable/internal/exportio"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -26,6 +26,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// ExportFormat selects the declared CSV or XLSX report encoding.
+//
+// Example: datatable.CSV
+//
 //foundry:enum
 type ExportFormat string
 
@@ -34,6 +38,10 @@ const (
 	XLSX ExportFormat = "xlsx"
 )
 
+// ExportOptions selects report encoding, filename, and explicit presentation context.
+//
+// Example: datatable.ExportOptions{Format: datatable.CSV, Name: "members"}
+//
 //foundry:dto
 type ExportOptions struct {
 	Format       ExportFormat `json:"format"`
@@ -53,6 +61,8 @@ type ExportOptions struct {
 // succeeds; Close, the next export and manager shutdown retry removal. The
 // path is not public. Manager shutdown closes artifacts that are still open.
 // Reads, seeks and close are serialized; callers must not copy an Artifact.
+//
+// Example: table.Export(ctx, manager, actor, request, options)
 type Artifact struct {
 	mu              sync.Mutex
 	file            *os.File
@@ -70,30 +80,39 @@ type Artifact struct {
 	closeErr        error
 }
 
+// Name returns the sanitized download filename.
 func (a *Artifact) Name() string {
 	if a == nil {
 		return ""
 	}
 	return a.name
 }
+
+// MediaType returns the media type of the completed report.
 func (a *Artifact) MediaType() foundryhttp.MediaType {
 	if a == nil {
 		return ""
 	}
 	return a.media
 }
+
+// Size returns the number of completed report bytes.
 func (a *Artifact) Size() int64 {
 	if a == nil {
 		return 0
 	}
 	return a.size
 }
+
+// Rows returns the number of exported data rows, excluding the heading.
 func (a *Artifact) Rows() int {
 	if a == nil {
 		return 0
 	}
 	return a.rows
 }
+
+// SHA256 returns the hexadecimal digest of the exact report bytes.
 func (a *Artifact) SHA256() string {
 	if a == nil {
 		return ""
@@ -118,6 +137,8 @@ func (a *Artifact) EntityTag() foundryhttp.EntityTag {
 	}
 	return foundryhttp.EntityTag(`"sha256-` + a.digest + `"`)
 }
+
+// Read reads completed report bytes while serializing access with seek and close.
 func (a *Artifact) Read(p []byte) (int, error) {
 	if a == nil {
 		return 0, invalid("export artifact is not initialized")
@@ -129,6 +150,8 @@ func (a *Artifact) Read(p []byte) (int, error) {
 	}
 	return a.file.Read(p)
 }
+
+// Seek moves the completed report's read position while the artifact remains open.
 func (a *Artifact) Seek(offset int64, whence int) (int64, error) {
 	if a == nil {
 		return 0, invalid("export artifact is not initialized")
@@ -140,6 +163,8 @@ func (a *Artifact) Seek(offset int64, whence int) (int64, error) {
 	}
 	return a.file.Seek(offset, whence)
 }
+
+// Close closes and removes the private report, releasing retention capacity after successful removal.
 func (a *Artifact) Close() error {
 	if a == nil {
 		return nil
@@ -271,13 +296,13 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 		}
 		artifact.file, artifact.path = file, file.Name()
 		digest := sha256.New()
-		bounded := &exportWriter{ctx: ctx, file: file, digest: digest, maximum: m.config.MaxExportBytes}
+		bounded := &exportio.Writer{Context: ctx, File: file, Digest: digest, Maximum: m.config.MaxExportBytes}
 		buffered := bufio.NewWriterSize(bounded, exportBufferBytes)
 		writer, err := newReportWriter(buffered, reportLayout{format: options.Format, byteOrderMark: options.ByteOrderMark, location: location, maxXMLBytes: m.config.MaxXMLBytes}, headings)
 		if err != nil {
 			return err
 		}
-		defer writer.Abort()
+		defer writer.abort()
 		cells := make([]exportCell, len(columns))
 		err = m.read(ctx, func(tx *database.Tx) error {
 			return rows.EachRead(ctx, tx, rows.Read(rows.Limit(source.rows, m.config.MaxExportRows+1)), func(row R) error {
@@ -299,7 +324,7 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 					}
 					cells[i] = cell
 				}
-				if err := writer.Row(cells); err != nil {
+				if err := writer.writeRow(cells); err != nil {
 					return err
 				}
 				artifact.rows++
@@ -309,7 +334,7 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 		if err != nil {
 			return err
 		}
-		if err := writer.Finish(); err != nil {
+		if err := writer.finish(); err != nil {
 			return err
 		}
 		if err := buffered.Flush(); err != nil {
@@ -321,7 +346,7 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
 			return err
 		}
-		artifact.size = bounded.written
+		artifact.size = bounded.Written
 		artifact.digest = hex.EncodeToString(digest.Sum(nil))
 		artifact.modified = time.Now().UTC()
 		return nil
@@ -339,30 +364,6 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 // exportBufferBytes batches small CSV/ZIP writes into fewer file writes.
 const exportBufferBytes = 64 << 10
 
-type exportWriter struct {
-	ctx              context.Context
-	file             io.Writer
-	digest           hash.Hash
-	maximum, written int64
-}
-
-func (w *exportWriter) Write(p []byte) (int, error) {
-	if err := w.ctx.Err(); err != nil {
-		return 0, err
-	}
-	if int64(len(p)) > w.maximum-w.written {
-		return 0, invalid("export byte limit exceeded")
-	}
-	n, err := w.file.Write(p)
-	w.written += int64(n)
-	if n > 0 {
-		_, _ = w.digest.Write(p[:n])
-	}
-	if err == nil && n != len(p) {
-		err = io.ErrShortWrite
-	}
-	return n, err
-}
 func exportName(name string, id TableID, format ExportFormat) string {
 	if name == "" {
 		name = string(id)

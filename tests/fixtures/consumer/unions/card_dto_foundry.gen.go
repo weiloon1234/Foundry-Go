@@ -12,6 +12,7 @@ import (
 // CardDTOJSON describes the concrete CardDTO JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: CardDTOJSON()
 func CardDTOJSON() foundrycontract.JSON[CardDTO] { return foundryCardDTOJSON() }
 
 var foundryCardDTOJSON = sync.OnceValue(func() foundrycontract.JSON[CardDTO] {
@@ -35,6 +36,7 @@ var foundryCardDTOJSON = sync.OnceValue(func() foundrycontract.JSON[CardDTO] {
 })
 
 // CardDTOValidationFieldSet retains concrete DTO and value types for validation.
+// Example: CardDTOValidationFields()
 type CardDTOValidationFieldSet struct {
 	// Labels validates the declared JSON property "labels".
 	Labels foundryvalidation.Field[CardDTO, []string]
@@ -45,6 +47,7 @@ type CardDTOValidationFieldSet struct {
 }
 
 // CardDTOValidationFields returns typed field descriptors.
+// Example: CardDTOValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func CardDTOValidationFields() CardDTOValidationFieldSet { return *foundryCardDTOValidationFields() }
 

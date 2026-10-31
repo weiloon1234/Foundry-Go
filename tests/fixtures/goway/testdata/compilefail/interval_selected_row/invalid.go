@@ -10,5 +10,5 @@ import (
 type other struct{}
 
 func invalid() {
-	_ = expr.NegateInterval(expr.SumInterval(orm.IntervalExpr(scalars.Records.Period)).Value())
+	_ = expr.NegateInterval(expr.AsSelected(expr.SumInterval(orm.IntervalExpr(scalars.Records.Period))))
 }

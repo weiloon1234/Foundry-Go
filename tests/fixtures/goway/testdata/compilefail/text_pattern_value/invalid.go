@@ -9,4 +9,4 @@ import (
 
 type other struct{}
 
-func invalid() { _ = expr.Lower(expr.Value(orm.TextExpr(scalars.Records.Name))).Like(123) }
+func invalid() { _ = expr.TextLike(expr.Lower(expr.Value(orm.TextExpr(scalars.Records.Name))), 123) }

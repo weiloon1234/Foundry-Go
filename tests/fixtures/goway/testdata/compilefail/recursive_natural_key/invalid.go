@@ -13,8 +13,8 @@ type other struct{}
 var record = rows.ModelRecord(models.Users.Query())
 var cte = rows.CTE("users_copy", record)
 var source = rows.AsRecord[tag](cte, "u")
-var ids = rows.SelectScalar(source, expr.Row(expr.At(rows.Scope(source), orm.KeyExpr(models.Users.ID))).Value())
-var nullable = rows.SelectScalar(source, expr.Row(expr.At(rows.Scope(source), orm.NullableTextExpr(models.Users.Nickname))).Value())
+var ids = rows.SelectScalar(source, expr.AsSelected(expr.Row(expr.At(rows.Scope(source), orm.KeyExpr(models.Users.ID)))))
+var nullable = rows.SelectScalar(source, expr.AsSelected(expr.Row(expr.At(rows.Scope(source), orm.NullableTextExpr(models.Users.Nickname)))))
 var combined = rows.Union(record, record)
 var tx = rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(models.Users.Query())))
 
@@ -25,5 +25,5 @@ var tree = orm.Define("nodes", func(b orm.Builder[node], n *node) nodes { return
 
 func invalid(self rows.RecursiveSelf[node]) {
 	a := rows.AsRecord[tag](self, "a")
-	_ = expr.At(rows.Scope(a), orm.KeyExpr(tree.Key())).Eq(models.User{}.ID)
+	_ = expr.Eq(expr.At(rows.Scope(a), orm.KeyExpr(tree.Key())), models.User{}.ID)
 }

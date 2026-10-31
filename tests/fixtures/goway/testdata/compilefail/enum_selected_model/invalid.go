@@ -8,4 +8,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.DistinctOnValues(rows.FromModel(models.Orders.Query()), expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status))).Value().Key())
+var _ = rows.DistinctOnValues(rows.FromModel(models.Orders.Query()), expr.Key(expr.AsSelected(expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status))))))

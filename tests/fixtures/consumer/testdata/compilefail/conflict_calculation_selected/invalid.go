@@ -9,4 +9,4 @@ import (
 )
 
 var records = rows.ConflictRowsOf(models.Users.Query())
-var _ = rows.SetConflictValue(orm.NumberExpr(models.Users.Age), expr.Row(expr.At(records.Proposed(), orm.NumberExpr(models.Users.Age))).Value())
+var _ = rows.SetConflictValue(orm.NumberExpr(models.Users.Age), expr.AsSelected(expr.Row(expr.At(records.Proposed(), orm.NumberExpr(models.Users.Age)))))

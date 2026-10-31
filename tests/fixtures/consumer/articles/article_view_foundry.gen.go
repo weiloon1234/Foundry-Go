@@ -11,6 +11,7 @@ import (
 // ArticleViewJSON describes the concrete ArticleView JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ArticleViewJSON()
 func ArticleViewJSON() foundrycontract.JSON[ArticleView] { return foundryArticleViewJSON() }
 
 var foundryArticleViewJSON = sync.OnceValue(func() foundrycontract.JSON[ArticleView] {

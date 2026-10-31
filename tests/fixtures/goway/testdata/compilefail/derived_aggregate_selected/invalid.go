@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.SumRow(expr.Sum(orm.NumberExpr(models.Users.Age)).Value())
+var _ = expr.SumRow(expr.AsSelected(expr.Sum(orm.NumberExpr(models.Users.Age))))

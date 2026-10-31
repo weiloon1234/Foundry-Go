@@ -18,9 +18,9 @@ func TestPostgresTransactionMembershipAndExists(t *testing.T) {
 	outer := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "outer_records")
 	inner := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "inner_records")
 	a, b := recordAt(rows.TransactionScope(outer)), recordAt(rows.TransactionScope(inner))
-	values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.Row(b.ID).Value()).Where(b.ID.Eq(2))).ForUpdate()
+	values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.AsSelected(expr.Row(b.ID))).Where(expr.Eq(b.ID, 2))).ForUpdate()
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		items, err := rows.SelectTransactionRecord(outer, rows.TransactionScope(outer)).Where(rows.TransactionInQuery(expr.Add(a.ID, expr.Row(a.ID).Value().Param(1)), values)).All(ctx, tx)
+		items, err := rows.SelectTransactionRecord(outer, rows.TransactionScope(outer)).Where(rows.TransactionInQuery(expr.Add(a.ID, expr.ParamOf(expr.AsSelected(expr.Row(a.ID)), 1)), values)).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -35,7 +35,7 @@ func TestPostgresTransactionMembershipAndExists(t *testing.T) {
 	}
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 		p := rows.TransactionExistsQuery(outer, rows.LockedRecord(orm.ForShare(Records.Query().Where(orm.KeyEq(Records.ID, 2)))))
-		items, err := rows.SelectTransactionRecord(outer, rows.TransactionScope(outer)).Where(a.ID.Eq(1), p).All(ctx, tx)
+		items, err := rows.SelectTransactionRecord(outer, rows.TransactionScope(outer)).Where(expr.Eq(a.ID, 1), p).All(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -57,18 +57,18 @@ func TestPostgresTransactionScalarCardinalityAndNulls(t *testing.T) {
 			outer := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyEq(Records.ID, 1)))), "outer_record")
 			inner := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "inner_record")
 			fields := recordAt(rows.TransactionScope(inner))
-			predicate := fields.ID.Eq(2)
+			predicate := expr.Eq(fields.ID, 2)
 			if mode == "empty" {
-				predicate = fields.ID.Eq(0)
+				predicate = expr.Eq(fields.ID, 0)
 			}
 			if mode == "many" {
-				predicate = expr.OrderRow(fields.ID).Gt(1)
+				predicate = expr.Gt(expr.OrderRow(fields.ID), 1)
 			}
-			values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.Row(fields.ID).Value()).Where(predicate)).ForUpdate()
-			scalar := rows.TransactionScalarRowQuery(outer, values).Value()
+			values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.AsSelected(expr.Row(fields.ID))).Where(predicate)).ForUpdate()
+			scalar := expr.AsSelected(rows.TransactionScalarRowQuery(outer, values))
 			if mode == "nullable" {
-				nullable := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.NullableRow(fields.ID).Param(value.Null[int64]()).Value()).Where(predicate)).ForUpdate()
-				scalar = rows.TransactionScalarNullableRowQuery(outer, nullable).Value()
+				nullable := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.AsSelected(expr.ParamOf(expr.NullableRow(fields.ID), value.Null[int64]()))).Where(predicate)).ForUpdate()
+				scalar = expr.AsSelected(rows.TransactionScalarNullableRowQuery(outer, nullable))
 			}
 			err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
 				items, err := rows.SelectTransactionValue(outer, scalar).All(ctx, tx)
@@ -110,7 +110,7 @@ func TestPostgresTransactionNullableMembershipAndScalarRow(t *testing.T) {
 	outer := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "outer_records")
 	inner := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "inner_records")
 	a, b := recordAt(rows.TransactionScope(outer)), recordAt(rows.TransactionScope(inner))
-	nullable := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.NullableRow(b.ID).Param(value.Null[int64]()).Value()).Where(b.ID.Eq(2))).ForShare()
+	nullable := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.AsSelected(expr.ParamOf(expr.NullableRow(b.ID), value.Null[int64]()))).Where(expr.Eq(b.ID, 2))).ForShare()
 	predicate := rows.TransactionInNullableQuery(a.ID, nullable)
 	for _, p := range []expr.Predicate[rows.TransactionAlias[claimedAlias, Record]]{predicate, expr.Not(predicate)} {
 		if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
@@ -128,7 +128,7 @@ func TestPostgresTransactionNullableMembershipAndScalarRow(t *testing.T) {
 		}
 	}
 	if err := inTransaction(ctx, db, path, func(tx *database.Tx) error {
-		values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.Row(b.ID).Value()).Where(b.ID.Eq(2))).ForUpdate()
+		values := rows.TransactionScalarOf(rows.SelectTransactionValue(inner, expr.AsSelected(expr.Row(b.ID))).Where(expr.Eq(b.ID, 2))).ForUpdate()
 		scalar := rows.TransactionScalarRowQuery(outer, values)
 		items, err := rows.SelectTransactionRecord(outer, rows.TransactionScope(outer)).Where(expr.Equal(expr.NullableRow(a.ID), scalar)).All(ctx, tx)
 		if err != nil {

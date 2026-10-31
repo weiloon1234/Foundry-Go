@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.RelationPivotOrder(j.Peers, expr.Negate(expr.Value(orm.NumberExpr(j.Targets.Rank))).Asc())
+var _ = expr.RelationPivotOrder(j.Peers, expr.Asc(expr.Negate(expr.Value(orm.NumberExpr(j.Targets.Rank)))))

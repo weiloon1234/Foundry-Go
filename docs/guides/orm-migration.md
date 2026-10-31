@@ -101,25 +101,25 @@ rows.ExplainLocked | rows.ExplainTransaction
 rows.ExplainAnalyzeLocked | rows.ExplainAnalyzeTransaction
 orm.DoesntHave | orm.Not(orm.Has(relation, predicates...))
 expr.JSONOrderedScalar | expr.OrderNullableRow(expr.JSONScalar(path, codec))
-expr.NullFor | expr.NullableRow(v).Param(value.Null[T]())
+expr.NullFor | expr.ParamOf(expr.NullableRow(v), value.Null[T]())
 extensions.Scope | extensions.ORMIdentity(owner).Scope
 extensions.Owner.ModelName | extensions.ORMIdentity(owner).ModelName
 extensions.Owner.Reference | extensions.ORMIdentity(owner).Reference
 extensions.Owner.Active | extensions.Owner.ActiveSubjects (discard the ordered-key result when unused)
-rows.ScalarQuery | rows.ScalarRowQuery(...).Value()
-rows.ScalarNullableQuery | rows.ScalarNullableRowQuery(...).Value()
-rows.CorrelatedScalarQuery | rows.CorrelatedScalarRowQuery(...).Value()
-rows.CorrelatedScalarNullableQuery | rows.CorrelatedScalarNullableRowQuery(...).Value()
-rows.TransactionScalarQuery | rows.TransactionScalarRowQuery(...).Value()
-rows.TransactionScalarNullableQuery | rows.TransactionScalarNullableRowQuery(...).Value()
-rows.TransactionCorrelatedScalarQuery | rows.TransactionCorrelatedScalarRowQuery(...).Value()
-rows.TransactionCorrelatedScalarNullableQuery | rows.TransactionCorrelatedScalarNullableRowQuery(...).Value()
+rows.ScalarQuery | expr.AsSelected(rows.ScalarRowQuery(...))
+rows.ScalarNullableQuery | expr.AsSelected(rows.ScalarNullableRowQuery(...))
+rows.CorrelatedScalarQuery | expr.AsSelected(rows.CorrelatedScalarRowQuery(...))
+rows.CorrelatedScalarNullableQuery | expr.AsSelected(rows.CorrelatedScalarNullableRowQuery(...))
+rows.TransactionScalarQuery | expr.AsSelected(rows.TransactionScalarRowQuery(...))
+rows.TransactionScalarNullableQuery | expr.AsSelected(rows.TransactionScalarNullableRowQuery(...))
+rows.TransactionCorrelatedScalarQuery | expr.AsSelected(rows.TransactionCorrelatedScalarRowQuery(...))
+rows.TransactionCorrelatedScalarNullableQuery | expr.AsSelected(rows.TransactionCorrelatedScalarNullableRowQuery(...))
 rows.Query.All | rows.Read(query).All
 rows.RecordRead.All | rows.ReadRecord(record).All
 rows.SetQuery.All | rows.ReadSet(set).All
 rows.ValueSetQuery.All | rows.ReadValues(values).All
 rows.ValueCursorQuery.Key | expr.Group(cursor.Value())
-expr.Select | row.Value(); aggregate.Value() also remains
+expr.Select | expr.AsSelected(row); expr.AsSelected(aggregate)
 expr.JSONKind | database.JSONKind
 expr.JSONObject | database.JSONObject
 expr.JSONArray | database.JSONArray
@@ -194,7 +194,7 @@ FoundryExplain / FoundryObservers bridges | native Explain terminals / registere
 model operations, including hooks and duplicate-row diagnostics. Scoped
 `orm.Update` and `orm.Delete` perform keyed `writeOne` operations within the
 query's visibility, retaining lifecycle and cardinality checks. Row-value
-carriers and aggregates retain `.Value()`; selected read families share
+carriers and aggregates use `expr.AsSelected`; selected read families share
 `CompileRead`, `PreflightRead`, `EachRead` and `Result` terminals. Missing JSON paths,
 SQL NULL and JSON null remain distinct. Loading existing parents uses a query so
 its relation depth/row budgets and already-loaded-slot policy survive.
@@ -1053,9 +1053,9 @@ After:
 ```go
 func aggregate(ctx context.Context, db database.Executor) error {
 	count := expr.Count[models.Order]()
-	q := rows.GroupByScalar(rows.SelectScalar(rows.From(models.Orders.Query()), count.Value()),
+	q := rows.GroupByScalar(rows.SelectScalar(rows.From(models.Orders.Query()), expr.AsSelected(count)),
 		expr.Group(expr.Value(orm.ColumnExpr(models.Orders.BuyerID))))
-	_, err := rows.ReadScalar(rows.HavingScalar(q, count.Gt(1))).All(ctx, db)
+	_, err := rows.ReadScalar(rows.HavingScalar(q, expr.GtValue(count, 1))).All(ctx, db)
 	return err
 }
 ```
@@ -1081,7 +1081,7 @@ func window(ctx context.Context, db database.Executor) error {
 	a := rows.As[orderSide](models.Orders.Query(), "o")
 	s := rows.Scope(a)
 	window := expr.WindowFor(s).PartitionBy(expr.Group(expr.At(s, orm.ColumnExpr(models.Orders.BuyerID)))).
-		OrderBy(expr.At(s, orm.NumberExpr(models.Orders.TotalCents)).Desc())
+		OrderBy(expr.Desc(expr.At(s, orm.NumberExpr(models.Orders.TotalCents))))
 	_, err := rows.ReadScalar(rows.SelectScalar(a, expr.RowNumber(window))).All(ctx, db)
 	return err
 }
@@ -1223,20 +1223,20 @@ func tableSource[A any](spec datatable.Spec[reports.Member, reports.MemberRow, A
 		if err != nil {
 			return rows.Query[reports.Member, reports.MemberRow]{}, err
 		}
-		return report().Where(expr.Value(orm.NumberExpr(reports.Members.TenantID)).Eq(id)), nil
+		return report().Where(expr.Eq(expr.Value(orm.NumberExpr(reports.Members.TenantID)), id)), nil
 	}
-	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Value(orm.KeyExpr(reports.Members.ID)).Asc()}
+	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Asc(expr.Value(orm.KeyExpr(reports.Members.ID)))}
 	return spec
 }
 ```
 
 Pass an authorized, tenant-constrained native source and retain the existing Spec
 ID, DTO descriptor, columns, labels, filters and export capabilities. Column
-`SortBy` accepts `expr.Row(expr.Value(Members.Name)).Value()` or comparison `.Value()`
-for enums (`expr.CompareRow(expr.Value(Members.State)).Value()`), while `Stable`
-takes the short `expr.Value(orm.KeyExpr(MemberModels.ID)).Asc()` spelling. The complete
+`SortBy` accepts `expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(Members.Name))))` or `expr.AsSelected` on a comparison adapter
+for enums (`expr.AsSelected(expr.CompareRow(expr.Value(orm.EnumExpr(Members.State))))`), while `Stable`
+takes the short `expr.Asc(expr.Value(orm.KeyExpr(MemberModels.ID)))` spelling. The complete
 [datatable fixture](../../tests/fixtures/consumer/reporting/members.go) uses
-`rows.Select`, `expr.Row(row).Value()`, `expr.TextRow`, nullable filters and typed related filters.
+`rows.Select`, `expr.AsSelected(expr.Row(row))`, `expr.TextRow`, nullable filters and typed related filters.
 Do not bypass actor resolution or reconciliation to adapt a
 source signature. Manifests, OpenAPI, TypeScript and filter/response bytes stay fixed.
 
@@ -1249,16 +1249,16 @@ ORM declaration. `RowEquality` and `RowNullable` are interfaces, not constructor
 
 | Before | After |
 | --- | --- |
-| Generated field sorting | `SortBy(expr.Row(expr.Value(f.X)).Value())`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
+| Generated field sorting | `SortBy(expr.AsSelected(expr.Row(expr.Value(f.X))))`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
 | `datatable.Where(text, f.Username)` | `datatable.Where(text, expr.TextRow(f.Username))`. |
 | `datatable.NullableWhere(text, f.Email)` | `datatable.NullableWhere(text, expr.TextNullableRow(f.Email))`. |
 | Equality-only or enum `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.CompareRow(expr.Value(f.X)))`; use `CompareNullableRow` with `NullableWhere`. |
 | Ordered numeric `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.OrderRow(expr.Value(f.X)))`; use `OrderNullableRow` for nullable values. Choose by the column's declared capabilities, not its underlying Go type. |
-| Generated stable order | `Stable: []expr.ProjectionOrder[M]{expr.Value(orm.KeyExpr(f.ID)).Asc()}`. Use `f.Key()` when the declaration has no named ID carrier. |
+| Generated stable order | `Stable: []expr.ProjectionOrder[M]{expr.Asc(expr.Value(orm.KeyExpr(f.ID)))}`. Use `f.Key()` when the declaration has no named ID carrier. |
 | Generated projection and selection | `rows.Query[M,R]`, `rows.Select(rows.From(source), XRows, rows.Map(...))`. Use `MapSelected` for computed selected values. |
-| Generated joined-field sort | `expr.Row(expr.At(joinedScope, field)).Value()`. The Spec's first type parameter is the joined scope, not one model. |
-| Correlated `CorrelatedScalarRowQuery(...).Value()` sort | `expr.Row(rows.CorrelatedScalarRowQuery(...)).Value()`; use `CorrelatedScalarNullableRowQuery` when the inner value is already nullable. |
-| `datatable.Having` / `NullableHaving` | Keep these constructors; supply native aggregates such as `expr.Count[M]()` / `expr.Sum(f.Amount)`, which return group predicates. |
+| Generated joined-field sort | `expr.AsSelected(expr.Row(expr.At(joinedScope, field)))`. The Spec's first type parameter is the joined scope, not one model. |
+| Correlated `CorrelatedScalarRowQuery(...).Value()` sort | `expr.AsSelected(expr.Row(rows.CorrelatedScalarRowQuery(...)))`; use `CorrelatedScalarNullableRowQuery` when the inner value is already nullable. |
+| `datatable.Having` / `NullableHaving` | Supply typed adapters: `expr.OrderValueFilter(expr.Count[M]())` or `expr.NullableOrderValueFilter(expr.Sum(orm.NumberExpr(f.Amount)))`. |
 | `datatable.Related(child, exists)` | Keep `Related`; its callback now maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, for example with `expr.Has`. |
 
 Text adapters retain text operators. Equality adapters preserve enum restrictions.
@@ -1311,37 +1311,37 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 		correlation := rows.Correlate(joined, rows.From(q))
 		outer := rows.OuterScope(correlation, admin)
 		inner := rows.InnerScope(correlation, rows.ModelScope(q))
-		return rows.SelectCorrelatedScalar(correlation, expr.Row(expr.At(inner, orm.TextExpr(countries.Countries.Name))).Value()).
+		return rows.SelectCorrelatedScalar(correlation, expr.AsSelected(expr.Row(expr.At(inner, orm.TextExpr(countries.Countries.Name))))).
 			Where(expr.Equal(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)), expr.At(outer, orm.ColumnExpr(Admins.CountryCode)))).
-			OrderBy(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)).Asc()).Limit(1)
+			OrderBy(expr.Asc(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)))).Limit(1)
 	}
-	sortedCountry := expr.Row(rows.CorrelatedScalarRowQuery(correlateName())).Value()
+	sortedCountry := expr.AsSelected(expr.Row(rows.CorrelatedScalarRowQuery(correlateName())))
 	statusFilter := datatable.NullableWhere(
 		foundryhttp.EnumQuery[countries.Status, *countries.Status](countries.EnabledStatus.EnumDescriptor()),
-		expr.CompareNullableRow(expr.AtNullable(country, orm.EnumExpr(countries.Countries.Status))))
+		expr.NullableCompareFilter(expr.CompareNullableRow(expr.AtNullable(country, orm.EnumExpr(countries.Countries.Status)))))
 	latitudeFilter := datatable.NullableWhere(
 		foundryhttp.FloatQuery[float64](),
-		expr.OrderNullableRow(expr.AtNullableValue(country, orm.NullableNumberExpr(countries.Countries.Latitude))))
+		expr.NullableOrderFilter(expr.OrderNullableRow(expr.AtNullableValue(country, orm.NullableNumberExpr(countries.Countries.Latitude)))))
 	base := rows.Select(joined, AuditRows,
 		rows.Map(AuditRows.ID, expr.At(admin, orm.KeyExpr(Admins.Key()))),
 		rows.MapSelected(AuditRows.Country, sortedCountry),
 		rows.Map(AuditRows.Status, expr.AtNullable(country, orm.EnumExpr(countries.Countries.Status))),
 		rows.Map(AuditRows.Latitude, expr.AtNullableValue(country, orm.NullableNumberExpr(countries.Countries.Latitude))))
 	spec.Columns = []datatable.ColumnRegistration[AuditScope, AuditRow]{
-		datatable.DefineColumn[AuditScope](validation.DefineField("country", func(r AuditRow) value.Nullable[string] { return r.Country }), "audit.country").
-			SortBy(sortedCountry).Registration(),
-		datatable.DefineColumn[AuditScope](validation.DefineField("status", func(r AuditRow) value.Nullable[countries.Status] { return r.Status }), "audit.status").
-			FilterBy(statusFilter).Registration(),
-		datatable.DefineColumn[AuditScope](validation.DefineField("latitude", func(r AuditRow) value.Nullable[float64] { return r.Latitude }), "audit.latitude").
-			FilterBy(latitudeFilter).Registration(),
+		datatable.DefineColumn[AuditScope](validation.DefineField("country", func(r AuditRow) value.Nullable[string] { return r.Country }), "audit.country",
+			datatable.SortBy(sortedCountry)),
+		datatable.DefineColumn[AuditScope](validation.DefineField("status", func(r AuditRow) value.Nullable[countries.Status] { return r.Status }), "audit.status",
+			datatable.FilterBy(statusFilter)),
+		datatable.DefineColumn[AuditScope](validation.DefineField("latitude", func(r AuditRow) value.Nullable[float64] { return r.Latitude }), "audit.latitude",
+			datatable.FilterBy(latitudeFilter)),
 	}
-	spec.Stable = []expr.ProjectionOrder[AuditScope]{expr.At(admin, orm.KeyExpr(Admins.Key())).Asc()}
+	spec.Stable = []expr.ProjectionOrder[AuditScope]{expr.Asc(expr.At(admin, orm.KeyExpr(Admins.Key())))}
 	spec.Source = func(ctx context.Context, actor A) (rows.Query[AuditScope, AuditRow], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
 			return rows.Query[AuditScope, AuditRow]{}, err
 		}
-		return base.Where(expr.At(admin, orm.NumberExpr(Admins.TenantID)).Eq(id)), nil
+		return base.Where(expr.Eq(expr.At(admin, orm.NumberExpr(Admins.TenantID)), id)), nil
 	}
 	return spec
 }
@@ -1423,15 +1423,21 @@ func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
 	text := foundryhttp.StringQuery[string]()
 	username := validation.DefineField("username", func(r AdminRow) string { return r.Username })
 	email := validation.DefineField("email", func(r AdminRow) value.Nullable[string] { return r.Email })
+	uExpr := expr.TextRow(orm.TextExpr(Admins.Username))
+	eExpr := expr.TextNullableRow(orm.NullableTextExpr(Admins.Email))
 	return []datatable.ColumnRegistration[Admin, AdminRow]{
-		datatable.DefineColumn[Admin](username, "admins.fields.username").
-			SortBy(expr.Row(expr.Value(orm.TextExpr(Admins.Username))).Value()).
-			FilterBy(datatable.Where(text, expr.TextRow(orm.TextExpr(Admins.Username)))).
-			Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
-		datatable.DefineColumn[Admin](email, "admins.fields.email").
-			SortBy(expr.Row(expr.Value(orm.NullableTextExpr(Admins.Email))).Value()).
-			FilterBy(datatable.NullableWhere(text, expr.TextNullableRow(orm.NullableTextExpr(Admins.Email)))).
-			Searchable().ExportAs(datatable.NullableCell(text)).Registration(),
+		datatable.DefineColumn[Admin](username, "admins.fields.username",
+			datatable.SortBy(expr.AsSelected(uExpr)),
+			datatable.FilterBy(datatable.Where(text, expr.TextFilter(uExpr))),
+			datatable.Searchable(uExpr),
+			datatable.ExportAs(expr.AsSelected(uExpr), datatable.ScalarCell(text)),
+		),
+		datatable.DefineColumn[Admin](email, "admins.fields.email",
+			datatable.SortBy(expr.AsSelected(eExpr)),
+			datatable.FilterBy(datatable.NullableWhere(text, expr.NullableTextFilter(eExpr))),
+			datatable.Searchable(eExpr),
+			datatable.ExportAs(expr.AsSelected(eExpr), datatable.NullableCell(text)),
+		),
 	}
 }
 ```
@@ -1458,7 +1464,7 @@ func adminSource(tenantID int64, archived bool) rows.Query[Admin, AdminRow] {
 func adminTable[A any](spec datatable.Spec[Admin, AdminRow, A], tenant func(context.Context, A) (int64, error), archived bool) datatable.Spec[Admin, AdminRow, A] {
 	// Retain the caller's Row descriptor, Authorize, ID, labels and export policy.
 	spec.Columns = adminColumns()
-	spec.Stable = []expr.ProjectionOrder[Admin]{expr.Value(orm.KeyExpr(Admins.Key())).Asc()}
+	spec.Stable = []expr.ProjectionOrder[Admin]{expr.Asc(expr.Value(orm.KeyExpr(Admins.Key())))}
 	spec.Source = func(ctx context.Context, actor A) (rows.Query[Admin, AdminRow], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
@@ -1487,13 +1493,13 @@ The [aggregate example above](#aggregates-windows-and-ctes) shows selected mappi
 func orderGroupFilters() (datatable.FilterSource[models.Order, int64], datatable.FilterSource[models.Order, value.Nullable[decimal.Decimal]]) {
 	count := expr.Count[models.Order]()
 	total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents))
-	return datatable.Having(foundryhttp.IntegerQuery[int64](), count),
-		datatable.NullableHaving(foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal](), total)
+	return datatable.Having(foundryhttp.IntegerQuery[int64](), expr.OrderValueFilter(count)),
+		datatable.NullableHaving(foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal](), expr.NullableOrderValueFilter(total))
 }
 
 func relatedOrderFilter() datatable.FilterSource[models.User, int64] {
 	return datatable.Related(
-		datatable.Where(foundryhttp.IntegerQuery[int64](), expr.OrderRow(expr.Value(orm.NumberExpr(models.Orders.TotalCents)))),
+		datatable.Where(foundryhttp.IntegerQuery[int64](), expr.OrderFilter(expr.OrderRow(expr.Value(orm.NumberExpr(models.Orders.TotalCents))))),
 		func(p expr.Predicate[models.Order]) expr.Predicate[models.User] {
 			return expr.Has(models.UserRelations.Orders, p)
 		})
@@ -1501,7 +1507,7 @@ func relatedOrderFilter() datatable.FilterSource[models.User, int64] {
 
 func statusFilter() datatable.FilterSource[models.User, models.Status] {
 	return datatable.Where(foundryhttp.EnumQuery[models.Status, *models.Status](models.StatusActive.EnumDescriptor()),
-		expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status))))
+		expr.CompareFilter(expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status)))))
 }
 ```
 
@@ -1591,11 +1597,11 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 		correlation := rows.Correlate(joined, rows.From(q))
 		outer := rows.OuterScope(correlation, admin)
 		inner := rows.InnerScope(correlation, rows.ModelScope(q))
-		return rows.SelectCorrelatedScalar(correlation, expr.Row(expr.At(inner, orm.NullableTextExpr(countries.Countries.OfficialName))).Value()).
+		return rows.SelectCorrelatedScalar(correlation, expr.AsSelected(expr.Row(expr.At(inner, orm.NullableTextExpr(countries.Countries.OfficialName))))).
 			Where(expr.Equal(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)), expr.At(outer, orm.ColumnExpr(Admins.CountryCode)))).
-			OrderBy(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)).Asc()).Limit(1)
+			OrderBy(expr.Asc(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)))).Limit(1)
 	}
-	selected := expr.Row(rows.CorrelatedScalarNullableRowQuery(correlate())).Value()
+	selected := expr.AsSelected(expr.Row(rows.CorrelatedScalarNullableRowQuery(correlate())))
 	filter := officialNameFilter[DirectoryScope]{exists: func(p orm.Predicate[countries.Country]) expr.Predicate[DirectoryScope] {
 		return correlate(p).Exists()
 	}}
@@ -1605,19 +1611,22 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 		rows.MapSelected(DirectoryRows.OfficialName, selected))
 	text := foundryhttp.StringQuery[string]()
 	spec.Columns = []datatable.ColumnRegistration[DirectoryScope, DirectoryRow]{
-		datatable.DefineColumn[DirectoryScope](validation.DefineField("country", func(r DirectoryRow) string { return r.Country }), "admins.country").
-			SortBy(expr.Row(expr.At(country, orm.TextExpr(countries.Countries.Name))).Value()).
-			FilterBy(datatable.Where(text, expr.TextRowAt(country, orm.TextExpr(countries.Countries.Name)))).Registration(),
-		datatable.DefineColumn[DirectoryScope](validation.DefineField("officialName", func(r DirectoryRow) value.Nullable[string] { return r.OfficialName }), "admins.officialName").
-			SortBy(selected).FilterBy(datatable.NullableWhere(text, filter)).Registration(),
+		datatable.DefineColumn[DirectoryScope](validation.DefineField("country", func(r DirectoryRow) string { return r.Country }), "admins.country",
+			datatable.SortBy(expr.AsSelected(expr.Row(expr.At(country, orm.TextExpr(countries.Countries.Name))))),
+			datatable.FilterBy(datatable.Where(text, expr.TextFilter(expr.TextRowAt(country, orm.TextExpr(countries.Countries.Name))))),
+		),
+		datatable.DefineColumn[DirectoryScope](validation.DefineField("officialName", func(r DirectoryRow) value.Nullable[string] { return r.OfficialName }), "admins.officialName",
+			datatable.SortBy(selected),
+			datatable.FilterBy(datatable.NullableWhere(text, filter)),
+		),
 	}
-	spec.Stable = []expr.ProjectionOrder[DirectoryScope]{expr.At(admin, orm.KeyExpr(Admins.Key())).Asc()}
+	spec.Stable = []expr.ProjectionOrder[DirectoryScope]{expr.Asc(expr.At(admin, orm.KeyExpr(Admins.Key())))}
 	spec.Source = func(ctx context.Context, actor A) (rows.Query[DirectoryScope, DirectoryRow], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
 			return rows.Query[DirectoryScope, DirectoryRow]{}, err
 		}
-		return base.Where(expr.At(admin, orm.NumberExpr(Admins.TenantID)).Eq(id)), nil
+		return base.Where(expr.Eq(expr.At(admin, orm.NumberExpr(Admins.TenantID)), id)), nil
 	}
 	return spec
 }
@@ -2011,14 +2020,14 @@ be demoted with `Row`; keep column-based `expr.Param` for comparison-typed input
 <!-- orm-example: pilot2-row-constant -->
 ```go
 func enabledAdmins() rows.Scalar[Admin, bool] {
-	enabled := expr.When(expr.Value(orm.TextExpr(Admins.Username)).Eq("active"),
+	enabled := expr.When(expr.Eq(expr.Value(orm.TextExpr(Admins.Username)), "active"),
 		expr.Constant[Admin](codec.Bool[bool](), true)).Else(expr.Constant[Admin](codec.Bool[bool](), false))
-	return rows.SelectScalar(rows.From(Admins.Query()), enabled.Value())
+	return rows.SelectScalar(rows.From(Admins.Query()), expr.AsSelected(enabled))
 }
 func scopedUsername() {
 	type adminScope struct{}
 	source := rows.As[adminScope](Admins.Query(), "admin")
-	parameter := expr.Row(expr.At(rows.Scope(source), orm.TextExpr(Admins.Username))).Param("Ada")
+	parameter := expr.ParamOf(expr.Row(expr.At(rows.Scope(source), orm.TextExpr(Admins.Username))), "Ada")
 	_ = parameter
 }
 ```
@@ -2082,3 +2091,156 @@ var PublicMedia = attachments.ManyOf(ext.Owner, "public-media",
 
 See [extension slots](model-extension-slots.md), [JSON models](json-models.md) and
 [projection declarations](model-projections.md) for the owning contracts.
+
+## v0.3.0 expression and datatable migration
+
+Row expression operators become package functions. Datatable columns take typed
+options and return `ColumnRegistration[S, R]` directly. Remove the old method
+calls; there are no compatibility methods.
+
+### Row operators
+
+| From (v0.2) | To (v0.3) |
+| --- | --- |
+| `e.Eq(v)`, `e.Ne(v)`, `e.In(vs...)` | `expr.Eq(e, v)`, `expr.Ne(e, v)`, `expr.In(e, vs...)` |
+| `opt.Eq(v)`, `opt.Ne(v)`, `opt.In(vs...)` for present values | `expr.NullableEq(opt, v)`, `expr.NullableNe(opt, v)`, `expr.NullableIn(opt, vs...)` |
+| `e.Lt(v)`, `e.Lte(v)`, `e.Gt(v)`, `e.Gte(v)` | `expr.Lt(e, v)`, `expr.Lte(e, v)`, `expr.Gt(e, v)`, `expr.Gte(e, v)` |
+| `opt.Lt(v)`, `opt.Lte(v)`, `opt.Gt(v)`, `opt.Gte(v)` | `expr.NullableLt(opt, v)`, `expr.NullableLte(opt, v)`, `expr.NullableGt(opt, v)`, `expr.NullableGte(opt, v)` |
+| `e.IsNull()`, `e.IsNotNull()` | `expr.IsNull(e)`, `expr.IsNotNull(e)` |
+| `t.Contains(s)`, `t.IContains(s)` | `expr.TextContains(t, s)`, `expr.TextIContains(t, s)` |
+| `t.StartsWith(s)`, `t.EndsWith(s)` | `expr.TextStartsWith(t, s)`, `expr.TextEndsWith(t, s)` |
+| `t.IStartsWith(s)`, `t.IEndsWith(s)` | `expr.TextIStartsWith(t, s)`, `expr.TextIEndsWith(t, s)` |
+| `t.Like(p)`, `t.ILike(p)` | `expr.TextLike(t, p)`, `expr.TextILike(t, p)` |
+| Nullable text operations, such as `optT.Contains(s)` | Add `Nullable` to the function name: `expr.NullableTextContains(optT, s)`; the same rule applies to all eight text operations above |
+| `e.Asc()`, `e.Desc()` for row values | `expr.Asc(e)`, `expr.Desc(e)` |
+| `e.Asc().NullsFirst()`, `e.Desc().NullsLast()` | `expr.Asc(e).NullsFirst()`, `expr.Desc(e).NullsLast()` |
+
+The names use the operator suffixes and `Nullable`/`Text` prefixes established by
+`orm` column functions. Equality and membership use `Eq`, `Ne` and `In` because
+`RowValue[S, V]` already carries the exact value type; there is no parallel
+`TextEq` spelling in `expr`.
+
+Ordered comparisons require `OrderedRowValue[S, V]`. Ordered calculations and
+text expressions carry this sealed capability. Use the existing `OrderRow` or
+`OrderNullableRow` constructor when starting from a general row value.
+Text operations require `TextRowExpression` or `NullableTextRowExpression`;
+`CompareRow` and `CompareNullableRow` do not grant enum text or ordered operations.
+Nullable operators compare a present `V` while retaining the expression's
+`value.Nullable[V]` result. `Eq`/`Ne`/`In` on a general nullable `RowExpression`
+still take its exact wrapped value type.
+
+### Selected and aggregate operators
+
+| From (v0.2) | To (v0.3) |
+| --- | --- |
+| `row.Value()`, `aggregate.Value()` | `expr.AsSelected(row)`, `expr.AsSelected(aggregate)` |
+| `e.Param(v)` on a row, selected, or aggregate exemplar | `expr.ParamOf(e, v)`; column parameters remain `expr.Param(column, v)` |
+| `selected.Key()` | `expr.Key(selected)` |
+| `aggregate.Filter(predicates...)` | `expr.Filter(aggregate, predicates...)` |
+| `a.Eq(v)`, `a.Ne(v)`, `a.In(vs...)` in HAVING | `expr.EqValue(a, v)`, `expr.NeValue(a, v)`, `expr.InValue(a, vs...)` |
+| `a.Lt(v)`, `a.Lte(v)`, `a.Gt(v)`, `a.Gte(v)` in HAVING | `expr.LtValue(a, v)`, `expr.LteValue(a, v)`, `expr.GtValue(a, v)`, `expr.GteValue(a, v)` |
+| `a.IsNull()`, `a.IsNotNull()` in HAVING | `expr.IsNullValue(a)`, `expr.IsNotNullValue(a)` |
+| `a.Asc()`, `a.Desc()` on selected values or aggregates | `expr.AscValue(a)`, `expr.DescValue(a)` |
+| `having.Not()` | `expr.HavingNot(having)` |
+| `text.Like(p)`, `text.ILike(p)` in HAVING | `expr.TextLikeValue(text, p)`, `expr.TextILikeValue(text, p)` |
+| `text.Contains(v)`, `text.IContains(v)` in HAVING | `expr.TextContainsValue(text, v)`, `expr.TextIContainsValue(text, v)` |
+| `text.StartsWith(v)`, `text.EndsWith(v)` in HAVING | `expr.TextStartsWithValue(text, v)`, `expr.TextEndsWithValue(text, v)` |
+| `text.IStartsWith(v)`, `text.IEndsWith(v)` in HAVING | `expr.TextIStartsWithValue(text, v)`, `expr.TextIEndsWithValue(text, v)` |
+
+Selected comparisons use the same spelling for required and nullable operands.
+Nullable operands still bind the present value through their declared nullable
+codec. `CompareValue`, `OrderValue`, `OrderNullableValue`, `TextValue`, and
+`TextNullableValue` retain their comparison capabilities and exact value types.
+`Filter` returns the same concrete aggregate type; its predicates remain in the
+row phase and must have the aggregate's scope. `AsSelected` retains result nullability.
+`ParamOf` on a nullable aggregate uses its present-value codec for fallbacks.
+
+Selected comparisons produce `HavingPredicate[S]`; row comparisons produce
+`Predicate[S]`. `AscValue` and `DescValue` produce `SelectedOrder[S]`; row ordering
+functions produce `Order[S]`. These phases remain distinct. Window, frame, CASE,
+and JSON-path builders remain methods on exported non-alias types.
+
+`Order[S]` and `SelectedOrder[S]` are exported non-alias types. Both retain
+`NullsFirst()` and `NullsLast()` methods, visible in `go doc`, so ordering reads
+`expr.Asc(e).NullsFirst()` or `expr.DescValue(a).NullsLast()`.
+
+Public expression types retain their scope, value and phase parameters. Most
+implementations use public aliases to private types with pointer-shaped scope
+parameters, for example `TextRowExpression[S, V] = textRowExpression[*S, V]`.
+Applications continue to name the public types; distinct aliases, joins and
+correlations retain distinct source scopes.
+
+Editor hover and compiler errors can show internal pointer-scoped names for expression
+types, such as `expr.predicate[*models.Order]` or
+`expr.selected[*models.Order, int64]`. The pointer is an internal scope type
+argument. Applications still use the public aliases, such as
+`expr.Predicate[models.Order]` and `expr.Selected[models.Order, int64]`.
+The public types and their source, value, phase, and nullability guarantees are
+unchanged.
+
+### Datatable filter adapters
+
+| From (v0.2) | To (v0.3) |
+| --- | --- |
+| `datatable.Where(codec, text)` | `datatable.Where(codec, expr.TextFilter(text))` |
+| `datatable.NullableWhere(codec, optText)` | `datatable.NullableWhere(codec, expr.NullableTextFilter(optText))` |
+| `datatable.Where(codec, ordered)` | `datatable.Where(codec, expr.OrderFilter(ordered))` |
+| `datatable.NullableWhere(codec, optOrdered)` | `datatable.NullableWhere(codec, expr.NullableOrderFilter(optOrdered))` |
+| `datatable.Where(codec, comparison)` | `datatable.Where(codec, expr.CompareFilter(comparison))` |
+| `datatable.NullableWhere(codec, optComparison)` | `datatable.NullableWhere(codec, expr.NullableCompareFilter(optComparison))` |
+| `datatable.Having(codec, aggregate)` | `datatable.Having(codec, expr.OrderValueFilter(aggregate))` for ordered aggregates; `expr.ValueFilter(aggregate)` for equality-only aggregates |
+| `datatable.NullableHaving(codec, aggregate)` | `datatable.NullableHaving(codec, expr.NullableOrderValueFilter(aggregate))` |
+| Selected text comparisons in HAVING filters | `expr.TextValueFilter(comparison)` or `expr.NullableTextValueFilter(comparison)` |
+
+The adapters retain the expression's source, value, nullability, and phase.
+`ValueFilter` and `NullableValueFilter` expose equality and membership;
+`OrderValueFilter` and `NullableOrderValueFilter` add ordered comparisons;
+`TextValueFilter` and `NullableTextValueFilter` add text operations. Their methods
+are declared on exported non-alias adapter types and remain visible in `go doc`.
+
+### Datatable column options
+
+| From (v0.2) | To (v0.3) |
+| --- | --- |
+| `column.SortBy(selected)` | `datatable.SortBy(selected)` in `DefineColumn` |
+| `column.FilterBy(source)` | `datatable.FilterBy(source)` in `DefineColumn` |
+| `column.Searchable()` | `datatable.Searchable(rowExpression)` in `DefineColumn` |
+| `column.ExportAs(cell)` | `datatable.ExportAs(selectedExpression, cell)` in `DefineColumn` |
+| `column.Registration()` | Use the `DefineColumn` result directly |
+
+<!-- orm-example: column-options-v030-before -->
+```go
+column := datatable.DefineColumn[UserScope](w.Username, key).
+	SortBy(username.Value()).
+	FilterBy(datatable.Where(Text, username)).
+	Searchable().
+	ExportAs(datatable.ScalarCell(Text)).
+	Registration()
+```
+
+The [compiled column declaration](../../tests/fixtures/goway/migration/column_options_test.go)
+uses the same expression to infer the option types:
+
+<!-- orm-example: column-options-v030 -->
+```go
+func usernameColumn() datatable.ColumnRegistration[Admin, AdminRow] {
+	text := foundryhttp.StringQuery[string]()
+	field := validation.DefineField("username", func(row AdminRow) string { return row.Username })
+	username := expr.TextRow(orm.TextExpr(Admins.Username))
+	return datatable.DefineColumn[Admin](field, "admins.fields.username",
+		datatable.SortBy(expr.AsSelected(username)),
+		datatable.FilterBy(datatable.Where(text, expr.TextFilter(username))),
+		datatable.Searchable(username),
+		datatable.ExportAs(expr.AsSelected(username), datatable.ScalarCell(text)),
+	)
+}
+```
+
+`ColumnOption[S, V]` retains both types through registration without assertions or
+value boxing. `DefineColumn[S, R, V]` ties each option to the DTO selector's exact
+`V` and the declared source `S`. `SortBy` takes `Selected[S, V]`; `FilterBy` takes
+`FilterSource[S, V]`. `Searchable` takes `RowValue[S, V]` to infer its two types.
+`ExportAs` takes `Selected[S, V]` and `Cell[V]`, inferring both types without
+repeating the scope. For an aggregate column, use `ExportAs(expr.AsSelected(count), cell)`.
+The search/export expression supplies types only; export formatting reads the DTO
+field. Report/table `Registration()` methods remain unchanged.

@@ -23,17 +23,20 @@ func TestConditionalBindingsAndImmutableCase(t *testing.T) {
 	o := declareOrders()
 	a := rows.As[right](o.Query(), "o")
 	id := expr.At(rows.Scope(a), orm.NumberExpr(o.MemberID))
-	parameter := expr.OrderRow(id).Param
-	base := expr.When(id.Eq(1), parameter(10))
+	parameterSource := expr.OrderRow(id)
+	parameter := func(v int64) expr.RowExpression[rows.Alias[right, order], int64] {
+		return expr.ParamOf(parameterSource, v)
+	}
+	base := expr.When(expr.Eq(id, 1), parameter(10))
 	first := base.Else(parameter(20))
-	derived := base.When(id.Eq(2), parameter(30)).Else(parameter(40))
-	q := rows.OrderBy(expressionQuery(a, first.Value(), codec.Signed[int64]()).Where(expr.Coalesce(expr.NullableRow(id).Param(value.Null[int64]()), id).Eq(5)), first.Asc())
+	derived := base.When(expr.Eq(id, 2), parameter(30)).Else(parameter(40))
+	q := rows.OrderBy(expressionQuery(a, expr.AsSelected(first), codec.Signed[int64]()).Where(expr.Eq(expr.Coalesce(expr.ParamOf(expr.NullableRow(id), value.Null[int64]()), id), 5)), expr.Asc(first))
 	s := expressionSQL(t, q)
 	if !strings.Contains(s.SQLText, `CASE WHEN ("o"."member_id" = $1) THEN CAST($2 AS bigint) ELSE CAST($3 AS bigint) END`) || !reflect.DeepEqual(s.Bindings, []any{int64(1), int64(10), int64(20), nil, int64(5), int64(1), int64(10), int64(20)}) {
 		t.Fatal(s.SQLText, s.Bindings)
 	}
 	for name, choice := range map[string]expr.RowExpression[rows.Alias[right, order], int64]{"base": first, "derived": derived, "base_again": base.Else(parameter(50))} {
-		core := expr.FoundrySelected(choice.Value(), sqlowner.Expressions())
+		core := expr.FoundrySelected(expr.AsSelected(choice), sqlowner.Expressions())
 		branches := len(core.Node.(querycore.CaseNode).Branches)
 		want := 1
 		if name == "derived" {
@@ -55,9 +58,9 @@ func TestConditionalNullableResultsAndComposition(t *testing.T) {
 	a := rows.As[left](m.Query(), "m")
 	name := expr.At(rows.Scope(a), orm.TextExpr(m.Name))
 	nickname := expr.At(rows.Scope(a), orm.NullableTextExpr(m.Nickname))
-	fallback := expr.Row(name).Value().Param("")
+	fallback := expr.ParamOf(expr.AsSelected(expr.Row(name)), "")
 	required := expr.Coalesce(nickname, fallback)
-	for _, selected := range []expr.Selected[rows.Alias[left, member], string]{required.Value(), expr.CoalesceValue(expr.Row(nickname).Value(), fallback.Value())} {
+	for _, selected := range []expr.Selected[rows.Alias[left, member], string]{expr.AsSelected(required), expr.CoalesceValue(expr.AsSelected(expr.Row(nickname)), expr.AsSelected(fallback))} {
 		state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{""}, {"Ada"}}}
 		got, err := rows.Read(expressionQuery(a, selected, codec.String[string]())).All(t.Context(), openTest(t, state))
 		if err != nil || len(got) != 2 || got[0].Value != "" || got[1].Value != "Ada" {
@@ -65,14 +68,14 @@ func TestConditionalNullableResultsAndComposition(t *testing.T) {
 		}
 	}
 	for name, selected := range map[string]expr.Selected[rows.Alias[left, member], value.Nullable[string]]{
-		"coalesce_row":             expr.CoalesceNullable(nickname, expr.NullableRow(name).Param(value.Null[string]())).Value(),
-		"coalesce_selected":        expr.CoalesceNullableValue(expr.Row(nickname).Value(), expr.NullableRow(name).Param(value.Null[string]()).Value()),
-		"nullif_row":               expr.NullIf(required, fallback).Value(),
-		"nullif_selected":          expr.NullIfValue(required.Value(), fallback.Value()),
-		"nullif_nullable_row":      expr.NullIfNullable(nickname, expr.NullableRow(name).Param(value.Null[string]())).Value(),
-		"nullif_nullable_selected": expr.NullIfNullableValue(expr.Row(nickname).Value(), expr.NullableRow(name).Param(value.Null[string]()).Value()),
-		"case_null":                expr.When(nickname.IsNull(), fallback).ElseNull().Value(),
-		"case_nullable":            expr.When(nickname.IsNull(), expr.NullableRow(fallback)).Else(nickname).Value(),
+		"coalesce_row":             expr.AsSelected(expr.CoalesceNullable(nickname, expr.ParamOf(expr.NullableRow(name), value.Null[string]()))),
+		"coalesce_selected":        expr.CoalesceNullableValue(expr.AsSelected(expr.Row(nickname)), expr.AsSelected(expr.ParamOf(expr.NullableRow(name), value.Null[string]()))),
+		"nullif_row":               expr.AsSelected(expr.NullIf(required, fallback)),
+		"nullif_selected":          expr.NullIfValue(expr.AsSelected(required), expr.AsSelected(fallback)),
+		"nullif_nullable_row":      expr.AsSelected(expr.NullIfNullable(nickname, expr.ParamOf(expr.NullableRow(name), value.Null[string]()))),
+		"nullif_nullable_selected": expr.NullIfNullableValue(expr.AsSelected(expr.Row(nickname)), expr.AsSelected(expr.ParamOf(expr.NullableRow(name), value.Null[string]()))),
+		"case_null":                expr.AsSelected(expr.When(expr.IsNull(nickname), fallback).ElseNull()),
+		"case_nullable":            expr.AsSelected(expr.When(expr.IsNull(nickname), expr.NullableRow(fallback)).Else(nickname)),
 	} {
 		t.Run(name, func(t *testing.T) {
 			state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {"Ada"}}}
@@ -91,13 +94,13 @@ func TestSelectedCaseAndGroupConditions(t *testing.T) {
 	o := declareOrders()
 	a := rows.As[right](o.Query(), "o")
 	count := expr.Count[rows.Alias[right, order]]()
-	selected := expr.WhenValue(count.Gt(0), count.Value()).When(count.Gt(10), count.Param(10).Value()).Else(count.Param(0).Value())
+	selected := expr.WhenValue(expr.GtValue(count, 0), expr.AsSelected(count)).When(expr.GtValue(count, 10), expr.AsSelected(expr.ParamOf(count, 10))).Else(expr.AsSelected(expr.ParamOf(count, 0)))
 	s := expressionSQL(t, expressionQuery(a, selected, codec.Signed[int64]()))
 	if !strings.Contains(s.SQLText, "CASE WHEN (COUNT(*) > $1)") || !reflect.DeepEqual(s.Bindings, []any{int64(0), int64(10), int64(10), int64(0)}) {
 		t.Fatal(s.SQLText, s.Bindings)
 	}
-	nullable := expr.WhenValue(count.Gt(0), count.Value()).ElseNull()
-	q := expressionQuery(a, expr.CoalesceValue(expr.NullIfValue(selected, count.Param(0).Value()), count.Param(0).Value()), codec.Signed[int64]())
+	nullable := expr.WhenValue(expr.GtValue(count, 0), expr.AsSelected(count)).ElseNull()
+	q := expressionQuery(a, expr.CoalesceValue(expr.NullIfValue(selected, expr.AsSelected(expr.ParamOf(count, 0))), expr.AsSelected(expr.ParamOf(count, 0))), codec.Signed[int64]())
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(0)}}}
 	got, err := rows.Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 1 || got[0].Value != 0 {
@@ -105,7 +108,7 @@ func TestSelectedCaseAndGroupConditions(t *testing.T) {
 	}
 	expressionSQL(t, expressionQuery(a, nullable, codec.Nullable(codec.Signed[int64]())))
 	// Explicitly lifting a row condition does not make its column grouped.
-	invalid := expr.WhenValue(expr.Grouped(expr.OrderRow(expr.At(rows.Scope(a), orm.NumberExpr(o.MemberID))).Gt(0)), count.Value()).Else(count.Param(0).Value())
+	invalid := expr.WhenValue(expr.Grouped(expr.Gt(expr.OrderRow(expr.At(rows.Scope(a), orm.NumberExpr(o.MemberID))), 0)), expr.AsSelected(count)).Else(expr.AsSelected(expr.ParamOf(count, 0)))
 	state = &driverState{}
 	result, err := rows.Read(expressionQuery(a, invalid, codec.Signed[int64]())).All(t.Context(), openTest(t, state))
 	if !errors.Is(err, fault.Invalid) || result != nil || state.sql != "" {
@@ -117,17 +120,17 @@ func TestConditionalsPreserveAllOwnersAndErrors(t *testing.T) {
 	o, other := declareOrders(), declareOrders()
 	a := rows.As[right](o.Query(), "o")
 	own, foreign := expr.At(rows.Scope(a), orm.NumberExpr(o.MemberID)), expr.At(rows.Scope(a), orm.NumberExpr(other.MemberID))
-	p := expr.OrderRow(own).Param(1)
+	p := expr.ParamOf(expr.OrderRow(own), 1)
 	for name, selected := range map[string]expr.Selected[rows.Alias[right, order], int64]{
-		"condition":          expr.When(foreign.Eq(1), p).Else(p).Value(),
-		"result":             expr.When(own.Eq(1), foreign).Else(p).Value(),
-		"fallback":           expr.When(own.Eq(1), p).Else(foreign).Value(),
-		"coalesce_first":     expr.Coalesce(expr.NullableRow(foreign), p).Value(),
-		"coalesce_fallback":  expr.Coalesce(expr.NullableRow(own).Param(value.Null[int64]()), foreign).Value(),
-		"param":              expr.When(own.Eq(1), p).Else(foreign).Param(2).Value(),
-		"zero_case":          (expr.Case[rows.Alias[right, order], int64]{}).Else(p).Value(),
-		"zero_selected_case": (expr.ValueCase[rows.Alias[right, order], int64]{}).Else(p.Value()),
-		"nil_coalesce":       expr.Coalesce[rows.Alias[right, order], int64](nil, p).Value(),
+		"condition":          expr.AsSelected(expr.When(expr.Eq(foreign, 1), p).Else(p)),
+		"result":             expr.AsSelected(expr.When(expr.Eq(own, 1), foreign).Else(p)),
+		"fallback":           expr.AsSelected(expr.When(expr.Eq(own, 1), p).Else(foreign)),
+		"coalesce_first":     expr.AsSelected(expr.Coalesce(expr.NullableRow(foreign), p)),
+		"coalesce_fallback":  expr.AsSelected(expr.Coalesce(expr.ParamOf(expr.NullableRow(own), value.Null[int64]()), foreign)),
+		"param":              expr.AsSelected(expr.ParamOf(expr.When(expr.Eq(own, 1), p).Else(foreign), 2)),
+		"zero_case":          expr.AsSelected((expr.Case[rows.Alias[right, order], int64]{}).Else(p)),
+		"zero_selected_case": (expr.ValueCase[rows.Alias[right, order], int64]{}).Else(expr.AsSelected(p)),
+		"nil_coalesce":       expr.AsSelected(expr.Coalesce[rows.Alias[right, order], int64](nil, p)),
 	} {
 		t.Run(name, func(t *testing.T) {
 			state := &driverState{}
@@ -137,15 +140,15 @@ func TestConditionalsPreserveAllOwnersAndErrors(t *testing.T) {
 			}
 		})
 	}
-	nested := expr.When(expr.OrderRow(own).Gt(0), expr.NullableRow(p)).ElseNull()
+	nested := expr.When(expr.Gt(expr.OrderRow(own), 0), expr.NullableRow(p)).ElseNull()
 	state := &driverState{}
-	got, err := rows.Read(expressionQuery(a, nested.Value(), codec.Nullable(codec.Nullable(codec.Signed[int64]())))).All(t.Context(), openTest(t, state))
+	got, err := rows.Read(expressionQuery(a, expr.AsSelected(nested), codec.Nullable(codec.Nullable(codec.Signed[int64]())))).All(t.Context(), openTest(t, state))
 	if !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 		t.Fatal("CASE nested NULL wrappers", got, err, state.sql)
 	}
 	invalidNullif := expr.NullIf(expr.NullableRow(p), expr.NullableRow(p))
 	state = &driverState{}
-	got, err = rows.Read(expressionQuery(a, invalidNullif.Value(), codec.Nullable(codec.Nullable(codec.Signed[int64]())))).All(t.Context(), openTest(t, state))
+	got, err = rows.Read(expressionQuery(a, expr.AsSelected(invalidNullif), codec.Nullable(codec.Nullable(codec.Signed[int64]())))).All(t.Context(), openTest(t, state))
 	if !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 		t.Fatal("NULLIF nested NULL wrappers", got, err, state.sql)
 	}
@@ -154,7 +157,7 @@ func TestConditionalsPreserveAllOwnersAndErrors(t *testing.T) {
 func TestEmptyMembershipRejectsInvalidOperand(t *testing.T) {
 	m := declareMembers()
 	invalid := expr.Param(orm.TextExpr(m.Name), "\x00")
-	q := rows.WhereScalar(rows.SelectScalar(rows.From(m.Query()), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()), invalid.In())
+	q := rows.WhereScalar(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))), expr.In(invalid))
 	if _, err := rows.CompileRead(rows.ReadScalar(q)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("empty IN concealed invalid operand", err)
 	}
@@ -170,7 +173,7 @@ func TestParameterCaptureAndCodecTypes(t *testing.T) {
 	original := &[2]byte{1, 2}
 	p := expr.Constant[member](c, original)
 	original[0] = 9
-	q := rows.SelectScalar(rows.From(declareMembers().Query()), p.Value())
+	q := rows.SelectScalar(rows.From(declareMembers().Query()), expr.AsSelected(p))
 	first, err := rows.CompileRead(rows.ReadScalar(q))
 	if err != nil {
 		t.Fatal(err)
@@ -187,17 +190,17 @@ func TestParameterCaptureAndCodecTypes(t *testing.T) {
 	}
 	m := declareMembers()
 	for _, c := range []codec.Codec[string]{codec.New(func(v string) (driver.Value, error) { return v, nil }, func(any) (string, error) { return "", nil }), codec.String[string]().WithParameterType(255), (codec.Codec[string]{}).WithParameterType(codec.TypeText)} {
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(m.Query()), expr.Constant[member](c, "x").Value()))); !errors.Is(err, fault.Invalid) {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Constant[member](c, "x"))))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid parameter metadata", err)
 		}
 	}
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(m.Query()), expr.Param(orm.TextExpr(m.Name), "\x00").Value()))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Param(orm.TextExpr(m.Name), "\x00"))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("invalid parameter value", err)
 	}
 	if got := codec.Nullable(codec.Signed[int64]().Validated(func(int64) error { return nil })).ParameterType(); got != codec.TypeInteger {
 		t.Fatal("adapter lost parameter type", got)
 	}
-	qbad := rows.WhereScalar(rows.SelectScalar(rows.From(m.Query()), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()), expr.NullableRow(expr.Value(orm.KeyExpr(m.ID))).Param(value.Null[int64]()).Eq(value.Null[int64]()))
+	qbad := rows.WhereScalar(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))), expr.Eq(expr.ParamOf(expr.NullableRow(expr.Value(orm.KeyExpr(m.ID))), value.Null[int64]()), value.Null[int64]()))
 	if _, err := rows.CompileRead(rows.ReadScalar(qbad)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("literal NULL equality accepted", err)
 	}
@@ -206,11 +209,11 @@ func TestZeroCaseAndDistinctParameterIdentity(t *testing.T) {
 	m := declareMembers()
 	id := expr.Value(orm.KeyExpr(m.ID))
 	q := rows.From(m.Query())
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, (expr.Case[member, int64]{}).When(id.Eq(1), id).ElseNull().Value()))); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.AsSelected((expr.Case[member, int64]{}).When(expr.Eq(id, 1), id).ElseNull())))); err != nil {
 		t.Fatal("zero CASE failed to acquire branch", err)
 	}
-	first := expr.When(id.Eq(1), expr.Param(orm.KeyExpr(m.ID), int64(10))).Else(expr.Param(orm.KeyExpr(m.ID), int64(20)))
-	s, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.DistinctScalar(rows.SelectScalar(q, first.Value())), expr.OrderRow(first).Asc())))
+	first := expr.When(expr.Eq(id, 1), expr.Param(orm.KeyExpr(m.ID), int64(10))).Else(expr.Param(orm.KeyExpr(m.ID), int64(20)))
+	s, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.DistinctScalar(rows.SelectScalar(q, expr.AsSelected(first))), expr.Asc(expr.OrderRow(first)))))
 	if err != nil || !strings.Contains(s.SQL(), "ORDER BY 1 ASC") || len(s.Arguments()) != 3 {
 		t.Fatal("DISTINCT CASE rebound parameters", s.SQL(), s.Arguments(), err)
 	}
@@ -220,12 +223,12 @@ func TestConditionalValuePhaseAndBounds(t *testing.T) {
 	source := rows.From(d.Query())
 	id := expr.Value(orm.KeyExpr(d.ID))
 	count := expr.Count[member]()
-	grouped := expr.WhenValue(expr.Grouped(id.Eq(1)), count.Value()).Else(count.Param(0).Value())
+	grouped := expr.WhenValue(expr.Grouped(expr.Eq(id, 1)), expr.AsSelected(count)).Else(expr.AsSelected(expr.ParamOf(count, 0)))
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.GroupByScalar(rows.SelectScalar(source, grouped), expr.Group(id)))); err != nil {
 		t.Fatal("grouped condition rejected", err)
 	}
-	window := expr.RowNumber(expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(id.Asc()))
-	wrapped := expr.WhenValue(expr.Grouped(expr.OrderRow(id).Gt(0)), window).Else(window.Param(0).Value())
+	window := expr.RowNumber(expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Asc(id)))
+	wrapped := expr.WhenValue(expr.Grouped(expr.Gt(expr.OrderRow(id), 0)), window).Else(expr.AsSelected(expr.ParamOf(window, 0)))
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, wrapped))); err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +274,7 @@ func TestConditionalValuePhaseAndBounds(t *testing.T) {
 func TestConditionalRejectsNestedNullability(t *testing.T) {
 	m := declareMembers()
 	id := expr.Value(orm.KeyExpr(m.ID))
-	for _, v := range []expr.Selected[member, value.Nullable[value.Nullable[int64]]]{expr.When(id.Eq(1), expr.NullableRow(id)).ElseNull().Value(), expr.NullIf(expr.NullableRow(id), expr.NullableRow(id)).Value()} {
+	for _, v := range []expr.Selected[member, value.Nullable[value.Nullable[int64]]]{expr.AsSelected(expr.When(expr.Eq(id, 1), expr.NullableRow(id)).ElseNull()), expr.AsSelected(expr.NullIf(expr.NullableRow(id), expr.NullableRow(id)))} {
 		state := &driverState{}
 		if _, err := rows.ReadScalar(rows.SelectScalar(rows.From(m.Query().Limit(0)), v)).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || state.sql != "" {
 			t.Fatal("nested NULL wrapper accepted", err, state.sql)

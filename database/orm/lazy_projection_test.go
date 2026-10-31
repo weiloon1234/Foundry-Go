@@ -67,7 +67,7 @@ func lazyDB(t *testing.T) (*database.DB, *lazyDriver) {
 }
 func TestPackageLevelProjectionWaitsForEnumInitialization(t *testing.T) {
 	db, d := lazyDB(t)
-	got, err := rows.Read(enuminit.Projection.Where(enuminit.State.Eq(enuminit.Active))).All(t.Context(), db)
+	got, err := rows.Read(enuminit.Projection.Where(expr.Eq(enuminit.State, enuminit.Active))).All(t.Context(), db)
 	if err != nil || len(got) != 1 || got[0].State != enuminit.Active || !got[0].Nullable.IsNull() {
 		t.Fatalf("projection: %+v %v", got, err)
 	}

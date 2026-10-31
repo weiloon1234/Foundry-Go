@@ -13,4 +13,4 @@ type forged struct {
 func (forged) Contains(models.Status) orm.Predicate[models.User] { return orm.Predicate[models.User]{} }
 func (forged) orderedColumn()                                    {}
 
-var _ = expr.TextNullableRow[models.User, models.Status](forged{}).Gt(models.StatusActive)
+var _ = expr.NullableGt(expr.TextNullableRow[models.User, models.Status](forged{}), models.StatusActive)

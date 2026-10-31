@@ -12,6 +12,7 @@ import (
 // ExportOptionsJSON describes the concrete ExportOptions JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ExportOptionsJSON()
 func ExportOptionsJSON() foundrycontract.JSON[ExportOptions] { return foundryExportOptionsJSON() }
 
 var foundryExportOptionsJSON = sync.OnceValue(func() foundrycontract.JSON[ExportOptions] {
@@ -38,6 +39,7 @@ var foundryExportOptionsJSON = sync.OnceValue(func() foundrycontract.JSON[Export
 })
 
 // ExportOptionsValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ExportOptionsValidationFields()
 type ExportOptionsValidationFieldSet struct {
 	// ByteOrderMark validates the declared JSON property "byte_order_mark".
 	//
@@ -55,6 +57,7 @@ type ExportOptionsValidationFieldSet struct {
 }
 
 // ExportOptionsValidationFields returns typed field descriptors.
+// Example: ExportOptionsValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ExportOptionsValidationFields() ExportOptionsValidationFieldSet {
 	return *foundryExportOptionsValidationFields()

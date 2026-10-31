@@ -12,6 +12,7 @@ import (
 // BankDTOJSON describes the concrete BankDTO JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: BankDTOJSON()
 func BankDTOJSON() foundrycontract.JSON[BankDTO] { return foundryBankDTOJSON() }
 
 var foundryBankDTOJSON = sync.OnceValue(func() foundrycontract.JSON[BankDTO] {
@@ -26,12 +27,14 @@ var foundryBankDTOJSON = sync.OnceValue(func() foundrycontract.JSON[BankDTO] {
 })
 
 // BankDTOValidationFieldSet retains concrete DTO and value types for validation.
+// Example: BankDTOValidationFields()
 type BankDTOValidationFieldSet struct {
 	// Reference validates the declared JSON property "reference".
 	Reference foundryvalidation.Field[BankDTO, string]
 }
 
 // BankDTOValidationFields returns typed field descriptors.
+// Example: BankDTOValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func BankDTOValidationFields() BankDTOValidationFieldSet { return *foundryBankDTOValidationFields() }
 

@@ -32,7 +32,7 @@ func (r TransactionCorrelatedRecord[O, I, R]) Where(ps ...expr.Predicate[Transac
 	return r
 }
 
-// OrderBy appends inner result ordering. Example: record.OrderBy(childID.Desc()).
+// OrderBy appends inner result ordering. Example: record.OrderBy(expr.Desc(childID)).
 func (r TransactionCorrelatedRecord[O, I, R]) OrderBy(os ...expr.ProjectionOrder[TransactionCorrelation[O, I]]) TransactionCorrelatedRecord[O, I, R] {
 	r.core.Correlation.Source = recordOrders(r.core.Correlation.Source, os)
 	return r

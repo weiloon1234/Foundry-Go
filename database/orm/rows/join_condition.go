@@ -9,7 +9,7 @@ import (
 )
 
 func compareJoinValues[L, R, V any](left expr.RowValue[L, V], right expr.RowValue[R, V], op querycore.Operator) JoinOn[L, R] {
-	return JoinOn[L, R]{core: ormcore.JoinComparison(expr.FoundryRowValue(left, sqlowner.Expressions()), expr.FoundryRowValue(right, sqlowner.Expressions()), op, expr.FoundrySelectedColumn(expr.Row(left).Value(), sqlowner.Expressions()).Text && expr.FoundrySelectedColumn(expr.Row(right).Value(), sqlowner.Expressions()).Text)}
+	return JoinOn[L, R]{core: ormcore.JoinComparison(expr.FoundryRowValue(left, sqlowner.Expressions()), expr.FoundryRowValue(right, sqlowner.Expressions()), op, expr.FoundrySelectedColumn(expr.AsSelected(expr.Row(left)), sqlowner.Expressions()).Text && expr.FoundrySelectedColumn(expr.AsSelected(expr.Row(right)), sqlowner.Expressions()).Text)}
 }
 
 // OnEqual compares same-typed row values across distinct join sides. Example: rows.OnEqual(left,right).
@@ -104,12 +104,12 @@ func (on JoinOn[L, R]) Not() JoinOn[L, R] {
 	return JoinOn[L, R]{core: ormcore.NegateJoinCondition(on.core)}
 }
 
-// WhereLeft adds predicates owned by the left input, preserving outer rows. Example: on.WhereLeft(left.Eq(1)).
+// WhereLeft adds predicates owned by the left input, preserving outer rows. Example: on.WhereLeft(expr.Eq(left, 1)).
 func (on JoinOn[L, R]) WhereLeft(predicates ...expr.Predicate[L]) JoinOn[L, R] {
 	return filterOn(on, true, predicates)
 }
 
-// WhereRight adds predicates owned by the right input. Example: on.WhereRight(right.Eq(1)).
+// WhereRight adds predicates owned by the right input. Example: on.WhereRight(expr.Eq(right, 1)).
 func (on JoinOn[L, R]) WhereRight(predicates ...expr.Predicate[R]) JoinOn[L, R] {
 	return filterOn(on, false, predicates)
 }

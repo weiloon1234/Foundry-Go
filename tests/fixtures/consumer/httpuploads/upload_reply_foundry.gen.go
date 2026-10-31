@@ -12,6 +12,7 @@ import (
 // UploadReplyJSON describes the concrete UploadReply JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: UploadReplyJSON()
 func UploadReplyJSON() foundrycontract.JSON[UploadReply] { return foundryUploadReplyJSON() }
 
 var foundryUploadReplyJSON = sync.OnceValue(func() foundrycontract.JSON[UploadReply] {
@@ -32,6 +33,7 @@ var foundryUploadReplyJSON = sync.OnceValue(func() foundrycontract.JSON[UploadRe
 })
 
 // UploadReplyValidationFieldSet retains concrete DTO and value types for validation.
+// Example: UploadReplyValidationFields()
 type UploadReplyValidationFieldSet struct {
 	// Bytes validates the declared JSON property "bytes".
 	Bytes foundryvalidation.Field[UploadReply, int64]
@@ -42,6 +44,7 @@ type UploadReplyValidationFieldSet struct {
 }
 
 // UploadReplyValidationFields returns typed field descriptors.
+// Example: UploadReplyValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func UploadReplyValidationFields() UploadReplyValidationFieldSet {
 	return *foundryUploadReplyValidationFields()

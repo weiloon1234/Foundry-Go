@@ -6,4 +6,4 @@ import (
 
 type owner struct{}
 
-var _ = expr.Predicate[owner](expr.Count[owner]().Gt(0))
+var _ = expr.Predicate[owner](expr.GtValue(expr.Count[owner](), 0))

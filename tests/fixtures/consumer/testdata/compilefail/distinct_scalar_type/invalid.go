@@ -8,4 +8,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.InQuery(expr.Value(orm.KeyExpr(models.Users.ID)), rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(orm.TextExpr(models.Users.Email))).Value())))
+var _ = rows.InQuery(expr.Value(orm.KeyExpr(models.Users.ID)), rows.DistinctScalar(rows.SelectScalar(rows.From(models.Users.Query()), expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(models.Users.Email)))))))

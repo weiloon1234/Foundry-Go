@@ -13,7 +13,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// RowValue is a sealed value evaluated before grouping. Example: expr.Add(expr.Value(orm.NumberExpr(Users.Age)),expr.Value(orm.NumberExpr(Users.Age))).
+// RowValue is a sealed value evaluated before grouping.
+//
+// Example: expr.Add(expr.Value(orm.NumberExpr(Users.Age)), expr.Value(orm.NumberExpr(Users.Age)))
 type RowValue[S, V any] interface{ rowValue(*S) rowData[V] }
 
 type rowData[V any] struct {
@@ -21,27 +23,35 @@ type rowData[V any] struct {
 	column ormcore.Column[V]
 }
 
-// RowExpression is a computed row value with exact owner and result types. Example: expr.Param(orm.NumberExpr(Users.Age), 2).
-type RowExpression[S, V any] struct {
+// RowExpression is a computed row value with exact owner and result types.
+//
+// Example: expr.Param(orm.NumberExpr(Users.Age), 2)
+type RowExpression[S, V any] = rowExpression[*S, V]
+
+type rowExpression[S, V any] struct {
 	rowPhase [0]struct{}
-	_        [0]*S
+	_        [0]S
 	data     rowData[V]
 }
 
-// Selected is a selected-phase value; it cannot become a row predicate. Example: expr.Count[User]().Value().
-type Selected[S, V any] struct {
+// Selected is a selected-phase value; it cannot become a row predicate.
+//
+// Example: expr.AsSelected(expr.Count[User]())
+type Selected[S, V any] = selected[*S, V]
+
+type selected[S, V any] struct {
 	selectedPhase [0]struct{}
-	_             [0]*S
+	_             [0]S
 	data          rowData[V]
 }
 
-func (e Expression[S, V, P]) rowValue(*S) rowData[P] {
+func (e expression[S, V, P]) rowValue(S) rowData[P] {
 	if e.projection == nil {
 		return rowData[P]{core: ormcore.Expression{Err: ormcore.Invalid("uninitialized expression")}}
 	}
 	return rowData[P]{core: e.core, column: e.projection()}
 }
-func (e RowExpression[S, V]) rowValue(*S) rowData[V] { return e.data }
+func (e rowExpression[S, V]) rowValue(S) rowData[V] { return e.data }
 
 func rowInput[S, V any](v RowValue[S, V]) RowExpression[S, V] {
 	if ormcore.NilDescriptor(v) {
@@ -51,35 +61,29 @@ func rowInput[S, V any](v RowValue[S, V]) RowExpression[S, V] {
 }
 
 // Row adapts a row-phase value without changing its scope or projection type.
-// Example: expr.Row(expr.At(scope, orm.NumberExpr(Users.Age))).Param(18).
+//
+// Example: expr.Row(v)
 func Row[S, V any](v RowValue[S, V]) RowExpression[S, V] { return rowInput(v) }
 
 // Constant snapshots a bound value using its explicit codec, without an exemplar column.
-// Example: expr.Constant[User](codec.Bool[bool](), true).
+//
+// Example: expr.Constant[User](c, v)
 func Constant[S, V any](c codec.Codec[V], v V) RowExpression[S, V] {
 	return parameter[S](rowData[V]{column: columnCodec(c)}, v)
 }
 
-// Value promotes a computed row value to the selected phase. Example: expr.Add(a,b).Value().
-func (e RowExpression[S, V]) Value() Selected[S, V] { return Selected[S, V]{data: e.data} }
-
-// Param snapshots a bound non-null value using a column's comparison codec. Example: expr.Param(orm.NullableTextExpr(Users.Nickname), "Ada").
+// Param snapshots a bound non-null value using a column's comparison codec.
+//
+// Example: expr.Param(column, v)
 func Param[S, V, P any](column orm.ExpressionColumn[S, V, P], v V) RowExpression[S, V] {
 	c, _ := orm.FoundryColumn(column, sqlowner.Metadata())
 	return parameter[S](rowData[V]{column: c, core: ormcore.Expression{Refs: []ormcore.Reference{c.Reference}, Err: c.Err}}, v)
 }
 
-// Param captures this row expression's exact value type. Example: expr.Add(a,b).Param(2).
-func (e RowExpression[S, V]) Param(v V) RowExpression[S, V] {
-	return parameter[S](e.data, v)
-}
-
-// Param captures this selected value's type without evaluating it. Example: expr.Count[User]().Value().Param(0).
-func (e Selected[S, V]) Param(v V) RowExpression[S, V] {
-	return parameter[S](e.data, v)
-}
-
 func parameter[S, V any](exemplar rowData[V], v V) RowExpression[S, V] {
+	return RowExpression[S, V]{data: parameterData(reflect.TypeFor[S](), exemplar, v)}
+}
+func parameterData[V any](scope reflect.Type, exemplar rowData[V], v V) rowData[V] {
 	c := exemplar.column
 	err := safeerror.Join("operation failed", exemplar.core.Err, c.Err)
 	var node querycore.ParameterNode
@@ -91,22 +95,25 @@ func parameter[S, V any](exemplar rowData[V], v V) RowExpression[S, V] {
 	}
 	node.Kind = c.Kind
 	node.Sensitive = c.Sensitive
-	refs, referenceErr := ormcore.MergeReferences(exemplar.core.Refs, []ormcore.Reference{{Scope: reflect.TypeFor[S]()}})
+	refs, referenceErr := ormcore.MergeReferences(exemplar.core.Refs, []ormcore.Reference{{Scope: scope}})
 	node.Err = safeerror.Join("operation failed", err, node.Err, referenceErr)
-	return RowExpression[S, V]{data: rowData[V]{core: ormcore.Expression{Node: node, Refs: refs, ReferenceFree: true, Err: node.Err}, column: c}}
+	return rowData[V]{core: ormcore.Expression{Node: node, Refs: refs, ReferenceFree: true, Err: node.Err}, column: c}
 }
 
 func columnCodec[V any](c codec.Codec[V]) ormcore.Column[V] {
 	return ormcore.Column[V]{Text: c.ParameterType() == codec.TypeText, Sensitive: c.SensitiveValues(), Kind: c.ParameterType(), Nullable: value.IsNullableType[V](), Bind: c.Bind, Clone: c.Clone, Scan: func(v *V) any { return c.Scan(v) }, Err: c.Validate()}
 }
 
-// NullableRow explicitly widens a row value by one nullable layer. Example: expr.NullableRow(expr.Value(orm.NumberExpr(Users.Age))).
+// NullableRow explicitly widens a row value by one nullable layer.
+//
+// Example: expr.NullableRow(v)
 func NullableRow[S, V any](v RowValue[S, V]) RowExpression[S, value.Nullable[V]] {
 	return RowExpression[S, value.Nullable[V]]{data: nullableData(rowInput(v).data)}
 }
 
 // Nullable widens a selected value by one nullable layer without changing its phase.
-// Example: expr.Nullable(expr.Count[User]().Value()).
+//
+// Example: expr.Nullable(e)
 func Nullable[S, V any](e Selected[S, V]) Selected[S, value.Nullable[V]] {
 	return Selected[S, value.Nullable[V]]{data: nullableData(e.data)}
 }
@@ -142,7 +149,9 @@ func nullableData[V any](e rowData[V]) rowData[value.Nullable[V]] {
 	return rowData[value.Nullable[V]]{core: e.core, column: out}
 }
 
-// FoundrySelected exposes sealed selected metadata to rows. Example: FoundrySelected(e,sqlowner.Expressions()).
+// FoundrySelected exposes sealed selected metadata to rows.
+//
+// Example: expr.FoundrySelected(e, seal)
 func FoundrySelected[S, V any](e Selected[S, V], seal sqlowner.ExpressionSeal) ormcore.Expression {
 	if !seal.Valid() {
 		return ormcore.Expression{Err: ormcore.Invalid("invalid SQL owner capability")}

@@ -10,5 +10,5 @@ import (
 var age = expr.Value(orm.NumberExpr(models.Users.Age))
 var email = expr.Value(orm.TextExpr(models.Users.Email))
 var _ = func() {
-	var _ expr.Selected[models.User, int] = expr.AddNullable(expr.NullableRow(age), expr.NullableRow(age)).Value()
+	var _ expr.Selected[models.User, int] = expr.AsSelected(expr.AddNullable(expr.NullableRow(age), expr.NullableRow(age)))
 }

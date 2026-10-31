@@ -9,5 +9,5 @@ import (
 
 func invalid() {
 	f := temporalqueries.Samples
-	_ = expr.Year(expr.Max(orm.TimeExpr(f.Date)).Value())
+	_ = expr.Year(expr.AsSelected(expr.Max(orm.TimeExpr(f.Date))))
 }

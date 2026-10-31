@@ -14,6 +14,7 @@ import (
 // TrackingResponseJSON describes the concrete TrackingResponse JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: TrackingResponseJSON()
 func TrackingResponseJSON() foundrycontract.JSON[TrackingResponse] {
 	return foundryTrackingResponseJSON()
 }
@@ -41,6 +42,7 @@ var foundryTrackingResponseJSON = sync.OnceValue(func() foundrycontract.JSON[Tra
 })
 
 // TrackingResponseValidationFieldSet retains concrete DTO and value types for validation.
+// Example: TrackingResponseValidationFields()
 type TrackingResponseValidationFieldSet struct {
 	// Code validates the declared JSON property "code".
 	Code foundryvalidation.Field[TrackingResponse, httpquery.TrackingCode]
@@ -51,6 +53,7 @@ type TrackingResponseValidationFieldSet struct {
 }
 
 // TrackingResponseValidationFields returns typed field descriptors.
+// Example: TrackingResponseValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func TrackingResponseValidationFields() TrackingResponseValidationFieldSet {
 	return *foundryTrackingResponseValidationFields()

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
+	"github.com/weiloon1234/Foundry-Go/datatable/internal/exportio"
 	"github.com/weiloon1234/Foundry-Go/datatable/internal/spreadsheet"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
@@ -58,6 +59,7 @@ const (
 // stay exact text; no cell is a formula, hyperlink, macro or external link.
 // ZIP central-directory memory is constant because there are always six parts.
 type xlsxReport struct {
+	reportWriter
 	archive  *zip.Writer
 	buffered *bufio.Writer
 	sheet    io.Writer
@@ -65,22 +67,6 @@ type xlsxReport struct {
 	line     []byte
 	row      int
 	closed   bool
-}
-type xmlBudget struct {
-	writer    io.Writer
-	remaining int64
-}
-
-func (w *xmlBudget) Write(p []byte) (int, error) {
-	if int64(len(p)) > w.remaining {
-		return 0, invalid("export XML byte limit exceeded")
-	}
-	n, err := w.writer.Write(p)
-	w.remaining -= int64(n)
-	if err == nil && n != len(p) {
-		err = io.ErrShortWrite
-	}
-	return n, err
 }
 
 const xlsxStyles = `<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/><numFmt numFmtId="165" formatCode="yyyy-mm-dd hh:mm:ss"/></numFmts><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="1" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`
@@ -120,12 +106,14 @@ func newXLSXReport(output io.Writer, maximum int64, location *time.Location) (*x
 	// Buffer the many small row writes in front of the compressor; the
 	// budget still counts every uncompressed byte before it is buffered.
 	buffered := bufio.NewWriterSize(sheet, xlsxSheetBufferBytes)
-	bounded := &xmlBudget{writer: buffered, remaining: maximum}
+	bounded := &exportio.XMLBudget{Writer: buffered, Remaining: maximum}
 	if _, err := io.WriteString(bounded, `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>`); err != nil {
 		return nil, err
 	}
 	complete = true
-	return &xlsxReport{archive: archive, buffered: buffered, sheet: bounded, location: location}, nil
+	report := &xlsxReport{archive: archive, buffered: buffered, sheet: bounded, location: location}
+	report.reportWriter = reportWriter{writeRow: func(cells []exportCell) error { return writeXLSXRow(report, cells) }, finish: func() error { return finishXLSX(report) }, abort: func() { abortXLSX(report) }}
+	return report, nil
 }
 func xlsxPart(archive *zip.Writer, name string) (io.Writer, error) {
 	header := &zip.FileHeader{Name: name, Method: zip.Deflate}
@@ -134,7 +122,7 @@ func xlsxPart(archive *zip.Writer, name string) (io.Writer, error) {
 }
 
 // Row encodes the complete row into one reused buffer, then writes it once.
-func (w *xlsxReport) Row(cells []exportCell) error {
+func writeXLSXRow(w *xlsxReport, cells []exportCell) error {
 	if w.closed {
 		return invalid("XLSX writer is closed")
 	}
@@ -174,7 +162,7 @@ func (w *xlsxReport) Row(cells []exportCell) error {
 	_, err := w.sheet.Write(line)
 	return err
 }
-func (w *xlsxReport) Finish() error {
+func finishXLSX(w *xlsxReport) error {
 	if w.closed {
 		return invalid("XLSX writer is closed")
 	}
@@ -185,7 +173,7 @@ func (w *xlsxReport) Finish() error {
 	}
 	return safeerror.Join("operation failed", err, w.archive.Close())
 }
-func (w *xlsxReport) Abort() {
+func abortXLSX(w *xlsxReport) {
 	if !w.closed {
 		w.closed = true
 		_ = w.archive.Close()

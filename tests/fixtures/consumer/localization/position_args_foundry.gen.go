@@ -13,6 +13,7 @@ import (
 // PositionArgsJSON describes the concrete PositionArgs JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: PositionArgsJSON()
 func PositionArgsJSON() foundrycontract.JSON[PositionArgs] { return foundryPositionArgsJSON() }
 
 var foundryPositionArgsJSON = sync.OnceValue(func() foundrycontract.JSON[PositionArgs] {
@@ -33,12 +34,14 @@ var foundryPositionArgsJSON = sync.OnceValue(func() foundrycontract.JSON[Positio
 })
 
 // PositionArgsValidationFieldSet retains concrete DTO and value types for validation.
+// Example: PositionArgsValidationFields()
 type PositionArgsValidationFieldSet struct {
 	// Position validates the declared JSON property "position".
 	Position foundryvalidation.Field[PositionArgs, int64]
 }
 
 // PositionArgsValidationFields returns typed field descriptors.
+// Example: PositionArgsValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func PositionArgsValidationFields() PositionArgsValidationFieldSet {
 	return *foundryPositionArgsValidationFields()

@@ -15,7 +15,7 @@ type tag struct{}
 func Read(ctx context.Context, db *database.DB) ([]models.Order, error) {
 	c := rows.RecursiveCTE("tree", rows.ModelRecord(models.Orders.Query()), func(self rows.RecursiveSelf[models.Order]) rows.RecordSource[models.Order] {
 		a := rows.AsRecord[tag](self, "parent")
-		return rows.SelectRecord(a, rows.Scope(a)).Where(expr.At(rows.Scope(a), orm.NumberExpr(models.Orders.TotalCents)).Eq(0))
+		return rows.SelectRecord(a, rows.Scope(a)).Where(expr.Eq(expr.At(rows.Scope(a), orm.NumberExpr(models.Orders.TotalCents)), 0))
 	})
 	a := rows.AsRecord[tag](rows.CTE("dependent", c).Materialized(), "r")
 	return rows.ReadRecord(rows.SelectRecord(a, rows.Scope(a)).Limit(5)).All(ctx, db)

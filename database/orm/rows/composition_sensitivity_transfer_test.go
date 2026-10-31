@@ -37,7 +37,7 @@ func TestComputedCursorSensitivityWithoutModelFields(t *testing.T) {
 	ordinary := expr.Value(orm.TextExpr(m.Name))
 	// The expression codec alone supplies sensitivity; model metadata stays public.
 	core := expr.FoundryRowValue(ordinary, sqlowner.Expressions())
-	col := expr.FoundrySelectedColumn(expr.Row(ordinary).Value(), sqlowner.Expressions())
+	col := expr.FoundrySelectedColumn(expr.AsSelected(expr.Row(ordinary)), sqlowner.Expressions())
 	col.Sensitive = true
 	core.Sensitive = true
 	core.Node = querycore.WithSensitivity(core.Node, true)
@@ -45,40 +45,40 @@ func TestComputedCursorSensitivityWithoutModelFields(t *testing.T) {
 	optional := expr.NullableRow(field)
 	fallback := expr.Param(orm.TextExpr(m.Name), "public")
 	for name, expression := range map[string]expr.Selected[member, string]{
-		"column comparison": expr.When(expr.Equal(field, ordinary), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other")).Value(),
-		"membership":        expr.When(rows.InQuery(field, rows.SelectScalar(q, fallback.Value())), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other")).Value(),
-		"lower":             expr.Lower(field).Value(),
-		"nested operations": expr.Lower(expr.Concat(ordinary, field)).Value(),
-		"coalesce":          expr.Coalesce(optional, fallback).Value(),
-		"selected coalesce": expr.CoalesceValue(optional.Value(), fallback.Value()),
-		"case result":       expr.When(ordinary.Eq("x"), fallback).Else(field).Value(),
-		"selected case":     expr.WhenValue(expr.Grouped(ordinary.Eq("x")), fallback.Value()).Else(field.Value()),
-		"case condition":    expr.When(field.Eq("x"), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other")).Value(),
+		"column comparison": expr.AsSelected(expr.When(expr.Equal(field, ordinary), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other"))),
+		"membership":        expr.AsSelected(expr.When(rows.InQuery(field, rows.SelectScalar(q, expr.AsSelected(fallback))), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other"))),
+		"lower":             expr.AsSelected(expr.Lower(field)),
+		"nested operations": expr.AsSelected(expr.Lower(expr.Concat(ordinary, field))),
+		"coalesce":          expr.AsSelected(expr.Coalesce(optional, fallback)),
+		"selected coalesce": expr.CoalesceValue(expr.AsSelected(optional), expr.AsSelected(fallback)),
+		"case result":       expr.AsSelected(expr.When(expr.Eq(ordinary, "x"), fallback).Else(field)),
+		"selected case":     expr.WhenValue(expr.Grouped(expr.Eq(ordinary, "x")), expr.AsSelected(fallback)).Else(expr.AsSelected(field)),
+		"case condition":    expr.AsSelected(expr.When(expr.Eq(field, "x"), fallback).Else(expr.Param(orm.TextExpr(m.Name), "other"))),
 	} {
 		t.Run(name, func(t *testing.T) { rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expression)) })
 	}
 	for name, expression := range map[string]expr.Selected[member, value.Nullable[string]]{
-		"nullable coalesce":          expr.CoalesceNullable(expr.NullableRow(fallback), optional).Value(),
-		"selected nullable coalesce": expr.CoalesceNullableValue(expr.Nullable(fallback.Value()), optional.Value()),
-		"nullif right":               expr.NullIf(ordinary, field).Value(),
-		"selected nullif":            expr.NullIfValue(expr.Row(ordinary).Value(), field.Value()),
+		"nullable coalesce":          expr.AsSelected(expr.CoalesceNullable(expr.NullableRow(fallback), optional)),
+		"selected nullable coalesce": expr.CoalesceNullableValue(expr.Nullable(expr.AsSelected(fallback)), expr.AsSelected(optional)),
+		"nullif right":               expr.AsSelected(expr.NullIf(ordinary, field)),
+		"selected nullif":            expr.NullIfValue(expr.AsSelected(expr.Row(ordinary)), expr.AsSelected(field)),
 	} {
 		t.Run(name, func(t *testing.T) { rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expression)) })
 	}
 	w := expr.WindowFor(rows.ModelScope(m.Query()))
-	rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expr.RowNumber(w.OrderBy(expr.OrderRow(field).Asc()))))
+	rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expr.RowNumber(w.OrderBy(expr.Asc(expr.OrderRow(field))))))
 	rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expr.RowNumber(w.PartitionBy(expr.Group(field)))))
 	lower := expr.Lower(field)
-	rejectComputedSensitiveCursor(t, rows.GroupByScalar(rows.SelectScalar(q, lower.Value()), expr.Group(lower)))
+	rejectComputedSensitiveCursor(t, rows.GroupByScalar(rows.SelectScalar(q, expr.AsSelected(lower)), expr.Group(lower)))
 	stored := core
 	stored.Node = querycore.UnwrapSensitivity(stored.Node)
-	rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expr.CountRow(expr.FoundryRowExpression[member](stored, col, sqlowner.Expressions())).Value()))
+	rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expr.AsSelected(expr.CountRow(expr.FoundryRowExpression[member](stored, col, sqlowner.Expressions())))))
 	numeric, numberColumn := expr.FoundryAggregate(expr.Sum(orm.NumberKeyExpr(orm.NumberKey(m.ID))), sqlowner.Expressions())
 	sum := numeric.Node.(querycore.AggregateNode)
 	sum.Sensitive = true
 	numeric.Node = sum
 	rejectComputedSensitiveCursor(t, rows.SelectScalar(q, expr.FoundrySelectedValue[member](numeric, numberColumn, sqlowner.Expressions())))
-	safe := rows.ValueCursorFor(rows.Values(rows.SelectScalar(q, expr.Lower(ordinary).Value())))
+	safe := rows.ValueCursorFor(rows.Values(rows.SelectScalar(q, expr.AsSelected(expr.Lower(ordinary)))))
 	safe = safe.UniqueBy(expr.Group(safe.Value()))
 	if _, err := ormcore.PlanResultCursor(t.Context(), rows.ValueCursorQueryCore(safe), 1, "", false, false); err != nil {
 		t.Fatal("public expression rejected", err)
@@ -124,11 +124,11 @@ func TestRelatedAggregateConditionalCursorSensitivity(t *testing.T) {
 				related := orm.FoundryRelatedValue(source, core, col, sqlowner.Expressions())
 				minimum := expr.FoundryRowExpression[sensitivityRelationModel](related, col, sqlowner.Expressions())
 				selected := expr.Coalesce(minimum, expr.Param(orm.KeyExpr(d.Key()), int64(0)))
-				rejectComputedSensitiveCursor(t, rows.SelectScalar(rows.From(d.Query()), selected.Value()))
+				rejectComputedSensitiveCursor(t, rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(selected)))
 			})
 		}
 		safe := expr.Coalesce(expr.RelatedValue(direct, expr.Min(orm.NumberKeyExpr(orm.NumberKey(d.Key())))), expr.Param(orm.KeyExpr(d.Key()), int64(0)))
-		cursor := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(d.Query()), safe.Value())))
+		cursor := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(safe))))
 		cursor = cursor.UniqueBy(expr.Group(cursor.Value()))
 		if _, err := ormcore.PlanResultCursor(t.Context(), rows.ValueCursorQueryCore(cursor), 1, "", false, false); err != nil {
 			t.Fatal("public relation output rejected", err)

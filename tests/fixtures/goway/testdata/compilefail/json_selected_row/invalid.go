@@ -8,5 +8,5 @@ import (
 )
 
 func invalid() {
-	_ = expr.JSONType(expr.Row(expr.Value(orm.JSONExpr(jsonpaths.Documents.Settings))).Value())
+	_ = expr.JSONType(expr.AsSelected(expr.Row(expr.Value(orm.JSONExpr(jsonpaths.Documents.Settings)))))
 }

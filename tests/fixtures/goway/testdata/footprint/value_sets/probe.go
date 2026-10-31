@@ -12,12 +12,12 @@ import (
 )
 
 func Read(ctx context.Context, db *database.DB) ([]int64, error) {
-	a := rows.Values(rows.SelectScalar(rows.From(models.Orders.Query()), expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Value()))
+	a := rows.Values(rows.SelectScalar(rows.From(models.Orders.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))))))
 	q := rows.ExceptAllValues(rows.UnionAllValues(a, a), rows.IntersectAllValues(a, a))
-	return rows.ReadValues(q.Where(q.Value().Ne(0)).OrderBy(q.Value().Asc()).Limit(10)).All(ctx, db)
+	return rows.ReadValues(q.Where(expr.Ne(q.Value(), 0)).OrderBy(expr.Asc(q.Value())).Limit(10)).All(ctx, db)
 }
 func Nullable(ctx context.Context, db *database.DB) ([]value.Nullable[string], error) {
-	a := rows.Values(rows.SelectScalar(rows.From(models.Users.Query()), expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))).Value()))
+	a := rows.Values(rows.SelectScalar(rows.From(models.Users.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))))))
 	q := rows.UnionValues(a, a)
-	return rows.ReadValues(q.OrderBy(q.Value().Asc())).All(ctx, db)
+	return rows.ReadValues(q.OrderBy(expr.Asc(q.Value()))).All(ctx, db)
 }

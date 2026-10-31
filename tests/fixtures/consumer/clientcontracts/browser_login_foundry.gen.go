@@ -12,6 +12,7 @@ import (
 // BrowserLoginJSON describes the concrete BrowserLogin JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: BrowserLoginJSON()
 func BrowserLoginJSON() foundrycontract.JSON[BrowserLogin] { return foundryBrowserLoginJSON() }
 
 var foundryBrowserLoginJSON = sync.OnceValue(func() foundrycontract.JSON[BrowserLogin] {
@@ -27,6 +28,7 @@ var foundryBrowserLoginJSON = sync.OnceValue(func() foundrycontract.JSON[Browser
 })
 
 // BrowserLoginValidationFieldSet retains concrete DTO and value types for validation.
+// Example: BrowserLoginValidationFields()
 type BrowserLoginValidationFieldSet struct {
 	// Email validates the declared JSON property "login_id".
 	Email foundryvalidation.Field[BrowserLogin, string]
@@ -35,6 +37,7 @@ type BrowserLoginValidationFieldSet struct {
 }
 
 // BrowserLoginValidationFields returns typed field descriptors.
+// Example: BrowserLoginValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func BrowserLoginValidationFields() BrowserLoginValidationFieldSet {
 	return *foundryBrowserLoginValidationFields()

@@ -51,17 +51,17 @@ func TestInferredZeroBridgeCapabilitiesFailClosed(t *testing.T) {
 	if expression.Node != nil || len(expression.Refs) != 0 {
 		t.Fatal("expression metadata escaped")
 	}
-	selected := openBridge(expr.FoundrySelected[models.User, int64], expr.Count[models.User]().Value())
+	selected := openBridge(expr.FoundrySelected[models.User, int64], expr.AsSelected(expr.Count[models.User]()))
 	requireInvalid(selected.Err)
 	if selected.Node != nil {
 		t.Fatal("selected metadata escaped")
 	}
-	predicate := openBridge(expr.FoundryPredicate[models.User], expr.Param(orm.NumberExpr(models.Users.Age), 1).Eq(1))
+	predicate := openBridge(expr.FoundryPredicate[models.User], expr.Eq(expr.Param(orm.NumberExpr(models.Users.Age), 1), 1))
 	requireInvalid(predicate.Err)
 	if predicate.Node != nil {
 		t.Fatal("predicate metadata escaped")
 	}
-	order := openBridge(expr.FoundryOrder[models.User], expr.Param(orm.NumberExpr(models.Users.Age), 1).Asc())
+	order := openBridge(expr.FoundryOrder[models.User], expr.Asc(expr.Param(orm.NumberExpr(models.Users.Age), 1)))
 	requireInvalid(order.Err)
 	if order.Node.Expression != nil {
 		t.Fatal("ordering metadata escaped")
@@ -187,9 +187,9 @@ func TestStage6a3InferredZeroCapabilitiesFailClosed(t *testing.T) {
 		t.Fatal("aggregate bridge exposed metadata/codec", metadata.Err, column.Err)
 	}
 	group := openBridge(expr.FoundryGroup[models.User], expr.Group(expr.Value(orm.NumberExpr(models.Users.Age))))
-	key := openBridge(expr.FoundryKey[models.User], expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))).Value().Key())
-	having := openBridge(expr.FoundryHaving[models.User], expr.Count[models.User]().Gt(0))
-	var order expr.ProjectionOrder[models.User] = expr.Count[models.User]().Desc()
+	key := openBridge(expr.FoundryKey[models.User], expr.Key(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))))))
+	having := openBridge(expr.FoundryHaving[models.User], expr.GtValue(expr.Count[models.User](), 0))
+	var order expr.ProjectionOrder[models.User] = expr.DescValue(expr.Count[models.User]())
 	ordering := openBridge(expr.FoundryProjectionOrder[models.User], order)
 	for _, err := range []error{group.Err, key.Err, having.Err, ordering.Err} {
 		if !errors.Is(err, fault.Invalid) {

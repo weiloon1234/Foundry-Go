@@ -176,6 +176,7 @@ func emitEnum(p *packageInput, enum enum) ([]byte, error) {
 	enumPackage, driver := e.use(framework+"/enum"), e.use("database/sql/driver")
 	base := enum.base.Name()
 	e.line("// %sValues returns declared values in source order, with independent slice ownership.", enum.name)
+	e.line("// Example: %sValues()", enum.name)
 	var names []string
 	for _, v := range enum.values {
 		names = append(names, v.name)
@@ -199,6 +200,7 @@ func emitEnum(p *packageInput, enum enum) ([]byte, error) {
 	e.line("// Validate reports invalid values without formatting the input.")
 	e.line("func(v %s)Validate()error{if !v.IsValid(){return %s.New(%s.Invalid,%q)};return nil}", enum.name, fault, fault, "invalid "+enum.name+" value")
 	e.line("// Parse%s decodes and validates an enum's text representation.", enum.name)
+	e.line("// Example: Parse%s(text)", enum.name)
 	e.line("func Parse%s(text string)(%s,error){", enum.name, enum.name)
 	textValue := "string(v)"
 	if enum.base.Kind() == types.String {
@@ -215,12 +217,17 @@ func emitEnum(p *packageInput, enum enum) ([]byte, error) {
 		textValue = fmt.Sprintf("%s.%s(%s(v),10)", str, format, convert)
 	}
 	e.line("if err:=v.Validate();err!=nil{return *new(%s),err};return v,nil}", enum.name)
+	e.line("// MarshalText encodes a validated enum as text.")
 	e.line("func(v %s)MarshalText()([]byte,error){if err:=v.Validate();err!=nil{return nil,err};return []byte(%s),nil}", enum.name, textValue)
+	e.line("// UnmarshalText decodes validated enum text and changes the receiver only on success.")
 	e.line("func(v *%s)UnmarshalText(data []byte)error{parsed,err:=Parse%s(string(data));if err!=nil{return err};*v=parsed;return nil}", enum.name, enum.name)
+	e.line("// MarshalJSON encodes a validated enum as JSON.")
 	e.line("func(v %s)MarshalJSON()([]byte,error){if err:=v.Validate();err!=nil{return nil,err};return %s.Marshal(%s(v))}", enum.name, json, base)
+	e.line("// UnmarshalJSON decodes validated JSON and rejects null.")
 	e.line("func(v *%s)UnmarshalJSON(data []byte)error{var raw *%s;if err:=%s.Unmarshal(data,&raw);err!=nil{return %s.Wrap(%s.Invalid,%q,err)};if raw==nil{return %s.New(%s.Invalid,%q)};parsed:=%s(*raw);if err:=parsed.Validate();err!=nil{return err};*v=parsed;return nil}", enum.name, base, json, fault, fault, "invalid "+enum.name+" representation", fault, fault, "enum cannot decode null", enum.name)
 	codec := e.use(framework + "/database/codec")
 	e.line("// %sCodec applies the generated membership rule at both SQL boundaries.", enum.name)
+	e.line("// Example: %sCodec()", enum.name)
 	e.line("func %sCodec()%s.Codec[%s]{return %s}", enum.name, codec, enum.name, e.enumCodec(enum))
 	e.line("// Value implements database/sql/driver.Valuer through the shared typed codec.")
 	e.line("func(v %s)Value()(%s.Value,error){return %sCodec().Bind(v)}", enum.name, driver, enum.name)

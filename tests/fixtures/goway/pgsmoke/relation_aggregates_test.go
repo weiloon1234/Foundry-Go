@@ -89,13 +89,13 @@ func TestStage4dRelationAggregatePostgres(t *testing.T) {
 	if n, _ := peers[0].Count.Get(); n != 2 {
 		t.Fatal("distinct targets", n)
 	}
-	filtered := j.ParentAggregates.Count.Using(expr.Related(j.DirectTargets, expr.Count[j.Target]().Filter(expr.OrderRow(expr.Value(orm.NumberExpr(j.Targets.Rank))).Gt(8))))
+	filtered := j.ParentAggregates.Count.Using(expr.Related(j.DirectTargets, expr.Filter(expr.Count[j.Target](), expr.Gt(expr.OrderRow(expr.Value(orm.NumberExpr(j.Targets.Rank))), 8))))
 	peers, err = orm.LoadFrom(ctx, db, j.Parents.Query().With(filtered), parents)
 	must(t, err)
 	if n, _ := peers[0].Count.Get(); n != 1 {
 		t.Fatal("aggregate FILTER", n)
 	}
-	if _, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Parents.Count.Using(expr.Related(j.Chosen, expr.Count[j.Target]().Filter(expr.Value(orm.NumberExpr(j.Targets.Rank)).Eq(-1))))), parents); !errors.Is(err, database.TooManyRows) {
+	if _, err := orm.LoadFrom(ctx, db, j.Parents.Query().With(j.Parents.Count.Using(expr.Related(j.Chosen, expr.Filter(expr.Count[j.Target](), expr.Eq(expr.Value(orm.NumberExpr(j.Targets.Rank)), -1))))), parents); !errors.Is(err, database.TooManyRows) {
 		t.Fatal("FILTER concealed singular cardinality", err)
 	}
 	statements = 0

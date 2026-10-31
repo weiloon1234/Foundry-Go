@@ -14,4 +14,4 @@ var email = expr.Value(orm.TextExpr(models.Users.Email))
 type otherSide struct{}
 
 var other = rows.As[otherSide](models.Users.Query(), "other")
-var _ = expr.EqualValue(expr.Row(age).Value(), expr.Row(expr.At(rows.Scope(other), orm.NumberExpr(models.Users.Age))).Value())
+var _ = expr.EqualValue(expr.AsSelected(expr.Row(age)), expr.AsSelected(expr.Row(expr.At(rows.Scope(other), orm.NumberExpr(models.Users.Age)))))

@@ -20,12 +20,12 @@ func TestPostgresJSONPredicatesAndProjections(t *testing.T) {
 			predicate expr.Predicate[jsonqueries.Document]
 			count     int64
 		}{
-			{expr.ModelPredicate(orm.JSONEq(f.Settings, filter)), 2}, {expr.JSONContains(expr.Value(orm.JSONExpr(f.Settings)), expr.Param(orm.JSONExpr(f.Settings), filter)).Eq(true), 2},
-			{expr.JSONContainedBy(expr.Value(orm.JSONExpr(f.Settings)), expr.Param(orm.JSONExpr(f.Settings), filter)).Eq(true), 3}, {expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))).Eq(database.JSONObject), 3},
-			{expr.JSONContains(expr.Value(orm.JSONExpr(f.Tags)), expr.Param(orm.JSONExpr(f.Tags), document(t, []string{"go"}))).Eq(true), 2},
+			{expr.ModelPredicate(orm.JSONEq(f.Settings, filter)), 2}, {expr.Eq(expr.JSONContains(expr.Value(orm.JSONExpr(f.Settings)), expr.Param(orm.JSONExpr(f.Settings), filter)), true), 2},
+			{expr.Eq(expr.JSONContainedBy(expr.Value(orm.JSONExpr(f.Settings)), expr.Param(orm.JSONExpr(f.Settings), filter)), true), 3}, {expr.Eq(expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))), database.JSONObject), 3},
+			{expr.Eq(expr.JSONContains(expr.Value(orm.JSONExpr(f.Tags)), expr.Param(orm.JSONExpr(f.Tags), document(t, []string{"go"}))), true), 2},
 			{expr.ModelPredicate(orm.JSONEq(f.Tags, document(t, []string{"db", "go"}))), 1},
-			{expr.ModelPredicate(orm.NullableJSONIsNull(f.Backup)), 2}, {expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))).Eq(value.Of(true)), 1},
-			{expr.JSONContainedByNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))).Eq(value.Of(true)), 1}, {expr.JSONTypeNullable(expr.JSONRoot(expr.Value(orm.JSONExpr(f.State))).JSON()).Eq(value.Of(database.JSONNull)), 2},
+			{expr.ModelPredicate(orm.NullableJSONIsNull(f.Backup)), 2}, {expr.Eq(expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))), value.Of(true)), 1},
+			{expr.Eq(expr.JSONContainedByNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))), value.Of(true)), 1}, {expr.Eq(expr.JSONTypeNullable(expr.JSONRoot(expr.Value(orm.JSONExpr(f.State))).JSON()), value.Of(database.JSONNull)), 2},
 		} {
 			count, err := orm.Count(t.Context(), tx, expr.Where(q, test.predicate))
 			if err != nil || count != test.count {
@@ -35,7 +35,7 @@ func TestPostgresJSONPredicatesAndProjections(t *testing.T) {
 		if err := checkSnapshotKind(t, tx, original); err != nil {
 			return err
 		}
-		grouped := rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))).Value()), expr.Group(expr.Value(orm.JSONExpr(f.Settings)))), expr.CompareValue(expr.JSONContainsValue(expr.Row(expr.Value(orm.JSONExpr(f.Settings))).Value(), expr.Param(orm.JSONExpr(f.Settings), filter).Value())).Eq(true))
+		grouped := rowset.HavingScalar(rowset.GroupByScalar(rowset.SelectScalar(rowset.From(q), expr.AsSelected(expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))))), expr.Group(expr.Value(orm.JSONExpr(f.Settings)))), expr.EqValue(expr.CompareValue(expr.JSONContainsValue(expr.AsSelected(expr.Row(expr.Value(orm.JSONExpr(f.Settings)))), expr.AsSelected(expr.Param(orm.JSONExpr(f.Settings), filter)))), true))
 		if kinds, err := rowset.ReadScalar(grouped).All(t.Context(), tx); err != nil || len(kinds) != 1 || kinds[0] != database.JSONObject {
 			t.Fatal(kinds, err)
 		}

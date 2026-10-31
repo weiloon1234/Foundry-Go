@@ -16,13 +16,13 @@ import (
 
 func TestFilteredAggregatePhaseSQLParity(t *testing.T) {
 	predicate := expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 0))
-	total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents)).Filter(predicate)
-	count := expr.Count[models.Order]().Filter(predicate)
-	exists := expr.Exists[models.Order]().Filter(predicate)
+	total := expr.Filter(expr.Sum(orm.NumberExpr(models.Orders.TotalCents)), predicate)
+	count := expr.Filter(expr.Count[models.Order](), predicate)
+	exists := expr.Filter(expr.Exists[models.Order](), predicate)
 	selected := rows.Select(rows.From(models.Orders.Query()), reports.OrderSummaries,
-		rows.MapSelected(reports.OrderSummaries.Total, total.Value()),
-		rows.MapSelected(reports.OrderSummaries.Count, count.Value()))
-	got, err := rows.CompileRead(rows.Read(rows.Having(selected, expr.HavingAnd(count.Gt(0), total.Gt(decimal.FromInt64(1)), exists.Eq(true)))))
+		rows.MapSelected(reports.OrderSummaries.Total, expr.AsSelected(total)),
+		rows.MapSelected(reports.OrderSummaries.Count, expr.AsSelected(count)))
+	got, err := rows.CompileRead(rows.Read(rows.Having(selected, expr.HavingAnd(expr.GtValue(count, 0), expr.GtValue(total, decimal.FromInt64(1)), expr.EqValue(exists, true)))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestFilteredAggregatePhaseSQLParity(t *testing.T) {
 			"frozen legacy comparison differs")
 	}
 
-	row := expr.OrderBy(expr.Where(models.Orders.Query(), predicate), expr.Value(orm.NumberExpr(models.Orders.TotalCents)).Desc())
+	row := expr.OrderBy(expr.Where(models.Orders.Query(), predicate), expr.Desc(expr.Value(orm.NumberExpr(models.Orders.TotalCents))))
 	if _, err := orm.Compile(row); err != nil {
 		t.Fatalf("ordinary row phase rejected: %v", err)
 	}

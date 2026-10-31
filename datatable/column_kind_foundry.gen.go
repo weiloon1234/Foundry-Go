@@ -14,6 +14,7 @@ import (
 )
 
 // ColumnKindValues returns declared values in source order, with independent slice ownership.
+// Example: ColumnKindValues()
 func ColumnKindValues() []ColumnKind {
 	return []ColumnKind{ColumnText, ColumnInteger, ColumnDecimal, ColumnBoolean, ColumnEnum, ColumnDate, ColumnDateTime, ColumnLocalDateTime, ColumnTime}
 }
@@ -55,6 +56,7 @@ func (v ColumnKind) Validate() error {
 }
 
 // ParseColumnKind decodes and validates an enum's text representation.
+// Example: ParseColumnKind(text)
 func ParseColumnKind(text string) (ColumnKind, error) {
 	v := ColumnKind(text)
 	if err := v.Validate(); err != nil {
@@ -62,12 +64,16 @@ func ParseColumnKind(text string) (ColumnKind, error) {
 	}
 	return v, nil
 }
+
+// MarshalText encodes a validated enum as text.
 func (v ColumnKind) MarshalText() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return []byte(string(v)), nil
 }
+
+// UnmarshalText decodes validated enum text and changes the receiver only on success.
 func (v *ColumnKind) UnmarshalText(data []byte) error {
 	parsed, err := ParseColumnKind(string(data))
 	if err != nil {
@@ -76,12 +82,16 @@ func (v *ColumnKind) UnmarshalText(data []byte) error {
 	*v = parsed
 	return nil
 }
+
+// MarshalJSON encodes a validated enum as JSON.
 func (v ColumnKind) MarshalJSON() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(string(v))
 }
+
+// UnmarshalJSON decodes validated JSON and rejects null.
 func (v *ColumnKind) UnmarshalJSON(data []byte) error {
 	var raw *string
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -99,6 +109,7 @@ func (v *ColumnKind) UnmarshalJSON(data []byte) error {
 }
 
 // ColumnKindCodec applies the generated membership rule at both SQL boundaries.
+// Example: ColumnKindCodec()
 func ColumnKindCodec() codec.Codec[ColumnKind] {
 	return codec.String[ColumnKind]().Validated(ColumnKind.Validate)
 }

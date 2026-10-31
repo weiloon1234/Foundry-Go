@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var invalid = rows.Having(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows), expr.Count[models.User]().Gt(1))
+var invalid = rows.Having(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows), expr.GtValue(expr.Count[models.User](), 1))

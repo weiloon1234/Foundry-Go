@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.OrderValue(expr.Exists[models.User]().Value())
+var _ = expr.OrderValue(expr.AsSelected(expr.Exists[models.User]()))

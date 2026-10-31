@@ -13,7 +13,7 @@ func checkDerivedSetAggregation(t *testing.T, tx *database.Tx) error {
 	reportsQuery := derivedReports()
 	r := reports.BuyerTotalRows
 	total := rows.At(reportsQuery.Scope(), r.Total)
-	results, err := rows.ReadSet(reportsQuery.Where(expr.OrderNullableRow(total).Gte(decimal.FromInt64(20))).OrderBy(total.Asc())).All(t.Context(), tx)
+	results, err := rows.ReadSet(reportsQuery.Where(expr.NullableGte(expr.OrderNullableRow(total), decimal.FromInt64(20))).OrderBy(expr.Asc(total))).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
@@ -26,8 +26,8 @@ func checkDerivedSetAggregation(t *testing.T, tx *database.Tx) error {
 	// Project and group the combined result through the same projection runtime.
 	s := reports.OrderSummaries
 	summary := rows.Select(reportsQuery, s.Row,
-		rows.MapSelected(s.Total, expr.SumNullableRow(total).Value()),
-		rows.MapSelected(s.Count, expr.Count[rows.Set[reports.BuyerTotals]]().Value()))
+		rows.MapSelected(s.Total, expr.AsSelected(expr.SumNullableRow(total))),
+		rows.MapSelected(s.Count, expr.AsSelected(expr.Count[rows.Set[reports.BuyerTotals]]())))
 	row, err := rows.Read(summary).RequireFirst(t.Context(), tx)
 	if err != nil {
 		return err

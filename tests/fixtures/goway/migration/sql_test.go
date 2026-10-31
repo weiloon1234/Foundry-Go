@@ -75,9 +75,9 @@ func deleteUsing(ctx context.Context, tx *database.Tx) error {
 // migration:aggregate-after
 func aggregate(ctx context.Context, db database.Executor) error {
 	count := expr.Count[models.Order]()
-	q := rows.GroupByScalar(rows.SelectScalar(rows.From(models.Orders.Query()), count.Value()),
+	q := rows.GroupByScalar(rows.SelectScalar(rows.From(models.Orders.Query()), expr.AsSelected(count)),
 		expr.Group(expr.Value(orm.ColumnExpr(models.Orders.BuyerID))))
-	_, err := rows.ReadScalar(rows.HavingScalar(q, count.Gt(1))).All(ctx, db)
+	_, err := rows.ReadScalar(rows.HavingScalar(q, expr.GtValue(count, 1))).All(ctx, db)
 	return err
 }
 
@@ -90,7 +90,7 @@ func window(ctx context.Context, db database.Executor) error {
 	a := rows.As[orderSide](models.Orders.Query(), "o")
 	s := rows.Scope(a)
 	window := expr.WindowFor(s).PartitionBy(expr.Group(expr.At(s, orm.ColumnExpr(models.Orders.BuyerID)))).
-		OrderBy(expr.At(s, orm.NumberExpr(models.Orders.TotalCents)).Desc())
+		OrderBy(expr.Desc(expr.At(s, orm.NumberExpr(models.Orders.TotalCents))))
 	_, err := rows.ReadScalar(rows.SelectScalar(a, expr.RowNumber(window))).All(ctx, db)
 	return err
 }
@@ -150,9 +150,9 @@ func tableSource[A any](spec datatable.Spec[reports.Member, reports.MemberRow, A
 		if err != nil {
 			return rows.Query[reports.Member, reports.MemberRow]{}, err
 		}
-		return report().Where(expr.Value(orm.NumberExpr(reports.Members.TenantID)).Eq(id)), nil
+		return report().Where(expr.Eq(expr.Value(orm.NumberExpr(reports.Members.TenantID)), id)), nil
 	}
-	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Value(orm.KeyExpr(reports.Members.ID)).Asc()}
+	spec.Stable = []expr.ProjectionOrder[reports.Member]{expr.Asc(expr.Value(orm.KeyExpr(reports.Members.ID)))}
 	return spec
 }
 

@@ -84,7 +84,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			t.Error("projection lost model-owned IDs, nullable values or imported enum codec")
 		}
 		widened := userSummarySelection()
-		widened[2] = rows.MapSelected(reports.UserSummaries.Nickname, expr.Row(expr.NullableRow(expr.Value(orm.TextExpr(models.Users.Email)))).Value())
+		widened[2] = rows.MapSelected(reports.UserSummaries.Nickname, expr.AsSelected(expr.Row(expr.NullableRow(expr.Value(orm.TextExpr(models.Users.Email))))))
 		promoted, err := rows.Read(rows.Select(rows.From(base), reports.UserSummaries, widened...)).RequireFirst(t.Context(), counter)
 		if err != nil {
 			return err
@@ -127,8 +127,8 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			return err
 		}
 		fields := models.Orders
-		selection := []rows.Mapping[models.Order, reports.BuyerTotals]{rows.Map(reports.BuyerTotalRows.BuyerID, expr.Value(orm.ColumnExpr(fields.BuyerID))), rows.MapSelected(reports.BuyerTotalRows.Total, expr.Sum(orm.NumberExpr(fields.TotalCents)).Value()), rows.MapSelected(reports.BuyerTotalRows.Orders, expr.Count[models.Order]().Value()), rows.MapSelected(reports.BuyerTotalRows.Average, expr.Avg(orm.NumberExpr(fields.TotalCents)).Value())}
-		totals := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows, selection...), expr.Group(expr.Value(orm.ColumnExpr(fields.BuyerID)))), expr.Value(orm.ColumnExpr(fields.BuyerID)).Asc())
+		selection := []rows.Mapping[models.Order, reports.BuyerTotals]{rows.Map(reports.BuyerTotalRows.BuyerID, expr.Value(orm.ColumnExpr(fields.BuyerID))), rows.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(expr.Sum(orm.NumberExpr(fields.TotalCents)))), rows.MapSelected(reports.BuyerTotalRows.Orders, expr.AsSelected(expr.Count[models.Order]())), rows.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.Avg(orm.NumberExpr(fields.TotalCents))))}
+		totals := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows, selection...), expr.Group(expr.Value(orm.ColumnExpr(fields.BuyerID)))), expr.Asc(expr.Value(orm.ColumnExpr(fields.BuyerID))))
 		grouped, err := rows.Read(totals).All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -155,7 +155,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		if n, err := rows.Read(totals.Where(expr.ModelPredicate(orm.ColumnEq(fields.BuyerID, first)))).Count(t.Context(), counter); err != nil || n != 1 {
 			t.Error("grouped projection lost typed input filters", err)
 		}
-		ranked := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows, selection...), expr.Group(expr.Value(orm.ColumnExpr(fields.BuyerID)))), expr.Sum(orm.NumberExpr(fields.TotalCents)).Desc(), expr.Value(orm.ColumnExpr(fields.BuyerID)).Asc())
+		ranked := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(models.Orders.Query()), reports.BuyerTotalRows, selection...), expr.Group(expr.Value(orm.ColumnExpr(fields.BuyerID)))), expr.DescValue(expr.Sum(orm.NumberExpr(fields.TotalCents))), expr.Asc(expr.Value(orm.ColumnExpr(fields.BuyerID))))
 		ranking, err := rows.Read(ranked).All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -163,7 +163,8 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 		if len(ranking) != 2 || ranking[0].BuyerID != second || ranking[1].BuyerID != first {
 			t.Error("aggregate ordering did not rank totals")
 		}
-		qualified := rows.Having(ranked, expr.HavingAnd(expr.Count[models.Order]().Gte(2), expr.Sum(orm.NumberExpr(fields.TotalCents)).Gt(decimal.FromInt64(4))))
+		qualificationTotal := expr.Sum(orm.NumberExpr(fields.TotalCents))
+		qualified := rows.Having(ranked, expr.HavingAnd(expr.GteValue(expr.Count[models.Order](), 2), expr.GtValue(qualificationTotal, decimal.FromInt64(4))))
 		qualifiedRows, err := rows.Read(qualified).All(t.Context(), counter)
 		if err != nil {
 			return err
@@ -178,7 +179,7 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			t.Error("Exists ignored filtered window", err)
 		}
 		mixed := rows.Having(ranked.Where(expr.ModelPredicate(orm.NumberGt(fields.TotalCents, 2))), expr.HavingOr(
-			expr.Grouped(expr.ModelPredicate(orm.ColumnEq(fields.BuyerID, first))), expr.Sum(orm.NumberExpr(fields.TotalCents)).Lt(decimal.FromInt64(9)),
+			expr.Grouped(expr.ModelPredicate(orm.ColumnEq(fields.BuyerID, first))), expr.LtValue(expr.Sum(orm.NumberExpr(fields.TotalCents)), decimal.FromInt64(9)),
 		))
 		mixedRows, err := rows.Read(mixed).All(t.Context(), counter)
 		if err != nil {
@@ -193,10 +194,10 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 				t.Error("WHERE did not filter aggregate inputs")
 			}
 		}
-		if n, err := rows.Read(rows.Having(ranked, expr.Count[models.Order]().In())).Count(t.Context(), counter); err != nil || n != 0 {
+		if n, err := rows.Read(rows.Having(ranked, expr.InValue(expr.Count[models.Order]()))).Count(t.Context(), counter); err != nil || n != 0 {
 			t.Error("empty aggregate membership matched groups", err)
 		}
-		scalar := rows.Select(rows.From(models.Orders.Query()), reports.OrderSummaries, rows.MapSelected(reports.OrderSummaries.Total, expr.Sum(orm.NumberExpr(fields.TotalCents)).Value()), rows.MapSelected(reports.OrderSummaries.Count, expr.Count[models.Order]().Value()))
+		scalar := rows.Select(rows.From(models.Orders.Query()), reports.OrderSummaries, rows.MapSelected(reports.OrderSummaries.Total, expr.AsSelected(expr.Sum(orm.NumberExpr(fields.TotalCents)))), rows.MapSelected(reports.OrderSummaries.Count, expr.AsSelected(expr.Count[models.Order]())))
 		summary, err := rows.Read(scalar).RequireFirst(t.Context(), counter)
 		if err != nil {
 			return err
@@ -220,10 +221,10 @@ func TestPostgresDeclaredProjections(t *testing.T) {
 			condition expr.HavingPredicate[models.Order]
 			count     int64
 		}{
-			{expr.Sum(orm.NumberExpr(fields.TotalCents)).IsNull(), 1}, {expr.Sum(orm.NumberExpr(fields.TotalCents)).IsNotNull(), 0},
-			{expr.Sum(orm.NumberExpr(fields.TotalCents)).Ne(decimal.FromInt64(0)), 0},
-			{expr.Sum(orm.NumberExpr(fields.TotalCents)).Gt(decimal.FromInt64(0)).Not(), 0},
-			{expr.Count[models.Order]().Eq(0), 1}, {expr.Exists[models.Order]().Eq(false), 1},
+			{expr.IsNullValue(expr.Sum(orm.NumberExpr(fields.TotalCents))), 1}, {expr.IsNotNullValue(expr.Sum(orm.NumberExpr(fields.TotalCents))), 0},
+			{expr.NeValue(expr.Sum(orm.NumberExpr(fields.TotalCents)), decimal.FromInt64(0)), 0},
+			{expr.HavingNot(expr.GtValue(expr.Sum(orm.NumberExpr(fields.TotalCents)), decimal.FromInt64(0))), 0},
+			{expr.EqValue(expr.Count[models.Order](), 0), 1}, {expr.EqValue(expr.Exists[models.Order](), false), 1},
 		} {
 			if n, err := rows.Read(rows.Having(emptyScalar, check.condition)).Count(t.Context(), counter); err != nil || n != check.count {
 				t.Error("scalar HAVING changed SQL NULL or empty-group semantics", err)

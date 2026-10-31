@@ -11,7 +11,8 @@ import (
 )
 
 // JSONPath retains its row owner and exact payload without embedded method chains.
-// Example: JSONProperty(JSONRoot(Value(Documents.Settings)), Theme).
+//
+// Example: expr.JSONProperty(parent, field)
 type JSONPath[S, P any] struct {
 	_    [0]*S
 	_    [0]*P
@@ -19,27 +20,31 @@ type JSONPath[S, P any] struct {
 }
 
 // JSONRoot starts a row path; selected expressions cannot become path predicates.
-// Example: expr.JSONRoot(Value(Documents.Settings)).
+//
+// Example: expr.JSONRoot(input)
 func JSONRoot[S, P any](input RowValue[S, value.JSON[P]]) JSONPath[S, P] {
 	return JSONPath[S, P]{data: nullableData(rowInput(input).data)}
 }
 
 // JSONNullableRoot preserves a SQL-null document ancestor.
-// Example: expr.JSONNullableRoot(Value(Documents.Backup)).
+//
+// Example: expr.JSONNullableRoot(input)
 func JSONNullableRoot[S, P any](input RowValue[S, value.Nullable[value.JSON[P]]]) JSONPath[S, P] {
 	return JSONPath[S, P]{data: rowInput(input).data}
 }
 
 // JSON selects a nullable payload snapshot. Missing/SQL-null ancestors are SQL NULL;
 // present JSON null is decoded through P and can fail if P cannot represent it.
-// Example: path.JSON().Value().
+//
+// Example: expr.AsSelected(path.JSON())
 func (p JSONPath[S, P]) JSON() RowExpression[S, value.Nullable[value.JSON[P]]] {
 	return RowExpression[S, value.Nullable[value.JSON[P]]]{data: p.data}
 }
 
 // JSONProperty applies a startup-validated field declaration. The json tag is a
 // SQL literal for expression-index parity; query-time map keys remain parameters.
-// Example: expr.JSONProperty(root, Theme).
+//
+// Example: expr.JSONProperty(parent, field)
 func JSONProperty[S, P, V any](parent JSONPath[S, P], field JSONField[P, V]) JSONPath[S, V] {
 	arg := jsonKeyArgument(field.binding.Name, true, field.Validate())
 	result := jsonPathOperation[S, V](querycore.JsonPropertyOperation, jsonPathArg(parent), arg)
@@ -50,7 +55,8 @@ func JSONProperty[S, P, V any](parent JSONPath[S, P], field JSONField[P, V]) JSO
 }
 
 // JSONIndex selects a typed slice element. Negative int32 indices count from the end.
-// Example: expr.JSONIndex(scores, -1).
+//
+// Example: expr.JSONIndex(parent, index)
 func JSONIndex[S any, P ~[]V, V any](parent JSONPath[S, P], index int32) JSONPath[S, V] {
 	arg := integerArgument(index)
 	arg.Value.Err = safeerror.Join("operation failed", arg.Value.Err, ormcore.JSONCollection(reflect.TypeFor[P]()))
@@ -58,14 +64,16 @@ func JSONIndex[S any, P ~[]V, V any](parent JSONPath[S, P], index int32) JSONPat
 }
 
 // JSONMapKey preserves the map's declared key and element types, including named keys.
-// Example: expr.JSONMapKey(labels, "language").
+//
+// Example: expr.JSONMapKey(parent, key)
 func JSONMapKey[S any, P ~map[K]V, K comparable, V any](parent JSONPath[S, P], key K) JSONPath[S, V] {
 	name, err := querycore.JSONMapKey(key)
 	return jsonPathOperation[S, V](querycore.JsonPropertyOperation, jsonPathArg(parent), jsonKeyArgument(name, false, safeerror.Join("operation failed", err, ormcore.JSONCollection(reflect.TypeFor[P]()))))
 }
 
 // JSONArrayElement selects a fixed array element using its validated declaration.
-// Example: expr.JSONArrayElement(fixed, Elements, 1).
+//
+// Example: expr.JSONArrayElement(parent, array, index)
 func JSONArrayElement[S, P, V any](parent JSONPath[S, P], array JSONFixedArray[P, V], index int32) JSONPath[S, V] {
 	arg := integerArgument(index)
 	arg.Value.Err = safeerror.Join("operation failed", arg.Value.Err, array.Validate())
@@ -85,37 +93,43 @@ func jsonPathOperation[S, P any](kind querycore.ScalarOperation, args ...ormcore
 }
 
 // JSONScalar uses the exact payload codec. Missing paths and JSON null become SQL NULL.
-// Example: expr.JSONScalar(flag, codec.Bool[bool]()).
+//
+// Example: expr.JSONScalar(path, c)
 func JSONScalar[S, P any](path JSONPath[S, P], c codec.Codec[P]) RowExpression[S, value.Nullable[P]] {
 	return RowExpression[S, value.Nullable[P]]{data: operationValue[S](querycore.JsonScalarOperation, columnCodec(codec.Nullable(c)), jsonPathArg(path)).data}
 }
 
 // JSONTextScalar adds pattern predicates only for string payloads.
-// Example: expr.JSONTextScalar(name, codec.String[string]()).
+//
+// Example: expr.JSONTextScalar(path, c)
 func JSONTextScalar[S any, P ~string](path JSONPath[S, P], c codec.Codec[P]) NullableTextRowExpression[S, P] {
 	return NullableTextRowExpression[S, P]{data: JSONScalar(path, c).data}
 }
 
 // JSONOptional unwraps property presence into path presence; no SQL cast is added.
-// Example: expr.JSONOptional(JSONProperty(root, Theme)).
+//
+// Example: expr.JSONOptional(path)
 func JSONOptional[S, P any](path JSONPath[S, value.Optional[P]]) JSONPath[S, P] {
 	return jsonRebind[S, P](path.data.core)
 }
 
 // JSONNullable unwraps payload nullability; JSON/Kind still distinguish JSON null.
-// Example: expr.JSONNullable(state).
+//
+// Example: expr.JSONNullable(path)
 func JSONNullable[S, P any](path JSONPath[S, value.Nullable[P]]) JSONPath[S, P] {
 	return jsonRebind[S, P](path.data.core)
 }
 
 // JSONPointer unwraps a pointer payload for typed traversal or scalar extraction.
-// Example: expr.JSONPointer(next).
+//
+// Example: expr.JSONPointer(path)
 func JSONPointer[S, P any](path JSONPath[S, *P]) JSONPath[S, P] {
 	return jsonRebind[S, P](path.data.core)
 }
 
 // JSONDocument unwraps a nested JSON value's payload without changing its SQL node.
-// Example: expr.JSONDocument(nested).
+//
+// Example: expr.JSONDocument(path)
 func JSONDocument[S, P any](path JSONPath[S, value.JSON[P]]) JSONPath[S, P] {
 	return jsonRebind[S, P](path.data.core)
 }

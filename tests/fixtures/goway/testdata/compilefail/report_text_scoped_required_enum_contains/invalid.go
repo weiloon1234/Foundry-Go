@@ -8,4 +8,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = expr.TextRowAt(rows.ModelScope(models.Users.Query()), orm.EnumExpr(models.Users.Status)).Contains(models.StatusActive)
+var _ = expr.TextContains(expr.TextRowAt(rows.ModelScope(models.Users.Query()), orm.EnumExpr(models.Users.Status)), models.StatusActive)

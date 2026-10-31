@@ -49,7 +49,7 @@ func OnConflictKeys[M any](keys ...expr.GroupKey[M]) orm.Conflict[M] {
 	return orm.FoundryConflict[M](ormcore.ConflictKeys(reflect.TypeFor[M](), inputs), sqlowner.Expressions())
 }
 
-// ConflictTargetWhere declares a partial index predicate using fixed migration values. Example: rows.ConflictTargetWhere(policy,expr.Value(orm.ColumnExpr(Users.Active)).Eq(true)).
+// ConflictTargetWhere declares a partial index predicate using fixed migration values. Example: rows.ConflictTargetWhere(policy,expr.Eq(expr.Value(orm.ColumnExpr(Users.Active)), true)).
 func ConflictTargetWhere[M any](policy orm.Conflict[M], predicates ...expr.Predicate[M]) orm.Conflict[M] {
 	return orm.FoundryConflict[M](ormcore.ConflictPredicates(orm.FoundryConflictData(policy, sqlowner.Expressions()), reflect.TypeFor[M](), conflictPredicates(predicates), false), sqlowner.Expressions())
 }

@@ -29,4 +29,4 @@ type fields struct {
 
 var schema = rows.Define(func(b rows.Builder[result], r *result) fields { return fields{b.Row(), rows.NumberOf(b, &r.Count)} })
 
-var _ = record.Where(expr.Value(orm.NumberExpr(models.Orders.TotalCents)).Eq(1))
+var _ = record.Where(expr.Eq(expr.Value(orm.NumberExpr(models.Orders.TotalCents)), 1))

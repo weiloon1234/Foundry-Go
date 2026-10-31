@@ -8,4 +8,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = expr.Lag(expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Value(), 1, expr.WindowFor(rows.ModelScope(models.Users.Query())))
+var _ = expr.Lag(expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents)))), 1, expr.WindowFor(rows.ModelScope(models.Users.Query())))

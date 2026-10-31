@@ -42,10 +42,10 @@ func TestReportEnumPatternCompilerDefense(t *testing.T) {
 	state, maybe := expr.Value(orm.EnumExpr(f.State)), expr.Value(orm.NullableEnumExpr(f.Maybe))
 	grouped := rowset.GroupBy(rowset.FromModel(f.Query()), expr.Group(expr.Value(orm.KeyExpr(f.Key()))), expr.Group(state), expr.Group(maybe))
 	for _, p := range []expr.HavingPredicate[record]{
-		expr.TextValue(expr.Row(state).Value()).Contains(models.StatusActive),
-		expr.TextValue(expr.Row(state).Value()).Like(models.StatusActive),
-		expr.TextNullableValue(expr.Row(maybe).Value()).Contains(models.StatusActive),
-		expr.TextNullableValue(expr.Row(maybe).Value()).Like(models.StatusActive),
+		expr.TextContainsValue(expr.TextValue(expr.AsSelected(expr.Row(state))), models.StatusActive),
+		expr.TextLikeValue(expr.TextValue(expr.AsSelected(expr.Row(state))), models.StatusActive),
+		expr.TextContainsValue(expr.TextNullableValue(expr.AsSelected(expr.Row(maybe))), models.StatusActive),
+		expr.TextLikeValue(expr.TextNullableValue(expr.AsSelected(expr.Row(maybe))), models.StatusActive),
 	} {
 		if _, err := rowset.CompileRead(rowset.Read(rowset.Having(grouped, p))); err == nil || !strings.Contains(err.Error(), "text capability") {
 			t.Fatalf("enum selected pattern: %v", err)
@@ -57,7 +57,7 @@ func TestReportEnumPatternCompilerDefense(t *testing.T) {
 		}
 	}
 	// Equality and membership are still valid for required and nullable enums.
-	if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(f.Query()).Where(expr.CompareRow(state).In(models.StatusActive), expr.CompareNullableRow(maybe).Eq(models.StatusActive)))); err != nil {
+	if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(f.Query()).Where(expr.In(expr.CompareRow(state), models.StatusActive), expr.NullableEq(expr.CompareNullableRow(maybe), models.StatusActive)))); err != nil {
 		t.Fatal(err)
 	}
 }

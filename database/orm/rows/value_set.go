@@ -20,7 +20,7 @@ type ValueSource[V any] interface {
 }
 
 // ValueRecord adapts one selected scalar without widening its type or granting record access.
-// Example: rows.Values(rows.SelectScalar(source,expr.Row(id).Value())).
+// Example: rows.Values(rows.SelectScalar(source,expr.AsSelected(expr.Row(id)))).
 type ValueRecord[V any] struct {
 	_           [0]*V
 	scalarInput [0]struct{}
@@ -35,7 +35,7 @@ func (q ValueRecord[V]) valueData(*V) (ormcore.RecordSource, ormcore.Column[V]) 
 type valueRecordDefinition struct{ record ormcore.Record }
 
 // Values adapts a typed scalar selection for value set operations.
-// Example: rows.Values(rows.SelectScalar(rows.From(Users.Query()),expr.Row(expr.Value(orm.KeyExpr(Users.ID))).Value())).
+// Example: rows.Values(rows.SelectScalar(rows.From(Users.Query()),expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(Users.ID)))))).
 func Values[S, V any](q Scalar[S, V]) ValueRecord[V] {
 	d := scalarRecord(q.column)
 	r := ormcore.RecordSource{Source: q.source, Record: d.record}
@@ -82,7 +82,7 @@ func valueSource[V any](q ValueSource[V]) (ormcore.RecordSource, ormcore.Column[
 }
 
 // ValueSetQuery retains one exact scalar type in the combined output scope.
-// Example: rows.ReadValues(values.Where(values.Value().Ne(id))).All(ctx,db).
+// Example: rows.ReadValues(values.Where(expr.Ne(values.Value(), id))).All(ctx,db).
 type ValueSetQuery[V any] struct {
 	_         [0]*V
 	scalarSet [0]struct{}
@@ -102,20 +102,20 @@ func combineValues[V any](a, b ValueSource[V], op querycore.SetOperator) ValueSe
 }
 
 // Value exposes the combined scalar with its original codec and nullability.
-// Example: expr.Row(values.Value()).Value().
+// Example: expr.AsSelected(expr.Row(values.Value())).
 func (q ValueSetQuery[V]) Value() expr.RowExpression[Set[V], V] {
 	r := ormcore.SetRecord(q.core)
 	e := ormcore.Expression{Node: querycore.FieldRef{Table: querycore.SetAlias, Column: "value"}, Refs: []ormcore.Reference{{Table: querycore.SetAlias, Owner: r.Record.Owner}}, Err: r.Source.Err}
 	return expr.FoundryRowExpression[Set[V]](e, q.column, sqlowner.Expressions())
 }
 
-// Where filters combined values. Example: combined.Where(combined.Value().Eq(v)).
+// Where filters combined values. Example: combined.Where(expr.Eq(combined.Value(), v)).
 func (q ValueSetQuery[V]) Where(ps ...expr.Predicate[Set[V]]) ValueSetQuery[V] {
 	q.core.Source = whereSource(q.core.Source, ps)
 	return q
 }
 
-// OrderBy orders combined values. Example: combined.OrderBy(combined.Value().Asc()).
+// OrderBy orders combined values. Example: combined.OrderBy(expr.Asc(combined.Value())).
 func (q ValueSetQuery[V]) OrderBy(os ...expr.ProjectionOrder[Set[V]]) ValueSetQuery[V] {
 	q.core.Source = recordOrders(q.core.Source, os)
 	return q

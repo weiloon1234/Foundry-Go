@@ -14,6 +14,7 @@ import (
 // ProjectViewJSON describes the concrete ProjectView JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ProjectViewJSON()
 func ProjectViewJSON() foundrycontract.JSON[ProjectView] { return foundryProjectViewJSON() }
 
 var foundryProjectViewJSON = sync.OnceValue(func() foundrycontract.JSON[ProjectView] {
@@ -42,6 +43,7 @@ var foundryProjectViewJSON = sync.OnceValue(func() foundrycontract.JSON[ProjectV
 })
 
 // ProjectViewValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ProjectViewValidationFields()
 type ProjectViewValidationFieldSet struct {
 	// Budget validates the declared JSON property "budget".
 	Budget foundryvalidation.Field[ProjectView, int64]
@@ -54,6 +56,7 @@ type ProjectViewValidationFieldSet struct {
 }
 
 // ProjectViewValidationFields returns typed field descriptors.
+// Example: ProjectViewValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ProjectViewValidationFields() ProjectViewValidationFieldSet {
 	return *foundryProjectViewValidationFields()

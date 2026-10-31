@@ -8,4 +8,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.GroupBy(rows.SelectValue(models.Users.Query(), orm.NumberExpr(models.Users.Age)), expr.Count[models.User]().Value().Key())
+var _ = rows.GroupBy(rows.SelectValue(models.Users.Query(), orm.NumberExpr(models.Users.Age)), expr.Key(expr.AsSelected(expr.Count[models.User]())))

@@ -94,12 +94,12 @@ func reportSpec() Spec[reportRecord, ReportRow, reportActor] {
 	return Spec[reportRecord, ReportRow, reportActor]{
 		ID: "reports.members", Row: reportJSON(), Exports: true,
 		Columns: []ColumnRegistration[reportRecord, ReportRow]{
-			DefineColumn[reportRecord](validation.DefineField("id", func(row ReportRow) int64 { return row.ID }), "reports.id").SortBy(id.Value()).FilterBy(Where(idCodec, id)).ExportAs(ScalarCell(idCodec)).Registration(),
-			DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name").SortBy(name.Value()).FilterBy(Where(textCodec, name)).Searchable().ExportAs(ScalarCell(textCodec)).Registration(),
-			DefineColumn[reportRecord](validation.DefineField("note", func(row ReportRow) value.Nullable[string] { return row.Note }), "reports.note").SortBy(note.Value()).FilterBy(NullableWhere(textCodec, note)).ExportAs(NullableCell(textCodec)).Registration(),
-			DefineColumn[reportRecord](validation.DefineField("amount", func(row ReportRow) decimal.Decimal { return row.Amount }), "reports.amount").SortBy(amount.Value()).FilterBy(Where(amountCodec, amount)).ExportAs(ScalarCell(amountCodec)).Registration(),
+			DefineColumn[reportRecord](validation.DefineField("id", func(row ReportRow) int64 { return row.ID }), "reports.id", SortBy(expr.AsSelected(id)), FilterBy(Where(idCodec, expr.OrderFilter(id))), ExportAs(expr.AsSelected(id), ScalarCell(idCodec))),
+			DefineColumn[reportRecord](validation.DefineField("name", func(row ReportRow) string { return row.Name }), "reports.name", SortBy(expr.AsSelected(name)), FilterBy(Where(textCodec, expr.TextFilter(name))), Searchable(name), ExportAs(expr.AsSelected(name), ScalarCell(textCodec))),
+			DefineColumn[reportRecord](validation.DefineField("note", func(row ReportRow) value.Nullable[string] { return row.Note }), "reports.note", SortBy(expr.AsSelected(note)), FilterBy(NullableWhere(textCodec, expr.NullableTextFilter(note))), ExportAs(expr.AsSelected(note), NullableCell(textCodec))),
+			DefineColumn[reportRecord](validation.DefineField("amount", func(row ReportRow) decimal.Decimal { return row.Amount }), "reports.amount", SortBy(expr.AsSelected(amount)), FilterBy(Where(amountCodec, expr.OrderFilter(amount))), ExportAs(expr.AsSelected(amount), ScalarCell(amountCodec))),
 		},
-		DefaultSort: []Sort{{Column: "name", Direction: Ascending}}, Stable: []expr.ProjectionOrder[reportRecord]{id.Value().Asc()},
+		DefaultSort: []Sort{{Column: "name", Direction: Ascending}}, Stable: []expr.ProjectionOrder[reportRecord]{expr.AscValue(expr.AsSelected(id))},
 		Authorize: func(_ context.Context, actor reportActor, _ Action) error {
 			if !actor.Allowed {
 				return auth.Forbidden

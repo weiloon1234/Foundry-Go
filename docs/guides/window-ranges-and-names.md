@@ -12,7 +12,7 @@ These APIs extend the [window-function contracts](model-windows.md), using the s
 ```go
 q := framequeries.Samples.Query()
 f := framequeries.Samples
-r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.Row(expr.Value(orm.NumberKeyExpr(f.ID))).Value())
+r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.NumberKeyExpr(f.ID)))))
 frameCounts(t, tx, r.Between(r.Preceding(1), r.CurrentRow()), []int64{1, 2, 2, 2})
 ```
 
@@ -30,7 +30,7 @@ Distances are encoded once, bound as parameters and explicitly cast using the co
 
 <!-- go-source: tests/fixtures/consumer/framequeries/ranges_postgres_test.go -->
 ```go
-r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.Row(expr.Value(orm.TimeExpr(f.At))).Value())
+r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(f.At)))))
 day, _ := temporal.Elapsed(24 * time.Hour)
 frameCounts(t, tx, r.Between(r.Preceding(temporal.Days(1)), r.CurrentRow()), []int64{1, 1, 2, 2})
 frameCounts(t, tx, r.Between(r.Preceding(day), r.CurrentRow()), []int64{1, 2, 2, 2})
@@ -53,10 +53,10 @@ For time-of-day ordering, calendar months/days are rejected because PostgreSQL o
 <!-- go-source: tests/fixtures/consumer/framequeries/named_postgres_test.go -->
 ```go
 base := expr.WindowFor(rowset.ModelScope(q)).PartitionBy(expr.Group(expr.Param(orm.NumberKeyExpr(f.ID), 1))).Named("all_samples")
-ordered := base.OrderBy(expr.Value(orm.NumberKeyExpr(f.ID)).Asc()).Named("ordered")
+ordered := base.OrderBy(expr.Asc(expr.Value(orm.NumberKeyExpr(f.ID)))).Named("ordered")
 framed := ordered.RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
 count := expr.Over(expr.Count[framequeries.Sample](), framed)
-result := rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), count), expr.RowNumber(framed).Asc())
+result := rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), count), expr.AscValue(expr.RowNumber(framed)))
 ```
 
 Each descriptor carries its definition. Reusing `framed` emits one WINDOW definition, with dependencies before dependents, and uses `OVER "framed"`. The scope remains typed. Define a name once and share the returned descriptor; different declarations with the same name in one SELECT are rejected. Names are validated and quoted at the declaration boundary. There are no string-based lookups when using a descriptor.

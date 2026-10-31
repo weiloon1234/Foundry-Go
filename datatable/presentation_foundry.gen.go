@@ -13,6 +13,7 @@ import (
 // PresentationJSON describes the concrete Presentation JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: PresentationJSON()
 func PresentationJSON() foundrycontract.JSON[Presentation] { return foundryPresentationJSON() }
 
 var foundryPresentationJSON = sync.OnceValue(func() foundrycontract.JSON[Presentation] {
@@ -29,6 +30,7 @@ var foundryPresentationJSON = sync.OnceValue(func() foundrycontract.JSON[Present
 })
 
 // PresentationValidationFieldSet retains concrete DTO and value types for validation.
+// Example: PresentationValidationFields()
 type PresentationValidationFieldSet struct {
 	// Locale validates the declared JSON property "locale".
 	Locale foundryvalidation.Field[Presentation, i18n.LocaleID]
@@ -37,6 +39,7 @@ type PresentationValidationFieldSet struct {
 }
 
 // PresentationValidationFields returns typed field descriptors.
+// Example: PresentationValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func PresentationValidationFields() PresentationValidationFieldSet {
 	return *foundryPresentationValidationFields()

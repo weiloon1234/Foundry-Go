@@ -43,17 +43,17 @@ func TestValueComparisonPhasesAndInvalidOperands(t *testing.T) {
 	base := rows.From(m.Query())
 	id := expr.Value(orm.KeyExpr(m.ID))
 	count := expr.Count[member]()
-	for _, p := range []expr.HavingPredicate[member]{expr.GreaterValue(count.Value(), count.Param(1).Value()), expr.EqualValue(count.Value(), count.Value()), expr.LessNullableValue(expr.Min(orm.NullableTextExpr(m.Nickname)).Value(), expr.Min(orm.NullableTextExpr(m.Nickname)).Value())} {
-		if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(base, count.Value()), p))); e != nil {
+	for _, p := range []expr.HavingPredicate[member]{expr.GreaterValue(expr.AsSelected(count), expr.AsSelected(expr.ParamOf(count, 1))), expr.EqualValue(expr.AsSelected(count), expr.AsSelected(count)), expr.LessNullableValue(expr.AsSelected(expr.Min(orm.NullableTextExpr(m.Nickname))), expr.AsSelected(expr.Min(orm.NullableTextExpr(m.Nickname))))} {
+		if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(base, expr.AsSelected(count)), p))); e != nil {
 			t.Fatal(e)
 		}
 	}
-	if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(base, expr.Row(id).Value()), expr.GreaterValue(count.Value(), count.Param(1).Value())))); !errors.Is(e, fault.Invalid) {
+	if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(base, expr.AsSelected(expr.Row(id))), expr.GreaterValue(expr.AsSelected(count), expr.AsSelected(expr.ParamOf(count, 1)))))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("binary HAVING did not group", e)
 	}
 	window := expr.RowNumber(expr.WindowFor(rows.ModelScope(m.Query())))
-	for _, p := range []expr.HavingPredicate[member]{expr.EqualValue(window, count.Value()), expr.EqualValue(count.Value(), window)} {
-		if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(base, count.Value()), p))); !errors.Is(e, fault.Invalid) {
+	for _, p := range []expr.HavingPredicate[member]{expr.EqualValue(window, expr.AsSelected(count)), expr.EqualValue(expr.AsSelected(count), window)} {
+		if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(base, expr.AsSelected(count)), p))); !errors.Is(e, fault.Invalid) {
 			t.Fatal("window HAVING", e)
 		}
 	}

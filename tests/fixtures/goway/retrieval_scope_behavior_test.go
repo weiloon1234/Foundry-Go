@@ -35,7 +35,7 @@ func TestScopePropagationProjectionJoinsAggregatesAndRelationBypasses(t *testing
 	name := expr.At(rowset.LeftScope(joined, rowset.Scope(left)), orm.TextExpr(n.Members.Name))
 	_, err = rowset.Read(rowset.Select(joined, readNames, rowset.Map(readNames.Name, name))).All(ctx, db)
 	check(err)
-	_, err = rowset.Read(rowset.Select(left, readCounts, rowset.MapSelected(readCounts.Count, expr.Count[rowset.Alias[readSide, n.Member]]().Value()))).All(ctx, db)
+	_, err = rowset.Read(rowset.Select(left, readCounts, rowset.MapSelected(readCounts.Count, expr.AsSelected(expr.Count[rowset.Alias[readSide, n.Member]]())))).All(ctx, db)
 	check(err)
 	if len(trace) != 0 || strings.Contains(capture.output.String(), "99") || strings.Count(capture.sql.String(), `"tenant_id" =`) != 4 {
 		t.Fatal("projection lost scope or retrieved", trace, capture.output.String())

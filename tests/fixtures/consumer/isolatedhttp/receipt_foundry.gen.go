@@ -12,6 +12,7 @@ import (
 // ReceiptJSON describes the concrete Receipt JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ReceiptJSON()
 func ReceiptJSON() foundrycontract.JSON[Receipt] { return foundryReceiptJSON() }
 
 var foundryReceiptJSON = sync.OnceValue(func() foundrycontract.JSON[Receipt] {
@@ -27,6 +28,7 @@ var foundryReceiptJSON = sync.OnceValue(func() foundrycontract.JSON[Receipt] {
 })
 
 // ReceiptValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ReceiptValidationFields()
 type ReceiptValidationFieldSet struct {
 	// Name validates the declared JSON property "name".
 	Name foundryvalidation.Field[Receipt, string]
@@ -35,6 +37,7 @@ type ReceiptValidationFieldSet struct {
 }
 
 // ReceiptValidationFields returns typed field descriptors.
+// Example: ReceiptValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ReceiptValidationFields() ReceiptValidationFieldSet { return *foundryReceiptValidationFields() }
 

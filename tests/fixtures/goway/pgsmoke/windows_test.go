@@ -42,7 +42,7 @@ func readWindow[V any](t *testing.T, ex database.Executor, d windowTable, e expr
 	s := rows.Define(func(b rows.Builder[windowResult[V]], r *windowResult[V]) windowFields[V] {
 		return windowFields[V]{b.Row(), rows.FieldOf(b, &r.Value, orm.Codec(c))}
 	})
-	out, err := rows.Read(rows.OrderBy(rows.Select(rows.FromModel(d.Query()), s, rows.MapSelected(s.Value, e)), expr.Value(orm.KeyExpr(d.ID)).Asc())).All(t.Context(), ex)
+	out, err := rows.Read(rows.OrderBy(rows.Select(rows.FromModel(d.Query()), s, rows.MapSelected(s.Value, e)), expr.Asc(expr.Value(orm.KeyExpr(d.ID))))).All(t.Context(), ex)
 	must(t, err)
 	values := make([]V, len(out))
 	for i, r := range out {
@@ -61,15 +61,15 @@ func TestStage6d1Windows(t *testing.T) {
 		table := orm.TableOf(b, &r.ID)
 		return windowTable{table, table.Key(), orm.NumberOf(b, &r.Amount), orm.NullableNumberOf(b, &r.Missing), orm.TimeOf(b, &r.Day), orm.IntervalOf(b, &r.Period), orm.SoftDeleteOf(b, &r.DeletedAt)}
 	})
-	w := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Value(orm.KeyExpr(d.ID)).Asc()).Named("ordered")
-	v := expr.Row(expr.Value(orm.NumberExpr(d.Amount))).Value()
-	n := expr.Row(expr.Value(orm.NullableNumberExpr(d.Missing))).Value()
+	w := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Asc(expr.Value(orm.KeyExpr(d.ID)))).Named("ordered")
+	v := expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(d.Amount))))
+	n := expr.AsSelected(expr.Row(expr.Value(orm.NullableNumberExpr(d.Missing))))
 	full := w.RowsBetween(expr.UnboundedPreceding(), expr.UnboundedFollowing())
 	numbers := readWindow(t, db, d, expr.RowNumber(w), codec.Signed[int64]())
 	if len(numbers) != 3 || numbers[0] != 1 || numbers[2] != 3 {
 		t.Fatal(numbers)
 	}
-	peers := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Value(orm.NumberExpr(d.Amount)).Asc())
+	peers := expr.WindowFor(rows.ModelScope(d.Query())).OrderBy(expr.Asc(expr.Value(orm.NumberExpr(d.Amount))))
 	for _, e := range []expr.Selected[windowRecord, int64]{expr.Rank(peers), expr.DenseRank(peers)} {
 		r := readWindow(t, db, d, e, codec.Signed[int64]())
 		if r[0] != 1 || r[1] != 1 {
@@ -121,7 +121,7 @@ func TestStage6d1Windows(t *testing.T) {
 	if counts[0] != 0 {
 		t.Fatal(counts)
 	}
-	filtered := expr.Count[windowRecord]().Filter(expr.OrderRow(expr.Value(orm.NumberExpr(d.Amount))).Gt(10))
+	filtered := expr.Filter(expr.Count[windowRecord](), expr.Gt(expr.OrderRow(expr.Value(orm.NumberExpr(d.Amount))), 10))
 	counts = readWindow(t, db, d, expr.Over(filtered, full), codec.Signed[int64]())
 	if counts[0] != 1 {
 		t.Fatal(counts)
@@ -136,7 +136,7 @@ func TestStage6d1Windows(t *testing.T) {
 	if counts[0] != 2 || counts[2] != 1 {
 		t.Fatal(counts)
 	}
-	tr := expr.TemporalRange(expr.WindowFor(rows.ModelScope(d.Query())), expr.Row(expr.Value(orm.TimeExpr(d.Day))).Value())
+	tr := expr.TemporalRange(expr.WindowFor(rows.ModelScope(d.Query())), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(d.Day)))))
 	counts = readWindow(t, db, d, expr.Over(expr.Count[windowRecord](), tr.Between(tr.Preceding(temporal.Days(1)), tr.CurrentRow())), codec.Signed[int64]())
 	if counts[1] != 2 || counts[2] != 1 {
 		t.Fatal(counts)

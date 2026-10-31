@@ -63,10 +63,10 @@ func TestScopeSourceFailureCapturedAndLaterComposition(t *testing.T) {
 			compilations := func() map[string]func() error {
 				a, b := rows.As[left](plain.Query(), "a"), rows.As[right](q, "b")
 				joined := rows.InnerJoin(a, b, rows.On(expr.At(rows.Scope(a), orm.KeyExpr(plain.Key())), expr.At(rows.Scope(b), orm.KeyExpr(d.Key()))))
-				projection := rows.SelectScalar(joined, expr.Row(expr.At(rows.RightScope(joined, rows.Scope(b)), orm.KeyExpr(d.Key()))).Value())
-				inner := rows.SelectScalar(rows.From(q), expr.Row(expr.Value(orm.KeyExpr(d.Key()))).Value())
-				sub := rows.WhereScalar(rows.SelectScalar(rows.From(plain.Query()), expr.Row(expr.Value(orm.KeyExpr(plain.Key()))).Value()), rows.InQuery(expr.Value(orm.KeyExpr(plain.Key())), inner))
-				aggregate := rows.SelectScalar(rows.From(q), expr.Count[scopeFailureRow]().Value())
+				projection := rows.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(rows.RightScope(joined, rows.Scope(b)), orm.KeyExpr(d.Key())))))
+				inner := rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(d.Key())))))
+				sub := rows.WhereScalar(rows.SelectScalar(rows.From(plain.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(plain.Key()))))), rows.InQuery(expr.Value(orm.KeyExpr(plain.Key())), inner))
+				aggregate := rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Count[scopeFailureRow]()))
 				return map[string]func() error{
 					"read":      func() error { _, e := orm.Compile(q); return e },
 					"relation":  func() error { _, e := orm.Compile(plain.Query().Where(orm.Has(rel))); return e },

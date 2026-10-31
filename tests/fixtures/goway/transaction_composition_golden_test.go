@@ -43,30 +43,30 @@ func runTransactionCompositionNew(g *goldenCapture, kind string) {
 		on := rowset.On(expr.At(as, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(bs, orm.ColumnExpr(models.Orders.BuyerID)))
 		switch kind {
 		case "lift":
-			lifted := rowset.TransactionValueOf(rowset.Values(rowset.SelectScalar(rowset.From(models.Orders.Query().Limit(1)), expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents))).Value())))
-			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(a, rowset.TransactionScalarRowQuery(a, lifted).Value()).All(ctx, tx))}))
+			lifted := rowset.TransactionValueOf(rowset.Values(rowset.SelectScalar(rowset.From(models.Orders.Query().Limit(1)), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Orders.TotalCents)))))))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(a, expr.AsSelected(rowset.TransactionScalarRowQuery(a, lifted))).All(ctx, tx))}))
 		case "inner":
 			j := rowset.TransactionInnerJoin(a, b, on)
-			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Row(expr.At(rowset.LeftScope(j, as), orm.NumberExpr(models.Orders.TotalCents))).Value())).All(ctx, tx))}))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.AsSelected(expr.Row(expr.At(rowset.LeftScope(j, as), orm.NumberExpr(models.Orders.TotalCents)))))).All(ctx, tx))}))
 		case "left":
 			j := rowset.TransactionLeftJoin(a, b, on)
-			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Row(expr.AtNullable(rowset.NullableRightScope(j, bs), orm.NumberExpr(models.Orders.TotalCents))).Value()).All(ctx, tx))}))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.AsSelected(expr.Row(expr.AtNullable(rowset.NullableRightScope(j, bs), orm.NumberExpr(models.Orders.TotalCents))))).All(ctx, tx))}))
 		case "right":
 			j := rowset.TransactionRightJoin(a, b, on)
-			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Row(expr.At(rowset.RightScope(j, bs), orm.NumberExpr(models.Orders.TotalCents))).Value())).All(ctx, tx))}))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.AsSelected(expr.Row(expr.At(rowset.RightScope(j, bs), orm.NumberExpr(models.Orders.TotalCents)))))).All(ctx, tx))}))
 		case "full":
 			j := rowset.TransactionFullJoin(a, b, on)
-			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Row(expr.AtNullable(rowset.NullableRightScope(j, bs), orm.NumberExpr(models.Orders.TotalCents))).Value()).All(ctx, tx))}))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.AsSelected(expr.Row(expr.AtNullable(rowset.NullableRightScope(j, bs), orm.NumberExpr(models.Orders.TotalCents))))).All(ctx, tx))}))
 		case "cross":
 			j := rowset.TransactionCrossJoin(a, b)
-			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Row(expr.At(rowset.RightScope(j, bs), orm.NumberExpr(models.Orders.TotalCents))).Value())).All(ctx, tx))}))
+			fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.AsSelected(expr.Row(expr.At(rowset.RightScope(j, bs), orm.NumberExpr(models.Orders.TotalCents)))))).All(ctx, tx))}))
 		case "scalar", "nullable_scalar", "membership", "exists":
-			v := rowset.SelectTransactionValue(b, expr.Row(y).Value()).Where(expr.Greater(y, expr.Row(y).Value().Param(1))).Limit(1)
+			v := rowset.SelectTransactionValue(b, expr.AsSelected(expr.Row(y))).Where(expr.Greater(y, expr.ParamOf(expr.AsSelected(expr.Row(y)), 1))).Limit(1)
 			locked := rowset.TransactionScalarOf(v).ForShare().NoWait()
-			q := rowset.SelectTransactionValue(a, rowset.TransactionScalarRowQuery(a, locked).Value())
+			q := rowset.SelectTransactionValue(a, expr.AsSelected(rowset.TransactionScalarRowQuery(a, locked)))
 			if kind == "nullable_scalar" {
-				n := rowset.SelectTransactionValue(b, expr.Nullable(expr.Row(y).Value())).Where(expr.Greater(y, expr.Row(y).Value().Param(1))).Limit(1)
-				q = rowset.SelectTransactionValue(a, rowset.TransactionScalarNullableRowQuery(a, rowset.TransactionScalarOf(n).ForShare().NoWait()).Value())
+				n := rowset.SelectTransactionValue(b, expr.Nullable(expr.AsSelected(expr.Row(y)))).Where(expr.Greater(y, expr.ParamOf(expr.AsSelected(expr.Row(y)), 1))).Limit(1)
+				q = rowset.SelectTransactionValue(a, expr.AsSelected(rowset.TransactionScalarNullableRowQuery(a, rowset.TransactionScalarOf(n).ForShare().NoWait())))
 			}
 			if kind == "membership" {
 				q = q.Where(rowset.TransactionInQuery(x, locked))
@@ -88,26 +88,26 @@ func runTransactionCompositionNew(g *goldenCapture, kind string) {
 				c = c.Where(n.Exists())
 			}
 			if kind == "correlated" || kind == "nested" {
-				v := rowset.SelectTransactionCorrelatedScalar(c, expr.Row(inner).Value()).Limit(1).ForShare().NoWait()
-				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(a, rowset.TransactionCorrelatedScalarRowQuery(v).Value()).Where(v.Exists(), rowset.TransactionInCorrelatedQuery(x, v)).All(ctx, tx))}))
+				v := rowset.SelectTransactionCorrelatedScalar(c, expr.AsSelected(expr.Row(inner))).Limit(1).ForShare().NoWait()
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(a, expr.AsSelected(rowset.TransactionCorrelatedScalarRowQuery(v))).Where(v.Exists(), rowset.TransactionInCorrelatedQuery(x, v)).All(ctx, tx))}))
 				return nil
 			}
-			r := rowset.SelectTransactionCorrelatedRecord(c, is).OrderBy(inner.Desc()).Limit(1).ForUpdate().Of(rowset.Target(is)).SkipLocked()
+			r := rowset.SelectTransactionCorrelatedRecord(c, is).OrderBy(expr.Desc(inner)).Limit(1).ForUpdate().Of(rowset.Target(is)).SkipLocked()
 			lat := rowset.AsTransactionLateral[joinC](r, "latest")
 			ls := rowset.TransactionLateralScope(lat)
 			switch kind {
 			case "lateral_cross":
 				j := rowset.TransactionCrossJoinLateral(a, lat)
-				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Row(expr.At(rowset.RightScope(j, ls), orm.NumberExpr(models.Orders.TotalCents))).Value())).All(ctx, tx))}))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.AsSelected(expr.Row(expr.At(rowset.RightScope(j, ls), orm.NumberExpr(models.Orders.TotalCents)))))).All(ctx, tx))}))
 			case "lateral_inner":
 				j := rowset.TransactionInnerJoinLateral(a, lat)
-				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.Row(expr.At(rowset.RightScope(j, ls), orm.NumberExpr(models.Orders.TotalCents))).Value())).All(ctx, tx))}))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Nullable(expr.AsSelected(expr.Row(expr.At(rowset.RightScope(j, ls), orm.NumberExpr(models.Orders.TotalCents)))))).All(ctx, tx))}))
 			case "lateral_left":
 				j := rowset.TransactionLeftJoinLateral(a, lat)
-				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Row(expr.AtNullable(rowset.NullableRightScope(j, ls), orm.NumberExpr(models.Orders.TotalCents))).Value()).All(ctx, tx))}))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.AsSelected(expr.Row(expr.AtNullable(rowset.NullableRightScope(j, ls), orm.NumberExpr(models.Orders.TotalCents))))).All(ctx, tx))}))
 			case "lateral_on":
 				j := rowset.TransactionLeftJoinLateral(a, lat, rowset.On(x, expr.At(ls, orm.NumberExpr(models.Orders.TotalCents))))
-				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.Row(expr.AtNullable(rowset.NullableRightScope(j, ls), orm.NumberExpr(models.Orders.TotalCents))).Value()).All(ctx, tx))}))
+				fmt.Fprintln(&g.output, oracleSnapshot([]any{must(rowset.SelectTransactionValue(j, expr.AsSelected(expr.Row(expr.AtNullable(rowset.NullableRightScope(j, ls), orm.NumberExpr(models.Orders.TotalCents))))).All(ctx, tx))}))
 			}
 		}
 		return nil

@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.Exists[models.Order]().Filter(expr.Value(orm.NumberExpr(models.Orders.TotalCents)).Eq(0)).Gt(true)
+var _ = expr.GtValue(expr.Filter(expr.Exists[models.Order](), expr.Eq(expr.Value(orm.NumberExpr(models.Orders.TotalCents)), 0)), true)

@@ -1,22 +1,38 @@
 package expr
 
 import (
-	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// OrderedRowExpression is an ordered computed row value. Example: expr.Add(a,b).Gt(2).
-type OrderedRowExpression[S any, V orderedScalar] struct {
+// OrderedRowValue is a sealed row value with ordered comparison capability.
+// Use OrderRow or OrderNullableRow to opt a general row value into this capability.
+//
+// Example: var operand expr.OrderedRowValue[User, int64] = expr.OrderRow(age)
+type OrderedRowValue[S, V any] interface {
+	RowValue[S, V]
+	orderedRowValue(*S)
+}
+
+// OrderedRowExpression is an ordered computed row value.
+//
+// Example: expr.Gt(expr.Add(a, b), 2)
+type OrderedRowExpression[S any, V orderedScalar] = orderedRowExpression[*S, V]
+
+type orderedRowExpression[S any, V orderedScalar] struct {
 	rowPhase [0]struct{}
-	_        [0]*S
+	_        [0]S
 	data     rowData[V]
 }
 
-// NullableOrderedRowExpression retains nullable results and present-value comparisons. Example: expr.AddNullable(a,b).Gt(2).
-type NullableOrderedRowExpression[S any, V orderedScalar] struct {
+// NullableOrderedRowExpression retains nullable results and present-value comparisons.
+//
+// Example: expr.NullableGt(expr.AddNullable(a, b), 2)
+type NullableOrderedRowExpression[S any, V orderedScalar] = nullableOrderedRowExpression[*S, V]
+
+type nullableOrderedRowExpression[S any, V orderedScalar] struct {
 	rowPhase [0]struct{}
-	_        [0]*S
+	_        [0]S
 	data     rowData[value.Nullable[V]]
 }
 
@@ -27,177 +43,78 @@ func nullableOrderedRow[S any, V orderedScalar](v Selected[S, value.Nullable[V]]
 	return NullableOrderedRowExpression[S, V]{data: v.data}
 }
 
-// OrderRow exposes ordered comparisons on a row value. Example: expr.OrderRow(expr.Value(orm.NumberExpr(Users.Age))).Gt(18).
+// OrderRow exposes ordered comparisons on a row value.
+//
+// Example: expr.OrderRow(v)
 func OrderRow[S any, V orderedScalar](v RowValue[S, V]) OrderedRowExpression[S, V] {
-	return orderedRow(Row(v).Value())
+	return orderedRow(AsSelected(Row(v)))
 }
 
-// OrderNullableRow exposes present-value comparisons. Example: expr.OrderNullableRow(expr.Value(orm.NullableTimeExpr(Users.Birthday))).IsNull().
+// OrderNullableRow exposes present-value comparisons.
+//
+// Example: expr.OrderNullableRow(v)
 func OrderNullableRow[S any, V orderedScalar](v RowValue[S, value.Nullable[V]]) NullableOrderedRowExpression[S, V] {
-	return nullableOrderedRow(Row(v).Value())
+	return nullableOrderedRow(AsSelected(Row(v)))
 }
 
-// Eq compares row values before grouping. Example: expression.Eq(value).
-func (e RowExpression[S, V]) Eq(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Equal, v)}
+// Lt compares row values before grouping.
+//
+// Example: expr.Lt(e, v)
+func Lt[S any, V orderedScalar](e OrderedRowValue[S, V], v V) Predicate[S] {
+	return Predicate[S]{core: rowCompare(rowInput(e).data, querycore.Less, v)}
 }
 
-// Ne compares row values before grouping. Example: expression.Ne(value).
-func (e RowExpression[S, V]) Ne(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.NotEqual, v)}
+// Lte compares row values before grouping.
+//
+// Example: expr.Lte(e, v)
+func Lte[S any, V orderedScalar](e OrderedRowValue[S, V], v V) Predicate[S] {
+	return Predicate[S]{core: rowCompare(rowInput(e).data, querycore.LessOrEqual, v)}
 }
 
-// In compares row values before grouping. Example: expression.In(value).
-func (e RowExpression[S, V]) In(vs ...V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.In, vs...)}
+// Gt compares row values before grouping.
+//
+// Example: expr.Gt(e, v)
+func Gt[S any, V orderedScalar](e OrderedRowValue[S, V], v V) Predicate[S] {
+	return Predicate[S]{core: rowCompare(rowInput(e).data, querycore.Greater, v)}
 }
 
-// IsNull tests SQL nullness. Example: expression.IsNull().
-func (e RowExpression[S, V]) IsNull() Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.IsNull)}
+// Gte compares row values before grouping.
+//
+// Example: expr.Gte(e, v)
+func Gte[S any, V orderedScalar](e OrderedRowValue[S, V], v V) Predicate[S] {
+	return Predicate[S]{core: rowCompare(rowInput(e).data, querycore.GreaterOrEqual, v)}
 }
 
-// IsNotNull tests SQL nullness. Example: expression.IsNotNull().
-func (e RowExpression[S, V]) IsNotNull() Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.IsNotNull)}
+// NullableLt compares nullable row values with a present value.
+//
+// Example: expr.NullableLt(e, v)
+func NullableLt[S any, V orderedScalar](e OrderedRowValue[S, value.Nullable[V]], v V) Predicate[S] {
+	return Predicate[S]{core: rowCompare(rowInput(e).data, querycore.Less, presentValues([]V{v})...)}
 }
 
-// Asc orders a computed row value. Example: expression.Asc().
-func (e RowExpression[S, V]) Asc() Order[S] {
-	return Order[S]{core: ormcore.OrderExpression(e.data.core, false)}
+// NullableLte compares nullable row values with a present value.
+//
+// Example: expr.NullableLte(e, v)
+func NullableLte[S any, V orderedScalar](e OrderedRowValue[S, value.Nullable[V]], v V) Predicate[S] {
+	return Predicate[S]{core: rowCompare(rowInput(e).data, querycore.LessOrEqual, presentValues([]V{v})...)}
 }
 
-// Desc orders a computed row value. Example: expression.Desc().
-func (e RowExpression[S, V]) Desc() Order[S] {
-	return Order[S]{core: ormcore.OrderExpression(e.data.core, true)}
-}
-func (e OrderedRowExpression[S, V]) rowValue(*S) rowData[V] { return e.data }
-
-// Value selects the computed value. Example: expression.Value().
-func (e OrderedRowExpression[S, V]) Value() Selected[S, V] { return Selected[S, V]{data: e.data} }
-
-// Param captures the exact result type. Example: expression.Param(value).
-func (e OrderedRowExpression[S, V]) Param(v V) RowExpression[S, V] {
-	return parameter[S](e.data, v)
+// NullableGt compares nullable row values with a present value.
+//
+// Example: expr.NullableGt(e, v)
+func NullableGt[S any, V orderedScalar](e OrderedRowValue[S, value.Nullable[V]], v V) Predicate[S] {
+	return Predicate[S]{core: rowCompare(rowInput(e).data, querycore.Greater, presentValues([]V{v})...)}
 }
 
-// Eq compares row values before grouping. Example: expression.Eq(value).
-func (e OrderedRowExpression[S, V]) Eq(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Equal, v)}
+// NullableGte compares nullable row values with a present value.
+//
+// Example: expr.NullableGte(e, v)
+func NullableGte[S any, V orderedScalar](e OrderedRowValue[S, value.Nullable[V]], v V) Predicate[S] {
+	return Predicate[S]{core: rowCompare(rowInput(e).data, querycore.GreaterOrEqual, presentValues([]V{v})...)}
 }
 
-// Ne compares row values before grouping. Example: expression.Ne(value).
-func (e OrderedRowExpression[S, V]) Ne(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.NotEqual, v)}
-}
+func (e orderedRowExpression[S, V]) rowValue(S) rowData[V] { return e.data }
+func (e orderedRowExpression[S, V]) orderedRowValue(S)     {}
 
-// In compares row values before grouping. Example: expression.In(value).
-func (e OrderedRowExpression[S, V]) In(vs ...V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.In, vs...)}
-}
-
-// Lt compares row values before grouping. Example: expression.Lt(value).
-func (e OrderedRowExpression[S, V]) Lt(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Less, v)}
-}
-
-// Lte compares row values before grouping. Example: expression.Lte(value).
-func (e OrderedRowExpression[S, V]) Lte(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.LessOrEqual, v)}
-}
-
-// Gt compares row values before grouping. Example: expression.Gt(value).
-func (e OrderedRowExpression[S, V]) Gt(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Greater, v)}
-}
-
-// Gte compares row values before grouping. Example: expression.Gte(value).
-func (e OrderedRowExpression[S, V]) Gte(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.GreaterOrEqual, v)}
-}
-
-// IsNull tests SQL nullness. Example: expression.IsNull().
-func (e OrderedRowExpression[S, V]) IsNull() Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.IsNull)}
-}
-
-// IsNotNull tests SQL nullness. Example: expression.IsNotNull().
-func (e OrderedRowExpression[S, V]) IsNotNull() Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.IsNotNull)}
-}
-
-// Asc orders a computed row value. Example: expression.Asc().
-func (e OrderedRowExpression[S, V]) Asc() Order[S] {
-	return Order[S]{core: ormcore.OrderExpression(e.data.core, false)}
-}
-
-// Desc orders a computed row value. Example: expression.Desc().
-func (e OrderedRowExpression[S, V]) Desc() Order[S] {
-	return Order[S]{core: ormcore.OrderExpression(e.data.core, true)}
-}
-func (e NullableOrderedRowExpression[S, V]) rowValue(*S) rowData[value.Nullable[V]] { return e.data }
-
-// Value selects the computed value. Example: expression.Value().
-func (e NullableOrderedRowExpression[S, V]) Value() Selected[S, value.Nullable[V]] {
-	return Selected[S, value.Nullable[V]]{data: e.data}
-}
-
-// Param captures the exact result type. Example: expression.Param(value).
-func (e NullableOrderedRowExpression[S, V]) Param(v value.Nullable[V]) RowExpression[S, value.Nullable[V]] {
-	return parameter[S](e.data, v)
-}
-
-// Eq compares row values before grouping. Example: expression.Eq(value).
-func (e NullableOrderedRowExpression[S, V]) Eq(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Equal, presentValues([]V{v})...)}
-}
-
-// Ne compares row values before grouping. Example: expression.Ne(value).
-func (e NullableOrderedRowExpression[S, V]) Ne(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.NotEqual, presentValues([]V{v})...)}
-}
-
-// In compares row values before grouping. Example: expression.In(value).
-func (e NullableOrderedRowExpression[S, V]) In(vs ...V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.In, presentValues(vs)...)}
-}
-
-// Lt compares row values before grouping. Example: expression.Lt(value).
-func (e NullableOrderedRowExpression[S, V]) Lt(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Less, presentValues([]V{v})...)}
-}
-
-// Lte compares row values before grouping. Example: expression.Lte(value).
-func (e NullableOrderedRowExpression[S, V]) Lte(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.LessOrEqual, presentValues([]V{v})...)}
-}
-
-// Gt compares row values before grouping. Example: expression.Gt(value).
-func (e NullableOrderedRowExpression[S, V]) Gt(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.Greater, presentValues([]V{v})...)}
-}
-
-// Gte compares row values before grouping. Example: expression.Gte(value).
-func (e NullableOrderedRowExpression[S, V]) Gte(v V) Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.GreaterOrEqual, presentValues([]V{v})...)}
-}
-
-// IsNull tests SQL nullness. Example: expression.IsNull().
-func (e NullableOrderedRowExpression[S, V]) IsNull() Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.IsNull)}
-}
-
-// IsNotNull tests SQL nullness. Example: expression.IsNotNull().
-func (e NullableOrderedRowExpression[S, V]) IsNotNull() Predicate[S] {
-	return Predicate[S]{core: rowCompare(e.data, querycore.IsNotNull)}
-}
-
-// Asc orders a computed row value. Example: expression.Asc().
-func (e NullableOrderedRowExpression[S, V]) Asc() Order[S] {
-	return Order[S]{core: ormcore.OrderExpression(e.data.core, false)}
-}
-
-// Desc orders a computed row value. Example: expression.Desc().
-func (e NullableOrderedRowExpression[S, V]) Desc() Order[S] {
-	return Order[S]{core: ormcore.OrderExpression(e.data.core, true)}
-}
+func (e nullableOrderedRowExpression[S, V]) rowValue(S) rowData[value.Nullable[V]] { return e.data }
+func (e nullableOrderedRowExpression[S, V]) orderedRowValue(S)                     {}

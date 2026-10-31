@@ -60,7 +60,7 @@ these summaries.
 
 `expr.RelatedValue(relation, aggregate)` produces a correlated row expression.
 Counts are required; sums retain SQL NULL for no input. Use it with `expr.Where`,
-`expr.OrderBy` or `rows.MapSelected` after `.Value()`. `rows.WithValue` pairs a
+`expr.OrderBy` or `rows.MapSelected` after `expr.AsSelected`. `rows.WithValue` pairs a
 complete model with the computed value while preserving its retrieval/loading
 pipeline. The [office consumer](../../tests/fixtures/consumer/officequeries/office_postgres_test.go)
 shows these forms without a permanent model slot.

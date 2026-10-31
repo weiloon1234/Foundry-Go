@@ -6,4 +6,4 @@ import (
 
 type owner struct{}
 
-var _ = expr.NullableOrderedRowExpression[owner, int64](expr.OrderNullableValue(expr.Nullable(expr.Count[owner]().Value())))
+var _ = expr.NullableOrderedRowExpression[owner, int64](expr.OrderNullableValue(expr.Nullable(expr.AsSelected(expr.Count[owner]()))))

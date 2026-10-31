@@ -14,6 +14,7 @@ import (
 // OrderRowJSON describes the concrete OrderRow JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: OrderRowJSON()
 func OrderRowJSON() foundrycontract.JSON[OrderRow] { return foundryOrderRowJSON() }
 
 var foundryOrderRowJSON = sync.OnceValue(func() foundrycontract.JSON[OrderRow] {
@@ -37,6 +38,7 @@ var foundryOrderRowJSON = sync.OnceValue(func() foundrycontract.JSON[OrderRow] {
 })
 
 // OrderRowValidationFieldSet retains concrete DTO and value types for validation.
+// Example: OrderRowValidationFields()
 type OrderRowValidationFieldSet struct {
 	// Amount validates the declared JSON property "amount".
 	Amount foundryvalidation.Field[OrderRow, decimal.Decimal]
@@ -49,6 +51,7 @@ type OrderRowValidationFieldSet struct {
 }
 
 // OrderRowValidationFields returns typed field descriptors.
+// Example: OrderRowValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func OrderRowValidationFields() OrderRowValidationFieldSet { return *foundryOrderRowValidationFields() }
 

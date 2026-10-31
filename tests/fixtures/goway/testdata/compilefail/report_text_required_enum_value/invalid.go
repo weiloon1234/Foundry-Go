@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.TextRow(expr.Value(orm.EnumExpr(models.Users.Status))).Contains(models.StatusActive)
+var _ = expr.TextContains(expr.TextRow(expr.Value(orm.EnumExpr(models.Users.Status))), models.StatusActive)

@@ -9,4 +9,4 @@ import (
 
 var age = expr.Value(orm.NumberExpr(models.Users.Age))
 var email = expr.Value(orm.TextExpr(models.Users.Email))
-var _ = expr.Less(expr.Exists[models.User]().Param(true), expr.Exists[models.User]().Param(false))
+var _ = expr.Less(expr.ParamOf(expr.Exists[models.User](), true), expr.ParamOf(expr.Exists[models.User](), false))

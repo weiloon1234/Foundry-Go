@@ -14,7 +14,7 @@ func TestDerivedSetAggregateSQLParity(t *testing.T) {
 	source := derivedReports()
 	total := rows.At(source.Scope(), reports.BuyerTotalRows.Total)
 	r := reports.OrderSummaries
-	selected := rows.Select(source, r.Row, rows.MapSelected(r.Total, expr.SumNullableRow(total).Value()), rows.MapSelected(r.Count, expr.Count[rows.Set[reports.BuyerTotals]]().Value()))
+	selected := rows.Select(source, r.Row, rows.MapSelected(r.Total, expr.AsSelected(expr.SumNullableRow(total))), rows.MapSelected(r.Count, expr.AsSelected(expr.Count[rows.Set[reports.BuyerTotals]]())))
 	got, err := rows.CompileRead(rows.Read(selected))
 	if err != nil {
 		t.Fatal(err)

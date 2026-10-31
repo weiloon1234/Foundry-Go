@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    "order_card_foundry.gen.go": "84d0ce270f7dddbefc243af4e3a9f551acb2327e06b04dcbfbd7c96c830f1fcc",
-    "order_placed_foundry.gen.go": "c62e2e50dda166d97ad0129c8cbc28562e81fcba5ae5de70537ee6a107d88922"
+    "order_card_foundry.gen.go": "b2792c3999040c704df5931487277751c38ed0a616e4abea2e560f4b1640ff33",
+    "order_placed_foundry.gen.go": "9cd04ac8ae175f7e5c17dc7f96f28c926941263f7cd991eef7d15dbbead3861b"
   }
 }

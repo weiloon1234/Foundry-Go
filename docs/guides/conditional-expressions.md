@@ -3,8 +3,8 @@
 <!-- compiled-examples -->
 
 `database/orm/expr` preserves the input scope, value type and evaluation phase.
-Use `expr.Value(column)` for a row operand, `expr.Row(row).Value()` or a computed
-expression's `.Value()` for selection, and `rows.MapSelected` for a selected result.
+Use `expr.Value(column)` for a row operand, `expr.AsSelected(expr.Row(row))` or a computed
+`expr.AsSelected(expression)` for selection, and `rows.MapSelected` for a selected result.
 Aggregates and windows cannot become WHERE predicates.
 
 ## Row values and NULL handling
@@ -17,14 +17,14 @@ u := models.Users
 display := expr.Coalesce(expr.Value(orm.NullableTextExpr(u.Nickname)), expr.Value(orm.TextExpr(u.Email)))
 choice := expr.When(expr.ModelPredicate(orm.NumberGt(u.Age, 20)), expr.Param(orm.TextExpr(u.Email), "older"))
 label := choice.When(expr.ModelPredicate(orm.NumberEq(u.Age, 20)), expr.Value(orm.TextExpr(u.Email))).Else(expr.Param(orm.TextExpr(u.Email), "unknown"))
-statement, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(expr.Where(models.Users.Query(), display.Ne(""))), label.Value()), label.Asc())))
+statement, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(rows.From(expr.Where(models.Users.Query(), expr.Ne(display, ""))), expr.AsSelected(label)), expr.Asc(label))))
 ```
 
 `expr.Coalesce` takes a nullable value and a required fallback with the same base
 type. It removes one nullable layer, retaining empty strings and numeric zero.
 `CoalesceNullable` retains one layer. `NullIf` adds one nullable layer to matching
 required inputs; `NullIfNullable` does not nest wrappers. `NullableRow` explicitly
-widens a required row value. `expr.NullableRow(v).Param(value.Null[T]())` uses the exemplar's codec for NULL.
+widens a required row value. `expr.ParamOf(expr.NullableRow(v), value.Null[T]())` uses the exemplar's codec for NULL.
 For generic nullable expressions, literal comparisons take a present
 `value.Nullable[V]` (for example, `value.Of(v)`). A SQL NULL literal in equality
 or membership is rejected; use `IsNull`/`IsNotNull` to test absence. Dedicated
@@ -53,7 +53,7 @@ be hidden inside a conditional to make it legal in HAVING.
 ```go
 orders := models.Orders.Query()
 total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents))
-computed := expr.CoalesceValue(total.Value(), total.Param(decimal.FromInt64(0)).Value())
+computed := expr.CoalesceValue(expr.AsSelected(total), expr.AsSelected(expr.ParamOf(total, decimal.FromInt64(0))))
 ```
 
 ## Bound parameters and codecs
@@ -77,7 +77,7 @@ For declaration and API migration, see the [ORM migration guide](orm-migration.m
 ## Parameters without an exemplar
 
 `expr.Constant[S](codec, value)` snapshots and binds a value with an explicit codec
-and scope; it never interpolates SQL. `expr.Row(expr.At(scope, column)).Param(v)`
+and scope; it never interpolates SQL. `expr.ParamOf(expr.Row(expr.At(scope, column)), v)`
 uses the scoped expression's projection type, including its nullable wrapper.
 `Row` cannot demote selected or aggregate values into row predicates. The original
 column-based `expr.Param(column, v)` continues to use its comparison input type.

@@ -15,6 +15,7 @@ import (
 // MemberRowJSON describes the concrete MemberRow JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: MemberRowJSON()
 func MemberRowJSON() foundrycontract.JSON[MemberRow] { return foundryMemberRowJSON() }
 
 var foundryMemberRowJSON = sync.OnceValue(func() foundrycontract.JSON[MemberRow] {
@@ -43,6 +44,7 @@ var foundryMemberRowJSON = sync.OnceValue(func() foundrycontract.JSON[MemberRow]
 })
 
 // MemberRowValidationFieldSet retains concrete DTO and value types for validation.
+// Example: MemberRowValidationFields()
 type MemberRowValidationFieldSet struct {
 	// Balance validates the declared JSON property "balance".
 	Balance foundryvalidation.Field[MemberRow, decimal.Decimal]
@@ -57,6 +59,7 @@ type MemberRowValidationFieldSet struct {
 }
 
 // MemberRowValidationFields returns typed field descriptors.
+// Example: MemberRowValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func MemberRowValidationFields() MemberRowValidationFieldSet {
 	return *foundryMemberRowValidationFields()

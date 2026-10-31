@@ -76,7 +76,7 @@ func projection() rows.Query[rows.Inner[rows.Alias[left, member], rows.Alias[rig
 	schema := declareRows()
 	id := expr.At(rows.RightScope(j, rows.Scope(b)), orm.KeyExpr(o.ID))
 	name := expr.At(rows.LeftScope(j, rows.Scope(a)), orm.TextExpr(m.Name))
-	return rows.OrderBy(rows.Select(j, schema, rows.Map(schema.Name, name), rows.Map(schema.ID, id)).Where(name.Eq("Ada")), id.Asc())
+	return rows.OrderBy(rows.Select(j, schema, rows.Map(schema.Name, name), rows.Map(schema.ID, id)).Where(expr.Eq(name, "Ada")), expr.Asc(id))
 }
 
 type cell[V any] struct{ Value V }

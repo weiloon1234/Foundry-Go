@@ -36,10 +36,10 @@ func TestCorrelatedScalarMembershipAndExists(t *testing.T) {
 	parent := expr.At(rows.OuterScope(c, rows.ModelScope(m.Query())), orm.KeyExpr(m.ID))
 	child := expr.At(rows.InnerScope(c, rows.ModelScope(o.Query())), orm.NumberExpr(o.MemberID))
 	c = c.Where(expr.Equal(child, parent))
-	count := rows.SelectCorrelatedScalar(c, expr.Count[rows.Correlation[member, order]]().Value())
-	ids := rows.SelectCorrelatedScalar(c, expr.Row(child).Value())
+	count := rows.SelectCorrelatedScalar(c, expr.AsSelected(expr.Count[rows.Correlation[member, order]]()))
+	ids := rows.SelectCorrelatedScalar(c, expr.AsSelected(expr.Row(child)))
 	schema := correlationCountSchema()
-	q := rows.Select(outer, schema, rows.MapSelected(schema.Count, rows.CorrelatedScalarRowQuery(count).Value())).Where(c.Exists(), count.Exists(), rows.InCorrelatedQuery(expr.Value(orm.KeyExpr(m.ID)), ids))
+	q := rows.Select(outer, schema, rows.MapSelected(schema.Count, expr.AsSelected(rows.CorrelatedScalarRowQuery(count)))).Where(c.Exists(), count.Exists(), rows.InCorrelatedQuery(expr.Value(orm.KeyExpr(m.ID)), ids))
 	state := &driverState{columns: []string{"count"}, rows: [][]driver.Value{{int64(2)}, {nil}}}
 	got, err := rows.Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 2 || got[0].Count != value.Of(int64(2)) || !got[1].Count.IsNull() {
@@ -89,7 +89,7 @@ func TestCorrelationRejectsForeignOwnersShadowingAndZeroDescriptors(t *testing.T
 	schema := correlationCountSchema()
 	valid := rows.Correlate(outer, rows.From(o.Query()))
 	other := rows.Correlate(rows.From(foreign.Query()), rows.From(o.Query()))
-	selected := rows.SelectCorrelatedScalar(other, expr.Count[rows.Correlation[member, order]]().Value())
+	selected := rows.SelectCorrelatedScalar(other, expr.AsSelected(expr.Count[rows.Correlation[member, order]]()))
 	invalidScope := rows.OuterScope(valid, rows.ModelScope(foreign.Query()))
 	if !errors.Is(expr.FoundryScopeData(invalidScope, sqlowner.Expressions()).Err, fault.Invalid) {
 		t.Fatal("foreign scope lifted")
@@ -106,15 +106,15 @@ func TestCorrelationRejectsForeignOwnersShadowingAndZeroDescriptors(t *testing.T
 		t.Fatal("shadowing accepted")
 	}
 	for _, q := range []rows.Query[member, correlationCount]{
-		rows.Select(outer, schema, rows.MapSelected(schema.Count, rows.CorrelatedScalarRowQuery(selected).Value())),
-		rows.Select(outer, schema, rows.MapSelected(schema.Count, rows.CorrelatedScalarRowQuery(rows.SelectCorrelatedScalar(valid, expr.Count[rows.Correlation[member, order]]().Value())).Value())).Where(other.Exists()),
+		rows.Select(outer, schema, rows.MapSelected(schema.Count, expr.AsSelected(rows.CorrelatedScalarRowQuery(selected)))),
+		rows.Select(outer, schema, rows.MapSelected(schema.Count, expr.AsSelected(rows.CorrelatedScalarRowQuery(rows.SelectCorrelatedScalar(valid, expr.AsSelected(expr.Count[rows.Correlation[member, order]]())))))).Where(other.Exists()),
 	} {
 		state := &driverState{}
 		if got, err := rows.Read(q).All(t.Context(), openTest(t, state)); !errors.Is(err, fault.Invalid) || got != nil || state.sql != "" {
 			t.Fatal(got, err, state.sql)
 		}
 	}
-	zero := rows.CorrelatedScalarRowQuery(rows.CorrelatedScalar[member, order, int64]{}).Param(value.Null[int64]())
+	zero := expr.ParamOf(rows.CorrelatedScalarRowQuery(rows.CorrelatedScalar[member, order, int64]{}), value.Null[int64]())
 	if !errors.Is(expr.FoundryRowValue(zero, sqlowner.Expressions()).Err, fault.Invalid) {
 		t.Fatal("Param erased zero correlation")
 	}
@@ -127,7 +127,7 @@ func TestCorrelationNullableScopesAndDeferredChecks(t *testing.T) {
 	c := rows.Correlate(j, rows.From(o.Query()))
 	nullable := rows.OuterNullableScope(c, rows.NullableRightScope(j, rows.Scope(b)))
 	v := expr.AtNullable(nullable, orm.KeyExpr(m.ID))
-	if expr.FoundrySelectedColumn(expr.Row(v).Value(), sqlowner.Expressions()).Nullable != true {
+	if expr.FoundrySelectedColumn(expr.AsSelected(expr.Row(v)), sqlowner.Expressions()).Nullable != true {
 		t.Fatal("outer nullability lost")
 	}
 	wrong := rows.OuterNullableScope(c, rows.NullableRightScope(j, rows.Scope(rows.As[right](declareMembers().Query(), "b"))))

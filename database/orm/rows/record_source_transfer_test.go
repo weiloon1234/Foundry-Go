@@ -27,11 +27,11 @@ func TestProjectionDerivedSourcesPreserveOutputAndWindows(t *testing.T) {
 	m := declareMembers()
 	id := expr.Value(orm.KeyExpr(m.ID))
 	count := expr.Count[member]()
-	report := Select(From(m.Query()), schema, Map(schema.ID, id), MapSelected(schema.Count, count.Value())).Where(expr.OrderRow(id).Gt(2))
-	report = Limit(OrderBy(Having(GroupBy(report, expr.Group(id)), count.Gt(3)), count.Desc()), 4)
+	report := Select(From(m.Query()), schema, Map(schema.ID, id), MapSelected(schema.Count, expr.AsSelected(count))).Where(expr.Gt(expr.OrderRow(id), 2))
+	report = Limit(OrderBy(Having(GroupBy(report, expr.Group(id)), expr.GtValue(count, 3)), expr.DescValue(count)), 4)
 	source := AsRecord[left](RecordOf(report), "totals")
 	total := At(Scope(source), schema.Count)
-	s, err := CompileRead(ReadScalar(LimitScalar(WhereScalar(SelectScalar(source, total.Value()), expr.OrderRow(total).Gt(5)), 6)))
+	s, err := CompileRead(ReadScalar(LimitScalar(WhereScalar(SelectScalar(source, expr.AsSelected(total)), expr.Gt(expr.OrderRow(total), 5)), 6)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,10 +41,10 @@ func TestProjectionDerivedSourcesPreserveOutputAndWindows(t *testing.T) {
 		t.Fatal("derived output/filter/window mismatch", s.SQL(), s.Arguments())
 	}
 	bad := AsRecord[left](RecordOf(Select(From(m.Query()), schema)), "bad")
-	if _, err := CompileRead(ReadScalar(SelectScalar(bad, total.Value()))); !errors.Is(err, fault.Invalid) {
+	if _, err := CompileRead(ReadScalar(SelectScalar(bad, expr.AsSelected(total)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("incomplete derived projection accepted", err)
 	}
-	forged := SelectScalar(source, total.Value())
+	forged := SelectScalar(source, expr.AsSelected(total))
 	forged.source.Node.Selections = []querycore.SelectItem{{Expression: querycore.FieldRef{Table: "members", Column: "id"}}}
 	if _, err := CompileRead(ReadScalar(forged)); !errors.Is(err, fault.Invalid) {
 		t.Fatal("inner model field escaped output boundary", err)
@@ -57,7 +57,7 @@ func TestProjectionDerivedSourcesPreserveOutputAndWindows(t *testing.T) {
 	pairSchema := Define(func(b Builder[pair], r *pair) pairColumns {
 		return pairColumns{b.Row(), NullableNumberOf(b, &r.A), NullableNumberOf(b, &r.B)}
 	})
-	projected := RecordOf(Select(From(m.Query()), pairSchema, MapSelected(pairSchema.A, expr.NullableRow(id).Value()), MapSelected(pairSchema.B, expr.NullableRow(id).Value())))
+	projected := RecordOf(Select(From(m.Query()), pairSchema, MapSelected(pairSchema.A, expr.AsSelected(expr.NullableRow(id))), MapSelected(pairSchema.B, expr.AsSelected(expr.NullableRow(id)))))
 	cols := projected.core.Record.Columns
 	if len(cols) != 2 || !cols[0].Nullable || !cols[1].Nullable || RecordOf(report).core.Record.Columns[0].Nullable {
 		t.Fatal("derived output nullability lost")
@@ -76,7 +76,7 @@ func TestProjectionCompleteTypedMappingAndSourceIsolation(t *testing.T) {
 	m := declareMembers()
 	id := expr.Value(orm.KeyExpr(m.ID))
 	count := expr.Count[member]()
-	mappings := []Mapping[member, summary]{MapSelected(schema.Count, count.Value()), Map(schema.ID, id)}
+	mappings := []Mapping[member, summary]{MapSelected(schema.Count, expr.AsSelected(count)), Map(schema.ID, id)}
 	base := Select(From(m.Query().OrderBy(orm.KeyAsc(m.Key()))), schema, mappings...)
 	q := GroupBy(base, expr.Group(id))
 	mappings[0] = Mapping[member, summary]{}
@@ -100,7 +100,7 @@ func TestProjectionCompleteTypedMappingAndSourceIsolation(t *testing.T) {
 		Select(From(m.Query()), schema, Map(schema.ID, id)),
 		Select(From(m.Query()), schema, Map(schema.ID, id), Map(schema.ID, id)),
 		Select(From(m.Query()), schema, Map(schema.ID, id), MapSelected(schema.Count, expr.Selected[member, int64]{})),
-		Select(From(m.Query()), schema, Map(foreign, id), MapSelected(schema.Count, count.Value())),
+		Select(From(m.Query()), schema, Map(foreign, id), MapSelected(schema.Count, expr.AsSelected(count))),
 		base, GroupBy(q, expr.Group(id)), Limit(q, -1),
 	} {
 		if _, err := CompileRead(Read(bad)); !errors.Is(err, fault.Invalid) {
@@ -136,7 +136,7 @@ func TestProjectionRejectsEagerLoads(t *testing.T) {
 	source := From(d.Query().With(r))
 	base := From(d.Query())
 	id := expr.Value(orm.KeyExpr(d.Key()))
-	if _, err := CompileRead(ReadScalar(WhereScalar(SelectScalar(base, expr.Row(id).Value()), ExistsQuery(base, source)))); !errors.Is(err, fault.Invalid) {
+	if _, err := CompileRead(ReadScalar(WhereScalar(SelectScalar(base, expr.AsSelected(expr.Row(id))), ExistsQuery(base, source)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("EXISTS lost eager load", err)
 	}
 	if _, err := CompileRead(ReadRecord(SelectRecord(source, ModelScope(d.Query())))); !errors.Is(err, fault.Invalid) {

@@ -68,7 +68,7 @@ func (c TransactionCorrelatedSource[O, I]) Where(ps ...expr.Predicate[Transactio
 	return c
 }
 
-// OrderBy appends scoped ordering. Example: c.OrderBy(childID.Desc()).
+// OrderBy appends scoped ordering. Example: c.OrderBy(expr.Desc(childID)).
 func (c TransactionCorrelatedSource[O, I]) OrderBy(os ...expr.Order[TransactionCorrelation[O, I]]) TransactionCorrelatedSource[O, I] {
 	c.core.Source = orderSource(c.core.Source, os)
 	return c

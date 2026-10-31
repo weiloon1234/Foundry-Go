@@ -13,8 +13,14 @@ import (
 )
 
 // TableID is a semantic registration identity, never a SQL table name.
+//
+// Example: datatable.TableID("reports.members")
 type TableID string
 
+// Operator identifies a supported, declared filter operation.
+//
+// Example: datatable.Equal
+//
 //foundry:enum
 type Operator string
 
@@ -38,6 +44,10 @@ const (
 	Not                 Operator = "not"
 )
 
+// Direction selects ascending or descending ordering for a declared column.
+//
+// Example: datatable.Ascending
+//
 //foundry:enum
 type Direction string
 
@@ -46,6 +56,10 @@ const (
 	Descending Direction = "desc"
 )
 
+// Sort requests one declared column and ordering direction.
+//
+// Example: datatable.Sort{Column: "email", Direction: datatable.Ascending}
+//
 //foundry:dto
 type Sort struct {
 	Column    string    `json:"column"`
@@ -55,6 +69,8 @@ type Sort struct {
 // Filter is either one declared column/operator with scalar text values, or an
 // AND/OR/NOT group with children. Groups cannot carry a column or values. Scalar
 // text is parsed by the column's exact codec; it never becomes a SQL identifier.
+//
+// Example: datatable.Filter{Column: "email", Op: datatable.Equal, Values: []string{"ada@example.com"}}
 //
 //foundry:dto
 type Filter struct {
@@ -67,6 +83,8 @@ type Filter struct {
 // Request defaults omitted/zero Page and Size to 1 and 20. Everything else is
 // explicit: unknown names, unsupported operators and invalid values are errors.
 // Direct Go callers retain input ownership until the operation returns.
+//
+// Example: datatable.Request{Page: 1, Size: 20}
 //
 //foundry:dto
 type Request struct {
@@ -94,6 +112,8 @@ const (
 // Rejected input matches http.BadRequest and retains *contract.DecodeError for
 // internal diagnostics. Cancellation and decoder infrastructure faults are not
 // client rejection.
+//
+// Example: datatable.DecodeRequest(ctx, data)
 func DecodeRequest(ctx context.Context, data []byte) (Request, error) {
 	request, err := RequestJSON().Decode(ctx, data, requestLimits())
 	if _, rejected := safeerror.UnwrapOwned(err).(*contract.DecodeError); rejected {

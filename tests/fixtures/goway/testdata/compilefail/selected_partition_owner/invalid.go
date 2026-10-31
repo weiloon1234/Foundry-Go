@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = expr.WindowFor(rows.ModelScope(models.Users.Query())).PartitionByValues(expr.Count[models.Order]().Value().Key())
+var _ = expr.WindowFor(rows.ModelScope(models.Users.Query())).PartitionByValues(expr.Key(expr.AsSelected(expr.Count[models.Order]())))

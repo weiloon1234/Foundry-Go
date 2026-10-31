@@ -13,6 +13,7 @@ import (
 // RecoveryRequestJSON describes the concrete RecoveryRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: RecoveryRequestJSON()
 func RecoveryRequestJSON() foundrycontract.JSON[RecoveryRequest] { return foundryRecoveryRequestJSON() }
 
 var foundryRecoveryRequestJSON = sync.OnceValue(func() foundrycontract.JSON[RecoveryRequest] {
@@ -27,12 +28,14 @@ var foundryRecoveryRequestJSON = sync.OnceValue(func() foundrycontract.JSON[Reco
 })
 
 // RecoveryRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: RecoveryRequestValidationFields()
 type RecoveryRequestValidationFieldSet struct {
 	// Code validates the declared JSON property "code".
 	Code foundryvalidation.Field[RecoveryRequest, mfa.RecoveryCode]
 }
 
 // RecoveryRequestValidationFields returns typed field descriptors.
+// Example: RecoveryRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func RecoveryRequestValidationFields() RecoveryRequestValidationFieldSet {
 	return *foundryRecoveryRequestValidationFields()

@@ -65,7 +65,7 @@ func TestReportPreflightRejectsBeforeIO(t *testing.T) {
 	m := declareMembers()
 	id := expr.Value(orm.KeyExpr(m.ID))
 	base := rows.SelectValue(m.Query(), orm.KeyExpr(m.ID))
-	ordered := rows.OrderBy(base, id.Asc())
+	ordered := rows.OrderBy(base, expr.Asc(id))
 	state := &driverState{}
 	db := openTest(t, state)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -73,7 +73,7 @@ func TestReportPreflightRejectsBeforeIO(t *testing.T) {
 	if err := rows.PreflightRead(ctx, rows.Read(ordered)); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	for _, q := range []rows.Query[member, int64]{rows.ReorderUnwindowed(base), rows.ReorderUnwindowed(rows.Limit(base, 1), id.Asc()), rows.ReorderUnwindowed(rows.Offset(base, 1), id.Asc()), rows.ReorderUnwindowed(rows.DistinctOn(base, expr.Group(id)), id.Asc()), {}} {
+	for _, q := range []rows.Query[member, int64]{rows.ReorderUnwindowed(base), rows.ReorderUnwindowed(rows.Limit(base, 1), expr.Asc(id)), rows.ReorderUnwindowed(rows.Offset(base, 1), expr.Asc(id)), rows.ReorderUnwindowed(rows.DistinctOn(base, expr.Group(id)), expr.Asc(id)), {}} {
 		if _, err := rows.CompileRead(rows.Read(q)); !errors.Is(err, fault.Invalid) {
 			t.Fatal(err)
 		}
@@ -99,7 +99,7 @@ func TestReportPreflightRejectsBeforeIO(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	after, err := rows.CompileRead(rows.Read(rows.ReorderUnwindowed(ordered, id.Desc())))
+	after, err := rows.CompileRead(rows.Read(rows.ReorderUnwindowed(ordered, expr.Desc(id))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestReportPreflightRejectsBeforeIO(t *testing.T) {
 
 func TestReportSimplePageAndCount(t *testing.T) {
 	m := declareMembers()
-	q := rows.OrderBy(rows.SelectValue(m.Query(), orm.KeyExpr(m.ID)), expr.Value(orm.KeyExpr(m.ID)).Asc())
+	q := rows.OrderBy(rows.SelectValue(m.Query(), orm.KeyExpr(m.ID)), expr.Asc(expr.Value(orm.KeyExpr(m.ID))))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(1)}, {int64(2)}}}
 	page, err := rows.Read(q).SimplePaginate(t.Context(), openTest(t, state), orm.Page(1, 1))
 	if err != nil || len(page.Items) != 1 || !page.HasMore || cap(page.Items) != 1 {

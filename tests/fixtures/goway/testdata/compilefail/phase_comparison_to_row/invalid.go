@@ -6,4 +6,4 @@ import (
 
 type owner struct{}
 
-var _ = expr.RowExpression[owner, int64](expr.CompareValue(expr.Count[owner]().Value()))
+var _ = expr.RowExpression[owner, int64](expr.CompareValue(expr.AsSelected(expr.Count[owner]())))

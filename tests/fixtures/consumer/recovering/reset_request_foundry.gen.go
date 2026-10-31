@@ -14,6 +14,7 @@ import (
 // ResetRequestJSON describes the concrete ResetRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ResetRequestJSON()
 func ResetRequestJSON() foundrycontract.JSON[ResetRequest] { return foundryResetRequestJSON() }
 
 var foundryResetRequestJSON = sync.OnceValue(func() foundrycontract.JSON[ResetRequest] {
@@ -30,6 +31,7 @@ var foundryResetRequestJSON = sync.OnceValue(func() foundrycontract.JSON[ResetRe
 })
 
 // ResetRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ResetRequestValidationFields()
 type ResetRequestValidationFieldSet struct {
 	// Password validates the declared JSON property "password".
 	Password foundryvalidation.Field[ResetRequest, password.Plaintext]
@@ -38,6 +40,7 @@ type ResetRequestValidationFieldSet struct {
 }
 
 // ResetRequestValidationFields returns typed field descriptors.
+// Example: ResetRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ResetRequestValidationFields() ResetRequestValidationFieldSet {
 	return *foundryResetRequestValidationFields()

@@ -146,13 +146,13 @@ func (q LockedResult[S, R]) Of(targets ...LockTarget[S]) LockedResult[S, R] {
 	return q
 }
 
-// Where filters contributing rows. Example: locked.Where(id.Ne(zero)).
+// Where filters contributing rows. Example: locked.Where(expr.Ne(id, zero)).
 func (q LockedResult[S, R]) Where(ps ...expr.Predicate[S]) LockedResult[S, R] {
 	q.core.Source = whereSource(q.core.Source, ps)
 	return q
 }
 
-// OrderBy orders contributing rows. Example: locked.OrderBy(id.Asc()).
+// OrderBy orders contributing rows. Example: locked.OrderBy(expr.Asc(id)).
 func (q LockedResult[S, R]) OrderBy(os ...expr.ProjectionOrder[S]) LockedResult[S, R] {
 	q.core.Source = recordOrders(q.core.Source, os)
 	return q

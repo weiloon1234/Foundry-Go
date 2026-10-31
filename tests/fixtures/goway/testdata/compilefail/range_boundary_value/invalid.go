@@ -8,5 +8,5 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var r = expr.NumericRange(expr.WindowFor(rows.ModelScope(models.Users.Query())), expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))).Value())
-var _ = r.Between(expr.NumericRange(expr.WindowFor(rows.ModelScope(models.Users.Query())), expr.Count[models.User]().Value()).Preceding(1), r.CurrentRow())
+var r = expr.NumericRange(expr.WindowFor(rows.ModelScope(models.Users.Query())), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age)))))
+var _ = r.Between(expr.NumericRange(expr.WindowFor(rows.ModelScope(models.Users.Query())), expr.AsSelected(expr.Count[models.User]())).Preceding(1), r.CurrentRow())

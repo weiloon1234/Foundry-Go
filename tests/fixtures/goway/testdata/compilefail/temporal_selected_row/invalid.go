@@ -9,4 +9,4 @@ import (
 
 type other struct{}
 
-func invalid() { _ = expr.Year(expr.Max(orm.TimeExpr(scalars.Records.Date)).Value()) }
+func invalid() { _ = expr.Year(expr.AsSelected(expr.Max(orm.TimeExpr(scalars.Records.Date)))) }

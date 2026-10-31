@@ -8,4 +8,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.Distinct(rows.FromModel(models.Users.Query())).Where(expr.Value(orm.NumberExpr(models.Orders.TotalCents)).Eq(3))
+var _ = rows.Distinct(rows.FromModel(models.Users.Query())).Where(expr.Eq(expr.Value(orm.NumberExpr(models.Orders.TotalCents)), 3))

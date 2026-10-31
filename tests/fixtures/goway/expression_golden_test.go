@@ -56,9 +56,9 @@ func runExpressionNew(g *goldenCapture) {
 	a := rowset.As[expressionSide](models.Orders.Query(), "o")
 	f := expr.At(rowset.Scope(a), orm.NumberExpr(models.Orders.TotalCents))
 	x := expr.Add(f, f)
-	result := expr.Divide(x, x.Param(2))
+	result := expr.Divide(x, expr.ParamOf(x, 2))
 	s := expressionRows
-	q := rowset.OrderBy(rowset.Select(a, s, rowset.MapSelected(s.Number, result.Value()), rowset.MapSelected(s.Exact, expr.DecimalOf(result).Value()), rowset.MapSelected(s.Approx, expr.FloatOf(result).Value()), rowset.MapSelected(s.Missing, expr.AddNullable(expr.NullableRow(result), expr.NullableRow(result).Param(value.Null[int64]())).Value())).Where(expr.And(result.Gt(0), expr.Less(result, result.Param(100)))), expr.Negate(f).Asc())
+	q := rowset.OrderBy(rowset.Select(a, s, rowset.MapSelected(s.Number, expr.AsSelected(result)), rowset.MapSelected(s.Exact, expr.AsSelected(expr.DecimalOf(result))), rowset.MapSelected(s.Approx, expr.AsSelected(expr.FloatOf(result))), rowset.MapSelected(s.Missing, expr.AsSelected(expr.AddNullable(expr.NullableRow(result), expr.ParamOf(expr.NullableRow(result), value.Null[int64]()))))).Where(expr.And(expr.Gt(result, 0), expr.Less(result, expr.ParamOf(result, 100)))), expr.Asc(expr.Negate(f)))
 	resultRows := must(rowset.Read(q).All(ctx, db))
 	fmt.Fprintln(&g.output, oracleSnapshot([]any{resultRows}))
 }

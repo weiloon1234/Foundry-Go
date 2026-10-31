@@ -29,5 +29,5 @@ var schema = rows.Define(func(b rows.Builder[result], r *result) fields {
 
 func Run(ctx context.Context, db database.Executor) ([]result, error) {
 	d := jsonpaths.Documents
-	return rows.Read(rows.Select(rows.FromModel(d.Query()), schema, rows.MapSelected(schema.Kind, expr.JSONTypeValue(expr.Row(expr.Value(orm.JSONExpr(d.Settings))).Value())), rows.MapSelected(schema.Length, expr.JSONLengthValue(expr.Row(expr.Value(orm.JSONExpr(d.Tags))).Value())), rows.MapSelected(schema.Contains, expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(d.Backup)), expr.NullableRow(expr.Value(orm.JSONExpr(d.Settings)))).Value()))).All(ctx, db)
+	return rows.Read(rows.Select(rows.FromModel(d.Query()), schema, rows.MapSelected(schema.Kind, expr.JSONTypeValue(expr.AsSelected(expr.Row(expr.Value(orm.JSONExpr(d.Settings)))))), rows.MapSelected(schema.Length, expr.JSONLengthValue(expr.AsSelected(expr.Row(expr.Value(orm.JSONExpr(d.Tags)))))), rows.MapSelected(schema.Contains, expr.AsSelected(expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(d.Backup)), expr.NullableRow(expr.Value(orm.JSONExpr(d.Settings)))))))).All(ctx, db)
 }

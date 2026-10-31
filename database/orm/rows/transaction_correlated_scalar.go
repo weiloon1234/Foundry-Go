@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// TransactionCorrelatedScalar keeps one value bound to its enclosing scope. Example: rows.SelectTransactionCorrelatedScalar(c,expr.Row(childID).Value()).
+// TransactionCorrelatedScalar keeps one value bound to its enclosing scope. Example: rows.SelectTransactionCorrelatedScalar(c,expr.AsSelected(expr.Row(childID))).
 type TransactionCorrelatedScalar[O, I TransactionScopeType, V any] struct {
 	_                      [0]*O
 	_                      [0]*I
@@ -17,7 +17,7 @@ type TransactionCorrelatedScalar[O, I TransactionScopeType, V any] struct {
 	column                 ormcore.Column[V]
 }
 
-// SelectTransactionCorrelatedScalar selects one lifted value without an execution escape. Example: rows.SelectTransactionCorrelatedScalar(c,expr.Row(childID).Value()).
+// SelectTransactionCorrelatedScalar selects one lifted value without an execution escape. Example: rows.SelectTransactionCorrelatedScalar(c,expr.AsSelected(expr.Row(childID))).
 func SelectTransactionCorrelatedScalar[O, I TransactionScopeType, V any](c TransactionCorrelatedSource[O, I], v expr.Selected[TransactionCorrelation[O, I], V]) TransactionCorrelatedScalar[O, I, V] {
 	s := SelectScalar(selectionAdapter[TransactionCorrelation[O, I]]{c.core.Source}, v)
 	c.core.Source = s.source
@@ -30,7 +30,7 @@ func (s TransactionCorrelatedScalar[O, I, V]) Where(ps ...expr.Predicate[Transac
 	return s
 }
 
-// OrderBy appends inner ordering. Example: selected.OrderBy(childID.Desc()).
+// OrderBy appends inner ordering. Example: selected.OrderBy(expr.Desc(childID)).
 func (s TransactionCorrelatedScalar[O, I, V]) OrderBy(os ...expr.ProjectionOrder[TransactionCorrelation[O, I]]) TransactionCorrelatedScalar[O, I, V] {
 	s.core.Source = recordOrders(s.core.Source, os)
 	return s

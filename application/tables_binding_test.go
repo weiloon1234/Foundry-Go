@@ -85,8 +85,8 @@ func TestTablesRedactCompiledAndCapturedBindingErrors(t *testing.T) {
 			}
 			direct := orm.HasManyOf(fields.Children, orm.KeyExpr(fields.Key()), orm.NumberExpr(fields.ParentID))
 			through := orm.HasManyThroughOf(fields.Children, orm.KeyExpr(fields.Key()), orm.NumberExpr(fields.ParentID), orm.KeyExpr(fields.Key()), orm.NumberExpr(fields.ParentID)).Where(orm.ColumnEq(fields.Name, "private input"))
-			filtered := fields.Count.Using(expr.Related(direct, expr.Count[row]().Filter(expr.Value(orm.ColumnExpr(fields.Name)).Eq("private input"))))
-			captured := fields.Count.Using(expr.Related(direct, expr.Count[row]().Filter(expr.Param(orm.ColumnExpr(fields.Name), "private input").IsNull())))
+			filtered := fields.Count.Using(expr.Related(direct, expr.Filter(expr.Count[row](), expr.Eq(expr.Value(orm.ColumnExpr(fields.Name)), "private input"))))
+			captured := fields.Count.Using(expr.Related(direct, expr.Filter(expr.Count[row](), expr.IsNull(expr.Param(orm.ColumnExpr(fields.Name), "private input")))))
 			for _, tc := range []struct {
 				name        string
 				declaration orm.CheckedTable

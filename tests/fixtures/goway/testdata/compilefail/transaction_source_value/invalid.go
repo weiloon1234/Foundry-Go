@@ -29,4 +29,4 @@ var txSource = rows.AsTransaction[tag](rows.LockedRecord(orm.Lock(models.Users.Q
 var txScope = rows.TransactionScope(txSource)
 var selected = rows.SelectTransactionRecord(txSource, txScope)
 
-var invalid = rows.SelectScalar(txSource, expr.Row(expr.At(txScope, orm.KeyExpr(models.Users.ID))).Value())
+var invalid = rows.SelectScalar(txSource, expr.AsSelected(expr.Row(expr.At(txScope, orm.KeyExpr(models.Users.ID)))))

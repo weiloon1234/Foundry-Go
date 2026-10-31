@@ -5,10 +5,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 )
 
-// OrderedScalar is the shared ordered row-value constraint. Example: func less[V expr.OrderedScalar](v V).
+// OrderedScalar is the shared ordered row-value constraint.
+//
+// Example: func less[V expr.OrderedScalar](v V) V { return v }
 type OrderedScalar interface{ orderedScalar }
 
-// FoundryRowValue exposes validated row metadata without admitting selected values. Example: FoundryRowValue(e,sqlowner.Expressions()).
+// FoundryRowValue exposes validated row metadata without admitting selected values.
+//
+// Example: expr.FoundryRowValue(e, seal)
 func FoundryRowValue[S, V any](e RowValue[S, V], seal sqlowner.ExpressionSeal) ormcore.Expression {
 	if !seal.Valid() {
 		return ormcore.Expression{Err: ormcore.Invalid("invalid SQL owner capability")}
@@ -16,7 +20,9 @@ func FoundryRowValue[S, V any](e RowValue[S, V], seal sqlowner.ExpressionSeal) o
 	return rowInput(e).data.core
 }
 
-// FoundrySelectedColumn retains concrete value codecs across a subquery boundary. Example: FoundrySelectedColumn(e,sqlowner.Expressions()).
+// FoundrySelectedColumn retains concrete value codecs across a subquery boundary.
+//
+// Example: expr.FoundrySelectedColumn(e, seal)
 func FoundrySelectedColumn[S, V any](e Selected[S, V], seal sqlowner.ExpressionSeal) ormcore.Column[V] {
 	if !seal.Valid() {
 		return ormcore.Column[V]{Err: ormcore.Invalid("invalid SQL owner capability")}
@@ -24,7 +30,9 @@ func FoundrySelectedColumn[S, V any](e Selected[S, V], seal sqlowner.ExpressionS
 	return e.data.column
 }
 
-// FoundryRowExpression constructs a validated row-phase SQL value. Example: FoundryRowExpression[S](core,column,sqlowner.Expressions()).
+// FoundryRowExpression constructs a validated row-phase SQL value.
+//
+// Example: expr.FoundryRowExpression[User](core, column, seal)
 func FoundryRowExpression[S, V any](core ormcore.Expression, column ormcore.Column[V], seal sqlowner.ExpressionSeal) RowExpression[S, V] {
 	if !seal.Valid() {
 		return RowExpression[S, V]{data: rowData[V]{core: ormcore.Expression{Err: ormcore.Invalid("invalid SQL owner capability")}}}
@@ -32,7 +40,9 @@ func FoundryRowExpression[S, V any](core ormcore.Expression, column ormcore.Colu
 	return RowExpression[S, V]{data: rowData[V]{core: core, column: column}}
 }
 
-// FoundrySelectedValue constructs a validated selected-phase SQL value. Example: FoundrySelectedValue[S](core,column,sqlowner.Expressions()).
+// FoundrySelectedValue constructs a validated selected-phase SQL value.
+//
+// Example: expr.FoundrySelectedValue[User](core, column, seal)
 func FoundrySelectedValue[S, V any](core ormcore.Expression, column ormcore.Column[V], seal sqlowner.ExpressionSeal) Selected[S, V] {
 	if !seal.Valid() {
 		return Selected[S, V]{data: rowData[V]{core: ormcore.Expression{Err: ormcore.Invalid("invalid SQL owner capability")}}}
@@ -40,7 +50,9 @@ func FoundrySelectedValue[S, V any](core ormcore.Expression, column ormcore.Colu
 	return Selected[S, V]{data: rowData[V]{core: core, column: column}}
 }
 
-// FoundryPredicateValue constructs a validated scoped SQL condition. Example: FoundryPredicateValue[S](core,sqlowner.Expressions()).
+// FoundryPredicateValue constructs a validated scoped SQL condition.
+//
+// Example: expr.FoundryPredicateValue[User](core, seal)
 func FoundryPredicateValue[S any](core ormcore.Predicate, seal sqlowner.ExpressionSeal) Predicate[S] {
 	if !seal.Valid() {
 		return Predicate[S]{core: ormcore.Predicate{Err: ormcore.Invalid("invalid SQL owner capability")}}
@@ -48,7 +60,9 @@ func FoundryPredicateValue[S any](core ormcore.Predicate, seal sqlowner.Expressi
 	return Predicate[S]{core: core}
 }
 
-// Not negates a row condition while preserving SQL NULL semantics. Example: expr.Not(rows.InQuery(id,inner)).
+// Not negates a row condition while preserving SQL NULL semantics.
+//
+// Example: expr.Not(p)
 func Not[S any](p Predicate[S]) Predicate[S] {
 	return Predicate[S]{core: ormcore.NegatePredicate(p.core)}
 }

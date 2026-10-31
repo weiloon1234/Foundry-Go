@@ -30,7 +30,7 @@ func TestRowsSQLParity(t *testing.T) {
 	check(got, err)
 	o := models.Orders
 	totals := rows.GroupBy(rows.Select(rows.From(o.Query()), BuyerTotalRows,
-		rows.Map(BuyerTotalRows.BuyerID, expr.Value(orm.ColumnExpr(o.BuyerID))), rows.MapSelected(BuyerTotalRows.Total, expr.Sum(orm.NumberExpr(o.TotalCents)).Value()), rows.MapSelected(BuyerTotalRows.Orders, expr.Count[models.Order]().Value()), rows.MapSelected(BuyerTotalRows.Average, expr.Avg(orm.NumberExpr(o.TotalCents)).Value())), expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID))))
+		rows.Map(BuyerTotalRows.BuyerID, expr.Value(orm.ColumnExpr(o.BuyerID))), rows.MapSelected(BuyerTotalRows.Total, expr.AsSelected(expr.Sum(orm.NumberExpr(o.TotalCents)))), rows.MapSelected(BuyerTotalRows.Orders, expr.AsSelected(expr.Count[models.Order]())), rows.MapSelected(BuyerTotalRows.Average, expr.AsSelected(expr.Avg(orm.NumberExpr(o.TotalCents))))), expr.Group(expr.Value(orm.ColumnExpr(o.BuyerID))))
 
 	got, err = rows.CompileRead(rows.Read(totals))
 	check(got, err)

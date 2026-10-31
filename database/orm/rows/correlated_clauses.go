@@ -3,7 +3,7 @@ package rows
 import "github.com/weiloon1234/Foundry-Go/database/orm/expr"
 
 // HavingCorrelatedRecord appends group predicates inside the correlated SELECT.
-// Example: rows.HavingCorrelatedRecord(summary, count.Gt(0)).
+// Example: rows.HavingCorrelatedRecord(summary, expr.GtValue(count, 0)).
 func HavingCorrelatedRecord[O, I, R any](q CorrelatedRecord[O, I, R], predicates ...expr.HavingPredicate[Correlation[O, I]]) CorrelatedRecord[O, I, R] {
 	q.core.Correlation.Source = Having(Query[Correlation[O, I], struct{}]{source: q.core.Correlation.Source}, predicates...).source
 	return q
@@ -31,14 +31,14 @@ func GroupByCorrelatedScalar[O, I, V any](q CorrelatedScalar[O, I, V], keys ...e
 }
 
 // DistinctOnCorrelatedScalarValues accepts selected keys inside the correlated SELECT.
-// Example: rows.DistinctOnCorrelatedScalarValues(selected, count.Value().Key()).
+// Example: rows.DistinctOnCorrelatedScalarValues(selected, expr.Key(expr.AsSelected(count))).
 func DistinctOnCorrelatedScalarValues[O, I, V any](q CorrelatedScalar[O, I, V], keys ...expr.ProjectionKey[Correlation[O, I]]) CorrelatedScalar[O, I, V] {
 	q.core.Source = DistinctOnValues(Query[Correlation[O, I], struct{}]{source: q.core.Source}, keys...).source
 	return q
 }
 
 // OrderCorrelatedScalar appends row or selected ordering inside the correlated SELECT.
-// Example: rows.OrderCorrelatedScalar(selected, count.Desc()).
+// Example: rows.OrderCorrelatedScalar(selected, expr.DescValue(count)).
 func OrderCorrelatedScalar[O, I, V any](q CorrelatedScalar[O, I, V], orders ...expr.ProjectionOrder[Correlation[O, I]]) CorrelatedScalar[O, I, V] {
 	q.core.Source = recordOrders(q.core.Source, orders)
 	return q

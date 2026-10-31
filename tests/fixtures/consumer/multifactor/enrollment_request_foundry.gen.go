@@ -13,6 +13,7 @@ import (
 // EnrollmentRequestJSON describes the concrete EnrollmentRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: EnrollmentRequestJSON()
 func EnrollmentRequestJSON() foundrycontract.JSON[EnrollmentRequest] {
 	return foundryEnrollmentRequestJSON()
 }
@@ -36,12 +37,14 @@ var foundryEnrollmentRequestJSON = sync.OnceValue(func() foundrycontract.JSON[En
 })
 
 // EnrollmentRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: EnrollmentRequestValidationFields()
 type EnrollmentRequestValidationFieldSet struct {
 	// Credentials validates the declared JSON property "credentials".
 	Credentials foundryvalidation.Field[EnrollmentRequest, PasswordCredentials]
 }
 
 // EnrollmentRequestValidationFields returns typed field descriptors.
+// Example: EnrollmentRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func EnrollmentRequestValidationFields() EnrollmentRequestValidationFieldSet {
 	return *foundryEnrollmentRequestValidationFields()

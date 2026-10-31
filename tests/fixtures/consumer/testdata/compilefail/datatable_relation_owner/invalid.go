@@ -9,4 +9,4 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-var invalid = datatable.Related[reporting.Member, reporting.Order, string](datatable.Where(foundryhttp.StringQuery[string](), expr.TextRow(orm.TextExpr(reporting.OrderModels.Label))), func(p expr.Predicate[reporting.Member]) expr.Predicate[reporting.Member] { return p })
+var invalid = datatable.Related[reporting.Member, reporting.Order, string](datatable.Where(foundryhttp.StringQuery[string](), expr.TextFilter(expr.TextRow(orm.TextExpr(reporting.OrderModels.Label)))), func(p expr.Predicate[reporting.Member]) expr.Predicate[reporting.Member] { return p })

@@ -14,6 +14,7 @@ import (
 // InventoryResponseJSON describes the concrete InventoryResponse JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: InventoryResponseJSON()
 func InventoryResponseJSON() foundrycontract.JSON[InventoryResponse] {
 	return foundryInventoryResponseJSON()
 }
@@ -42,6 +43,7 @@ var foundryInventoryResponseJSON = sync.OnceValue(func() foundrycontract.JSON[In
 })
 
 // InventoryResponseValidationFieldSet retains concrete DTO and value types for validation.
+// Example: InventoryResponseValidationFields()
 type InventoryResponseValidationFieldSet struct {
 	// ByNumber validates the declared JSON property "ByNumber".
 	ByNumber foundryvalidation.Field[InventoryResponse, map[int16]string]
@@ -54,6 +56,7 @@ type InventoryResponseValidationFieldSet struct {
 }
 
 // InventoryResponseValidationFields returns typed field descriptors.
+// Example: InventoryResponseValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func InventoryResponseValidationFields() InventoryResponseValidationFieldSet {
 	return *foundryInventoryResponseValidationFields()

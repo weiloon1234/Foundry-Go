@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.When(expr.OrderRow(expr.Value(orm.NumberExpr(models.Users.Age))).Gt(0), expr.Count[models.User]().Value())
+var _ = expr.When(expr.Gt(expr.OrderRow(expr.Value(orm.NumberExpr(models.Users.Age))), 0), expr.AsSelected(expr.Count[models.User]()))

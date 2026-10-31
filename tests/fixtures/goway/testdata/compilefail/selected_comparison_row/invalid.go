@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.Where(models.Users.Query(), expr.OrderValue(expr.Count[models.User]().Value()).Gt(2))
+var _ = expr.Where(models.Users.Query(), expr.GtValue(expr.OrderValue(expr.AsSelected(expr.Count[models.User]())), 2))

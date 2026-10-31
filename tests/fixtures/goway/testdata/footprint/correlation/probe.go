@@ -33,7 +33,7 @@ func F() rows.Query[models.User, result] {
 	nparent := expr.At(rows.OuterScope(nested, parentScope), orm.KeyExpr(models.Users.ID))
 	nchild := expr.At(rows.InnerScope(nested, rows.Scope(third)), orm.KeyExpr(models.Users.ID))
 	c = c.Where(nested.Where(expr.Equal(nparent, nchild)).Limit(1).Exists())
-	count := rows.SelectCorrelatedScalar(c, expr.Count[rows.Correlation[models.User, models.Order]]().Value())
-	ids := rows.SelectCorrelatedScalar(c, expr.Row(buyer).Value())
-	return rows.Select(outer, schema, rows.MapSelected(schema.Count, rows.CorrelatedScalarRowQuery(count).Value())).Where(c.Exists(), rows.InCorrelatedQuery(expr.Value(orm.KeyExpr(models.Users.ID)), ids))
+	count := rows.SelectCorrelatedScalar(c, expr.AsSelected(expr.Count[rows.Correlation[models.User, models.Order]]()))
+	ids := rows.SelectCorrelatedScalar(c, expr.AsSelected(expr.Row(buyer)))
+	return rows.Select(outer, schema, rows.MapSelected(schema.Count, expr.AsSelected(rows.CorrelatedScalarRowQuery(count)))).Where(c.Exists(), rows.InCorrelatedQuery(expr.Value(orm.KeyExpr(models.Users.ID)), ids))
 }

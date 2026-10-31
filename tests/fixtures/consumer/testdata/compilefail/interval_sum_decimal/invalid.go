@@ -9,5 +9,5 @@ import (
 )
 
 func invalid() {
-	_ = expr.SumInterval(orm.IntervalExpr(intervalqueries.Samples.Period)).Gt(decimal.Decimal{})
+	_ = expr.GtValue(expr.SumInterval(orm.IntervalExpr(intervalqueries.Samples.Period)), decimal.Decimal{})
 }

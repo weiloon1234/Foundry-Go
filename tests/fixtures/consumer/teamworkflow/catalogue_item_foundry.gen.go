@@ -12,6 +12,7 @@ import (
 // CatalogueItemJSON describes the concrete CatalogueItem JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: CatalogueItemJSON()
 func CatalogueItemJSON() foundrycontract.JSON[CatalogueItem] { return foundryCatalogueItemJSON() }
 
 var foundryCatalogueItemJSON = sync.OnceValue(func() foundrycontract.JSON[CatalogueItem] {
@@ -26,12 +27,14 @@ var foundryCatalogueItemJSON = sync.OnceValue(func() foundrycontract.JSON[Catalo
 })
 
 // CatalogueItemValidationFieldSet retains concrete DTO and value types for validation.
+// Example: CatalogueItemValidationFields()
 type CatalogueItemValidationFieldSet struct {
 	// Slug validates the declared JSON property "slug".
 	Slug foundryvalidation.Field[CatalogueItem, Slug]
 }
 
 // CatalogueItemValidationFields returns typed field descriptors.
+// Example: CatalogueItemValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func CatalogueItemValidationFields() CatalogueItemValidationFieldSet {
 	return *foundryCatalogueItemValidationFields()

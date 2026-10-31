@@ -31,20 +31,20 @@ func TestAdvancedConflictInvalidPoliciesSendNoSQL(t *testing.T) {
 	records := r.ConflictRowsOf(f.Query())
 	foreign := r.ConflictRowsOf(other.Query())
 	valid := orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoUpdate(orm.ConflictIncoming(orm.TextExpr(f.Name)))
-	inner := r.SelectScalar(r.From(f.Query()), expr.Row(expr.Value(orm.NumberExpr(f.Amount))).Value())
+	inner := r.SelectScalar(r.From(f.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(f.Amount)))))
 	computed := expr.Group(expr.Add(expr.Value(orm.NumberExpr(f.Amount)), expr.Value(orm.NumberExpr(f.Amount))))
 	for name, p := range map[string]orm.Conflict[n.WriteRecord]{
 		"foreign target":           r.OnConflictKeys(expr.Group(expr.Value(orm.TextExpr(other.Name)))).DoNothing(),
 		"foreign calculation":      valid.DoUpdate(r.SetConflictValue(orm.NumberExpr(f.Amount), expr.At(foreign.Proposed(), orm.NumberExpr(other.Amount)))),
-		"foreign condition":        r.ConflictWhereRows(valid, expr.At(foreign.Proposed(), orm.ColumnExpr(other.Enabled)).Eq(true)),
-		"foreign partial index":    r.ConflictTargetWhere(valid, expr.Value(orm.ColumnExpr(other.Enabled)).Eq(true)),
+		"foreign condition":        r.ConflictWhereRows(valid, expr.Eq(expr.At(foreign.Proposed(), orm.ColumnExpr(other.Enabled)), true)),
+		"foreign partial index":    r.ConflictTargetWhere(valid, expr.Eq(expr.Value(orm.ColumnExpr(other.Enabled)), true)),
 		"zero calculation":         valid.DoUpdate(r.SetConflictValue(orm.NumberExpr(f.Amount), expr.RowExpression[r.ConflictRow[n.WriteRecord], decimal.Decimal]{})),
 		"zero rows":                valid.DoUpdate(r.SetConflictValue(orm.NumberExpr(f.Amount), expr.At(r.ConflictRows[n.WriteRecord]{}.Stored(), orm.NumberExpr(f.Amount)))),
 		"duplicate index":          r.OnConflictKeys(computed, computed).DoNothing(),
 		"scalar index":             r.OnConflictKeys(expr.Group(r.ScalarRowQuery(r.From(f.Query()), inner))).DoNothing(),
 		"subquery index condition": r.ConflictTargetWhere(valid, r.ExistsQuery(r.From(f.Query()), r.From(f.Query()))),
 		"named partial":            orm.OnConflictConstraint[n.WriteRecord]("write_records_pkey").TargetWhere(orm.ColumnEq(f.Enabled, true)).DoNothing(),
-		"do nothing condition":     r.ConflictWhereRows(orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoNothing(), expr.At(records.Proposed(), orm.ColumnExpr(f.Enabled)).Eq(true)),
+		"do nothing condition":     r.ConflictWhereRows(orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.Name))).DoNothing(), expr.Eq(expr.At(records.Proposed(), orm.ColumnExpr(f.Enabled)), true)),
 	} {
 		t.Run(name, func(t *testing.T) {
 			capture := &goldenCapture{}
@@ -120,7 +120,7 @@ func TestAdvancedConflictSubqueryScopesFailClosed(t *testing.T) {
 	dest := advancedScopedDeclaration("conflict_dest", false)
 	source := advancedScopedDeclaration("conflict_source", true)
 	records := r.ConflictRowsOf(dest.Query())
-	scalar := r.SelectScalar(r.From(source.Query().Limit(1)), expr.Row(expr.Value(orm.NumberExpr(source.Amount))).Value())
+	scalar := r.SelectScalar(r.From(source.Query().Limit(1)), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(source.Amount)))))
 	policy := orm.OnConflict(orm.ConflictKey(orm.KeyExpr(dest.Key()))).DoUpdate(r.SetConflictValue(orm.NullableNumberExpr(dest.Note), r.ConflictScalarRowQuery(records, scalar)))
 	capture := &goldenCapture{scriptedColumns: []string{"id", "tenant", "amount", "note"}, scriptedBatches: [][][]driver.Value{{{int64(1), int64(9), int64(3), int64(7)}}}}
 	db, err := database.Prepare(database.Adapter{Connector: connector{capture}}, database.DefaultPoolConfig())

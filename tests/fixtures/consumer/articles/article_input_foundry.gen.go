@@ -14,6 +14,7 @@ import (
 // ArticleInputJSON describes the concrete ArticleInput JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ArticleInputJSON()
 func ArticleInputJSON() foundrycontract.JSON[ArticleInput] { return foundryArticleInputJSON() }
 
 var foundryArticleInputJSON = sync.OnceValue(func() foundrycontract.JSON[ArticleInput] {
@@ -51,6 +52,7 @@ var foundryArticleInputJSON = sync.OnceValue(func() foundrycontract.JSON[Article
 })
 
 // ArticleInputValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ArticleInputValidationFields()
 type ArticleInputValidationFieldSet struct {
 	// Author validates the declared JSON property "author".
 	Author foundryvalidation.Field[ArticleInput, string]
@@ -65,6 +67,7 @@ type ArticleInputValidationFieldSet struct {
 }
 
 // ArticleInputValidationFields returns typed field descriptors.
+// Example: ArticleInputValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ArticleInputValidationFields() ArticleInputValidationFieldSet {
 	return *foundryArticleInputValidationFields()

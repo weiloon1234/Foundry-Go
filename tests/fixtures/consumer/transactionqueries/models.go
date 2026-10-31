@@ -35,7 +35,7 @@ func Claimed(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(Records.Query().OrderBy(orm.KeyAsc(Records.ID)).Limit(1)).SkipLocked()))
 	source := rows.AsTransaction[claimedAlias](definition, "candidate")
 	fields := recordAt(rows.TransactionScope(source))
-	return rows.SelectTransaction(source, Summaries, rows.MapSelected(Summaries.ID, expr.Row(fields.ID).Value()), rows.MapSelected(Summaries.Name, expr.Row(fields.Name).Value())).All(ctx, tx)
+	return rows.SelectTransaction(source, Summaries, rows.MapSelected(Summaries.ID, expr.AsSelected(expr.Row(fields.ID))), rows.MapSelected(Summaries.Name, expr.AsSelected(expr.Row(fields.Name)))).All(ctx, tx)
 }
 
 func Joined(ctx context.Context, tx *database.Tx) ([]Summary, error) {
@@ -45,12 +45,12 @@ func Joined(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 	a, b := recordAt(rows.TransactionScope(left)), recordAt(rows.TransactionScope(right))
 	joined := rows.TransactionInnerJoin(left, right, rows.OnEqual(a.ID, b.ID))
 	fields := recordAt(rows.LeftScope(joined, rows.TransactionScope(left)))
-	return rows.SelectTransaction(joined, Summaries, rows.MapSelected(Summaries.ID, expr.Row(fields.ID).Value()), rows.MapSelected(Summaries.Name, expr.Row(fields.Name).Value())).All(ctx, tx)
+	return rows.SelectTransaction(joined, Summaries, rows.MapSelected(Summaries.ID, expr.AsSelected(expr.Row(fields.ID))), rows.MapSelected(Summaries.Name, expr.AsSelected(expr.Row(fields.Name)))).All(ctx, tx)
 }
 
 func CountClaimed(ctx context.Context, tx *database.Tx) (Totals, error) {
 	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(Records.Query())))
 	source := rows.AsTransaction[claimedAlias](definition, "candidate")
 	fields := recordAt(rows.TransactionScope(source))
-	return rows.SelectTransaction(source, TotalRows, rows.MapSelected(TotalRows.Count, expr.CountFieldAt(fields.scope, orm.KeyExpr(Records.ID)).Value())).RequireFirst(ctx, tx)
+	return rows.SelectTransaction(source, TotalRows, rows.MapSelected(TotalRows.Count, expr.AsSelected(expr.CountFieldAt(fields.scope, orm.KeyExpr(Records.ID))))).RequireFirst(ctx, tx)
 }

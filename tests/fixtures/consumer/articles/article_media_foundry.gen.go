@@ -31,6 +31,7 @@ var foundryArticleMediaDescriptor = sync.OnceValue(func() foundryhttp.Multipart[
 })
 
 // ArticleMediaValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ArticleMediaValidationFields()
 type ArticleMediaValidationFieldSet struct {
 	// Galleries validates the declared multipart part "galleries".
 	Galleries foundryvalidation.Field[ArticleMedia, Gallery]
@@ -41,6 +42,7 @@ type ArticleMediaValidationFieldSet struct {
 }
 
 // ArticleMediaValidationFields returns typed field descriptors.
+// Example: ArticleMediaValidationFields()
 // Compose rules with these fields; multipart names and selectors are generated.
 func ArticleMediaValidationFields() ArticleMediaValidationFieldSet {
 	return *foundryArticleMediaValidationFields()

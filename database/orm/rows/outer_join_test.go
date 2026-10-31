@@ -93,7 +93,7 @@ func TestNullableScopeChainAndSourceBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := &driverState{columns: []string{"id"}, rows: [][]driver.Value{{nil}}}
-	q := rows.Select(chain, schema, rows.Map(schema.ID, e)).Where(e.IsNull())
+	q := rows.Select(chain, schema, rows.Map(schema.ID, e)).Where(expr.IsNull(e))
 	if _, err := rows.Read(q).All(t.Context(), openTest(t, state)); err != nil {
 		t.Fatal(err)
 	}

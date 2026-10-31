@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.TextRow(orm.EnumExpr(models.Users.Status)).Like(models.StatusActive)
+var _ = expr.TextLike(expr.TextRow(orm.EnumExpr(models.Users.Status)), models.StatusActive)

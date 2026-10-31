@@ -247,8 +247,8 @@ func TestRelationAggregateFailuresDiscardResults(t *testing.T) {
 		rel   orm.Relation[j.Parent]
 		cause error
 	}{
-		{"singular", [][]driver.Value{{int64(1), int64(0), int64(2)}}, j.Parents.Count.Using(expr.Related(j.Chosen, expr.Count[j.Target]().Filter(expr.Value(orm.NumberExpr(j.Targets.Rank)).Eq(-1)))), database.TooManyRows},
-		{"ambiguous_pivot", [][]driver.Value{{int64(1), int64(0), int64(2), int64(1)}}, j.Parents.Count.Using(expr.Related(j.Peers, expr.Count[j.Target]().Filter(expr.Value(orm.NumberExpr(j.Targets.Rank)).Eq(-1)))), database.TooManyRows},
+		{"singular", [][]driver.Value{{int64(1), int64(0), int64(2)}}, j.Parents.Count.Using(expr.Related(j.Chosen, expr.Filter(expr.Count[j.Target](), expr.Eq(expr.Value(orm.NumberExpr(j.Targets.Rank)), -1)))), database.TooManyRows},
+		{"ambiguous_pivot", [][]driver.Value{{int64(1), int64(0), int64(2), int64(1)}}, j.Parents.Count.Using(expr.Related(j.Peers, expr.Filter(expr.Count[j.Target](), expr.Eq(expr.Value(orm.NumberExpr(j.Targets.Rank)), -1)))), database.TooManyRows},
 		{"foreign_key", [][]driver.Value{{int64(999), int64(1)}}, j.ParentAggregates.Count, fault.Invalid},
 		{"duplicate_key", [][]driver.Value{{int64(1), int64(1)}, {int64(1), int64(1)}}, j.ParentAggregates.Count, fault.Invalid},
 		{"decode", [][]driver.Value{{int64(1), "bad"}}, j.ParentAggregates.Count, nil},

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    "profile_input_foundry.gen.go": "ee8b292a8e3e9678fd072459b5adbd1d2a02231ac7f451f3f492a10448e0de94",
-    "upload_reply_foundry.gen.go": "fbe1d81cc12eb048c8f4be64bf7bfd9de4164ddc22544624747287b3bfa75525"
+    "profile_input_foundry.gen.go": "adb6e3b98e60fb82e95fd5a60ad8b6ddc7e9fc80ed2a25967c78d9a46fd62884",
+    "upload_reply_foundry.gen.go": "4b21ef6d6c6edb7d85ab5b0238d5a90abeb7c89bd611721d6ed49fb684a1bf28"
   }
 }

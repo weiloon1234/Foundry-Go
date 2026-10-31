@@ -136,7 +136,7 @@ func TestPostgresLockWindowValidationPreservesTransaction(t *testing.T) {
 			return errors.New("invalid window lock was not rejected before SQL")
 		}
 		inner := rows.SelectScalar(rows.From(q.Limit(1)), calculation)
-		outer := rows.LockRows(rows.ReadScalar(rows.SelectScalar(rows.From(q), rows.ScalarRowQuery(rows.From(q), inner).Value())), rows.UpdateLock(rows.Target(rows.ModelScope(q))))
+		outer := rows.LockRows(rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.AsSelected(rows.ScalarRowQuery(rows.From(q), inner)))), rows.UpdateLock(rows.Target(rows.ModelScope(q))))
 		items, err := outer.All(ctx, tx)
 		if err != nil {
 			return err

@@ -24,6 +24,9 @@ func (e *emitter) emitDTO(declaration dtoDeclaration) {
 	e.line("// Reuse this immutable descriptor for decoding and client contract export.")
 	e.line("// Fields are discovered from Go declarations; persistence models are not response DTOs.")
 	params, args := e.genericDeclaration(declaration.typ)
+	if params == "" {
+		e.line("// Example: %s()", public)
+	}
 	argumentDecl, arguments := "", map[*types.TypeParam]string(nil)
 	if params != "" {
 		argumentDecl, arguments = e.genericArguments(declaration.typ, declaration.dtoGraph)

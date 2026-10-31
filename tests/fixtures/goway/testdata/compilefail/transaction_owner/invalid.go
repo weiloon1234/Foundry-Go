@@ -29,4 +29,4 @@ var txSource = rows.AsTransaction[tag](rows.LockedRecord(orm.Lock(models.Users.Q
 var txScope = rows.TransactionScope(txSource)
 var selected = rows.SelectTransactionRecord(txSource, txScope)
 
-var invalid = selected.Where(expr.At(rows.TransactionScope(rows.AsTransaction[otherTag](rows.TransactionOf(rows.ModelRecord(models.Users.Query())), "other")), orm.KeyExpr(models.Users.ID)).Eq(models.User{}.ID))
+var invalid = selected.Where(expr.Eq(expr.At(rows.TransactionScope(rows.AsTransaction[otherTag](rows.TransactionOf(rows.ModelRecord(models.Users.Query())), "other")), orm.KeyExpr(models.Users.ID)), models.User{}.ID))

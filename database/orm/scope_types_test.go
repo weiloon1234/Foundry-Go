@@ -66,8 +66,8 @@ func TestRelationAndProjectionTypesRejectWrongOwners(t *testing.T) {
 		name, extra string
 		invalid     bool
 	}{
-		{"nullable join", `var _=rows.On(expr.At(rows.Scope(order),orm.NullableColumnExpr(nfk)),expr.At(rows.Scope(member),orm.KeyExpr(uid)));var _=expr.At(rows.Scope(order),orm.NullableColumnExpr(nfk)).Eq(model.ID[User]{})`, false},
-		{"nullable null comparison", `var _=expr.At(rows.Scope(order),orm.NullableColumnExpr(nfk)).Eq(value.Null[model.ID[User]]())`, true},
+		{"nullable join", `var _=rows.On(expr.At(rows.Scope(order),orm.NullableColumnExpr(nfk)),expr.At(rows.Scope(member),orm.KeyExpr(uid)));var _=expr.NullableEq(expr.At(rows.Scope(order),orm.NullableColumnExpr(nfk)), model.ID[User]{})`, false},
+		{"nullable null comparison", `var _=expr.NullableEq(expr.At(rows.Scope(order),orm.NullableColumnExpr(nfk)), value.Null[model.ID[User]]())`, true},
 		{"noncomparable join", `var _=rows.On(expr.At(rows.Scope(order),orm.ColumnExpr(bytes)),expr.At(rows.Scope(order),orm.ColumnExpr(bytes)))`, true},
 		{"joined right", `var _=rows.InnerJoin(member,joined,rows.JoinOn[rows.Alias[L,User],rows.Inner[rows.Alias[L,User],rows.Alias[R,Order]]]{})`, true},
 		{"returned column values", `

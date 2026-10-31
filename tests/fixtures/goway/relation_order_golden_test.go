@@ -20,14 +20,14 @@ func TestComputedRelationOrderSQLMatchesOldAPI(t *testing.T) {
 
 				if mode == "direct" {
 					r := j.TargetParent
-					r = r.OrderBy(expr.RelationOrder(r, expr.Lower(expr.Value(orm.TextExpr(j.Parents.Name))).Asc()))
+					r = r.OrderBy(expr.RelationOrder(r, expr.Asc(expr.Lower(expr.Value(orm.TextExpr(j.Parents.Name))))))
 					if _, err := orm.LoadFrom(ctx, db, j.Targets.Query().With(r), []j.Target{{ID: 10, ParentID: 1}}); err != nil {
 						t.Fatal(err)
 					}
 				} else {
 					r := j.Peers
-					target := expr.RelationOrder(r, expr.Add(expr.Value(orm.NumberExpr(j.Targets.Rank)), expr.Param(orm.NumberExpr(j.Targets.Rank), 2)).Desc())
-					pivot := expr.RelationPivotOrder(r, expr.Lower(expr.Value(orm.TextExpr(j.Pivots.Role))).Asc())
+					target := expr.RelationOrder(r, expr.Desc(expr.Add(expr.Value(orm.NumberExpr(j.Targets.Rank)), expr.Param(orm.NumberExpr(j.Targets.Rank), 2))))
+					pivot := expr.RelationPivotOrder(r, expr.Asc(expr.Lower(expr.Value(orm.TextExpr(j.Pivots.Role)))))
 					switch mode {
 					case "target":
 						r = r.OrderBy(target)

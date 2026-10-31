@@ -74,7 +74,7 @@ func (c CorrelatedSource[O, I]) Where(ps ...expr.Predicate[Correlation[O, I]]) C
 	return c
 }
 
-// OrderBy appends scoped ordering. Example: c.OrderBy(childID.Desc()).
+// OrderBy appends scoped ordering. Example: c.OrderBy(expr.Desc(childID)).
 func (c CorrelatedSource[O, I]) OrderBy(os ...expr.Order[Correlation[O, I]]) CorrelatedSource[O, I] {
 	c.core.Source = orderSource(c.core.Source, os)
 	return c

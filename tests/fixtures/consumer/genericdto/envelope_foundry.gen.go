@@ -25,6 +25,7 @@ func EnvelopeJSON[T any](foundryType0 foundrycontract.JSON[T]) foundrycontract.J
 }
 
 // EnvelopeValidationFieldSet retains concrete DTO and value types for validation.
+// Example: EnvelopeValidationFields[T]()
 type EnvelopeValidationFieldSet[T any] struct {
 	// Data validates the declared JSON property "data".
 	Data foundryvalidation.Field[Envelope[T], T]
@@ -33,6 +34,7 @@ type EnvelopeValidationFieldSet[T any] struct {
 }
 
 // EnvelopeValidationFields returns typed field descriptors.
+// Example: EnvelopeValidationFields[T]()
 // Compose rules with these fields; JSON names and selectors are generated.
 func EnvelopeValidationFields[T any]() EnvelopeValidationFieldSet[T] {
 	return EnvelopeValidationFieldSet[T]{

@@ -16,4 +16,4 @@ var a = rows.As[leftTag](models.Users.Query(), "a")
 var b = rows.As[rightTag](models.Users.Query(), "b")
 var selected = rows.Select(a, reports.ReferralRows,
 	rows.Map(reports.ReferralRows.ID, expr.At(rows.Scope(a), orm.KeyExpr(models.Users.ID))))
-var invalid = selected.Where(expr.At(rows.Scope(b), orm.TextExpr(models.Users.Email)).Eq("x"))
+var invalid = selected.Where(expr.Eq(expr.At(rows.Scope(b), orm.TextExpr(models.Users.Email)), "x"))

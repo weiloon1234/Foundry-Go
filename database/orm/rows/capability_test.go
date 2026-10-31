@@ -27,8 +27,8 @@ func TestScopeBridgeRejectsZeroCapabilityWithValidMetadata(t *testing.T) {
 func TestModelBridgesRejectZeroCapabilityWithValidMetadata(t *testing.T) {
 	o := declareOrders()
 	amount := expr.Value(orm.NumberExpr(o.MemberID))
-	predicate := expr.FoundryPredicate(amount.Eq(1), sqlowner.Expressions())
-	orderBy := expr.FoundryOrder(amount.Asc(), sqlowner.Expressions())
+	predicate := expr.FoundryPredicate(expr.Eq(amount, 1), sqlowner.Expressions())
+	orderBy := expr.FoundryOrder(expr.Asc(amount), sqlowner.Expressions())
 	var zero sqlowner.QuerySeal
 	for _, q := range []orm.Query[order]{orm.FoundryWhere(o.Query(), predicate, zero), orm.FoundryOrderBy(o.Query(), orderBy, zero)} {
 		state := &driverState{}
@@ -59,7 +59,7 @@ func TestNullableScopeBridgesRejectZeroCapability(t *testing.T) {
 
 func TestSubqueryBridgesRejectZeroCapabilities(t *testing.T) {
 	m := declareMembers()
-	v := expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()
+	v := expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))
 	row := expr.Value(orm.KeyExpr(m.ID))
 	core := expr.FoundrySelected(v, sqlowner.Expressions())
 	column := expr.FoundrySelectedColumn(v, sqlowner.Expressions())
@@ -72,7 +72,7 @@ func TestSubqueryBridgesRejectZeroCapabilities(t *testing.T) {
 	if !errors.Is(expr.FoundrySelected(selected, sqlowner.Expressions()).Err, fault.Invalid) || !errors.Is(expr.FoundryRowValue(restored, sqlowner.Expressions()).Err, fault.Invalid) {
 		t.Fatal("zero capability adopted a value")
 	}
-	predicate := expr.FoundryPredicateValue[member](expr.FoundryPredicate(row.Eq(1), sqlowner.Expressions()), zero)
+	predicate := expr.FoundryPredicateValue[member](expr.FoundryPredicate(expr.Eq(row, 1), sqlowner.Expressions()), zero)
 	if !errors.Is(expr.FoundryPredicate(predicate, sqlowner.Expressions()).Err, fault.Invalid) {
 		t.Fatal("zero capability adopted predicate")
 	}

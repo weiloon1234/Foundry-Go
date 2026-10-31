@@ -13,6 +13,7 @@ import (
 // MFATOTPRequestJSON describes the concrete MFATOTPRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: MFATOTPRequestJSON()
 func MFATOTPRequestJSON() foundrycontract.JSON[MFATOTPRequest] { return foundryMFATOTPRequestJSON() }
 
 var foundryMFATOTPRequestJSON = sync.OnceValue(func() foundrycontract.JSON[MFATOTPRequest] {
@@ -29,6 +30,7 @@ var foundryMFATOTPRequestJSON = sync.OnceValue(func() foundrycontract.JSON[MFATO
 })
 
 // MFATOTPRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: MFATOTPRequestValidationFields()
 type MFATOTPRequestValidationFieldSet struct {
 	// Challenge validates the declared JSON property "challenge".
 	Challenge foundryvalidation.Field[MFATOTPRequest, MFAChallengeCredential]
@@ -37,6 +39,7 @@ type MFATOTPRequestValidationFieldSet struct {
 }
 
 // MFATOTPRequestValidationFields returns typed field descriptors.
+// Example: MFATOTPRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func MFATOTPRequestValidationFields() MFATOTPRequestValidationFieldSet {
 	return *foundryMFATOTPRequestValidationFields()

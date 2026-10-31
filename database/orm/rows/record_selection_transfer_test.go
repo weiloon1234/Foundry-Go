@@ -22,13 +22,13 @@ func TestSelectRecordKeepsColumnsWindowsAndJoinMultiplicity(t *testing.T) {
 	j := InnerJoin(a, b, On(expr.At(Scope(a), orm.KeyExpr(m.ID)), expr.At(Scope(b), orm.KeyExpr(m.ID))))
 	scope := LeftScope(j, Scope(a))
 	id := expr.At(scope, orm.KeyExpr(m.ID))
-	q := SelectRecord(j, scope).Where(id.Ne(4)).OrderBy(id.Desc()).Limit(5)
+	q := SelectRecord(j, scope).Where(expr.Ne(id, 4)).OrderBy(expr.Desc(id)).Limit(5)
 	s, e := CompileRead(ReadRecord(q))
 	want := `SELECT "a"."id", "a"."name", "a"."nickname" FROM (SELECT "members"."id", "members"."name", "members"."nickname" FROM "members" WHERE ("members"."id" <> $1) LIMIT $2) AS "a" INNER JOIN "members" AS "b" ON ("a"."id" = "b"."id") WHERE ("a"."id" <> $3) ORDER BY "a"."id" DESC LIMIT $4`
 	if e != nil || s.SQL() != want || !reflect.DeepEqual(s.Arguments(), []any{int64(2), int64(3), int64(4), int64(5)}) || len(q.core.Record.Columns) != 3 {
 		t.Fatal(s.SQL(), s.Arguments(), e)
 	}
-	_ = q.Where(id.Eq(9)).Limit(1)
+	_ = q.Where(expr.Eq(id, 9)).Limit(1)
 	again, _ := CompileRead(ReadRecord(q))
 	if again.SQL() != s.SQL() || !reflect.DeepEqual(again.Arguments(), s.Arguments()) {
 		t.Fatal("record mutated")

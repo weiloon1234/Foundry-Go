@@ -13,6 +13,7 @@ import (
 // UploadResultJSON describes the concrete UploadResult JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: UploadResultJSON()
 func UploadResultJSON() foundrycontract.JSON[UploadResult] { return foundryUploadResultJSON() }
 
 var foundryUploadResultJSON = sync.OnceValue(func() foundrycontract.JSON[UploadResult] {
@@ -36,6 +37,7 @@ var foundryUploadResultJSON = sync.OnceValue(func() foundrycontract.JSON[UploadR
 })
 
 // UploadResultValidationFieldSet retains concrete DTO and value types for validation.
+// Example: UploadResultValidationFields()
 type UploadResultValidationFieldSet struct {
 	// Bytes validates the declared JSON property "bytes".
 	Bytes foundryvalidation.Field[UploadResult, int64]
@@ -46,6 +48,7 @@ type UploadResultValidationFieldSet struct {
 }
 
 // UploadResultValidationFields returns typed field descriptors.
+// Example: UploadResultValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func UploadResultValidationFields() UploadResultValidationFieldSet {
 	return *foundryUploadResultValidationFields()

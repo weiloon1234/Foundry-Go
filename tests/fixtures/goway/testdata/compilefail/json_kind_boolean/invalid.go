@@ -7,4 +7,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-func invalid() { _ = expr.JSONType(expr.Value(orm.JSONExpr(jsonpaths.Documents.Settings))).Eq(true) }
+func invalid() {
+	_ = expr.Eq(expr.JSONType(expr.Value(orm.JSONExpr(jsonpaths.Documents.Settings))), true)
+}

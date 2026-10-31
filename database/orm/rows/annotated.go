@@ -33,7 +33,7 @@ func WithValue[M, V any](q orm.Query[M], computed expr.RowValue[M, V]) RecordRea
 	if r.Source.Err != nil {
 		return RecordRead[M, Annotated[M, V]]{core: r}
 	}
-	selected := expr.Row(computed).Value()
+	selected := expr.AsSelected(expr.Row(computed))
 	expression := expr.FoundrySelected(selected, sqlowner.Expressions())
 	column := expr.FoundrySelectedColumn(selected, sqlowner.Expressions())
 	column.Sensitive = column.Sensitive || expression.Sensitive

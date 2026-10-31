@@ -10,7 +10,7 @@ Row calculations preserve their model or alias scope and compose with handwritte
 ```go
 quantity := expr.Value(orm.NumberExpr(f.Quantity))
 incremented := expr.Add(quantity, expr.Param(orm.NumberExpr(f.Quantity), 1))
-if rows, err := orm.All(t.Context(), tx, expr.Where(scalarqueries.Samples.Query(), incremented.Gte(3))); err != nil || len(rows) != 2 {
+if rows, err := orm.All(t.Context(), tx, expr.Where(scalarqueries.Samples.Query(), expr.Gte(incremented, 3))); err != nil || len(rows) != 2 {
 	t.Fatal("typed arithmetic predicate", rows, err)
 }
 ```
@@ -25,7 +25,7 @@ Arithmetic uses canonical SQL bigint, numeric or double precision operands. Phys
 
 Integer division truncates toward zero. For fractional division of integer inputs, convert explicitly with `DecimalOf` before `Divide`. `DecimalOf` accepts exact integers/decimals and produces `decimal.Decimal`; floating inputs are excluded. `FloatOf` deliberately produces float64 and can lose precision. Decimal division follows PostgreSQL numeric precision, not an arbitrary rational-number contract. See [PostgreSQL arithmetic](https://www.postgresql.org/docs/18/functions-math.html).
 
-`AddNullable` and corresponding nullable operations retain `value.Nullable[V]`. Both operands must be nullable; use `NullableRow(nonNullValue)` to widen one explicitly. SQL NULL propagates through these operations. Ordered nullable expressions take concrete comparison values: `total.Gt(amount)` tests a non-null amount, while `total.IsNull()` tests absence. `DecimalNullable` and `FloatNullable` preserve this distinction during conversion.
+`AddNullable` and corresponding nullable operations retain `value.Nullable[V]`. Both operands must be nullable; use `NullableRow(nonNullValue)` to widen one explicitly. SQL NULL propagates through these operations. Ordered nullable expressions take concrete comparison values: `expr.NullableGt(total, amount)` tests a non-null amount, while `expr.IsNull(total)` tests absence. `DecimalNullable` and `FloatNullable` preserve this distinction during conversion.
 
 ## Text values
 
@@ -45,7 +45,7 @@ Text functions accept ordinary or named string operands with a preserved text ca
 
 Case conversion follows the database's locale/collation. Character counts are not grapheme-cluster counts, and ordinary-space trimming is not Go's Unicode `strings.TrimSpace`. Substring positions follow SQL's one-based convention. See [PostgreSQL string functions](https://www.postgresql.org/docs/18/functions-string.html).
 
-`Lower(...).Like("%admin%")` accepts a SQL LIKE pattern. `Lower(...).Contains("_20%")` escapes wildcard characters and searches for that literal substring. Pattern values remain bound. Text comparisons retain the original query scope.
+`expr.TextLike(expr.Lower(input), "%admin%")` accepts a SQL LIKE pattern. `expr.TextContains(expr.Lower(input), "_20%")` escapes wildcard characters and searches for that literal substring. Pattern values remain bound. Text comparisons retain the original query scope.
 
 Nullable variants such as `LowerNullable`, `ConcatNullable` and `SubstringNullable` propagate NULL. `ConcatWSNullable` instead skips NULL operands, preserves empty strings and returns non-null text; an all-NULL input produces an empty string. Its separator is a non-null Go string, and its variadic operands share a concrete string type. Widen non-null operands with `NullableRow`, or normalize differently named strings with a text transformation first. The compiler uses a typed variadic array to avoid PostgreSQL's ordinary function-argument count limit; framework expression bounds still apply.
 
@@ -53,11 +53,11 @@ Negative literal substring counts fail query compilation before executor access,
 
 ## Selected values and comparisons
 
-The `...Value` counterparts compose selected expressions, including ordinary aggregates and window outputs. For example, `MultiplyValue(count.Value(), count.Param(2).Value())` calculates a scaled count. Nullable counterparts retain nullable results. These APIs do not convert selected expressions into row predicates.
+The `...Value` counterparts compose selected expressions, including ordinary aggregates and window outputs. For example, `expr.MultiplyValue(expr.AsSelected(count), expr.AsSelected(expr.ParamOf(count, 2)))` calculates a scaled count. Nullable counterparts retain nullable results. These APIs do not convert selected expressions into row predicates.
 
 `CompareValue(expr)` exposes equality/membership and NULL checks for HAVING. `OrderValue(expr)` adds ordered comparisons; `OrderNullableValue(expr)` accepts concrete non-null comparison values. `TextValue` and `TextNullableValue` add LIKE and literal substring comparisons. SQL grouping restrictions still apply, and wrapping a window expression does not make it legal in HAVING or inside another window.
 
-Row calculations expose `Value()` for declared projections, `expr.Group(row)` for computed grouping and `Asc()`/`Desc()` for ordering. Their AST participates in dependency discovery, explicit correlations, [computed keys](computed-query-keys.md) and named-window discovery. To aggregate a computed projection field, declare its rows schema and use `rows.At` with an `expr.SumRow` or corresponding aggregate constructor, as shown by the [consumer composition tests](../../tests/fixtures/consumer/scalarqueries/composition_postgres_test.go).
+Row calculations expose `Value()` for declared projections, `expr.Group(row)` for computed grouping and `expr.Asc(row)`/`expr.Desc(row)` for ordering. Their AST participates in dependency discovery, explicit correlations, [computed keys](computed-query-keys.md) and named-window discovery. To aggregate a computed projection field, declare its rows schema and use `rows.At` with an `expr.SumRow` or corresponding aggregate constructor, as shown by the [consumer composition tests](../../tests/fixtures/consumer/scalarqueries/composition_postgres_test.go).
 
 ## Computed model ordering
 

@@ -55,13 +55,13 @@ func TestStage6a1Expressions(t *testing.T) {
 	source := rows.As[arithmeticSide](table.Query(), "r")
 	v := expr.At(rows.Scope(source), orm.NumberExpr(table.Amount))
 	n := expr.At(rows.Scope(source), orm.NullableNumberExpr(table.Missing))
-	two := expr.OrderRow(v).Param(2)
+	two := expr.ParamOf(expr.OrderRow(v), 2)
 	fields := rows.Define(func(b rows.Builder[arithmeticResult], r *arithmeticResult) arithmeticFields {
 		return arithmeticFields{b.Row(), rows.NumberOf(b, &r.Add), rows.NumberOf(b, &r.Subtract), rows.NumberOf(b, &r.Multiply), rows.NumberOf(b, &r.Divide), rows.NumberOf(b, &r.Remainder), rows.NumberOf(b, &r.Negate), rows.NumberOf(b, &r.Abs), rows.NumberOf(b, &r.Exact), rows.NumberOf(b, &r.Approx), rows.NullableNumberOf(b, &r.Missing)}
 	})
 	q := rows.OrderBy(rows.Select(source, fields,
-		rows.MapSelected(fields.Add, expr.Add(v, two).Value()), rows.MapSelected(fields.Subtract, expr.Subtract(v, two).Value()), rows.MapSelected(fields.Multiply, expr.Multiply(v, two).Value()), rows.MapSelected(fields.Divide, expr.Divide(v, two).Value()), rows.MapSelected(fields.Remainder, expr.Remainder(v, two).Value()), rows.MapSelected(fields.Negate, expr.Negate(v).Value()), rows.MapSelected(fields.Abs, expr.Abs(expr.Negate(v)).Value()), rows.MapSelected(fields.Exact, expr.DecimalOf(v).Value()), rows.MapSelected(fields.Approx, expr.FloatOf(v).Value()), rows.MapSelected(fields.Missing, expr.AddNullable(n, expr.NullableRow(two)).Value()),
-	).Where(expr.Greater(v, two), expr.LessOrEqual(two, v), expr.DistinctFrom(n, expr.NullableRow(v))), expr.Negate(v).Asc())
+		rows.MapSelected(fields.Add, expr.AsSelected(expr.Add(v, two))), rows.MapSelected(fields.Subtract, expr.AsSelected(expr.Subtract(v, two))), rows.MapSelected(fields.Multiply, expr.AsSelected(expr.Multiply(v, two))), rows.MapSelected(fields.Divide, expr.AsSelected(expr.Divide(v, two))), rows.MapSelected(fields.Remainder, expr.AsSelected(expr.Remainder(v, two))), rows.MapSelected(fields.Negate, expr.AsSelected(expr.Negate(v))), rows.MapSelected(fields.Abs, expr.AsSelected(expr.Abs(expr.Negate(v)))), rows.MapSelected(fields.Exact, expr.AsSelected(expr.DecimalOf(v))), rows.MapSelected(fields.Approx, expr.AsSelected(expr.FloatOf(v))), rows.MapSelected(fields.Missing, expr.AsSelected(expr.AddNullable(n, expr.NullableRow(two)))),
+	).Where(expr.Greater(v, two), expr.LessOrEqual(two, v), expr.DistinctFrom(n, expr.NullableRow(v))), expr.Asc(expr.Negate(v)))
 	got, err := rows.Read(q).All(ctx, db)
 	must(t, err)
 	if len(got) != 1 {
@@ -72,7 +72,7 @@ func TestStage6a1Expressions(t *testing.T) {
 		t.Fatal(r)
 	}
 	modelAmount := expr.Value(orm.NumberExpr(table.Amount))
-	selected, err := orm.All(ctx, db, expr.OrderBy(expr.Where(table.Query(), expr.Add(modelAmount, expr.Param(orm.NumberExpr(table.Amount), 2)).Eq(9)), expr.Negate(modelAmount).Asc()))
+	selected, err := orm.All(ctx, db, expr.OrderBy(expr.Where(table.Query(), expr.Eq(expr.Add(modelAmount, expr.Param(orm.NumberExpr(table.Amount), 2)), 9)), expr.Asc(expr.Negate(modelAmount))))
 	must(t, err)
 	if len(selected) != 1 || selected[0].ID != 1 {
 		t.Fatal(selected)
@@ -96,7 +96,7 @@ func TestStage6a1Expressions(t *testing.T) {
 			input = input.Where(orm.NumberLt(table.Amount, 0))
 		}
 		a := rows.As[arithmeticSide](input, "r")
-		out, e := rows.Read(rows.Select(a, summaryRows, rows.MapSelected(summaryRows.Count, expr.Count[rows.Alias[arithmeticSide, arithmeticRecord]]().Value()), rows.MapSelected(summaryRows.Exists, expr.Exists[rows.Alias[arithmeticSide, arithmeticRecord]]().Value()))).All(ctx, ex)
+		out, e := rows.Read(rows.Select(a, summaryRows, rows.MapSelected(summaryRows.Count, expr.AsSelected(expr.Count[rows.Alias[arithmeticSide, arithmeticRecord]]())), rows.MapSelected(summaryRows.Exists, expr.AsSelected(expr.Exists[rows.Alias[arithmeticSide, arithmeticRecord]]())))).All(ctx, ex)
 		must(t, e)
 		if len(out) != 1 {
 			t.Fatal(out)

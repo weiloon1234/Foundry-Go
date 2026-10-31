@@ -167,7 +167,7 @@ func TestTypedPasswordModelPersistsHydratesAndComparesWithoutDisclosure(t *testi
 		}
 		result := rows.CursorFor(rows.RecordOf(projectionQuery))
 		rf := rows.At(result.Scope(), passwords.CredentialRows.Digest)
-		if _, err := rows.CompileCursor(result.OrderBy(rf.Asc()).UniqueBy(expr.Group(rf))); !errors.Is(err, fault.Invalid) {
+		if _, err := rows.CompileCursor(result.OrderBy(expr.Asc(rf)).UniqueBy(expr.Group(rf))); !errors.Is(err, fault.Invalid) {
 			return errors.New("projection cursor accepted sensitive key")
 		}
 		if _, err := orm.Update(ctx, tx, q.Table.Query(), q.Table.Key(), account.ID, orm.ColumnSet(f.Digest, password.Hash{})); !errors.Is(err, fault.Invalid) {

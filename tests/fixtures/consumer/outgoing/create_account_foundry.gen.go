@@ -12,6 +12,7 @@ import (
 // CreateAccountJSON describes the concrete CreateAccount JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: CreateAccountJSON()
 func CreateAccountJSON() foundrycontract.JSON[CreateAccount] { return foundryCreateAccountJSON() }
 
 var foundryCreateAccountJSON = sync.OnceValue(func() foundrycontract.JSON[CreateAccount] {
@@ -26,12 +27,14 @@ var foundryCreateAccountJSON = sync.OnceValue(func() foundrycontract.JSON[Create
 })
 
 // CreateAccountValidationFieldSet retains concrete DTO and value types for validation.
+// Example: CreateAccountValidationFields()
 type CreateAccountValidationFieldSet struct {
 	// Name validates the declared JSON property "name".
 	Name foundryvalidation.Field[CreateAccount, string]
 }
 
 // CreateAccountValidationFields returns typed field descriptors.
+// Example: CreateAccountValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func CreateAccountValidationFields() CreateAccountValidationFieldSet {
 	return *foundryCreateAccountValidationFields()

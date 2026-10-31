@@ -21,23 +21,23 @@ func DistinctSet[R any](q SetQuery[R]) SetQuery[R] {
 // DistinctValues removes duplicate combined values with their original codec.
 // Example: rows.DistinctValues(rows.UnionAllValues(left, right)).
 func DistinctValues[V any](q ValueSetQuery[V]) ValueSetQuery[V] {
-	q.core.Source = DistinctScalar(SelectScalar(q, expr.Row(q.Value()).Value())).source
+	q.core.Source = DistinctScalar(SelectScalar(q, expr.AsSelected(expr.Row(q.Value())))).source
 	q.core.Direct = false
 	return q
 }
 
 // DistinctOnValueSet selects one combined value per selected-key combination.
 // Keys and ordering belong to the combined output scope, not either input SELECT.
-// Example: rows.DistinctOnValueSet(values, expr.Row(values.Value()).Value().Key()).
+// Example: rows.DistinctOnValueSet(values, expr.Key(expr.AsSelected(expr.Row(values.Value())))).
 func DistinctOnValueSet[V any](q ValueSetQuery[V], keys ...expr.ProjectionKey[Set[V]]) ValueSetQuery[V] {
-	q.core.Source = DistinctOnScalarValues(SelectScalar(q, expr.Row(q.Value()).Value()), keys...).source
+	q.core.Source = DistinctOnScalarValues(SelectScalar(q, expr.AsSelected(expr.Row(q.Value()))), keys...).source
 	q.core.Direct = false
 	return q
 }
 
 // DistinctOnRecord selects a complete read-only record per input-key combination.
 // Ordering stays in the input scope, including columns not in the selected record.
-// Example: rows.DistinctOnRecord(rows.SelectRecord(joined,left),expr.Group(buyerID)).OrderBy(buyerID.Asc(),orderID.Desc()).
+// Example: rows.DistinctOnRecord(rows.SelectRecord(joined,left),expr.Group(buyerID)).OrderBy(expr.Asc(buyerID),expr.Desc(orderID)).
 func DistinctOnRecord[S, R any](q RecordRead[S, R], keys ...expr.GroupKey[S]) RecordRead[S, R] {
 	q.core.Source = DistinctOn(Query[S, struct{}]{source: q.core.Source}, keys...).source
 	q.core.Direct = false

@@ -12,6 +12,7 @@ import (
 // RequestJSON describes the concrete Request JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: RequestJSON()
 func RequestJSON() foundrycontract.JSON[Request] { return foundryRequestJSON() }
 
 var foundryRequestJSON = sync.OnceValue(func() foundrycontract.JSON[Request] {
@@ -58,6 +59,7 @@ var foundryRequestJSON = sync.OnceValue(func() foundrycontract.JSON[Request] {
 })
 
 // RequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: RequestValidationFields()
 type RequestValidationFieldSet struct {
 	// Filters validates the declared JSON property "filters".
 	Filters foundryvalidation.Field[Request, []Filter]
@@ -72,6 +74,7 @@ type RequestValidationFieldSet struct {
 }
 
 // RequestValidationFields returns typed field descriptors.
+// Example: RequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func RequestValidationFields() RequestValidationFieldSet { return *foundryRequestValidationFields() }
 

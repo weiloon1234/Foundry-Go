@@ -40,7 +40,7 @@ func TestQueryRedactsCompiledAndCapturedBindingErrors(t *testing.T) {
 			f := orm.Define("binding_records", func(b orm.Builder[item], r *item) fields {
 				return fields{orm.TableOf(b, &r.ID), orm.NumberOf(b, &r.Number, orm.Codec(c))}
 			})
-			for name, q := range map[string]orm.Query[item]{"compiled": f.Query().Where(orm.NumberEq(f.Number, 1)), "captured": expr.Where(f.Query(), expr.Param(orm.NumberExpr(f.Number), int64(1)).IsNull())} {
+			for name, q := range map[string]orm.Query[item]{"compiled": f.Query().Where(orm.NumberEq(f.Number, 1)), "captured": expr.Where(f.Query(), expr.IsNull(expr.Param(orm.NumberExpr(f.Number), int64(1))))} {
 				t.Run(name, func(t *testing.T) {
 					state := &driverState{}
 					_, compileErr := orm.Compile(q)

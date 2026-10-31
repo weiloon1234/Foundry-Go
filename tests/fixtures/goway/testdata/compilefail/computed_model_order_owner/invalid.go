@@ -9,4 +9,4 @@ import (
 
 var age = expr.Value(orm.NumberExpr(models.Users.Age))
 var email = expr.Value(orm.TextExpr(models.Users.Email))
-var _ = expr.OrderBy(models.Orders.Query(), expr.Add(age, age).Asc())
+var _ = expr.OrderBy(models.Orders.Query(), expr.Asc(expr.Add(age, age)))

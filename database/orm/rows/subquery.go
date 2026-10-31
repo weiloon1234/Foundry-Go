@@ -11,7 +11,7 @@ import (
 )
 
 // SelectionSource retains a scope for projections and subqueries, without granting join access.
-// Example: rows.SelectScalar(rows.From(query), expr.Row(age).Value()).
+// Example: rows.SelectScalar(rows.From(query), expr.AsSelected(expr.Row(age))).
 type SelectionSource[S any] interface{ rowSource(*S) ormcore.Source }
 
 // Input retains a SELECT's scope without adding methods to model or row queries. Example: rows.From(Users.Query()).
@@ -22,7 +22,7 @@ type Input[S any] struct {
 
 func (s Input[S]) rowSource(*S) ormcore.Source { return s.source }
 
-// Scalar retains exactly one selected value without standalone execution. Example: rows.SelectScalar(rows.From(q),expr.Row(age).Value()).
+// Scalar retains exactly one selected value without standalone execution. Example: rows.SelectScalar(rows.From(q),expr.AsSelected(expr.Row(age))).
 type Scalar[S, V any] struct {
 	_      [0]*S
 	_      [0]*V
@@ -51,7 +51,7 @@ func sourceOf[S any](s SelectionSource[S]) ormcore.Source {
 	return s.rowSource(nil)
 }
 
-// SelectScalar selects one exact value for scalar, IN or EXISTS composition. Example: rows.SelectScalar(rows.From(q),expr.Row(expr.Value(orm.NumberExpr(Users.Age))).Value()).
+// SelectScalar selects one exact value for scalar, IN or EXISTS composition. Example: rows.SelectScalar(rows.From(q),expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(Users.Age))))).
 func SelectScalar[S, V any](source SelectionSource[S], selected expr.Selected[S, V]) Scalar[S, V] {
 	c := expr.FoundrySelectedColumn(selected, sqlowner.Expressions())
 	s := ormcore.SelectScalar(sourceOf(source), expr.FoundrySelected(selected, sqlowner.Expressions()))
@@ -62,7 +62,7 @@ func SelectScalar[S, V any](source SelectionSource[S], selected expr.Selected[S,
 	return Scalar[S, V]{source: s, column: c}
 }
 
-// WhereScalar appends row predicates without changing the selected type. Example: rows.WhereScalar(inner,age.Eq(18)).
+// WhereScalar appends row predicates without changing the selected type. Example: rows.WhereScalar(inner,expr.Eq(age, 18)).
 func WhereScalar[S, V any](q Scalar[S, V], predicates ...expr.Predicate[S]) Scalar[S, V] {
 	q.source = whereSource(q.source, predicates)
 	return q

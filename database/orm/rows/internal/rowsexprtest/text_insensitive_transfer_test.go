@@ -23,10 +23,10 @@ func literalTextCases() map[string]rows.Query[member, record] {
 	return map[string]rows.Query[member, record]{
 		"field":                 rows.Select(rows.From(m.Query().Where(orm.TextIContains(m.Name, "aLPHa %_!"))), r, rows.Map(r.ID, expr.Value(orm.KeyExpr(m.ID))), rows.Map(r.Name, expr.Value(orm.TextExpr(m.Name)))),
 		"nullable field":        rows.Select(rows.From(m.Query().Where(orm.NullableTextIContains(m.Nickname, "aLPHa %_!"))), r, rows.Map(r.ID, expr.Value(orm.KeyExpr(m.ID))), rows.Map(r.Name, expr.Value(orm.TextExpr(m.Name)))),
-		"computed row":          selected.Where(expr.Trim(expr.Value(orm.TextExpr(m.Name))).IContains("aLPHa %_!")),
-		"nullable computed row": selected.Where(expr.TrimNullable(expr.Value(orm.NullableTextExpr(m.Nickname))).IContains("aLPHa %_!")),
-		"group":                 rows.Having(grouped, expr.TextValue(expr.Row(expr.Value(orm.TextExpr(m.Name))).Value()).IContains("aLPHa %_!")),
-		"nullable group":        rows.Having(grouped, expr.TextNullableValue(expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value()).IContains("aLPHa %_!")),
+		"computed row":          selected.Where(expr.TextIContains(expr.Trim(expr.Value(orm.TextExpr(m.Name))), "aLPHa %_!")),
+		"nullable computed row": selected.Where(expr.NullableTextIContains(expr.TrimNullable(expr.Value(orm.NullableTextExpr(m.Nickname))), "aLPHa %_!")),
+		"group":                 rows.Having(grouped, expr.TextIContainsValue(expr.TextValue(expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(m.Name))))), "aLPHa %_!")),
+		"nullable group":        rows.Having(grouped, expr.TextIContainsValue(expr.TextNullableValue(expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))))), "aLPHa %_!")),
 	}
 }
 
@@ -61,10 +61,10 @@ func TestPostgresCaseInsensitiveContainsKeepsWildcardsAndNullLiteral(t *testing.
 		}
 		m := declareMembers()
 		for name, q := range map[string]rows.Scalar[member, int64]{
-			"pattern": rows.SelectScalar(rows.From(m.Query().Where(orm.NullableTextILike(m.Nickname, "%alpha %_!%"))), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()),
-			"null":    rows.SelectScalar(rows.From(m.Query().Where(orm.NullableTextIsNull(m.Nickname))), expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()),
+			"pattern": rows.SelectScalar(rows.From(m.Query().Where(orm.NullableTextILike(m.Nickname, "%alpha %_!%"))), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))),
+			"null":    rows.SelectScalar(rows.From(m.Query().Where(orm.NullableTextIsNull(m.Nickname))), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))),
 		} {
-			got, err := rows.ReadScalar(rows.OrderScalar(q, expr.Value(orm.KeyExpr(m.ID)).Asc())).All(t.Context(), tx)
+			got, err := rows.ReadScalar(rows.OrderScalar(q, expr.Asc(expr.Value(orm.KeyExpr(m.ID))))).All(t.Context(), tx)
 			if err != nil {
 				return err
 			}

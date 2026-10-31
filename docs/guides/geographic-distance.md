@@ -7,7 +7,7 @@
 accepts typed numeric row operands, such as `expr.Value(column)`, and a validated
 origin. Exact decimal operands are supported. Origin coordinates are parameters.
 
-Use the result's `.Lte(metres)` with `expr.Where` for a radius filter and `.Asc()`
+Use `expr.Lte(distance, metres)` with `expr.Where` for a radius filter and `expr.Asc(distance)`
 with `expr.OrderBy` for distance order. Add a unique final key before pagination.
 The [compiled consumer](../../tests/fixtures/consumer/scalarqueries/geographic_test.go)
 checks construction and compilation; applications should declare separate

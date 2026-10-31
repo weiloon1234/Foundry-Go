@@ -9,4 +9,4 @@ import (
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
-var invalid = datatable.Where[reporting.Member, string](foundryhttp.StringQuery[string](), expr.OrderRow(expr.Value(orm.NumberExpr(reporting.MemberModels.Balance))))
+var invalid = datatable.Where[reporting.Member, string](foundryhttp.StringQuery[string](), expr.OrderFilter(expr.OrderRow(expr.Value(orm.NumberExpr(reporting.MemberModels.Balance)))))

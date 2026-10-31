@@ -39,7 +39,7 @@ func transactionRecordSubquery(r ormcore.RecordSource) ormcore.Source {
 }
 
 // TransactionValueSource retains a single value's exact codec and executor requirement.
-// Example: rows.TransactionScalarRowQuery(parent,selected).Value().
+// Example: expr.AsSelected(rows.TransactionScalarRowQuery(parent, selected)).
 type TransactionValueSource[V any] interface {
 	transactionValue(*V) (ormcore.RecordSource, ormcore.Column[V])
 }
@@ -78,7 +78,7 @@ func (q TransactionScalar[S, V]) transactionSubquery() ormcore.Source {
 }
 
 // TransactionScalarOf retains codecs when adding locks to scalar subqueries.
-// Example: rows.TransactionScalarOf(rows.SelectTransactionValue(source,expr.Row(id).Value())).ForShare().
+// Example: rows.TransactionScalarOf(rows.SelectTransactionValue(source,expr.AsSelected(expr.Row(id)))).ForShare().
 func TransactionScalarOf[S TransactionScopeType, V any](q TransactionValue[S, V]) TransactionScalar[S, V] {
 	r, c := transactionValueSource(q)
 	return TransactionScalar[S, V]{core: r, column: c}

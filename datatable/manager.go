@@ -22,6 +22,8 @@ import (
 // Presentation is explicit, serializable export context, suitable for an
 // ordinary typed job payload. It never consults process-global request state.
 //
+// Example: datatable.Presentation{Locale: "en", TimeZone: "UTC"}
+//
 //foundry:dto
 type Presentation struct {
 	Locale   i18n.LocaleID `json:"locale"`
@@ -30,16 +32,27 @@ type Presentation struct {
 
 const maxTimeZoneBytes = 128
 
+// Location validates and resolves the explicit presentation timezone.
 func (p Presentation) Location() (*time.Location, error) { return temporal.ParseTimeZone(p.TimeZone) }
 
 // Labels resolves UI message keys for export headings. Catalogs are borrowed;
 // it must be concurrency-safe, honor cancellation and return bounded text.
+//
+// Example: var labels datatable.Labels = resolveLabel
 type Labels func(context.Context, i18n.LocaleID, i18n.MessageKey) (string, error)
+
+// Dependencies supplies borrowed database, locale, and label services to a manager.
+//
+// Example: datatable.Dependencies{Database: db, Locales: locales, Labels: labels}
 type Dependencies struct {
 	Database *database.DB
 	Locales  i18n.LocaleCatalog
 	Labels   Labels
 }
+
+// Config bounds query, export, artifact retention, and presentation resources.
+//
+// Example: datatable.DefaultConfig()
 type Config struct {
 	// TimeZone is the default export presentation zone. Empty means UTC for a
 	// direct manager, or inherits the application timezone during assembly.
@@ -65,6 +78,9 @@ type Config struct {
 	TempDir        string
 }
 
+// DefaultConfig returns the default bounded query and export configuration.
+//
+// Example: datatable.DefaultConfig()
 func DefaultConfig() Config {
 	return Config{
 		Schema: "public", MaxActive: 32, Timeout: time.Minute,
@@ -75,6 +91,8 @@ func DefaultConfig() Config {
 		MaxXMLBytes: 256 << 20, MaxCellBytes: 64 << 10,
 	}
 }
+
+// Validate checks limits, schema, and timezone without acquiring resources.
 func (c Config) Validate() error {
 	if len(c.TimeZone) > maxTimeZoneBytes {
 		return invalid("invalid export timezone")
@@ -103,6 +121,8 @@ func (c Config) Validate() error {
 // locale/label dependencies. Construction performs no I/O and starts no worker.
 // Export generation holds an export slot until its artifact is complete; the
 // artifact then holds only a retention slot and its private file until Close.
+//
+// Example: datatable.New(dependencies, datatable.DefaultConfig(), table.Registration())
 type Manager struct {
 	dependencies   Dependencies
 	registry       *Registry
@@ -118,6 +138,9 @@ type Manager struct {
 	pendingCleanup map[*Artifact]struct{}
 }
 
+// New validates dependencies, limits, and table registrations before constructing a manager.
+//
+// Example: datatable.New(dependencies, config, registrations...)
 func New(dependencies Dependencies, config Config, registrations ...Registration) (*Manager, error) {
 	if config.TimeZone == "" {
 		config.TimeZone = temporal.UTC
@@ -152,12 +175,16 @@ func New(dependencies Dependencies, config Config, registrations ...Registration
 	stop, halt := context.WithCancel(context.Background())
 	return &Manager{dependencies: dependencies, registry: registry, config: config, calls: calls, exports: exports, retained: admission.New(config.MaxArtifacts), stop: stop, halt: halt, open: make(map[*Artifact]struct{}), pendingCleanup: make(map[*Artifact]struct{})}, nil
 }
+
+// Validate reports initialization, configuration, or registration errors.
 func (m *Manager) Validate() error {
 	if m == nil || m.calls == nil || m.exports == nil || m.retained == nil || m.dependencies.Database == nil {
 		return invalid("datatable manager is not initialized")
 	}
 	return m.registry.Validate()
 }
+
+// Registry returns this manager's validated table registry.
 func (m *Manager) Registry() *Registry {
 	if m == nil {
 		return nil
@@ -287,6 +314,8 @@ func (m *Manager) DoneQueries() <-chan struct{} {
 	}
 	return m.calls.Done()
 }
+
+// DoneExports closes after admitted export generation and artifact cleanup have drained.
 func (m *Manager) DoneExports() <-chan struct{} {
 	if m == nil {
 		var g *workscope.Group
@@ -431,6 +460,8 @@ func (t Table[S, R, A]) Count(ctx context.Context, m *Manager, subject A, reques
 	}
 	return result, nil
 }
+
+// Inspect authorizes inspection and returns an owned declaration description.
 func (t Table[S, R, A]) Inspect(ctx context.Context, m *Manager, subject A) (Description, error) {
 	if err := t.check(m); err != nil {
 		return Description{}, err

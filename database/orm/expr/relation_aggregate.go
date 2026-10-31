@@ -6,7 +6,8 @@ import (
 )
 
 // Related computes a typed relation aggregate; bind it with a slot's Using method.
-// Example: Users.OrdersCount.Using(expr.Related(UserRelations.Orders,expr.Count[Order]())).
+//
+// Example: expr.Related(source, computation)
 func Related[M, N, V any](source orm.AggregateSource[M, N], computation AggregateExpression[N, V]) orm.AggregateRelation[M, V] {
 	expression, column := FoundryAggregate(computation, sqlowner.Expressions())
 	return orm.FoundryRelated(source, expression, column, sqlowner.Expressions())
@@ -14,7 +15,8 @@ func Related[M, N, V any](source orm.AggregateSource[M, N], computation Aggregat
 
 // RelatedValue computes a relation aggregate per parent without a model slot.
 // The aggregate keeps its own nullability: COUNT is present, an empty SUM is NULL.
-// Example: count := expr.RelatedValue(UserRelations.Orders,expr.Count[Order]()).
+//
+// Example: expr.RelatedValue(source, computation)
 func RelatedValue[M, N, V any](source orm.AggregateSource[M, N], computation AggregateExpression[N, V]) RowExpression[M, V] {
 	expression, column := FoundryAggregate(computation, sqlowner.Expressions())
 	core := orm.FoundryRelatedValue(source, expression, column, sqlowner.Expressions())

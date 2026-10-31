@@ -12,6 +12,7 @@ import (
 // SummaryJSON describes the concrete Summary JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: SummaryJSON()
 func SummaryJSON() foundrycontract.JSON[Summary] { return foundrySummaryJSON() }
 
 var foundrySummaryJSON = sync.OnceValue(func() foundrycontract.JSON[Summary] {
@@ -26,12 +27,14 @@ var foundrySummaryJSON = sync.OnceValue(func() foundrycontract.JSON[Summary] {
 })
 
 // SummaryValidationFieldSet retains concrete DTO and value types for validation.
+// Example: SummaryValidationFields()
 type SummaryValidationFieldSet struct {
 	// Label validates the declared JSON property "label".
 	Label foundryvalidation.Field[Summary, string]
 }
 
 // SummaryValidationFields returns typed field descriptors.
+// Example: SummaryValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func SummaryValidationFields() SummaryValidationFieldSet { return *foundrySummaryValidationFields() }
 

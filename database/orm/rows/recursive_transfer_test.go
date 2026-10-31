@@ -38,7 +38,7 @@ func recursionID[S any](scope expr.Scope[S, recursionRecord]) expr.Expression[S,
 }
 func recursionWide[S any](scope expr.Scope[S, recursionRecord], n int) expr.Predicate[S] {
 	// Floating computed values bind separately, exercising the statement-wide budget.
-	return expr.OrderRow(expr.FloatOf(recursionID(scope))).In(make([]float64, n)...)
+	return expr.In(expr.OrderRow(expr.FloatOf(recursionID(scope))), make([]float64, n)...)
 }
 
 func recursiveRecordStep(self RecursiveSelf[recursionRecord]) RecordSource[recursionRecord] {
@@ -47,17 +47,17 @@ func recursiveRecordStep(self RecursiveSelf[recursionRecord]) RecordSource[recur
 	rank := expr.At(Scope(child), orm.NullableNumberExpr(recursionTable.Rank))
 	joined := InnerJoin(child, parent, On(rank, recursionID(Scope(parent))))
 	scope := LeftScope(joined, Scope(child))
-	return SelectRecord(joined, scope).Where(recursionID(scope).Ne(8)).Limit(3)
+	return SelectRecord(joined, scope).Where(expr.Ne(recursionID(scope), 8)).Limit(3)
 }
 
 func compileRecursiveRecords(table CommonTable[recursionRecord]) (orm.Statement, error) {
 	a := AsRecord[recursionOutput](table, "result")
-	return CompileRead(SelectRecord(a, Scope(a)).Where(recursionID(Scope(a)).Ne(9)).Limit(4))
+	return CompileRead(SelectRecord(a, Scope(a)).Where(expr.Ne(recursionID(Scope(a)), 9)).Limit(4))
 }
 
 func TestRecursiveCTEUsesDirectUnionAndOwnedReference(t *testing.T) {
 	base := recursionSource()
-	anchor := base.Where(recursionID(ModelScope(recursionTable.Query())).Eq(7)).Limit(2)
+	anchor := base.Where(expr.Eq(recursionID(ModelScope(recursionTable.Query())), 7)).Limit(2)
 	for _, all := range []bool{false, true} {
 		calls := 0
 		step := func(self RecursiveSelf[recursionRecord]) RecordSource[recursionRecord] {
@@ -154,7 +154,7 @@ func TestRecursiveCTERejectsSelfPlacement(t *testing.T) {
 			a := AsRecord[recursionParent](self, "a")
 			id := recursionID(Scope(a))
 			rank := expr.At(Scope(a), orm.NullableNumberExpr(recursionTable.Rank))
-			q := SelectRecord(a, Scope(a)).OrderBy(expr.CountFieldAt(Scope(a), orm.KeyExpr(recursionTable.Key())).Asc())
+			q := SelectRecord(a, Scope(a)).OrderBy(expr.AscValue(expr.CountFieldAt(Scope(a), orm.KeyExpr(recursionTable.Key()))))
 			q.core.Source.Node.GroupBy = []querycore.ValueExpression{querycore.FieldRef{Table: "a", Column: "id"}, querycore.FieldRef{Table: "a", Column: "rank"}}
 			_ = id
 			_ = rank

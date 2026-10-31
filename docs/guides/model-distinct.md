@@ -22,7 +22,7 @@ p, o := rows.Scope(people), rows.Scope(orders)
 joined := rows.InnerJoin(people, orders, rows.On(expr.At(p, orm.KeyExpr(models.Users.ID)), expr.At(o, orm.ColumnExpr(models.Orders.BuyerID))))
 scope := rows.LeftScope(joined, rows.Scope(people))
 fields := scope
-base := rows.SelectRecord(joined, scope).OrderBy(expr.At(fields, orm.TextExpr(models.Users.Email)).Asc())
+base := rows.SelectRecord(joined, scope).OrderBy(expr.Asc(expr.At(fields, orm.TextExpr(models.Users.Email))))
 unique := rows.DistinctRecord(base)
 items, err := rows.ReadRecord(unique).All(t.Context(), tx)
 ```
@@ -36,7 +36,7 @@ clauses are rejected on these read-only sources.
 ## One ordered row per group
 
 `rows.DistinctOn(q, expr.Group(row), ...)` accepts row keys;
-`rows.DistinctOnValues(q, selected.Key(), ...)` accepts selected keys. These keys
+`rows.DistinctOnValues(q, expr.Key(selected), ...)` accepts selected keys. These keys
 need not be output fields. Start ordering with the distinct keys, then desired
 precedence and a unique tie-breaker. The compiler accepts a permutation or shortened
 prefix of distinct keys, but an unrelated order can only follow all distinct keys.

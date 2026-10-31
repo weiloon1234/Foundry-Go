@@ -22,7 +22,7 @@ func TestResultCursorCanonicalOrderAndBoundary(t *testing.T) {
 	m := declareMembers()
 	base := CursorFor(ModelRecord(m.Query().Limit(7).Offset(2)))
 	id, rank := expr.At(base.Scope(), orm.KeyExpr(m.ID)), expr.At(base.Scope(), orm.NullableTextExpr(m.Nickname))
-	q := base.OrderBy(rank.Desc()).UniqueBy(expr.Group(id))
+	q := base.OrderBy(expr.Desc(rank)).UniqueBy(expr.Group(id))
 	s, e := ormcore.CompileResultCursor(t.Context(), q.core)
 	if e != nil || !strings.HasSuffix(s.SQLText, `ORDER BY "foundry_cursor"."nickname" DESC, "foundry_cursor"."id" ASC`) || !strings.Contains(s.SQLText, `LIMIT $1 OFFSET $2) AS "foundry_cursor"`) || !reflect.DeepEqual(s.Bindings, []any{int64(7), int64(2)}) {
 		t.Fatal(s.SQLText, s.Bindings, e)
@@ -71,7 +71,7 @@ func TestResultCursorRejectsAmbiguousDeclarations(t *testing.T) {
 	good := base.UniqueBy(expr.Group(id))
 	for _, q := range []CursorQuery[member]{
 		{}, CursorFor[member](nil), base, base.UniqueBy(expr.Group(id), expr.Group(id)), base.UniqueBy(expr.GroupKey[CursorScope[member]]{}),
-		good.OrderBy(id.Asc(), id.Desc()), good.OrderBy(nil), good.OrderBy(expr.Count[CursorScope[member]]().Asc()), good.OrderBy(make([]expr.ProjectionOrder[CursorScope[member]], querycore.MaxCursorFields+1)...), base.UniqueBy(make([]expr.GroupKey[CursorScope[member]], querycore.MaxCursorFields+1)...),
+		good.OrderBy(expr.Asc(id), expr.Desc(id)), good.OrderBy(nil), good.OrderBy(expr.AscValue(expr.Count[CursorScope[member]]())), good.OrderBy(make([]expr.ProjectionOrder[CursorScope[member]], querycore.MaxCursorFields+1)...), base.UniqueBy(make([]expr.GroupKey[CursorScope[member]], querycore.MaxCursorFields+1)...),
 	} {
 		if _, e := ormcore.CompileResultCursor(t.Context(), q.core); !errors.Is(e, fault.Invalid) {
 			t.Fatal("ambiguous cursor", e)
@@ -103,7 +103,7 @@ func TestResultCursorRejectsAmbiguousDeclarations(t *testing.T) {
 }
 func TestNullableCursorTerminalBoundaryCompilesFalse(t *testing.T) {
 	m := declareMembers()
-	v := Values(DistinctScalar(SelectScalar(From(m.Query()), expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value())))
+	v := Values(DistinctScalar(SelectScalar(From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname)))))))
 	c := ValueCursorFor(v)
 	c = c.UniqueBy(expr.Group(c.Value()))
 	plan, e := ormcore.PlanResultCursor(t.Context(), c.core, 2, "", false, false)

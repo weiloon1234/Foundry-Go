@@ -16,9 +16,9 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 		return j.TargetFields{Table: table, ID: table.Key(), ParentID: orm.NumberOf(b, &m.ParentID), Name: orm.TextOf(b, &m.Name), Rank: orm.NumberOf(b, &m.Rank), DeletedAt: orm.SoftDeleteOf(b, &m.DeletedAt), Parent: orm.OneOf(b, &m.Parent), Inverse: orm.ThroughOf(b, &m.Inverse)}
 	})
 	for name, p := range map[string]expr.Predicate[j.Target]{
-		"foreign":       expr.TextRow(orm.TextExpr(foreign.Name)).Contains("a"),
+		"foreign":       expr.TextContains(expr.TextRow(orm.TextExpr(foreign.Name)), "a"),
 		"zero":          {},
-		"foreign-scope": expr.TextRowAt(rowset.ModelScope(foreign.Query()), orm.TextExpr(foreign.Name)).Contains("a"),
+		"foreign-scope": expr.TextContains(expr.TextRowAt(rowset.ModelScope(foreign.Query()), orm.TextExpr(foreign.Name)), "a"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := j.Peers.Where(expr.RelationFilter(j.Peers, p))
@@ -44,7 +44,7 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 			if err := orm.Check(invalidRelation); !errors.Is(err, fault.Invalid) {
 				t.Fatal("expected malformed relation", err)
 			}
-			p := expr.RelationFilter(invalidRelation, expr.TextRow(orm.TextExpr(j.Parents.Name)).Contains("one"))
+			p := expr.RelationFilter(invalidRelation, expr.TextContains(expr.TextRow(orm.TextExpr(j.Parents.Name)), "one"))
 			if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Parents.Query().Where(p)))); !errors.Is(err, fault.Invalid) {
 				t.Fatal("target query lost construction error", err)
 			}
@@ -69,7 +69,7 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 					t.Fatal(name+" lost construction error", err)
 				}
 			}
-			if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Targets.Query()).Where(expr.Has(invalidRelation, expr.TextRow(orm.TextExpr(j.Parents.Name)).Contains("one"))))); !errors.Is(err, fault.Invalid) {
+			if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Targets.Query()).Where(expr.Has(invalidRelation, expr.TextContains(expr.TextRow(orm.TextExpr(j.Parents.Name)), "one"))))); !errors.Is(err, fault.Invalid) {
 				t.Fatal("expr.Has lost construction error", err)
 			}
 			if g.statements != 0 {
@@ -79,13 +79,13 @@ func TestRelationFilterRejectsForeignMetadata(t *testing.T) {
 	}
 
 	fake := borrowedFilterTarget{Relation: j.Peers}
-	rejected := expr.RelationFilter(fake, expr.TextRow(orm.TextExpr(j.Parents.Name)).Contains("x"))
+	rejected := expr.RelationFilter(fake, expr.TextContains(expr.TextRow(orm.TextExpr(j.Parents.Name)), "x"))
 	if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Parents.Query().Where(rejected)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("borrowed target accepted", err)
 	}
 	var nilRelation *orm.ThroughRelation[j.Parent, j.Target, j.Pivot]
 	for _, r := range []orm.ExistenceRelation[j.Parent, j.Target]{nil, nilRelation, orm.HasMany[j.Parent, j.Target]{}} {
-		p := expr.RelationFilter(r, expr.TextRow(orm.TextExpr(j.Targets.Name)).Contains("x"))
+		p := expr.RelationFilter(r, expr.TextContains(expr.TextRow(orm.TextExpr(j.Targets.Name)), "x"))
 		if _, err := rowset.CompileRead(rowset.Read(rowset.FromModel(j.Targets.Query().Where(p)))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("nil/zero relation accepted", err)
 		}

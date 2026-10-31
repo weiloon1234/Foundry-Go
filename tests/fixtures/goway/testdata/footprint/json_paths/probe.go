@@ -38,5 +38,5 @@ func Run(ctx context.Context, db database.Executor) ([]result, error) {
 	profile := expr.JSONOptional(expr.JSONProperty(root, jsonpaths.UserProfile))
 	age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, jsonpaths.Age), codec.Signed[int64]()))
 	key := expr.JSONTextScalar(expr.JSONMapKey(expr.JSONProperty(profile, jsonpaths.Attributes), 2), codec.String[string]())
-	return rows.Read(rows.Select(rows.FromModel(d.Query()), schema, rows.MapSelected(schema.Theme, theme.Value()), rows.MapSelected(schema.Age, age.Value()), rows.MapSelected(schema.Key, key.Value())).Where(theme.Like("d%"), age.Gt(18))).All(ctx, db)
+	return rows.Read(rows.Select(rows.FromModel(d.Query()), schema, rows.MapSelected(schema.Theme, expr.AsSelected(theme)), rows.MapSelected(schema.Age, expr.AsSelected(age)), rows.MapSelected(schema.Key, expr.AsSelected(key))).Where(expr.NullableTextLike(theme, "d%"), expr.NullableGt(age, 18))).All(ctx, db)
 }

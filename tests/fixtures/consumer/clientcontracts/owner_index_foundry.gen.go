@@ -16,6 +16,7 @@ import (
 // OwnerIndexJSON describes the concrete OwnerIndex JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: OwnerIndexJSON()
 func OwnerIndexJSON() foundrycontract.JSON[OwnerIndex] { return foundryOwnerIndexJSON() }
 
 var foundryOwnerIndexJSON = sync.OnceValue(func() foundrycontract.JSON[OwnerIndex] {
@@ -40,6 +41,7 @@ var foundryOwnerIndexJSON = sync.OnceValue(func() foundrycontract.JSON[OwnerInde
 })
 
 // OwnerIndexValidationFieldSet retains concrete DTO and value types for validation.
+// Example: OwnerIndexValidationFields()
 type OwnerIndexValidationFieldSet struct {
 	// Owners validates the declared JSON property "owners".
 	Owners foundryvalidation.Field[OwnerIndex, map[model.ID[models.User]]string]
@@ -50,6 +52,7 @@ type OwnerIndexValidationFieldSet struct {
 }
 
 // OwnerIndexValidationFields returns typed field descriptors.
+// Example: OwnerIndexValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func OwnerIndexValidationFields() OwnerIndexValidationFieldSet {
 	return *foundryOwnerIndexValidationFields()

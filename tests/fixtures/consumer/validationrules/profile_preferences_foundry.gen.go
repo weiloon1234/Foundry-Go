@@ -12,6 +12,7 @@ import (
 // ProfilePreferencesJSON describes the concrete ProfilePreferences JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ProfilePreferencesJSON()
 func ProfilePreferencesJSON() foundrycontract.JSON[ProfilePreferences] {
 	return foundryProfilePreferencesJSON()
 }
@@ -31,6 +32,7 @@ var foundryProfilePreferencesJSON = sync.OnceValue(func() foundrycontract.JSON[P
 })
 
 // ProfilePreferencesValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ProfilePreferencesValidationFields()
 type ProfilePreferencesValidationFieldSet struct {
 	// Alias validates the declared JSON property "alias".
 	Alias foundryvalidation.Field[ProfilePreferences, string]
@@ -41,6 +43,7 @@ type ProfilePreferencesValidationFieldSet struct {
 }
 
 // ProfilePreferencesValidationFields returns typed field descriptors.
+// Example: ProfilePreferencesValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ProfilePreferencesValidationFields() ProfilePreferencesValidationFieldSet {
 	return *foundryProfilePreferencesValidationFields()

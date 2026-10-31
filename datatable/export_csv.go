@@ -9,10 +9,10 @@ import (
 	"unicode/utf8"
 )
 
-type reportWriter interface {
-	Row([]exportCell) error
-	Finish() error
-	Abort()
+type reportWriter struct {
+	writeRow func([]exportCell) error
+	finish   func() error
+	abort    func()
 }
 
 // reportLayout is the validated per-export writer configuration.
@@ -29,10 +29,11 @@ func newReportWriter(output io.Writer, layout reportLayout, headers []string) (r
 	case CSV:
 		if layout.byteOrderMark {
 			if _, err := io.WriteString(output, "\uFEFF"); err != nil {
-				return nil, err
+				return reportWriter{}, err
 			}
 		}
-		writer = &csvReport{writer: csv.NewWriter(output)}
+		csv := &csvReport{writer: csv.NewWriter(output)}
+		writer = reportWriter{writeRow: func(cells []exportCell) error { return writeCSVRow(csv, cells) }, finish: func() error { return finishCSV(csv) }, abort: func() { abortCSV(csv) }}
 	case XLSX:
 		location := layout.location
 		if location == nil {
@@ -40,19 +41,19 @@ func newReportWriter(output io.Writer, layout reportLayout, headers []string) (r
 		}
 		xlsx, err := newXLSXReport(output, layout.maxXMLBytes, location)
 		if err != nil {
-			return nil, err
+			return reportWriter{}, err
 		}
-		writer = xlsx
+		writer = xlsx.reportWriter
 	default:
-		return nil, invalid("invalid report format")
+		return reportWriter{}, invalid("invalid report format")
 	}
 	heading := make([]exportCell, len(headers))
 	for i, text := range headers {
 		heading[i] = exportCell{text: text}
 	}
-	if err := writer.Row(heading); err != nil {
-		writer.Abort()
-		return nil, err
+	if err := writer.writeRow(heading); err != nil {
+		writer.abort()
+		return reportWriter{}, err
 	}
 	return writer, nil
 }
@@ -64,15 +65,15 @@ type csvReport struct {
 
 // Row writes cell text, including control characters, which CSV can carry
 // literally. Typed spreadsheet values apply only to XLSX.
-func (w *csvReport) Row(cells []exportCell) error {
+func writeCSVRow(w *csvReport, cells []exportCell) error {
 	w.record = w.record[:0]
 	for _, cell := range cells {
 		w.record = append(w.record, csvLiteral(cell.text))
 	}
 	return w.writer.Write(w.record)
 }
-func (w *csvReport) Finish() error { w.writer.Flush(); return w.writer.Error() }
-func (w *csvReport) Abort()        {}
+func finishCSV(w *csvReport) error { w.writer.Flush(); return w.writer.Error() }
+func abortCSV(w *csvReport)        {}
 
 // CSV is text, not a typed spreadsheet format. Prefix values that spreadsheet
 // programs may interpret as formulas (also after leading whitespace) with an

@@ -96,7 +96,7 @@ func TestTransactionCorrelationAndLateralLocks(t *testing.T) {
 	outer, inner := TransactionOuterScope(c, TransactionScope(a)), TransactionInnerScope(c, TransactionScope(b))
 	x, y := expr.At(outer, orm.KeyExpr(m.ID)), expr.At(inner, orm.KeyExpr(m.ID))
 	c = c.Where(expr.Less(y, x))
-	record := SelectTransactionCorrelatedRecord(c, inner).OrderBy(y.Desc()).Limit(1).ForUpdate().Of(Target(inner)).SkipLocked()
+	record := SelectTransactionCorrelatedRecord(c, inner).OrderBy(expr.Desc(y)).Limit(1).ForUpdate().Of(Target(inner)).SkipLocked()
 	lat := AsTransactionLateral[latestTag](record, "latest")
 	j := TransactionLeftJoinLateral(a, lat)
 	sql := compileTransaction(t, SelectTransactionRecord(j, LeftScope(j, TransactionScope(a))).core.Source)
@@ -118,8 +118,8 @@ func TestTransactionCorrelationAndLateralLocks(t *testing.T) {
 	if v := TransactionCrossJoinLateral(wrong, lat); !errors.Is(v.state.source.Err, fault.Invalid) {
 		t.Fatal("foreign lateral parent")
 	}
-	scalar := SelectTransactionCorrelatedScalar(c, expr.Row(y).Value()).Limit(1).ForShare().NoWait()
-	out := SelectTransactionValue(a, TransactionCorrelatedScalarRowQuery(scalar).Value()).Where(scalar.Exists(), TransactionInCorrelatedQuery(expr.At(TransactionScope(a), orm.KeyExpr(m.ID)), scalar))
+	scalar := SelectTransactionCorrelatedScalar(c, expr.AsSelected(expr.Row(y))).Limit(1).ForShare().NoWait()
+	out := SelectTransactionValue(a, expr.AsSelected(TransactionCorrelatedScalarRowQuery(scalar))).Where(scalar.Exists(), TransactionInCorrelatedQuery(expr.At(TransactionScope(a), orm.KeyExpr(m.ID)), scalar))
 	sql = compileTransaction(t, out.core.Source)
 	if !strings.Contains(sql, `FOR SHARE NOWAIT`) || !strings.Contains(sql, `EXISTS(SELECT`) {
 		t.Fatal(sql)
@@ -133,7 +133,7 @@ func TestTransactionCorrelationAndLateralLocks(t *testing.T) {
 	c = c.Where(nested.Where(expr.Equal(childID, nestedID)).Exists())
 	compileTransaction(t, SelectTransactionRecord(a, TransactionScope(a)).Where(c.Exists()).core.Source)
 	totals := lateralTotalSchema()
-	mapped := ProjectTransactionCorrelated(c, totals, MapSelected(totals.Count, expr.Count[TransactionCorrelation[TransactionAlias[left, member], TransactionAlias[right, member]]]().Value()))
+	mapped := ProjectTransactionCorrelated(c, totals, MapSelected(totals.Count, expr.AsSelected(expr.Count[TransactionCorrelation[TransactionAlias[left, member], TransactionAlias[right, member]]]())))
 	projected := AsTransactionLateral[latestTag](mapped, "counts")
 	cross := TransactionCrossJoinLateral(a, projected)
 	compileTransaction(t, SelectTransactionRecord(cross, RightScope(cross, TransactionLateralScope(projected))).core.Source)
@@ -144,9 +144,9 @@ func TestTransactionSubqueriesUseCallerTransaction(t *testing.T) {
 	a := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "a")
 	b := AsTransaction[right](TransactionOf(ModelRecord(m.Query())), "b")
 	id := expr.At(TransactionScope(a), orm.KeyExpr(m.ID))
-	selected := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), orm.KeyExpr(m.ID))).Value()).Limit(1)
+	selected := SelectTransactionValue(b, expr.AsSelected(expr.Row(expr.At(TransactionScope(b), orm.KeyExpr(m.ID))))).Limit(1)
 	scalar := TransactionScalarOf(selected).ForShare().SkipLocked()
-	q := SelectTransactionValue(a, TransactionScalarRowQuery(a, scalar).Value()).Where(TransactionInQuery(id, scalar), TransactionExistsQuery(a, scalar))
+	q := SelectTransactionValue(a, expr.AsSelected(TransactionScalarRowQuery(a, scalar))).Where(TransactionInQuery(id, scalar), TransactionExistsQuery(a, scalar))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{nil}, {int64(7)}}}
 	db, err := database.Open(t.Context(), database.Adapter{Connector: recordConnector{state}}, database.DefaultPoolConfig())
 	if err != nil {
@@ -166,8 +166,8 @@ func TestTransactionSubqueriesUseCallerTransaction(t *testing.T) {
 	if got, err := q.All(t.Context(), nil); !errors.Is(err, fault.Invalid) || got != nil {
 		t.Fatal(got, err)
 	}
-	nullable := SelectTransactionValue(b, expr.Row(expr.At(TransactionScope(b), orm.NullableTextExpr(m.Nickname))).Value())
-	compileTransaction(t, SelectTransactionValue(a, TransactionScalarNullableRowQuery(a, nullable).Value()).core.Source)
+	nullable := SelectTransactionValue(b, expr.AsSelected(expr.Row(expr.At(TransactionScope(b), orm.NullableTextExpr(m.Nickname)))))
+	compileTransaction(t, SelectTransactionValue(a, expr.AsSelected(TransactionScalarNullableRowQuery(a, nullable))).core.Source)
 	_ = TransactionScalarNullableRowQuery(a, nullable)
 	_ = TransactionScalarRowQuery(a, selected)
 	empty := TransactionScalarOf(TransactionValue[TransactionAlias[right, member], int64]{})

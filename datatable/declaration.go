@@ -17,6 +17,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// Action identifies the operation passed to a table authorization callback.
+//
+// Example: datatable.QueryAction
 type Action string
 
 const (
@@ -31,6 +34,8 @@ const (
 // for explicitly public/system reports. A is trusted server context, never
 // decoded from Request. Use auth.Guard[M] when binding an authenticated policy.
 // Stable orders must uniquely identify a result (including grouped/joined rows).
+//
+// Example: var spec datatable.Spec[User, UserRow, Actor]
 type Spec[S, R, A any] struct {
 	ID          TableID
 	Row         contract.JSON[R]
@@ -44,6 +49,10 @@ type Spec[S, R, A any] struct {
 }
 
 type tableIdentity struct{ marker byte }
+
+// Table retains an immutable, typed table declaration and its authorization policy.
+//
+// Example: datatable.Define(spec)
 type Table[S, R, A any] struct{ definition *tableDefinition[S, R, A] }
 type tableDefinition[S, R, A any] struct {
 	identity  *tableIdentity
@@ -57,6 +66,9 @@ type tableDefinition[S, R, A any] struct {
 	err       error
 }
 
+// NamedFilterInfo describes one named filter for the shared client manifest.
+//
+// Example: datatable.NamedFilterInfo{Name: "email", Label: "members.email"}
 type NamedFilterInfo struct {
 	Name   string          `json:"name"`
 	Label  i18n.MessageKey `json:"label"`
@@ -66,6 +78,8 @@ type NamedFilterInfo struct {
 // Description is the table contribution to the shared client manifest. Row and
 // Request schemas originate from their typed contracts. No second TS schema is
 // inferred from SQL, model fields, column names or arbitrary reflection.
+//
+// Example: table.Description()
 type Description struct {
 	ID          TableID           `json:"id"`
 	Row         contract.Schema   `json:"row"`
@@ -76,6 +90,9 @@ type Description struct {
 	Exports     bool              `json:"exports"`
 }
 
+// Define snapshots a typed table specification and retains declaration errors for validation.
+//
+// Example: datatable.Define(spec)
 func Define[S, R, A any](spec Spec[S, R, A]) Table[S, R, A] {
 	d := &tableDefinition[S, R, A]{identity: &tableIdentity{}, row: spec.Row, authorize: spec.Authorize, source: spec.Source, stable: slices.Clone(spec.Stable)}
 	d.metadata.info.ID = spec.ID
@@ -118,18 +135,24 @@ func (d *tableDefinition[S, R, A]) initialize(spec Spec[S, R, A]) error {
 	}
 	return d.metadata.initialize(spec.ID, row, spec.Row.DescribeScalarProperty, columns, filters, spec.DefaultSort, spec.Exports)
 }
+
+// Validate reports declaration errors without acquiring query or export resources.
 func (t Table[S, R, A]) Validate() error {
 	if t.definition == nil || t.definition.identity == nil {
 		return invalid("datatable is not defined")
 	}
 	return t.definition.err
 }
+
+// ID returns the declared table identifier, or empty for an undefined table.
 func (t Table[S, R, A]) ID() TableID {
 	if t.definition == nil {
 		return ""
 	}
 	return t.definition.metadata.info.ID
 }
+
+// Description returns an owned inspection snapshot after validating the declaration.
 func (t Table[S, R, A]) Description() (Description, error) {
 	if err := t.Validate(); err != nil {
 		return Description{}, err
@@ -137,6 +160,9 @@ func (t Table[S, R, A]) Description() (Description, error) {
 	return t.definition.metadata.description()
 }
 
+// Registration retains a table's identity and validation for manager registration.
+//
+// Example: table.Registration()
 type Registration struct {
 	identity *tableIdentity
 	id       TableID
@@ -144,6 +170,7 @@ type Registration struct {
 	describe func() (Description, error)
 }
 
+// Registration captures this table's identity for registration with a manager.
 func (t Table[S, R, A]) Registration() Registration {
 	if t.definition == nil {
 		return Registration{}
@@ -151,8 +178,14 @@ func (t Table[S, R, A]) Registration() Registration {
 	return Registration{identity: t.definition.identity, id: t.ID(), validate: t.Validate, describe: t.Description}
 }
 
+// Registry owns the validated set of table registrations indexed by their typed identifiers.
+//
+// Example: datatable.NewRegistry(table.Registration())
 type Registry struct{ entries map[TableID]Registration }
 
+// NewRegistry validates and snapshots table registrations, rejecting duplicate identifiers.
+//
+// Example: datatable.NewRegistry(registrations...)
 func NewRegistry(registrations ...Registration) (*Registry, error) {
 	if len(registrations) > 1024 {
 		return nil, invalid("too many datatables")
@@ -172,12 +205,16 @@ func NewRegistry(registrations ...Registration) (*Registry, error) {
 	}
 	return r, nil
 }
+
+// Validate reports an uninitialized registry without invoking table callbacks.
 func (r *Registry) Validate() error {
 	if r == nil || r.entries == nil {
 		return invalid("datatable registry is not initialized")
 	}
 	return nil
 }
+
+// Descriptions returns owned table descriptions in stable identifier order.
 func (r *Registry) Descriptions() ([]Description, error) {
 	if err := r.Validate(); err != nil {
 		return nil, err

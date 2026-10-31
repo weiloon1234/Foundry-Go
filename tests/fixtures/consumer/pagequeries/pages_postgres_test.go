@@ -35,7 +35,7 @@ func (e *pageExecutor) Query(ctx context.Context, sql string, args ...any) (*dat
 
 func summaries() rows.Query[models.User, reports.UserSummary] {
 	u, r := models.Users, reports.UserSummaries
-	return rows.OrderBy(rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.Row(expr.Value(orm.KeyExpr(u.Key()))).Value()), rows.MapSelected(r.Email, expr.Row(expr.Value(orm.TextExpr(u.Email))).Value()), rows.MapSelected(r.Nickname, expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname))).Value()), rows.MapSelected(r.Status, expr.Row(expr.Value(orm.EnumExpr(u.Status))).Value())), expr.Value(orm.TextExpr(u.Email)).Asc(), expr.Value(orm.KeyExpr(u.Key())).Asc())
+	return rows.OrderBy(rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(u.Key()))))), rows.MapSelected(r.Email, expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(u.Email))))), rows.MapSelected(r.Nickname, expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname))))), rows.MapSelected(r.Status, expr.AsSelected(expr.Row(expr.Value(orm.EnumExpr(u.Status)))))), expr.Asc(expr.Value(orm.TextExpr(u.Email))), expr.Asc(expr.Value(orm.KeyExpr(u.Key()))))
 }
 
 func TestPostgresSimpleModelsAndEagerLookahead(t *testing.T) {

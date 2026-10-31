@@ -37,13 +37,13 @@ func (q SetQuery[R]) Scope() expr.Scope[Set[R], R] {
 	return expr.FoundryScope[Set[R], R](ormcore.Scope{Reference: ormcore.Reference{Table: querycore.SetAlias, Owner: r.Record.Owner}, Err: r.Source.Err}, sqlowner.Expressions())
 }
 
-// Where filters combined rows. Example: combined.Where(expr.At(combined.Scope(), orm.KeyExpr(Users.ID)).Ne(id)).
+// Where filters combined rows. Example: combined.Where(expr.Ne(expr.At(combined.Scope(), orm.KeyExpr(Users.ID)), id)).
 func (q SetQuery[R]) Where(ps ...expr.Predicate[Set[R]]) SetQuery[R] {
 	q.core.Source = whereSource(q.core.Source, ps)
 	return q
 }
 
-// OrderBy orders combined rows independently of input ordering. Example: combined.OrderBy(id.Asc()).
+// OrderBy orders combined rows independently of input ordering. Example: combined.OrderBy(expr.Asc(id)).
 func (q SetQuery[R]) OrderBy(os ...expr.ProjectionOrder[Set[R]]) SetQuery[R] {
 	q.core.Source = recordOrders(q.core.Source, os)
 	return q

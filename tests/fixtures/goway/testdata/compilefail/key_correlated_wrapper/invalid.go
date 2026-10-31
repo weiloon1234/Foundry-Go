@@ -11,7 +11,7 @@ import (
 var c = rows.Correlate(rows.From(models.Users.Query()), rows.From(models.Orders.Query()))
 var scope = rows.InnerScope(c, rows.ModelScope(models.Orders.Query()))
 var child = expr.At(scope, orm.NumberExpr(models.Orders.TotalCents))
-var scalar = rows.SelectCorrelatedScalar(c, expr.Row(child).Value())
+var scalar = rows.SelectCorrelatedScalar(c, expr.AsSelected(expr.Row(child)))
 
 type forged struct {
 	rows.CorrelatedScalar[models.User, models.Order, int64]

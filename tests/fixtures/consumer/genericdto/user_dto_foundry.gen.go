@@ -14,6 +14,7 @@ import (
 // UserDTOJSON describes the concrete UserDTO JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: UserDTOJSON()
 func UserDTOJSON() foundrycontract.JSON[UserDTO] { return foundryUserDTOJSON() }
 
 var foundryUserDTOJSON = sync.OnceValue(func() foundrycontract.JSON[UserDTO] {
@@ -44,6 +45,7 @@ var foundryUserDTOJSON = sync.OnceValue(func() foundrycontract.JSON[UserDTO] {
 })
 
 // UserDTOValidationFieldSet retains concrete DTO and value types for validation.
+// Example: UserDTOValidationFields()
 type UserDTOValidationFieldSet struct {
 	// ID validates the declared JSON property "id".
 	ID foundryvalidation.Field[UserDTO, model.ID[User]]
@@ -56,6 +58,7 @@ type UserDTOValidationFieldSet struct {
 }
 
 // UserDTOValidationFields returns typed field descriptors.
+// Example: UserDTOValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func UserDTOValidationFields() UserDTOValidationFieldSet { return *foundryUserDTOValidationFields() }
 

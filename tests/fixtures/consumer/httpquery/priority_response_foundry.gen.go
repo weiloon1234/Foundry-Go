@@ -12,6 +12,7 @@ import (
 // PriorityResponseJSON describes the concrete PriorityResponse JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: PriorityResponseJSON()
 func PriorityResponseJSON() foundrycontract.JSON[PriorityResponse] {
 	return foundryPriorityResponseJSON()
 }
@@ -30,12 +31,14 @@ var foundryPriorityResponseJSON = sync.OnceValue(func() foundrycontract.JSON[Pri
 })
 
 // PriorityResponseValidationFieldSet retains concrete DTO and value types for validation.
+// Example: PriorityResponseValidationFields()
 type PriorityResponseValidationFieldSet struct {
 	// Priority validates the declared JSON property "Priority".
 	Priority foundryvalidation.Field[PriorityResponse, Priority]
 }
 
 // PriorityResponseValidationFields returns typed field descriptors.
+// Example: PriorityResponseValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func PriorityResponseValidationFields() PriorityResponseValidationFieldSet {
 	return *foundryPriorityResponseValidationFields()

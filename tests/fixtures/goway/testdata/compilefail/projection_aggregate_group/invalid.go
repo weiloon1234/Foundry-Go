@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.Sum(orm.NumberExpr(models.Orders.TotalCents)).Value().Group()
+var _ = expr.AsSelected(expr.Sum(orm.NumberExpr(models.Orders.TotalCents))).Group()

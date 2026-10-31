@@ -16,12 +16,12 @@ import (
 func TestReportReorderingPreservesMaterializedWinnerSelection(t *testing.T) {
 	m, r := declareMembers(), declareRows()
 	base := rows.Select(rows.From(m.Query().Where(orm.NumberKeyGt(orm.NumberKey(m.Key()), 2))), r, rows.Map(r.ID, expr.Value(orm.KeyExpr(m.ID))), rows.Map(r.Name, expr.Value(orm.TextExpr(m.Name))))
-	winners := rows.Limit(rows.OrderBy(rows.DistinctOn(base, expr.Group(expr.Value(orm.KeyExpr(m.ID)))), expr.Value(orm.KeyExpr(m.ID)).Desc()), 5)
+	winners := rows.Limit(rows.OrderBy(rows.DistinctOn(base, expr.Group(expr.Value(orm.KeyExpr(m.ID)))), expr.Desc(expr.Value(orm.KeyExpr(m.ID)))), 5)
 	source := rows.AsRecord[left](rows.RecordOf(winners), "winners")
 	id := rows.At(rows.Scope(source), r.ID)
 	name := rows.At(rows.Scope(source), r.Name)
-	report := rows.OrderBy(rows.Select(source, r, rows.MapSelected(r.ID, id.Value()), rows.MapSelected(r.Name, name.Value())), id.Desc())
-	statement, err := rows.CompileRead(rows.Read(rows.ReorderUnwindowed(report, id.Asc())))
+	report := rows.OrderBy(rows.Select(source, r, rows.MapSelected(r.ID, expr.AsSelected(id)), rows.MapSelected(r.Name, expr.AsSelected(name))), expr.Desc(id))
+	statement, err := rows.CompileRead(rows.Read(rows.ReorderUnwindowed(report, expr.Asc(id))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,12 +42,12 @@ func TestReportReorderingPreservesMaterializedWinnerSelection(t *testing.T) {
 func TestReportReorderingReplacesOnlyOuterOrders(t *testing.T) {
 	m, r := declareMembers(), declareRows()
 	id := expr.Value(orm.KeyExpr(m.ID))
-	report := rows.OrderBy(rows.Select(rows.From(m.Query().Where(orm.NumberKeyGt(orm.NumberKey(m.Key()), 4))), r, rows.Map(r.ID, id), rows.Map(r.Name, expr.Value(orm.TextExpr(m.Name)))), id.Desc())
+	report := rows.OrderBy(rows.Select(rows.From(m.Query().Where(orm.NumberKeyGt(orm.NumberKey(m.Key()), 4))), r, rows.Map(r.ID, id), rows.Map(r.Name, expr.Value(orm.TextExpr(m.Name)))), expr.Desc(id))
 	before, err := rows.CompileRead(rows.Read(report))
 	if err != nil {
 		t.Fatal(err)
 	}
-	after, err := rows.CompileRead(rows.Read(rows.ReorderUnwindowed(report, id.Asc())))
+	after, err := rows.CompileRead(rows.Read(rows.ReorderUnwindowed(report, expr.Asc(id))))
 	if err != nil || !strings.HasSuffix(after.SQL(), `ORDER BY "members"."id" ASC`) || !reflect.DeepEqual(after.Arguments(), []any{int64(4)}) {
 		t.Fatal(after.SQL(), after.Arguments(), err)
 	}
@@ -56,14 +56,14 @@ func TestReportReorderingReplacesOnlyOuterOrders(t *testing.T) {
 		t.Fatal("reorder mutated source")
 	}
 	for name, bad := range map[string]rows.Query[member, record]{"limit": rows.Limit(report, 1), "zero limit": rows.Limit(report, 0), "offset": rows.Offset(report, 1), "distinct on": rows.DistinctOn(report, expr.Group(id)), "zero": {}} {
-		if s, e := rows.CompileRead(rows.Read(rows.ReorderUnwindowed(bad, id.Asc()))); !errors.Is(e, fault.Invalid) || s.SQL() != "" {
+		if s, e := rows.CompileRead(rows.Read(rows.ReorderUnwindowed(bad, expr.Asc(id)))); !errors.Is(e, fault.Invalid) || s.SQL() != "" {
 			t.Fatal("unsafe report", name, e)
 		}
 	}
 	if _, err := rows.CompileRead(rows.Read(rows.ReorderUnwindowed(report))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("empty order", err)
 	}
-	if s, err := rows.CompileRead(rows.Read(rows.ReorderUnwindowed(rows.Distinct(report), id.Asc()))); err != nil || !strings.HasPrefix(s.SQL(), "SELECT DISTINCT ") {
+	if s, err := rows.CompileRead(rows.Read(rows.ReorderUnwindowed(rows.Distinct(report), expr.Asc(id)))); err != nil || !strings.HasPrefix(s.SQL(), "SELECT DISTINCT ") {
 		t.Fatal("lost DISTINCT", s.SQL(), err)
 	}
 }

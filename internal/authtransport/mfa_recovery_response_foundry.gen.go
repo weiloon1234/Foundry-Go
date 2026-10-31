@@ -12,6 +12,7 @@ import (
 // MFARecoveryResponseJSON describes the concrete MFARecoveryResponse JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: MFARecoveryResponseJSON()
 func MFARecoveryResponseJSON() foundrycontract.JSON[MFARecoveryResponse] {
 	return foundryMFARecoveryResponseJSON()
 }
@@ -31,12 +32,14 @@ var foundryMFARecoveryResponseJSON = sync.OnceValue(func() foundrycontract.JSON[
 })
 
 // MFARecoveryResponseValidationFieldSet retains concrete DTO and value types for validation.
+// Example: MFARecoveryResponseValidationFields()
 type MFARecoveryResponseValidationFieldSet struct {
 	// RecoveryCodes validates the declared JSON property "recovery_codes".
 	RecoveryCodes foundryvalidation.Field[MFARecoveryResponse, []string]
 }
 
 // MFARecoveryResponseValidationFields returns typed field descriptors.
+// Example: MFARecoveryResponseValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func MFARecoveryResponseValidationFields() MFARecoveryResponseValidationFieldSet {
 	return *foundryMFARecoveryResponseValidationFields()

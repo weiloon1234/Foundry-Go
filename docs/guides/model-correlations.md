@@ -16,8 +16,8 @@ link := rowset.Correlate(rowset.From(models.Users.Query()), rowset.From(models.O
 buyer := rowset.OuterScope(link, rowset.ModelScope(models.Users.Query()))
 order := rowset.InnerScope(link, rowset.ModelScope(models.Orders.Query()))
 matched := link.Where(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(buyer, orm.KeyExpr(models.Users.ID))))
-counts := rowset.SelectCorrelatedScalar(matched, expr.CountFieldAt(order, orm.KeyExpr(models.Orders.ID)).Value())
-totals := rowset.SelectCorrelatedScalar(matched, expr.SumAt(order, orm.NumberExpr(models.Orders.TotalCents)).Value())
+counts := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.CountFieldAt(order, orm.KeyExpr(models.Orders.ID))))
+totals := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.SumAt(order, orm.NumberExpr(models.Orders.TotalCents))))
 ```
 
 The `rowset` import is `database/orm/rows`. `matched.Exists()` is a predicate of
@@ -28,8 +28,8 @@ supplies scope; keep outer filters on the executing outer query.
 ## Select a value per outer row
 
 `rows.SelectCorrelatedScalar` returns a value tied to its outer owner. Embed it
-with `rows.CorrelatedScalarRowQuery(selected).Value()`, or
-`rows.CorrelatedScalarNullableRowQuery(selected).Value()` when the inner value is
+with `expr.AsSelected(rows.CorrelatedScalarRowQuery(selected))`, or
+`expr.AsSelected(rows.CorrelatedScalarNullableRowQuery(selected))` when the inner value is
 already nullable. A scalar COUNT yields a present zero over empty input,
 but the general scalar result stays nullable because a SELECT can yield no row.
 Multiple rows cause a database cardinality error; no implicit limit is added.

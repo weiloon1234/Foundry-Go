@@ -11,7 +11,7 @@ import (
 )
 
 func TestTemporalDeclarationSQLParity(t *testing.T) {
-	got, err := orm.Compile(expr.Where(Samples.Query(), expr.Year(expr.Value(orm.TimeExpr(Samples.Date))).Eq(2024)))
+	got, err := orm.Compile(expr.Where(Samples.Query(), expr.Eq(expr.Year(expr.Value(orm.TimeExpr(Samples.Date))), 2024)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestTemporalDeclarationSQLParity(t *testing.T) {
 		t.Fatal("temporal row predicate SQL changed")
 	}
 	year := expr.Year(expr.Value(orm.TimeExpr(Samples.Date)))
-	report := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, year.Value()), rows.MapSelected(CalendarSummaries.Rows, expr.Count[Sample]().Value()), rows.MapSelected(CalendarSummaries.Latest, expr.Max(orm.TimeExpr(Samples.Date)).Value())), expr.Group(year)), year.Asc())
+	report := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, expr.AsSelected(year)), rows.MapSelected(CalendarSummaries.Rows, expr.AsSelected(expr.Count[Sample]())), rows.MapSelected(CalendarSummaries.Latest, expr.AsSelected(expr.Max(orm.TimeExpr(Samples.Date))))), expr.Group(year)), expr.Asc(year))
 	got, err = rows.CompileRead(rows.Read(report))
 	if err != nil {
 		t.Fatal(err)

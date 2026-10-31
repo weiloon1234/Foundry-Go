@@ -22,6 +22,8 @@ import (
 // Jobs remain at-least-once: use jobs.Current's execution ID for an idempotent
 // destination. Locale/timezone/actor references belong in P's existing job
 // contract; this adapter creates neither another queue nor implicit email sends.
+//
+// Example: datatable.ExportHandler(table, manager, resolve, deliver)
 func ExportHandler[P, S, R, A any](table Table[S, R, A], manager *Manager, resolve func(context.Context, P) (A, Request, ExportOptions, error), deliver func(context.Context, P, *Artifact) error) (jobs.Handler[P], error) {
 	if err := table.check(manager); err != nil {
 		return nil, err

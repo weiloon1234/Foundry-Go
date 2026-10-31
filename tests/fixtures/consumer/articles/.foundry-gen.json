@@ -1,13 +1,13 @@
 {
   "version": 1,
   "files": {
-    "article_input_foundry.gen.go": "318b401c05259e85cf6eb8b04c2fd10e836a19bf06bda9012ca05fc53f4f1102",
-    "article_list_foundry.gen.go": "087688ac65d2068cc2279aa9fcae21110e95200498d1bdb7c10cf9e0706e88ce",
-    "article_media_foundry.gen.go": "432044306d3301a97cbd3626d437a50fac08fb141a56845b0acb83e8ef82ffae",
+    "article_input_foundry.gen.go": "d023ca763aa7ed437dd63520d771c01f3f320f9729d321c6d7e03d9357edb855",
+    "article_list_foundry.gen.go": "d99fc6281243ef75de90430f072369383d794889a0ce2d47d7cf529cb6715a1a",
+    "article_media_foundry.gen.go": "fd03bdda2c05bff206978f5522441cd7ff958fba645ba48bd271376b046b6363",
     "article_media_path_foundry.gen.go": "fd386fa467ffcc4efba0e34db612d9b9cfd9b5a01a1159b8031532815954bbbb",
     "article_path_foundry.gen.go": "a08f9a91139fae93c4518d39c394b0f7540358b5effa5bff652615906eb02699",
-    "article_view_foundry.gen.go": "79b57914ff2d22865a4851fb8ee7d5db51e20c1b3d491796ada86a50d828f1e6",
-    "file_view_foundry.gen.go": "e147a4eb00b124cfc3d8ed49fa52f1234df0314676f7459b297fac9ac0171645",
-    "seo_foundry.gen.go": "6b2b26d2dea1fb3b85791dc9516a57f806b721b2fc1252631ef724866d2cc6cc"
+    "article_view_foundry.gen.go": "233db1f8ea7a1bb94af741ce1f01673bb1359d451ac4d398bf0de265eabb6c70",
+    "file_view_foundry.gen.go": "903a180a0d62bad4c3d39265b571e8ecf0fd19a82ec624ce0f01ad105b326806",
+    "seo_foundry.gen.go": "432e3f3d60450fff2ac1a42f04d765545ccda788aeb01e8c3bd6a740f63f5a24"
   }
 }

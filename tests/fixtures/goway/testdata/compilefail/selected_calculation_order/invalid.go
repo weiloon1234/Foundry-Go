@@ -6,4 +6,4 @@ import (
 )
 
 var c = expr.Count[models.User]()
-var _ = expr.OrderBy(models.Users.Query(), expr.AddValue(c.Value(), c.Value()).Asc())
+var _ = expr.OrderBy(models.Users.Query(), expr.AscValue(expr.AddValue(expr.AsSelected(c), expr.AsSelected(c))))

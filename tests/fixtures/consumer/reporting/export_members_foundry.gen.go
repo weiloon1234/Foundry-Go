@@ -14,6 +14,7 @@ import (
 // ExportMembersJSON describes the concrete ExportMembers JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: ExportMembersJSON()
 func ExportMembersJSON() foundrycontract.JSON[ExportMembers] { return foundryExportMembersJSON() }
 
 var foundryExportMembersJSON = sync.OnceValue(func() foundrycontract.JSON[ExportMembers] {
@@ -87,6 +88,7 @@ var foundryExportMembersJSON = sync.OnceValue(func() foundrycontract.JSON[Export
 })
 
 // ExportMembersValidationFieldSet retains concrete DTO and value types for validation.
+// Example: ExportMembersValidationFields()
 type ExportMembersValidationFieldSet struct {
 	// OperatorID validates the declared JSON property "operator_id".
 	OperatorID foundryvalidation.Field[ExportMembers, model.ID[Operator]]
@@ -97,6 +99,7 @@ type ExportMembersValidationFieldSet struct {
 }
 
 // ExportMembersValidationFields returns typed field descriptors.
+// Example: ExportMembersValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func ExportMembersValidationFields() ExportMembersValidationFieldSet {
 	return *foundryExportMembersValidationFields()

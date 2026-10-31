@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/datatable/internal/exportio"
 	"io"
 	"reflect"
 	"regexp"
@@ -110,11 +111,11 @@ func TestXLSXStructureLiteralCellsAndExactValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer writer.Abort()
-	if err := writer.Row(textCells(input...)); err != nil {
+	defer writer.abort()
+	if err := writer.writeRow(textCells(input...)); err != nil {
 		t.Fatal(err)
 	}
-	if err := writer.Finish(); err != nil {
+	if err := writer.finish(); err != nil {
 		t.Fatal(err)
 	}
 	parts, sheet := readWorkbook(t, output.Bytes())
@@ -169,10 +170,10 @@ func TestXLSXStructureLiteralCellsAndExactValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := again.Row(textCells(input...)); err != nil {
+	if err := again.writeRow(textCells(input...)); err != nil {
 		t.Fatal(err)
 	}
-	if err := again.Finish(); err != nil {
+	if err := again.finish(); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(output.Bytes(), repeat.Bytes()) {
@@ -188,16 +189,16 @@ func TestXLSXRejectsLimitsAndFinalizationFailures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer writer.Abort()
+	defer writer.abort()
 	writer.row = 1_048_575
-	if err := writer.Row(textCells("last")); err != nil {
+	if err := writer.writeRow(textCells("last")); err != nil {
 		t.Fatal(err)
 	}
-	if err := writer.Row(nil); err == nil {
+	if err := writer.writeRow(nil); err == nil {
 		t.Fatal("worksheet row limit ignored")
 	}
 	writer.row = 0
-	if err := writer.Row(make([]exportCell, 16385)); err == nil {
+	if err := writer.writeRow(make([]exportCell, 16385)); err == nil {
 		t.Fatal("worksheet column limit ignored")
 	}
 	for n, want := range map[int]string{1: "A", 26: "Z", 27: "AA", 52: "AZ", 702: "ZZ", 703: "AAA", 16384: "XFD"} {
@@ -205,19 +206,19 @@ func TestXLSXRejectsLimitsAndFinalizationFailures(t *testing.T) {
 			t.Fatal("incorrect Excel column", n, got)
 		}
 	}
-	writer.sheet = &xmlBudget{writer: io.Discard, remaining: 0}
-	if err := writer.Finish(); err == nil {
+	writer.sheet = &exportio.XMLBudget{Writer: io.Discard, Remaining: 0}
+	if err := writer.finish(); err == nil {
 		t.Fatal("closing XML escaped its budget")
 	}
-	if err := writer.Finish(); err == nil {
+	if err := writer.finish(); err == nil {
 		t.Fatal("finalized writer accepted another finish")
 	}
 	stop := errors.New("archive output failed")
 	output := &failureWriter{err: stop}
 	broken, err := newXLSXReport(output, 1<<20, time.UTC)
 	if err == nil {
-		err = broken.Finish()
-		broken.Abort()
+		err = broken.finish()
+		broken.abort()
 	}
 	if !errors.Is(err, stop) {
 		t.Fatal("ZIP finalization hid output failure", err)
@@ -243,11 +244,11 @@ func TestXLSXWritesWhileRowsAreStillBeingProduced(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer writer.Abort()
+	defer writer.abort()
 	initial := sink.bytes
 	for row := range 4096 {
 		digest := sha256.Sum256([]byte(strconv.Itoa(row)))
-		if err := writer.Row(textCells(hex.EncodeToString(digest[:]), strings.Repeat("x", 256))); err != nil {
+		if err := writer.writeRow(textCells(hex.EncodeToString(digest[:]), strings.Repeat("x", 256))); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -257,7 +258,7 @@ func TestXLSXWritesWhileRowsAreStillBeingProduced(t *testing.T) {
 	if sink.largest > 1<<20 {
 		t.Fatal("workbook-sized output buffer observed")
 	}
-	if err := writer.Finish(); err != nil {
+	if err := writer.finish(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -275,11 +276,11 @@ func FuzzXLSXLiteralRoundTrip(f *testing.F) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer writer.Abort()
-		if err := writer.Row(textCells(text)); err != nil {
+		defer writer.abort()
+		if err := writer.writeRow(textCells(text)); err != nil {
 			t.Fatal(err)
 		}
-		if err := writer.Finish(); err != nil {
+		if err := writer.finish(); err != nil {
 			t.Fatal(err)
 		}
 		_, sheet := readWorkbook(t, output.Bytes())
@@ -294,7 +295,7 @@ func TestXLSXDoesNotRetainReportSizedCellBuffers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer writer.Abort()
+	defer writer.abort()
 	// Distinct cells total more than 50 MiB. Sample live heap after collection
 	// while the worksheet remains open, so a retained row/shared-string table
 	// cannot hide behind finalization. This is not a process RSS quota.
@@ -304,7 +305,7 @@ func TestXLSXDoesNotRetainReportSizedCellBuffers(t *testing.T) {
 	padding := strings.Repeat("value", 210)
 	var peak uint64
 	for row := range 50_000 {
-		if err := writer.Row(textCells(strconv.Itoa(row) + ":" + padding)); err != nil {
+		if err := writer.writeRow(textCells(strconv.Itoa(row) + ":" + padding)); err != nil {
 			t.Fatal(err)
 		}
 		if (row+1)%10_000 == 0 {
@@ -318,7 +319,7 @@ func TestXLSXDoesNotRetainReportSizedCellBuffers(t *testing.T) {
 	if peak > 8<<20 {
 		t.Fatal("streaming writer retained report-sized data", peak)
 	}
-	if err := writer.Finish(); err != nil {
+	if err := writer.finish(); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("peak additional live heap at checkpoints: %d bytes for 50,000 distinct cells", peak)
@@ -335,11 +336,11 @@ func BenchmarkXLSXStreamingRows(b *testing.B) {
 				}
 				cells := []exportCell{{text: "9007199254740993", kind: integerCell}, {text: "12345678901234567890.001", kind: decimalCell}, {text: "2026-09-25T17:30:00Z", kind: dateTimeCell}, {text: "ordinary text"}}
 				for range rows {
-					if err := writer.Row(cells); err != nil {
+					if err := writer.writeRow(cells); err != nil {
 						b.Fatal(err)
 					}
 				}
-				if err := writer.Finish(); err != nil {
+				if err := writer.finish(); err != nil {
 					b.Fatal(err)
 				}
 			}
@@ -378,11 +379,11 @@ func TestXLSXTypedCellsUseExactNumbersAndPresentationZoneDates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer writer.Abort()
-	if err := writer.Row(cells); err != nil {
+	defer writer.abort()
+	if err := writer.writeRow(cells); err != nil {
 		t.Fatal(err)
 	}
-	if err := writer.Finish(); err != nil {
+	if err := writer.finish(); err != nil {
 		t.Fatal(err)
 	}
 	_, sheet := readWorkbook(t, output.Bytes())
@@ -424,13 +425,13 @@ func TestXLSXSixteenDigitIntegersRoundTripThroughTheImporter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer writer.Abort()
+	defer writer.abort()
 	for _, id := range ids {
-		if err := writer.Row([]exportCell{{text: id, kind: integerCell}, {text: id, kind: textCell}}); err != nil {
+		if err := writer.writeRow([]exportCell{{text: id, kind: integerCell}, {text: id, kind: textCell}}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := writer.Finish(); err != nil {
+	if err := writer.finish(); err != nil {
 		t.Fatal(err)
 	}
 	_, sheet := readWorkbook(t, output.Bytes())

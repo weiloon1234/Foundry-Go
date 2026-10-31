@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.WithValue(models.Users.Query(), expr.Count[models.User]().Value())
+var _ = rows.WithValue(models.Users.Query(), expr.AsSelected(expr.Count[models.User]()))

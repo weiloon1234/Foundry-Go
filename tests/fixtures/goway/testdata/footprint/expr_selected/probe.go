@@ -27,5 +27,5 @@ var schema = rows.Define(func(b rows.Builder[Result], r *Result) fields {
 func Query() rows.Query[rows.Alias[side, models.Order], Result] {
 	source := rows.As[side](models.Orders.Query(), "o")
 	count := expr.Count[rows.Alias[side, models.Order]]()
-	return rows.Select(source, schema, rows.MapSelected(schema.Count, expr.AddValue(count.Value(), expr.Row(count.Param(1)).Value())), rows.MapSelected(schema.Exists, expr.Exists[rows.Alias[side, models.Order]]().Value()))
+	return rows.Select(source, schema, rows.MapSelected(schema.Count, expr.AddValue(expr.AsSelected(count), expr.AsSelected(expr.Row(expr.ParamOf(count, 1))))), rows.MapSelected(schema.Exists, expr.AsSelected(expr.Exists[rows.Alias[side, models.Order]]())))
 }

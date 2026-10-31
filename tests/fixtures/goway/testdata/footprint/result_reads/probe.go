@@ -13,10 +13,10 @@ import (
 type alias struct{}
 
 func Page(ctx context.Context, db database.Executor) (orm.PageResult[int64], error) {
-	return rows.Read(rows.SelectValue(models.Orders.Query(), orm.NumberExpr(models.Orders.TotalCents))).OrderBy(expr.Value(orm.KeyExpr(models.Orders.ID)).Asc()).Paginate(ctx, db, orm.PageRequest{Number: 1, Size: 10})
+	return rows.Read(rows.SelectValue(models.Orders.Query(), orm.NumberExpr(models.Orders.TotalCents))).OrderBy(expr.Asc(expr.Value(orm.KeyExpr(models.Orders.ID)))).Paginate(ctx, db, orm.PageRequest{Number: 1, Size: 10})
 }
 func Lock(ctx context.Context, tx *database.Tx) ([]int64, error) {
 	a := rows.AsTransaction[alias](rows.TransactionOf(rows.ModelRecord(models.Orders.Query())), "orders_alias")
-	q := rows.SelectTransactionValue(a, expr.Row(expr.At(rows.TransactionScope(a), orm.NumberExpr(models.Orders.TotalCents))).Value())
+	q := rows.SelectTransactionValue(a, expr.AsSelected(expr.Row(expr.At(rows.TransactionScope(a), orm.NumberExpr(models.Orders.TotalCents)))))
 	return rows.ForUpdate(q).Of(rows.Target(rows.TransactionScope(a))).SkipLocked().Limit(10).All(ctx, tx)
 }

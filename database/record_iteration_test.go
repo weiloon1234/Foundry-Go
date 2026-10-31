@@ -80,7 +80,7 @@ func recordIterationQuery(kind string, factory func(), retrieved func(context.Co
 	a := rows.AsRecord[iterationAlias](source, "r")
 	r := rows.SelectRecord(a, rows.Scope(a)).Offset(3).Limit(205)
 	if kind == "ordered" {
-		r = r.OrderBy(expr.At(rows.Scope(a), orm.TextExpr(table.Name)).Desc())
+		r = r.OrderBy(expr.Desc(expr.At(rows.Scope(a), orm.TextExpr(table.Name))))
 	}
 	if kind == "record-adapter" {
 		return ormIterator(rows.ReadRecord(r))

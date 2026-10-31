@@ -36,7 +36,7 @@ func readUsers(t *testing.T, tx database.Executor, definition rowset.CommonTable
 	t.Helper()
 	source := rowset.AsRecord[resultAlias](definition, "result")
 	fields := rowset.Scope(source)
-	rows, err := rowset.ReadRecord(rowset.SelectRecord(source, rowset.Scope(source)).OrderBy(expr.At(fields, orm.TextExpr(models.Users.Email)).Asc())).All(t.Context(), tx)
+	rows, err := rowset.ReadRecord(rowset.SelectRecord(source, rowset.Scope(source)).OrderBy(expr.Asc(expr.At(fields, orm.TextExpr(models.Users.Email))))).All(t.Context(), tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func checkPermittedStepSources(t *testing.T, tx *database.Tx, anchor orm.Query[m
 		},
 		"independent_aggregate": func(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
 			a := rowset.AsRecord[parentAlias](self, "a")
-			count := rowset.SelectScalar(rowset.From(models.Orders.Query()), expr.Count[models.Order]().Value())
+			count := rowset.SelectScalar(rowset.From(models.Orders.Query()), expr.AsSelected(expr.Count[models.Order]()))
 			return rowset.SelectRecord(a, rowset.Scope(a)).Where(rowset.ExistsQuery(a, count))
 		},
 	} {
@@ -150,7 +150,7 @@ func checkRecursiveComposition(t *testing.T, tx *database.Tx, tree rowset.Common
 	if strings.Count(s.SQL(), `"descendants" ("id"`) != 1 {
 		t.Fatal("shared recursive CTE was emitted more than once")
 	}
-	ids := rowset.SelectScalar(combined, expr.Row(expr.At(fields, orm.KeyExpr(models.Users.ID))).Value())
+	ids := rowset.SelectScalar(combined, expr.AsSelected(expr.Row(expr.At(fields, orm.KeyExpr(models.Users.ID)))))
 	if n, err := orm.Count(ctx, tx, models.Users.Query().Where(orm.Has(models.UserLinks.Referrals.Where(expr.RelationFilter(models.UserLinks.Referrals, rowset.InQuery(expr.Value(orm.KeyExpr(models.Users.ID)), ids)))))); err != nil || n != 2 {
 		t.Fatal("relationship predicate lost recursive CTE dependency", err)
 	}
@@ -159,7 +159,7 @@ func checkRecursiveComposition(t *testing.T, tx *database.Tx, tree rowset.Common
 	}
 	result := rowset.AsRecord[resultAlias](tree, "result")
 	f := rowset.Scope(result)
-	q := rowset.SelectRecord(result, rowset.Scope(result)).OrderBy(expr.At(f, orm.TextExpr(models.Users.Email)).Asc())
+	q := rowset.SelectRecord(result, rowset.Scope(result)).OrderBy(expr.Asc(expr.At(f, orm.TextExpr(models.Users.Email))))
 	if row, err := rowset.ReadRecord(q.Offset(1)).RequireFirst(ctx, tx); err != nil || row.ID != users[1].ID {
 		t.Fatal("recursive required result lost selected window", err)
 	}
@@ -198,7 +198,7 @@ func checkRecursiveProjection(t *testing.T, tx *database.Tx, anchor orm.Query[mo
 	})
 	a := rowset.AsRecord[resultAlias](tree, "result")
 	f := rowset.Scope(a)
-	rows, err := rowset.ReadRecord(rowset.SelectRecord(a, rowset.Scope(a)).OrderBy(rowset.At(f, reports.UserSummaries.Email).Asc())).All(t.Context(), tx)
+	rows, err := rowset.ReadRecord(rowset.SelectRecord(a, rowset.Scope(a)).OrderBy(expr.Asc(rowset.At(f, reports.UserSummaries.Email)))).All(t.Context(), tx)
 	if err != nil {
 		return err
 	}
@@ -239,7 +239,7 @@ func TestPostgresNaturalKeyRecursionAndCancellation(t *testing.T) {
 		})
 		a := rowset.AsRecord[resultAlias](tree, "result")
 		fields := rowset.Scope(a)
-		codes, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(a, expr.Row(expr.At(fields, orm.TextExpr(recursivequeries.Nodes.Code))).Value()), expr.At(fields, orm.TextExpr(recursivequeries.Nodes.Code)).Asc())).All(t.Context(), session)
+		codes, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(a, expr.AsSelected(expr.Row(expr.At(fields, orm.TextExpr(recursivequeries.Nodes.Code))))), expr.Asc(expr.At(fields, orm.TextExpr(recursivequeries.Nodes.Code))))).All(t.Context(), session)
 		if err != nil || !reflect.DeepEqual(codes, []recursivequeries.NodeCode{"child", "leaf", "root"}) {
 			t.Fatal("recursive natural-key hierarchy failed", codes, err)
 		}

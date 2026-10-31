@@ -9,4 +9,4 @@ import (
 
 var age = expr.Value(orm.NumberExpr(models.Users.Age))
 var email = expr.Value(orm.TextExpr(models.Users.Email))
-var _ = expr.Where(models.Users.Query(), expr.EqualValue(expr.Row(age).Value(), expr.Row(age).Value()))
+var _ = expr.Where(models.Users.Query(), expr.EqualValue(expr.AsSelected(expr.Row(age)), expr.AsSelected(expr.Row(age))))

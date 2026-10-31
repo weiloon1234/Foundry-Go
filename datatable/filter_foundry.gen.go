@@ -12,6 +12,7 @@ import (
 // FilterJSON describes the concrete Filter JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: FilterJSON()
 func FilterJSON() foundrycontract.JSON[Filter] { return foundryFilterJSON() }
 
 var foundryFilterJSON = sync.OnceValue(func() foundrycontract.JSON[Filter] {
@@ -36,6 +37,7 @@ var foundryFilterJSON = sync.OnceValue(func() foundrycontract.JSON[Filter] {
 })
 
 // FilterValidationFieldSet retains concrete DTO and value types for validation.
+// Example: FilterValidationFields()
 type FilterValidationFieldSet struct {
 	// Children validates the declared JSON property "children".
 	Children foundryvalidation.Field[Filter, []Filter]
@@ -48,6 +50,7 @@ type FilterValidationFieldSet struct {
 }
 
 // FilterValidationFields returns typed field descriptors.
+// Example: FilterValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func FilterValidationFields() FilterValidationFieldSet { return *foundryFilterValidationFields() }
 

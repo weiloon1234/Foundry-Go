@@ -40,10 +40,10 @@ func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
 	foreign := declareMembers()
 	for _, bad := range []rows.CursorQuery[member]{
 		{}, base, base.UniqueBy(expr.Group(id), expr.Group(id)),
-		base.UniqueBy(expr.Group(expr.Row(id).Value().Param(1))),
+		base.UniqueBy(expr.Group(expr.ParamOf(expr.AsSelected(expr.Row(id)), 1))),
 		base.UniqueBy(expr.Group(expr.At(base.Scope(), orm.KeyExpr(foreign.ID)))),
-		valid.OrderBy(expr.Negate(id).Asc()),
-		valid.OrderBy(id.Asc().NullsLast()),
+		valid.OrderBy(expr.Asc(expr.Negate(id))),
+		valid.OrderBy(expr.Asc(id).NullsLast()),
 	} {
 		if _, err := rows.CompileCursor(bad); !errors.Is(err, fault.Invalid) {
 			t.Fatal("invalid cursor compiled", err)
@@ -56,7 +56,7 @@ func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
 	if err != nil || again.SQL() != s.SQL() {
 		t.Fatal("validation mutated cursor", err)
 	}
-	scalar := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname))).Value())))
+	scalar := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(m.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(m.Nickname)))))))
 	scalar = scalar.UniqueBy(expr.Group(scalar.Value()))
 	if _, err := rows.CompileValueCursor(scalar); err != nil {
 		t.Fatal(err)
@@ -70,7 +70,7 @@ func TestCursorTerminalsValidateWithoutPageBoundary(t *testing.T) {
 	if err := rows.PreflightValueCursor(ctx, scalar); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	badScalar := scalar.UniqueBy(expr.Group(scalar.Value().Param(value.Null[string]())))
+	badScalar := scalar.UniqueBy(expr.Group(expr.ParamOf(scalar.Value(), value.Null[string]())))
 	if _, err := rows.CompileValueCursor(badScalar); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
 	}

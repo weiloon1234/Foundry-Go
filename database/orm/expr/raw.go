@@ -12,13 +12,15 @@ import (
 // Raw declares a selected-phase SQL fragment with a built-in result codec.
 // Use ? for bound arguments and ?? for a literal question mark. The caller owns
 // SQL semantics and result type; scopes and transactions belong to the query.
-// Example: expr.Raw[User,int64]("COALESCE(score, ?)", 0).
+//
+// Example: expr.Raw[User, string](sql, args...)
 func Raw[S, V any](sql string, args ...any) Selected[S, V] {
 	return RawWithCodec[S](ormcore.ResultCodec[V](), sql, args...)
 }
 
 // RawWithCodec supplies an explicit result codec, including custom/nullable types.
-// Example: expr.RawWithCodec[User](codec.Nullable(codec.String[Label]()),"label").
+//
+// Example: expr.RawWithCodec[User](c, sql, args...)
 func RawWithCodec[S, V any](c codec.Codec[V], sql string, args ...any) Selected[S, V] {
 	node := querycore.NewRawFragment(sql, args)
 	column := columnCodec(c)

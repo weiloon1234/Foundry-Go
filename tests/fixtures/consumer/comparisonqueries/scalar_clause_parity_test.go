@@ -15,7 +15,7 @@ func TestAliasedScalarWindowSQLParity(t *testing.T) {
 	q := models.Users.Query()
 	a := rows.AsRecord[thresholdAlias](rows.CTE("adult_threshold", rows.ModelRecord(q.Where(orm.NumberGt(models.Users.Age, 20)))), "threshold")
 	age := expr.At(rows.Scope(a), orm.NumberExpr(models.Users.Age))
-	selected := rows.LimitScalar(rows.OffsetScalar(rows.OrderScalar(rows.SelectScalar(a, expr.Row(age).Value()), age.Asc()), 1), 1)
+	selected := rows.LimitScalar(rows.OffsetScalar(rows.OrderScalar(rows.SelectScalar(a, expr.AsSelected(expr.Row(age))), expr.Asc(age)), 1), 1)
 	got, err := orm.Compile(expr.Where(q, expr.Equal(expr.NullableRow(expr.Value(orm.NumberExpr(models.Users.Age))), rows.ScalarRowQuery(rows.From(q), selected))))
 	if err != nil {
 		t.Fatal(err)

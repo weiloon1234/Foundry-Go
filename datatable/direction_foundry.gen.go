@@ -14,6 +14,7 @@ import (
 )
 
 // DirectionValues returns declared values in source order, with independent slice ownership.
+// Example: DirectionValues()
 func DirectionValues() []Direction { return []Direction{Ascending, Descending} }
 
 // EnumDescriptor describes this enum type independently of the receiver's value.
@@ -44,6 +45,7 @@ func (v Direction) Validate() error {
 }
 
 // ParseDirection decodes and validates an enum's text representation.
+// Example: ParseDirection(text)
 func ParseDirection(text string) (Direction, error) {
 	v := Direction(text)
 	if err := v.Validate(); err != nil {
@@ -51,12 +53,16 @@ func ParseDirection(text string) (Direction, error) {
 	}
 	return v, nil
 }
+
+// MarshalText encodes a validated enum as text.
 func (v Direction) MarshalText() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return []byte(string(v)), nil
 }
+
+// UnmarshalText decodes validated enum text and changes the receiver only on success.
 func (v *Direction) UnmarshalText(data []byte) error {
 	parsed, err := ParseDirection(string(data))
 	if err != nil {
@@ -65,12 +71,16 @@ func (v *Direction) UnmarshalText(data []byte) error {
 	*v = parsed
 	return nil
 }
+
+// MarshalJSON encodes a validated enum as JSON.
 func (v Direction) MarshalJSON() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(string(v))
 }
+
+// UnmarshalJSON decodes validated JSON and rejects null.
 func (v *Direction) UnmarshalJSON(data []byte) error {
 	var raw *string
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -88,6 +98,7 @@ func (v *Direction) UnmarshalJSON(data []byte) error {
 }
 
 // DirectionCodec applies the generated membership rule at both SQL boundaries.
+// Example: DirectionCodec()
 func DirectionCodec() codec.Codec[Direction] {
 	return codec.String[Direction]().Validated(Direction.Validate)
 }

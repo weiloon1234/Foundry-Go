@@ -12,5 +12,5 @@ func root() expr.JSONPath[jsonpaths.Document, jsonpaths.Preferences] {
 	return expr.JSONRoot(expr.Value(orm.JSONExpr(jsonpaths.Documents.Settings)))
 }
 func invalid() {
-	_ = expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(root(), jsonpaths.Theme)), codec.String[string]()).Eq(42)
+	_ = expr.NullableEq(expr.JSONTextScalar(expr.JSONOptional(expr.JSONProperty(root(), jsonpaths.Theme)), codec.String[string]()), 42)
 }

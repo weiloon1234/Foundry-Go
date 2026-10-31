@@ -6,7 +6,7 @@ import (
 )
 
 // OrderScalar appends row or selected ordering inside the scalar SELECT.
-// Example: rows.OrderScalar(selected, age.Asc()).
+// Example: rows.OrderScalar(selected, expr.Asc(age)).
 func OrderScalar[S, V any](q Scalar[S, V], orders ...expr.ProjectionOrder[S]) Scalar[S, V] {
 	q.source = recordOrders(q.source, orders)
 	return q
@@ -34,7 +34,7 @@ func GroupByScalar[S, V any](q Scalar[S, V], keys ...expr.GroupKey[S]) Scalar[S,
 }
 
 // HavingScalar appends group predicates inside the scalar SELECT.
-// Example: rows.HavingScalar(selected, count.Gt(0)).
+// Example: rows.HavingScalar(selected, expr.GtValue(count, 0)).
 func HavingScalar[S, V any](q Scalar[S, V], predicates ...expr.HavingPredicate[S]) Scalar[S, V] {
 	q.source = Having(Query[S, struct{}]{source: q.source}, predicates...).source
 	return q
@@ -55,7 +55,7 @@ func DistinctOnScalar[S, V any](q Scalar[S, V], keys ...expr.GroupKey[S]) Scalar
 }
 
 // DistinctOnScalarValues accepts selected keys and retains group/window validation.
-// Example: rows.DistinctOnScalarValues(selected, count.Value().Key()).
+// Example: rows.DistinctOnScalarValues(selected, expr.Key(expr.AsSelected(count))).
 func DistinctOnScalarValues[S, V any](q Scalar[S, V], keys ...expr.ProjectionKey[S]) Scalar[S, V] {
 	q.source = DistinctOnValues(Query[S, struct{}]{source: q.source}, keys...).source
 	return q

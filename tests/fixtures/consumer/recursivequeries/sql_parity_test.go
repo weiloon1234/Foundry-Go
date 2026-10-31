@@ -18,7 +18,7 @@ func TestRecursiveRecordSQLParity(t *testing.T) {
 	}
 	tree := rows.RecursiveCTE("descendants", rows.ModelRecord(models.Users.Query().Where(orm.NumberEq(models.Users.Age, 20))), descendants)
 	alias := rows.AsRecord[resultAlias](tree, "result")
-	selected := rows.SelectRecord(alias, rows.Scope(alias)).OrderBy(expr.At(rows.Scope(alias), orm.TextExpr(models.Users.Email)).Asc())
+	selected := rows.SelectRecord(alias, rows.Scope(alias)).OrderBy(expr.Asc(expr.At(rows.Scope(alias), orm.TextExpr(models.Users.Email))))
 	if err := rows.PreflightRead(t.Context(), selected); err != nil {
 		t.Fatal(err)
 	}

@@ -64,7 +64,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	s := rows.Scope(a)
 	t.Run("SumRow", func(t *testing.T) {
 		aggregate := expr.SumRow(rows.At(s, r.Exact))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -74,7 +74,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("SumNullableRow", func(t *testing.T) {
 		aggregate := expr.SumNullableRow(rows.At(s, r.MaybeExact))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -84,7 +84,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("AvgRow", func(t *testing.T) {
 		aggregate := expr.AvgRow(rows.At(s, r.Exact))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -94,7 +94,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("AvgNullableRow", func(t *testing.T) {
 		aggregate := expr.AvgNullableRow(rows.At(s, r.MaybeExact))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -104,7 +104,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("SumFloatRow", func(t *testing.T) {
 		aggregate := expr.SumFloatRow(rows.At(s, r.Approx))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -114,7 +114,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("SumFloatNullableRow", func(t *testing.T) {
 		aggregate := expr.SumFloatNullableRow(rows.At(s, r.MaybeApprox))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -124,7 +124,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("AvgFloatRow", func(t *testing.T) {
 		aggregate := expr.AvgFloatRow(rows.At(s, r.Approx))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -134,7 +134,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("AvgFloatNullableRow", func(t *testing.T) {
 		aggregate := expr.AvgFloatNullableRow(rows.At(s, r.MaybeApprox))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -144,7 +144,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("SumIntervalRow", func(t *testing.T) {
 		aggregate := expr.SumIntervalRow(rows.At(s, r.Period))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -154,7 +154,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("SumIntervalNullableRow", func(t *testing.T) {
 		aggregate := expr.SumIntervalNullableRow(rows.At(s, r.MaybePeriod))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -164,7 +164,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("AvgIntervalRow", func(t *testing.T) {
 		aggregate := expr.AvgIntervalRow(rows.At(s, r.Period))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -174,7 +174,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("AvgIntervalNullableRow", func(t *testing.T) {
 		aggregate := expr.AvgIntervalNullableRow(rows.At(s, r.MaybePeriod))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -184,7 +184,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("MinRow", func(t *testing.T) {
 		aggregate := expr.MinRow(rows.At(s, r.Name))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -194,7 +194,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("MinNullableRow", func(t *testing.T) {
 		aggregate := expr.MinNullableRow(rows.At(s, r.MaybeName))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -204,7 +204,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("MaxRow", func(t *testing.T) {
 		aggregate := expr.MaxRow(rows.At(s, r.Name))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -214,7 +214,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	})
 	t.Run("MaxNullableRow", func(t *testing.T) {
 		aggregate := expr.MaxNullableRow(rows.At(s, r.MaybeName))
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 		_, column := expr.FoundryAggregate(aggregate, sqlowner.Expressions())
@@ -223,7 +223,7 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 		}
 	})
 	for _, aggregate := range []expr.OrderedAggregate[rows.Alias[left, aggregateRecord], int64]{expr.CountRow(rows.At(s, r.Exact)), expr.CountDistinctRow(rows.At(s, r.MaybeExact))} {
-		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, aggregate.Value()))); err != nil {
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(aggregate)))); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -241,11 +241,11 @@ func TestDerivedAggregateFamilies(t *testing.T) {
 	if err := scanner.Scan(nil); err != nil || !decoded.IsNull() {
 		t.Fatal(decoded, err)
 	}
-	fallback := expr.CoalesceValue(minimum.Value(), minimum.Param(aggregateName("fallback")).Value())
+	fallback := expr.CoalesceValue(expr.AsSelected(minimum), expr.AsSelected(expr.ParamOf(minimum, aggregateName("fallback"))))
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, fallback))); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := expr.FoundrySelectedColumn(minimum.Param(aggregateName("fallback")).Value(), sqlowner.Expressions()).Bind(aggregateName("fallback")); err != nil || got != "fallback" {
+	if got, err := expr.FoundrySelectedColumn(expr.AsSelected(expr.ParamOf(minimum, aggregateName("fallback"))), sqlowner.Expressions()).Bind(aggregateName("fallback")); err != nil || got != "fallback" {
 		t.Fatal(got, err)
 	}
 }
@@ -259,13 +259,13 @@ func TestDerivedAggregatesRejectEnumMetadataAndWrongOwners(t *testing.T) {
 	a, r := derivedAggregateSource()
 	other, foreign := derivedAggregateSource()
 	foreignSum := expr.SumRow(rows.At(rows.Scope(other), foreign.Exact))
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, foreignSum.Value()))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(foreignSum)))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("foreign aggregate accepted", err)
 	}
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.SumRow(rows.At(rows.Scope(a), r.Exact).Param(1)).Value()))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(expr.SumRow(expr.ParamOf(rows.At(rows.Scope(a), r.Exact), 1)))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("parameter accepted as a stored field", err)
 	}
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.SumRow(expr.RowExpression[rows.Alias[left, aggregateRecord], int64]{}).Value()))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, expr.AsSelected(expr.SumRow(expr.RowExpression[rows.Alias[left, aggregateRecord], int64]{}))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("zero aggregate accepted", err)
 	}
 	enumRow := rows.Define(func(b rows.Builder[cell[numericRowEnum]], v *cell[numericRowEnum]) struct {
@@ -280,13 +280,13 @@ func TestDerivedAggregatesRejectEnumMetadataAndWrongOwners(t *testing.T) {
 	// Feed the concrete declaration metadata through the same sealed rows.At path.
 	enumSource := rows.AsRecord[left](rows.RecordOf(rows.Select(a, enumRow, rows.MapSelected(enumRow.Value, expr.Raw[rows.Alias[left, aggregateRecord], numericRowEnum]("1")))), "enum_input")
 	enumValue := rows.At(rows.Scope(enumSource), enumRow.Value)
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(enumSource, expr.SumRow(enumValue).Value()))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(enumSource, expr.AsSelected(expr.SumRow(enumValue))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("numeric enum SUM accepted", err)
 	}
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(enumSource, expr.MinRow(enumValue).Value()))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(enumSource, expr.AsSelected(expr.MinRow(enumValue))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("numeric enum MIN accepted", err)
 	}
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(enumSource, expr.CountRow(enumValue).Value()))); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(enumSource, expr.AsSelected(expr.CountRow(enumValue))))); err != nil {
 		t.Fatal("enum COUNT rejected", err)
 	}
 }
@@ -296,8 +296,8 @@ func TestNullableDerivedAggregateMetadataCannotBeLaundered(t *testing.T) {
 	other, foreign := derivedAggregateSource()
 	invalid := expr.SumRow(rows.At(rows.Scope(a), foreign.Exact))
 	for _, v := range []expr.Selected[rows.Alias[left, aggregateRecord], value.Nullable[decimal.Decimal]]{
-		invalid.Value(),
-		expr.SumRow(rows.At(rows.Scope(a), r.Exact)).Filter(rows.At(rows.Scope(other), foreign.Exact).Eq(1)).Value(),
+		expr.AsSelected(invalid),
+		expr.AsSelected(expr.Filter(expr.SumRow(rows.At(rows.Scope(a), r.Exact)), expr.Eq(rows.At(rows.Scope(other), foreign.Exact), 1))),
 	} {
 		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(a, v))); !errors.Is(err, fault.Invalid) {
 			t.Fatal("foreign aggregate metadata accepted", err)
@@ -314,10 +314,10 @@ func TestNullableDerivedAggregateMetadataCannotBeLaundered(t *testing.T) {
 	})
 	source := rows.AsRecord[left](rows.RecordOf(rows.Select(a, enumRow, rows.MapSelected(enumRow.Value, expr.RawWithCodec[rows.Alias[left, aggregateRecord]](codec.Nullable(codec.Signed[numericRowEnum]()), "1")))), "nullable_enum")
 	input := rows.At(rows.Scope(source), enumRow.Value)
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, expr.SumNullableRow(input).Value()))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, expr.AsSelected(expr.SumNullableRow(input))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nullable enum SUM accepted", err)
 	}
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, expr.MinNullableRow(input).Value()))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(source, expr.AsSelected(expr.MinNullableRow(input))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nullable enum MIN accepted", err)
 	}
 }

@@ -9,4 +9,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-var invalid = expr.Sum(orm.NumberExpr(models.Orders.TotalCents)).Gt(value.Null[decimal.Decimal]())
+var invalid = expr.GtValue(expr.Sum(orm.NumberExpr(models.Orders.TotalCents)), value.Null[decimal.Decimal]())

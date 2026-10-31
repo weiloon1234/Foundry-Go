@@ -15,8 +15,8 @@ type b struct{}
 
 var source = rows.AsTransaction[a](rows.TransactionOf(rows.ModelRecord(f.Records.Query())), "records_alias")
 var fields = rows.TransactionScope(source)
-var selected = rows.SelectTransactionValue(source, expr.Row(expr.At(fields, orm.KeyExpr(f.Records.ID))).Value())
+var selected = rows.SelectTransactionValue(source, expr.AsSelected(expr.Row(expr.At(fields, orm.KeyExpr(f.Records.ID)))))
 var _ context.Context
 var _ *database.Tx
 
-var _ = rows.TransactionInQuery(expr.CountFieldAt(fields, orm.KeyExpr(f.Records.ID)).Value(), selected)
+var _ = rows.TransactionInQuery(expr.AsSelected(expr.CountFieldAt(fields, orm.KeyExpr(f.Records.ID))), selected)

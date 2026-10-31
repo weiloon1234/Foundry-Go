@@ -70,7 +70,7 @@ func ReadValues[V any](q ValueSetQuery[V]) Result[Set[V], V] {
 }
 
 // SelectTransactionValue retains exact scalar codecs and the transaction requirement.
-// Example: rows.SelectTransactionValue(source,expr.Row(id).Value()).All(ctx,tx).
+// Example: rows.SelectTransactionValue(source,expr.AsSelected(expr.Row(id))).All(ctx,tx).
 func SelectTransactionValue[S, V any](source TransactionSelectionSource[S], selected expr.Selected[S, V]) TransactionValue[S, V] {
 	q := SelectScalar(selectionAdapter[S]{source: transactionSelectionOf(source)}, selected)
 	r := Values(q).core
@@ -90,14 +90,14 @@ type TransactionValue[S, V any] struct {
 
 func (q TransactionValue[S, V]) readSource(*S, *V) ormcore.RecordSource { return q.core }
 
-// Where filters the retained input scope. Example: selected.Where(id.Ne(zero)).
+// Where filters the retained input scope. Example: selected.Where(expr.Ne(id, zero)).
 func (q Result[S, R]) Where(ps ...expr.Predicate[S]) Result[S, R] {
 	q.core.Source = whereSource(q.core.Source, ps)
 	q.core.Direct = false
 	return q
 }
 
-// OrderBy retains explicit result ordering. Example: selected.OrderBy(id.Asc()).
+// OrderBy retains explicit result ordering. Example: selected.OrderBy(expr.Asc(id)).
 func (q Result[S, R]) OrderBy(os ...expr.ProjectionOrder[S]) Result[S, R] {
 	q.core.Source = recordOrders(q.core.Source, os)
 	q.core.Direct = false
@@ -143,14 +143,14 @@ func (q Result[S, R]) Exists(ctx context.Context, ex database.Executor) (bool, e
 	return ormcore.RecordExists(ctx, ex, q.core)
 }
 
-// Where filters the retained input scope. Example: selected.Where(id.Ne(zero)).
+// Where filters the retained input scope. Example: selected.Where(expr.Ne(id, zero)).
 func (q TransactionValue[S, V]) Where(ps ...expr.Predicate[S]) TransactionValue[S, V] {
 	q.core.Source = whereSource(q.core.Source, ps)
 	q.core.Direct = false
 	return q
 }
 
-// OrderBy retains explicit result ordering. Example: selected.OrderBy(id.Asc()).
+// OrderBy retains explicit result ordering. Example: selected.OrderBy(expr.Asc(id)).
 func (q TransactionValue[S, V]) OrderBy(os ...expr.ProjectionOrder[S]) TransactionValue[S, V] {
 	q.core.Source = recordOrders(q.core.Source, os)
 	q.core.Direct = false

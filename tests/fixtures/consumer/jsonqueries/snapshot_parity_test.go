@@ -22,9 +22,9 @@ func TestSnapshotJSONKindIdentityAndSQLParity(t *testing.T) {
 	filter := document(t, jsonqueries.Preferences{Theme: value.Set("dark")})
 	selected := rows.Select(rows.From(f.Query().OrderBy(orm.KeyAsc(f.Key()))), r.Row,
 		rows.Map(r.ID, expr.Value(orm.KeyExpr(f.Key()))), rows.Map(r.Settings, expr.Value(orm.JSONExpr(f.Settings))),
-		rows.MapSelected(r.Kind, expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))).Value()),
-		rows.MapSelected(r.BackupKind, expr.JSONTypeNullable(expr.Value(orm.NullableJSONExpr(f.Backup))).Value()),
-		rows.MapSelected(r.Matches, expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))).Value()))
+		rows.MapSelected(r.Kind, expr.AsSelected(expr.JSONType(expr.Value(orm.JSONExpr(f.Settings))))),
+		rows.MapSelected(r.BackupKind, expr.AsSelected(expr.JSONTypeNullable(expr.Value(orm.NullableJSONExpr(f.Backup))))),
+		rows.MapSelected(r.Matches, expr.AsSelected(expr.JSONContainsNullable(expr.Value(orm.NullableJSONExpr(f.Backup)), expr.NullableRow(expr.Param(orm.JSONExpr(f.Settings), filter))))))
 	got, err := rows.CompileRead(rows.Read(selected))
 	if err != nil {
 		t.Fatal(err)

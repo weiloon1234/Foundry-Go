@@ -15,6 +15,6 @@ var parentScope = rows.OuterScope(link, rows.ModelScope(models.Users.Query()))
 var childScope = rows.InnerScope(link, rows.ModelScope(models.Orders.Query()))
 var parentID = expr.At(parentScope, orm.KeyExpr(models.Users.ID))
 var buyerID = expr.At(childScope, orm.ColumnExpr(models.Orders.BuyerID))
-var selected = rows.SelectCorrelatedScalar(link.Where(expr.Equal(buyerID, parentID)), expr.Row(buyerID).Value())
+var selected = rows.SelectCorrelatedScalar(link.Where(expr.Equal(buyerID, parentID)), expr.AsSelected(expr.Row(buyerID)))
 
-var _ = link.Where(expr.Value(orm.NumberExpr(models.Orders.TotalCents)).Eq(1))
+var _ = link.Where(expr.Eq(expr.Value(orm.NumberExpr(models.Orders.TotalCents)), 1))

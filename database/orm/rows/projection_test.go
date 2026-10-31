@@ -76,7 +76,7 @@ func projection() Query[Inner[Alias[left, member], Alias[right, order]], record]
 	schema := declareRows()
 	id := expr.At(RightScope(j, Scope(b)), orm.KeyExpr(o.ID))
 	name := expr.At(LeftScope(j, Scope(a)), orm.TextExpr(m.Name))
-	return OrderBy(Select(j, schema, Map(schema.Name, name), Map(schema.ID, id)).Where(name.Eq("Ada")), id.Asc())
+	return OrderBy(Select(j, schema, Map(schema.Name, name), Map(schema.ID, id)).Where(expr.Eq(name, "Ada")), expr.Asc(id))
 }
 func TestJoinProjectionAllUsesDeclaredFieldOrder(t *testing.T) {
 	state := &driverState{columns: []string{"id", "name"}, rows: [][]driver.Value{{int64(9), "Ada"}}}
@@ -252,7 +252,7 @@ func TestNullableJoinComparisonAndProjection(t *testing.T) {
 	}
 	schema := Define(func(b Builder[result], r *result) fields { return fields{b.Row(), NullableNumberOf(b, &r.Parent)} })
 	parent := expr.At(LeftScope(joined, Scope(a)), orm.NullableColumnExpr(people.Parent))
-	q := Select(joined, schema, Map(schema.Parent, parent)).Where(parent.Eq(3), parent.Ne(4), parent.IsNotNull())
+	q := Select(joined, schema, Map(schema.Parent, parent)).Where(expr.NullableEq(parent, 3), expr.NullableNe(parent, 4), expr.IsNotNull(parent))
 	state := &driverState{columns: []string{"parent"}, rows: [][]driver.Value{{int64(3)}}}
 	got, err := Read(q).All(t.Context(), openTest(t, state))
 	if err != nil || len(got) != 1 {

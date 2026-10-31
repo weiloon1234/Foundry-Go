@@ -6,4 +6,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.SelectScalar(rows.From(models.Users.Query()), expr.SumRow(expr.RowExpression[models.Order, int]{}).Value())
+var _ = rows.SelectScalar(rows.From(models.Users.Query()), expr.AsSelected(expr.SumRow(expr.RowExpression[models.Order, int]{})))

@@ -8,5 +8,5 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var selected = rows.SelectScalar(rows.From(models.Users.Query()), expr.Count[models.User]().Value())
+var selected = rows.SelectScalar(rows.From(models.Users.Query()), expr.AsSelected(expr.Count[models.User]()))
 var invalid = rows.DistinctOnScalar(selected, expr.Group(expr.Value(orm.KeyExpr(models.Orders.ID))))

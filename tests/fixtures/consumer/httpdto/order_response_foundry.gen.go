@@ -14,6 +14,7 @@ import (
 // OrderResponseJSON describes the concrete OrderResponse JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: OrderResponseJSON()
 func OrderResponseJSON() foundrycontract.JSON[OrderResponse] { return foundryOrderResponseJSON() }
 
 var foundryOrderResponseJSON = sync.OnceValue(func() foundrycontract.JSON[OrderResponse] {
@@ -34,6 +35,7 @@ var foundryOrderResponseJSON = sync.OnceValue(func() foundrycontract.JSON[OrderR
 })
 
 // OrderResponseValidationFieldSet retains concrete DTO and value types for validation.
+// Example: OrderResponseValidationFields()
 type OrderResponseValidationFieldSet struct {
 	// BuyerID validates the declared JSON property "buyer_id".
 	BuyerID foundryvalidation.Field[OrderResponse, model.ID[models.User]]
@@ -42,6 +44,7 @@ type OrderResponseValidationFieldSet struct {
 }
 
 // OrderResponseValidationFields returns typed field descriptors.
+// Example: OrderResponseValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func OrderResponseValidationFields() OrderResponseValidationFieldSet {
 	return *foundryOrderResponseValidationFields()

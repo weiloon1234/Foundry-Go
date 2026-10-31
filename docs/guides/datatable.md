@@ -31,10 +31,17 @@ not become public DTOs implicitly. Persistence models, persistence tags and
 unsupported custom codecs remain rejected at DTO boundaries. Use JSON tags for public property names
 and typed projection mappings for the selected SQL expressions.
 
-`datatable.DefineColumn[Source](wire.Name, label)` retains source scope, response
-row and field value types. Add `SortBy(expression)`, `FilterBy(source)`,
-`Searchable()` and `ExportAs(cell)` only for supported capabilities, then call
-`Registration()`. The table checks each column against a scalar property in the
+`datatable.DefineColumn[Source](wire.Name, label, options...)` returns a typed
+`ColumnRegistration[Source, Row]` directly. Supply functional options
+`datatable.SortBy(expression)`, `datatable.FilterBy(source)`,
+`datatable.Searchable(rowExpression)` and
+`datatable.ExportAs(selectedExpression, cell)` only for supported capabilities.
+`ColumnOption[Source, Value]` retains both the table scope and DTO field type;
+mismatched scopes and values fail compilation. `Searchable` infers its types from
+the row expression; `ExportAs` uses a selected expression, such as `expr.AsSelected(name)`
+or `expr.AsSelected(count)`, so neither option repeats `[Source]`. These expressions supply
+types only; exports format the DTO field value.
+The table checks each column against a scalar property in the
 row's existing JSON graph, including enum cases, widths, nullability and formats.
 Arrays, objects and dynamic fields cannot be scalar table columns.
 
@@ -58,22 +65,25 @@ use `orm.PrimaryOf` and `orm.SoftDeleteOf` to retain declaration roles; the
 [row schemas](../../tests/fixtures/consumer/reporting/rows.go) retain exact DTO
 field types. Existing generated DTO descriptors continue to own wire metadata.
 
-Use `expr.Row(expr.Value(orm.TextExpr(Users.Name))).Value()` in `SortBy`, an enum or comparison row
-adapter's `.Value()` (such as `expr.CompareRow(expr.Value(Users.State)).Value()`),
-or a computed/aggregate expression's `.Value()`. `Stable` is `[]expr.ProjectionOrder[S]`,
-accepting the short `expr.Value(orm.KeyExpr(table.Key())).Asc()` spelling for a unique final key.
-Filters take `expr.Predicate[S]` for WHERE and `expr.HavingPredicate[S]` for HAVING:
+Use `expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(Users.Name))))` in `datatable.SortBy`, `expr.AsSelected` on an enum or comparison row
+adapter (such as `expr.AsSelected(expr.CompareRow(expr.Value(orm.EnumExpr(Users.State))))`),
+or `expr.AsSelected` on a computed or aggregate expression. `Stable` is `[]expr.ProjectionOrder[S]`,
+accepting the short `expr.Asc(expr.Value(orm.KeyExpr(table.Key())))` spelling for a unique final key.
+Filters wrap row expressions in typed filter adapters:
 
 | Operand | Filter adapter |
 | --- | --- |
-| Required text | `expr.TextRow(Users.Name)` |
-| Nullable text | `expr.TextNullableRow(Users.Nickname)` |
-| Required number | `expr.OrderRow(expr.Value(orm.NumberExpr(Users.Age)))` |
-| Nullable number | `expr.OrderNullableRow(expr.Value(Users.Score))` |
-| Enum or equality-only field | `expr.CompareRow(expr.Value(Users.State))` (sort via `.Value()`) |
-| Nullable enum | `expr.CompareNullableRow(expr.Value(Users.State))` (sort via `.Value()`) |
-| Joined text | `expr.TextRowAt(memberScope, Members.Name)` |
-| Aggregate | `expr.Count[User]()` or `expr.Sum(Orders.Amount)` |
+| Required text | `expr.TextFilter(expr.TextRow(orm.TextExpr(Users.Name)))` |
+| Nullable text | `expr.NullableTextFilter(expr.TextNullableRow(orm.NullableTextExpr(Users.Nickname)))` |
+| Required number | `expr.OrderFilter(expr.OrderRow(expr.Value(orm.NumberExpr(Users.Age))))` |
+| Nullable number | `expr.NullableOrderFilter(expr.OrderNullableRow(expr.Value(orm.NullableNumberExpr(Users.Score))))` |
+| Enum or equality-only field | `expr.CompareFilter(expr.CompareRow(expr.Value(orm.EnumExpr(Users.State))))` |
+| Nullable enum | `expr.NullableCompareFilter(expr.CompareNullableRow(expr.Value(orm.NullableEnumExpr(Users.OptionalState))))` |
+| Joined text | `expr.TextFilter(expr.TextRowAt(memberScope, orm.TextExpr(Members.Name)))` |
+| Required ordered aggregate | `expr.OrderValueFilter(expr.Count[User]())` |
+| Nullable ordered aggregate | `expr.NullableOrderValueFilter(expr.Sum(orm.NumberExpr(Orders.Amount)))` |
+| Equality-only aggregate | `expr.ValueFilter(expr.Exists[User]())` |
+| Selected text | `expr.TextValueFilter(expr.TextValue(selectedName))` |
 
 `Related` maps `expr.Predicate[Child]` to `expr.Predicate[Parent]`, normally
 with `expr.Has(ParentRelations.Children, predicate)`. `expr.ModelPredicate`
@@ -156,7 +166,8 @@ rejects outer LIMIT/OFFSET and DISTINCT ON because they change result selection.
 Materialize a DISTINCT ON result before reporting on its completed rows. Inner
 windows and winner ordering remain intact. Ordinary DISTINCT stays intact.
 
-Use `Where(codec, field)` or `Having(codec, aggregate)`; nullable counterparts
+Use `Where(codec, adapter)` or `Having(codec, adapter)` with the corresponding
+row or selected filter adapter; nullable counterparts
 retain the exact nullable column type while parsing non-null values with the
 same codec. Available comparisons come from that typed expression. `Restrict`
 narrows the operator allowlist. `Related` maps an explicitly declared child row

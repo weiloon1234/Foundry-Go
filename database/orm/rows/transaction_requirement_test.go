@@ -38,7 +38,7 @@ type transactionMembershipInputs struct {
 }
 
 func transactionJoinMembershipInputs[S TransactionScopeType](source TransactionSelectionSource[S]) transactionMembershipInputs {
-	count := expr.Count[S]().Value()
+	count := expr.AsSelected(expr.Count[S]())
 	return transactionMembershipInputs{SelectTransactionValue(source, count), SelectTransactionValue(source, expr.Nullable(count))}
 }
 
@@ -47,9 +47,9 @@ func testTransactionMarkerMembership[M TransactionScopeType](t *testing.T, outer
 	m := declareMembers()
 	a := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "a")
 	b := AsTransaction[right](TransactionOf(ModelRecord(m.Query())), "b")
-	id := expr.Row(expr.At(TransactionScope(a), orm.KeyExpr(m.ID))).Value()
+	id := expr.AsSelected(expr.Row(expr.At(TransactionScope(a), orm.KeyExpr(m.ID))))
 	on := On(expr.At(TransactionScope(a), orm.KeyExpr(m.ID)), expr.At(TransactionScope(b), orm.KeyExpr(m.ID)))
-	ordinary := expr.Row(expr.Value(orm.KeyExpr(m.ID))).Value()
+	ordinary := expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(m.ID))))
 	inputs := map[string]transactionMembershipInputs{
 		"selected":   {SelectTransactionValue(a, id), SelectTransactionValue(a, expr.Nullable(id))},
 		"lifted":     {TransactionValueOf(Values(SelectScalar(From(m.Query()), ordinary))), TransactionValueOf(Values(SelectScalar(From(m.Query()), expr.Nullable(ordinary))))},

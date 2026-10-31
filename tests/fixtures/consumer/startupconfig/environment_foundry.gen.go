@@ -13,6 +13,7 @@ import (
 )
 
 // EnvironmentValues returns declared values in source order, with independent slice ownership.
+// Example: EnvironmentValues()
 func EnvironmentValues() []Environment { return []Environment{Development, Production} }
 
 // EnumDescriptor describes this enum type independently of the receiver's value.
@@ -45,6 +46,7 @@ func (v Environment) Validate() error {
 }
 
 // ParseEnvironment decodes and validates an enum's text representation.
+// Example: ParseEnvironment(text)
 func ParseEnvironment(text string) (Environment, error) {
 	v := Environment(text)
 	if err := v.Validate(); err != nil {
@@ -52,12 +54,16 @@ func ParseEnvironment(text string) (Environment, error) {
 	}
 	return v, nil
 }
+
+// MarshalText encodes a validated enum as text.
 func (v Environment) MarshalText() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return []byte(string(v)), nil
 }
+
+// UnmarshalText decodes validated enum text and changes the receiver only on success.
 func (v *Environment) UnmarshalText(data []byte) error {
 	parsed, err := ParseEnvironment(string(data))
 	if err != nil {
@@ -66,12 +72,16 @@ func (v *Environment) UnmarshalText(data []byte) error {
 	*v = parsed
 	return nil
 }
+
+// MarshalJSON encodes a validated enum as JSON.
 func (v Environment) MarshalJSON() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(string(v))
 }
+
+// UnmarshalJSON decodes validated JSON and rejects null.
 func (v *Environment) UnmarshalJSON(data []byte) error {
 	var raw *string
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -89,6 +99,7 @@ func (v *Environment) UnmarshalJSON(data []byte) error {
 }
 
 // EnvironmentCodec applies the generated membership rule at both SQL boundaries.
+// Example: EnvironmentCodec()
 func EnvironmentCodec() codec.Codec[Environment] {
 	return codec.String[Environment]().Validated(Environment.Validate)
 }

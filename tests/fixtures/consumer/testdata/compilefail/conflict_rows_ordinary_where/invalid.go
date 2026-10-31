@@ -9,4 +9,4 @@ import (
 )
 
 var records = rows.ConflictRowsOf(models.Users.Query())
-var _ = models.Users.Query().Where(expr.At(records.Proposed(), orm.NumberExpr(models.Users.Age)).Eq(10))
+var _ = models.Users.Query().Where(expr.Eq(expr.At(records.Proposed(), orm.NumberExpr(models.Users.Age)), 10))

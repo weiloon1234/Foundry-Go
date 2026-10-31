@@ -28,7 +28,7 @@ func streamRows[R any](ctx context.Context, ex database.Executor, source ormcore
 	})
 }
 
-// ReorderUnwindowed replaces report ordering, rejecting outer windows and DISTINCT ON. Example: rows.ReorderUnwindowed(q,name.Asc(),id.Asc()).
+// ReorderUnwindowed replaces report ordering, rejecting outer windows and DISTINCT ON. Example: rows.ReorderUnwindowed(q,expr.Asc(name),expr.Asc(id)).
 func ReorderUnwindowed[S, R any](q Query[S, R], orders ...expr.ProjectionOrder[S]) Query[S, R] {
 	node, err := querycore.ReorderUnwindowed(q.source.Node, len(orders))
 	if err != nil {

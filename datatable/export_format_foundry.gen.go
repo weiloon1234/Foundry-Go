@@ -14,6 +14,7 @@ import (
 )
 
 // ExportFormatValues returns declared values in source order, with independent slice ownership.
+// Example: ExportFormatValues()
 func ExportFormatValues() []ExportFormat { return []ExportFormat{CSV, XLSX} }
 
 // EnumDescriptor describes this enum type independently of the receiver's value.
@@ -46,6 +47,7 @@ func (v ExportFormat) Validate() error {
 }
 
 // ParseExportFormat decodes and validates an enum's text representation.
+// Example: ParseExportFormat(text)
 func ParseExportFormat(text string) (ExportFormat, error) {
 	v := ExportFormat(text)
 	if err := v.Validate(); err != nil {
@@ -53,12 +55,16 @@ func ParseExportFormat(text string) (ExportFormat, error) {
 	}
 	return v, nil
 }
+
+// MarshalText encodes a validated enum as text.
 func (v ExportFormat) MarshalText() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return []byte(string(v)), nil
 }
+
+// UnmarshalText decodes validated enum text and changes the receiver only on success.
 func (v *ExportFormat) UnmarshalText(data []byte) error {
 	parsed, err := ParseExportFormat(string(data))
 	if err != nil {
@@ -67,12 +73,16 @@ func (v *ExportFormat) UnmarshalText(data []byte) error {
 	*v = parsed
 	return nil
 }
+
+// MarshalJSON encodes a validated enum as JSON.
 func (v ExportFormat) MarshalJSON() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(string(v))
 }
+
+// UnmarshalJSON decodes validated JSON and rejects null.
 func (v *ExportFormat) UnmarshalJSON(data []byte) error {
 	var raw *string
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -90,6 +100,7 @@ func (v *ExportFormat) UnmarshalJSON(data []byte) error {
 }
 
 // ExportFormatCodec applies the generated membership rule at both SQL boundaries.
+// Example: ExportFormatCodec()
 func ExportFormatCodec() codec.Codec[ExportFormat] {
 	return codec.String[ExportFormat]().Validated(ExportFormat.Validate)
 }

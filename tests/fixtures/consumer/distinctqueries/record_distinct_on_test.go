@@ -22,7 +22,7 @@ func TestRecordDistinctOnInputOrderingParity(t *testing.T) {
 	left, right := rows.LeftScope(joined, rows.Scope(buyers)), rows.RightScope(joined, rows.Scope(orders))
 	id, orderID := expr.At(left, orm.KeyExpr(models.Users.ID)), expr.At(right, orm.KeyExpr(models.Orders.ID))
 	record := rows.SelectRecord(joined, left)
-	selected := rows.DistinctOnRecord(record, expr.Group(id)).OrderBy(id.Asc(), orderID.Desc()).Limit(2)
+	selected := rows.DistinctOnRecord(record, expr.Group(id)).OrderBy(expr.Asc(id), expr.Desc(orderID)).Limit(2)
 	got, err := rows.CompileRead(rows.ReadRecord(selected))
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +31,7 @@ func TestRecordDistinctOnInputOrderingParity(t *testing.T) {
 	assertClauseParity(t, got)
 	for _, bad := range []rows.RecordRead[rows.Inner[rows.Alias[recordBuyer, models.User], rows.Alias[recordOrder, models.Order]], models.User]{
 		rows.DistinctOnRecord(record),
-		rows.DistinctOnRecord(record, expr.Group(id)).OrderBy(orderID.Desc()),
+		rows.DistinctOnRecord(record, expr.Group(id)).OrderBy(expr.Desc(orderID)),
 		rows.DistinctOnRecord(record, expr.Group(id), expr.Group(id)),
 		rows.DistinctOnRecord(record, expr.GroupKey[rows.Inner[rows.Alias[recordBuyer, models.User], rows.Alias[recordOrder, models.Order]]]{}),
 	} {

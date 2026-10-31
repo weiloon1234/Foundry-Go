@@ -13,6 +13,7 @@ import (
 // LoginRequestJSON describes the concrete LoginRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: LoginRequestJSON()
 func LoginRequestJSON() foundrycontract.JSON[LoginRequest] { return foundryLoginRequestJSON() }
 
 var foundryLoginRequestJSON = sync.OnceValue(func() foundrycontract.JSON[LoginRequest] {
@@ -29,6 +30,7 @@ var foundryLoginRequestJSON = sync.OnceValue(func() foundrycontract.JSON[LoginRe
 })
 
 // LoginRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: LoginRequestValidationFields()
 type LoginRequestValidationFieldSet struct {
 	// Email validates the declared JSON property "email".
 	Email foundryvalidation.Field[LoginRequest, string]
@@ -37,6 +39,7 @@ type LoginRequestValidationFieldSet struct {
 }
 
 // LoginRequestValidationFields returns typed field descriptors.
+// Example: LoginRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func LoginRequestValidationFields() LoginRequestValidationFieldSet {
 	return *foundryLoginRequestValidationFields()

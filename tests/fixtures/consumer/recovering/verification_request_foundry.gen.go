@@ -13,6 +13,7 @@ import (
 // VerificationRequestJSON describes the concrete VerificationRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: VerificationRequestJSON()
 func VerificationRequestJSON() foundrycontract.JSON[VerificationRequest] {
 	return foundryVerificationRequestJSON()
 }
@@ -29,12 +30,14 @@ var foundryVerificationRequestJSON = sync.OnceValue(func() foundrycontract.JSON[
 })
 
 // VerificationRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: VerificationRequestValidationFields()
 type VerificationRequestValidationFieldSet struct {
 	// Token validates the declared JSON property "token".
 	Token foundryvalidation.Field[VerificationRequest, challenge.Token[Member, challenge.EmailVerification]]
 }
 
 // VerificationRequestValidationFields returns typed field descriptors.
+// Example: VerificationRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func VerificationRequestValidationFields() VerificationRequestValidationFieldSet {
 	return *foundryVerificationRequestValidationFields()

@@ -8,4 +8,4 @@ import (
 )
 
 var other = rows.ConflictRowsOf(models.WriteRecords.Query())
-var _ = rows.ConflictWhereRows(orm.OnConflict(orm.ConflictKey(orm.TextExpr(models.Users.Email))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(models.Users.Age))), expr.At(other.Proposed(), orm.ColumnExpr(models.WriteRecords.Enabled)).Eq(true))
+var _ = rows.ConflictWhereRows(orm.OnConflict(orm.ConflictKey(orm.TextExpr(models.Users.Email))).DoUpdate(orm.ConflictIncoming(orm.NumberExpr(models.Users.Age))), expr.Eq(expr.At(other.Proposed(), orm.ColumnExpr(models.WriteRecords.Enabled)), true))

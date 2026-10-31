@@ -2,6 +2,8 @@ package datatable
 
 // ColumnKind classifies the data and filter behavior of a datatable column.
 //
+// Example: datatable.ColumnText
+//
 //foundry:enum
 type ColumnKind string
 

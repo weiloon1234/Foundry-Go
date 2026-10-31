@@ -12,6 +12,7 @@ import (
 // CombinedJSON describes the concrete Combined JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: CombinedJSON()
 func CombinedJSON() foundrycontract.JSON[Combined] { return foundryCombinedJSON() }
 
 var foundryCombinedJSON = sync.OnceValue(func() foundrycontract.JSON[Combined] {
@@ -69,6 +70,7 @@ var foundryCombinedJSON = sync.OnceValue(func() foundrycontract.JSON[Combined] {
 })
 
 // CombinedValidationFieldSet retains concrete DTO and value types for validation.
+// Example: CombinedValidationFields()
 type CombinedValidationFieldSet struct {
 	// Project validates the declared JSON property "project".
 	Project foundryvalidation.Field[Combined, Envelope[ProjectDTO]]
@@ -77,6 +79,7 @@ type CombinedValidationFieldSet struct {
 }
 
 // CombinedValidationFields returns typed field descriptors.
+// Example: CombinedValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func CombinedValidationFields() CombinedValidationFieldSet { return *foundryCombinedValidationFields() }
 

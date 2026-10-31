@@ -45,7 +45,7 @@ func TestRelationExpressionFilterSQLParity(t *testing.T) {
 				switch kind {
 				case "belongs":
 					r := j.TargetParent
-					_, err = orm.All(t.Context(), db, j.Targets.Query().With(r.Where(expr.RelationFilter(r, expr.TextRow(orm.TextExpr(j.Parents.Name)).Contains("one")))))
+					_, err = orm.All(t.Context(), db, j.Targets.Query().With(r.Where(expr.RelationFilter(r, expr.TextContains(expr.TextRow(orm.TextExpr(j.Parents.Name)), "one")))))
 				case "one":
 					r := j.Chosen
 					_, err = orm.All(t.Context(), db, j.Parents.Query().With(r.Where(expr.RelationFilter(r, p))))

@@ -70,15 +70,21 @@ func adminColumns() []datatable.ColumnRegistration[Admin, AdminRow] {
 	text := foundryhttp.StringQuery[string]()
 	username := validation.DefineField("username", func(r AdminRow) string { return r.Username })
 	email := validation.DefineField("email", func(r AdminRow) value.Nullable[string] { return r.Email })
+	uExpr := expr.TextRow(orm.TextExpr(Admins.Username))
+	eExpr := expr.TextNullableRow(orm.NullableTextExpr(Admins.Email))
 	return []datatable.ColumnRegistration[Admin, AdminRow]{
-		datatable.DefineColumn[Admin](username, "admins.fields.username").
-			SortBy(expr.Row(expr.Value(orm.TextExpr(Admins.Username))).Value()).
-			FilterBy(datatable.Where(text, expr.TextRow(orm.TextExpr(Admins.Username)))).
-			Searchable().ExportAs(datatable.ScalarCell(text)).Registration(),
-		datatable.DefineColumn[Admin](email, "admins.fields.email").
-			SortBy(expr.Row(expr.Value(orm.NullableTextExpr(Admins.Email))).Value()).
-			FilterBy(datatable.NullableWhere(text, expr.TextNullableRow(orm.NullableTextExpr(Admins.Email)))).
-			Searchable().ExportAs(datatable.NullableCell(text)).Registration(),
+		datatable.DefineColumn[Admin](username, "admins.fields.username",
+			datatable.SortBy(expr.AsSelected(uExpr)),
+			datatable.FilterBy(datatable.Where(text, expr.TextFilter(uExpr))),
+			datatable.Searchable(uExpr),
+			datatable.ExportAs(expr.AsSelected(uExpr), datatable.ScalarCell(text)),
+		),
+		datatable.DefineColumn[Admin](email, "admins.fields.email",
+			datatable.SortBy(expr.AsSelected(eExpr)),
+			datatable.FilterBy(datatable.NullableWhere(text, expr.NullableTextFilter(eExpr))),
+			datatable.Searchable(eExpr),
+			datatable.ExportAs(expr.AsSelected(eExpr), datatable.NullableCell(text)),
+		),
 	}
 }
 
@@ -99,7 +105,7 @@ func adminSource(tenantID int64, archived bool) rows.Query[Admin, AdminRow] {
 func adminTable[A any](spec datatable.Spec[Admin, AdminRow, A], tenant func(context.Context, A) (int64, error), archived bool) datatable.Spec[Admin, AdminRow, A] {
 	// Retain the caller's Row descriptor, Authorize, ID, labels and export policy.
 	spec.Columns = adminColumns()
-	spec.Stable = []expr.ProjectionOrder[Admin]{expr.Value(orm.KeyExpr(Admins.Key())).Asc()}
+	spec.Stable = []expr.ProjectionOrder[Admin]{expr.Asc(expr.Value(orm.KeyExpr(Admins.Key())))}
 	spec.Source = func(ctx context.Context, actor A) (rows.Query[Admin, AdminRow], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
@@ -152,37 +158,37 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 		correlation := rows.Correlate(joined, rows.From(q))
 		outer := rows.OuterScope(correlation, admin)
 		inner := rows.InnerScope(correlation, rows.ModelScope(q))
-		return rows.SelectCorrelatedScalar(correlation, expr.Row(expr.At(inner, orm.TextExpr(countries.Countries.Name))).Value()).
+		return rows.SelectCorrelatedScalar(correlation, expr.AsSelected(expr.Row(expr.At(inner, orm.TextExpr(countries.Countries.Name))))).
 			Where(expr.Equal(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)), expr.At(outer, orm.ColumnExpr(Admins.CountryCode)))).
-			OrderBy(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)).Asc()).Limit(1)
+			OrderBy(expr.Asc(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)))).Limit(1)
 	}
-	sortedCountry := expr.Row(rows.CorrelatedScalarRowQuery(correlateName())).Value()
+	sortedCountry := expr.AsSelected(expr.Row(rows.CorrelatedScalarRowQuery(correlateName())))
 	statusFilter := datatable.NullableWhere(
 		foundryhttp.EnumQuery[countries.Status, *countries.Status](countries.EnabledStatus.EnumDescriptor()),
-		expr.CompareNullableRow(expr.AtNullable(country, orm.EnumExpr(countries.Countries.Status))))
+		expr.NullableCompareFilter(expr.CompareNullableRow(expr.AtNullable(country, orm.EnumExpr(countries.Countries.Status)))))
 	latitudeFilter := datatable.NullableWhere(
 		foundryhttp.FloatQuery[float64](),
-		expr.OrderNullableRow(expr.AtNullableValue(country, orm.NullableNumberExpr(countries.Countries.Latitude))))
+		expr.NullableOrderFilter(expr.OrderNullableRow(expr.AtNullableValue(country, orm.NullableNumberExpr(countries.Countries.Latitude)))))
 	base := rows.Select(joined, AuditRows,
 		rows.Map(AuditRows.ID, expr.At(admin, orm.KeyExpr(Admins.Key()))),
 		rows.MapSelected(AuditRows.Country, sortedCountry),
 		rows.Map(AuditRows.Status, expr.AtNullable(country, orm.EnumExpr(countries.Countries.Status))),
 		rows.Map(AuditRows.Latitude, expr.AtNullableValue(country, orm.NullableNumberExpr(countries.Countries.Latitude))))
 	spec.Columns = []datatable.ColumnRegistration[AuditScope, AuditRow]{
-		datatable.DefineColumn[AuditScope](validation.DefineField("country", func(r AuditRow) value.Nullable[string] { return r.Country }), "audit.country").
-			SortBy(sortedCountry).Registration(),
-		datatable.DefineColumn[AuditScope](validation.DefineField("status", func(r AuditRow) value.Nullable[countries.Status] { return r.Status }), "audit.status").
-			FilterBy(statusFilter).Registration(),
-		datatable.DefineColumn[AuditScope](validation.DefineField("latitude", func(r AuditRow) value.Nullable[float64] { return r.Latitude }), "audit.latitude").
-			FilterBy(latitudeFilter).Registration(),
+		datatable.DefineColumn[AuditScope](validation.DefineField("country", func(r AuditRow) value.Nullable[string] { return r.Country }), "audit.country",
+			datatable.SortBy(sortedCountry)),
+		datatable.DefineColumn[AuditScope](validation.DefineField("status", func(r AuditRow) value.Nullable[countries.Status] { return r.Status }), "audit.status",
+			datatable.FilterBy(statusFilter)),
+		datatable.DefineColumn[AuditScope](validation.DefineField("latitude", func(r AuditRow) value.Nullable[float64] { return r.Latitude }), "audit.latitude",
+			datatable.FilterBy(latitudeFilter)),
 	}
-	spec.Stable = []expr.ProjectionOrder[AuditScope]{expr.At(admin, orm.KeyExpr(Admins.Key())).Asc()}
+	spec.Stable = []expr.ProjectionOrder[AuditScope]{expr.Asc(expr.At(admin, orm.KeyExpr(Admins.Key())))}
 	spec.Source = func(ctx context.Context, actor A) (rows.Query[AuditScope, AuditRow], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
 			return rows.Query[AuditScope, AuditRow]{}, err
 		}
-		return base.Where(expr.At(admin, orm.NumberExpr(Admins.TenantID)).Eq(id)), nil
+		return base.Where(expr.Eq(expr.At(admin, orm.NumberExpr(Admins.TenantID)), id)), nil
 	}
 	return spec
 }
@@ -193,13 +199,13 @@ func auditTable[A any](spec datatable.Spec[AuditScope, AuditRow, A], tenant func
 func orderGroupFilters() (datatable.FilterSource[models.Order, int64], datatable.FilterSource[models.Order, value.Nullable[decimal.Decimal]]) {
 	count := expr.Count[models.Order]()
 	total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents))
-	return datatable.Having(foundryhttp.IntegerQuery[int64](), count),
-		datatable.NullableHaving(foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal](), total)
+	return datatable.Having(foundryhttp.IntegerQuery[int64](), expr.OrderValueFilter(count)),
+		datatable.NullableHaving(foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal](), expr.NullableOrderValueFilter(total))
 }
 
 func relatedOrderFilter() datatable.FilterSource[models.User, int64] {
 	return datatable.Related(
-		datatable.Where(foundryhttp.IntegerQuery[int64](), expr.OrderRow(expr.Value(orm.NumberExpr(models.Orders.TotalCents)))),
+		datatable.Where(foundryhttp.IntegerQuery[int64](), expr.OrderFilter(expr.OrderRow(expr.Value(orm.NumberExpr(models.Orders.TotalCents))))),
 		func(p expr.Predicate[models.Order]) expr.Predicate[models.User] {
 			return expr.Has(models.UserRelations.Orders, p)
 		})
@@ -207,7 +213,7 @@ func relatedOrderFilter() datatable.FilterSource[models.User, int64] {
 
 func statusFilter() datatable.FilterSource[models.User, models.Status] {
 	return datatable.Where(foundryhttp.EnumQuery[models.Status, *models.Status](models.StatusActive.EnumDescriptor()),
-		expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status))))
+		expr.CompareFilter(expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status)))))
 }
 
 // migration:end
@@ -272,11 +278,11 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 		correlation := rows.Correlate(joined, rows.From(q))
 		outer := rows.OuterScope(correlation, admin)
 		inner := rows.InnerScope(correlation, rows.ModelScope(q))
-		return rows.SelectCorrelatedScalar(correlation, expr.Row(expr.At(inner, orm.NullableTextExpr(countries.Countries.OfficialName))).Value()).
+		return rows.SelectCorrelatedScalar(correlation, expr.AsSelected(expr.Row(expr.At(inner, orm.NullableTextExpr(countries.Countries.OfficialName))))).
 			Where(expr.Equal(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)), expr.At(outer, orm.ColumnExpr(Admins.CountryCode)))).
-			OrderBy(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)).Asc()).Limit(1)
+			OrderBy(expr.Asc(expr.At(inner, orm.KeyExpr(countries.Countries.ISO2)))).Limit(1)
 	}
-	selected := expr.Row(rows.CorrelatedScalarNullableRowQuery(correlate())).Value()
+	selected := expr.AsSelected(expr.Row(rows.CorrelatedScalarNullableRowQuery(correlate())))
 	filter := officialNameFilter[DirectoryScope]{exists: func(p orm.Predicate[countries.Country]) expr.Predicate[DirectoryScope] {
 		return correlate(p).Exists()
 	}}
@@ -286,19 +292,22 @@ func directoryTable[A any](spec datatable.Spec[DirectoryScope, DirectoryRow, A],
 		rows.MapSelected(DirectoryRows.OfficialName, selected))
 	text := foundryhttp.StringQuery[string]()
 	spec.Columns = []datatable.ColumnRegistration[DirectoryScope, DirectoryRow]{
-		datatable.DefineColumn[DirectoryScope](validation.DefineField("country", func(r DirectoryRow) string { return r.Country }), "admins.country").
-			SortBy(expr.Row(expr.At(country, orm.TextExpr(countries.Countries.Name))).Value()).
-			FilterBy(datatable.Where(text, expr.TextRowAt(country, orm.TextExpr(countries.Countries.Name)))).Registration(),
-		datatable.DefineColumn[DirectoryScope](validation.DefineField("officialName", func(r DirectoryRow) value.Nullable[string] { return r.OfficialName }), "admins.officialName").
-			SortBy(selected).FilterBy(datatable.NullableWhere(text, filter)).Registration(),
+		datatable.DefineColumn[DirectoryScope](validation.DefineField("country", func(r DirectoryRow) string { return r.Country }), "admins.country",
+			datatable.SortBy(expr.AsSelected(expr.Row(expr.At(country, orm.TextExpr(countries.Countries.Name))))),
+			datatable.FilterBy(datatable.Where(text, expr.TextFilter(expr.TextRowAt(country, orm.TextExpr(countries.Countries.Name))))),
+		),
+		datatable.DefineColumn[DirectoryScope](validation.DefineField("officialName", func(r DirectoryRow) value.Nullable[string] { return r.OfficialName }), "admins.officialName",
+			datatable.SortBy(selected),
+			datatable.FilterBy(datatable.NullableWhere(text, filter)),
+		),
 	}
-	spec.Stable = []expr.ProjectionOrder[DirectoryScope]{expr.At(admin, orm.KeyExpr(Admins.Key())).Asc()}
+	spec.Stable = []expr.ProjectionOrder[DirectoryScope]{expr.Asc(expr.At(admin, orm.KeyExpr(Admins.Key())))}
 	spec.Source = func(ctx context.Context, actor A) (rows.Query[DirectoryScope, DirectoryRow], error) {
 		id, err := tenant(ctx, actor)
 		if err != nil {
 			return rows.Query[DirectoryScope, DirectoryRow]{}, err
 		}
-		return base.Where(expr.At(admin, orm.NumberExpr(Admins.TenantID)).Eq(id)), nil
+		return base.Where(expr.Eq(expr.At(admin, orm.NumberExpr(Admins.TenantID)), id)), nil
 	}
 	return spec
 }

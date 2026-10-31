@@ -13,6 +13,7 @@ import (
 // RegistrationJSON describes the concrete Registration JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: RegistrationJSON()
 func RegistrationJSON() foundrycontract.JSON[Registration] { return foundryRegistrationJSON() }
 
 var foundryRegistrationJSON = sync.OnceValue(func() foundrycontract.JSON[Registration] {
@@ -38,6 +39,7 @@ var foundryRegistrationJSON = sync.OnceValue(func() foundrycontract.JSON[Registr
 })
 
 // RegistrationValidationFieldSet retains concrete DTO and value types for validation.
+// Example: RegistrationValidationFields()
 type RegistrationValidationFieldSet struct {
 	// Company validates the declared JSON property "company".
 	Company foundryvalidation.Field[Registration, foundryvalue.Optional[string]]
@@ -52,6 +54,7 @@ type RegistrationValidationFieldSet struct {
 }
 
 // RegistrationValidationFields returns typed field descriptors.
+// Example: RegistrationValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func RegistrationValidationFields() RegistrationValidationFieldSet {
 	return *foundryRegistrationValidationFields()

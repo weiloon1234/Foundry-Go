@@ -42,14 +42,14 @@ func temporalTransferNode[S, V any](s expr.Selected[S, V]) querycore.ValueExpres
 func TestTemporalOperationsValidateBeforeZeroLimit(t *testing.T) {
 	d := temporalTransferFields()
 	date, local, at, clock := expr.Value(orm.TimeExpr(d.Day)), expr.Value(orm.TimeExpr(d.Local)), expr.Value(orm.TimeExpr(d.At)), expr.Value(orm.TimeExpr(d.Clock))
-	rejectTemporalTransfer(t, d, "date unit zero", expr.TruncateDate(date, 0).Value())
-	rejectTemporalTransfer(t, d, "date clock unit", expr.TruncateDate(date, expr.DateUnit(expr.TimestampHour)).Value())
-	rejectTemporalTransfer(t, d, "timestamp unit", expr.TruncateLocal(local, 255).Value())
-	rejectTemporalTransfer(t, d, "zone zero", expr.TruncateInstant(at, expr.TimestampDay, expr.TimeZone{}).Value())
-	rejectTemporalTransfer(t, d, "resolution policy", expr.ResolveLocal(local, expr.UTCZone(), 0).Value())
-	rejectTemporalTransfer(t, d, "submicrosecond", expr.AddClockElapsed(clock, time.Nanosecond).Value())
-	rejectTemporalTransfer(t, d, "nil row", expr.Year[temporalTransferRow, temporal.Date](nil).Value())
-	rejectTemporalTransfer(t, d, "nil scope", expr.TransactionTime(expr.Scope[temporalTransferRow, temporalTransferRow]{}).Value())
+	rejectTemporalTransfer(t, d, "date unit zero", expr.AsSelected(expr.TruncateDate(date, 0)))
+	rejectTemporalTransfer(t, d, "date clock unit", expr.AsSelected(expr.TruncateDate(date, expr.DateUnit(expr.TimestampHour))))
+	rejectTemporalTransfer(t, d, "timestamp unit", expr.AsSelected(expr.TruncateLocal(local, 255)))
+	rejectTemporalTransfer(t, d, "zone zero", expr.AsSelected(expr.TruncateInstant(at, expr.TimestampDay, expr.TimeZone{})))
+	rejectTemporalTransfer(t, d, "resolution policy", expr.AsSelected(expr.ResolveLocal(local, expr.UTCZone(), 0)))
+	rejectTemporalTransfer(t, d, "submicrosecond", expr.AsSelected(expr.AddClockElapsed(clock, time.Nanosecond)))
+	rejectTemporalTransfer(t, d, "nil row", expr.AsSelected(expr.Year[temporalTransferRow, temporal.Date](nil)))
+	rejectTemporalTransfer(t, d, "nil scope", expr.AsSelected(expr.TransactionTime(expr.Scope[temporalTransferRow, temporalTransferRow]{})))
 	for name, v := range map[string]querycore.ValueExpression{
 		"wrong representation":   querycore.OperationNode{Kind: querycore.ExtractYearOperation, Result: codec.TypeInteger, Arguments: []querycore.OperationArgument{{Value: querycore.FieldRef{Table: "temporal_records", Column: "day"}, Kind: codec.TypeText}}},
 		"wrong result":           querycore.OperationNode{Kind: querycore.ExtractYearOperation, Result: codec.TypeText, Arguments: []querycore.OperationArgument{{Value: querycore.FieldRef{Table: "temporal_records", Column: "day"}, Kind: codec.TypeDate}}},
@@ -74,7 +74,7 @@ func TestTemporalOperationsValidateBeforeZeroLimit(t *testing.T) {
 func TestTemporalCompilerRetainsScopePhaseAndParameters(t *testing.T) {
 	d := temporalTransferFields()
 	year := expr.Year(expr.LocalAt(expr.Value(orm.TimeExpr(d.At)), expr.UTCZone()))
-	q := rows.OrderScalar(rows.GroupByScalar(rows.SelectScalar(rows.From(d.Query()), year.Value()), expr.Group(year)), year.Asc())
+	q := rows.OrderScalar(rows.GroupByScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(year)), expr.Group(year)), expr.Asc(year))
 	s, e := rows.CompileRead(rows.ReadScalar(q))
 	if e != nil || !strings.Contains(s.SQL(), "EXTRACT(year FROM") || !strings.Contains(s.SQL(), "TIMEZONE(") {
 		t.Fatal(s.SQL(), e)
@@ -84,18 +84,18 @@ func TestTemporalCompilerRetainsScopePhaseAndParameters(t *testing.T) {
 			t.Fatal(s.Arguments())
 		}
 	}
-	original := temporalTransferNode(year.Value())
+	original := temporalTransferNode(expr.AsSelected(year))
 	renamed := querycore.RequalifyValue(original, "qualified").(querycore.OperationNode)
 	if renamed.Arguments[0].Value.(querycore.OperationNode).Arguments[1].Value.(querycore.FieldRef).Table != "qualified" || original.(querycore.OperationNode).Arguments[0].Value.(querycore.OperationNode).Arguments[1].Value.(querycore.FieldRef).Table != "temporal_records" {
 		t.Fatal("temporal qualifier mutation")
 	}
 	window := expr.FromUnixMillisValue(expr.RowNumber(expr.WindowFor(rows.ModelScope(d.Query()))))
-	p := expr.OrderValue(expr.UnixMillisecondsValue(window)).Gt(0)
-	if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(rows.From(d.Query()), expr.Count[temporalTransferRow]().Value()), p))); !errors.Is(e, fault.Invalid) {
+	p := expr.GtValue(expr.OrderValue(expr.UnixMillisecondsValue(window)), 0)
+	if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(expr.Count[temporalTransferRow]())), p))); !errors.Is(e, fault.Invalid) {
 		t.Fatal("window hidden in HAVING", e)
 	}
-	v := expr.UnixMillisecondsNullableValue(expr.Min(orm.TimeExpr(d.At)).Value())
-	if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(rows.From(d.Query()), v), expr.OrderNullableValue(v).Gt(0)))); e != nil {
+	v := expr.UnixMillisecondsNullableValue(expr.AsSelected(expr.Min(orm.TimeExpr(d.At))))
+	if _, e := rows.CompileRead(rows.ReadScalar(rows.HavingScalar(rows.SelectScalar(rows.From(d.Query()), v), expr.GtValue(expr.OrderNullableValue(v), 0)))); e != nil {
 		t.Fatal("aggregate phase lost", e)
 	}
 }

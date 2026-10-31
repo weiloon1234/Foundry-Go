@@ -16,7 +16,7 @@ func Check() error {
 	if _, err := orm.Compile(base); err != nil {
 		return err
 	}
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query().Where(orm.ColumnEq(f.Active, true))), expr.Sum(orm.NumberExpr(f.Score)).Value()))); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query().Where(orm.ColumnEq(f.Active, true))), expr.AsSelected(expr.Sum(orm.NumberExpr(f.Score)))))); err != nil {
 		return err
 	}
 	_ = []orm.Assignment[Record]{orm.TextSet(f.Name, "profile"), orm.ColumnSet(f.Payload, []byte("owned"))}
@@ -34,11 +34,11 @@ func CheckJoinedFields() error {
 	fields := rows.LeftScope(joined, rows.Scope(left))
 	nullable := rows.NullableRightScope(joined, rows.Scope(right))
 	caption := expr.Coalesce(expr.AtNullable(nullable, orm.TextExpr(Records.Name)), expr.At(fields, orm.TextExpr(Records.Name)))
-	text := rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(joined, expr.Lower(caption).Value()),
-		expr.At(fields, orm.ColumnExpr(Records.Active)).Eq(true), expr.AtNullable(nullable, orm.NumberExpr(Records.Score)).IsNotNull())).OrderBy(caption.Asc(), expr.At(fields, orm.KeyExpr(Records.ID)).Asc())
+	text := rows.ReadScalar(rows.WhereScalar(rows.SelectScalar(joined, expr.AsSelected(expr.Lower(caption))),
+		expr.Eq(expr.At(fields, orm.ColumnExpr(Records.Active)), true), expr.IsNotNull(expr.AtNullable(nullable, orm.NumberExpr(Records.Score))))).OrderBy(expr.Asc(caption), expr.Asc(expr.At(fields, orm.KeyExpr(Records.ID))))
 	if _, err := rows.CompileRead(text); err != nil {
 		return err
 	}
-	_, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(joined, expr.Row(expr.Coalesce(expr.AtNullable(nullable, orm.ColumnExpr(Records.Payload)), expr.At(fields, orm.ColumnExpr(Records.Payload)))).Value())))
+	_, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(joined, expr.AsSelected(expr.Row(expr.Coalesce(expr.AtNullable(nullable, orm.ColumnExpr(Records.Payload)), expr.At(fields, orm.ColumnExpr(Records.Payload))))))))
 	return err
 }

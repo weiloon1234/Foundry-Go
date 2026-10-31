@@ -238,9 +238,9 @@ func assertFilteredThroughAggregates(t *testing.T, tx *database.Tx, users []mode
 	order := rowset.InnerScope(link, rowset.ModelScope(models.Orders.Query()))
 	ownersWithOrders := link.Where(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(group, orm.ColumnExpr(models.Groups.OwnerID)))).Exists()
 	rows, err := orm.LoadFrom(t.Context(), tx, models.Users.Query().With(
-		a.GroupCount.Using(expr.Related(r.Groups, expr.Count[models.Group]().Filter(expr.ModelPredicate(orm.KeyEq(g.Code, "a"))))),
-		a.GroupDistinct.Using(expr.Related(r.Groups, expr.CountDistinctField(orm.KeyExpr(g.Code)).Filter(ownersWithOrders))),
-		a.GroupPriority.Using(expr.Related(orm.Pivot(r.Groups), expr.Sum(orm.NumberExpr(p.Priority)).Filter(expr.ModelPredicate(orm.NumberGt(p.Priority, 1))))),
+		a.GroupCount.Using(expr.Related(r.Groups, expr.Filter(expr.Count[models.Group](), expr.ModelPredicate(orm.KeyEq(g.Code, "a"))))),
+		a.GroupDistinct.Using(expr.Related(r.Groups, expr.Filter(expr.CountDistinctField(orm.KeyExpr(g.Code)), ownersWithOrders))),
+		a.GroupPriority.Using(expr.Related(orm.Pivot(r.Groups), expr.Filter(expr.Sum(orm.NumberExpr(p.Priority)), expr.ModelPredicate(orm.NumberGt(p.Priority, 1))))),
 	), users)
 	if err != nil {
 		return err
@@ -253,12 +253,12 @@ func assertFilteredThroughAggregates(t *testing.T, tx *database.Tx, users []mode
 	assertDecimalAggregate(t, rows[0].GroupPriority, "5")
 	// Conditional values must follow target/pivot qualification, including
 	// outer fields captured inside a correlated conditional predicate.
-	ownerMatch := expr.When(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(group, orm.ColumnExpr(models.Groups.OwnerID))), expr.At(group, orm.KeyExpr(models.Groups.Code))).Else(expr.Row(expr.At(group, orm.KeyExpr(models.Groups.Code))).Value().Param("missing"))
-	conditionalOwners := link.Where(ownerMatch.Ne("missing")).Exists()
+	ownerMatch := expr.When(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(group, orm.ColumnExpr(models.Groups.OwnerID))), expr.At(group, orm.KeyExpr(models.Groups.Code))).Else(expr.ParamOf(expr.AsSelected(expr.Row(expr.At(group, orm.KeyExpr(models.Groups.Code)))), "missing"))
+	conditionalOwners := link.Where(expr.Ne(ownerMatch, "missing")).Exists()
 	rows, err = orm.LoadFrom(t.Context(), tx, models.Users.Query().With(
-		a.GroupCount.Using(expr.Related(r.Groups, expr.Count[models.Group]().Filter(expr.When(expr.ModelPredicate(orm.KeyEq(g.Code, "a")), expr.Value(orm.KeyExpr(g.Code))).Else(expr.Param(orm.KeyExpr(g.Code), "other")).Eq("a")))),
-		a.GroupDistinct.Using(expr.Related(r.Groups, expr.CountDistinctField(orm.KeyExpr(g.Code)).Filter(conditionalOwners))),
-		a.GroupPriority.Using(expr.Related(orm.Pivot(r.Groups), expr.Sum(orm.NumberExpr(p.Priority)).Filter(expr.When(expr.ModelPredicate(orm.NumberGt(p.Priority, 1)), expr.Param(orm.NumberExpr(p.Priority), 1)).Else(expr.Param(orm.NumberExpr(p.Priority), 0)).Eq(1)))),
+		a.GroupCount.Using(expr.Related(r.Groups, expr.Filter(expr.Count[models.Group](), expr.Eq(expr.When(expr.ModelPredicate(orm.KeyEq(g.Code, "a")), expr.Value(orm.KeyExpr(g.Code))).Else(expr.Param(orm.KeyExpr(g.Code), "other")), "a")))),
+		a.GroupDistinct.Using(expr.Related(r.Groups, expr.Filter(expr.CountDistinctField(orm.KeyExpr(g.Code)), conditionalOwners))),
+		a.GroupPriority.Using(expr.Related(orm.Pivot(r.Groups), expr.Filter(expr.Sum(orm.NumberExpr(p.Priority)), expr.Eq(expr.When(expr.ModelPredicate(orm.NumberGt(p.Priority, 1)), expr.Param(orm.NumberExpr(p.Priority), 1)).Else(expr.Param(orm.NumberExpr(p.Priority), 0)), 1)))),
 	), users)
 	if err != nil {
 		return err
@@ -298,7 +298,7 @@ func assertAggregateFailures(t *testing.T, tx *database.Tx, counter *queryfixtur
 	if rows, err := orm.LoadFrom(t.Context(), counter, base.With(singular), users); !errors.Is(err, database.TooManyRows) || rows != nil {
 		t.Error("singular aggregate ignored relation cardinality")
 	}
-	filteredSingular := singular.Using(expr.Related(models.UserLinks.SingleOrder, expr.Count[models.Order]().Filter(expr.ModelPredicate(orm.NumberLt(models.Orders.TotalCents, 0)))))
+	filteredSingular := singular.Using(expr.Related(models.UserLinks.SingleOrder, expr.Filter(expr.Count[models.Order](), expr.ModelPredicate(orm.NumberLt(models.Orders.TotalCents, 0)))))
 	if rows, err := orm.LoadFrom(t.Context(), counter, base.With(filteredSingular), users); !errors.Is(err, database.TooManyRows) || rows != nil {
 		t.Error("empty filtered measure concealed singular cardinality violation")
 	}
@@ -306,7 +306,7 @@ func assertAggregateFailures(t *testing.T, tx *database.Tx, counter *queryfixtur
 	if rows, err := orm.LoadFrom(t.Context(), counter, base.With(a.GroupCount.Using(expr.Related(ambiguous, expr.Count[models.Group]()))), users); !errors.Is(err, database.TooManyRows) || rows != nil {
 		t.Error("many-to-many aggregate accepted ambiguous join")
 	}
-	if rows, err := orm.LoadFrom(t.Context(), counter, base.With(a.GroupCount.Using(expr.Related(ambiguous, expr.Count[models.Group]().Filter(expr.ModelPredicate(orm.KeyEq(models.Groups.Code, "missing")))))), users); !errors.Is(err, database.TooManyRows) || rows != nil {
+	if rows, err := orm.LoadFrom(t.Context(), counter, base.With(a.GroupCount.Using(expr.Related(ambiguous, expr.Filter(expr.Count[models.Group](), expr.ModelPredicate(orm.KeyEq(models.Groups.Code, "missing")))))), users); !errors.Is(err, database.TooManyRows) || rows != nil {
 		t.Error("empty filtered measure concealed ambiguous through join")
 	}
 	if _, err := tx.Exec(t.Context(), `UPDATE measurements SET score = 'Infinity' WHERE label = $1`, "z"); err != nil {

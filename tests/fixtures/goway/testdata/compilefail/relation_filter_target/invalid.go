@@ -7,4 +7,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.RelationFilter(models.UserRelations.Orders, expr.TextRow(orm.TextExpr(models.Users.Email)).Contains("x"))
+var _ = expr.RelationFilter(models.UserRelations.Orders, expr.TextContains(expr.TextRow(orm.TextExpr(models.Users.Email)), "x"))

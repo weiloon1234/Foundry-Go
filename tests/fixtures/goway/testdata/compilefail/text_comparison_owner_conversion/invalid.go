@@ -8,7 +8,7 @@ import (
 )
 
 func invalid() {
-	users := expr.TextValue(expr.Row(expr.Value(orm.TextExpr(models.Users.Email))).Value())
+	users := expr.TextValue(expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(models.Users.Email)))))
 	orders := expr.TextValueComparison[models.Order, string](users)
-	_ = orders.Eq("x")
+	_ = expr.EqValue(orders, "x")
 }

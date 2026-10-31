@@ -41,7 +41,7 @@ func TestPostgresNaturalKeyJoins(t *testing.T) {
 		natural := rows.InnerJoin(countries, locations, rows.On(expr.At(country, orm.KeyExpr(models.Countries.Code)), expr.At(location, orm.TextExpr(models.Locations.CountryCode))))
 		nc := rows.LeftScope(natural, rows.Scope(countries))
 		nl := rows.RightScope(natural, rows.Scope(locations))
-		naturalReport := rows.Select(natural, reports.LocationRows, rows.MapSelected(reports.LocationRows.CountryCode, expr.Row(expr.At(nc, orm.KeyExpr(models.Countries.Code))).Value()), rows.MapSelected(reports.LocationRows.LocationCode, expr.Row(expr.At(nl, orm.KeyExpr(models.Locations.Code))).Value()), rows.MapSelected(reports.LocationRows.CountryName, expr.Row(expr.At(nc, orm.TextExpr(models.Countries.Name))).Value()))
+		naturalReport := rows.Select(natural, reports.LocationRows, rows.MapSelected(reports.LocationRows.CountryCode, expr.AsSelected(expr.Row(expr.At(nc, orm.KeyExpr(models.Countries.Code))))), rows.MapSelected(reports.LocationRows.LocationCode, expr.AsSelected(expr.Row(expr.At(nl, orm.KeyExpr(models.Locations.Code))))), rows.MapSelected(reports.LocationRows.CountryName, expr.AsSelected(expr.Row(expr.At(nc, orm.TextExpr(models.Countries.Name))))))
 		naturalRows, err := rows.Read(naturalReport).All(t.Context(), counter)
 		if err != nil {
 			return err

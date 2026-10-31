@@ -47,7 +47,7 @@ func ValueCursorFor[V any](source ValueSource[V]) ValueCursorQuery[V] {
 	return ValueCursorQuery[V]{core: ormcore.NewResultCursor(r, reflect.TypeFor[CursorScope[V]]()), column: c}
 }
 
-// Value exposes the completed scalar for filtering and ordering. Example: c.Value().Asc().
+// Value exposes the completed scalar for filtering and ordering. Example: expr.Asc(c.Value()).
 func (q ValueCursorQuery[V]) Value() expr.RowExpression[CursorScope[V], V] {
 	r := q.core.Record
 	ref := ormcore.Reference{Table: r.Source.Node.Source.Name(), Owner: r.Record.Owner}
@@ -60,13 +60,13 @@ func (q CursorQuery[R]) Scope() expr.Scope[CursorScope[R], R] {
 	return expr.FoundryScope[CursorScope[R], R](ormcore.Scope{Reference: ormcore.Reference{Table: r.Source.Node.Source.Name(), Owner: r.Record.Owner}, Err: r.Source.Err}, sqlowner.Expressions())
 }
 
-// Where filters completed rows. Example: c.Where(id.Ne(zero)).
+// Where filters completed rows. Example: c.Where(expr.Ne(id, zero)).
 func (q CursorQuery[R]) Where(ps ...expr.Predicate[CursorScope[R]]) CursorQuery[R] {
 	q.core.Record.Source = whereSource(q.core.Record.Source, ps)
 	return q
 }
 
-// OrderBy orders plain output fields. Example: c.OrderBy(id.Asc()).
+// OrderBy orders plain output fields. Example: c.OrderBy(expr.Asc(id)).
 func (q CursorQuery[R]) OrderBy(os ...expr.ProjectionOrder[CursorScope[R]]) CursorQuery[R] {
 	q.core = cursorOrders(q.core, os)
 	return q
@@ -91,13 +91,13 @@ func (q ValueCursorQuery[V]) Scope() expr.Scope[CursorScope[V], V] {
 	return expr.FoundryScope[CursorScope[V], V](ormcore.Scope{Reference: ormcore.Reference{Table: r.Source.Node.Source.Name(), Owner: r.Record.Owner}, Err: r.Source.Err}, sqlowner.Expressions())
 }
 
-// Where filters completed rows. Example: c.Where(id.Ne(zero)).
+// Where filters completed rows. Example: c.Where(expr.Ne(id, zero)).
 func (q ValueCursorQuery[V]) Where(ps ...expr.Predicate[CursorScope[V]]) ValueCursorQuery[V] {
 	q.core.Record.Source = whereSource(q.core.Record.Source, ps)
 	return q
 }
 
-// OrderBy orders plain output fields. Example: c.OrderBy(id.Asc()).
+// OrderBy orders plain output fields. Example: c.OrderBy(expr.Asc(id)).
 func (q ValueCursorQuery[V]) OrderBy(os ...expr.ProjectionOrder[CursorScope[V]]) ValueCursorQuery[V] {
 	q.core = cursorOrders(q.core, os)
 	return q

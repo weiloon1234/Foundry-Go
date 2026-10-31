@@ -46,7 +46,7 @@ on another payload. Optional, nullable, pointer and nested document layers use
 ```go
 profile := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(orm.JSONExpr(f.Settings))), jsonqueries.ProfileField))
 age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, jsonqueries.AgeField), codec.Signed[int64]()))
-selected := rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(f.Query(), age.Eq(42))), age.Value()))
+selected := rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(f.Query(), expr.NullableEq(age, 42))), expr.AsSelected(age)))
 ```
 
 The linked test binds `f := jsonqueries.Documents`. `JSONRoot` starts a required
@@ -69,9 +69,9 @@ array indexing. Declared `,string` properties are unquoted before inspection.
 | --- | --- |
 | `path.JSON()` | Nullable typed child snapshot; present JSON null requires a payload that can represent it |
 | `expr.JSONTypeNullable(path.JSON())` | Nullable `database.JSONKind`; present `database.JSONNull` is distinct from SQL NULL |
-| `path.JSON().IsNotNull()` | Includes present JSON null |
-| `path.JSON().IsNull()` | Missing path or SQL-null ancestor |
-| `expr.JSONTypeNullable(path.JSON()).Eq(value.Of(database.JSONNull))` | Present JSON null only |
+| `expr.IsNotNull(path.JSON())` | Includes present JSON null |
+| `expr.IsNull(path.JSON())` | Missing path or SQL-null ancestor |
+| `expr.NullableEq(expr.JSONTypeNullable(path.JSON()), value.Of(database.JSONNull))` | Present JSON null only |
 | `expr.JSONLengthNullable(path.JSON())` | Array element count; NULL for missing, SQL NULL, JSON null or non-array |
 | Scalar extraction | Missing, SQL NULL and JSON null all become SQL NULL |
 
@@ -92,7 +92,7 @@ shared identity, including in retained report DTOs.
 
 `JSONContains`/`JSONContainedBy` compare typed document operands. Capture a child
 fragment with `value.NewJSON`, handle its error, and use
-`expr.JSONContainsNullable(path.JSON(), path.JSON().Param(value.Of(fragment))).Eq(value.Of(true))`. SQL containment ignores array
+`expr.NullableEq(expr.JSONContainsNullable(path.JSON(), expr.ParamOf(path.JSON(), value.Of(fragment))), value.Of(true))`. SQL containment ignores array
 order/duplicates, while whole-document equality preserves them. Optional payload
 fields support partial containment documents. No raw SQL is needed.
 

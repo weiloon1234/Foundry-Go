@@ -64,6 +64,7 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 	rootName := name + args
 	fieldNames, setName, cached := validationDescriptorNames(name)
 	e.line("// %sValidationFieldSet retains concrete DTO and value types for validation.", name)
+	e.line("// Example: %s%s()", fieldNames, args)
 	e.line("type %s%s struct {", setName, params)
 	for _, field := range fields {
 		e.line("// %s validates the declared %s %s %q.", field.name, wireLabel, fieldLabel, field.wire)
@@ -75,6 +76,7 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 	}
 	e.line("}")
 	e.line("// %sValidationFields returns typed field descriptors.", name)
+	e.line("// Example: %s%s()", fieldNames, args)
 	e.line("// Compose rules with these fields; %s names and selectors are generated.", wireLabel)
 	if params == "" {
 		// Field descriptors are immutable values; build them once and return copies.

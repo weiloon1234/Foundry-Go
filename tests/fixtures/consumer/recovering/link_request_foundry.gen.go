@@ -12,6 +12,7 @@ import (
 // LinkRequestJSON describes the concrete LinkRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: LinkRequestJSON()
 func LinkRequestJSON() foundrycontract.JSON[LinkRequest] { return foundryLinkRequestJSON() }
 
 var foundryLinkRequestJSON = sync.OnceValue(func() foundrycontract.JSON[LinkRequest] {
@@ -26,12 +27,14 @@ var foundryLinkRequestJSON = sync.OnceValue(func() foundrycontract.JSON[LinkRequ
 })
 
 // LinkRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: LinkRequestValidationFields()
 type LinkRequestValidationFieldSet struct {
 	// Email validates the declared JSON property "email".
 	Email foundryvalidation.Field[LinkRequest, string]
 }
 
 // LinkRequestValidationFields returns typed field descriptors.
+// Example: LinkRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func LinkRequestValidationFields() LinkRequestValidationFieldSet {
 	return *foundryLinkRequestValidationFields()

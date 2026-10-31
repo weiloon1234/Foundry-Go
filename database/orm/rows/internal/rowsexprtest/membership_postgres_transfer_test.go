@@ -56,8 +56,8 @@ func membershipFields() membershipTable {
 }
 func membershipIDs(t *testing.T, ctx context.Context, ex database.Executor, q orm.Query[membershipRow], d membershipTable) []int64 {
 	t.Helper()
-	selected := rows.SelectScalar(rows.From(q), expr.Row(expr.Value(orm.KeyExpr(d.Key()))).Value())
-	got, e := rows.ReadScalar(rows.OrderScalar(selected, expr.Value(orm.KeyExpr(d.Key())).Asc())).All(ctx, ex)
+	selected := rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(d.Key())))))
+	got, e := rows.ReadScalar(rows.OrderScalar(selected, expr.Asc(expr.Value(orm.KeyExpr(d.Key()))))).All(ctx, ex)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -125,7 +125,7 @@ func TestPostgresMembershipBindsOneTypedArray(t *testing.T) {
 	// A declared JSON property is a SQL literal, so a generic plan (the plan
 	// a cached prepared statement switches to) can still use the expression index.
 	name := expr.JSONTextScalar(expr.JSONNullable(expr.JSONProperty(expr.JSONRoot(expr.Value(orm.JSONExpr(d.Doc))), expr.JSONFieldOf(func(p *membershipDocument) *value.Nullable[string] { return &p.Name }))), codec.String[string]())
-	statement, err = rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(d.Query(), name.Eq("alice"))), expr.Row(expr.Value(orm.KeyExpr(d.Key()))).Value())))
+	statement, err = rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(d.Query(), expr.NullableEq(name, "alice"))), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(d.Key())))))))
 	if err != nil || len(statement.Arguments()) != 1 {
 		t.Fatal(statement.SQL(), err)
 	}
@@ -160,7 +160,7 @@ func TestPostgresMembershipBindsOneTypedArray(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := membershipIDs(t, ctx, db, expr.Where(d.Query(), name.Eq("alice")), d); !slices.Equal(got, []int64{1}) {
+	if got := membershipIDs(t, ctx, db, expr.Where(d.Query(), expr.NullableEq(name, "alice")), d); !slices.Equal(got, []int64{1}) {
 		t.Fatal("JSON text predicate matched", got)
 	}
 }
@@ -258,15 +258,15 @@ func TestPostgresJSONLengthAndPathContainment(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		return expr.JSONContainsNullable(tags.JSON(), tags.JSON().Param(value.Of(v))).Eq(value.Of(true))
+		return expr.Eq(expr.JSONContainsNullable(tags.JSON(), expr.ParamOf(tags.JSON(), value.Of(v))), value.Of(true))
 	}
 	for name, test := range map[string]struct {
 		p    expr.Predicate[record]
 		want []int64
 	}{
-		"length": {expr.JSONLengthNullable(tags.JSON()).Gte(1), []int64{1, 4}}, "longest": {expr.JSONLengthNullable(tags.JSON()).Gt(2), []int64{1}}, "contains": {contains("b"), []int64{1, 4}}, "both": {contains("a", "c"), []int64{1}}, "document": {expr.JSONContains(expr.Value(orm.JSONExpr(d.Doc)), expr.Param(orm.JSONExpr(d.Doc), fragment)).Eq(true), []int64{1}},
+		"length": {expr.NullableGte(expr.JSONLengthNullable(tags.JSON()), 1), []int64{1, 4}}, "longest": {expr.NullableGt(expr.JSONLengthNullable(tags.JSON()), 2), []int64{1}}, "contains": {contains("b"), []int64{1, 4}}, "both": {contains("a", "c"), []int64{1}}, "document": {expr.Eq(expr.JSONContains(expr.Value(orm.JSONExpr(d.Doc)), expr.Param(orm.JSONExpr(d.Doc), fragment)), true), []int64{1}},
 	} {
-		q := rows.OrderScalar(rows.WhereScalar(rows.SelectScalar(rows.From(d.Query()), expr.Row(expr.Value(orm.KeyExpr(d.Key()))).Value()), test.p), expr.Value(orm.KeyExpr(d.Key())).Asc())
+		q := rows.OrderScalar(rows.WhereScalar(rows.SelectScalar(rows.From(d.Query()), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(d.Key()))))), test.p), expr.Asc(expr.Value(orm.KeyExpr(d.Key()))))
 		got, e := rows.ReadScalar(q).All(ctx, db)
 		if e != nil || !reflect.DeepEqual(got, test.want) {
 			t.Fatal(name, got, e)

@@ -18,7 +18,7 @@ func TestResultReadTerminals(t *testing.T) {
 	q := Read(SelectValue(m.Query(), orm.TextExpr(m.Name)))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{"Ada"}, {"Lin"}}}
 	db := openTest(t, state)
-	page, err := q.OrderBy(expr.Value(orm.KeyExpr(m.ID)).Asc()).SimplePaginate(t.Context(), db, orm.PageRequest{Number: 1, Size: 1})
+	page, err := q.OrderBy(expr.Asc(expr.Value(orm.KeyExpr(m.ID)))).SimplePaginate(t.Context(), db, orm.PageRequest{Number: 1, Size: 1})
 	if err != nil || len(page.Items) != 1 || page.Items[0] != "Ada" || !page.HasMore || !state.closed {
 		t.Fatal(page, err)
 	}
@@ -38,7 +38,7 @@ func TestResultReadTerminals(t *testing.T) {
 		t.Fatal(exists, err, state.sql)
 	}
 	state.sql = ""
-	for _, bad := range []Result[member, string]{q, q.OrderBy(expr.Value(orm.KeyExpr(m.ID)).Asc()).Limit(1), q.OrderBy(expr.Value(orm.KeyExpr(m.ID)).Asc()).Offset(1)} {
+	for _, bad := range []Result[member, string]{q, q.OrderBy(expr.Asc(expr.Value(orm.KeyExpr(m.ID)))).Limit(1), q.OrderBy(expr.Asc(expr.Value(orm.KeyExpr(m.ID)))).Offset(1)} {
 		if _, err := bad.Paginate(t.Context(), db, orm.PageRequest{Number: 1, Size: 1}); !errors.Is(err, fault.Invalid) || state.sql != "" {
 			t.Fatal(err, state.sql)
 		}
@@ -69,7 +69,7 @@ func TestResultLocksUseSharedCompilerAndPreservedTargets(t *testing.T) {
 		t.Fatal(err)
 	}
 	txsource := AsTransaction[left](TransactionOf(ModelRecord(m.Query())), "txm")
-	scalar := SelectTransactionValue(txsource, expr.Row(expr.At(TransactionScope(txsource), orm.KeyExpr(m.ID))).Value())
+	scalar := SelectTransactionValue(txsource, expr.AsSelected(expr.Row(expr.At(TransactionScope(txsource), orm.KeyExpr(m.ID)))))
 	locked := ForKeyShare(scalar).Of(Target(TransactionScope(txsource)))
 	if s, err := ormcore.CompileRecord(t.Context(), locked.core); err != nil || !strings.Contains(s.SQLText, "FOR KEY SHARE") {
 		t.Fatal(s.SQLText, err)

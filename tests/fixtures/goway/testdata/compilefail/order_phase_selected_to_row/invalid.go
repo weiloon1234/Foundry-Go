@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.Order[models.User](expr.Count[models.User]().Desc())
+var _ = expr.Order[models.User](expr.DescValue(expr.Count[models.User]()))

@@ -23,5 +23,5 @@ func F(tenant int64) rows.Query[Scope, reporting.OrderRow] {
 	id := expr.At(order, orm.KeyExpr(reporting.Orders.ID))
 	return rows.OrderBy(rows.Select(joined, reporting.OrderRows,
 		rows.Map(reporting.OrderRows.ID, id), rows.Map(reporting.OrderRows.MemberName, expr.At(member, orm.TextExpr(reporting.Members.Name))), rows.Map(reporting.OrderRows.Label, expr.At(order, orm.TextExpr(reporting.Orders.Label))), rows.Map(reporting.OrderRows.Amount, expr.At(order, orm.NumberExpr(reporting.Orders.Amount))),
-	).Where(expr.At(member, orm.NumberExpr(reporting.Members.TenantID)).Eq(tenant), expr.At(order, orm.NumberExpr(reporting.Orders.TenantID)).Eq(tenant)), id.Asc())
+	).Where(expr.Eq(expr.At(member, orm.NumberExpr(reporting.Members.TenantID)), tenant), expr.Eq(expr.At(order, orm.NumberExpr(reporting.Orders.TenantID)), tenant)), expr.Asc(id))
 }

@@ -13,6 +13,8 @@ import (
 // any still open instead of waiting for their owners, so the remaining wait is
 // bounded by callbacks honoring cancellation. Export workers must declare this
 // module as their dependency so their deliveries finish first.
+//
+// Example: datatable.Module(name, key, requires, construct)
 func Module(name foundation.ProviderID, key foundation.Key[*Manager], requires []foundation.ProviderID, construct func(foundation.Resolver) (*Manager, error)) foundation.Module {
 	return foundation.Module{Name: name, Requires: slices.Clone(requires), OnRegister: func(r *foundation.Registrar) error {
 		if construct == nil {

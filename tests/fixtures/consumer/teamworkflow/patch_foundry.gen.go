@@ -13,6 +13,7 @@ import (
 // PatchJSON describes the concrete Patch JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: PatchJSON()
 func PatchJSON() foundrycontract.JSON[Patch] { return foundryPatchJSON() }
 
 var foundryPatchJSON = sync.OnceValue(func() foundrycontract.JSON[Patch] {
@@ -41,6 +42,7 @@ var foundryPatchJSON = sync.OnceValue(func() foundrycontract.JSON[Patch] {
 })
 
 // PatchValidationFieldSet retains concrete DTO and value types for validation.
+// Example: PatchValidationFields()
 type PatchValidationFieldSet struct {
 	// Budget validates the declared JSON property "budget".
 	Budget foundryvalidation.Field[Patch, foundryvalue.Optional[int64]]
@@ -49,6 +51,7 @@ type PatchValidationFieldSet struct {
 }
 
 // PatchValidationFields returns typed field descriptors.
+// Example: PatchValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func PatchValidationFields() PatchValidationFieldSet { return *foundryPatchValidationFields() }
 

@@ -42,7 +42,7 @@ func TestPredicatesHideLiteralsThroughPrivateWrappers(t *testing.T) {
 			t.Run("orm/"+name+"/"+wrapper, func(t *testing.T) { assertPredicateRedacted(t, input, secret) })
 		}
 	}
-	grouped := expr.Grouped(expr.ModelPredicate(next)).Not()
+	grouped := expr.HavingNot(expr.Grouped(expr.ModelPredicate(next)))
 	assertPredicateRedacted(t, grouped, secret)
 	assertPredicateRedacted(t, struct{ outer any }{struct {
 		predicate expr.HavingPredicate[predicateOwner]

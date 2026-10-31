@@ -15,44 +15,44 @@ func TestFieldCapabilityFunctionsPreservePointersNullsAndInvalidDescriptors(t *t
 	f := declareAggregateRecords()
 	var selected expr.Expression[aggregateRecord, int64, value.Nullable[int64]] = expr.Value(orm.NullableNumberExpr(f.MaybeExact))
 	var parameter expr.RowExpression[aggregateRecord, int64] = expr.Param(orm.NullableNumberExpr(f.MaybeExact), int64(3))
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.Row(selected).Value()))); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.AsSelected(expr.Row(selected))))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), parameter.Value()))); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.AsSelected(parameter)))); err != nil {
 		t.Fatal(err)
 	}
 	var missing orm.NullableNumber[aggregateRecord, int64]
 	checks := []func() error{
 		func() error {
-			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.Row(expr.Value(orm.NullableNumberExpr(missing))).Value())))
+			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.AsSelected(expr.Row(expr.Value(orm.NullableNumberExpr(missing)))))))
 			return e
 		},
 		func() error {
-			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.Param(orm.NullableNumberExpr(missing), int64(3)).Value())))
+			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.AsSelected(expr.Param(orm.NullableNumberExpr(missing), int64(3))))))
 			return e
 		},
 		func() error {
-			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.CountField(orm.NullableNumberExpr(missing)).Value())))
+			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.AsSelected(expr.CountField(orm.NullableNumberExpr(missing))))))
 			return e
 		},
 		func() error {
-			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.CountDistinctField(orm.NullableNumberExpr(missing)).Value())))
+			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.AsSelected(expr.CountDistinctField(orm.NullableNumberExpr(missing))))))
 			return e
 		},
 		func() error {
-			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.Min(orm.NullableNumberExpr(missing)).Value())))
+			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.AsSelected(expr.Min(orm.NullableNumberExpr(missing))))))
 			return e
 		},
 		func() error {
-			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.Max(orm.NullableNumberExpr(missing)).Value())))
+			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.AsSelected(expr.Max(orm.NullableNumberExpr(missing))))))
 			return e
 		},
 		func() error {
-			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.Sum(orm.NullableNumberExpr(missing)).Value())))
+			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.AsSelected(expr.Sum(orm.NullableNumberExpr(missing))))))
 			return e
 		},
 		func() error {
-			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.Avg(orm.NullableNumberExpr(missing)).Value())))
+			_, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(f.Query()), expr.AsSelected(expr.Avg(orm.NullableNumberExpr(missing))))))
 			return e
 		},
 	}

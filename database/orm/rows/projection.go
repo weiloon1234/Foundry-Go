@@ -33,7 +33,7 @@ func Map[S, R, V, P any](field Field[R, P], expression expr.Expression[S, V, P])
 }
 
 // MapSelected binds a row field to an exactly typed selected value, including aggregates.
-// Example: rows.MapSelected(Totals.Count,expr.Count[Scope]().Value()).
+// Example: rows.MapSelected(Totals.Count,expr.AsSelected(expr.Count[Scope]())).
 func MapSelected[S, R, V any](field Field[R, V], expression expr.Selected[S, V]) Mapping[S, R] {
 	return Mapping[S, R]{field: field.core, expression: expr.FoundrySelected(expression, sqlowner.Expressions())}
 }
@@ -88,7 +88,7 @@ func SelectValue[M, V, P any](source orm.Query[M], column orm.ExpressionColumn[M
 	}}
 }
 
-// Where appends scoped predicates. Example: report.Where(memberTenant.Eq(tenant)).
+// Where appends scoped predicates. Example: report.Where(expr.Eq(memberTenant, tenant)).
 func (q Query[S, R]) Where(predicates ...expr.Predicate[S]) Query[S, R] {
 	q.source = whereSource(q.source, predicates)
 	return q

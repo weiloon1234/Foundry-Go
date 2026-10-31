@@ -43,7 +43,7 @@ func TestRelatedValueHydratesModelsAndReleasesSession(t *testing.T) {
 	rel := orm.HasManyOf(table.Children, orm.KeyExpr(table.Key()), orm.NumberExpr(table.ParentID))
 	count := expr.RelatedValue(rel, expr.Count[annotatedNode]())
 	sum := expr.RelatedValue(rel, expr.Sum(orm.NumberExpr(table.Amount)))
-	q := expr.OrderBy(expr.Where(table.Query().With(rel), expr.OrderRow(count).Gte(1)), count.Desc())
+	q := expr.OrderBy(expr.Where(table.Query().With(rel), expr.Gte(expr.OrderRow(count), 1)), expr.Desc(count))
 	must(t, db.Session(ctx, func(session *database.Session) error {
 		got, err := rows.ReadRecord(rows.WithValue(q, sum)).All(ctx, session)
 		if err != nil {

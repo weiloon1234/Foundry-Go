@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.HavingAnd(expr.Count[models.User]().Gt(1), expr.Count[models.Order]().Gt(1))
+var _ = expr.HavingAnd(expr.GtValue(expr.Count[models.User](), 1), expr.GtValue(expr.Count[models.Order](), 1))

@@ -42,19 +42,19 @@ func TestStage6d3JSONPaths(t *testing.T) {
 	scores := expr.JSONProperty(profile, jsonpaths.Scores)
 	fragment, err := value.NewJSON([]int64{2})
 	must(t, err)
-	if k := readJSON(t, db, expr.JSONType(expr.Value(orm.JSONExpr(d.Settings))).Value(), codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)); k != database.JSONObject {
+	if k := readJSON(t, db, expr.AsSelected(expr.JSONType(expr.Value(orm.JSONExpr(d.Settings)))), codec.String[database.JSONKind]().Validated(database.JSONKind.Validate)); k != database.JSONObject {
 		t.Fatal(k)
 	}
-	if v := readJSON(t, db, expr.JSONTypeNullable(expr.Value(orm.NullableJSONExpr(d.Backup))).Value(), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
+	if v := readJSON(t, db, expr.AsSelected(expr.JSONTypeNullable(expr.Value(orm.NullableJSONExpr(d.Backup)))), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
 		t.Fatal(v)
 	}
-	if v := readJSON(t, db, expr.JSONTypeNullable(theme.JSON()).Value(), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
+	if v := readJSON(t, db, expr.AsSelected(expr.JSONTypeNullable(theme.JSON())), codec.Nullable(codec.String[database.JSONKind]())); !v.IsNull() {
 		t.Fatal(v)
 	}
-	if v := readJSON(t, db, expr.JSONTypeNullable(nick.JSON()).Value(), codec.Nullable(codec.String[database.JSONKind]())); v != value.Of(database.JSONNull) {
+	if v := readJSON(t, db, expr.AsSelected(expr.JSONTypeNullable(nick.JSON())), codec.Nullable(codec.String[database.JSONKind]())); v != value.Of(database.JSONNull) {
 		t.Fatal(v)
 	}
-	if v := readJSON(t, db, nick.JSON().Value(), codec.Nullable(codec.JSON[*string]())); v.IsNull() {
+	if v := readJSON(t, db, expr.AsSelected(nick.JSON()), codec.Nullable(codec.JSON[*string]())); v.IsNull() {
 		t.Fatal("JSON null lost presence")
 	} else {
 		j, _ := v.Get()
@@ -62,22 +62,22 @@ func TestStage6d3JSONPaths(t *testing.T) {
 			t.Fatal(j)
 		}
 	}
-	if v := readJSON(t, db, expr.JSONTextScalar(expr.JSONPointer(nick), codec.String[string]()).Value(), codec.Nullable(codec.String[string]())); !v.IsNull() {
+	if v := readJSON(t, db, expr.AsSelected(expr.JSONTextScalar(expr.JSONPointer(nick), codec.String[string]())), codec.Nullable(codec.String[string]())); !v.IsNull() {
 		t.Fatal(v)
 	}
-	if v := readJSON(t, db, expr.OrderNullableRow(expr.JSONScalar(age, codec.Signed[int64]())).Value(), codec.Nullable(codec.Signed[int64]())); v != value.Of(int64(42)) {
+	if v := readJSON(t, db, expr.AsSelected(expr.OrderNullableRow(expr.JSONScalar(age, codec.Signed[int64]()))), codec.Nullable(codec.Signed[int64]())); v != value.Of(int64(42)) {
 		t.Fatal(v)
 	}
-	if v := readJSON(t, db, expr.OrderNullableRow(expr.JSONScalar(expr.JSONIndex(scores, -1), codec.Signed[int64]())).Value(), codec.Nullable(codec.Signed[int64]())); v != value.Of(int64(3)) {
+	if v := readJSON(t, db, expr.AsSelected(expr.OrderNullableRow(expr.JSONScalar(expr.JSONIndex(scores, -1), codec.Signed[int64]()))), codec.Nullable(codec.Signed[int64]())); v != value.Of(int64(3)) {
 		t.Fatal(v)
 	}
-	if v := readJSON(t, db, expr.JSONTextScalar(expr.JSONMapKey(expr.JSONProperty(profile, jsonpaths.Attributes), 2), codec.String[string]()).Value(), codec.Nullable(codec.String[string]())); v != value.Of("two") {
+	if v := readJSON(t, db, expr.AsSelected(expr.JSONTextScalar(expr.JSONMapKey(expr.JSONProperty(profile, jsonpaths.Attributes), 2), codec.String[string]())), codec.Nullable(codec.String[string]())); v != value.Of("two") {
 		t.Fatal(v)
 	}
-	if v := readJSON(t, db, expr.JSONTextScalar(expr.JSONProperty(profile, jsonpaths.Quoted), codec.String[string]()).Value(), codec.Nullable(codec.String[string]())); v != value.Of("hello") {
+	if v := readJSON(t, db, expr.AsSelected(expr.JSONTextScalar(expr.JSONProperty(profile, jsonpaths.Quoted), codec.String[string]())), codec.Nullable(codec.String[string]())); v != value.Of("hello") {
 		t.Fatal(v)
 	}
-	for _, p := range []expr.Predicate[jsonpaths.Document]{theme.JSON().IsNull(), nick.JSON().IsNotNull(), expr.JSONTypeNullable(nick.JSON()).Eq(value.Of(database.JSONNull)), expr.JSONContainsNullable(scores.JSON(), scores.JSON().Param(value.Of(fragment))).Eq(value.Of(true))} {
+	for _, p := range []expr.Predicate[jsonpaths.Document]{expr.IsNull(theme.JSON()), expr.IsNotNull(nick.JSON()), expr.Eq(expr.JSONTypeNullable(nick.JSON()), value.Of(database.JSONNull)), expr.Eq(expr.JSONContainsNullable(scores.JSON(), expr.ParamOf(scores.JSON(), value.Of(fragment))), value.Of(true))} {
 		n, err := orm.Count(ctx, db, expr.Where(d.Query(), p))
 		must(t, err)
 		if n != 1 {
@@ -88,7 +88,7 @@ func TestStage6d3JSONPaths(t *testing.T) {
 	for _, json := range []string{`null`, `{}`, `"text"`, `42`, `true`, `[]`, `[null,1]`} {
 		_, err = db.Exec(ctx, `UPDATE json_documents SET tags=$1::jsonb`, json)
 		must(t, err)
-		got := readJSON(t, db, expr.JSONLength(expr.Value(orm.JSONExpr(d.Tags))).Value(), codec.Nullable(codec.Signed[int64]()))
+		got := readJSON(t, db, expr.AsSelected(expr.JSONLength(expr.Value(orm.JSONExpr(d.Tags)))), codec.Nullable(codec.Signed[int64]()))
 		switch json {
 		case `[]`:
 			if got != value.Of(int64(0)) {
@@ -109,7 +109,7 @@ func TestStage6d3JSONPaths(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if v := readJSON(t, tx, expr.JSONTextScalar(theme, codec.String[string]()).Value(), codec.Nullable(codec.String[string]())); v != value.Of("transaction") {
+		if v := readJSON(t, tx, expr.AsSelected(expr.JSONTextScalar(theme, codec.String[string]())), codec.Nullable(codec.String[string]())); v != value.Of("transaction") {
 			t.Fatal(v)
 		}
 		return nil

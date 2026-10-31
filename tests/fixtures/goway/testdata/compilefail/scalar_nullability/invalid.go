@@ -19,7 +19,7 @@ var c = rows.As[cTag](models.Users.Query(), "c")
 var ageA = expr.At(rows.Scope(a), orm.NumberExpr(models.Users.Age))
 var ageB = expr.At(rows.Scope(b), orm.NumberExpr(models.Users.Age))
 var outer = rows.From(models.Users.Query())
-var inner = rows.SelectScalar(outer, expr.Row(expr.Value(orm.KeyExpr(models.Users.ID))).Value())
+var inner = rows.SelectScalar(outer, expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(models.Users.ID)))))
 
 type result struct{ ID model.ID[models.User] }
 type fields struct {
@@ -30,4 +30,4 @@ type fields struct {
 var schema = rows.Define(func(b rows.Builder[result], r *result) fields {
 	return fields{b.Row(), rows.FieldOf(b, &r.ID, orm.Codec(codec.ID[models.User]()))}
 })
-var _ = rows.Select(outer, schema, rows.MapSelected(schema.ID, rows.ScalarRowQuery(outer, inner).Value()))
+var _ = rows.Select(outer, schema, rows.MapSelected(schema.ID, expr.AsSelected(rows.ScalarRowQuery(outer, inner))))

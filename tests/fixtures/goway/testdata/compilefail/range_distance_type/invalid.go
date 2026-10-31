@@ -8,4 +8,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = expr.NumericRange(expr.WindowFor(rows.ModelScope(models.Users.Query())), expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))).Value()).Preceding("two")
+var _ = expr.NumericRange(expr.WindowFor(rows.ModelScope(models.Users.Query())), expr.AsSelected(expr.Row(expr.Value(orm.NumberExpr(models.Users.Age))))).Preceding("two")

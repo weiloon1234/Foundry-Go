@@ -202,7 +202,7 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 		parentKey := expr.At(rows.Scope(ancestor), orm.KeyExpr(f.Key()))
 		joined := rows.LeftJoin(child, ancestor, rows.On(childParent, parentKey))
 		missing := expr.AtNullable(rows.NullableRightScope(joined, rows.Scope(ancestor)), orm.KeyExpr(f.Key()))
-		selected := rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child))).Where(missing.IsNull())
+		selected := rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child))).Where(expr.IsNull(missing))
 		items, err := rows.ReadRecord(selected).All(ctx, tx)
 		if err != nil {
 			return err
@@ -214,7 +214,7 @@ func TestPostgresSoftDeleteRelationsAggregatesAndOuterJoins(t *testing.T) {
 		parentKey = expr.At(rows.Scope(ancestor), orm.KeyExpr(f.Key()))
 		joined = rows.LeftJoin(child, ancestor, rows.On(childParent, parentKey))
 		missing = expr.AtNullable(rows.NullableRightScope(joined, rows.Scope(ancestor)), orm.KeyExpr(f.Key()))
-		items, err = rows.ReadRecord(rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child))).Where(missing.IsNull())).All(ctx, tx)
+		items, err = rows.ReadRecord(rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child))).Where(expr.IsNull(missing))).All(ctx, tx)
 		if err != nil {
 			return err
 		}

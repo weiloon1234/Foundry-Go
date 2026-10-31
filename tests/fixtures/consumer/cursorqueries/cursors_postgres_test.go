@@ -20,7 +20,7 @@ import (
 
 func summaries() rows.Query[models.User, reports.UserSummary] {
 	u, r := models.Users, reports.UserSummaries
-	return rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.Row(expr.Value(orm.KeyExpr(u.Key()))).Value()), rows.MapSelected(r.Email, expr.Row(expr.Value(orm.TextExpr(u.Email))).Value()), rows.MapSelected(r.Nickname, expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname))).Value()), rows.MapSelected(r.Status, expr.Row(expr.Value(orm.EnumExpr(u.Status))).Value()))
+	return rows.Select(rows.From(u.Query()), r.Row, rows.MapSelected(r.ID, expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(u.Key()))))), rows.MapSelected(r.Email, expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(u.Email))))), rows.MapSelected(r.Nickname, expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname))))), rows.MapSelected(r.Status, expr.AsSelected(expr.Row(expr.Value(orm.EnumExpr(u.Status))))))
 }
 
 // Traverse both directions, including an empty page after the terminal row.
@@ -64,8 +64,8 @@ func checkTraversal[R any](t *testing.T, tx *database.Tx, q interface {
 func TestPostgresProjectionCursors(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
 		cursor := rows.CursorFor(rows.RecordOf(summaries()))
-		ordered := cursor.OrderBy(rows.At(cursor.Scope(), reports.UserSummaries.Nickname).Asc(), rows.At(cursor.Scope(), reports.UserSummaries.Email).Desc()).UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID)))
-		want, err := rows.Read(rows.OrderBy(summaries(), expr.Value(orm.NullableTextExpr(models.Users.Nickname)).Asc(), expr.Value(orm.TextExpr(models.Users.Email)).Desc())).All(t.Context(), tx)
+		ordered := cursor.OrderBy(expr.Asc(rows.At(cursor.Scope(), reports.UserSummaries.Nickname)), expr.Desc(rows.At(cursor.Scope(), reports.UserSummaries.Email))).UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID)))
+		want, err := rows.Read(rows.OrderBy(summaries(), expr.Asc(expr.Value(orm.NullableTextExpr(models.Users.Nickname))), expr.Desc(expr.Value(orm.TextExpr(models.Users.Email))))).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -75,9 +75,9 @@ func TestPostgresProjectionCursors(t *testing.T) {
 			return err
 		}
 		for _, changed := range []rows.CursorQuery[reports.UserSummary]{
-			ordered.Where(rows.At(cursor.Scope(), reports.UserSummaries.Email).Ne(users[0].Email)),
-			cursor.OrderBy(rows.At(cursor.Scope(), reports.UserSummaries.Nickname).Desc()).UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID))),
-			cursor.OrderBy(rows.At(cursor.Scope(), reports.UserSummaries.Nickname).Asc(), rows.At(cursor.Scope(), reports.UserSummaries.Email).Desc()).UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID)), expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.Email))),
+			ordered.Where(expr.Ne(rows.At(cursor.Scope(), reports.UserSummaries.Email), users[0].Email)),
+			cursor.OrderBy(expr.Desc(rows.At(cursor.Scope(), reports.UserSummaries.Nickname))).UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID))),
+			cursor.OrderBy(expr.Asc(rows.At(cursor.Scope(), reports.UserSummaries.Nickname)), expr.Desc(rows.At(cursor.Scope(), reports.UserSummaries.Email))).UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID)), expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.Email))),
 		} {
 			page, err := changed.Paginate(t.Context(), queryfixture.NoQueries(t), orm.CursorRequest[reports.UserSummary]{Size: 1, After: first.Next})
 			if !errors.Is(err, fault.Invalid) || page.Items != nil {
@@ -86,7 +86,7 @@ func TestPostgresProjectionCursors(t *testing.T) {
 		}
 		// Input ordering/windows identify a bounded dataset independently of
 		// the order used to traverse it. No inner limit/offset is discarded.
-		input := rows.Offset(rows.Limit(rows.OrderBy(summaries(), expr.Value(orm.TextExpr(models.Users.Email)).Asc()), 2), 1)
+		input := rows.Offset(rows.Limit(rows.OrderBy(summaries(), expr.Asc(expr.Value(orm.TextExpr(models.Users.Email)))), 2), 1)
 		bounded := rows.CursorFor(rows.RecordOf(input))
 		boundedWant, err := rows.Read(input).All(t.Context(), tx)
 		if err != nil {
@@ -107,13 +107,13 @@ func TestPostgresRecordCursorMetadataSurvivesComposition(t *testing.T) {
 		cte := rows.CTE("foundry_cursor", rows.RecordOf(input))
 		a := rows.AsRecord[reportAlias](cte, "summary")
 		combined := rows.Union(rows.RecordOf(input), rows.RecordOf(input))
-		want, err := rows.Read(rows.OrderBy(input, expr.Value(orm.TextExpr(models.Users.Email)).Asc())).All(t.Context(), tx)
+		want, err := rows.Read(rows.OrderBy(input, expr.Asc(expr.Value(orm.TextExpr(models.Users.Email))))).All(t.Context(), tx)
 		if err != nil {
 			return err
 		}
 		for _, source := range []rows.RecordSource[reports.UserSummary]{cte, rows.SelectRecord(a, rows.Scope(a)), combined} {
 			cursor := rows.CursorFor(source)
-			checkTraversal(t, tx, cursor.OrderBy(rows.At(cursor.Scope(), reports.UserSummaries.Email).Asc()).UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID))), want)
+			checkTraversal(t, tx, cursor.OrderBy(expr.Asc(rows.At(cursor.Scope(), reports.UserSummaries.Email))).UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID))), want)
 		}
 		users := models.Users.Query()
 		for _, source := range []rows.RecordSource[models.User]{rows.ModelRecord(users), rows.SelectRecord(rows.From(users), rows.ModelScope(users)), rows.CTE("cursor_users", rows.ModelRecord(users)), rows.Union(rows.ModelRecord(users), rows.ModelRecord(users))} {
@@ -122,7 +122,7 @@ func TestPostgresRecordCursorMetadataSurvivesComposition(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			checkTraversal(t, tx, cursor.OrderBy(expr.At(cursor.Scope(), orm.TextExpr(models.Users.Email)).Asc()).UniqueBy(expr.Group(expr.At(cursor.Scope(), orm.KeyExpr(models.Users.Key())))), want)
+			checkTraversal(t, tx, cursor.OrderBy(expr.Asc(expr.At(cursor.Scope(), orm.TextExpr(models.Users.Email)))).UniqueBy(expr.Group(expr.At(cursor.Scope(), orm.KeyExpr(models.Users.Key())))), want)
 		}
 		return nil
 	})
@@ -138,7 +138,7 @@ func TestPostgresRecursiveResultCursor(t *testing.T) {
 			return rows.SelectRecord(joined, rows.LeftScope(joined, rows.Scope(child)))
 		})
 		cursor := rows.CursorFor(tree)
-		checkTraversal(t, tx, cursor.OrderBy(expr.At(cursor.Scope(), orm.TextExpr(models.Users.Email)).Asc()).UniqueBy(expr.Group(expr.At(cursor.Scope(), orm.KeyExpr(models.Users.Key())))), users[:2])
+		checkTraversal(t, tx, cursor.OrderBy(expr.Asc(expr.At(cursor.Scope(), orm.TextExpr(models.Users.Email)))).UniqueBy(expr.Group(expr.At(cursor.Scope(), orm.KeyExpr(models.Users.Key())))), users[:2])
 		return nil
 	})
 }
@@ -151,7 +151,7 @@ func TestCursorValidationBeforeExecution(t *testing.T) {
 	if _, err := q.Paginate(ctx, queryfixture.NoQueries(t), orm.CursorRequest[reports.UserSummary]{Size: 1}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	for _, bad := range []rows.CursorQuery[reports.UserSummary]{cursor, cursor.UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID)), expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID))), q.OrderBy(rows.At(cursor.Scope(), reports.UserSummaries.ID).Asc(), rows.At(cursor.Scope(), reports.UserSummaries.ID).Desc()), {}} {
+	for _, bad := range []rows.CursorQuery[reports.UserSummary]{cursor, cursor.UniqueBy(expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID)), expr.Group(rows.At(cursor.Scope(), reports.UserSummaries.ID))), q.OrderBy(expr.Asc(rows.At(cursor.Scope(), reports.UserSummaries.ID)), expr.Desc(rows.At(cursor.Scope(), reports.UserSummaries.ID))), {}} {
 		if p, err := bad.Paginate(t.Context(), queryfixture.NoQueries(t), orm.CursorRequest[reports.UserSummary]{Size: 1}); !errors.Is(err, fault.Invalid) || p.Items != nil {
 			t.Fatal("invalid cursor reached execution", err)
 		}
@@ -176,7 +176,7 @@ func TestPostgresCursorFailureDiscardsPage(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `UPDATE users SET status = 'active', email_address = $1 WHERE id = $2`, strings.Repeat("x", orm.MaxCursorBytes+1), users[1].ID.String()); err != nil {
 			return err
 		}
-		if page, err := c.OrderBy(rows.At(c.Scope(), reports.UserSummaries.Email).Desc()).UniqueBy(expr.Group(rows.At(c.Scope(), reports.UserSummaries.ID))).Paginate(t.Context(), tx, orm.CursorRequest[reports.UserSummary]{Size: 1}); !errors.Is(err, fault.Invalid) || !reflect.DeepEqual(page, orm.CursorPage[reports.UserSummary]{}) {
+		if page, err := c.OrderBy(expr.Desc(rows.At(c.Scope(), reports.UserSummaries.Email))).UniqueBy(expr.Group(rows.At(c.Scope(), reports.UserSummaries.ID))).Paginate(t.Context(), tx, orm.CursorRequest[reports.UserSummary]{Size: 1}); !errors.Is(err, fault.Invalid) || !reflect.DeepEqual(page, orm.CursorPage[reports.UserSummary]{}) {
 			t.Fatal("oversized token leaked page", err)
 		}
 		if _, err := orm.Count(t.Context(), tx, models.Users.Query()); err != nil {

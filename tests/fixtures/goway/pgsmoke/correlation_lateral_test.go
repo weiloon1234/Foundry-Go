@@ -29,29 +29,29 @@ func TestStage6b3CorrelationAndLateral(t *testing.T) {
 	c := rows.Correlate(parent, child)
 	outer, inner := rows.OuterScope(c, rows.Scope(parent)), rows.InnerScope(c, rows.Scope(child))
 	c = c.Where(expr.Equal(expr.At(inner, orm.NullableColumnExpr(table.ParentID)), expr.NullableRow(expr.At(outer, orm.KeyExpr(table.Key())))))
-	record := rows.SelectCorrelatedRecord(c, inner).OrderBy(expr.At(inner, orm.KeyExpr(table.Key())).Desc()).Limit(1)
+	record := rows.SelectCorrelatedRecord(c, inner).OrderBy(expr.Desc(expr.At(inner, orm.KeyExpr(table.Key())))).Limit(1)
 	latest := rows.AsLateral[joinThird](record, "latest")
 	joined := rows.LeftJoinLateral(parent, latest)
 	ls, rs := rows.LeftScope(joined, rows.Scope(parent)), rows.NullableRightScope(joined, rows.LateralScope(latest))
-	q := rows.OrderBy(rows.Select(joined, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(expr.At(ls, orm.KeyExpr(table.Key()))).Value()), rows.Map(schema.RightID, expr.AtNullable(rs, orm.KeyExpr(table.Key()))), rows.Map(schema.Note, expr.AtNullableValue(rs, orm.NullableTextExpr(table.Note)))), expr.At(ls, orm.KeyExpr(table.Key())).Asc())
+	q := rows.OrderBy(rows.Select(joined, schema, rows.MapSelected(schema.LeftID, expr.AsSelected(expr.NullableRow(expr.At(ls, orm.KeyExpr(table.Key()))))), rows.Map(schema.RightID, expr.AtNullable(rs, orm.KeyExpr(table.Key()))), rows.Map(schema.Note, expr.AtNullableValue(rs, orm.NullableTextExpr(table.Note)))), expr.Asc(expr.At(ls, orm.KeyExpr(table.Key()))))
 	got, err := rows.Read(q).All(ctx, db)
 	must(t, err)
 	if len(got) != 2 || got[0].RightID != value.Of(int64(3)) || !got[1].RightID.IsNull() {
 		t.Fatal(got)
 	}
-	on := rows.On(expr.At(rows.Scope(parent), orm.KeyExpr(table.Key())), expr.At(rows.LateralScope(latest), orm.NullableColumnExpr(table.ParentID))).WhereRight(expr.At(rows.LateralScope(latest), orm.KeyExpr(table.Key())).Eq(999))
+	on := rows.On(expr.At(rows.Scope(parent), orm.KeyExpr(table.Key())), expr.At(rows.LateralScope(latest), orm.NullableColumnExpr(table.ParentID))).WhereRight(expr.Eq(expr.At(rows.LateralScope(latest), orm.KeyExpr(table.Key())), 999))
 	rejected := rows.LeftJoinLateral(parent, latest, on)
 	ns := rows.NullableRightScope(rejected, rows.LateralScope(latest))
 	ps := rows.LeftScope(rejected, rows.Scope(parent))
-	got, err = rows.Read(rows.Select(rejected, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(expr.At(ps, orm.KeyExpr(table.Key()))).Value()), rows.Map(schema.RightID, expr.AtNullable(ns, orm.KeyExpr(table.Key()))), rows.Map(schema.Note, expr.AtNullableValue(ns, orm.NullableTextExpr(table.Note))))).All(ctx, db)
+	got, err = rows.Read(rows.Select(rejected, schema, rows.MapSelected(schema.LeftID, expr.AsSelected(expr.NullableRow(expr.At(ps, orm.KeyExpr(table.Key()))))), rows.Map(schema.RightID, expr.AtNullable(ns, orm.KeyExpr(table.Key()))), rows.Map(schema.Note, expr.AtNullableValue(ns, orm.NullableTextExpr(table.Note))))).All(ctx, db)
 	must(t, err)
 	if len(got) != 2 || !got[0].RightID.IsNull() || !got[1].RightID.IsNull() {
 		t.Fatal("ON did not preserve parents", got)
 	}
-	count := rows.SelectCorrelatedScalar(c, expr.Count[rows.Correlation[rows.Alias[joinLeft, joinNode], rows.Alias[joinRight, joinNode]]]().Value())
-	ids := rows.SelectCorrelatedScalar(c, expr.Row(expr.At(inner, orm.NullableColumnExpr(table.ParentID))).Value())
+	count := rows.SelectCorrelatedScalar(c, expr.AsSelected(expr.Count[rows.Correlation[rows.Alias[joinLeft, joinNode], rows.Alias[joinRight, joinNode]]]()))
+	ids := rows.SelectCorrelatedScalar(c, expr.AsSelected(expr.Row(expr.At(inner, orm.NullableColumnExpr(table.ParentID)))))
 	parentID := expr.At(rows.Scope(parent), orm.KeyExpr(table.Key()))
-	countQuery := rows.OrderBy(rows.Select(parent, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(parentID).Value()), rows.MapSelected(schema.RightID, rows.CorrelatedScalarRowQuery(count).Value()), rows.Map(schema.Note, expr.At(rows.Scope(parent), orm.NullableTextExpr(table.Note)))), parentID.Asc())
+	countQuery := rows.OrderBy(rows.Select(parent, schema, rows.MapSelected(schema.LeftID, expr.AsSelected(expr.NullableRow(parentID))), rows.MapSelected(schema.RightID, expr.AsSelected(rows.CorrelatedScalarRowQuery(count))), rows.Map(schema.Note, expr.At(rows.Scope(parent), orm.NullableTextExpr(table.Note)))), expr.Asc(parentID))
 	got, err = rows.Read(countQuery).All(ctx, db)
 	must(t, err)
 	if len(got) != 2 || got[0].RightID != value.Of(int64(2)) || got[1].RightID != value.Of(int64(0)) {
@@ -62,8 +62,8 @@ func TestStage6b3CorrelationAndLateral(t *testing.T) {
 	if len(got) != 1 || got[0].LeftID != value.Of(int64(1)) {
 		t.Fatal(got)
 	}
-	many := rows.SelectCorrelatedScalar(c, expr.Row(expr.At(inner, orm.KeyExpr(table.Key()))).Value())
-	_, err = rows.Read(rows.Select(parent, schema, rows.MapSelected(schema.LeftID, expr.NullableRow(parentID).Value()), rows.MapSelected(schema.RightID, rows.CorrelatedScalarRowQuery(many).Value()), rows.Map(schema.Note, expr.At(rows.Scope(parent), orm.NullableTextExpr(table.Note))))).All(ctx, db)
+	many := rows.SelectCorrelatedScalar(c, expr.AsSelected(expr.Row(expr.At(inner, orm.KeyExpr(table.Key())))))
+	_, err = rows.Read(rows.Select(parent, schema, rows.MapSelected(schema.LeftID, expr.AsSelected(expr.NullableRow(parentID))), rows.MapSelected(schema.RightID, expr.AsSelected(rows.CorrelatedScalarRowQuery(many))), rows.Map(schema.Note, expr.At(rows.Scope(parent), orm.NullableTextExpr(table.Note))))).All(ctx, db)
 	var sqlstate interface{ SQLState() string }
 	if !errors.As(err, &sqlstate) || sqlstate.SQLState() != "21000" {
 		t.Fatal("scalar cardinality was hidden", err)

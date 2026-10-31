@@ -19,7 +19,7 @@ func TestNamedWindowsShareDefinitionsAndBindings(t *testing.T) {
 	q := rows.From(recursionTable.Query())
 	f := expr.Value(orm.KeyExpr(recursionTable.Key()))
 	base := expr.WindowFor(rows.ModelScope(recursionTable.Query())).PartitionBy(expr.Group(f)).Named("partition")
-	ordered := base.OrderBy(f.Asc()).Named("ordered")
+	ordered := base.OrderBy(expr.Asc(f)).Named("ordered")
 	framed := ordered.RowsBetween(expr.Preceding(2), expr.CurrentRow()).Named("framed")
 	n := rows.SourceOf(q).Node
 	n.Selections = []querycore.SelectItem{{Expression: expr.FoundrySelected(expr.RowNumber(framed), sqlowner.Expressions()).Node}, {Expression: expr.FoundrySelected(expr.Over(expr.Count[recursionRecord](), framed), sqlowner.Expressions()).Node}}
@@ -35,24 +35,24 @@ func TestNamedWindowsShareDefinitionsAndBindings(t *testing.T) {
 		t.Fatal("named descriptor changed", err)
 	}
 	row := expr.RowNumber(framed)
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.DistinctOnScalarValues(rows.SelectScalar(q, row), row.Key()), row.Asc()))); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.DistinctOnScalarValues(rows.SelectScalar(q, row), expr.Key(row)), expr.AscValue(row)))); err != nil {
 		t.Fatal("named DISTINCT identity", err)
 	}
 }
 func TestNamedWindowInheritanceAndCycles(t *testing.T) {
 	q := rows.From(recursionTable.Query())
 	f := expr.Value(orm.KeyExpr(recursionTable.Key()))
-	base := expr.WindowFor(rows.ModelScope(recursionTable.Query())).OrderBy(f.Asc()).Named("ordered")
+	base := expr.WindowFor(rows.ModelScope(recursionTable.Query())).OrderBy(expr.Asc(f)).Named("ordered")
 	framed := base.RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
 	for name, w := range map[string]expr.Window[recursionRecord]{
-		"invalid name": base.Named("bad name"), "partition override": base.PartitionBy(expr.Group(f)), "order override": base.OrderBy(f.Desc()), "framed extension": framed.RowsBetween(expr.CurrentRow(), expr.UnboundedFollowing()), "framed alias": framed.Named("alias"), "nested window": expr.WindowFor(rows.ModelScope(recursionTable.Query())).OrderBy(expr.RowNumber(base).Asc()).Named("nested"),
+		"invalid name": base.Named("bad name"), "partition override": base.PartitionBy(expr.Group(f)), "order override": base.OrderBy(expr.Desc(f)), "framed extension": framed.RowsBetween(expr.CurrentRow(), expr.UnboundedFollowing()), "framed alias": framed.Named("alias"), "nested window": expr.WindowFor(rows.ModelScope(recursionTable.Query())).OrderBy(expr.AscValue(expr.RowNumber(base))).Named("nested"),
 	} {
 		if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.RowNumber(w)))); !errors.Is(err, fault.Invalid) {
 			t.Fatal(name, err)
 		}
 	}
 	other := expr.WindowFor(rows.ModelScope(recursionTable.Query())).Named("ordered")
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(q, expr.RowNumber(base)), expr.RowNumber(other).Asc()))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(q, expr.RowNumber(base)), expr.AscValue(expr.RowNumber(other))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("duplicate named definition", err)
 	}
 	cycle := &querycore.NamedWindow{Name: "cycle"}
@@ -63,11 +63,11 @@ func TestNamedWindowInheritanceAndCycles(t *testing.T) {
 	if _, err := c.CompileSelect(n); !errors.Is(err, fault.Invalid) {
 		t.Fatal("cyclic window accepted", err)
 	}
-	grouped := expr.WindowFor(rows.ModelScope(recursionTable.Query())).PartitionByValues(expr.Count[recursionRecord]().Value().Key()).Named("counts")
+	grouped := expr.WindowFor(rows.ModelScope(recursionTable.Query())).PartitionByValues(expr.Key(expr.AsSelected(expr.Count[recursionRecord]()))).Named("counts")
 	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.RowNumber(grouped)))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(q, expr.Row(f).Value()), expr.RowNumber(grouped).Asc()))); !errors.Is(err, fault.Invalid) {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(q, expr.AsSelected(expr.Row(f))), expr.AscValue(expr.RowNumber(grouped))))); !errors.Is(err, fault.Invalid) {
 		t.Fatal("named aggregate partition did not group", err)
 	}
 }
@@ -75,13 +75,13 @@ func TestNamedWindowQueryIsolationAndQualification(t *testing.T) {
 	q := rows.From(recursionTable.Query())
 	f := expr.Value(orm.KeyExpr(recursionTable.Key()))
 	w := expr.WindowFor(rows.ModelScope(recursionTable.Query()))
-	inner := rows.LimitScalar(rows.SelectScalar(q, expr.RowNumber(w.OrderBy(f.Asc()).Named("same"))), 1)
-	outer := rows.OrderScalar(rows.SelectScalar(q, rows.ScalarRowQuery(q, inner).Value()), expr.RowNumber(w.OrderBy(f.Desc()).Named("same")).Asc())
+	inner := rows.LimitScalar(rows.SelectScalar(q, expr.RowNumber(w.OrderBy(expr.Asc(f)).Named("same"))), 1)
+	outer := rows.OrderScalar(rows.SelectScalar(q, expr.AsSelected(rows.ScalarRowQuery(q, inner))), expr.AscValue(expr.RowNumber(w.OrderBy(expr.Desc(f)).Named("same"))))
 	s, err := rows.CompileRead(rows.ReadScalar(outer))
 	if err != nil || strings.Count(s.SQL(), `WINDOW "same" AS (`) != 2 {
 		t.Fatal("named definitions escaped SELECT", s.SQL(), err)
 	}
-	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.RowNumber(w.OrderBy(rows.ScalarRowQuery(q, inner).Value().Asc()).Named("nested_scope"))))); err != nil {
+	if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(q, expr.RowNumber(w.OrderBy(expr.AscValue(expr.AsSelected(rows.ScalarRowQuery(q, inner)))).Named("nested_scope"))))); err != nil {
 		t.Fatal("independent scalar window rejected", err)
 	}
 }

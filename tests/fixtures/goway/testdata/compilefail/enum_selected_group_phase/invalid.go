@@ -8,4 +8,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var _ = rows.GroupBy(rows.SelectValue(models.Users.Query(), orm.NumberExpr(models.Users.Age)), expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status))).Value().Key())
+var _ = rows.GroupBy(rows.SelectValue(models.Users.Query(), orm.NumberExpr(models.Users.Age)), expr.Key(expr.AsSelected(expr.CompareRow(expr.Value(orm.EnumExpr(models.Users.Status))))))

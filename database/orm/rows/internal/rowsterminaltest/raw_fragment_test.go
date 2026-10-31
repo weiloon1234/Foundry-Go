@@ -21,7 +21,7 @@ func TestRawFragmentsComposeAndHydrate(t *testing.T) {
 	source := rows.FromModel(o.Query().Where(orm.And(orm.KeyEq(o.ID, 1), orm.Not(orm.WhereRaw[order]("member_id = ?", 2)))))
 	selected := expr.Raw[order, int64]("COALESCE(member_id, ?)", 0)
 	q := expressionQuery(source, selected, codec.Signed[int64]())
-	q = rows.OrderBy(q, selected.Asc())
+	q = rows.OrderBy(q, expr.AscValue(selected))
 	state := &driverState{columns: []string{"value"}, rows: [][]driver.Value{{int64(5)}}}
 	got, err := rows.Read(q).All(statementmeta.Enable(t.Context()), openTest(t, state))
 	if err != nil || len(got) != 1 || got[0].Value != 5 {

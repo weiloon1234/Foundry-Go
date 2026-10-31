@@ -6,5 +6,5 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-var selected = rows.SelectScalar(rows.From(models.Users.Query()), expr.Count[models.User]().Value())
-var invalid = rows.GroupByScalar(selected, expr.Count[models.User]().Value().Key())
+var selected = rows.SelectScalar(rows.From(models.Users.Query()), expr.AsSelected(expr.Count[models.User]()))
+var invalid = rows.GroupByScalar(selected, expr.Key(expr.AsSelected(expr.Count[models.User]())))

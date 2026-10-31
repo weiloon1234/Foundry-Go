@@ -27,7 +27,7 @@ func GroupBy[S, R any](q Query[S, R], keys ...expr.GroupKey[S]) Query[S, R] {
 	return q
 }
 
-// Having appends group conditions. Example: rows.Having(q,count.Gt(0)).
+// Having appends group conditions. Example: rows.Having(q,expr.GtValue(count, 0)).
 func Having[S, R any](q Query[S, R], predicates ...expr.HavingPredicate[S]) Query[S, R] {
 	inputs := make([]ormcore.Predicate, len(predicates))
 	for i, p := range predicates {
@@ -38,7 +38,7 @@ func Having[S, R any](q Query[S, R], predicates ...expr.HavingPredicate[S]) Quer
 }
 
 // OrderBy accepts row and selected ordering through this read-only boundary.
-// Example: rows.OrderBy(q,count.Desc(),buyer.Asc()).
+// Example: rows.OrderBy(q,expr.DescValue(count),expr.Asc(buyer)).
 func OrderBy[S, R any](q Query[S, R], orders ...expr.ProjectionOrder[S]) Query[S, R] {
 	inputs := make([]ormcore.Order, len(orders))
 	for i, o := range orders {
@@ -67,7 +67,7 @@ func DistinctOn[S, R any](q Query[S, R], keys ...expr.GroupKey[S]) Query[S, R] {
 }
 
 // DistinctOnValues accepts selected keys while preserving grouping validation.
-// Example: rows.DistinctOnValues(q,count.Value().Key()).
+// Example: rows.DistinctOnValues(q,expr.Key(expr.AsSelected(count))).
 func DistinctOnValues[S, R any](q Query[S, R], keys ...expr.ProjectionKey[S]) Query[S, R] {
 	inputs := make([]ormcore.Expression, len(keys))
 	for i, key := range keys {

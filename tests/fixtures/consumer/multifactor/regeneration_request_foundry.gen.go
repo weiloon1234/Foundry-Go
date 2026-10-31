@@ -14,6 +14,7 @@ import (
 // RegenerationRequestJSON describes the concrete RegenerationRequest JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: RegenerationRequestJSON()
 func RegenerationRequestJSON() foundrycontract.JSON[RegenerationRequest] {
 	return foundryRegenerationRequestJSON()
 }
@@ -39,6 +40,7 @@ var foundryRegenerationRequestJSON = sync.OnceValue(func() foundrycontract.JSON[
 })
 
 // RegenerationRequestValidationFieldSet retains concrete DTO and value types for validation.
+// Example: RegenerationRequestValidationFields()
 type RegenerationRequestValidationFieldSet struct {
 	// Code validates the declared JSON property "code".
 	Code foundryvalidation.Field[RegenerationRequest, mfa.TOTPCode]
@@ -47,6 +49,7 @@ type RegenerationRequestValidationFieldSet struct {
 }
 
 // RegenerationRequestValidationFields returns typed field descriptors.
+// Example: RegenerationRequestValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func RegenerationRequestValidationFields() RegenerationRequestValidationFieldSet {
 	return *foundryRegenerationRequestValidationFields()

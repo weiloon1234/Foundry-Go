@@ -14,6 +14,7 @@ import (
 // UserResponseJSON describes the concrete UserResponse JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: UserResponseJSON()
 func UserResponseJSON() foundrycontract.JSON[UserResponse] { return foundryUserResponseJSON() }
 
 var foundryUserResponseJSON = sync.OnceValue(func() foundrycontract.JSON[UserResponse] {
@@ -34,6 +35,7 @@ var foundryUserResponseJSON = sync.OnceValue(func() foundrycontract.JSON[UserRes
 })
 
 // UserResponseValidationFieldSet retains concrete DTO and value types for validation.
+// Example: UserResponseValidationFields()
 type UserResponseValidationFieldSet struct {
 	// Email validates the declared JSON property "email".
 	Email foundryvalidation.Field[UserResponse, string]
@@ -44,6 +46,7 @@ type UserResponseValidationFieldSet struct {
 }
 
 // UserResponseValidationFields returns typed field descriptors.
+// Example: UserResponseValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func UserResponseValidationFields() UserResponseValidationFieldSet {
 	return *foundryUserResponseValidationFields()

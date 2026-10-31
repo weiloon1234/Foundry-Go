@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"github.com/weiloon1234/Foundry-Go/datatable/internal/exportio"
 	"io"
 	"os"
 	"path/filepath"
@@ -265,7 +266,7 @@ func (shortWriter) Write(p []byte) (int, error) { return len(p) / 2, nil }
 func TestExportWriterBoundsCancellationAndShortWrites(t *testing.T) {
 	var output bytes.Buffer
 	digest := sha256.New()
-	writer := &exportWriter{ctx: t.Context(), file: &output, digest: digest, maximum: 3}
+	writer := &exportio.Writer{Context: t.Context(), File: &output, Digest: digest, Maximum: 3}
 	if n, err := writer.Write([]byte("abc")); err != nil || n != 3 {
 		t.Fatal(err)
 	}
@@ -278,12 +279,12 @@ func TestExportWriterBoundsCancellationAndShortWrites(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	writer.ctx = ctx
+	writer.Context = ctx
 	if n, err := writer.Write(nil); n != 0 || !errors.Is(err, context.Canceled) {
 		t.Fatal("canceled writer accepted work", err)
 	}
-	writer = &exportWriter{ctx: t.Context(), file: shortWriter{}, digest: sha256.New(), maximum: 10}
-	if n, err := writer.Write([]byte("abcd")); n != 2 || !errors.Is(err, io.ErrShortWrite) || writer.written != 2 {
+	writer = &exportio.Writer{Context: t.Context(), File: shortWriter{}, Digest: sha256.New(), Maximum: 10}
+	if n, err := writer.Write([]byte("abcd")); n != 2 || !errors.Is(err, io.ErrShortWrite) || writer.Written != 2 {
 		t.Fatal("short write was hidden", err)
 	}
 }

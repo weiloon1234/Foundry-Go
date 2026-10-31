@@ -29,6 +29,6 @@ type columns struct {
 var Reports = rows.Define(func(b rows.Builder[Report], r *Report) columns { return columns{b.Row(), rows.BoolOf(b, &r.Enabled)} })
 
 func Compile() (orm.Statement, error) {
-	flag := expr.When(expr.Value(orm.ColumnExpr(Models.Enabled)).Eq(true), expr.Constant[Model](codec.Bool[bool](), true)).Else(expr.Row(expr.Value(orm.ColumnExpr(Models.Enabled))).Param(false))
-	return rows.CompileRead(rows.Read(rows.Select(rows.From(Models.Query()), Reports.Row, rows.MapSelected(Reports.Enabled, flag.Value()))))
+	flag := expr.When(expr.Eq(expr.Value(orm.ColumnExpr(Models.Enabled)), true), expr.Constant[Model](codec.Bool[bool](), true)).Else(expr.ParamOf(expr.Row(expr.Value(orm.ColumnExpr(Models.Enabled))), false))
+	return rows.CompileRead(rows.Read(rows.Select(rows.From(Models.Query()), Reports.Row, rows.MapSelected(Reports.Enabled, expr.AsSelected(flag)))))
 }

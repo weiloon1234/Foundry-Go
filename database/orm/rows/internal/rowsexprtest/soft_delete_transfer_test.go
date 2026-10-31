@@ -72,7 +72,7 @@ func TestSoftDeleteScopesReachAliasesAndModelMutations(t *testing.T) {
 	}
 	plain := declareMembers()
 	for _, q := range []orm.Query[member]{plain.Query().WithTrashed(), plain.Query().OnlyTrashed()} {
-		if _, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.Row(expr.Value(orm.KeyExpr(plain.ID))).Value()))); !errors.Is(e, fault.Invalid) {
+		if _, e := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(q), expr.AsSelected(expr.Row(expr.Value(orm.KeyExpr(plain.ID))))))); !errors.Is(e, fault.Invalid) {
 			t.Fatal("projection lost visibility failure", e)
 		}
 	}

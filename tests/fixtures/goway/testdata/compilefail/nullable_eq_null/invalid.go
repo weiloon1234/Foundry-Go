@@ -12,5 +12,5 @@ import (
 
 func F() {
 	u := rows.As[struct{}](models.Users.Query(), "u")
-	expr.At(rows.Scope(u), orm.NullableColumnExpr(models.Users.IntroducerID)).Eq(value.Null[model.ID[models.User]]())
+	expr.NullableEq[rows.Alias[struct{}, models.User], model.ID[models.User]](expr.At(rows.Scope(u), orm.NullableColumnExpr(models.Users.IntroducerID)), value.Null[model.ID[models.User]]())
 }

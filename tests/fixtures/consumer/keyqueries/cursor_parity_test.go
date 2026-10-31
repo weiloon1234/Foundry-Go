@@ -16,7 +16,7 @@ import (
 func TestCursorCompileSQLParity(t *testing.T) {
 	cursor := rows.CursorFor(rows.RecordOf(buckets()))
 	bucket := rows.At(cursor.Scope(), keyqueries.BucketCounts.Bucket)
-	current := cursor.OrderBy(bucket.Desc()).UniqueBy(expr.Group(bucket))
+	current := cursor.OrderBy(expr.Desc(bucket)).UniqueBy(expr.Group(bucket))
 	got, err := rows.CompileCursor(current)
 	if err != nil {
 		t.Fatal(err)
@@ -29,8 +29,8 @@ func TestCursorCompileSQLParity(t *testing.T) {
 		t.Fatal("recorded SQL parity changed")
 	}
 
-	values := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query().Limit(5)), expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))).Value())))
-	valueCursor := values.OrderBy(values.Value().Desc()).UniqueBy(expr.Group(values.Value()))
+	values := rows.ValueCursorFor(rows.Values(rows.SelectScalar(rows.From(models.Users.Query().Limit(5)), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname)))))))
+	valueCursor := values.OrderBy(expr.Desc(values.Value())).UniqueBy(expr.Group(values.Value()))
 	scalar, err := rows.CompileValueCursor(valueCursor)
 	if err != nil {
 		t.Fatal(err)

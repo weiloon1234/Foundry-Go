@@ -66,7 +66,7 @@ for _, test := range []struct {
 	period temporal.Interval
 	hours  time.Duration
 }{{temporal.Days(1), 23}, {interval(t, 0, 0, 24*time.Hour), 24}} {
-	got := intervalOne(t, tx, expr.ShiftInstant(expr.Value(orm.TimeExpr(f.Start)), expr.Param(orm.IntervalExpr(f.Period), test.period), ny).Value())
+	got := intervalOne(t, tx, expr.AsSelected(expr.ShiftInstant(expr.Value(orm.TimeExpr(f.Start)), expr.Param(orm.IntervalExpr(f.Period), test.period), ny)))
 	if got.Sub(samples[0].Start) != test.hours*time.Hour {
 		t.Fatal(got, test.hours)
 	}
@@ -86,12 +86,12 @@ Use `expr.SumInterval`, `expr.AvgInterval`, `expr.Min`, `expr.Max`, counts and t
 <!-- go-source: tests/fixtures/consumer/intervalqueries/orm_test.go -->
 ```go
 projection := rows.Select(rows.From(Samples.Query()), Summaries,
-	rows.MapSelected(Summaries.Total, expr.SumInterval(orm.IntervalExpr(Samples.Period)).Value()),
-	rows.MapSelected(Summaries.Average, expr.AvgInterval(orm.IntervalExpr(Samples.Period)).Value()),
-	rows.MapSelected(Summaries.Count, expr.Count[Sample]().Value()))
+	rows.MapSelected(Summaries.Total, expr.AsSelected(expr.SumInterval(orm.IntervalExpr(Samples.Period)))),
+	rows.MapSelected(Summaries.Average, expr.AsSelected(expr.AvgInterval(orm.IntervalExpr(Samples.Period)))),
+	rows.MapSelected(Summaries.Count, expr.AsSelected(expr.Count[Sample]())))
 ```
 
-Every calculation has `Nullable`, `Value` and `NullableValue` forms. Nullable binary operations require both operands to be nullable; use `NullableRow` or `Nullable` to widen the other operand explicitly. SQL NULL propagates. Selected forms retain aggregates and windows, for example `expr.IntervalMonthsNullableValue(expr.SumInterval(f.Period).Value())`. They cannot silently become row predicates.
+Every calculation has `Nullable`, `Value` and `NullableValue` forms. Nullable binary operations require both operands to be nullable; use `NullableRow` or `Nullable` to widen the other operand explicitly. SQL NULL propagates. Selected forms retain aggregates and windows, for example `expr.IntervalMonthsNullableValue(expr.AsSelected(expr.SumInterval(orm.IntervalExpr(f.Period))))`. They cannot silently become row predicates.
 
 Expression depth, node and parameter limits still apply. The shared compiler bounds cumulative scalar SQL expansion during one compiler run, excluding parameter contents; it is not a universal statement-byte limit. Nested calculations exceeding that work budget fail before execution. Arithmetic overflow, physical database types and stored values still require runtime checks.
 

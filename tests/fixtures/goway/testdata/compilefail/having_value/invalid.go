@@ -5,4 +5,4 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 )
 
-var _ = expr.Count[models.Order]().Gt("two")
+var _ = expr.GtValue(expr.Count[models.Order](), "two")

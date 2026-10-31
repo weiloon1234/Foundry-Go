@@ -8,7 +8,7 @@ import (
 )
 
 func invalid() {
-	users := expr.TextNullableValue(expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname))).Value())
+	users := expr.TextNullableValue(expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(models.Users.Nickname)))))
 	orders := expr.NullableTextValueComparison[models.Order, string](users)
-	_ = orders.Eq("x")
+	_ = expr.EqValue(orders, "x")
 }

@@ -131,14 +131,14 @@ func SelectTransactionRecord[S, R any](source TransactionSelectionSource[S], sco
 	return TransactionRead[S, R]{core: r}
 }
 
-// Where retains transaction input ownership. Example: selected.Where(id.Gt(0)).
+// Where retains transaction input ownership. Example: selected.Where(expr.Gt(id, 0)).
 func (q TransactionRead[S, R]) Where(ps ...expr.Predicate[S]) TransactionRead[S, R] {
 	q.core.Source = whereSource(q.core.Source, ps)
 	q.core.Direct = false
 	return q
 }
 
-// OrderBy orders the transaction selection. Example: selected.OrderBy(id.Asc()).
+// OrderBy orders the transaction selection. Example: selected.OrderBy(expr.Asc(id)).
 func (q TransactionRead[S, R]) OrderBy(os ...expr.ProjectionOrder[S]) TransactionRead[S, R] {
 	q.core.Source = recordOrders(q.core.Source, os)
 	q.core.Direct = false

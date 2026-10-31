@@ -13,6 +13,7 @@ import (
 // AvailabilityWindowJSON describes the concrete AvailabilityWindow JSON boundary.
 // Reuse this immutable descriptor for decoding and client contract export.
 // Fields are discovered from Go declarations; persistence models are not response DTOs.
+// Example: AvailabilityWindowJSON()
 func AvailabilityWindowJSON() foundrycontract.JSON[AvailabilityWindow] {
 	return foundryAvailabilityWindowJSON()
 }
@@ -32,6 +33,7 @@ var foundryAvailabilityWindowJSON = sync.OnceValue(func() foundrycontract.JSON[A
 })
 
 // AvailabilityWindowValidationFieldSet retains concrete DTO and value types for validation.
+// Example: AvailabilityWindowValidationFields()
 type AvailabilityWindowValidationFieldSet struct {
 	// End validates the declared JSON property "end".
 	End foundryvalidation.Field[AvailabilityWindow, temporal.DateTime]
@@ -40,6 +42,7 @@ type AvailabilityWindowValidationFieldSet struct {
 }
 
 // AvailabilityWindowValidationFields returns typed field descriptors.
+// Example: AvailabilityWindowValidationFields()
 // Compose rules with these fields; JSON names and selectors are generated.
 func AvailabilityWindowValidationFields() AvailabilityWindowValidationFieldSet {
 	return *foundryAvailabilityWindowValidationFields()

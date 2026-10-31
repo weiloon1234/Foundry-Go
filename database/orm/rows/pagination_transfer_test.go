@@ -34,7 +34,7 @@ func (e *pageTransferExecutor) Query(ctx context.Context, s string, args ...any)
 
 func TestResultPageValidationAndImmutableWindows(t *testing.T) {
 	d := declareMembers()
-	base := Read(FromModel(d.Query())).OrderBy(expr.Value(orm.KeyExpr(d.ID)).Asc())
+	base := Read(FromModel(d.Query())).OrderBy(expr.Asc(expr.Value(orm.KeyExpr(d.ID))))
 	original, e := CompileRead(base)
 	if e != nil {
 		t.Fatal(e)
@@ -60,7 +60,7 @@ func TestResultPageValidationAndImmutableWindows(t *testing.T) {
 		t.Fatal("page mutated source", again, e)
 	}
 	foreign := declareMembers()
-	for _, bad := range []Result[member, member]{base.Limit(0), base.Offset(1), base.Offset(-1), Read(FromModel(d.Query())), {}, base.OrderBy(expr.Value(orm.KeyExpr(foreign.ID)).Asc())} {
+	for _, bad := range []Result[member, member]{base.Limit(0), base.Offset(1), base.Offset(-1), Read(FromModel(d.Query())), {}, base.OrderBy(expr.Asc(expr.Value(orm.KeyExpr(foreign.ID))))} {
 		if p, e := bad.Paginate(t.Context(), ex, orm.Page(1, 2)); e == nil || p.Items != nil || p.Total != 0 {
 			t.Fatal(p, e)
 		}
@@ -85,7 +85,7 @@ func TestResultPageValidationAndImmutableWindows(t *testing.T) {
 }
 func TestPageFailuresAndLookaheadOwnership(t *testing.T) {
 	d := declareMembers()
-	q := Read(FromModel(d.Query())).OrderBy(expr.Value(orm.KeyExpr(d.ID)).Asc())
+	q := Read(FromModel(d.Query())).OrderBy(expr.Asc(expr.Value(orm.KeyExpr(d.ID))))
 	stop := errors.New("read failed")
 	for _, total := range []int64{-1, 0, math.MaxInt64} {
 		state := &driverState{}

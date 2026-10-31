@@ -101,14 +101,14 @@ func SelectRecord[S, R any](source SelectionSource[S], scope expr.Scope[S, R]) R
 	return RecordRead[S, R]{core: ormcore.SelectRecord(sourceOf(source), s, recordDefinition[R](s.Owner), reflect.TypeFor[R]())}
 }
 
-// Where retains predicates in the input scope. Example: result.Where(id.Gt(0)).
+// Where retains predicates in the input scope. Example: result.Where(expr.Gt(id, 0)).
 func (r RecordRead[S, R]) Where(ps ...expr.Predicate[S]) RecordRead[S, R] {
 	r.core.Source = whereSource(r.core.Source, ps)
 	r.core.Direct = false
 	return r
 }
 
-// OrderBy retains row or selected ordering. Example: result.OrderBy(id.Asc()).
+// OrderBy retains row or selected ordering. Example: result.OrderBy(expr.Asc(id)).
 func (r RecordRead[S, R]) OrderBy(os ...expr.ProjectionOrder[S]) RecordRead[S, R] {
 	r.core.Source = recordOrders(r.core.Source, os)
 	r.core.Direct = false

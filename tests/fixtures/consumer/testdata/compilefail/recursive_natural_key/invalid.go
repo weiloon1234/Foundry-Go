@@ -13,5 +13,5 @@ type parentAlias struct{}
 
 func invalid(self rows.RecursiveSelf[recursivequeries.Node]) {
 	parent := rows.AsRecord[parentAlias](self, "parent")
-	_ = expr.At(rows.Scope(parent), orm.TextExpr(recursivequeries.Nodes.Code)).Eq(models.User{}.ID)
+	_ = expr.Eq(expr.At(rows.Scope(parent), orm.TextExpr(recursivequeries.Nodes.Code)), models.User{}.ID)
 }

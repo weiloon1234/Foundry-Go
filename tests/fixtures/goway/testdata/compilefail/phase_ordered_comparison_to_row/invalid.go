@@ -6,4 +6,4 @@ import (
 
 type owner struct{}
 
-var _ = expr.OrderedRowExpression[owner, int64](expr.OrderValue(expr.Count[owner]().Value()))
+var _ = expr.OrderedRowExpression[owner, int64](expr.OrderValue(expr.AsSelected(expr.Count[owner]())))

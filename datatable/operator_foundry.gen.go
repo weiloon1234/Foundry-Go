@@ -14,6 +14,7 @@ import (
 )
 
 // OperatorValues returns declared values in source order, with independent slice ownership.
+// Example: OperatorValues()
 func OperatorValues() []Operator {
 	return []Operator{Equal, NotEqual, In, NotIn, Less, LessEqual, Greater, GreaterEqual, Between, Contains, InsensitiveContains, Like, IsNull, IsNotNull, All, Any, Not}
 }
@@ -61,6 +62,7 @@ func (v Operator) Validate() error {
 }
 
 // ParseOperator decodes and validates an enum's text representation.
+// Example: ParseOperator(text)
 func ParseOperator(text string) (Operator, error) {
 	v := Operator(text)
 	if err := v.Validate(); err != nil {
@@ -68,12 +70,16 @@ func ParseOperator(text string) (Operator, error) {
 	}
 	return v, nil
 }
+
+// MarshalText encodes a validated enum as text.
 func (v Operator) MarshalText() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return []byte(string(v)), nil
 }
+
+// UnmarshalText decodes validated enum text and changes the receiver only on success.
 func (v *Operator) UnmarshalText(data []byte) error {
 	parsed, err := ParseOperator(string(data))
 	if err != nil {
@@ -82,12 +88,16 @@ func (v *Operator) UnmarshalText(data []byte) error {
 	*v = parsed
 	return nil
 }
+
+// MarshalJSON encodes a validated enum as JSON.
 func (v Operator) MarshalJSON() ([]byte, error) {
 	if err := v.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(string(v))
 }
+
+// UnmarshalJSON decodes validated JSON and rejects null.
 func (v *Operator) UnmarshalJSON(data []byte) error {
 	var raw *string
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -105,6 +115,7 @@ func (v *Operator) UnmarshalJSON(data []byte) error {
 }
 
 // OperatorCodec applies the generated membership rule at both SQL boundaries.
+// Example: OperatorCodec()
 func OperatorCodec() codec.Codec[Operator] {
 	return codec.String[Operator]().Validated(Operator.Validate)
 }

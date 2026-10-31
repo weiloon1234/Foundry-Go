@@ -9,4 +9,4 @@ import (
 
 type other struct{}
 
-func invalid() { _ = expr.Second(expr.Value(orm.TimeExpr(scalars.Records.Clock))).Eq(float64(1)) }
+func invalid() { _ = expr.Eq(expr.Second(expr.Value(orm.TimeExpr(scalars.Records.Clock))), float64(1)) }
