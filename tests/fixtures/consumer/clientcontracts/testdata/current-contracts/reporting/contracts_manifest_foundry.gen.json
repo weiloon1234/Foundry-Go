@@ -790,6 +790,7 @@
         {
           "name": "id",
           "label": "reports.member.id",
+          "kind": "text",
           "value": {
             "property": {
               "name": "id",
@@ -811,6 +812,7 @@
         {
           "name": "name",
           "label": "reports.member.name",
+          "kind": "text",
           "value": {
             "property": {
               "name": "name",
@@ -857,6 +859,7 @@
         {
           "name": "nickname",
           "label": "reports.member.nickname",
+          "kind": "text",
           "value": {
             "property": {
               "name": "nickname",
@@ -904,6 +907,7 @@
         {
           "name": "state",
           "label": "reports.member.state",
+          "kind": "enum",
           "value": {
             "property": {
               "name": "state",
@@ -950,6 +954,7 @@
         {
           "name": "balance",
           "label": "reports.member.balance",
+          "kind": "decimal",
           "value": {
             "property": {
               "name": "balance",
@@ -1040,6 +1045,7 @@
         {
           "name": "id",
           "label": "reports.order.id",
+          "kind": "text",
           "value": {
             "property": {
               "name": "id",
@@ -1061,6 +1067,7 @@
         {
           "name": "memberName",
           "label": "reports.member.name",
+          "kind": "text",
           "value": {
             "property": {
               "name": "memberName",
@@ -1107,6 +1114,7 @@
         {
           "name": "label",
           "label": "reports.order.label",
+          "kind": "text",
           "value": {
             "property": {
               "name": "label",
@@ -1153,6 +1161,7 @@
         {
           "name": "amount",
           "label": "reports.order.amount",
+          "kind": "decimal",
           "value": {
             "property": {
               "name": "amount",
@@ -1212,6 +1221,7 @@
         {
           "name": "memberId",
           "label": "reports.member.id",
+          "kind": "text",
           "value": {
             "property": {
               "name": "memberId",
@@ -1252,6 +1262,7 @@
         {
           "name": "count",
           "label": "reports.total.count",
+          "kind": "integer",
           "value": {
             "property": {
               "name": "count",
@@ -1299,6 +1310,7 @@
         {
           "name": "total",
           "label": "reports.total.amount",
+          "kind": "decimal",
           "value": {
             "property": {
               "name": "total",
@@ -1351,6 +1363,22 @@
         }
       ],
       "exports": true
+    }
+  ],
+  "enums": [
+    {
+      "package": "foundry.test/consumer/reporting",
+      "name": "State",
+      "cases": [
+        {
+          "name": "Active",
+          "value": "active"
+        },
+        {
+          "name": "Disabled",
+          "value": "disabled"
+        }
+      ]
     }
   ]
 }

@@ -1,6 +1,16 @@
 {
   "components": {
     "schemas": {
+      "Array_2_String": {
+        "items": {
+          "$ref": "#/components/schemas/String"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "title": "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb",
+        "type": "array",
+        "x-foundry-type-id": "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb"
+      },
       "BankDTO": {
         "additionalProperties": false,
         "properties": {
@@ -24,7 +34,7 @@
         "additionalProperties": false,
         "properties": {
           "labels": {
-            "$ref": "#/components/schemas/Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd"
+            "$ref": "#/components/schemas/List_String"
           },
           "sequence": {
             "$ref": "#/components/schemas/Int64"
@@ -253,7 +263,7 @@
         "additionalProperties": false,
         "properties": {
           "children": {
-            "$ref": "#/components/schemas/Go_16e835e6349558afbd479c09a2594198a865b_79be729d8e2af57f"
+            "$ref": "#/components/schemas/List_Filter"
           },
           "column": {
             "$ref": "#/components/schemas/String"
@@ -262,7 +272,7 @@
             "$ref": "#/components/schemas/Operator"
           },
           "values": {
-            "$ref": "#/components/schemas/Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd"
+            "$ref": "#/components/schemas/List_String"
           }
         },
         "required": [
@@ -272,93 +282,12 @@
         "type": "object",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/datatable.Filter"
       },
-      "Go_16e835e6349558afbd479c09a2594198a865b_79be729d8e2af57f": {
-        "anyOf": [
-          {
-            "items": {
-              "$ref": "#/components/schemas/Filter"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b",
-        "x-foundry-type-id": "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b"
-      },
-      "Go_3b116365e8100fa0774841a4f3971426d59a3_b9c6b76d0960ca1a": {
-        "anyOf": [
-          {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/String"
-            },
-            "propertyNames": {
-              "type": "string",
-              "x-foundry-key": {
-                "value": {
-                  "id": "github.com/weiloon1234/Foundry-Go/i18n.LocaleID",
-                  "kind": "string",
-                  "nullable": false
-                },
-                "syntax": "string",
-                "server_only": false,
-                "non_zero": false
-              }
-            },
-            "type": "object"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67",
-        "x-foundry-type-id": "go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67"
-      },
-      "Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd": {
-        "anyOf": [
-          {
-            "items": {
-              "$ref": "#/components/schemas/String"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0",
-        "x-foundry-type-id": "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0"
-      },
-      "Go_582b06c611e8fd832b8bbf5c28362494a8661_ff3a8d3163ae05a2": {
-        "anyOf": [
-          {
-            "items": {
-              "$ref": "#/components/schemas/Sort"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528",
-        "x-foundry-type-id": "go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528"
-      },
-      "Go_67bd049929fdb4b45b9011d3b853b9e4b1dd5_f3cb80f5da54f087": {
-        "anyOf": [
-          {
-            "items": {
-              "$ref": "#/components/schemas/PaymentMethod"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "go:67bd049929fdb4b45b9011d3b853b9e4b1dd507dca9f4b209e49ab32623beaa1",
-        "x-foundry-type-id": "go:67bd049929fdb4b45b9011d3b853b9e4b1dd507dca9f4b209e49ab32623beaa1"
+      "Genericdto_UserID": {
+        "format": "uuid",
+        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/genericdto.User]",
+        "type": "string",
+        "x-foundry-format": "uuid",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/genericdto.User]"
       },
       "Go_874612457cdc8d7319303305c10492405e8dd_30613f76773b1d69": {
         "anyOf": [
@@ -373,131 +302,6 @@
         ],
         "title": "go:874612457cdc8d7319303305c10492405e8dd6f1b85c024df63dbfb73046fa1e",
         "x-foundry-type-id": "go:874612457cdc8d7319303305c10492405e8dd6f1b85c024df63dbfb73046fa1e"
-      },
-      "Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f": {
-        "items": {
-          "$ref": "#/components/schemas/String"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "title": "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb",
-        "type": "array",
-        "x-foundry-type-id": "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb"
-      },
-      "Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57": {
-        "anyOf": [
-          {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/String"
-            },
-            "propertyNames": {
-              "format": "uuid",
-              "not": {
-                "const": "00000000-0000-0000-0000-000000000000"
-              },
-              "type": "string",
-              "x-foundry-key": {
-                "value": {
-                  "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
-                  "kind": "string",
-                  "nullable": false,
-                  "format": "uuid"
-                },
-                "syntax": "model_id",
-                "server_only": true,
-                "non_zero": true
-              }
-            },
-            "type": "object"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8",
-        "x-foundry-type-id": "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8"
-      },
-      "Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606": {
-        "anyOf": [
-          {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/String"
-            },
-            "propertyNames": {
-              "enum": [
-                "draft",
-                "ready"
-              ],
-              "type": "string",
-              "x-foundry-key": {
-                "value": {
-                  "id": "foundry.test/consumer/localization.Status",
-                  "kind": "string",
-                  "nullable": false,
-                  "cases": [
-                    "draft",
-                    "ready"
-                  ]
-                },
-                "syntax": "enum",
-                "server_only": true,
-                "non_zero": false
-              }
-            },
-            "type": "object"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981",
-        "x-foundry-type-id": "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981"
-      },
-      "Go_ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1_e5f5c3777a56ad47": {
-        "anyOf": [
-          {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/String"
-            },
-            "propertyNames": {
-              "maxLength": 21,
-              "pattern": "^(0|-?[1-9][0-9]*)$",
-              "type": "string",
-              "x-foundry-key": {
-                "value": {
-                  "id": "int64",
-                  "kind": "integer",
-                  "nullable": false,
-                  "bits": 64,
-                  "signed": true
-                },
-                "syntax": "integer",
-                "server_only": false,
-                "non_zero": false
-              }
-            },
-            "type": "object"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "go:ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1082e95f7d54048592da8f3af5c8",
-        "x-foundry-type-id": "go:ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1082e95f7d54048592da8f3af5c8"
-      },
-      "ID_Order": {
-        "format": "uuid",
-        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]",
-        "type": "string",
-        "x-foundry-format": "uuid",
-        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]"
-      },
-      "ID_Project": {
-        "format": "uuid",
-        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/genericdto.Project]",
-        "type": "string",
-        "x-foundry-format": "uuid",
-        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/genericdto.Project]"
       },
       "Int": {
         "format": "int64",
@@ -584,6 +388,21 @@
         "type": "object",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.Links"
       },
+      "List_Filter": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/Filter"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b",
+        "x-foundry-type-id": "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b"
+      },
       "List_Issue": {
         "anyOf": [
           {
@@ -614,11 +433,185 @@
         "title": "[]pagination.PageLink",
         "x-foundry-type-id": "[]pagination.PageLink"
       },
+      "List_PaymentMethod": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/PaymentMethod"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:67bd049929fdb4b45b9011d3b853b9e4b1dd507dca9f4b209e49ab32623beaa1",
+        "x-foundry-type-id": "go:67bd049929fdb4b45b9011d3b853b9e4b1dd507dca9f4b209e49ab32623beaa1"
+      },
+      "List_Sort": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/Sort"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528",
+        "x-foundry-type-id": "go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528"
+      },
+      "List_String": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/String"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0",
+        "x-foundry-type-id": "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0"
+      },
       "LocalDateTime": {
         "title": "github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime",
         "type": "string",
         "x-foundry-format": "local_date_time",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime"
+      },
+      "LocaleMap_String": {
+        "anyOf": [
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/String"
+            },
+            "propertyNames": {
+              "type": "string",
+              "x-foundry-key": {
+                "value": {
+                  "id": "github.com/weiloon1234/Foundry-Go/i18n.LocaleID",
+                  "kind": "string",
+                  "nullable": false
+                },
+                "syntax": "string",
+                "server_only": false,
+                "non_zero": false
+              }
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67",
+        "x-foundry-type-id": "go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67"
+      },
+      "Map_Int64_String": {
+        "anyOf": [
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/String"
+            },
+            "propertyNames": {
+              "maxLength": 21,
+              "pattern": "^(0|-?[1-9][0-9]*)$",
+              "type": "string",
+              "x-foundry-key": {
+                "value": {
+                  "id": "int64",
+                  "kind": "integer",
+                  "nullable": false,
+                  "bits": 64,
+                  "signed": true
+                },
+                "syntax": "integer",
+                "server_only": false,
+                "non_zero": false
+              }
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1082e95f7d54048592da8f3af5c8",
+        "x-foundry-type-id": "go:ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1082e95f7d54048592da8f3af5c8"
+      },
+      "Map_Status_String": {
+        "anyOf": [
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/String"
+            },
+            "propertyNames": {
+              "enum": [
+                "draft",
+                "ready"
+              ],
+              "type": "string",
+              "x-foundry-key": {
+                "value": {
+                  "id": "foundry.test/consumer/localization.Status",
+                  "kind": "string",
+                  "nullable": false,
+                  "cases": [
+                    "draft",
+                    "ready"
+                  ]
+                },
+                "syntax": "enum",
+                "server_only": true,
+                "non_zero": false
+              }
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981",
+        "x-foundry-type-id": "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981"
+      },
+      "Map_UserID_String": {
+        "anyOf": [
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/String"
+            },
+            "propertyNames": {
+              "format": "uuid",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              },
+              "type": "string",
+              "x-foundry-key": {
+                "value": {
+                  "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
+                  "kind": "string",
+                  "nullable": false,
+                  "format": "uuid"
+                },
+                "syntax": "model_id",
+                "server_only": true,
+                "non_zero": true
+              }
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8",
+        "x-foundry-type-id": "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8"
       },
       "Member": {
         "additionalProperties": false,
@@ -641,7 +634,7 @@
             "$ref": "#/components/schemas/DisplayEmail"
           },
           "id": {
-            "$ref": "#/components/schemas/Member_f0dd89ece5f2c419"
+            "$ref": "#/components/schemas/Mutatorqueries_MemberID"
           },
           "nickname": {
             "$ref": "#/components/schemas/Nullable_DisplayNickname"
@@ -663,7 +656,7 @@
             "$ref": "#/components/schemas/Decimal"
           },
           "id": {
-            "$ref": "#/components/schemas/Member_07820d787f468ce7"
+            "$ref": "#/components/schemas/Reporting_MemberID"
           },
           "name": {
             "$ref": "#/components/schemas/String"
@@ -686,24 +679,24 @@
         "type": "object",
         "x-foundry-type-id": "foundry.test/consumer/reporting.MemberRow"
       },
-      "Member_07820d787f468ce7": {
+      "MessageKey": {
+        "title": "github.com/weiloon1234/Foundry-Go/i18n.MessageKey",
+        "type": "string",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/i18n.MessageKey"
+      },
+      "Models_UserID": {
         "format": "uuid",
-        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
+        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
         "type": "string",
         "x-foundry-format": "uuid",
-        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]"
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]"
       },
-      "Member_f0dd89ece5f2c419": {
+      "Mutatorqueries_MemberID": {
         "format": "uuid",
         "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/mutatorqueries.Member]",
         "type": "string",
         "x-foundry-format": "uuid",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/mutatorqueries.Member]"
-      },
-      "MessageKey": {
-        "title": "github.com/weiloon1234/Foundry-Go/i18n.MessageKey",
-        "type": "string",
-        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/i18n.MessageKey"
       },
       "Nullable_DisplayNickname": {
         "anyOf": [
@@ -843,7 +836,7 @@
       "Optional_Map_LocaleID_String": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/Go_3b116365e8100fa0774841a4f3971426d59a3_b9c6b76d0960ca1a"
+            "$ref": "#/components/schemas/LocaleMap_String"
           }
         ],
         "not": {
@@ -890,17 +883,24 @@
         "title": "github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/value.Nullable[string]]",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/value.Nullable[string]]"
       },
+      "OrderID": {
+        "format": "uuid",
+        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]",
+        "type": "string",
+        "x-foundry-format": "uuid",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]"
+      },
       "OwnerIndex": {
         "additionalProperties": false,
         "properties": {
           "owners": {
-            "$ref": "#/components/schemas/Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57"
+            "$ref": "#/components/schemas/Map_UserID_String"
           },
           "pair": {
-            "$ref": "#/components/schemas/Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f"
+            "$ref": "#/components/schemas/Array_2_String"
           },
           "states": {
-            "$ref": "#/components/schemas/Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606"
+            "$ref": "#/components/schemas/Map_Status_String"
           }
         },
         "required": [
@@ -950,7 +950,7 @@
             }
           },
           "buyer_id": {
-            "$ref": "#/components/schemas/User_e5b5e89e3b570ab7"
+            "$ref": "#/components/schemas/Models_UserID"
           },
           "bytes": {
             "$ref": "#/components/schemas/Go_874612457cdc8d7319303305c10492405e8dd_30613f76773b1d69"
@@ -971,10 +971,10 @@
             "$ref": "#/components/schemas/Number"
           },
           "id": {
-            "$ref": "#/components/schemas/ID_Order"
+            "$ref": "#/components/schemas/OrderID"
           },
           "keys": {
-            "$ref": "#/components/schemas/Go_ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1_e5f5c3777a56ad47"
+            "$ref": "#/components/schemas/Map_Int64_String"
           },
           "large": {
             "$ref": "#/components/schemas/Int64"
@@ -1001,7 +1001,7 @@
             "$ref": "#/components/schemas/Status"
           },
           "tags": {
-            "$ref": "#/components/schemas/Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd"
+            "$ref": "#/components/schemas/List_String"
           },
           "titles": {
             "$ref": "#/components/schemas/Optional_Map_LocaleID_String"
@@ -1083,7 +1083,7 @@
             "type": "string"
           },
           "labels": {
-            "$ref": "#/components/schemas/Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd"
+            "$ref": "#/components/schemas/List_String"
           },
           "sequence": {
             "$ref": "#/components/schemas/Int64"
@@ -1132,7 +1132,7 @@
             "$ref": "#/components/schemas/PaymentMethod"
           },
           "more": {
-            "$ref": "#/components/schemas/Go_67bd049929fdb4b45b9011d3b853b9e4b1dd5_f3cb80f5da54f087"
+            "$ref": "#/components/schemas/List_PaymentMethod"
           }
         },
         "required": [
@@ -1146,7 +1146,7 @@
         "additionalProperties": false,
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/ID_Project"
+            "$ref": "#/components/schemas/ProjectID"
           },
           "title": {
             "$ref": "#/components/schemas/String"
@@ -1159,6 +1159,13 @@
         "title": "foundry.test/consumer/genericdto.ProjectDTO",
         "type": "object",
         "x-foundry-type-id": "foundry.test/consumer/genericdto.ProjectDTO"
+      },
+      "ProjectID": {
+        "format": "uuid",
+        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/genericdto.Project]",
+        "type": "string",
+        "x-foundry-format": "uuid",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/genericdto.Project]"
       },
       "Quoted_Int64": {
         "contentMediaType": "application/json",
@@ -1191,7 +1198,7 @@
             "$ref": "#/components/schemas/String"
           },
           "tags": {
-            "$ref": "#/components/schemas/Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd"
+            "$ref": "#/components/schemas/List_String"
           },
           "title": {
             "$ref": "#/components/schemas/String"
@@ -1206,11 +1213,18 @@
         "type": "object",
         "x-foundry-type-id": "foundry.test/consumer/requestflow.Reply"
       },
+      "Reporting_MemberID": {
+        "format": "uuid",
+        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
+        "type": "string",
+        "x-foundry-format": "uuid",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]"
+      },
       "Request": {
         "additionalProperties": false,
         "properties": {
           "filters": {
-            "$ref": "#/components/schemas/Go_16e835e6349558afbd479c09a2594198a865b_79be729d8e2af57f"
+            "$ref": "#/components/schemas/List_Filter"
           },
           "page": {
             "$ref": "#/components/schemas/Int"
@@ -1222,7 +1236,7 @@
             "$ref": "#/components/schemas/Int"
           },
           "sort": {
-            "$ref": "#/components/schemas/Go_582b06c611e8fd832b8bbf5c28362494a8661_ff3a8d3163ae05a2"
+            "$ref": "#/components/schemas/List_Sort"
           }
         },
         "title": "github.com/weiloon1234/Foundry-Go/datatable.Request",
@@ -1377,7 +1391,7 @@
         "additionalProperties": false,
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/User_87d9646de071eb9d"
+            "$ref": "#/components/schemas/Genericdto_UserID"
           },
           "name": {
             "$ref": "#/components/schemas/String"
@@ -1397,20 +1411,6 @@
         "title": "foundry.test/consumer/genericdto.UserDTO",
         "type": "object",
         "x-foundry-type-id": "foundry.test/consumer/genericdto.UserDTO"
-      },
-      "User_87d9646de071eb9d": {
-        "format": "uuid",
-        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/genericdto.User]",
-        "type": "string",
-        "x-foundry-format": "uuid",
-        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/genericdto.User]"
-      },
-      "User_e5b5e89e3b570ab7": {
-        "format": "uuid",
-        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
-        "type": "string",
-        "x-foundry-format": "uuid",
-        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]"
       }
     },
     "securitySchemes": {

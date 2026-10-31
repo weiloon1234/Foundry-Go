@@ -231,6 +231,83 @@ function describeOperation(name: string): unknown {
   });
 }
 
+export type TableColumnKind =
+  | "text"
+  | "integer"
+  | "decimal"
+  | "boolean"
+  | "enum"
+  | "date"
+  | "date_time"
+  | "local_date_time"
+  | "time";
+
+export interface EnumCase<T extends string | number = string | number> {
+  readonly value: T;
+  readonly labelKey?: string;
+}
+
+export interface EnumValueObject<T extends string | number = string | number> {
+  readonly cases: readonly T[];
+  readonly labels?: Readonly<Partial<Record<T, string>>>;
+}
+
+export interface BaseTableColumn<Name extends string = string, Op extends string = string> {
+  readonly name: Name;
+  readonly label: string;
+  readonly kind: TableColumnKind;
+  readonly nullable: boolean;
+  readonly sortable: boolean;
+  readonly searchable: boolean;
+  readonly exportable: boolean;
+  readonly operators: readonly Op[];
+}
+
+export interface ScalarTableColumn<Name extends string = string, Op extends string = string> extends BaseTableColumn<Name, Op> {
+  readonly kind: Exclude<TableColumnKind, "enum">;
+}
+
+export interface EnumTableColumn<Name extends string = string, E extends string | number = string | number, Op extends string = string> extends BaseTableColumn<Name, Op> {
+  readonly kind: "enum";
+  readonly enum?: EnumValueObject<E>;
+  readonly cases: readonly EnumCase<E>[];
+}
+
+export type TableColumn<Row, Op extends string = string> = {
+  [K in keyof Row & string]: NonNullable<Row[K]> extends string | number
+    ? ScalarTableColumn<K, Op> | EnumTableColumn<K, NonNullable<Row[K]> & (string | number), Op>
+    : ScalarTableColumn<K, Op>;
+}[keyof Row & string];
+
+export interface TableSort<Name extends string = string> {
+  readonly column: Name;
+  readonly direction: "asc" | "desc";
+}
+
+export interface TableDescriptor<
+  Row = unknown,
+  QueryOp extends keyof Operations & keyof API = keyof Operations & keyof API,
+  ExportOp extends keyof Operations & keyof API = keyof Operations & keyof API,
+> {
+  readonly id: string;
+  readonly queryOperation?: QueryOp;
+  readonly exportOperation?: ExportOp;
+  readonly columns: readonly TableColumn<Row>[];
+  readonly defaultSort: readonly TableSort<keyof Row & string>[];
+  readonly exports: boolean;
+  readonly query?: (client: API, input: Operations[QueryOp]["request"], options?: CallOptions) => Promise<Operations[QueryOp]["response"]>;
+  readonly export?: (client: API, input: Operations[ExportOp]["request"], options?: CallOptions) => Promise<Operations[ExportOp]["response"]>;
+}
+
+export function createTableDescriptor<
+  Row,
+  QueryOp extends keyof Operations & keyof API = never,
+  ExportOp extends keyof Operations & keyof API = never,
+>(descriptor: TableDescriptor<Row, QueryOp, ExportOp>): TableDescriptor<Row, QueryOp, ExportOp> {
+  return Object.freeze(descriptor);
+}
+
+
 /** Editable request state. Missing values are allowed here, never asserted valid. */
 export type FormDraft<T> = T extends Blob | JSONNumber | Upload ? T : T extends readonly (infer V)[] ? readonly FormDraft<V>[] : T extends object ? { readonly [K in keyof T]?: FormDraft<T[K]> } : T;
 export type FormReadonly<T> = T extends Blob | JSONNumber ? T : T extends readonly (infer V)[] ? readonly FormReadonly<V>[] : T extends object ? { readonly [K in keyof T]: FormReadonly<T[K]> } : T;
@@ -713,10 +790,10 @@ export type List_Issue = (ReadonlyArray<Contract_Issue>) | null;
 export type List_PageLink = (ReadonlyArray<PageLink>) | null;
 export type Bool = boolean;
 export type RawMessage = (Exclude<JSONValue, null>) | null;
-export type ExplicitLabels = (Readonly<Partial<Record<string, String_473287f8298dba71>>>) | null;
-export type Member = { readonly "display": String_473287f8298dba71 };
-export type OwnerIndex = { readonly "owners": Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57; readonly "pair": Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f; readonly "states": Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606 };
-export type MemberResponse = { readonly "email": DisplayEmail; readonly "id": Member_f0dd89ece5f2c419; readonly "nickname": Nullable_DisplayNickname };
+export type ExplicitLabels = (Readonly<Partial<Record<string, GoString>>>) | null;
+export type Member = { readonly "display": GoString };
+export type OwnerIndex = { readonly "owners": Map_UserID_String; readonly "pair": Array_2_String; readonly "states": Map_Status_String };
+export type MemberResponse = { readonly "email": DisplayEmail; readonly "id": Mutatorqueries_MemberID; readonly "nickname": Nullable_DisplayNickname };
 export type Status = "draft" | "ready";
 export const Status = /* @__PURE__ */ Object.freeze({
   cases: ["draft", "ready"] as const,
@@ -728,31 +805,31 @@ export const Status = /* @__PURE__ */ Object.freeze({
 export type DisplayEmail = string;
 export type DisplayNickname = string;
 export type RequestID = string;
-export type Contract_Issue = { readonly "code": IssueCode; readonly "label"?: String_473287f8298dba71; readonly "label_key"?: MessageKey; readonly "message"?: String_473287f8298dba71; readonly "path": String_473287f8298dba71 };
+export type Contract_Issue = { readonly "code": IssueCode; readonly "label"?: GoString; readonly "label_key"?: MessageKey; readonly "message"?: GoString; readonly "path": GoString };
 export type IssueCode = string;
 export type Cursor_Member = string;
 export type Http_ErrorCode = string;
-export type Http_ErrorResponse = { readonly "error_code": Http_ErrorCode; readonly "issues"?: List_Issue; readonly "issues_truncated"?: Bool; readonly "message": String_473287f8298dba71; readonly "request_id"?: RequestID; readonly "status": Int };
+export type Http_ErrorResponse = { readonly "error_code": Http_ErrorCode; readonly "issues"?: List_Issue; readonly "issues_truncated"?: Bool; readonly "message": GoString; readonly "request_id"?: RequestID; readonly "status": Int };
 export type CursorMeta = { readonly "per_page": Int };
 export type CursorResponse_MemberResponse = { readonly "data": Pagination_Items_MemberResponse; readonly "links": Links; readonly "meta": CursorMeta };
-export type Links = { readonly "first"?: String_473287f8298dba71; readonly "last"?: String_473287f8298dba71; readonly "next": Nullable_String; readonly "prev": Nullable_String; readonly "window"?: List_PageLink };
+export type Links = { readonly "first"?: GoString; readonly "last"?: GoString; readonly "next": Nullable_String; readonly "prev": Nullable_String; readonly "window"?: List_PageLink };
 export type NumberedMeta = { readonly "current_page": Int; readonly "last_page": Int64; readonly "per_page": Int; readonly "total": Int64 };
 export type NumberedResponse_MemberResponse = { readonly "data": Pagination_Items_MemberResponse; readonly "links": Links; readonly "meta": NumberedMeta };
-export type PageLink = { readonly "page": Int; readonly "url": String_473287f8298dba71 };
+export type PageLink = { readonly "page": Int; readonly "url": GoString };
 export type SimpleMeta = { readonly "current_page": Int; readonly "has_more": Bool; readonly "per_page": Int };
 export type SimpleResponse_MemberResponse = { readonly "data": Pagination_Items_MemberResponse; readonly "links": Links; readonly "meta": SimpleMeta };
 export type MessageKey = string;
-export type User_e5b5e89e3b570ab7 = Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]">;
-export type Member_f0dd89ece5f2c419 = Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/mutatorqueries.Member]">;
+export type Models_UserID = Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]">;
+export type Mutatorqueries_MemberID = Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/mutatorqueries.Member]">;
 export type Nullable_DisplayNickname = (Exclude<DisplayNickname, null>) | null;
-export type Nullable_String = (Exclude<String_473287f8298dba71, null>) | null;
-export type Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f = ReadonlyArray<String_473287f8298dba71> & { readonly length: 2 };
-export type Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57 = (Readonly<Partial<Record<Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]">, String_473287f8298dba71>>>) | null;
-export type Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606 = (Readonly<Partial<Record<"draft" | "ready", String_473287f8298dba71>>>) | null;
+export type Nullable_String = (Exclude<GoString, null>) | null;
+export type Array_2_String = ReadonlyArray<GoString> & { readonly length: 2 };
+export type Map_UserID_String = (Readonly<Partial<Record<Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]">, GoString>>>) | null;
+export type Map_Status_String = (Readonly<Partial<Record<"draft" | "ready", GoString>>>) | null;
 export type Int = string;
 export type Int64 = string;
 export type Pagination_Items_MemberResponse = ReadonlyArray<MemberResponse>;
-export type String_473287f8298dba71 = string;
+export type GoString = string;
 /** Server output of Status; unknown enum values decode as UnknownEnumValue. */
 export type StatusReceived = "draft" | "ready" | UnknownEnumValue;
 
@@ -783,17 +860,17 @@ export interface ContractTypes {
   readonly "github.com/weiloon1234/Foundry-Go/http/pagination.SimpleMeta": SimpleMeta;
   readonly "github.com/weiloon1234/Foundry-Go/http/pagination.SimpleResponse[foundry.test/consumer/httppagination.MemberResponse]": SimpleResponse_MemberResponse;
   readonly "github.com/weiloon1234/Foundry-Go/i18n.MessageKey": MessageKey;
-  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]": User_e5b5e89e3b570ab7;
-  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/mutatorqueries.Member]": Member_f0dd89ece5f2c419;
+  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]": Models_UserID;
+  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/mutatorqueries.Member]": Mutatorqueries_MemberID;
   readonly "github.com/weiloon1234/Foundry-Go/value.Nullable[foundry.test/consumer/mutatorqueries.DisplayNickname]": Nullable_DisplayNickname;
   readonly "github.com/weiloon1234/Foundry-Go/value.Nullable[string]": Nullable_String;
-  readonly "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb": Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f;
-  readonly "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8": Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57;
-  readonly "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981": Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606;
+  readonly "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb": Array_2_String;
+  readonly "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8": Map_UserID_String;
+  readonly "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981": Map_Status_String;
   readonly "int": Int;
   readonly "int64": Int64;
   readonly "pagination:items:foundry.test/consumer/httppagination.MemberResponse": Pagination_Items_MemberResponse;
-  readonly "string": String_473287f8298dba71;
+  readonly "string": GoString;
 }
 
 /** Tolerantly decoded server output for each declared schema. */
@@ -824,21 +901,22 @@ export interface ReceivedContractTypes {
   readonly "github.com/weiloon1234/Foundry-Go/http/pagination.SimpleMeta": SimpleMeta;
   readonly "github.com/weiloon1234/Foundry-Go/http/pagination.SimpleResponse[foundry.test/consumer/httppagination.MemberResponse]": SimpleResponse_MemberResponse;
   readonly "github.com/weiloon1234/Foundry-Go/i18n.MessageKey": MessageKey;
-  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]": User_e5b5e89e3b570ab7;
-  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/mutatorqueries.Member]": Member_f0dd89ece5f2c419;
+  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]": Models_UserID;
+  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/mutatorqueries.Member]": Mutatorqueries_MemberID;
   readonly "github.com/weiloon1234/Foundry-Go/value.Nullable[foundry.test/consumer/mutatorqueries.DisplayNickname]": Nullable_DisplayNickname;
   readonly "github.com/weiloon1234/Foundry-Go/value.Nullable[string]": Nullable_String;
-  readonly "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb": Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f;
-  readonly "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8": Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57;
-  readonly "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981": Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606;
+  readonly "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb": Array_2_String;
+  readonly "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8": Map_UserID_String;
+  readonly "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981": Map_Status_String;
   readonly "int": Int;
   readonly "int64": Int64;
   readonly "pagination:items:foundry.test/consumer/httppagination.MemberResponse": Pagination_Items_MemberResponse;
-  readonly "string": String_473287f8298dba71;
+  readonly "string": GoString;
 }
 
 /** Named schema identity mapping for decodeContract, decodeReceived, encodeContract and schema(). */
 export const schemas = /* @__PURE__ */ Object.freeze({
+  Array_2_String: "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb",
   Bool: "bool",
   Contract_Issue: "github.com/weiloon1234/Foundry-Go/contract.Issue",
   CursorMeta: "github.com/weiloon1234/Foundry-Go/http/pagination.CursorMeta",
@@ -847,9 +925,7 @@ export const schemas = /* @__PURE__ */ Object.freeze({
   DisplayEmail: "foundry.test/consumer/mutatorqueries.DisplayEmail",
   DisplayNickname: "foundry.test/consumer/mutatorqueries.DisplayNickname",
   ExplicitLabels: "foundry.test/consumer/clientcontracts.ExplicitLabels",
-  Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f: "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb",
-  Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57: "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8",
-  Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606: "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981",
+  GoString: "string",
   Http_ErrorCode: "github.com/weiloon1234/Foundry-Go/http.ErrorCode",
   Http_ErrorResponse: "github.com/weiloon1234/Foundry-Go/http.ErrorResponse",
   Int: "int",
@@ -858,10 +934,13 @@ export const schemas = /* @__PURE__ */ Object.freeze({
   Links: "github.com/weiloon1234/Foundry-Go/http/pagination.Links",
   List_Issue: "[]contract.Issue",
   List_PageLink: "[]pagination.PageLink",
+  Map_Status_String: "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981",
+  Map_UserID_String: "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8",
   Member: "foundry.test/consumer/clientcontracts.Member",
   MemberResponse: "foundry.test/consumer/httppagination.MemberResponse",
-  Member_f0dd89ece5f2c419: "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/mutatorqueries.Member]",
   MessageKey: "github.com/weiloon1234/Foundry-Go/i18n.MessageKey",
+  Models_UserID: "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
+  Mutatorqueries_MemberID: "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/mutatorqueries.Member]",
   Nullable_DisplayNickname: "github.com/weiloon1234/Foundry-Go/value.Nullable[foundry.test/consumer/mutatorqueries.DisplayNickname]",
   Nullable_String: "github.com/weiloon1234/Foundry-Go/value.Nullable[string]",
   NumberedMeta: "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedMeta",
@@ -874,8 +953,6 @@ export const schemas = /* @__PURE__ */ Object.freeze({
   SimpleMeta: "github.com/weiloon1234/Foundry-Go/http/pagination.SimpleMeta",
   SimpleResponse_MemberResponse: "github.com/weiloon1234/Foundry-Go/http/pagination.SimpleResponse[foundry.test/consumer/httppagination.MemberResponse]",
   Status: "foundry.test/consumer/localization.Status",
-  String_473287f8298dba71: "string",
-  User_e5b5e89e3b570ab7: "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
 } as const);
 
 /** Decode a raw network value using a declared schema and resource bounds. */
@@ -920,10 +997,10 @@ export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 export type ErrorResponse = Http_ErrorResponse;
 export interface Operations {
   readonly "membersEvents": { readonly request: Readonly<Record<string, never>>; readonly response: EventStreamResult<Member>; readonly errorCode: "bad_request" | "conflict" | "forbidden" | "internal_error" | "method_not_allowed" | "mfa_required" | "not_acceptable" | "not_found" | "payload_too_large" | "precondition_failed" | "range_not_satisfiable" | "rate_limited" | "request_timeout" | "unauthenticated" | "unavailable" | "unsupported_media_type" | "validation_failed" };
-  readonly "membersIndex": { readonly request: { readonly query?: { readonly "email"?: String_473287f8298dba71; readonly "page"?: Int; readonly "per_page"?: Int } }; readonly response: NumberedResponse_MemberResponse; readonly errorCode: "bad_request" | "conflict" | "forbidden" | "internal_error" | "method_not_allowed" | "mfa_required" | "not_acceptable" | "not_found" | "payload_too_large" | "precondition_failed" | "range_not_satisfiable" | "rate_limited" | "request_timeout" | "unauthenticated" | "unavailable" | "unsupported_media_type" | "validation_failed" };
-  readonly "membersSecure": { readonly request: { readonly query?: { readonly "email"?: String_473287f8298dba71; readonly "page"?: Int; readonly "per_page"?: Int } }; readonly response: NumberedResponse_MemberResponse; readonly errorCode: "bad_request" | "conflict" | "forbidden" | "internal_error" | "method_not_allowed" | "mfa_required" | "not_acceptable" | "not_found" | "payload_too_large" | "precondition_failed" | "range_not_satisfiable" | "rate_limited" | "request_timeout" | "unauthenticated" | "unavailable" | "unsupported_media_type" | "validation_failed" };
-  readonly "membersSecureCursor": { readonly request: { readonly query?: { readonly "after"?: Cursor_Member; readonly "before"?: Cursor_Member; readonly "email"?: String_473287f8298dba71; readonly "per_page"?: Int } }; readonly response: CursorResponse_MemberResponse; readonly errorCode: "bad_request" | "conflict" | "forbidden" | "internal_error" | "method_not_allowed" | "mfa_required" | "not_acceptable" | "not_found" | "payload_too_large" | "precondition_failed" | "range_not_satisfiable" | "rate_limited" | "request_timeout" | "unauthenticated" | "unavailable" | "unsupported_media_type" | "validation_failed" };
-  readonly "membersSecureSimple": { readonly request: { readonly query?: { readonly "email"?: String_473287f8298dba71; readonly "page"?: Int; readonly "per_page"?: Int } }; readonly response: SimpleResponse_MemberResponse; readonly errorCode: "bad_request" | "conflict" | "forbidden" | "internal_error" | "method_not_allowed" | "mfa_required" | "not_acceptable" | "not_found" | "payload_too_large" | "precondition_failed" | "range_not_satisfiable" | "rate_limited" | "request_timeout" | "unauthenticated" | "unavailable" | "unsupported_media_type" | "validation_failed" };
+  readonly "membersIndex": { readonly request: { readonly query?: { readonly "email"?: GoString; readonly "page"?: Int; readonly "per_page"?: Int } }; readonly response: NumberedResponse_MemberResponse; readonly errorCode: "bad_request" | "conflict" | "forbidden" | "internal_error" | "method_not_allowed" | "mfa_required" | "not_acceptable" | "not_found" | "payload_too_large" | "precondition_failed" | "range_not_satisfiable" | "rate_limited" | "request_timeout" | "unauthenticated" | "unavailable" | "unsupported_media_type" | "validation_failed" };
+  readonly "membersSecure": { readonly request: { readonly query?: { readonly "email"?: GoString; readonly "page"?: Int; readonly "per_page"?: Int } }; readonly response: NumberedResponse_MemberResponse; readonly errorCode: "bad_request" | "conflict" | "forbidden" | "internal_error" | "method_not_allowed" | "mfa_required" | "not_acceptable" | "not_found" | "payload_too_large" | "precondition_failed" | "range_not_satisfiable" | "rate_limited" | "request_timeout" | "unauthenticated" | "unavailable" | "unsupported_media_type" | "validation_failed" };
+  readonly "membersSecureCursor": { readonly request: { readonly query?: { readonly "after"?: Cursor_Member; readonly "before"?: Cursor_Member; readonly "email"?: GoString; readonly "per_page"?: Int } }; readonly response: CursorResponse_MemberResponse; readonly errorCode: "bad_request" | "conflict" | "forbidden" | "internal_error" | "method_not_allowed" | "mfa_required" | "not_acceptable" | "not_found" | "payload_too_large" | "precondition_failed" | "range_not_satisfiable" | "rate_limited" | "request_timeout" | "unauthenticated" | "unavailable" | "unsupported_media_type" | "validation_failed" };
+  readonly "membersSecureSimple": { readonly request: { readonly query?: { readonly "email"?: GoString; readonly "page"?: Int; readonly "per_page"?: Int } }; readonly response: SimpleResponse_MemberResponse; readonly errorCode: "bad_request" | "conflict" | "forbidden" | "internal_error" | "method_not_allowed" | "mfa_required" | "not_acceptable" | "not_found" | "payload_too_large" | "precondition_failed" | "range_not_satisfiable" | "rate_limited" | "request_timeout" | "unauthenticated" | "unavailable" | "unsupported_media_type" | "validation_failed" };
   readonly "membersSigned": { readonly request: { readonly signedURL: string }; readonly response: Member; readonly errorCode: "bad_request" | "conflict" | "forbidden" | "internal_error" | "method_not_allowed" | "mfa_required" | "not_acceptable" | "not_found" | "payload_too_large" | "precondition_failed" | "range_not_satisfiable" | "rate_limited" | "request_timeout" | "unauthenticated" | "unavailable" | "unsupported_media_type" | "validation_failed" };
   readonly "membersUpsert": { readonly request: { readonly body: Member }; readonly response: StatusResult<200 | 201, Member>; readonly errorCode: "bad_request" | "conflict" | "forbidden" | "internal_error" | "method_not_allowed" | "mfa_required" | "not_acceptable" | "not_found" | "payload_too_large" | "precondition_failed" | "range_not_satisfiable" | "rate_limited" | "request_timeout" | "unauthenticated" | "unavailable" | "unsupported_media_type" | "validation_failed" };
 }

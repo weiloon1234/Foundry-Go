@@ -235,6 +235,83 @@ function describeOperation(name: string): unknown {
   });
 }
 
+export type TableColumnKind =
+  | "text"
+  | "integer"
+  | "decimal"
+  | "boolean"
+  | "enum"
+  | "date"
+  | "date_time"
+  | "local_date_time"
+  | "time";
+
+export interface EnumCase<T extends string | number = string | number> {
+  readonly value: T;
+  readonly labelKey?: string;
+}
+
+export interface EnumValueObject<T extends string | number = string | number> {
+  readonly cases: readonly T[];
+  readonly labels?: Readonly<Partial<Record<T, string>>>;
+}
+
+export interface BaseTableColumn<Name extends string = string, Op extends string = string> {
+  readonly name: Name;
+  readonly label: string;
+  readonly kind: TableColumnKind;
+  readonly nullable: boolean;
+  readonly sortable: boolean;
+  readonly searchable: boolean;
+  readonly exportable: boolean;
+  readonly operators: readonly Op[];
+}
+
+export interface ScalarTableColumn<Name extends string = string, Op extends string = string> extends BaseTableColumn<Name, Op> {
+  readonly kind: Exclude<TableColumnKind, "enum">;
+}
+
+export interface EnumTableColumn<Name extends string = string, E extends string | number = string | number, Op extends string = string> extends BaseTableColumn<Name, Op> {
+  readonly kind: "enum";
+  readonly enum?: EnumValueObject<E>;
+  readonly cases: readonly EnumCase<E>[];
+}
+
+export type TableColumn<Row, Op extends string = string> = {
+  [K in keyof Row & string]: NonNullable<Row[K]> extends string | number
+    ? ScalarTableColumn<K, Op> | EnumTableColumn<K, NonNullable<Row[K]> & (string | number), Op>
+    : ScalarTableColumn<K, Op>;
+}[keyof Row & string];
+
+export interface TableSort<Name extends string = string> {
+  readonly column: Name;
+  readonly direction: "asc" | "desc";
+}
+
+export interface TableDescriptor<
+  Row = unknown,
+  QueryOp extends keyof Operations & keyof API = keyof Operations & keyof API,
+  ExportOp extends keyof Operations & keyof API = keyof Operations & keyof API,
+> {
+  readonly id: string;
+  readonly queryOperation?: QueryOp;
+  readonly exportOperation?: ExportOp;
+  readonly columns: readonly TableColumn<Row>[];
+  readonly defaultSort: readonly TableSort<keyof Row & string>[];
+  readonly exports: boolean;
+  readonly query?: (client: API, input: Operations[QueryOp]["request"], options?: CallOptions) => Promise<Operations[QueryOp]["response"]>;
+  readonly export?: (client: API, input: Operations[ExportOp]["request"], options?: CallOptions) => Promise<Operations[ExportOp]["response"]>;
+}
+
+export function createTableDescriptor<
+  Row,
+  QueryOp extends keyof Operations & keyof API = never,
+  ExportOp extends keyof Operations & keyof API = never,
+>(descriptor: TableDescriptor<Row, QueryOp, ExportOp>): TableDescriptor<Row, QueryOp, ExportOp> {
+  return Object.freeze(descriptor);
+}
+
+
 /** Editable request state. Missing values are allowed here, never asserted valid. */
 export type FormDraft<T> = T extends Blob | JSONNumber | Upload ? T : T extends readonly (infer V)[] ? readonly FormDraft<V>[] : T extends object ? { readonly [K in keyof T]?: FormDraft<T[K]> } : T;
 export type FormReadonly<T> = T extends Blob | JSONNumber ? T : T extends readonly (infer V)[] ? readonly FormReadonly<V>[] : T extends object ? { readonly [K in keyof T]: FormReadonly<T[K]> } : T;
@@ -717,10 +794,10 @@ export type List_Issue = (ReadonlyArray<Contract_Issue>) | null;
 export type Bool = boolean;
 export type Json_Number = string;
 export type RawMessage = (Exclude<JSONValue, null>) | null;
-export type ExplicitLabels = (Readonly<Partial<Record<string, String_473287f8298dba71>>>) | null;
-export type Member = { readonly "display": String_473287f8298dba71 };
-export type OwnerIndex = { readonly "owners": Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57; readonly "pair": Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f; readonly "states": Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606 };
-export type Clientcontracts_Payload = { readonly "amount": Decimal; readonly "buyer_id": User_e5b5e89e3b570ab7; readonly "bytes": Go_874612457cdc8d7319303305c10492405e8dd_30613f76773b1d69; readonly "clock": Time; readonly "counter": Uint64; readonly "day": Temporal_Date; readonly "duration": Temporal_Interval; readonly "exact": Json_Number; readonly "id": ID_Order; readonly "keys": Go_ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1_e5f5c3777a56ad47; readonly "large": Int64; readonly "local": LocalDateTime; readonly "natural": CountryCode; readonly "nullable": Nullable_String; readonly "optional"?: Optional_Nullable_String; readonly "quoted": Quoted_Int64; readonly "state": Status; readonly "tags": Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd; readonly "titles"?: Optional_Map_LocaleID_String; readonly "when": DateTime };
+export type ExplicitLabels = (Readonly<Partial<Record<string, GoString>>>) | null;
+export type Member = { readonly "display": GoString };
+export type OwnerIndex = { readonly "owners": Map_UserID_String; readonly "pair": Array_2_String; readonly "states": Map_Status_String };
+export type Clientcontracts_Payload = { readonly "amount": Decimal; readonly "buyer_id": Models_UserID; readonly "bytes": Go_874612457cdc8d7319303305c10492405e8dd_30613f76773b1d69; readonly "clock": Time; readonly "counter": Uint64; readonly "day": Temporal_Date; readonly "duration": Temporal_Interval; readonly "exact": Json_Number; readonly "id": OrderID; readonly "keys": Map_Int64_String; readonly "large": Int64; readonly "local": LocalDateTime; readonly "natural": CountryCode; readonly "nullable": Nullable_String; readonly "optional"?: Optional_Nullable_String; readonly "quoted": Quoted_Int64; readonly "state": Status; readonly "tags": List_String; readonly "titles"?: Optional_Map_LocaleID_String; readonly "when": DateTime };
 export type Status = "draft" | "ready";
 export const Status = /* @__PURE__ */ Object.freeze({
   cases: ["draft", "ready"] as const,
@@ -731,42 +808,42 @@ export const Status = /* @__PURE__ */ Object.freeze({
 });
 export type CountryCode = string;
 export type RequestID = string;
-export type Contract_Issue = { readonly "code": IssueCode; readonly "label"?: String_473287f8298dba71; readonly "label_key"?: MessageKey; readonly "message"?: String_473287f8298dba71; readonly "path": String_473287f8298dba71 };
+export type Contract_Issue = { readonly "code": IssueCode; readonly "label"?: GoString; readonly "label_key"?: MessageKey; readonly "message"?: GoString; readonly "path": GoString };
 export type IssueCode = string;
 export type Decimal = string;
 export type Http_ErrorCode = string;
-export type Http_ErrorResponse = { readonly "error_code": Http_ErrorCode; readonly "issues"?: List_Issue; readonly "issues_truncated"?: Bool; readonly "message": String_473287f8298dba71; readonly "request_id"?: RequestID; readonly "status": Int };
+export type Http_ErrorResponse = { readonly "error_code": Http_ErrorCode; readonly "issues"?: List_Issue; readonly "issues_truncated"?: Bool; readonly "message": GoString; readonly "request_id"?: RequestID; readonly "status": Int };
 export type MessageKey = string;
-export type ID_Order = Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]">;
-export type User_e5b5e89e3b570ab7 = Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]">;
+export type OrderID = Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]">;
+export type Models_UserID = Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]">;
 export type Temporal_Date = string;
 export type DateTime = string;
 export type Temporal_Interval = string;
 export type LocalDateTime = string;
 export type Time = string;
-export type Nullable_String = (Exclude<String_473287f8298dba71, null>) | null;
+export type Nullable_String = (Exclude<GoString, null>) | null;
 export type Optional_Nullable_String = (Exclude<Nullable_String, null>) | null;
-export type Optional_Map_LocaleID_String = Exclude<Go_3b116365e8100fa0774841a4f3971426d59a3_b9c6b76d0960ca1a, null>;
-export type Go_3b116365e8100fa0774841a4f3971426d59a3_b9c6b76d0960ca1a = (LocaleMap<String_473287f8298dba71>) | null;
-export type Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd = (ReadonlyArray<String_473287f8298dba71>) | null;
+export type Optional_Map_LocaleID_String = Exclude<LocaleMap_String, null>;
+export type LocaleMap_String = (LocaleMap<GoString>) | null;
+export type List_String = (ReadonlyArray<GoString>) | null;
 export type Go_874612457cdc8d7319303305c10492405e8dd_30613f76773b1d69 = (string) | null;
-export type Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f = ReadonlyArray<String_473287f8298dba71> & { readonly length: 2 };
-export type Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57 = (Readonly<Partial<Record<Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]">, String_473287f8298dba71>>>) | null;
-export type Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606 = (Readonly<Partial<Record<"draft" | "ready", String_473287f8298dba71>>>) | null;
-export type Go_ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1_e5f5c3777a56ad47 = (Readonly<Partial<Record<string, String_473287f8298dba71>>>) | null;
+export type Array_2_String = ReadonlyArray<GoString> & { readonly length: 2 };
+export type Map_UserID_String = (Readonly<Partial<Record<Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]">, GoString>>>) | null;
+export type Map_Status_String = (Readonly<Partial<Record<"draft" | "ready", GoString>>>) | null;
+export type Map_Int64_String = (Readonly<Partial<Record<string, GoString>>>) | null;
 export type Int = string;
 export type Int64 = string;
 export type Quoted_Int64 = Exclude<Int64, null>;
-export type String_473287f8298dba71 = string;
+export type GoString = string;
 export type Uint64 = string;
 /** Server output of Clientcontracts_Payload; unknown enum values decode as UnknownEnumValue. */
-export type Clientcontracts_PayloadReceived = { readonly "amount": Decimal; readonly "buyer_id": User_e5b5e89e3b570ab7; readonly "bytes": Go_874612457cdc8d7319303305c10492405e8dd_30613f76773b1d69; readonly "clock": Time; readonly "counter": Uint64; readonly "day": Temporal_Date; readonly "duration": Temporal_Interval; readonly "exact": Json_Number; readonly "id": ID_Order; readonly "keys": Go_ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1_e5f5c3777a56ad47; readonly "large": Int64; readonly "local": LocalDateTime; readonly "natural": CountryCode; readonly "nullable": Nullable_String; readonly "optional"?: Optional_Nullable_String; readonly "quoted": Quoted_Int64; readonly "state": StatusReceived; readonly "tags": Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd; readonly "titles"?: Optional_Map_LocaleID_StringReceived; readonly "when": DateTime };
+export type Clientcontracts_PayloadReceived = { readonly "amount": Decimal; readonly "buyer_id": Models_UserID; readonly "bytes": Go_874612457cdc8d7319303305c10492405e8dd_30613f76773b1d69; readonly "clock": Time; readonly "counter": Uint64; readonly "day": Temporal_Date; readonly "duration": Temporal_Interval; readonly "exact": Json_Number; readonly "id": OrderID; readonly "keys": Map_Int64_String; readonly "large": Int64; readonly "local": LocalDateTime; readonly "natural": CountryCode; readonly "nullable": Nullable_String; readonly "optional"?: Optional_Nullable_String; readonly "quoted": Quoted_Int64; readonly "state": StatusReceived; readonly "tags": List_String; readonly "titles"?: Optional_Map_LocaleID_StringReceived; readonly "when": DateTime };
 /** Server output of Status; unknown enum values decode as UnknownEnumValue. */
 export type StatusReceived = "draft" | "ready" | UnknownEnumValue;
 /** Server output of Optional_Map_LocaleID_String; its locale keys stay open strings. */
-export type Optional_Map_LocaleID_StringReceived = Exclude<Go_3b116365e8100fa0774841a4f3971426d59a3_b9c6b76d0960ca1aReceived, null>;
-/** Server output of Go_3b116365e8100fa0774841a4f3971426d59a3_b9c6b76d0960ca1a; its locale keys stay open strings. */
-export type Go_3b116365e8100fa0774841a4f3971426d59a3_b9c6b76d0960ca1aReceived = (Readonly<Partial<Record<string, String_473287f8298dba71>>>) | null;
+export type Optional_Map_LocaleID_StringReceived = Exclude<LocaleMap_StringReceived, null>;
+/** Server output of LocaleMap_String; its locale keys stay open strings. */
+export type LocaleMap_StringReceived = (Readonly<Partial<Record<string, GoString>>>) | null;
 
 export interface ContractTypes {
   readonly "[]contract.Issue": List_Issue;
@@ -786,8 +863,8 @@ export interface ContractTypes {
   readonly "github.com/weiloon1234/Foundry-Go/http.ErrorCode": Http_ErrorCode;
   readonly "github.com/weiloon1234/Foundry-Go/http.ErrorResponse": Http_ErrorResponse;
   readonly "github.com/weiloon1234/Foundry-Go/i18n.MessageKey": MessageKey;
-  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]": ID_Order;
-  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]": User_e5b5e89e3b570ab7;
+  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]": OrderID;
+  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]": Models_UserID;
   readonly "github.com/weiloon1234/Foundry-Go/temporal.Date": Temporal_Date;
   readonly "github.com/weiloon1234/Foundry-Go/temporal.DateTime": DateTime;
   readonly "github.com/weiloon1234/Foundry-Go/temporal.Interval": Temporal_Interval;
@@ -796,17 +873,17 @@ export interface ContractTypes {
   readonly "github.com/weiloon1234/Foundry-Go/value.Nullable[string]": Nullable_String;
   readonly "github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/value.Nullable[string]]": Optional_Nullable_String;
   readonly "github.com/weiloon1234/Foundry-Go/value.Optional[map[github.com/weiloon1234/Foundry-Go/i18n.LocaleID]string]": Optional_Map_LocaleID_String;
-  readonly "go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67": Go_3b116365e8100fa0774841a4f3971426d59a3_b9c6b76d0960ca1a;
-  readonly "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0": Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd;
+  readonly "go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67": LocaleMap_String;
+  readonly "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0": List_String;
   readonly "go:874612457cdc8d7319303305c10492405e8dd6f1b85c024df63dbfb73046fa1e": Go_874612457cdc8d7319303305c10492405e8dd_30613f76773b1d69;
-  readonly "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb": Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f;
-  readonly "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8": Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57;
-  readonly "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981": Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606;
-  readonly "go:ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1082e95f7d54048592da8f3af5c8": Go_ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1_e5f5c3777a56ad47;
+  readonly "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb": Array_2_String;
+  readonly "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8": Map_UserID_String;
+  readonly "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981": Map_Status_String;
+  readonly "go:ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1082e95f7d54048592da8f3af5c8": Map_Int64_String;
   readonly "int": Int;
   readonly "int64": Int64;
   readonly "quoted:int64": Quoted_Int64;
-  readonly "string": String_473287f8298dba71;
+  readonly "string": GoString;
   readonly "uint64": Uint64;
 }
 
@@ -829,8 +906,8 @@ export interface ReceivedContractTypes {
   readonly "github.com/weiloon1234/Foundry-Go/http.ErrorCode": Http_ErrorCode;
   readonly "github.com/weiloon1234/Foundry-Go/http.ErrorResponse": Http_ErrorResponse;
   readonly "github.com/weiloon1234/Foundry-Go/i18n.MessageKey": MessageKey;
-  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]": ID_Order;
-  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]": User_e5b5e89e3b570ab7;
+  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]": OrderID;
+  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]": Models_UserID;
   readonly "github.com/weiloon1234/Foundry-Go/temporal.Date": Temporal_Date;
   readonly "github.com/weiloon1234/Foundry-Go/temporal.DateTime": DateTime;
   readonly "github.com/weiloon1234/Foundry-Go/temporal.Interval": Temporal_Interval;
@@ -839,22 +916,23 @@ export interface ReceivedContractTypes {
   readonly "github.com/weiloon1234/Foundry-Go/value.Nullable[string]": Nullable_String;
   readonly "github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/value.Nullable[string]]": Optional_Nullable_String;
   readonly "github.com/weiloon1234/Foundry-Go/value.Optional[map[github.com/weiloon1234/Foundry-Go/i18n.LocaleID]string]": Optional_Map_LocaleID_StringReceived;
-  readonly "go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67": Go_3b116365e8100fa0774841a4f3971426d59a3_b9c6b76d0960ca1aReceived;
-  readonly "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0": Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd;
+  readonly "go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67": LocaleMap_StringReceived;
+  readonly "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0": List_String;
   readonly "go:874612457cdc8d7319303305c10492405e8dd6f1b85c024df63dbfb73046fa1e": Go_874612457cdc8d7319303305c10492405e8dd_30613f76773b1d69;
-  readonly "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb": Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f;
-  readonly "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8": Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57;
-  readonly "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981": Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606;
-  readonly "go:ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1082e95f7d54048592da8f3af5c8": Go_ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1_e5f5c3777a56ad47;
+  readonly "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb": Array_2_String;
+  readonly "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8": Map_UserID_String;
+  readonly "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981": Map_Status_String;
+  readonly "go:ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1082e95f7d54048592da8f3af5c8": Map_Int64_String;
   readonly "int": Int;
   readonly "int64": Int64;
   readonly "quoted:int64": Quoted_Int64;
-  readonly "string": String_473287f8298dba71;
+  readonly "string": GoString;
   readonly "uint64": Uint64;
 }
 
 /** Named schema identity mapping for decodeContract, decodeReceived, encodeContract and schema(). */
 export const schemas = /* @__PURE__ */ Object.freeze({
+  Array_2_String: "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb",
   Bool: "bool",
   Clientcontracts_Payload: "foundry.test/consumer/clientcontracts.Payload",
   Contract_Issue: "github.com/weiloon1234/Foundry-Go/contract.Issue",
@@ -862,38 +940,37 @@ export const schemas = /* @__PURE__ */ Object.freeze({
   DateTime: "github.com/weiloon1234/Foundry-Go/temporal.DateTime",
   Decimal: "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
   ExplicitLabels: "foundry.test/consumer/clientcontracts.ExplicitLabels",
-  Go_3b116365e8100fa0774841a4f3971426d59a3_b9c6b76d0960ca1a: "go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67",
-  Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd: "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0",
+  GoString: "string",
   Go_874612457cdc8d7319303305c10492405e8dd_30613f76773b1d69: "go:874612457cdc8d7319303305c10492405e8dd6f1b85c024df63dbfb73046fa1e",
-  Go_a9692c220e277ecb765aa695f859c9f23f5d5_22d62c95526b4e3f: "go:a9692c220e277ecb765aa695f859c9f23f5d572f3ae8f07df381f9dd703504bb",
-  Go_ad804751e8f388618a4291c8e1638379f1e12_33145d17173f9e57: "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8",
-  Go_b6adcaad9e06fbb06b6f1b5cd078aa7e91634_17bdcce50f70f606: "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981",
-  Go_ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1_e5f5c3777a56ad47: "go:ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1082e95f7d54048592da8f3af5c8",
   Http_ErrorCode: "github.com/weiloon1234/Foundry-Go/http.ErrorCode",
   Http_ErrorResponse: "github.com/weiloon1234/Foundry-Go/http.ErrorResponse",
-  ID_Order: "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]",
   Int: "int",
   Int64: "int64",
   IssueCode: "github.com/weiloon1234/Foundry-Go/contract.IssueCode",
   Json_Number: "encoding/json.Number",
   List_Issue: "[]contract.Issue",
+  List_String: "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0",
   LocalDateTime: "github.com/weiloon1234/Foundry-Go/temporal.LocalDateTime",
+  LocaleMap_String: "go:3b116365e8100fa0774841a4f3971426d59a3d3b2a85917e7c2c2cd61ae68f67",
+  Map_Int64_String: "go:ca7854f505c4dc3f0ce2b1b547b9bbb2bdaf1082e95f7d54048592da8f3af5c8",
+  Map_Status_String: "go:b6adcaad9e06fbb06b6f1b5cd078aa7e91634f354edb64a2768a998c99604981",
+  Map_UserID_String: "go:ad804751e8f388618a4291c8e1638379f1e122f418310f283855ca7940d06ac8",
   Member: "foundry.test/consumer/clientcontracts.Member",
   MessageKey: "github.com/weiloon1234/Foundry-Go/i18n.MessageKey",
+  Models_UserID: "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
   Nullable_String: "github.com/weiloon1234/Foundry-Go/value.Nullable[string]",
   Optional_Map_LocaleID_String: "github.com/weiloon1234/Foundry-Go/value.Optional[map[github.com/weiloon1234/Foundry-Go/i18n.LocaleID]string]",
   Optional_Nullable_String: "github.com/weiloon1234/Foundry-Go/value.Optional[github.com/weiloon1234/Foundry-Go/value.Nullable[string]]",
+  OrderID: "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.Order]",
   OwnerIndex: "foundry.test/consumer/clientcontracts.OwnerIndex",
   Quoted_Int64: "quoted:int64",
   RawMessage: "encoding/json.RawMessage",
   RequestID: "github.com/weiloon1234/Foundry-Go/attribution.RequestID",
   Status: "foundry.test/consumer/localization.Status",
-  String_473287f8298dba71: "string",
   Temporal_Date: "github.com/weiloon1234/Foundry-Go/temporal.Date",
   Temporal_Interval: "github.com/weiloon1234/Foundry-Go/temporal.Interval",
   Time: "github.com/weiloon1234/Foundry-Go/temporal.Time",
   Uint64: "uint64",
-  User_e5b5e89e3b570ab7: "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
 } as const);
 
 /** Decode a raw network value using a declared schema and resource bounds. */

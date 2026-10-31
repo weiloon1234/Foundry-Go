@@ -61,7 +61,7 @@
         "additionalProperties": false,
         "properties": {
           "children": {
-            "$ref": "#/components/schemas/Go_16e835e6349558afbd479c09a2594198a865b_79be729d8e2af57f"
+            "$ref": "#/components/schemas/List_Filter"
           },
           "column": {
             "$ref": "#/components/schemas/String"
@@ -70,7 +70,7 @@
             "$ref": "#/components/schemas/Operator"
           },
           "values": {
-            "$ref": "#/components/schemas/Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd"
+            "$ref": "#/components/schemas/List_String"
           }
         },
         "required": [
@@ -79,65 +79,6 @@
         "title": "github.com/weiloon1234/Foundry-Go/datatable.Filter",
         "type": "object",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/datatable.Filter"
-      },
-      "Go_16e835e6349558afbd479c09a2594198a865b_79be729d8e2af57f": {
-        "anyOf": [
-          {
-            "items": {
-              "$ref": "#/components/schemas/Filter"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b",
-        "x-foundry-type-id": "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b"
-      },
-      "Go_4af101177fe720bf0766557228231c42b3863_1c3240217b81adbd": {
-        "anyOf": [
-          {
-            "items": {
-              "$ref": "#/components/schemas/String"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0",
-        "x-foundry-type-id": "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0"
-      },
-      "Go_582b06c611e8fd832b8bbf5c28362494a8661_ff3a8d3163ae05a2": {
-        "anyOf": [
-          {
-            "items": {
-              "$ref": "#/components/schemas/Sort"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528",
-        "x-foundry-type-id": "go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528"
-      },
-      "ID_Member": {
-        "format": "uuid",
-        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
-        "type": "string",
-        "x-foundry-format": "uuid",
-        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]"
-      },
-      "ID_Order": {
-        "format": "uuid",
-        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]",
-        "type": "string",
-        "x-foundry-format": "uuid",
-        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]"
       },
       "Int": {
         "format": "int64",
@@ -218,6 +159,21 @@
         "type": "object",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.Links"
       },
+      "List_Filter": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/Filter"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b",
+        "x-foundry-type-id": "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b"
+      },
       "List_Issue": {
         "anyOf": [
           {
@@ -248,6 +204,43 @@
         "title": "[]pagination.PageLink",
         "x-foundry-type-id": "[]pagination.PageLink"
       },
+      "List_Sort": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/Sort"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528",
+        "x-foundry-type-id": "go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528"
+      },
+      "List_String": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/String"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0",
+        "x-foundry-type-id": "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0"
+      },
+      "MemberID": {
+        "format": "uuid",
+        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
+        "type": "string",
+        "x-foundry-format": "uuid",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]"
+      },
       "MemberRow": {
         "additionalProperties": false,
         "properties": {
@@ -255,7 +248,7 @@
             "$ref": "#/components/schemas/Decimal"
           },
           "id": {
-            "$ref": "#/components/schemas/ID_Member"
+            "$ref": "#/components/schemas/MemberID"
           },
           "name": {
             "$ref": "#/components/schemas/String"
@@ -285,7 +278,7 @@
             "$ref": "#/components/schemas/Int64"
           },
           "memberId": {
-            "$ref": "#/components/schemas/ID_Member"
+            "$ref": "#/components/schemas/MemberID"
           },
           "total": {
             "$ref": "#/components/schemas/Nullable_Decimal"
@@ -415,6 +408,13 @@
         "type": "string",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/datatable.Operator"
       },
+      "OrderID": {
+        "format": "uuid",
+        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]",
+        "type": "string",
+        "x-foundry-format": "uuid",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]"
+      },
       "OrderRow": {
         "additionalProperties": false,
         "properties": {
@@ -422,7 +422,7 @@
             "$ref": "#/components/schemas/Decimal"
           },
           "id": {
-            "$ref": "#/components/schemas/ID_Order"
+            "$ref": "#/components/schemas/OrderID"
           },
           "label": {
             "$ref": "#/components/schemas/String"
@@ -471,7 +471,7 @@
         "additionalProperties": false,
         "properties": {
           "filters": {
-            "$ref": "#/components/schemas/Go_16e835e6349558afbd479c09a2594198a865b_79be729d8e2af57f"
+            "$ref": "#/components/schemas/List_Filter"
           },
           "page": {
             "$ref": "#/components/schemas/Int"
@@ -483,7 +483,7 @@
             "$ref": "#/components/schemas/Int"
           },
           "sort": {
-            "$ref": "#/components/schemas/Go_582b06c611e8fd832b8bbf5c28362494a8661_ff3a8d3163ae05a2"
+            "$ref": "#/components/schemas/List_Sort"
           }
         },
         "title": "github.com/weiloon1234/Foundry-Go/datatable.Request",
