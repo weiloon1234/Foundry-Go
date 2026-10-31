@@ -48,11 +48,11 @@ type UploadResultValidationFieldSet struct {
 // UploadResultValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func UploadResultValidationFields() UploadResultValidationFieldSet {
-	return foundryUploadResultValidationFields()
+	return *foundryUploadResultValidationFields()
 }
 
-var foundryUploadResultValidationFields = sync.OnceValue(func() UploadResultValidationFieldSet {
-	return UploadResultValidationFieldSet{
+var foundryUploadResultValidationFields = sync.OnceValue(func() *UploadResultValidationFieldSet {
+	return &UploadResultValidationFieldSet{
 		Bytes: foundryvalidation.DefineField("bytes", func(input UploadResult) int64 {
 			return input.Bytes
 		}),

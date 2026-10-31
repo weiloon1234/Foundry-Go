@@ -59,11 +59,11 @@ type ProfileInputValidationFieldSet struct {
 // ProfileInputValidationFields returns typed field descriptors.
 // Compose rules with these fields; multipart names and selectors are generated.
 func ProfileInputValidationFields() ProfileInputValidationFieldSet {
-	return foundryProfileInputValidationFields()
+	return *foundryProfileInputValidationFields()
 }
 
-var foundryProfileInputValidationFields = sync.OnceValue(func() ProfileInputValidationFieldSet {
-	return ProfileInputValidationFieldSet{
+var foundryProfileInputValidationFields = sync.OnceValue(func() *ProfileInputValidationFieldSet {
+	return &ProfileInputValidationFieldSet{
 		Attachment: foundryvalidation.DefineField("document", func(input ProfileInput) foundryhttp.UploadedFile {
 			return input.Attachment
 		}),

@@ -2,6 +2,6 @@
   "version": 1,
   "files": {
     "member_filters_foundry.gen.go": "95542c347b2d5c637b5e418a7527cb6e5af5143f1095c654389b659c3e1ad8ea",
-    "member_response_foundry.gen.go": "430c90f91485e3d799addd7717bb3d720f4fe6fefcfd93bed932d706c5e7345f"
+    "member_response_foundry.gen.go": "eeb0f1fd11dd532726d41f40c151e9bf447fc633d0b9cf421dd7f9ec0aab51bd"
   }
 }

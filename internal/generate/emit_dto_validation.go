@@ -78,8 +78,8 @@ func (e *emitter) emitTransportValidation(name string, root types.Type, position
 	e.line("// Compose rules with these fields; %s names and selectors are generated.", wireLabel)
 	if params == "" {
 		// Field descriptors are immutable values; build them once and return copies.
-		e.line("func %s()%s{return %s()}", fieldNames, setName, cached)
-		e.line("var %s=%s.OnceValue(func()%s{return %s{", cached, e.use("sync"), setName, setName)
+		e.line("func %s()%s{return *%s()}", fieldNames, setName, cached)
+		e.line("var %s=%s.OnceValue(func()*%s{return &%s{", cached, e.use("sync"), setName, setName)
 	} else {
 		e.line("func %s%s()%s%s{return %s%s{", fieldNames, params, setName, args, setName, args)
 	}

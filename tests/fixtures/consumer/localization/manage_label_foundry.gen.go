@@ -27,11 +27,11 @@ type ManageLabelValidationFieldSet struct {
 // ManageLabelValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func ManageLabelValidationFields() ManageLabelValidationFieldSet {
-	return foundryManageLabelValidationFields()
+	return *foundryManageLabelValidationFields()
 }
 
-var foundryManageLabelValidationFields = sync.OnceValue(func() ManageLabelValidationFieldSet {
-	return ManageLabelValidationFieldSet{}
+var foundryManageLabelValidationFields = sync.OnceValue(func() *ManageLabelValidationFieldSet {
+	return &ManageLabelValidationFieldSet{}
 })
 
 // ManageLabelMessage retains this declaration's exact argument type and shared JSON contract.

@@ -54,11 +54,11 @@ type RegistrationValidationFieldSet struct {
 // RegistrationValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func RegistrationValidationFields() RegistrationValidationFieldSet {
-	return foundryRegistrationValidationFields()
+	return *foundryRegistrationValidationFields()
 }
 
-var foundryRegistrationValidationFields = sync.OnceValue(func() RegistrationValidationFieldSet {
-	return RegistrationValidationFieldSet{
+var foundryRegistrationValidationFields = sync.OnceValue(func() *RegistrationValidationFieldSet {
+	return &RegistrationValidationFieldSet{
 		Company: foundryvalidation.DefineField("company", func(input Registration) foundryvalue.Optional[string] {
 			return input.Company
 		}),

@@ -39,11 +39,11 @@ type MFARecoveryResponseValidationFieldSet struct {
 // MFARecoveryResponseValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func MFARecoveryResponseValidationFields() MFARecoveryResponseValidationFieldSet {
-	return foundryMFARecoveryResponseValidationFields()
+	return *foundryMFARecoveryResponseValidationFields()
 }
 
-var foundryMFARecoveryResponseValidationFields = sync.OnceValue(func() MFARecoveryResponseValidationFieldSet {
-	return MFARecoveryResponseValidationFieldSet{
+var foundryMFARecoveryResponseValidationFields = sync.OnceValue(func() *MFARecoveryResponseValidationFieldSet {
+	return &MFARecoveryResponseValidationFieldSet{
 		RecoveryCodes: foundryvalidation.DefineField("recovery_codes", func(input MFARecoveryResponse) []string {
 			return input.RecoveryCodes
 		}),

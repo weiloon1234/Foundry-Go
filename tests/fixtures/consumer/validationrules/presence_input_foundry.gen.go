@@ -75,11 +75,11 @@ type PresenceInputValidationFieldSet struct {
 // PresenceInputValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func PresenceInputValidationFields() PresenceInputValidationFieldSet {
-	return foundryPresenceInputValidationFields()
+	return *foundryPresenceInputValidationFields()
 }
 
-var foundryPresenceInputValidationFields = sync.OnceValue(func() PresenceInputValidationFieldSet {
-	return PresenceInputValidationFieldSet{
+var foundryPresenceInputValidationFields = sync.OnceValue(func() *PresenceInputValidationFieldSet {
+	return &PresenceInputValidationFieldSet{
 		Active: foundryvalidation.DefineField("active", func(input PresenceInput) foundryvalue.Optional[bool] {
 			return input.Active
 		}),

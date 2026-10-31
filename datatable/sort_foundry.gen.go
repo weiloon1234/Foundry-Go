@@ -37,10 +37,10 @@ type SortValidationFieldSet struct {
 
 // SortValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func SortValidationFields() SortValidationFieldSet { return foundrySortValidationFields() }
+func SortValidationFields() SortValidationFieldSet { return *foundrySortValidationFields() }
 
-var foundrySortValidationFields = sync.OnceValue(func() SortValidationFieldSet {
-	return SortValidationFieldSet{
+var foundrySortValidationFields = sync.OnceValue(func() *SortValidationFieldSet {
+	return &SortValidationFieldSet{
 		Column: foundryvalidation.DefineField("column", func(input Sort) string {
 			return input.Column
 		}),

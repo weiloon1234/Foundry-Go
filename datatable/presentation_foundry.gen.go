@@ -39,11 +39,11 @@ type PresentationValidationFieldSet struct {
 // PresentationValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func PresentationValidationFields() PresentationValidationFieldSet {
-	return foundryPresentationValidationFields()
+	return *foundryPresentationValidationFields()
 }
 
-var foundryPresentationValidationFields = sync.OnceValue(func() PresentationValidationFieldSet {
-	return PresentationValidationFieldSet{
+var foundryPresentationValidationFields = sync.OnceValue(func() *PresentationValidationFieldSet {
+	return &PresentationValidationFieldSet{
 		Locale: foundryvalidation.DefineField("locale", func(input Presentation) i18n.LocaleID {
 			return input.Locale
 		}),

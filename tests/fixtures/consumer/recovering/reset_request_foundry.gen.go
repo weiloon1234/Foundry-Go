@@ -40,11 +40,11 @@ type ResetRequestValidationFieldSet struct {
 // ResetRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func ResetRequestValidationFields() ResetRequestValidationFieldSet {
-	return foundryResetRequestValidationFields()
+	return *foundryResetRequestValidationFields()
 }
 
-var foundryResetRequestValidationFields = sync.OnceValue(func() ResetRequestValidationFieldSet {
-	return ResetRequestValidationFieldSet{
+var foundryResetRequestValidationFields = sync.OnceValue(func() *ResetRequestValidationFieldSet {
+	return &ResetRequestValidationFieldSet{
 		Password: foundryvalidation.DefineField("password", func(input ResetRequest) password.Plaintext {
 			return input.Password
 		}),

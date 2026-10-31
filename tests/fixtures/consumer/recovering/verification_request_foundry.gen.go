@@ -37,11 +37,11 @@ type VerificationRequestValidationFieldSet struct {
 // VerificationRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func VerificationRequestValidationFields() VerificationRequestValidationFieldSet {
-	return foundryVerificationRequestValidationFields()
+	return *foundryVerificationRequestValidationFields()
 }
 
-var foundryVerificationRequestValidationFields = sync.OnceValue(func() VerificationRequestValidationFieldSet {
-	return VerificationRequestValidationFieldSet{
+var foundryVerificationRequestValidationFields = sync.OnceValue(func() *VerificationRequestValidationFieldSet {
+	return &VerificationRequestValidationFieldSet{
 		Token: foundryvalidation.DefineField("token", func(input VerificationRequest) challenge.Token[Member, challenge.EmailVerification] {
 			return input.Token
 		}),

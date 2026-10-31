@@ -46,11 +46,11 @@ type UserResponseValidationFieldSet struct {
 // UserResponseValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func UserResponseValidationFields() UserResponseValidationFieldSet {
-	return foundryUserResponseValidationFields()
+	return *foundryUserResponseValidationFields()
 }
 
-var foundryUserResponseValidationFields = sync.OnceValue(func() UserResponseValidationFieldSet {
-	return UserResponseValidationFieldSet{
+var foundryUserResponseValidationFields = sync.OnceValue(func() *UserResponseValidationFieldSet {
+	return &UserResponseValidationFieldSet{
 		Email: foundryvalidation.DefineField("email", func(input UserResponse) string {
 			return input.Email
 		}),

@@ -37,11 +37,11 @@ type RecipientRequestValidationFieldSet struct {
 // RecipientRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func RecipientRequestValidationFields() RecipientRequestValidationFieldSet {
-	return foundryRecipientRequestValidationFields()
+	return *foundryRecipientRequestValidationFields()
 }
 
-var foundryRecipientRequestValidationFields = sync.OnceValue(func() RecipientRequestValidationFieldSet {
-	return RecipientRequestValidationFieldSet{
+var foundryRecipientRequestValidationFields = sync.OnceValue(func() *RecipientRequestValidationFieldSet {
+	return &RecipientRequestValidationFieldSet{
 		Recipient: foundryvalidation.DefineField("recipient", func(input RecipientRequest) email.Address {
 			return input.Recipient
 		}),

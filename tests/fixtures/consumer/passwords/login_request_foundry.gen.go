@@ -39,11 +39,11 @@ type LoginRequestValidationFieldSet struct {
 // LoginRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func LoginRequestValidationFields() LoginRequestValidationFieldSet {
-	return foundryLoginRequestValidationFields()
+	return *foundryLoginRequestValidationFields()
 }
 
-var foundryLoginRequestValidationFields = sync.OnceValue(func() LoginRequestValidationFieldSet {
-	return LoginRequestValidationFieldSet{
+var foundryLoginRequestValidationFields = sync.OnceValue(func() *LoginRequestValidationFieldSet {
+	return &LoginRequestValidationFieldSet{
 		Email: foundryvalidation.DefineField("email", func(input LoginRequest) string {
 			return input.Email
 		}),

@@ -66,4 +66,4 @@ Unit tests check width/representation failures, nullable states, enum validation
 
 ## Binary ownership
 
-[Binary model fields](binary-models.md) use `Bytes[T ~[]byte]()` and explicit nullable wrappers. Binding, hydration, drafts, predicates and change snapshots copy their byte buffers. Non-nil empty slices remain present; the built-in codec rejects nil. `Clone` and `CloneOptional` apply ownership without binding or validation.
+[Binary model fields](binary-models.md) use `Bytes[T ~[]byte]()` and explicit nullable wrappers. Binding, hydration, drafts, predicates and change snapshots copy their byte buffers. Non-nil empty slices remain present; the built-in codec rejects nil. `Codec.Clone` and `codec.CloneOptional(c, v)` apply ownership without binding or validation.

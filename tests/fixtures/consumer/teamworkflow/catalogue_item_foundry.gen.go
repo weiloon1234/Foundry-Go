@@ -34,11 +34,11 @@ type CatalogueItemValidationFieldSet struct {
 // CatalogueItemValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func CatalogueItemValidationFields() CatalogueItemValidationFieldSet {
-	return foundryCatalogueItemValidationFields()
+	return *foundryCatalogueItemValidationFields()
 }
 
-var foundryCatalogueItemValidationFields = sync.OnceValue(func() CatalogueItemValidationFieldSet {
-	return CatalogueItemValidationFieldSet{
+var foundryCatalogueItemValidationFields = sync.OnceValue(func() *CatalogueItemValidationFieldSet {
+	return &CatalogueItemValidationFieldSet{
 		Slug: foundryvalidation.DefineField("slug", func(input CatalogueItem) Slug {
 			return input.Slug
 		}),

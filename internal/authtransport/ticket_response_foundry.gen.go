@@ -41,11 +41,11 @@ type TicketResponseValidationFieldSet struct {
 // TicketResponseValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func TicketResponseValidationFields() TicketResponseValidationFieldSet {
-	return foundryTicketResponseValidationFields()
+	return *foundryTicketResponseValidationFields()
 }
 
-var foundryTicketResponseValidationFields = sync.OnceValue(func() TicketResponseValidationFieldSet {
-	return TicketResponseValidationFieldSet{
+var foundryTicketResponseValidationFields = sync.OnceValue(func() *TicketResponseValidationFieldSet {
+	return &TicketResponseValidationFieldSet{
 		ExpiresIn: foundryvalidation.DefineField("expires_in", func(input TicketResponse) int64 {
 			return input.ExpiresIn
 		}),

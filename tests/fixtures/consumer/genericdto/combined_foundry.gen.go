@@ -78,10 +78,10 @@ type CombinedValidationFieldSet struct {
 
 // CombinedValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func CombinedValidationFields() CombinedValidationFieldSet { return foundryCombinedValidationFields() }
+func CombinedValidationFields() CombinedValidationFieldSet { return *foundryCombinedValidationFields() }
 
-var foundryCombinedValidationFields = sync.OnceValue(func() CombinedValidationFieldSet {
-	return CombinedValidationFieldSet{
+var foundryCombinedValidationFields = sync.OnceValue(func() *CombinedValidationFieldSet {
+	return &CombinedValidationFieldSet{
 		Project: foundryvalidation.DefineField("project", func(input Combined) Envelope[ProjectDTO] {
 			return input.Project
 		}),

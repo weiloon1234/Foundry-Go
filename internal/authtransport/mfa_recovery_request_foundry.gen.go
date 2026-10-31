@@ -41,11 +41,11 @@ type MFARecoveryRequestValidationFieldSet struct {
 // MFARecoveryRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func MFARecoveryRequestValidationFields() MFARecoveryRequestValidationFieldSet {
-	return foundryMFARecoveryRequestValidationFields()
+	return *foundryMFARecoveryRequestValidationFields()
 }
 
-var foundryMFARecoveryRequestValidationFields = sync.OnceValue(func() MFARecoveryRequestValidationFieldSet {
-	return MFARecoveryRequestValidationFieldSet{
+var foundryMFARecoveryRequestValidationFields = sync.OnceValue(func() *MFARecoveryRequestValidationFieldSet {
+	return &MFARecoveryRequestValidationFieldSet{
 		Challenge: foundryvalidation.DefineField("challenge", func(input MFARecoveryRequest) MFAChallengeCredential {
 			return input.Challenge
 		}),

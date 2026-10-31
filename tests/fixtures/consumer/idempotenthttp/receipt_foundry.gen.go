@@ -56,10 +56,10 @@ type ReceiptValidationFieldSet struct {
 
 // ReceiptValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func ReceiptValidationFields() ReceiptValidationFieldSet { return foundryReceiptValidationFields() }
+func ReceiptValidationFields() ReceiptValidationFieldSet { return *foundryReceiptValidationFields() }
 
-var foundryReceiptValidationFields = sync.OnceValue(func() ReceiptValidationFieldSet {
-	return ReceiptValidationFieldSet{
+var foundryReceiptValidationFields = sync.OnceValue(func() *ReceiptValidationFieldSet {
+	return &ReceiptValidationFieldSet{
 		ID: foundryvalidation.DefineField("id", func(input Receipt) model.ID[Order] {
 			return input.ID
 		}),

@@ -67,11 +67,11 @@ type ArticleInputValidationFieldSet struct {
 // ArticleInputValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func ArticleInputValidationFields() ArticleInputValidationFieldSet {
-	return foundryArticleInputValidationFields()
+	return *foundryArticleInputValidationFields()
 }
 
-var foundryArticleInputValidationFields = sync.OnceValue(func() ArticleInputValidationFieldSet {
-	return ArticleInputValidationFieldSet{
+var foundryArticleInputValidationFields = sync.OnceValue(func() *ArticleInputValidationFieldSet {
+	return &ArticleInputValidationFieldSet{
 		Author: foundryvalidation.DefineField("author", func(input ArticleInput) string {
 			return input.Author
 		}),

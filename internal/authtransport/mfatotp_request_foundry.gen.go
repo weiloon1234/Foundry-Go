@@ -39,11 +39,11 @@ type MFATOTPRequestValidationFieldSet struct {
 // MFATOTPRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func MFATOTPRequestValidationFields() MFATOTPRequestValidationFieldSet {
-	return foundryMFATOTPRequestValidationFields()
+	return *foundryMFATOTPRequestValidationFields()
 }
 
-var foundryMFATOTPRequestValidationFields = sync.OnceValue(func() MFATOTPRequestValidationFieldSet {
-	return MFATOTPRequestValidationFieldSet{
+var foundryMFATOTPRequestValidationFields = sync.OnceValue(func() *MFATOTPRequestValidationFieldSet {
+	return &MFATOTPRequestValidationFieldSet{
 		Challenge: foundryvalidation.DefineField("challenge", func(input MFATOTPRequest) MFAChallengeCredential {
 			return input.Challenge
 		}),

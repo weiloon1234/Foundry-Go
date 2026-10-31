@@ -1,9 +1,9 @@
 {
   "version": 1,
   "files": {
-    "json_submission_foundry.gen.go": "2eaf62ecbfa46f4c94dd780bd97f8a3997fc436f8532068a956d74b5309ef2be",
-    "multipart_submission_foundry.gen.go": "4598dcab7185fdb445726170007f991ce118b863cbfbc500b4a460de7809c40a",
-    "reply_foundry.gen.go": "bcf7f5f1029cd984af6b38f306a862744ea37cc4eee478b54972bcd6d1777b78",
-    "submission_foundry.gen.go": "de3468e4d1ef0da8d9d636c07618027edaf9e68c2593358612422ce0fccb43b3"
+    "json_submission_foundry.gen.go": "89d0f27c16ec9770153076b235a1c9cd345a7031d1a7a8270a1fe011b3bf407c",
+    "multipart_submission_foundry.gen.go": "8c3d3c91f68909422b5012a20f39150004e867a47c2a91da42e39db1dfd3a39d",
+    "reply_foundry.gen.go": "3855eeefbfecdd33104f791e542eace8c5cd16d9b5da69ff54604dc6c14caedf",
+    "submission_foundry.gen.go": "21cc813ee43f8e9c840776c1272534951592f048ed472e4a16cf6c20a8763277"
   }
 }

@@ -34,11 +34,11 @@ type RuleReplyValidationFieldSet struct {
 // RuleReplyValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func RuleReplyValidationFields() RuleReplyValidationFieldSet {
-	return foundryRuleReplyValidationFields()
+	return *foundryRuleReplyValidationFields()
 }
 
-var foundryRuleReplyValidationFields = sync.OnceValue(func() RuleReplyValidationFieldSet {
-	return RuleReplyValidationFieldSet{
+var foundryRuleReplyValidationFields = sync.OnceValue(func() *RuleReplyValidationFieldSet {
+	return &RuleReplyValidationFieldSet{
 		Name: foundryvalidation.DefineField("name", func(input RuleReply) string {
 			return input.Name
 		}),

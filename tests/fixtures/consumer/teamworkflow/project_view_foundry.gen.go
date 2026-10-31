@@ -56,11 +56,11 @@ type ProjectViewValidationFieldSet struct {
 // ProjectViewValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func ProjectViewValidationFields() ProjectViewValidationFieldSet {
-	return foundryProjectViewValidationFields()
+	return *foundryProjectViewValidationFields()
 }
 
-var foundryProjectViewValidationFields = sync.OnceValue(func() ProjectViewValidationFieldSet {
-	return ProjectViewValidationFieldSet{
+var foundryProjectViewValidationFields = sync.OnceValue(func() *ProjectViewValidationFieldSet {
+	return &ProjectViewValidationFieldSet{
 		Budget: foundryvalidation.DefineField("budget", func(input ProjectView) int64 {
 			return input.Budget
 		}),

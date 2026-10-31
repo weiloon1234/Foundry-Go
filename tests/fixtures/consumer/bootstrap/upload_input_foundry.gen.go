@@ -31,11 +31,11 @@ type UploadInputValidationFieldSet struct {
 // UploadInputValidationFields returns typed field descriptors.
 // Compose rules with these fields; multipart names and selectors are generated.
 func UploadInputValidationFields() UploadInputValidationFieldSet {
-	return foundryUploadInputValidationFields()
+	return *foundryUploadInputValidationFields()
 }
 
-var foundryUploadInputValidationFields = sync.OnceValue(func() UploadInputValidationFieldSet {
-	return UploadInputValidationFieldSet{
+var foundryUploadInputValidationFields = sync.OnceValue(func() *UploadInputValidationFieldSet {
+	return &UploadInputValidationFieldSet{
 		Image: foundryvalidation.DefineField("image", func(input UploadInput) foundryhttp.UploadedFile {
 			return input.Image
 		}),

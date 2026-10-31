@@ -46,10 +46,10 @@ type CardDTOValidationFieldSet struct {
 
 // CardDTOValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func CardDTOValidationFields() CardDTOValidationFieldSet { return foundryCardDTOValidationFields() }
+func CardDTOValidationFields() CardDTOValidationFieldSet { return *foundryCardDTOValidationFields() }
 
-var foundryCardDTOValidationFields = sync.OnceValue(func() CardDTOValidationFieldSet {
-	return CardDTOValidationFieldSet{
+var foundryCardDTOValidationFields = sync.OnceValue(func() *CardDTOValidationFieldSet {
+	return &CardDTOValidationFieldSet{
 		Labels: foundryvalidation.DefineField("labels", func(input CardDTO) []string {
 			return input.Labels
 		}),

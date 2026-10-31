@@ -35,11 +35,11 @@ type TOTPRequestValidationFieldSet struct {
 // TOTPRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func TOTPRequestValidationFields() TOTPRequestValidationFieldSet {
-	return foundryTOTPRequestValidationFields()
+	return *foundryTOTPRequestValidationFields()
 }
 
-var foundryTOTPRequestValidationFields = sync.OnceValue(func() TOTPRequestValidationFieldSet {
-	return TOTPRequestValidationFieldSet{
+var foundryTOTPRequestValidationFields = sync.OnceValue(func() *TOTPRequestValidationFieldSet {
+	return &TOTPRequestValidationFieldSet{
 		Code: foundryvalidation.DefineField("code", func(input TOTPRequest) mfa.TOTPCode {
 			return input.Code
 		}),

@@ -155,10 +155,10 @@ type PayloadValidationFieldSet struct {
 
 // PayloadValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func PayloadValidationFields() PayloadValidationFieldSet { return foundryPayloadValidationFields() }
+func PayloadValidationFields() PayloadValidationFieldSet { return *foundryPayloadValidationFields() }
 
-var foundryPayloadValidationFields = sync.OnceValue(func() PayloadValidationFieldSet {
-	return PayloadValidationFieldSet{
+var foundryPayloadValidationFields = sync.OnceValue(func() *PayloadValidationFieldSet {
+	return &PayloadValidationFieldSet{
 		Amount: foundryvalidation.WithLabelKey(foundryvalidation.DefineField("amount", func(input Payload) decimal.Decimal {
 			return input.Amount
 		}), "fields.amount"),

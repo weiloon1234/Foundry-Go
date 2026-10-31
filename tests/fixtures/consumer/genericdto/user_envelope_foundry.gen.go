@@ -58,11 +58,11 @@ type UserEnvelopeValidationFieldSet struct {
 // UserEnvelopeValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func UserEnvelopeValidationFields() UserEnvelopeValidationFieldSet {
-	return foundryUserEnvelopeValidationFields()
+	return *foundryUserEnvelopeValidationFields()
 }
 
-var foundryUserEnvelopeValidationFields = sync.OnceValue(func() UserEnvelopeValidationFieldSet {
-	return UserEnvelopeValidationFieldSet{
+var foundryUserEnvelopeValidationFields = sync.OnceValue(func() *UserEnvelopeValidationFieldSet {
+	return &UserEnvelopeValidationFieldSet{
 		Data: foundryvalidation.DefineField("data", func(input UserEnvelope) UserDTO {
 			return input.Data
 		}),

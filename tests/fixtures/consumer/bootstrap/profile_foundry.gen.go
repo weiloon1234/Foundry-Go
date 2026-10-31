@@ -36,10 +36,10 @@ type ProfileValidationFieldSet struct {
 
 // ProfileValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func ProfileValidationFields() ProfileValidationFieldSet { return foundryProfileValidationFields() }
+func ProfileValidationFields() ProfileValidationFieldSet { return *foundryProfileValidationFields() }
 
-var foundryProfileValidationFields = sync.OnceValue(func() ProfileValidationFieldSet {
-	return ProfileValidationFieldSet{
+var foundryProfileValidationFields = sync.OnceValue(func() *ProfileValidationFieldSet {
+	return &ProfileValidationFieldSet{
 		Kind: foundryvalidation.DefineField("kind", func(input Profile) string {
 			return input.Kind
 		}),

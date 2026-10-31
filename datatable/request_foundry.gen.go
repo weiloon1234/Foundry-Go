@@ -73,10 +73,10 @@ type RequestValidationFieldSet struct {
 
 // RequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func RequestValidationFields() RequestValidationFieldSet { return foundryRequestValidationFields() }
+func RequestValidationFields() RequestValidationFieldSet { return *foundryRequestValidationFields() }
 
-var foundryRequestValidationFields = sync.OnceValue(func() RequestValidationFieldSet {
-	return RequestValidationFieldSet{
+var foundryRequestValidationFields = sync.OnceValue(func() *RequestValidationFieldSet {
+	return &RequestValidationFieldSet{
 		Filters: foundryvalidation.DefineField("filters", func(input Request) []Filter {
 			return input.Filters
 		}),

@@ -30,11 +30,11 @@ type FormInputValidationFieldSet struct {
 // FormInputValidationFields returns typed field descriptors.
 // Compose rules with these fields; form names and selectors are generated.
 func FormInputValidationFields() FormInputValidationFieldSet {
-	return foundryFormInputValidationFields()
+	return *foundryFormInputValidationFields()
 }
 
-var foundryFormInputValidationFields = sync.OnceValue(func() FormInputValidationFieldSet {
-	return FormInputValidationFieldSet{
+var foundryFormInputValidationFields = sync.OnceValue(func() *FormInputValidationFieldSet {
+	return &FormInputValidationFieldSet{
 		Name: foundryvalidation.DefineField("name", func(input FormInput) string {
 			return input.Name
 		}),

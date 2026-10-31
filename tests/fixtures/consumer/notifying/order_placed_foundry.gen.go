@@ -42,11 +42,11 @@ type OrderPlacedValidationFieldSet struct {
 // OrderPlacedValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func OrderPlacedValidationFields() OrderPlacedValidationFieldSet {
-	return foundryOrderPlacedValidationFields()
+	return *foundryOrderPlacedValidationFields()
 }
 
-var foundryOrderPlacedValidationFields = sync.OnceValue(func() OrderPlacedValidationFieldSet {
-	return OrderPlacedValidationFieldSet{
+var foundryOrderPlacedValidationFields = sync.OnceValue(func() *OrderPlacedValidationFieldSet {
+	return &OrderPlacedValidationFieldSet{
 		OrderID: foundryvalidation.DefineField("order_id", func(input OrderPlaced) model.ID[models.Order] {
 			return input.OrderID
 		}),

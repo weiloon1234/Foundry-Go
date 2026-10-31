@@ -41,10 +41,10 @@ type CartArgsValidationFieldSet struct {
 
 // CartArgsValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func CartArgsValidationFields() CartArgsValidationFieldSet { return foundryCartArgsValidationFields() }
+func CartArgsValidationFields() CartArgsValidationFieldSet { return *foundryCartArgsValidationFields() }
 
-var foundryCartArgsValidationFields = sync.OnceValue(func() CartArgsValidationFieldSet {
-	return CartArgsValidationFieldSet{
+var foundryCartArgsValidationFields = sync.OnceValue(func() *CartArgsValidationFieldSet {
+	return &CartArgsValidationFieldSet{
 		Count: foundryvalidation.DefineField("count", func(input CartArgs) decimal.Decimal {
 			return input.Count
 		}),

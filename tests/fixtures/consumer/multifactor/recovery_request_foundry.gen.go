@@ -35,11 +35,11 @@ type RecoveryRequestValidationFieldSet struct {
 // RecoveryRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func RecoveryRequestValidationFields() RecoveryRequestValidationFieldSet {
-	return foundryRecoveryRequestValidationFields()
+	return *foundryRecoveryRequestValidationFields()
 }
 
-var foundryRecoveryRequestValidationFields = sync.OnceValue(func() RecoveryRequestValidationFieldSet {
-	return RecoveryRequestValidationFieldSet{
+var foundryRecoveryRequestValidationFields = sync.OnceValue(func() *RecoveryRequestValidationFieldSet {
+	return &RecoveryRequestValidationFieldSet{
 		Code: foundryvalidation.DefineField("code", func(input RecoveryRequest) mfa.RecoveryCode {
 			return input.Code
 		}),

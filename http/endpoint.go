@@ -226,8 +226,16 @@ func endpointRegister[P, Q, B, R any](e Endpoint[P, Q, B, R], stage preparedStag
 		files:               e.limits.Files,
 		browserResponse:     e.idempotency == nil && (e.response.kind == payloadJSON || e.response.kind == payloadEmpty || e.response.kind == payloadRedirect),
 	}
+	request := requestEndpoint[P, Q, B]{
+		endpointCore:  e.endpointCore,
+		query:         e.query,
+		body:          e.body,
+		validation:    e.validation,
+		preparation:   e.preparation,
+		authorization: e.authorization,
+	}
 	registration := routeHandle(e.route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, path P) {
-		endpointServe(e, w, r, path, stage, handler, transport)
+		endpointServe(request, w, r, path, stage, handler, transport)
 	}, false)
 	registration.contract = endpointContributionContract(e)
 	info := registration.info.clone()
@@ -239,7 +247,16 @@ func endpointRegister[P, Q, B, R any](e Endpoint[P, Q, B, R], stage preparedStag
 	return registration
 }
 
-func endpointServe[P, Q, B, R any](e Endpoint[P, Q, B, R], w stdhttp.ResponseWriter, r *stdhttp.Request, path P, stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error), transport endpointTransport) {
+type requestEndpoint[P, Q, B any] struct {
+	endpointCore
+	query         Query[Q]
+	body          Body[B]
+	validation    *validation.Rule[Input[P, Q, B]]
+	preparation   *Preparation[P, Q, B]
+	authorization *RequestAuthorization[P, Q, B]
+}
+
+func endpointServe[P, Q, B any](e requestEndpoint[P, Q, B], w stdhttp.ResponseWriter, r *stdhttp.Request, path P, stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error), transport endpointTransport) {
 	var ready bool
 	w, r, ready = transport.preflight(w, r)
 	if !ready {

@@ -50,10 +50,10 @@ type PatchValidationFieldSet struct {
 
 // PatchValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func PatchValidationFields() PatchValidationFieldSet { return foundryPatchValidationFields() }
+func PatchValidationFields() PatchValidationFieldSet { return *foundryPatchValidationFields() }
 
-var foundryPatchValidationFields = sync.OnceValue(func() PatchValidationFieldSet {
-	return PatchValidationFieldSet{
+var foundryPatchValidationFields = sync.OnceValue(func() *PatchValidationFieldSet {
+	return &PatchValidationFieldSet{
 		Budget: foundryvalidation.DefineField("budget", func(input Patch) foundryvalue.Optional[int64] {
 			return input.Budget
 		}),

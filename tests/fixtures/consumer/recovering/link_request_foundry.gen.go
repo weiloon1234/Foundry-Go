@@ -34,11 +34,11 @@ type LinkRequestValidationFieldSet struct {
 // LinkRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func LinkRequestValidationFields() LinkRequestValidationFieldSet {
-	return foundryLinkRequestValidationFields()
+	return *foundryLinkRequestValidationFields()
 }
 
-var foundryLinkRequestValidationFields = sync.OnceValue(func() LinkRequestValidationFieldSet {
-	return LinkRequestValidationFieldSet{
+var foundryLinkRequestValidationFields = sync.OnceValue(func() *LinkRequestValidationFieldSet {
+	return &LinkRequestValidationFieldSet{
 		Email: foundryvalidation.DefineField("email", func(input LinkRequest) string {
 			return input.Email
 		}),

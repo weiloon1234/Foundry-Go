@@ -34,11 +34,11 @@ type CreateAccountValidationFieldSet struct {
 // CreateAccountValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func CreateAccountValidationFields() CreateAccountValidationFieldSet {
-	return foundryCreateAccountValidationFields()
+	return *foundryCreateAccountValidationFields()
 }
 
-var foundryCreateAccountValidationFields = sync.OnceValue(func() CreateAccountValidationFieldSet {
-	return CreateAccountValidationFieldSet{
+var foundryCreateAccountValidationFields = sync.OnceValue(func() *CreateAccountValidationFieldSet {
+	return &CreateAccountValidationFieldSet{
 		Name: foundryvalidation.DefineField("name", func(input CreateAccount) string {
 			return input.Name
 		}),

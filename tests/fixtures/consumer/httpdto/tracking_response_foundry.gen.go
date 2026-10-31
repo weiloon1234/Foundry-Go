@@ -53,11 +53,11 @@ type TrackingResponseValidationFieldSet struct {
 // TrackingResponseValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func TrackingResponseValidationFields() TrackingResponseValidationFieldSet {
-	return foundryTrackingResponseValidationFields()
+	return *foundryTrackingResponseValidationFields()
 }
 
-var foundryTrackingResponseValidationFields = sync.OnceValue(func() TrackingResponseValidationFieldSet {
-	return TrackingResponseValidationFieldSet{
+var foundryTrackingResponseValidationFields = sync.OnceValue(func() *TrackingResponseValidationFieldSet {
+	return &TrackingResponseValidationFieldSet{
 		Code: foundryvalidation.DefineField("code", func(input TrackingResponse) httpquery.TrackingCode {
 			return input.Code
 		}),

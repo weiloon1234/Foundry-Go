@@ -41,11 +41,11 @@ type PositionArgsValidationFieldSet struct {
 // PositionArgsValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func PositionArgsValidationFields() PositionArgsValidationFieldSet {
-	return foundryPositionArgsValidationFields()
+	return *foundryPositionArgsValidationFields()
 }
 
-var foundryPositionArgsValidationFields = sync.OnceValue(func() PositionArgsValidationFieldSet {
-	return PositionArgsValidationFieldSet{
+var foundryPositionArgsValidationFields = sync.OnceValue(func() *PositionArgsValidationFieldSet {
+	return &PositionArgsValidationFieldSet{
 		Position: foundryvalidation.DefineField("position", func(input PositionArgs) int64 {
 			return input.Position
 		}),

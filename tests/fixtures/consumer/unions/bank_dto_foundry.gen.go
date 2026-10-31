@@ -33,10 +33,10 @@ type BankDTOValidationFieldSet struct {
 
 // BankDTOValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func BankDTOValidationFields() BankDTOValidationFieldSet { return foundryBankDTOValidationFields() }
+func BankDTOValidationFields() BankDTOValidationFieldSet { return *foundryBankDTOValidationFields() }
 
-var foundryBankDTOValidationFields = sync.OnceValue(func() BankDTOValidationFieldSet {
-	return BankDTOValidationFieldSet{
+var foundryBankDTOValidationFields = sync.OnceValue(func() *BankDTOValidationFieldSet {
+	return &BankDTOValidationFieldSet{
 		Reference: foundryvalidation.DefineField("reference", func(input BankDTO) string {
 			return input.Reference
 		}),

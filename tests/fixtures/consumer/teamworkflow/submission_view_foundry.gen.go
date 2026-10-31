@@ -47,11 +47,11 @@ type SubmissionViewValidationFieldSet struct {
 // SubmissionViewValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func SubmissionViewValidationFields() SubmissionViewValidationFieldSet {
-	return foundrySubmissionViewValidationFields()
+	return *foundrySubmissionViewValidationFields()
 }
 
-var foundrySubmissionViewValidationFields = sync.OnceValue(func() SubmissionViewValidationFieldSet {
-	return SubmissionViewValidationFieldSet{
+var foundrySubmissionViewValidationFields = sync.OnceValue(func() *SubmissionViewValidationFieldSet {
+	return &SubmissionViewValidationFieldSet{
 		ID: foundryvalidation.DefineField("id", func(input SubmissionView) model.ID[Submission] {
 			return input.ID
 		}),

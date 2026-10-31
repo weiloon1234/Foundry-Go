@@ -49,10 +49,10 @@ type FilterValidationFieldSet struct {
 
 // FilterValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func FilterValidationFields() FilterValidationFieldSet { return foundryFilterValidationFields() }
+func FilterValidationFields() FilterValidationFieldSet { return *foundryFilterValidationFields() }
 
-var foundryFilterValidationFields = sync.OnceValue(func() FilterValidationFieldSet {
-	return FilterValidationFieldSet{
+var foundryFilterValidationFields = sync.OnceValue(func() *FilterValidationFieldSet {
+	return &FilterValidationFieldSet{
 		Children: foundryvalidation.DefineField("children", func(input Filter) []Filter {
 			return input.Children
 		}),

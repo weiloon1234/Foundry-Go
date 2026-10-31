@@ -57,10 +57,10 @@ type UserDTOValidationFieldSet struct {
 
 // UserDTOValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func UserDTOValidationFields() UserDTOValidationFieldSet { return foundryUserDTOValidationFields() }
+func UserDTOValidationFields() UserDTOValidationFieldSet { return *foundryUserDTOValidationFields() }
 
-var foundryUserDTOValidationFields = sync.OnceValue(func() UserDTOValidationFieldSet {
-	return UserDTOValidationFieldSet{
+var foundryUserDTOValidationFields = sync.OnceValue(func() *UserDTOValidationFieldSet {
+	return &UserDTOValidationFieldSet{
 		ID: foundryvalidation.DefineField("id", func(input UserDTO) model.ID[User] {
 			return input.ID
 		}),

@@ -52,11 +52,11 @@ type OwnerIndexValidationFieldSet struct {
 // OwnerIndexValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func OwnerIndexValidationFields() OwnerIndexValidationFieldSet {
-	return foundryOwnerIndexValidationFields()
+	return *foundryOwnerIndexValidationFields()
 }
 
-var foundryOwnerIndexValidationFields = sync.OnceValue(func() OwnerIndexValidationFieldSet {
-	return OwnerIndexValidationFieldSet{
+var foundryOwnerIndexValidationFields = sync.OnceValue(func() *OwnerIndexValidationFieldSet {
+	return &OwnerIndexValidationFieldSet{
 		Owners: foundryvalidation.DefineField("owners", func(input OwnerIndex) map[model.ID[models.User]]string {
 			return input.Owners
 		}),

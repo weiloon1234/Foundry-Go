@@ -57,11 +57,11 @@ type ExportOptionsValidationFieldSet struct {
 // ExportOptionsValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func ExportOptionsValidationFields() ExportOptionsValidationFieldSet {
-	return foundryExportOptionsValidationFields()
+	return *foundryExportOptionsValidationFields()
 }
 
-var foundryExportOptionsValidationFields = sync.OnceValue(func() ExportOptionsValidationFieldSet {
-	return ExportOptionsValidationFieldSet{
+var foundryExportOptionsValidationFields = sync.OnceValue(func() *ExportOptionsValidationFieldSet {
+	return &ExportOptionsValidationFieldSet{
 		ByteOrderMark: foundryvalidation.DefineField("byte_order_mark", func(input ExportOptions) bool {
 			return input.ByteOrderMark
 		}),

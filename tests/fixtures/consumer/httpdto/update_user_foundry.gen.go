@@ -55,11 +55,11 @@ type UpdateUserValidationFieldSet struct {
 // UpdateUserValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func UpdateUserValidationFields() UpdateUserValidationFieldSet {
-	return foundryUpdateUserValidationFields()
+	return *foundryUpdateUserValidationFields()
 }
 
-var foundryUpdateUserValidationFields = sync.OnceValue(func() UpdateUserValidationFieldSet {
-	return UpdateUserValidationFieldSet{
+var foundryUpdateUserValidationFields = sync.OnceValue(func() *UpdateUserValidationFieldSet {
+	return &UpdateUserValidationFieldSet{
 		Email: foundryvalidation.DefineField("email", func(input UpdateUser) foundryvalue.Optional[string] {
 			return input.Email
 		}),

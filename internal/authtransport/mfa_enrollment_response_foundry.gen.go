@@ -54,11 +54,11 @@ type MFAEnrollmentResponseValidationFieldSet struct {
 // MFAEnrollmentResponseValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func MFAEnrollmentResponseValidationFields() MFAEnrollmentResponseValidationFieldSet {
-	return foundryMFAEnrollmentResponseValidationFields()
+	return *foundryMFAEnrollmentResponseValidationFields()
 }
 
-var foundryMFAEnrollmentResponseValidationFields = sync.OnceValue(func() MFAEnrollmentResponseValidationFieldSet {
-	return MFAEnrollmentResponseValidationFieldSet{
+var foundryMFAEnrollmentResponseValidationFields = sync.OnceValue(func() *MFAEnrollmentResponseValidationFieldSet {
+	return &MFAEnrollmentResponseValidationFieldSet{
 		EnrollmentID: foundryvalidation.DefineField("enrollment_id", func(input MFAEnrollmentResponse) model.ID[mfa.Record] {
 			return input.EnrollmentID
 		}),

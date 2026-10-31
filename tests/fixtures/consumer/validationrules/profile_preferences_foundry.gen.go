@@ -43,11 +43,11 @@ type ProfilePreferencesValidationFieldSet struct {
 // ProfilePreferencesValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func ProfilePreferencesValidationFields() ProfilePreferencesValidationFieldSet {
-	return foundryProfilePreferencesValidationFields()
+	return *foundryProfilePreferencesValidationFields()
 }
 
-var foundryProfilePreferencesValidationFields = sync.OnceValue(func() ProfilePreferencesValidationFieldSet {
-	return ProfilePreferencesValidationFieldSet{
+var foundryProfilePreferencesValidationFields = sync.OnceValue(func() *ProfilePreferencesValidationFieldSet {
+	return &ProfilePreferencesValidationFieldSet{
 		Alias: foundryvalidation.DefineField("alias", func(input ProfilePreferences) string {
 			return input.Alias
 		}),

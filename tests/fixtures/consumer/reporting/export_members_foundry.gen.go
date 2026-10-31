@@ -99,11 +99,11 @@ type ExportMembersValidationFieldSet struct {
 // ExportMembersValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func ExportMembersValidationFields() ExportMembersValidationFieldSet {
-	return foundryExportMembersValidationFields()
+	return *foundryExportMembersValidationFields()
 }
 
-var foundryExportMembersValidationFields = sync.OnceValue(func() ExportMembersValidationFieldSet {
-	return ExportMembersValidationFieldSet{
+var foundryExportMembersValidationFields = sync.OnceValue(func() *ExportMembersValidationFieldSet {
+	return &ExportMembersValidationFieldSet{
 		OperatorID: foundryvalidation.DefineField("operator_id", func(input ExportMembers) model.ID[Operator] {
 			return input.OperatorID
 		}),

@@ -1,10 +1,10 @@
 {
   "version": 1,
   "files": {
-    "availability_window_foundry.gen.go": "914938de6e4618adfab344cad24377aab29da52b4a4fed29f3d9791265035328",
+    "availability_window_foundry.gen.go": "62c7a0413ed3d74b784eba929909d8cd662ea9c2865ff1f2c0edd4fc799b77ac",
     "organization_kind_foundry.gen.go": "349a432a6f0dbd5e0296a0d8d4a3a95bd62a0d93f11ca849d2d5ed7dec9d41b5",
-    "presence_input_foundry.gen.go": "feb0f997f4c2bf1b80223996b831b2740475dff7469c07ef01c283b517e36eaa",
-    "profile_preferences_foundry.gen.go": "00919e146db0d0f494509a5de25d6d524beef7bbee23d6c3615fdc6374200675",
-    "registration_foundry.gen.go": "6bab9202ad4f450f385f65d9be31ab9f73e05cd8a8b5e4126374d42616ecd1d8"
+    "presence_input_foundry.gen.go": "283a4fbb07021bb42fe34b844ef61fd8543e463c7140b7de29b6b06d7071225a",
+    "profile_preferences_foundry.gen.go": "f0904278f83f807fe0a04729cb4a71907206efb8972654f914de875ea4b15629",
+    "registration_foundry.gen.go": "53bf2c94893ebd6693875a30692d41444e5284d466b5a10948a3a224baeaea4c"
   }
 }

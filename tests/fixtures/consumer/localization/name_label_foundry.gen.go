@@ -27,11 +27,11 @@ type NameLabelValidationFieldSet struct {
 // NameLabelValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func NameLabelValidationFields() NameLabelValidationFieldSet {
-	return foundryNameLabelValidationFields()
+	return *foundryNameLabelValidationFields()
 }
 
-var foundryNameLabelValidationFields = sync.OnceValue(func() NameLabelValidationFieldSet {
-	return NameLabelValidationFieldSet{}
+var foundryNameLabelValidationFields = sync.OnceValue(func() *NameLabelValidationFieldSet {
+	return &NameLabelValidationFieldSet{}
 })
 
 // NameLabelMessage retains this declaration's exact argument type and shared JSON contract.

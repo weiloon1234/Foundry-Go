@@ -49,11 +49,11 @@ type RegenerationRequestValidationFieldSet struct {
 // RegenerationRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func RegenerationRequestValidationFields() RegenerationRequestValidationFieldSet {
-	return foundryRegenerationRequestValidationFields()
+	return *foundryRegenerationRequestValidationFields()
 }
 
-var foundryRegenerationRequestValidationFields = sync.OnceValue(func() RegenerationRequestValidationFieldSet {
-	return RegenerationRequestValidationFieldSet{
+var foundryRegenerationRequestValidationFields = sync.OnceValue(func() *RegenerationRequestValidationFieldSet {
+	return &RegenerationRequestValidationFieldSet{
 		Code: foundryvalidation.DefineField("code", func(input RegenerationRequest) mfa.TOTPCode {
 			return input.Code
 		}),

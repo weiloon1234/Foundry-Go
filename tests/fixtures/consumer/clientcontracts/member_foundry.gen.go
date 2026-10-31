@@ -33,10 +33,10 @@ type MemberValidationFieldSet struct {
 
 // MemberValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func MemberValidationFields() MemberValidationFieldSet { return foundryMemberValidationFields() }
+func MemberValidationFields() MemberValidationFieldSet { return *foundryMemberValidationFields() }
 
-var foundryMemberValidationFields = sync.OnceValue(func() MemberValidationFieldSet {
-	return MemberValidationFieldSet{
+var foundryMemberValidationFields = sync.OnceValue(func() *MemberValidationFieldSet {
+	return &MemberValidationFieldSet{
 		Display: foundryvalidation.DefineField("display", func(input Member) string {
 			return input.Display
 		}),

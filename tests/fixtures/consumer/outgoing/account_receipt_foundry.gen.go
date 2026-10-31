@@ -44,11 +44,11 @@ type AccountReceiptValidationFieldSet struct {
 // AccountReceiptValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func AccountReceiptValidationFields() AccountReceiptValidationFieldSet {
-	return foundryAccountReceiptValidationFields()
+	return *foundryAccountReceiptValidationFields()
 }
 
-var foundryAccountReceiptValidationFields = sync.OnceValue(func() AccountReceiptValidationFieldSet {
-	return AccountReceiptValidationFieldSet{
+var foundryAccountReceiptValidationFields = sync.OnceValue(func() *AccountReceiptValidationFieldSet {
+	return &AccountReceiptValidationFieldSet{
 		ID: foundryvalidation.DefineField("id", func(input AccountReceipt) int64 {
 			return input.ID
 		}),

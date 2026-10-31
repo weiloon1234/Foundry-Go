@@ -33,10 +33,10 @@ type SummaryValidationFieldSet struct {
 
 // SummaryValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func SummaryValidationFields() SummaryValidationFieldSet { return foundrySummaryValidationFields() }
+func SummaryValidationFields() SummaryValidationFieldSet { return *foundrySummaryValidationFields() }
 
-var foundrySummaryValidationFields = sync.OnceValue(func() SummaryValidationFieldSet {
-	return SummaryValidationFieldSet{
+var foundrySummaryValidationFields = sync.OnceValue(func() *SummaryValidationFieldSet {
+	return &SummaryValidationFieldSet{
 		Label: foundryvalidation.DefineField("label", func(input Summary) string {
 			return input.Label
 		}),

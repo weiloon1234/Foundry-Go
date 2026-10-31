@@ -56,11 +56,11 @@ type InventoryResponseValidationFieldSet struct {
 // InventoryResponseValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func InventoryResponseValidationFields() InventoryResponseValidationFieldSet {
-	return foundryInventoryResponseValidationFields()
+	return *foundryInventoryResponseValidationFields()
 }
 
-var foundryInventoryResponseValidationFields = sync.OnceValue(func() InventoryResponseValidationFieldSet {
-	return InventoryResponseValidationFieldSet{
+var foundryInventoryResponseValidationFields = sync.OnceValue(func() *InventoryResponseValidationFieldSet {
+	return &InventoryResponseValidationFieldSet{
 		ByNumber: foundryvalidation.DefineField("ByNumber", func(input InventoryResponse) map[int16]string {
 			return input.ByNumber
 		}),

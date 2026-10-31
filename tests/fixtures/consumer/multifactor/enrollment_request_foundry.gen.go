@@ -44,11 +44,11 @@ type EnrollmentRequestValidationFieldSet struct {
 // EnrollmentRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func EnrollmentRequestValidationFields() EnrollmentRequestValidationFieldSet {
-	return foundryEnrollmentRequestValidationFields()
+	return *foundryEnrollmentRequestValidationFields()
 }
 
-var foundryEnrollmentRequestValidationFields = sync.OnceValue(func() EnrollmentRequestValidationFieldSet {
-	return EnrollmentRequestValidationFieldSet{
+var foundryEnrollmentRequestValidationFields = sync.OnceValue(func() *EnrollmentRequestValidationFieldSet {
+	return &EnrollmentRequestValidationFieldSet{
 		Credentials: foundryvalidation.DefineField("credentials", func(input EnrollmentRequest) PasswordCredentials {
 			return input.Credentials
 		}),

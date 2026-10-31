@@ -15,7 +15,7 @@ func (c Codec[T]) Clone(v T) T {
 }
 
 // CloneOptional preserves omission while applying the codec's ownership policy.
-func (c Codec[T]) CloneOptional(v value.Optional[T]) value.Optional[T] {
+func CloneOptional[T any](c Codec[T], v value.Optional[T]) value.Optional[T] {
 	item, present := v.Get()
 	if !present {
 		return value.Optional[T]{}

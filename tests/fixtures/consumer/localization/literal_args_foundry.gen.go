@@ -45,11 +45,11 @@ type LiteralArgsValidationFieldSet struct {
 // LiteralArgsValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func LiteralArgsValidationFields() LiteralArgsValidationFieldSet {
-	return foundryLiteralArgsValidationFields()
+	return *foundryLiteralArgsValidationFields()
 }
 
-var foundryLiteralArgsValidationFields = sync.OnceValue(func() LiteralArgsValidationFieldSet {
-	return LiteralArgsValidationFieldSet{
+var foundryLiteralArgsValidationFields = sync.OnceValue(func() *LiteralArgsValidationFieldSet {
+	return &LiteralArgsValidationFieldSet{
 		Enabled: foundryvalidation.DefineField("enabled", func(input LiteralArgs) bool {
 			return input.Enabled
 		}),

@@ -1,10 +1,10 @@
 {
   "version": 1,
   "files": {
-    "combined_foundry.gen.go": "48fb54a58906881e262575b37e393c9df14906ef003e50b5e1bb13ead454532d",
+    "combined_foundry.gen.go": "4a1420057e51c0535b3053f7c0241a6d2c41efea14e1bf79b080aba4786704b7",
     "envelope_foundry.gen.go": "4f0be8a0092b0f1d7dd29c71badad21f024f68c4f9fdfbb71ac1749957de626c",
-    "project_dto_foundry.gen.go": "a9ac0d84c408d1eb7f064aa7ef773917d5db2974b8c5c5d02bb806561a5c1b17",
-    "user_dto_foundry.gen.go": "f74c85b461c74df599489dee62241a469c502b9740527e58d15bb930d7d5424b",
-    "user_envelope_foundry.gen.go": "1b74c605c2f3c0f8f1c65625f286315f316dd624d3a545e53d4985f12c32c0dc"
+    "project_dto_foundry.gen.go": "4417becdc693a74f42c68cd0d86e4400bf783c7f9249cbd4864f5f88c4cc6e34",
+    "user_dto_foundry.gen.go": "dac6ab76ac7ce2921dddbeb055c39d6d87e70a6345eeed0382ed0eaab26f581d",
+    "user_envelope_foundry.gen.go": "d4b52261c6e68f3eb6df667fca371e8f1fa7c335da57db0b2674507a2044284d"
   }
 }

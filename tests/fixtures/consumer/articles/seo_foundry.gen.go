@@ -46,10 +46,10 @@ type SEOValidationFieldSet struct {
 
 // SEOValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func SEOValidationFields() SEOValidationFieldSet { return foundrySEOValidationFields() }
+func SEOValidationFields() SEOValidationFieldSet { return *foundrySEOValidationFields() }
 
-var foundrySEOValidationFields = sync.OnceValue(func() SEOValidationFieldSet {
-	return SEOValidationFieldSet{
+var foundrySEOValidationFields = sync.OnceValue(func() *SEOValidationFieldSet {
+	return &SEOValidationFieldSet{
 		Canonical: foundryvalidation.DefineField("canonical", func(input SEO) foundryvalue.Optional[string] {
 			return input.Canonical
 		}),

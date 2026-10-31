@@ -82,11 +82,11 @@ type PaymentRequestValidationFieldSet struct {
 // PaymentRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func PaymentRequestValidationFields() PaymentRequestValidationFieldSet {
-	return foundryPaymentRequestValidationFields()
+	return *foundryPaymentRequestValidationFields()
 }
 
-var foundryPaymentRequestValidationFields = sync.OnceValue(func() PaymentRequestValidationFieldSet {
-	return PaymentRequestValidationFieldSet{
+var foundryPaymentRequestValidationFields = sync.OnceValue(func() *PaymentRequestValidationFieldSet {
+	return &PaymentRequestValidationFieldSet{
 		Maybe: foundryvalidation.DefineField("maybe", func(input PaymentRequest) foundryvalue.Optional[foundryvalue.Nullable[PaymentMethod]] {
 			return input.Maybe
 		}),

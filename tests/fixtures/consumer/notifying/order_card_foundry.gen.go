@@ -42,11 +42,11 @@ type OrderCardValidationFieldSet struct {
 // OrderCardValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func OrderCardValidationFields() OrderCardValidationFieldSet {
-	return foundryOrderCardValidationFields()
+	return *foundryOrderCardValidationFields()
 }
 
-var foundryOrderCardValidationFields = sync.OnceValue(func() OrderCardValidationFieldSet {
-	return OrderCardValidationFieldSet{
+var foundryOrderCardValidationFields = sync.OnceValue(func() *OrderCardValidationFieldSet {
+	return &OrderCardValidationFieldSet{
 		OrderID: foundryvalidation.DefineField("order_id", func(input OrderCard) model.ID[models.Order] {
 			return input.OrderID
 		}),

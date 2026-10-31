@@ -63,7 +63,7 @@ func TestBinaryOwnershipSurvivesAdaptersAndChangeSnapshots(t *testing.T) {
 	c := codec.Bytes[binaryBlob]().Validated(func(binaryBlob) error { calls++; return nil }).WithSensitiveValues().WithParameterType(codec.TypeBytes)
 	input := binaryBlob{1, 2}
 	nullable := codec.Nullable(c)
-	owned := nullable.CloneOptional(value.Set(value.Of(input)))
+	owned := codec.CloneOptional(nullable, value.Set(value.Of(input)))
 	if calls != 0 || !nullable.SensitiveValues() || nullable.ParameterType() != codec.TypeBytes {
 		t.Fatal("ownership invoked validation or lost metadata")
 	}
@@ -72,6 +72,14 @@ func TestBinaryOwnershipSurvivesAdaptersAndChangeSnapshots(t *testing.T) {
 	data, _ := v.Get()
 	if data[0] != 1 {
 		t.Fatal("nullable snapshot retained its input")
+	}
+	clonedNull, present := codec.CloneOptional(nullable, value.Set(value.Null[binaryBlob]())).Get()
+	if !present || !clonedNull.IsNull() {
+		t.Fatal("explicit NULL lost its presence")
+	}
+	clonedEmpty, present := codec.CloneOptional(c, value.Set(binaryBlob{})).Get()
+	if !present || clonedEmpty == nil || len(clonedEmpty) != 0 || calls != 0 {
+		t.Fatal("empty bytes lost presence or invoked validation")
 	}
 	before, after := binaryBlob{3}, binaryBlob{4}
 	change, err := lifecycle.CompareField(c, value.Set(before), value.Set(after), true)
@@ -94,7 +102,7 @@ func TestBinaryOwnershipSurvivesAdaptersAndChangeSnapshots(t *testing.T) {
 	if err != nil || unchanged.Changed() || !unchanged.Assigned() {
 		t.Fatal("equal bytes lost assignment semantics", err)
 	}
-	if (codec.Codec[binaryBlob]{}).CloneOptional(value.Optional[binaryBlob]{}).IsSet() {
+	if codec.CloneOptional(codec.Codec[binaryBlob]{}, value.Optional[binaryBlob]{}).IsSet() {
 		t.Fatal("omission became a value")
 	}
 }

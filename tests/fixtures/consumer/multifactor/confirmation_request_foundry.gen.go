@@ -53,11 +53,11 @@ type ConfirmationRequestValidationFieldSet struct {
 // ConfirmationRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func ConfirmationRequestValidationFields() ConfirmationRequestValidationFieldSet {
-	return foundryConfirmationRequestValidationFields()
+	return *foundryConfirmationRequestValidationFields()
 }
 
-var foundryConfirmationRequestValidationFields = sync.OnceValue(func() ConfirmationRequestValidationFieldSet {
-	return ConfirmationRequestValidationFieldSet{
+var foundryConfirmationRequestValidationFields = sync.OnceValue(func() *ConfirmationRequestValidationFieldSet {
+	return &ConfirmationRequestValidationFieldSet{
 		Code: foundryvalidation.DefineField("code", func(input ConfirmationRequest) mfa.TOTPCode {
 			return input.Code
 		}),

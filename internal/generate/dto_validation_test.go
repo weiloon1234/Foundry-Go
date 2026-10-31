@@ -31,6 +31,8 @@ type Request struct {
 }
 //foundry:dto
 type Empty struct{}
+//foundry:dto
+type CacheProbe struct{ Name string }
 func RequestRules() validation.Rule[Request] {
  fields:=RequestValidationFields()
  return validation.All(
@@ -49,7 +51,7 @@ func TestFreshDTOValidationGenerationAndRuntime(t *testing.T) {
 	}
 	first := generatedSnapshot(t, dir)
 	output := first["request_foundry.gen.go"]
-	for _, want := range []string{"func RequestValidationFields()", "Optional[Contact]", "Optional[string]", "Field_Left_Name", "Field_Right_Name", "Field_Field__A", "input.Base.Shadow", "input.Embedded == nil"} {
+	for _, want := range []string{"func RequestValidationFields() RequestValidationFieldSet { return *foundryRequestValidationFields() }", "sync.OnceValue(func() *RequestValidationFieldSet", "return &RequestValidationFieldSet{", "Optional[Contact]", "Optional[string]", "Field_Left_Name", "Field_Right_Name", "Field_Field__A", "input.Base.Shadow", "input.Embedded == nil"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %q in generated validation:\n%s", want, output)
 		}
@@ -66,11 +68,31 @@ func TestFreshDTOValidationGenerationAndRuntime(t *testing.T) {
 	write(t, dir, "validation_runtime_test.go", `package sample_test
 import (
  "errors"
+ "sync"
  "testing"
  sample "foundry.test/generator"
  "github.com/weiloon1234/Foundry-Go/validation"
  "github.com/weiloon1234/Foundry-Go/value"
 )
+func TestValidationFieldSetCache(t *testing.T) {
+ // CacheProbe is used only here, so all callers race on its first initialization.
+ start:=make(chan struct{})
+ var workers sync.WaitGroup
+ for range 32 {
+  workers.Go(func(){
+   <-start
+   fields:=sample.CacheProbeValidationFields()
+   if validation.FieldName(fields.Name)!="Name" {t.Error("incomplete cached field set")}
+   if selected,err:=validation.Select(fields.Name,sample.CacheProbe{Name:"cached"});err!=nil || selected!="cached" {t.Error("cached selector was not initialized",err)}
+   fields.Name=validation.DefineField("local",func(v sample.CacheProbe)string{return v.Name})
+   if validation.FieldName(fields.Name)!="local" {t.Error("local replacement failed")}
+   if validation.FieldName(sample.CacheProbeValidationFields().Name)!="Name" {t.Error("local replacement mutated cache")}
+  })
+ }
+ close(start)
+ workers.Wait()
+ if validation.FieldName(sample.CacheProbeValidationFields().Name)!="Name" {t.Fatal("cached field set changed")}
+}
 func TestGeneratedValidation(t *testing.T) {
  rules:=sample.RequestRules()
  input:=sample.Request{Base:sample.Base{Shadow:"stored"},Left:sample.Left{Name:"same"},Right:sample.Right{Name:"same"}}

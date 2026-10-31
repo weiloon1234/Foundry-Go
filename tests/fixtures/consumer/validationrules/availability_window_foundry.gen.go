@@ -42,11 +42,11 @@ type AvailabilityWindowValidationFieldSet struct {
 // AvailabilityWindowValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func AvailabilityWindowValidationFields() AvailabilityWindowValidationFieldSet {
-	return foundryAvailabilityWindowValidationFields()
+	return *foundryAvailabilityWindowValidationFields()
 }
 
-var foundryAvailabilityWindowValidationFields = sync.OnceValue(func() AvailabilityWindowValidationFieldSet {
-	return AvailabilityWindowValidationFieldSet{
+var foundryAvailabilityWindowValidationFields = sync.OnceValue(func() *AvailabilityWindowValidationFieldSet {
+	return &AvailabilityWindowValidationFieldSet{
 		End: foundryvalidation.DefineField("end", func(input AvailabilityWindow) temporal.DateTime {
 			return input.End
 		}),

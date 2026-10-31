@@ -31,11 +31,11 @@ type MultipartSubmissionValidationFieldSet struct {
 // MultipartSubmissionValidationFields returns typed field descriptors.
 // Compose rules with these fields; multipart names and selectors are generated.
 func MultipartSubmissionValidationFields() MultipartSubmissionValidationFieldSet {
-	return foundryMultipartSubmissionValidationFields()
+	return *foundryMultipartSubmissionValidationFields()
 }
 
-var foundryMultipartSubmissionValidationFields = sync.OnceValue(func() MultipartSubmissionValidationFieldSet {
-	return MultipartSubmissionValidationFieldSet{
+var foundryMultipartSubmissionValidationFields = sync.OnceValue(func() *MultipartSubmissionValidationFieldSet {
+	return &MultipartSubmissionValidationFieldSet{
 		Name: foundryvalidation.DefineField("name", func(input MultipartSubmission) string {
 			return input.Name
 		}),

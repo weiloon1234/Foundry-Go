@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Changed (breaking): `Codec.CloneOptional` → `codec.CloneOptional`. Pass the codec as the first argument; the method is removed.
+- Changed (internal compile footprint): HTTP request execution now carries only path, query and body types; typed response completion and endpoint metadata retain the response type. Generated non-generic validation field sets cache pointers with `sync.OnceValue` and return value copies. Generic DTO construction is unchanged.
+
 - Changed (breaking): Deterministic readable type names (S4) and typed datatable descriptors (S2) in TypeScript contract generation:
   - S4 Type Renaming: Replaced nondeterministic hashed names (`Go_<hash>`, `String_<hash>`, etc.) with deterministic readable identifiers:
     - `model.ID[T]` generates as `<Model>ID` (e.g., `OrderID`, `UserID`), qualified by package prefix upon collision (e.g., `Reporting_MemberID`, `Models_UserID`).

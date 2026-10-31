@@ -185,7 +185,7 @@ type Search struct{ Term string }
 	output := generatedSnapshot(t, dir)
 	for name, want := range map[string]string{
 		"status_foundry.gen.go":    "var foundryStatusEnumDescriptor = sync.OnceValue(",
-		"request_foundry.gen.go":   "var foundryRequestValidationFields = sync.OnceValue(",
+		"request_foundry.gen.go":   "var foundryRequestValidationFields = sync.OnceValue(func() *RequestValidationFieldSet",
 		"reply_foundry.gen.go":     "var foundryReplyJSON = sync.OnceValue(",
 		"item_path_foundry.gen.go": "var foundryItemPathDescriptor = sync.OnceValue(",
 		"search_foundry.gen.go":    "var foundrySearchDescriptor = sync.OnceValue(",

@@ -41,11 +41,11 @@ type SubmissionValidationFieldSet struct {
 // SubmissionValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func SubmissionValidationFields() SubmissionValidationFieldSet {
-	return foundrySubmissionValidationFields()
+	return *foundrySubmissionValidationFields()
 }
 
-var foundrySubmissionValidationFields = sync.OnceValue(func() SubmissionValidationFieldSet {
-	return SubmissionValidationFieldSet{
+var foundrySubmissionValidationFields = sync.OnceValue(func() *SubmissionValidationFieldSet {
+	return &SubmissionValidationFieldSet{
 		Name: foundryvalidation.DefineField("name", func(input Submission) string {
 			return input.Name
 		}),

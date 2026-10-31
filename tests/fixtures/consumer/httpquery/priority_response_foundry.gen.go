@@ -38,11 +38,11 @@ type PriorityResponseValidationFieldSet struct {
 // PriorityResponseValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func PriorityResponseValidationFields() PriorityResponseValidationFieldSet {
-	return foundryPriorityResponseValidationFields()
+	return *foundryPriorityResponseValidationFields()
 }
 
-var foundryPriorityResponseValidationFields = sync.OnceValue(func() PriorityResponseValidationFieldSet {
-	return PriorityResponseValidationFieldSet{
+var foundryPriorityResponseValidationFields = sync.OnceValue(func() *PriorityResponseValidationFieldSet {
+	return &PriorityResponseValidationFieldSet{
 		Priority: foundryvalidation.DefineField("Priority", func(input PriorityResponse) Priority {
 			return input.Priority
 		}),

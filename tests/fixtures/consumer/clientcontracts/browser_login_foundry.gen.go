@@ -37,11 +37,11 @@ type BrowserLoginValidationFieldSet struct {
 // BrowserLoginValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func BrowserLoginValidationFields() BrowserLoginValidationFieldSet {
-	return foundryBrowserLoginValidationFields()
+	return *foundryBrowserLoginValidationFields()
 }
 
-var foundryBrowserLoginValidationFields = sync.OnceValue(func() BrowserLoginValidationFieldSet {
-	return BrowserLoginValidationFieldSet{
+var foundryBrowserLoginValidationFields = sync.OnceValue(func() *BrowserLoginValidationFieldSet {
+	return &BrowserLoginValidationFieldSet{
 		Email: foundryvalidation.DefineField("login_id", func(input BrowserLogin) string {
 			return input.Email
 		}),

@@ -35,11 +35,11 @@ type WelcomeArgsValidationFieldSet struct {
 // WelcomeArgsValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func WelcomeArgsValidationFields() WelcomeArgsValidationFieldSet {
-	return foundryWelcomeArgsValidationFields()
+	return *foundryWelcomeArgsValidationFields()
 }
 
-var foundryWelcomeArgsValidationFields = sync.OnceValue(func() WelcomeArgsValidationFieldSet {
-	return WelcomeArgsValidationFieldSet{
+var foundryWelcomeArgsValidationFields = sync.OnceValue(func() *WelcomeArgsValidationFieldSet {
+	return &WelcomeArgsValidationFieldSet{
 		Name: foundryvalidation.DefineField("name", func(input WelcomeArgs) string {
 			return input.Name
 		}),

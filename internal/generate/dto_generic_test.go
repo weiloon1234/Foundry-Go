@@ -58,6 +58,9 @@ func TestGenericDTOGenerationAndRuntime(t *testing.T) {
 			t.Fatalf("missing generic contract %q", want)
 		}
 	}
+	if output := first["envelope_foundry.gen.go"]; strings.Contains(output, "foundryEnvelopeValidationFields") || !strings.Contains(output, "return EnvelopeValidationFieldSet[T]{") {
+		t.Fatal("generic validation fields must retain per-call value construction")
+	}
 	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 		t.Fatal(err)
 	}

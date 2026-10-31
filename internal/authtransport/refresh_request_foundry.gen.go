@@ -34,11 +34,11 @@ type RefreshRequestValidationFieldSet struct {
 // RefreshRequestValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func RefreshRequestValidationFields() RefreshRequestValidationFieldSet {
-	return foundryRefreshRequestValidationFields()
+	return *foundryRefreshRequestValidationFields()
 }
 
-var foundryRefreshRequestValidationFields = sync.OnceValue(func() RefreshRequestValidationFieldSet {
-	return RefreshRequestValidationFieldSet{
+var foundryRefreshRequestValidationFields = sync.OnceValue(func() *RefreshRequestValidationFieldSet {
+	return &RefreshRequestValidationFieldSet{
 		RefreshToken: foundryvalidation.DefineField("refresh_token", func(input RefreshRequest) RefreshCredential {
 			return input.RefreshToken
 		}),

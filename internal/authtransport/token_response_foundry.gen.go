@@ -53,11 +53,11 @@ type TokenResponseValidationFieldSet struct {
 // TokenResponseValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func TokenResponseValidationFields() TokenResponseValidationFieldSet {
-	return foundryTokenResponseValidationFields()
+	return *foundryTokenResponseValidationFields()
 }
 
-var foundryTokenResponseValidationFields = sync.OnceValue(func() TokenResponseValidationFieldSet {
-	return TokenResponseValidationFieldSet{
+var foundryTokenResponseValidationFields = sync.OnceValue(func() *TokenResponseValidationFieldSet {
+	return &TokenResponseValidationFieldSet{
 		MFARequired: foundryvalidation.DefineField("mfa_required", func(input TokenResponse) bool {
 			return input.MFARequired
 		}),

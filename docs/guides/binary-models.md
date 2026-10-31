@@ -34,7 +34,7 @@ and field snapshots from `Before` and `After`. Mutable input values remain
 ordinary Go slices outside these capture boundaries; synchronize concurrent
 application access in the usual way.
 
-The shared `Codec.Clone` and `CloneOptional` operations apply ownership without
+The shared `Codec.Clone` and `codec.CloneOptional(c, v)` operations apply ownership without
 encoding, decoding, validation or mutation. `Validated`, nullable and metadata
 adapters preserve that policy. Custom codecs and custom struct inputs retain
 their existing ordinary Go value semantics; referenced application data must

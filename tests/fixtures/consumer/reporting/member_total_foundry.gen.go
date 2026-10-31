@@ -55,11 +55,11 @@ type MemberTotalValidationFieldSet struct {
 // MemberTotalValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func MemberTotalValidationFields() MemberTotalValidationFieldSet {
-	return foundryMemberTotalValidationFields()
+	return *foundryMemberTotalValidationFields()
 }
 
-var foundryMemberTotalValidationFields = sync.OnceValue(func() MemberTotalValidationFieldSet {
-	return MemberTotalValidationFieldSet{
+var foundryMemberTotalValidationFields = sync.OnceValue(func() *MemberTotalValidationFieldSet {
+	return &MemberTotalValidationFieldSet{
 		Count: foundryvalidation.DefineField("count", func(input MemberTotal) int64 {
 			return input.Count
 		}),

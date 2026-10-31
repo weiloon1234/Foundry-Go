@@ -50,10 +50,10 @@ type OrderRowValidationFieldSet struct {
 
 // OrderRowValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
-func OrderRowValidationFields() OrderRowValidationFieldSet { return foundryOrderRowValidationFields() }
+func OrderRowValidationFields() OrderRowValidationFieldSet { return *foundryOrderRowValidationFields() }
 
-var foundryOrderRowValidationFields = sync.OnceValue(func() OrderRowValidationFieldSet {
-	return OrderRowValidationFieldSet{
+var foundryOrderRowValidationFields = sync.OnceValue(func() *OrderRowValidationFieldSet {
+	return &OrderRowValidationFieldSet{
 		Amount: foundryvalidation.DefineField("amount", func(input OrderRow) decimal.Decimal {
 			return input.Amount
 		}),

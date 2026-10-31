@@ -43,11 +43,11 @@ type ArticleMediaValidationFieldSet struct {
 // ArticleMediaValidationFields returns typed field descriptors.
 // Compose rules with these fields; multipart names and selectors are generated.
 func ArticleMediaValidationFields() ArticleMediaValidationFieldSet {
-	return foundryArticleMediaValidationFields()
+	return *foundryArticleMediaValidationFields()
 }
 
-var foundryArticleMediaValidationFields = sync.OnceValue(func() ArticleMediaValidationFieldSet {
-	return ArticleMediaValidationFieldSet{
+var foundryArticleMediaValidationFields = sync.OnceValue(func() *ArticleMediaValidationFieldSet {
+	return &ArticleMediaValidationFieldSet{
 		Galleries: foundryvalidation.DefineField("galleries", func(input ArticleMedia) Gallery {
 			return input.Galleries
 		}),

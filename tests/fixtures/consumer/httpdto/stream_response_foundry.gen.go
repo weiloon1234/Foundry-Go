@@ -50,11 +50,11 @@ type StreamResponseValidationFieldSet struct {
 // StreamResponseValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func StreamResponseValidationFields() StreamResponseValidationFieldSet {
-	return foundryStreamResponseValidationFields()
+	return *foundryStreamResponseValidationFields()
 }
 
-var foundryStreamResponseValidationFields = sync.OnceValue(func() StreamResponseValidationFieldSet {
-	return StreamResponseValidationFieldSet{
+var foundryStreamResponseValidationFields = sync.OnceValue(func() *StreamResponseValidationFieldSet {
+	return &StreamResponseValidationFieldSet{
 		History: foundryvalidation.DefineField("History", func(input StreamResponse) []StreamLabel {
 			return input.History
 		}),

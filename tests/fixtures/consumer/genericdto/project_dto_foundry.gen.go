@@ -41,11 +41,11 @@ type ProjectDTOValidationFieldSet struct {
 // ProjectDTOValidationFields returns typed field descriptors.
 // Compose rules with these fields; JSON names and selectors are generated.
 func ProjectDTOValidationFields() ProjectDTOValidationFieldSet {
-	return foundryProjectDTOValidationFields()
+	return *foundryProjectDTOValidationFields()
 }
 
-var foundryProjectDTOValidationFields = sync.OnceValue(func() ProjectDTOValidationFieldSet {
-	return ProjectDTOValidationFieldSet{
+var foundryProjectDTOValidationFields = sync.OnceValue(func() *ProjectDTOValidationFieldSet {
+	return &ProjectDTOValidationFieldSet{
 		ID: foundryvalidation.DefineField("id", func(input ProjectDTO) model.ID[Project] {
 			return input.ID
 		}),
