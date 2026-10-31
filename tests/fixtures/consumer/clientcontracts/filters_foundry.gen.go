@@ -13,6 +13,8 @@ import (
 // FiltersDescriptor binds query parameters to concrete Filters fields.
 // Reuse this descriptor for request decoding and query URL encoding.
 // Optional fields preserve omission; repeated fields retain slice order.
+//
+// Example: FiltersDescriptor()
 func FiltersDescriptor() foundryhttp.Query[Filters] { return foundryFiltersDescriptor() }
 
 var foundryFiltersDescriptor = sync.OnceValue(func() foundryhttp.Query[Filters] {

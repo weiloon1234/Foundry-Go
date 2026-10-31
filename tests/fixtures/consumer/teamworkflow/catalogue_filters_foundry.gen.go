@@ -12,6 +12,8 @@ import (
 // CatalogueFiltersDescriptor binds query parameters to concrete CatalogueFilters fields.
 // Reuse this descriptor for request decoding and query URL encoding.
 // Optional fields preserve omission; repeated fields retain slice order.
+//
+// Example: CatalogueFiltersDescriptor()
 func CatalogueFiltersDescriptor() foundryhttp.Query[CatalogueFilters] {
 	return foundryCatalogueFiltersDescriptor()
 }

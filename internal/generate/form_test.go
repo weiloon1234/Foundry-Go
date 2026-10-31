@@ -14,7 +14,7 @@ func TestFreshFormGeneration(t *testing.T) {
 	}
 	first := generatedSnapshot(t, dir)
 	output := first["search_input_foundry.gen.go"]
-	for _, want := range []string{"Query[SearchInput]", "SearchInputValidationFields()", "Field[SearchInput, MemberID]", "OptionalQueryParam[SearchInput, string]", "RepeatedQueryParam[SearchInput, State, States]"} {
+	for _, want := range []string{"//\n// Example: SearchInputDescriptor()\nfunc SearchInputDescriptor()", "Query[SearchInput]", "SearchInputValidationFields()", "Field[SearchInput, MemberID]", "OptionalQueryParam[SearchInput, string]", "RepeatedQueryParam[SearchInput, State, States]"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %q: %s", want, output)
 		}

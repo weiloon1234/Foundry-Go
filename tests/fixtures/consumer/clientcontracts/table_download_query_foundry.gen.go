@@ -12,6 +12,8 @@ import (
 // TableDownloadQueryDescriptor binds query parameters to concrete TableDownloadQuery fields.
 // Reuse this descriptor for request decoding and query URL encoding.
 // Optional fields preserve omission; repeated fields retain slice order.
+//
+// Example: TableDownloadQueryDescriptor()
 func TableDownloadQueryDescriptor() foundryhttp.Query[TableDownloadQuery] {
 	return foundryTableDownloadQueryDescriptor()
 }

@@ -8,6 +8,8 @@ import (
 
 // ExportRequest asks for every matching row as CSV or XLSX; paging is ignored.
 //
+// Example: datatable.ExportRequest{Format: datatable.CSV, Request: request}
+//
 //foundry:dto
 type ExportRequest struct {
 	Format  ExportFormat `json:"format"`
@@ -15,6 +17,8 @@ type ExportRequest struct {
 }
 
 // DownloadQuery opens a ticket export with its bounded JSON request.
+//
+// Example: datatable.DownloadQuery{Ticket: ticketSecret.Reveal(), Format: datatable.CSV, Request: "{}"}
 //
 //foundry:query
 type DownloadQuery struct {
@@ -27,6 +31,8 @@ type DownloadQuery struct {
 }
 
 // ExportTicket is the download URL and expiry returned by ticket issuance.
+//
+// Example: datatable.ExportTicket{URL: location, ExpiresAt: expiresAt}
 //
 //foundry:dto
 type ExportTicket struct {

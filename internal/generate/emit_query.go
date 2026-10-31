@@ -19,6 +19,8 @@ func emitQuery(p *packageInput, declaration queryDeclaration) ([]byte, error) {
 	}
 	e.line("// Reuse this descriptor for request decoding and query URL encoding.")
 	e.line("// Optional fields preserve omission; repeated fields retain slice order.")
+	e.line("//")
+	e.line("// Example: %sDescriptor()", declaration.name)
 	e.line("func %sDescriptor() %s.Query[%s] {return foundry%sDescriptor()}", declaration.name, http, declaration.name, declaration.name)
 	e.line("var foundry%sDescriptor=%s.OnceValue(func()%s.Query[%s]{", declaration.name, e.use("sync"), http, declaration.name)
 	e.line("return %s.DefineQuery[%s](", http, declaration.name)

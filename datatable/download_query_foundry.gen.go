@@ -13,6 +13,8 @@ import (
 // DownloadQueryDescriptor binds query parameters to concrete DownloadQuery fields.
 // Reuse this descriptor for request decoding and query URL encoding.
 // Optional fields preserve omission; repeated fields retain slice order.
+//
+// Example: DownloadQueryDescriptor()
 func DownloadQueryDescriptor() foundryhttp.Query[DownloadQuery] {
 	return foundryDownloadQueryDescriptor()
 }

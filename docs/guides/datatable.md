@@ -544,7 +544,8 @@ the download opens. Callbacks must honor cancellation; request ownership lasts
 until they exit. Query-only tables need no ticket, clock or quota configuration.
 
 For table ID `reports.numeric_levels`, the helper registers these paths below
-your scope, all with success status 200:
+your scope. The normal declared status is 200; downloads also support 206
+(partial content) and 304 (not modified):
 
 | Method | Suffix | Request | Response |
 | --- | --- | --- | --- |

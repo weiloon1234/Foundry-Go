@@ -11,6 +11,8 @@ import (
 // PriorityQueryDescriptor binds query parameters to concrete PriorityQuery fields.
 // Reuse this descriptor for request decoding and query URL encoding.
 // Optional fields preserve omission; repeated fields retain slice order.
+//
+// Example: PriorityQueryDescriptor()
 func PriorityQueryDescriptor() foundryhttp.Query[PriorityQuery] {
 	return foundryPriorityQueryDescriptor()
 }

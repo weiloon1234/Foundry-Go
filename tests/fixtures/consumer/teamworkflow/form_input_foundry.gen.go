@@ -13,6 +13,8 @@ import (
 // Pass these shared URL bindings to FormBody; body and query remain independent.
 // Reuse this descriptor for request decoding and query URL encoding.
 // Optional fields preserve omission; repeated fields retain slice order.
+//
+// Example: FormInputDescriptor()
 func FormInputDescriptor() foundryhttp.Query[FormInput] { return foundryFormInputDescriptor() }
 
 var foundryFormInputDescriptor = sync.OnceValue(func() foundryhttp.Query[FormInput] {

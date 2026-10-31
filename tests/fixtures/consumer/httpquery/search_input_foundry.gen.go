@@ -14,6 +14,8 @@ import (
 // SearchInputDescriptor binds query parameters to concrete SearchInput fields.
 // Reuse this descriptor for request decoding and query URL encoding.
 // Optional fields preserve omission; repeated fields retain slice order.
+//
+// Example: SearchInputDescriptor()
 func SearchInputDescriptor() foundryhttp.Query[SearchInput] { return foundrySearchInputDescriptor() }
 
 var foundrySearchInputDescriptor = sync.OnceValue(func() foundryhttp.Query[SearchInput] {

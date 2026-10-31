@@ -12,6 +12,8 @@ import (
 // NearbyInputDescriptor binds query parameters to concrete NearbyInput fields.
 // Reuse this descriptor for request decoding and query URL encoding.
 // Optional fields preserve omission; repeated fields retain slice order.
+//
+// Example: NearbyInputDescriptor()
 func NearbyInputDescriptor() foundryhttp.Query[NearbyInput] { return foundryNearbyInputDescriptor() }
 
 var foundryNearbyInputDescriptor = sync.OnceValue(func() foundryhttp.Query[NearbyInput] {

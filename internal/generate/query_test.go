@@ -54,6 +54,7 @@ func TestFreshQueryGenerationAndRuntime(t *testing.T) {
 	first := generatedSnapshot(t, dir)
 	output := first["search_input_foundry.gen.go"]
 	for _, want := range []string{
+		"//\n// Example: SearchInputDescriptor()\nfunc SearchInputDescriptor()",
 		"func SearchInputDescriptor()", "Query[SearchInput]", "ModelIDQuery[Member]", "StringQuery[string]",
 		"IntegerQuery[query]", "BoolQuery[Flag]", "EnumQuery[State, *State]", "TextQuery[temporal.Date, *temporal.Date]",
 		"TextQuery[decimal.Decimal, *decimal.Decimal]", "OptionalQueryParam[SearchInput, string]", "RepeatedQueryParam[SearchInput, State, States]", "query1 *SearchInput",

@@ -168,3 +168,40 @@ outside the requested gate and were not run. No performance claim is made.
 Changed source/contract fingerprint (sorted relative path, NUL, bytes, NUL;
 `.go`, `.ts`, `.mjs`, `.py`, `.tsv`, `.json`; excludes documentation):
 `ea5bd8ef468fa6b1ed71d25e85d8f5622920574a37b6db48d2c7da37e40aa01b`.
+
+## Review corrections on 9feefe21 — V032-01 and V032-02
+
+The independent review identified a gap in the original targeted gate: descriptive
+comments and `go doc` did not establish compliance with the root public API
+requirement for standalone examples. The evidence and fingerprint above describe
+the original implementation; the following records the correction to that commit.
+
+V032-01 adds standalone `Example:` lines to all ten handwritten route/transport
+functions and types. The shared query/form descriptor emitter now emits a
+standalone example as well, including `DownloadQueryDescriptor`. Existing query
+and form generation tests assert that generated documentation. `make generate`
+regenerated ten owned Go files (one datatable descriptor and nine consumer
+query/form descriptors) and their ownership hashes. Generated Go changes consist
+only of the two added comment lines per descriptor; none were handwritten.
+
+V032-02 corrects the `Routes` comment and datatable guide: 200 is the normal
+declared status, while downloads also support 206 (partial content) and 304
+(not modified). Runtime behavior and contracts are unchanged.
+
+All commands below passed, using the native warm Go cache (`GOFLAGS=-trimpath`):
+
+| Command | Result |
+| --- | --- |
+| `make generate` | PASS; ten owned descriptors regenerated |
+| Root: `go test -count=1 . -run '^TestConsumerAPI(Documentation\|DSLGoDocSurface\|MethodVisibility)$'` | PASS; all three root public API checks |
+| `go test -count=1 -timeout=20m ./internal/generate -run '^(TestFreshQueryGenerationAndRuntime\|TestFreshFormGeneration)$'` | PASS; query runtime, documentation, repeat generation and form checks |
+| `make generate-check` | PASS across all configured declaration roots |
+| `make publish-client-contracts` | PASS; client artifact bytes unchanged, current-cohort provenance refreshed |
+| Consumer: `go test -count=1 ./clientcontracts` | PASS |
+| Go-way: `go test -count=1 ./guideadapters ./guideexamples` | PASS |
+| `make release-tools-check` | PASS; release Go vet/tests and 38 Python tests |
+| `make docs-check` | PASS |
+| `git diff --check` | PASS |
+
+The public API documentation baseline and guards were neither expanded nor
+weakened. Released cohorts and frozen oracles are unchanged. No commit was made.

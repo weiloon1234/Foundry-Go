@@ -19,6 +19,8 @@ import (
 )
 
 // IssuedTicket carries an application-issued credential and its expiry.
+//
+// Example: datatable.IssuedTicket{Secret: ticketSecret, ExpiresAt: expiresAt}
 type IssuedTicket struct {
 	Secret    secret.String
 	ExpiresAt temporal.DateTime
@@ -28,6 +30,8 @@ type IssuedTicket struct {
 // must check current credentials and actor eligibility, and return authority
 // usable through deferred row loading (not an already-closed auth scope).
 // Callbacks must honor cancellation; HTTP retains ownership until they exit.
+//
+// Example: datatable.Tickets[Actor, Authority]{Issue: issueTicket, Redeem: redeemTicket}
 type Tickets[M, A any] struct {
 	Issue  func(context.Context, M) (IssuedTicket, error)
 	Redeem func(context.Context, secret.String) (A, error)
@@ -37,6 +41,8 @@ type Tickets[M, A any] struct {
 // Manager, Guard and Authority are required for every table. Exportable tables
 // also require Tickets, Clock and Quota. WithLocale optionally localizes redeemed
 // authority before Download captures it for deferred execution.
+//
+// Example: datatable.RoutesConfig[Actor, Authority]{Manager: manager, Guard: guard, Authority: authority}
 type RoutesConfig[M, A any] struct {
 	Manager    *Manager
 	Guard      foundryhttp.GuardBinding[M]
@@ -49,6 +55,8 @@ type RoutesConfig[M, A any] struct {
 
 // RouteOption retains immutable guard options for one table operation.
 // Construct it with ReadAccess or ExportAccess; its zero value is invalid.
+//
+// Example: datatable.ReadAccess(http.Permissions(readPermission))
 type RouteOption[M any] struct {
 	kind   contract.TableOperationKind
 	access []foundryhttp.GuardOption[M]
@@ -56,6 +64,8 @@ type RouteOption[M any] struct {
 
 // ReadAccess snapshots guard options applied before query request decoding.
 // Supplying ReadAccess more than once is an error, even with no guard options.
+//
+// Example: datatable.ReadAccess(http.Scopes(readScopes), http.Permissions(readPermission))
 func ReadAccess[M any](options ...foundryhttp.GuardOption[M]) RouteOption[M] {
 	return RouteOption[M]{kind: contract.TableQuery, access: slices.Clone(options)}
 }
@@ -63,18 +73,23 @@ func ReadAccess[M any](options ...foundryhttp.GuardOption[M]) RouteOption[M] {
 // ExportAccess snapshots guard options applied before ticket request decoding.
 // Supplying ExportAccess more than once is an error. Download authority remains
 // the responsibility of Tickets.Redeem and the table's own authorization.
+//
+// Example: datatable.ExportAccess(http.Scopes(exportScopes), http.Permissions(exportPermission))
 func ExportAccess[M any](options ...foundryhttp.GuardOption[M]) RouteOption[M] {
 	return RouteOption[M]{kind: contract.TableTicketExport, access: slices.Clone(options)}
 }
 
 // Routes declares POST /<table ID> for queries and, for exportable tables,
 // POST /<table ID>/export for tickets and GET /<table ID>/download for files.
-// IDs within group end in <table ID>.query, .export and .download. All responses
-// use status 200. Issuance uses CredentialRequests and Quota; downloads are public
+// IDs within group end in <table ID>.query, .export and .download. The normal
+// declared status is 200; downloads also support 206 (partial content) and 304
+// (not modified). Issuance uses CredentialRequests and Quota; downloads are public
 // at the HTTP guard boundary and authenticate through Tickets.Redeem.
 //
 // All declarations are validated before registrations are returned. HTTP owns
 // callback isolation and request lifetime; Manager owns deferred export work.
+//
+// Example: datatable.Routes(group, table, config, datatable.ReadAccess(read...), datatable.ExportAccess(export...))
 func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], config RoutesConfig[M, A], options ...RouteOption[M]) ([]foundryhttp.RouteRegistration, error) {
 	if err := table.check(config.Manager); err != nil {
 		return nil, err
