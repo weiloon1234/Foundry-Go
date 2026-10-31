@@ -5,6 +5,11 @@
 - Fixed: Readable schema naming qualifies map keys as well as values and exhausts
   structural name candidates before using identity digests, preventing contract,
   OpenAPI and SDK export hangs on colliding map declarations or reserved names.
+- Fixed: PostgreSQL test application concurrency slots remain held after a shutdown
+  timeout until owned tasks and dependencies finish. Custom test applications must
+  expose a `Done()` signal that closes only after cleanup completes.
+- Fixed: Concurrent PostgreSQL test application starts in the same top-level test
+  share a pending capacity acquisition, avoiding self-deadlock when the limit is full.
 
 - Changed (breaking): HTTP pagination endpoint `Handle` and `URL` methods move to
   documented package functions: `pagination.Handle`, `pagination.URL`,

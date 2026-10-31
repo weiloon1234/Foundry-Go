@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 )
 
@@ -19,6 +22,9 @@ type mockApplication struct {
 	shutdownFn      func(context.Context) error
 	shutdownTimeout time.Duration
 	migrations      []infrastructure.MigrationTarget
+	done            chan struct{}
+	doneInit        sync.Once
+	doneClose       sync.Once
 }
 
 func (m *mockApplication) Start(ctx context.Context) error {
@@ -29,11 +35,20 @@ func (m *mockApplication) Start(ctx context.Context) error {
 }
 
 func (m *mockApplication) Shutdown(ctx context.Context) error {
+	var err error
 	if m.shutdownFn != nil {
-		return m.shutdownFn(ctx)
+		err = m.shutdownFn(ctx)
 	}
-	return nil
+	m.doneClose.Do(func() { close(m.completion()) })
+	return err
 }
+
+func (m *mockApplication) completion() chan struct{} {
+	m.doneInit.Do(func() { m.done = make(chan struct{}) })
+	return m.done
+}
+
+func (m *mockApplication) Done() <-chan struct{} { return m.completion() }
 
 func (m *mockApplication) ShutdownTimeout() time.Duration {
 	if m.shutdownTimeout > 0 {
@@ -318,6 +333,214 @@ func TestLimiter_ReleaseHappensAfterAppShutdown(t *testing.T) {
 	defer mu.Unlock()
 	if len(events) != 1 || events[0] != "shutdown" {
 		t.Fatalf("unexpected events: %v", events)
+	}
+}
+
+type scopedFoundationApplication struct {
+	*foundation.App
+}
+
+func (scopedFoundationApplication) Migrations() []infrastructure.MigrationTarget { return nil }
+
+func TestLimiter_ShutdownTimeoutRetainsSlotUntilDependenciesClose(t *testing.T) {
+	resetLimiterForTest(t)
+	t.Setenv(concurrencyVariable, "1")
+	env := makeTestEnvironment(t)
+	releaseTask := make(chan struct{})
+	var unblock sync.Once
+	var dependencyClosed atomic.Bool
+	startupFailure := errors.New("startup failed after admitting a task")
+	app, err := foundation.NewBuilder(
+		foundation.WithShutdownTimeout(20*time.Millisecond),
+		foundation.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))),
+	).Register(foundation.Module{
+		Name: "pending-shutdown",
+		OnBoot: func(_ context.Context, r *foundation.Runtime) error {
+			if err := r.OnShutdown("dependency", func(context.Context) error {
+				dependencyClosed.Store(true)
+				return nil
+			}); err != nil {
+				return err
+			}
+			if err := r.Go("held-task", func(context.Context) error {
+				<-releaseTask
+				return nil
+			}); err != nil {
+				return err
+			}
+			return startupFailure
+		},
+	}).Build(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		unblock.Do(func() { close(releaseTask) })
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		select {
+		case <-app.Done():
+		case <-ctx.Done():
+			t.Error("application did not finish after its task exited")
+			return
+		}
+		if !dependencyClosed.Load() {
+			t.Error("application completed without closing its dependency")
+		}
+		// Also wait for the limiter to observe completion before resetting it.
+		release, err := acquireSlot(newMockTB(t, "TestAfterShutdownCompletion", ctx))
+		if err != nil {
+			t.Errorf("capacity not released after application completion: %v", err)
+			return
+		}
+		release()
+	})
+	mock := newMockTB(t, "TestPendingShutdown", nil)
+	err = env.Start(mock, scopedFoundationApplication{app})
+	if !errors.Is(err, startupFailure) || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Start = %v, want startup failure and shutdown timeout", err)
+	}
+	if dependencyClosed.Load() {
+		t.Fatal("dependency closed while the admitted task still owns it")
+	}
+	// Repeated cleanup must not release the still-owned slot either.
+	mock.finish()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+	defer cancel()
+	release, err := acquireSlot(newMockTB(t, "TestBlockedByPendingShutdown", ctx))
+	if release != nil {
+		release()
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("acquire during pending shutdown = %v, want deadline exceeded", err)
+	}
+}
+
+type waitingTB struct {
+	*mockTB
+	waiting chan struct{}
+	once    sync.Once
+}
+
+func (m *waitingTB) Context() context.Context {
+	return slotWaitContext{Context: m.mockTB.Context(), caller: m}
+}
+
+type slotWaitContext struct {
+	context.Context
+	caller *waitingTB
+}
+
+func (ctx slotWaitContext) Done() <-chan struct{} {
+	ctx.caller.once.Do(func() { close(ctx.caller.waiting) })
+	return ctx.Context.Done()
+}
+
+func TestLimiter_ConcurrentStartsJoinPendingGroupAtCapacityOne(t *testing.T) {
+	resetLimiterForTest(t)
+	t.Setenv(concurrencyVariable, "1")
+	env := makeTestEnvironment(t)
+	owner := newMockTB(t, "TestCapacityOwner", nil)
+	if err := env.Start(owner, &mockApplication{}); err != nil {
+		t.Fatal(err)
+	}
+	defer owner.finish()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	results := make(chan error, 2)
+	callers := make([]*waitingTB, 2)
+	for i := range callers {
+		callers[i] = &waitingTB{
+			mockTB:  newMockTB(t, fmt.Sprintf("TestPendingGroup/sub_%d", i), ctx),
+			waiting: make(chan struct{}),
+		}
+		go func(caller *waitingTB) { results <- env.Start(caller, &mockApplication{}) }(callers[i])
+	}
+	for _, caller := range callers {
+		select {
+		case <-caller.waiting:
+		case <-time.After(2 * time.Second):
+			cancel()
+			t.Error("start did not reach capacity wait")
+		}
+	}
+	owner.finish()
+	for range callers {
+		select {
+		case err := <-results:
+			if err != nil {
+				t.Errorf("concurrent Start = %v", err)
+			}
+		case <-time.After(time.Second):
+			cancel()
+			<-results
+			t.Error("concurrent starts waited behind their own group's capacity slot")
+		}
+	}
+	for _, caller := range callers {
+		caller.finish()
+	}
+}
+
+func TestLimiter_PendingGroupCancellationDoesNotCancelSibling(t *testing.T) {
+	for _, canceled := range []int{0, 1} {
+		t.Run(fmt.Sprintf("cancel_caller_%d", canceled), func(t *testing.T) {
+			resetLimiterForTest(t)
+			t.Setenv(concurrencyVariable, "1")
+			owner, err := acquireSlot(newMockTB(t, "TestCapacityOwner", nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer owner()
+			type result struct {
+				release func()
+				err     error
+			}
+			var cancels [2]context.CancelFunc
+			var results [2]chan result
+			for i := range results {
+				ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+				defer cancel()
+				cancels[i] = cancel
+				results[i] = make(chan result, 1)
+				caller := &waitingTB{
+					mockTB:  newMockTB(t, fmt.Sprintf("TestPendingCancellation/sub_%d", i), ctx),
+					waiting: make(chan struct{}),
+				}
+				go func() {
+					release, err := acquireSlot(caller)
+					results[i] <- result{release: release, err: err}
+				}()
+				// The first caller owns the pending acquisition before the
+				// second joins it; both are blocked by the unrelated owner.
+				select {
+				case <-caller.waiting:
+				case <-ctx.Done():
+					t.Fatal("caller did not enter the capacity wait")
+				}
+			}
+			cancels[canceled]()
+			stopped := <-results[canceled]
+			if stopped.release != nil {
+				stopped.release()
+			}
+			if !errors.Is(stopped.err, context.Canceled) {
+				t.Fatalf("canceled caller = %v, want context.Canceled", stopped.err)
+			}
+			owner()
+			sibling := <-results[1-canceled]
+			if sibling.err != nil {
+				t.Fatalf("live sibling inherited another caller's cancellation: %v", sibling.err)
+			}
+			sibling.release()
+			sibling.release()
+			limiterMu.Lock()
+			holders, slots := len(limiterHolders), len(limiterSem)
+			limiterMu.Unlock()
+			if holders != 0 || slots != 0 {
+				t.Fatalf("pending cancellation leaked capacity: holders=%d slots=%d", holders, slots)
+			}
+		})
 	}
 }
 

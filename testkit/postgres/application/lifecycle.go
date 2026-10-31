@@ -21,6 +21,8 @@ type Application interface {
 	Start(context.Context) error
 	Shutdown(context.Context) error
 	ShutdownTimeout() time.Duration
+	// Done closes only after all owned work and dependency cleanup finish.
+	Done() <-chan struct{}
 	Migrations() []infrastructure.MigrationTarget
 }
 
@@ -38,6 +40,10 @@ func (e *Environment) Start(t testing.TB, app Application, domain ...infrastruct
 	if app == nil || (reflect.ValueOf(app).Kind() == reflect.Pointer && reflect.ValueOf(app).IsNil()) || app.ShutdownTimeout() <= 0 {
 		return fault.New(fault.Invalid, "test environment requires a prepared application")
 	}
+	done := app.Done()
+	if done == nil {
+		return fault.New(fault.Invalid, "test application requires a completion signal")
+	}
 	release, err := acquireSlot(t)
 	if err != nil {
 		return err
@@ -51,7 +57,17 @@ func (e *Environment) Start(t testing.TB, app Application, domain ...infrastruct
 	closeCleanup := func() (err error) {
 		cleanup.Do(func() {
 			err = stop()
-			release()
+			select {
+			case <-done:
+				release()
+			default:
+				// A shutdown deadline bounds the caller's wait, not resource
+				// ownership. Keep capacity until actual cleanup completion.
+				go func() {
+					<-done
+					release()
+				}()
+			}
 		})
 		return err
 	}

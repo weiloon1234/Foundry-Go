@@ -23,7 +23,9 @@ const DefaultConcurrency = 8
 const concurrencyVariable = "FOUNDRY_TEST_APP_CONCURRENCY"
 
 type holder struct {
-	refs int
+	refs     int
+	ready    chan struct{}
+	acquired bool
 }
 
 var (
@@ -71,43 +73,66 @@ func acquireSlot(t testing.TB) (func(), error) {
 	}
 
 	key := topLevelTestName(t)
-
-	limiterMu.Lock()
-	if h, ok := limiterHolders[key]; ok {
+	ctx := t.Context()
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		limiterMu.Lock()
+		h, exists := limiterHolders[key]
+		if !exists {
+			// Publish the pending group before waiting for global capacity.
+			// Siblings reserve references and join this acquisition.
+			h = &holder{ready: make(chan struct{})}
+			limiterHolders[key] = h
+		}
 		h.refs++
 		limiterMu.Unlock()
-		return makeRelease(key), nil
-	}
-	limiterMu.Unlock()
 
-	select {
-	case limiterSem <- struct{}{}:
-	case <-t.Context().Done():
-		return nil, t.Context().Err()
-	}
+		if !exists {
+			select {
+			case limiterSem <- struct{}{}:
+				h.acquired = true
+			case <-ctx.Done():
+			}
+			limiterMu.Lock()
+			if !h.acquired {
+				delete(limiterHolders, key)
+			}
+			close(h.ready)
+			limiterMu.Unlock()
+			if !h.acquired {
+				return nil, ctx.Err()
+			}
+		}
 
-	limiterMu.Lock()
-	if h, ok := limiterHolders[key]; ok {
-		// A parallel subtest of the same test won the race and created the holder:
-		<-limiterSem
-		h.refs++
-		limiterMu.Unlock()
-		return makeRelease(key), nil
+		release := makeRelease(key, h)
+		select {
+		case <-h.ready:
+			if !h.acquired {
+				// The acquiring caller was canceled. A live sibling retries
+				// with its own context instead of inheriting that cancellation.
+				continue
+			}
+			if err := ctx.Err(); err != nil {
+				release()
+				return nil, err
+			}
+			return release, nil
+		case <-ctx.Done():
+			release()
+			return nil, ctx.Err()
+		}
 	}
-
-	limiterHolders[key] = &holder{refs: 1}
-	limiterMu.Unlock()
-	return makeRelease(key), nil
 }
 
-func makeRelease(key string) func() {
+func makeRelease(key string, h *holder) func() {
 	var once sync.Once
 	return func() {
 		once.Do(func() {
 			limiterMu.Lock()
 			defer limiterMu.Unlock()
-			h, ok := limiterHolders[key]
-			if !ok {
+			if limiterHolders[key] != h {
 				return
 			}
 			h.refs--
