@@ -122,10 +122,14 @@ restricted to its selection, which combines four kinds of entry:
 The embedded manifest is a projection (`manifest.Manifest.Project`) containing:
 
 - the selected operations and channels and the schemas they reach;
-- the tables whose row or request schema those operations reach;
+- the tables explicitly named by selected operations' `TableOperation` bindings,
+  together with those tables' schema dependencies;
 - notifications' inbox deliveries, and realtime deliveries on selected channels;
 - the application-wide error definitions, locales, enums, permissions and
   explicit schemas.
+
+Metadata-only tables remain available in the full manifest; a selected surface
+retains a table only through an explicit operation binding.
 
 `contractMetadata()` returns that projection. Schema names are the full
 manifest's in every entry, and identity brands and runtime classes come from the

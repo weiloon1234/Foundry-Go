@@ -1,9 +1,12 @@
 package datatable
 
 import (
+	"fmt"
+
 	"github.com/weiloon1234/Foundry-Go/contract"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
@@ -17,7 +20,7 @@ func QueryEndpoint[S, R, A, P, Q any](table Table[S, R, A], route foundryhttp.Ro
 		row = table.definition.row
 	}
 	endpoint := foundryhttp.DefineEndpoint(route, query, foundryhttp.JSONBody(RequestJSON()), foundryhttp.JSONResponse(200, pagination.NumberedJSON(row)), options...)
-	return foundryhttp.ConfigureEndpoint(endpoint, tableOperation(table, contract.TableQuery, ""))
+	return foundryhttp.ConfigureEndpoint(endpoint, tableOperation(table, "QueryEndpoint", contract.TableQuery, ""))
 }
 
 // BindTicketExport preserves the endpoint's concrete request and ticket response.
@@ -25,10 +28,10 @@ func QueryEndpoint[S, R, A, P, Q any](table Table[S, R, A], route foundryhttp.Ro
 //
 // Example: datatable.BindTicketExport(table, endpoint, requests.ExportRequestValidationFields().Request)
 func BindTicketExport[S, R, A, P, Q, B, T any](table Table[S, R, A], endpoint foundryhttp.Endpoint[P, Q, B, T], request validation.Field[B, Request]) foundryhttp.Endpoint[P, Q, B, T] {
-	if validation.ValidateField(request) != nil {
-		return foundryhttp.ConfigureEndpoint(endpoint, nil)
+	if err := validation.ValidateField(request); err != nil {
+		return foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.InvalidEndpointOption(safeerror.Prefix(fmt.Sprintf("datatable.BindTicketExport table %q: invalid request-field declaration", table.ID()), err)))
 	}
-	return foundryhttp.ConfigureEndpoint(endpoint, tableOperation(table, contract.TableTicketExport, validation.FieldName(request)))
+	return foundryhttp.ConfigureEndpoint(endpoint, tableOperation(table, "BindTicketExport", contract.TableTicketExport, validation.FieldName(request)))
 }
 
 // DownloadEndpoint declares a bodyless table download with the supplied query
@@ -37,7 +40,7 @@ func BindTicketExport[S, R, A, P, Q, B, T any](table Table[S, R, A], endpoint fo
 // Example: datatable.DownloadEndpoint(table, route, query, http.DownloadResponse("text/csv"))
 func DownloadEndpoint[S, R, A, P, Q any](table Table[S, R, A], route foundryhttp.Route[P], query foundryhttp.Query[Q], response foundryhttp.Response[foundryhttp.Download], options ...foundryhttp.EndpointOption) foundryhttp.Endpoint[P, Q, foundryhttp.NoBody, foundryhttp.Download] {
 	endpoint := foundryhttp.DefineEndpoint(route, query, foundryhttp.EmptyBody(), response, options...)
-	return foundryhttp.ConfigureEndpoint(endpoint, tableOperation(table, contract.TableDownload, ""))
+	return foundryhttp.ConfigureEndpoint(endpoint, tableOperation(table, "DownloadEndpoint", contract.TableDownload, ""))
 }
 
 // BindFileExport associates a direct file export while preserving its complete
@@ -45,12 +48,12 @@ func DownloadEndpoint[S, R, A, P, Q any](table Table[S, R, A], route foundryhttp
 //
 // Example: datatable.BindFileExport(table, endpoint)
 func BindFileExport[S, R, A, P, Q, B any](table Table[S, R, A], endpoint foundryhttp.Endpoint[P, Q, B, foundryhttp.Download]) foundryhttp.Endpoint[P, Q, B, foundryhttp.Download] {
-	return foundryhttp.ConfigureEndpoint(endpoint, tableOperation(table, contract.TableFileExport, ""))
+	return foundryhttp.ConfigureEndpoint(endpoint, tableOperation(table, "BindFileExport", contract.TableFileExport, ""))
 }
 
-func tableOperation[S, R, A any](table Table[S, R, A], kind contract.TableOperationKind, field string) foundryhttp.EndpointOption {
-	if table.Validate() != nil {
-		return nil
+func tableOperation[S, R, A any](table Table[S, R, A], constructor string, kind contract.TableOperationKind, field string) foundryhttp.EndpointOption {
+	if err := table.Validate(); err != nil {
+		return foundryhttp.InvalidEndpointOption(safeerror.Prefix(fmt.Sprintf("datatable.%s table %q: invalid table declaration", constructor, table.ID()), err))
 	}
 	return foundryhttp.TableOperation(contract.TableOperationBinding{Table: table.ID(), Kind: kind, RequestField: field})
 }

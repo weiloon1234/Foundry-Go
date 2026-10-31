@@ -116,16 +116,23 @@ manifest, as the [client consumer](../../tests/fixtures/consumer/clientcontracts
 does. This exports setting metadata, not loaded server values. Secret fields,
 secret groups and secret/password types cannot be public.
 
-The client tag also accepts `fallback`, a positive `max` length, and `kind`:
+The client tag also accepts the bare `optional` flag, `fallback`, a positive `max`
+length, and `kind`:
 `string`, `boolean`, `number`, `locale`, `currency`, `time_zone` or `enum`.
 Locale, currency and timezone kinds require string fields; enum kind requires
 a declared enum. The TypeScript entry exports `PublicEnv`, `publicEnvSchema`,
 `decodePublicEnv` and `findPublicEnvProblems` from this metadata.
 
+For example, `client:"env=VITE_TIME_ZONE,kind=time_zone,optional"` declares an
+optional time zone. For every kind, optional properties have TypeScript type
+`T | undefined`; absent or blank values decode to `undefined`. Optional settings
+prohibit nonempty fallbacks, including whitespace. Supplied values still undergo
+the declared kind's validation; supplied `false` and numeric `0` remain values.
+
 Public `number` values and fallbacks use finite JavaScript numbers: decimal
 and scientific notation (such as `-12.5` or `1e2`), or unsigned integers with
 `0x`, `0o` or `0b` prefixes. Go hexadecimal floats (`0x1p2`), numeric separators
 (`1_000`), `NaN`, infinity and overflow are rejected during fallback generation
-and client validation. Numeric fallbacks must be nonempty and have no surrounding
-whitespace. Supplied environment values are trimmed; absent or blank values use
-the declared fallback.
+and client validation. Non-optional numeric fallbacks must be nonempty and have no
+surrounding whitespace. Supplied environment values are trimmed; absent or blank
+values use the declared fallback only for non-optional settings.

@@ -3,11 +3,14 @@ package typescript
 import (
 	"fmt"
 	"maps"
+	"reflect"
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/datatable"
+	"github.com/weiloon1234/Foundry-Go/http/pagination"
+	"github.com/weiloon1234/Foundry-Go/internal/contractmeta"
 )
 
 type tableOperations struct {
@@ -57,7 +60,9 @@ func (r *renderer) tables() error {
 		r.out.WriteString("}\n")
 	}
 	r.out.WriteString("export type TableId = keyof TableRows;\nexport type TableRow<Id extends TableId> = TableRows[Id];\nexport type TableReceivedRow<Id extends TableId> = TableReceivedRows[Id];\n")
-	r.tablePageFamily(r.document.Tables[0])
+	if err := r.tablePageFamily(); err != nil {
+		return err
+	}
 	for _, role := range []string{"Query", "Export", "Download"} {
 		for _, field := range []string{"Inputs", "Outputs", "OperationNames", "Kinds"} {
 			if role == "Query" && field == "Outputs" {
@@ -135,21 +140,29 @@ func (r *renderer) tables() error {
 	return nil
 }
 
-func (r *renderer) tablePageFamily(table manifest.Table) {
-	// Render the canonical schema with only its declared row parameter replaced.
+func (r *renderer) tablePageFamily() error {
+	// Use a distinct row parameter so fixed page fields never become generic,
+	// even when a table's row is itself a pagination metadata type.
+	rowID := contractmeta.TypeID(reflect.TypeFor[contractmeta.PageRow]())
+	row := contract.DefineJSON[contractmeta.PageRow](contract.Schema{Root: rowID, Types: []contract.Type{{ID: rowID, Kind: contract.ObjectKind}}})
+	schema, err := pagination.NumberedJSON(row).Description()
+	if err != nil {
+		return err
+	}
 	template := *r
-	template.names, template.received = maps.Clone(r.names), maps.Clone(r.received)
-	template.received[table.Row] = "Row"
-	for _, typ := range r.document.Types {
-		if typ.Kind == contract.ArrayKind && typ.Element == table.Row {
+	template.received = maps.Clone(r.received)
+	template.received[rowID] = "Row"
+	for _, typ := range schema.Types {
+		if typ.Kind == contract.ArrayKind && typ.Element == rowID {
 			template.received[typ.ID] = template.renderExpression(typ, true)
 		}
 	}
-	for _, typ := range r.document.Types {
-		if typ.ID == table.Page {
+	for _, typ := range schema.Types {
+		if typ.ID == schema.Root {
 			fmt.Fprintf(&r.out, "export type TablePageReceived<Row> = %s;\n", template.renderExpression(typ, true))
 		}
 	}
+	return nil
 }
 
 func (r *renderer) renderTableEntry(t manifest.Table) {

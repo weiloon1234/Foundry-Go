@@ -17,6 +17,9 @@ This release is breaking; see the entries below, the
 [readable-name migration](docs/guides/client-contracts.md#migrating-from-v02-to-v03).
 The first immutable client contract cohort is `contracts-v0.3.0`.
 
+- Fixed: Generated table page families preserve concrete pagination metadata even
+  when a table uses that metadata as its row. Invalid datatable endpoint constructors
+  retain their original declaration causes and identify the failing constructor.
 - Added: Public browser configuration accepts the bare `optional` client tag flag
   for every kind. Missing or blank values decode to `undefined`, and generated
   TypeScript properties include `| undefined`. Optional settings reject non-empty fallbacks.

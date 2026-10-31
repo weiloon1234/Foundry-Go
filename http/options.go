@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"slices"
@@ -31,18 +32,20 @@ const (
 	optionLimits
 	optionErrors
 	optionTableOperation
+	optionDeclarationError
 )
 
 type endpointOptionValue struct {
-	tableOperation contract.TableOperationBinding
-	kind           optionKind
-	scope          Scope
-	timeout        time.Duration
-	bytes          int64
-	middleware     []Middleware
-	documentation  RouteDocumentation
-	limits         EndpointLimits
-	errors         []ErrorDeclaration
+	declarationError error
+	tableOperation   contract.TableOperationBinding
+	kind             optionKind
+	scope            Scope
+	timeout          time.Duration
+	bytes            int64
+	middleware       []Middleware
+	documentation    RouteDocumentation
+	limits           EndpointLimits
+	errors           []ErrorDeclaration
 }
 type routeOptionValue struct{ endpointOptionValue }
 
@@ -109,6 +112,10 @@ func ConfigureEndpoint[P, Q, B, R any](endpoint Endpoint[P, Q, B, R], options ..
 		}
 		setting := option.endpointOption()
 		switch setting.kind {
+		case optionDeclarationError:
+			if endpoint.route.err == nil {
+				endpoint.route.err = safeerror.Prefix(fmt.Sprintf("endpoint %q", endpoint.route.spec.ID), setting.declarationError)
+			}
 		case optionTableOperation:
 			if endpoint.hasTableOperation {
 				if endpoint.route.err == nil {

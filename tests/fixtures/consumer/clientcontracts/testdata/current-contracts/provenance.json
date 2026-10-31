@@ -1,5 +1,5 @@
 {
-  "base_commit": "52fa602b647b979f6dc6b3aea2ea15e66e908f4e",
+  "base_commit": "db7a461c274c1b0d9fa10fdfe363355b60bd62b0",
   "command": "make publish-client-contracts",
   "source_sha256": {
     "client_publication_test.go": "56a014d6902a05c25ccaf939bb4409f39a4523255817ff4e6ac233ba58856c93",
@@ -8,7 +8,7 @@
   },
   "artifacts": {
     "client/.foundry-gen.json": {
-      "old_sha256": "5444757d494ff6447136adc09db3354b911af584cd77a809a0a14d14e588e39c",
+      "old_sha256": "8280eb131a84a60463ef99e981e5708a43cab8597bf6925114034be55da3184f",
       "new_sha256": "8280eb131a84a60463ef99e981e5708a43cab8597bf6925114034be55da3184f"
     },
     "client/contracts_browser_foundry.gen.ts": {
@@ -16,7 +16,7 @@
       "new_sha256": "ddeb09246b7ec609bd11ddde04e0371438ea05de0c3ddd5b3fb3de35f178a5ad"
     },
     "client/contracts_foundry.gen.ts": {
-      "old_sha256": "dbf27f5b3f28e95f55b4cdb9cb5240860b6b2fcba603c3c1c81aae24464f1ea9",
+      "old_sha256": "6bdab88589ed6140a9fd92393e2bfba59bdbb72abf55c1c6ab502602a1933f64",
       "new_sha256": "6bdab88589ed6140a9fd92393e2bfba59bdbb72abf55c1c6ab502602a1933f64"
     },
     "client/contracts_live_foundry.gen.ts": {
