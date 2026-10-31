@@ -47,21 +47,21 @@ func ValueOf[M any, K comparable, V any](owner extensions.Owner[M, K], name Name
 func wrapValueHandle[M any, K comparable, V any](state valueSlot[M, K, V]) *valueHandleCore {
 	return &valueHandleCore{
 		key:          func(out unsafe.Pointer) { *(*Key[M, K, V])(out) = state.key },
-		bind:         func(m *Manager) *valueHandleCore { return wrapValueHandle(state.From(m)) },
+		bind:         func(m *Manager) *valueHandleCore { return wrapValueHandle(state.from(m)) },
 		relation:     func(out unsafe.Pointer) { *(*extensionslot.Slot[M])(out) = state.loader },
-		validate:     state.Validate,
-		describe:     state.Describe,
-		registration: state.Registration,
-		name:         state.Name,
+		validate:     state.validate,
+		describe:     state.describe,
+		registration: state.registration,
+		name:         state.name,
 		save: func(ctx context.Context, owner unsafe.Pointer, input unsafe.Pointer) error {
-			return state.Save(ctx, *(*M)(owner), *(*V)(input))
+			return state.save(ctx, *(*M)(owner), *(*V)(input))
 		},
 		saveIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, input unsafe.Pointer) error {
-			return state.SaveIn(ctx, tx, *(*M)(owner), *(*V)(input))
+			return state.saveIn(ctx, tx, *(*M)(owner), *(*V)(input))
 		},
-		forget: func(ctx context.Context, owner unsafe.Pointer) (bool, error) { return state.Forget(ctx, *(*M)(owner)) },
+		forget: func(ctx context.Context, owner unsafe.Pointer) (bool, error) { return state.forget(ctx, *(*M)(owner)) },
 		forgetIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer) (bool, error) {
-			return state.ForgetIn(ctx, tx, *(*M)(owner))
+			return state.forgetIn(ctx, tx, *(*M)(owner))
 		},
 	}
 }

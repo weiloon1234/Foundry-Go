@@ -87,7 +87,7 @@ func buildMIME(m Message, attachments []ResolvedAttachment, limit int, id string
 	} else if err := body(b); err != nil {
 		return nil, emaildiag.Failure(Construction)
 	}
-	return slices.Clone(b.Bytes()), nil
+	return slices.Clone(b.bytes()), nil
 }
 func addressHeader(addresses []Address) string {
 	values := make([]string, len(addresses))

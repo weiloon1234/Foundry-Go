@@ -50,7 +50,7 @@ func TestAddFilesToValidatesBeforeOpening(t *testing.T) {
 	// must fail before either a file or the store is touched.
 	collection := state.collection
 	manager := &Manager{collections: map[string]Registration{collection.registrationKey(): collection.Registration()}}
-	state = state.From(manager)
+	state = state.from(manager)
 	next, nextErr := AddFilesTo(t.Context(), ManyHandle[batchOwner, int64]{core: wrapManyHandle(state)}, batchOwner{ID: 1}, files)
 	if !errors.Is(nextErr, fault.Invalid) || next != nil || opened != 0 {
 		t.Fatal("batch preflight changed", nextErr, opened)

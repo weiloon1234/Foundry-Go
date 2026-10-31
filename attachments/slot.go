@@ -60,7 +60,7 @@ func (Many[M]) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("attachment
 func (Many[M]) MarshalJSON() ([]byte, error) { return nil, invalid() }
 
 // slotDefinition shares declaration, binding, manager, loading and links for
-// both slot kinds; oneSlot and manySlot promote its exported methods.
+// both slot kinds; oneSlot and manySlot share its private methods.
 type slotDefinition[M any, K comparable, S any] struct {
 	collection Collection[M, K]
 	binding    extensions.SlotBinding[M, K, S]
@@ -85,13 +85,13 @@ type manySlot[M any, K comparable] struct {
 // defineOne is the generated declaration boundary for a One slot. The slot
 // type selects Single cardinality; a policy declaring Multiple is invalid.
 func defineOne[M any, K comparable](owner extensions.Owner[M, K], name Name, policy Policy, binding extensions.SlotBinding[M, K, One[M]]) oneSlot[M, K] {
-	return oneSlot[M, K]{slotDefinition: defineSlot(owner, name, policy, Single, binding)}.From(nil)
+	return oneSlot[M, K]{slotDefinition: defineSlot(owner, name, policy, Single, binding)}.from(nil)
 }
 
 // defineMany is the generated declaration boundary for a Many slot. The slot
 // type selects Multiple cardinality; a policy declaring Single is invalid.
 func defineMany[M any, K comparable](owner extensions.Owner[M, K], name Name, policy Policy, binding extensions.SlotBinding[M, K, Many[M]]) manySlot[M, K] {
-	return manySlot[M, K]{slotDefinition: defineSlot(owner, name, policy, Multiple, binding)}.From(nil)
+	return manySlot[M, K]{slotDefinition: defineSlot(owner, name, policy, Multiple, binding)}.from(nil)
 }
 
 func defineSlot[M any, K comparable, S any](owner extensions.Owner[M, K], name Name, policy Policy, cardinality Cardinality, binding extensions.SlotBinding[M, K, S]) slotDefinition[M, K, S] {
@@ -106,9 +106,9 @@ func defineSlot[M any, K comparable, S any](owner extensions.Owner[M, K], name N
 	return slotDefinition[M, K, S]{collection: Define(owner, name, policy), binding: binding, err: err}
 }
 
-// From returns a copy that borrows the manager. A nil manager leaves the slot
+// from returns a copy that borrows the manager. A nil manager leaves the slot
 // unbound; loading, links and writes then report fault.Missing.
-func (s oneSlot[M, K]) From(m *Manager) oneSlot[M, K] {
+func (s oneSlot[M, K]) from(m *Manager) oneSlot[M, K] {
 	s.manager = m
 	s.loader = relationOf(s.slotDefinition, m, func(o One[M]) bool { return o.loaded }, func(o One[M]) int { return boolCount(o.file != nil) }, func(files []File[M]) (One[M], error) {
 		switch len(files) {
@@ -122,9 +122,9 @@ func (s oneSlot[M, K]) From(m *Manager) oneSlot[M, K] {
 	return s
 }
 
-// From returns a copy that borrows the manager. A nil manager leaves the slot
+// from returns a copy that borrows the manager. A nil manager leaves the slot
 // unbound; loading, links and writes then report fault.Missing.
-func (s manySlot[M, K]) From(m *Manager) manySlot[M, K] {
+func (s manySlot[M, K]) from(m *Manager) manySlot[M, K] {
 	s.manager = m
 	s.loader = relationOf(s.slotDefinition, m, func(files Many[M]) bool { return files.loaded }, func(files Many[M]) int { return len(files.files) }, func(files []File[M]) (Many[M], error) {
 		return Many[M]{files: files, loaded: true}, nil
@@ -236,12 +236,12 @@ func (s slotDefinition[M, K, S]) attachment(owner M, file File[M]) Attachment[M,
 	return Attachment[M, K]{File: file, owner: s.binding.Reference(owner)}
 }
 
-// Collection returns the underlying declaration for the explicit attachment API.
-func (s slotDefinition[M, K, S]) Collection() Collection[M, K] { return s.collection }
+// collectionDeclaration returns the underlying declaration for the explicit attachment API.
+func (s slotDefinition[M, K, S]) collectionDeclaration() Collection[M, K] { return s.collection }
 
-// Describe returns the slot's inspection snapshot.
-func (s slotDefinition[M, K, S]) Describe() extensions.SlotDescription {
-	result := extensions.SlotDescription{Field: s.binding.Field, Kind: "many", Name: string(s.Name()), Storage: "foundry_attachments"}
+// describe returns the slot's inspection snapshot.
+func (s slotDefinition[M, K, S]) describe() extensions.SlotDescription {
+	result := extensions.SlotDescription{Field: s.binding.Field, Kind: "many", Name: string(s.name()), Storage: "foundry_attachments"}
 	if s.collection.definition == nil {
 		return result
 	}
@@ -259,15 +259,12 @@ func (s slotDefinition[M, K, S]) Describe() extensions.SlotDescription {
 	return result
 }
 
-// Name is the stored collection name.
-func (s slotDefinition[M, K, S]) Name() Name { return s.collection.Name() }
+// name is the stored collection name.
+func (s slotDefinition[M, K, S]) name() Name { return s.collection.Name() }
 
-// Validate checks the declaration, cardinality and generated binding.
-func (s slotDefinition[M, K, S]) Validate() error { return s.validate() }
-
-// Registration is the manager registration of the underlying collection,
+// registration is the manager registration of the underlying collection,
 // including the slot's cardinality and binding validation.
-func (s slotDefinition[M, K, S]) Registration() Registration {
+func (s slotDefinition[M, K, S]) registration() Registration {
 	registration := s.collection.Registration()
 	if err := s.validate(); err != nil && registration.validate != nil {
 		registration.validate = func(*extensions.Registry) error { return err }
@@ -275,10 +272,10 @@ func (s slotDefinition[M, K, S]) Registration() Registration {
 	return registration
 }
 
-// URL derives the public URL of one loaded file of owner without database or
+// url derives the public URL of one loaded file of owner without database or
 // storage I/O, under the collection's active-content policy. Authorize access
 // to the file first; the URL does not.
-func (s slotDefinition[M, K, S]) URL(ctx context.Context, owner M, file File[M]) (string, error) {
+func (s slotDefinition[M, K, S]) url(ctx context.Context, owner M, file File[M]) (string, error) {
 	m, err := s.bound()
 	if err != nil {
 		return "", err
@@ -286,9 +283,9 @@ func (s slotDefinition[M, K, S]) URL(ctx context.Context, owner M, file File[M])
 	return s.collection.PublicURLOf(ctx, m, s.attachment(owner, file))
 }
 
-// TemporaryURL signs a read link for one loaded file, pinned to its stored
+// temporaryURL signs a read link for one loaded file, pinned to its stored
 // version, without database or storage I/O.
-func (s slotDefinition[M, K, S]) TemporaryURL(ctx context.Context, owner M, file File[M], options storage.LinkOptions) (storage.TemporaryURL, error) {
+func (s slotDefinition[M, K, S]) temporaryURL(ctx context.Context, owner M, file File[M], options storage.LinkOptions) (storage.TemporaryURL, error) {
 	m, err := s.bound()
 	if err != nil {
 		return storage.TemporaryURL{}, err
@@ -296,9 +293,9 @@ func (s slotDefinition[M, K, S]) TemporaryURL(ctx context.Context, owner M, file
 	return s.collection.TemporaryURLOf(ctx, m, s.attachment(owner, file), options)
 }
 
-// VariantURL derives the public URL of a generated variant of one loaded
+// variantURL derives the public URL of a generated variant of one loaded
 // file. A variant not generated yet reports VariantUnavailable.
-func (s slotDefinition[M, K, S]) VariantURL(ctx context.Context, owner M, file File[M], variant Variant) (string, error) {
+func (s slotDefinition[M, K, S]) variantURL(ctx context.Context, owner M, file File[M], variant Variant) (string, error) {
 	m, err := s.bound()
 	if err != nil {
 		return "", err
@@ -306,9 +303,9 @@ func (s slotDefinition[M, K, S]) VariantURL(ctx context.Context, owner M, file F
 	return s.collection.VariantPublicURLOf(ctx, m, s.attachment(owner, file), variant)
 }
 
-// PublicURL derives the public URL of owner's loaded file without I/O. It is
+// publicURL derives the public URL of owner's loaded file without I/O. It is
 // absent when the loaded slot holds no file and fails when it was not loaded.
-func (s oneSlot[M, K]) PublicURL(ctx context.Context, owner M) (value.Optional[string], error) {
+func (s oneSlot[M, K]) publicURL(ctx context.Context, owner M) (value.Optional[string], error) {
 	file, loaded := s.binding.Get(owner).Get()
 	if !loaded {
 		return value.Optional[string]{}, notLoaded()
@@ -317,16 +314,16 @@ func (s oneSlot[M, K]) PublicURL(ctx context.Context, owner M) (value.Optional[s
 	if !ok {
 		return value.Optional[string]{}, nil
 	}
-	url, err := s.URL(ctx, owner, present)
+	url, err := s.url(ctx, owner, present)
 	if err != nil {
 		return value.Optional[string]{}, err
 	}
 	return value.Set(url), nil
 }
 
-// PublicURLs derives the public URLs of owner's loaded files in collection
+// publicURLs derives the public URLs of owner's loaded files in collection
 // order without I/O. It fails when the slot was not loaded.
-func (s manySlot[M, K]) PublicURLs(ctx context.Context, owner M) ([]string, error) {
+func (s manySlot[M, K]) publicURLs(ctx context.Context, owner M) ([]string, error) {
 	files, loaded := s.binding.Get(owner).Get()
 	if !loaded {
 		return nil, notLoaded()
@@ -334,7 +331,7 @@ func (s manySlot[M, K]) PublicURLs(ctx context.Context, owner M) ([]string, erro
 	urls := make([]string, len(files))
 	for i, file := range files {
 		var err error
-		if urls[i], err = s.URL(ctx, owner, file); err != nil {
+		if urls[i], err = s.url(ctx, owner, file); err != nil {
 			return nil, err
 		}
 	}

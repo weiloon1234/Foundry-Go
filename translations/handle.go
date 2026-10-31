@@ -54,36 +54,36 @@ func TextOf[M any, K comparable](owner extensions.Owner[M, K], name Name, option
 func wrapTextHandle[M any, K comparable](state textSlot[M, K]) *textHandleCore {
 	return &textHandleCore{
 		field:        func(out unsafe.Pointer) { *(*Field[M, K])(out) = state.field },
-		bind:         func(m *Manager) *textHandleCore { return wrapTextHandle(state.From(m)) },
+		bind:         func(m *Manager) *textHandleCore { return wrapTextHandle(state.from(m)) },
 		relation:     func(out unsafe.Pointer) { *(*extensionslot.Slot[M])(out) = state.loader },
-		validate:     state.Validate,
-		describe:     state.Describe,
-		registration: state.Registration,
-		name:         state.Name,
-		options:      state.Options,
-		rule:         state.Rule,
-		mergeRule:    state.MergeRule,
+		validate:     state.validate,
+		describe:     state.describe,
+		registration: state.registration,
+		name:         state.name,
+		options:      state.options,
+		rule:         state.rule,
+		mergeRule:    state.mergeRule,
 		save: func(ctx context.Context, owner unsafe.Pointer, input map[i18n.LocaleID]string) error {
-			return state.Save(ctx, *(*M)(owner), input)
+			return state.save(ctx, *(*M)(owner), input)
 		},
 		saveIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, input map[i18n.LocaleID]string) error {
-			return state.SaveIn(ctx, tx, *(*M)(owner), input)
+			return state.saveIn(ctx, tx, *(*M)(owner), input)
 		},
 		sync: func(ctx context.Context, owner unsafe.Pointer, input map[i18n.LocaleID]string) error {
-			return state.Sync(ctx, *(*M)(owner), input)
+			return state.sync(ctx, *(*M)(owner), input)
 		},
 		syncIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, input map[i18n.LocaleID]string) error {
-			return state.SyncIn(ctx, tx, *(*M)(owner), input)
+			return state.syncIn(ctx, tx, *(*M)(owner), input)
 		},
 		forget: func(ctx context.Context, owner unsafe.Pointer, locale i18n.LocaleID) (bool, error) {
-			return state.Forget(ctx, *(*M)(owner), locale)
+			return state.forget(ctx, *(*M)(owner), locale)
 		},
 		forgetIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, locale i18n.LocaleID) (bool, error) {
-			return state.ForgetIn(ctx, tx, *(*M)(owner), locale)
+			return state.forgetIn(ctx, tx, *(*M)(owner), locale)
 		},
-		clear: func(ctx context.Context, owner unsafe.Pointer) (int, error) { return state.Clear(ctx, *(*M)(owner)) },
+		clear: func(ctx context.Context, owner unsafe.Pointer) (int, error) { return state.clear(ctx, *(*M)(owner)) },
 		clearIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer) (int, error) {
-			return state.ClearIn(ctx, tx, *(*M)(owner))
+			return state.clearIn(ctx, tx, *(*M)(owner))
 		},
 	}
 }

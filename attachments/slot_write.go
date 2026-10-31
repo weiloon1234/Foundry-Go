@@ -22,16 +22,16 @@ import (
 // ClientContentType only the existing text-specialization hint.
 type FileSource = upload.Source
 
-// ReplaceFile replaces owner's collection with file, publishing in the
+// replaceFile replaces owner's collection with file, publishing in the
 // manager's own transaction, so commit the owner first; inspect
 // Result.Publication when an error is returned. To publish inside a
 // transaction, PrepareFile before it begins and ReplaceIn inside it.
-func (s slotDefinition[M, K, S]) ReplaceFile(ctx context.Context, owner M, file FileSource) (Result[M, K], error) {
-	return withFile(ctx, file, func(upload Upload) (Result[M, K], error) { return s.Replace(ctx, owner, upload) })
+func (s slotDefinition[M, K, S]) replaceFile(ctx context.Context, owner M, file FileSource) (Result[M, K], error) {
+	return withFile(ctx, file, func(upload Upload) (Result[M, K], error) { return s.replace(ctx, owner, upload) })
 }
 
-// Replace replaces owner's collection with one upload.
-func (s slotDefinition[M, K, S]) Replace(ctx context.Context, owner M, upload Upload) (Result[M, K], error) {
+// replace replaces owner's collection with one upload.
+func (s slotDefinition[M, K, S]) replace(ctx context.Context, owner M, upload Upload) (Result[M, K], error) {
 	m, err := s.bound()
 	if err != nil {
 		return Result[M, K]{}, err
@@ -39,16 +39,16 @@ func (s slotDefinition[M, K, S]) Replace(ctx context.Context, owner M, upload Up
 	return s.collection.Replace(ctx, m, s.binding.Reference(owner), upload)
 }
 
-// PrepareFile reads, checks and stores file for owner without publishing it,
+// prepareFile reads, checks and stores file for owner without publishing it,
 // so a later transaction publishes it with ReplaceIn (or AddIn) using only its
 // own connection. Call it before that transaction begins; owner may be a model
 // the transaction creates, with its key chosen first. See Collection.Prepare.
-func (s slotDefinition[M, K, S]) PrepareFile(ctx context.Context, owner M, file FileSource) (Prepared[M, K], error) {
-	return withFile(ctx, file, func(upload Upload) (Prepared[M, K], error) { return s.Prepare(ctx, owner, upload) })
+func (s slotDefinition[M, K, S]) prepareFile(ctx context.Context, owner M, file FileSource) (Prepared[M, K], error) {
+	return withFile(ctx, file, func(upload Upload) (Prepared[M, K], error) { return s.prepare(ctx, owner, upload) })
 }
 
-// Prepare is PrepareFile for one upload.
-func (s slotDefinition[M, K, S]) Prepare(ctx context.Context, owner M, upload Upload) (Prepared[M, K], error) {
+// prepare is PrepareFile for one upload.
+func (s slotDefinition[M, K, S]) prepare(ctx context.Context, owner M, upload Upload) (Prepared[M, K], error) {
 	m, err := s.bound()
 	if err != nil {
 		return Prepared[M, K]{}, err
@@ -56,11 +56,11 @@ func (s slotDefinition[M, K, S]) Prepare(ctx context.Context, owner M, upload Up
 	return s.collection.Prepare(ctx, m, s.binding.Reference(owner), upload)
 }
 
-// ReplaceIn publishes a prepared upload as owner's collection inside tx, a
+// replaceIn publishes a prepared upload as owner's collection inside tx, a
 // transaction of the extension store's pool, using only that transaction; a
 // rollback unpublishes it. Old files are cleaned after tx commits. See
 // Collection.AddIn.
-func (s slotDefinition[M, K, S]) ReplaceIn(ctx context.Context, tx *database.Tx, owner M, prepared Prepared[M, K]) (Result[M, K], error) {
+func (s slotDefinition[M, K, S]) replaceIn(ctx context.Context, tx *database.Tx, owner M, prepared Prepared[M, K]) (Result[M, K], error) {
 	m, err := s.bound()
 	if err != nil {
 		return Result[M, K]{}, err
@@ -68,8 +68,8 @@ func (s slotDefinition[M, K, S]) ReplaceIn(ctx context.Context, tx *database.Tx,
 	return s.collection.ReplaceIn(ctx, tx, m, s.binding.Reference(owner), prepared)
 }
 
-// Discard reclaims a prepared upload that will not be published.
-func (s slotDefinition[M, K, S]) Discard(ctx context.Context, prepared Prepared[M, K]) error {
+// discard reclaims a prepared upload that will not be published.
+func (s slotDefinition[M, K, S]) discard(ctx context.Context, prepared Prepared[M, K]) error {
 	m, err := s.bound()
 	if err != nil {
 		return err
@@ -77,8 +77,8 @@ func (s slotDefinition[M, K, S]) Discard(ctx context.Context, prepared Prepared[
 	return s.collection.Discard(ctx, m, prepared)
 }
 
-// Detach retires one file of owner's collection and cleans its storage.
-func (s slotDefinition[M, K, S]) Detach(ctx context.Context, owner M, id ID[M]) (ChangeResult, error) {
+// detach retires one file of owner's collection and cleans its storage.
+func (s slotDefinition[M, K, S]) detach(ctx context.Context, owner M, id ID[M]) (ChangeResult, error) {
 	m, err := s.bound()
 	if err != nil {
 		return ChangeResult{}, err
@@ -86,8 +86,8 @@ func (s slotDefinition[M, K, S]) Detach(ctx context.Context, owner M, id ID[M]) 
 	return s.collection.Detach(ctx, m, s.binding.Reference(owner), id)
 }
 
-// Clear retires every file of owner's collection and cleans their storage.
-func (s slotDefinition[M, K, S]) Clear(ctx context.Context, owner M) (ChangeResult, error) {
+// clear retires every file of owner's collection and cleans their storage.
+func (s slotDefinition[M, K, S]) clear(ctx context.Context, owner M) (ChangeResult, error) {
 	m, err := s.bound()
 	if err != nil {
 		return ChangeResult{}, err
@@ -95,14 +95,14 @@ func (s slotDefinition[M, K, S]) Clear(ctx context.Context, owner M) (ChangeResu
 	return s.collection.Clear(ctx, m, s.binding.Reference(owner))
 }
 
-// Accepts reports whether file satisfies this slot's policy, using the same
+// accepts reports whether file satisfies this slot's policy, using the same
 // filename, size and byte-detected media checks as a write, including image
 // inspection under an image plan, without storage or database work. It
 // returns false for a rejected file and an error only when checking fails.
 // Image transformation limits are checked by the write, which stays
 // authoritative. Wrap Accepts in validation.Custom with an application rule ID
 // to report rejected uploads as request validation issues.
-func (s slotDefinition[M, K, S]) Accepts(ctx context.Context, file FileSource) (bool, error) {
+func (s slotDefinition[M, K, S]) accepts(ctx context.Context, file FileSource) (bool, error) {
 	m, err := s.bound()
 	if err != nil {
 		return false, err
@@ -141,13 +141,13 @@ func (s slotDefinition[M, K, S]) Accepts(ctx context.Context, file FileSource) (
 	return accepted, err
 }
 
-// AddFile appends file to owner's multiple-file collection.
-func (s manySlot[M, K]) AddFile(ctx context.Context, owner M, file FileSource) (Result[M, K], error) {
-	return withFile(ctx, file, func(upload Upload) (Result[M, K], error) { return s.Add(ctx, owner, upload) })
+// addFile appends file to owner's multiple-file collection.
+func (s manySlot[M, K]) addFile(ctx context.Context, owner M, file FileSource) (Result[M, K], error) {
+	return withFile(ctx, file, func(upload Upload) (Result[M, K], error) { return s.add(ctx, owner, upload) })
 }
 
-// Add appends one upload to owner's multiple-file collection.
-func (s manySlot[M, K]) Add(ctx context.Context, owner M, upload Upload) (Result[M, K], error) {
+// add appends one upload to owner's multiple-file collection.
+func (s manySlot[M, K]) add(ctx context.Context, owner M, upload Upload) (Result[M, K], error) {
 	m, err := s.bound()
 	if err != nil {
 		return Result[M, K]{}, err
@@ -155,9 +155,9 @@ func (s manySlot[M, K]) Add(ctx context.Context, owner M, upload Upload) (Result
 	return s.collection.Add(ctx, m, s.binding.Reference(owner), upload)
 }
 
-// AddIn publishes a prepared upload into owner's collection inside tx; see
+// addIn publishes a prepared upload into owner's collection inside tx; see
 // ReplaceIn.
-func (s manySlot[M, K]) AddIn(ctx context.Context, tx *database.Tx, owner M, prepared Prepared[M, K]) (Result[M, K], error) {
+func (s manySlot[M, K]) addIn(ctx context.Context, tx *database.Tx, owner M, prepared Prepared[M, K]) (Result[M, K], error) {
 	m, err := s.bound()
 	if err != nil {
 		return Result[M, K]{}, err
@@ -165,8 +165,8 @@ func (s manySlot[M, K]) AddIn(ctx context.Context, tx *database.Tx, owner M, pre
 	return s.collection.AddIn(ctx, tx, m, s.binding.Reference(owner), prepared)
 }
 
-// Reorder sets the collection order to an exact permutation of its file IDs.
-func (s manySlot[M, K]) Reorder(ctx context.Context, owner M, order []ID[M]) ([]Attachment[M, K], error) {
+// reorder sets the collection order to an exact permutation of its file IDs.
+func (s manySlot[M, K]) reorder(ctx context.Context, owner M, order []ID[M]) ([]Attachment[M, K], error) {
 	m, err := s.bound()
 	if err != nil {
 		return nil, err

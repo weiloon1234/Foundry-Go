@@ -75,23 +75,23 @@ func defineValue[M any, K comparable, V any](owner extensions.Owner[M, K], name 
 		}
 		spec.JSON = inferred
 	}
-	return valueSlot[M, K, V]{key: Define(owner, name, spec.Version, spec.JSON), binding: binding, err: err}.From(nil)
+	return valueSlot[M, K, V]{key: Define(owner, name, spec.Version, spec.JSON), binding: binding, err: err}.from(nil)
 }
 
-// Key returns the underlying declaration for the explicit metadata API.
-func (s valueSlot[M, K, V]) Key() Key[M, K, V] { return s.key }
+// keyDeclaration returns the underlying declaration for the explicit metadata API.
+func (s valueSlot[M, K, V]) keyDeclaration() Key[M, K, V] { return s.key }
 
-// Name is the stored key name.
-func (s valueSlot[M, K, V]) Name() Name { return s.key.Name() }
+// name is the stored key name.
+func (s valueSlot[M, K, V]) name() Name { return s.key.Name() }
 
-// Describe returns the slot's inspection snapshot.
-func (s valueSlot[M, K, V]) Describe() extensions.SlotDescription {
-	return extensions.SlotDescription{Field: s.binding.Field, Kind: "value", Name: string(s.Name()), Storage: "foundry_model_metadata", MaxBytes: MaxValueBytes, Version: uint32(s.key.Version())}
+// describe returns the slot's inspection snapshot.
+func (s valueSlot[M, K, V]) describe() extensions.SlotDescription {
+	return extensions.SlotDescription{Field: s.binding.Field, Kind: "value", Name: string(s.name()), Storage: "foundry_model_metadata", MaxBytes: MaxValueBytes, Version: uint32(s.key.Version())}
 }
 
-// From returns a copy that borrows the manager. A nil manager leaves the slot
+// from returns a copy that borrows the manager. A nil manager leaves the slot
 // unbound; loading and writes then report fault.Missing.
-func (s valueSlot[M, K, V]) From(m *Manager) valueSlot[M, K, V] {
+func (s valueSlot[M, K, V]) from(m *Manager) valueSlot[M, K, V] {
 	s.manager = m
 	binding := extensionslot.Binding[M, Value[V]]{
 		Name: s.binding.Field, Get: s.binding.Get, Set: s.binding.Set,
@@ -109,8 +109,8 @@ func (s valueSlot[M, K, V]) From(m *Manager) valueSlot[M, K, V] {
 	return s
 }
 
-// Validate checks the declaration, contract and generated binding.
-func (s valueSlot[M, K, V]) Validate() error {
+// validate checks the declaration, contract and generated binding.
+func (s valueSlot[M, K, V]) validate() error {
 	if s.err != nil {
 		return s.err
 	}
@@ -120,11 +120,11 @@ func (s valueSlot[M, K, V]) Validate() error {
 	return s.key.Validate()
 }
 
-// Registration is the manager registration of the underlying key, including
+// registration is the manager registration of the underlying key, including
 // the slot's contract and binding validation.
-func (s valueSlot[M, K, V]) Registration() Registration {
+func (s valueSlot[M, K, V]) registration() Registration {
 	registration := s.key.Registration()
-	if err := s.Validate(); err != nil && registration.validate != nil {
+	if err := s.validate(); err != nil && registration.validate != nil {
 		registration.validate = func(*extensions.Registry) error { return err }
 	}
 	return registration
@@ -132,7 +132,7 @@ func (s valueSlot[M, K, V]) Registration() Registration {
 
 // bound returns the manager, or a Missing fault naming an unbound slot.
 func (s valueSlot[M, K, V]) bound() (*Manager, error) {
-	if err := s.Validate(); err != nil {
+	if err := s.validate(); err != nil {
 		return nil, err
 	}
 	if s.manager == nil {
@@ -184,9 +184,9 @@ func (s valueSlot[M, K, V]) fetch(ctx context.Context, executor database.Executo
 	})
 }
 
-// SaveIn stores input for owner inside tx with the declared version and
+// saveIn stores input for owner inside tx with the declared version and
 // contract, replacing any previous value. A parent rollback rolls it back.
-func (s valueSlot[M, K, V]) SaveIn(ctx context.Context, tx *database.Tx, owner M, input V) error {
+func (s valueSlot[M, K, V]) saveIn(ctx context.Context, tx *database.Tx, owner M, input V) error {
 	if tx == nil {
 		return invalid()
 	}
@@ -197,8 +197,8 @@ func (s valueSlot[M, K, V]) SaveIn(ctx context.Context, tx *database.Tx, owner M
 	return s.key.SetIn(ctx, tx, m, s.binding.Reference(owner), input)
 }
 
-// Save is SaveIn in the manager's own transaction.
-func (s valueSlot[M, K, V]) Save(ctx context.Context, owner M, input V) error {
+// save is SaveIn in the manager's own transaction.
+func (s valueSlot[M, K, V]) save(ctx context.Context, owner M, input V) error {
 	m, err := s.bound()
 	if err != nil {
 		return err
@@ -206,8 +206,8 @@ func (s valueSlot[M, K, V]) Save(ctx context.Context, owner M, input V) error {
 	return s.key.Set(ctx, m, s.binding.Reference(owner), input)
 }
 
-// ForgetIn removes owner's value inside tx and reports whether one existed.
-func (s valueSlot[M, K, V]) ForgetIn(ctx context.Context, tx *database.Tx, owner M) (bool, error) {
+// forgetIn removes owner's value inside tx and reports whether one existed.
+func (s valueSlot[M, K, V]) forgetIn(ctx context.Context, tx *database.Tx, owner M) (bool, error) {
 	if tx == nil {
 		return false, invalid()
 	}
@@ -227,8 +227,8 @@ func (s valueSlot[M, K, V]) ForgetIn(ctx context.Context, tx *database.Tx, owner
 	return removed, err
 }
 
-// Forget is ForgetIn in the manager's own transaction.
-func (s valueSlot[M, K, V]) Forget(ctx context.Context, owner M) (bool, error) {
+// forget is ForgetIn in the manager's own transaction.
+func (s valueSlot[M, K, V]) forget(ctx context.Context, owner M) (bool, error) {
 	m, err := s.bound()
 	if err != nil {
 		return false, err

@@ -92,30 +92,30 @@ func defineText[M any, K comparable](owner extensions.Owner[M, K], name Name, op
 	return s
 }
 
-// Field returns the underlying declaration for the explicit translation API.
-func (s textSlot[M, K]) Field() Field[M, K] { return s.field }
+// fieldDeclaration returns the underlying declaration for the explicit translation API.
+func (s textSlot[M, K]) fieldDeclaration() Field[M, K] { return s.field }
 
-// Name is the stored field name.
-func (s textSlot[M, K]) Name() Name { return s.field.Name() }
+// name is the stored field name.
+func (s textSlot[M, K]) name() Name { return s.field.Name() }
 
-// Options returns the declared text bounds and input requirement.
-func (s textSlot[M, K]) Options() Options {
+// options returns the declared text bounds and input requirement.
+func (s textSlot[M, K]) options() Options {
 	if s.field.definition == nil {
 		return Options{}
 	}
 	return s.field.definition.options
 }
 
-// Describe returns the slot's inspection snapshot.
-func (s textSlot[M, K]) Describe() extensions.SlotDescription {
-	options := s.Options()
+// describe returns the slot's inspection snapshot.
+func (s textSlot[M, K]) describe() extensions.SlotDescription {
+	options := s.options()
 	require := map[i18n.LocaleRequirement]string{i18n.DefaultLocale: "default", i18n.AllLocales: "all"}[options.Require]
-	return extensions.SlotDescription{Field: s.binding.Field, Kind: "text", Name: string(s.Name()), Storage: "foundry_model_translations", MaxBytes: int64(options.MaxBytes), Require: require}
+	return extensions.SlotDescription{Field: s.binding.Field, Kind: "text", Name: string(s.name()), Storage: "foundry_model_translations", MaxBytes: int64(options.MaxBytes), Require: require}
 }
 
-// From returns a copy that borrows the manager. A nil manager leaves the slot
+// from returns a copy that borrows the manager. A nil manager leaves the slot
 // unbound; loading and writes then report fault.Missing.
-func (s textSlot[M, K]) From(m *Manager) textSlot[M, K] {
+func (s textSlot[M, K]) from(m *Manager) textSlot[M, K] {
 	s.manager = m
 	if m == nil {
 		s.loader = s.relation(nil)
@@ -125,17 +125,17 @@ func (s textSlot[M, K]) From(m *Manager) textSlot[M, K] {
 	return s
 }
 
-// Validate checks the declaration and generated binding.
-func (s textSlot[M, K]) Validate() error {
+// validate checks the declaration and generated binding.
+func (s textSlot[M, K]) validate() error {
 	if err := s.binding.Validate(); err != nil {
 		return err
 	}
 	return s.field.Validate()
 }
 
-// Registration is the manager registration of the underlying field, including
+// registration is the manager registration of the underlying field, including
 // the slot binding's validation.
-func (s textSlot[M, K]) Registration() Registration {
+func (s textSlot[M, K]) registration() Registration {
 	registration := s.field.Registration()
 	if err := s.binding.Validate(); err != nil && registration.validate != nil {
 		registration.validate = func(*extensions.Registry) error { return err }
@@ -145,7 +145,7 @@ func (s textSlot[M, K]) Registration() Registration {
 
 // bound returns the manager, or a Missing fault naming an unbound slot.
 func (s textSlot[M, K]) bound() (*Manager, error) {
-	if err := s.Validate(); err != nil {
+	if err := s.validate(); err != nil {
 		return nil, err
 	}
 	if s.manager == nil {
@@ -210,42 +210,42 @@ func (s textSlot[M, K]) fetch(ctx context.Context, executor database.Executor, p
 	})
 }
 
-// SaveIn merges input into the stored text of owner inside tx: supplied
+// saveIn merges input into the stored text of owner inside tx: supplied
 // locales are upserted in one statement and others stay unchanged. Every
 // entry is validated before writing; empty text is a present value. A parent
 // rollback rolls the write back. Empty input writes nothing.
-func (s textSlot[M, K]) SaveIn(ctx context.Context, tx *database.Tx, owner M, input map[i18n.LocaleID]string) error {
+func (s textSlot[M, K]) saveIn(ctx context.Context, tx *database.Tx, owner M, input map[i18n.LocaleID]string) error {
 	if tx == nil {
 		return invalid()
 	}
-	return s.save(ctx, tx, owner, input)
+	return s.saveWithTx(ctx, tx, owner, input)
 }
 
-// Save is SaveIn in the manager's own transaction.
-func (s textSlot[M, K]) Save(ctx context.Context, owner M, input map[i18n.LocaleID]string) error {
-	return s.save(ctx, nil, owner, input)
+// save is SaveIn in the manager's own transaction.
+func (s textSlot[M, K]) save(ctx context.Context, owner M, input map[i18n.LocaleID]string) error {
+	return s.saveWithTx(ctx, nil, owner, input)
 }
 
-// SyncIn makes the supported locales of this field exactly input inside tx:
+// syncIn makes the supported locales of this field exactly input inside tx:
 // supplied locales are upserted and every other supported locale is removed.
 // Options.Require is enforced: required locales need non-blank text, as Rule
 // checks. Locales
 // removed from the catalog keep their retained rows.
-func (s textSlot[M, K]) SyncIn(ctx context.Context, tx *database.Tx, owner M, input map[i18n.LocaleID]string) error {
+func (s textSlot[M, K]) syncIn(ctx context.Context, tx *database.Tx, owner M, input map[i18n.LocaleID]string) error {
 	if tx == nil {
 		return invalid()
 	}
-	return s.sync(ctx, tx, owner, input)
+	return s.syncWithTx(ctx, tx, owner, input)
 }
 
-// Sync is SyncIn in the manager's own transaction.
-func (s textSlot[M, K]) Sync(ctx context.Context, owner M, input map[i18n.LocaleID]string) error {
-	return s.sync(ctx, nil, owner, input)
+// sync is SyncIn in the manager's own transaction.
+func (s textSlot[M, K]) sync(ctx context.Context, owner M, input map[i18n.LocaleID]string) error {
+	return s.syncWithTx(ctx, nil, owner, input)
 }
 
-// ForgetIn removes one supported locale's text inside tx and reports whether
+// forgetIn removes one supported locale's text inside tx and reports whether
 // a row existed.
-func (s textSlot[M, K]) ForgetIn(ctx context.Context, tx *database.Tx, owner M, locale i18n.LocaleID) (bool, error) {
+func (s textSlot[M, K]) forgetIn(ctx context.Context, tx *database.Tx, owner M, locale i18n.LocaleID) (bool, error) {
 	if tx == nil {
 		return false, invalid()
 	}
@@ -265,8 +265,8 @@ func (s textSlot[M, K]) ForgetIn(ctx context.Context, tx *database.Tx, owner M, 
 	return removed, err
 }
 
-// Forget is ForgetIn in the manager's own transaction.
-func (s textSlot[M, K]) Forget(ctx context.Context, owner M, locale i18n.LocaleID) (bool, error) {
+// forget is ForgetIn in the manager's own transaction.
+func (s textSlot[M, K]) forget(ctx context.Context, owner M, locale i18n.LocaleID) (bool, error) {
 	m, err := s.bound()
 	if err != nil {
 		return false, err
@@ -274,8 +274,8 @@ func (s textSlot[M, K]) Forget(ctx context.Context, owner M, locale i18n.LocaleI
 	return s.field.Forget(ctx, m, s.binding.Reference(owner), locale)
 }
 
-// ClearIn removes every locale of this field inside tx and returns the count.
-func (s textSlot[M, K]) ClearIn(ctx context.Context, tx *database.Tx, owner M) (int, error) {
+// clearIn removes every locale of this field inside tx and returns the count.
+func (s textSlot[M, K]) clearIn(ctx context.Context, tx *database.Tx, owner M) (int, error) {
 	if tx == nil {
 		return 0, invalid()
 	}
@@ -295,8 +295,8 @@ func (s textSlot[M, K]) ClearIn(ctx context.Context, tx *database.Tx, owner M) (
 	return count, err
 }
 
-// Clear is ClearIn in the manager's own transaction.
-func (s textSlot[M, K]) Clear(ctx context.Context, owner M) (int, error) {
+// clear is ClearIn in the manager's own transaction.
+func (s textSlot[M, K]) clear(ctx context.Context, owner M) (int, error) {
 	m, err := s.bound()
 	if err != nil {
 		return 0, err
@@ -304,23 +304,23 @@ func (s textSlot[M, K]) Clear(ctx context.Context, owner M) (int, error) {
 	return s.field.Clear(ctx, m, s.binding.Reference(owner))
 }
 
-// Rule validates complete translated input, written with SyncIn, with one
+// rule validates complete translated input, written with SyncIn, with one
 // catalog snapshot per check: keys must be supported locales, Options.Require
 // locales need nonempty text and each text is bounded by MaxBytes. Attach it
 // to the request field, for example validation.Rules(fields.Title, x.Title.Rule()). An
 // unbound slot yields a rule that fails endpoint registration.
-func (s textSlot[M, K]) Rule() validation.Rule[map[i18n.LocaleID]string] {
-	return s.rule(s.Options().Require)
+func (s textSlot[M, K]) rule() validation.Rule[map[i18n.LocaleID]string] {
+	return s.ruleFor(s.options().Require)
 }
 
-// MergeRule validates partial translated input, written with SaveIn: keys must
+// mergeRule validates partial translated input, written with SaveIn: keys must
 // be supported locales and each text is bounded by MaxBytes. Options.Require
 // does not apply, because a merge keeps the locales it does not mention.
-func (s textSlot[M, K]) MergeRule() validation.Rule[map[i18n.LocaleID]string] {
-	return s.rule(i18n.OptionalLocales)
+func (s textSlot[M, K]) mergeRule() validation.Rule[map[i18n.LocaleID]string] {
+	return s.ruleFor(i18n.OptionalLocales)
 }
 
-func (s textSlot[M, K]) rule(require i18n.LocaleRequirement) validation.Rule[map[i18n.LocaleID]string] {
+func (s textSlot[M, K]) ruleFor(require i18n.LocaleRequirement) validation.Rule[map[i18n.LocaleID]string] {
 	var catalog i18n.LocaleCatalog
 	if s.manager != nil {
 		catalog = s.manager.catalog
@@ -329,11 +329,11 @@ func (s textSlot[M, K]) rule(require i18n.LocaleRequirement) validation.Rule[map
 	// NUL characters (JSON decoding already guarantees valid UTF-8).
 	return validation.All(
 		validation.Locales[map[i18n.LocaleID]string](catalog, require),
-		validation.EachValue[map[i18n.LocaleID]string](validation.MaxBytes[string](s.Options().MaxBytes), validation.NotMatches[string]("\\x00")),
+		validation.EachValue[map[i18n.LocaleID]string](validation.MaxBytes[string](s.options().MaxBytes), validation.NotMatches[string]("\\x00")),
 	)
 }
 
-func (s textSlot[M, K]) save(ctx context.Context, outer *database.Tx, owner M, input map[i18n.LocaleID]string) error {
+func (s textSlot[M, K]) saveWithTx(ctx context.Context, outer *database.Tx, owner M, input map[i18n.LocaleID]string) error {
 	m, err := s.bound()
 	if err != nil {
 		return err
@@ -350,7 +350,7 @@ func (s textSlot[M, K]) save(ctx context.Context, outer *database.Tx, owner M, i
 	})
 }
 
-func (s textSlot[M, K]) sync(ctx context.Context, outer *database.Tx, owner M, input map[i18n.LocaleID]string) error {
+func (s textSlot[M, K]) syncWithTx(ctx context.Context, outer *database.Tx, owner M, input map[i18n.LocaleID]string) error {
 	m, err := s.bound()
 	if err != nil {
 		return err
@@ -370,7 +370,7 @@ func (s textSlot[M, K]) sync(ctx context.Context, outer *database.Tx, owner M, i
 		if err != nil {
 			return err
 		}
-		for _, locale := range s.Options().Require.Required(locales) {
+		for _, locale := range s.options().Require.Required(locales) {
 			if strings.TrimSpace(input[locale]) == "" {
 				return safeerror.NewFault(fault.Invalid, "translated slot "+s.binding.Field+" requires text for locale "+string(locale))
 			}

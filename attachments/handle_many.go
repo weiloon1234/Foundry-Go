@@ -34,78 +34,78 @@ func wrapManyHandle[M any, K comparable](state manySlot[M, K]) *attachmentHandle
 	return &attachmentHandleCore{
 		collection:   func(out unsafe.Pointer) { *(*Collection[M, K])(out) = state.collection },
 		checkFiles:   func(count int) error { return checkAddFiles(state.slotDefinition, count) },
-		bind:         func(m *Manager) *attachmentHandleCore { return wrapManyHandle(state.From(m)) },
+		bind:         func(m *Manager) *attachmentHandleCore { return wrapManyHandle(state.from(m)) },
 		relation:     func(out unsafe.Pointer) { *(*extensionslot.Slot[M])(out) = state.loader },
-		validate:     state.Validate,
-		describe:     state.Describe,
-		registration: state.Registration,
-		name:         state.Name,
+		validate:     state.validate,
+		describe:     state.describe,
+		registration: state.registration,
+		name:         state.name,
 		replace: func(ctx context.Context, owner unsafe.Pointer, upload Upload, out unsafe.Pointer) error {
-			result, err := state.Replace(ctx, *(*M)(owner), upload)
+			result, err := state.replace(ctx, *(*M)(owner), upload)
 			*(*Result[M, K])(out) = result
 			return err
 		},
 		replaceFile: func(ctx context.Context, owner unsafe.Pointer, file FileSource, out unsafe.Pointer) error {
-			result, err := state.ReplaceFile(ctx, *(*M)(owner), file)
+			result, err := state.replaceFile(ctx, *(*M)(owner), file)
 			*(*Result[M, K])(out) = result
 			return err
 		},
 		prepare: func(ctx context.Context, owner unsafe.Pointer, upload Upload, out unsafe.Pointer) error {
-			result, err := state.Prepare(ctx, *(*M)(owner), upload)
+			result, err := state.prepare(ctx, *(*M)(owner), upload)
 			*(*Prepared[M, K])(out) = result
 			return err
 		},
 		prepareFile: func(ctx context.Context, owner unsafe.Pointer, file FileSource, out unsafe.Pointer) error {
-			result, err := state.PrepareFile(ctx, *(*M)(owner), file)
+			result, err := state.prepareFile(ctx, *(*M)(owner), file)
 			*(*Prepared[M, K])(out) = result
 			return err
 		},
 		replaceIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, prepared unsafe.Pointer, out unsafe.Pointer) error {
-			result, err := state.ReplaceIn(ctx, tx, *(*M)(owner), *(*Prepared[M, K])(prepared))
+			result, err := state.replaceIn(ctx, tx, *(*M)(owner), *(*Prepared[M, K])(prepared))
 			*(*Result[M, K])(out) = result
 			return err
 		},
 		discard: func(ctx context.Context, prepared unsafe.Pointer) error {
-			return state.Discard(ctx, *(*Prepared[M, K])(prepared))
+			return state.discard(ctx, *(*Prepared[M, K])(prepared))
 		},
 		detach: func(ctx context.Context, owner unsafe.Pointer, id unsafe.Pointer) (ChangeResult, error) {
-			return state.Detach(ctx, *(*M)(owner), *(*ID[M])(id))
+			return state.detach(ctx, *(*M)(owner), *(*ID[M])(id))
 		},
 		clear: func(ctx context.Context, owner unsafe.Pointer) (ChangeResult, error) {
-			return state.Clear(ctx, *(*M)(owner))
+			return state.clear(ctx, *(*M)(owner))
 		},
-		accepts: func(ctx context.Context, file FileSource) (bool, error) { return state.Accepts(ctx, file) },
+		accepts: func(ctx context.Context, file FileSource) (bool, error) { return state.accepts(ctx, file) },
 		url: func(ctx context.Context, owner unsafe.Pointer, file unsafe.Pointer) (string, error) {
-			return state.URL(ctx, *(*M)(owner), *(*File[M])(file))
+			return state.url(ctx, *(*M)(owner), *(*File[M])(file))
 		},
 		temporaryURL: func(ctx context.Context, owner unsafe.Pointer, file unsafe.Pointer, options storage.LinkOptions) (storage.TemporaryURL, error) {
-			return state.TemporaryURL(ctx, *(*M)(owner), *(*File[M])(file), options)
+			return state.temporaryURL(ctx, *(*M)(owner), *(*File[M])(file), options)
 		},
 		variantURL: func(ctx context.Context, owner unsafe.Pointer, file unsafe.Pointer, variant Variant) (string, error) {
-			return state.VariantURL(ctx, *(*M)(owner), *(*File[M])(file), variant)
+			return state.variantURL(ctx, *(*M)(owner), *(*File[M])(file), variant)
 		},
 		add: func(ctx context.Context, owner unsafe.Pointer, upload Upload, out unsafe.Pointer) error {
-			result, err := state.Add(ctx, *(*M)(owner), upload)
+			result, err := state.add(ctx, *(*M)(owner), upload)
 			*(*Result[M, K])(out) = result
 			return err
 		},
 		addFile: func(ctx context.Context, owner unsafe.Pointer, file FileSource, out unsafe.Pointer) error {
-			result, err := state.AddFile(ctx, *(*M)(owner), file)
+			result, err := state.addFile(ctx, *(*M)(owner), file)
 			*(*Result[M, K])(out) = result
 			return err
 		},
 		addIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, prepared unsafe.Pointer, out unsafe.Pointer) error {
-			result, err := state.AddIn(ctx, tx, *(*M)(owner), *(*Prepared[M, K])(prepared))
+			result, err := state.addIn(ctx, tx, *(*M)(owner), *(*Prepared[M, K])(prepared))
 			*(*Result[M, K])(out) = result
 			return err
 		},
 		reorder: func(ctx context.Context, owner unsafe.Pointer, order unsafe.Pointer, out unsafe.Pointer) error {
-			result, err := state.Reorder(ctx, *(*M)(owner), *(*[]ID[M])(order))
+			result, err := state.reorder(ctx, *(*M)(owner), *(*[]ID[M])(order))
 			*(*[]Attachment[M, K])(out) = result
 			return err
 		},
 		publicURLs: func(ctx context.Context, owner unsafe.Pointer) ([]string, error) {
-			return state.PublicURLs(ctx, *(*M)(owner))
+			return state.publicURLs(ctx, *(*M)(owner))
 		},
 	}
 }

@@ -41,13 +41,13 @@ func TestPostgresMetadataSlotContainsDecoderErrorMatching(t *testing.T) {
 		Get: func(extensiontest.Member) Value[InspectionValue] { return Value[InspectionValue]{} },
 		Set: func(m extensiontest.Member, _ Value[InspectionValue]) extensiontest.Member { assigned++; return m },
 	})
-	manager, err := New(f.Store, slot.Registration())
+	manager, err := New(f.Store, slot.registration())
 	if err != nil {
 		t.Fatal(err)
 	}
-	slot = slot.From(manager)
+	slot = slot.from(manager)
 	for _, mode := range []string{"cycle", "panic", "goexit"} {
-		if err := slot.Key().Set(t.Context(), manager, extensions.ORMIdentity(extensiontest.Members).Reference(1), InspectionValue{mode}); err != nil {
+		if err := slot.keyDeclaration().Set(t.Context(), manager, extensions.ORMIdentity(extensiontest.Members).Reference(1), InspectionValue{mode}); err != nil {
 			t.Fatal(err)
 		}
 		inspectionDecodes.Store(0)

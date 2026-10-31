@@ -182,9 +182,9 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 	return b.buffer.Write(p)
 }
 func (b *boundedBuffer) WriteString(text string) (int, error) { return b.Write([]byte(text)) }
-func (b *boundedBuffer) Reset()                               { b.buffer.Reset() }
+func (b *boundedBuffer) reset()                               { b.buffer.Reset() }
 func (b *boundedBuffer) String() string                       { return b.buffer.String() }
-func (b *boundedBuffer) Bytes() []byte                        { return b.buffer.Bytes() }
+func (b *boundedBuffer) bytes() []byte                        { return b.buffer.Bytes() }
 func renderTemplates(ctx context.Context, t *renderedTemplates, data any) (Body, error) {
 	if ctx == nil || ctx.Err() != nil || t == nil {
 		return Body{}, emaildiag.Failure(Construction)
@@ -196,7 +196,7 @@ func renderTemplates(ctx context.Context, t *renderedTemplates, data any) (Body,
 			execute func(io.Writer, any) error
 			output  *string
 		}{{t.subject.Execute, &result.Subject}, {t.text.Execute, &result.Text}, {t.html.Execute, &result.HTML}} {
-			b.Reset()
+			b.reset()
 			if err := part.execute(b, data); err != nil {
 				return emaildiag.Failure(Construction)
 			}

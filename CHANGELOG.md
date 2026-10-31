@@ -12,6 +12,9 @@
   their 14 methods discoverable in `go doc`. Audit records and Redis containers
   retain embedding and promoted method calls. The embedded field names are now
   `Metadata` and `Handle`; framework literals use the new names.
+- Changed (breaking): Attachment, metadata, and translation slot implementation
+  methods and email buffer `Reset` and `Bytes` are now private. Public typed
+  handles and protocol methods retain their existing API.
 
 - Changed (breaking): Row, selected, and aggregate expression operations move to
   typed `expr` package functions, including `AsSelected`, `ParamOf`, `Key`, `Filter`,
