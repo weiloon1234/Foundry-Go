@@ -36,6 +36,7 @@ func TestTableMetadataReusesDTOAndOwnsRegistrationSlices(t *testing.T) {
 	copy, _ := table.Description()
 	copy.Columns[1].Filter.Operators[0] = "mutated"
 	copy.Row.Types[0].ID = "mutated"
+	copy.Page.Types[0].ID = "mutated"
 	copy.DefaultSort[0].Column = "mutated"
 	after, _ := table.Description()
 	if !reflect.DeepEqual(before, after) {

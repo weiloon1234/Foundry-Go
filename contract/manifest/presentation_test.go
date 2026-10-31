@@ -100,7 +100,7 @@ func TestPresentationRejectsConflictingNestedValidation(t *testing.T) {
 func TestPresentationManifestVersionPrivacyAndAdapters(t *testing.T) {
 	source := credentialManifest(t)
 	doc, _ := source.Snapshot()
-	if doc.Version != 6 {
+	if doc.Version != manifest.Version {
 		t.Fatal("new metadata needs explicit manifest version")
 	}
 	for name, edit := range map[string]func(*manifest.Document){

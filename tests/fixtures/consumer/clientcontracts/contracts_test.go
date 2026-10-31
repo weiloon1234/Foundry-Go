@@ -130,6 +130,7 @@ func TestConsumerClientManifestKeepsRealFeatureBoundaries(t *testing.T) {
 
 func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	t.Run("reporting", checkReportingClient)
+	t.Run("table_bindings", checkTableBindingsClient)
 	testkit.TrackExternalInputs(t)
 	node, compiler := os.Getenv("FOUNDRY_TEST_NODE"), os.Getenv("FOUNDRY_TEST_TYPESCRIPT")
 	if node == "" || compiler == "" {

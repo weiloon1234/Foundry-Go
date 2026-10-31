@@ -12,11 +12,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-// TableID is a semantic registration identity, never a SQL table name.
-//
-// Example: datatable.TableID("reports.members")
-type TableID string
-
 // Operator identifies a supported, declared filter operation.
 //
 // Example: datatable.Equal

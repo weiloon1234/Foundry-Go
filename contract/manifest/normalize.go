@@ -31,13 +31,16 @@ func normalizeDocument(d *Document) error {
 	}
 	slices.Sort(d.Roots)
 	d.Roots = slices.Compact(d.Roots)
-	if err := normalizeHTTP(d, types); err != nil {
-		return err
-	}
 	if err := normalizeRealtime(d.Realtime, types); err != nil {
 		return err
 	}
 	if err := normalizeFeatures(d, types); err != nil {
+		return err
+	}
+	if err := normalizeTableOperations(d, types); err != nil {
+		return err
+	}
+	if err := normalizeHTTP(d, types); err != nil {
 		return err
 	}
 	if err := types.outputPresentation(d); err != nil {

@@ -13,7 +13,8 @@ var renderedNames = []string{
 	"NewIdentity", "OperationInputs", "OperationJSONBodies", "Operations",
 	"PasswordCredentials", "PresentationKind", "PublicEnv", "PublicEnvEntry", "PublicEnvKey",
 	"Realtime", "ReceivedContractTypes", "Schemas",
-	"TableColumn", "TableColumnKind", "TableDescriptor", "TableId", "TableReceivedRow", "TableRow", "TableSort",
+	"TableColumn", "TableColumnKind", "TableMetadata", "TableRows", "TableReceivedRows", "TablePageReceived", "Tables",
+	"QueryTableId", "ExportTableId", "DownloadTableId", "TableQueryInputs", "TableQueryOutputs", "TableQueryOperationNames", "TableExportInputs", "TableExportOutputs", "TableExportOperationNames", "TableExportKinds", "TableDownloadInputs", "TableDownloadOutputs", "TableDownloadOperationNames", "TableQueries", "TableExports", "TableDownloads", "TableId", "TableReceivedRow", "TableRow", "TableSort",
 }
 
 var capitalizedIdentifier = regexp.MustCompile(`\b[A-Z][A-Za-z0-9_$]*\b`)

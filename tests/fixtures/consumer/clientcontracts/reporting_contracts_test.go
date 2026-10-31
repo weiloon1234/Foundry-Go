@@ -10,6 +10,7 @@ import (
 	"slices"
 	"testing"
 
+	"foundry.test/consumer/clientcontracts"
 	"foundry.test/consumer/internal/clientfixture"
 	"foundry.test/consumer/reporting"
 	"github.com/weiloon1234/Foundry-Go/auth"
@@ -208,4 +209,13 @@ func checkReportingClient(t *testing.T) {
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
 	tools.Check(t, source, server.URL, filepath.Join("testdata", "reporting"))
+}
+
+func checkTableBindingsClient(t *testing.T) {
+	tools := clientfixture.Load(t)
+	source, err := clientcontracts.TableBindingsManifest(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools.Check(t, source, "", filepath.Join("testdata", "table-bindings"))
 }

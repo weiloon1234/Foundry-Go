@@ -39,10 +39,12 @@ type NoQuery struct{}
 func EmptyQuery() Query[NoQuery] { return DefineQuery[NoQuery]() }
 
 type endpointCore struct {
-	limits      EndpointLimits
-	errors      []ErrorDeclaration
-	idempotency *IdempotencyInfo
-	examples    endpointExamples
+	tableOperation    contract.TableOperationBinding
+	hasTableOperation bool
+	limits            EndpointLimits
+	errors            []ErrorDeclaration
+	idempotency       *IdempotencyInfo
+	examples          endpointExamples
 }
 
 // Endpoint composes the existing route, query and payload descriptors. Assembly

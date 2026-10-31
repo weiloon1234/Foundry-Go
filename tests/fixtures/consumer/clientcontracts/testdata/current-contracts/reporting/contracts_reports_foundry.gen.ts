@@ -278,29 +278,12 @@ export interface TableSort<Name extends string = string> {
   readonly direction: "asc" | "desc";
 }
 
-export interface TableDescriptor<
-  Row = unknown,
-  QueryOp extends keyof Operations & keyof API = keyof Operations & keyof API,
-  ExportOp extends keyof Operations & keyof API = keyof Operations & keyof API,
-> {
+export interface TableMetadata<Row> {
   readonly id: string;
-  readonly queryOperation?: QueryOp;
-  readonly exportOperation?: ExportOp;
   readonly columns: readonly TableColumn<Row>[];
   readonly defaultSort: readonly TableSort<keyof Row & string>[];
   readonly exports: boolean;
-  readonly query?: (client: API, input: Operations[QueryOp]["request"], options?: CallOptions) => Promise<Operations[QueryOp]["response"]>;
-  readonly export?: (client: API, input: Operations[ExportOp]["request"], options?: CallOptions) => Promise<Operations[ExportOp]["response"]>;
 }
-
-export function createTableDescriptor<
-  Row,
-  QueryOp extends keyof Operations & keyof API = never,
-  ExportOp extends keyof Operations & keyof API = never,
->(descriptor: TableDescriptor<Row, QueryOp, ExportOp>): TableDescriptor<Row, QueryOp, ExportOp> {
-  return Object.freeze(descriptor);
-}
-
 
 /** Editable request state. Missing values are allowed here, never asserted valid. */
 export type FormDraft<T> = T extends Blob | JSONNumber | Upload ? T : T extends readonly (infer V)[] ? readonly FormDraft<V>[] : T extends object ? { readonly [K in keyof T]?: FormDraft<T[K]> } : T;
@@ -767,7 +750,7 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
 }
 
 
-export const manifestJSON = "{\"version\":6,\"types\":[{\"id\":\"[]contract.Issue\",\"kind\":\"array\",\"nullable\":true,\"element\":\"github.com/weiloon1234/Foundry-Go/contract.Issue\"},{\"id\":\"[]pagination.PageLink\",\"kind\":\"array\",\"nullable\":true,\"element\":\"github.com/weiloon1234/Foundry-Go/http/pagination.PageLink\"},{\"id\":\"bool\",\"kind\":\"boolean\",\"nullable\":false},{\"id\":\"foundry.test/consumer/reporting.AgentLevel\",\"kind\":\"integer\",\"nullable\":false,\"bits\":32,\"signed\":true,\"cases\":[0,1]},{\"id\":\"foundry.test/consumer/reporting.MemberRow\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"balance\",\"type\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"required\":true},{\"name\":\"id\",\"type\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"required\":true},{\"name\":\"name\",\"type\":\"string\",\"required\":true},{\"name\":\"nickname\",\"type\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[string]\",\"required\":true},{\"name\":\"state\",\"type\":\"foundry.test/consumer/reporting.State\",\"required\":true}]},{\"id\":\"foundry.test/consumer/reporting.MemberTotal\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"count\",\"type\":\"int64\",\"required\":true},{\"name\":\"memberId\",\"type\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"required\":true},{\"name\":\"total\",\"type\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]\",\"required\":true}]},{\"id\":\"foundry.test/consumer/reporting.NumericLevelRow\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"id\",\"type\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"required\":true},{\"name\":\"level\",\"type\":\"foundry.test/consumer/reporting.AgentLevel\",\"required\":true},{\"name\":\"wideLevel\",\"type\":\"foundry.test/consumer/reporting.WideLevel\",\"required\":true}]},{\"id\":\"foundry.test/consumer/reporting.OrderRow\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"amount\",\"type\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"required\":true},{\"name\":\"id\",\"type\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]\",\"required\":true},{\"name\":\"label\",\"type\":\"string\",\"required\":true},{\"name\":\"memberName\",\"type\":\"string\",\"required\":true}]},{\"id\":\"foundry.test/consumer/reporting.State\",\"kind\":\"string\",\"nullable\":false,\"cases\":[\"active\",\"disabled\"]},{\"id\":\"foundry.test/consumer/reporting.WideLevel\",\"kind\":\"integer\",\"nullable\":false,\"bits\":64,\"signed\":true,\"cases\":[9007199254740993,9007199254740994]},{\"id\":\"github.com/weiloon1234/Foundry-Go/attribution.RequestID\",\"kind\":\"string\",\"nullable\":false},{\"id\":\"github.com/weiloon1234/Foundry-Go/contract.Issue\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"code\",\"type\":\"github.com/weiloon1234/Foundry-Go/contract.IssueCode\",\"required\":true},{\"name\":\"label\",\"type\":\"string\",\"required\":false},{\"name\":\"label_key\",\"type\":\"github.com/weiloon1234/Foundry-Go/i18n.MessageKey\",\"required\":false},{\"name\":\"message\",\"type\":\"string\",\"required\":false},{\"name\":\"path\",\"type\":\"string\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/contract.IssueCode\",\"kind\":\"string\",\"nullable\":false},{\"id\":\"github.com/weiloon1234/Foundry-Go/datatable.Direction\",\"kind\":\"string\",\"nullable\":false,\"cases\":[\"asc\",\"desc\"]},{\"id\":\"github.com/weiloon1234/Foundry-Go/datatable.Filter\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"children\",\"type\":\"go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b\",\"required\":false},{\"name\":\"column\",\"type\":\"string\",\"required\":false},{\"name\":\"op\",\"type\":\"github.com/weiloon1234/Foundry-Go/datatable.Operator\",\"required\":true},{\"name\":\"values\",\"type\":\"go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0\",\"required\":false}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/datatable.Operator\",\"kind\":\"string\",\"nullable\":false,\"cases\":[\"and\",\"between\",\"contains\",\"eq\",\"gt\",\"gte\",\"icontains\",\"in\",\"is_not_null\",\"is_null\",\"like\",\"lt\",\"lte\",\"ne\",\"not\",\"not_in\",\"or\"]},{\"id\":\"github.com/weiloon1234/Foundry-Go/datatable.Request\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"filters\",\"type\":\"go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b\",\"required\":false},{\"name\":\"page\",\"type\":\"int\",\"required\":false},{\"name\":\"search\",\"type\":\"string\",\"required\":false},{\"name\":\"size\",\"type\":\"int\",\"required\":false},{\"name\":\"sort\",\"type\":\"go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528\",\"required\":false}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/datatable.Sort\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"column\",\"type\":\"string\",\"required\":true},{\"name\":\"direction\",\"type\":\"github.com/weiloon1234/Foundry-Go/datatable.Direction\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"kind\":\"string\",\"nullable\":false,\"format\":\"decimal\"},{\"id\":\"github.com/weiloon1234/Foundry-Go/http.ErrorCode\",\"kind\":\"string\",\"nullable\":false},{\"id\":\"github.com/weiloon1234/Foundry-Go/http.ErrorResponse\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"error_code\",\"type\":\"github.com/weiloon1234/Foundry-Go/http.ErrorCode\",\"required\":true},{\"name\":\"issues\",\"type\":\"[]contract.Issue\",\"required\":false},{\"name\":\"issues_truncated\",\"type\":\"bool\",\"required\":false},{\"name\":\"message\",\"type\":\"string\",\"required\":true},{\"name\":\"request_id\",\"type\":\"github.com/weiloon1234/Foundry-Go/attribution.RequestID\",\"required\":false},{\"name\":\"status\",\"type\":\"int\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/http/pagination.Links\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"first\",\"type\":\"string\",\"required\":false},{\"name\":\"last\",\"type\":\"string\",\"required\":false},{\"name\":\"next\",\"type\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[string]\",\"required\":true},{\"name\":\"prev\",\"type\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[string]\",\"required\":true},{\"name\":\"window\",\"type\":\"[]pagination.PageLink\",\"required\":false}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/http/pagination.NumberedMeta\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"current_page\",\"type\":\"int\",\"required\":true},{\"name\":\"last_page\",\"type\":\"int64\",\"required\":true},{\"name\":\"per_page\",\"type\":\"int\",\"required\":true},{\"name\":\"total\",\"type\":\"int64\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"data\",\"type\":\"pagination:items:foundry.test/consumer/reporting.MemberRow\",\"required\":true},{\"name\":\"links\",\"type\":\"github.com/weiloon1234/Foundry-Go/http/pagination.Links\",\"required\":true},{\"name\":\"meta\",\"type\":\"github.com/weiloon1234/Foundry-Go/http/pagination.NumberedMeta\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/http/pagination.PageLink\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"page\",\"type\":\"int\",\"required\":true},{\"name\":\"url\",\"type\":\"string\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/i18n.MessageKey\",\"kind\":\"string\",\"nullable\":false},{\"id\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"kind\":\"string\",\"nullable\":false,\"format\":\"uuid\"},{\"id\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]\",\"kind\":\"string\",\"nullable\":false,\"format\":\"uuid\"},{\"id\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]\",\"kind\":\"alias\",\"nullable\":true,\"element\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\"},{\"id\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[string]\",\"kind\":\"alias\",\"nullable\":true,\"element\":\"string\"},{\"id\":\"go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b\",\"kind\":\"array\",\"nullable\":true,\"element\":\"github.com/weiloon1234/Foundry-Go/datatable.Filter\"},{\"id\":\"go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0\",\"kind\":\"array\",\"nullable\":true,\"element\":\"string\"},{\"id\":\"go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528\",\"kind\":\"array\",\"nullable\":true,\"element\":\"github.com/weiloon1234/Foundry-Go/datatable.Sort\"},{\"id\":\"int\",\"kind\":\"integer\",\"nullable\":false,\"bits\":64,\"signed\":true},{\"id\":\"int64\",\"kind\":\"integer\",\"nullable\":false,\"bits\":64,\"signed\":true},{\"id\":\"pagination:items:foundry.test/consumer/reporting.MemberRow\",\"kind\":\"array\",\"nullable\":false,\"element\":\"foundry.test/consumer/reporting.MemberRow\"},{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false}],\"roots\":null,\"http\":[{\"route\":{\"id\":\"reports.members.csv\",\"method\":\"GET\",\"path\":\"/reports/members.csv\",\"parameters\":[],\"access\":\"guarded\",\"raw\":false,\"middlewares\":[\"foundry.authentication\"],\"authentication\":{\"guard\":\"report.contract\",\"provider\":\"report.operators\",\"optional\":false,\"credential\":{\"source\":\"report.contract\",\"kind\":\"bearer\",\"name\":\"Authorization\"}}},\"name\":\"reportsMembersCsv\",\"path\":[],\"query\":[],\"response\":{\"media_type\":\"text/csv; charset=utf-8\",\"file\":{\"media_types\":[\"text/csv; charset=utf-8\"],\"seekable\":true}},\"status\":200,\"file_transfer_bytes\":1073744652,\"limits\":{\"Multipart\":{\"Bytes\":2097152,\"FileBytes\":2097152,\"Parts\":128,\"Files\":16,\"Readers\":16,\"HeaderBytes\":32768,\"FieldBytes\":65536,\"FieldsBytes\":262144,\"Issues\":16},\"Files\":{\"Bytes\":1073741824,\"Ranges\":16,\"RangeBytes\":4096},\"Query\":{\"Bytes\":16384,\"Pairs\":128,\"Issues\":16},\"Form\":{\"Bytes\":2097152,\"Pairs\":1024,\"Issues\":16},\"Body\":{\"Bytes\":2097152,\"Depth\":32,\"Nodes\":65536,\"Steps\":262144,\"Issues\":16},\"Response\":{\"Bytes\":33554432,\"Depth\":32,\"Nodes\":1048576,\"Steps\":4194304,\"Issues\":16},\"Validation\":{\"Checks\":65536,\"Issues\":32,\"Depth\":32,\"ValueBytes\":1048576},\"Raw\":{\"Bytes\":2097152}},\"errors\":[\"bad_request\",\"conflict\",\"forbidden\",\"internal_error\",\"method_not_allowed\",\"mfa_required\",\"not_acceptable\",\"not_found\",\"payload_too_large\",\"precondition_failed\",\"range_not_satisfiable\",\"rate_limited\",\"request_timeout\",\"unauthenticated\",\"unavailable\",\"unsupported_media_type\",\"validation_failed\"]},{\"route\":{\"id\":\"reports.members.query\",\"method\":\"POST\",\"path\":\"/reports/members/query\",\"parameters\":[],\"access\":\"guarded\",\"raw\":false,\"middlewares\":[\"foundry.authentication\"],\"authentication\":{\"guard\":\"report.contract\",\"provider\":\"report.operators\",\"optional\":false,\"credential\":{\"source\":\"report.contract\",\"kind\":\"bearer\",\"name\":\"Authorization\"}}},\"name\":\"reportsMembersQuery\",\"path\":[],\"query\":[],\"body\":{\"media_type\":\"application/json\",\"type\":\"github.com/weiloon1234/Foundry-Go/datatable.Request\"},\"response\":{\"media_type\":\"application/json\",\"type\":\"github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]\"},\"status\":200,\"limits\":{\"Multipart\":{\"Bytes\":2097152,\"FileBytes\":2097152,\"Parts\":128,\"Files\":16,\"Readers\":16,\"HeaderBytes\":32768,\"FieldBytes\":65536,\"FieldsBytes\":262144,\"Issues\":16},\"Files\":{\"Bytes\":1073741824,\"Ranges\":16,\"RangeBytes\":4096},\"Query\":{\"Bytes\":16384,\"Pairs\":128,\"Issues\":16},\"Form\":{\"Bytes\":2097152,\"Pairs\":1024,\"Issues\":16},\"Body\":{\"Bytes\":2097152,\"Depth\":32,\"Nodes\":65536,\"Steps\":262144,\"Issues\":16},\"Response\":{\"Bytes\":33554432,\"Depth\":32,\"Nodes\":1048576,\"Steps\":4194304,\"Issues\":16},\"Validation\":{\"Checks\":65536,\"Issues\":32,\"Depth\":32,\"ValueBytes\":1048576},\"Raw\":{\"Bytes\":2097152}},\"errors\":[\"bad_request\",\"conflict\",\"forbidden\",\"internal_error\",\"method_not_allowed\",\"mfa_required\",\"not_acceptable\",\"not_found\",\"payload_too_large\",\"precondition_failed\",\"range_not_satisfiable\",\"rate_limited\",\"request_timeout\",\"unauthenticated\",\"unavailable\",\"unsupported_media_type\",\"validation_failed\"]}],\"error_type\":\"github.com/weiloon1234/Foundry-Go/http.ErrorResponse\",\"errors\":[{\"error_code\":\"bad_request\",\"status\":400,\"message\":\"Invalid request\"},{\"error_code\":\"conflict\",\"status\":409,\"message\":\"Request conflicts with current state\"},{\"error_code\":\"forbidden\",\"status\":403,\"message\":\"Access denied\"},{\"error_code\":\"internal_error\",\"status\":500,\"message\":\"Internal server error\"},{\"error_code\":\"method_not_allowed\",\"status\":405,\"message\":\"Method not allowed\"},{\"error_code\":\"mfa_required\",\"status\":403,\"message\":\"Additional authentication required\"},{\"error_code\":\"not_acceptable\",\"status\":406,\"message\":\"No acceptable response encoding\"},{\"error_code\":\"not_found\",\"status\":404,\"message\":\"Resource not found\"},{\"error_code\":\"payload_too_large\",\"status\":413,\"message\":\"Payload too large\"},{\"error_code\":\"precondition_failed\",\"status\":412,\"message\":\"Request precondition failed\"},{\"error_code\":\"range_not_satisfiable\",\"status\":416,\"message\":\"Requested range is not satisfiable\"},{\"error_code\":\"rate_limited\",\"status\":429,\"message\":\"Rate limit exceeded\"},{\"error_code\":\"request_timeout\",\"status\":408,\"message\":\"Request timed out\"},{\"error_code\":\"unauthenticated\",\"status\":401,\"message\":\"Authentication required\"},{\"error_code\":\"unavailable\",\"status\":503,\"message\":\"Service unavailable\"},{\"error_code\":\"unsupported_media_type\",\"status\":415,\"message\":\"Unsupported media type\"},{\"error_code\":\"validation_failed\",\"status\":422,\"message\":\"Validation failed\"}],\"tables\":[{\"id\":\"reports.members\",\"row\":\"foundry.test/consumer/reporting.MemberRow\",\"request\":\"github.com/weiloon1234/Foundry-Go/datatable.Request\",\"columns\":[{\"name\":\"id\",\"label\":\"reports.member.id\",\"kind\":\"text\",\"value\":{\"property\":{\"name\":\"id\",\"type\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"required\":true},\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"kind\":\"string\",\"nullable\":false,\"format\":\"uuid\"},\"quoted\":false},\"sortable\":true,\"searchable\":false,\"exportable\":true},{\"name\":\"name\",\"label\":\"reports.member.name\",\"kind\":\"text\",\"value\":{\"property\":{\"name\":\"name\",\"type\":\"string\",\"required\":true},\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"quoted\":false},\"sortable\":true,\"searchable\":true,\"search_operator\":\"icontains\",\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"syntax\":\"text\"},\"nullable\":false,\"operators\":[\"between\",\"contains\",\"eq\",\"gt\",\"gte\",\"icontains\",\"in\",\"lt\",\"lte\",\"ne\",\"not_in\"]}},{\"name\":\"nickname\",\"label\":\"reports.member.nickname\",\"kind\":\"text\",\"value\":{\"property\":{\"name\":\"nickname\",\"type\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[string]\",\"required\":true},\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":true},\"quoted\":false},\"sortable\":true,\"searchable\":false,\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"syntax\":\"text\"},\"nullable\":true,\"operators\":[\"between\",\"contains\",\"eq\",\"gt\",\"gte\",\"icontains\",\"in\",\"is_not_null\",\"is_null\",\"lt\",\"lte\",\"ne\",\"not_in\"]}},{\"name\":\"state\",\"label\":\"reports.member.state\",\"kind\":\"enum\",\"value\":{\"property\":{\"name\":\"state\",\"type\":\"foundry.test/consumer/reporting.State\",\"required\":true},\"value\":{\"id\":\"foundry.test/consumer/reporting.State\",\"kind\":\"string\",\"nullable\":false,\"cases\":[\"active\",\"disabled\"]},\"quoted\":false},\"sortable\":false,\"searchable\":false,\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"foundry.test/consumer/reporting.State\",\"kind\":\"string\",\"nullable\":false,\"cases\":[\"active\",\"disabled\"]},\"syntax\":\"enum\"},\"nullable\":false,\"operators\":[\"eq\",\"in\",\"ne\",\"not_in\"]}},{\"name\":\"balance\",\"label\":\"reports.member.balance\",\"kind\":\"decimal\",\"value\":{\"property\":{\"name\":\"balance\",\"type\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"required\":true},\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"kind\":\"string\",\"nullable\":false,\"format\":\"decimal\"},\"quoted\":false},\"sortable\":true,\"searchable\":false,\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"kind\":\"string\",\"nullable\":false,\"format\":\"decimal\"},\"syntax\":\"formatted\"},\"nullable\":false,\"operators\":[\"between\",\"eq\",\"gt\",\"gte\",\"in\",\"lt\",\"lte\",\"ne\",\"not_in\"]}}],\"filters\":[{\"name\":\"orderLabel\",\"label\":\"reports.order.label\",\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"syntax\":\"text\"},\"nullable\":false,\"operators\":[\"between\",\"contains\",\"eq\",\"gt\",\"gte\",\"icontains\",\"in\",\"lt\",\"lte\",\"ne\",\"not_in\"]}}],\"default_sort\":[{\"column\":\"name\",\"direction\":\"asc\"}],\"exports\":true},{\"id\":\"reports.numeric_levels\",\"row\":\"foundry.test/consumer/reporting.NumericLevelRow\",\"request\":\"github.com/weiloon1234/Foundry-Go/datatable.Request\",\"columns\":[{\"name\":\"id\",\"label\":\"reports.member.id\",\"kind\":\"text\",\"value\":{\"property\":{\"name\":\"id\",\"type\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"required\":true},\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"kind\":\"string\",\"nullable\":false,\"format\":\"uuid\"},\"quoted\":false},\"sortable\":false,\"searchable\":false,\"exportable\":true},{\"name\":\"level\",\"label\":\"reports.numeric_levels.level\",\"kind\":\"enum\",\"value\":{\"property\":{\"name\":\"level\",\"type\":\"foundry.test/consumer/reporting.AgentLevel\",\"required\":true},\"value\":{\"id\":\"foundry.test/consumer/reporting.AgentLevel\",\"kind\":\"integer\",\"nullable\":false,\"bits\":32,\"signed\":true,\"cases\":[0,1]},\"quoted\":false},\"sortable\":false,\"searchable\":false,\"exportable\":true},{\"name\":\"wideLevel\",\"label\":\"reports.numeric_levels.wide_level\",\"kind\":\"enum\",\"value\":{\"property\":{\"name\":\"wideLevel\",\"type\":\"foundry.test/consumer/reporting.WideLevel\",\"required\":true},\"value\":{\"id\":\"foundry.test/consumer/reporting.WideLevel\",\"kind\":\"integer\",\"nullable\":false,\"bits\":64,\"signed\":true,\"cases\":[9007199254740993,9007199254740994]},\"quoted\":false},\"sortable\":false,\"searchable\":false,\"exportable\":true}],\"exports\":true},{\"id\":\"reports.orders\",\"row\":\"foundry.test/consumer/reporting.OrderRow\",\"request\":\"github.com/weiloon1234/Foundry-Go/datatable.Request\",\"columns\":[{\"name\":\"id\",\"label\":\"reports.order.id\",\"kind\":\"text\",\"value\":{\"property\":{\"name\":\"id\",\"type\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]\",\"required\":true},\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]\",\"kind\":\"string\",\"nullable\":false,\"format\":\"uuid\"},\"quoted\":false},\"sortable\":false,\"searchable\":false,\"exportable\":true},{\"name\":\"memberName\",\"label\":\"reports.member.name\",\"kind\":\"text\",\"value\":{\"property\":{\"name\":\"memberName\",\"type\":\"string\",\"required\":true},\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"quoted\":false},\"sortable\":true,\"searchable\":true,\"search_operator\":\"icontains\",\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"syntax\":\"text\"},\"nullable\":false,\"operators\":[\"between\",\"contains\",\"eq\",\"gt\",\"gte\",\"icontains\",\"in\",\"lt\",\"lte\",\"ne\",\"not_in\"]}},{\"name\":\"label\",\"label\":\"reports.order.label\",\"kind\":\"text\",\"value\":{\"property\":{\"name\":\"label\",\"type\":\"string\",\"required\":true},\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"quoted\":false},\"sortable\":false,\"searchable\":true,\"search_operator\":\"icontains\",\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"syntax\":\"text\"},\"nullable\":false,\"operators\":[\"between\",\"contains\",\"eq\",\"gt\",\"gte\",\"icontains\",\"in\",\"lt\",\"lte\",\"ne\",\"not_in\"]}},{\"name\":\"amount\",\"label\":\"reports.order.amount\",\"kind\":\"decimal\",\"value\":{\"property\":{\"name\":\"amount\",\"type\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"required\":true},\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"kind\":\"string\",\"nullable\":false,\"format\":\"decimal\"},\"quoted\":false},\"sortable\":true,\"searchable\":false,\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"kind\":\"string\",\"nullable\":false,\"format\":\"decimal\"},\"syntax\":\"formatted\"},\"nullable\":false,\"operators\":[\"between\",\"eq\",\"gt\",\"gte\",\"in\",\"lt\",\"lte\",\"ne\",\"not_in\"]}}],\"default_sort\":[{\"column\":\"memberName\",\"direction\":\"asc\"}],\"exports\":true},{\"id\":\"reports.totals\",\"row\":\"foundry.test/consumer/reporting.MemberTotal\",\"request\":\"github.com/weiloon1234/Foundry-Go/datatable.Request\",\"columns\":[{\"name\":\"memberId\",\"label\":\"reports.member.id\",\"kind\":\"text\",\"value\":{\"property\":{\"name\":\"memberId\",\"type\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"required\":true},\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"kind\":\"string\",\"nullable\":false,\"format\":\"uuid\"},\"quoted\":false},\"sortable\":false,\"searchable\":false,\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"kind\":\"string\",\"nullable\":false,\"format\":\"uuid\"},\"syntax\":\"model_id\"},\"nullable\":false,\"operators\":[\"eq\",\"in\",\"ne\",\"not_in\"]}},{\"name\":\"count\",\"label\":\"reports.total.count\",\"kind\":\"integer\",\"value\":{\"property\":{\"name\":\"count\",\"type\":\"int64\",\"required\":true},\"value\":{\"id\":\"int64\",\"kind\":\"integer\",\"nullable\":false,\"bits\":64,\"signed\":true},\"quoted\":false},\"sortable\":true,\"searchable\":false,\"exportable\":true,\"filter\":{\"phase\":\"having\",\"scalar\":{\"value\":{\"id\":\"int64\",\"kind\":\"integer\",\"nullable\":false,\"bits\":64,\"signed\":true},\"syntax\":\"integer\"},\"nullable\":false,\"operators\":[\"between\",\"eq\",\"gt\",\"gte\",\"in\",\"lt\",\"lte\",\"ne\",\"not_in\"]}},{\"name\":\"total\",\"label\":\"reports.total.amount\",\"kind\":\"decimal\",\"value\":{\"property\":{\"name\":\"total\",\"type\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]\",\"required\":true},\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"kind\":\"string\",\"nullable\":true,\"format\":\"decimal\"},\"quoted\":false},\"sortable\":true,\"searchable\":false,\"exportable\":true,\"filter\":{\"phase\":\"having\",\"scalar\":{\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"kind\":\"string\",\"nullable\":false,\"format\":\"decimal\"},\"syntax\":\"formatted\"},\"nullable\":true,\"operators\":[\"between\",\"eq\",\"gt\",\"gte\",\"in\",\"is_not_null\",\"is_null\",\"lt\",\"lte\",\"ne\",\"not_in\"]}}],\"default_sort\":[{\"column\":\"total\",\"direction\":\"desc\"}],\"exports\":true}],\"locales\":{\"default\":\"en\",\"supported\":[\"en\"],\"messages\":[{\"key\":\"reports.agent_level.leader_level\"},{\"key\":\"reports.agent_level.member_level\"},{\"key\":\"reports.wide_level.wide_leader_level\"},{\"key\":\"reports.wide_level.wide_member_level\"}]},\"enums\":[{\"package\":\"foundry.test/consumer/reporting\",\"name\":\"AgentLevel\",\"cases\":[{\"name\":\"MemberLevel\",\"value\":0,\"label_key\":\"reports.agent_level.member_level\"},{\"name\":\"LeaderLevel\",\"value\":1,\"label_key\":\"reports.agent_level.leader_level\"}]},{\"package\":\"foundry.test/consumer/reporting\",\"name\":\"State\",\"cases\":[{\"name\":\"Active\",\"value\":\"active\"},{\"name\":\"Disabled\",\"value\":\"disabled\"}]},{\"package\":\"foundry.test/consumer/reporting\",\"name\":\"WideLevel\",\"cases\":[{\"name\":\"WideMemberLevel\",\"value\":9007199254740993,\"label_key\":\"reports.wide_level.wide_member_level\"},{\"name\":\"WideLeaderLevel\",\"value\":9007199254740994,\"label_key\":\"reports.wide_level.wide_leader_level\"}]}]}";
+export const manifestJSON = "{\"version\":7,\"types\":[{\"id\":\"[]contract.Issue\",\"kind\":\"array\",\"nullable\":true,\"element\":\"github.com/weiloon1234/Foundry-Go/contract.Issue\"},{\"id\":\"[]pagination.PageLink\",\"kind\":\"array\",\"nullable\":true,\"element\":\"github.com/weiloon1234/Foundry-Go/http/pagination.PageLink\"},{\"id\":\"bool\",\"kind\":\"boolean\",\"nullable\":false},{\"id\":\"foundry.test/consumer/reporting.MemberRow\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"balance\",\"type\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"required\":true},{\"name\":\"id\",\"type\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"required\":true},{\"name\":\"name\",\"type\":\"string\",\"required\":true},{\"name\":\"nickname\",\"type\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[string]\",\"required\":true},{\"name\":\"state\",\"type\":\"foundry.test/consumer/reporting.State\",\"required\":true}]},{\"id\":\"foundry.test/consumer/reporting.State\",\"kind\":\"string\",\"nullable\":false,\"cases\":[\"active\",\"disabled\"]},{\"id\":\"github.com/weiloon1234/Foundry-Go/attribution.RequestID\",\"kind\":\"string\",\"nullable\":false},{\"id\":\"github.com/weiloon1234/Foundry-Go/contract.Issue\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"code\",\"type\":\"github.com/weiloon1234/Foundry-Go/contract.IssueCode\",\"required\":true},{\"name\":\"label\",\"type\":\"string\",\"required\":false},{\"name\":\"label_key\",\"type\":\"github.com/weiloon1234/Foundry-Go/i18n.MessageKey\",\"required\":false},{\"name\":\"message\",\"type\":\"string\",\"required\":false},{\"name\":\"path\",\"type\":\"string\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/contract.IssueCode\",\"kind\":\"string\",\"nullable\":false},{\"id\":\"github.com/weiloon1234/Foundry-Go/datatable.Direction\",\"kind\":\"string\",\"nullable\":false,\"cases\":[\"asc\",\"desc\"]},{\"id\":\"github.com/weiloon1234/Foundry-Go/datatable.Filter\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"children\",\"type\":\"go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b\",\"required\":false},{\"name\":\"column\",\"type\":\"string\",\"required\":false},{\"name\":\"op\",\"type\":\"github.com/weiloon1234/Foundry-Go/datatable.Operator\",\"required\":true},{\"name\":\"values\",\"type\":\"go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0\",\"required\":false}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/datatable.Operator\",\"kind\":\"string\",\"nullable\":false,\"cases\":[\"and\",\"between\",\"contains\",\"eq\",\"gt\",\"gte\",\"icontains\",\"in\",\"is_not_null\",\"is_null\",\"like\",\"lt\",\"lte\",\"ne\",\"not\",\"not_in\",\"or\"]},{\"id\":\"github.com/weiloon1234/Foundry-Go/datatable.Request\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"filters\",\"type\":\"go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b\",\"required\":false},{\"name\":\"page\",\"type\":\"int\",\"required\":false},{\"name\":\"search\",\"type\":\"string\",\"required\":false},{\"name\":\"size\",\"type\":\"int\",\"required\":false},{\"name\":\"sort\",\"type\":\"go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528\",\"required\":false}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/datatable.Sort\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"column\",\"type\":\"string\",\"required\":true},{\"name\":\"direction\",\"type\":\"github.com/weiloon1234/Foundry-Go/datatable.Direction\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"kind\":\"string\",\"nullable\":false,\"format\":\"decimal\"},{\"id\":\"github.com/weiloon1234/Foundry-Go/http.ErrorCode\",\"kind\":\"string\",\"nullable\":false},{\"id\":\"github.com/weiloon1234/Foundry-Go/http.ErrorResponse\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"error_code\",\"type\":\"github.com/weiloon1234/Foundry-Go/http.ErrorCode\",\"required\":true},{\"name\":\"issues\",\"type\":\"[]contract.Issue\",\"required\":false},{\"name\":\"issues_truncated\",\"type\":\"bool\",\"required\":false},{\"name\":\"message\",\"type\":\"string\",\"required\":true},{\"name\":\"request_id\",\"type\":\"github.com/weiloon1234/Foundry-Go/attribution.RequestID\",\"required\":false},{\"name\":\"status\",\"type\":\"int\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/http/pagination.Links\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"first\",\"type\":\"string\",\"required\":false},{\"name\":\"last\",\"type\":\"string\",\"required\":false},{\"name\":\"next\",\"type\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[string]\",\"required\":true},{\"name\":\"prev\",\"type\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[string]\",\"required\":true},{\"name\":\"window\",\"type\":\"[]pagination.PageLink\",\"required\":false}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/http/pagination.NumberedMeta\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"current_page\",\"type\":\"int\",\"required\":true},{\"name\":\"last_page\",\"type\":\"int64\",\"required\":true},{\"name\":\"per_page\",\"type\":\"int\",\"required\":true},{\"name\":\"total\",\"type\":\"int64\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"data\",\"type\":\"pagination:items:foundry.test/consumer/reporting.MemberRow\",\"required\":true},{\"name\":\"links\",\"type\":\"github.com/weiloon1234/Foundry-Go/http/pagination.Links\",\"required\":true},{\"name\":\"meta\",\"type\":\"github.com/weiloon1234/Foundry-Go/http/pagination.NumberedMeta\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/http/pagination.PageLink\",\"kind\":\"object\",\"nullable\":false,\"properties\":[{\"name\":\"page\",\"type\":\"int\",\"required\":true},{\"name\":\"url\",\"type\":\"string\",\"required\":true}]},{\"id\":\"github.com/weiloon1234/Foundry-Go/i18n.MessageKey\",\"kind\":\"string\",\"nullable\":false},{\"id\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"kind\":\"string\",\"nullable\":false,\"format\":\"uuid\"},{\"id\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[string]\",\"kind\":\"alias\",\"nullable\":true,\"element\":\"string\"},{\"id\":\"go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b\",\"kind\":\"array\",\"nullable\":true,\"element\":\"github.com/weiloon1234/Foundry-Go/datatable.Filter\"},{\"id\":\"go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0\",\"kind\":\"array\",\"nullable\":true,\"element\":\"string\"},{\"id\":\"go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528\",\"kind\":\"array\",\"nullable\":true,\"element\":\"github.com/weiloon1234/Foundry-Go/datatable.Sort\"},{\"id\":\"int\",\"kind\":\"integer\",\"nullable\":false,\"bits\":64,\"signed\":true},{\"id\":\"int64\",\"kind\":\"integer\",\"nullable\":false,\"bits\":64,\"signed\":true},{\"id\":\"pagination:items:foundry.test/consumer/reporting.MemberRow\",\"kind\":\"array\",\"nullable\":false,\"element\":\"foundry.test/consumer/reporting.MemberRow\"},{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false}],\"roots\":null,\"http\":[{\"table_operation\":{\"table\":\"reports.members\",\"kind\":\"download\"},\"route\":{\"id\":\"reports.members.csv\",\"method\":\"GET\",\"path\":\"/reports/members.csv\",\"parameters\":[],\"access\":\"guarded\",\"raw\":false,\"middlewares\":[\"foundry.authentication\"],\"authentication\":{\"guard\":\"report.contract\",\"provider\":\"report.operators\",\"optional\":false,\"credential\":{\"source\":\"report.contract\",\"kind\":\"bearer\",\"name\":\"Authorization\"}}},\"name\":\"reportsMembersCsv\",\"path\":[],\"query\":[],\"response\":{\"media_type\":\"text/csv; charset=utf-8\",\"file\":{\"media_types\":[\"text/csv; charset=utf-8\"],\"seekable\":true}},\"status\":200,\"file_transfer_bytes\":1073744652,\"limits\":{\"Multipart\":{\"Bytes\":2097152,\"FileBytes\":2097152,\"Parts\":128,\"Files\":16,\"Readers\":16,\"HeaderBytes\":32768,\"FieldBytes\":65536,\"FieldsBytes\":262144,\"Issues\":16},\"Files\":{\"Bytes\":1073741824,\"Ranges\":16,\"RangeBytes\":4096},\"Query\":{\"Bytes\":16384,\"Pairs\":128,\"Issues\":16},\"Form\":{\"Bytes\":2097152,\"Pairs\":1024,\"Issues\":16},\"Body\":{\"Bytes\":2097152,\"Depth\":32,\"Nodes\":65536,\"Steps\":262144,\"Issues\":16},\"Response\":{\"Bytes\":33554432,\"Depth\":32,\"Nodes\":1048576,\"Steps\":4194304,\"Issues\":16},\"Validation\":{\"Checks\":65536,\"Issues\":32,\"Depth\":32,\"ValueBytes\":1048576},\"Raw\":{\"Bytes\":2097152}},\"errors\":[\"bad_request\",\"conflict\",\"forbidden\",\"internal_error\",\"method_not_allowed\",\"mfa_required\",\"not_acceptable\",\"not_found\",\"payload_too_large\",\"precondition_failed\",\"range_not_satisfiable\",\"rate_limited\",\"request_timeout\",\"unauthenticated\",\"unavailable\",\"unsupported_media_type\",\"validation_failed\"]},{\"table_operation\":{\"table\":\"reports.members\",\"kind\":\"query\"},\"route\":{\"id\":\"reports.members.query\",\"method\":\"POST\",\"path\":\"/reports/members/query\",\"parameters\":[],\"access\":\"guarded\",\"raw\":false,\"middlewares\":[\"foundry.authentication\"],\"authentication\":{\"guard\":\"report.contract\",\"provider\":\"report.operators\",\"optional\":false,\"credential\":{\"source\":\"report.contract\",\"kind\":\"bearer\",\"name\":\"Authorization\"}}},\"name\":\"reportsMembersQuery\",\"path\":[],\"query\":[],\"body\":{\"media_type\":\"application/json\",\"type\":\"github.com/weiloon1234/Foundry-Go/datatable.Request\"},\"response\":{\"media_type\":\"application/json\",\"type\":\"github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]\"},\"status\":200,\"limits\":{\"Multipart\":{\"Bytes\":2097152,\"FileBytes\":2097152,\"Parts\":128,\"Files\":16,\"Readers\":16,\"HeaderBytes\":32768,\"FieldBytes\":65536,\"FieldsBytes\":262144,\"Issues\":16},\"Files\":{\"Bytes\":1073741824,\"Ranges\":16,\"RangeBytes\":4096},\"Query\":{\"Bytes\":16384,\"Pairs\":128,\"Issues\":16},\"Form\":{\"Bytes\":2097152,\"Pairs\":1024,\"Issues\":16},\"Body\":{\"Bytes\":2097152,\"Depth\":32,\"Nodes\":65536,\"Steps\":262144,\"Issues\":16},\"Response\":{\"Bytes\":33554432,\"Depth\":32,\"Nodes\":1048576,\"Steps\":4194304,\"Issues\":16},\"Validation\":{\"Checks\":65536,\"Issues\":32,\"Depth\":32,\"ValueBytes\":1048576},\"Raw\":{\"Bytes\":2097152}},\"errors\":[\"bad_request\",\"conflict\",\"forbidden\",\"internal_error\",\"method_not_allowed\",\"mfa_required\",\"not_acceptable\",\"not_found\",\"payload_too_large\",\"precondition_failed\",\"range_not_satisfiable\",\"rate_limited\",\"request_timeout\",\"unauthenticated\",\"unavailable\",\"unsupported_media_type\",\"validation_failed\"]}],\"error_type\":\"github.com/weiloon1234/Foundry-Go/http.ErrorResponse\",\"errors\":[{\"error_code\":\"bad_request\",\"status\":400,\"message\":\"Invalid request\"},{\"error_code\":\"conflict\",\"status\":409,\"message\":\"Request conflicts with current state\"},{\"error_code\":\"forbidden\",\"status\":403,\"message\":\"Access denied\"},{\"error_code\":\"internal_error\",\"status\":500,\"message\":\"Internal server error\"},{\"error_code\":\"method_not_allowed\",\"status\":405,\"message\":\"Method not allowed\"},{\"error_code\":\"mfa_required\",\"status\":403,\"message\":\"Additional authentication required\"},{\"error_code\":\"not_acceptable\",\"status\":406,\"message\":\"No acceptable response encoding\"},{\"error_code\":\"not_found\",\"status\":404,\"message\":\"Resource not found\"},{\"error_code\":\"payload_too_large\",\"status\":413,\"message\":\"Payload too large\"},{\"error_code\":\"precondition_failed\",\"status\":412,\"message\":\"Request precondition failed\"},{\"error_code\":\"range_not_satisfiable\",\"status\":416,\"message\":\"Requested range is not satisfiable\"},{\"error_code\":\"rate_limited\",\"status\":429,\"message\":\"Rate limit exceeded\"},{\"error_code\":\"request_timeout\",\"status\":408,\"message\":\"Request timed out\"},{\"error_code\":\"unauthenticated\",\"status\":401,\"message\":\"Authentication required\"},{\"error_code\":\"unavailable\",\"status\":503,\"message\":\"Service unavailable\"},{\"error_code\":\"unsupported_media_type\",\"status\":415,\"message\":\"Unsupported media type\"},{\"error_code\":\"validation_failed\",\"status\":422,\"message\":\"Validation failed\"}],\"tables\":[{\"id\":\"reports.members\",\"row\":\"foundry.test/consumer/reporting.MemberRow\",\"request\":\"github.com/weiloon1234/Foundry-Go/datatable.Request\",\"page\":\"github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]\",\"columns\":[{\"name\":\"id\",\"label\":\"reports.member.id\",\"kind\":\"text\",\"value\":{\"property\":{\"name\":\"id\",\"type\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"required\":true},\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]\",\"kind\":\"string\",\"nullable\":false,\"format\":\"uuid\"},\"quoted\":false},\"sortable\":true,\"searchable\":false,\"exportable\":true},{\"name\":\"name\",\"label\":\"reports.member.name\",\"kind\":\"text\",\"value\":{\"property\":{\"name\":\"name\",\"type\":\"string\",\"required\":true},\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"quoted\":false},\"sortable\":true,\"searchable\":true,\"search_operator\":\"icontains\",\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"syntax\":\"text\"},\"nullable\":false,\"operators\":[\"between\",\"contains\",\"eq\",\"gt\",\"gte\",\"icontains\",\"in\",\"lt\",\"lte\",\"ne\",\"not_in\"]}},{\"name\":\"nickname\",\"label\":\"reports.member.nickname\",\"kind\":\"text\",\"value\":{\"property\":{\"name\":\"nickname\",\"type\":\"github.com/weiloon1234/Foundry-Go/value.Nullable[string]\",\"required\":true},\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":true},\"quoted\":false},\"sortable\":true,\"searchable\":false,\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"syntax\":\"text\"},\"nullable\":true,\"operators\":[\"between\",\"contains\",\"eq\",\"gt\",\"gte\",\"icontains\",\"in\",\"is_not_null\",\"is_null\",\"lt\",\"lte\",\"ne\",\"not_in\"]}},{\"name\":\"state\",\"label\":\"reports.member.state\",\"kind\":\"enum\",\"value\":{\"property\":{\"name\":\"state\",\"type\":\"foundry.test/consumer/reporting.State\",\"required\":true},\"value\":{\"id\":\"foundry.test/consumer/reporting.State\",\"kind\":\"string\",\"nullable\":false,\"cases\":[\"active\",\"disabled\"]},\"quoted\":false},\"sortable\":false,\"searchable\":false,\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"foundry.test/consumer/reporting.State\",\"kind\":\"string\",\"nullable\":false,\"cases\":[\"active\",\"disabled\"]},\"syntax\":\"enum\"},\"nullable\":false,\"operators\":[\"eq\",\"in\",\"ne\",\"not_in\"]}},{\"name\":\"balance\",\"label\":\"reports.member.balance\",\"kind\":\"decimal\",\"value\":{\"property\":{\"name\":\"balance\",\"type\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"required\":true},\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"kind\":\"string\",\"nullable\":false,\"format\":\"decimal\"},\"quoted\":false},\"sortable\":true,\"searchable\":false,\"exportable\":true,\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"github.com/weiloon1234/Foundry-Go/decimal.Decimal\",\"kind\":\"string\",\"nullable\":false,\"format\":\"decimal\"},\"syntax\":\"formatted\"},\"nullable\":false,\"operators\":[\"between\",\"eq\",\"gt\",\"gte\",\"in\",\"lt\",\"lte\",\"ne\",\"not_in\"]}}],\"filters\":[{\"name\":\"orderLabel\",\"label\":\"reports.order.label\",\"filter\":{\"phase\":\"where\",\"scalar\":{\"value\":{\"id\":\"string\",\"kind\":\"string\",\"nullable\":false},\"syntax\":\"text\"},\"nullable\":false,\"operators\":[\"between\",\"contains\",\"eq\",\"gt\",\"gte\",\"icontains\",\"in\",\"lt\",\"lte\",\"ne\",\"not_in\"]}}],\"default_sort\":[{\"column\":\"name\",\"direction\":\"asc\"}],\"exports\":true}],\"locales\":{\"default\":\"en\",\"supported\":[\"en\"],\"messages\":[{\"key\":\"reports.agent_level.leader_level\"},{\"key\":\"reports.agent_level.member_level\"},{\"key\":\"reports.wide_level.wide_leader_level\"},{\"key\":\"reports.wide_level.wide_member_level\"}]},\"enums\":[{\"package\":\"foundry.test/consumer/reporting\",\"name\":\"AgentLevel\",\"cases\":[{\"name\":\"MemberLevel\",\"value\":0,\"label_key\":\"reports.agent_level.member_level\"},{\"name\":\"LeaderLevel\",\"value\":1,\"label_key\":\"reports.agent_level.leader_level\"}]},{\"package\":\"foundry.test/consumer/reporting\",\"name\":\"State\",\"cases\":[{\"name\":\"Active\",\"value\":\"active\"},{\"name\":\"Disabled\",\"value\":\"disabled\"}]},{\"package\":\"foundry.test/consumer/reporting\",\"name\":\"WideLevel\",\"cases\":[{\"name\":\"WideMemberLevel\",\"value\":9007199254740993,\"label_key\":\"reports.wide_level.wide_member_level\"},{\"name\":\"WideLeaderLevel\",\"value\":9007199254740994,\"label_key\":\"reports.wide_level.wide_leader_level\"}]}]}";
 let runtimeDocumentCache: RuntimeDocument | undefined;
 function runtimeDocument(): RuntimeDocument { return runtimeDocumentCache ??= loadRuntimeDocument(); }
 let contractsCache: WireCodec | undefined;
@@ -783,29 +766,10 @@ export type LocaleMap<V> = Readonly<Partial<Record<Locale, V>>> & { readonly [lo
 export type List_Issue = (ReadonlyArray<Contract_Issue>) | null;
 export type List_PageLink = (ReadonlyArray<PageLink>) | null;
 export type Bool = boolean;
-export type AgentLevel = 0 | 1;
-export const AgentLevel = /* @__PURE__ */ Object.freeze({
-  cases: [0, 1] as const,
-  labels: /* @__PURE__ */ Object.freeze({
-    "0": "reports.agent_level.member_level",
-    "1": "reports.agent_level.leader_level",
-  }) satisfies Record<AgentLevel, CatalogMessageKey>,
-});
 export type MemberRow = { readonly "balance": Decimal; readonly "id": MemberID; readonly "name": GoString; readonly "nickname": Nullable_String; readonly "state": State };
-export type MemberTotal = { readonly "count": Int64; readonly "memberId": MemberID; readonly "total": Nullable_Decimal };
-export type NumericLevelRow = { readonly "id": MemberID; readonly "level": AgentLevel; readonly "wideLevel": WideLevel };
-export type OrderRow = { readonly "amount": Decimal; readonly "id": OrderID; readonly "label": GoString; readonly "memberName": GoString };
 export type State = "active" | "disabled";
 export const State = /* @__PURE__ */ Object.freeze({
   cases: ["active", "disabled"] as const,
-});
-export type WideLevel = "9007199254740993" | "9007199254740994";
-export const WideLevel = /* @__PURE__ */ Object.freeze({
-  cases: ["9007199254740993", "9007199254740994"] as const,
-  labels: /* @__PURE__ */ Object.freeze({
-    "9007199254740993": "reports.wide_level.wide_member_level",
-    "9007199254740994": "reports.wide_level.wide_leader_level",
-  }) satisfies Record<WideLevel, CatalogMessageKey>,
 });
 export type RequestID = string;
 export type Contract_Issue = { readonly "code": IssueCode; readonly "label"?: GoString; readonly "label_key"?: MessageKey; readonly "message"?: GoString; readonly "path": GoString };
@@ -830,8 +794,6 @@ export type NumberedResponse_MemberRow = { readonly "data": Pagination_Items_Mem
 export type PageLink = { readonly "page": Int; readonly "url": GoString };
 export type MessageKey = string;
 export type MemberID = Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]">;
-export type OrderID = Identity<"github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]">;
-export type Nullable_Decimal = (Exclude<Decimal, null>) | null;
 export type Nullable_String = (Exclude<GoString, null>) | null;
 export type List_Filter = (ReadonlyArray<Filter>) | null;
 export type List_String = (ReadonlyArray<GoString>) | null;
@@ -840,16 +802,10 @@ export type Int = string;
 export type Int64 = string;
 export type Pagination_Items_MemberRow = ReadonlyArray<MemberRow>;
 export type GoString = string;
-/** Server output of AgentLevel; unknown enum values decode as UnknownEnumValue. */
-export type AgentLevelReceived = 0 | 1 | UnknownEnumValue;
 /** Server output of MemberRow; unknown enum values decode as UnknownEnumValue. */
 export type MemberRowReceived = { readonly "balance": Decimal; readonly "id": MemberID; readonly "name": GoString; readonly "nickname": Nullable_String; readonly "state": StateReceived };
-/** Server output of NumericLevelRow; unknown enum values decode as UnknownEnumValue. */
-export type NumericLevelRowReceived = { readonly "id": MemberID; readonly "level": AgentLevelReceived; readonly "wideLevel": WideLevelReceived };
 /** Server output of State; unknown enum values decode as UnknownEnumValue. */
 export type StateReceived = "active" | "disabled" | UnknownEnumValue;
-/** Server output of WideLevel; unknown enum values decode as UnknownEnumValue. */
-export type WideLevelReceived = "9007199254740993" | "9007199254740994" | UnknownEnumValue;
 /** Server output of NumberedResponse_MemberRow; unknown enum values decode as UnknownEnumValue. */
 export type NumberedResponse_MemberRowReceived = { readonly "data": Pagination_Items_MemberRowReceived; readonly "links": Links; readonly "meta": NumberedMeta };
 /** Server output of Pagination_Items_MemberRow; unknown enum values decode as UnknownEnumValue. */
@@ -859,13 +815,8 @@ export interface ContractTypes {
   readonly "[]contract.Issue": List_Issue;
   readonly "[]pagination.PageLink": List_PageLink;
   readonly "bool": Bool;
-  readonly "foundry.test/consumer/reporting.AgentLevel": AgentLevel;
   readonly "foundry.test/consumer/reporting.MemberRow": MemberRow;
-  readonly "foundry.test/consumer/reporting.MemberTotal": MemberTotal;
-  readonly "foundry.test/consumer/reporting.NumericLevelRow": NumericLevelRow;
-  readonly "foundry.test/consumer/reporting.OrderRow": OrderRow;
   readonly "foundry.test/consumer/reporting.State": State;
-  readonly "foundry.test/consumer/reporting.WideLevel": WideLevel;
   readonly "github.com/weiloon1234/Foundry-Go/attribution.RequestID": RequestID;
   readonly "github.com/weiloon1234/Foundry-Go/contract.Issue": Contract_Issue;
   readonly "github.com/weiloon1234/Foundry-Go/contract.IssueCode": IssueCode;
@@ -883,8 +834,6 @@ export interface ContractTypes {
   readonly "github.com/weiloon1234/Foundry-Go/http/pagination.PageLink": PageLink;
   readonly "github.com/weiloon1234/Foundry-Go/i18n.MessageKey": MessageKey;
   readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]": MemberID;
-  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]": OrderID;
-  readonly "github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]": Nullable_Decimal;
   readonly "github.com/weiloon1234/Foundry-Go/value.Nullable[string]": Nullable_String;
   readonly "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b": List_Filter;
   readonly "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0": List_String;
@@ -900,13 +849,8 @@ export interface ReceivedContractTypes {
   readonly "[]contract.Issue": List_Issue;
   readonly "[]pagination.PageLink": List_PageLink;
   readonly "bool": Bool;
-  readonly "foundry.test/consumer/reporting.AgentLevel": AgentLevelReceived;
   readonly "foundry.test/consumer/reporting.MemberRow": MemberRowReceived;
-  readonly "foundry.test/consumer/reporting.MemberTotal": MemberTotal;
-  readonly "foundry.test/consumer/reporting.NumericLevelRow": NumericLevelRowReceived;
-  readonly "foundry.test/consumer/reporting.OrderRow": OrderRow;
   readonly "foundry.test/consumer/reporting.State": StateReceived;
-  readonly "foundry.test/consumer/reporting.WideLevel": WideLevelReceived;
   readonly "github.com/weiloon1234/Foundry-Go/attribution.RequestID": RequestID;
   readonly "github.com/weiloon1234/Foundry-Go/contract.Issue": Contract_Issue;
   readonly "github.com/weiloon1234/Foundry-Go/contract.IssueCode": IssueCode;
@@ -924,8 +868,6 @@ export interface ReceivedContractTypes {
   readonly "github.com/weiloon1234/Foundry-Go/http/pagination.PageLink": PageLink;
   readonly "github.com/weiloon1234/Foundry-Go/i18n.MessageKey": MessageKey;
   readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]": MemberID;
-  readonly "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]": OrderID;
-  readonly "github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]": Nullable_Decimal;
   readonly "github.com/weiloon1234/Foundry-Go/value.Nullable[string]": Nullable_String;
   readonly "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b": List_Filter;
   readonly "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0": List_String;
@@ -938,7 +880,6 @@ export interface ReceivedContractTypes {
 
 /** Named schema identity mapping for decodeContract, decodeReceived, encodeContract and schema(). */
 export const schemas = /* @__PURE__ */ Object.freeze({
-  AgentLevel: "foundry.test/consumer/reporting.AgentLevel",
   Bool: "bool",
   Contract_Issue: "github.com/weiloon1234/Foundry-Go/contract.Issue",
   Datatable_Request: "github.com/weiloon1234/Foundry-Go/datatable.Request",
@@ -959,22 +900,16 @@ export const schemas = /* @__PURE__ */ Object.freeze({
   List_String: "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0",
   MemberID: "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
   MemberRow: "foundry.test/consumer/reporting.MemberRow",
-  MemberTotal: "foundry.test/consumer/reporting.MemberTotal",
   MessageKey: "github.com/weiloon1234/Foundry-Go/i18n.MessageKey",
-  Nullable_Decimal: "github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]",
   Nullable_String: "github.com/weiloon1234/Foundry-Go/value.Nullable[string]",
   NumberedMeta: "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedMeta",
   NumberedResponse_MemberRow: "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]",
-  NumericLevelRow: "foundry.test/consumer/reporting.NumericLevelRow",
   Operator: "github.com/weiloon1234/Foundry-Go/datatable.Operator",
-  OrderID: "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]",
-  OrderRow: "foundry.test/consumer/reporting.OrderRow",
   PageLink: "github.com/weiloon1234/Foundry-Go/http/pagination.PageLink",
   Pagination_Items_MemberRow: "pagination:items:foundry.test/consumer/reporting.MemberRow",
   RequestID: "github.com/weiloon1234/Foundry-Go/attribution.RequestID",
   Sort: "github.com/weiloon1234/Foundry-Go/datatable.Sort",
   State: "foundry.test/consumer/reporting.State",
-  WideLevel: "foundry.test/consumer/reporting.WideLevel",
 } as const);
 
 /** Decode a raw network value using a declared schema and resource bounds. */
@@ -1052,27 +987,52 @@ export function schema<K extends keyof ContractTypes>(id: K): FieldDescriptor<Co
   return describeField(id, true, "", undefined) as FieldDescriptor<ContractTypes[K], readonly ["schema", K]>;
 }
 
-export type TableId = "reports.members" | "reports.numeric_levels" | "reports.orders" | "reports.totals";
+export interface TableRows {
+  readonly "reports.members": MemberRow;
+}
 
-export type TableRow<Id extends TableId> =
-  Id extends "reports.members" ? MemberRow :
-  Id extends "reports.numeric_levels" ? NumericLevelRow :
-  Id extends "reports.orders" ? OrderRow :
-  Id extends "reports.totals" ? MemberTotal :
-  never;
+export interface TableReceivedRows {
+  readonly "reports.members": MemberRowReceived;
+}
+export type TableId = keyof TableRows;
+export type TableRow<Id extends TableId> = TableRows[Id];
+export type TableReceivedRow<Id extends TableId> = TableReceivedRows[Id];
+export type TablePageReceived<Row> = { readonly "data": ReadonlyArray<Row>; readonly "links": Links; readonly "meta": NumberedMeta };
+export interface TableQueryInputs {
+  readonly "reports.members": Operations["reportsMembersQuery"]["request"];
+}
+export interface TableQueryOperationNames {
+  readonly "reports.members": "reportsMembersQuery";
+}
+export type QueryTableId = keyof TableQueryInputs;
+export interface TableExportInputs {
+}
+export interface TableExportOutputs {
+}
+export interface TableExportOperationNames {
+}
+export interface TableExportKinds {
+}
+export type ExportTableId = keyof TableExportInputs;
+export interface TableDownloadInputs {
+  readonly "reports.members": Operations["reportsMembersCsv"]["request"];
+}
+export interface TableDownloadOutputs {
+  readonly "reports.members": FileResult;
+}
+export interface TableDownloadOperationNames {
+  readonly "reports.members": "reportsMembersCsv";
+}
+export type DownloadTableId = keyof TableDownloadInputs;
+export type TableQueryOutputs = { readonly [Id in QueryTableId]: TablePageReceived<TableReceivedRows[Id]> };
+export type Tables = { readonly [Id in TableId]: TableMetadata<TableRows[Id]> & { readonly id: Id } };
+export type TableQueries = { readonly [Id in QueryTableId]: (client: API, input: TableQueryInputs[Id], options?: CallOptions) => Promise<TableQueryOutputs[Id]> };
+export type TableExports = { readonly [Id in ExportTableId]: (client: API, input: TableExportInputs[Id], options?: CallOptions) => Promise<TableExportOutputs[Id]> };
+export type TableDownloads = { readonly [Id in DownloadTableId]: (client: API, input: TableDownloadInputs[Id], options?: CallOptions) => Promise<TableDownloadOutputs[Id]> };
 
-export type TableReceivedRow<Id extends TableId> =
-  Id extends "reports.members" ? MemberRowReceived :
-  Id extends "reports.numeric_levels" ? NumericLevelRowReceived :
-  Id extends "reports.orders" ? OrderRow :
-  Id extends "reports.totals" ? MemberTotal :
-  never;
-
-export const tables = /* @__PURE__ */ Object.freeze({
-  "reports.members": createTableDescriptor<MemberRow, "reportsMembersQuery", "reportsMembersCsv">({
+export const tables: Tables = /* @__PURE__ */ Object.freeze<Tables>({
+  "reports.members": Object.freeze<Tables["reports.members"]>({
     id: "reports.members",
-    queryOperation: "reportsMembersQuery",
-    exportOperation: "reportsMembersCsv",
     columns: [
       {
         name: "id",
@@ -1130,142 +1090,22 @@ export const tables = /* @__PURE__ */ Object.freeze({
       { column: "name", direction: "asc" },
     ],
     exports: true,
-    query(client: API, input: Operations["reportsMembersQuery"]["request"], options?: CallOptions): Promise<Operations["reportsMembersQuery"]["response"]> {
-      return client["reportsMembersQuery"](input, options);
-    },
-    export(client: API, input: Operations["reportsMembersCsv"]["request"], options?: CallOptions): Promise<Operations["reportsMembersCsv"]["response"]> {
-      return client["reportsMembersCsv"](input, options);
-    },
   }),
-  "reports.numeric_levels": createTableDescriptor<NumericLevelRow>({
-    id: "reports.numeric_levels",
-    columns: [
-      {
-        name: "id",
-        label: "reports.member.id",
-        kind: "text",
-        nullable: false,
-        sortable: false,
-        searchable: false,
-        exportable: true,
-        operators: [],
-      },
-      {
-        name: "level",
-        label: "reports.numeric_levels.level",
-        kind: "enum",
-        nullable: false,
-        sortable: false,
-        searchable: false,
-        exportable: true,
-        operators: [],
-        enum: AgentLevel,
-      },
-      {
-        name: "wideLevel",
-        label: "reports.numeric_levels.wide_level",
-        kind: "enum",
-        nullable: false,
-        sortable: false,
-        searchable: false,
-        exportable: true,
-        operators: [],
-        enum: WideLevel,
-      },
-    ],
-    defaultSort: [
-    ],
-    exports: true,
-  }),
-  "reports.orders": createTableDescriptor<OrderRow>({
-    id: "reports.orders",
-    columns: [
-      {
-        name: "id",
-        label: "reports.order.id",
-        kind: "text",
-        nullable: false,
-        sortable: false,
-        searchable: false,
-        exportable: true,
-        operators: [],
-      },
-      {
-        name: "memberName",
-        label: "reports.member.name",
-        kind: "text",
-        nullable: false,
-        sortable: true,
-        searchable: true,
-        exportable: true,
-        operators: ["between", "contains", "eq", "gt", "gte", "icontains", "in", "lt", "lte", "ne", "not_in"],
-      },
-      {
-        name: "label",
-        label: "reports.order.label",
-        kind: "text",
-        nullable: false,
-        sortable: false,
-        searchable: true,
-        exportable: true,
-        operators: ["between", "contains", "eq", "gt", "gte", "icontains", "in", "lt", "lte", "ne", "not_in"],
-      },
-      {
-        name: "amount",
-        label: "reports.order.amount",
-        kind: "decimal",
-        nullable: false,
-        sortable: true,
-        searchable: false,
-        exportable: true,
-        operators: ["between", "eq", "gt", "gte", "in", "lt", "lte", "ne", "not_in"],
-      },
-    ],
-    defaultSort: [
-      { column: "memberName", direction: "asc" },
-    ],
-    exports: true,
-  }),
-  "reports.totals": createTableDescriptor<MemberTotal>({
-    id: "reports.totals",
-    columns: [
-      {
-        name: "memberId",
-        label: "reports.member.id",
-        kind: "text",
-        nullable: false,
-        sortable: false,
-        searchable: false,
-        exportable: true,
-        operators: ["eq", "in", "ne", "not_in"],
-      },
-      {
-        name: "count",
-        label: "reports.total.count",
-        kind: "integer",
-        nullable: false,
-        sortable: true,
-        searchable: false,
-        exportable: true,
-        operators: ["between", "eq", "gt", "gte", "in", "lt", "lte", "ne", "not_in"],
-      },
-      {
-        name: "total",
-        label: "reports.total.amount",
-        kind: "decimal",
-        nullable: true,
-        sortable: true,
-        searchable: false,
-        exportable: true,
-        operators: ["between", "eq", "gt", "gte", "in", "is_not_null", "is_null", "lt", "lte", "ne", "not_in"],
-      },
-    ],
-    defaultSort: [
-      { column: "total", direction: "desc" },
-    ],
-    exports: true,
-  }),
-} as const);
+});
+export const tableQueries: TableQueries = /* @__PURE__ */ Object.freeze<TableQueries>({
+  "reports.members"(client: API, input: Operations["reportsMembersQuery"]["request"], options?: CallOptions) {
+    return client.reportsMembersQuery(input, options);
+  },
+});
+export const tableExports: TableExports = /* @__PURE__ */ Object.freeze<TableExports>({
+});
+export const tableDownloads: TableDownloads = /* @__PURE__ */ Object.freeze<TableDownloads>({
+  "reports.members"(client: API, input: Operations["reportsMembersCsv"]["request"], options?: CallOptions) {
+    return client.reportsMembersCsv(input, options);
+  },
+});
+export const tableExportKinds: TableExportKinds = /* @__PURE__ */ Object.freeze<TableExportKinds>({
+});
 
 /** Arguments of each declared catalog message; numbers may also be exact decimal strings. */
 export interface CatalogMessageArguments {

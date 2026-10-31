@@ -58,7 +58,17 @@ The first immutable client contract cohort is `contracts-v0.3.0`.
 - Fixed: Session restoration rejects profiles superseded by sign-in, sign-out, or disposal with `SessionChangedError`.
 - Fixed: Authenticated requests can cancel their own refresh waits; shared refreshes have a configurable deadline and disposal cancellation while retaining the credential lock until the operation exits.
 - Fixed: TypeScript auth helpers reject endpoints with required inputs they cannot supply and emit requests without type assertions.
-- Fixed: TypeScript datatable helpers bind only exact table route IDs, validate request and row contracts, reject competing bindings, and omit unavailable operations.
+- Changed (breaking): Manifest 7 declares table operation bindings in Go through
+  `datatable.QueryEndpoint`, `BindTicketExport`, `BindFileExport`, and
+  `DownloadEndpoint`, or `http.TableOperation`. Validation rejects duplicate slots
+  and incompatible schemas. Route-name and shared-schema inference are removed.
+- Changed (breaking): `contract.TableID` replaces `datatable.TableID` without an alias.
+  Projected clients retain tables only through selected operation bindings.
+- Changed (breaking): TypeScript tables use indexed row maps and a mapped `Tables`
+  metadata registry, plus separate mapped `tableQueries`, `tableExports`, and
+  `tableDownloads` registries. These preserve generic ID correlation, omit absent
+  keys, and expose canonical `TablePageReceived` and literal `tableExportKinds`.
+  `createTableDescriptor` and `TableDescriptor` are removed.
 - Fixed: Public enum configuration uses authoritative descriptor cases for local and imported enums, honoring alias and ignored-constant rules while preserving escaped strings and wide integers.
 - Fixed: Public configuration validates catalog locale membership and declared fallbacks before emission; invalid supplied values raise an error instead of escaping the declared TypeScript union.
 - Fixed: Extension-only upload constraints preserve the browser file picker's `accept` hint.

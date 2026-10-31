@@ -5,6 +5,8 @@ import (
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
+	"github.com/weiloon1234/Foundry-Go/http/pagination"
+	"github.com/weiloon1234/Foundry-Go/internal/contractmeta"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 )
 
@@ -39,6 +41,9 @@ func (d Description) Normalize() (Description, error) {
 		if !reflect.DeepEqual(requestTypes[typ.ID], typ) {
 			return Description{}, invalid("datatable request shape changed")
 		}
+	}
+	if err := normalizePage(&d); err != nil {
+		return Description{}, err
 	}
 	names := make([]string, 0, len(d.Columns))
 	for _, column := range d.Columns {
@@ -123,4 +128,29 @@ func normalizeFilterMetadata(info FilterInfo) (FilterInfo, error) {
 	}
 	slices.Sort(result.Operators)
 	return result, nil
+}
+
+func normalizePage(d *Description) error {
+	var err error
+	d.Page, err = d.Page.Normalize()
+	if err != nil {
+		return err
+	}
+	rowID := contractmeta.TypeID(reflect.TypeFor[contractmeta.PageRow]())
+	row := contract.DefineJSON[contractmeta.PageRow](contract.Schema{Root: rowID, Types: []contract.Type{{ID: rowID, Kind: contract.ObjectKind}}})
+	template, err := pagination.NumberedJSON(row).Description()
+	if err != nil {
+		return err
+	}
+	expected := contractmeta.ComposePage(template, rowID, d.Row.Root, d.Page.Root)
+	actual := make(map[contract.TypeID]contract.Type, len(d.Page.Types))
+	for _, typ := range d.Page.Types {
+		actual[typ.ID] = typ
+	}
+	for _, typ := range expected.Types {
+		if !reflect.DeepEqual(actual[typ.ID], typ) {
+			return invalid("datatable page differs from canonical numbered response")
+		}
+	}
+	return nil
 }

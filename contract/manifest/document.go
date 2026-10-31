@@ -19,9 +19,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
-// Version 6 adds bounded property/parameter presentation metadata. Earlier
+// Version 7 adds explicit table operation bindings and canonical page schemas. Earlier
 // formats must be regenerated; older readers reject unsupported versions.
-const Version = 6
+const Version = 7
 const MaxBytes = 16 << 20
 const MaxOperations = 4096
 
@@ -61,21 +61,23 @@ type Document struct {
 }
 
 type Operation struct {
-	Route             foundryhttp.RouteInfo        `json:"route"`
-	Name              string                       `json:"name"`
-	Path              []Parameter                  `json:"path"`
-	Query             []Parameter                  `json:"query"`
-	Body              *Payload                     `json:"body,omitempty"`
-	Response          *Payload                     `json:"response,omitempty"`
-	Status            int                          `json:"status"`
-	Statuses          []int                        `json:"statuses,omitempty"`
-	Redirect          bool                         `json:"redirect,omitempty"`
-	FileTransferBytes int64                        `json:"file_transfer_bytes,omitempty"`
-	Limits            foundryhttp.EndpointLimits   `json:"limits"`
-	Idempotency       *foundryhttp.IdempotencyInfo `json:"idempotency,omitempty"`
-	Preparation       bool                         `json:"preparation,omitempty"`
-	Validation        *validation.Description      `json:"validation,omitempty"`
-	Errors            []foundryhttp.ErrorCode      `json:"errors,omitempty"`
+	// TableOperation binds this operation to one registered table and role.
+	TableOperation    *contract.TableOperationBinding `json:"table_operation,omitempty"`
+	Route             foundryhttp.RouteInfo           `json:"route"`
+	Name              string                          `json:"name"`
+	Path              []Parameter                     `json:"path"`
+	Query             []Parameter                     `json:"query"`
+	Body              *Payload                        `json:"body,omitempty"`
+	Response          *Payload                        `json:"response,omitempty"`
+	Status            int                             `json:"status"`
+	Statuses          []int                           `json:"statuses,omitempty"`
+	Redirect          bool                            `json:"redirect,omitempty"`
+	FileTransferBytes int64                           `json:"file_transfer_bytes,omitempty"`
+	Limits            foundryhttp.EndpointLimits      `json:"limits"`
+	Idempotency       *foundryhttp.IdempotencyInfo    `json:"idempotency,omitempty"`
+	Preparation       bool                            `json:"preparation,omitempty"`
+	Validation        *validation.Description         `json:"validation,omitempty"`
+	Errors            []foundryhttp.ErrorCode         `json:"errors,omitempty"`
 	// RefreshCookie marks a browser refresh-token cookie the operation reads,
 	// sets or clears; clients send it with same-origin or include credentials.
 	RefreshCookie *foundryhttp.RefreshCookieInfo `json:"refresh_cookie,omitempty"`
@@ -153,9 +155,11 @@ type NotificationChannel struct {
 }
 
 type Table struct {
-	ID          datatable.TableID           `json:"id"`
-	Row         contract.TypeID             `json:"row"`
-	Request     contract.TypeID             `json:"request"`
+	ID      contract.TableID `json:"id"`
+	Row     contract.TypeID  `json:"row"`
+	Request contract.TypeID  `json:"request"`
+	// Page references the canonical numbered response for Row.
+	Page        contract.TypeID             `json:"page"`
 	Columns     []datatable.ColumnInfo      `json:"columns"`
 	Filters     []datatable.NamedFilterInfo `json:"filters,omitempty"`
 	DefaultSort []datatable.Sort            `json:"default_sort,omitempty"`

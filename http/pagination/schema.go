@@ -32,16 +32,18 @@ func pageJSON[Envelope, T any](item contract.JSON[T]) contract.JSON[Envelope] {
 		return invalid()
 	}
 	root := reflect.TypeFor[Envelope]()
+	const parameter contract.TypeID = "pagination:item"
 	extras := map[reflect.Type]contract.Type{
-		reflect.TypeFor[[]T]():                    {ID: contract.TypeID("pagination:items:" + string(itemInfo.Root)), Kind: contract.ArrayKind, Element: itemInfo.Root},
+		reflect.TypeFor[[]T]():                    {ID: contract.TypeID("pagination:items:" + string(parameter)), Kind: contract.ArrayKind, Element: parameter},
 		reflect.TypeFor[value.Nullable[string]](): {ID: contractmeta.TypeID(reflect.TypeFor[value.Nullable[string]]()), Kind: contract.AliasKind, Nullable: true, Element: "string"},
 		// Optional links are omitted, not null; the property is not required.
 		reflect.TypeFor[value.Optional[string]](): {ID: "string", Kind: contract.StringKind},
 	}
 	schema, err := contractmeta.Struct(root, []reflect.Type{root, reflect.TypeFor[NumberedMeta](), reflect.TypeFor[SimpleMeta](), reflect.TypeFor[Links](), reflect.TypeFor[PageLink](), reflect.TypeFor[CursorMeta]()}, extras,
-		contract.JSONType(itemInfo.Root, func() contract.JSON[T] { return item }), contract.Type{ID: "string", Kind: contract.StringKind})
+		contract.Type{ID: parameter, Kind: contract.ObjectKind}, contract.Type{ID: "string", Kind: contract.StringKind})
 	if err != nil {
 		return invalid()
 	}
+	schema = contractmeta.ComposePage(schema, parameter, itemInfo.Root, schema.Root, contract.JSONType(itemInfo.Root, func() contract.JSON[T] { return item }))
 	return contract.DefineJSON[Envelope](schema)
 }

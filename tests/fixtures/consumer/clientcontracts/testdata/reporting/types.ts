@@ -48,12 +48,10 @@ export function reportingTypes(): void {
       }
     }
   }
-  if (membersTable.query) {
-    void membersTable.query(api, { body: {} });
-  }
-  if (membersTable.export) {
-    void membersTable.export(api, {});
-  }
+  void sdk.tableQueries["reports.members"](api, { body: {} });
+  void sdk.tableDownloads["reports.members"](api, {});
+  // @ts-expect-error Capability alone does not declare an export operation.
+  void sdk.tableExports["reports.members"](api, {});
   // @ts-expect-error Filters keep their declared operator set.
   void api.reportsMembersQuery({ body: { filters: [{ op: "raw_sql" }] } });
   void [amount, count, sum, note, memberID, wrongID, rounded, countNumber, tableMember, tableNumericLevel];

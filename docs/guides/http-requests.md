@@ -93,3 +93,11 @@ Full repository verification also passed for this slice, including the real
 PostgreSQL and gopls checks, compiler-rejection fixtures and generation freshness.
 The [master acceptance record](../../blueprint/00-master-architecture-and-parity.md#http-request-limits-attribution-and-built-in-errors)
 owns the detailed evidence. The HTTP blueprint records current milestone status.
+
+## Table operation declarations
+
+`http.TableOperation(contract.TableOperationBinding{Table: tableID, Kind: contract.TableQuery})`
+is an endpoint option; raw routes cannot carry it. Prefer the typed datatable
+constructors and binders, which retain request, response, row, and actor types.
+See [table operation bindings](datatable.md#declare-http-operation-bindings) for
+query, ticket export, file export, and download declarations.

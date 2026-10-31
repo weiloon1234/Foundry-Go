@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/datatable/internal/exportio"
@@ -364,7 +365,7 @@ func (t Table[S, R, A]) Export(ctx context.Context, m *Manager, subject A, reque
 // exportBufferBytes batches small CSV/ZIP writes into fewer file writes.
 const exportBufferBytes = 64 << 10
 
-func exportName(name string, id TableID, format ExportFormat) string {
+func exportName(name string, id contract.TableID, format ExportFormat) string {
 	if name == "" {
 		name = string(id)
 	}

@@ -8,6 +8,21 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Explicit datatable operation bindings (Part A) — 2026-10-31
+
+Status: **implemented and passed the requested targeted gate**.
+
+Manifest 7 carries explicit Go-declared query, ticket-export, file-export, and
+download bindings, plus canonical page schemas. Selected bindings own projected
+table inventories. The generated metadata and separate mapped operation registries
+preserve generic row/input/output correlation without casts or string dispatch.
+`contract.TableID` is the sole identifier definition.
+
+The [evidence](../docs/evidence/table-bindings-20261031.md) records the public API,
+compiler rejections, strict generic adapter, emitted TypeScript, current-contract
+publication, and targeted command results. Full `make verify`, races, application
+migrations, and release tagging were outside this gate. Part B remains separate.
+
 ## Pubsub synchronization and scope-source isolation (B32/B33) — 2026-10-23
 
 Status: **accepted on current native source under the requested focused gate**.

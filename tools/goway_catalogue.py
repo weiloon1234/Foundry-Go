@@ -50,6 +50,12 @@ def generated_symbols(root=ROOT):
 
 def generated_references(source, symbols):
     code = code_only(source)
+    imports = re.findall(r'(?:\b([A-Za-z_]\w*)\s+)?"([^"\n]+)"', source)
+    for alias, path in imports:
+        if path == "github.com/weiloon1234/Foundry-Go/datatable":
+            qualifier = (alias if alias != "import" else "") or "datatable"
+            # This package function is transport assembly, not a retired QueryX emitter.
+            code = re.sub(r'\b' + re.escape(qualifier) + r'\s*\.\s*QueryEndpoint\b', ' ', code)
     references = set(re.findall(r'\bFoundry(?:Reference|Identity|Model|CreateMutation|UpdateMutation)\s*(?=\()', code))
     references.update(re.findall(r'\b[A-Z]\w*Draft\b|\bQuery[A-Z]\w*\s*(?=\()', code))
     # Exact generated exports also catch hooks, changes, projections, observers
@@ -57,7 +63,7 @@ def generated_references(source, symbols):
     for name in re.findall(r'\b([A-Z]\w*(?:Fields|Relations))\s*\(', code):
         if not name.endswith(("ValidationFields", "ConfigFields")):
             references.add(name)
-    for alias, path in re.findall(r'(?:\b([A-Za-z_]\w*)\s+)?"([^"\n]+)"', source):
+    for alias, path in imports:
         # A standalone import keyword is not a package alias.
         qualifier = (alias if alias != "import" else "") or path.rsplit('/', 1)[-1]
         selected = set(re.findall(r'\b' + re.escape(qualifier) + r'\s*\.\s*([A-Za-z_]\w*)', code))

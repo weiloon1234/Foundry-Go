@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/http/pagination"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
@@ -37,7 +38,7 @@ const (
 //
 // Example: var spec datatable.Spec[User, UserRow, Actor]
 type Spec[S, R, A any] struct {
-	ID          TableID
+	ID          contract.TableID
 	Row         contract.JSON[R]
 	Columns     []ColumnRegistration[S, R]
 	Filters     []FilterRegistration[S]
@@ -81,9 +82,11 @@ type NamedFilterInfo struct {
 //
 // Example: table.Description()
 type Description struct {
-	ID          TableID           `json:"id"`
-	Row         contract.Schema   `json:"row"`
-	Request     contract.Schema   `json:"request"`
+	ID      contract.TableID `json:"id"`
+	Row     contract.Schema  `json:"row"`
+	Request contract.Schema  `json:"request"`
+	// Page derives from the canonical numbered response for Row.
+	Page        contract.Schema   `json:"page"`
 	Columns     []ColumnInfo      `json:"columns"`
 	Filters     []NamedFilterInfo `json:"filters,omitempty"`
 	DefaultSort []Sort            `json:"default_sort,omitempty"`
@@ -133,6 +136,11 @@ func (d *tableDefinition[S, R, A]) initialize(spec Spec[S, R, A]) error {
 		filters = append(filters, filterMetadataDeclaration{name: f.name, label: f.label, info: f.info, hasBuilder: f.build != nil, err: f.err})
 		d.filters[f.name] = f.build
 	}
+	page, err := pagination.NumberedJSON(spec.Row).Description()
+	if err != nil {
+		return err
+	}
+	d.metadata.info.Page = page
 	return d.metadata.initialize(spec.ID, row, spec.Row.DescribeScalarProperty, columns, filters, spec.DefaultSort, spec.Exports)
 }
 
@@ -145,7 +153,7 @@ func (t Table[S, R, A]) Validate() error {
 }
 
 // ID returns the declared table identifier, or empty for an undefined table.
-func (t Table[S, R, A]) ID() TableID {
+func (t Table[S, R, A]) ID() contract.TableID {
 	if t.definition == nil {
 		return ""
 	}
@@ -165,7 +173,7 @@ func (t Table[S, R, A]) Description() (Description, error) {
 // Example: table.Registration()
 type Registration struct {
 	identity *tableIdentity
-	id       TableID
+	id       contract.TableID
 	validate func() error
 	describe func() (Description, error)
 }
@@ -181,7 +189,9 @@ func (t Table[S, R, A]) Registration() Registration {
 // Registry owns the validated set of table registrations indexed by their typed identifiers.
 //
 // Example: datatable.NewRegistry(table.Registration())
-type Registry struct{ entries map[TableID]Registration }
+type Registry struct {
+	entries map[contract.TableID]Registration
+}
 
 // NewRegistry validates and snapshots table registrations, rejecting duplicate identifiers.
 //
@@ -190,7 +200,7 @@ func NewRegistry(registrations ...Registration) (*Registry, error) {
 	if len(registrations) > 1024 {
 		return nil, invalid("too many datatables")
 	}
-	r := &Registry{entries: make(map[TableID]Registration, len(registrations))}
+	r := &Registry{entries: make(map[contract.TableID]Registration, len(registrations))}
 	for _, item := range registrations {
 		if item.identity == nil || item.validate == nil || item.describe == nil {
 			return nil, invalid("invalid datatable registration")
@@ -219,7 +229,7 @@ func (r *Registry) Descriptions() ([]Description, error) {
 	if err := r.Validate(); err != nil {
 		return nil, err
 	}
-	ids := make([]TableID, 0, len(r.entries))
+	ids := make([]contract.TableID, 0, len(r.entries))
 	for id := range r.entries {
 		ids = append(ids, id)
 	}

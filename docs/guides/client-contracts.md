@@ -25,7 +25,7 @@ operation names and feature metadata. Conflicting definitions or ambiguous
 camel-cased names are errors. `Snapshot()` and `JSON()` return owned copies.
 `manifest.Decode(data)` validates a saved manifest without loading application
 code. The decoder rejects unknown versions, duplicate JSON keys, unknown fields,
-broken references and oversized/deep documents. Manifest version 6 adds bounded
+broken references and oversized/deep documents. Manifest version 7 includes explicit table operation bindings and canonical page schemas, alongside bounded
 property/parameter presentation metadata. Regenerate saved manifests and clients
 together. [Typed descriptors](client-descriptors.md) expose operation/field lookup
 and explicit semantic hints through the same contract.
@@ -365,36 +365,102 @@ Error codes defined in the manifest are transformed to PascalCase keys (e.g. `va
 Generated entry modules export a frozen `tables` registry for surfaces that define datatables, together with typed identifiers and row helper types:
 
 ```typescript
-import { tables, type TableId, type TableRow } from "./generated/contracts_foundry.gen.js";
+import { tables, tableQueries, tableDownloads, type TableId, type TableRow } from "./generated/contracts_foundry.gen.js";
 
 const membersTable = tables["reports.members"];
 const memberRow: TableRow<"reports.members"> = member;
 
-// Invoke typed query or export methods directly through the descriptor:
-const page = await membersTable.query(api, {
+// Invoke the selected query and download through their registries:
+const page = await tableQueries["reports.members"](api, {
   body: {
     filters: [{ op: "eq", column: "state", values: ["active"] }],
   },
 });
-const csv = await membersTable.export(api, {});
+const csv = await tableDownloads["reports.members"](api, {});
 ```
 
 Each descriptor in `tables` carries:
+
 - `id`: unique table identifier string.
 - `columns`: readonly array of `TableColumn<Row>` with `name` typed strictly as `keyof Row & string`, `kind` derived from Go `datatable.ColumnKind`, `nullable`, `sortable`, `searchable`, `exportable`, and declared filter `operators`. Enum columns carry `kind: "enum"` and reference the S1 enum value object through `enum`. Read allowed values from `column.enum.cases` and optional label keys from `column.enum.labels`. Integer enums use numbers up to 32 bits and decimal strings for wider integers. Without registered enum metadata, the value object carries schema-owned cases without labels.
 - `defaultSort`: readonly array of `TableSort<keyof Row & string>`.
 - `exports`: boolean flag indicating whether the table supports export operations.
-- `query?(client, input, options)` and `export?(client, input, options)`: strongly-typed invokers that call client operations without casts or `any`.
 
-Table operation bindings use exact route IDs: `<table ID>.query` for queries
-and `<table ID>.export` or `<table ID>.csv` for downloads. The corresponding
-`:query`, `:export`, and `:csv` spellings are also accepted. Declare one route per
-operation; competing routes fail generation. Query bodies must use the table's
-JSON request contract, and responses must contain a required `data` array of
-that table's row type. Export routes require an exportable table and a file
-response; any request body must use the table's JSON request contract.
-Client names and shared request schemas do not establish ownership. Without a
-matching route in the surface, the descriptor omits that operation and helper.
+Declare associations in Go with `datatable.QueryEndpoint`, `BindTicketExport`,
+`BindFileExport`, and `DownloadEndpoint`. These helpers attach
+`contract.TableOperationBinding` to the endpoint. Scoped or unrelated route IDs
+work because route names and shared schemas have no association semantics.
+Unannotated routes do not create table helpers.
+
+Each table has at most one query, export, and download operation across the full
+manifest. Ticket and direct-file exports share the export slot. Manifest Build
+and Decode reject conflicting slots and invalid payload contracts before export.
+Queries use the exact table request and a plain canonical numbered page response;
+status-tagged response alternatives are not a canonical page. A custom object
+with only a `data` array is insufficient.
+
+The metadata registry has the mapped type `Tables`. `TableRow<Id>` and
+`TableReceivedRow<Id>` index separate declared and received row maps; received
+rows admit unknown enum values. `TablePageReceived<Row>` derives from the
+canonical pagination schema, including non-null data, links, and lossless counts.
+`TableMetadata<Row>` contains columns, sort, ID, and export capability.
+Call operations through `tableQueries`, `tableExports`, and `tableDownloads`.
+Each registry is one mapped type over its own table IDs, preserving correlation
+when indexed by a generic ID. There are no operation methods on `tables`.
+A missing slot has no key in its operation registry. `tableExportKinds[id]` is
+`"ticket"` or `"file"`, narrowed per exporting table. Tickets retain the exact
+application response; files and downloads return `FileResult`, whose caller owns
+`close()`.
+
+```typescript
+const ticket = await tableExports["reports.members"](api, {
+  body: { format: "csv", request: {} },
+});
+const file = await tableDownloads["reports.members"](api, {
+  query: { ticket: ticket.url, format: "csv" },
+});
+await file.close();
+```
+
+Helpers retain the complete operation input, including required path and query
+fields. They do not parse ticket URLs, issue automatic downloads, or retry tickets.
+Client projections retain only tables named by selected bindings. Selecting a
+public download route alone retains metadata and a `tableDownloads` entry; selecting a
+ticket export does not implicitly include its download. Metadata-only tables
+remain in the full client. `exports` describes server capability, so check operation-registry key
+availability in the selected client before offering an action.
+
+Uniform application adapters can use a checked optional export view without
+weakening the generated registries:
+
+```typescript
+type AdminExports = {
+  readonly [Id in QueryTableId]?: (
+    client: API,
+    input: { readonly body: TableExportRequest },
+    options?: CallOptions,
+  ) => Promise<TableExportResource>;
+};
+const exports: AdminExports = tableExports;
+
+function adminTable<Id extends QueryTableId>(id: Id) {
+  const exportCall = exports[id];
+  return {
+    metadata: tables[id],
+    query: (request: Datatable_Request, signal?: AbortSignal) =>
+      tableQueries[id](api, { body: request }, signal ? { signal } : {}),
+    export: exportCall
+      ? (format: ExportFormat, request: Datatable_Request) =>
+          exportCall(api, { body: { format, request } })
+      : undefined,
+  };
+}
+```
+
+The assignment rejects incompatible export protocols on query tables. The app
+owns its UI state and ticket handling. The independent
+[complete adapter fixture](../../tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts)
+checks the declared/received row relationship, exact outputs, and absent keys.
 
 Surfaces without tables omit the `tables` constant. The framework runtime remains strictly decoupled from UI and state management libraries (such as Zustand, table sources, or display formatters).
 

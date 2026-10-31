@@ -1,6 +1,7 @@
 package http
 
 import (
+	"github.com/weiloon1234/Foundry-Go/contract"
 	"reflect"
 
 	"github.com/weiloon1234/Foundry-Go/idempotency"
@@ -10,12 +11,14 @@ import (
 // model-binding adapters retain the underlying transport contract; additional
 // signing is permitted, but a declared signed transport cannot lose it.
 type contributionContract struct {
-	wire        reflect.Type
-	method      Method
-	path        string
-	access      Access
-	signed      bool
-	idempotency idempotency.Definition
+	tableOperation    contract.TableOperationBinding
+	hasTableOperation bool
+	wire              reflect.Type
+	method            Method
+	path              string
+	access            Access
+	signed            bool
+	idempotency       idempotency.Definition
 }
 
 func (c contributionContract) accepts(actual contributionContract) bool {
@@ -36,6 +39,7 @@ func routeContributionContract[P any](r Route[P]) contributionContract {
 func endpointContributionContract[P, Q, B, R any](e Endpoint[P, Q, B, R]) contributionContract {
 	result := routeContributionContract(e.route)
 	result.wire = reflect.TypeFor[Endpoint[P, Q, B, R]]()
+	result.tableOperation, result.hasTableOperation = e.tableOperation, e.hasTableOperation
 	return result
 }
 func signedRouteContributionContract[P any](r SignedRoute[P]) contributionContract {

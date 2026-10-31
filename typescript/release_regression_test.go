@@ -14,7 +14,6 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
-	"github.com/weiloon1234/Foundry-Go/datatable"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -26,12 +25,9 @@ func TestTableOperationsDoNotBorrowAnotherTableEndpoint(t *testing.T) {
 		{Name: "reportsMembersQuery", Route: foundryhttp.RouteInfo{ID: "reports.members.query"}, Body: &manifest.Payload{Type: "request"}},
 		{Name: "otherReportsOrdersQuery", Route: foundryhttp.RouteInfo{ID: "other.reports.orders.query"}, Body: &manifest.Payload{Type: "request"}},
 	}}}
-	query, export, err := r.tableOperations(manifest.Table{ID: datatable.TableID("reports.orders"), Request: "request"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if query != "" || export != "" {
-		t.Fatalf("orders borrowed another table's endpoint: %q %q", query, export)
+	binding := r.tableBindings()["reports.orders"]
+	if binding != (tableOperations{}) {
+		t.Fatalf("orders borrowed another table endpoint: %+v", binding)
 	}
 }
 
@@ -309,51 +305,16 @@ func runReleaseTypeScript(t *testing.T, source []byte, assertions string) {
 	}
 }
 
-func TestTableOperationBindingsValidateContracts(t *testing.T) {
-	table := manifest.Table{ID: "reports.members", Request: "request", Row: "member", Exports: true}
-	query := manifest.Operation{Name: "membersQuery", Route: foundryhttp.RouteInfo{ID: "reports.members.query"}, Body: &manifest.Payload{MediaType: "application/json", Type: "request"}, Response: &manifest.Payload{MediaType: "application/json", Type: "page"}}
-	types := []contract.Type{{ID: "page", Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "data", Type: "rows", Required: true}}}, {ID: "rows", Kind: contract.ArrayKind, Element: "member"}}
-	for _, scenario := range []string{"valid", "wrong request", "wrong row", "ambiguous query", "ambiguous export", "export only"} {
-		t.Run(scenario, func(t *testing.T) {
-			table := table
-			op := query
-			r := renderer{document: manifest.Document{Types: types, HTTP: []manifest.Operation{op}}}
-			switch scenario {
-			case "wrong request":
-				op.Body = &manifest.Payload{MediaType: "application/json", Type: "other"}
-				r.document.HTTP[0] = op
-			case "wrong row":
-				table.Row = "other"
-			case "ambiguous query":
-				op.Route.ID = "reports.members:query"
-				r.document.HTTP = append(r.document.HTTP, op)
-			case "ambiguous export", "export only":
-				op = manifest.Operation{Name: "membersExport", Route: foundryhttp.RouteInfo{ID: "reports.members.csv"}, Response: &manifest.Payload{File: &foundryhttp.FileResponseInfo{}}}
-				r.document.HTTP = []manifest.Operation{op}
-				if scenario == "ambiguous export" {
-					op.Route.ID = "reports.members.export"
-					r.document.HTTP = append(r.document.HTTP, op)
-				}
-			}
-			queryName, exportName, err := r.tableOperations(table)
-			switch scenario {
-			case "valid":
-				if err != nil || queryName != "membersQuery" || exportName != "" {
-					t.Fatalf("valid binding: %q %q %v", queryName, exportName, err)
-				}
-			case "export only":
-				if err != nil || queryName != "" || exportName != "membersExport" {
-					t.Fatalf("export binding: %q %q %v", queryName, exportName, err)
-				}
-				r.renderTableEntry(table, queryName, exportName, "Member")
-				if !strings.Contains(r.out.String(), `createTableDescriptor<Member, never, "membersExport">`) {
-					t.Fatal("export-only descriptor lost its operation type")
-				}
-			default:
-				if !errors.Is(err, fault.Invalid) {
-					t.Fatalf("invalid table binding accepted: %v", err)
-				}
-			}
-		})
+func TestTableOperationBindingsUseOnlyExplicitMetadata(t *testing.T) {
+	r := renderer{document: manifest.Document{HTTP: []manifest.Operation{
+		{Name: "unrelatedName", Route: foundryhttp.RouteInfo{ID: "scope.anything"}, TableOperation: &contract.TableOperationBinding{Table: "members", Kind: contract.TableQuery}},
+		{Name: "ticket", TableOperation: &contract.TableOperationBinding{Table: "members", Kind: contract.TableTicketExport}},
+		{Name: "file", TableOperation: &contract.TableOperationBinding{Table: "orders", Kind: contract.TableFileExport}},
+		{Name: "download", TableOperation: &contract.TableOperationBinding{Table: "members", Kind: contract.TableDownload}},
+		{Name: "old", Route: foundryhttp.RouteInfo{ID: "orders.query"}},
+	}}}
+	bindings := r.tableBindings()
+	if bindings["members"] != (tableOperations{query: "unrelatedName", export: "ticket", download: "download", exportKind: "ticket"}) || bindings["orders"] != (tableOperations{export: "file", exportKind: "file"}) {
+		t.Fatal(bindings)
 	}
 }

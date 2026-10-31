@@ -141,7 +141,7 @@ func Build(ctx context.Context, sources Sources) (*Manifest, error) {
 			if err != nil {
 				return nil, err
 			}
-			operation := Operation{Route: endpoint.Route, Name: name, Status: endpoint.Status, Statuses: slices.Clone(endpoint.Statuses), Redirect: endpoint.Redirect, Limits: endpoint.Limits, Preparation: endpoint.Preparation, Idempotency: endpoint.Idempotency, Validation: endpoint.Validation, Body: g.payload(endpoint.Body), Response: g.payload(endpoint.Response)}
+			operation := Operation{TableOperation: endpoint.TableOperation, Route: endpoint.Route, Name: name, Status: endpoint.Status, Statuses: slices.Clone(endpoint.Statuses), Redirect: endpoint.Redirect, Limits: endpoint.Limits, Preparation: endpoint.Preparation, Idempotency: endpoint.Idempotency, Validation: endpoint.Validation, Body: g.payload(endpoint.Body), Response: g.payload(endpoint.Response)}
 			if cookie := endpoint.RefreshCookie; cookie != nil {
 				owned := *cookie
 				operation.RefreshCookie = &owned
@@ -218,7 +218,7 @@ func Build(ctx context.Context, sources Sources) (*Manifest, error) {
 			return nil, invalid("too many datatable contracts")
 		}
 		for _, source := range entries {
-			document.Tables = append(document.Tables, Table{ID: source.ID, Row: g.add(source.Row), Request: g.add(source.Request), Columns: source.Columns, Filters: source.Filters, DefaultSort: source.DefaultSort, Exports: source.Exports})
+			document.Tables = append(document.Tables, Table{ID: source.ID, Row: g.add(source.Row), Request: g.add(source.Request), Page: g.add(source.Page), Columns: source.Columns, Filters: source.Filters, DefaultSort: source.DefaultSort, Exports: source.Exports})
 		}
 	}
 	if sources.Catalog != nil {

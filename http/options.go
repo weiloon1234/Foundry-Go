@@ -1,6 +1,8 @@
 package http
 
 import (
+	"github.com/weiloon1234/Foundry-Go/contract"
+	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"slices"
 	"time"
 
@@ -28,17 +30,19 @@ const (
 	optionDocumentation
 	optionLimits
 	optionErrors
+	optionTableOperation
 )
 
 type endpointOptionValue struct {
-	kind          optionKind
-	scope         Scope
-	timeout       time.Duration
-	bytes         int64
-	middleware    []Middleware
-	documentation RouteDocumentation
-	limits        EndpointLimits
-	errors        []ErrorDeclaration
+	tableOperation contract.TableOperationBinding
+	kind           optionKind
+	scope          Scope
+	timeout        time.Duration
+	bytes          int64
+	middleware     []Middleware
+	documentation  RouteDocumentation
+	limits         EndpointLimits
+	errors         []ErrorDeclaration
 }
 type routeOptionValue struct{ endpointOptionValue }
 
@@ -105,6 +109,19 @@ func ConfigureEndpoint[P, Q, B, R any](endpoint Endpoint[P, Q, B, R], options ..
 		}
 		setting := option.endpointOption()
 		switch setting.kind {
+		case optionTableOperation:
+			if endpoint.hasTableOperation {
+				if endpoint.route.err == nil {
+					endpoint.route.err = safeerror.NewFault(fault.Invalid, "table operation is declared more than once")
+				}
+			} else {
+				endpoint.tableOperation, endpoint.hasTableOperation = setting.tableOperation, true
+				binding := setting.tableOperation
+				validKind := binding.Kind == contract.TableQuery || binding.Kind == contract.TableTicketExport || binding.Kind == contract.TableFileExport || binding.Kind == contract.TableDownload
+				if (!identifier.Semantic(string(binding.Table)) || !validKind || (binding.Kind != contract.TableTicketExport && binding.RequestField != "") || (binding.Kind == contract.TableTicketExport && binding.RequestField == "")) && endpoint.route.err == nil {
+					endpoint.route.err = safeerror.NewFault(fault.Invalid, "invalid table operation declaration")
+				}
+			}
 		case optionLimits:
 			endpoint.limits = setting.limits
 		case optionErrors:

@@ -25,12 +25,14 @@ type PayloadInfo struct {
 // cardinality and codec-owned scalar metadata share the runtime declarations.
 // Undescribed custom codecs retain nil metadata instead of a fabricated schema.
 type EndpointInfo struct {
-	Path     []PathParameterInfo  `json:"path"`
-	Route    RouteInfo            `json:"route"`
-	Query    []QueryParameterInfo `json:"query"`
-	Body     *PayloadInfo         `json:"body,omitempty"`
-	Response *PayloadInfo         `json:"response,omitempty"`
-	Status   int                  `json:"status"`
+	// TableOperation is the explicitly declared table association.
+	TableOperation *contract.TableOperationBinding `json:"table_operation,omitempty"`
+	Path           []PathParameterInfo             `json:"path"`
+	Route          RouteInfo                       `json:"route"`
+	Query          []QueryParameterInfo            `json:"query"`
+	Body           *PayloadInfo                    `json:"body,omitempty"`
+	Response       *PayloadInfo                    `json:"response,omitempty"`
+	Status         int                             `json:"status"`
 	// Statuses lists every declared success status, primary first, when the
 	// response declares alternatives (JSONResponses).
 	Statuses []int `json:"statuses,omitempty"`
@@ -62,6 +64,10 @@ func endpointSnapshot[P, Q, B, R any](e Endpoint[P, Q, B, R], route RouteInfo) E
 	query, _ := QueryParameters(e.query)
 	path, _ := PathParameters(e.route.path)
 	info := EndpointInfo{Path: path, Route: route.clone(), Query: query, Status: e.response.status, Statuses: slices.Clone(e.response.statuses), Redirect: e.response.kind == payloadRedirect, Limits: e.limits}
+	if e.hasTableOperation {
+		binding := e.tableOperation
+		info.TableOperation = &binding
+	}
 	info.Idempotency = e.idempotency.clone()
 	info.RefreshCookie = endpointRefreshCookieInfo(e)
 	info.Preparation = e.preparation != nil

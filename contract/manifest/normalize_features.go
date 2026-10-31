@@ -11,9 +11,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/datatable"
 	"github.com/weiloon1234/Foundry-Go/enum"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/notifications"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
@@ -119,15 +121,15 @@ func normalizeFeatures(d *Document, types typeIndex) error {
 	if err := normalizeNotifications(d, types); err != nil {
 		return err
 	}
-	seen := make(map[datatable.TableID]bool)
+	seen := make(map[contract.TableID]bool)
 	for i, table := range d.Tables {
-		if seen[table.ID] || !types.has(table.Row) || !types.has(table.Request) {
-			return invalid("invalid table schema reference")
+		if seen[table.ID] || !types.has(table.Row) || !types.has(table.Request) || !types.has(table.Page) {
+			return invalid(fmt.Sprintf("table %q has invalid schema references: row %q, request %q, page %q", table.ID, table.Row, table.Request, table.Page))
 		}
 		seen[table.ID] = true
-		normalized, err := (datatable.Description{ID: table.ID, Row: contract.Schema{Root: table.Row, Types: d.Types}, Request: contract.Schema{Root: table.Request, Types: d.Types}, Columns: table.Columns, Filters: table.Filters, DefaultSort: table.DefaultSort, Exports: table.Exports}).Normalize()
+		normalized, err := (datatable.Description{ID: table.ID, Row: contract.Schema{Root: table.Row, Types: d.Types}, Request: contract.Schema{Root: table.Request, Types: d.Types}, Page: contract.Schema{Root: table.Page, Types: d.Types}, Columns: table.Columns, Filters: table.Filters, DefaultSort: table.DefaultSort, Exports: table.Exports}).Normalize()
 		if err != nil {
-			return err
+			return safeerror.WrapFault(fault.Invalid, fmt.Sprintf("table %q schemas: row %q, request %q, page %q", table.ID, table.Row, table.Request, table.Page), err)
 		}
 		d.Tables[i].Columns, d.Tables[i].Filters, d.Tables[i].DefaultSort = normalized.Columns, normalized.Filters, normalized.DefaultSort
 	}

@@ -169,14 +169,29 @@ func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 			}
 		}
 	}
-	// Tables belong to the operations that reach their row or request type.
+	// Only selected explicit bindings retain tables in a projected client.
+	boundTables := make(map[contract.TableID]bool)
+	for _, op := range result.HTTP {
+		if op.TableOperation != nil {
+			boundTables[op.TableOperation.Table] = true
+		}
+	}
 	for _, table := range document.Tables {
-		if reached[table.Row] || reached[table.Request] {
+		if boundTables[table.ID] {
 			result.Tables = append(result.Tables, table)
 		}
 	}
 	for _, table := range result.Tables {
-		reach(table.Row, table.Request)
+		reach(table.Row, table.Request, table.Page)
+		for _, column := range table.Columns {
+			reach(column.Value.Value.ID)
+			if column.Filter != nil {
+				reach(column.Filter.Scalar.Value.ID)
+			}
+		}
+		for _, filter := range table.Filters {
+			reach(filter.Filter.Scalar.Value.ID)
+		}
 	}
 	// Inbox deliveries are application-wide; realtime deliveries follow their
 	// channel. A notification left without a delivery is not part of the surface.

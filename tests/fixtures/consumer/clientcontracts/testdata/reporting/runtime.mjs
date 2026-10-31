@@ -33,8 +33,8 @@ await assert.rejects(api.reportsMembersCsv({}), error => error instanceof sdk.AP
 
 // S2: typed datatable descriptor and query/export helpers
 assert.equal(sdk.tables["reports.members"].id, "reports.members");
-assert.equal(sdk.tables["reports.members"].queryOperation, "reportsMembersQuery");
-assert.equal(sdk.tables["reports.members"].exportOperation, "reportsMembersCsv");
+assert.equal(typeof sdk.tableQueries["reports.members"], "function");
+assert.equal(typeof sdk.tableDownloads["reports.members"], "function");
 assert.equal(sdk.tables["reports.members"].columns.find(column => column.name === "state").kind, "enum");
 assert.deepEqual(sdk.tables["reports.members"].columns.find(column => column.name === "state").enum.cases, ["active", "disabled"]);
 for (const [name, enumeration, cases] of [
@@ -48,7 +48,7 @@ for (const [name, enumeration, cases] of [
 }
 assert.equal(sdk.AgentLevel.labels[0], "reports.agent_level.member_level");
 assert.equal(sdk.WideLevel.labels["9007199254740993"], "reports.wide_level.wide_member_level");
-await assert.rejects(sdk.tables["reports.members"].query(api, { body: {} }), error => error instanceof sdk.APIError && error.status === 401);
-await assert.rejects(sdk.tables["reports.members"].export(api, {}), error => error instanceof sdk.APIError && error.status === 401);
+await assert.rejects(sdk.tableQueries["reports.members"](api, { body: {} }), error => error instanceof sdk.APIError && error.status === 401);
+await assert.rejects(sdk.tableDownloads["reports.members"](api, {}), error => error instanceof sdk.APIError && error.status === 401);
 
 console.log("PASS reporting tables, exact/nullable DTO codecs and authenticated HTTP contracts");

@@ -888,6 +888,50 @@
         "type": "object",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/httppagination.MemberResponse]"
       },
+      "NumberedResponse_MemberRow": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Pagination_Items_MemberRow"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/NumberedMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]"
+      },
+      "NumberedResponse_NumericLevelRow": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Pagination_Items_NumericLevelRow"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/NumberedMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.NumericLevelRow]",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.NumericLevelRow]"
+      },
       "NumericLevelRow": {
         "additionalProperties": false,
         "properties": {
@@ -1038,6 +1082,22 @@
         "title": "pagination:items:foundry.test/consumer/httppagination.MemberResponse",
         "type": "array",
         "x-foundry-type-id": "pagination:items:foundry.test/consumer/httppagination.MemberResponse"
+      },
+      "Pagination_Items_MemberRow": {
+        "items": {
+          "$ref": "#/components/schemas/MemberRow"
+        },
+        "title": "pagination:items:foundry.test/consumer/reporting.MemberRow",
+        "type": "array",
+        "x-foundry-type-id": "pagination:items:foundry.test/consumer/reporting.MemberRow"
+      },
+      "Pagination_Items_NumericLevelRow": {
+        "items": {
+          "$ref": "#/components/schemas/NumericLevelRow"
+        },
+        "title": "pagination:items:foundry.test/consumer/reporting.NumericLevelRow",
+        "type": "array",
+        "x-foundry-type-id": "pagination:items:foundry.test/consumer/reporting.NumericLevelRow"
       },
       "Payload": {
         "additionalProperties": false,
@@ -16833,5 +16893,5 @@
       }
     }
   },
-  "x-foundry-manifest-version": 6
+  "x-foundry-manifest-version": 7
 }

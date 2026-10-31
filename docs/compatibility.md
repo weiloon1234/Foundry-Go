@@ -6,6 +6,33 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## Explicit table operations — manifest 7
+
+Regenerate Go contracts, manifest, OpenAPI, and TypeScript together. Version 7
+adds `Operation.TableOperation` and `Table.Page`; version 6 documents must be
+regenerated. Declare associations with the datatable endpoint constructors and
+binders. Route IDs, suffixes, and shared request/row schemas no longer create
+helpers or retain tables in projections. There is no compatibility switch.
+
+Queries require the canonical numbered page, including its metadata and links.
+Migrate custom envelopes that previously supplied only a `data` array. A full
+manifest rejects duplicate query/export/download slots before client selection.
+
+`contract.TableID` replaces `datatable.TableID` without an alias. A DTO field
+using this type now references `github.com/weiloon1234/Foundry-Go/contract.TableID`
+in the schema graph; review regenerated TypeScript names and explicit imports.
+Its string wire representation is unchanged.
+
+Generated `TableMetadata<Row>` replaces `TableDescriptor`.
+The mapped metadata registry `tables` and indexed row maps preserve generic
+table access. Call operations only through `tableQueries`, `tableExports`, and
+`tableDownloads`, each mapped over its own key set. Missing slots have no keys;
+`tableExportKinds` exposes the literal ticket/file kind. Per-entry operation
+methods and `createTableDescriptor` are removed. Ticket results retain the
+application DTO. File exports and the new download helper return `FileResult`.
+Server export capability does not promise a helper in every projected client.
+See the [migration examples](guides/datatable.md#declare-http-operation-bindings).
+
 ## Application-error containment (H1)
 
 Generated contracts and stored formats are unchanged. PostgreSQL configuration

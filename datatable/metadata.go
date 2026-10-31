@@ -43,7 +43,7 @@ type filterLocation struct {
 	index  int
 }
 
-func (m *tableMetadata) initialize(id TableID, row contract.Schema, describeScalar func(string) (contract.ScalarProperty, error), columns []columnMetadataDeclaration, filters []filterMetadataDeclaration, defaultSort []Sort, exportsEnabled bool) error {
+func (m *tableMetadata) initialize(id contract.TableID, row contract.Schema, describeScalar func(string) (contract.ScalarProperty, error), columns []columnMetadataDeclaration, filters []filterMetadataDeclaration, defaultSort []Sort, exportsEnabled bool) error {
 	m.byColumn = make(map[string]int, len(columns))
 	m.byFilter = make(map[string]filterLocation, len(columns)+len(filters))
 	if err := contract.RejectPasswordOutput(row, "table row"); err != nil {
@@ -53,7 +53,7 @@ func (m *tableMetadata) initialize(id TableID, row contract.Schema, describeScal
 	if err != nil {
 		return err
 	}
-	m.info = Description{ID: id, Row: row, Request: request, DefaultSort: slices.Clone(defaultSort), Exports: exportsEnabled}
+	m.info = Description{ID: id, Page: m.info.Page, Row: row, Request: request, DefaultSort: slices.Clone(defaultSort), Exports: exportsEnabled}
 	exports := 0
 	var searchPhase FilterPhase
 	for _, c := range columns {

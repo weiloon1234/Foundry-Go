@@ -223,7 +223,7 @@ controllers in a finally block after server rendering.
 
 The framework owns the reusable controller, parsing, subscription and cancellation
 logic. The starter adopts a published matching runtime/tool revision, regenerates
-Go/manifest v6/OpenAPI/SDK together, and adds its own domain form examples and
+Go/manifest v7/OpenAPI/SDK together, and adds its own domain form examples and
 optional package subpaths. The starter must not copy this runtime. Deployment,
 publication and component styling remain application decisions. The
 [starter handoff](forms-starter-handoff-20260930.md) records its current adopted

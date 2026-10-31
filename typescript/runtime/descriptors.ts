@@ -246,26 +246,9 @@ export interface TableSort<Name extends string = string> {
   readonly direction: "asc" | "desc";
 }
 
-export interface TableDescriptor<
-  Row = unknown,
-  QueryOp extends keyof Operations & keyof API = keyof Operations & keyof API,
-  ExportOp extends keyof Operations & keyof API = keyof Operations & keyof API,
-> {
+export interface TableMetadata<Row> {
   readonly id: string;
-  readonly queryOperation?: QueryOp;
-  readonly exportOperation?: ExportOp;
   readonly columns: readonly TableColumn<Row>[];
   readonly defaultSort: readonly TableSort<keyof Row & string>[];
   readonly exports: boolean;
-  readonly query?: (client: API, input: Operations[QueryOp]["request"], options?: CallOptions) => Promise<Operations[QueryOp]["response"]>;
-  readonly export?: (client: API, input: Operations[ExportOp]["request"], options?: CallOptions) => Promise<Operations[ExportOp]["response"]>;
 }
-
-export function createTableDescriptor<
-  Row,
-  QueryOp extends keyof Operations & keyof API = never,
-  ExportOp extends keyof Operations & keyof API = never,
->(descriptor: TableDescriptor<Row, QueryOp, ExportOp>): TableDescriptor<Row, QueryOp, ExportOp> {
-  return Object.freeze(descriptor);
-}
-

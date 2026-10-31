@@ -120,3 +120,11 @@ was 7.25 GB, versus 0.51 GB for the ordinary profile; these are concurrent compi
 process totals, not request memory. No compile/test workload ran concurrently with
 controlled measurements. Earlier milestone records retain the generic/union,
 setup/checkout and contended-operation baselines.
+
+## Table operation declarations
+
+`http.TableOperation(contract.TableOperationBinding{Table: tableID, Kind: contract.TableQuery})`
+is an endpoint option; raw routes cannot carry it. Prefer the typed datatable
+constructors and binders, which retain request, response, row, and actor types.
+See [table operation bindings](datatable.md#declare-http-operation-bindings) for
+query, ticket export, file export, and download declarations.

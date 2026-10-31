@@ -307,6 +307,45 @@ limit, 128 filter nodes, bounded nesting, 100 values per filter, 4096 bytes per
 scalar/search and 8 requested sort fields. `DefaultConfig` is the runtime source
 of these defaults; `Validate` checks custom limits before any I/O.
 
+## Declare HTTP operation bindings
+
+Use `contract.TableID` for table identities. There is no `datatable.TableID` alias.
+Declare each association at its endpoint:
+
+```go
+query := datatable.QueryEndpoint(table, queryRoute, http.EmptyQuery())
+export := datatable.BindTicketExport(table, ticketEndpoint,
+    requests.TableExportRequestValidationFields().Request)
+download := datatable.DownloadEndpoint(table, downloadRoute,
+    requests.TableDownloadQueryDescriptor(),
+    http.DownloadResponse("text/csv; charset=utf-8"),
+    http.Timeout(manager.DownloadTimeout()))
+direct := datatable.BindFileExport(otherTable, existingFileEndpoint)
+```
+
+`queryRoute` can use a scoped ID such as `admin.inventory.members`; its name does
+not identify the table. `QueryEndpoint` supplies `RequestJSON()` and the canonical
+`pagination.NumberedResponse[R]` contract from the table's retained row descriptor.
+The handler and HTTP guard retain their concrete types. The guard actor and table
+authority need not be the same type.
+
+Ticket exports keep the complete application body and response, including status.
+The selected validation field must belong to that body and have type `Request`.
+It must name a required, non-null, top-level JSON property. A ticket response can
+use any declared JSON DTO. Direct file exports keep the complete endpoint request;
+they do not require a bare table request body. Downloads require GET, no body,
+and a file response. Export and download bindings require table export capability.
+
+Register the table with the manager or registry used by manifest export. A table
+has one query, one export, and one download slot across all routes; ticket and
+file exports compete for the export slot. Missing slots are legal. The low-level
+`http.TableOperation(binding)` endpoint option uses the same manifest validation.
+Repeated options fail even when their values agree. Bindings describe association;
+application handlers still own authorization and the work they execute.
+
+See [generated table helpers](client-contracts.md#typed-datatable-descriptors) for
+mapped generic access and operation-based client projection.
+
 ## HTTP, jobs and lifecycle
 
 `table.Download(...)` freezes a validated request and returns the existing typed

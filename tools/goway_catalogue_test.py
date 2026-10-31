@@ -28,9 +28,19 @@ class CatalogueTests(unittest.TestCase):
 
     def test_complete_reviewed_catalogue_and_summary(self):
         rows = catalogue.validate()
-        self.assertEqual(len(rows), 1049)
+        self.assertEqual(len(rows), 1055)
         page = (catalogue.ROOT / "blueprint/goway-data-layer/README.md").read_text()
         self.assertIn(catalogue.summary(rows), page)
+
+    def test_table_endpoint_is_transport_not_a_generated_query(self):
+        for alias in ("", "tables "):
+            qualifier = alias.strip() or "datatable"
+            source = f'import {alias}"github.com/weiloon1234/Foundry-Go/datatable"\nvar _ = {qualifier}.QueryEndpoint(table, route, query)'
+            self.assertEqual(catalogue.generated_references(source, {}), [])
+        source = 'import tables "example/models"\nvar _ = tables.QueryEndpoint()'
+        self.assertIn("QueryEndpoint", catalogue.generated_references(source, {}))
+        source = 'import "github.com/weiloon1234/Foundry-Go/datatable"\nvar _ = models.QueryUsers()'
+        self.assertIn("QueryUsers", catalogue.generated_references(source, {}))
 
     def test_retired_hook_exports_still_classify_without_generated_files(self):
         symbols = catalogue.generated_symbols()

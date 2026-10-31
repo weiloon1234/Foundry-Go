@@ -6,6 +6,7 @@ import (
 	stdhttp "net/http"
 	"testing"
 
+	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/testkit"
@@ -28,6 +29,11 @@ func TestRouteFactoriesCannotSubstituteDeclaredTransport(t *testing.T) {
 	registerRaw := func(r *foundation.Registrar, key foundation.Key[*Router], result RouteRegistration) error {
 		return RegisterRoute(r, key, route, func(foundation.Resolver) (RouteRegistration, error) { return result, nil })
 	}
+	bound := ConfigureEndpoint(endpoint, TableOperation(contract.TableOperationBinding{Table: "first", Kind: contract.TableQuery}))
+	other := ConfigureEndpoint(endpoint, TableOperation(contract.TableOperationBinding{Table: "second", Kind: contract.TableQuery}))
+	registerBound := func(r *foundation.Registrar, key foundation.Key[*Router], result RouteRegistration) error {
+		return RegisterEndpoint(r, key, bound, func(foundation.Resolver) (RouteRegistration, error) { return result, nil })
+	}
 	cases := []struct {
 		name     string
 		register func(*foundation.Registrar, foundation.Key[*Router], RouteRegistration) error
@@ -35,6 +41,10 @@ func TestRouteFactoriesCannotSubstituteDeclaredTransport(t *testing.T) {
 		valid    bool
 	}{
 		{"same", registerEndpoint, endpoint.Handle(handler), true},
+		{"same-table", registerBound, bound.Handle(handler), true},
+		{"changed-table", registerBound, other.Handle(handler), false},
+		{"dropped-table", registerBound, endpoint.Handle(handler), false},
+		{"added-table", registerEndpoint, bound.Handle(handler), false},
 		{"added-signing", registerEndpoint, signed.Handle(handler), true},
 		{"signed", registerSigned, signed.Handle(handler), true},
 		{"missing-signing", registerSigned, endpoint.Handle(handler), false},

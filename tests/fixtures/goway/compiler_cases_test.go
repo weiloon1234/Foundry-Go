@@ -2,6 +2,12 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"datatable_query_handler_row", "cannot use"},
+		{"datatable_query_handler_request", "cannot use"},
+		{"datatable_query_guard_actor", "cannot use"},
+		{"datatable_ticket_field_owner", "does not match"},
+		{"datatable_ticket_field_value", "does not match"},
+		{"datatable_file_export_response", "does not match"},
 		{"datatable_filter_scope", "cannot use"},
 		{"datatable_searchable_scope", "cannot use"},
 		{"datatable_export_column_value", "cannot use"},
