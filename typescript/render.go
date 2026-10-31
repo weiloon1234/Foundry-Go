@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -37,6 +39,13 @@ var runtimeSources embed.FS
 // maxOutputBytes shares the artifact publisher's bound, which admits a module
 // embedding the largest accepted manifest.
 const maxOutputBytes = generate.MaxArtifactBytes
+
+// publicNumberPattern is shared by fallback checks and the emitted validator.
+// It admits JavaScript decimal/scientific notation and unsigned radix integers,
+// excluding Go-only hex floats and numeric separators. Callers also check range.
+const publicNumberPattern = `^([+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$`
+
+var publicNumberSyntax = regexp.MustCompile(publicNumberPattern)
 
 type renderer struct {
 	document manifest.Document
@@ -318,7 +327,7 @@ export const publicEnvSchema = {
 		case "time_zone":
 			validator = r.ref("isTimeZone")
 		case "number":
-			validator = "(value: string) => Number.isFinite(Number(value))"
+			validator = fmt.Sprintf("(value: string) => /%s/.test(value) && Number.isFinite(Number(value))", publicNumberPattern)
 		case "boolean":
 			validator = `(value: string) => value === "true" || value === "false" || value === "1" || value === "0"`
 		case "enum":
@@ -455,11 +464,39 @@ func (r *renderer) validPublicFallback(setting manifest.PublicSetting) bool {
 	case manifest.PublicBoolean:
 		return value == "true" || value == "false" || value == "1" || value == "0"
 	case manifest.PublicNumber:
-		number, err := strconv.ParseFloat(value, 64)
-		return err == nil && !math.IsNaN(number) && !math.IsInf(number, 0)
+		return validPublicNumber(value)
 	default:
 		return setting.MaxLength <= 0 || len(utf16.Encode([]rune(value))) <= setting.MaxLength
 	}
+}
+
+func validPublicNumber(value string) bool {
+	if !publicNumberSyntax.MatchString(value) {
+		return false
+	}
+	if len(value) > 2 && value[0] == '0' {
+		base := 0
+		switch value[1] {
+		case 'x', 'X':
+			base = 16
+		case 'o', 'O':
+			base = 8
+		case 'b', 'B':
+			base = 2
+		}
+		if base != 0 {
+			// JavaScript numbers can represent radix integers beyond uint64;
+			// reject only those that overflow the finite float64 range.
+			integer, ok := new(big.Int).SetString(value[2:], base)
+			if !ok {
+				return false
+			}
+			number, _ := integer.Float64()
+			return !math.IsInf(number, 0)
+		}
+	}
+	number, err := strconv.ParseFloat(value, 64)
+	return err == nil && !math.IsInf(number, 0)
 }
 
 func quote(value string) string                        { data, _ := json.Marshal(value); return string(data) }

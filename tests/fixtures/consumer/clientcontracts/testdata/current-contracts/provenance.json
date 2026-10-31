@@ -1,5 +1,5 @@
 {
-  "base_commit": "bdd6108415bb789b210594d3afde128bd698fc6d",
+  "base_commit": "76015897ed3713532c4c7de9c2246a4f3c1a28b6",
   "command": "make publish-client-contracts",
   "source_sha256": {
     "client_publication_test.go": "56a014d6902a05c25ccaf939bb4409f39a4523255817ff4e6ac233ba58856c93",

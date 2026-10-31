@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,6 +47,93 @@ func TestPublicConfigRejectsInvalidUnionFallback(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPublicConfigNumericFallbackParity(t *testing.T) {
+	cases := []struct {
+		Value  string  `json:"value"`
+		Valid  bool    `json:"valid"`
+		Number float64 `json:"number"`
+	}{
+		{Value: "0x10", Valid: true, Number: 16},
+		{Value: "0x1p2"},
+		{Value: "0Xff", Valid: true, Number: 255},
+		{Value: "0b101", Valid: true, Number: 5},
+		{Value: "0B11", Valid: true, Number: 3},
+		{Value: "0o10", Valid: true, Number: 8},
+		{Value: "0O17", Valid: true, Number: 15},
+		{Value: "0x10000000000000000", Valid: true, Number: 18446744073709551616},
+		{Value: "0", Valid: true},
+		{Value: "-0", Valid: true},
+		{Value: "-12.5", Valid: true, Number: -12.5},
+		{Value: "+.5", Valid: true, Number: .5},
+		{Value: "1.", Valid: true, Number: 1},
+		{Value: "01", Valid: true, Number: 1},
+		{Value: "1e2", Valid: true, Number: 100},
+		{Value: "1E-2", Valid: true, Number: .01},
+		{Value: "1e-999", Valid: true},
+		{Value: "1_000"},
+		{Value: "0x1_0"},
+		{Value: "+0x10"},
+		{Value: "-0x10"},
+		{Value: "0x"},
+		{Value: "0b2"},
+		{Value: "0o8"},
+		{Value: "1e"},
+		{Value: "NaN"},
+		{Value: "Infinity"},
+		{Value: "1e999"},
+		{Value: "0x" + strings.Repeat("f", 256)},
+	}
+	settings := []manifest.PublicSetting{{Name: "number", Env: "VITE_NUMBER", Kind: manifest.PublicNumber, Fallback: "1"}}
+	for i, test := range cases {
+		t.Run(test.Value, func(t *testing.T) {
+			setting := manifest.PublicSetting{Name: "number", Env: "VITE_NUMBER", Kind: manifest.PublicNumber, Fallback: test.Value}
+			source, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: []manifest.PublicSetting{setting}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = Render(source)
+			if (err == nil) != test.Valid {
+				t.Fatalf("fallback %q: Render error = %v, want valid = %v", test.Value, err, test.Valid)
+			}
+		})
+		if test.Valid {
+			settings = append(settings, manifest.PublicSetting{Name: fmt.Sprintf("number%d", i), Env: fmt.Sprintf("VITE_NUMBER_%d", i), Kind: manifest.PublicNumber, Fallback: test.Value})
+		}
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: settings})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := Render(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(cases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runReleaseTypeScript(t, output, `
+const cases = `+string(data)+`;
+const defaults = sdk.decodePublicEnv({});
+for (const [i, test] of cases.entries()) {
+  assert.equal(sdk.publicEnvSchema.VITE_NUMBER.isValid(test.value), test.valid, test.value);
+  assert.equal(sdk.isValidPublicValue("VITE_NUMBER", test.value), test.valid, test.value);
+  assert.equal(sdk.findPublicEnvProblems({VITE_NUMBER: test.value}, "VITE_").length, test.valid ? 0 : 1, test.value);
+  if (test.valid) {
+    const expected = test.value === "-0" ? -0 : test.number;
+    assert.equal(defaults["number" + i], expected, test.value);
+    assert.equal(sdk.decodePublicEnv({VITE_NUMBER: test.value}).number, expected, test.value);
+  } else {
+    assert.throws(() => sdk.decodePublicEnv({VITE_NUMBER: test.value}), /VITE_NUMBER is invalid/, test.value);
+  }
+}
+assert.equal(sdk.decodePublicEnv({VITE_NUMBER: ""}).number, 1);
+assert.equal(sdk.decodePublicEnv({VITE_NUMBER: "  "}).number, 1);
+assert.equal(sdk.decodePublicEnv({VITE_NUMBER: " 0x10 "}).number, 16);
+assert.equal(Object.is(sdk.decodePublicEnv({VITE_NUMBER: "-0"}).number, -0), true);
+`)
 }
 
 func TestPublicConfigLocaleMatchesCatalog(t *testing.T) {

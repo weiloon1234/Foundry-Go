@@ -121,3 +121,11 @@ The client tag also accepts `fallback`, a positive `max` length, and `kind`:
 Locale, currency and timezone kinds require string fields; enum kind requires
 a declared enum. The TypeScript entry exports `PublicEnv`, `publicEnvSchema`,
 `decodePublicEnv` and `findPublicEnvProblems` from this metadata.
+
+Public `number` values and fallbacks use finite JavaScript numbers: decimal
+and scientific notation (such as `-12.5` or `1e2`), or unsigned integers with
+`0x`, `0o` or `0b` prefixes. Go hexadecimal floats (`0x1p2`), numeric separators
+(`1_000`), `NaN`, infinity and overflow are rejected during fallback generation
+and client validation. Numeric fallbacks must be nonempty and have no surrounding
+whitespace. Supplied environment values are trimmed; absent or blank values use
+the declared fallback.

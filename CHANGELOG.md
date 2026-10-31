@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed: Public numeric configuration fallbacks and generated validators share
+  JavaScript-compatible finite-number spellings, accepting hexadecimal, octal and
+  binary integers while rejecting Go hex floats and numeric separators.
+
 - Fixed: `expr.CompareFilter` and `expr.NullableCompareFilter` accept any typed row
   value, including computed booleans and scalars, while preserving exact scope and
   value types. Datatable equality and membership filters no longer need local adapters.
