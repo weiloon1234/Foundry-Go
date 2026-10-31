@@ -111,6 +111,14 @@ The scanner follows the [Go vulnerability workflow](https://go.dev/doc/security/
 No dependency is automatically upgraded or scanner installed by the harness.
 Record any approved upgrade, its reason, compatibility impact and validation.
 
+## Client contract cohort freeze
+
+At release tag time, freeze the client contract cohort: copy
+`tests/fixtures/consumer/clientcontracts/testdata/current-contracts` to an
+immutable `testdata/contracts-<version>/` (for example `testdata/contracts-v1.0.0/`).
+Each released cohort remains immutable, and `TestReleasedContractCohorts` verifies
+that its recorded provenance hashes match its files and ownership manifests.
+
 ## Final acceptance and handoff
 
 Publish measured conditions and results, explicit omissions, rolling-upgrade

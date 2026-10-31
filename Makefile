@@ -38,7 +38,7 @@ set -eu; for task_generate_dir in $(GENERATION_DIRS); do \
 done
 endef
 
-.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check security-check security-tools-check verify
+.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check security-check security-tools-check verify publish-client-contracts
 
 toolchain-check:
 	$(GO) version
@@ -94,11 +94,15 @@ release-tools-check:
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p '*_test.py'
 
 datatable-contracts:
-	cd tests/fixtures/consumer && $(GO) test -timeout=$(TEST_TIMEOUT) -v ./clientcontracts -run '^(TestDatatableContractBytes|TestReportingContractCoverage|TestCursorContractPublication)$$'
+	cd tests/fixtures/consumer && $(GO) test -timeout=$(TEST_TIMEOUT) -v ./clientcontracts -run '^(TestDatatableContractBytes|TestReportingContractCoverage|TestCursorContractPublication|TestReleasedContractCohorts)$$'
 
 .PHONY: publish-cursor-contracts
 publish-cursor-contracts:
 	cd tests/fixtures/consumer && FOUNDRY_PUBLISH_CURSOR_CONTRACTS=1 $(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./clientcontracts -run '^TestPublishCursorContracts$$'
+
+.PHONY: publish-client-contracts
+publish-client-contracts:
+	cd tests/fixtures/consumer && FOUNDRY_PUBLISH_CLIENT_CONTRACTS=1 $(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./clientcontracts -run '^TestPublishClientContracts$$'
 
 typescript-check:
 	@test -n "$$FOUNDRY_TEST_NODE" -a -n "$$FOUNDRY_TEST_TYPESCRIPT" || { printf 'Set FOUNDRY_TEST_NODE and FOUNDRY_TEST_TYPESCRIPT to existing native tool paths.\n'; exit 1; }

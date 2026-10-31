@@ -73,8 +73,8 @@ func reportingContracts(t *testing.T) (*manifest.Manifest, *foundryhttp.Router) 
 	return source, router
 }
 
-// Current outputs publish the native cursor ID. The migration check retains the
-// immutable pre-cutover cohort and restricts changes to that ID and ownership hashes.
+// TestDatatableContractBytes compares generated artifacts against the current
+// unreleased contract cohort (testdata/current-contracts).
 func TestDatatableContractBytes(t *testing.T) {
 	for _, name := range []string{"client", "reporting"} {
 		t.Run(name, func(t *testing.T) {
@@ -88,7 +88,7 @@ func TestDatatableContractBytes(t *testing.T) {
 			if _, err := typescript.Generate(t.Context(), source, options); err != nil {
 				t.Fatal(err)
 			}
-			expected := filepath.Join("testdata", "native-cursor-contracts", name)
+			expected := filepath.Join("testdata", "current-contracts", name)
 			assertContractBytes(t, dir, expected)
 		})
 	}

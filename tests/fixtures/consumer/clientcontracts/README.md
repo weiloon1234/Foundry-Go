@@ -8,11 +8,17 @@ datatable sources; they do not redeclare projections or persistence models.
 The native cursor descriptor publishes the ORM owner's type ID. Endpoint and DTO
 identities, token bytes and datatable reporting contracts are unchanged.
 `TestDatatableContractBytes` compares generated artifacts with
-`testdata/native-cursor-contracts`. `TestCursorContractPublication` restricts changes
-from the immutable `testdata/datatable-baseline` to the cursor ID and resulting
-ownership hashes. Its provenance lists old/new hashes for every protected artifact.
+`testdata/current-contracts`. Historical cohorts `testdata/datatable-baseline`
+and `testdata/native-cursor-contracts` remain immutable; `TestCursorContractPublication`
+restricts changes between them to the cursor ID and resulting ownership hashes.
+Released cohorts under `testdata/contracts-<version>/` are also immutable;
+`TestReleasedContractCohorts` verifies that each released cohort's recorded
+provenance hashes match its files and ownership manifests.
 
-Publish only through `make publish-cursor-contracts`; reruns require identical
-bytes. Run `make datatable-contracts` to check the publication. The native
-TypeScript gate retains strict negative contracts, HTTP/WebSocket behavior,
-React/Vue form adapters and bundle assertions.
+Publish the current unreleased cohort using `make publish-client-contracts`,
+which updates `testdata/current-contracts` and its provenance. Republishing is
+permitted while unreleased. Historical cursor-ID publication (`make publish-cursor-contracts`)
+remains locked to its original bytes. Run `make datatable-contracts` to check byte
+agreement, reporting coverage, and historical publication. The native TypeScript
+gate retains strict negative contracts, HTTP/WebSocket behavior, React/Vue form
+adapters and bundle assertions.
