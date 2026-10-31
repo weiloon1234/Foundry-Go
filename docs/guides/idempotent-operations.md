@@ -39,7 +39,7 @@ route := operation.Handle(
         return idempotency.NewScope(actor.Tenant, actor.ID.String())
     },
     func(ctx context.Context, tx *database.Tx, in OrderRequest) (OrderReceipt, error) {
-        order, err := QueryOrders().Create(ctx, tx, OrderDraft{}.SetName(in.Body.Name))
+        order, err := orm.Insert(ctx, tx, Orders.Table, orm.TextSet(Orders.Name, in.Body.Name))
         if err != nil { return OrderReceipt{}, err }
         receipt := OrderReceipt{ID: order.ID}
         _, err = OrderCreated.Enqueue(ctx, tx, outbox, receipt)

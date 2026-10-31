@@ -83,7 +83,7 @@ Creation time preserves supplied input and uses the owning clock when omitted.
 Update time is managed by the write pipeline. Document both on fields and handles.
 `SoftDeletes` derives the capability needed for physical deletion. `InputTextOf`
 keeps the stored string separate from `NameInput`; predicates accept the stored
-string, while `Set` accepts the input type. A nil transform selects a named model
+string, while `orm.InputTextSet` accepts the input type. A nil transform selects a named model
 mutator. Other `Input*` families preserve their corresponding storage types.
 
 ## Add relations after table declarations

@@ -3,7 +3,7 @@
 <!-- compiled-examples -->
 
 `database/orm/expr` preserves the input scope, value type and evaluation phase.
-Use `expr.Value(column)` for a row operand, `expr.AsSelected(expr.Row(row))` or a computed
+Use `expr.Value(orm.TextExpr(column))` for a text row operand, `expr.AsSelected(expr.Row(row))` or a computed
 `expr.AsSelected(expression)` for selection, and `rows.MapSelected` for a selected result.
 Aggregates and windows cannot become WHERE predicates.
 
@@ -59,7 +59,7 @@ computed := expr.CoalesceValue(expr.AsSelected(total), expr.AsSelected(expr.Para
 ## Bound parameters and codecs
 
 `expr.Param(column, value)` captures the column's present value type and codec.
-Computed `.Param` retains its expression's ownership errors. Nullable aggregates
+`expr.ParamOf(e, v)` retains its expression's ownership errors. Nullable aggregates
 accept a present fallback, as above. Encoding occurs during construction; encoded
 buffers are owned, and encoding errors are returned before execution even when
 SQL would not take that branch.

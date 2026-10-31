@@ -93,3 +93,31 @@ not be logged. See the [configuration consumer](../../tests/fixtures/consumer/st
 and its [source precedence tests](../../tests/fixtures/consumer/startupconfig/settings_test.go).
 
 Named infrastructure tables reuse these generated schemas; see [named services](named-services.md).
+
+## Public browser configuration
+
+Mark browser-visible scalar or declared enum fields with `config:"name,public"`
+and a `client:"env=..."` tag containing the complete frontend environment key.
+The [compiled configuration declaration](../../tests/fixtures/consumer/configured/settings.go)
+uses the same settings type for server configuration and public metadata:
+
+<!-- compiled-source: tests/fixtures/consumer/configured/settings.go -->
+```go
+type Settings struct {
+	Services      infrastructure.Settings
+	AppName       string `config:"app_name,public" client:"env=VITE_APP_NAME,fallback=ConsumerApp"`
+	DefaultLocale string `config:"default_locale,public" client:"env=VITE_DEFAULT_LOCALE,fallback=en,kind=locale"`
+}
+```
+
+For this declaration, generation adds `SettingsPublicConfig() []config.PublicSetting`.
+Pass its result to `manifest.Sources.PublicConfig` when building the contract
+manifest, as the [client consumer](../../tests/fixtures/consumer/clientcontracts/contracts.go)
+does. This exports setting metadata, not loaded server values. Secret fields,
+secret groups and secret/password types cannot be public.
+
+The client tag also accepts `fallback`, a positive `max` length, and `kind`:
+`string`, `boolean`, `number`, `locale`, `currency`, `time_zone` or `enum`.
+Locale, currency and timezone kinds require string fields; enum kind requires
+a declared enum. The TypeScript entry exports `PublicEnv`, `publicEnvSchema`,
+`decodePublicEnv` and `findPublicEnvProblems` from this metadata.

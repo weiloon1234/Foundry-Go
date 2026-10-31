@@ -340,8 +340,8 @@ Each entry module exports `schemas`, a frozen map of declared schema names to th
 import { decodeContract, newIdentity, schemas } from "./generated/contracts_foundry.gen.js";
 
 const payload = decodeContract(schemas.Payload, networkData);
-const orderId = newIdentity(schemas.ID_Order); // generates a fresh UUID v4
-const existingId = newIdentity(schemas.ID_Order, "0190a8f0-0000-7000-8000-000000000001");
+const orderId = newIdentity(schemas.OrderID); // generates a fresh UUID v4
+const existingId = newIdentity(schemas.OrderID, "0190a8f0-0000-7000-8000-000000000001");
 ```
 
 `newIdentity<Owner>(owner, id?)` brands a UUID string as `Identity<Owner>`. When `id` is omitted, it generates a fresh UUID v4 via `crypto.randomUUID()`. It validates UUID v4 syntax and rejects nil UUIDs.

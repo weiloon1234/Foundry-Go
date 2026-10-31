@@ -26,13 +26,13 @@ credential adapter; it is not a production identity provider.
 Preparation trims supplied text while preserving all three presence states. Rules
 validate the prepared concrete DTO. The domain handler explicitly maps:
 
-| Input | Generated mutation |
+| Input | Assignment |
 | --- | --- |
 | Title omitted | No title assignment |
-| Title null | `ProjectDraft.ClearTitle()` |
-| Title text, including empty text | `ProjectDraft.SetTitle(text)` |
+| Title null | `orm.NullableTextSetNull(Projects.Title)` |
+| Title text, including empty text | `orm.NullableTextSet(Projects.Title, text)` |
 | Budget omitted | No budget assignment |
-| Budget zero or a positive value | `ProjectDraft.SetBudget(value)` |
+| Budget zero or a positive value | `orm.NumberSet(Projects.Budget, value)` |
 
 An empty patch returns the current view without inventing an empty UPDATE. Actual
 updates use the injected pool's real transaction. Responses contain an explicit

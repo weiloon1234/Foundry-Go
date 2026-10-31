@@ -13,7 +13,7 @@ body, err := UserResponseJSON().Encode(ctx, response, limits)
 
 `response` must have the descriptor's concrete DTO type. Passing another model's
 response DTO is a compiler error. Map domain data into explicit response fields;
-read the generated model field notices when choosing stored values or getters.
+use the model declaration when choosing stored values or explicit accessors.
 The encoder does not choose or apply model getters automatically.
 
 ## Slices and explicit null

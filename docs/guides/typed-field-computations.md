@@ -6,6 +6,10 @@ Declare columns once with `orm.Define` and the appropriate typed constructors.
 Use package functions from `database/orm/expr` to construct optional computations;
 columns do not need a separate summary-method family for each owner/value pair.
 
+In the table below, `column` is a sealed expression adapter, such as
+`orm.TextExpr(Users.Email)` or `orm.NumberExpr(Orders.TotalCents)`, rather than
+the methodless column handle itself. Choose the adapter for the declared kind.
+
 | Purpose | Function |
 | --- | --- |
 | Row operand / bound parameter | `expr.Value(column)` / `expr.Param(column, value)` |

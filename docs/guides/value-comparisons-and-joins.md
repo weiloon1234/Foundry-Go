@@ -11,7 +11,7 @@ type. Enums do not gain numeric or text operators.
 ## Row and selected comparisons
 
 `expr.Like(text, pattern)` accepts typed text operands; wildcard characters retain
-SQL meaning. Text `Contains` escapes wildcards for literal substring matching.
+SQL meaning. `expr.TextContains` escapes wildcards for literal substring matching.
 The `...Value` comparison forms accept selected values and produce
 `expr.HavingPredicate[S]`; they cannot filter a row WHERE. Windows remain invalid
 in HAVING even when nested inside a calculation.

@@ -46,8 +46,8 @@ provider credentials out of tracked files and command output.
 | `make fmt-check` | Fail if source formatting differs from the selected formatter |
 | `make vet` | Static analysis of framework/tool packages |
 | `make test` | Current framework/tool tests |
-| `make fixture-check` | Vet and test both plugin fixtures and the independent consumer module |
-| `make generate` | Regenerate framework-owned declarations, then the independent consumer, with managed field notices |
+| `make fixture-check` | Vet and test both plugin fixtures, the independent consumer and the Go-way fixture |
+| `make generate` | Regenerate framework-owned declarations and both consumer fixtures, removing obsolete managed field notices |
 | `make generate-check` | Type-check generated output and fail on stale files without rewriting them |
 | `make gopls-install` | Explicitly install the pinned development tool into `bin/` |
 | `make agent-smoke` | Verify real gopls against the consumer, requiring `FOUNDRY_TEST_GOPLS` to select an existing approved executable |
@@ -57,7 +57,7 @@ provider credentials out of tracked files and command output.
 | `make race` | Race-enabled framework/tool and consumer checks |
 | `make test-postgres` | Required real PostgreSQL acceptance, including the independent consumer, with race detection |
 
-`GOWORK=off` is set by Make so a local workspace cannot hide module-boundary mistakes. The consumer and two plugin fixtures use test-only local replacements; the root module has none. The [release gate](../release-checklist.md) separately builds packaged modules in copied consumers with every replacement removed.
+`GOWORK=off` is set by Make so a local workspace cannot hide module-boundary mistakes. The consumer, Go-way and two plugin fixtures use test-only local replacements; the root module has none. The [release gate](../release-checklist.md) separately builds packaged modules in copied consumers with every replacement removed.
 
 Use ordinary native Go compiler and GC defaults for host development. Do not
 carry historical VM-specific optimization or tiny heap settings into native

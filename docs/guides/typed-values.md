@@ -20,7 +20,7 @@ New identities use UUIDv7: millisecond timestamp plus cryptographic random bits.
 | `value.Of(T)` | Non-null value, including T's zero value |
 | `value.Optional[value.Nullable[T]]` | Omitted, explicit null, or a concrete T |
 
-`Optional.Get()` returns `(T, isSet)`. `Nullable.Get()` returns `(T, isNonNull)`. Both preserve the concrete value type. Generated create/update drafts will use these distinctions instead of treating zero as an omitted field.
+`Optional.Get()` returns `(T, isSet)`. `Nullable.Get()` returns `(T, isNonNull)`. Both preserve the concrete value type. Typed write drafts and mutation assignments use these distinctions instead of treating zero as an omitted field.
 
 Use `json:",omitzero"` on optional DTO fields. An absent `Optional` cannot encode as a standalone JSON value. An explicit null requires `Nullable`; decoding null into `Optional[int]` fails. Failed decoding leaves the receiver unchanged. A present nil pointer/map that would accidentally encode as null is rejected during serialization; use the explicit nullable type.
 

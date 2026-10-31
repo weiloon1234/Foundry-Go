@@ -1,8 +1,8 @@
 # Typed database values
 
-`database/codec` preserves concrete Go types at binding and scanning boundaries. It supplies codecs for named scalars, model-owned IDs, exact decimals, temporal values and nullable fields. Generated enums expose `StatusCodec()`-style functions and delegate their standard SQL interfaces to that same codec. Generated [model reads](model-queries.md) and [writes](model-writes.md) reuse these codecs for predicates, mutation assignments and full-row hydration.
+`database/codec` preserves concrete Go types at binding and scanning boundaries. It supplies codecs for named scalars, model-owned IDs, exact decimals, temporal values and nullable fields. Generated enums expose `StatusCodec()`-style functions and delegate their standard SQL interfaces to that same codec. [Model reads](model-queries.md) and [writes](model-writes.md) reuse these codecs for predicates, mutation assignments and full-row hydration.
 
-`codec.Interval()` preserves separate calendar and elapsed components through all four PostgreSQL output styles. It rejects infinity and elapsed components outside Go's duration range. Generated interval fields also provide typed calculations and summaries; see [interval queries](interval-queries.md).
+`codec.Interval()` preserves separate calendar and elapsed components through all four PostgreSQL output styles. It rejects infinity and elapsed components outside Go's duration range. Interval columns also provide typed calculations and summaries; see [interval queries](interval-queries.md).
 
 ## Binding, scanning and validation
 
@@ -19,7 +19,7 @@ scanner := statusCodec.Scan(&status)
 // Pass scanner as a scan destination for the matching column.
 ```
 
-The driver value and SQL column order remain runtime boundaries. A whole row scan can fill earlier destinations before a later column fails, even though each individual codec assigns atomically. Discard the entire attempted row on failure. Generated model queries construct a fresh model and publish it only after every persisted column decodes successfully.
+The driver value and SQL column order remain runtime boundaries. A whole row scan can fill earlier destinations before a later column fails, even though each individual codec assigns atomically. Discard the entire attempted row on failure. Model queries construct a fresh model and publish it only after every persisted column decodes successfully.
 
 `Validated(func(T) error)` composes one rule at both boundaries. Generated enum codecs reuse their generated `Validate` method, keeping membership declarations in one place. `codec.New` supports explicit custom encoding/decoding; callbacks must be concurrent-safe, preserve inputs and return owned decoded data. Custom callbacks own their validation and NULL semantics. Built-in failures omit the input value; do not assume custom errors or unwrapped database causes are safe to log.
 
@@ -48,7 +48,7 @@ Integers accept driver `int64` or decimal integer text/bytes. Floats accept driv
 
 `Add`, `Sub` and `Mul` return exact values or a bound error without modifying operands. `Cmp` compares numerically and `Scale` reports canonical fractional digits. There is no implicit rounding: `Div` and `Round` require an explicit scale and `decimal.RoundingMode` (see [supporting APIs](supporting-apis.md#exact-decimals-and-money)). Scale used for display is not retained: `1.00` and `1` are the same value. JSON uses strings to preserve exact digits for JavaScript and other consumers; numeric JSON input is rejected.
 
-`codec.Decimal()` binds canonical text and accepts exact text/integer driver values. Floating-point sources fail. The generator recognizes `decimal.Decimal`, including nullable forms, and emits ordered predicates and typed draft setters. The [ledger declaration](../../tests/fixtures/consumer/models/ledger.go) demonstrates this shape; a float cannot be passed to its amount setter.
+`codec.Decimal()` binds canonical text and accepts exact text/integer driver values. Floating-point sources fail. Table declarations use `orm.NumberOf` and `orm.NullableNumberOf` with `decimal.Decimal`, exposing ordered predicates and assignments. The [ledger declaration](../../tests/fixtures/consumer/models/ledger.go) demonstrates this shape; a float cannot be passed to its amount assignment.
 
 The codec cannot override a database column's declared scale. PostgreSQL rounds inputs to a constrained numeric scale; use a matching schema and validate an application's precision/scale rule before writing when rounding is unacceptable. [PostgreSQL numeric types](https://www.postgresql.org/docs/18/datatype-numeric.html)
 
@@ -66,4 +66,4 @@ Unit tests check width/representation failures, nullable states, enum validation
 
 ## Binary ownership
 
-[Binary model fields](binary-models.md) use `Bytes[T ~[]byte]()` and explicit nullable wrappers. Binding, hydration, drafts, predicates and change snapshots copy their byte buffers. Non-nil empty slices remain present; the built-in codec rejects nil. `Codec.Clone` and `codec.CloneOptional(c, v)` apply ownership without binding or validation.
+[Binary model fields](binary-models.md) use `Bytes[T ~[]byte]()` and explicit nullable wrappers. Binding, hydration, assignments, predicates and change snapshots copy their byte buffers. Non-nil empty slices remain present; the built-in codec rejects nil. `Codec.Clone` and `codec.CloneOptional(c, v)` apply ownership without binding or validation.

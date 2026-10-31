@@ -10,7 +10,7 @@ membership, err := orm.Attach(ctx, db, groups, member, group,
     orm.InputTextSet(linkqueries.Memberships.Role, " ADMIN "))
 ```
 
-`membership` is a complete `Membership` model. Foundry refreshes the stored member and group by their typed primary identities, then derives the pivot keys from the relationship metadata. Omitted draft keys receive those defaults before the usual UUID preparation and creating/saving hooks. The pivot's `MutateRole` setter, managed timestamps and local/provider observers run through the same pipeline as ordinary `Create`. The original draft and supplied endpoint structs remain unchanged.
+`membership` is a complete `Membership` model. Foundry refreshes the stored member and group by their typed primary identities, then derives the pivot keys from the relationship metadata. Omitted draft keys receive those defaults before the usual UUID preparation and creating/saving hooks. The pivot's `MutateRole` setter, managed timestamps and local/provider observers run through the same pipeline as ordinary `orm.Insert`. The original draft and supplied endpoint structs remain unchanged.
 
 Explicit draft inputs remain explicit. A hook or setter can transform them, but the stored result must still link the selected endpoints and satisfy the relationship's target/pivot filters. A failed postcondition rolls back the relation write and its queued after-commit callbacks. A distinct custom setter input cannot be manufactured from a stored key; supply that typed input in the draft when necessary. Typed `orm.Assignment[P]` values carry input and owner roles into the shared write pipeline.
 
@@ -26,7 +26,7 @@ permanentlyRemoved, err := orm.ForceDetach(ctx, db, groups.WithTrashedPivot(),
 
 Both results are `[]Membership`, one complete model for each selected pivot. `Detach` runs normal per-model deletion: soft-delete pivots remain stored, while ordinary pivots are physically removed. Soft deletion returns the stored post-write model; physical deletion returns its pre-write model. Duplicate links invoke separate hooks. All selected removals commit or roll back together, including when a later pivot hook fails. Detachment shares its bounded candidate selection and ordinary mutation runtime with [per-model batch writes](model-batch-writes.md).
 
-`ForceDetach` requires a soft-delete pivot and runs its force-delete lifecycle. The selected pivot visibility remains in force: use `WithTrashedPivot` to include deleted links, or `OnlyTrashedPivot` to select only deleted links. Ordinary `Detach` changes active pivots even with `WithTrashedPivot`; `OnlyTrashedPivot().Detach` therefore selects nothing. To restore a known pivot, use its ordinary `orm.Restore` operation with the typed pivot ID. See [soft deletion](model-soft-deletes.md) for event order and visibility.
+`ForceDetach` requires a soft-delete pivot and runs its force-delete lifecycle. The selected pivot visibility remains in force: use `WithTrashedPivot` to include deleted links, or `OnlyTrashedPivot` to select only deleted links. Ordinary `Detach` changes active pivots even with `WithTrashedPivot`; `orm.Detach(..., groups.OnlyTrashedPivot(), ...)` therefore selects nothing. To restore a known pivot, use its ordinary `orm.Restore` operation with the typed pivot ID. See [soft deletion](model-soft-deletes.md) for event order and visibility.
 
 ## Synchronizing many links
 

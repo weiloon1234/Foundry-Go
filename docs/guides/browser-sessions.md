@@ -85,8 +85,8 @@ brute-force the password there: configure the login with
 Protected routes add the actor-stage middleware:
 
 ```go
-route := http.RequireAuthentication(endpoint, browser.Authentication(), browser.Guard()).
-    WithActorMiddleware(browser.RequirePasswordConfirmation(15 * time.Minute))
+route := http.RequireAuthentication(endpoint, browser.Authentication(), browser.Guard(),
+    http.ActorMiddleware[User](browser.RequirePasswordConfirmation(15 * time.Minute)))
 ```
 
 Without a confirmation within the window, checked against the session store's
@@ -100,7 +100,7 @@ session cookie without revoking the actor's session, and
 `browser.StopImpersonating(ctx, support)` ends it and stages the actor's own
 session again under a fresh secret, with its original expiry (clearing the cookie
 when the actor's session has ended). Add
-`WithActorMiddleware(browser.RefuseImpersonation())` to routes that change
+`http.ActorMiddleware[User](browser.RefuseImpersonation())` to routes that change
 credentials, email, MFA factors or the account, or that mint tokens; they then
 reject impersonation sessions with 403 before decoding (minting through
 `CurrentProof` is refused regardless). Impersonation cookies are never persistent.
@@ -118,7 +118,7 @@ before publication withhold it. Only a credential-bearing publication (a staged
 login, rotation or logout cookie) is withheld once the request context ended; an
 ordinary response completed after its deadline is still delivered. Session work
 ends on client disconnect or forced shutdown, while the handler's own context
-carries its route's deadline, so a route with `WithTimeout` can log in after the
+carries its route's deadline, so a route with `http.Timeout` can log in after the
 kernel `RequestTimeout`. The native writer is preserved; no response body is
 buffered by this integration. Public handlers returning auth errors use the same
 HTTP 401/403/MFA contracts as guarded handlers. Explicit domain HTTP errors retain

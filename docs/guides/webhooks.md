@@ -17,7 +17,7 @@ verifier, err := webhook.New(
     clock.System{},
 )
 // Handle err. Attach before any body-transforming middleware:
-endpoint = endpoint.WithMiddleware(http.VerifyWebhook(verifier))
+endpoint = http.ConfigureEndpoint(endpoint, http.Use(http.VerifyWebhook(verifier)))
 ```
 
 Account IDs retain their concrete Go type. The configured account/provider are

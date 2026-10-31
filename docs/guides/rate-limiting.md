@@ -125,9 +125,9 @@ middleware := foundryhttp.RateLimit(limiter,
 
 The resolver is a typed domain boundary. Resolvers that need the authenticated
 model run in [middleware after authentication](authentication.md#middleware-after-authentication)
-through `WithActorMiddleware`, where `guard.Require(r.Context())` reads the request's
+through `http.ActorMiddleware[M]`, where `guard.Require(r.Context())` reads the request's
 concrete actor. `RateLimitByActor` provides the existing authenticated-model quota
-with an anonymous IP fallback. Other resolvers can use route/scope `WithMiddleware`
+with an anonymous IP fallback. Other resolvers can use route `http.Use` / scope `WithMiddleware`
 or global `ApplyMiddleware`. Route middleware can inspect `MatchedRoute` and native
 path values. The handler receives its original request and response writer after
 admission; resolver deadlines do not cancel the downstream handler context.

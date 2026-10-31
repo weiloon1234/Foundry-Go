@@ -28,7 +28,7 @@ err = env.Start(t, app,
 if err != nil { t.Fatal(err) }
 db, err := app.Resources().Database()
 if err != nil { t.Fatal(err) }
-// Generated queries/factories now use db normally, including real commits.
+// ORM queries/factories now use db normally, including real commits.
 ```
 
 Use `FOUNDRY_TEST_POSTGRES_URL` only for the explicitly opted-in test database.
@@ -67,11 +67,11 @@ so client cleanup runs first. The application drains handlers/tasks before pools
 
 ## Parallel execution and application concurrency
 
-When running integration test suites with `t.Parallel()`, multiple applications boot concurrently in the same test process. `Environment.Start` automatically bounds concurrent booted applications to `application.DefaultConcurrency` (8 by default).
+When integration tests use `t.Parallel()`, `Environment.Start` limits concurrent top-level test groups to `pgapp.DefaultConcurrency` (8 by default) per test process.
 
-Each booted application uses 4 PostgreSQL connections (2 primary + 2 read replica). Bounding concurrency to 8 ensures that 32 pool connections are active at peak, leaving 68 connections headroom below PostgreSQL's default `max_connections` ceiling of 100 for schema creation (`scopePoolSize = 2`), ephemeral migration runners, and assertion pools. The limit may be overridden per test process via the `FOUNDRY_TEST_APP_CONCURRENCY` environment variable with a positive integer. An invalid value fails the test immediately.
+Each bound endpoint has a two-connection pool; `WithReads` adds a separate read pool. Total connection use depends on the configured endpoints and the number of applications each test starts. The limiter does not impose a process-wide database connection ceiling. Set `FOUNDRY_TEST_APP_CONCURRENCY` to a positive integer before starting the test process to override the default. An invalid value makes `Environment.Start` return an error.
 
-Concurrency slots are tracked per top-level test name (`t.Name()` truncated at the first `/`). If a single test or its subtests boot multiple applications (e.g. testing background workers alongside HTTP servers), all applications in that test share the single slot by reference counting. This eliminates self-deadlock without an unbounded burst tier. The slot is released only after all applications in that test have completely shut down and drained their connection pools.
+Concurrency slots are tracked per top-level test name (`t.Name()` truncated at the first `/`). If a single test or its subtests boot multiple applications (e.g. testing background workers alongside HTTP servers), all applications in that test share the single slot by reference counting. This avoids requiring another slot when a test starts a second application; it does not bound applications within that group. The slot is released only after all applications in that test have completely shut down and drained their connection pools.
 
 > [!NOTE]
 > Concurrency limits are enforced per test process. When running `go test -p N ./...`, the Go toolchain executes `N` package test binaries in parallel. Each package process enforces its own concurrency limit against the shared database server.

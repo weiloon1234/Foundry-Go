@@ -57,7 +57,7 @@ The `...Value` counterparts compose selected expressions, including ordinary agg
 
 `CompareValue(expr)` exposes equality/membership and NULL checks for HAVING. `OrderValue(expr)` adds ordered comparisons; `OrderNullableValue(expr)` accepts concrete non-null comparison values. `TextValue` and `TextNullableValue` add LIKE and literal substring comparisons. SQL grouping restrictions still apply, and wrapping a window expression does not make it legal in HAVING or inside another window.
 
-Row calculations expose `Value()` for declared projections, `expr.Group(row)` for computed grouping and `expr.Asc(row)`/`expr.Desc(row)` for ordering. Their AST participates in dependency discovery, explicit correlations, [computed keys](computed-query-keys.md) and named-window discovery. To aggregate a computed projection field, declare its rows schema and use `rows.At` with an `expr.SumRow` or corresponding aggregate constructor, as shown by the [consumer composition tests](../../tests/fixtures/consumer/scalarqueries/composition_postgres_test.go).
+Row calculations use `expr.AsSelected(row)` for declared projections, `expr.Group(row)` for computed grouping and `expr.Asc(row)`/`expr.Desc(row)` for ordering. Their AST participates in dependency discovery, explicit correlations, [computed keys](computed-query-keys.md) and named-window discovery. To aggregate a computed projection field, declare its rows schema and use `rows.At` with an `expr.SumRow` or corresponding aggregate constructor, as shown by the [consumer composition tests](../../tests/fixtures/consumer/scalarqueries/composition_postgres_test.go).
 
 ## Computed model ordering
 

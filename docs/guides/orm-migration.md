@@ -1249,11 +1249,11 @@ ORM declaration. `RowEquality` and `RowNullable` are interfaces, not constructor
 
 | Before | After |
 | --- | --- |
-| Generated field sorting | `SortBy(expr.AsSelected(expr.Row(expr.Value(f.X))))`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
-| `datatable.Where(text, f.Username)` | `datatable.Where(text, expr.TextRow(f.Username))`. |
-| `datatable.NullableWhere(text, f.Email)` | `datatable.NullableWhere(text, expr.TextNullableRow(f.Email))`. |
-| Equality-only or enum `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.CompareRow(expr.Value(f.X)))`; use `CompareNullableRow` with `NullableWhere`. |
-| Ordered numeric `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.OrderRow(expr.Value(f.X)))`; use `OrderNullableRow` for nullable values. Choose by the column's declared capabilities, not its underlying Go type. |
+| Generated field sorting | `datatable.SortBy(expr.AsSelected(expr.Row(expr.Value(orm.TextExpr(f.Username)))))`, with `f` now the ORM declaration. The selected value must match the DTO field type, including nullability. |
+| `datatable.Where(text, f.Username)` | `datatable.Where(text, expr.TextFilter(expr.TextRow(orm.TextExpr(f.Username))))`. |
+| `datatable.NullableWhere(text, f.Email)` | `datatable.NullableWhere(text, expr.NullableTextFilter(expr.TextNullableRow(orm.NullableTextExpr(f.Email))))`. |
+| Equality-only or enum `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.CompareFilter(expr.CompareRow(expr.Value(orm.EnumExpr(f.State)))))` for an enum; use `orm.ColumnExpr` for a generic equality column. Nullable columns use their nullable column adapter, `CompareNullableRow`, `NullableCompareFilter` and `NullableWhere`. |
+| Ordered numeric `datatable.Where(codec, f.X)` | `datatable.Where(codec, expr.OrderFilter(expr.OrderRow(expr.Value(orm.NumberExpr(f.Amount)))))`; nullable numbers use `NullableNumberExpr`, `OrderNullableRow`, `NullableOrderFilter` and `NullableWhere`. Choose by the column's declared capabilities, not its underlying Go type. |
 | Generated stable order | `Stable: []expr.ProjectionOrder[M]{expr.Asc(expr.Value(orm.KeyExpr(f.ID)))}`. Use `f.Key()` when the declaration has no named ID carrier. |
 | Generated projection and selection | `rows.Query[M,R]`, `rows.Select(rows.From(source), XRows, rows.Map(...))`. Use `MapSelected` for computed selected values. |
 | Generated joined-field sort | `expr.AsSelected(expr.Row(expr.At(joinedScope, field)))`. The Spec's first type parameter is the joined scope, not one model. |

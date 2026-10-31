@@ -303,7 +303,7 @@ HTTP download. Opening it runs export authorization and scoping again. The
 HTTP file response owns the artifact, ranges and cleanup. Its own file-response
 limits still apply. Generation and transfer run under the request's single
 deadline, so declare the download route with
-`.WithTimeout(manager.DownloadTimeout())` instead of inheriting the kernel's
+`http.Timeout(manager.DownloadTimeout())` instead of inheriting the kernel's
 `RequestTimeout`. `Manager.DownloadTimeout()` is twice `ExportTimeout` (20 minutes
 by default, at most `http.MaxRouteTimeout`); generation is additionally bounded
 by `ExportTimeout`. When the request ends through its deadline, a client

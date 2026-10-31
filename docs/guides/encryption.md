@@ -87,18 +87,21 @@ Like Laravel's `encrypted` and `encrypted:array/json` casts, a model field of ty
 `encrypted.Text` or `encrypted.JSON[T]` (package `database/encrypted`, optionally
 inside `value.Nullable`) is stored as an envelope and used as plaintext:
 
+<!-- compiled-source: tests/fixtures/consumer/vault/entry.go -->
 ```go
-//foundry:model table=vault_entries
 type Entry struct {
-    ID       model.ID[Entry]
-    Token    encrypted.Text
-    Settings value.Nullable[encrypted.JSON[Settings]]
+	ID       model.ID[Entry]
+	Label    string
+	Token    encrypted.Text
+	Settings value.Nullable[encrypted.JSON[Settings]]
 }
-
-entry, err := QueryVaultEntries().Create(ctx, db, EntryDraft{}.
-    SetToken(encrypted.NewText(apiToken)).ClearSettings())
-// Handle err. entry.Token.Reveal() returns the plaintext; the column holds an envelope.
 ```
+
+The [handwritten table](../../tests/fixtures/consumer/vault/orm.go) uses
+`orm.EncryptedTextOf` and `orm.NullableEncryptedJSONOf`. Write through
+`orm.Insert` with `orm.EncryptedSet(vault.Entries.Token, encrypted.NewText(apiToken))`
+and `orm.NullableEncryptedSetNull(vault.Entries.Settings)`. The returned model
+exposes plaintext through `Token.Reveal()`; the column holds an envelope.
 
 Configured applications give every database connection the application key ring
 (`Encryption.KeyID`/`Key`), so nothing else is wired; a direct pool uses
@@ -113,15 +116,16 @@ fails the read. Each value is authenticated (not stored) with the purpose
 ciphertext copied into another row, column or table does not decrypt. The primary
 key must therefore be application-assigned (Foundry's default `model.ID`), and an
 encrypted field cannot be the key, use a database default, declare a mutator or
-appear in a projection; generation rejects these. Renaming the table or column, or
+appear in a projection. Declaration validation rejects invalid columns; typed
+projection adapters exclude encrypted fields. Renaming the table or column, or
 changing a primary key, needs re-encryption.
 
 Every write uses a fresh random nonce, so encrypted fields have no `Eq`, `Like`,
 ordering, conflict-update, `rows.Select` mapping or aggregate operations; the compiler
-rejects them, and a nullable field offers only `IsNull`/`IsNotNull`. Set-based
-writes (`PatchAll`, `Values` on insert-from or update-from) reject encrypted
-assignments, because one envelope cannot belong to many rows; per-model writes,
-`CreateMany` and `CreateEach` bind each row to its own key. An upsert seals the
+rejects them, and a nullable field offers only `orm.NullableEncryptedIsNull`/`orm.NullableEncryptedIsNotNull`. Set-based
+writes (`orm.UpdateAll`, `Values` on insert-from or update-from) reject encrypted
+assignments, because one envelope cannot belong to many rows; per-model writes
+such as `orm.CreateEach` bind each row to its own key. An upsert seals the
 inserted row; a conflict update cannot touch an encrypted field, so an existing
 row keeps its envelope. Change detection compares plaintext, so reassigning the
 same value is not a change. Formatting, JSON, logs and audit values are redacted,

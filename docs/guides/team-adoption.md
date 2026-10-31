@@ -103,7 +103,7 @@ are required. Select persistent session/token services for production authentica
 
 Keep generated output and `.foundry-gen.json` ownership manifests alongside their
 declarations. Regenerate after declaration or framework changes. A failed
-generation check lists each stale file and whether its content, comments, formatting or ownership manifest differ. This workflow opts into `--field-docs`, so it also refreshes and checks managed notices in handwritten models. Without that flag, handwritten notices are left untouched. Add these checks
+generation check lists each stale file and whether its content, comments, formatting or ownership manifest differ. This workflow opts into `--field-docs`, so it also removes obsolete managed notices from handwritten models and checks that removal. Without that flag, handwritten notices are left untouched. Add these checks
 to the boilerplate's own CI, together with its configured integration/client tests:
 
 ```sh

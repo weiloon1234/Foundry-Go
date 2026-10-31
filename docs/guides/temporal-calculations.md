@@ -27,7 +27,7 @@ Integral components return `int64`. `Second`, `Milliseconds`, `JulianDay` and `U
 ## Truncation and timezone resolution
 
 These functions live in `expr`; `field` below is a row operand such as
-`expr.Value(Samples.Date)`. Selected forms take `expr.Selected` values instead.
+`expr.Value(orm.TimeExpr(Samples.Date))`. Selected forms take `expr.Selected` values instead.
 
 | Operation | Input | Result |
 | --- | --- | --- |

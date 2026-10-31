@@ -1,6 +1,6 @@
 # Typed model field mutators
 
-A mutation input column separates the value accepted by writes from the value stored in the model. `Set` retains input until persistence; reads and predicates use the stored type. Declare the appropriate `Input*` carrier even when input and stored types are identical.
+A mutation input column separates the value accepted by writes from the value stored in the model. An input assignment retains input until persistence; reads and predicates use the stored type. Declare the appropriate `Input*` carrier even when input and stored types are identical.
 
 The [complete declaration](model-declarations.md) uses `InputText[User, EmailInput, string]` with a named `MutateEmail` method. This fixture uses distinct input and stored types:
 
@@ -21,7 +21,7 @@ The receiver is a zero-valued type marker. Transform the argument rather than re
 
 ## Different input and stored types
 
-Omitted fields skip the transform, including database defaults and untouched update fields. `SetNull()` preserves SQL NULL and skips a nullable field's scalar transform. Zero, false and empty string are supplied inputs and do run it.
+Omitted fields skip the transform, including database defaults and untouched update fields. `orm.NullableInputTextSetNull(column)` preserves SQL NULL for a nullable input text column and skips a nullable field's scalar transform. Zero, false and empty string are supplied inputs and do run it.
 
 Before-write hooks read `value.Optional[Input]` through `WriteGet` and `value.Optional[value.Nullable[Input]]` through `WriteNullableGet`. `WriteSet` replaces inputs; `WriteUnset` restores omission. After-write changes contain stored types, never fresh inputs.
 
