@@ -193,41 +193,17 @@ func TestConsumerAPIMethodVisibility(t *testing.T) {
 }
 
 func TestConsumerAPIDocumentation(t *testing.T) {
-	data, err := os.ReadFile("testdata/public-api-undocumented.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	backlog := make(map[string]bool)
-	for _, line := range strings.Split(string(data), "\n") {
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		if _, duplicate := backlog[line]; duplicate {
-			t.Errorf("duplicate documentation backlog entry %s", line)
-		}
-		backlog[line] = false
-	}
 	for _, declaration := range consumerAPIDeclarations(t) {
 		name := declaration.Name
 		if declaration.Receiver != "" {
 			name = declaration.Receiver + "." + name
 		}
-		key := declaration.File + "\t" + declaration.Kind + "\t" + name
 		dsl := declaration.Package == "database/orm/expr" || declaration.Package == "datatable"
 		if !declaration.Documented {
-			if _, existing := backlog[key]; existing && !dsl {
-				backlog[key] = true
-			} else {
-				t.Errorf("%s:%d: %s needs a doc comment; do not add documentation debt", declaration.File, declaration.Line, name)
-			}
+			t.Errorf("%s:%d: %s needs a doc comment", declaration.File, declaration.Line, name)
 		}
 		if dsl && (declaration.Kind == "func" || declaration.Kind == "type") && !declaration.Example {
 			t.Errorf("%s:%d: %s needs an accurate standalone Example: line", declaration.File, declaration.Line, name)
-		}
-	}
-	for key, stillUndocumented := range backlog {
-		if !stillUndocumented {
-			t.Errorf("remove documented or deleted declaration from documentation backlog: %s", key)
 		}
 	}
 }

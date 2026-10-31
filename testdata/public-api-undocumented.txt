@@ -1,2 +1,0 @@
-# Existing undocumented public declarations outside expr/datatable, 2026-10-31.
-# This backlog may only shrink. Each entry is: file<TAB>kind<TAB>receiver.name.

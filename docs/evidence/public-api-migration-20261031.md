@@ -83,7 +83,8 @@ with `make generate`.
 | All undocumented declarations | 3,866 | 3,730 |
 | External documentation backlog | 3,734 | 3,730 |
 
-The fixed [backlog](../../testdata/public-api-undocumented.txt) contains 3,730
+The fixed backlog (`testdata/public-api-undocumented.txt`, cleared and removed on
+2026-11-01 once every declaration was documented) contained 3,730
 declarations outside the DSL. Four generated countries.Status methods became
 documented through the enum emitter and were removed from the backlog.
 

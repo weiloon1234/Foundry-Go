@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Docs: Every exported declaration now has a Go doc comment written from its
+  implementation (3,716 previously undocumented), so `go doc`,
+  editor hover and coding agents describe the actual behaviour. The documentation
+  backlog file is removed; `TestConsumerAPIDocumentation` now rejects any
+  undocumented exported declaration. Code is unchanged.
+
 ## v0.3.2 — 2026-11-01
 
 - Added: `datatable.Routes` registers explicitly bound query, ticket-export and
