@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
 import { pathToFileURL } from "node:url";
 
-const { authenticatedTransport } = await import(pathToFileURL(process.argv[2]).href);
+const { authenticatedTransport, createTokenSession } = await import(pathToFileURL(process.argv[2]).href);
 
 function request(overrides = {}) {
   return {
@@ -60,6 +60,61 @@ function session(...tokens) {
 const authorization = (sent) => sent.headers["authorization"];
 
 describe("authenticatedTransport", () => {
+  it("M5 cancels one refresh waiter without canceling the shared renewal", async () => {
+    let finish;
+    const entered = Promise.withResolvers();
+    const refresh = mock.fn(() => {
+      entered.resolve();
+      return new Promise(resolve => { finish = resolve; });
+    });
+    const tokens = createTokenSession({ name: "cancel-wait", refresh, channel: null });
+    const api = backend(200);
+    const call = authenticatedTransport(api.transport, tokens);
+    const controller = new AbortController();
+    let result = "pending";
+    const canceled = call(request({ signal: controller.signal })).then(
+      () => { result = "resolved"; },
+      error => { assert.equal(error, controller.signal.reason); result = "aborted"; },
+    );
+    await entered.promise;
+    const survivor = call(request());
+    controller.abort();
+    await new Promise(resolve => setImmediate(resolve));
+    try {
+      assert.equal(result, "aborted");
+      assert.equal(api.sent.length, 0);
+    } finally {
+      finish({ kind: "renewed", token: { value: "shared", expiresAt: Date.now() + 60_000 } });
+      await Promise.all([canceled, survivor]);
+      tokens.dispose();
+    }
+    assert.equal(refresh.mock.callCount(), 1);
+    assert.equal(api.sent.length, 1);
+  });
+
+  it("M5 closes a discarded 401 when its renewal wait is canceled", async () => {
+    const entered = Promise.withResolvers();
+    const finish = Promise.withResolvers();
+    const tokens = createTokenSession({
+      name: "cancel-retry", channel: null,
+      refresh: () => { entered.resolve(); return finish.promise; },
+    });
+    tokens.signIn({ value: "old", expiresAt: Date.now() + 60_000 });
+    const api = backend(401);
+    const controller = new AbortController();
+    const pending = authenticatedTransport(api.transport, tokens)(request({ signal: controller.signal }));
+    await entered.promise;
+    controller.abort();
+    try {
+      await assert.rejects(pending, error => error === controller.signal.reason);
+      assert.deepEqual(api.closed, [0]);
+      assert.equal(api.sent.length, 1);
+    } finally {
+      finish.resolve({ kind: "signed-out" });
+      tokens.dispose();
+    }
+  });
+
   it("does not replay an old mutation using a later login", async () => {
     const tokens = session("old", "new");
     let version = 1;

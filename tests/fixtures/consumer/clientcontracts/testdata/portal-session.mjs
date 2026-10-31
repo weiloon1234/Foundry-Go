@@ -97,4 +97,55 @@ assert.equal("cookieName" in portal.authDescriptor, false);
   instance.session.dispose();
 }
 
+// M3: restoration must not publish a previous account's pending profile.
+for (const transition of ["sign-out", "sign-in", "dispose"]) {
+  const api = backend();
+  const profile = deferred();
+  const entered = deferred();
+  api.respond(async path => {
+    if (path === "/browser/profile") { entered.resolve(); return profile.promise; }
+    return { status: 200, payload: { tokens: { access_token: "account-a", expires_in: 900, token_type: "Bearer" }, mfa_required: false } };
+  });
+  const instance = portal.createPortalSession(api.transport, { channel: null });
+  const restoring = instance.restoreSession();
+  await entered.promise;
+  if (transition === "sign-out") instance.session.signOut();
+  else if (transition === "sign-in") instance.session.signIn(auth.accessTokenExpiring("account-b", 900));
+  else instance.session.dispose();
+  profile.resolve({ status: 200, payload: { display: "Private account A" } });
+  await assert.rejects(restoring, auth.SessionChangedError, `M3 ${transition}`);
+  instance.session.dispose();
+}
+
+// M5: generated refresh calls receive owned cancellation, releasing the lock
+// only once the transport has settled. A canceled rotation must not be retried.
+for (const cancellation of ["timeout", "dispose"]) {
+  const entered = deferred();
+  let refreshRequest;
+  let refreshes = 0;
+  const transport = async request => {
+    if (request.url !== "/browser/refresh") return { status: 204, headers: {}, body: "", close: () => undefined };
+    refreshes++;
+    refreshRequest = request;
+    entered.resolve();
+    return new Promise((resolve, reject) => {
+      request.signal?.addEventListener("abort", () => reject(request.signal.reason), { once: true });
+    });
+  };
+  const instance = portal.createPortalSession(transport, { channel: null, refreshTimeoutMs: 10 });
+  const pending = instance.session.accessToken();
+  await entered.promise;
+  if (cancellation === "dispose") instance.session.dispose();
+  // Bound the test itself so a missing signal cannot hang the test runner.
+  const settled = await Promise.race([pending.then(() => true), new Promise(resolve => setTimeout(() => resolve(false), 100))]);
+  assert.equal(settled, true, `M5 ${cancellation} must settle refresh`);
+  assert.equal(refreshRequest.signal.aborted, true);
+  let acquired = false;
+  await instance.session.runCredentials(async () => { acquired = true; });
+  assert.equal(acquired, true);
+  assert.equal(await instance.session.accessToken(), null);
+  assert.equal(refreshes, 1);
+  instance.session.dispose();
+}
+
 console.log("portal auth descriptor and sessions ok");

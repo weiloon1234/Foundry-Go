@@ -7,7 +7,12 @@ const { accessTokenExpiring, createTokenSession } = await import(pathToFileURL(p
 /** One exclusive lock shared by the tabs of a test, like Web Locks. */
 function sharedLock() {
   let tail = Promise.resolve();
+  let transition = null;
   return {
+    coordination: {
+      read: () => transition,
+      write: next => { transition = next; },
+    },
     run(_name, work) {
       const result = tail.then(work);
       tail = result.catch(() => undefined);
@@ -17,14 +22,19 @@ function sharedLock() {
 }
 
 /** Delivers each tab's messages to the other tabs, asynchronously. */
-function sharedChannel() {
+function sharedChannel(delayed = false) {
+  const pending = [];
   const receivers = new Set();
-  return () => {
+  const channel = () => {
     let own;
     return {
       post(message) {
         for (const receive of receivers)
-          if (receive !== own) queueMicrotask(() => receive(message));
+          if (receive !== own) {
+            const deliver = () => receive(message);
+            if (delayed) pending.push(deliver);
+            else queueMicrotask(deliver);
+          }
       },
       listen(receive) {
         own = receive;
@@ -33,6 +43,8 @@ function sharedChannel() {
       },
     };
   };
+  channel.deliver = () => { for (const receive of pending.splice(0)) receive(); };
+  return channel;
 }
 
 const at = (value, expiresAt) => ({
@@ -54,11 +66,140 @@ function tab(
     refresh,
     now,
     lock: shared.lock,
+    coordination: shared.lock.coordination,
     channel: shared.channel(),
   });
 }
 
 describe("createTokenSession", () => {
+  it("M1 persists only transition metadata and blocks another browser tab without messages", async () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const stored = new Map();
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { localStorage: {
+        getItem: key => stored.get(key) ?? null,
+        setItem: (key, value) => stored.set(key, value),
+      } },
+    });
+    const lock = sharedLock();
+    const one = createTokenSession({ name: "browser", lock, channel: null, refresh: async () => { throw new TypeError("lost response"); } });
+    const retry = mock.fn(async () => renewed(at("unsafe", Date.now() + 60_000)));
+    const two = createTokenSession({ name: "browser", lock, channel: null, refresh: retry });
+    try {
+      await one.runCredentials(async () => one.signIn(at("memory-only", 0)));
+      assert.equal(await one.accessToken(), null);
+      assert.equal(await two.accessToken(), null);
+      assert.equal(retry.mock.callCount(), 0);
+      assert.equal(stored.size, 1);
+      const record = JSON.parse([...stored.values()][0]);
+      assert.deepEqual(Object.keys(record).sort(), ["identity", "revision", "status"]);
+      assert.equal(record.status, "uncertain");
+      stored.set("foundry.browser.session.transition", "invalid");
+      assert.throws(() => two.accessToken(), SyntaxError);
+    } finally {
+      one.dispose();
+      two.dispose();
+      if (original === undefined) delete globalThis.window;
+      else Object.defineProperty(globalThis, "window", original);
+    }
+  });
+
+  it("M1 refuses refresh if the shared uncertainty marker cannot be written", async () => {
+    const refresh = mock.fn(async () => renewed(at("unsafe", 60_000)));
+    const unavailable = new Error("storage unavailable");
+    const session = createTokenSession({
+      name: "storage-failure", channel: null, refresh,
+      coordination: { read: () => null, write: () => { throw unavailable; } },
+    });
+    await assert.rejects(session.accessToken(), error => error === unavailable);
+    assert.equal(refresh.mock.callCount(), 0);
+    session.dispose();
+  });
+
+  it("M1 blocks queued and newly opened tabs after an unknown refresh outcome", async () => {
+    const shared = { lock: sharedLock(), channel: sharedChannel(true) };
+    const first = tab(async () => { throw new TypeError("lost rotation response"); }, shared);
+    const retry = mock.fn(async () => renewed(at("unsafe-retry", 60_000)));
+    const second = tab(retry, shared);
+    assert.deepEqual(await Promise.all([first.accessToken(), second.accessToken()]), [null, null]);
+    const third = tab(retry, shared);
+    assert.equal(await third.accessToken(), null);
+    assert.equal(retry.mock.callCount(), 0);
+    await second.runCredentials(async () => second.signIn(at("new-login", 60_000)));
+    assert.equal(await second.accessToken(), "new-login");
+    for (const session of [first, second, third]) session.dispose();
+  });
+
+  for (const transition of ["signed-out", "signed-in", "token"]) it(
+    `M2 ignores delayed ${transition} messages after a newer login`,
+    async () => {
+      const shared = { lock: sharedLock(), channel: sharedChannel(true) };
+      const first = tab(async () => renewed(at("old-refresh", 120_000)), shared);
+      const second = tab(async () => renewed(at("new-renewal", 60_000)), shared);
+      if (transition === "token") await first.accessToken();
+      else await first.runCredentials(async () => {
+        if (transition === "signed-out") first.signOut();
+        else first.signIn(at("old-login", 120_000));
+      });
+      await second.runCredentials(async () => second.signIn(at("new-login", 60_000)));
+      const version = second.version();
+      if (transition === "token") second.rejected("new-login");
+      shared.channel.deliver();
+      assert.equal(await second.accessToken(), transition === "token" ? "new-renewal" : "new-login");
+      assert.equal(second.version(), version);
+      assert.equal(await first.accessToken(), "new-login");
+      first.dispose();
+      second.dispose();
+    },
+  );
+
+  it("M5 bounds time queued for the credential lock without starting refresh", async () => {
+    const lock = sharedLock();
+    const release = Promise.withResolvers();
+    const holder = lock.run("test", () => release.promise);
+    const refresh = mock.fn(async () => renewed(at("unused", 60_000)));
+    const session = createTokenSession({ name: "queued", channel: null, lock, refresh, refreshTimeoutMs: 10 });
+    try {
+      const pending = session.accessToken();
+      assert.equal(await Promise.race([pending.then(() => "settled"), new Promise(resolve => setTimeout(() => resolve("pending"), 100))]), "settled");
+      assert.equal(refresh.mock.callCount(), 0);
+    } finally {
+      session.dispose();
+      release.resolve();
+      await holder;
+    }
+  });
+
+  it("M5 bounds refresh waits without releasing an uncooperative credential writer", async () => {
+    const entered = Promise.withResolvers();
+    const finish = Promise.withResolvers();
+    const lock = sharedLock();
+    const session = createTokenSession({
+      name: "uncooperative",
+      channel: null,
+      lock,
+      coordination: lock.coordination,
+      refreshTimeoutMs: 10,
+      refresh: () => { entered.resolve(); return finish.promise; },
+    });
+    const pending = session.accessToken();
+    await entered.promise;
+    let acquired = false;
+    const login = session.runCredentials(async () => {
+      acquired = true;
+      session.signIn(at("new-login", Date.now() + 60_000));
+    });
+    try {
+      assert.equal(await Promise.race([pending.then(() => "settled"), new Promise(resolve => setTimeout(() => resolve("pending"), 100))]), "settled");
+      assert.equal(acquired, false);
+    } finally {
+      finish.resolve(renewed(at("late-refresh", Date.now() + 60_000)));
+      await login;
+      session.dispose();
+    }
+  });
+
   it("serializes login cookie writes behind an in-flight refresh", async () => {
     const shared = { lock: sharedLock(), channel: sharedChannel() };
     let finish;

@@ -21,6 +21,10 @@
   report source mutations independently of editor results.
 - Fixed: Released client contract cohorts accept recorded artifact deletions and
   reject deleted artifacts that remain on disk.
+- Fixed: Browser auth sessions record uncertain refresh-cookie rotations under the shared credential lock, preventing queued or newly opened tabs from retrying until a new login.
+- Fixed: Cross-tab auth messages carry credential transition revisions so delayed sign-in, sign-out, or token messages cannot overwrite a newer login.
+- Fixed: Session restoration rejects profiles superseded by sign-in, sign-out, or disposal with `SessionChangedError`.
+- Fixed: Authenticated requests can cancel their own refresh waits; shared refreshes have a configurable deadline and disposal cancellation while retaining the credential lock until the operation exits.
 
 - Changed (breaking): HTTP pagination endpoint `Handle` and `URL` methods move to
   documented package functions: `pagination.Handle`, `pagination.URL`,

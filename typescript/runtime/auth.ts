@@ -19,11 +19,26 @@ export interface TabLock {
   run<T>(name: string, work: () => Promise<T>): Promise<T>;
 }
 
+/** Credential metadata shared under the portal's lock; never contains tokens. */
+export interface SessionTransition {
+  readonly revision: number;
+  readonly identity: number;
+  readonly status: "active" | "signed-out" | "uncertain";
+}
+
+/** Synchronous shared storage. Writes must be visible before releasing the lock. */
+export interface SessionCoordination {
+  read(): SessionTransition | null;
+  write(transition: SessionTransition): void;
+}
+
 /** Messages between the portal's tabs (a BroadcastChannel). */
-export type SessionMessage =
+type SessionEvent =
   | { readonly type: "signed-in"; readonly token: AccessToken }
   | { readonly type: "token"; readonly token: AccessToken }
   | { readonly type: "signed-out" };
+
+export type SessionMessage = SessionEvent & { readonly transition: SessionTransition };
 
 export interface TabChannel {
   post(message: SessionMessage): void;
@@ -39,9 +54,14 @@ export interface TokenSessionOptions {
   readonly name: string;
   /**
    * Resolves "signed-out" when the server rejects the refresh credential and
-   * throws when the outcome is unknown (no response).
+   * throws when the outcome is unknown (no response). Honor the signal to let
+   * queued credential operations proceed after timeout or disposal.
    */
-  readonly refresh: () => Promise<RefreshOutcome>;
+  readonly refresh: (signal: AbortSignal) => Promise<RefreshOutcome>;
+  /** Maximum renewal wait, including lock acquisition (default 30 seconds). */
+  readonly refreshTimeoutMs?: number;
+  /** Defaults to localStorage in browsers, session-owned memory elsewhere. */
+  readonly coordination?: SessionCoordination;
   /** Renew this long before expiry (default 30 seconds). */
   readonly marginMs?: number;
   readonly now?: () => number;
@@ -60,7 +80,7 @@ export interface TokenSession {
    * A fresh access token, renewing it when needed (one renewal at a time across
    * tabs), or null when signed out.
    */
-  accessToken(): Promise<string | null>;
+  accessToken(signal?: AbortSignal): Promise<string | null>;
   /** Serialize login/logout cookie writes with renewal across this portal's tabs. */
   runCredentials<T>(work: () => Promise<T>): Promise<T>;
   /** Adopts the access token from a sign-in response and shares it with other tabs. */
@@ -84,7 +104,11 @@ export function accessTokenExpiring(
 export function createTokenSession(options: TokenSessionOptions): TokenSession {
   const now = options.now ?? Date.now;
   const marginMs = options.marginMs ?? 30_000;
+  const refreshTimeoutMs = options.refreshTimeoutMs ?? 30_000;
+  if (!Number.isSafeInteger(refreshTimeoutMs) || refreshTimeoutMs <= 0 || refreshTimeoutMs > 2_147_483_647)
+    throw new TypeError("invalid refresh timeout");
   const lock = options.lock ?? webLock();
+  const coordination = options.coordination ?? sessionCoordination(options.name);
   const channel =
     options.channel === undefined
       ? broadcastChannel(`foundry.${options.name}.session`)
@@ -96,6 +120,9 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
   let version = 0;
   let disposed = false;
   let renewing: Promise<string | null> | null = null;
+  let refreshController: AbortController | null = null;
+  let identity = 0;
+  let appliedRevision = 0;
 
   const fresh = (candidate: AccessToken | null): candidate is AccessToken =>
     candidate !== null && candidate.expiresAt - marginMs > now();
@@ -104,90 +131,199 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
     current = next;
     for (const listener of [...listeners]) listener(next);
   };
-  const adopt = (next: AccessToken, signingIn = false) => {
-    if (signingIn) version++;
-    token = next;
-    setStatus("signed-in", signingIn);
+  const synchronize = () => {
+    const transition = coordination.read();
+    if (transition !== null && transition.identity !== identity) {
+      identity = transition.identity;
+      version++;
+      token = null;
+      setStatus(transition.status === "active" ? "unknown" : "signed-out");
+    } else if (transition?.status === "active" && current === "signed-out") {
+      setStatus("unknown");
+    }
+    return transition;
   };
-  const end = () => {
-    version++;
-    token = null;
-    setStatus("signed-out");
+  const apply = (message: SessionMessage) => {
+    if (message.transition.identity !== identity) {
+      identity = message.transition.identity;
+      version++;
+    }
+    appliedRevision = message.transition.revision;
+    if (message.type === "signed-out") {
+      token = null;
+      setStatus("signed-out");
+    } else {
+      token = message.token;
+      setStatus("signed-in", message.type === "signed-in");
+    }
+  };
+  const advance = (status: SessionTransition["status"], changeIdentity: boolean) => {
+    const previous = coordination.read();
+    const revision = (previous?.revision ?? 0) + 1;
+    const nextIdentity = (previous?.identity ?? 0) + (changeIdentity ? 1 : 0);
+    if (!Number.isSafeInteger(revision) || !Number.isSafeInteger(nextIdentity))
+      throw new TypeError("session transition overflow");
+    const transition: SessionTransition = { revision, identity: nextIdentity, status };
+    // Only metadata is persisted, before releasing the credential lock.
+    coordination.write(transition);
+    return transition;
+  };
+  const publish = (event: SessionEvent, uncertain = false) => {
+    const transition = advance(
+      uncertain ? "uncertain" : event.type === "signed-out" ? "signed-out" : "active",
+      event.type !== "token",
+    );
+    const message: SessionMessage = { ...event, transition };
+    if (!disposed) {
+      apply(message);
+      channel?.post(message);
+    }
   };
 
   const stopListening = channel?.listen((message) => {
-    if (message.type === "signed-out") end();
-    else if (message.type === "signed-in") adopt(message.token, true);
-    else if (current !== "signed-out" && !fresh(token)) adopt(message.token);
+    if (disposed) return;
+    const latest = coordination.read();
+    if (latest === null || message.transition.revision !== latest.revision ||
+        message.transition.identity !== latest.identity || message.transition.status !== latest.status ||
+        message.transition.revision <= appliedRevision) return;
+    apply(message);
   });
 
-  const renew = (startedVersion: number) =>
+  const renew = (startedVersion: number, controller: AbortController) =>
     lock.run(lockName, async () => {
-      if (disposed || startedVersion !== version) return null;
-      // Another tab may have renewed while this one waited for the lock.
+      const startedTransition = synchronize();
+      if (disposed || controller.signal.aborted || startedVersion !== version || current === "signed-out") return null;
+      if (startedTransition !== null && startedTransition.status !== "active") {
+        token = null;
+        setStatus("signed-out");
+        return null;
+      }
       if (fresh(token)) return token.value;
+      // Persist uncertainty before sending a rotating credential. A crashed tab
+      // or failed completion write must never make the old cookie retryable.
+      const pending = advance("uncertain", false);
+      const invalidate = () => {
+        if (coordination.read()?.revision === pending.revision)
+          publish({ type: "signed-out" }, true);
+      };
       let outcome: RefreshOutcome;
       try {
-        outcome = await options.refresh();
+        outcome = await options.refresh(controller.signal);
+        controller.signal.throwIfAborted();
       } catch {
-        if (disposed || startedVersion !== version) return null;
-        // The server may already have rotated the credential; resending it
-        // would be a replay that revokes the whole session. Sign this tab out.
-        end();
+        // Cancellation also leaves the cookie rotation outcome unknown. Record
+        // it even after disposal, while still owning the credential lock.
+        invalidate();
         return null;
       }
-      // A sign-out or a new login owns the tab now. An older response must
-      // neither restore a revoked token nor end/share the newer session.
+      // A newer credential transition owns the tab now.
+      synchronize();
       if (disposed || startedVersion !== version) return null;
       if (outcome.kind === "signed-out") {
-        end();
-        channel?.post({ type: "signed-out" });
+        publish({ type: "signed-out" });
         return null;
       }
-      adopt(outcome.token);
-      channel?.post({ type: "token", token: outcome.token });
+      publish({ type: "token", token: outcome.token });
       return outcome.token.value;
     });
 
   return {
     status: () => current,
-    version: () => version,
+    version: () => { if (!disposed) synchronize(); return version; },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    accessToken() {
+    accessToken(signal) {
+      if (signal?.aborted) return Promise.reject(signal.reason);
       if (disposed) return Promise.resolve(null);
+      synchronize();
       if (fresh(token)) return Promise.resolve(token.value);
       if (current === "signed-out") return Promise.resolve(null);
-      renewing ??= renew(version).finally(() => {
-        renewing = null;
-      });
-      return renewing;
+      if (renewing === null) {
+        const controller = new AbortController();
+        refreshController = controller;
+        const timer = setTimeout(
+          () => controller.abort(new DOMException("Refresh timed out", "TimeoutError")),
+          refreshTimeoutMs,
+        );
+        const clearTimer = () => clearTimeout(timer);
+        controller.signal.addEventListener("abort", clearTimer, { once: true });
+        const work = renew(version, controller).finally(() => {
+          clearTimer();
+          controller.signal.removeEventListener("abort", clearTimer);
+          renewing = null;
+          refreshController = null;
+        });
+        // Ending the wait does not release the lock or admit another renewal.
+        renewing = waitForToken(work, controller.signal).catch(error => {
+          if (controller.signal.aborted) return null;
+          throw error;
+        });
+      }
+      return waitForToken(renewing, signal);
     },
     runCredentials: (work) => lock.run(lockName, work),
     signIn(next) {
       if (disposed) return;
-      adopt(next, true);
-      channel?.post({ type: "signed-in", token: next });
+      publish({ type: "signed-in", token: next });
     },
     rejected(value) {
       if (token?.value === value) token = null;
     },
     signOut() {
       if (disposed) return;
-      end();
-      channel?.post({ type: "signed-out" });
+      publish({ type: "signed-out" });
     },
     dispose() {
       if (disposed) return;
       disposed = true;
+      refreshController?.abort(new DOMException("Session disposed", "AbortError"));
       version++;
       token = null;
       stopListening?.();
       listeners.clear();
     },
   };
+}
+
+function waitForToken(pending: Promise<string | null>, signal?: AbortSignal): Promise<string | null> {
+  if (signal === undefined) return pending;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    const abort = () => { signal.removeEventListener("abort", abort); reject(signal.reason); };
+    signal.addEventListener("abort", abort, { once: true });
+    pending.then(
+      value => { signal.removeEventListener("abort", abort); resolve(value); },
+      error => { signal.removeEventListener("abort", abort); reject(error); },
+    );
+  });
+}
+
+function sessionCoordination(name: string): SessionCoordination {
+  if (typeof window === "undefined") {
+    let transition: SessionTransition | null = null;
+    return { read: () => transition, write: next => { transition = next; } };
+  }
+  const storage = window.localStorage;
+  const key = `foundry.${name}.session.transition`;
+  return {
+    read() {
+      const value = storage.getItem(key);
+      if (value === null) return null;
+      const transition: unknown = JSON.parse(value);
+      if (!isSessionTransition(transition)) throw new TypeError("invalid session transition");
+      return transition;
+    },
+    write: transition => storage.setItem(key, JSON.stringify(transition)),
+  };
+}
+
+function isSessionTransition(value: unknown): value is SessionTransition {
+  return typeof value === "object" && value !== null &&
+    "revision" in value && typeof value.revision === "number" && Number.isSafeInteger(value.revision) && value.revision > 0 &&
+    "identity" in value && typeof value.identity === "number" && Number.isSafeInteger(value.identity) && value.identity >= 0 && value.identity <= value.revision &&
+    "status" in value && (value.status === "active" || value.status === "signed-out" || value.status === "uncertain");
 }
 
 function webLock(): TabLock {
@@ -232,16 +368,18 @@ function broadcastChannel(name: string): TabChannel | null {
 /** Same-origin scripts can post to the channel; accept only well-formed messages. */
 function isSessionMessage(data: unknown): data is SessionMessage {
   if (typeof data !== "object" || data === null) return false;
-  const message = data as { type?: unknown; token?: unknown };
-  if (message.type === "signed-out") return true;
+  const message = data;
+  if (!("transition" in message) || !isSessionTransition(message.transition) || !("type" in message)) return false;
+  if (message.type === "signed-out") return message.transition.status !== "active";
   if (message.type !== "token" && message.type !== "signed-in") return false;
-  const token = message.token as { value?: unknown; expiresAt?: unknown };
+  if (message.transition.status !== "active" || !("token" in message)) return false;
+  const token = message.token;
   return (
     typeof token === "object" &&
     token !== null &&
-    typeof token.value === "string" &&
+    "value" in token && typeof token.value === "string" &&
     token.value !== "" &&
-    typeof token.expiresAt === "number" &&
+    "expiresAt" in token && typeof token.expiresAt === "number" &&
     Number.isFinite(token.expiresAt)
   );
 }
@@ -298,7 +436,7 @@ export function authenticatedTransport(
   return async (request) => {
     if (hasAuthorization(request)) return base(request);
     const version = session.version();
-    const token = await session.accessToken();
+    const token = await session.accessToken(request.signal);
     const response = await base(withBearer(request, token));
     if (
       response.status !== 401 ||
@@ -309,7 +447,13 @@ export function authenticatedTransport(
       return response;
     }
     session.rejected(token);
-    const renewed = await session.accessToken();
+    let renewed: string | null;
+    try {
+      renewed = await session.accessToken(request.signal);
+    } catch (error) {
+      await response.close();
+      throw error;
+    }
     if (renewed === null || renewed === token || session.version() !== version)
       return response;
     await response.close();
@@ -350,13 +494,15 @@ export interface SurfaceAuthDescriptor<TClient, TProfile, TCredentials> {
 }
 
 export interface PortalSessionOptions {
+  readonly coordination?: SessionCoordination;
+  readonly refreshTimeoutMs?: number;
   readonly now?: () => number;
   readonly lock?: TabLock;
   readonly channel?: TabChannel | null;
   readonly marginMs?: number;
 }
 
-/** A credential transition superseded a pending sign-in profile response. */
+/** A credential transition superseded a pending profile response. */
 export class SessionChangedError extends Error {}
 
 export interface PortalSession<TClient, TProfile, TCredentials> {
@@ -379,7 +525,10 @@ export function createPortalSession<TClient, TProfile, TCredentials>(
   const session = createTokenSession({
     ...options,
     name: descriptor.guard,
-    refresh: () => cookieRefresh(() => descriptor.refresh(credentialsClient), options?.now),
+    refresh: signal => cookieRefresh(
+      () => descriptor.refresh(createClient(request => baseTransport({ ...request, signal }))),
+      options?.now,
+    ),
   });
   const apiClient = createClient(authenticatedTransport(baseTransport, session));
   return {
@@ -400,7 +549,11 @@ export function createPortalSession<TClient, TProfile, TCredentials>(
       return profile;
     },
     async restoreSession(): Promise<TProfile | null> {
-      return (await session.accessToken()) === null ? null : descriptor.profile(apiClient);
+      const version = session.version();
+      if ((await session.accessToken()) === null) return null;
+      const profile = await descriptor.profile(apiClient);
+      if (session.version() !== version) throw new SessionChangedError();
+      return profile;
     },
     async signOut(): Promise<void> {
       await session.runCredentials(async () => {
