@@ -105,10 +105,10 @@ func (a Action[P]) record(ctx context.Context, tx *database.Tx, recorder *Record
 
 // ActionRecord is immutable persisted domain history. Document.Decode returns a
 // fresh DTO only when the stored representation is complete and unredacted.
-// Its embedded metadata supplies Sequence, Area, Origin, Correlation, Route and
+// Its embedded Metadata supplies Sequence, Area, Origin, Correlation, Route and
 // CreatedAt.
 type ActionRecord[P any] struct {
-	metadata
+	Metadata
 	id       ActionID[P]
 	document record.Document[P]
 	subject  value.Nullable[model.Identity]
@@ -209,5 +209,5 @@ func restoreAction[P any](row auditstore.Entry) (ActionRecord[P], error) {
 		}
 		subject = value.Of(identity)
 	}
-	return ActionRecord[P]{metadata: meta, id: model.IDFromBytes[ActionEntry[P]](row.ID.Bytes()), document: document, subject: subject}, nil
+	return ActionRecord[P]{Metadata: meta, id: model.IDFromBytes[ActionEntry[P]](row.ID.Bytes()), document: document, subject: subject}, nil
 }

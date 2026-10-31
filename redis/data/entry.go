@@ -10,24 +10,32 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-type handle[K any] struct {
+// Handle supplies shared operations for a bound Hash, Set, SortedSet or List.
+// Declaration Bind methods construct the containers with an embedded Handle,
+// promoting Name, Version, Exists, Expire, Count, Delete, DeleteMany and AdapterKey.
+// Its zero value is unbound: Name and Version return zero values, and operations
+// requiring a store return an error.
+type Handle[K any] struct {
 	store      *Store
 	definition *definition[K]
 }
 
-func (h handle[K]) Name() Name {
+// Name returns the bound declaration name, or an empty name for an unbound handle.
+func (h Handle[K]) Name() Name {
 	if h.definition == nil {
 		return ""
 	}
 	return h.definition.name
 }
-func (h handle[K]) Version() Version {
+
+// Version returns the bound declaration version, or zero for an unbound handle.
+func (h Handle[K]) Version() Version {
 	if h.definition == nil {
 		return 0
 	}
 	return h.definition.version
 }
-func (h handle[K]) address(ctx context.Context, key K) (Key, error) {
+func (h Handle[K]) address(ctx context.Context, key K) (Key, error) {
 	text, err := h.definition.keys.Encode(key)
 	if err != nil {
 		return Key{}, err
@@ -40,7 +48,7 @@ func (h handle[K]) address(ctx context.Context, key K) (Key, error) {
 	}
 	return NewKey(h.store.config.Namespace, h.Name(), h.Version(), h.definition.kind, text)
 }
-func (h handle[K]) execute(ctx context.Context, key K, fn func(context.Context, Key, Limits) error) error {
+func (h Handle[K]) execute(ctx context.Context, key K, fn func(context.Context, Key, Limits) error) error {
 	if err := h.definition.validate(); err != nil {
 		return err
 	}
@@ -54,7 +62,7 @@ func (h handle[K]) execute(ctx context.Context, key K, fn func(context.Context, 
 }
 
 // Exists checks the key's declared Redis type, without decoding payloads.
-func (h handle[K]) Exists(ctx context.Context, key K) (bool, error) {
+func (h Handle[K]) Exists(ctx context.Context, key K) (bool, error) {
 	var result bool
 	err := h.execute(ctx, key, func(ctx context.Context, k Key, _ Limits) error {
 		var err error
@@ -70,7 +78,7 @@ func (h handle[K]) Exists(ctx context.Context, key K) (bool, error) {
 // Expire changes expiry without replacing data. New hash/set writes are persistent
 // and later writes retain TTL. Setting expiry is a separate explicit operation;
 // a write followed by Expire does not claim atomic initialization with expiry.
-func (h handle[K]) Expire(ctx context.Context, key K, ttl cache.TTL) (bool, error) {
+func (h Handle[K]) Expire(ctx context.Context, key K, ttl cache.TTL) (bool, error) {
 	if err := ttl.Validate(); err != nil {
 		return false, err
 	}
@@ -85,7 +93,9 @@ func (h handle[K]) Expire(ctx context.Context, key K, ttl cache.TTL) (bool, erro
 	}
 	return result, nil
 }
-func (h handle[K]) Count(ctx context.Context, key K) (uint64, error) {
+
+// Count returns the number of fields, members or elements at the resource key.
+func (h Handle[K]) Count(ctx context.Context, key K) (uint64, error) {
 	var count uint64
 	err := h.execute(ctx, key, func(ctx context.Context, k Key, l Limits) error {
 		var err error
@@ -103,14 +113,16 @@ func (h handle[K]) Count(ctx context.Context, key K) (uint64, error) {
 	}
 	return count, nil
 }
-func (h handle[K]) Delete(ctx context.Context, key K) (bool, error) {
+
+// Delete removes the resource key and reports whether it existed.
+func (h Handle[K]) Delete(ctx context.Context, key K) (bool, error) {
 	n, err := h.DeleteMany(ctx, key)
 	return n == 1, err
 }
 
 // DeleteMany validates all encoded keys before one atomic batch. The input bound
 // applies before deduplication; returned count excludes duplicates and missing keys.
-func (h handle[K]) DeleteMany(ctx context.Context, keys ...K) (uint64, error) {
+func (h Handle[K]) DeleteMany(ctx context.Context, keys ...K) (uint64, error) {
 	if err := h.definition.validate(); err != nil {
 		return 0, err
 	}
@@ -151,7 +163,7 @@ func (h handle[K]) DeleteMany(ctx context.Context, keys ...K) (uint64, error) {
 // AdapterKey explicitly exports this declaration's resolved address for advanced
 // Redis adapters. It preserves key typing and callback ownership; ordinary callers
 // should prefer the typed Hash/Set operations.
-func (h handle[K]) AdapterKey(ctx context.Context, input K) (Key, error) {
+func (h Handle[K]) AdapterKey(ctx context.Context, input K) (Key, error) {
 	var key Key
 	err := h.execute(ctx, input, func(_ context.Context, resolved Key, _ Limits) error { key = resolved; return nil })
 	if err != nil {

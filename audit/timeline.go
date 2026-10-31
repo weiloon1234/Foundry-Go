@@ -50,8 +50,12 @@ type Timeline[R any] struct {
 	Next  value.Optional[Sequence]
 }
 
-// metadata is shared by typed records and activity summaries.
-type metadata struct {
+// Metadata contains the provenance shared by ModelRecord, ActionRecord and Activity.
+// Audit history readers populate it from validated stored rows. These records embed
+// Metadata to promote Sequence, Area, Origin, Correlation, Route and CreatedAt.
+// Its zero value describes no stored row: accessors return zero values and absent
+// optional values.
+type Metadata struct {
 	sequence    Sequence
 	area        Area
 	origin      attribution.Origin
@@ -60,46 +64,55 @@ type metadata struct {
 	createdAt   temporal.DateTime
 }
 
-func (m metadata) Sequence() Sequence                       { return m.sequence }
-func (m metadata) Area() Area                               { return m.area }
-func (m metadata) Origin() attribution.Origin               { return m.origin }
-func (m metadata) Correlation() value.Optional[Correlation] { return m.correlation }
-func (m metadata) CreatedAt() temporal.DateTime             { return m.createdAt }
+// Sequence returns the database-assigned insertion position of the row.
+func (m Metadata) Sequence() Sequence { return m.sequence }
+
+// Area returns the audit namespace in which the row was recorded.
+func (m Metadata) Area() Area { return m.area }
+
+// Origin returns the attribution captured when the row was written.
+func (m Metadata) Origin() attribution.Origin { return m.origin }
+
+// Correlation returns the logical operation identifier captured for the row, if set.
+func (m Metadata) Correlation() value.Optional[Correlation] { return m.correlation }
+
+// CreatedAt returns the timestamp captured when the row was written.
+func (m Metadata) CreatedAt() temporal.DateTime { return m.createdAt }
 
 // Route returns the matched request route that wrote the row, when the write
 // happened inside a routed request.
-func (m metadata) Route() value.Optional[attribution.Route] { return m.route }
+func (m Metadata) Route() value.Optional[attribution.Route] { return m.route }
 
-func entryMetadata(row auditstore.Entry) (metadata, error) {
+func entryMetadata(row auditstore.Entry) (Metadata, error) {
 	return decodeMetadata(row.Sequence, row.Area, row.Origin, row.Correlation, row.RequestMethod, row.RequestRoute, row.CreatedAt)
 }
 
-func decodeMetadata(sequence int64, area string, source value.JSON[attribution.Origin], correlation value.Nullable[string], method, route string, createdAt temporal.DateTime) (metadata, error) {
-	result := metadata{sequence: Sequence(sequence), area: Area(area), createdAt: createdAt}
+func decodeMetadata(sequence int64, area string, source value.JSON[attribution.Origin], correlation value.Nullable[string], method, route string, createdAt temporal.DateTime) (Metadata, error) {
+	result := Metadata{sequence: Sequence(sequence), area: Area(area), createdAt: createdAt}
 	if sequence < 1 {
-		return metadata{}, safeerror.NewFault(fault.Invalid, "stored audit sequence is invalid")
+		return Metadata{}, safeerror.NewFault(fault.Invalid, "stored audit sequence is invalid")
 	}
 	if err := result.area.Validate(); err != nil {
-		return metadata{}, err
+		return Metadata{}, err
 	}
 	origin, err := source.Decode()
 	if err != nil {
-		return metadata{}, err
+		return Metadata{}, err
 	}
 	if err := origin.Validate(); err != nil {
-		return metadata{}, err
+		return Metadata{}, err
 	}
 	result.origin = origin
 	if text, present := correlation.Get(); present {
 		if err := Correlation(text).Validate(); err != nil {
-			return metadata{}, err
+			return Metadata{}, err
 		}
 		result.correlation = value.Set(Correlation(text))
 	}
 	if method != "" || route != "" {
 		matched := attribution.Route{Method: method, Name: route}
 		if err := matched.Validate(); err != nil {
-			return metadata{}, err
+			return Metadata{}, err
 		}
 		result.route = value.Set(matched)
 	}
@@ -109,10 +122,10 @@ func decodeMetadata(sequence int64, area string, source value.JSON[attribution.O
 // Activity is a payload-free summary of one stored audit row for heterogeneous
 // timelines: a subject's combined history, an actor's changes or everything
 // written under one correlation. Load typed details with FindModel/Action.Find
-// using ModelActivityID or ActionActivityID. Its embedded metadata supplies
+// using ModelActivityID or ActionActivityID. Its embedded Metadata supplies
 // Sequence, Area, Origin, Correlation, Route and CreatedAt.
 type Activity struct {
-	metadata
+	Metadata
 	id        [16]byte
 	operation lifecycle.Operation
 	action    ActionName
@@ -153,7 +166,7 @@ func decodeActivity(row auditstore.Activity) (Activity, error) {
 	if err != nil {
 		return Activity{}, err
 	}
-	result := Activity{metadata: meta, id: row.ID.Bytes(), operation: row.Operation, action: ActionName(row.Action), version: Version(row.Version)}
+	result := Activity{Metadata: meta, id: row.ID.Bytes(), operation: row.Operation, action: ActionName(row.Action), version: Version(row.Version)}
 	if row.Operation == 0 && (row.Action == "" || row.Version == 0) || row.Operation != 0 && (row.Action != "" || row.Version != 0) {
 		return Activity{}, safeerror.NewFault(fault.Invalid, "invalid stored audit activity metadata")
 	}

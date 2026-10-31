@@ -39,6 +39,14 @@ namespace must share declarations, codecs and bounds. Increment the version for 
 incompatible field or payload schema. Different namespaces, kinds and versions use
 different physical addresses; no ambient namespace discovery takes place.
 
+`Hash`, `Set`, `SortedSet` and `List` embed the exported defined type
+`data.Handle[K]`. Its documented methods are `Handle.Name`, `Handle.Version`,
+`Handle.Exists`, `Handle.Expire`, `Handle.Count`, `Handle.Delete`,
+`Handle.DeleteMany` and `Handle.AdapterKey`. Existing calls such as
+`profiles.Count(ctx, key)` remain valid. Obtain a bound container through its
+declaration's `Bind` method. A zero `Handle` is unbound: `Name` and `Version`
+return zero values, and operations requiring a store return an error.
+
 ## Read and write typed fields
 
 ```go

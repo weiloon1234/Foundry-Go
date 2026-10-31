@@ -21,10 +21,10 @@ type ModelEntry[M any] struct{ _ [0]*M }
 type ModelID[M any] = model.ID[ModelEntry[M]]
 
 // ModelRecord contains complete audit representations, not a partial model.
-// Its embedded metadata supplies Sequence, Area, Origin, Correlation, Route
+// Its embedded Metadata supplies Sequence, Area, Origin, Correlation, Route
 // and CreatedAt.
 type ModelRecord[M, K any] struct {
-	metadata
+	Metadata
 	id      ModelID[M]
 	changes record.Model[M, K]
 }
@@ -159,7 +159,7 @@ func restoreModel[M, K any](template model.Reference[M, K], row auditstore.Entry
 	if err != nil {
 		return ModelRecord[M, K]{}, err
 	}
-	return ModelRecord[M, K]{metadata: meta, id: model.IDFromBytes[ModelEntry[M]](row.ID.Bytes()), changes: changes}, nil
+	return ModelRecord[M, K]{Metadata: meta, id: model.IDFromBytes[ModelEntry[M]](row.ID.Bytes()), changes: changes}, nil
 }
 
 // capturedDraft binds validated payload text with the context's attribution,

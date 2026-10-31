@@ -141,6 +141,12 @@ Use `Approved.Record(ctx, tx, recorder, payload)` for an event without a model s
 
 ## Origin, areas and retention
 
+`audit.ModelRecord`, `audit.ActionRecord` and `audit.Activity` embed
+`audit.Metadata`. Its documented methods are `Sequence`, `Area`, `Origin`,
+`Correlation`, `Route` and `CreatedAt`; existing calls such as `row.Sequence()`
+remain valid. History readers populate the metadata from validated stored rows.
+The zero value describes no stored row and returns zero or absent values.
+
 `attribution.WithContext` supplies immutable human/system and request provenance. Audit does not store authentication credentials or depend on an Actor wrapper. `audit.WithArea(ctx, area)` selects an area for subsequent history reads and writes; the recorder's configured area is the default. Areas are metadata/scoping, not an authorization mechanism. Applications must authorize access to audit history.
 
 Inside a routed HTTP request, the router attaches `attribution.Route` (method and declared route name) to the request context, and audit rows store it; `Route()` returns it. Raw URLs, query strings and path values are never stored because they can carry credentials or personal data. The route is request-local and does not travel with queued work.

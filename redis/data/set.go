@@ -11,7 +11,7 @@ import (
 // Members returns an owned native slice ordered by encoded JSON bytes. This is
 // deterministic, not numeric/domain sorting. New sets persist; writes retain TTL.
 type Set[K, V any] struct {
-	handle[K]
+	Handle[K]
 	backend SetBackend
 }
 

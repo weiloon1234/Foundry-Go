@@ -12,7 +12,7 @@ import (
 // Members use canonical JSON identity (as in Set). Reads order by score, then
 // by encoded member bytes. New sorted sets persist; writes retain TTL.
 type SortedSet[K, V any] struct {
-	handle[K]
+	Handle[K]
 	backend SortedSetBackend
 }
 

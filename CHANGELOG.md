@@ -7,6 +7,11 @@
   `pagination.HandleAuthenticated`, and `pagination.AuthenticatedURL`. Pass the
   endpoint first; the former methods are removed. See the
   [migration table](docs/guides/http-pagination.md#v03-migration).
+- Changed (breaking): `audit.metadata` → `audit.Metadata` and
+  `redis/data.handle[K]` → `data.Handle[K]` are exported defined types, making
+  their 14 methods discoverable in `go doc`. Audit records and Redis containers
+  retain embedding and promoted method calls. The embedded field names are now
+  `Metadata` and `Handle`; framework literals use the new names.
 
 - Changed (breaking): Row, selected, and aggregate expression operations move to
   typed `expr` package functions, including `AsSelected`, `ParamOf`, `Key`, `Filter`,

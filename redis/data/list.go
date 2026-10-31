@@ -11,7 +11,7 @@ import (
 // bounded by Limits.Entries: a push that would exceed it inserts nothing.
 // New lists persist; writes retain TTL. Removing the last element removes it.
 type List[K, V any] struct {
-	handle[K]
+	Handle[K]
 	backend ListBackend
 }
 

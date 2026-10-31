@@ -57,7 +57,7 @@ func (d HashDeclaration[K, F, V]) Bind(s *Store) (Hash[K, F, V], error) {
 	if err := s.bind(d.definition.name, d.definition.version, &d.definition.id); err != nil {
 		return Hash[K, F, V]{}, err
 	}
-	return Hash[K, F, V]{handle[K]{s, d.definition}, d.fields, d.parse, backend}, nil
+	return Hash[K, F, V]{Handle[K]{s, d.definition}, d.fields, d.parse, backend}, nil
 }
 
 // SetDeclaration preserves resource and member types. Members use canonical JSON
@@ -81,7 +81,7 @@ func (d SetDeclaration[K, V]) Bind(s *Store) (Set[K, V], error) {
 	if err := s.bind(d.definition.name, d.definition.version, &d.definition.id); err != nil {
 		return Set[K, V]{}, err
 	}
-	return Set[K, V]{handle[K]{s, d.definition}, backend}, nil
+	return Set[K, V]{Handle[K]{s, d.definition}, backend}, nil
 }
 
 // SortedSetDeclaration preserves resource and member types. Members use canonical
@@ -105,7 +105,7 @@ func (d SortedSetDeclaration[K, V]) Bind(s *Store) (SortedSet[K, V], error) {
 	if err := s.bind(d.definition.name, d.definition.version, &d.definition.id); err != nil {
 		return SortedSet[K, V]{}, err
 	}
-	return SortedSet[K, V]{handle[K]{s, d.definition}, backend}, nil
+	return SortedSet[K, V]{Handle[K]{s, d.definition}, backend}, nil
 }
 
 // ListDeclaration preserves resource and element types. Elements are canonical
@@ -129,5 +129,5 @@ func (d ListDeclaration[K, V]) Bind(s *Store) (List[K, V], error) {
 	if err := s.bind(d.definition.name, d.definition.version, &d.definition.id); err != nil {
 		return List[K, V]{}, err
 	}
-	return List[K, V]{handle[K]{s, d.definition}, backend}, nil
+	return List[K, V]{Handle[K]{s, d.definition}, backend}, nil
 }

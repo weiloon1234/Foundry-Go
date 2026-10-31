@@ -13,7 +13,7 @@ import (
 // expiry and return whether a field was newly inserted. Values are canonical JSON
 // snapshots; use DTOs that explicitly select model getters for presentation data.
 type Hash[K, F, V any] struct {
-	handle[K]
+	Handle[K]
 	fields  keyspace.Codec[F]
 	parse   func(string) (F, error)
 	backend HashBackend
