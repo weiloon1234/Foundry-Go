@@ -310,21 +310,31 @@ of these defaults; `Validate` checks custom limits before any I/O.
 ## Declare HTTP operation bindings
 
 Use `contract.TableID` for table identities. There is no `datatable.TableID` alias.
-Declare each association at its endpoint:
+Declare each association at its endpoint. A query endpoint (`h` is the
+Foundry-Go `http` package):
 
+<!-- go-source: tests/fixtures/consumer/clientcontracts/table_bindings.go -->
 ```go
-query := datatable.QueryEndpoint(table, queryRoute, http.EmptyQuery())
-export := datatable.BindTicketExport(table, ticketEndpoint,
-    requests.TableExportRequestValidationFields().Request)
-download := datatable.DownloadEndpoint(table, downloadRoute,
-    requests.TableDownloadQueryDescriptor(),
-    http.DownloadResponse("text/csv; charset=utf-8"),
-    http.Timeout(manager.DownloadTimeout()))
-direct := datatable.BindFileExport(otherTable, existingFileEndpoint)
+func tableQuery[S, R, A any](table datatable.Table[S, R, A], id h.RouteID, path string) h.RouteRegistration {
+	endpoint := datatable.QueryEndpoint(table, h.DefineRoute(h.RouteSpec{ID: id, Method: h.POST, Access: h.Public}, h.StaticPath(path)), h.EmptyQuery())
+	return endpoint.Handle(func(context.Context, h.Input[h.NoPath, h.NoQuery, datatable.Request]) (pagination.NumberedResponse[R], error) {
+		return pagination.NumberedResponse[R]{Data: []R{}}, nil
+	})
+}
 ```
 
-`queryRoute` can use a scoped ID such as `admin.inventory.members`; its name does
-not identify the table. `QueryEndpoint` supplies `RequestJSON()` and the canonical
+Ticket export, download and direct file export bindings:
+
+<!-- go-source: tests/fixtures/consumer/clientcontracts/table_bindings.go -->
+```go
+ticket := datatable.BindTicketExport(reporting.Members, h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "issue.report", Method: h.POST, Access: h.Public}, h.StaticPath("/issue")), h.EmptyQuery(), h.JSONBody(TableExportRequestJSON()), h.JSONResponse(201, TableExportResourceJSON())), TableExportRequestValidationFields().Request)
+download := datatable.DownloadEndpoint(reporting.Members, h.DefineRoute(h.RouteSpec{ID: "files.open", Method: h.GET, Access: h.Public}, h.StaticPath("/file")), TableDownloadQueryDescriptor(), h.DownloadResponse("text/csv"))
+aggregate := datatable.DownloadEndpoint(reporting.Totals, h.DefineRoute(h.RouteSpec{ID: "files.aggregate", Method: h.GET, Access: h.Public}, h.StaticPath("/aggregate")), h.EmptyQuery(), h.DownloadResponse("text/csv"))
+direct := datatable.BindFileExport(reporting.Orders, h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "reports.direct", Method: h.GET, Access: h.Public}, TableFilePathDescriptor()), TableDownloadQueryDescriptor(), h.EmptyBody(), h.DownloadResponse("text/csv")))
+```
+
+A query route can use any ID, such as `admin.inventory` or a scoped
+`admin-tables.members.query`; its name does not identify the table. `QueryEndpoint` supplies `RequestJSON()` and the canonical
 `pagination.NumberedResponse[R]` contract from the table's retained row descriptor.
 The handler and HTTP guard retain their concrete types. The guard actor and table
 authority need not be the same type.
