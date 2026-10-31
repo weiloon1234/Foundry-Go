@@ -36,6 +36,7 @@ func (e entry) decision(now int64) lockout.Decision {
 	return lockout.Decision{Status: lockout.StatusAllowed}
 }
 
+// Backend is a mutex-protected, bounded process-local lockout authority.
 type Backend struct {
 	mu       sync.Mutex
 	clock    clock.Clock
@@ -44,6 +45,7 @@ type Backend struct {
 	closed   bool
 }
 
+// New creates a bounded in-memory authority using source as its clock.
 func New(maxEntries int, source clock.Clock) (*Backend, error) {
 	if maxEntries < 1 || credential.IsNil(source) {
 		return nil, safeerror.NewFault(fault.Invalid, "memory lockout needs bounded capacity and a clock")
@@ -105,6 +107,9 @@ func (b *Backend) run(ctx context.Context, key lockout.Key, policy lockout.Polic
 	b.entries[key] = updated
 	return nil
 }
+
+// LockoutBegin atomically checks the lock and returns the current snapshot for an
+// allowed attempt.
 func (b *Backend) LockoutBegin(ctx context.Context, key lockout.Key, policy lockout.Policy, candidate lockout.Generation) (lockout.Admission, error) {
 	if err := candidate.Validate(); err != nil {
 		return lockout.Admission{}, err
@@ -125,6 +130,9 @@ func (b *Backend) LockoutBegin(ctx context.Context, key lockout.Key, policy lock
 	}
 	return result, nil
 }
+
+// LockoutFinish atomically applies an admitted outcome; stale successes cannot clear
+// newer failures, and expired generations do not mutate current state.
 func (b *Backend) LockoutFinish(ctx context.Context, key lockout.Key, policy lockout.Policy, snapshot lockout.Snapshot, outcome lockout.Outcome) (lockout.Decision, error) {
 	if err := snapshot.Validate(); err != nil {
 		return lockout.Decision{}, err
@@ -174,6 +182,8 @@ func (b *Backend) LockoutFinish(ctx context.Context, key lockout.Key, policy loc
 	}
 	return result, nil
 }
+
+// LockoutReset atomically removes the key's state and reports whether it existed.
 func (b *Backend) LockoutReset(ctx context.Context, key lockout.Key, policy lockout.Policy) (bool, error) {
 	changed := false
 	err := b.run(ctx, key, policy, func(_ int64, _ entry, exists bool) (entry, bool, error) { changed = exists; return entry{}, false, nil })
@@ -182,6 +192,8 @@ func (b *Backend) LockoutReset(ctx context.Context, key lockout.Key, policy lock
 	}
 	return changed, nil
 }
+
+// Close seals the backend and clears its retained lockout entries under its mutex.
 func (b *Backend) Close() error {
 	if b == nil || b.clock == nil {
 		return safeerror.NewFault(fault.Invalid, "memory lockout is not initialized")

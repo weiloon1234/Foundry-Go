@@ -73,6 +73,9 @@ func newPageEndpoint[P, F, W, Page, Response any](route foundryhttp.Route[P], pa
 		pageCore:  pageCore{links: links}, validateWindow: validate, finish: finish,
 	}
 }
+
+// Validate checks retained errors, pagination callbacks, link mode and the underlying
+// endpoint.
 func Validate[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response]) error {
 	if e.err != nil {
 		return e.err
@@ -82,21 +85,31 @@ func Validate[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Respons
 	}
 	return foundryhttp.ValidateEndpoint(e.transport)
 }
+
+// EndpointID returns the pagination endpoint's route identifier.
 func EndpointID[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response]) foundryhttp.RouteID {
 	return foundryhttp.EndpointID(e.transport)
 }
+
+// EndpointMethod returns the pagination endpoint's HTTP method.
 func EndpointMethod[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response]) foundryhttp.Method {
 	return foundryhttp.EndpointMethod(e.transport)
 }
+
+// EndpointPattern returns the pagination endpoint's path template.
 func EndpointPattern[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response]) string {
 	return foundryhttp.EndpointPattern(e.transport)
 }
+
+// Inspect validates the pagination declaration and returns endpoint metadata.
 func Inspect[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response]) (foundryhttp.EndpointInfo, error) {
 	if err := Validate(e); err != nil {
 		return foundryhttp.EndpointInfo{}, err
 	}
 	return foundryhttp.InspectEndpoint(e.transport)
 }
+
+// ValidatePath returns a pagination endpoint with the supplied path validation rules.
 func ValidatePath[P, F, W, Page, Response any](e pageEndpoint[P, F, W, Page, Response], rules ...validation.Rule[P]) pageEndpoint[P, F, W, Page, Response] {
 	e.transport = foundryhttp.ValidatePath(e.transport, rules...)
 	return e

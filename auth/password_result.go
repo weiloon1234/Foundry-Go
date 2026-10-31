@@ -25,8 +25,13 @@ type passwordCheck[M any] struct {
 	verify   func(context.Context, *database.Tx) (M, error)
 }
 
-func (r PasswordResult[M, K]) Subject() M         { return r.subject }
+// Subject returns the resolved model without cloning reference-valued fields.
+func (r PasswordResult[M, K]) Subject() M { return r.subject }
+
+// Proof returns the verified authentication proof.
 func (r PasswordResult[M, K]) Proof() Proof[M, K] { return r.proof }
+
+// Format writes a result label without exposing the subject or proof.
 func (PasswordResult[M, K]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("password authentication result"))
 }

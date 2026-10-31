@@ -30,10 +30,20 @@ type Record struct {
 	RecoveryHashes []RecoveryHash
 }
 
-func (r Record) Clone() Record              { r.RecoveryHashes = slices.Clone(r.RecoveryHashes); return r }
-func (Record) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("stored MFA factor")) }
-func (Record) LogValue() slog.Value         { return slog.StringValue("stored MFA factor") }
+// Clone returns a record with an independent recovery-hash slice.
+func (r Record) Clone() Record { r.RecoveryHashes = slices.Clone(r.RecoveryHashes); return r }
+
+// Format writes the label "stored MFA factor" without exposing the value.
+func (Record) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("stored MFA factor")) }
+
+// LogValue returns a factor label without exposing stored secrets or metadata.
+func (Record) LogValue() slog.Value { return slog.StringValue("stored MFA factor") }
+
+// MarshalJSON encodes the redaction marker without exposing the value.
 func (Record) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
+
+// Validate checks address and subject ownership, encrypted data and pending or
+// confirmed factor invariants.
 func (r Record) Validate(address Address, subject model.Identity) error {
 	if _, err := address.SubjectKey(subject); err != nil {
 		return err

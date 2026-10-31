@@ -23,10 +23,16 @@ type AccessScope[M any] struct {
 	name AccessScopeName
 }
 
+// DefineAccessScope declares a credential capability for model M; Validate checks its
+// name.
 func DefineAccessScope[M any](name AccessScopeName) AccessScope[M] {
 	return AccessScope[M]{name: name}
 }
+
+// Name returns the declared capability name.
 func (s AccessScope[M]) Name() AccessScopeName { return s.name }
+
+// Validate requires a semantic capability name without wildcards.
 func (s AccessScope[M]) Validate() error {
 	if !identifier.Semantic(string(s.name)) {
 		return safeerror.NewFault(fault.Invalid, "access scope requires a semantic name without wildcards")
@@ -43,6 +49,8 @@ type AccessScopes[M any] struct {
 	grant *accessGrant
 }
 
+// NewAccessScopes builds an immutable sorted set, rejecting invalid names, duplicates
+// and more than MaxAccessScopes entries.
 func NewAccessScopes[M any](scopes ...AccessScope[M]) (AccessScopes[M], error) {
 	if len(scopes) > MaxAccessScopes {
 		return AccessScopes[M]{}, safeerror.NewFault(fault.Invalid, "access scope capacity exceeded")
@@ -68,8 +76,14 @@ func (s AccessScopes[M]) names() []AccessScopeName {
 	}
 	return s.grant.names
 }
+
+// Names returns a copy of the sorted capability names.
 func (s AccessScopes[M]) Names() []AccessScopeName { return slices.Clone(s.names()) }
-func (s AccessScopes[M]) Len() int                 { return len(s.names()) }
+
+// Len returns the number of granted capabilities.
+func (s AccessScopes[M]) Len() int { return len(s.names()) }
+
+// Contains reports whether the set grants scope; invalid scopes never match.
 func (s AccessScopes[M]) Contains(scope AccessScope[M]) bool {
 	if scope.Validate() != nil {
 		return false

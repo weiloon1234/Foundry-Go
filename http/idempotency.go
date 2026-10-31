@@ -20,6 +20,8 @@ type TransactionHandler[P, Q, B, R any] func(context.Context, *database.Tx, Inpu
 // may capture that request's concrete authorized models for the winning callback.
 type TransactionPreparation[P, Q, B, R any] func(context.Context, Input[P, Q, B]) (idempotency.Scope, TransactionHandler[P, Q, B, R], error)
 
+// IdempotentEndpoint binds a typed endpoint to a versioned store operation and
+// replayable response headers.
 type IdempotentEndpoint[P, Q, B, R any] struct {
 	endpoint   Endpoint[P, Q, B, R]
 	store      *idempotency.Store
@@ -37,6 +39,8 @@ func Idempotent[P, Q, B, R any](endpoint Endpoint[P, Q, B, R], store *idempotenc
 	return IdempotentEndpoint[P, Q, B, R]{endpoint: endpoint, store: store, definition: definition}
 }
 
+// IdempotentSigned binds signed endpoint execution to the versioned idempotency
+// operation and preserves URL verification.
 func IdempotentSigned[P, Q, B, R any](endpoint SignedEndpoint[P, Q, B, R], store *idempotency.Store, definition idempotency.Definition) IdempotentEndpoint[P, Q, B, R] {
 	bound := Idempotent(endpoint.endpoint, store, definition)
 	bound.err = ValidateSigned(endpoint)
@@ -46,6 +50,8 @@ func IdempotentSigned[P, Q, B, R any](endpoint SignedEndpoint[P, Q, B, R], store
 	}
 	return bound
 }
+
+// IdempotentEndpointID returns the underlying endpoint's route identifier.
 func IdempotentEndpointID[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) RouteID {
 	return EndpointID(e.endpoint)
 }
@@ -60,6 +66,9 @@ func IdempotentHeaders[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R], prepare
 	e.headers = prepare
 	return e
 }
+
+// ValidateIdempotent checks the operation, store and endpoint, requiring replayable
+// middleware and supported noncredential input and response contracts.
 func ValidateIdempotent[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) error {
 	if e.endpoint.headers != nil {
 		// Replays must reproduce the stored outcome exactly.
@@ -100,6 +109,9 @@ func idempotentEndpointDescribed[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R
 	}
 	return ConfigureEndpoint(endpoint, Errors(idempotencyErrors()...))
 }
+
+// InspectIdempotent validates the endpoint and returns its idempotency and optional
+// signed-URL metadata.
 func InspectIdempotent[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) (EndpointInfo, error) {
 	if err := ValidateIdempotent(e); err != nil {
 		return EndpointInfo{}, err
@@ -191,6 +203,7 @@ type idempotencyRetryError struct {
 	retry time.Duration
 }
 
+// Unwrap returns the underlying idempotency failure.
 func (e *idempotencyRetryError) Unwrap() error { return e.cause }
 func idempotencyHTTPError(err error, wait time.Duration) error {
 	switch {

@@ -37,6 +37,8 @@ func DefaultEndpointLimits() EndpointLimits {
 	return EndpointLimits{Form: QueryLimits{Bytes: json.Bytes, Pairs: 1024, Issues: json.Issues}, Files: DefaultFileResponseLimits(), Multipart: DefaultMultipartLimits(), Query: QueryLimits{Bytes: 16 << 10, Pairs: 128, Issues: 16}, Body: json, Response: response, Validation: validation.DefaultLimits(), Raw: RawBodyLimits{Bytes: DefaultServerConfig().MaxBodyBytes}}
 }
 
+// Validate checks endpoint budgets; zero form and raw budgets are inactive here, with
+// body-specific requirements enforced at registration.
 func (l EndpointLimits) Validate() error {
 	// An inactive zero form budget preserves existing explicit limit literals.
 	// Form endpoints additionally require a positive form budget at registration.

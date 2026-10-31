@@ -13,11 +13,15 @@ import (
 type channelCounters struct {
 	incoming, accepted, completed, failures, published, delivered, replayed atomic.Uint64
 }
+
+// ChannelSnapshot reports one channel's subscription count and message counters.
 type ChannelSnapshot struct {
 	ID                                                                      ChannelID
 	Subscriptions                                                           int
 	Incoming, Accepted, Completed, Failures, Published, Delivered, Replayed uint64
 }
+
+// Diagnostics reports hub resources, failure counters and per-channel statistics.
 type Diagnostics struct {
 	Runtime                                                         Snapshot
 	QueuedFrames, QueuedBytes                                       int

@@ -51,6 +51,7 @@ type CachePolicy struct {
 // NoStoreCachePolicy forbids any cache from storing the response.
 func NoStoreCachePolicy() CachePolicy { return CachePolicy{NoStore: true} }
 
+// Validate checks that the cache policy can be compiled into response headers.
 func (p CachePolicy) Validate() error { _, err := p.compile(); return err }
 
 type compiledCachePolicy struct {

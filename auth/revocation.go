@@ -27,15 +27,21 @@ type Revocation[M model.Identifiable, K any] struct {
 	revoke   func(context.Context, *database.Tx, model.Reference[M, K]) (uint64, error)
 }
 
+// DefineRevocation declares one provider's transactional credential-revocation
+// callback.
 func DefineRevocation[M model.Identifiable, K any](name RevocationName, provider Provider[M, K], revoke func(context.Context, *database.Tx, model.Reference[M, K]) (uint64, error)) Revocation[M, K] {
 	return Revocation[M, K]{name: name, provider: provider, revoke: revoke}
 }
+
+// Validate checks the name, transactional callback and provider.
 func (r Revocation[M, K]) Validate() error {
 	if !identifier.Semantic(string(r.name)) || r.revoke == nil {
 		return safeerror.NewFault(fault.Invalid, "credential revocation requires a stable name and transaction callback")
 	}
 	return r.provider.Validate()
 }
+
+// Name returns the revocation target's stable name.
 func (r Revocation[M, K]) Name() RevocationName { return r.name }
 
 // Revocations groups all registered session/token guards for one model provider.
@@ -47,6 +53,8 @@ type Revocations[M model.Identifiable, K any] struct {
 	targets  []Revocation[M, K]
 }
 
+// NewRevocations copies and orders targets by name, requiring unique names and the
+// exact same provider declaration.
 func NewRevocations[M model.Identifiable, K any](provider Provider[M, K], targets ...Revocation[M, K]) (*Revocations[M, K], error) {
 	if err := provider.Validate(); err != nil {
 		return nil, err
@@ -71,6 +79,8 @@ func NewRevocations[M model.Identifiable, K any](provider Provider[M, K], target
 	}
 	return &Revocations[M, K]{provider: provider, targets: targets}, nil
 }
+
+// Validate requires a configured nonempty target group.
 func (r *Revocations[M, K]) Validate() error {
 	if r == nil || len(r.targets) == 0 {
 		return safeerror.NewFault(fault.Invalid, "credential revocations are not configured")

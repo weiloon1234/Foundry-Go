@@ -13,6 +13,8 @@ import (
 const MaxEnrollmentLifetime = time.Hour
 const MaxPrune = 128
 
+// Config declares the MFA namespace, issuer, enrollment and verification policy, and
+// operation bounds.
 type Config struct {
 	Namespace          keyspace.Namespace
 	Issuer             string
@@ -23,9 +25,14 @@ type Config struct {
 	Timeout            time.Duration
 }
 
+// DefaultConfig returns default enrollment, TOTP-window, recovery-code and operation
+// bounds for namespace and issuer.
 func DefaultConfig(namespace keyspace.Namespace, issuer string) Config {
 	return Config{Namespace: namespace, Issuer: issuer, EnrollmentLifetime: 10 * time.Minute, Window: 1, RecoveryCodes: DefaultRecoveryCodes, MaxConcurrent: 128, Timeout: 15 * time.Second}
 }
+
+// Validate checks namespace, issuer, enrollment lifetime, TOTP window, recovery-code
+// count and operation bounds.
 func (c Config) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {
 		return err
@@ -51,6 +58,8 @@ type Store struct {
 	gate    *credential.Gate
 }
 
+// NewStore validates and borrows the backend and keyring and creates bounded
+// factor-operation admission.
 func NewStore(backend Backend, keys *encryption.Keyring, config Config) (*Store, error) {
 	if credential.IsNil(backend) {
 		return nil, safeerror.NewFault(fault.Invalid, "MFA store requires a backend")
@@ -63,6 +72,8 @@ func NewStore(backend Backend, keys *encryption.Keyring, config Config) (*Store,
 	}
 	return &Store{backend: backend, keys: keys, config: config, gate: credential.NewGate(config.MaxConcurrent, config.Timeout)}, nil
 }
+
+// Validate checks that the store is configured.
 func (s *Store) Validate() error {
 	if s == nil || s.gate == nil {
 		return safeerror.NewFault(fault.Invalid, "MFA store is not configured")

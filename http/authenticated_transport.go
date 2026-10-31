@@ -13,8 +13,12 @@ import (
 // A custom implementation owns its authentication semantics; this interface alone
 // is not an authentication capability.
 type AuthenticatedHandlerTransport[P, Q, B, S, R any] interface {
+	// Validate checks the authenticated transport declaration.
 	Validate() error
+	// Description returns the authenticated endpoint's contract metadata.
 	Description() (EndpointInfo, error)
+	// Handle registers a callback receiving the concrete authenticated subject and typed
+	// input.
 	Handle(func(context.Context, S, Input[P, Q, B]) (R, error)) RouteRegistration
 }
 

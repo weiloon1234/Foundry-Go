@@ -12,6 +12,8 @@ import (
 // Wildcards belong to negotiation and are not a representation's media type.
 type MediaType string
 
+// Validate checks a concrete MIME media type and header-safe representation, rejecting
+// wildcards.
 func (m MediaType) Validate() error {
 	if err := HeaderValue(m).Validate(); err != nil {
 		return err
@@ -29,6 +31,7 @@ func (m MediaType) Validate() error {
 // A tag is supplied by the representation owner, never guessed from its name.
 type EntityTag string
 
+// Validate accepts an omitted tag or a valid quoted strong or weak entity tag.
 func (tag EntityTag) Validate() error {
 	if tag == "" {
 		return nil

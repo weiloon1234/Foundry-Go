@@ -13,6 +13,8 @@ type GuardBinding[M any] struct {
 	guard          auth.Guard[M]
 }
 
+// BindGuard checks exact guard registration and credential-source availability in
+// authentication.
 func BindGuard[M any](authentication *Authentication, guard auth.Guard[M]) (GuardBinding[M], error) {
 	if err := authentication.validate(); err != nil {
 		return GuardBinding[M]{}, err
@@ -31,10 +33,18 @@ func BindGuard[M any](authentication *Authentication, guard auth.Guard[M]) (Guar
 func (b GuardBinding[M]) Select(guard auth.Guard[M]) (GuardBinding[M], error) {
 	return BindGuard(b.authentication, guard)
 }
+
+// Guard returns the bound authentication guard.
 func (b GuardBinding[M]) Guard() auth.Guard[M] { return b.guard }
+
+// Authenticated requires the bound guard's concrete subject and applies guard options
+// to endpoint.
 func Authenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M], options ...GuardOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
 	return ConfigureAuthenticated(RequireAuthentication(endpoint, binding.authentication, binding.guard), options...)
 }
+
+// OptionallyAuthenticated adds the bound guard's optional concrete subject and applies
+// actor options to endpoint.
 func OptionallyAuthenticated[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], binding GuardBinding[M], options ...ActorOption[M]) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
 	return ConfigureOptional(OptionalAuthentication(endpoint, binding.authentication, binding.guard), options...)
 }

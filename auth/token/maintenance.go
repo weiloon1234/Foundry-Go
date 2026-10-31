@@ -9,6 +9,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
+// Revoke hashes the access credential and removes its family, reporting whether it
+// existed.
 func (t *Tokens[M, K]) Revoke(ctx context.Context, access secret.String) (bool, error) {
 	if err := t.Validate(); err != nil {
 		return false, err
@@ -62,6 +64,8 @@ func (t *Tokens[M, K]) RevokeID(ctx context.Context, reference model.Reference[M
 	}
 	return removed, nil
 }
+
+// RevokeAll removes the reference's token families after checking provider ownership.
 func (t *Tokens[M, K]) RevokeAll(ctx context.Context, reference model.Reference[M, K]) (uint64, error) {
 	if err := t.Validate(); err != nil {
 		return 0, err

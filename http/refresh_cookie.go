@@ -28,6 +28,8 @@ type RefreshCookie struct {
 	err    error
 }
 
+// DefineRefreshCookie declares a Secure, HttpOnly, SameSite=Strict refresh cookie at /
+// with CSRF protection. Validate requires a __Host- name.
 func DefineRefreshCookie(name CookieName, csrf CSRFConfig) RefreshCookie {
 	cookie := DefineCookie(name, SecretCookie(), CookieOptions{Path: "/", Secure: true, HTTPOnly: true, SameSite: stdhttp.SameSiteStrictMode})
 	policy, err := compileCSRF(csrf)
@@ -37,7 +39,10 @@ func DefineRefreshCookie(name CookieName, csrf CSRFConfig) RefreshCookie {
 	return RefreshCookie{cookie: cookie, csrf: policy, err: safeerror.Join("operation failed", err, cookie.Validate())}
 }
 
+// Name returns the refresh cookie's declared name.
 func (c RefreshCookie) Name() CookieName { return c.cookie.Name() }
+
+// Validate checks retained declaration errors and requires a compiled CSRF policy.
 func (c RefreshCookie) Validate() error {
 	if c.err != nil {
 		return c.err
@@ -76,6 +81,8 @@ type RefreshCookieInfo struct {
 	Optional bool       `json:"optional,omitempty"`
 }
 
+// Validate checks the __Host- name and supported read, set, clear and optional metadata
+// combinations.
 func (i RefreshCookieInfo) Validate() error {
 	if err := i.Name.Validate(); err != nil || !strings.HasPrefix(string(i.Name), "__Host-") || !i.Reads && !i.Sets && !i.Clears || i.Sets && i.Clears || i.Reads && !i.Sets && !i.Clears || i.Optional && (!i.Reads || !i.Clears) {
 		return safeerror.NewFault(fault.Invalid, "invalid refresh cookie metadata")
@@ -216,6 +223,8 @@ type refreshClearingWriter struct {
 	wrote bool
 }
 
+// WriteHeader adds the clearing cookie when the first response status is 401, then
+// forwards the status.
 func (w *refreshClearingWriter) WriteHeader(status int) {
 	if !w.wrote {
 		w.wrote = true
@@ -225,10 +234,14 @@ func (w *refreshClearingWriter) WriteHeader(status int) {
 	}
 	w.ResponseWriter.WriteHeader(status)
 }
+
+// Write marks the response as started and forwards body data.
 func (w *refreshClearingWriter) Write(data []byte) (int, error) {
 	w.wrote = true
 	return w.ResponseWriter.Write(data)
 }
+
+// Unwrap returns the underlying response writer.
 func (w *refreshClearingWriter) Unwrap() stdhttp.ResponseWriter { return w.ResponseWriter }
 
 // refreshCookie is the endpoint's refresh cookie, from its body or response.

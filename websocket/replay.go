@@ -16,6 +16,8 @@ type ReplayConfig struct {
 	TTL      time.Duration `json:"ttl"`
 }
 
+// Validate checks replay count, byte and whole-millisecond retention bounds. A zero
+// configuration disables replay and is valid.
 func (c ReplayConfig) Validate() error {
 	if c == (ReplayConfig{}) {
 		return nil

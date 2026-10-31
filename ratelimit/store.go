@@ -20,9 +20,13 @@ type Config struct {
 	Timeout                                     time.Duration
 }
 
+// DefaultConfig returns default key, declaration, concurrency and timeout bounds for
+// namespace.
 func DefaultConfig(namespace keyspace.Namespace) Config {
 	return Config{Namespace: namespace, MaxKeyBytes: 1024, MaxDeclarations: 256, MaxConcurrent: 128, Timeout: 5 * time.Second}
 }
+
+// Validate checks the namespace and positive resource bounds.
 func (c Config) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {
 		return err
@@ -44,6 +48,8 @@ type Store struct {
 	declarations map[Name]*declarationID
 }
 
+// NewStore validates the backend and config and creates a bounded declaration registry.
+// The caller retains backend lifecycle ownership.
 func NewStore(backend Backend, config Config) (*Store, error) {
 	if backend == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "rate limit store requires a backend")
@@ -53,4 +59,6 @@ func NewStore(backend Backend, config Config) (*Store, error) {
 	}
 	return &Store{backend: backend, config: config, slots: admission.New(config.MaxConcurrent), declarations: make(map[Name]*declarationID)}, nil
 }
+
+// Namespace returns the store's configured application namespace.
 func (s *Store) Namespace() keyspace.Namespace { return s.config.Namespace }

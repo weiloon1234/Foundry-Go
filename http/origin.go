@@ -20,6 +20,7 @@ const NullOrigin Origin = "null"
 
 const maxOriginBytes = 2048
 
+// Validate checks that the origin can be parsed by ParseOrigin.
 func (o Origin) Validate() error { _, err := ParseOrigin(string(o)); return err }
 
 // ParseOrigin validates a declaration and returns its normalized authority.

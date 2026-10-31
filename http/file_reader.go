@@ -62,6 +62,8 @@ func (r *fileReader) fail(cause error) error {
 	return errFileTransfer
 }
 
+// Read serializes source reads, contains callback failures and checks counts,
+// cancellation and repeated lack of progress.
 func (r *fileReader) Read(data []byte) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -96,6 +98,8 @@ func (r *fileReader) Read(data []byte) (int, error) {
 	return n, returned
 }
 
+// Seek serializes source seeking and checks cancellation, position consistency and
+// configured size bounds.
 func (r *fileReader) Seek(offset int64, whence int) (int64, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -128,6 +132,8 @@ func (r *fileReader) failure() error {
 	return r.failed
 }
 
+// Close serializes closure and retains the isolated callback's close result for
+// subsequent calls.
 func (r *fileReader) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

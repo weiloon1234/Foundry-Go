@@ -14,7 +14,10 @@ import (
 // Implementations must be safe for concurrent use. Parse and Format must agree;
 // neither receives escaped URL text. Path applies escaping exactly once.
 type PathCodec[V any] interface {
+	// Parse converts decoded path text to a typed value or returns a validation error.
 	Parse(string) (V, error)
+	// Format converts a typed path value to its textual representation before URL
+	// escaping.
 	Format(V) (string, error)
 }
 
@@ -27,7 +30,10 @@ func StringPath[V ~string]() PathCodec[V] {
 
 type stringPathCodec[V ~string] struct{}
 
-func (stringPathCodec[V]) Parse(text string) (V, error)   { return V(text), nil }
+// Parse converts text to the declared string type.
+func (stringPathCodec[V]) Parse(text string) (V, error) { return V(text), nil }
+
+// Format returns the typed string as text.
 func (stringPathCodec[V]) Format(value V) (string, error) { return string(value), nil }
 
 // PathInteger is the set of integer types supported by IntegerPath. Named
@@ -45,6 +51,7 @@ func IntegerPath[V PathInteger]() PathCodec[V] {
 
 type integerPathCodec[V PathInteger] struct{}
 
+// Parse requires canonical base-ten text within the target integer type's range.
 func (integerPathCodec[V]) Parse(text string) (V, error) {
 	var zero V
 	// Conversion back to text detects overflow for narrower integer types. Using
@@ -65,6 +72,7 @@ func (integerPathCodec[V]) Parse(text string) (V, error) {
 	return value, nil
 }
 
+// Format returns the integer's base-ten representation.
 func (integerPathCodec[V]) Format(value V) (string, error) {
 	var zero V
 	if ^zero > zero {
@@ -81,6 +89,7 @@ func ModelIDPath[M any]() PathCodec[model.ID[M]] {
 
 type modelIDPathCodec[M any] struct{}
 
+// Parse parses a model-owned identifier and rejects a zero identifier.
 func (modelIDPathCodec[M]) Parse(text string) (model.ID[M], error) {
 	id, err := model.ParseID[M](text)
 	if err != nil {
@@ -92,6 +101,7 @@ func (modelIDPathCodec[M]) Parse(text string) (model.ID[M], error) {
 	return id, nil
 }
 
+// Format returns the model identifier's text, rejecting a zero identifier.
 func (modelIDPathCodec[M]) Format(id model.ID[M]) (string, error) {
 	if id.IsZero() {
 		return "", safeerror.NewFault(fault.Invalid, "model path identity is empty")

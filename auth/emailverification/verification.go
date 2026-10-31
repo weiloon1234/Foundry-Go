@@ -18,9 +18,13 @@ import (
 
 const DefaultLifetime = 24 * time.Hour
 
+// Token is an email-verification secret retaining its model type.
 type Token[M any] = challenge.Token[M, challenge.EmailVerification]
+
+// Issued carries a committed email-verification challenge for model M.
 type Issued[M any] = challenge.Issued[M, challenge.EmailVerification]
 
+// ParseToken validates verification-token syntax without checking its stored validity.
 func ParseToken[M any](raw secret.String) (Token[M], error) {
 	return challenge.ParseToken[M, challenge.EmailVerification](raw)
 }
@@ -38,6 +42,9 @@ type Model[M model.Identifiable, K any] struct {
 	MarkVerified  func(context.Context, *database.Tx, M) (M, error)
 	Eligible      func(context.Context, M) (bool, error)
 }
+
+// Verification owns the typed single-use email-verification flow and its model
+// callbacks.
 type Verification[M model.Identifiable, K any] struct {
 	flow     *challenge.Flow[M, K, challenge.EmailVerification]
 	model    Model[M, K]
@@ -61,6 +68,8 @@ func (v *Verification[M, K]) WithObserver(observer auth.Observer) (*Verification
 	return &next, nil
 }
 
+// New validates model callbacks and binds an email-verification flow to the current
+// email and revision.
 func New[M model.Identifiable, K any](store *challenge.Store, provider auth.Provider[M, K], binding Model[M, K], lifetime time.Duration) (*Verification[M, K], error) {
 	if binding.Lock == nil || binding.Email == nil || binding.EmailRevision == nil || binding.Verified == nil || binding.MarkVerified == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "email verification requires model callbacks")
@@ -76,6 +85,8 @@ func New[M model.Identifiable, K any](store *challenge.Store, provider auth.Prov
 	}
 	return &Verification[M, K]{flow: flow, model: binding, provider: provider.Name()}, nil
 }
+
+// Validate checks that the verification flow is configured.
 func (v *Verification[M, K]) Validate() error {
 	if v == nil || v.flow == nil {
 		return safeerror.NewFault(fault.Invalid, "email verification is not configured")
@@ -91,6 +102,9 @@ func (v *Verification[M, K]) Issue(ctx context.Context, reference model.Referenc
 	}
 	return v.flow.Issue(ctx, reference)
 }
+
+// Complete consumes the token and marks the unchanged email verified in one
+// transaction, then notifies the observer after success.
 func (v *Verification[M, K]) Complete(ctx context.Context, token Token[M]) (M, error) {
 	if err := v.Validate(); err != nil {
 		return *new(M), err
@@ -115,12 +129,16 @@ func (v *Verification[M, K]) Complete(ctx context.Context, token Token[M]) (M, e
 	}
 	return verified, nil
 }
+
+// Revoke removes the subject's verification challenge and reports whether one existed.
 func (v *Verification[M, K]) Revoke(ctx context.Context, reference model.Reference[M, K]) (bool, error) {
 	if err := v.Validate(); err != nil {
 		return false, err
 	}
 	return v.flow.Revoke(ctx, reference)
 }
+
+// Prune removes up to limit expired verification challenges.
 func (v *Verification[M, K]) Prune(ctx context.Context, limit int) (uint64, error) {
 	if err := v.Validate(); err != nil {
 		return 0, err

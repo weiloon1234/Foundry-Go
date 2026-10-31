@@ -38,6 +38,8 @@ func (b *responseBuffer) append(data []byte) bool {
 	return true
 }
 
+// ReadAt copies buffered bytes at offset without changing a cursor, returning io.EOF
+// for an incomplete read.
 func (b *responseBuffer) ReadAt(dst []byte, offset int64) (int, error) {
 	if offset < 0 {
 		return 0, os.ErrInvalid

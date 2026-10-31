@@ -58,6 +58,8 @@ func MultipartDirectory[B any](d Multipart[B], directory string) Multipart[B] {
 	return d
 }
 
+// ValidateMultipart checks retained descriptor errors, upload indexes, the server
+// temporary directory and text-field declaration.
 func ValidateMultipart[B any](d Multipart[B]) error {
 	if d.err != nil {
 		return d.err
@@ -117,6 +119,8 @@ type MultipartPartInfo struct {
 	Kind   MultipartKind    `json:"kind"`
 	Schema *contract.Schema `json:"schema,omitempty"`
 }
+
+// MultipartInfo describes the declared parts of a multipart request.
 type MultipartInfo struct {
 	Parts []MultipartPartInfo `json:"parts"`
 }
@@ -129,10 +133,19 @@ type MultipartError struct {
 	cause  error
 }
 
-func (*MultipartError) Error() string              { return "invalid multipart form" }
-func (e *MultipartError) GoString() string         { return e.Error() }
-func (*MultipartError) Is(target error) bool       { return target == fault.Invalid }
-func (e *MultipartError) Unwrap() error            { return e.cause }
+// Error returns a generic multipart failure message without exposing input.
+func (*MultipartError) Error() string { return "invalid multipart form" }
+
+// GoString returns the generic multipart failure message.
+func (e *MultipartError) GoString() string { return e.Error() }
+
+// Is reports whether target is fault.Invalid.
+func (*MultipartError) Is(target error) bool { return target == fault.Invalid }
+
+// Unwrap returns the underlying cause.
+func (e *MultipartError) Unwrap() error { return e.cause }
+
+// Issues returns a copy of the multipart validation issues.
 func (e *MultipartError) Issues() []contract.Issue { return slices.Clone(e.issues) }
 
 func multipartFailure(issues []contract.Issue, cause error) error {

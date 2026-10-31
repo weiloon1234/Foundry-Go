@@ -62,6 +62,7 @@ type corsPolicy struct {
 	maxAge                                        time.Duration
 }
 
+// Validate checks that the CORS declaration can be compiled.
 func (c CORSConfig) Validate() error { _, err := compileCORS(c); return err }
 
 type corsPathPolicy struct {

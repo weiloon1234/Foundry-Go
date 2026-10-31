@@ -52,6 +52,7 @@ type Event struct {
 	Count        uint64
 }
 
+// Format writes an event label without exposing event data.
 func (Event) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("authentication event")) }
 
 // Observer receives an in-process notification after the transition finished

@@ -12,6 +12,8 @@ func PrepareAuthenticated[P, Q, B, M, R any](e AuthenticatedEndpoint[P, Q, B, M,
 	e.endpoint = PrepareEndpoint(e.endpoint, prepare)
 	return e
 }
+
+// PrepareOptional returns an endpoint with the supplied request preparation callback.
 func PrepareOptional[P, Q, B, M, R any](e OptionalAuthenticationEndpoint[P, Q, B, M, R], prepare Preparation[P, Q, B]) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
 	e.required.endpoint = PrepareEndpoint(e.required.endpoint, prepare)
 	return e

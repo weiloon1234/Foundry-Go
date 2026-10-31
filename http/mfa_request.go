@@ -15,6 +15,8 @@ type MFAChallengeCredential = authtransport.MFAChallengeCredential
 // MFATOTPBody uses generated bounded JSON decoding: required fields, duplicate
 // and unknown names, nulls and invalid credential/code syntax are rejected.
 func MFATOTPBody() Body[MFATOTPRequest] { return JSONBody(authtransport.MFATOTPRequestJSON()) }
+
+// MFARecoveryBody returns the shared typed JSON recovery-code request descriptor.
 func MFARecoveryBody() Body[MFARecoveryRequest] {
 	return JSONBody(authtransport.MFARecoveryRequestJSON())
 }

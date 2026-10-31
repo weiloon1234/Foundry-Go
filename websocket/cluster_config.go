@@ -33,9 +33,14 @@ type ClusterConfig struct {
 	ExcludeRemoteConnections bool
 }
 
+// DefaultClusterConfig returns default connection, lease, timeout and
+// subscription-buffer bounds for namespace.
 func DefaultClusterConfig(namespace keyspace.Namespace) ClusterConfig {
 	return ClusterConfig{Namespace: namespace, MaxConnections: 65536, MaxConnectionsPerSubject: 8, ConnectionTTL: 30 * time.Second, OperationTimeout: 5 * time.Second, Buffer: pubsub.Limits{Messages: 4096, Bytes: 32 << 20, PayloadBytes: 128 << 10, Channels: 1}}
 }
+
+// Validate checks the namespace, connection and lease bounds, operation timeout and
+// subscription buffer.
 func (c ClusterConfig) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {
 		return err

@@ -14,7 +14,13 @@ import "context"
 // An error always returns a zero result. External adapters must provide bounded
 // state, atomic count+expiry updates and distinct generation values after reset.
 type Backend interface {
+	// LockoutBegin checks the current lock and returns a snapshot for an admitted attempt,
+	// using candidate only when creating a window.
 	LockoutBegin(context.Context, Key, Policy, Generation) (Admission, error)
+	// LockoutFinish applies one admitted outcome after checking the current generation,
+	// revision and lock. A stale success cannot clear newer failures.
 	LockoutFinish(context.Context, Key, Policy, Snapshot, Outcome) (Decision, error)
+	// LockoutReset removes the key's state and invalidates outstanding snapshots,
+	// reporting whether state existed.
 	LockoutReset(context.Context, Key, Policy) (bool, error)
 }

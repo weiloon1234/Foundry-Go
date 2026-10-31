@@ -85,6 +85,8 @@ type etagConditionWriter struct {
 	success   int
 }
 
+// WriteHeader replaces a 200 status with the selected conditional status and restores
+// the original Accept-Ranges header.
 func (w etagConditionWriter) WriteHeader(status int) {
 	if status == stdhttp.StatusOK {
 		status = w.success

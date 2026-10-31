@@ -72,6 +72,7 @@ type DeliveryRequest struct {
 	Delivery DeliveryID `json:"delivery"`
 }
 
+// Format writes a request label without exposing delivery data.
 func (DeliveryRequest) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("webhook delivery request"))
 }
@@ -82,6 +83,7 @@ type DeliveryJob struct {
 	definition jobs.Definition[DeliveryRequest]
 }
 
+// DefineDeliveryJob declares the version-one delivery job with the supplied policy.
 func DefineDeliveryJob(name jobs.Name, policy jobs.Policy) DeliveryJob {
 	return DeliveryJob{definition: jobs.Define[DeliveryRequest](name, 1, policy)}
 }
@@ -89,6 +91,9 @@ func DefineDeliveryJob(name jobs.Name, policy jobs.Policy) DeliveryJob {
 // Definition returns the typed job definition, for registry inspection and
 // explicit dispatch by operational tooling.
 func (j DeliveryJob) Definition() jobs.Definition[DeliveryRequest] { return j.definition }
+
+// Declare binds the job handler to service; a zero delivery ID is a permanent job
+// failure.
 func (j DeliveryJob) Declare(service *Service) (jobs.Declaration, error) {
 	if err := service.Validate(); err != nil {
 		return jobs.Declaration{}, err
@@ -122,6 +127,8 @@ type deliverySink struct {
 	service *Service
 }
 
+// RecordFailure finalizes matching delivery jobs with their failure reason, ignoring
+// unrelated jobs and zero delivery IDs.
 func (d deliverySink) RecordFailure(ctx context.Context, failed jobs.FailedJob) error {
 	if failed.Envelope.Name() != d.job.definition.Name() || failed.Envelope.Version() != d.job.definition.Version() {
 		return nil
@@ -144,6 +151,7 @@ type Queue struct {
 	producer *jobs.Outbox
 }
 
+// ToOutbox validates and binds the service and durable job producer into a queue.
 func (j DeliveryJob) ToOutbox(service *Service, producer *jobs.Outbox) (Queue, error) {
 	q := Queue{service: service, job: j, producer: producer}
 	if err := q.Validate(); err != nil {
@@ -151,6 +159,8 @@ func (j DeliveryJob) ToOutbox(service *Service, producer *jobs.Outbox) (Queue, e
 	}
 	return q, nil
 }
+
+// Validate checks the service, job declaration and outbox destination.
 func (q Queue) Validate() error {
 	if err := q.service.Validate(); err != nil {
 		return err
@@ -163,6 +173,8 @@ func (q Queue) Validate() error {
 	}
 	return q.producer.Destination().Validate()
 }
+
+// Format writes a queue label without exposing its dependencies.
 func (Queue) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("outbound webhook queue")) }
 
 // Service returns the bound service, for example to inspect deliveries.

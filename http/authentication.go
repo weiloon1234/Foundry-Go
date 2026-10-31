@@ -95,8 +95,11 @@ func SecretCookie() CookieCodec[secret.String] { return credentialCookieCodec{} 
 
 type credentialCookieCodec struct{}
 
+// Parse wraps cookie text as a secret without verifying credentials.
 func (credentialCookieCodec) Parse(text string) (secret.String, error) { return secret.New(text), nil }
-func (credentialCookieCodec) Format(v secret.String) (string, error)   { return v.Reveal(), nil }
+
+// Format explicitly reveals the secret for cookie transport.
+func (credentialCookieCodec) Format(v secret.String) (string, error) { return v.Reveal(), nil }
 
 // Authentication composes one registry and immutable HTTP input declarations.
 // Each accepted request gets a fresh scope; callbacks finish before its cleanup.
@@ -109,6 +112,8 @@ type Authentication struct {
 	sources  []CredentialSource
 }
 
+// NewAuthentication binds credential sources to a registry, rejecting cookie sources
+// without origin protection unless explicitly opted out.
 func NewAuthentication(registry *auth.Registry, sources ...CredentialSource) (*Authentication, error) {
 	for _, source := range sources {
 		if source.info.Kind == CookieCredentialKind && !source.info.OriginProtection && !source.unprotected {

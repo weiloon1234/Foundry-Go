@@ -16,10 +16,20 @@ type CookieCodec[V any] = PathCodec[V]
 // FloatCookie preserves finite native/named floats; use TextCookie for exact decimals.
 func FloatCookie[V PathFloat]() CookieCodec[V] { return FloatPath[V]() }
 
-func StringCookie[V ~string]() CookieCodec[V]                 { return StringPath[V]() }
-func IntegerCookie[V PathInteger]() CookieCodec[V]            { return IntegerPath[V]() }
-func BoolCookie[V ~bool]() CookieCodec[V]                     { return BoolPath[V]() }
-func ModelIDCookie[M any]() CookieCodec[model.ID[M]]          { return ModelIDPath[M]() }
+// StringCookie returns the typed string path codec for cookie values.
+func StringCookie[V ~string]() CookieCodec[V] { return StringPath[V]() }
+
+// IntegerCookie returns the typed integer path codec for cookie values.
+func IntegerCookie[V PathInteger]() CookieCodec[V] { return IntegerPath[V]() }
+
+// BoolCookie returns the typed boolean path codec for cookie values.
+func BoolCookie[V ~bool]() CookieCodec[V] { return BoolPath[V]() }
+
+// ModelIDCookie returns the model-owned identifier path codec for cookie values.
+func ModelIDCookie[M any]() CookieCodec[model.ID[M]] { return ModelIDPath[M]() }
+
+// TextCookie returns a cookie codec using V's text marshaling and pointer unmarshaling
+// methods.
 func TextCookie[V any, P PathTextPointer[V]]() CookieCodec[V] { return TextPath[V, P]() }
 
 // Base64Cookie explicitly encodes arbitrary text into canonical URL-safe cookie
@@ -34,6 +44,8 @@ func Base64Cookie[V any](codec CookieCodec[V]) CookieCodec[V] {
 
 type base64CookieCodec[V any] struct{ inner CookieCodec[V] }
 
+// Parse requires canonical bounded unpadded URL-safe base64 and parses its decoded text
+// with the inner codec.
 func (c base64CookieCodec[V]) Parse(text string) (V, error) {
 	var zero V
 	if nilCookieValue(c.inner) || len(text) > MaxCookieBytes {
@@ -45,6 +57,8 @@ func (c base64CookieCodec[V]) Parse(text string) (V, error) {
 	}
 	return c.inner.Parse(string(data))
 }
+
+// Format encodes the inner codec's bounded text as unpadded URL-safe base64.
 func (c base64CookieCodec[V]) Format(v V) (string, error) {
 	if nilCookieValue(c.inner) {
 		return "", safeerror.NewFault(fault.Invalid, "cookie codec is missing")
@@ -62,11 +76,21 @@ func (c base64CookieCodec[V]) Format(v V) (string, error) {
 // Built-in scalar and credential codecs run no application methods and never
 // call runtime.Goexit, so cookie reads and writes use the in-goroutine panic
 // boundary for them. Text, enum and custom codecs remain isolated.
-func (stringPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)    {}
-func (integerPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)   {}
-func (floatPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)     {}
-func (boolPathCodec[V]) FoundryAdapter(frameworkadapter.Seal)      {}
-func (modelIDPathCodec[M]) FoundryAdapter(frameworkadapter.Seal)   {}
+func (stringPathCodec[V]) FoundryAdapter(frameworkadapter.Seal) {}
+
+// FoundryAdapter marks this codec as a framework-owned adapter.
+func (integerPathCodec[V]) FoundryAdapter(frameworkadapter.Seal) {}
+
+// FoundryAdapter marks this codec as a framework-owned adapter.
+func (floatPathCodec[V]) FoundryAdapter(frameworkadapter.Seal) {}
+
+// FoundryAdapter marks this codec as a framework-owned adapter.
+func (boolPathCodec[V]) FoundryAdapter(frameworkadapter.Seal) {}
+
+// FoundryAdapter marks this codec as a framework-owned adapter.
+func (modelIDPathCodec[M]) FoundryAdapter(frameworkadapter.Seal) {}
+
+// FoundryAdapter marks this codec as a framework-owned adapter.
 func (credentialCookieCodec) FoundryAdapter(frameworkadapter.Seal) {}
 
 // cookieCodecOwned reports whether every layer of a codec is framework-owned.

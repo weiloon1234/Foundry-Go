@@ -28,7 +28,10 @@ type Config struct {
 	Clock  clock.Clock
 }
 
+// DefaultConfig returns the public schema and system clock.
 func DefaultConfig() Config { return Config{Schema: "public", Clock: clock.System{}} }
+
+// Validate requires a valid SQL schema and a non-nil clock.
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || credential.IsNil(c.Clock) {
 		return safeerror.NewFault(fault.Invalid, "MFA PostgreSQL adapter requires a schema and clock")
@@ -36,11 +39,13 @@ func (c Config) Validate() error {
 	return nil
 }
 
+// Backend persists MFA factors in PostgreSQL using a borrowed database pool.
 type Backend struct {
 	db     *database.DB
 	config Config
 }
 
+// New validates configuration and creates an adapter borrowing db.
 func New(db *database.DB, config Config) (*Backend, error) {
 	if db == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "MFA PostgreSQL adapter requires a database pool")
@@ -82,10 +87,14 @@ func factors(scope string) orm.Query[mfastore.Factor] {
 	return mfastore.Factors.Query().Where(orm.TextEq(mfastore.Factors.Scope, scope))
 }
 
+// Within locks the application model before the factor, validates and persists one
+// change, and checks its deadline before committing.
 func (b *Backend) Within(ctx context.Context, address mfa.Address, identity model.Identity, prepare func(context.Context, *database.Tx) error, change func(context.Context, *database.Tx, value.Optional[mfa.Record], temporal.DateTime) (mfa.Change, error)) (value.Optional[mfa.Record], error) {
 	return b.mutate(ctx, address, identity, prepare, change, func(fn func(*database.Tx) error) error { return b.within(ctx, fn) })
 }
 
+// WithinIn applies a factor mutation using a savepoint in the caller-owned database
+// transaction without committing it.
 func (b *Backend) WithinIn(ctx context.Context, tx *database.Tx, address mfa.Address, identity model.Identity, prepare func(context.Context, *database.Tx) error, change func(context.Context, *database.Tx, value.Optional[mfa.Record], temporal.DateTime) (mfa.Change, error)) (value.Optional[mfa.Record], error) {
 	if b == nil {
 		return value.Optional[mfa.Record]{}, safeerror.NewFault(fault.Invalid, "MFA backend is missing")

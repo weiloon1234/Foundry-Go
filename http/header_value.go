@@ -12,6 +12,7 @@ type HeaderValue string
 
 const MaxHeaderValueBytes = 8192
 
+// Validate checks the byte bound and rejects control bytes other than horizontal tabs.
 func (v HeaderValue) Validate() error {
 	if len(v) > MaxHeaderValueBytes {
 		return safeerror.NewFault(fault.Invalid, "HTTP header value exceeds its byte bound")
@@ -32,6 +33,7 @@ type ResponseHeader struct {
 	Value HeaderValue
 }
 
+// Validate checks the header's name and value.
 func (h ResponseHeader) Validate() error {
 	if err := h.Name.Validate(); err != nil {
 		return err

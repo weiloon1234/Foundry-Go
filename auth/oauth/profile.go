@@ -39,8 +39,13 @@ type Token struct {
 	Scopes    []string
 }
 
-func (Token) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte(secret.Redacted)) }
-func (Token) LogValue() slog.Value         { return slog.StringValue(secret.Redacted) }
+// Format writes the redaction marker without exposing the value.
+func (Token) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(secret.Redacted)) }
+
+// LogValue returns the redaction marker without exposing the value.
+func (Token) LogValue() slog.Value { return slog.StringValue(secret.Redacted) }
+
+// MarshalJSON encodes the redaction marker without exposing the value.
 func (Token) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 
 // HasScope reports whether the provider reported granting scope.

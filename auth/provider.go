@@ -34,18 +34,26 @@ type providerDefinition[M model.Identifiable, K any] struct {
 func DefineProvider[M model.Identifiable, K any](name ProviderName, reference model.Reference[M, K], lookup func(context.Context, K) (value.Optional[M], error), eligible func(context.Context, M) (bool, error)) Provider[M, K] {
 	return Provider[M, K]{definition: &providerDefinition[M, K]{id: &declarationID{}, name: name, reference: reference, lookup: lookup, eligible: eligible}}
 }
+
+// Validate checks the name, concrete struct model, lookup, eligibility callback and
+// model reference.
 func (p Provider[M, K]) Validate() error {
 	if p.definition == nil || !identifier.Semantic(string(p.definition.name)) || p.definition.lookup == nil || p.definition.eligible == nil || reflect.TypeFor[M]().Kind() != reflect.Struct {
 		return safeerror.NewFault(fault.Invalid, "authentication provider requires a name, concrete model struct, lookup and eligibility check")
 	}
 	return p.definition.reference.Validate()
 }
+
+// Name returns the provider name, or an empty name for an undefined provider.
 func (p Provider[M, K]) Name() ProviderName {
 	if p.definition == nil {
 		return ""
 	}
 	return p.definition.name
 }
+
+// ModelName returns the provider's reference model name, or an empty string for an
+// undefined provider.
 func (p Provider[M, K]) ModelName() string {
 	if p.definition == nil {
 		return ""

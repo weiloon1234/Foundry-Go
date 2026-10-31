@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// LinkMode selects relative or configured public-origin pagination links.
 type LinkMode uint8
 
 const (
@@ -46,9 +47,14 @@ const DefaultMaximumPage = 10_000
 // MaximumPageWindow bounds the per-response link generation of a page window.
 const MaximumPageWindow = 10
 
+// DefaultConfig returns page and per_page parameters, a default size of 20, a maximum
+// size of 100 and relative links.
 func DefaultConfig() Config {
 	return Config{NumberParam: "page", SizeParam: "per_page", DefaultSize: 20, MaximumSize: 100, MaximumPage: DefaultMaximumPage, Links: RelativeLinks}
 }
+
+// Validate checks distinct query parameter names, representable page bounds,
+// page-window size and link policy.
 func (c Config) Validate() error {
 	if !httpquery.ValidName(c.NumberParam) || !httpquery.ValidName(c.SizeParam) || c.NumberParam == c.SizeParam {
 		return safeerror.NewFault(fault.Invalid, "pagination requires distinct valid query parameter names")

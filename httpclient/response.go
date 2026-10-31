@@ -31,56 +31,83 @@ type Response struct {
 	data []byte
 }
 
-func (r Response) Status() int          { return r.info.status }
-func (r Response) Attempts() int        { return r.info.attempt }
+// Status returns the HTTP status code.
+func (r Response) Status() int { return r.info.status }
+
+// Attempts returns the number of the final request attempt.
+func (r Response) Attempts() int { return r.info.attempt }
+
+// Headers returns a copy of the response headers.
 func (r Response) Headers() http.Header { return r.info.headers.Clone() }
-func (r Response) Bytes() []byte        { return slices.Clone(r.data) }
+
+// Bytes returns a copy of the buffered body.
+func (r Response) Bytes() []byte { return slices.Clone(r.data) }
+
+// Text returns the body as UTF-8 text, or a DecodeFailed error for invalid UTF-8 or an
+// uninitialized response.
 func (r Response) Text() (string, error) {
 	if r.info.status == 0 || !utf8.Valid(r.data) {
 		return "", failure(DecodeFailed, r.info.name, r.info.method, r.info.attempt, r.info.status, nil)
 	}
 	return string(r.data), nil
 }
+
+// EnsureSuccess returns a StatusFailed error unless the status is in the 2xx range.
 func (r Response) EnsureSuccess() error { return r.info.ensureSuccess() }
+
+// Format writes the response status and body length without exposing content.
 func (r Response) Format(state fmt.State, _ rune) {
 	_, _ = fmt.Fprintf(state, "HTTP response (status %d, bytes %d)", r.info.status, len(r.data))
 }
 
+// StreamResponse exposes the response body within the client's streaming callback
+// lifetime.
 type StreamResponse struct {
 	info responseInfo
 	body *ownedstream.Body
 }
 
+// Status returns the HTTP status code, or zero for a nil response.
 func (r *StreamResponse) Status() int {
 	if r == nil {
 		return 0
 	}
 	return r.info.status
 }
+
+// Attempts returns the final attempt number, or zero for a nil response.
 func (r *StreamResponse) Attempts() int {
 	if r == nil {
 		return 0
 	}
 	return r.info.attempt
 }
+
+// Headers returns a copy of the headers, or nil for a nil response.
 func (r *StreamResponse) Headers() http.Header {
 	if r == nil {
 		return nil
 	}
 	return r.info.headers.Clone()
 }
+
+// Read reads from the owned response body; a nil response is invalid.
 func (r *StreamResponse) Read(p []byte) (int, error) {
 	if r == nil {
 		return 0, invalid()
 	}
 	return r.body.Read(p)
 }
+
+// EnsureSuccess checks for a 2xx status; a nil response is invalid.
 func (r *StreamResponse) EnsureSuccess() error {
 	if r == nil {
 		return invalid()
 	}
 	return r.info.ensureSuccess()
 }
+
+// Format writes the response status without exposing content.
 func (r *StreamResponse) Format(state fmt.State, _ rune) {
 	_, _ = fmt.Fprintf(state, "HTTP stream (status %d)", r.Status())
 }

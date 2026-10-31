@@ -46,7 +46,10 @@ type Config struct {
 	Timeout       time.Duration
 }
 
+// DefaultConfig returns default authentication callback concurrency and timeout bounds.
 func DefaultConfig() Config { return Config{MaxConcurrent: 128, Timeout: 5 * time.Second} }
+
+// Validate requires bounded positive concurrency and a positive timeout.
 func (c Config) Validate() error {
 	if c.MaxConcurrent < 1 || c.MaxConcurrent > 65536 || c.Timeout <= 0 {
 		return safeerror.NewFault(fault.Invalid, "invalid authentication registry limits")
@@ -73,6 +76,8 @@ type providerOwner struct {
 	owner foundation.ProviderID
 }
 
+// NewRegistry validates configuration and registrations and creates an isolated
+// authentication registry.
 func NewRegistry(c Config, registrations ...Registration) (*Registry, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
@@ -150,6 +155,8 @@ func duplicateAuthorization(message string, previous, owner foundation.ProviderI
 	}
 	return safeerror.NewFault(fault.Duplicate, message)
 }
+
+// Validate checks that the registry is initialized.
 func (r *Registry) Validate() error {
 	if r == nil || r.slots == nil || r.guards == nil {
 		return safeerror.NewFault(fault.Invalid, "authentication requires a registry")
@@ -176,6 +183,8 @@ type resolutionEntry struct {
 	err   error
 }
 
+// NewScope creates a cancellable authentication boundary with its own guard-resolution
+// cache. The caller must close the scope.
 func (r *Registry) NewScope(ctx context.Context, credentials Credentials) (*Scope, error) {
 	if err := r.Validate(); err != nil {
 		return nil, err

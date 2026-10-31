@@ -23,13 +23,24 @@ import (
 // family revocation; no replay grace period is implied. An unknown commit outcome
 // returns an error, never a partial record or new secret.
 type Backend interface {
+	// Create atomically creates a token under the subject's capacity policy.
 	Create(context.Context, Address, Creation) (Record, error)
+	// Lookup resolves a live token by digest, optionally recording activity.
 	Lookup(context.Context, Address, Digest, bool) (value.Optional[Record], error)
+	// Refresh atomically consumes a refresh generation and creates its successor; reuse
+	// revokes the family and returns omission.
 	Refresh(context.Context, Address, Digest, Digest, Digest) (value.Optional[Record], error)
+	// Revoke removes the token family identified by its credential digest and reports
+	// whether it existed.
 	Revoke(context.Context, Address, Digest) (bool, error)
+	// RevokeID removes the subject's identified token family and reports whether it
+	// existed.
 	RevokeID(context.Context, Address, model.Identity, model.ID[Record]) (bool, error)
+	// RevokeAll removes all of the subject's token families, serializing with creation.
 	RevokeAll(context.Context, Address, model.Identity) (uint64, error)
+	// List returns a bounded page of the subject's token records.
 	List(context.Context, Address, model.Identity, int) ([]Record, error)
+	// Prune removes a bounded batch of expired token families.
 	Prune(context.Context, Address, int) (uint64, error)
 }
 
@@ -39,6 +50,8 @@ type Backend interface {
 // expiry. It never accepts older generations, and refresh-token reuse still
 // revokes the family.
 type GraceBackend interface {
+	// LookupWithin accepts the current access generation or its immediate predecessor
+	// within grace and its own access expiry.
 	LookupWithin(context.Context, Address, Digest, time.Duration) (value.Optional[Record], error)
 }
 
@@ -47,6 +60,8 @@ type GraceBackend interface {
 // the subject lock shared with issuance. It returns the removed family's subject,
 // omitted when no family matches. Expired families are removed too.
 type RefreshRevocationBackend interface {
+	// RevokeRefresh removes the family matching a current or consumed refresh digest and
+	// returns its subject, omitting unknown families.
 	RevokeRefresh(context.Context, Address, Digest) (value.Optional[model.Identity], error)
 }
 
@@ -60,9 +75,15 @@ type RefreshRevocationBackend interface {
 // current generation for a re-check and is omitted unless the family is live.
 // PruneTickets deletes at most limit expired tickets of the address.
 type TicketBackend interface {
+	// IssueTicket stores a bounded single-use ticket for a live family and returns its
+	// expiry, omitting families that are no longer live.
 	IssueTicket(context.Context, Address, model.Identity, model.ID[Record], Digest, time.Duration, int) (value.Optional[temporal.DateTime], error)
+	// RedeemTicket atomically deletes and reads a ticket, omitting unknown or expired
+	// tickets.
 	RedeemTicket(context.Context, Address, Digest) (value.Optional[TicketRecord], error)
+	// LookupFamily returns a live family's current generation for revalidation.
 	LookupFamily(context.Context, Address, model.Identity, model.ID[Record]) (value.Optional[Record], error)
+	// PruneTickets removes at most limit expired tickets in the address.
 	PruneTickets(context.Context, Address, int) (uint64, error)
 }
 
@@ -76,6 +97,8 @@ type TicketRecord struct {
 // SelectiveBackend revokes every family of a subject in this address except
 // keep, under the subject lock shared with issuance, and returns the count.
 type SelectiveBackend interface {
+	// RevokeOthers removes every token family of the subject except keep, returning the
+	// count.
 	RevokeOthers(context.Context, Address, model.Identity, model.ID[Record]) (uint64, error)
 }
 
@@ -83,12 +106,16 @@ type SelectiveBackend interface {
 // creation, before acquiring credential subject locks. The check must lock the
 // model and may run once only. A failed check creates nothing; never retry it.
 type CheckedBackend interface {
+	// CreateChecked runs the proof check before credential locks and creates the token in
+	// the same transaction.
 	CreateChecked(context.Context, Address, Creation, func(context.Context, *database.Tx) error) (Record, error)
 }
 
 // TransactionalBackend joins a caller-owned transaction. It must verify pool
 // ownership, restore schema state, preserve rollback, and never commit or retry.
 type TransactionalBackend interface {
+	// RevokeAllIn removes the subject's token families within the caller-owned
+	// transaction, without committing or retrying.
 	RevokeAllIn(context.Context, *database.Tx, Address, model.Identity) (uint64, error)
 }
 
@@ -100,6 +127,10 @@ type TransactionalBackend interface {
 // Both methods preserve rollback, never retry, and return no secret on failure.
 type CompletionBackend interface {
 	CheckedBackend
+	// ConsumePendingIn locks, revalidates and provisionally deletes the exact pending-MFA
+	// credential in the caller's transaction.
 	ConsumePendingIn(context.Context, *database.Tx, Address, Record) error
+	// CreateBefore performs checked creation and rechecks the pending deadline before
+	// commit, rolling back joined writes on expiry.
 	CreateBefore(context.Context, Address, Creation, temporal.DateTime, func(context.Context, *database.Tx) error) (Record, error)
 }

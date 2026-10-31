@@ -15,7 +15,10 @@ import (
 // authority, and a new scope verifies the credential again.
 type CredentialSlot[C any] struct{ id *declarationID }
 
+// NewCredentialSlot creates a unique typed credential-metadata slot.
 func NewCredentialSlot[C any]() CredentialSlot[C] { return CredentialSlot[C]{id: &declarationID{}} }
+
+// Validate checks that the slot was declared. The zero slot is invalid.
 func (s CredentialSlot[C]) Validate() error {
 	if s.id == nil {
 		return safeerror.NewFault(fault.Invalid, "credential slot is not declared")

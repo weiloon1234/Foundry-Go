@@ -58,12 +58,22 @@ type SignedRoute[P any] struct {
 	err    error
 }
 
+// SignRoute adds a URL-signing declaration while retaining the route's concrete path
+// type.
 func SignRoute[P any](r Route[P], signer URLSigner) SignedRoute[P] {
 	return SignedRoute[P]{route: r, signer: signer}
 }
-func SignedRouteID[P any](r SignedRoute[P]) RouteID     { return RouteIDOf(r.route) }
-func SignedRouteMethod[P any](r SignedRoute[P]) Method  { return RouteMethod(r.route) }
+
+// SignedRouteID returns the underlying route identifier.
+func SignedRouteID[P any](r SignedRoute[P]) RouteID { return RouteIDOf(r.route) }
+
+// SignedRouteMethod returns the underlying HTTP method.
+func SignedRouteMethod[P any](r SignedRoute[P]) Method { return RouteMethod(r.route) }
+
+// SignedRoutePattern returns the underlying path template.
 func SignedRoutePattern[P any](r SignedRoute[P]) string { return RoutePattern(r.route) }
+
+// ValidateSignedRoute checks the route and signer and rejects TRACE routes.
 func ValidateSignedRoute[P any](r SignedRoute[P]) error {
 	if r.err != nil {
 		return r.err

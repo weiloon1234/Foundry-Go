@@ -25,6 +25,7 @@ type BoundCredential struct {
 	value  any
 }
 
+// Format writes a credential label without exposing its bound value.
 func (BoundCredential) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("bound authentication credential"))
 }
@@ -35,6 +36,8 @@ func (b BoundCredential) IsZero() bool { return b.binder == nil }
 // Binder creates bound credentials that only its own strategy verifies.
 type Binder[B any] struct{ id *binderID }
 
+// Bind wraps bound with this binder's identity. It does not verify the credential or
+// clone bound.
 func (b Binder[B]) Bind(bound B) (BoundCredential, error) {
 	if b.id == nil {
 		return BoundCredential{}, safeerror.NewFault(fault.Invalid, "credential binder is not defined")

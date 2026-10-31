@@ -14,13 +14,28 @@ const Subprotocol = "foundry.v1"
 const MaxRoomBytes = 512
 const MaxReplayMessages = 1024
 
+// ChannelID identifies a declared channel in the wire protocol.
 type ChannelID string
+
+// EventID identifies an event within a channel.
 type EventID string
+
+// RequestID correlates a client request with its response.
 type RequestID string
+
+// Connection identifies the model type for a WebSocket connection.
 type Connection struct{}
+
+// ConnectionID identifies a WebSocket connection.
 type ConnectionID = model.ID[Connection]
+
+// Publication identifies the model type for a publication.
 type Publication struct{}
+
+// MessageID identifies a publication.
 type MessageID = model.ID[Publication]
+
+// Action identifies a client request operation.
 type Action string
 
 const (
@@ -41,6 +56,8 @@ type Request struct {
 	Payload json.RawMessage `json:"payload,omitempty"`
 	Replay  *int            `json:"replay,omitempty"`
 }
+
+// Code identifies a protocol failure sent to clients.
 type Code string
 
 const (
@@ -64,8 +81,10 @@ const (
 	Unavailable Code = "unavailable"
 )
 
+// Error returns the protocol error code text.
 func (c Code) Error() string { return string(c) }
 
+// ResponseType identifies the kind of server wire response.
 type ResponseType string
 
 const (
@@ -80,12 +99,19 @@ const (
 	PresenceUpdated ResponseType = "presence_updated"
 )
 
+// MemberID identifies a presence subject using an opaque digest.
 type MemberID string
+
+// MemberFrame carries a presence member's ID, JSON data and connection count on the
+// wire.
 type MemberFrame struct {
 	ID          MemberID        `json:"id"`
 	Data        json.RawMessage `json:"data"`
 	Connections int             `json:"connections"`
 }
+
+// Response is the server wire envelope for acknowledgements, errors, events and
+// presence updates.
 type Response struct {
 	Version   int             `json:"v"`
 	Type      ResponseType    `json:"type"`

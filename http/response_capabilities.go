@@ -21,16 +21,20 @@ type controlledResponseWriter interface {
 
 type responseFlusher struct{ writer controlledResponseWriter }
 
+// Flush flushes the wrapped response, discarding the returned error to implement
+// http.Flusher.
 func (f responseFlusher) Flush() { _ = f.writer.FlushError() }
 
 type responseHijacker struct{ writer controlledResponseWriter }
 
+// Hijack invokes the wrapped response's connection-hijack operation.
 func (h responseHijacker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return h.writer.hijackResponse()
 }
 
 type responsePusher struct{ writer controlledResponseWriter }
 
+// Push forwards an HTTP/2 push to the underlying writer.
 func (p responsePusher) Push(target string, options *stdhttp.PushOptions) error {
 	return p.writer.underlyingWriter().(stdhttp.Pusher).Push(target, options)
 }
@@ -95,13 +99,17 @@ func responseCapabilities(writer controlledResponseWriter) stdhttp.ResponseWrite
 // the buffering owner first so it cannot delay a native streaming response.
 type responseController struct{ controlledResponseWriter }
 
+// Unwrap returns the underlying response writer.
 func (c responseController) Unwrap() stdhttp.ResponseWriter {
 	return c.underlyingWriter()
 }
+
+// Hijack invokes the wrapper's connection-hijack operation.
 func (c responseController) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return c.hijackResponse()
 }
 
+// EnableFullDuplex invokes the wrapper's full-duplex control operation.
 func (c responseController) EnableFullDuplex() error {
 	return c.enableFullDuplexResponse()
 }

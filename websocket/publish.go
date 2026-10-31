@@ -43,12 +43,15 @@ func NotPublished(err error) bool { var failure *notPublished; return callback.E
 
 type notPublished struct{ cause error }
 
+// Error returns an owned safe cause message or a generic publication failure message.
 func (e *notPublished) Error() string {
 	if message, ok := safeerror.OwnedMessage(e.cause); ok {
 		return message
 	}
 	return "websocket publication failed"
 }
+
+// Unwrap returns the underlying publication failure.
 func (e *notPublished) Unwrap() error { return e.cause }
 
 func publish[C, R, S, P any](ctx context.Context, source PublisherSource, channel Channel[C, R, S], event Outgoing[C, P], payload P, target Target[R], options []PublishOption) (MessageID, error) {

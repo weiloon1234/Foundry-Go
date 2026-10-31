@@ -39,6 +39,8 @@ type PasswordModel[M model.Identifiable, I any] struct {
 	RequiresMFA func(context.Context, M) (bool, error)
 }
 
+// Validate requires lookup, transactional locking, hash access, conditional rehash and
+// MFA-policy callbacks.
 func (m PasswordModel[M, I]) Validate() error {
 	if m.Lookup == nil || m.Lock == nil || m.Hash == nil || m.Rehash == nil || m.RequiresMFA == nil {
 		return safeerror.NewFault(fault.Invalid, "password model requires lookup, transactional lock, stored hash, conditional rehash and MFA policy")

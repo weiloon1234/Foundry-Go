@@ -21,12 +21,15 @@ type Hasher struct {
 	gate   *credential.Gate
 }
 
+// New validates config and creates a hasher with bounded operation admission.
 func New(config Config) (*Hasher, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
 	return &Hasher{config: config, gate: credential.NewGate(config.MaxConcurrent, config.Timeout)}, nil
 }
+
+// Validate checks that the hasher is configured and its policy is valid.
 func (h *Hasher) Validate() error {
 	if h == nil || h.gate == nil {
 		return safeerror.NewFault(fault.Invalid, "password hasher is not configured")

@@ -28,6 +28,8 @@ type Command struct {
 
 const usage = "mfa reencrypt [--batch 128] [--max-batches 10000] [--format text|json]"
 
+// Parse parses bounded MFA re-encryption arguments and writes flag help to help. Help
+// requests return flag.ErrHelp.
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
 		return Command{}, safeerror.NewFault(fault.Invalid, "MFA commands require help output")

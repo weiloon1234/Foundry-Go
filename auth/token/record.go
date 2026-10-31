@@ -74,6 +74,7 @@ type Record struct {
 	SupersededAt value.Optional[temporal.DateTime] `json:",omitzero"`
 }
 
+// Format writes the label "token record" without exposing the value.
 func (Record) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("token record")) }
 
 // LiveAccessWithin reports access validity, allowing a superseded generation
@@ -126,6 +127,9 @@ func (r Record) validateMetadata(address Address) error {
 	}
 	return nil
 }
+
+// Validate checks address ownership, token metadata, device and generation lifetime
+// consistency.
 func (r Record) Validate(address Address) error {
 	if err := r.validateMetadata(address); err != nil {
 		return err
@@ -154,13 +158,20 @@ func boundedExpiry(now time.Time, duration time.Duration, absolute time.Time) ti
 	}
 	return expiry
 }
+
+// LiveAccess reports whether now is strictly before access and absolute expiry.
 func (r Record) LiveAccess(now time.Time) bool {
 	return now.Before(r.AccessExpiresAt.UTC()) && now.Before(r.ExpiresAt.UTC())
 }
+
+// LiveRefresh reports whether this renewable token is before both refresh and absolute
+// expiry.
 func (r Record) LiveRefresh(now time.Time) bool {
 	expiry, present := r.RefreshExpiresAt.Get()
 	return r.Mode == Renewable && present && now.Before(expiry.UTC()) && now.Before(r.ExpiresAt.UTC())
 }
+
+// Live reports whether access or refresh remains live at now.
 func (r Record) Live(now time.Time) bool { return r.LiveAccess(now) || r.LiveRefresh(now) }
 
 // Refreshed computes the successor of a current live generation. The adapter must
@@ -231,6 +242,8 @@ type Creation struct {
 func (c Creation) metadata(address Address) Record {
 	return Record{ID: c.ID, Address: address, Subject: c.Subject, Name: c.Name, Scopes: c.Scopes, Mode: c.Mode, Assurance: c.Assurance, AccessHash: c.AccessHash, RefreshHash: c.RefreshHash, Lifetime: c.Lifetime, RotationLimit: c.RotationLimit, Device: c.Device}
 }
+
+// Validate checks subject capacity, limit policy, device and token metadata.
 func (c Creation) Validate(address Address) error {
 	if c.Maximum < 1 || c.PendingMaximum < 1 || c.Maximum+c.PendingMaximum > MaxTokens {
 		return safeerror.NewFault(fault.Invalid, "invalid token subject capacity")
@@ -243,6 +256,9 @@ func (c Creation) Validate(address Address) error {
 	}
 	return c.metadata(address).validateMetadata(address)
 }
+
+// At validates creation and builds a record with copied scopes and UTC microsecond
+// timestamps.
 func (c Creation) At(address Address, now time.Time) (Record, error) {
 	if err := c.Validate(address); err != nil {
 		return Record{}, err

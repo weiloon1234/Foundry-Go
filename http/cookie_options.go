@@ -13,6 +13,7 @@ import (
 // CookieName is case-sensitive and distinct from HTTP header names.
 type CookieName string
 
+// Validate checks the cookie name using the HTTP token name rules.
 func (n CookieName) Validate() error { return HeaderName(n).Validate() }
 
 // MaxCookieBytes bounds a complete outgoing Set-Cookie field, including scope.

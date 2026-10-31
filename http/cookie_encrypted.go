@@ -19,15 +19,26 @@ type EncryptedCookie[V any] struct {
 	encrypter CookieEncrypter
 }
 
+// String returns a label containing the encrypted cookie's name.
 func (c EncryptedCookie[V]) String() string {
 	return "EncryptedCookie(" + string(c.cookie.Name()) + ")"
 }
+
+// GoString returns the encrypted cookie's name label without exposing values.
 func (c EncryptedCookie[V]) GoString() string { return c.String() }
+
+// Encrypted binds this cookie declaration to an encrypter.
 func (c Cookie[V]) Encrypted(encrypter CookieEncrypter) EncryptedCookie[V] {
 	return EncryptedCookie[V]{c, encrypter}
 }
-func (c EncryptedCookie[V]) Name() CookieName       { return c.cookie.Name() }
+
+// Name returns the underlying cookie name.
+func (c EncryptedCookie[V]) Name() CookieName { return c.cookie.Name() }
+
+// Options returns the underlying cookie attributes.
 func (c EncryptedCookie[V]) Options() CookieOptions { return c.cookie.Options() }
+
+// Validate checks the cookie declaration and encrypter.
 func (c EncryptedCookie[V]) Validate() error {
 	if err := c.cookie.Validate(); err != nil {
 		return err
@@ -60,6 +71,8 @@ func (c EncryptedCookie[V]) Read(r *stdhttp.Request) (value.Optional[V], error) 
 	return value.Set(parsed), nil
 }
 
+// Set formats and encrypts v and adds its Set-Cookie header after checking
+// cancellation.
 func (c EncryptedCookie[V]) Set(ctx context.Context, w stdhttp.ResponseWriter, v V) error {
 	if err := c.Validate(); err != nil {
 		return err
@@ -78,6 +91,7 @@ func (c EncryptedCookie[V]) Set(ctx context.Context, w stdhttp.ResponseWriter, v
 	return c.cookie.publish(w, envelope, false)
 }
 
+// Clear validates the encrypted cookie and adds its clearing Set-Cookie header.
 func (c EncryptedCookie[V]) Clear(w stdhttp.ResponseWriter) error {
 	if err := c.Validate(); err != nil {
 		return err

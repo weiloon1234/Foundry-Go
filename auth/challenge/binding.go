@@ -17,6 +17,8 @@ import (
 // Bindings are not passwords or standalone authenticators. Keep them private.
 type Binding struct{ hash credential.Digest }
 
+// Bind fingerprints one to eight nonempty, bounded UTF-8 secret components into a
+// model-state binding.
 func Bind(parts ...secret.String) (Binding, error) {
 	if len(parts) < 1 || len(parts) > 8 {
 		return Binding{}, safeerror.NewFault(fault.Invalid, "invalid challenge binding components")
@@ -31,10 +33,20 @@ func Bind(parts ...secret.String) (Binding, error) {
 	}
 	return Binding{hash: credential.Fingerprint(values...)}, nil
 }
+
+// Format writes the label "challenge binding" without exposing the value.
 func (Binding) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("challenge binding")) }
-func (b Binding) Hex() string              { return b.hash.Hex() }
-func (b Binding) IsZero() bool             { return b.hash.IsZero() }
+
+// Hex returns the binding digest's hexadecimal persistence representation.
+func (b Binding) Hex() string { return b.hash.Hex() }
+
+// IsZero reports whether the binding is uninitialized.
+func (b Binding) IsZero() bool { return b.hash.IsZero() }
+
+// Equal compares binding digests.
 func (b Binding) Equal(other Binding) bool { return b.hash.Equal(other.hash) }
+
+// ParseBinding restores a binding from its encoded digest.
 func ParseBinding(text string) (Binding, error) {
 	hash, err := credential.ParseDigest(text)
 	return Binding{hash: hash}, err

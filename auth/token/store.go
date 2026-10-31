@@ -16,6 +16,7 @@ type Store struct {
 	gate    *credential.Gate
 }
 
+// NewStore validates and borrows backend and creates bounded token-operation admission.
 func NewStore(backend Backend, config Config) (*Store, error) {
 	if credential.IsNil(backend) {
 		return nil, safeerror.NewFault(fault.Invalid, "token store requires a backend")

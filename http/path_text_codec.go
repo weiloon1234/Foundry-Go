@@ -27,6 +27,7 @@ func TextPath[V any, P PathTextPointer[V]]() PathCodec[V] { return knownTextURLC
 
 type textPathCodec[V any, P PathTextPointer[V]] struct{}
 
+// Parse invokes a new value's text unmarshaler, wrapping failures as fault.Invalid.
 func (textPathCodec[V, P]) Parse(text string) (V, error) {
 	var decoded V
 	if err := P(&decoded).UnmarshalText([]byte(text)); err != nil {
@@ -36,6 +37,7 @@ func (textPathCodec[V, P]) Parse(text string) (V, error) {
 	return decoded, nil
 }
 
+// Format invokes the value's text marshaler, wrapping failures as fault.Invalid.
 func (textPathCodec[V, P]) Format(value V) (string, error) {
 	data, err := P(&value).MarshalText()
 	if err != nil {
@@ -51,6 +53,7 @@ func BoolPath[V ~bool]() PathCodec[V] {
 
 type boolPathCodec[V ~bool] struct{}
 
+// Parse accepts only the exact text true or false.
 func (boolPathCodec[V]) Parse(text string) (V, error) {
 	switch text {
 	case "true":
@@ -62,6 +65,7 @@ func (boolPathCodec[V]) Parse(text string) (V, error) {
 	}
 }
 
+// Format returns exactly true or false.
 func (boolPathCodec[V]) Format(value V) (string, error) {
 	if value {
 		return "true", nil

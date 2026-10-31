@@ -28,6 +28,7 @@ const (
 	ImpersonationForbidden Code = "impersonation_forbidden"
 )
 
+// Error returns the authentication error code text.
 func (c Code) Error() string { return string(c) }
 
 // WithCause retains diagnostic identity without formatting credential details.
@@ -49,8 +50,13 @@ type failure struct {
 	cause error
 }
 
-func (e *failure) Error() string        { return e.code.Error() }
-func (e *failure) Unwrap() error        { return e.cause }
+// Error returns the code without formatting the cause.
+func (e *failure) Error() string { return e.code.Error() }
+
+// Unwrap returns the underlying cause.
+func (e *failure) Unwrap() error { return e.cause }
+
+// Is reports whether target is the authentication error code.
 func (e *failure) Is(target error) bool { return target == e.code }
 func operationFailure(err error) error {
 	if err == nil {

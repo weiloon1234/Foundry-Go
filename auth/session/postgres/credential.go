@@ -105,6 +105,9 @@ func (b *Backend) Lookup(ctx context.Context, address session.Address, hash sess
 	}
 	return value.Set(current), nil
 }
+
+// Rotate atomically replaces a live session's digest and records activity, omitting
+// missing or expired sessions.
 func (b *Backend) Rotate(ctx context.Context, address session.Address, old, next session.Digest) (value.Optional[session.Record], error) {
 	if err := validateCredential(address, old); err != nil {
 		return value.Optional[session.Record]{}, err
@@ -147,6 +150,8 @@ func (b *Backend) Rotate(ctx context.Context, address session.Address, old, next
 	}
 	return result, nil
 }
+
+// Revoke atomically deletes the session matching hash and reports whether it existed.
 func (b *Backend) Revoke(ctx context.Context, address session.Address, hash session.Digest) (bool, error) {
 	if err := validateCredential(address, hash); err != nil {
 		return false, err

@@ -48,6 +48,7 @@ type Body[B any] struct {
 	refreshLogout bool
 }
 
+// JSONBody declares bounded typed JSON decoding using descriptor.
 func JSONBody[B any](descriptor contract.JSON[B]) Body[B] {
 	b := Body[B]{kind: payloadJSON, encodeJSON: descriptor.Encode, decodeJSON: descriptor.Decode, validate: descriptor.Validate, describe: func() *PayloadInfo {
 		schema, _ := descriptor.Description()
@@ -87,6 +88,7 @@ func FormBody[B any](fields Query[B]) Body[B] {
 	return b
 }
 
+// EmptyBody declares a request contract that rejects a nonempty body.
 func EmptyBody() Body[NoBody] {
 	b := Body[NoBody]{kind: payloadEmpty, validate: func() error { return nil }}
 	b.read = func(w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (NoBody, func() error, error) {
@@ -96,6 +98,8 @@ func EmptyBody() Body[NoBody] {
 	return b
 }
 
+// ValidateBodyDescriptor checks that the request body has a reader and a valid
+// descriptor.
 func ValidateBodyDescriptor[B any](body Body[B]) error {
 	if body.validate == nil || body.read == nil {
 		return safeerror.NewFault(fault.Invalid, "request body contract is not defined")
@@ -145,6 +149,8 @@ func EmptyResponse(status int) Response[NoContent] {
 	return Response[NoContent]{prepare: prepareEmptyResponse, kind: payloadEmpty, status: status}
 }
 
+// ValidateResponse checks the response kind, status, codecs and associated file, event
+// or refresh-cookie contracts.
 func ValidateResponse[R any](r Response[R]) error {
 	if r.refreshCookieErr != nil {
 		return r.refreshCookieErr

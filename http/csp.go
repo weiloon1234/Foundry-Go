@@ -21,6 +21,7 @@ type CSPConfig struct {
 	ReportOnly value.Optional[CSPPolicy]
 }
 
+// Validate checks the enforced and report-only content security policy configuration.
 func (c CSPConfig) Validate() error { _, _, err := compileCSPConfig(c); return err }
 
 func compileCSPConfig(c CSPConfig) (compiledCSP, compiledCSP, error) {
@@ -45,6 +46,7 @@ func compileCSPConfig(c CSPConfig) (compiledCSP, compiledCSP, error) {
 // value for an HTML nonce attribute; it is not pre-escaped or trusted markup.
 type CSPNonce struct{ encoded string }
 
+// String exposes the encoded nonce for response markup.
 func (n CSPNonce) String() string { return n.encoded }
 
 type cspNonceContextKey struct{}

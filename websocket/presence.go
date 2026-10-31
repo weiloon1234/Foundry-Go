@@ -23,6 +23,8 @@ type presenceDefinition[S any] struct {
 	description func() (contract.Schema, error)
 	encode      func(context.Context, S, contract.JSONLimits) ([]byte, error)
 }
+
+// PresenceChannel binds a channel to its typed presence-data contract.
 type PresenceChannel[C, R, S, D any] struct {
 	channel Channel[C, R, S]
 	payload contract.JSON[D]
@@ -49,8 +51,11 @@ func WithPresence[C, R any, S model.Identifiable, D any](channel Channel[C, R, S
 	}}
 	return PresenceChannel[C, R, S, D]{channel: channel, payload: payload}
 }
+
+// Channel returns the underlying typed channel declaration.
 func (p PresenceChannel[C, R, S, D]) Channel() Channel[C, R, S] { return p.channel }
 
+// Member carries a presence subject's safe data and connection count.
 type Member[D any] struct {
 	ID          MemberID
 	Data        D

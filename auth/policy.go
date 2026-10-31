@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// PolicyName identifies a policy or authorization hook declaration.
 type PolicyName string
 
 // Policy retains both subject and resource types. It loads the subject through
@@ -23,21 +24,29 @@ type policyDefinition[M, R any] struct {
 	guest    func(context.Context, value.Optional[M], R) (bool, error)
 }
 
+// DefinePolicy declares a named resource evaluator for model M; Validate checks its
+// name and callback.
 func DefinePolicy[M, R any](name PolicyName, evaluate func(context.Context, M, R) (bool, error)) Policy[M, R] {
 	return Policy[M, R]{definition: &policyDefinition[M, R]{id: &declarationID{}, name: name, evaluate: evaluate}}
 }
+
+// Validate requires a semantic name and evaluator. The zero policy is invalid.
 func (p Policy[M, R]) Validate() error {
 	if p.definition == nil || !identifier.Semantic(string(p.definition.name)) || p.definition.evaluate == nil {
 		return safeerror.NewFault(fault.Invalid, "authentication policy requires a semantic name and evaluator")
 	}
 	return nil
 }
+
+// Name returns the policy name, or an empty name for an undefined policy.
 func (p Policy[M, R]) Name() PolicyName {
 	if p.definition == nil {
 		return ""
 	}
 	return p.definition.name
 }
+
+// Registration returns the policy's identity and validation contract for a registry.
 func (p Policy[M, R]) Registration() Registration {
 	if p.definition == nil {
 		return Registration{}
@@ -60,6 +69,8 @@ func (p Policy[M, R]) ValidateIn(registry *Registry) error {
 	return nil
 }
 
+// Allows evaluates the registered policy and hooks for the current subject and resource
+// and reports whether access is allowed.
 func (p Policy[M, R]) Allows(ctx context.Context, guard Guard[M], resource R) (bool, error) {
 	decision, err := p.Inspect(ctx, guard, resource)
 	if err != nil {
@@ -67,6 +78,8 @@ func (p Policy[M, R]) Allows(ctx context.Context, guard Guard[M], resource R) (b
 	}
 	return decision.Allowed(), nil
 }
+
+// Authorize evaluates the policy and returns its denial error when access is refused.
 func (p Policy[M, R]) Authorize(ctx context.Context, guard Guard[M], resource R) error {
 	decision, err := p.Inspect(ctx, guard, resource)
 	if err != nil {
@@ -146,6 +159,8 @@ func denied(err error) (Decision, error) {
 // a model is present. It shares the policy registry namespace.
 type GuestPolicy[M, R any] struct{ policy Policy[M, R] }
 
+// DefineGuestPolicy declares a resource policy that receives an omitted subject for
+// anonymous requests.
 func DefineGuestPolicy[M, R any](name PolicyName, evaluate func(context.Context, value.Optional[M], R) (bool, error)) GuestPolicy[M, R] {
 	var check func(context.Context, M, R) (bool, error)
 	if evaluate != nil {
@@ -157,10 +172,20 @@ func DefineGuestPolicy[M, R any](name PolicyName, evaluate func(context.Context,
 	p.definition.guest = evaluate
 	return GuestPolicy[M, R]{policy: p}
 }
-func (p GuestPolicy[M, R]) Name() PolicyName                    { return p.policy.Name() }
-func (p GuestPolicy[M, R]) Validate() error                     { return p.policy.Validate() }
-func (p GuestPolicy[M, R]) Registration() Registration          { return p.policy.Registration() }
+
+// Name returns the underlying policy name.
+func (p GuestPolicy[M, R]) Name() PolicyName { return p.policy.Name() }
+
+// Validate checks the underlying policy declaration.
+func (p GuestPolicy[M, R]) Validate() error { return p.policy.Validate() }
+
+// Registration returns the guest policy's declaration for a registry.
+func (p GuestPolicy[M, R]) Registration() Registration { return p.policy.Registration() }
+
+// ValidateIn checks that this exact guest policy declaration belongs to registry.
 func (p GuestPolicy[M, R]) ValidateIn(registry *Registry) error { return p.policy.ValidateIn(registry) }
+
+// Allows evaluates the guest policy and returns whether the decision allows access.
 func (p GuestPolicy[M, R]) Allows(ctx context.Context, guard Guard[M], resource R) (bool, error) {
 	decision, err := p.Inspect(ctx, guard, resource)
 	if err != nil {
@@ -168,6 +193,9 @@ func (p GuestPolicy[M, R]) Allows(ctx context.Context, guard Guard[M], resource 
 	}
 	return decision.Allowed(), nil
 }
+
+// Authorize evaluates the guest policy and returns its denial error when access is
+// refused.
 func (p GuestPolicy[M, R]) Authorize(ctx context.Context, guard Guard[M], resource R) error {
 	decision, err := p.Inspect(ctx, guard, resource)
 	if err != nil {
@@ -175,6 +203,9 @@ func (p GuestPolicy[M, R]) Authorize(ctx context.Context, guard Guard[M], resour
 	}
 	return decision.Err()
 }
+
+// Inspect evaluates the registered policy for the optional current subject, preserving
+// typed denial reasons. Invalid credentials still fail.
 func (p GuestPolicy[M, R]) Inspect(ctx context.Context, guard Guard[M], resource R) (Decision, error) {
 	if err := p.policy.Validate(); err != nil {
 		return Decision{}, err

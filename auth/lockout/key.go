@@ -9,19 +9,30 @@ import (
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
+// Name identifies a lockout declaration family.
 type Name string
 
 // Key is an adapter address, distinct from cache, lease and request-limit keys.
 // Logical identifiers are hashed by the shared address codec, not logged raw.
 type Key struct{ address keyaddress.Address }
 
+// NewKey validates and constructs an adapter address for namespace, name and logical
+// key.
 func NewKey(namespace keyspace.Namespace, name Name, logical string) (Key, error) {
 	address, err := keyaddress.New(namespace, string(name), logical)
 	return Key{address}, err
 }
-func (k Key) Validate() error               { return k.address.Validate() }
+
+// Validate checks the adapter address.
+func (k Key) Validate() error { return k.address.Validate() }
+
+// Namespace returns the key's application namespace.
 func (k Key) Namespace() keyspace.Namespace { return k.address.Namespace }
-func (k Key) String() string                { return k.address.String(KeyFeature) }
+
+// String returns the physical lockout address.
+func (k Key) String() string { return k.address.String(KeyFeature) }
+
+// ValidateOperation checks context cancellation, key validity and lockout policy.
 func ValidateOperation(ctx context.Context, key Key, policy Policy) error {
 	if ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "lockout requires a context")

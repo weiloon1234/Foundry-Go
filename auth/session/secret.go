@@ -15,10 +15,19 @@ const EncodedSecretBytes = credential.EncodedSecretBytes
 // It cannot be submitted in place of the raw session secret.
 type Digest struct{ hash credential.Digest }
 
+// Format writes the label "session digest" without exposing the value.
 func (Digest) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("session digest")) }
-func (d Digest) Hex() string              { return d.hash.Hex() }
-func (d Digest) IsZero() bool             { return d.hash.IsZero() }
-func (d Digest) Equal(other Digest) bool  { return d.hash.Equal(other.hash) }
+
+// Hex returns the digest's hexadecimal persistence representation.
+func (d Digest) Hex() string { return d.hash.Hex() }
+
+// IsZero reports whether the digest is uninitialized.
+func (d Digest) IsZero() bool { return d.hash.IsZero() }
+
+// Equal compares session digests.
+func (d Digest) Equal(other Digest) bool { return d.hash.Equal(other.hash) }
+
+// ParseDigest restores a session digest from its hexadecimal representation.
 func ParseDigest(text string) (Digest, error) {
 	hash, err := credential.ParseDigest(text)
 	return Digest{hash: hash}, err

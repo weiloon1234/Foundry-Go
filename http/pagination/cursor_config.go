@@ -14,10 +14,15 @@ type CursorConfig struct {
 	Links                              LinkMode
 }
 
+// DefaultCursorConfig returns after and before cursor parameters with default page-size
+// and link settings.
 func DefaultCursorConfig() CursorConfig {
 	defaults := DefaultConfig()
 	return CursorConfig{AfterParam: "after", BeforeParam: "before", SizeParam: defaults.SizeParam, DefaultSize: defaults.DefaultSize, MaximumSize: defaults.MaximumSize, Links: defaults.Links}
 }
+
+// Validate checks distinct cursor and size parameter names, size bounds and link
+// policy.
 func (c CursorConfig) Validate() error {
 	if !httpquery.ValidName(c.AfterParam) || !httpquery.ValidName(c.BeforeParam) || !httpquery.ValidName(c.SizeParam) || c.AfterParam == c.BeforeParam || c.AfterParam == c.SizeParam || c.BeforeParam == c.SizeParam {
 		return safeerror.NewFault(fault.Invalid, "cursor pagination requires distinct valid query parameter names")

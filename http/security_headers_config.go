@@ -37,6 +37,7 @@ func DefaultSecurityHeadersConfig() SecurityHeadersConfig {
 	return SecurityHeadersConfig{NoSniff: true, Frame: FrameDeny, Referrer: ReferrerStrictOriginWhenCrossOrigin, DisableLegacyXSSFilter: true}
 }
 
+// Validate checks that security header policies can be compiled.
 func (c SecurityHeadersConfig) Validate() error { _, err := compileSecurityHeaders(c); return err }
 
 const maxSecurityExtraHeaders = 64

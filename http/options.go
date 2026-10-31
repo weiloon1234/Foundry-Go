@@ -52,25 +52,38 @@ type routeOptionValue struct{ endpointOptionValue }
 func (o endpointOptionValue) endpointOption() endpointOptionValue { return o }
 func (routeOptionValue) routeOption()                             {}
 
+// Within snapshots the scope's middleware for application to a route or endpoint.
 func Within(scope Scope) RouteOption {
 	scope.middlewares = slices.Clone(scope.middlewares)
 	return routeOptionValue{endpointOptionValue{kind: optionWithin, scope: scope}}
 }
+
+// Timeout declares the route's request timeout.
 func Timeout(timeout time.Duration) RouteOption {
 	return routeOptionValue{endpointOptionValue{kind: optionTimeout, timeout: timeout}}
 }
+
+// BodyLimit declares the route's request-body byte limit.
 func BodyLimit(bytes int64) RouteOption {
 	return routeOptionValue{endpointOptionValue{kind: optionBodyLimit, bytes: bytes}}
 }
+
+// Use snapshots middleware to append to a route or endpoint.
 func Use(middleware ...Middleware) RouteOption {
 	return routeOptionValue{endpointOptionValue{kind: optionUse, middleware: slices.Clone(middleware)}}
 }
+
+// Documentation snapshots route documentation for declaration metadata.
 func Documentation(documentation RouteDocumentation) RouteOption {
 	return routeOptionValue{endpointOptionValue{kind: optionDocumentation, documentation: *documentation.clone()}}
 }
+
+// Limits declares the endpoint's decoding, response and validation budgets.
 func Limits(limits EndpointLimits) EndpointOption {
 	return endpointOptionValue{kind: optionLimits, limits: limits}
 }
+
+// Errors snapshots application error declarations for addition to an endpoint.
 func Errors(declarations ...ErrorDeclaration) EndpointOption {
 	return endpointOptionValue{kind: optionErrors, errors: slices.Clone(declarations)}
 }
@@ -90,6 +103,9 @@ func configureRouteOption[P any](route Route[P], option endpointOptionValue) Rou
 	}
 	return route
 }
+
+// ConfigureRoute applies declaration options to a copy of route and retains
+// missing-option errors for validation.
 func ConfigureRoute[P any](route Route[P], options ...RouteOption) Route[P] {
 	for _, option := range options {
 		if option == nil {
@@ -102,6 +118,9 @@ func ConfigureRoute[P any](route Route[P], options ...RouteOption) Route[P] {
 	}
 	return route
 }
+
+// ConfigureEndpoint applies declaration options to a copy of endpoint and retains
+// option errors for validation.
 func ConfigureEndpoint[P, Q, B, R any](endpoint Endpoint[P, Q, B, R], options ...EndpointOption) Endpoint[P, Q, B, R] {
 	for _, option := range options {
 		if option == nil {
@@ -161,23 +180,32 @@ func (o guardOption[M]) applyGuard(binding authenticationBinding[M]) authenticat
 type actorOption[M any] struct{ guardOption[M] }
 
 func (actorOption[M]) actorOption() {}
+
+// Scopes requires the credential to grant the supplied model-owned access scopes.
 func Scopes[M any](required auth.AccessScopes[M]) GuardOption[M] {
 	return guardOption[M]{apply: func(binding authenticationBinding[M]) authenticationBinding[M] {
 		return authenticationWithScopes(binding, required)
 	}}
 }
+
+// Permissions snapshots model permissions required by the authentication binding.
 func Permissions[M any](required ...auth.Permission[M]) GuardOption[M] {
 	required = slices.Clone(required)
 	return guardOption[M]{apply: func(binding authenticationBinding[M]) authenticationBinding[M] {
 		return authenticationWithPermissions(binding, required...)
 	}}
 }
+
+// ActorMiddleware snapshots middleware to run with the resolved authentication actor.
 func ActorMiddleware[M any](middleware ...Middleware) ActorOption[M] {
 	middleware = slices.Clone(middleware)
 	return actorOption[M]{guardOption[M]{apply: func(binding authenticationBinding[M]) authenticationBinding[M] {
 		return authenticationWithActorMiddleware(binding, middleware...)
 	}}}
 }
+
+// ConfigureAuthenticated applies guard options to a copy of endpoint, retaining
+// missing-option errors for validation.
 func ConfigureAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R], options ...GuardOption[M]) AuthenticatedEndpoint[P, Q, B, M, R] {
 	for _, option := range options {
 		if option == nil {
@@ -190,6 +218,9 @@ func ConfigureAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P,
 	}
 	return endpoint
 }
+
+// ConfigureOptional applies actor options to a copy of endpoint, retaining
+// missing-option errors for validation.
 func ConfigureOptional[P, Q, B, M, R any](endpoint OptionalAuthenticationEndpoint[P, Q, B, M, R], options ...ActorOption[M]) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
 	for _, option := range options {
 		if option == nil {
@@ -203,6 +234,8 @@ func ConfigureOptional[P, Q, B, M, R any](endpoint OptionalAuthenticationEndpoin
 	return endpoint
 }
 
+// ConfigureAuthenticatedRoute applies guard options to a copy of route, retaining
+// missing-option errors for validation.
 func ConfigureAuthenticatedRoute[P, M any](route AuthenticatedRoute[P, M], options ...GuardOption[M]) AuthenticatedRoute[P, M] {
 	for _, option := range options {
 		if option == nil {
@@ -215,6 +248,9 @@ func ConfigureAuthenticatedRoute[P, M any](route AuthenticatedRoute[P, M], optio
 	}
 	return route
 }
+
+// ConfigureOptionalRoute applies actor options to a copy of route, retaining
+// missing-option errors for validation.
 func ConfigureOptionalRoute[P, M any](route OptionalAuthenticationRoute[P, M], options ...ActorOption[M]) OptionalAuthenticationRoute[P, M] {
 	for _, option := range options {
 		if option == nil {
@@ -228,16 +264,25 @@ func ConfigureOptionalRoute[P, M any](route OptionalAuthenticationRoute[P, M], o
 	return route
 }
 
+// SignedOption configures permanent-link acceptance or unsigned query parameters for
+// signed declarations.
 type SignedOption struct {
 	permanent bool
 	ignored   []string
 	ignore    bool
 }
 
+// PermanentLinks permits signed links without expiry in addition to expiring links.
 func PermanentLinks() SignedOption { return SignedOption{permanent: true} }
+
+// IgnoredParameters snapshots unauthenticated query parameter names to exclude from
+// signature verification and typed query decoding.
 func IgnoredParameters(names ...string) SignedOption {
 	return SignedOption{ignored: slices.Clone(names), ignore: true}
 }
+
+// ConfigureSigned applies permanent-link and ignored-parameter options to a copy of
+// endpoint.
 func ConfigureSigned[P, Q, B, R any](endpoint SignedEndpoint[P, Q, B, R], options ...SignedOption) SignedEndpoint[P, Q, B, R] {
 	for _, option := range options {
 		if option.permanent {
@@ -249,6 +294,9 @@ func ConfigureSigned[P, Q, B, R any](endpoint SignedEndpoint[P, Q, B, R], option
 	}
 	return endpoint
 }
+
+// ConfigureSignedAuthenticated applies signed-link options to a copy of the
+// authenticated endpoint.
 func ConfigureSignedAuthenticated[P, Q, B, S, R any](endpoint SignedAuthenticatedEndpoint[P, Q, B, S, R], options ...SignedOption) SignedAuthenticatedEndpoint[P, Q, B, S, R] {
 	for _, option := range options {
 		if option.permanent {
@@ -260,6 +308,9 @@ func ConfigureSignedAuthenticated[P, Q, B, S, R any](endpoint SignedAuthenticate
 	}
 	return endpoint
 }
+
+// ConfigureSignedRoute applies permanent-link and ignored-parameter options to a copy
+// of route.
 func ConfigureSignedRoute[P any](route SignedRoute[P], options ...SignedOption) SignedRoute[P] {
 	for _, option := range options {
 		if option.permanent {
@@ -271,6 +322,9 @@ func ConfigureSignedRoute[P any](route SignedRoute[P], options ...SignedOption) 
 	}
 	return route
 }
+
+// ConfigureSignedAuthenticatedRoute applies signed-link options to a copy of the
+// authenticated raw route.
 func ConfigureSignedAuthenticatedRoute[P, S any](route SignedAuthenticatedRoute[P, S], options ...SignedOption) SignedAuthenticatedRoute[P, S] {
 	for _, option := range options {
 		if option.permanent {
@@ -283,21 +337,32 @@ func ConfigureSignedAuthenticatedRoute[P, S any](route SignedAuthenticatedRoute[
 	return route
 }
 
+// AuthenticatedEndpointID returns the endpoint's route identifier.
 func AuthenticatedEndpointID[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R]) RouteID {
 	return EndpointID(endpoint.endpoint)
 }
+
+// AuthenticatedEndpointMethod returns the endpoint's HTTP method.
 func AuthenticatedEndpointMethod[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R]) Method {
 	return EndpointMethod(endpoint.endpoint)
 }
+
+// AuthenticatedEndpointPattern returns the endpoint's path template.
 func AuthenticatedEndpointPattern[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R]) string {
 	return EndpointPattern(endpoint.endpoint)
 }
+
+// OptionalEndpointID returns the endpoint's route identifier.
 func OptionalEndpointID[P, Q, B, M, R any](endpoint OptionalAuthenticationEndpoint[P, Q, B, M, R]) RouteID {
 	return EndpointID(endpoint.required.endpoint)
 }
+
+// OptionalEndpointMethod returns the endpoint's HTTP method.
 func OptionalEndpointMethod[P, Q, B, M, R any](endpoint OptionalAuthenticationEndpoint[P, Q, B, M, R]) Method {
 	return EndpointMethod(endpoint.required.endpoint)
 }
+
+// OptionalEndpointPattern returns the endpoint's path template.
 func OptionalEndpointPattern[P, Q, B, M, R any](endpoint OptionalAuthenticationEndpoint[P, Q, B, M, R]) string {
 	return EndpointPattern(endpoint.required.endpoint)
 }

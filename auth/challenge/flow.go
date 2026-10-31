@@ -29,6 +29,7 @@ type Model[M model.Identifiable, K any] struct {
 	Eligible func(context.Context, M) (bool, error)
 }
 
+// Flow binds a model and recovery purpose to a provider, store and lifetime.
 type Flow[M model.Identifiable, K any, P Purpose] struct {
 	store    *Store
 	provider auth.Provider[M, K]
@@ -37,6 +38,7 @@ type Flow[M model.Identifiable, K any, P Purpose] struct {
 	lifetime time.Duration
 }
 
+// New validates and binds the store, provider, model callbacks and challenge lifetime.
 func New[M model.Identifiable, K any, P Purpose](store *Store, provider auth.Provider[M, K], binding Model[M, K], lifetime time.Duration) (*Flow[M, K, P], error) {
 	for _, err := range []error{store.Validate(), provider.Validate(), ValidateLifetime(lifetime)} {
 		if err != nil {
@@ -52,6 +54,8 @@ func New[M model.Identifiable, K any, P Purpose](store *Store, provider auth.Pro
 	}
 	return &Flow[M, K, P]{store: store, provider: provider, model: binding, address: address, lifetime: lifetime}, nil
 }
+
+// Validate checks that the flow and its store are configured.
 func (f *Flow[M, K, P]) Validate() error {
 	if f == nil {
 		return safeerror.NewFault(fault.Invalid, "challenge flow is not configured")
@@ -68,10 +72,17 @@ type Issued[M any, P Purpose] struct {
 	expires temporal.DateTime
 }
 
-func (i Issued[M, P]) Subject() M                   { return i.subject }
-func (i Issued[M, P]) Token() Token[M, P]           { return i.token }
+// Subject returns the model snapshot from issuance without cloning it.
+func (i Issued[M, P]) Subject() M { return i.subject }
+
+// Token returns the secret challenge for explicit delivery.
+func (i Issued[M, P]) Token() Token[M, P] { return i.token }
+
+// ExpiresAt returns the committed challenge deadline.
 func (i Issued[M, P]) ExpiresAt() temporal.DateTime { return i.expires }
-func (Issued[M, P]) Format(s fmt.State, _ rune)     { _, _ = s.Write([]byte("issued challenge")) }
+
+// Format writes the label "issued challenge" without exposing the value.
+func (Issued[M, P]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("issued challenge")) }
 
 func (f *Flow[M, K, P]) locked(ctx context.Context, tx *database.Tx, identity model.Identity) (M, Binding, error) {
 	reference, err := f.provider.Parse(identity)
@@ -276,6 +287,8 @@ func (f *Flow[M, K, P]) Consume(ctx context.Context, token Token[M, P], apply fu
 	}
 	return result, nil
 }
+
+// Revoke removes the reference's challenge after checking provider ownership.
 func (f *Flow[M, K, P]) Revoke(ctx context.Context, reference model.Reference[M, K]) (bool, error) {
 	if err := f.Validate(); err != nil {
 		return false, err
@@ -297,6 +310,9 @@ func (f *Flow[M, K, P]) Revoke(ctx context.Context, reference model.Reference[M,
 	}
 	return removed, nil
 }
+
+// Prune removes expired challenges within the flow's address, bounded by limit and
+// MaxPrune.
 func (f *Flow[M, K, P]) Prune(ctx context.Context, limit int) (uint64, error) {
 	if err := f.Validate(); err != nil {
 		return 0, err

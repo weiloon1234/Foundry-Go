@@ -26,6 +26,8 @@ func FloatPath[V PathFloat]() PathCodec[V] {
 
 type floatPathCodec[V PathFloat] struct{ bits int }
 
+// Parse accepts finite decimal or scientific notation within the codec's precision,
+// rejecting hexadecimal and digit-separator syntax.
 func (c floatPathCodec[V]) Parse(text string) (V, error) {
 	var zero V
 	// ParseFloat also accepts Go hexadecimal literals and digit separators.
@@ -45,6 +47,7 @@ func (c floatPathCodec[V]) Parse(text string) (V, error) {
 	return V(parsed), nil
 }
 
+// Format returns a finite float's shortest representation at the codec's precision.
 func (c floatPathCodec[V]) Format(value V) (string, error) {
 	number := float64(value)
 	if math.IsNaN(number) || math.IsInf(number, 0) {

@@ -30,17 +30,26 @@ type bucket struct {
 // buckets in amortized O(log n) each instead of scanning every entry.
 type expiries []*bucket
 
-func (h expiries) Len() int           { return len(h) }
+// Len returns the number of buckets in the expiry heap.
+func (h expiries) Len() int { return len(h) }
+
+// Less orders buckets by their window end.
 func (h expiries) Less(i, j int) bool { return h[i].end < h[j].end }
+
+// Swap exchanges buckets and updates their heap indices.
 func (h expiries) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
 	h[i].index, h[j].index = i, j
 }
+
+// Push appends a bucket and records its heap index.
 func (h *expiries) Push(value any) {
 	item := value.(*bucket)
 	item.index = len(*h)
 	*h = append(*h, item)
 }
+
+// Pop removes the heap's last bucket and clears its index.
 func (h *expiries) Pop() any {
 	old := *h
 	item := old[len(old)-1]
@@ -68,6 +77,8 @@ type Backend struct {
 // FoundryAdapter marks the backend as a framework-owned adapter.
 func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}
 
+// New creates a bounded in-memory backend using source as its clock; capacity must be
+// positive.
 func New(maxEntries int, source clock.Clock) (*Backend, error) {
 	if maxEntries <= 0 || source == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "memory rate limiter requires positive capacity and a clock")
@@ -78,6 +89,8 @@ func New(maxEntries int, source clock.Clock) (*Backend, error) {
 var _ ratelimit.Backend = (*Backend)(nil)
 var _ ratelimit.InspectBackend = (*Backend)(nil)
 
+// RateLimit atomically evaluates and, on admission, consumes cost in the key's fixed
+// window.
 func (b *Backend) RateLimit(ctx context.Context, key ratelimit.Key, limit ratelimit.Limit, cost uint32) (ratelimit.Decision, error) {
 	return b.decide(ctx, key, limit, cost, true)
 }

@@ -14,14 +14,22 @@ import (
 // The same value type is retained through authorization and incoming handlers.
 type Target[R any] struct{ Room value.Optional[R] }
 
-func Room[R any](room R) Target[R]   { return Target[R]{Room: value.Set(room)} }
+// Room returns a target restricted to the supplied typed room.
+func Room[R any](room R) Target[R] { return Target[R]{Room: value.Set(room)} }
+
+// WholeChannel returns a target for the entire channel without a room restriction.
 func WholeChannel[R any]() Target[R] { return Target[R]{} }
 
+// Rooms binds room values to their path codec.
 type Rooms[R any] struct{ codec foundryhttp.PathCodec[R] }
 
 // DefineRooms reuses the existing text codec and its same-value metadata.
 func DefineRooms[R any](codec foundryhttp.PathCodec[R]) Rooms[R] { return Rooms[R]{codec: codec} }
-func (r Rooms[R]) Validate() error                               { _, err := foundryhttp.DescribePathCodec(r.codec); return err }
+
+// Validate checks that the room codec has valid URL scalar metadata.
+func (r Rooms[R]) Validate() error { _, err := foundryhttp.DescribePathCodec(r.codec); return err }
+
+// Description returns the room codec's URL scalar metadata.
 func (r Rooms[R]) Description() (foundryhttp.URLScalarInfo, error) {
 	return foundryhttp.DescribePathCodec(r.codec)
 }

@@ -52,6 +52,7 @@ func pathPrefixed[P any](p Path[P], prefix string) Path[P] {
 // StaticPath declares an exact path with no parameters.
 func StaticPath(pattern string) Path[NoPath] { return DefinePath[NoPath](pattern) }
 
+// PathPattern returns the declared path template.
 func PathPattern[P any](p Path[P]) string { return p.pattern }
 
 type pathSegment = httppath.Segment

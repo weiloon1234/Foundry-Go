@@ -33,10 +33,15 @@ type etagResponse struct {
 	passthrough bool
 }
 
+// Header returns the wrapper's mutable response headers.
 func (w *etagResponse) Header() stdhttp.Header                   { return w.header }
 func (w *etagResponse) underlyingWriter() stdhttp.ResponseWriter { return w.native }
-func (w *etagResponse) Unwrap() stdhttp.ResponseWriter           { return responseController{w} }
 
+// Unwrap exposes the wrapper's supported response-control operations.
+func (w *etagResponse) Unwrap() stdhttp.ResponseWriter { return responseController{w} }
+
+// WriteHeader snapshots the first final status and headers, committing immediately when
+// automatic ETag capture is ineligible.
 func (w *etagResponse) WriteHeader(status int) {
 	if status < 100 || status > 999 {
 		panic("invalid HTTP status code")
@@ -72,6 +77,8 @@ func (w *etagResponse) WriteHeader(status int) {
 	}
 }
 
+// Write captures eligible data for ETag evaluation or passes it through when capture
+// bounds or admission prevent retention.
 func (w *etagResponse) Write(data []byte) (int, error) {
 	if w.hijacked {
 		return 0, stdhttp.ErrHijacked
@@ -215,6 +222,8 @@ func (w *etagResponse) release() {
 	}
 }
 
+// FlushError commits any captured response and flushes the underlying writer,
+// preserving stored or unsupported-operation errors.
 func (w *etagResponse) FlushError() error {
 	if w.hijacked {
 		return stdhttp.ErrHijacked

@@ -65,6 +65,8 @@ func DefaultEventStreamConfig() EventStreamConfig {
 	return EventStreamConfig{Queue: 64, Heartbeat: 15 * time.Second, Data: contract.JSONLimits{Bytes: 64 << 10, Depth: 32, Nodes: 4096, Steps: 16384, Issues: 16}}
 }
 
+// Validate checks queue and data bounds and requires a disabled heartbeat or an
+// interval of at least one second.
 func (c EventStreamConfig) Validate() error {
 	if c.Queue <= 0 || c.Queue > maxEventQueue || c.Heartbeat < 0 || c.Heartbeat > 0 && c.Heartbeat < minEventHeartbeat {
 		return safeerror.NewFault(fault.Invalid, "event stream requires a queue of 1–4096 and a heartbeat of zero or at least one second")

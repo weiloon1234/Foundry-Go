@@ -153,6 +153,8 @@ type assetBody struct {
 	err     error
 }
 
+// Close closes the file and releases its asset lease exactly once, returning the
+// retained close error.
 func (b *assetBody) Close() error {
 	b.once.Do(func() { defer b.release(); b.err = closeAssetFile(b.ReadSeekCloser) })
 	return b.err

@@ -29,6 +29,7 @@ import (
 // EventType names a delivered event, for example "invoice.paid".
 type EventType string
 
+// Validate requires a semantic event identifier.
 func (t EventType) Validate() error {
 	if !identifier.Semantic(string(t)) {
 		return invalid()
@@ -43,22 +44,35 @@ type Event[P any] struct {
 	contract contract.JSON[P]
 }
 
+// DefineEvent declares a typed webhook event using the supplied JSON contract.
 func DefineEvent[P any](kind EventType, payload contract.JSON[P]) Event[P] {
 	return Event[P]{kind: kind, contract: payload}
 }
+
+// Type returns the declared webhook event type.
 func (e Event[P]) Type() EventType { return e.kind }
+
+// Validate checks the event type and JSON contract.
 func (e Event[P]) Validate() error {
 	if err := e.kind.Validate(); err != nil {
 		return err
 	}
 	return e.contract.Validate()
 }
+
+// Format writes an event label without exposing its payload contract.
 func (Event[P]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("outbound webhook event")) }
 
 // Endpoint and Delivery are identity markers for typed IDs.
 type Endpoint struct{}
+
+// Delivery identifies the model type for persisted outbound deliveries.
 type Delivery struct{}
+
+// EndpointID identifies a persisted outbound endpoint.
 type EndpointID = model.ID[Endpoint]
+
+// DeliveryID identifies a persisted outbound delivery.
 type DeliveryID = model.ID[Delivery]
 
 // Config bounds one outbound webhook service. MaxEndpoints bounds the registry
@@ -87,9 +101,14 @@ const (
 	failureCategoryBytes = 64
 )
 
+// DefaultConfig returns default schema, endpoint, payload, concurrency, timeout and
+// secret-grace settings.
 func DefaultConfig() Config {
 	return Config{Schema: "public", MaxEndpoints: defaultMaxEndpoints, MaxPayloadBytes: 256 << 10, MaxActive: 32, Timeout: time.Minute, SecretGrace: 24 * time.Hour}
 }
+
+// Validate checks the SQL schema and endpoint, payload, concurrency, timeout and
+// secret-grace bounds.
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || c.MaxEndpoints < 1 || c.MaxEndpoints > 100000 || c.MaxPayloadBytes < 1024 || c.MaxPayloadBytes > MaxPayloadBytes || c.MaxActive < 1 || c.MaxActive > 1024 || c.Timeout <= 0 || c.Timeout > 10*time.Minute || c.SecretGrace < 0 || c.SecretGrace > MaxSecretGrace {
 		return invalid()
@@ -118,6 +137,8 @@ type Service struct {
 	calls  *workscope.Group
 }
 
+// New validates dependencies and bounds and creates a service using a
+// destination-restricted HTTP client.
 func New(dependencies Dependencies, config Config) (*Service, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -137,12 +158,16 @@ func New(dependencies Dependencies, config Config) (*Service, error) {
 	}
 	return &Service{db: dependencies.DB, keys: dependencies.Keys, client: dependencies.Client, clock: dependencies.Clock, config: config, calls: calls}, nil
 }
+
+// Validate checks that the service has a database, operation group and HTTP client.
 func (s *Service) Validate() error {
 	if s == nil || s.db == nil || s.calls == nil || s.client == nil {
 		return invalid()
 	}
 	return nil
 }
+
+// Config returns the service's settings, or zero settings for a nil service.
 func (s *Service) Config() Config {
 	if s == nil {
 		return Config{}
@@ -157,6 +182,9 @@ func (s *Service) Close(ctx context.Context) error {
 	}
 	return s.calls.Close(ctx)
 }
+
+// Done returns the channel that closes when the service's operation group finishes
+// shutting down.
 func (s *Service) Done() <-chan struct{} {
 	if s == nil {
 		var g *workscope.Group
@@ -164,6 +192,8 @@ func (s *Service) Done() <-chan struct{} {
 	}
 	return s.calls.Done()
 }
+
+// Format writes a service label without exposing its dependencies.
 func (*Service) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("outbound webhook service"))
 }

@@ -25,7 +25,10 @@ import (
 // a Committed database outcome; an error is not permission to retry blindly.
 // Prune deletes only expired pending factors and acquires no model locks.
 type Backend interface {
+	// Within prepares the model lock, reads the factor and applies one change in an owned
+	// transaction without retries.
 	Within(context.Context, Address, model.Identity, func(context.Context, *database.Tx) error, func(context.Context, *database.Tx, value.Optional[Record], temporal.DateTime) (Change, error)) (value.Optional[Record], error)
+	// Prune deletes at most limit expired pending factors without acquiring model locks.
 	Prune(context.Context, Address, int) (uint64, error)
 }
 
@@ -37,17 +40,32 @@ type Change struct {
 	until  value.Optional[temporal.DateTime]
 }
 
-func Replace(record Record) Change                           { return Change{kind: 1, record: record.Clone()} }
-func Remove() Change                                         { return Change{kind: 2} }
-func (c Change) Before(until temporal.DateTime) Change       { c.until = value.Set(until); return c }
+// Replace selects replacement with an owned clone of record.
+func Replace(record Record) Change { return Change{kind: 1, record: record.Clone()} }
+
+// Remove selects deletion of the current factor record.
+func Remove() Change { return Change{kind: 2} }
+
+// Before returns a change with a strict deadline to recheck before commit.
+func (c Change) Before(until temporal.DateTime) Change { c.until = value.Set(until); return c }
+
+// Deadline returns the optional pre-commit deadline.
 func (c Change) Deadline() value.Optional[temporal.DateTime] { return c.until }
-func (c Change) Removes() bool                               { return c.kind == 2 }
+
+// Removes reports whether the change selects deletion.
+func (c Change) Removes() bool { return c.kind == 2 }
+
+// Next returns an owned clone of the replacement record, or omission for a removal or
+// undefined change.
 func (c Change) Next() value.Optional[Record] {
 	if c.kind != 1 {
 		return value.Optional[Record]{}
 	}
 	return value.Set(c.record.Clone())
 }
+
+// Validate checks the mutation choice, optional deadline and replacement's address and
+// subject ownership.
 func (c Change) Validate(address Address, subject model.Identity) error {
 	if c.kind != 1 && c.kind != 2 {
 		return safeerror.NewFault(fault.Invalid, "MFA mutation must select replacement or removal")
@@ -65,5 +83,7 @@ func (c Change) Validate(address Address, subject model.Identity) error {
 // exact pool ownership, uses a savepoint, restores schema settings and never
 // commits. The same model-before-factor ordering and callback rules apply.
 type TransactionalBackend interface {
+	// WithinIn applies the model-before-factor mutation contract within the caller-owned
+	// transaction, without committing it.
 	WithinIn(context.Context, *database.Tx, Address, model.Identity, func(context.Context, *database.Tx) error, func(context.Context, *database.Tx, value.Optional[Record], temporal.DateTime) (Change, error)) (value.Optional[Record], error)
 }

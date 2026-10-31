@@ -33,6 +33,8 @@ type Tokens[M model.Identifiable, K any] struct {
 	tickets   auth.Binder[familyBinding]
 }
 
+// New binds a token store, provider, guard and credential source with an immutable
+// allowed-scope ceiling and validated options.
 func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provider auth.Provider[M, K], source auth.CredentialName, allowed auth.AccessScopes[M], opts ...Option) (*Tokens[M, K], error) {
 	if err := store.validate(); err != nil {
 		return nil, err
@@ -66,6 +68,8 @@ func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provide
 	}
 	return tokens, nil
 }
+
+// Validate checks the token store and guard binding.
 func (t *Tokens[M, K]) Validate() error {
 	if t == nil {
 		return safeerror.NewFault(fault.Invalid, "token binding is missing")
@@ -75,6 +79,9 @@ func (t *Tokens[M, K]) Validate() error {
 	}
 	return t.guard.Validate()
 }
+
+// Guard returns the token authentication guard, or an undefined guard for a nil
+// binding.
 func (t *Tokens[M, K]) Guard() auth.Guard[M] {
 	if t == nil {
 		return auth.Guard[M]{}

@@ -34,6 +34,9 @@ func DefineEncoding[T any](identity string, encode func(context.Context, T, int)
 	}
 	return e
 }
+
+// JSONEncoding derives an encoding identity and bounded codecs from the JSON
+// descriptor.
 func JSONEncoding[T any](descriptor contract.JSON[T]) Encoding[T] {
 	schema, err := descriptor.Description()
 	if err != nil {
@@ -52,6 +55,9 @@ func JSONEncoding[T any](descriptor contract.JSON[T]) Encoding[T] {
 func encodingLimits(limit int) contract.JSONLimits {
 	return contract.JSONLimits{Bytes: limit, Depth: jsonwire.MaxDepth, Nodes: jsonwire.MaxNodes, Steps: 100000, Issues: 32}
 }
+
+// Validate checks that the encoding has an identity and both codecs, returning any
+// retained declaration error.
 func (e Encoding[T]) Validate() error {
 	if e.err != nil {
 		return e.err
@@ -61,6 +67,8 @@ func (e Encoding[T]) Validate() error {
 	}
 	return nil
 }
+
+// Format writes an encoding label without exposing callbacks.
 func (Encoding[T]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("idempotency encoding")) }
 
 // Input is the one-way, concrete fingerprint boundary. It never deserializes
@@ -71,6 +79,8 @@ type Input[T any] struct {
 	err      error
 }
 
+// DefineInput declares a bounded input encoder and its stable identity, retaining
+// declaration errors for Validate.
 func DefineInput[T any](identity string, encode func(context.Context, T, int) ([]byte, error)) Input[T] {
 	i := Input[T]{identity: identity, encode: encode}
 	if !identityPart(identity) || encode == nil {
@@ -78,10 +88,15 @@ func DefineInput[T any](identity string, encode func(context.Context, T, int) ([
 	}
 	return i
 }
+
+// JSONInput derives input encoding and identity from the JSON descriptor.
 func JSONInput[T any](descriptor contract.JSON[T]) Input[T] {
 	e := JSONEncoding(descriptor)
 	return Input[T]{identity: e.identity, encode: e.encode, err: e.err}
 }
+
+// Validate checks that the input has an identity and encoder, returning any retained
+// declaration error.
 func (i Input[T]) Validate() error {
 	if i.err != nil {
 		return i.err
@@ -91,6 +106,8 @@ func (i Input[T]) Validate() error {
 	}
 	return nil
 }
+
+// Format writes an input label without exposing its callback.
 func (Input[T]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("idempotency input")) }
 func (e Encoding[T]) prepare(ctx context.Context, v T, limit int) ([]byte, error) {
 	return (Input[T]{identity: e.identity, encode: e.encode}).prepare(ctx, v, limit)

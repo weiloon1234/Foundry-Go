@@ -50,6 +50,7 @@ func ProxySchemeHeader(scheme HeaderName) ProxyOriginHeader {
 	return ProxyOriginHeader{scheme, "", proxyOriginScheme}
 }
 
+// Validate checks the declared Forwarded, scheme or scheme-and-host header combination.
 func (h ProxyOriginHeader) Validate() error {
 	scheme, err := h.scheme.Canonical()
 	if err != nil {

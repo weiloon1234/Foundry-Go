@@ -25,7 +25,10 @@ type Config struct {
 	Clock  clock.Clock
 }
 
+// DefaultConfig returns the public schema and system clock.
 func DefaultConfig() Config { return Config{Schema: "public", Clock: clock.System{}} }
+
+// Validate requires a valid SQL schema and a non-nil clock.
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || credential.IsNil(c.Clock) {
 		return safeerror.NewFault(fault.Invalid, "challenge PostgreSQL adapter requires a schema and clock")
@@ -33,11 +36,13 @@ func (c Config) Validate() error {
 	return nil
 }
 
+// Backend persists single-use challenges in PostgreSQL using a borrowed database pool.
 type Backend struct {
 	db     *database.DB
 	config Config
 }
 
+// New validates configuration and creates an adapter borrowing db.
 func New(db *database.DB, config Config) (*Backend, error) {
 	if db == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "challenge PostgreSQL adapter requires a database pool")

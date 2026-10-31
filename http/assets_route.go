@@ -27,6 +27,8 @@ type AssetMount struct {
 	navigationFallback stdhttp.Handler
 }
 
+// Mount declares a public GET subtree for assets under prefix, retaining invalid-prefix
+// errors for validation.
 func (a *Assets) Mount(id RouteID, prefix string) AssetMount {
 	normalized, err := assetPrefix(prefix)
 	route := DefineRoute(RouteSpec{ID: id, Method: GET, Access: Public}, DefinePath(normalized+"/{"+assetParameter+"...}", Param(assetParameter, StringPath[AssetPath](), func(p *assetRoutePath) *AssetPath { return &p.Value })))
@@ -47,12 +49,16 @@ func assetPrefix(prefix string) (string, error) {
 	}
 	return prefix, nil
 }
+
+// Validate requires constructed assets and a valid route declaration.
 func (m AssetMount) Validate() error {
 	if m.assets == nil || m.assets.done == nil {
 		return safeerror.NewFault(fault.Invalid, "asset mount requires constructed assets")
 	}
 	return ValidateRoute(m.route)
 }
+
+// WithMiddleware returns a mount with the supplied middleware appended to its route.
 func (m AssetMount) WithMiddleware(middleware ...Middleware) AssetMount {
 	m.route = ConfigureRoute(m.route, Use(middleware...))
 	return m
@@ -65,6 +71,9 @@ func (m AssetMount) WithNavigationFallback(handler stdhttp.Handler) AssetMount {
 	m.navigationFallback = handler
 	return m
 }
+
+// URL formats an asset path under the mount, preserving a valid directory trailing
+// slash.
 func (m AssetMount) URL(name AssetPath) (string, error) {
 	if err := m.Validate(); err != nil {
 		return "", err
@@ -82,6 +91,9 @@ func (m AssetMount) URL(name AssetPath) (string, error) {
 	}
 	return location, nil
 }
+
+// Register creates the asset route registration, retaining validation errors and
+// coordinating missing-asset fallback with mounted SPAs.
 func (m AssetMount) Register() RouteRegistration {
 	if err := m.Validate(); err != nil {
 		return RouteRegistration{err: err}

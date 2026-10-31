@@ -36,13 +36,20 @@ type Pending struct {
 	expires  time.Time
 }
 
-func (Pending) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte(secret.Redacted)) }
-func (Pending) LogValue() slog.Value         { return slog.StringValue(secret.Redacted) }
+// Format writes the redaction marker without exposing the value.
+func (Pending) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(secret.Redacted)) }
+
+// LogValue returns the redaction marker without exposing the value.
+func (Pending) LogValue() slog.Value { return slog.StringValue(secret.Redacted) }
+
+// MarshalJSON encodes the redaction marker without exposing the value.
 func (Pending) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 
 // Provider and ExpiresAt describe the pending request without its secrets.
 func (p Pending) Provider() ProviderName { return p.provider }
-func (p Pending) ExpiresAt() time.Time   { return p.expires }
+
+// ExpiresAt returns the pending authorization deadline.
+func (p Pending) ExpiresAt() time.Time { return p.expires }
 
 func newToken() (string, error) {
 	var raw [randomBytes]byte
@@ -98,12 +105,16 @@ func canonicalToken(text string) bool {
 // encrypted and authenticated by the cookie encrypter.
 type pendingCodec struct{}
 
+// Format validates and serializes pending authorization secrets for the protected
+// cookie boundary.
 func (pendingCodec) Format(p Pending) (string, error) {
 	if err := p.validate(); err != nil {
 		return "", err
 	}
 	return strings.Join([]string{"v1", string(p.provider), p.state, p.nonce, p.verifier, strconv.FormatInt(p.expires.Unix(), 10)}, ":"), nil
 }
+
+// Parse restores and validates a version-one pending authorization value.
 func (pendingCodec) Parse(text string) (Pending, error) {
 	parts := strings.Split(text, ":")
 	if len(parts) != 6 || parts[0] != "v1" {

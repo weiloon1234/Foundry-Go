@@ -43,14 +43,21 @@ type Stream struct {
 // streams that outlive the kernel RequestTimeout.
 func (s Stream) Progressive() Stream { s.progressive = true; return s }
 
+// StreamFrom binds a streaming source with default file presentation.
 func StreamFrom(source StreamSource) Stream {
 	return Stream{source: source, filePresentation: defaultFilePresentation()}
 }
+
+// WithName returns a stream with an explicitly supplied filename.
 func (s Stream) WithName(name string) Stream { s.name = value.Set(name); return s }
+
+// WithDisposition returns a stream with the selected disposition.
 func (s Stream) WithDisposition(disposition Disposition) Stream {
 	s.disposition = disposition
 	return s
 }
+
+// WithMediaType returns a stream with an explicitly supplied media type.
 func (s Stream) WithMediaType(media MediaType) Stream { s.media = value.Set(media); return s }
 
 // Validate checks metadata without opening or consuming the stream.
@@ -60,6 +67,9 @@ func (s Stream) Validate() error {
 	}
 	return s.filePresentation.validate()
 }
+
+// MarshalJSON rejects JSON serialization because a stream requires a file response
+// contract.
 func (Stream) MarshalJSON() ([]byte, error) {
 	return nil, safeerror.NewFault(fault.Invalid, "stream requires a file response contract")
 }

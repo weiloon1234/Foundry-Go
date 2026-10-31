@@ -82,6 +82,7 @@ func DefaultIPRateLimitOptions() IPRateLimitOptions {
 	return IPRateLimitOptions{IPv4Prefix: 32, IPv6Prefix: 64}
 }
 
+// Validate checks that the IP rate-limit options can be compiled.
 func (o IPRateLimitOptions) Validate() error { _, err := o.compile(); return err }
 
 func (o IPRateLimitOptions) compile() (IPRateLimitOptions, error) {
@@ -154,7 +155,10 @@ func RateLimitExceeded(decision ratelimit.Decision) error {
 
 type rateLimitRejection struct{ decision ratelimit.Decision }
 
-func (e *rateLimitRejection) Error() string            { return RateLimited.Error() }
+// Error returns the RateLimited code.
+func (e *rateLimitRejection) Error() string { return RateLimited.Error() }
+
+// Is reports whether target is RateLimited.
 func (e *rateLimitRejection) Is(target error) bool     { return target == RateLimited }
 func (e *rateLimitRejection) httpErrorCode() ErrorCode { return RateLimited }
 

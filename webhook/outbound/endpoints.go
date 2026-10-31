@@ -49,6 +49,7 @@ type EndpointInfo struct {
 	CreatedAt temporal.DateTime
 }
 
+// Format writes an endpoint label without exposing endpoint data.
 func (EndpointInfo) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("webhook endpoint")) }
 
 func endpointInfo(row store.Endpoint) (EndpointInfo, error) {

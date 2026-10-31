@@ -80,6 +80,7 @@ func (l *PasswordLogin[M, K, I]) confirmationKey(subject M) (ConfirmationKey, er
 // EnrolledFactors reports whether a model currently has a confirmed second
 // factor. mfa.Factors implements it from the model's stored enabled state.
 type EnrolledFactors[M any] interface {
+	// HasEnrolledFactor reports whether the current model has an enrolled second factor.
 	HasEnrolledFactor(context.Context, M) (bool, error)
 }
 
@@ -128,6 +129,8 @@ func (l *PasswordLogin[M, K, I]) requiresMFA(ctx context.Context, subject M) (bo
 	return l.factors.HasEnrolledFactor(ctx, subject)
 }
 
+// NewPasswordLogin validates and binds the provider, hasher and password model with
+// bounded verification admission.
 func NewPasswordLogin[M model.Identifiable, K, I any](provider Provider[M, K], hasher *password.Hasher, binding PasswordModel[M, I], config Config) (*PasswordLogin[M, K, I], error) {
 	if err := provider.Validate(); err != nil {
 		return nil, err
@@ -143,6 +146,8 @@ func NewPasswordLogin[M model.Identifiable, K, I any](provider Provider[M, K], h
 	}
 	return &PasswordLogin[M, K, I]{provider: provider, hasher: hasher, model: binding, gate: credential.NewGate(config.MaxConcurrent, config.Timeout)}, nil
 }
+
+// Validate checks that password login has been configured.
 func (l *PasswordLogin[M, K, I]) Validate() error {
 	if l == nil || l.gate == nil {
 		return safeerror.NewFault(fault.Invalid, "password login is not configured")

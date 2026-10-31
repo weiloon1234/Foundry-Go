@@ -27,6 +27,8 @@ type SecondFactor[M model.Identifiable, K any] struct {
 func DefineSecondFactor[M model.Identifiable, K any](provider Provider[M, K], verify func(context.Context, *database.Tx, model.Reference[M, K], func(context.Context, *database.Tx) error) error) SecondFactor[M, K] {
 	return SecondFactor[M, K]{provider: provider, verify: verify}
 }
+
+// ValidateFor requires a verifier bound to the exact supplied provider declaration.
 func (s SecondFactor[M, K]) ValidateFor(provider Provider[M, K]) error {
 	if err := provider.Validate(); err != nil {
 		return err
@@ -39,6 +41,8 @@ func (s SecondFactor[M, K]) ValidateFor(provider Provider[M, K]) error {
 	}
 	return nil
 }
+
+// Format writes a verification label without exposing factor data.
 func (SecondFactor[M, K]) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("second-factor verification"))
 }

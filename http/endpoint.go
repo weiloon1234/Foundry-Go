@@ -61,14 +61,23 @@ type Endpoint[P, Q, B, R any] struct {
 	headers       *ResponseHeaders[R]
 }
 
+// DefineEndpoint connects typed path, query, body and response contracts with default
+// limits and the supplied options.
 func DefineEndpoint[P, Q, B, R any](route Route[P], query Query[Q], body Body[B], response Response[R], options ...EndpointOption) Endpoint[P, Q, B, R] {
 	return ConfigureEndpoint(Endpoint[P, Q, B, R]{route: route, query: query, body: body, response: response, endpointCore: endpointCore{limits: DefaultEndpointLimits()}}, options...)
 }
 
-func EndpointID[P, Q, B, R any](e Endpoint[P, Q, B, R]) RouteID     { return RouteIDOf(e.route) }
-func EndpointMethod[P, Q, B, R any](e Endpoint[P, Q, B, R]) Method  { return RouteMethod(e.route) }
+// EndpointID returns the endpoint's declared route identifier.
+func EndpointID[P, Q, B, R any](e Endpoint[P, Q, B, R]) RouteID { return RouteIDOf(e.route) }
+
+// EndpointMethod returns the endpoint's declared HTTP method.
+func EndpointMethod[P, Q, B, R any](e Endpoint[P, Q, B, R]) Method { return RouteMethod(e.route) }
+
+// EndpointPattern returns the endpoint's path template.
 func EndpointPattern[P, Q, B, R any](e Endpoint[P, Q, B, R]) string { return RoutePattern(e.route) }
 
+// ValidateEndpoint checks declarations, lifecycle callbacks, limits, error and header
+// contracts, and method-specific body and credential restrictions.
 func ValidateEndpoint[P, Q, B, R any](e Endpoint[P, Q, B, R]) error {
 	if e.body.kind == payloadForm {
 		if err := e.limits.Form.Validate(); err != nil {

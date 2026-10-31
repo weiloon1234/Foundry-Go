@@ -19,12 +19,17 @@ type Body struct {
 	err    error
 }
 
+// Bytes returns a replayable body backed by a copy of data, recording an invalid
+// request if data exceeds MaxBodyBytes.
 func Bytes(data []byte) Body {
 	if int64(len(data)) > MaxBodyBytes {
 		return Body{err: invalid()}
 	}
 	return Body{data: slices.Clone(data), length: int64(len(data)), replay: true}
 }
+
+// StreamBody declares a non-replayable reader source with the given length, or -1 for
+// unknown length. Each opened reader transfers ownership to the client.
 func StreamBody(length int64, open func(context.Context) (io.ReadCloser, error)) Body {
 	return streamBody(length, open, false)
 }
@@ -51,4 +56,6 @@ func (b Body) reader(ctx context.Context) (io.ReadCloser, error) {
 	}
 	return io.NopCloser(bytes.NewReader(b.data)), nil
 }
+
+// Format writes a body label without exposing its content.
 func (Body) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("HTTP body")) }

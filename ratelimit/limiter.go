@@ -17,15 +17,24 @@ type Limiter[K any] struct {
 	definition *definition[K]
 }
 
-func (l Limiter[K]) Name() Name   { return (Declaration[K]{l.definition}).Name() }
+// Name returns the bound declaration's name.
+func (l Limiter[K]) Name() Name { return (Declaration[K]{l.definition}).Name() }
+
+// Limit returns the bound declaration's policy.
 func (l Limiter[K]) Limit() Limit { return (Declaration[K]{l.definition}).Limit() }
+
+// Validate checks the store binding and declaration.
 func (l Limiter[K]) Validate() error {
 	if l.store == nil || l.store.backend == nil {
 		return safeerror.NewFault(fault.Invalid, "rate limiter is not bound")
 	}
 	return (Declaration[K]{l.definition}).Validate()
 }
+
+// Allow attempts to consume one unit for key.
 func (l Limiter[K]) Allow(ctx context.Context, key K) (Decision, error) { return l.Take(ctx, key, 1) }
+
+// Take attempts to consume cost units for key.
 func (l Limiter[K]) Take(ctx context.Context, key K, cost uint32) (Decision, error) {
 	return l.TakeWith(ctx, cost, func(context.Context) (K, error) { return key, nil })
 }

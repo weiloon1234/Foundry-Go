@@ -42,6 +42,7 @@ func DeviceFrom(ctx context.Context) Device {
 	return Device{ClientIP: request.IP.Unmap().WithZone(""), UserAgent: strings.Clone(agent)}
 }
 
+// Validate checks the IP zone and bounded, control-free UTF-8 user agent.
 func (d Device) Validate() error {
 	if d.ClientIP.Zone() != "" || len(d.UserAgent) > MaxDeviceUserAgentBytes || !utf8.ValidString(d.UserAgent) || strings.IndexFunc(d.UserAgent, unicode.IsControl) >= 0 {
 		return safeerror.NewFault(fault.Invalid, "invalid credential device metadata")

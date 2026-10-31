@@ -41,10 +41,20 @@ func (c Cookie[V]) invoke(operation string, fn func() error) error {
 	}
 	return callback.Isolated(operation, fn)
 }
-func (c Cookie[V]) Name() CookieName       { return c.name }
+
+// Name returns the declared cookie name.
+func (c Cookie[V]) Name() CookieName { return c.name }
+
+// Options returns the cookie's declared attributes.
 func (c Cookie[V]) Options() CookieOptions { return c.options }
-func (c Cookie[V]) String() string         { return "Cookie(" + string(c.name) + ")" }
-func (c Cookie[V]) GoString() string       { return c.String() }
+
+// String returns a label containing the cookie name.
+func (c Cookie[V]) String() string { return "Cookie(" + string(c.name) + ")" }
+
+// GoString returns the cookie's name label without exposing values.
+func (c Cookie[V]) GoString() string { return c.String() }
+
+// Validate checks retained declaration errors, codec presence and cookie attributes.
 func (c Cookie[V]) Validate() error {
 	if c.err != nil {
 		return c.err

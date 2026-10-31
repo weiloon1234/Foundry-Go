@@ -13,6 +13,7 @@ import (
 // Validate checks the ASCII field-name grammar before canonicalization.
 type HeaderName string
 
+// Validate requires a nonempty HTTP token no longer than 256 bytes.
 func (n HeaderName) Validate() error {
 	if len(n) == 0 || len(n) > 256 {
 		return safeerror.NewFault(fault.Invalid, "HTTP header name is empty or too long")

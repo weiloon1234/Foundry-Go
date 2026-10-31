@@ -146,6 +146,8 @@ func (r *Router) Routes() []RouteInfo {
 	return result
 }
 
+// ServeHTTP dispatches registered routes, rejects ambiguous encoded paths and applies
+// framework errors and configured fallbacks to unmatched requests.
 func (r *Router) ServeHTTP(w stdhttp.ResponseWriter, request *stdhttp.Request) {
 	if r == nil || r.mux == nil {
 		writeRoutingError(w, request, Unavailable)
@@ -200,6 +202,8 @@ type routingResponse struct {
 	passthrough bool
 }
 
+// Header returns staged fallback headers, or the native headers after passthrough
+// begins.
 func (r *routingResponse) Header() stdhttp.Header {
 	if r.passthrough {
 		return r.native.Header()
@@ -209,6 +213,9 @@ func (r *routingResponse) Header() stdhttp.Header {
 	}
 	return r.header
 }
+
+// WriteHeader captures native 404 and 405 statuses and forwards other first statuses
+// and staged headers.
 func (r *routingResponse) WriteHeader(status int) {
 	if r.status != 0 {
 		return
@@ -224,6 +231,8 @@ func (r *routingResponse) WriteHeader(status int) {
 	}
 	r.native.WriteHeader(status)
 }
+
+// Write suppresses unmatched native fallback bodies and forwards passthrough bodies.
 func (r *routingResponse) Write(body []byte) (int, error) {
 	if r.status == 0 {
 		r.WriteHeader(stdhttp.StatusOK)

@@ -16,6 +16,7 @@ import (
 // not enforce an application's password-strength policy or verify credentials.
 type Plaintext struct{ value secret.String }
 
+// NewPlaintext requires nonempty password input no longer than MaxPasswordBytes.
 func NewPlaintext(raw secret.String) (Plaintext, error) {
 	if raw.IsZero() || len(raw.Reveal()) > MaxPasswordBytes {
 		return Plaintext{}, safeerror.NewFault(fault.Invalid, "password input is empty or exceeds its byte limit")
@@ -27,10 +28,19 @@ func NewPlaintext(raw secret.String) (Plaintext, error) {
 // credential adapter. The returned secret still redacts ordinary serialization.
 func (p Plaintext) Secret() secret.String { return p.value }
 
-func (p Plaintext) Validate() error            { _, err := NewPlaintext(p.value); return err }
-func (Plaintext) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte(secret.Redacted)) }
-func (Plaintext) LogValue() slog.Value         { return slog.StringValue(secret.Redacted) }
+// Validate checks the password's nonempty input and byte bound.
+func (p Plaintext) Validate() error { _, err := NewPlaintext(p.value); return err }
+
+// Format writes the redaction marker without exposing the value.
+func (Plaintext) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(secret.Redacted)) }
+
+// LogValue returns the redaction marker without exposing the value.
+func (Plaintext) LogValue() slog.Value { return slog.StringValue(secret.Redacted) }
+
+// MarshalJSON encodes the redaction marker without exposing the value.
 func (Plaintext) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
+
+// UnmarshalJSON clears the receiver and decodes a nonempty, bounded password string.
 func (p *Plaintext) UnmarshalJSON(data []byte) error {
 	if p == nil {
 		return safeerror.NewFault(fault.Invalid, "password input destination is missing")

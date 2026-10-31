@@ -17,6 +17,9 @@ func (id EnrollmentID[M]) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(id.String())
 }
+
+// UnmarshalJSON clears the receiver and parses a bounded JSON string as a nonzero
+// enrollment identifier.
 func (id *EnrollmentID[M]) UnmarshalJSON(data []byte) error {
 	if id == nil {
 		return safeerror.NewFault(fault.Invalid, "enrollment ID destination is missing")
@@ -36,6 +39,8 @@ func (id *EnrollmentID[M]) UnmarshalJSON(data []byte) error {
 	*id = parsed
 	return nil
 }
+
+// JSONContract describes the model-owned enrollment identifier as a UUID string.
 func (EnrollmentID[M]) JSONContract() contract.JSON[EnrollmentID[M]] {
 	typ := reflect.TypeFor[EnrollmentID[M]]()
 	id := contract.TypeID(typ.PkgPath() + "." + typ.Name())

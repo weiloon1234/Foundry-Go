@@ -21,7 +21,10 @@ type SigningKey struct {
 	Secret secret.String
 }
 
-func (k SigningKey) String() string   { return secret.Redacted }
+// String returns the redaction marker without exposing the key.
+func (k SigningKey) String() string { return secret.Redacted }
+
+// GoString returns the redaction marker without exposing the key.
 func (k SigningKey) GoString() string { return secret.Redacted }
 
 // SigningKeys is an immutable rotation set. Active signs new values; previous
@@ -31,7 +34,10 @@ type SigningKeys struct {
 	keys   map[SigningKeyID]secret.String
 }
 
-func (k SigningKeys) String() string   { return secret.Redacted }
+// String returns the redaction marker without exposing keys.
+func (k SigningKeys) String() string { return secret.Redacted }
+
+// GoString returns the redaction marker without exposing keys.
 func (k SigningKeys) GoString() string { return secret.Redacted }
 
 // NewSigningKeys copies at most sixteen distinct keys. IDs are bounded ASCII
@@ -62,7 +68,11 @@ func NewSigningKeys(active SigningKey, previous ...SigningKey) (SigningKeys, err
 	}
 	return result, nil
 }
+
+// ActiveID returns the identifier used for new signatures.
 func (k SigningKeys) ActiveID() SigningKeyID { return k.active }
+
+// Validate requires the selected active key to exist in the key set.
 func (k SigningKeys) Validate() error {
 	if _, ok := k.keys[k.active]; !ok {
 		return safeerror.NewFault(fault.Invalid, "signing keys have no active key")

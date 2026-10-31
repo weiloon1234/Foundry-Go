@@ -17,6 +17,7 @@ const (
 	FrameSameOrigin FramePolicy = "SAMEORIGIN"
 )
 
+// Validate accepts an omitted, deny or same-origin frame policy.
 func (p FramePolicy) Validate() error {
 	switch p {
 	case "", FrameDeny, FrameSameOrigin:
@@ -40,6 +41,7 @@ const (
 	ReferrerUnsafeURL                   ReferrerPolicy = "unsafe-url"
 )
 
+// Validate accepts an omitted or supported referrer policy.
 func (p ReferrerPolicy) Validate() error {
 	switch p {
 	case "", ReferrerNoReferrer, ReferrerNoReferrerWhenDowngrade, ReferrerSameOrigin, ReferrerOrigin, ReferrerStrictOrigin, ReferrerOriginWhenCrossOrigin, ReferrerStrictOriginWhenCrossOrigin, ReferrerUnsafeURL:
@@ -58,6 +60,8 @@ type HSTSPolicy struct {
 	Preload           bool
 }
 
+// Validate requires a nonnegative whole-second max age and enforces subdomain and
+// one-year prerequisites for preload.
 func (p HSTSPolicy) Validate() error {
 	if p.MaxAge < 0 || p.MaxAge%time.Second != 0 {
 		return safeerror.NewFault(fault.Invalid, "HSTS max age must be a nonnegative whole number of seconds")

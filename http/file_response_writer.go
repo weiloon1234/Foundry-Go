@@ -27,7 +27,12 @@ type fileResponseWriter struct {
 func newFileResponseWriter(ctx context.Context, w stdhttp.ResponseWriter) *fileResponseWriter {
 	return &fileResponseWriter{ctx: ctx, native: w, header: w.Header().Clone()}
 }
+
+// Header returns the file response's mutable staged headers.
 func (w *fileResponseWriter) Header() stdhttp.Header { return w.header }
+
+// WriteHeader records the first status, committing headers only for a nonerror response
+// with an active context.
 func (w *fileResponseWriter) WriteHeader(status int) {
 	if w.status != 0 {
 		return
@@ -45,6 +50,9 @@ func (w *fileResponseWriter) WriteHeader(status int) {
 	copyResponseHeaders(w.native.Header(), w.header)
 	w.native.WriteHeader(status)
 }
+
+// Write forwards successful file data with cancellation and count checks, discarding
+// native error bodies for framework error handling.
 func (w *fileResponseWriter) Write(data []byte) (int, error) {
 	if w.status == 0 {
 		w.WriteHeader(stdhttp.StatusOK)
@@ -95,6 +103,8 @@ type fileRangeErrorWriter struct {
 	contentRange string
 }
 
+// WriteHeader restores the supplied Content-Range header for a 416 response and
+// forwards status.
 func (w fileRangeErrorWriter) WriteHeader(status int) {
 	if status == stdhttp.StatusRequestedRangeNotSatisfiable && w.contentRange != "" {
 		w.Header().Set("Content-Range", w.contentRange)

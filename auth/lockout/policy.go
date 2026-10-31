@@ -25,9 +25,14 @@ type Policy struct {
 	Window, LockFor time.Duration
 }
 
+// DefaultPolicy returns a five-failure threshold with a fifteen-minute window and lock
+// duration.
 func DefaultPolicy() Policy {
 	return Policy{MaxFailures: 5, Window: 15 * time.Minute, LockFor: 15 * time.Minute}
 }
+
+// Validate checks the failure threshold and whole-millisecond window and lock
+// durations.
 func (p Policy) Validate() error {
 	if p.MaxFailures < 1 || p.MaxFailures > MaxFailures {
 		return safeerror.NewFault(fault.Invalid, "invalid login failure threshold")
@@ -75,6 +80,8 @@ func DefaultAddressPolicy() Policy {
 	return Policy{MaxFailures: 100, Window: 15 * time.Minute, LockFor: 15 * time.Minute}
 }
 
+// Validate checks each policy and requires account and optional address ceilings at
+// least as high as the per-client threshold.
 func (l Limits) Validate() error {
 	for _, p := range []Policy{l.PerClient, l.Account} {
 		if err := p.Validate(); err != nil {

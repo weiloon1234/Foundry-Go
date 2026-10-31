@@ -23,10 +23,13 @@ type ETagConfig struct {
 	AdmissionWait time.Duration
 }
 
+// DefaultETagConfig returns default automatic ETag capture, concurrency and
+// admission-wait bounds.
 func DefaultETagConfig() ETagConfig {
 	return ETagConfig{MaxBytes: 10 << 20, MaxConcurrent: 64, AdmissionWait: 100 * time.Millisecond}
 }
 
+// Validate checks automatic ETag capture size, concurrency and admission-wait bounds.
 func (c ETagConfig) Validate() error {
 	if c.MaxBytes < 1 || c.MaxBytes > 64<<20 || c.MaxConcurrent < 1 || c.MaxConcurrent > 1024 || c.AdmissionWait < 0 || c.AdmissionWait > admission.DefaultWait {
 		return safeerror.NewFault(fault.Invalid, "automatic ETag capture bounds are invalid")

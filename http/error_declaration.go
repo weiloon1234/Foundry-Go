@@ -27,6 +27,8 @@ func DefineError(code ErrorCode, status int, message string) ErrorDeclaration {
 
 const maxErrorMessageBytes = 16384
 
+// Validate requires a semantic nonreserved code, a 4xx or 5xx status and a bounded
+// public message.
 func (d ErrorDeclaration) Validate() error {
 	info := d.definition
 	if !identifier.Semantic(string(info.Code)) || info.Status < 400 || info.Status > 599 ||
@@ -67,6 +69,7 @@ func (d ErrorDeclaration) MessageDefinition() (i18n.MessageDefinition, error) {
 	return definition, nil
 }
 
+// Error returns the declaration's HTTP error code text.
 func (d ErrorDeclaration) Error() string { return string(d.httpErrorCode()) }
 func (d ErrorDeclaration) httpErrorCode() ErrorCode {
 	if d.Validate() != nil {
@@ -90,7 +93,10 @@ type declaredResponseError struct {
 	cause error
 }
 
-func (e *declaredResponseError) Unwrap() error        { return e.cause }
+// Unwrap returns the underlying cause.
+func (e *declaredResponseError) Unwrap() error { return e.cause }
+
+// Is reports whether target is the wrapped error declaration.
 func (e *declaredResponseError) Is(target error) bool { return target == e.ErrorDeclaration }
 
 func endpointErrorDefinitions[P, Q, B, R any](e Endpoint[P, Q, B, R]) ([]ErrorDefinition, error) {

@@ -22,9 +22,13 @@ type SPAConfig struct {
 	CacheControl HeaderValue
 }
 
+// DefaultSPAConfig returns a root mount with index.html and no-cache headers.
 func DefaultSPAConfig() SPAConfig {
 	return SPAConfig{Prefix: "/", Index: "index.html", CacheControl: "no-cache"}
 }
+
+// Validate checks the mount prefix, index, cache header and bounded unique exclusion
+// prefixes.
 func (c SPAConfig) Validate() error {
 	if _, err := assetPrefix(c.Prefix); err != nil {
 		return err

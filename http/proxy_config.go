@@ -36,8 +36,10 @@ func XForwardedForHeader() ProxyHeader { return ProxyHeader{"X-Forwarded-For", p
 // peer, such as X-Real-IP or CF-Connecting-IP. It cannot parse chain headers.
 func ClientIPHeader(name HeaderName) ProxyHeader { return ProxyHeader{name, proxySingleIP} }
 
+// Name returns the declared forwarding header name.
 func (h ProxyHeader) Name() HeaderName { return h.name }
 
+// Validate checks the header name against its single-IP or chain parser declaration.
 func (h ProxyHeader) Validate() error {
 	name, err := h.name.Canonical()
 	if err != nil {
@@ -91,6 +93,7 @@ type proxyPolicy struct {
 	originHeaders []ProxyOriginHeader
 }
 
+// Validate checks that trusted proxy networks and header declarations can be compiled.
 func (c TrustedProxyConfig) Validate() error { _, err := compileTrustedProxy(c); return err }
 
 func compileTrustedProxy(c TrustedProxyConfig) (proxyPolicy, error) {

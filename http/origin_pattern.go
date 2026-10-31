@@ -18,6 +18,7 @@ import (
 // Public-suffix knowledge is not built in; do not declare *.co.uk-style suffixes.
 type OriginPattern string
 
+// Validate checks that the origin pattern can be compiled.
 func (p OriginPattern) Validate() error { _, err := compileOriginPattern(p); return err }
 
 // Wildcard reports whether the declaration matches a family of subdomains.

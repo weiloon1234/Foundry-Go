@@ -41,6 +41,9 @@ type Lifetime struct{ Access, RefreshIdle, Absolute time.Duration }
 func durationValid(d time.Duration) bool {
 	return d >= time.Millisecond && d <= MaxLifetime && d%time.Microsecond == 0
 }
+
+// Validate checks access, refresh and absolute durations against the selected token
+// mode.
 func (l Lifetime) Validate(mode Mode) error {
 	if !durationValid(l.Access) || !durationValid(l.Absolute) || l.Access > l.Absolute {
 		return safeerror.NewFault(fault.Invalid, "invalid token access or absolute lifetime")
@@ -94,6 +97,8 @@ type Config struct {
 	MaxTicketsPerFamily  int
 }
 
+// DefaultConfig returns default token lifetimes, capacity, rotation, access-grace,
+// ticket and operation bounds.
 func DefaultConfig(namespace keyspace.Namespace) Config {
 	return Config{Namespace: namespace,
 		Personal:      Lifetime{Access: 30 * 24 * time.Hour, Absolute: 30 * 24 * time.Hour},
@@ -102,6 +107,9 @@ func DefaultConfig(namespace keyspace.Namespace) Config {
 		MaxPerSubject: 32, MaxPendingPerSubject: 8, Limit: auth.RejectNew, MaxRotations: MaxRotations, AccessGrace: 30 * time.Second, MaxConcurrent: 128, Timeout: 5 * time.Second,
 		TicketLifetime: 30 * time.Second, MaxTicketsPerFamily: 8}
 }
+
+// Validate checks namespace, mode lifetimes, prefix, capacity, rotations, grace, ticket
+// and operation bounds.
 func (c Config) Validate() error {
 	for _, err := range []error{c.Namespace.Validate(), c.Personal.Validate(Personal), c.Renewable.Validate(Renewable), c.Challenge.Validate(Challenge), c.Limit.Validate(), validatePrefix(c.Prefix)} {
 		if err != nil {

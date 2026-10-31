@@ -25,15 +25,32 @@ const (
 	cspNonce
 )
 
-func CSPNone() CSPSource           { return CSPSource{"'none'", cspKeyword} }
-func CSPSelf() CSPSource           { return CSPSource{"'self'", cspKeyword} }
-func CSPAny() CSPSource            { return CSPSource{"*", cspHost} }
-func CSPUnsafeInline() CSPSource   { return CSPSource{"'unsafe-inline'", cspKeyword} }
-func CSPUnsafeEval() CSPSource     { return CSPSource{"'unsafe-eval'", cspKeyword} }
+// CSPNone returns the 'none' source expression.
+func CSPNone() CSPSource { return CSPSource{"'none'", cspKeyword} }
+
+// CSPSelf returns the 'self' source expression.
+func CSPSelf() CSPSource { return CSPSource{"'self'", cspKeyword} }
+
+// CSPAny returns the wildcard host source.
+func CSPAny() CSPSource { return CSPSource{"*", cspHost} }
+
+// CSPUnsafeInline returns the 'unsafe-inline' source expression.
+func CSPUnsafeInline() CSPSource { return CSPSource{"'unsafe-inline'", cspKeyword} }
+
+// CSPUnsafeEval returns the 'unsafe-eval' source expression.
+func CSPUnsafeEval() CSPSource { return CSPSource{"'unsafe-eval'", cspKeyword} }
+
+// CSPWasmUnsafeEval returns the 'wasm-unsafe-eval' source expression.
 func CSPWasmUnsafeEval() CSPSource { return CSPSource{"'wasm-unsafe-eval'", cspKeyword} }
-func CSPStrictDynamic() CSPSource  { return CSPSource{"'strict-dynamic'", cspKeyword} }
-func CSPUnsafeHashes() CSPSource   { return CSPSource{"'unsafe-hashes'", cspKeyword} }
-func CSPReportSample() CSPSource   { return CSPSource{"'report-sample'", cspKeyword} }
+
+// CSPStrictDynamic returns the 'strict-dynamic' source expression.
+func CSPStrictDynamic() CSPSource { return CSPSource{"'strict-dynamic'", cspKeyword} }
+
+// CSPUnsafeHashes returns the 'unsafe-hashes' source expression.
+func CSPUnsafeHashes() CSPSource { return CSPSource{"'unsafe-hashes'", cspKeyword} }
+
+// CSPReportSample returns the 'report-sample' source expression.
+func CSPReportSample() CSPSource { return CSPSource{"'report-sample'", cspKeyword} }
 
 // CSPHostSource accepts a CSP host pattern, for example
 // "https://*.example.test:443/assets/". It is not an arbitrary source-list string.
@@ -50,12 +67,17 @@ func CSPNonceSource() CSPSource { return CSPSource{"\x00", cspNonce} }
 
 // CSPSHA256 accepts the digest of the exact allowed script/style bytes.
 func CSPSHA256(digest [32]byte) CSPSource { return cspDigest("sha256", digest[:]) }
+
+// CSPSHA384 returns a source expression for the supplied SHA-384 digest.
 func CSPSHA384(digest [48]byte) CSPSource { return cspDigest("sha384", digest[:]) }
+
+// CSPSHA512 returns a source expression for the supplied SHA-512 digest.
 func CSPSHA512(digest [64]byte) CSPSource { return cspDigest("sha512", digest[:]) }
 func cspDigest(name string, digest []byte) CSPSource {
 	return CSPSource{"'" + name + "-" + base64.StdEncoding.EncodeToString(digest) + "'", cspHash}
 }
 
+// Validate checks the source kind, representation and byte bound.
 func (s CSPSource) Validate() error {
 	if len(s.text) > 2048 {
 		return safeerror.NewFault(fault.Invalid, "content security policy source exceeds its byte bound")

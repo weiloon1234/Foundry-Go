@@ -46,21 +46,31 @@ func AuthorizeActor[P, F, W, A, Page, Response any](e authenticatedPageEndpoint[
 	return e
 }
 
+// ValidateAuthenticated checks the pagination and authenticated transport declarations.
 func ValidateAuthenticated[P, F, W, A, Page, Response any](e authenticatedPageEndpoint[P, F, W, A, Page, Response]) error {
 	if err := Validate(e.page); err != nil {
 		return err
 	}
 	return foundryhttp.ValidateAuthenticated(e.transport)
 }
+
+// AuthenticatedEndpointID returns the underlying route identifier.
 func AuthenticatedEndpointID[P, F, W, A, Page, Response any](e authenticatedPageEndpoint[P, F, W, A, Page, Response]) foundryhttp.RouteID {
 	return EndpointID(e.page)
 }
+
+// AuthenticatedEndpointMethod returns the underlying HTTP method.
 func AuthenticatedEndpointMethod[P, F, W, A, Page, Response any](e authenticatedPageEndpoint[P, F, W, A, Page, Response]) foundryhttp.Method {
 	return EndpointMethod(e.page)
 }
+
+// AuthenticatedEndpointPattern returns the underlying path template.
 func AuthenticatedEndpointPattern[P, F, W, A, Page, Response any](e authenticatedPageEndpoint[P, F, W, A, Page, Response]) string {
 	return EndpointPattern(e.page)
 }
+
+// InspectAuthenticated validates pagination and authentication and returns endpoint
+// metadata.
 func InspectAuthenticated[P, F, W, A, Page, Response any](e authenticatedPageEndpoint[P, F, W, A, Page, Response]) (foundryhttp.EndpointInfo, error) {
 	if err := ValidateAuthenticated(e); err != nil {
 		return foundryhttp.EndpointInfo{}, err

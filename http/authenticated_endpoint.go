@@ -25,6 +25,7 @@ func RequireAuthentication[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], aut
 	return ConfigureAuthenticated(AuthenticatedEndpoint[P, Q, B, M, R]{endpoint: endpoint, binding: authenticationBinding[M]{authentication: authentication, guard: guard}}, options...)
 }
 
+// ValidateAuthenticated checks the endpoint and its required authentication binding.
 func ValidateAuthenticated[P, Q, B, M, R any](e AuthenticatedEndpoint[P, Q, B, M, R]) error {
 	return authenticatedEndpointValidate(e, false)
 }
@@ -42,18 +43,26 @@ func authenticatedEndpointBound[P, Q, B, M, R any](e AuthenticatedEndpoint[P, Q,
 	endpoint.route.authentication = authenticationInfo(e.binding, optional)
 	return ConfigureEndpoint(endpoint, Use(authenticationChain(e.binding, optional)...))
 }
+
+// InspectAuthenticated validates the endpoint and returns metadata including its
+// authentication requirements.
 func InspectAuthenticated[P, Q, B, M, R any](e AuthenticatedEndpoint[P, Q, B, M, R]) (EndpointInfo, error) {
 	if err := ValidateAuthenticated(e); err != nil {
 		return EndpointInfo{}, err
 	}
 	return InspectEndpoint(authenticatedEndpointBound(e, false))
 }
+
+// URL validates the authenticated declaration and formats its typed path and query
+// without authenticating a request.
 func (e AuthenticatedEndpoint[P, Q, B, M, R]) URL(ctx context.Context, path P, query Q) (string, error) {
 	if err := ValidateAuthenticated(e); err != nil {
 		return "", err
 	}
 	return e.endpoint.URL(ctx, path, query)
 }
+
+// Handle registers a typed callback requiring the guard's current concrete subject.
 func (e AuthenticatedEndpoint[P, Q, B, M, R]) Handle(handler func(context.Context, M, Input[P, Q, B]) (R, error)) RouteRegistration {
 	if err := ValidateAuthenticated(e); err != nil {
 		return InvalidRouteRegistration(err)
@@ -103,27 +112,40 @@ type OptionalAuthenticationEndpoint[P, Q, B, M, R any] struct {
 	authorization *func(context.Context, value.Optional[M], Input[P, Q, B]) error
 }
 
+// OptionalAuthentication adds an optional concrete subject to endpoint; invalid
+// supplied credentials still fail authentication.
 func OptionalAuthentication[P, Q, B, M, R any](endpoint Endpoint[P, Q, B, R], authentication *Authentication, guard auth.Guard[M], options ...ActorOption[M]) OptionalAuthenticationEndpoint[P, Q, B, M, R] {
 	return ConfigureOptional(OptionalAuthenticationEndpoint[P, Q, B, M, R]{required: RequireAuthentication(endpoint, authentication, guard)}, options...)
 }
+
+// ValidateOptional checks the endpoint, optional authentication binding and any
+// authorization callback.
 func ValidateOptional[P, Q, B, M, R any](e OptionalAuthenticationEndpoint[P, Q, B, M, R]) error {
 	if e.authorization != nil && *e.authorization == nil {
 		return safeerror.NewFault(fault.Invalid, "request authorization callback is missing")
 	}
 	return authenticatedEndpointValidate(e.required, true)
 }
+
+// InspectOptional validates the endpoint and returns metadata including optional
+// authentication.
 func InspectOptional[P, Q, B, M, R any](e OptionalAuthenticationEndpoint[P, Q, B, M, R]) (EndpointInfo, error) {
 	if err := ValidateOptional(e); err != nil {
 		return EndpointInfo{}, err
 	}
 	return InspectEndpoint(authenticatedEndpointBound(e.required, true))
 }
+
+// URL validates the optional-authentication declaration and formats its typed path and
+// query.
 func (e OptionalAuthenticationEndpoint[P, Q, B, M, R]) URL(ctx context.Context, path P, query Q) (string, error) {
 	if err := ValidateOptional(e); err != nil {
 		return "", err
 	}
 	return e.required.endpoint.URL(ctx, path, query)
 }
+
+// Handle registers a typed callback receiving the guard's optional concrete subject.
 func (e OptionalAuthenticationEndpoint[P, Q, B, M, R]) Handle(handler func(context.Context, value.Optional[M], Input[P, Q, B]) (R, error)) RouteRegistration {
 	if err := ValidateOptional(e); err != nil {
 		return InvalidRouteRegistration(err)

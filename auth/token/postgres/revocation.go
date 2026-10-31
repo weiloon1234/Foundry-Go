@@ -61,6 +61,8 @@ func (b *Backend) RevokeOthers(ctx context.Context, address token.Address, ident
 	}
 	return count, nil
 }
+
+// RevokeAll atomically removes the subject's token families and returns the count.
 func (b *Backend) RevokeAll(ctx context.Context, address token.Address, identity model.Identity) (uint64, error) {
 	if _, err := address.SubjectKey(identity); err != nil {
 		return 0, err

@@ -28,9 +28,14 @@ type BrowserSessionConfig struct {
 	Clock   clock.Clock
 }
 
+// DefaultBrowserSessionConfig returns a host-only session cookie with default options
+// and the system clock.
 func DefaultBrowserSessionConfig() BrowserSessionConfig {
 	return BrowserSessionConfig{Cookie: "__Host-foundry_session", Options: DefaultCookieOptions(), Clock: clock.System{}}
 }
+
+// Validate requires a clock, an HttpOnly cookie with server-owned expiry, valid cookie
+// options and CSRF configuration.
 func (c BrowserSessionConfig) Validate() error {
 	if nilCookieValue(c.Clock) || !c.Options.HTTPOnly || c.Options.MaxAge != 0 || !c.Options.Expires.IsZero() {
 		return safeerror.NewFault(fault.Invalid, "browser sessions require a clock, HttpOnly and server-owned expiry")
@@ -69,6 +74,8 @@ type BrowserSessions[M model.Identifiable, K any] struct {
 	authentication *Authentication
 }
 
+// NewBrowserSessions binds registered sessions to cookie authentication and CSRF
+// protection after validating configuration.
 func NewBrowserSessions[M model.Identifiable, K any](registry *auth.Registry, sessions *session.Sessions[M, K], config BrowserSessionConfig) (*BrowserSessions[M, K], error) {
 	if err := sessions.Validate(); err != nil {
 		return nil, err
@@ -103,24 +110,35 @@ func NewBrowserSessions[M model.Identifiable, K any](registry *auth.Registry, se
 	transport.browser = adapter
 	return &BrowserSessions[M, K]{sessions: sessions, adapter: adapter, authentication: transport}, nil
 }
+
+// Validate checks that the browser adapter, authentication transport and sessions are
+// configured.
 func (b *BrowserSessions[M, K]) Validate() error {
 	if b == nil || b.adapter == nil || b.authentication == nil {
 		return safeerror.NewFault(fault.Invalid, "browser sessions are not configured")
 	}
 	return b.sessions.Validate()
 }
+
+// Authentication returns the browser authentication transport, or nil for a nil
+// binding.
 func (b *BrowserSessions[M, K]) Authentication() *Authentication {
 	if b == nil {
 		return nil
 	}
 	return b.authentication
 }
+
+// Guard returns the session guard, or an undefined guard for a nil binding.
 func (b *BrowserSessions[M, K]) Guard() auth.Guard[M] {
 	if b == nil {
 		return auth.Guard[M]{}
 	}
 	return b.sessions.Guard()
 }
+
+// Middleware binds browser-session request state and cookie handling to downstream
+// requests.
 func (b *BrowserSessions[M, K]) Middleware() Middleware {
 	return defineReplayMiddleware(BrowserSessionMiddlewareID, func(next stdhttp.Handler) (stdhttp.Handler, error) {
 		if err := b.Validate(); err != nil {
@@ -284,6 +302,8 @@ func (b *BrowserSessions[M, K]) CompleteMFA(ctx context.Context, factor auth.Sec
 	return info, nil
 }
 
+// Rotate replaces the current session secret and stages its cookie, returning the new
+// session metadata.
 func (b *BrowserSessions[M, K]) Rotate(ctx context.Context) (session.Info[M, K], error) {
 	state, err := b.state(ctx)
 	if err != nil {
@@ -311,6 +331,9 @@ func (b *BrowserSessions[M, K]) Rotate(ctx context.Context) (session.Info[M, K],
 	}
 	return info, nil
 }
+
+// Logout revokes the current credential, when present, and stages a clearing cookie in
+// the bound request.
 func (b *BrowserSessions[M, K]) Logout(ctx context.Context) error {
 	state, err := b.state(ctx)
 	if err != nil {

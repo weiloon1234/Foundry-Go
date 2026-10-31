@@ -14,6 +14,7 @@ import (
 
 type cookieEncryptionError string
 
+// Error returns the cookie encryption error code text.
 func (e cookieEncryptionError) Error() string { return string(e) }
 
 // ErrInvalidEncryptedCookie identifies malformed, tampered, expired, rescoped
@@ -35,9 +36,13 @@ type CookieEncrypter struct {
 	clock   clock.Clock
 }
 
-func (e CookieEncrypter) String() string   { return secret.Redacted }
+// String returns the redaction marker without exposing encryption keys.
+func (e CookieEncrypter) String() string { return secret.Redacted }
+
+// GoString returns the redaction marker without exposing encryption keys.
 func (e CookieEncrypter) GoString() string { return secret.Redacted }
 
+// NewCookieEncrypter validates and binds the keyring and application clock.
 func NewCookieEncrypter(keyring *encryption.Keyring, applicationClock clock.Clock) (CookieEncrypter, error) {
 	encrypter := CookieEncrypter{keyring: keyring, clock: applicationClock}
 	if err := encrypter.Validate(); err != nil {
@@ -46,6 +51,7 @@ func NewCookieEncrypter(keyring *encryption.Keyring, applicationClock clock.Cloc
 	return encrypter, nil
 }
 
+// Validate checks the keyring and requires a non-nil application clock.
 func (e CookieEncrypter) Validate() error {
 	if err := e.keyring.Validate(); err != nil {
 		return err

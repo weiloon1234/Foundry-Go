@@ -18,13 +18,20 @@ type IdempotentEndpoint[P, Q, B, M, R any] struct {
 	transport     foundryhttp.IdempotentEndpoint[P, Q, B, R]
 }
 
+// BindIdempotent attaches a typed model resolver to an idempotent endpoint.
 func BindIdempotent[P, Q, B, M, R any](endpoint foundryhttp.IdempotentEndpoint[P, Q, B, R], resolver Resolver[P, M]) IdempotentEndpoint[P, Q, B, M, R] {
 	return IdempotentEndpoint[P, Q, B, M, R]{transport: endpoint, resolver: resolver}
 }
+
+// AuthorizeIdempotentResource returns an endpoint with resource authorization before
+// idempotent execution or replay.
 func AuthorizeIdempotentResource[P, Q, B, M, R any](endpoint IdempotentEndpoint[P, Q, B, M, R], authorize func(context.Context, Input[P, Q, B, M]) error) IdempotentEndpoint[P, Q, B, M, R] {
 	endpoint.authorization = &authorize
 	return endpoint
 }
+
+// ValidateIdempotentEndpoint checks resource authorization, idempotency and model
+// resolver declarations.
 func ValidateIdempotentEndpoint[P, Q, B, M, R any](e IdempotentEndpoint[P, Q, B, M, R]) error {
 	if e.authorization != nil && *e.authorization == nil {
 		return safeerror.NewFault(fault.Invalid, "resource authorization callback is missing")
@@ -34,16 +41,25 @@ func ValidateIdempotentEndpoint[P, Q, B, M, R any](e IdempotentEndpoint[P, Q, B,
 	}
 	return ValidateResolver(e.resolver)
 }
+
+// DescribeIdempotentEndpoint validates the model-binding declaration and returns
+// idempotency metadata.
 func DescribeIdempotentEndpoint[P, Q, B, M, R any](e IdempotentEndpoint[P, Q, B, M, R]) (foundryhttp.EndpointInfo, error) {
 	if err := ValidateIdempotentEndpoint(e); err != nil {
 		return foundryhttp.EndpointInfo{}, err
 	}
 	return foundryhttp.InspectIdempotent(e.transport)
 }
+
+// IdempotentHeaders returns an endpoint with application headers captured for exact
+// replay.
 func IdempotentHeaders[P, Q, B, M, R any](e IdempotentEndpoint[P, Q, B, M, R], fn func(context.Context, R) ([]foundryhttp.ResponseHeader, error)) IdempotentEndpoint[P, Q, B, M, R] {
 	e.transport = foundryhttp.IdempotentHeaders(e.transport, fn)
 	return e
 }
+
+// Handle resolves and authorizes the model before choosing the scope and transaction
+// handler for execution or replay.
 func (e IdempotentEndpoint[P, Q, B, M, R]) Handle(scope func(context.Context, Input[P, Q, B, M]) (idempotency.Scope, error), handler func(context.Context, *database.Tx, Input[P, Q, B, M]) (R, error)) foundryhttp.RouteRegistration {
 	if err := ValidateIdempotentEndpoint(e); err != nil {
 		return foundryhttp.InvalidRouteRegistration(err)
@@ -68,19 +84,29 @@ func (e IdempotentEndpoint[P, Q, B, M, R]) Handle(scope func(context.Context, In
 	})
 }
 
+// AuthenticatedIdempotentEndpoint combines a typed model resolver and resource
+// authorization with actor-aware idempotency.
 type AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R any] struct {
 	resolver      Resolver[P, M]
 	authorization *func(context.Context, S, Input[P, Q, B, M]) error
 	transport     foundryhttp.AuthenticatedIdempotentEndpoint[P, Q, B, S, R]
 }
 
+// BindAuthenticatedIdempotent attaches a typed model resolver to an authenticated
+// idempotent endpoint.
 func BindAuthenticatedIdempotent[P, Q, B, S, M, R any](endpoint foundryhttp.AuthenticatedIdempotentEndpoint[P, Q, B, S, R], resolver Resolver[P, M]) AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R] {
 	return AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R]{transport: endpoint, resolver: resolver}
 }
+
+// AuthorizeAuthenticatedIdempotentResource returns an endpoint with actor-aware
+// resource authorization before idempotent execution or replay.
 func AuthorizeAuthenticatedIdempotentResource[P, Q, B, S, M, R any](endpoint AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R], authorize func(context.Context, S, Input[P, Q, B, M]) error) AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R] {
 	endpoint.authorization = &authorize
 	return endpoint
 }
+
+// ValidateAuthenticatedIdempotentEndpoint checks resource authorization, authenticated
+// idempotency and model resolver declarations.
 func ValidateAuthenticatedIdempotentEndpoint[P, Q, B, S, M, R any](e AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R]) error {
 	if e.authorization != nil && *e.authorization == nil {
 		return safeerror.NewFault(fault.Invalid, "resource authorization callback is missing")
@@ -90,16 +116,25 @@ func ValidateAuthenticatedIdempotentEndpoint[P, Q, B, S, M, R any](e Authenticat
 	}
 	return ValidateResolver(e.resolver)
 }
+
+// DescribeAuthenticatedIdempotentEndpoint validates the model-binding declaration and
+// returns authentication and idempotency metadata.
 func DescribeAuthenticatedIdempotentEndpoint[P, Q, B, S, M, R any](e AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R]) (foundryhttp.EndpointInfo, error) {
 	if err := ValidateAuthenticatedIdempotentEndpoint(e); err != nil {
 		return foundryhttp.EndpointInfo{}, err
 	}
 	return foundryhttp.InspectAuthenticatedIdempotent(e.transport)
 }
+
+// AuthenticatedIdempotentHeaders returns an endpoint with application headers captured
+// for exact replay.
 func AuthenticatedIdempotentHeaders[P, Q, B, S, M, R any](e AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R], fn func(context.Context, R) ([]foundryhttp.ResponseHeader, error)) AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R] {
 	e.transport = foundryhttp.AuthenticatedIdempotentHeaders(e.transport, fn)
 	return e
 }
+
+// Handle resolves and authorizes the model before choosing the actor-aware scope and
+// transaction handler for execution or replay.
 func (e AuthenticatedIdempotentEndpoint[P, Q, B, S, M, R]) Handle(scope func(context.Context, S, Input[P, Q, B, M]) (idempotency.Scope, error), handler func(context.Context, *database.Tx, S, Input[P, Q, B, M]) (R, error)) foundryhttp.RouteRegistration {
 	if err := ValidateAuthenticatedIdempotentEndpoint(e); err != nil {
 		return foundryhttp.InvalidRouteRegistration(err)

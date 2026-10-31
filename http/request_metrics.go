@@ -25,6 +25,9 @@ type RequestMetric struct {
 	Seconds float64
 	Buckets []uint64
 }
+
+// RequestMetricsSnapshot contains request metric series and the number of observations
+// dropped for new series.
 type RequestMetricsSnapshot struct {
 	Series  []RequestMetric
 	Dropped uint64
@@ -45,12 +48,17 @@ type RequestMetrics struct {
 	dropped uint64
 }
 
+// NewRequestMetrics creates a mutex-protected collector with a series bound between one
+// and 4096.
 func NewRequestMetrics(maxSeries int) (*RequestMetrics, error) {
 	if maxSeries < 1 || maxSeries > 4096 {
 		return nil, safeerror.NewFault(fault.Invalid, "invalid HTTP metric series bound")
 	}
 	return &RequestMetrics{limit: maxSeries, bounds: observability.DurationBuckets(), series: make(map[requestMetricKey]*RequestMetric)}, nil
 }
+
+// ObserveRequest records normalized duration metrics under bounded route, method and
+// result labels, counting dropped series when capacity is full.
 func (m *RequestMetrics) ObserveRequest(_ context.Context, event RequestEvent) {
 	if m == nil {
 		return
@@ -117,8 +125,12 @@ func (m *RequestMetrics) snapshot(drain bool) RequestMetricsSnapshot {
 	}
 	return result
 }
+
+// Snapshot returns an owned metrics snapshot without resetting the collector.
 func (m *RequestMetrics) Snapshot() RequestMetricsSnapshot { return m.snapshot(false) }
-func (m *RequestMetrics) Drain() RequestMetricsSnapshot    { return m.snapshot(true) }
+
+// Drain returns an owned metrics snapshot and resets the collector.
+func (m *RequestMetrics) Drain() RequestMetricsSnapshot { return m.snapshot(true) }
 
 // WritePrometheus exposes only bounded route metadata. Do not concurrently Drain
 // a cumulative exporter: choose snapshots for scraping or drains for persistence.

@@ -18,10 +18,15 @@ type observedResponse struct {
 	err      error
 }
 
+// Header returns the native writer's mutable response headers.
 func (w *observedResponse) Header() stdhttp.Header                   { return w.native.Header() }
 func (w *observedResponse) underlyingWriter() stdhttp.ResponseWriter { return w.native }
-func (w *observedResponse) Unwrap() stdhttp.ResponseWriter           { return responseController{w} }
 
+// Unwrap exposes the wrapper's supported response-control operations.
+func (w *observedResponse) Unwrap() stdhttp.ResponseWriter { return responseController{w} }
+
+// WriteHeader forwards status and records the first final status unless the response
+// was hijacked.
 func (w *observedResponse) WriteHeader(status int) {
 	w.native.WriteHeader(status)
 	if !w.hijacked && w.status == 0 && (status >= 200 || status == stdhttp.StatusSwitchingProtocols) {
@@ -29,6 +34,7 @@ func (w *observedResponse) WriteHeader(status int) {
 	}
 }
 
+// Write forwards body data and records the status, written byte count and error.
 func (w *observedResponse) Write(data []byte) (int, error) {
 	if !w.hijacked && w.status == 0 {
 		w.status = stdhttp.StatusOK
@@ -62,6 +68,8 @@ func (w *observedResponse) ReadFrom(source io.Reader) (int64, error) {
 	return n, err
 }
 
+// FlushError flushes the native writer and records the status or error, rejecting
+// unsupported flushing.
 func (w *observedResponse) FlushError() error {
 	if !responseFlushSupported(w.native) {
 		return stdhttp.ErrNotSupported

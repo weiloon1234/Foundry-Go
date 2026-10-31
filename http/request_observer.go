@@ -31,10 +31,14 @@ type RequestEvent struct {
 // request ownership is released. It must return; its context may be cancelled.
 // Panics and Goexit are isolated. Use middleware for request/response behavior.
 type RequestObserver interface {
+	// ObserveRequest receives a completed request's bounded metadata and outcome.
 	ObserveRequest(context.Context, RequestEvent)
 }
+
+// RequestObserverFunc adapts a function to RequestObserver.
 type RequestObserverFunc func(context.Context, RequestEvent)
 
+// ObserveRequest calls f with the request event.
 func (f RequestObserverFunc) ObserveRequest(ctx context.Context, event RequestEvent) { f(ctx, event) }
 
 type serverOptions struct {
@@ -42,8 +46,11 @@ type serverOptions struct {
 	// proxy resolves client address and scheme for kernel-level admission.
 	proxy *proxyPolicy
 }
+
+// ServerOption configures an HTTP server during construction.
 type ServerOption func(*serverOptions) error
 
+// WithRequestObserver adds a non-nil observer, rejecting more than 16 observers.
 func WithRequestObserver(observer RequestObserver) ServerOption {
 	return func(o *serverOptions) error {
 		if credential.IsNil(observer) {

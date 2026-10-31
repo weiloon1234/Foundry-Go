@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
+// Name identifies a rate-limit declaration.
 type Name string
 
 // Key is an opaque adapter address, distinct from cache and lease keys.
@@ -21,9 +22,15 @@ func NewKey(namespace keyspace.Namespace, name Name, logical string) (Key, error
 	address, err := keyaddress.New(namespace, string(name), logical)
 	return Key{address}, err
 }
-func (k Key) Validate() error               { return k.address.Validate() }
+
+// Validate checks the key's adapter address.
+func (k Key) Validate() error { return k.address.Validate() }
+
+// Namespace returns the key's application namespace.
 func (k Key) Namespace() keyspace.Namespace { return k.address.Namespace }
-func (k Key) String() string                { return k.address.String(KeyFeature) }
+
+// String returns the physical rate-limit address.
+func (k Key) String() string { return k.address.String(KeyFeature) }
 
 // WindowOffset is this key's deterministic window phase in [0, window). Adapters
 // start fixed windows at offset + n*window, so the buckets of many keys do not
@@ -50,6 +57,8 @@ func (k Key) WindowOffset(window time.Duration) time.Duration {
 // fall back to another authority. The caller owns the adapter lifecycle; network
 // errors may leave consumption unconfirmed.
 type Backend interface {
+	// RateLimit atomically decides whether cost fits the key's fixed window, consuming
+	// capacity only on admission.
 	RateLimit(context.Context, Key, Limit, uint32) (Decision, error)
 }
 
@@ -60,10 +69,15 @@ type Backend interface {
 // address, so the next request starts a fresh window; true means state existed.
 // Both follow Backend's cancellation, validation and no-retry rules.
 type InspectBackend interface {
+	// PeekRateLimit reports the decision for cost without consuming capacity or changing
+	// expiry.
 	PeekRateLimit(context.Context, Key, Limit, uint32) (Decision, error)
+	// ClearRateLimit removes the key's bucket and reports whether state existed.
 	ClearRateLimit(context.Context, Key) (bool, error)
 }
 
+// ValidateOperation checks context cancellation, key validity, policy and cost before
+// an adapter operation.
 func ValidateOperation(ctx context.Context, key Key, limit Limit, cost uint32) error {
 	if err := ValidateClear(ctx, key); err != nil {
 		return err

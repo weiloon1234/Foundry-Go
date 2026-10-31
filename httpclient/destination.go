@@ -22,6 +22,7 @@ const (
 	RestrictedDestinations   DestinationMode = "restricted"
 )
 
+// Scheme identifies an allowed outbound URL scheme.
 type Scheme string
 
 const (
@@ -50,6 +51,8 @@ func PublicDestinations() DestinationPolicy {
 
 var DestinationDenied = safeerror.Sentinel(fault.Invalid, "outbound destination is not permitted")
 
+// Validate checks the destination mode and bounded scheme, port, host and network
+// allowlists.
 func (p DestinationPolicy) Validate() error {
 	if p.Mode == UnrestrictedDestinations {
 		if len(p.Schemes)+len(p.Ports)+len(p.Hosts)+len(p.Networks) != 0 {

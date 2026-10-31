@@ -18,6 +18,7 @@ const (
 	DispositionInline     Disposition = "inline"
 )
 
+// Validate accepts only attachment or inline disposition.
 func (d Disposition) Validate() error {
 	switch d {
 	case DispositionAttachment, DispositionInline:

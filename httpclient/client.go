@@ -33,6 +33,8 @@ type Client struct {
 	requests, attempts, failures atomic.Uint64
 }
 
+// New validates and snapshots config and creates a client. A supplied transport is
+// borrowed and cannot be combined with restricted destinations or custom TLS settings.
 func New(config Config, transport http.RoundTripper) (*Client, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -78,6 +80,7 @@ func New(config Config, transport http.RoundTripper) (*Client, error) {
 	return c, nil
 }
 
+// Name returns the configured name, or an empty name for a nil client.
 func (c *Client) Name() Name {
 	if c == nil {
 		return ""
@@ -91,6 +94,9 @@ func (c *Client) Name() Name {
 func (c *Client) RestrictsDestinations() bool {
 	return c != nil && c.config.Destination.Mode == RestrictedDestinations
 }
+
+// Close stops admission and waits for active operations before closing owned idle
+// connections. A canceled wait does not stop active operations.
 func (c *Client) Close(ctx context.Context) error {
 	if c == nil || c.operations == nil {
 		return invalid()
@@ -103,17 +109,23 @@ func (c *Client) Close(ctx context.Context) error {
 	}
 	return nil
 }
+
+// Done returns the channel that closes when the client's operation group finishes
+// shutting down.
 func (c *Client) Done() <-chan struct{} {
 	if c == nil {
 		return (*workscope.Group)(nil).Done()
 	}
 	return c.operations.Done()
 }
+
+// Format writes a client label without exposing configuration.
 func (*Client) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("outbound HTTP client")) }
 
 // Snapshot contains only bounded operation counts; no request values are retained.
 type Snapshot struct{ Requests, Attempts, Failures uint64 }
 
+// Snapshot reads the client's atomic request, attempt and failure counters.
 func (c *Client) Snapshot() Snapshot {
 	if c == nil {
 		return Snapshot{}
@@ -121,6 +133,8 @@ func (c *Client) Snapshot() Snapshot {
 	return Snapshot{Requests: c.requests.Load(), Attempts: c.attempts.Load(), Failures: c.failures.Load()}
 }
 
+// Do executes request and buffers the bounded response body. HTTP error statuses
+// require a separate EnsureSuccess check.
 func (c *Client) Do(ctx context.Context, request Request) (Response, error) {
 	var result Response
 	err := c.execute(ctx, request, c.responseLimit(), func(op context.Context, info responseInfo, body *ownedstream.Body) error {

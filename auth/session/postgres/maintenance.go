@@ -12,6 +12,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// RevokeID locks the subject and removes the identified session, reporting whether it
+// existed.
 func (b *Backend) RevokeID(ctx context.Context, address session.Address, identity model.Identity, id model.ID[session.Record]) (bool, error) {
 	if _, err := address.SubjectKey(identity); err != nil {
 		return false, err

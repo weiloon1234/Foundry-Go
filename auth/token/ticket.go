@@ -23,10 +23,17 @@ type Ticket[M, K any] struct {
 	family  ID[M]
 }
 
-func (t Ticket[M, K]) Secret() secret.String        { return t.secret }
+// Secret explicitly exposes the single-use handshake ticket wrapper for delivery.
+func (t Ticket[M, K]) Secret() secret.String { return t.secret }
+
+// ExpiresAt returns the handshake ticket's deadline.
 func (t Ticket[M, K]) ExpiresAt() temporal.DateTime { return t.expires }
-func (t Ticket[M, K]) Family() ID[M]                { return t.family }
-func (Ticket[M, K]) Format(s fmt.State, _ rune)     { _, _ = s.Write([]byte("token ticket")) }
+
+// Family returns the model-owned token family identifier.
+func (t Ticket[M, K]) Family() ID[M] { return t.family }
+
+// Format writes the label "token ticket" without exposing the value.
+func (Ticket[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("token ticket")) }
 
 // familyBinding is the server-side stand-in for a redeemed ticket. It names a
 // family and subject, so it is only ever created by this package's binder.

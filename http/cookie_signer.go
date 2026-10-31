@@ -14,6 +14,7 @@ import (
 
 type cookieSignatureError string
 
+// Error returns the cookie signature error code text.
 func (e cookieSignatureError) Error() string { return string(e) }
 
 // ErrInvalidSignedCookie identifies malformed, tampered, expired or retired-key
@@ -28,9 +29,13 @@ type CookieSigner struct {
 	clock clock.Clock
 }
 
-func (s CookieSigner) String() string   { return secret.Redacted }
+// String returns the redaction marker without exposing signing keys.
+func (s CookieSigner) String() string { return secret.Redacted }
+
+// GoString returns the redaction marker without exposing signing keys.
 func (s CookieSigner) GoString() string { return secret.Redacted }
 
+// NewCookieSigner validates and binds signing keys and a non-nil application clock.
 func NewCookieSigner(keys SigningKeys, applicationClock clock.Clock) (CookieSigner, error) {
 	if err := keys.Validate(); err != nil {
 		return CookieSigner{}, err
@@ -40,6 +45,8 @@ func NewCookieSigner(keys SigningKeys, applicationClock clock.Clock) (CookieSign
 	}
 	return CookieSigner{keys: keys, clock: applicationClock}, nil
 }
+
+// Validate checks signing keys and requires a non-nil application clock.
 func (s CookieSigner) Validate() error {
 	if err := s.keys.Validate(); err != nil {
 		return err

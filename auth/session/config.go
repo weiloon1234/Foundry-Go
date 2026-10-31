@@ -24,6 +24,8 @@ type Lifetime struct {
 	Sliding  bool
 }
 
+// Validate requires whole-microsecond durations with positive idle expiry and an
+// absolute expiry between idle and MaxLifetime.
 func (l Lifetime) Validate() error {
 	if l.Idle < time.Millisecond || l.Absolute < l.Idle || l.Absolute > MaxLifetime || l.Idle%time.Microsecond != 0 || l.Absolute%time.Microsecond != 0 {
 		return safeerror.NewFault(fault.Invalid, "session lifetime requires microsecond precision, positive idle expiry and a bounded absolute expiry")
@@ -51,9 +53,14 @@ type Config struct {
 	Timeout              time.Duration
 }
 
+// DefaultConfig returns default regular, remembered and pending lifetimes, credential
+// capacity and operation bounds.
 func DefaultConfig(namespace keyspace.Namespace) Config {
 	return Config{Namespace: namespace, Regular: Lifetime{Idle: 2 * time.Hour, Absolute: 24 * time.Hour, Sliding: true}, Remembered: Lifetime{Idle: 7 * 24 * time.Hour, Absolute: 30 * 24 * time.Hour, Sliding: true}, Pending: Lifetime{Idle: 5 * time.Minute, Absolute: 5 * time.Minute}, MaxPerSubject: 32, MaxPendingPerSubject: 8, Limit: auth.EvictOldest, MaxConcurrent: 128, Timeout: 5 * time.Second}
 }
+
+// Validate checks namespace, lifetimes, capacity and timeouts; pending-MFA sessions
+// cannot slide.
 func (c Config) Validate() error {
 	for _, err := range []error{c.Namespace.Validate(), c.Regular.Validate(), c.Remembered.Validate(), c.Pending.Validate(), c.Limit.Validate()} {
 		if err != nil {

@@ -41,13 +41,22 @@ type CompressionEncoder struct {
 	window   int
 }
 
+// GzipCompression declares a gzip encoder with the supplied level; Validate checks its
+// bounds.
 func GzipCompression(level GzipLevel) CompressionEncoder {
 	return CompressionEncoder{encoding: GzipEncoding, level: int(level)}
 }
+
+// BrotliCompression declares a Brotli encoder with the supplied quality and window;
+// Validate checks their bounds.
 func BrotliCompression(quality BrotliQuality, window BrotliWindow) CompressionEncoder {
 	return CompressionEncoder{encoding: BrotliEncoding, level: int(quality), window: int(window)}
 }
+
+// Encoding returns the encoder's content-encoding name.
 func (e CompressionEncoder) Encoding() ContentEncoding { return e.encoding }
+
+// Validate checks the encoding and its supported level and window settings.
 func (e CompressionEncoder) Validate() error {
 	switch e.encoding {
 	case GzipEncoding:
@@ -101,6 +110,8 @@ type pooledCompressionStream struct {
 
 type compressionSink struct{ dst io.Writer }
 
+// Write forwards data to the current destination, returning io.ErrClosedPipe when none
+// is attached.
 func (s *compressionSink) Write(data []byte) (int, error) {
 	if s.dst == nil {
 		return 0, io.ErrClosedPipe
@@ -153,6 +164,8 @@ type CompressionConfig struct {
 	MaxConcurrent int
 }
 
+// DefaultCompressionConfig returns Brotli and gzip encoders with a 1024-byte threshold
+// and 32 concurrent compression slots.
 func DefaultCompressionConfig() CompressionConfig {
 	return CompressionConfig{
 		Encoders:      []CompressionEncoder{BrotliCompression(4, 20), GzipCompression(GzipFastest)},
@@ -160,6 +173,9 @@ func DefaultCompressionConfig() CompressionConfig {
 		MaxConcurrent: 32,
 	}
 }
+
+// Validate checks encoder count, uniqueness, settings, threshold and concurrency
+// bounds.
 func (c CompressionConfig) Validate() error {
 	if len(c.Encoders) == 0 || len(c.Encoders) > 2 || c.MinBytes < 0 || c.MinBytes > 64<<10 || c.MaxConcurrent < 1 || c.MaxConcurrent > 1024 {
 		return safeerror.NewFault(fault.Invalid, "compression configuration exceeds its bounds")

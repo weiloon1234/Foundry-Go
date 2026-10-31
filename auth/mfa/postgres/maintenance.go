@@ -11,6 +11,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// Prune removes at most limit expired pending factors, skipping locked rows and
+// acquiring no model locks.
 func (b *Backend) Prune(ctx context.Context, address mfa.Address, limit int) (uint64, error) {
 	scope, err := address.Key()
 	if err != nil {

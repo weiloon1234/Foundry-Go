@@ -22,6 +22,7 @@ type SecurityRequestEvent struct {
 // payload-free observations. Both callbacks run once under request ownership.
 type SecurityRequestObserver interface {
 	RequestObserver
+	// ObserveSecurityRequest receives bounded security metadata for a completed request.
 	ObserveSecurityRequest(context.Context, SecurityRequestEvent)
 }
 

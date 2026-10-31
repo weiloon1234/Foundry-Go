@@ -18,6 +18,7 @@ const (
 	Unavailable Code = "idempotency_unavailable"
 )
 
+// Error returns the error code text.
 func (c Code) Error() string { return string(c) }
 
 // Error preserves a private operational cause for diagnostics; never log Unwrap.
@@ -26,9 +27,16 @@ type Error struct {
 	cause error
 }
 
-func (e *Error) Error() string              { return e.code.Error() }
-func (e *Error) Unwrap() error              { return e.cause }
-func (e *Error) Is(target error) bool       { return target == e.code }
+// Error returns the code without formatting the underlying cause.
+func (e *Error) Error() string { return e.code.Error() }
+
+// Unwrap returns the underlying cause.
+func (e *Error) Unwrap() error { return e.cause }
+
+// Is reports whether target is this error's code.
+func (e *Error) Is(target error) bool { return target == e.code }
+
+// Format writes the error code without formatting its cause.
 func (e *Error) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(e.Error())) }
 func failure(code Code, cause error) error {
 	if cause == nil {

@@ -45,7 +45,11 @@ type Proof[M, K any] struct {
 	credential *attachedCredential
 }
 
+// Format writes a proof label without exposing identity or credential data.
 func (Proof[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("authentication proof")) }
+
+// NewProof validates the reference and assurance and constructs a trusted adapter
+// result. Construction does not verify submitted credentials.
 func NewProof[M, K any](reference model.Reference[M, K], assurance Assurance) (Proof[M, K], error) {
 	if !assurance.valid() {
 		return Proof[M, K]{}, safeerror.NewFault(fault.Invalid, "invalid authentication assurance")
@@ -56,8 +60,12 @@ func NewProof[M, K any](reference model.Reference[M, K], assurance Assurance) (P
 	}
 	return Proof[M, K]{identity: identity, assurance: assurance}, nil
 }
+
+// Identity returns the proof's stored model identity.
 func (p Proof[M, K]) Identity() model.Identity { return p.identity }
-func (p Proof[M, K]) Assurance() Assurance     { return p.assurance }
+
+// Assurance returns the proof's authentication assurance.
+func (p Proof[M, K]) Assurance() Assurance { return p.assurance }
 
 // Strategy verifies one explicitly selected credential source. Each guard owns
 // its strategy invocation; no implicit fallback from an invalid credential to
@@ -72,13 +80,20 @@ type Strategy[M, K any] struct {
 	bindable bool
 }
 
+// DefineStrategy declares a verifier for one credential source; missing inputs do not
+// invoke it.
 func DefineStrategy[M, K any](source CredentialName, verify func(context.Context, secret.String) (value.Optional[Proof[M, K]], error)) Strategy[M, K] {
 	return Strategy[M, K]{source: source, verify: verify}
 }
+
+// Validate checks the source and verifier, including a bound verifier when binding is
+// enabled.
 func (s Strategy[M, K]) Validate() error {
 	if !identifier.Semantic(string(s.source)) || s.verify == nil || s.bindable && s.bound == nil {
 		return safeerror.NewFault(fault.Invalid, "authentication strategy requires a source and verifier")
 	}
 	return nil
 }
+
+// Source returns the selected credential source.
 func (s Strategy[M, K]) Source() CredentialName { return s.source }

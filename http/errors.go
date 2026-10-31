@@ -85,6 +85,8 @@ func (c ErrorCode) definition() (ErrorDefinition, bool) {
 	return ErrorDefinition{}, false
 }
 
+// Error returns a recognized built-in code, falling back to InternalError for unknown
+// codes.
 func (c ErrorCode) Error() string {
 	if definition, ok := c.definition(); ok {
 		return string(definition.Code)
@@ -117,12 +119,18 @@ type classifiedError interface {
 	httpErrorCode() ErrorCode
 }
 
-func (c ErrorCode) httpErrorCode() ErrorCode              { return c }
-func (e responseError) httpErrorCode() ErrorCode          { return e.code }
+func (c ErrorCode) httpErrorCode() ErrorCode     { return c }
+func (e responseError) httpErrorCode() ErrorCode { return e.code }
+
+// Error returns the safe HTTP error code without formatting its cause.
 func (e responseError) Error() string                     { return e.code.Error() }
 func (e responseError) httpErrorIssues() []contract.Issue { return slices.Clone(e.issues) }
-func (e responseError) Unwrap() error                     { return e.cause }
-func (e responseError) Is(target error) bool              { return target == e.code }
+
+// Unwrap returns the underlying cause.
+func (e responseError) Unwrap() error { return e.cause }
+
+// Is reports whether target is the wrapped HTTP error code.
+func (e responseError) Is(target error) bool { return target == e.code }
 
 // FoundryDiagnostic contributes the public transport code to redacted diagnostics.
 func (c ErrorCode) FoundryDiagnostic(seal errordiag.Seal) []fault.Attribute {
@@ -131,6 +139,8 @@ func (c ErrorCode) FoundryDiagnostic(seal errordiag.Seal) []fault.Attribute {
 	}
 	return []fault.Attribute{{Key: "http_code", Value: string(c)}}
 }
+
+// FoundryDiagnostic returns the code's framework-owned diagnostic attributes.
 func (e responseError) FoundryDiagnostic(seal errordiag.Seal) []fault.Attribute {
 	return e.code.FoundryDiagnostic(seal)
 }

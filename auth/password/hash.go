@@ -23,16 +23,28 @@ import (
 // successful login replaces them with Argon2id.
 type Hash struct{ encoded secret.String }
 
+// ParseHash validates a supported Argon2 or bcrypt encoding without verifying a
+// password.
 func ParseHash(encoded secret.String) (Hash, error) {
 	if _, err := parse(encoded.Reveal()); err != nil {
 		return Hash{}, err
 	}
 	return Hash{encoded: encoded}, nil
 }
-func (h Hash) Validate() error            { _, err := parse(h.encoded.Reveal()); return err }
-func (h Hash) Encoded() secret.String     { return h.encoded }
-func (Hash) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte(secret.Redacted)) }
-func (Hash) LogValue() slog.Value         { return slog.StringValue(secret.Redacted) }
+
+// Validate checks the stored hash encoding without verifying a password.
+func (h Hash) Validate() error { _, err := parse(h.encoded.Reveal()); return err }
+
+// Encoded exposes the secret hash wrapper for persistence or migration.
+func (h Hash) Encoded() secret.String { return h.encoded }
+
+// Format writes the redaction marker without exposing the value.
+func (Hash) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(secret.Redacted)) }
+
+// LogValue returns the redaction marker without exposing the value.
+func (Hash) LogValue() slog.Value { return slog.StringValue(secret.Redacted) }
+
+// MarshalJSON encodes the redaction marker without exposing the value.
 func (Hash) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 
 type algorithm uint8

@@ -17,9 +17,13 @@ type AuthenticatedRoute[P, M any] struct {
 	binding authenticationBinding[M]
 }
 
+// RequireRouteAuthentication binds a raw route to required typed authentication and
+// guard options.
 func RequireRouteAuthentication[P, M any](route Route[P], authentication *Authentication, guard auth.Guard[M], options ...GuardOption[M]) AuthenticatedRoute[P, M] {
 	return ConfigureAuthenticatedRoute(AuthenticatedRoute[P, M]{route: route, binding: authenticationBinding[M]{authentication: authentication, guard: guard}}, options...)
 }
+
+// ValidateAuthenticatedRoute checks the raw route and required authentication binding.
 func ValidateAuthenticatedRoute[P, M any](r AuthenticatedRoute[P, M]) error {
 	return authenticatedRouteValidate(r, false)
 }
@@ -45,9 +49,15 @@ func authenticatedRouteDescription[P, M any](r AuthenticatedRoute[P, M], optiona
 	}
 	return routeInfo(bound, segments, true), nil
 }
+
+// InspectAuthenticatedRoute returns validated route metadata including required
+// authentication.
 func InspectAuthenticatedRoute[P, M any](r AuthenticatedRoute[P, M]) (RouteInfo, error) {
 	return authenticatedRouteDescription(r, false)
 }
+
+// AuthenticatedRouteURL validates the authenticated declaration and formats its typed
+// path.
 func AuthenticatedRouteURL[P, M any](r AuthenticatedRoute[P, M], path P) (string, error) {
 	if err := ValidateAuthenticatedRoute(r); err != nil {
 		return "", err
@@ -78,21 +88,34 @@ func HandleAuthenticatedRaw[P, M any](r AuthenticatedRoute[P, M], handler func(s
 // credentials with value.Optional[M]. Only absent credentials reach it anonymously.
 type OptionalAuthenticationRoute[P, M any] struct{ required AuthenticatedRoute[P, M] }
 
+// OptionalRouteAuthentication adds optional typed authentication and actor options to a
+// raw route.
 func OptionalRouteAuthentication[P, M any](route Route[P], authentication *Authentication, guard auth.Guard[M], options ...ActorOption[M]) OptionalAuthenticationRoute[P, M] {
 	return ConfigureOptionalRoute(OptionalAuthenticationRoute[P, M]{required: RequireRouteAuthentication(route, authentication, guard)}, options...)
 }
+
+// ValidateOptionalRoute checks the raw route and optional authentication binding.
 func ValidateOptionalRoute[P, M any](r OptionalAuthenticationRoute[P, M]) error {
 	return authenticatedRouteValidate(r.required, true)
 }
+
+// InspectOptionalRoute returns validated route metadata including optional
+// authentication.
 func InspectOptionalRoute[P, M any](r OptionalAuthenticationRoute[P, M]) (RouteInfo, error) {
 	return authenticatedRouteDescription(r.required, true)
 }
+
+// OptionalRouteURL validates the optional-authentication declaration and formats its
+// typed path.
 func OptionalRouteURL[P, M any](r OptionalAuthenticationRoute[P, M], path P) (string, error) {
 	if err := ValidateOptionalRoute(r); err != nil {
 		return "", err
 	}
 	return RouteURL(r.required.route, path)
 }
+
+// HandleOptionalRaw registers a raw HTTP handler receiving the guard's optional subject
+// and decoded path.
 func HandleOptionalRaw[P, M any](r OptionalAuthenticationRoute[P, M], handler func(stdhttp.ResponseWriter, *stdhttp.Request, value.Optional[M], P)) RouteRegistration {
 	if err := ValidateOptionalRoute(r); err != nil {
 		return InvalidRouteRegistration(err)

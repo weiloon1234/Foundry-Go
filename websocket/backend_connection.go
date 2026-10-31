@@ -15,7 +15,10 @@ type BackendConnection struct {
 	cluster ClusterConfig
 }
 
+// NewLocalConnection creates a connection that builds process-local hubs.
 func NewLocalConnection() *BackendConnection { return &BackendConnection{local: true} }
+
+// NewClusterConnection validates and borrows a cluster adapter with its configuration.
 func NewClusterConnection(backend ClusterBackend, cluster ClusterConfig) (*BackendConnection, error) {
 	if credential.IsNil(backend) {
 		return nil, safeerror.NewFault(fault.Invalid, "realtime connection requires a cluster adapter")
@@ -25,6 +28,9 @@ func NewClusterConnection(backend ClusterBackend, cluster ClusterConfig) (*Backe
 	}
 	return &BackendConnection{backend: backend, cluster: cluster}, nil
 }
+
+// NewHub creates a local or distributed hub according to the connection's
+// configuration.
 func (c *BackendConnection) NewHub(registry *Registry, authentication *foundryhttp.Authentication, config Config, opts ...Option) (*Hub, error) {
 	if c == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "realtime connection is missing")
@@ -34,6 +40,9 @@ func (c *BackendConnection) NewHub(registry *Registry, authentication *foundryht
 	}
 	return NewDistributed(registry, authentication, config, c.backend, c.cluster, opts...)
 }
+
+// NewPublisher creates a standalone publisher; local connections and nil receivers are
+// invalid.
 func (c *BackendConnection) NewPublisher(registry *Registry, config Config, opts ...Option) (*Publisher, error) {
 	if c == nil || c.local {
 		return nil, safeerror.NewFault(fault.Invalid, "standalone realtime publication requires a cluster connection")

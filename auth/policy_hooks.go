@@ -55,6 +55,8 @@ type beforeHook struct {
 	decide any
 }
 
+// DefineBefore declares a model hook that may allow, deny or defer before policy
+// evaluation.
 func DefineBefore[M any](name PolicyName, decide func(context.Context, M, PolicyName) (Verdict, error)) Before[M] {
 	return Before[M]{definition: &hookDefinition[M]{id: &declarationID{}, name: name, phase: beforePhase, decide: decide}}
 }
@@ -77,16 +79,27 @@ func (d *hookDefinition[M]) registration() Registration {
 	return Registration{kind: hookRegistration, id: d.id, name: string(d.name), validate: d.validate, hook: beforeHook{id: d.id, phase: d.phase, decide: d.decide}}
 }
 
-func (b Before[M]) Validate() error            { return b.definition.validate() }
+// Validate requires a declared hook with a semantic name and callback.
+func (b Before[M]) Validate() error { return b.definition.validate() }
+
+// Registration returns the before hook's declaration for a registry.
 func (b Before[M]) Registration() Registration { return b.definition.registration() }
+
+// Name returns the hook name, or an empty name for an undefined hook.
 func (b Before[M]) Name() PolicyName {
 	if b.definition == nil {
 		return ""
 	}
 	return b.definition.name
 }
-func (a After[M]) Validate() error            { return a.definition.validate() }
+
+// Validate requires a declared hook with a semantic name and callback.
+func (a After[M]) Validate() error { return a.definition.validate() }
+
+// Registration returns the veto hook's declaration for a registry.
 func (a After[M]) Registration() Registration { return a.definition.registration() }
+
+// Name returns the hook name, or an empty name for an undefined hook.
 func (a After[M]) Name() PolicyName {
 	if a.definition == nil {
 		return ""
@@ -146,19 +159,27 @@ func NewDenial(code DenialCode, message string) error {
 	denial := &Denial{code: code, message: message}
 	return safeerror.Owned(denial.Error(), denial)
 }
+
+// Code returns the application denial code, or an empty code for a nil denial.
 func (d *Denial) Code() DenialCode {
 	if d == nil {
 		return ""
 	}
 	return d.code
 }
+
+// Message returns the safe public denial message, or an empty string for a nil denial.
 func (d *Denial) Message() string {
 	if d == nil {
 		return ""
 	}
 	return d.message
 }
-func (d *Denial) Error() string        { return Forbidden.Error() }
+
+// Error returns the Forbidden code without exposing the public message.
+func (d *Denial) Error() string { return Forbidden.Error() }
+
+// Is reports whether target is Forbidden.
 func (d *Denial) Is(target error) bool { return target == Forbidden }
 
 // Decision is an inspected authorization outcome. A denied decision may carry
@@ -168,6 +189,8 @@ type Decision struct {
 	denial  *Denial
 }
 
+// Allowed reports whether the authorization decision grants access. The zero decision
+// denies.
 func (d Decision) Allowed() bool { return d.allowed }
 
 // Denial returns the typed reason when the policy supplied one.

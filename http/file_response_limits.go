@@ -18,9 +18,14 @@ type FileResponseLimits struct {
 	RangeBytes int
 }
 
+// DefaultFileResponseLimits returns a one-gigabyte body limit with at most 16 ranges
+// and 4096 range-header bytes.
 func DefaultFileResponseLimits() FileResponseLimits {
 	return FileResponseLimits{Bytes: 1 << 30, Ranges: 16, RangeBytes: 4096}
 }
+
+// Validate checks body and range bounds and rejects limits that could overflow range
+// arithmetic.
 func (l FileResponseLimits) Validate() error {
 	if l.Bytes <= 0 || l.Ranges <= 0 || l.Ranges > 128 || l.RangeBytes <= 0 || l.RangeBytes > 65536 {
 		return safeerror.NewFault(fault.Invalid, "invalid file response limits")

@@ -44,6 +44,7 @@ const (
 	CSPSandboxTopNavigationCustomProtocols CSPSandboxToken = "allow-top-navigation-to-custom-protocols"
 )
 
+// Validate accepts only supported content security policy sandbox tokens.
 func (t CSPSandboxToken) Validate() error {
 	switch t {
 	case CSPSandboxDownloads, CSPSandboxForms, CSPSandboxModals, CSPSandboxOrientationLock, CSPSandboxPointerLock,
@@ -61,6 +62,7 @@ type CSPReportGroup string
 // absolute local path. Reporting endpoint handlers must be registered separately.
 type CSPReportURI string
 
+// Validate checks that the content security policy can be compiled.
 func (p CSPPolicy) Validate() error { _, err := compileCSPPolicy(p, false); return err }
 
 type compiledCSP struct {

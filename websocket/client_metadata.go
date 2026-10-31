@@ -9,11 +9,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
 
+// ProtocolActions lists client action names in the wire protocol.
 type ProtocolActions struct {
 	Subscribe   Action `json:"subscribe"`
 	Unsubscribe Action `json:"unsubscribe"`
 	Message     Action `json:"message"`
 }
+
+// ProtocolResponses lists server response names in the wire protocol.
 type ProtocolResponses struct {
 	Subscribed      ResponseType `json:"subscribed"`
 	Unsubscribed    ResponseType `json:"unsubscribed"`
@@ -39,6 +42,8 @@ type ProtocolInfo struct {
 	Codes             []Code            `json:"codes"`
 }
 
+// ProtocolDescription returns protocol constants, action names, response names and
+// error codes for client generation.
 func ProtocolDescription() ProtocolInfo {
 	return ProtocolInfo{
 		Version: ProtocolVersion, Subprotocol: Subprotocol, TicketPrefix: TicketSubprotocolPrefix, MaxRoomBytes: MaxRoomBytes, MaxReplayMessages: MaxReplayMessages,
@@ -70,6 +75,7 @@ type ClientRate struct {
 	WindowMilliseconds int64  `json:"window_ms"`
 }
 
+// ClientDescription describes the protocol, client limits and registered channels.
 type ClientDescription struct {
 	Protocol ProtocolInfo  `json:"protocol"`
 	Limits   ClientLimits  `json:"limits"`

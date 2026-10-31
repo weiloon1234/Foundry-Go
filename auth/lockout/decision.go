@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// Status identifies an allowed, locked or expired lockout decision.
 type Status uint8
 
 const (
@@ -24,6 +25,8 @@ type Decision struct {
 	Triggered  bool
 }
 
+// Validate checks status and retry metadata against policy, returning fault.Internal
+// for an invalid adapter decision.
 func (d Decision) Validate(p Policy) error {
 	if err := p.Validate(); err != nil {
 		return err
@@ -47,6 +50,8 @@ type Admission struct {
 	Snapshot Snapshot
 }
 
+// Validate checks that admission is either allowed with a valid snapshot or locked
+// without one.
 func (a Admission) Validate(p Policy) error {
 	if err := a.Decision.Validate(p); err != nil {
 		return err
@@ -63,6 +68,7 @@ func (a Admission) Validate(p Policy) error {
 	return safeerror.NewFault(fault.Internal, "invalid lockout admission")
 }
 
+// Outcome identifies whether an admitted credential attempt failed or succeeded.
 type Outcome uint8
 
 const (
@@ -70,6 +76,7 @@ const (
 	Succeeded
 )
 
+// Validate accepts only Failed and Succeeded.
 func (o Outcome) Validate() error {
 	if o != Failed && o != Succeeded {
 		return safeerror.NewFault(fault.Invalid, "invalid lockout attempt outcome")

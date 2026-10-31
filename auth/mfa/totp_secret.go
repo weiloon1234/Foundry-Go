@@ -24,6 +24,8 @@ var totpEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
 // supported. This type does not promise memory erasure.
 type TOTPSecret struct{ encoded secret.String }
 
+// ParseTOTPSecret requires a canonical unpadded uppercase base32 encoding of a 160-bit
+// key.
 func ParseTOTPSecret(encoded secret.String) (TOTPSecret, error) {
 	if len(encoded.Reveal()) != totpEncoding.EncodedLen(totpSecretBytes) {
 		return TOTPSecret{}, safeerror.NewFault(fault.Invalid, "invalid TOTP secret")
@@ -34,6 +36,9 @@ func ParseTOTPSecret(encoded secret.String) (TOTPSecret, error) {
 	}
 	return TOTPSecret{encoded: encoded}, nil
 }
+
+// GenerateTOTPSecret creates a cryptographically random 160-bit key, returning
+// fault.Internal if randomness fails.
 func GenerateTOTPSecret() (TOTPSecret, error) {
 	var raw [totpSecretBytes]byte
 	if _, err := rand.Read(raw[:]); err != nil {
@@ -41,8 +46,19 @@ func GenerateTOTPSecret() (TOTPSecret, error) {
 	}
 	return ParseTOTPSecret(secret.New(totpEncoding.EncodeToString(raw[:])))
 }
-func (s TOTPSecret) Secret() secret.String      { return s.encoded }
-func (s TOTPSecret) Validate() error            { _, err := ParseTOTPSecret(s.encoded); return err }
-func (TOTPSecret) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte(secret.Redacted)) }
-func (TOTPSecret) LogValue() slog.Value         { return slog.StringValue(secret.Redacted) }
+
+// Secret explicitly exposes the encoded key wrapper for encrypted persistence or
+// enrollment delivery.
+func (s TOTPSecret) Secret() secret.String { return s.encoded }
+
+// Validate checks the key's canonical base32 encoding and length.
+func (s TOTPSecret) Validate() error { _, err := ParseTOTPSecret(s.encoded); return err }
+
+// Format writes the redaction marker without exposing the value.
+func (TOTPSecret) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(secret.Redacted)) }
+
+// LogValue returns the redaction marker without exposing the value.
+func (TOTPSecret) LogValue() slog.Value { return slog.StringValue(secret.Redacted) }
+
+// MarshalJSON encodes the redaction marker without exposing the value.
 func (TOTPSecret) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }

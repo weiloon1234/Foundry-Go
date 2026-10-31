@@ -13,6 +13,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// Direction identifies whether an event travels from client to server or server to
+// client.
 type Direction string
 
 const (
@@ -21,6 +23,8 @@ const (
 )
 
 type eventToken struct{ marker byte }
+
+// EventRegistration binds an event declaration to its channel type.
 type EventRegistration[C any] struct {
 	_          [0]*C
 	definition *eventDefinition
@@ -39,6 +43,7 @@ type eventDefinition struct {
 	invoke      func(context.Context, *Hub, ConnectionID, accessResult, []byte, contract.JSONLimits, func() bool) error
 }
 
+// Incoming declares a typed client event before its handler is bound.
 type Incoming[C, R, S, P any] struct {
 	channel     Channel[C, R, S]
 	token       *eventToken
@@ -51,6 +56,8 @@ type Incoming[C, R, S, P any] struct {
 	accepted    bool
 }
 
+// DefineIncoming declares a typed client-to-server event using the payload's JSON
+// contract.
 func DefineIncoming[C, R, S, P any](channel Channel[C, R, S], id EventID, payload contract.JSON[P]) Incoming[C, R, S, P] {
 	return Incoming[C, R, S, P]{channel: channel, token: &eventToken{}, id: id, decode: payload.Decode, description: payload.Description, validate: payload.Validate}
 }
@@ -105,6 +112,9 @@ func (e Incoming[C, R, S, P]) relay(outgoing Outgoing[C, P], others bool) EventR
 	registration.definition.relay = outgoing.definition
 	return registration
 }
+
+// Handle binds the incoming event to a typed callback, decoding and authorizing
+// payloads before invocation.
 func (e Incoming[C, R, S, P]) Handle(handler func(context.Context, MessageContext[R, S], P) error) EventRegistration[C] {
 	d := &eventDefinition{token: e.token, channel: e.channel.token, id: e.id, direction: ClientToServer, dynamic: e.dynamic, accepted: e.accepted, description: e.description}
 	d.validate = func() error {
@@ -141,12 +151,15 @@ func (e Incoming[C, R, S, P]) Handle(handler func(context.Context, MessageContex
 	return EventRegistration[C]{definition: d}
 }
 
+// Outgoing binds a channel's server event to its typed payload encoder.
 type Outgoing[C, P any] struct {
 	_          [0]*C
 	definition *eventDefinition
 	encode     func(context.Context, P, contract.JSONLimits) ([]byte, error)
 }
 
+// DefineOutgoing declares a typed server-to-client event using the payload's JSON
+// contract.
 func DefineOutgoing[C, R, S, P any](channel Channel[C, R, S], id EventID, payload contract.JSON[P]) Outgoing[C, P] {
 	d := &eventDefinition{token: &eventToken{}, channel: channel.token, id: id, direction: ServerToClient, description: payload.Description}
 	d.wire = func(ctx context.Context, data []byte, limits contract.JSONLimits) error {
@@ -161,6 +174,8 @@ func DefineOutgoing[C, R, S, P any](channel Channel[C, R, S], id EventID, payloa
 	}
 	return Outgoing[C, P]{definition: d, encode: payload.Encode}
 }
+
+// Registration returns the event declaration for channel registration.
 func (e Outgoing[C, P]) Registration() EventRegistration[C] {
 	return EventRegistration[C]{definition: e.definition}
 }
@@ -172,6 +187,9 @@ func RawIncoming[C, R, S any](channel Channel[C, R, S], id EventID) Incoming[C, 
 		return rawJSON(ctx, data, limits)
 	}, validate: func() error { return nil }, description: func() (contract.Schema, error) { return contract.Schema{}, nil }}
 }
+
+// RawOutgoing declares a server-to-client event with dynamically validated raw JSON
+// payloads.
 func RawOutgoing[C, R, S any](channel Channel[C, R, S], id EventID) Outgoing[C, json.RawMessage] {
 	d := &eventDefinition{token: &eventToken{}, channel: channel.token, id: id, direction: ServerToClient, dynamic: true, validate: channel.Validate, description: func() (contract.Schema, error) { return contract.Schema{}, nil }}
 	d.wire = func(ctx context.Context, data []byte, limits contract.JSONLimits) error {

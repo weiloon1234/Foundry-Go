@@ -19,9 +19,16 @@ type CursorResult[M, T any] struct {
 	defined        bool
 }
 
-func (p CursorResult[M, T]) Items() []T                              { return slices.Clone(p.items) }
-func (p CursorResult[M, T]) Size() int                               { return p.size }
-func (p CursorResult[M, T]) Next() value.Optional[orm.Cursor[M]]     { return p.next }
+// Items returns a copy of the page's item slice without cloning each item.
+func (p CursorResult[M, T]) Items() []T { return slices.Clone(p.items) }
+
+// Size returns the page's configured size.
+func (p CursorResult[M, T]) Size() int { return p.size }
+
+// Next returns the optional cursor for the following page.
+func (p CursorResult[M, T]) Next() value.Optional[orm.Cursor[M]] { return p.next }
+
+// Previous returns the optional cursor for the preceding page.
 func (p CursorResult[M, T]) Previous() value.Optional[orm.Cursor[M]] { return p.previous }
 
 // MapCursorPage selects DTO values while preserving the source's cursor owner,

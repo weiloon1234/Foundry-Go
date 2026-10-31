@@ -32,8 +32,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
+// Provider identifies an incoming webhook source.
 type Provider string
+
+// DeliveryID identifies a webhook delivery within its provider.
 type DeliveryID string
+
+// Protocol selects the incoming webhook signature format.
 type Protocol string
 
 const (
@@ -57,6 +62,7 @@ var (
 	BodyTooLarge     = safeerror.New("webhook body exceeds its configured limit")
 )
 
+// Config selects the provider, signature protocol and verification bounds.
 type Config struct {
 	Provider     Provider
 	Protocol     Protocol
@@ -66,9 +72,14 @@ type Config struct {
 	HMAC HMACScheme
 }
 
+// DefaultConfig returns verification settings with a one-megabyte body limit and
+// five-minute timestamp tolerance.
 func DefaultConfig(provider Provider, protocol Protocol) Config {
 	return Config{Provider: provider, Protocol: protocol, MaxBodyBytes: 1 << 20, Tolerance: 5 * time.Minute}
 }
+
+// Validate checks the provider, protocol, body and timestamp bounds, and
+// protocol-specific HMAC settings.
 func (c Config) Validate() error {
 	invalid := safeerror.NewFault(fault.Invalid, "invalid webhook verification configuration")
 	if !identifier.Semantic(string(c.Provider)) || c.Protocol != Standard && c.Protocol != Stripe && c.Protocol != HMAC || c.MaxBodyBytes < 1 || c.MaxBodyBytes > 16<<20 || c.Tolerance < time.Second || c.Tolerance > time.Hour {
@@ -83,7 +94,10 @@ func (c Config) Validate() error {
 	return c.HMAC.validate()
 }
 
+// HMACAlgorithm selects the HMAC digest algorithm.
 type HMACAlgorithm string
+
+// SignatureEncoding selects the textual representation of a signature digest.
 type SignatureEncoding string
 
 const (
@@ -246,12 +260,17 @@ func New[A any](config Config, account A, keys []secret.String, source clock.Clo
 	}
 	return v, nil
 }
+
+// Validate checks that keys and a clock are configured and validates verification
+// settings.
 func (v *Verifier[A]) Validate() error {
 	if v == nil || len(v.keys) == 0 || v.clock == nil {
 		return safeerror.NewFault(fault.Invalid, "webhook verifier is not configured")
 	}
 	return v.config.Validate()
 }
+
+// Format writes a verifier label without exposing keys or account data.
 func (Verifier[A]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("webhook verifier")) }
 
 // Delivery contains only signature-authenticated metadata and the configured
@@ -263,6 +282,7 @@ type Delivery[A any] struct {
 	unverified string
 }
 
+// ID returns the verified delivery identifier.
 func (d Delivery[A]) ID() DeliveryID { return d.id }
 
 // UnverifiedProviderID returns the provider's delivery header of an HMAC
@@ -272,25 +292,37 @@ func (d Delivery[A]) ID() DeliveryID { return d.id }
 func (d Delivery[A]) UnverifiedProviderID() (string, bool) {
 	return d.unverified, d.unverified != ""
 }
+
+// Timestamp returns the verified delivery timestamp.
 func (d Delivery[A]) Timestamp() time.Time { return d.timestamp }
+
+// Provider returns the verifier's provider, or an empty provider for an uninitialized
+// delivery.
 func (d Delivery[A]) Provider() Provider {
 	if d.verifier == nil {
 		return ""
 	}
 	return d.verifier.config.Provider
 }
+
+// Account returns the verifier's account, or its zero value for an uninitialized
+// delivery.
 func (d Delivery[A]) Account() A {
 	if d.verifier == nil {
 		return *new(A)
 	}
 	return d.verifier.account
 }
+
+// Format writes a delivery label without exposing verified data.
 func (Delivery[A]) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("verified webhook delivery"))
 }
 
 type deliveryContextKey[A any] struct{ verifier *Verifier[A] }
 
+// WithDelivery attaches a delivery from this verifier to a non-nil context, rejecting
+// foreign or uninitialized deliveries.
 func (v *Verifier[A]) WithDelivery(ctx context.Context, d Delivery[A]) (context.Context, error) {
 	if ctx == nil || d.verifier != v || v == nil || d.id == "" {
 		return ctx, safeerror.NewFault(fault.Invalid, "webhook delivery belongs to another verifier")

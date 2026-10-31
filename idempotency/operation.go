@@ -20,6 +20,8 @@ import (
 // Handler receives the transaction that owns claim, writes, outbox and outcome.
 // It must not commit an independently captured pool or call external providers.
 type Handler[I, R any] func(context.Context, *database.Tx, I) (R, error)
+
+// Operation binds typed input and result codecs to one versioned operation and store.
 type Operation[I, R any] struct {
 	store      *Store
 	definition Definition
@@ -27,6 +29,8 @@ type Operation[I, R any] struct {
 	output     Encoding[R]
 }
 
+// Define validates and binds a store, operation definition, input codec and result
+// encoding.
 func Define[I, R any](store *Store, definition Definition, input Input[I], output Encoding[R]) (Operation[I, R], error) {
 	for _, err := range []error{store.Validate(), definition.Validate(), input.Validate(), output.Validate()} {
 		if err != nil {
@@ -35,6 +39,8 @@ func Define[I, R any](store *Store, definition Definition, input Input[I], outpu
 	}
 	return Operation[I, R]{store, definition, input, output}, nil
 }
+
+// Validate checks the store, definition and codecs. The zero operation is invalid.
 func (o Operation[I, R]) Validate() error {
 	for _, err := range []error{o.store.Validate(), o.definition.Validate(), o.input.Validate(), o.output.Validate()} {
 		if err != nil {
@@ -43,7 +49,11 @@ func (o Operation[I, R]) Validate() error {
 	}
 	return nil
 }
+
+// Definition returns the operation's identity and version.
 func (o Operation[I, R]) Definition() Definition { return o.definition }
+
+// Format writes an operation label without exposing its codecs or store.
 func (Operation[I, R]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("typed idempotent operation"))
 }
@@ -57,10 +67,19 @@ type Result[R any] struct {
 	replayed, committed bool
 }
 
-func (r Result[R]) Value() R                 { return r.value }
-func (r Result[R]) Encoded() []byte          { return slices.Clone(r.encoded) }
-func (r Result[R]) Replayed() bool           { return r.replayed }
-func (r Result[R]) Committed() bool          { return r.committed }
+// Value returns the decoded result value without cloning it.
+func (r Result[R]) Value() R { return r.value }
+
+// Encoded returns a copy of the encoded result.
+func (r Result[R]) Encoded() []byte { return slices.Clone(r.encoded) }
+
+// Replayed reports whether the result came from a retained response.
+func (r Result[R]) Replayed() bool { return r.replayed }
+
+// Committed reports whether the result records a confirmed commit.
+func (r Result[R]) Committed() bool { return r.committed }
+
+// Format writes a result label without exposing its value.
 func (Result[R]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("idempotent operation result")) }
 
 // Run never retries the business callback. An uncertain commit is reconciled on

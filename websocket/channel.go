@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// Anonymous is the subject type for public channels.
 type Anonymous struct{}
 type channelToken struct{ marker byte }
 
@@ -23,6 +24,8 @@ type SubjectReference struct {
 	Identity model.Identity
 }
 
+// MessageContext carries the publisher, connection, typed target and current subject
+// for a message callback.
 type MessageContext[R, S any] struct {
 	Publisher  *Hub
 	Connection ConnectionID
@@ -37,6 +40,8 @@ type LeaveContext[R any] struct {
 	Target     Target[R]
 	Subject    SubjectReference
 }
+
+// Hooks declares callbacks for channel joins and leaves.
 type Hooks[R, S any] struct {
 	Joined func(context.Context, MessageContext[R, S]) error
 	Left   func(context.Context, LeaveContext[R]) error
@@ -61,6 +66,8 @@ type Channel[C, R, S any] struct {
 	err       error
 }
 
+// Public declares an anonymous channel with typed rooms and no authentication
+// requirement.
 func Public[C, R any](id ChannelID, rooms Rooms[R]) Channel[C, R, Anonymous] {
 	return Channel[C, R, Anonymous]{token: &channelToken{}, id: id, rooms: rooms,
 		resolve: func(ctx context.Context) (Anonymous, SubjectReference, attribution.Origin, error) {
@@ -121,12 +128,20 @@ func OwnedRooms[C any, R comparable, S model.Identifiable](id ChannelID, rooms R
 	return c
 }
 
-func (c Channel[C, R, S]) ID() ChannelID                                { return c.id }
+// ID returns the declared channel identifier.
+func (c Channel[C, R, S]) ID() ChannelID { return c.id }
+
+// WithHooks returns a channel with the supplied join and leave callbacks.
 func (c Channel[C, R, S]) WithHooks(hooks Hooks[R, S]) Channel[C, R, S] { c.hooks = hooks; return c }
+
+// WithReplay returns a channel with the supplied replay bounds.
 func (c Channel[C, R, S]) WithReplay(config ReplayConfig) Channel[C, R, S] {
 	c.replay = config
 	return c
 }
+
+// Validate checks channel identity, rooms, replay, authentication and presence
+// declarations.
 func (c Channel[C, R, S]) Validate() error {
 	if c.err != nil {
 		return c.err

@@ -18,6 +18,7 @@ const (
 	EvictOldest LimitPolicy = "evict_oldest"
 )
 
+// Validate accepts only RejectNew and EvictOldest.
 func (p LimitPolicy) Validate() error {
 	if p != RejectNew && p != EvictOldest {
 		return safeerror.NewFault(fault.Invalid, "invalid credential limit policy")

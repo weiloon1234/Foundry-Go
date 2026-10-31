@@ -23,12 +23,17 @@ type Address struct {
 	Model     string
 }
 
+// Validate checks the namespace, guard, provider and model address components.
 func (a Address) Validate() error {
 	return credential.ValidateAddress(a.Namespace, string(a.Guard), string(a.Provider), a.Model)
 }
+
+// Key validates the address and returns its opaque persistence scope.
 func (a Address) Key() (string, error) {
 	return credential.AddressKey(a.Namespace, string(a.Guard), string(a.Provider), a.Model)
 }
+
+// SubjectKey returns the subject's opaque key within the validated address.
 func (a Address) SubjectKey(identity model.Identity) (string, error) {
 	scope, err := a.Key()
 	if err != nil {
@@ -68,6 +73,7 @@ type Impersonator struct {
 	Session model.ID[Record]
 }
 
+// Validate checks the actor identity, guard and nonzero actor session identifier.
 func (i Impersonator) Validate() error {
 	if err := i.Subject.Validate(); err != nil {
 		return err
@@ -78,7 +84,11 @@ func (i Impersonator) Validate() error {
 	return nil
 }
 
+// Format writes the label "session record" without exposing the value.
 func (Record) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("session record")) }
+
+// Validate checks address ownership, identity, assurance, lifetime consistency,
+// confirmation, impersonation and device metadata.
 func (r Record) Validate(address Address) error {
 	if err := address.Validate(); err != nil {
 		return err
@@ -115,6 +125,8 @@ func (r Record) Validate(address Address) error {
 	}
 	return r.Device.Validate()
 }
+
+// Live reports whether now is strictly before both idle and absolute expiry.
 func (r Record) Live(now time.Time) bool {
 	return now.Before(r.IdleExpiresAt.UTC()) && now.Before(r.ExpiresAt.UTC())
 }
@@ -186,6 +198,8 @@ type Creation struct {
 	Impersonator value.Optional[Impersonator]
 }
 
+// Validate checks subject ownership, credential capacity, device, assurance and
+// lifetime, including pending and impersonation restrictions.
 func (c Creation) Validate(address Address) error {
 	if _, err := address.SubjectKey(c.Subject); err != nil {
 		return err
@@ -218,6 +232,9 @@ func (c Creation) Validate(address Address) error {
 	}
 	return nil
 }
+
+// At validates creation and constructs a record using now truncated to UTC
+// microseconds.
 func (c Creation) At(address Address, now time.Time) (Record, error) {
 	if err := c.Validate(address); err != nil {
 		return Record{}, err

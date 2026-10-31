@@ -238,6 +238,8 @@ func (b *Backend) retire(ctx context.Context, tx *database.Tx, family tokenstore
 	return err
 }
 
+// Refresh atomically rotates the live generation; replay, expiry or exhausted rotations
+// remove the family and return omission.
 func (b *Backend) Refresh(ctx context.Context, address token.Address, old, access, refresh token.Digest) (value.Optional[token.Record], error) {
 	if err := validateCredential(address, old); err != nil {
 		return value.Optional[token.Record]{}, err
@@ -303,6 +305,8 @@ func (b *Backend) Refresh(ctx context.Context, address token.Address, old, acces
 	return result, nil
 }
 
+// Revoke removes the family matching the current or immediately previous access
+// generation and reports whether it existed.
 func (b *Backend) Revoke(ctx context.Context, address token.Address, hash token.Digest) (bool, error) {
 	if err := validateCredential(address, hash); err != nil {
 		return false, err

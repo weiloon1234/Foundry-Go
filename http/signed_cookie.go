@@ -16,17 +16,31 @@ type SignedCookie[V any] struct {
 	signer CookieSigner
 }
 
-func (c SignedCookie[V]) String() string                       { return "SignedCookie(" + string(c.cookie.Name()) + ")" }
-func (c SignedCookie[V]) GoString() string                     { return c.String() }
+// String returns a label containing the signed cookie's name.
+func (c SignedCookie[V]) String() string { return "SignedCookie(" + string(c.cookie.Name()) + ")" }
+
+// GoString returns the signed cookie's name label without exposing values.
+func (c SignedCookie[V]) GoString() string { return c.String() }
+
+// Signed binds this cookie declaration to a signer.
 func (c Cookie[V]) Signed(signer CookieSigner) SignedCookie[V] { return SignedCookie[V]{c, signer} }
-func (c SignedCookie[V]) Name() CookieName                     { return c.cookie.Name() }
-func (c SignedCookie[V]) Options() CookieOptions               { return c.cookie.Options() }
+
+// Name returns the underlying cookie name.
+func (c SignedCookie[V]) Name() CookieName { return c.cookie.Name() }
+
+// Options returns the underlying cookie attributes.
+func (c SignedCookie[V]) Options() CookieOptions { return c.cookie.Options() }
+
+// Validate checks the cookie declaration and signer.
 func (c SignedCookie[V]) Validate() error {
 	if err := c.cookie.Validate(); err != nil {
 		return err
 	}
 	return c.signer.Validate()
 }
+
+// Read verifies and decodes a present cookie, returning omission when absent and
+// BadRequest for an invalid signature.
 func (c SignedCookie[V]) Read(r *stdhttp.Request) (value.Optional[V], error) {
 	if err := c.Validate(); err != nil {
 		return value.Optional[V]{}, err
@@ -48,6 +62,8 @@ func (c SignedCookie[V]) Read(r *stdhttp.Request) (value.Optional[V], error) {
 	}
 	return value.Set(parsed), nil
 }
+
+// Set formats and signs v and adds its Set-Cookie header after checking cancellation.
 func (c SignedCookie[V]) Set(ctx context.Context, w stdhttp.ResponseWriter, v V) error {
 	if err := c.Validate(); err != nil {
 		return err
@@ -65,6 +81,8 @@ func (c SignedCookie[V]) Set(ctx context.Context, w stdhttp.ResponseWriter, v V)
 	}
 	return c.cookie.publish(w, envelope, false)
 }
+
+// Clear validates the signed cookie and adds its clearing Set-Cookie header.
 func (c SignedCookie[V]) Clear(w stdhttp.ResponseWriter) error {
 	if err := c.Validate(); err != nil {
 		return err

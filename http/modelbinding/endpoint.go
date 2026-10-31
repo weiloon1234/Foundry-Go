@@ -20,8 +20,11 @@ type Input[P, Q, B, M any] struct {
 // ForBinding and ForSignedBinding construct it, preserving signature checks and
 // all existing middleware, decoding, validation, errors and response contracts.
 type Transport[P, Q, B, R any] interface {
+	// Validate checks the binding transport declaration.
 	Validate() error
+	// Description returns the endpoint's contract metadata.
 	Description() (foundryhttp.EndpointInfo, error)
+	// HandleBound registers the typed request's model-binding stage.
 	HandleBound(foundryhttp.Binding[P, Q, B, R]) foundryhttp.RouteRegistration
 }
 
@@ -44,6 +47,8 @@ func Bind[P, Q, B, M, R any](transport Transport[P, Q, B, R], resolver Resolver[
 	return Endpoint[P, Q, B, M, R]{transport: transport, resolver: resolver}
 }
 
+// ValidateEndpoint checks the transport, resolver and any resource-authorization
+// callback.
 func ValidateEndpoint[P, Q, B, M, R any](e Endpoint[P, Q, B, M, R]) error {
 	if e.authorization != nil && *e.authorization == nil {
 		return safeerror.NewFault(fault.Invalid, "resource authorization callback is missing")

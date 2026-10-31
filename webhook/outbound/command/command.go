@@ -34,6 +34,8 @@ type Command struct {
 	json      bool
 }
 
+// Parse parses webhook delivery, replay or prune arguments, writing flag help to help.
+// Help requests return flag.ErrHelp.
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
 		return Command{}, safeerror.NewFault(fault.Invalid, "webhook commands require help output")

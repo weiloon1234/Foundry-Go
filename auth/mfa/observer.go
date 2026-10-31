@@ -32,9 +32,14 @@ type Notice[M any, K any] struct {
 	action  Action
 }
 
+// Subject returns the notice's typed model reference.
 func (n Notice[M, K]) Subject() model.Reference[M, K] { return n.subject }
-func (n Notice[M, K]) Action() Action                 { return n.action }
-func (Notice[M, K]) Format(s fmt.State, _ rune)       { _, _ = s.Write([]byte("MFA notice")) }
+
+// Action returns the factor operation recorded in the notice.
+func (n Notice[M, K]) Action() Action { return n.action }
+
+// Format writes the label "MFA notice" without exposing the value.
+func (Notice[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("MFA notice")) }
 
 // Observer maps MFA observations to application-owned event DTOs. Changed runs
 // inside the mutation transaction: use events.Topic.Enqueue for durable dispatch,

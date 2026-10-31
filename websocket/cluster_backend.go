@@ -17,7 +17,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/pubsub"
 )
 
+// Instance identifies the model type for a cluster process instance.
 type Instance struct{}
+
+// InstanceID identifies a cluster process instance.
 type InstanceID = model.ID[Instance]
 
 // Scope distinguishes whole-channel membership from an exact room. Adapters use
@@ -28,12 +31,16 @@ type Scope struct {
 	HasRoom bool      `json:"has_room"`
 }
 
+// Validate checks the channel and the distinction between a whole channel and an exact
+// room.
 func (s Scope) Validate() error {
 	if !identifier.Semantic(string(s.Channel)) || s.HasRoom && !validRoom(s.Room) || !s.HasRoom && s.Room != "" {
 		return safeerror.NewFault(fault.Invalid, "invalid WebSocket scope")
 	}
 	return nil
 }
+
+// Hash returns the SHA-256 digest of the scope's JSON representation.
 func (s Scope) Hash() string {
 	data, _ := json.Marshal(s)
 	sum := sha256.Sum256(data)
@@ -59,6 +66,7 @@ type ClusterLimits struct {
 	Retention             time.Duration `json:"retention"`
 }
 
+// Validate checks connection, subscription, presence, frame and lease bounds.
 func (l ClusterLimits) Validate() error {
 	if !validPresenceBounds(l.PresenceMembers, l.MemberBytes, l.FrameBytes) {
 		return safeerror.NewFault(fault.Invalid, "cluster presence cannot fit its bounded frame")
@@ -69,12 +77,16 @@ func (l ClusterLimits) Validate() error {
 	return nil
 }
 
+// ClusterKey binds an adapter address to the cluster's policy fingerprint and authority
+// limits.
 type ClusterKey struct {
 	address keyaddress.Address
 	policy  string
 	limits  ClusterLimits
 }
 
+// NewClusterKey validates and binds a namespace, policy fingerprint and cluster
+// authority limits.
 func NewClusterKey(namespace keyspace.Namespace, policy string, limits ClusterLimits) (ClusterKey, error) {
 	address, err := keyaddress.New(namespace, "realtime", "cluster")
 	if err != nil {
@@ -83,6 +95,8 @@ func NewClusterKey(namespace keyspace.Namespace, policy string, limits ClusterLi
 	key := ClusterKey{address, policy, limits}
 	return key, key.Validate()
 }
+
+// Validate checks the address, policy fingerprint and cluster limits.
 func (k ClusterKey) Validate() error {
 	if err := k.address.Validate(); err != nil {
 		return err
@@ -92,15 +106,23 @@ func (k ClusterKey) Validate() error {
 	}
 	return k.limits.Validate()
 }
+
+// String returns the physical cluster address, or an empty string for an invalid key.
 func (k ClusterKey) String() string {
 	if k.Validate() != nil {
 		return ""
 	}
 	return k.address.String(KeyFeature)
 }
+
+// Namespace returns the application namespace.
 func (k ClusterKey) Namespace() keyspace.Namespace { return k.address.Namespace }
-func (k ClusterKey) Policy() string                { return k.policy }
-func (k ClusterKey) Limits() ClusterLimits         { return k.limits }
+
+// Policy returns the cluster policy fingerprint.
+func (k ClusterKey) Policy() string { return k.policy }
+
+// Limits returns the cluster authority bounds.
+func (k ClusterKey) Limits() ClusterLimits { return k.limits }
 func validDigest(s string) bool {
 	if len(s) != 64 {
 		return false
@@ -122,6 +144,8 @@ type ClusterMembership struct {
 	Data     json.RawMessage
 }
 
+// Validate checks the scope, subject digest and bounded presence JSON; non-presence
+// memberships must have no data.
 func (m ClusterMembership) Validate(limits ClusterLimits) error {
 	if err := m.Scope.Validate(); err != nil {
 		return err
@@ -156,17 +180,32 @@ type PresenceSnapshot struct {
 // Close/Leave are idempotent and never delete another instance's live ownership.
 type ClusterBackend interface {
 	pubsub.Backend
+	// WebSocketCheck checks the cluster authority and policy compatibility.
 	WebSocketCheck(context.Context, ClusterKey) error
+	// WebSocketOpen admits a connection lease under the cluster capacity bounds.
 	WebSocketOpen(context.Context, ClusterKey, InstanceID, ConnectionID) error
+	// WebSocketTouch renews an owned live connection lease without resurrecting an expired
+	// connection.
 	WebSocketTouch(context.Context, ClusterKey, InstanceID, ConnectionID) error
+	// WebSocketJoin registers membership for a live connection and returns the presence
+	// snapshot.
 	WebSocketJoin(context.Context, ClusterKey, InstanceID, ConnectionID, ClusterMembership) (PresenceSnapshot, error)
+	// WebSocketLeave idempotently releases the connection's membership in scope.
 	WebSocketLeave(context.Context, ClusterKey, InstanceID, ConnectionID, Scope) error
+	// WebSocketClose idempotently releases the connection and its memberships without
+	// deleting another instance's ownership.
 	WebSocketClose(context.Context, ClusterKey, InstanceID, ConnectionID) error
+	// WebSocketMembers returns presence members and connection counts, excluding expired
+	// leases.
 	WebSocketMembers(context.Context, ClusterKey, Scope) (PresenceSnapshot, error)
+	// WebSocketAppend retains a channel publication within the replay policy's bounds.
 	WebSocketAppend(context.Context, ClusterKey, ChannelID, ReplayConfig, []byte) error
+	// WebSocketHistory reads retained channel publications under the replay policy.
 	WebSocketHistory(context.Context, ClusterKey, ChannelID, ReplayConfig) ([][]byte, error)
 }
 
+// ValidateClusterOperation checks context cancellation and cluster key validity before
+// adapter work.
 func ValidateClusterOperation(ctx context.Context, key ClusterKey) error {
 	if ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "WebSocket cluster operation requires context")
@@ -176,6 +215,9 @@ func ValidateClusterOperation(ctx context.Context, key ClusterKey) error {
 	}
 	return key.Validate()
 }
+
+// ValidateClusterConnection checks context, cluster key and nonzero instance and
+// connection identities.
 func ValidateClusterConnection(ctx context.Context, key ClusterKey, instance InstanceID, connection ConnectionID) error {
 	if err := ValidateClusterOperation(ctx, key); err != nil {
 		return err

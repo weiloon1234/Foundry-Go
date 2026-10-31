@@ -9,33 +9,49 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// AuthenticatedIdempotentEndpoint preserves the authenticated source alongside its
+// typed idempotency operation.
 type AuthenticatedIdempotentEndpoint[P, Q, B, M, R any] struct {
 	source   AuthenticatedEndpoint[P, Q, B, M, R]
 	endpoint IdempotentEndpoint[P, Q, B, R]
 }
 
+// IdempotentAuthenticated binds an authenticated endpoint to a versioned idempotency
+// operation while preserving current authorization.
 func IdempotentAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R], store *idempotency.Store, definition idempotency.Definition) AuthenticatedIdempotentEndpoint[P, Q, B, M, R] {
 	if err := ValidateAuthenticated(endpoint); err != nil {
 		return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: endpoint, endpoint: IdempotentEndpoint[P, Q, B, R]{err: err}}
 	}
 	return AuthenticatedIdempotentEndpoint[P, Q, B, M, R]{source: endpoint, endpoint: Idempotent(authenticatedEndpointAuthorized(endpoint), store, definition)}
 }
+
+// ValidateAuthenticatedIdempotent checks the authenticated source and idempotent
+// endpoint declaration.
 func ValidateAuthenticatedIdempotent[P, Q, B, M, R any](e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) error {
 	if err := ValidateAuthenticated(e.source); err != nil {
 		return err
 	}
 	return ValidateIdempotent(e.endpoint)
 }
+
+// InspectAuthenticatedIdempotent validates the endpoint and returns its authentication
+// and idempotency metadata.
 func InspectAuthenticatedIdempotent[P, Q, B, M, R any](e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) (EndpointInfo, error) {
 	if err := ValidateAuthenticatedIdempotent(e); err != nil {
 		return EndpointInfo{}, err
 	}
 	return InspectIdempotent(e.endpoint)
 }
+
+// AuthenticatedIdempotentHeaders returns an endpoint with application headers captured
+// for exact replay.
 func AuthenticatedIdempotentHeaders[P, Q, B, M, R any](e AuthenticatedIdempotentEndpoint[P, Q, B, M, R], fn func(context.Context, R) ([]ResponseHeader, error)) AuthenticatedIdempotentEndpoint[P, Q, B, M, R] {
 	e.endpoint = IdempotentHeaders(e.endpoint, fn)
 	return e
 }
+
+// Handle registers actor-aware scope and transaction callbacks; current authentication
+// and authorization precede idempotent execution or replay.
 func (e AuthenticatedIdempotentEndpoint[P, Q, B, M, R]) Handle(scope func(context.Context, M, Input[P, Q, B]) (idempotency.Scope, error), handler func(context.Context, *database.Tx, M, Input[P, Q, B]) (R, error)) RouteRegistration {
 	if scope == nil || handler == nil {
 		return InvalidRouteRegistration(safeerror.NewFault(fault.Invalid, "authenticated idempotency requires scope and transaction callbacks"))

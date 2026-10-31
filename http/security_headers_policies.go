@@ -19,6 +19,7 @@ const (
 	OpenerUnsafeNone            CrossOriginOpenerPolicy = "unsafe-none"
 )
 
+// Validate accepts an omitted or supported cross-origin opener policy.
 func (p CrossOriginOpenerPolicy) Validate() error {
 	switch p {
 	case "", OpenerSameOrigin, OpenerSameOriginAllowPopups, OpenerNoOpenerAllowPopups, OpenerUnsafeNone:
@@ -38,6 +39,7 @@ const (
 	EmbedderUnsafeNone     CrossOriginEmbedderPolicy = "unsafe-none"
 )
 
+// Validate accepts an omitted or supported cross-origin embedder policy.
 func (p CrossOriginEmbedderPolicy) Validate() error {
 	switch p {
 	case "", EmbedderRequireCORP, EmbedderCredentialless, EmbedderUnsafeNone:
@@ -56,6 +58,7 @@ const (
 	ResourceCrossOrigin CrossOriginResourcePolicy = "cross-origin"
 )
 
+// Validate accepts an omitted or supported cross-origin resource policy.
 func (p CrossOriginResourcePolicy) Validate() error {
 	switch p {
 	case "", ResourceSameOrigin, ResourceSameSite, ResourceCrossOrigin:

@@ -24,6 +24,7 @@ type RawBodyLimits struct {
 	Bytes int64
 }
 
+// Validate requires a positive byte limit no greater than MaxRouteBodyBytes.
 func (l RawBodyLimits) Validate() error {
 	if l.Bytes <= 0 || l.Bytes > MaxRouteBodyBytes {
 		return safeerror.NewFault(fault.Invalid, "raw request body limit must be positive and at most MaxRouteBodyBytes")
@@ -91,6 +92,8 @@ type rawBodyReader struct {
 	closed atomic.Bool
 }
 
+// Read reads the request body and classifies I/O failures, rejecting reads after the
+// handler lifetime ends.
 func (r *rawBodyReader) Read(data []byte) (int, error) {
 	if r.closed.Load() {
 		return 0, safeerror.NewFault(fault.Closed, "raw request body was read after its handler returned")

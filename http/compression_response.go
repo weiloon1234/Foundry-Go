@@ -43,8 +43,14 @@ type compressionResponse struct {
 	passthrough    bool
 }
 
-func (w *compressionResponse) Header() stdhttp.Header         { return w.header }
+// Header returns the wrapper's mutable response headers.
+func (w *compressionResponse) Header() stdhttp.Header { return w.header }
+
+// Unwrap exposes the wrapper's supported response-control operations.
 func (w *compressionResponse) Unwrap() stdhttp.ResponseWriter { return responseController{w} }
+
+// WriteHeader records the first final status and header snapshot, forwarding
+// informational statuses and bypassing compression for bodyless responses.
 func (w *compressionResponse) WriteHeader(status int) {
 	if status < 100 || status > 999 {
 		panic("invalid HTTP status code")
@@ -68,6 +74,9 @@ func (w *compressionResponse) WriteHeader(status int) {
 		w.commit(false)
 	}
 }
+
+// Write buffers or compresses response data according to negotiated encoding and
+// bounds, enforcing declared length and bodyless statuses.
 func (w *compressionResponse) Write(data []byte) (int, error) {
 	if w.hijacked {
 		return 0, stdhttp.ErrHijacked

@@ -94,6 +94,8 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
+// New validates the registry, authentication bindings and resource bounds and creates a
+// local hub.
 func New(registry *Registry, authentication *foundryhttp.Authentication, config Config, opts ...Option) (*Hub, error) {
 	return newHub(registry, authentication, config, true, opts)
 }
@@ -167,6 +169,8 @@ func (h *Hub) validateChannel(token *channelToken, id ChannelID) error {
 	}
 	return nil
 }
+
+// Done returns the shutdown-completion channel, or nil for a nil hub.
 func (h *Hub) Done() <-chan struct{} {
 	if h == nil {
 		return nil
@@ -274,6 +278,7 @@ func (h *Hub) operation(ctx context.Context) (context.Context, func(), error) {
 	}, nil
 }
 
+// Snapshot reports hub state, resource usage and operation counters.
 type Snapshot struct {
 	Distributed, Degraded                                       bool
 	Streaming                                                   bool
@@ -307,6 +312,8 @@ func (h *Hub) snapshotLocked() Snapshot {
 	result.Streaming = h.cluster == nil || h.cluster.streaming
 	return result
 }
+
+// Registry returns the hub's channel registry, or nil for a nil hub.
 func (h *Hub) Registry() *Registry {
 	if h == nil {
 		return nil

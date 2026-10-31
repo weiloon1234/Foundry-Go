@@ -32,6 +32,9 @@ func (p Proof[M, K]) WithIssuanceCheck(check func(context.Context, *database.Tx)
 	p.issuance = &issuanceCheck{verify: check}
 	return p, nil
 }
+
+// HasIssuanceCheck reports whether the proof carries a transactional revalidation
+// callback.
 func (p Proof[M, K]) HasIssuanceCheck() bool { return p.issuance != nil }
 
 // CheckIssuance is called by a transactional credential backend. The caller owns

@@ -29,6 +29,7 @@ type Definition struct {
 	Version uint32
 }
 
+// Validate requires a semantic operation ID and a nonzero version.
 func (d Definition) Validate() error {
 	if !identifier.Semantic(string(d.ID)) || d.Version == 0 {
 		return invalid("operation needs a semantic identity and nonzero version")
@@ -43,6 +44,8 @@ const MaxKeyBytes = 256
 // Use a random UUID or stronger random value, and reuse it for network retries.
 type Key struct{ text string }
 
+// ParseKey validates the key's length and permitted characters, returning BadKey on
+// failure.
 func ParseKey(text string) (Key, error) {
 	if len(text) < MinKeyBytes || len(text) > MaxKeyBytes {
 		return Key{}, failure(BadKey, nil)
@@ -52,6 +55,8 @@ func ParseKey(text string) (Key, error) {
 	}
 	return Key{text}, nil
 }
+
+// Format writes a key label without exposing its value.
 func (Key) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("idempotency key")) }
 
 // Scope contains trusted tenant and caller identity. HTTP adapters derive this
@@ -59,6 +64,8 @@ func (Key) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("idempotency key"
 // Webhook adapters verify the provider signature before constructing their scope.
 type Scope struct{ digest string }
 
+// NewScope hashes bounded, trusted tenant and caller identities into an operation
+// scope.
 func NewScope(tenant, caller string) (Scope, error) {
 	if !identityPart(tenant) || !identityPart(caller) {
 		return Scope{}, invalid("idempotency scope needs bounded trusted tenant and caller identities")
@@ -76,6 +83,8 @@ func identityPart(s string) bool {
 	}
 	return true
 }
+
+// Format writes a scope label without exposing its identity digest.
 func (Scope) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("idempotency scope")) }
 func digest(domain string, values ...string) string {
 	h := sha256.New()

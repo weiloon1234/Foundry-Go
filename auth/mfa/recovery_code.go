@@ -20,17 +20,32 @@ const DefaultRecoveryCodes = 10
 // the digest is persisted; consumption must be atomic with factor completion.
 type RecoveryCode struct{ value secret.String }
 
+// ParseRecoveryCode checks recovery-secret syntax without verifying that the code is
+// stored or unused.
 func ParseRecoveryCode(raw secret.String) (RecoveryCode, error) {
 	if _, err := credential.Hash(raw); err != nil {
 		return RecoveryCode{}, err
 	}
 	return RecoveryCode{value: raw}, nil
 }
-func (c RecoveryCode) Secret() secret.String      { return c.value }
-func (c RecoveryCode) Validate() error            { _, err := ParseRecoveryCode(c.value); return err }
-func (RecoveryCode) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte(secret.Redacted)) }
-func (RecoveryCode) LogValue() slog.Value         { return slog.StringValue(secret.Redacted) }
+
+// Secret explicitly exposes the recovery-secret wrapper for delivery.
+func (c RecoveryCode) Secret() secret.String { return c.value }
+
+// Validate checks recovery-code syntax without verifying stored validity.
+func (c RecoveryCode) Validate() error { _, err := ParseRecoveryCode(c.value); return err }
+
+// Format writes the redaction marker without exposing the value.
+func (RecoveryCode) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(secret.Redacted)) }
+
+// LogValue returns the redaction marker without exposing the value.
+func (RecoveryCode) LogValue() slog.Value { return slog.StringValue(secret.Redacted) }
+
+// MarshalJSON encodes the redaction marker without exposing the value.
 func (RecoveryCode) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
+
+// UnmarshalJSON clears the receiver and parses a bounded JSON string as a recovery
+// code.
 func (c *RecoveryCode) UnmarshalJSON(data []byte) error {
 	if c == nil {
 		return safeerror.NewFault(fault.Invalid, "recovery code destination is missing")
@@ -50,6 +65,9 @@ func (c *RecoveryCode) UnmarshalJSON(data []byte) error {
 	*c = parsed
 	return nil
 }
+
+// JSONContract describes recovery-code input as a JSON string; ordinary output remains
+// redacted.
 func (RecoveryCode) JSONContract() contract.JSON[RecoveryCode] {
 	const id contract.TypeID = "github.com/weiloon1234/Foundry-Go/auth/mfa.RecoveryCode"
 	return contract.DefineJSONValue[RecoveryCode](contract.Schema{Root: id, Types: []contract.Type{{ID: id, Kind: contract.StringKind}}})
@@ -60,14 +78,26 @@ func (RecoveryCode) JSONContract() contract.JSON[RecoveryCode] {
 // Encoded is an explicit persistence boundary, never an authentication proof.
 type RecoveryHash struct{ digest credential.Digest }
 
+// ParseRecoveryHash restores a recovery digest from its hexadecimal persistence
+// encoding.
 func ParseRecoveryHash(encoded string) (RecoveryHash, error) {
 	digest, err := credential.ParseDigest(encoded)
 	return RecoveryHash{digest: digest}, err
 }
-func (h RecoveryHash) Encoded() string            { return h.digest.Hex() }
-func (h RecoveryHash) IsZero() bool               { return h.digest.IsZero() }
-func (RecoveryHash) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte(secret.Redacted)) }
-func (RecoveryHash) LogValue() slog.Value         { return slog.StringValue(secret.Redacted) }
+
+// Encoded exposes the recovery digest's hexadecimal persistence representation.
+func (h RecoveryHash) Encoded() string { return h.digest.Hex() }
+
+// IsZero reports whether the recovery digest is uninitialized.
+func (h RecoveryHash) IsZero() bool { return h.digest.IsZero() }
+
+// Format writes the redaction marker without exposing the value.
+func (RecoveryHash) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(secret.Redacted)) }
+
+// LogValue returns the redaction marker without exposing the value.
+func (RecoveryHash) LogValue() slog.Value { return slog.StringValue(secret.Redacted) }
+
+// MarshalJSON encodes the redaction marker without exposing the value.
 func (RecoveryHash) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 
 func newRecoveryCodes(count int) ([]RecoveryCode, []RecoveryHash, error) {

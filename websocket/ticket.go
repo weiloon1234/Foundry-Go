@@ -28,7 +28,10 @@ const MaxTicketRedeemers = auth.MaxCredentials
 // of the guard whose credential source it names. token.Tokens implements it.
 // An unknown, expired or already redeemed ticket is omitted, not an error.
 type TicketRedeemer interface {
+	// TicketSource returns the credential source whose tickets this redeemer accepts.
 	TicketSource() auth.CredentialName
+	// RedeemTicket consumes a single-use handshake ticket, returning omission for unknown,
+	// expired or already redeemed tickets.
 	RedeemTicket(context.Context, secret.String) (value.Optional[auth.BoundCredential], error)
 }
 

@@ -13,6 +13,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/ratelimit"
 )
 
+// Config bounds hub resources and controls heartbeat, authentication refresh and origin
+// acceptance.
 type Config struct {
 	MaxPresenceScopes int
 	MaxConnections    int
@@ -51,6 +53,8 @@ type Config struct {
 	AllowOriginless   bool
 }
 
+// DefaultConfig returns default connection, queue, operation, heartbeat, presence and
+// payload limits.
 func DefaultConfig() Config {
 	return Config{MaxPresenceScopes: 256, MaxConnections: 10000, MaxSubscriptions: 64, MaxFrameBytes: 64 << 10,
 		InboundQueue: 64, OutboundQueue: 256, MaxQueuedBytes: 1 << 20, MaxTotalQueuedBytes: 256 << 20, MaxOperations: 1024,
@@ -60,6 +64,8 @@ func DefaultConfig() Config {
 		Payload: contract.JSONLimits{Bytes: 32 << 10, Depth: 32, Nodes: 8192, Steps: 32768, Issues: 16}}
 }
 
+// Validate checks runtime bounds and exact additional origins, including aggregate
+// presence and queue budgets.
 func (c Config) Validate() error {
 	if c.MaxPresenceScopes < 1 || c.MaxPresenceScopes > 4096 || int64(c.MaxPresenceScopes)*int64(c.MaxPresenceMembers)*int64(c.MaxMemberBytes+128) > 128<<20 {
 		return safeerror.NewFault(fault.Invalid, "WebSocket presence scope budget exceeds its bound")

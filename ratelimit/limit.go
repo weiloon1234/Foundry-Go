@@ -19,15 +19,25 @@ type Limit struct {
 	Window   time.Duration
 }
 
+// PerSecond declares a fixed-window capacity per second.
 func PerSecond(requests uint32) Limit { return Limit{requests, time.Second} }
+
+// PerMinute declares a fixed-window capacity per minute.
 func PerMinute(requests uint32) Limit { return Limit{requests, time.Minute} }
-func PerHour(requests uint32) Limit   { return Limit{requests, time.Hour} }
+
+// PerHour declares a fixed-window capacity per hour.
+func PerHour(requests uint32) Limit { return Limit{requests, time.Hour} }
+
+// Validate requires positive capacity and a whole-millisecond window between one
+// millisecond and MaxWindow.
 func (l Limit) Validate() error {
 	if l.Requests == 0 || l.Window < time.Millisecond || l.Window > MaxWindow || l.Window%time.Millisecond != 0 {
 		return safeerror.NewFault(fault.Invalid, "rate limit needs positive capacity and a whole-millisecond window between 1ms and 24h")
 	}
 	return nil
 }
+
+// ValidateCost checks the policy and requires cost between one and the window capacity.
 func (l Limit) ValidateCost(cost uint32) error {
 	if err := l.Validate(); err != nil {
 		return err

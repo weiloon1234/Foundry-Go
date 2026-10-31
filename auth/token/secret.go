@@ -12,10 +12,19 @@ import (
 // substitute for an opaque credential supplied at a transport boundary.
 type Digest struct{ hash credential.Digest }
 
+// Format writes the label "token digest" without exposing the value.
 func (Digest) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("token digest")) }
-func (d Digest) Hex() string              { return d.hash.Hex() }
-func (d Digest) IsZero() bool             { return d.hash.IsZero() }
-func (d Digest) Equal(other Digest) bool  { return d.hash.Equal(other.hash) }
+
+// Hex returns the digest's hexadecimal persistence representation.
+func (d Digest) Hex() string { return d.hash.Hex() }
+
+// IsZero reports whether the digest is uninitialized.
+func (d Digest) IsZero() bool { return d.hash.IsZero() }
+
+// Equal compares token digests.
+func (d Digest) Equal(other Digest) bool { return d.hash.Equal(other.hash) }
+
+// ParseDigest restores a token digest from its hexadecimal representation.
 func ParseDigest(text string) (Digest, error) {
 	hash, err := credential.ParseDigest(text)
 	return Digest{hash: hash}, err

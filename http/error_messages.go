@@ -95,12 +95,18 @@ type localizedResponseWriter struct {
 }
 
 func (w *localizedResponseWriter) errorMessages() *errorPresenter { return &w.presenter }
+
+// ReadFrom copies reader data to the underlying response writer.
 func (w *localizedResponseWriter) ReadFrom(r io.Reader) (int64, error) {
 	return io.Copy(w.ResponseWriter, r)
 }
+
+// FlushError flushes the underlying response through its response controller.
 func (w *localizedResponseWriter) FlushError() error {
 	return stdhttp.NewResponseController(w.ResponseWriter).Flush()
 }
+
+// Unwrap exposes the wrapper's supported response-control operations.
 func (w *localizedResponseWriter) Unwrap() stdhttp.ResponseWriter           { return responseController{w} }
 func (w *localizedResponseWriter) underlyingWriter() stdhttp.ResponseWriter { return w.ResponseWriter }
 func (w *localizedResponseWriter) hijackResponse() (net.Conn, *bufio.ReadWriter, error) {

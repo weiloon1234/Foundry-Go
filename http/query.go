@@ -81,6 +81,7 @@ type QueryLimits struct{ Bytes, Pairs, Issues int }
 
 func (l QueryLimits) wire() httpquery.Limits { return httpquery.Limits{Bytes: l.Bytes, Pairs: l.Pairs} }
 
+// Validate checks wire decoding bounds and requires a positive diagnostic issue limit.
 func (l QueryLimits) Validate() error {
 	if err := l.wire().Validate(); err != nil {
 		return err
@@ -101,10 +102,19 @@ type QueryError struct {
 	cause  error
 }
 
-func (*QueryError) Error() string              { return "invalid query parameters" }
-func (e *QueryError) GoString() string         { return e.Error() }
-func (*QueryError) Is(target error) bool       { return target == fault.Invalid }
-func (e *QueryError) Unwrap() error            { return e.cause }
+// Error returns a generic query failure message without exposing input.
+func (*QueryError) Error() string { return "invalid query parameters" }
+
+// GoString returns the generic query failure message.
+func (e *QueryError) GoString() string { return e.Error() }
+
+// Is reports whether target is fault.Invalid.
+func (*QueryError) Is(target error) bool { return target == fault.Invalid }
+
+// Unwrap returns the underlying cause.
+func (e *QueryError) Unwrap() error { return e.cause }
+
+// Issues returns a copy of the query validation issues.
 func (e *QueryError) Issues() []contract.Issue { return slices.Clone(e.issues) }
 
 func queryFailure(issues []contract.Issue, cause error) error {

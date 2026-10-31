@@ -17,7 +17,10 @@ type CursorRequest[P, F, M any] = pageRequest[P, F, orm.CursorRequest[M]]
 
 type cursorCodec[M any] struct{}
 
+// Parse restores a model-owned cursor from its opaque token.
 func (cursorCodec[M]) Parse(text string) (orm.Cursor[M], error) { return orm.ParseCursor[M](text) }
+
+// Format validates the cursor and returns its opaque token.
 func (cursorCodec[M]) Format(cursor orm.Cursor[M]) (string, error) {
 	if err := cursor.Validate(); err != nil {
 		return "", err

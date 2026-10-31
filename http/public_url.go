@@ -44,6 +44,7 @@ type publicURLPolicy struct {
 	canonical Origin
 }
 
+// Validate checks that public URL origins and configuration can be compiled.
 func (c PublicURLConfig) Validate() error { _, err := compilePublicURLs(c); return err }
 
 func compilePublicURLs(c PublicURLConfig) (publicURLPolicy, error) {

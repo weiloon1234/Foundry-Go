@@ -18,21 +18,28 @@ type definition[K any] struct {
 // declaration for a shared quota; distinct names intentionally isolate quotas.
 type Declaration[K any] struct{ definition *definition[K] }
 
+// Define declares a typed key codec and rate policy; Validate checks the declaration.
 func Define[K any](name Name, codec keyspace.Codec[K], limit Limit) Declaration[K] {
 	return Declaration[K]{&definition[K]{name: name, codec: codec, limit: limit}}
 }
+
+// Name returns the declaration name, or an empty name for an undefined declaration.
 func (d Declaration[K]) Name() Name {
 	if d.definition == nil {
 		return ""
 	}
 	return d.definition.name
 }
+
+// Limit returns the declared policy, or a zero limit for an undefined declaration.
 func (d Declaration[K]) Limit() Limit {
 	if d.definition == nil {
 		return Limit{}
 	}
 	return d.definition.limit
 }
+
+// Validate checks the declaration name, key codec and rate policy.
 func (d Declaration[K]) Validate() error {
 	if d.definition == nil || !keyspace.ValidName(string(d.Name())) {
 		return safeerror.NewFault(fault.Invalid, "invalid rate limit declaration")

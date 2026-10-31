@@ -16,12 +16,17 @@ type Address struct {
 	Model     string
 }
 
+// Validate checks the namespace, guard, provider and model address components.
 func (a Address) Validate() error {
 	return credential.ValidateAddress(a.Namespace, string(a.Guard), string(a.Provider), a.Model)
 }
+
+// Key validates the address and returns its opaque persistence scope.
 func (a Address) Key() (string, error) {
 	return credential.AddressKey(a.Namespace, string(a.Guard), string(a.Provider), a.Model)
 }
+
+// SubjectKey returns the subject's opaque key within the validated address.
 func (a Address) SubjectKey(identity model.Identity) (string, error) {
 	scope, err := a.Key()
 	if err != nil {

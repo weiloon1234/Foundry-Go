@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// Code identifies a lockout failure category.
 type Code string
 
 const (
@@ -14,6 +15,7 @@ const (
 	Unavailable Code = "login_protection_unavailable"
 )
 
+// Error returns the lockout error code text.
 func (c Code) Error() string { return string(c) }
 
 // Rejection carries a safe relative retry duration, never the submitted key.
@@ -28,14 +30,21 @@ type Rejection struct {
 // than being denied by an existing lock.
 func (e *Rejection) Triggered() bool { return e != nil && e.triggered }
 
+// Unwrap returns the underlying cause, or nil for a nil rejection.
 func (e *Rejection) Unwrap() error {
 	if e == nil {
 		return nil
 	}
 	return e.cause
 }
-func (e *Rejection) Error() string        { return Locked.Error() }
+
+// Error returns the Locked code without formatting the cause.
+func (e *Rejection) Error() string { return Locked.Error() }
+
+// Is reports whether target is Locked.
 func (e *Rejection) Is(target error) bool { return target == Locked }
+
+// RetryAfter returns the remaining lock duration, or zero for a nil rejection.
 func (e *Rejection) RetryAfter() time.Duration {
 	if e == nil {
 		return 0
@@ -45,9 +54,14 @@ func (e *Rejection) RetryAfter() time.Duration {
 
 type unavailable struct{ cause error }
 
-func (e *unavailable) Error() string        { return Unavailable.Error() }
+// Error returns the Unavailable code without formatting the cause.
+func (e *unavailable) Error() string { return Unavailable.Error() }
+
+// Is reports whether target is Unavailable.
 func (e *unavailable) Is(target error) bool { return target == Unavailable }
-func (e *unavailable) Unwrap() error        { return e.cause }
+
+// Unwrap returns the underlying authority failure.
+func (e *unavailable) Unwrap() error { return e.cause }
 
 func unavailableFailure(cause error) error {
 	failure := &unavailable{cause: cause}

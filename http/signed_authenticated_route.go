@@ -19,16 +19,24 @@ type SignedAuthenticatedRoute[P, S any] struct {
 	signed   SignedRoute[P]
 }
 
+// SignAuthenticatedRoute adds URL-signature verification to a required-authentication
+// raw route.
 func SignAuthenticatedRoute[P, M any](r AuthenticatedRoute[P, M], signer URLSigner) SignedAuthenticatedRoute[P, M] {
 	return SignedAuthenticatedRoute[P, M]{validate: func() error { return ValidateAuthenticatedRoute(r) }, describe: func() (RouteInfo, error) { return InspectAuthenticatedRoute(r) }, handle: func(handler func(stdhttp.ResponseWriter, *stdhttp.Request, M, P)) RouteRegistration {
 		return HandleAuthenticatedRaw(r, handler)
 	}, signed: SignRoute(r.route, signer)}
 }
+
+// SignOptionalRoute adds URL-signature verification to an optional-authentication raw
+// route.
 func SignOptionalRoute[P, M any](r OptionalAuthenticationRoute[P, M], signer URLSigner) SignedAuthenticatedRoute[P, value.Optional[M]] {
 	return SignedAuthenticatedRoute[P, value.Optional[M]]{validate: func() error { return ValidateOptionalRoute(r) }, describe: func() (RouteInfo, error) { return InspectOptionalRoute(r) }, handle: func(handler func(stdhttp.ResponseWriter, *stdhttp.Request, value.Optional[M], P)) RouteRegistration {
 		return HandleOptionalRaw(r, handler)
 	}, signed: SignRoute(r.required.route, signer)}
 }
+
+// ValidateSignedAuthenticatedRoute checks the authentication transport, raw route and
+// signer.
 func ValidateSignedAuthenticatedRoute[P, S any](r SignedAuthenticatedRoute[P, S]) error {
 	if r.validate == nil || r.describe == nil || r.handle == nil {
 		return safeerror.NewFault(fault.Invalid, "signed raw authentication requires a transport")
@@ -38,6 +46,9 @@ func ValidateSignedAuthenticatedRoute[P, S any](r SignedAuthenticatedRoute[P, S]
 	}
 	return ValidateSignedRoute(r.signed)
 }
+
+// SignedAuthenticatedRouteURL validates the declaration and signs an expiring
+// origin-bound raw-route link.
 func SignedAuthenticatedRouteURL[P, S any](r SignedAuthenticatedRoute[P, S], ctx context.Context, origin Origin, path P, expires time.Time) (string, error) {
 	if err := ValidateSignedAuthenticatedRoute(r); err != nil {
 		return "", err
@@ -56,18 +67,27 @@ func signedAuthenticatedRouteWithIgnoredParameters[P, S any](r SignedAuthenticat
 	r.signed = ConfigureSignedRoute(r.signed, IgnoredParameters(names...))
 	return r
 }
+
+// PermanentAuthenticatedRouteURL signs an origin-bound raw-route link without expiry;
+// the route must permit permanent links.
 func PermanentAuthenticatedRouteURL[P, S any](r SignedAuthenticatedRoute[P, S], ctx context.Context, origin Origin, path P) (string, error) {
 	if err := ValidateSignedAuthenticatedRoute(r); err != nil {
 		return "", err
 	}
 	return PermanentRouteURL(r.signed, ctx, origin, path)
 }
+
+// RelativeAuthenticatedRouteURL signs an expiring origin-relative raw-route link valid
+// on every admitted origin.
 func RelativeAuthenticatedRouteURL[P, S any](r SignedAuthenticatedRoute[P, S], ctx context.Context, path P, expires time.Time) (string, error) {
 	if err := ValidateSignedAuthenticatedRoute(r); err != nil {
 		return "", err
 	}
 	return RelativeRouteURL(r.signed, ctx, path, expires)
 }
+
+// InspectSignedAuthenticatedRoute returns validated authentication, raw-route and
+// signed-link metadata.
 func InspectSignedAuthenticatedRoute[P, S any](r SignedAuthenticatedRoute[P, S]) (RouteInfo, error) {
 	if err := ValidateSignedAuthenticatedRoute(r); err != nil {
 		return RouteInfo{}, err
@@ -79,6 +99,9 @@ func InspectSignedAuthenticatedRoute[P, S any](r SignedAuthenticatedRoute[P, S])
 	info.SignedURL = signedURLInfo(r.signed.signer.policy)
 	return info, nil
 }
+
+// HandleSignedAuthenticatedRaw registers a typed-subject raw handler behind
+// URL-signature verification and authentication.
 func HandleSignedAuthenticatedRaw[P, S any](r SignedAuthenticatedRoute[P, S], handler func(stdhttp.ResponseWriter, *stdhttp.Request, S, P)) RouteRegistration {
 	if err := ValidateSignedAuthenticatedRoute(r); err != nil {
 		return InvalidRouteRegistration(err)

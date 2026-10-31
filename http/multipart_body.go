@@ -29,6 +29,7 @@ type multipartSource struct {
 	tooLarge bool
 }
 
+// Read forwards source data and records whether the HTTP body limit was exceeded.
 func (r *multipartSource) Read(p []byte) (int, error) {
 	n, err := r.source.Read(p)
 	if _, ok := err.(*stdhttp.MaxBytesError); ok {

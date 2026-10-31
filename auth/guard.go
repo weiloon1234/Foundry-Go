@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// GuardName identifies an authentication guard declaration.
 type GuardName string
 
 // Guard retains the concrete authenticated model while its strategy/provider
@@ -31,6 +32,9 @@ type guardDefinition[M any] struct {
 	resolve      func(context.Context, Credentials) (guardResult[M], error)
 }
 
+// DefineGuard binds a named guard to the exact provider and credential strategy
+// declarations. Resolution verifies supplied credentials before loading the current
+// eligible model.
 func DefineGuard[M model.Identifiable, K any](name GuardName, provider Provider[M, K], strategy Strategy[M, K]) Guard[M] {
 	d := &guardDefinition[M]{id: &declarationID{}, name: name, providerName: provider.Name(), source: strategy.Source()}
 	if provider.definition != nil {
@@ -85,24 +89,33 @@ func DefineGuard[M model.Identifiable, K any](name GuardName, provider Provider[
 	}
 	return Guard[M]{definition: d}
 }
+
+// Validate checks the guard name and its provider and strategy declarations.
 func (g Guard[M]) Validate() error {
 	if g.definition == nil || !identifier.Semantic(string(g.definition.name)) {
 		return safeerror.NewFault(fault.Invalid, "authentication guard requires a semantic name")
 	}
 	return g.definition.validate()
 }
+
+// Name returns the guard name, or an empty name for an undefined guard.
 func (g Guard[M]) Name() GuardName {
 	if g.definition == nil {
 		return ""
 	}
 	return g.definition.name
 }
+
+// ProviderName returns the bound provider name, or an empty name for an undefined
+// guard.
 func (g Guard[M]) ProviderName() ProviderName {
 	if g.definition == nil {
 		return ""
 	}
 	return g.definition.providerName
 }
+
+// Registration returns the guard's identity and validation contract for a registry.
 func (g Guard[M]) Registration() Registration {
 	if g.definition == nil {
 		return Registration{}

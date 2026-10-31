@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// CredentialKind identifies how an HTTP request supplies an authentication credential.
 type CredentialKind string
 
 const authorizationHeader = "Authorization"
@@ -26,6 +27,8 @@ type CredentialInfo struct {
 	OriginProtection bool                `json:"origin_protection,omitempty"`
 }
 
+// Validate checks the credential source and supported bearer or cookie transport
+// metadata.
 func (info CredentialInfo) Validate() error {
 	if !identifier.Semantic(string(info.Source)) {
 		return safeerror.NewFault(fault.Invalid, "credential metadata requires a source")

@@ -14,6 +14,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+// Issue locks the challenge subject, prepares its binding and atomically replaces the
+// previous token.
 func (b *Backend) Issue(ctx context.Context, address challenge.Address, identity model.Identity, hash challenge.Digest, lifetime time.Duration, prepare func(context.Context, *database.Tx) (challenge.Binding, error)) (challenge.Record, error) {
 	if err := validateCredential(address, hash); err != nil {
 		return challenge.Record{}, err

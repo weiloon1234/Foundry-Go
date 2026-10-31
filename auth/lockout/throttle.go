@@ -18,11 +18,16 @@ type Throttle[K any] struct {
 	observer   func(context.Context, Notice[K]) error
 }
 
-func (t Throttle[K]) Name() Name     { return (Declaration[K]{t.definition}).Name() }
+// Name returns the bound lockout family name.
+func (t Throttle[K]) Name() Name { return (Declaration[K]{t.definition}).Name() }
+
+// Policy returns the bound declaration's policy.
 func (t Throttle[K]) Policy() Policy { return (Declaration[K]{t.definition}).Policy() }
 
 // Limits returns the client-aware limits when this throttle came from DefineLogin.
 func (t Throttle[K]) Limits() (Limits, bool) { return (Declaration[K]{t.definition}).Limits() }
+
+// Validate checks the store binding and declaration.
 func (t Throttle[K]) Validate() error {
 	if t.store == nil || t.store.gate == nil {
 		return safeerror.NewFault(fault.Invalid, "lockout throttle is not bound")

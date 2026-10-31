@@ -63,6 +63,7 @@ func (b *Backend) RevokeOthers(ctx context.Context, address session.Address, ide
 	return count, nil
 }
 
+// RevokeAll atomically removes the subject's sessions and returns the count.
 func (b *Backend) RevokeAll(ctx context.Context, address session.Address, identity model.Identity) (uint64, error) {
 	if _, err := address.SubjectKey(identity); err != nil {
 		return 0, err

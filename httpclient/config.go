@@ -19,10 +19,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
+// Name identifies a configured outbound HTTP client.
 type Name string
 
 const MaxBodyBytes int64 = 64 << 20
 
+// Config declares one named client's transport, resource bounds and request defaults.
 type Config struct {
 	// Destination optionally enforces direct, address-checked outbound networking.
 	Destination    DestinationPolicy
@@ -46,9 +48,14 @@ type Config struct {
 	TLS TLSConfig
 }
 
+// DefaultConfig returns the named client's default timeouts, resource bounds and retry
+// policy.
 func DefaultConfig(name Name) Config {
 	return Config{Name: name, ConnectTimeout: 10 * time.Second, AttemptTimeout: 30 * time.Second, Timeout: time.Minute, Concurrency: 64, RequestBytes: 4 << 20, ResponseBytes: 4 << 20, HeaderBytes: 64 << 10, Retry: DefaultRetryPolicy()}
 }
+
+// Validate checks the client's name, resource bounds, URL, headers, destination policy,
+// TLS and retries.
 func (c Config) Validate() error {
 	if c.Name.Validate() != nil || c.ConnectTimeout <= 0 || c.ConnectTimeout > time.Hour || c.AttemptTimeout <= 0 || c.AttemptTimeout > time.Hour || c.Timeout <= 0 || c.Timeout > time.Hour || c.Concurrency < 1 || c.Concurrency > 4096 || c.RequestBytes < 1 || c.RequestBytes > MaxBodyBytes || c.ResponseBytes < 1 || c.ResponseBytes > MaxBodyBytes || c.HeaderBytes < 1 || c.HeaderBytes > 1<<20 {
 		return invalid()
@@ -69,11 +76,16 @@ func (c Config) Validate() error {
 	}
 	return c.Retry.Validate()
 }
+
+// Format writes a configuration label without exposing settings.
 func (Config) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("HTTP client configuration"))
 }
+
+// MarshalJSON encodes a configuration label without exposing settings.
 func (Config) MarshalJSON() ([]byte, error) { return []byte(`"HTTP client configuration"`), nil }
 
+// RetryMode selects which operations are eligible for retry.
 type RetryMode string
 
 const (
@@ -96,10 +108,17 @@ type RetryPolicy struct {
 	Statuses                   []int `config:",json"`
 }
 
+// DefaultRetryPolicy allows up to three safe-read attempts with jittered exponential
+// backoff.
 func DefaultRetryPolicy() RetryPolicy {
 	return RetryPolicy{Mode: SafeReads, Attempts: 3, InitialBackoff: 100 * time.Millisecond, MaxBackoff: 2 * time.Second, Jitter: true}
 }
+
+// NoRetries returns a policy allowing one attempt.
 func NoRetries() RetryPolicy { return RetryPolicy{Mode: SafeReads, Attempts: 1} }
+
+// Validate checks the retry mode, attempt and backoff bounds, and retryable status
+// codes.
 func (p RetryPolicy) Validate() error {
 	if p.Mode != SafeReads && p.Mode != IdempotentOperation || p.Attempts < 1 || p.Attempts > 10 || p.InitialBackoff < 0 || p.MaxBackoff < p.InitialBackoff || p.MaxBackoff > time.Minute || len(p.Statuses) > 32 {
 		return invalid()
@@ -179,6 +198,7 @@ type TLSConfig struct {
 	ServerName             string
 }
 
+// IsZero reports whether no custom TLS settings are supplied.
 func (t TLSConfig) IsZero() bool {
 	return t.CertificateAuthorities == "" && !t.AppendSystemRoots && t.Certificate.IsZero() && t.PrivateKey.IsZero() && t.ServerName == ""
 }

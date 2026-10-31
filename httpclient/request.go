@@ -28,6 +28,8 @@ type Request struct {
 	err     error
 }
 
+// Request declares a request using the client's base URL, copied default headers and
+// retry policy. Invalid methods or URLs are retained as validation errors.
 func (c *Client) Request(method, path string) Request {
 	r := Request{client: c, method: method}
 	if c == nil || len(method) > 32 || !httptoken.Valid(method) || method != strings.ToUpper(method) || method == http.MethodConnect {
@@ -42,8 +44,15 @@ func (c *Client) Request(method, path string) Request {
 	r.retry = c.config.Retry
 	return r
 }
-func (c *Client) Get(path string) Request  { return c.Request(http.MethodGet, path) }
+
+// Get declares a GET request to path.
+func (c *Client) Get(path string) Request { return c.Request(http.MethodGet, path) }
+
+// Post declares a POST request to path.
 func (c *Client) Post(path string) Request { return c.Request(http.MethodPost, path) }
+
+// Header returns a request with a copied, validated header set containing the
+// replacement value.
 func (r Request) Header(name, value string) Request {
 	if err := r.Validate(); err != nil {
 		r.err = err
@@ -54,6 +63,8 @@ func (r Request) Header(name, value string) Request {
 	r.headers, r.err = copyHeaders(r.headers, r.client.config.HeaderBytes, true)
 	return r
 }
+
+// Bearer returns a request with a validated bearer Authorization header.
 func (r Request) Bearer(token secret.String) Request {
 	if err := r.Validate(); err != nil {
 		r.err = err
@@ -65,6 +76,9 @@ func (r Request) Bearer(token secret.String) Request {
 	}
 	return r.Header("Authorization", "Bearer "+token.Reveal())
 }
+
+// QueryPair returns a request with an additional encoded query value, retaining
+// validation errors on the result.
 func (r Request) QueryPair(name, value string) Request {
 	if err := r.Validate(); err != nil {
 		r.err = err
@@ -89,6 +103,9 @@ func (r Request) QueryPair(name, value string) Request {
 	r.url = &u
 	return r
 }
+
+// WithBody returns a request with body, retaining an error if the body is invalid or
+// exceeds the client's request limit.
 func (r Request) WithBody(body Body) Request {
 	if err := r.Validate(); err != nil {
 		r.err = err
@@ -101,6 +118,8 @@ func (r Request) WithBody(body Body) Request {
 	r.body = body
 	return r
 }
+
+// WithRetry returns a request with the validated retry policy.
 func (r Request) WithRetry(policy RetryPolicy) Request {
 	if err := r.Validate(); err != nil {
 		r.err = err
@@ -113,6 +132,9 @@ func (r Request) WithRetry(policy RetryPolicy) Request {
 	r.retry = policy
 	return r
 }
+
+// Validate returns retained declaration errors and checks the destination policy. The
+// zero request is invalid.
 func (r Request) Validate() error {
 	if r.err != nil {
 		return r.err
@@ -122,13 +144,19 @@ func (r Request) Validate() error {
 	}
 	return r.client.config.Destination.checkURL(r.url)
 }
+
+// URL returns the request URL, or an empty string when no URL is set.
 func (r Request) URL() string {
 	if r.url == nil {
 		return ""
 	}
 	return r.url.String()
 }
-func (r Request) Method() string               { return r.method }
+
+// Method returns the declared HTTP method.
+func (r Request) Method() string { return r.method }
+
+// Format writes a request label without exposing its URL, headers or body.
 func (Request) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("HTTP request")) }
 
 // BasicAuth sets RFC 7617 Basic credentials. The user ID must not contain a
@@ -168,6 +196,8 @@ func Field(name, value string) Part { return Part{name: name, data: []byte(value
 func File(name, filename, contentType string, data []byte) Part {
 	return Part{name: name, filename: filename, contentType: contentType, data: slices.Clone(data)}
 }
+
+// Format writes a multipart label without exposing content.
 func (Part) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("multipart part")) }
 
 // Multipart encodes parts once as a replayable multipart/form-data body within

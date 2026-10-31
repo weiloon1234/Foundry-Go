@@ -43,6 +43,8 @@ type Impersonation[A model.Identifiable, AK any, M model.Identifiable, K any] st
 	observer auth.Observer
 }
 
+// NewImpersonation validates the duration bound and requires actor and target sessions
+// to share the same store.
 func NewImpersonation[A model.Identifiable, AK any, M model.Identifiable, K any](actors *Sessions[A, AK], targets *Sessions[M, K], maximum time.Duration) (*Impersonation[A, AK, M, K], error) {
 	if err := actors.Validate(); err != nil {
 		return nil, err
@@ -61,6 +63,7 @@ func NewImpersonation[A model.Identifiable, AK any, M model.Identifiable, K any]
 	return &Impersonation[A, AK, M, K]{actors: actors, targets: targets, maximum: maximum}, nil
 }
 
+// Validate checks that actor and target session bindings are configured.
 func (i *Impersonation[A, AK, M, K]) Validate() error {
 	if i == nil {
 		return safeerror.NewFault(fault.Invalid, "impersonation is not configured")
@@ -89,6 +92,8 @@ func (i *Impersonation[A, AK, M, K]) WithObserver(observer auth.Observer) (*Impe
 
 // Actors and Targets return the bound session bindings.
 func (i *Impersonation[A, AK, M, K]) Actors() *Sessions[A, AK] { return i.actors }
+
+// Targets returns the target session binding.
 func (i *Impersonation[A, AK, M, K]) Targets() *Sessions[M, K] { return i.targets }
 
 // sameBinding reports whether actors and targets share one guard binding, so

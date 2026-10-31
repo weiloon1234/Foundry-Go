@@ -73,6 +73,7 @@ const (
 	exclusionLifetime  = time.Minute
 )
 
+// NewDistributed creates a hub and binds it to the supplied cluster adapter and policy.
 func NewDistributed(registry *Registry, authentication *foundryhttp.Authentication, config Config, backend ClusterBackend, cluster ClusterConfig, opts ...Option) (*Hub, error) {
 	hub, err := New(registry, authentication, config, opts...)
 	if err != nil {
@@ -192,7 +193,10 @@ type clusterError struct {
 	cause error
 }
 
-func (e *clusterError) Error() string   { return string(e.code) }
+// Error returns the cluster error code without formatting its cause.
+func (e *clusterError) Error() string { return string(e.code) }
+
+// Unwrap returns the error code and underlying cause for error matching.
 func (e *clusterError) Unwrap() []error { return []error{e.code, e.cause} }
 
 func clusterCode(err error) Code {

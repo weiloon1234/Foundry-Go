@@ -55,12 +55,16 @@ func describeURL[V any](codec PathCodec[V], description contract.Scalar[V], synt
 	return describedURLCodec[V]{codec: codec, description: description, syntax: syntax, err: err}
 }
 
+// Parse returns any retained descriptor error before parsing through the wrapped codec.
 func (c describedURLCodec[V]) Parse(text string) (V, error) {
 	if c.err != nil {
 		return *new(V), c.err
 	}
 	return c.codec.Parse(text)
 }
+
+// Format returns any retained descriptor error before formatting through the wrapped
+// codec.
 func (c describedURLCodec[V]) Format(value V) (string, error) {
 	if c.err != nil {
 		return "", c.err
@@ -109,6 +113,7 @@ func EnumPath[E enum.Scalar, P PathTextPointer[E]](descriptor enum.Descriptor[E]
 
 type enumURLCodec[E enum.Scalar, P PathTextPointer[E]] struct{ descriptor enum.Descriptor[E] }
 
+// Parse decodes enum text and requires membership in the declared enum.
 func (c enumURLCodec[E, P]) Parse(text string) (E, error) {
 	value, err := (textPathCodec[E, P]{}).Parse(text)
 	if err != nil {
@@ -119,6 +124,8 @@ func (c enumURLCodec[E, P]) Parse(text string) (E, error) {
 	}
 	return value, nil
 }
+
+// Format requires a declared enum value before invoking its text marshaler.
 func (c enumURLCodec[E, P]) Format(value E) (string, error) {
 	if !c.descriptor.Contains(value) {
 		return "", safeerror.NewFault(fault.Invalid, "invalid enum URL value")

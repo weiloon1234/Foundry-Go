@@ -17,9 +17,16 @@ type ID[M any] struct {
 	value model.ID[Record]
 }
 
-func (id ID[M]) String() string               { return id.value.String() }
-func (id ID[M]) IsZero() bool                 { return id.value.IsZero() }
+// String returns the session identifier's text representation.
+func (id ID[M]) String() string { return id.value.String() }
+
+// IsZero reports whether the identifier is uninitialized.
+func (id ID[M]) IsZero() bool { return id.value.IsZero() }
+
+// MarshalText encodes the session identifier in text form.
 func (id ID[M]) MarshalText() ([]byte, error) { return id.value.MarshalText() }
+
+// ParseID parses a session identifier while retaining model ownership.
 func ParseID[M any](text string) (ID[M], error) {
 	id, err := model.ParseID[Record](text)
 	return ID[M]{value: id}, err
@@ -38,14 +45,29 @@ type Info[M, K any] struct {
 	impersonator                            value.Optional[Impersonator]
 }
 
-func (i Info[M, K]) ID() ID[M]                        { return i.id }
-func (i Info[M, K]) Subject() model.Reference[M, K]   { return i.subject }
-func (i Info[M, K]) Assurance() auth.Assurance        { return i.assurance }
-func (i Info[M, K]) Remembered() bool                 { return i.remembered }
-func (i Info[M, K]) CreatedAt() temporal.DateTime     { return i.created }
-func (i Info[M, K]) LastSeenAt() temporal.DateTime    { return i.lastSeen }
+// ID returns the model-owned session identifier.
+func (i Info[M, K]) ID() ID[M] { return i.id }
+
+// Subject returns the session's typed model reference.
+func (i Info[M, K]) Subject() model.Reference[M, K] { return i.subject }
+
+// Assurance returns the session's authentication assurance.
+func (i Info[M, K]) Assurance() auth.Assurance { return i.assurance }
+
+// Remembered reports whether the session uses the remembered lifetime policy.
+func (i Info[M, K]) Remembered() bool { return i.remembered }
+
+// CreatedAt returns the session's creation time.
+func (i Info[M, K]) CreatedAt() temporal.DateTime { return i.created }
+
+// LastSeenAt returns the session's recorded activity time.
+func (i Info[M, K]) LastSeenAt() temporal.DateTime { return i.lastSeen }
+
+// IdleExpiresAt returns the session's current inactivity deadline.
 func (i Info[M, K]) IdleExpiresAt() temporal.DateTime { return i.idleExpires }
-func (i Info[M, K]) ExpiresAt() temporal.DateTime     { return i.expires }
+
+// ExpiresAt returns the session's absolute expiry.
+func (i Info[M, K]) ExpiresAt() temporal.DateTime { return i.expires }
 
 // Device is the client metadata captured when the session was issued.
 func (i Info[M, K]) Device() auth.Device { return i.device }
@@ -57,7 +79,9 @@ func (i Info[M, K]) ConfirmedAt() value.Optional[temporal.DateTime] { return i.c
 func (i Info[M, K]) Impersonator() value.Optional[Impersonator] { return i.impersonator }
 
 // Impersonated reports whether this session was started by impersonation.
-func (i Info[M, K]) Impersonated() bool       { return i.impersonator.IsSet() }
+func (i Info[M, K]) Impersonated() bool { return i.impersonator.IsSet() }
+
+// Format writes the label "session metadata" without exposing the value.
 func (Info[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("session metadata")) }
 
 // Issued owns the newly generated secret. Only Secret exposes it for the explicit
@@ -68,6 +92,11 @@ type Issued[M, K any] struct {
 	secret secret.String
 }
 
-func (i Issued[M, K]) Info() Info[M, K]         { return i.info }
-func (i Issued[M, K]) Secret() secret.String    { return i.secret }
+// Info returns the issued session's safe metadata.
+func (i Issued[M, K]) Info() Info[M, K] { return i.info }
+
+// Secret explicitly exposes the issued session secret wrapper for delivery.
+func (i Issued[M, K]) Secret() secret.String { return i.secret }
+
+// Format writes the label "issued session" without exposing the value.
 func (Issued[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("issued session")) }

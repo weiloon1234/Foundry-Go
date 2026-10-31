@@ -18,6 +18,7 @@ type CSRFConfig struct {
 	TrustedOrigins []Origin `config:",json"`
 }
 
+// Validate checks that the CSRF configuration can be compiled.
 func (c CSRFConfig) Validate() error { _, err := compileCSRF(c); return err }
 
 type csrfPolicy struct {

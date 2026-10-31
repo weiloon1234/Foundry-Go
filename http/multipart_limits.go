@@ -20,11 +20,15 @@ type MultipartLimits struct {
 	HeaderBytes, FieldBytes, FieldsBytes, Issues int
 }
 
+// DefaultMultipartLimits returns upload, part, reader, header, field and issue bounds
+// derived from default server settings.
 func DefaultMultipartLimits() MultipartLimits {
 	body := DefaultServerConfig().MaxBodyBytes
 	return MultipartLimits{Bytes: body, FileBytes: body, Parts: 128, Files: 16, Readers: 16, HeaderBytes: DefaultServerConfig().MaxHeaderBytes, FieldBytes: 64 << 10, FieldsBytes: 256 << 10, Issues: 16}
 }
 
+// Validate checks positive multipart resource bounds and their size and count
+// relationships.
 func (l MultipartLimits) Validate() error {
 	if l.Bytes <= 0 || l.FileBytes <= 0 || l.FileBytes > l.Bytes || l.Parts <= 0 || l.Files <= 0 || l.Files > l.Parts || l.Readers <= 0 || l.HeaderBytes <= 0 || l.FieldBytes <= 0 || l.FieldsBytes < l.FieldBytes || int64(l.FieldsBytes) > l.Bytes || int64(l.FieldBytes) == math.MaxInt64 || l.Issues <= 0 {
 		return safeerror.NewFault(fault.Invalid, "invalid multipart resource limits")

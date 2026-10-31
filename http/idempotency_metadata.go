@@ -36,6 +36,9 @@ func idempotencyInfo(d idempotency.Definition, c idempotency.Config, headers boo
 	return i
 }
 func idempotencyKeyPattern(maximum int) string { return idempotency.KeyPattern(maximum) }
+
+// Validate checks exported idempotency metadata against supported key, fingerprint,
+// replay-header, wait and retention policies.
 func (i IdempotencyInfo) Validate() error {
 	if (idempotency.Definition{ID: i.Operation, Version: i.Version}).Validate() != nil || i.Header != IdempotencyKeyHeader || i.MinKeyBytes != idempotency.MinKeyBytes || i.MaxKeyBytes < i.MinKeyBytes || i.MaxKeyBytes > idempotency.MaxKeyBytes || i.KeyPattern != idempotencyKeyPattern(i.MaxKeyBytes) || i.Fingerprint != "prepared-path-query-body-v1" || !i.SuccessOnly || i.DuplicateWaitMilliseconds < 1 || i.DuplicateWaitMilliseconds > int64(5*time.Minute/time.Millisecond) || i.RetentionSeconds < 3600 || i.RetentionSeconds > int64(365*24*time.Hour/time.Second) {
 		return safeerror.NewFault(fault.Invalid, "invalid HTTP idempotency policy")

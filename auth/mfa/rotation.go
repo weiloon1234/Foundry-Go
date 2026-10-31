@@ -37,6 +37,7 @@ type RotationBackend interface {
 // value starts from the beginning. It is opaque and not a model reference.
 type RotationCursor struct{ owner string }
 
+// IsZero reports whether the cursor has no rotation owner.
 func (c RotationCursor) IsZero() bool { return c.owner == "" }
 
 // Rotation reports one bounded batch. Reencrypted counts committed

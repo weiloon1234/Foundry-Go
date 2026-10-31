@@ -22,7 +22,9 @@ import (
 // Issuer is the model/purpose contract implemented by Flow, passwordreset.Reset
 // and emailverification.Verification. A requester borrows the configured issuer.
 type Issuer[M model.Identifiable, K any, P Purpose] interface {
+	// Validate checks that the issuer is configured.
 	Validate() error
+	// Issue creates a model-bound challenge for the supplied reference.
 	Issue(context.Context, model.Reference[M, K]) (Issued[M, P], error)
 }
 
@@ -60,6 +62,8 @@ type Requests[M model.Identifiable, K, I any, P Purpose] struct {
 	idle      chan struct{} // Closed when active returns to zero.
 }
 
+// NewRequests validates dependencies and creates bounded background recovery dispatch.
+// The caller must close the requester to drain its work.
 func NewRequests[M model.Identifiable, K, I any, P Purpose](issuer Issuer[M, K, P], limiter ratelimit.Limiter[I], callbacks RequestCallbacks[M, K, I, P], logger *slog.Logger, config auth.Config) (*Requests[M, K, I, P], error) {
 	if credential.IsNil(issuer) || callbacks.Lookup == nil || callbacks.Deliver == nil || logger == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "recovery requests require issuer, lookup, delivery and logger")
@@ -72,6 +76,8 @@ func NewRequests[M model.Identifiable, K, I any, P Purpose](issuer Issuer[M, K, 
 	owned, cancel := context.WithCancel(context.Background())
 	return &Requests[M, K, I, P]{issuer: issuer, limiter: limiter, callbacks: callbacks, logger: logger, config: config, slots: admission.New(config.MaxConcurrent), owned: owned, cancel: cancel}, nil
 }
+
+// Validate checks that the requester is configured.
 func (r *Requests[M, K, I, P]) Validate() error {
 	if r == nil || r.slots == nil {
 		return safeerror.NewFault(fault.Invalid, "recovery requests are not configured")

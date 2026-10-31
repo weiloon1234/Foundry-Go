@@ -14,9 +14,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/tokenstore"
 )
 
+// Create atomically creates a token under the subject lock and enforces credential
+// capacity.
 func (b *Backend) Create(ctx context.Context, address token.Address, creation token.Creation) (token.Record, error) {
 	return b.create(ctx, address, creation, nil, nil)
 }
+
+// CreateChecked runs check before credential locks and creates the token in the same
+// transaction, without retries.
 func (b *Backend) CreateChecked(ctx context.Context, address token.Address, creation token.Creation, check func(context.Context, *database.Tx) error) (token.Record, error) {
 	if check == nil {
 		return token.Record{}, safeerror.NewFault(fault.Invalid, "credential creation requires a proof check")

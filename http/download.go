@@ -35,18 +35,25 @@ type Download struct {
 	tag value.Optional[EntityTag]
 }
 
+// DownloadFrom binds a download source with default file presentation.
 func DownloadFrom(source DownloadSource) Download {
 	return Download{source: source, filePresentation: defaultFilePresentation()}
 }
 
 // WithName overrides display metadata only; it never changes the source path.
 func (d Download) WithName(name string) Download { d.name = value.Set(name); return d }
+
+// WithDisposition returns a download with the selected disposition.
 func (d Download) WithDisposition(disposition Disposition) Download {
 	d.disposition = disposition
 	return d
 }
+
+// WithMediaType returns a download with an explicitly supplied media type.
 func (d Download) WithMediaType(media MediaType) Download { d.media = value.Set(media); return d }
-func (d Download) WithEntityTag(tag EntityTag) Download   { d.tag = value.Set(tag); return d }
+
+// WithEntityTag returns a download with an explicitly supplied entity tag.
+func (d Download) WithEntityTag(tag EntityTag) Download { d.tag = value.Set(tag); return d }
 
 // Validate checks the declaration without opening or reading its source.
 func (d Download) Validate() error {

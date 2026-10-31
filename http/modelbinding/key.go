@@ -15,7 +15,10 @@ import (
 // Find retains the query's filters, eager loads, soft-delete scope and retrieval
 // hooks. Transaction-only locked queries have a different executor contract.
 type KeyQuery[M, K any] interface {
+	// Validate checks the typed key-query declaration.
 	Validate() error
+	// Find looks up a model by its concrete key using the supplied executor, returning
+	// omission when absent.
 	Find(context.Context, database.Executor, K) (value.Optional[M], error)
 }
 

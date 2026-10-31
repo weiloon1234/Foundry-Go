@@ -30,6 +30,7 @@ type Parameters struct {
 	Parallelism uint8
 }
 
+// Validate checks supported memory, iteration and parallelism bounds.
 func (p Parameters) Validate() error {
 	if p.Parallelism < 1 || p.Parallelism > MaxParallelism || p.Iterations < 1 || p.Iterations > MaxIterations || p.MemoryKiB < 8*uint32(p.Parallelism) || p.MemoryKiB > MaxMemoryKiB {
 		return safeerror.NewFault(fault.Invalid, "password hash parameters exceed supported bounds")
@@ -60,11 +61,16 @@ type Config struct {
 	Timeout       time.Duration
 }
 
+// DefaultConfig returns default Argon2id parameters, verification ceilings, bcrypt
+// ceiling and admission bounds.
 func DefaultConfig() Config {
 	return Config{Parameters: Parameters{MemoryKiB: 64 * 1024, Iterations: 3, Parallelism: 4},
 		VerifyLimit:   Parameters{MemoryKiB: 128 * 1024, Iterations: 6, Parallelism: 8},
 		MaxBcryptCost: 13, MaxConcurrent: 4, Timeout: 5 * time.Second}
 }
+
+// Validate checks hash strength, verification ceilings, bcrypt cost and operation
+// bounds.
 func (c Config) Validate() error {
 	if err := c.Parameters.Validate(); err != nil {
 		return err

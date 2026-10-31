@@ -17,9 +17,14 @@ type AuthenticatedEndpoint[P, Q, B, S, M, R any] struct {
 	authorization *func(context.Context, S, Input[P, Q, B, M]) error
 }
 
+// BindAuthenticated connects a typed model resolver to an authenticated binding
+// transport.
 func BindAuthenticated[P, Q, B, S, M, R any](transport AuthenticatedTransport[P, Q, B, S, R], resolver Resolver[P, M]) AuthenticatedEndpoint[P, Q, B, S, M, R] {
 	return AuthenticatedEndpoint[P, Q, B, S, M, R]{transport: transport, resolver: resolver}
 }
+
+// ValidateAuthenticatedEndpoint checks the authenticated transport, resolver and any
+// resource-authorization callback.
 func ValidateAuthenticatedEndpoint[P, Q, B, S, M, R any](e AuthenticatedEndpoint[P, Q, B, S, M, R]) error {
 	if e.authorization != nil && *e.authorization == nil {
 		return safeerror.NewFault(fault.Invalid, "resource authorization callback is missing")
@@ -29,12 +34,18 @@ func ValidateAuthenticatedEndpoint[P, Q, B, S, M, R any](e AuthenticatedEndpoint
 	}
 	return ValidateResolver(e.resolver)
 }
+
+// DescribeAuthenticatedEndpoint validates the model-binding declaration and returns
+// transport metadata.
 func DescribeAuthenticatedEndpoint[P, Q, B, S, M, R any](e AuthenticatedEndpoint[P, Q, B, S, M, R]) (foundryhttp.EndpointInfo, error) {
 	if err := ValidateAuthenticatedEndpoint(e); err != nil {
 		return foundryhttp.EndpointInfo{}, err
 	}
 	return e.transport.Description()
 }
+
+// Handle resolves and authorizes the bound model before invoking the typed subject
+// handler at the transport's binding stage.
 func (e AuthenticatedEndpoint[P, Q, B, S, M, R]) Handle(handler func(context.Context, S, Input[P, Q, B, M]) (R, error)) foundryhttp.RouteRegistration {
 	if err := ValidateAuthenticatedEndpoint(e); err != nil {
 		return foundryhttp.InvalidRouteRegistration(err)
@@ -69,7 +80,11 @@ func (e AuthenticatedEndpoint[P, Q, B, S, M, R]) Handle(handler func(context.Con
 
 // AuthenticatedTransport requires explicit binding-stage ownership.
 type AuthenticatedTransport[P, Q, B, S, R any] interface {
+	// Validate checks the authenticated transport declaration.
 	Validate() error
+	// Description returns the authenticated endpoint's contract metadata.
 	Description() (foundryhttp.EndpointInfo, error)
+	// HandleBound registers a binding stage receiving the concrete subject and typed
+	// request.
 	HandleBound(foundryhttp.AuthenticatedBinding[P, Q, B, S, R]) foundryhttp.RouteRegistration
 }

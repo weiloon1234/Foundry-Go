@@ -35,6 +35,9 @@ func prepareAssets(config AssetsConfig) (*Assets, error) {
 	}
 	return &Assets{config: config.snapshot(), done: make(chan struct{})}, nil
 }
+
+// OpenAssets validates and opens the configured asset source. The caller must close the
+// returned assets.
 func OpenAssets(ctx context.Context, config AssetsConfig) (*Assets, error) {
 	assets, err := prepareAssets(config)
 	if err != nil {

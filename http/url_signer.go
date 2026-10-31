@@ -26,6 +26,7 @@ const MaxSignedURLQueryPairs = 1024
 
 type signedURLError string
 
+// Error returns the signed URL error code text.
 func (e signedURLError) Error() string { return string(e) }
 
 // ErrInvalidSignedURL identifies malformed, changed, expired or retired-key
@@ -77,9 +78,13 @@ func (p signedURLPolicy) withIgnored(names []string) (signedURLPolicy, error) {
 	return p, nil
 }
 
-func (s URLSigner) String() string   { return secret.Redacted }
+// String returns the redaction marker without exposing signing keys.
+func (s URLSigner) String() string { return secret.Redacted }
+
+// GoString returns the redaction marker without exposing signing keys.
 func (s URLSigner) GoString() string { return secret.Redacted }
 
+// NewURLSigner validates and binds signing keys and the application clock.
 func NewURLSigner(keys SigningKeys, applicationClock clock.Clock) (URLSigner, error) {
 	s := URLSigner{keys: keys, clock: applicationClock}
 	if err := s.Validate(); err != nil {
@@ -87,6 +92,8 @@ func NewURLSigner(keys SigningKeys, applicationClock clock.Clock) (URLSigner, er
 	}
 	return s, nil
 }
+
+// Validate checks signing keys and requires a non-nil application clock.
 func (s URLSigner) Validate() error {
 	if err := s.keys.Validate(); err != nil {
 		return err

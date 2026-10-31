@@ -15,6 +15,7 @@ import (
 // root; one trailing slash identifies a directory. Download requires a file path.
 type AssetPath string
 
+// Validate checks the asset path's structure and optional trailing slash.
 func (p AssetPath) Validate() error { _, _, err := assetPathParts(string(p)); return err }
 
 // AssetExtension is a lowercase suffix including its leading dot, such as .css.
@@ -27,6 +28,7 @@ type AssetSource struct {
 	filesystem fs.FS
 }
 
+// DirectoryAssets declares a directory source to open when assets start.
 func DirectoryAssets(directory string) AssetSource { return AssetSource{directory: directory} }
 
 // FilesystemAssets supports embed.FS and other concurrency-safe filesystems.
@@ -65,6 +67,8 @@ type AssetsConfig struct {
 	AllowHidden  bool
 }
 
+// DefaultAssetsConfig returns an index.html policy with no-cache headers, default file
+// limits and common media types.
 func DefaultAssetsConfig(source AssetSource) AssetsConfig {
 	return AssetsConfig{Source: source, Index: "index.html", CacheControl: "no-cache", Limits: DefaultFileResponseLimits(), Media: map[AssetExtension]MediaType{
 		".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
@@ -73,6 +77,9 @@ func DefaultAssetsConfig(source AssetSource) AssetsConfig {
 		".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf", ".otf": "font/otf", ".wasm": "application/wasm", ".pdf": "application/pdf",
 	}}
 }
+
+// Validate checks the source, response limits, cache headers, index policy and bounded
+// media-type declarations.
 func (c AssetsConfig) Validate() error {
 	if err := c.Source.validate(); err != nil {
 		return err

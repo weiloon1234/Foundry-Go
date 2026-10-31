@@ -27,6 +27,7 @@ const Denied failureCode = "oauth authorization was denied at the provider"
 
 type failureCode string
 
+// Error returns the OAuth failure code text.
 func (c failureCode) Error() string { return string(c) }
 
 // maxProviderResponseBytes bounds token, user and JWKS documents.
@@ -59,6 +60,7 @@ func NewClient(provider Provider, outbound *httpclient.Client, source clock.Cloc
 	return &Client{provider: provider, http: outbound, clock: source, lifetime: DefaultPendingLifetime, keys: newKeySet()}, nil
 }
 
+// Validate checks that the OAuth client has HTTP and encryption dependencies.
 func (c *Client) Validate() error {
 	if c == nil || c.http == nil || c.keys == nil {
 		return safeerror.NewFault(fault.Invalid, "OAuth client is not configured")
@@ -76,8 +78,12 @@ type Authorization struct {
 	Pending Pending
 }
 
+// Format writes an authorization label without exposing the authorization URL or
+// pending secrets.
 func (Authorization) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("OAuth authorization")) }
-func (Authorization) LogValue() slog.Value       { return slog.StringValue("OAuth authorization") }
+
+// LogValue returns an authorization label without exposing its contents.
+func (Authorization) LogValue() slog.Value { return slog.StringValue("OAuth authorization") }
 
 // Begin creates fresh state, nonce and PKCE verifier and the provider URL with
 // response_type=code, the exact redirect URI and the S256 code challenge.

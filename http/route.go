@@ -68,12 +68,19 @@ type Route[P any] struct {
 	err            error
 }
 
+// DefineRoute declares a typed path route and applies its options; validation occurs
+// separately.
 func DefineRoute[P any](spec RouteSpec, path Path[P], options ...RouteOption) Route[P] {
 	return ConfigureRoute(Route[P]{spec: spec, path: path}, options...)
 }
 
-func RouteIDOf[P any](r Route[P]) RouteID   { return r.spec.ID }
-func RouteMethod[P any](r Route[P]) Method  { return r.spec.Method }
+// RouteIDOf returns the route's declared identifier.
+func RouteIDOf[P any](r Route[P]) RouteID { return r.spec.ID }
+
+// RouteMethod returns the route's declared HTTP method.
+func RouteMethod[P any](r Route[P]) Method { return r.spec.Method }
+
+// RoutePattern returns the route's path template.
 func RoutePattern[P any](r Route[P]) string { return PathPattern(r.path) }
 
 func routeValidate[P any](r Route[P]) ([]pathSegment, error) {

@@ -16,6 +16,8 @@ type Store struct {
 	gate    *credential.Gate
 }
 
+// NewStore validates and borrows backend and creates bounded session-operation
+// admission.
 func NewStore(backend Backend, config Config) (*Store, error) {
 	if credential.IsNil(backend) {
 		return nil, safeerror.NewFault(fault.Invalid, "session store requires a backend")

@@ -40,6 +40,8 @@ type Factors[M model.Identifiable, K any] struct {
 	observer *Observer[M, K]
 }
 
+// New validates the store, provider, model callbacks and lockout throttle and creates a
+// typed factor binding.
 func New[M model.Identifiable, K any](store *Store, provider auth.Provider[M, K], binding Model[M, K], attempts lockout.Throttle[K]) (*Factors[M, K], error) {
 	for _, err := range []error{store.Validate(), provider.Validate(), attempts.Validate()} {
 		if err != nil {
@@ -64,6 +66,8 @@ func (f *Factors[M, K]) HasEnrolledFactor(_ context.Context, subject M) (bool, e
 	}
 	return f.model.Enabled(subject), nil
 }
+
+// Validate checks that the factor binding and store are configured.
 func (f *Factors[M, K]) Validate() error {
 	if f == nil {
 		return safeerror.NewFault(fault.Invalid, "MFA factors are not configured")

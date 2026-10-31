@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// ErrorKind identifies an outbound HTTP failure category.
 type ErrorKind string
 
 const (
@@ -32,16 +33,35 @@ type Error struct {
 	cause           error
 }
 
+// Error returns the failure kind, client name, attempt and status without formatting
+// its cause.
 func (e *Error) Error() string {
 	return fmt.Sprintf("outbound HTTP %s (%s, attempt %d, status %d)", e.kind, e.name, e.attempt, e.status)
 }
+
+// Format writes the safe error summary without formatting its cause.
 func (e *Error) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte(e.Error())) }
-func (e *Error) Unwrap() error                  { return e.cause }
-func (e *Error) Kind() ErrorKind                { return e.kind }
-func (e *Error) Name() Name                     { return e.name }
-func (e *Error) Method() string                 { return e.method }
-func (e *Error) Status() int                    { return e.status }
-func (e *Error) Attempt() int                   { return e.attempt }
+
+// Unwrap returns the underlying cause.
+func (e *Error) Unwrap() error { return e.cause }
+
+// Kind returns the outbound failure category.
+func (e *Error) Kind() ErrorKind { return e.kind }
+
+// Name returns the client name recorded for the failure.
+func (e *Error) Name() Name { return e.name }
+
+// Method returns the request method recorded for the failure.
+func (e *Error) Method() string { return e.method }
+
+// Status returns the HTTP status recorded for the failure.
+func (e *Error) Status() int { return e.status }
+
+// Attempt returns the attempt number recorded for the failure.
+func (e *Error) Attempt() int { return e.attempt }
+
+// Is matches invalid, internal and overloaded framework faults according to the failure
+// kind.
 func (e *Error) Is(target error) bool {
 	if target == fault.Invalid {
 		return e.kind == InvalidRequest || e.kind == DecodeFailed

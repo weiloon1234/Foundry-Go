@@ -46,6 +46,7 @@ func (info FileResponseInfo) TransferBytes(limits FileResponseLimits) (int64, er
 
 type metadataByteCounter struct{ bytes int64 }
 
+// Write adds the input length to the metadata byte count without retaining data.
 func (counter *metadataByteCounter) Write(data []byte) (int, error) {
 	counter.bytes += int64(len(data))
 	return len(data), nil

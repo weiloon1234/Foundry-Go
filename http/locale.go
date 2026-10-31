@@ -38,6 +38,7 @@ type LocaleNegotiation struct {
 	Preferred      func(*stdhttp.Request) (i18n.LocaleID, bool, error)
 }
 
+// Validate checks optional query-parameter and cookie names used for locale selection.
 func (n LocaleNegotiation) Validate() error {
 	if n.QueryParameter != "" && !httpquery.ValidName(n.QueryParameter) {
 		return safeerror.NewFault(fault.Invalid, "locale query parameter name is invalid")

@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// Revoke locks the subject and removes its challenge, reporting whether one existed.
 func (b *Backend) Revoke(ctx context.Context, address challenge.Address, identity model.Identity) (bool, error) {
 	if _, err := address.SubjectKey(identity); err != nil {
 		return false, err
@@ -46,6 +47,9 @@ func (b *Backend) Revoke(ctx context.Context, address challenge.Address, identit
 	}
 	return removed, nil
 }
+
+// Prune deletes at most limit expired challenges after locking and rechecking each
+// candidate.
 func (b *Backend) Prune(ctx context.Context, address challenge.Address, limit int) (uint64, error) {
 	scope, err := address.Key()
 	if err != nil {

@@ -33,8 +33,10 @@ func DefineMiddleware(id MiddlewareID, construct func(stdhttp.Handler) (stdhttp.
 	return Middleware{id: id, construct: construct}
 }
 
+// ID returns the middleware's declared identifier.
 func (m Middleware) ID() MiddlewareID { return m.id }
 
+// Validate requires a semantic identifier and middleware constructor.
 func (m Middleware) Validate() error {
 	if !identifier.Semantic(string(m.id)) || m.construct == nil {
 		return safeerror.NewFault(fault.Invalid, "HTTP middleware requires a semantic ID and constructor")

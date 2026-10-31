@@ -23,15 +23,24 @@ type SignedEndpoint[P, Q, B, R any] struct {
 func Signed[P, Q, B, R any](endpoint Endpoint[P, Q, B, R], signer URLSigner) SignedEndpoint[P, Q, B, R] {
 	return SignedEndpoint[P, Q, B, R]{endpoint: endpoint, signer: signer}
 }
+
+// SignedEndpointID returns the endpoint's route identifier.
 func SignedEndpointID[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) RouteID {
 	return EndpointID(e.endpoint)
 }
+
+// SignedEndpointMethod returns the endpoint's HTTP method.
 func SignedEndpointMethod[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) Method {
 	return EndpointMethod(e.endpoint)
 }
+
+// SignedEndpointPattern returns the endpoint's path template.
 func SignedEndpointPattern[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) string {
 	return EndpointPattern(e.endpoint)
 }
+
+// ValidateSigned checks the endpoint and signer and rejects query fields colliding with
+// signing or ignored parameters.
 func ValidateSigned[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) error {
 	if e.err != nil {
 		return e.err
@@ -79,6 +88,8 @@ func PermanentEndpointURL[P, Q, B, R any](e SignedEndpoint[P, Q, B, R], ctx cont
 func RelativeEndpointURL[P, Q, B, R any](e SignedEndpoint[P, Q, B, R], ctx context.Context, path P, query Q, expires time.Time) (string, error) {
 	return signedEndpointLink(e, ctx, "", path, query, expires, signedURLForm{relative: true})
 }
+
+// URL signs an expiring origin-bound link using the endpoint's typed path and query.
 func (e SignedEndpoint[P, Q, B, R]) URL(ctx context.Context, origin Origin, path P, query Q, expires time.Time) (string, error) {
 	return signedEndpointLink(e, ctx, origin, path, query, expires, signedURLForm{})
 }
@@ -113,6 +124,8 @@ func HandleSignedBound[P, Q, B, R any](e SignedEndpoint[P, Q, B, R], bind Bindin
 	}
 	return signedRegistration(HandleBound(e.endpoint, bind), e.signer, e.endpoint.route.spec, EndpointPattern(e.endpoint), true)
 }
+
+// InspectSigned returns validated endpoint metadata including signed-link policy.
 func InspectSigned[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) (EndpointInfo, error) {
 	if err := ValidateSigned(e); err != nil {
 		return EndpointInfo{}, err

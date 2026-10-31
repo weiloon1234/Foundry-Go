@@ -21,9 +21,13 @@ import (
 
 const DefaultLifetime = time.Hour
 
+// Token is a password-reset secret retaining its model type.
 type Token[M any] = challenge.Token[M, challenge.PasswordReset]
+
+// Issued carries a committed password-reset challenge for model M.
 type Issued[M any] = challenge.Issued[M, challenge.PasswordReset]
 
+// ParseToken validates reset-token syntax without checking its stored validity.
 func ParseToken[M any](raw secret.String) (Token[M], error) {
 	return challenge.ParseToken[M, challenge.PasswordReset](raw)
 }
@@ -51,6 +55,8 @@ type Model[M model.Identifiable, K any] struct {
 	Eligible         func(context.Context, M) (bool, error)
 }
 
+// Reset binds single-use password-reset challenges to password policy and transactional
+// model changes.
 type Reset[M model.Identifiable, K any] struct {
 	flow     *challenge.Flow[M, K, challenge.PasswordReset]
 	hasher   *password.Hasher
@@ -107,6 +113,8 @@ func (r *Reset[M, K]) WithObserver(observer auth.Observer) (*Reset[M, K], error)
 	return &next, nil
 }
 
+// New validates the hasher and model callbacks and binds reset challenges to the
+// current email revision and password hash.
 func New[M model.Identifiable, K any](store *challenge.Store, provider auth.Provider[M, K], hasher *password.Hasher, binding Model[M, K], lifetime time.Duration) (*Reset[M, K], error) {
 	if err := hasher.Validate(); err != nil {
 		return nil, err
@@ -126,12 +134,16 @@ func New[M model.Identifiable, K any](store *challenge.Store, provider auth.Prov
 	}
 	return &Reset[M, K]{flow: flow, hasher: hasher, model: binding, provider: provider.Name()}, nil
 }
+
+// Validate checks that the password-reset flow is configured.
 func (r *Reset[M, K]) Validate() error {
 	if r == nil || r.flow == nil {
 		return safeerror.NewFault(fault.Invalid, "password reset is not configured")
 	}
 	return r.flow.Validate()
 }
+
+// Issue creates a reset challenge for the current subject identified by reference.
 func (r *Reset[M, K]) Issue(ctx context.Context, reference model.Reference[M, K]) (Issued[M], error) {
 	if err := r.Validate(); err != nil {
 		return Issued[M]{}, err
@@ -200,12 +212,16 @@ func (r *Reset[M, K]) consume(ctx context.Context, token Token[M], plain passwor
 		return updated, nil
 	})
 }
+
+// Revoke removes the subject's reset challenge and reports whether one existed.
 func (r *Reset[M, K]) Revoke(ctx context.Context, reference model.Reference[M, K]) (bool, error) {
 	if err := r.Validate(); err != nil {
 		return false, err
 	}
 	return r.flow.Revoke(ctx, reference)
 }
+
+// Prune removes up to limit expired reset challenges.
 func (r *Reset[M, K]) Prune(ctx context.Context, limit int) (uint64, error) {
 	if err := r.Validate(); err != nil {
 		return 0, err

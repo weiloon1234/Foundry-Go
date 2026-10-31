@@ -30,9 +30,13 @@ type Config struct {
 	PruneBatch           int
 }
 
+// DefaultConfig returns default PostgreSQL schema, resource, retention and pruning
+// settings.
 func DefaultConfig() Config {
 	return Config{Schema: "public", MaxActive: 32, MaxRetainedPerCaller: 1000, MaxKeyBytes: MaxKeyBytes, MaxInputBytes: 1 << 18, MaxResultBytes: 1 << 18, Timeout: 15 * time.Second, DuplicateWait: time.Second, Retention: 7 * 24 * time.Hour, PruneInterval: 10 * time.Minute, PruneBatch: 500}
 }
+
+// Validate checks resource, timeout, retention and pruning bounds.
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || c.MaxActive < 1 || c.MaxActive > 1024 || c.MaxRetainedPerCaller < 1 || c.MaxRetainedPerCaller > 100000 || c.MaxKeyBytes < MinKeyBytes || c.MaxKeyBytes > MaxKeyBytes || c.MaxInputBytes < 1 || c.MaxInputBytes > jsonwire.MaxBytes || c.MaxResultBytes < 1 || c.MaxResultBytes > jsonwire.MaxBytes || c.Timeout < time.Millisecond || c.Timeout > 5*time.Minute || c.DuplicateWait < time.Millisecond || c.DuplicateWait > c.Timeout || c.Retention < time.Hour || c.Retention > 365*24*time.Hour {
 		return invalid("invalid idempotency resource bounds")

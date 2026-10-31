@@ -43,18 +43,24 @@ func (d Declaration[K]) Limits() (Limits, bool) {
 	}
 	return *d.definition.limits, true
 }
+
+// Name returns the family name, or an empty name for an undefined declaration.
 func (d Declaration[K]) Name() Name {
 	if d.definition == nil {
 		return ""
 	}
 	return d.definition.name
 }
+
+// Policy returns the declared policy, or a zero policy for an undefined declaration.
 func (d Declaration[K]) Policy() Policy {
 	if d.definition == nil {
 		return Policy{}
 	}
 	return d.definition.policy
 }
+
+// Validate checks the family name, key codec and single or layered policies.
 func (d Declaration[K]) Validate() error {
 	if d.definition == nil || !keyspace.ValidName(string(d.Name())) {
 		return safeerror.NewFault(fault.Invalid, "invalid lockout declaration")
@@ -67,6 +73,9 @@ func (d Declaration[K]) Validate() error {
 	}
 	return d.Policy().Validate()
 }
+
+// Bind registers the exact declaration in store and returns its throttle, rejecting
+// conflicting names or exhausted declaration capacity.
 func (d Declaration[K]) Bind(store *Store) (Throttle[K], error) {
 	if err := d.Validate(); err != nil {
 		return Throttle[K]{}, err

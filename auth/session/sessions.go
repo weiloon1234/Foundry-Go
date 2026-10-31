@@ -28,6 +28,7 @@ type Sessions[M model.Identifiable, K any] struct {
 	observer auth.Observer
 }
 
+// New validates and binds a session store, provider, guard name and credential source.
 func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provider auth.Provider[M, K], source auth.CredentialName) (*Sessions[M, K], error) {
 	if err := store.validate(); err != nil {
 		return nil, err
@@ -47,6 +48,8 @@ func New[M model.Identifiable, K any](store *Store, name auth.GuardName, provide
 	}
 	return sessions, nil
 }
+
+// Validate checks the session store and guard binding.
 func (s *Sessions[M, K]) Validate() error {
 	if s == nil {
 		return safeerror.NewFault(fault.Invalid, "session binding is missing")
@@ -56,6 +59,9 @@ func (s *Sessions[M, K]) Validate() error {
 	}
 	return s.guard.Validate()
 }
+
+// Guard returns the session authentication guard, or an undefined guard for a nil
+// binding.
 func (s *Sessions[M, K]) Guard() auth.Guard[M] {
 	if s == nil {
 		return auth.Guard[M]{}
@@ -316,6 +322,8 @@ func (s *Sessions[M, K]) Rotate(ctx context.Context, credential secret.String) (
 	}
 	return result, nil
 }
+
+// Revoke hashes the credential and removes its session, reporting whether it existed.
 func (s *Sessions[M, K]) Revoke(ctx context.Context, credential secret.String) (bool, error) {
 	if err := s.Validate(); err != nil {
 		return false, err
@@ -363,6 +371,7 @@ func (s *Sessions[M, K]) RevokeID(ctx context.Context, reference model.Reference
 	return removed, nil
 }
 
+// RevokeAll removes the reference's sessions after checking provider ownership.
 func (s *Sessions[M, K]) RevokeAll(ctx context.Context, reference model.Reference[M, K]) (uint64, error) {
 	if err := s.Validate(); err != nil {
 		return 0, err
@@ -428,6 +437,8 @@ func (s *Sessions[M, K]) List(ctx context.Context, reference model.Reference[M, 
 	}
 	return result, nil
 }
+
+// Prune removes up to limit expired sessions within this binding's address.
 func (s *Sessions[M, K]) Prune(ctx context.Context, limit int) (uint64, error) {
 	if err := s.Validate(); err != nil {
 		return 0, err

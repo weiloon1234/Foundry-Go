@@ -32,8 +32,11 @@ type Credentials struct {
 	bound  map[CredentialName]BoundCredential
 }
 
+// Format writes a credentials label without exposing secrets.
 func (Credentials) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("authentication credentials")) }
 
+// NewCredentials copies bounded credential secrets into a set, rejecting invalid or
+// duplicate sources and empty or oversized secrets.
 func NewCredentials(inputs ...Credential) (Credentials, error) {
 	if len(inputs) > MaxCredentials {
 		return Credentials{}, safeerror.NewFault(fault.Invalid, "too many authentication credential sources")

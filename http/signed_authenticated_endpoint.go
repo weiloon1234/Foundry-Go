@@ -21,6 +21,8 @@ type SignedAuthenticatedEndpoint[P, Q, B, S, R any] struct {
 	signed     SignedEndpoint[P, Q, B, R]
 }
 
+// SignedAuthenticated adds URL-signature verification while preserving the endpoint's
+// required concrete subject.
 func SignedAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q, B, M, R], signer URLSigner) SignedAuthenticatedEndpoint[P, Q, B, M, R] {
 	return SignedAuthenticatedEndpoint[P, Q, B, M, R]{
 		validate:   func() error { return ValidateAuthenticated(endpoint) },
@@ -31,6 +33,8 @@ func SignedAuthenticated[P, Q, B, M, R any](endpoint AuthenticatedEndpoint[P, Q,
 	}
 }
 
+// SignedOptionalAuthentication adds URL-signature verification while preserving the
+// endpoint's optional concrete subject.
 func SignedOptionalAuthentication[P, Q, B, M, R any](endpoint OptionalAuthenticationEndpoint[P, Q, B, M, R], signer URLSigner) SignedAuthenticatedEndpoint[P, Q, B, value.Optional[M], R] {
 	return SignedAuthenticatedEndpoint[P, Q, B, value.Optional[M], R]{
 		validate:   func() error { return ValidateOptional(endpoint) },
@@ -41,15 +45,24 @@ func SignedOptionalAuthentication[P, Q, B, M, R any](endpoint OptionalAuthentica
 		signed:     Signed(endpoint.required.endpoint, signer),
 	}
 }
+
+// SignedAuthenticatedEndpointID returns the endpoint's route identifier.
 func SignedAuthenticatedEndpointID[P, Q, B, S, R any](e SignedAuthenticatedEndpoint[P, Q, B, S, R]) RouteID {
 	return SignedEndpointID(e.signed)
 }
+
+// SignedAuthenticatedEndpointMethod returns the endpoint's HTTP method.
 func SignedAuthenticatedEndpointMethod[P, Q, B, S, R any](e SignedAuthenticatedEndpoint[P, Q, B, S, R]) Method {
 	return SignedEndpointMethod(e.signed)
 }
+
+// SignedAuthenticatedEndpointPattern returns the endpoint's path template.
 func SignedAuthenticatedEndpointPattern[P, Q, B, S, R any](e SignedAuthenticatedEndpoint[P, Q, B, S, R]) string {
 	return SignedEndpointPattern(e.signed)
 }
+
+// ValidateSignedAuthenticated checks the authentication transport and signed endpoint
+// declaration.
 func ValidateSignedAuthenticated[P, Q, B, S, R any](e SignedAuthenticatedEndpoint[P, Q, B, S, R]) error {
 	if e.validate == nil || e.describe == nil || e.authorized == nil || e.subject == nil {
 		return safeerror.NewFault(fault.Invalid, "signed authentication requires a transport")
@@ -59,6 +72,8 @@ func ValidateSignedAuthenticated[P, Q, B, S, R any](e SignedAuthenticatedEndpoin
 	}
 	return ValidateSigned(e.signed)
 }
+
+// URL signs an expiring origin-bound link using the endpoint's typed path and query.
 func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) URL(ctx context.Context, origin Origin, path P, query Q, expires time.Time) (string, error) {
 	if err := ValidateSignedAuthenticated(e); err != nil {
 		return "", err
@@ -77,18 +92,27 @@ func signedAuthenticatedEndpointWithIgnoredParameters[P, Q, B, S, R any](e Signe
 	e.signed = ConfigureSigned(e.signed, IgnoredParameters(names...))
 	return e
 }
+
+// PermanentAuthenticatedEndpointURL signs an origin-bound link without expiry; the
+// endpoint must permit permanent links.
 func PermanentAuthenticatedEndpointURL[P, Q, B, S, R any](e SignedAuthenticatedEndpoint[P, Q, B, S, R], ctx context.Context, origin Origin, path P, query Q) (string, error) {
 	if err := ValidateSignedAuthenticated(e); err != nil {
 		return "", err
 	}
 	return PermanentEndpointURL(e.signed, ctx, origin, path, query)
 }
+
+// RelativeAuthenticatedEndpointURL signs an expiring origin-relative link valid on
+// every admitted origin.
 func RelativeAuthenticatedEndpointURL[P, Q, B, S, R any](e SignedAuthenticatedEndpoint[P, Q, B, S, R], ctx context.Context, path P, query Q, expires time.Time) (string, error) {
 	if err := ValidateSignedAuthenticated(e); err != nil {
 		return "", err
 	}
 	return RelativeEndpointURL(e.signed, ctx, path, query, expires)
 }
+
+// InspectSignedAuthenticated returns validated authentication, endpoint and signed-link
+// metadata.
 func InspectSignedAuthenticated[P, Q, B, S, R any](e SignedAuthenticatedEndpoint[P, Q, B, S, R]) (EndpointInfo, error) {
 	if err := ValidateSignedAuthenticated(e); err != nil {
 		return EndpointInfo{}, err
@@ -116,6 +140,9 @@ func HandleSignedAuthenticatedBound[P, Q, B, S, R any](e SignedAuthenticatedEndp
 	}
 	return signedRegistration(HandleBound(e.authorized(), bindSubject(bind, e.subject)), e.signed.signer, e.signed.endpoint.route.spec, SignedAuthenticatedEndpointPattern(e), true)
 }
+
+// Handle registers a typed subject callback behind URL-signature verification and the
+// endpoint's authentication and authorization stages.
 func (e SignedAuthenticatedEndpoint[P, Q, B, S, R]) Handle(handler func(context.Context, S, Input[P, Q, B]) (R, error)) RouteRegistration {
 	if err := ValidateSignedAuthenticated(e); err != nil {
 		return InvalidRouteRegistration(err)

@@ -51,6 +51,8 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
+// New validates the database, namespace and bounds and creates a store. It does not
+// take ownership of the database.
 func New(db *database.DB, namespace Namespace, config Config, options ...Option) (*Store, error) {
 	if db == nil || namespace.Validate() != nil {
 		return nil, invalid("idempotency requires a database and application namespace")
@@ -75,18 +77,24 @@ func New(db *database.DB, namespace Namespace, config Config, options ...Option)
 	}
 	return store, nil
 }
+
+// Validate checks that the store was initialized by New.
 func (s *Store) Validate() error {
 	if s == nil || s.db == nil || s.calls == nil || s.lifecycle == nil {
 		return invalid("idempotency store is undefined")
 	}
 	return nil
 }
+
+// Database returns the borrowed database, or nil for a nil store.
 func (s *Store) Database() *database.DB {
 	if s == nil {
 		return nil
 	}
 	return s.db
 }
+
+// Config returns the store's settings, or zero settings for a nil store.
 func (s *Store) Config() Config {
 	if s == nil {
 		return Config{}
@@ -178,6 +186,8 @@ func (s *Store) Done() <-chan struct{} {
 	}
 	return s.lifecycle.done
 }
+
+// Format writes a store label without exposing its configuration.
 func (*Store) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("idempotency store")) }
 
 // The runner owns its outer transaction, so its infrastructure statements set

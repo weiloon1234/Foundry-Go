@@ -12,15 +12,20 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// ServerConfig declares the HTTP listener, upgrade path and middleware for a WebSocket
+// server.
 type ServerConfig struct {
 	HTTP       foundryhttp.ServerConfig
 	Path       string
 	Middleware []foundryhttp.Middleware
 }
 
+// DefaultServerConfig returns default HTTP server settings with the WebSocket path /ws.
 func DefaultServerConfig() ServerConfig {
 	return ServerConfig{HTTP: foundryhttp.DefaultServerConfig(), Path: "/ws"}
 }
+
+// Validate checks HTTP settings, the static upgrade path and middleware declarations.
 func (c ServerConfig) Validate() error {
 	if err := c.HTTP.Validate(); err != nil {
 		return err

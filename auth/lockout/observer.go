@@ -17,9 +17,14 @@ type Notice[K any] struct {
 	retryAfter time.Duration
 }
 
-func (n Notice[K]) Key() K                    { return n.key }
+// Key returns the typed key whose lockout was observed.
+func (n Notice[K]) Key() K { return n.key }
+
+// RetryAfter returns the lock duration recorded in the notice.
 func (n Notice[K]) RetryAfter() time.Duration { return n.retryAfter }
-func (Notice[K]) Format(s fmt.State, _ rune)  { _, _ = s.Write([]byte("login lockout notice")) }
+
+// Format writes the label "login lockout notice" without exposing the value.
+func (Notice[K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("login lockout notice")) }
 
 // WithLockedObserver returns an immutable view. One confirmed threshold transition
 // calls it once; already-locked denials do not. Lost backend replies can lose the

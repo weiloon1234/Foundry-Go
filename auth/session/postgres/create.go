@@ -12,9 +12,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/sessionstore"
 )
 
+// Create atomically creates a session under the subject lock and enforces credential
+// capacity.
 func (b *Backend) Create(ctx context.Context, address session.Address, creation session.Creation) (session.Record, error) {
 	return b.create(ctx, address, creation, nil, nil)
 }
+
+// CreateChecked runs check before credential locks and creates the session in the same
+// transaction, without retries.
 func (b *Backend) CreateChecked(ctx context.Context, address session.Address, creation session.Creation, check func(context.Context, *database.Tx) error) (session.Record, error) {
 	if check == nil {
 		return session.Record{}, safeerror.NewFault(fault.Invalid, "credential creation requires a proof check")

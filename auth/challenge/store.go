@@ -13,6 +13,8 @@ type Store struct {
 	gate    *credential.Gate
 }
 
+// NewStore validates and borrows backend and creates bounded challenge-operation
+// admission.
 func NewStore(backend Backend, config Config) (*Store, error) {
 	if credential.IsNil(backend) {
 		return nil, safeerror.NewFault(fault.Invalid, "challenge store requires a backend")
@@ -22,6 +24,8 @@ func NewStore(backend Backend, config Config) (*Store, error) {
 	}
 	return &Store{backend: backend, config: config, gate: credential.NewGate(config.MaxConcurrent, config.Timeout)}, nil
 }
+
+// Validate checks that the store is configured.
 func (s *Store) Validate() error {
 	if s == nil || s.gate == nil {
 		return safeerror.NewFault(fault.Invalid, "challenge store is not configured")

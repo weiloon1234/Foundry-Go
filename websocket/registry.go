@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// EventInfo describes an event's direction, acknowledgement mode and payload schema.
 type EventInfo struct {
 	ID                      EventID         `json:"id"`
 	Direction               Direction       `json:"direction"`
@@ -20,6 +21,9 @@ type EventInfo struct {
 	AcceptedAcknowledgement bool            `json:"accepted_acknowledgement"`
 	Payload                 contract.Schema `json:"payload,omitzero"`
 }
+
+// ChannelInfo describes a channel's rooms, authentication, presence, replay and event
+// contracts.
 type ChannelInfo struct {
 	ID         ChannelID                 `json:"id"`
 	Room       foundryhttp.URLScalarInfo `json:"room"`
@@ -31,6 +35,8 @@ type ChannelInfo struct {
 	Replay     ReplayConfig              `json:"replay,omitzero"`
 	Events     []EventInfo               `json:"events"`
 }
+
+// Registration holds a channel declaration for inclusion in a registry.
 type Registration struct{ definition *channelDefinition }
 
 const MaxChannels = 256
@@ -165,6 +171,7 @@ func Register[C, R, S any](channel Channel[C, R, S], events ...EventRegistration
 	return Registration{definition: d}
 }
 
+// Registry holds validated channel declarations indexed and ordered by identifier.
 type Registry struct {
 	channels map[ChannelID]*channelDefinition
 	ordered  []*channelDefinition
@@ -181,6 +188,8 @@ func outputPresentation(describe func() (contract.Schema, error), output string)
 	return contract.RejectPasswordOutput(schema, output)
 }
 
+// NewRegistry validates channel registrations, rejects duplicate IDs and orders
+// channels by ID.
 func NewRegistry(registrations ...Registration) (*Registry, error) {
 	if len(registrations) < 1 || len(registrations) > MaxChannels {
 		return nil, safeerror.NewFault(fault.Invalid, "WebSocket registry needs 1 to 256 channels")

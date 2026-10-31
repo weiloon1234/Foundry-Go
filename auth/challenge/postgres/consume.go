@@ -13,6 +13,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// Consume locks and rechecks the token, applies model changes and deletes the token in
+// one transaction. Expiry during the action rolls back its writes.
 func (b *Backend) Consume(ctx context.Context, address challenge.Address, hash challenge.Digest, apply func(context.Context, *database.Tx, challenge.Record) error) (value.Optional[challenge.Record], error) {
 	if err := validateCredential(address, hash); err != nil {
 		return value.Optional[challenge.Record]{}, err

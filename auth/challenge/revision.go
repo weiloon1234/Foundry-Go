@@ -19,6 +19,7 @@ type RevisionOwner[M any] struct{ _ [0]*M }
 // never restore an earlier revision when restoring an earlier field value.
 type Revision[M any] = model.ID[RevisionOwner[M]]
 
+// NewRevision creates a new model-specific revision identifier using the current time.
 func NewRevision[M any]() (Revision[M], error) {
 	return model.NewIDAt[RevisionOwner[M]](time.Now())
 }
