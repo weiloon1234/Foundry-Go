@@ -169,6 +169,7 @@ type Stats struct {
 	Failed    int64 `json:"failed"`
 }
 
+// Stats counts pending, published, and failed messages in a read-only transaction.
 func (p *Publisher) Stats(ctx context.Context) (Stats, error) {
 	if p == nil || p.writer == nil || ctx == nil {
 		return Stats{}, safeerror.NewFault(fault.Invalid, "outbox stats require an initialized publisher and context")

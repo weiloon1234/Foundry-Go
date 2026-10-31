@@ -18,7 +18,9 @@ type Key[T any] struct{ name string }
 
 // NewKey declares a service key. Its name is checked at registration/resolution.
 func NewKey[T any](name string) Key[T] { return Key[T]{name: name} }
-func (k Key[T]) Name() string          { return k.name }
+
+// Name returns the service key name.
+func (k Key[T]) Name() string { return k.name }
 
 type serviceRef struct {
 	name string
@@ -94,6 +96,7 @@ type Registrar struct {
 	plugin   *pluginmanifest.Manifest
 }
 
+// Owner returns the registrar's owning provider identifier.
 func (r *Registrar) Owner() ProviderID { return r.owner }
 
 // Plugin returns the captured manifest when called in a plugin's registration.

@@ -37,6 +37,8 @@ type renderedTemplates struct {
 	html          *htmltemplate.Template
 	limit         int
 }
+
+// Template holds parsed email templates for a concrete data type.
 type Template[T any] struct{ templates *renderedTemplates }
 
 // DynamicTemplate is the explicit heterogeneous-map escape hatch.
@@ -49,7 +51,10 @@ type Body struct {
 	Locale              i18n.LocaleID
 }
 
+// Format writes a fixed label without exposing rendered content.
 func (Body) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("rendered email body")) }
+
+// Message creates a message with the rendered subject, bodies, and locale.
 func (b Body) Message(from Address, to ...Address) Message {
 	return NewMessage(from, b.Subject, to...).Text(b.Text).HTML(b.HTML).Locale(b.Locale)
 }
@@ -108,6 +113,8 @@ func (t LocalizedTemplate[T]) Render(ctx context.Context, locale i18n.LocaleID, 
 	}
 	return Body{}, emaildiag.Failure(Construction)
 }
+
+// NewTemplate parses template sources for a named struct type, rejecting other data types.
 func NewTemplate[T any](source TemplateSource) (Template[T], error) {
 	typ := reflect.TypeFor[T]()
 	if typ.Kind() != reflect.Struct || typ.Name() == "" {
@@ -116,6 +123,8 @@ func NewTemplate[T any](source TemplateSource) (Template[T], error) {
 	t, err := parseTemplates(source)
 	return Template[T]{templates: t}, err
 }
+
+// NewDynamicTemplate parses template sources for dynamically typed rendering.
 func NewDynamicTemplate(source TemplateSource) (DynamicTemplate, error) {
 	t, err := parseTemplates(source)
 	return DynamicTemplate{templates: t}, err
@@ -158,9 +167,13 @@ func parseTemplates(s TemplateSource) (*renderedTemplates, error) {
 	}
 	return &renderedTemplates{subject: subject, text: text, html: html, limit: s.MaxBytes}, nil
 }
+
+// Render renders the templates using typed data and the supplied context.
 func (t Template[T]) Render(ctx context.Context, data T) (Body, error) {
 	return renderTemplates(ctx, t.templates, data)
 }
+
+// Render renders the templates using dynamic data and the supplied context.
 func (t DynamicTemplate) Render(ctx context.Context, data map[string]any) (Body, error) {
 	return renderTemplates(ctx, t.templates, data)
 }
@@ -171,6 +184,7 @@ type boundedBuffer struct {
 	ctx       context.Context
 }
 
+// Write writes within the remaining byte budget, rejecting canceled contexts and oversized writes.
 func (b *boundedBuffer) Write(p []byte) (int, error) {
 	if b.ctx != nil && b.ctx.Err() != nil {
 		return 0, emaildiag.Failure(Construction)
@@ -181,10 +195,14 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 	b.remaining -= len(p)
 	return b.buffer.Write(p)
 }
+
+// WriteString writes text through the buffer's context and size checks.
 func (b *boundedBuffer) WriteString(text string) (int, error) { return b.Write([]byte(text)) }
 func (b *boundedBuffer) reset()                               { b.buffer.Reset() }
-func (b *boundedBuffer) String() string                       { return b.buffer.String() }
-func (b *boundedBuffer) bytes() []byte                        { return b.buffer.Bytes() }
+
+// String returns the buffered text.
+func (b *boundedBuffer) String() string { return b.buffer.String() }
+func (b *boundedBuffer) bytes() []byte  { return b.buffer.Bytes() }
 func renderTemplates(ctx context.Context, t *renderedTemplates, data any) (Body, error) {
 	if ctx == nil || ctx.Err() != nil || t == nil {
 		return Body{}, emaildiag.Failure(Construction)
@@ -210,4 +228,5 @@ func renderTemplates(ctx context.Context, t *renderedTemplates, data any) (Body,
 	return result, nil
 }
 
+// LogValue returns a fixed log label without exposing rendered content.
 func (Body) LogValue() slog.Value { return slog.StringValue("rendered email body") }

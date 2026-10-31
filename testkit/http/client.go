@@ -171,6 +171,8 @@ func JSON[T any](ctx context.Context, request httpclient.Request, descriptor con
 func DecodeJSON[T any](ctx context.Context, response httpclient.Response, descriptor contract.JSON[T]) (T, error) {
 	return httpclient.DecodeJSON(ctx, response, descriptor)
 }
+
+// AssertStatus reports a test error when the response status differs from want.
 func AssertStatus(t testing.TB, response httpclient.Response, want int) {
 	t.Helper()
 	if response.Status() != want {

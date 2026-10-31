@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/redis"
 )
 
+// CacheDriver selects a cache implementation.
 type CacheDriver string
 
 const (
@@ -62,13 +63,16 @@ type CacheSettings struct {
 	Coordination cache.CoordinationConfig
 }
 
+// DefaultCacheSettings returns default cache driver, backend, lease, and coordination settings.
 func DefaultCacheSettings() CacheSettings {
 	f, p := cachefile.DefaultConfig(""), cachepg.DefaultConfig()
 	return CacheSettings{Driver: MemoryCache, Config: cache.DefaultConfig(cache.Namespace{}), Memory: memory.DefaultConfig(), File: FileCacheSettings{MaxEntries: f.MaxEntries, MaxBytes: f.MaxBytes, Sync: f.Sync, PruneInterval: f.PruneInterval}, Postgres: PostgresCacheSettings{Schema: p.Schema, MaxEntries: p.MaxEntries, MaxBytes: p.MaxBytes, PruneInterval: p.PruneInterval}, Leases: lease.DefaultConfig(cache.Namespace{}), Coordination: cache.DefaultCoordinationConfig()}
 }
 
+// CacheStores maps cache store names to settings.
 type CacheStores map[cache.StoreName]CacheSettings
 
+// UnmarshalText decodes cache store settings, replacing the receiver only on success.
 func (m *CacheStores) UnmarshalText(data []byte) error {
 	schema, err := CacheSettingsConfigSchema()
 	if err != nil {
@@ -82,9 +86,11 @@ func (m *CacheStores) UnmarshalText(data []byte) error {
 	return nil
 }
 
+// CachesSettings configures named cache stores and their default.
 type CachesSettings struct {
 	Default cache.StoreName
 	Stores  CacheStores
 }
 
+// DefaultCachesSettings returns cache settings selecting the default store name.
 func DefaultCachesSettings() CachesSettings { return CachesSettings{Default: "default"} }

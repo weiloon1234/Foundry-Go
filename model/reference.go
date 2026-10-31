@@ -22,7 +22,9 @@ const MaxIdentityKeyBytes = 4096
 // Generated references reuse the primary field's existing codec. Custom codecs
 // must be pure, safe for concurrent use, and return owned decoded values.
 type KeyCodec[K any] interface {
+	// Bind converts a typed key to a database driver value.
 	Bind(K) (driver.Value, error)
+	// Decode decodes a database value into a typed key.
 	Decode(any) (K, error)
 }
 
@@ -42,8 +44,14 @@ type Reference[M, K any] struct {
 func NewReference[M, K any](name string, key K, codec KeyCodec[K]) Reference[M, K] {
 	return Reference[M, K]{name: name, key: key, codec: codec}
 }
-func (r Reference[M, K]) ModelName() string            { return r.name }
-func (r Reference[M, K]) Key() K                       { return r.key }
+
+// ModelName returns the reference's model name.
+func (r Reference[M, K]) ModelName() string { return r.name }
+
+// Key returns the reference's typed key.
+func (r Reference[M, K]) Key() K { return r.key }
+
+// Format writes a fixed label without exposing the reference.
 func (Reference[M, K]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("model reference")) }
 
 // Validate checks generated model/key metadata without encoding a key or doing I/O.
@@ -137,10 +145,18 @@ type Identity struct {
 
 // Identifiable is implemented by generated model metadata. Framework adapters
 // capture the stored identity without another database lookup or an Actor.
-type Identifiable interface{ FoundryIdentity() (Identity, error) }
+type Identifiable interface {
+	// FoundryIdentity returns the model's persistence identity.
+	FoundryIdentity() (Identity, error)
+}
 
-func (i Identity) ModelName() string            { return i.name }
-func (i Identity) IsZero() bool                 { return i.name == "" && i.key == (sqlvalue.Value{}) }
+// ModelName returns the identity's model name.
+func (i Identity) ModelName() string { return i.name }
+
+// IsZero reports whether both model name and key are uninitialized.
+func (i Identity) IsZero() bool { return i.name == "" && i.key == (sqlvalue.Value{}) }
+
+// Format writes a fixed label without exposing identity data.
 func (Identity) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("model identity")) }
 
 // KeyJSON exports the tagged SQL key for a deliberate storage/transport boundary.
@@ -168,6 +184,7 @@ func (i Identity) WithModelName(name string) (Identity, error) {
 	return renamed, nil
 }
 
+// Validate checks the model name and bounded key and requires a canonical identity representation.
 func (i Identity) Validate() error {
 	if !sqlname.Table(i.name) || len(i.key.Text) > MaxIdentityKeyBytes {
 		return invalidIdentity()
@@ -252,12 +269,16 @@ type identityWire struct {
 	Key   sqlvalue.Value `json:"key"`
 }
 
+// MarshalJSON validates and encodes the model identity as JSON.
 func (i Identity) MarshalJSON() ([]byte, error) {
 	if err := i.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(identityWire{Model: i.name, Key: i.key})
 }
+
+// UnmarshalJSON decodes a bounded JSON identity, replacing the receiver only after key
+// normalization succeeds.
 func (i *Identity) UnmarshalJSON(data []byte) error {
 	if i == nil {
 		return safeerror.NewFault(fault.Invalid, "nil model identity destination")

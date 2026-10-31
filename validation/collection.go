@@ -10,6 +10,8 @@ func MinItems[S ~[]T, T any](minimum int) Rule[S] {
 	}
 	return valueRule(Spec{ID: "foundry.min_items", Parameters: []Parameter{parameter("min", minimum)}}, collectionWireTransform[S, T](), func(_ *execution, input S) (bool, error) { return len(input) >= minimum, nil })
 }
+
+// MaxItems creates a rule limiting slice length, rejecting a negative maximum.
 func MaxItems[S ~[]T, T any](maximum int) Rule[S] {
 	if maximum < 0 {
 		return failed[S](invalid("maximum item count must not be negative"))

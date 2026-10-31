@@ -16,6 +16,7 @@ import (
 // additionally allow only the bounded escaping overhead of a canonical name.
 type JSONKeyLimits struct{ Bytes, Keys int }
 
+// Validate checks that byte and key budgets are positive.
 func (l JSONKeyLimits) Validate() error {
 	if l.Bytes <= 0 || l.Keys <= 0 {
 		return safeerror.NewFault(fault.Invalid, "invalid JSON key limits")

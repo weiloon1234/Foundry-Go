@@ -24,6 +24,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
+// Name identifies a CLI command.
 type Name string
 
 const MaxCommands = 1024
@@ -38,12 +39,17 @@ const DuringMaintenance = "--during-maintenance"
 // Decoder performs pure argument parsing. It must return an owned value and
 // leave resource acquisition to the command handler. Help returns flag.ErrHelp.
 type Decoder[A any] func([]string, io.Writer) (A, error)
+
+// Handler handles decoded command arguments using explicit streams.
 type Handler[A any] func(context.Context, A, Streams) error
+
+// Streams holds the command's input, output, and error streams.
 type Streams struct {
 	In       io.Reader
 	Out, Err io.Writer
 }
 
+// Validate checks that all three streams are supplied.
 func (s Streams) Validate() error {
 	if s.In == nil || s.Out == nil || s.Err == nil {
 		return safeerror.NewFault(fault.Invalid, "CLI requires explicit input, output and error streams")
@@ -51,6 +57,7 @@ func (s Streams) Validate() error {
 	return nil
 }
 
+// Description describes a command's name, summary, arguments, and maintenance policy.
 type Description struct {
 	Name      Name   `json:"name"`
 	Summary   string `json:"summary"`
@@ -58,6 +65,8 @@ type Description struct {
 	// Maintenance reports that the command runs while maintenance is paused.
 	Maintenance bool `json:"maintenance,omitempty"`
 }
+
+// Command pairs a command description with its typed argument decoder.
 type Command[A any] struct {
 	description Description
 	decode      Decoder[A]
@@ -68,6 +77,8 @@ type Command[A any] struct {
 func Define[A any](name Name, summary string, decode Decoder[A]) Command[A] {
 	return Command[A]{description: Description{Name: name, Summary: summary, Arguments: reflect.TypeFor[A]().String()}, decode: decode}
 }
+
+// Name returns the command name.
 func (c Command[A]) Name() Name { return c.description.Name }
 
 // AllowDuringMaintenance declares an operational command, such as a migration
@@ -78,6 +89,8 @@ func (c Command[A]) AllowDuringMaintenance() Command[A] {
 	c.description.Maintenance = true
 	return c
 }
+
+// Validate checks the command name, summary, and decoder.
 func (c Command[A]) Validate() error {
 	if !identifier.Semantic(string(c.Name())) || len(c.description.Summary) > 4096 || !utf8.ValidString(c.description.Summary) || strings.IndexFunc(c.description.Summary, unicode.IsControl) >= 0 || c.decode == nil {
 		return safeerror.NewFault(fault.Invalid, "command requires a semantic name, single-line summary and typed decoder")
@@ -93,6 +106,7 @@ type Declaration struct {
 	parse       func([]string, io.Writer) (func(context.Context, foundation.Resolver, Streams) error, error)
 }
 
+// Declare binds the command to a typed handler constructor after validating both.
 func (c Command[A]) Declare(construct func(foundation.Resolver) (Handler[A], error)) (Declaration, error) {
 	if err := c.Validate(); err != nil {
 		return Declaration{}, err
@@ -120,12 +134,15 @@ func (c Command[A]) Declare(construct func(foundation.Resolver) (Handler[A], err
 		}, nil
 	}}, nil
 }
+
+// Format writes a fixed label without exposing the declaration.
 func (Declaration) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("CLI declaration")) }
 
 // Registry freezes explicit declarations. New, Describe and Parse perform no
 // service construction, kernel startup or external I/O beyond the help writer.
 type Registry struct{ entries map[Name]Declaration }
 
+// New constructs a command registry, rejecting invalid, duplicate, or excessive declarations.
 func New(declarations ...Declaration) (*Registry, error) {
 	if len(declarations) > MaxCommands {
 		return nil, safeerror.NewFault(fault.Invalid, "too many CLI commands")
@@ -142,6 +159,8 @@ func New(declarations ...Declaration) (*Registry, error) {
 	}
 	return r, nil
 }
+
+// Describe returns command descriptions sorted by name; a nil registry returns nil.
 func (r *Registry) Describe() []Description {
 	if r == nil {
 		return nil
@@ -167,6 +186,9 @@ func validateArguments(args []string) error {
 	}
 	return nil
 }
+
+// Parse parses command arguments without constructing the handler. Help requests write help and
+// return flag.ErrHelp.
 func (r *Registry) Parse(args []string, help io.Writer) (Invocation, error) {
 	if r == nil || r.entries == nil || help == nil {
 		return Invocation{}, safeerror.NewFault(fault.Invalid, "CLI parsing requires a registry and help writer")
@@ -231,15 +253,21 @@ type invocation struct {
 // of a partially completed mutation. Parse again for an intentional new run.
 type Invocation struct{ state *invocation }
 
+// Name returns the parsed command name, or an empty name for a zero invocation.
 func (i Invocation) Name() Name {
 	if i.state == nil {
 		return ""
 	}
 	return i.state.name
 }
+
+// Format writes a fixed label without exposing parsed arguments.
 func (Invocation) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("parsed CLI invocation"))
 }
+
+// Run runs the invocation at most once after validating context and streams, with maintenance
+// admission and callback isolation.
 func (i Invocation) Run(ctx context.Context, resolver foundation.Resolver, streams Streams) error {
 	if i.state == nil || i.state.run == nil || ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "uninitialized CLI invocation or context")

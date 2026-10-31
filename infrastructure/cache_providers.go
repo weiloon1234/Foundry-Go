@@ -133,6 +133,8 @@ type MigrationTarget struct {
 	Definitions []migrate.Definition
 }
 
+// Migrations returns cache migration targets deduplicated by connection and schema; a nil plan
+// returns nil.
 func (p *Plan) Migrations() []MigrationTarget {
 	if p == nil {
 		return nil

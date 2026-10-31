@@ -17,6 +17,7 @@ import (
 // in the bundled reference. ParseCode normalizes explicit transport input.
 type Code string
 
+// ParseCode trims and uppercases text, then validates the two-letter code.
 func ParseCode(text string) (Code, error) {
 	code := Code(strings.ToUpper(strings.TrimSpace(text)))
 	if err := code.Validate(); err != nil {
@@ -24,6 +25,8 @@ func ParseCode(text string) (Code, error) {
 	}
 	return code, nil
 }
+
+// Validate checks that the code consists of two uppercase ASCII letters.
 func (c Code) Validate() error {
 	if len(c) != 2 || c[0] < 'A' || c[0] > 'Z' || c[1] < 'A' || c[1] > 'Z' {
 		return invalid()
@@ -31,6 +34,8 @@ func (c Code) Validate() error {
 	return nil
 }
 
+// Status is a country's status value.
+//
 //foundry:enum
 type Status string
 
@@ -39,6 +44,7 @@ const (
 	DisabledStatus Status = "disabled"
 )
 
+// Currency describes a country's currency and optional reference metadata.
 type Currency struct {
 	Code       string                 `json:"code"`
 	Name       value.Nullable[string] `json:"name"`

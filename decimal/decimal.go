@@ -81,7 +81,10 @@ func Scaled(coefficient int64, scale int) (Decimal, error) {
 	return fromCoefficient(big.NewInt(coefficient), scale)
 }
 
+// IsZero reports whether the decimal is zero.
 func (d Decimal) IsZero() bool { return d.text == "" }
+
+// String returns the decimal's canonical string, including "0" for the zero value.
 func (d Decimal) String() string {
 	if d.IsZero() {
 		return "0"
@@ -265,7 +268,10 @@ func fromCoefficient(coefficient *big.Int, scale int) (Decimal, error) {
 	return Parse(text)
 }
 
+// MarshalText encodes the decimal's canonical string as text.
 func (d Decimal) MarshalText() ([]byte, error) { return []byte(d.String()), nil }
+
+// UnmarshalText parses decimal text, replacing the receiver only on success.
 func (d *Decimal) UnmarshalText(data []byte) error {
 	parsed, err := Parse(string(data))
 	if err != nil {
@@ -274,6 +280,8 @@ func (d *Decimal) UnmarshalText(data []byte) error {
 	*d = parsed
 	return nil
 }
+
+// UnmarshalJSON decodes a JSON decimal, replacing the receiver only on success.
 func (d *Decimal) UnmarshalJSON(data []byte) error {
 	parsed, err := textvalue.Decode(data, Parse)
 	if err != nil {

@@ -147,6 +147,7 @@ type childPartWriter struct {
 	body   io.Writer
 }
 
+// Write buffers a bounded MIME header, then forwards the body into a new multipart child.
 func (w *childPartWriter) Write(data []byte) (int, error) {
 	if w.body != nil {
 		return w.body.Write(data)

@@ -25,6 +25,7 @@ type Replay struct {
 	consumed  map[string]bool
 }
 
+// NewReplay creates a replay tracker for the supplied assertion prefix.
 func NewReplay(prefix string) *Replay {
 	return &Replay{prefix: prefix, counts: map[string]int{}, consumed: map[string]bool{}}
 }
@@ -36,6 +37,8 @@ func NewReplayAt(prefix, directory string) *Replay {
 	return r
 }
 
+// Directory returns FOUNDRY_ORACLE_READ when set, otherwise locates the oracle directory from the
+// working directory. Lookup failures panic.
 func Directory() string {
 	if dir := os.Getenv("FOUNDRY_ORACLE_READ"); dir != "" {
 		return dir
@@ -77,6 +80,8 @@ func (r *Replay) load() {
 	})
 }
 
+// Equal compares the current transcript with its indexed frozen record and reports missing or
+// differing evidence to the test.
 func (r *Replay) Equal(t *testing.T, site, current string) bool {
 	t.Helper()
 	testkit.TrackExternalInputs(t)
@@ -132,6 +137,8 @@ func Unconsumed(b Bundle, prefix string, consumed map[string]bool, selection Sel
 	sort.Strings(missing)
 	return missing, nil
 }
+
+// Main runs the test suite and passes its exit code through Finish.
 func (r *Replay) Main(m *testing.M) int {
 	return r.Finish(m.Run())
 }

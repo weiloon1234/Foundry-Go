@@ -17,12 +17,15 @@ import (
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
+// SessionSettings configures the session store and its database schema.
 type SessionSettings struct {
 	Enabled  bool
 	Database database.ConnectionName
 	Schema   string
 	Config   session.Config
 }
+
+// TokenSettings configures the token store and its database schema.
 type TokenSettings struct {
 	Enabled  bool
 	Database database.ConnectionName
@@ -41,6 +44,8 @@ type MFASettings struct {
 	Config   mfa.Config
 }
 
+// BrowserGuardSettings configures a browser guard's session cookie and CSRF protection.
+//
 //foundry:config
 type BrowserGuardSettings struct {
 	Cookie  http.CookieName
@@ -48,6 +53,8 @@ type BrowserGuardSettings struct {
 	CSRF    http.CSRFConfig
 }
 
+// DefaultBrowserGuardSettings returns browser session defaults with a host cookie named for the
+// guard.
 func DefaultBrowserGuardSettings(name auth.GuardName) BrowserGuardSettings {
 	c := http.DefaultBrowserSessionConfig()
 	c.Cookie = http.CookieName("__Host-foundry_" + string(name))
@@ -57,8 +64,10 @@ func (s BrowserGuardSettings) runtime(source clock.Clock) http.BrowserSessionCon
 	return http.BrowserSessionConfig{Cookie: s.Cookie, Options: s.Options, CSRF: s.CSRF, Clock: source}
 }
 
+// BrowserGuards maps guard names to browser session settings.
 type BrowserGuards map[auth.GuardName]BrowserGuardSettings
 
+// UnmarshalText decodes the guard table and replaces the receiver only on success.
 func (m *BrowserGuards) UnmarshalText(data []byte) error {
 	schema, err := BrowserGuardSettingsConfigSchema()
 	if err != nil {
@@ -72,10 +81,13 @@ func (m *BrowserGuards) UnmarshalText(data []byte) error {
 	return nil
 }
 
+// BrowserSettings configures named browser guards and their default.
 type BrowserSettings struct {
 	Default auth.GuardName
 	Guards  BrowserGuards
 }
+
+// AuthSettings configures authentication registries, stores, and default guards.
 type AuthSettings struct {
 	Registry          auth.Config
 	Sessions          SessionSettings
@@ -85,6 +97,7 @@ type AuthSettings struct {
 	DefaultTokenGuard auth.GuardName
 }
 
+// DefaultAuthSettings returns the default authentication configuration.
 func DefaultAuthSettings() AuthSettings {
 	return AuthSettings{Registry: auth.DefaultConfig(), Sessions: SessionSettings{Schema: sessionpg.DefaultConfig().Schema, Config: session.DefaultConfig(keyspace.Namespace{})}, Tokens: TokenSettings{Schema: tokenpg.DefaultConfig().Schema, Config: token.DefaultConfig(keyspace.Namespace{})}, MFA: MFASettings{Schema: mfapg.DefaultConfig().Schema, Config: mfa.DefaultConfig(keyspace.Namespace{}, "")}, Browser: BrowserSettings{Default: "web", Guards: BrowserGuards{"web": DefaultBrowserGuardSettings("web")}}, DefaultTokenGuard: "api"}
 }

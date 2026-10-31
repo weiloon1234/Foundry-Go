@@ -16,7 +16,9 @@ type ImageSize struct{ Width, Height int }
 // which rejects the input; an error is an execution failure. The imaging
 // validation adapter supplies this from imaging.Inspect.
 type ImageMeasurer[F any] interface {
+	// Validate checks the image measurer's configuration.
 	Validate() error
+	// Measure measures image dimensions, reporting whether the input is a supported image.
 	Measure(context.Context, F) (size ImageSize, ok bool, err error)
 }
 
@@ -29,6 +31,8 @@ type DimensionConstraints struct {
 	RatioWidth, RatioHeight                  int
 }
 
+// Validate checks dimension bounds, paired ratio values, and the presence of at least one
+// constraint.
 func (c DimensionConstraints) Validate() error {
 	values := []int{c.MinWidth, c.MaxWidth, c.MinHeight, c.MaxHeight, c.Width, c.Height, c.RatioWidth, c.RatioHeight}
 	constrained := false

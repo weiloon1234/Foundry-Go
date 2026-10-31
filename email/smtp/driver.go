@@ -25,6 +25,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
+// Security selects SMTP connection security.
 type Security uint8
 
 const (
@@ -61,8 +62,10 @@ type Config struct {
 	IdleTimeout time.Duration
 }
 
+// Format writes a fixed label without exposing SMTP configuration.
 func (Config) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("SMTP configuration")) }
 
+// Driver submits SMTP email with configured security, authentication, and idle connection pooling.
 type Driver struct {
 	address, host, username, localName string
 	password                           secret.String
@@ -88,6 +91,8 @@ func (c *connection) close() {
 	_ = c.raw.Close()
 }
 
+// New validates SMTP settings and copies TLS configuration. Plaintext connections are restricted
+// to unauthenticated loopback use.
 func New(config Config) (*Driver, error) {
 	host, port, err := net.SplitHostPort(config.Address)
 	number, numberErr := strconv.Atoi(port)
@@ -158,6 +163,8 @@ func validLocalName(name string) bool {
 	}
 	return true
 }
+
+// Format writes a fixed label without exposing driver credentials.
 func (*Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("SMTP driver")) }
 
 // Close releases idle pooled connections and stops pooling. Close it after the
@@ -175,6 +182,8 @@ func (d *Driver) Close() {
 	}
 }
 
+// Send submits email within the configured timeout. A stale pooled connection is retried once only
+// when its first command received no reply.
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || ctx == nil || out.Validate() != nil {
 		return email.Receipt{}, emaildiag.Failure(email.Construction)
@@ -417,12 +426,15 @@ type loginAuth struct {
 	password secret.String
 }
 
+// Start starts SMTP LOGIN authentication only on a TLS connection.
 func (a loginAuth) Start(server *stdsmtp.ServerInfo) (string, []byte, error) {
 	if !server.TLS {
 		return "", nil, errUnencrypted
 	}
 	return "LOGIN", nil, nil
 }
+
+// Next answers SMTP LOGIN username and password challenges, rejecting unknown challenges.
 func (a loginAuth) Next(challenge []byte, more bool) ([]byte, error) {
 	if !more {
 		return nil, nil
@@ -441,6 +453,7 @@ type xoauth2 struct {
 	token    secret.String
 }
 
+// Start starts SMTP XOAUTH2 authentication only on a TLS connection.
 func (a xoauth2) Start(server *stdsmtp.ServerInfo) (string, []byte, error) {
 	if !server.TLS {
 		return "", nil, errUnencrypted

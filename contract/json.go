@@ -120,6 +120,7 @@ type JSONLimits struct {
 	Issues int
 }
 
+// Validate checks positive transport budgets and the supported depth range.
 func (l JSONLimits) Validate() error {
 	if l.Bytes <= 0 || l.Nodes <= 0 || l.Steps <= 0 || l.Issues <= 0 || l.Depth < 0 || l.Depth > MaxJSONDepth {
 		return safeerror.NewFault(fault.Invalid, "invalid JSON transport limits")
@@ -135,11 +136,20 @@ type DecodeError struct {
 	cause  error
 }
 
-func (*DecodeError) Error() string        { return "invalid JSON input" }
-func (e *DecodeError) GoString() string   { return e.Error() }
+// Error returns a fixed message without exposing JSON input.
+func (*DecodeError) Error() string { return "invalid JSON input" }
+
+// GoString returns the same safe message as Error.
+func (e *DecodeError) GoString() string { return e.Error() }
+
+// Is reports whether the target is fault.Invalid.
 func (*DecodeError) Is(target error) bool { return target == fault.Invalid }
-func (e *DecodeError) Unwrap() error      { return e.cause }
-func (e *DecodeError) Issues() []Issue    { return slices.Clone(e.issues) }
+
+// Unwrap returns the underlying decoding cause.
+func (e *DecodeError) Unwrap() error { return e.cause }
+
+// Issues returns a copy of the decoding issues.
+func (e *DecodeError) Issues() []Issue { return slices.Clone(e.issues) }
 
 func decodeFailure(issues []Issue, cause error) error {
 	failure := &DecodeError{issues: issues, cause: cause}

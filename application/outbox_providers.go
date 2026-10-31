@@ -27,6 +27,7 @@ type schemaTransactor struct {
 	schema string
 }
 
+// Transaction runs the callback in a transaction scoped to the configured schema.
 func (s schemaTransactor) Transaction(ctx context.Context, fn func(*database.Tx) error, options ...database.TxOptions) error {
 	return s.db.Transaction(ctx, func(tx *database.Tx) error { return sqlscope.InSchema(ctx, tx, s.db, s.schema, fn) }, options...)
 }
@@ -113,6 +114,8 @@ func registerOutbox(builder *foundation.Builder, s OutboxSettings, source clock.
 	}))
 	return nil
 }
+
+// OutboxPublisher resolves the application's outbox publisher.
 func (s Services) OutboxPublisher() (*publisher.Publisher, error) { return Resolve(s, OutboxKey) }
 
 // JobOutbox selects the named job connection's configured durable producer.

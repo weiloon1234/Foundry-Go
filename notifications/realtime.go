@@ -22,6 +22,7 @@ type RealtimeMessage[D any] struct {
 	Data    D              `json:"data"`
 }
 
+// Format writes a fixed label without exposing realtime notification data.
 func (RealtimeMessage[D]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("realtime notification"))
 }
@@ -37,14 +38,19 @@ type Realtime[C any, M model.Identifiable, K comparable, D any] struct {
 	payload   contract.JSON[RealtimeMessage[D]]
 }
 
+// DefineRealtime defines a typed outgoing notification event on recipient-owned rooms.
 func DefineRealtime[C any, M model.Identifiable, K comparable, D any](recipient Recipient[M, K], channel websocket.ChannelID, rooms websocket.Rooms[K], event websocket.EventID, data contract.JSON[D]) Realtime[C, M, K, D] {
 	payload := realtimeContract(data)
 	owned := websocket.OwnedRooms[C](channel, rooms, recipient.guard, recipient.provider.Reference())
 	return Realtime[C, M, K, D]{recipient: recipient, channel: owned, event: websocket.DefineOutgoing(owned, event, payload), eventName: event, payload: payload}
 }
+
+// Registration returns the realtime channel and event registration.
 func (r Realtime[C, M, K, D]) Registration() websocket.Registration {
 	return websocket.Register(r.channel, r.event.Registration())
 }
+
+// WithReplay returns a copy with replay configuration applied to its channel.
 func (r Realtime[C, M, K, D]) WithReplay(config websocket.ReplayConfig) Realtime[C, M, K, D] {
 	r.channel = r.channel.WithReplay(config)
 	return r

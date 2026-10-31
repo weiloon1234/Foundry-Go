@@ -18,6 +18,7 @@ const (
 	MaxCatalogBytes = 16 << 20
 )
 
+// ParameterKind identifies a message parameter's value kind.
 type ParameterKind string
 
 const (
@@ -32,6 +33,7 @@ type Parameter struct {
 	Kind ParameterKind `json:"kind"`
 }
 
+// PluralKind selects a message's pluralization kind.
 type PluralKind string
 
 const (
@@ -49,6 +51,7 @@ type MessageDefinition struct {
 	Kind       PluralKind  `json:"plural_kind,omitempty"`
 }
 
+// Validate checks the message definition and returns a keyed definition error on failure.
 func (d MessageDefinition) Validate() error {
 	if problem := d.problem(); problem != "" {
 		return definitionError(d.Key, problem)
@@ -191,9 +194,14 @@ type Argument struct {
 	text string
 }
 
-func Text(value string) Argument            { return Argument{TextParameter, value} }
+// Text creates a text message argument.
+func Text(value string) Argument { return Argument{TextParameter, value} }
+
+// Number creates a decimal number message argument.
 func Number(value decimal.Decimal) Argument { return Argument{NumberParameter, value.String()} }
-func Boolean(value bool) Argument           { return Argument{BooleanParameter, strconv.FormatBool(value)} }
+
+// Boolean creates a boolean message argument.
+func Boolean(value bool) Argument { return Argument{BooleanParameter, strconv.FormatBool(value)} }
 func (a Argument) valid(kind ParameterKind) bool {
 	return a.kind == kind && validText(a.text) && (kind != NumberParameter || len(a.text) <= decimal.MaxDigits+2)
 }

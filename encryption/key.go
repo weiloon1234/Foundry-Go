@@ -72,20 +72,31 @@ func GenerateKey(id KeyID) (Key, error) {
 	}
 	return ParseKey(id, secret.New(base64.RawURLEncoding.EncodeToString(raw[:])))
 }
+
+// ID returns the key identifier, or an empty identifier for an uninitialized key.
 func (k Key) ID() KeyID {
 	if k.state == nil {
 		return ""
 	}
 	return k.state.id
 }
+
+// Secret returns base64-encoded key material as a secret, or an empty secret for an uninitialized
+// key.
 func (k Key) Secret() secret.String {
 	if k.state == nil {
 		return secret.String{}
 	}
 	return secret.New(base64.RawURLEncoding.EncodeToString(k.state.material[:]))
 }
-func (Key) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte(secret.Redacted)) }
-func (Key) LogValue() slog.Value         { return slog.StringValue(secret.Redacted) }
+
+// Format writes the redaction marker instead of key material.
+func (Key) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(secret.Redacted)) }
+
+// LogValue returns the redaction marker for logging.
+func (Key) LogValue() slog.Value { return slog.StringValue(secret.Redacted) }
+
+// MarshalJSON encodes the redaction marker instead of key material.
 func (Key) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 
 // Keyring encrypts with one active key and decrypts with its retained keys. It
@@ -96,6 +107,8 @@ type Keyring struct {
 	keys   map[KeyID]*keyState
 }
 
+// NewKeyring constructs a bounded keyring, rejecting duplicate identifiers or key material and a
+// missing active key.
 func NewKeyring(active KeyID, keys ...Key) (*Keyring, error) {
 	if len(keys) < 1 || len(keys) > MaxKeys {
 		return nil, safeerror.NewFault(fault.Invalid, "encryption requires a bounded nonempty keyring")
@@ -121,20 +134,30 @@ func NewKeyring(active KeyID, keys ...Key) (*Keyring, error) {
 	}
 	return ring, nil
 }
+
+// Validate checks that the keyring has an active key.
 func (r *Keyring) Validate() error {
 	if r == nil || r.active == nil {
 		return safeerror.NewFault(fault.Invalid, "encryption keyring is uninitialized")
 	}
 	return nil
 }
+
+// ActiveID returns the active key identifier, or an empty identifier for an uninitialized keyring.
 func (r *Keyring) ActiveID() KeyID {
 	if r == nil || r.active == nil {
 		return ""
 	}
 	return r.active.id
 }
-func (Keyring) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("encryption keyring")) }
-func (Keyring) LogValue() slog.Value         { return slog.StringValue("encryption keyring") }
+
+// Format writes a fixed label without exposing keys.
+func (Keyring) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("encryption keyring")) }
+
+// LogValue returns a fixed log label without exposing keys.
+func (Keyring) LogValue() slog.Value { return slog.StringValue("encryption keyring") }
+
+// MarshalJSON encodes the redaction marker instead of keyring contents.
 func (Keyring) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 
 func (k *keyState) reserve() error {

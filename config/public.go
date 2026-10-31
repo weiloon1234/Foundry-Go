@@ -21,6 +21,7 @@ const (
 	PublicEnum         PublicKind = "enum"
 )
 
+// Validate checks that the public configuration kind is supported; the empty kind is allowed.
 func (k PublicKind) Validate() error {
 	switch k {
 	case "", PublicString, PublicBoolean, PublicNumber, PublicLocale, PublicFormatLocale, PublicCurrency, PublicTimeZone, PublicEnum:

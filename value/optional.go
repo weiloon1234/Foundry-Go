@@ -18,16 +18,29 @@ type Optional[T any] struct {
 	set   bool
 }
 
+// Set returns a present Optional containing the supplied value, including its zero value.
 func Set[T any](value T) Optional[T] { return Optional[T]{value: value, set: true} }
-func (v Optional[T]) IsSet() bool    { return v.set }
-func (v Optional[T]) IsZero() bool   { return !v.set }
+
+// IsSet reports whether the optional value is present.
+func (v Optional[T]) IsSet() bool { return v.set }
+
+// IsZero reports whether the optional value is omitted.
+func (v Optional[T]) IsZero() bool { return !v.set }
+
+// Get returns the stored value and whether it is present.
 func (v Optional[T]) Get() (T, bool) { return v.value, v.set }
+
+// MarshalJSON encodes a present value; an omitted value returns a missing fault and requires
+// omitzero at its containing field.
 func (v Optional[T]) MarshalJSON() ([]byte, error) {
 	if !v.set {
 		return nil, safeerror.NewFault(fault.Missing, "omitted field has no JSON value; use omitzero")
 	}
 	return marshalPresent(v.value)
 }
+
+// UnmarshalJSON decodes a present value, rejecting null unless T supports null or is a JSON
+// document. The receiver changes only on success.
 func (v *Optional[T]) UnmarshalJSON(data []byte) error {
 	var decoded T
 	if isNull(data) && !isNullable(decoded) && !isJSONDocument(decoded) {
@@ -47,17 +60,28 @@ type Nullable[T any] struct {
 	valid bool
 }
 
-func Of[T any](value T) Nullable[T]  { return Nullable[T]{value: value, valid: true} }
-func Null[T any]() Nullable[T]       { return Nullable[T]{} }
-func (v Nullable[T]) IsNull() bool   { return !v.valid }
+// Of returns a non-null Nullable containing the supplied value, including its zero value.
+func Of[T any](value T) Nullable[T] { return Nullable[T]{value: value, valid: true} }
+
+// Null returns a null Nullable value.
+func Null[T any]() Nullable[T] { return Nullable[T]{} }
+
+// IsNull reports whether the value is null.
+func (v Nullable[T]) IsNull() bool { return !v.valid }
+
+// Get returns the stored value and whether it is non-null.
 func (v Nullable[T]) Get() (T, bool) { return v.value, v.valid }
 func (v Nullable[T]) nullableValue() {}
+
+// MarshalJSON encodes null or the present value as JSON.
 func (v Nullable[T]) MarshalJSON() ([]byte, error) {
 	if !v.valid {
 		return []byte("null"), nil
 	}
 	return marshalPresent(v.value)
 }
+
+// UnmarshalJSON decodes null or a present JSON value, replacing the receiver only on success.
 func (v *Nullable[T]) UnmarshalJSON(data []byte) error {
 	if isNull(data) {
 		*v = Null[T]()

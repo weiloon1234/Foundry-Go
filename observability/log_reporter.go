@@ -34,10 +34,12 @@ type LogReporterConfig struct {
 	Clock clock.Clock
 }
 
+// DefaultLogReporterConfig returns default error severity and deduplication settings.
 func DefaultLogReporterConfig() LogReporterConfig {
 	return LogReporterConfig{Level: slog.LevelError, Window: time.Minute, MaxFingerprints: 256}
 }
 
+// Validate checks error log severity, deduplication bounds, and suppression filters.
 func (c LogReporterConfig) Validate() error {
 	if c.Level < slog.LevelDebug || c.Level > slog.LevelError || c.Window < 0 || c.Window > 24*time.Hour || c.MaxFingerprints < 1 || c.MaxFingerprints > 4096 {
 		return safeerror.NewFault(fault.Invalid, "invalid error log reporter bounds")

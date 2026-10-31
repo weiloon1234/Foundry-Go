@@ -30,6 +30,7 @@ type Store struct {
 
 var _ maintenance.Store = (*Store)(nil)
 
+// New binds maintenance state storage to a nonnil cache store.
 func New(store *cache.Store) (*Store, error) {
 	if store == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "maintenance cache store is missing")
@@ -41,6 +42,7 @@ func New(store *cache.Store) (*Store, error) {
 	return &Store{values: values}, nil
 }
 
+// Load loads the current cached maintenance state and reports whether it exists.
 func (s *Store) Load(ctx context.Context) (maintenance.State, bool, error) {
 	if s == nil {
 		return maintenance.State{}, false, safeerror.NewFault(fault.Invalid, "maintenance cache store is not initialized")
@@ -48,6 +50,7 @@ func (s *Store) Load(ctx context.Context) (maintenance.State, bool, error) {
 	return s.values.Get(ctx, current)
 }
 
+// Save validates and stores maintenance state without expiry.
 func (s *Store) Save(ctx context.Context, state maintenance.State) error {
 	if s == nil {
 		return safeerror.NewFault(fault.Invalid, "maintenance cache store is not initialized")

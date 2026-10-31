@@ -12,8 +12,11 @@ import (
 // scope. A collection does not discover plugins or construct unrelated scopes.
 type Collection[T any] struct{ name string }
 
+// NewCollection creates a typed contribution collection with the supplied name.
 func NewCollection[T any](name string) Collection[T] { return Collection[T]{name} }
-func (c Collection[T]) Name() string                 { return c.name }
+
+// Name returns the collection name.
+func (c Collection[T]) Name() string { return c.name }
 
 type collectionRef struct {
 	name string

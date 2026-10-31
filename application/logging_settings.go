@@ -7,8 +7,10 @@ import (
 	"maps"
 )
 
+// LogChannels maps channel names to logging settings.
 type LogChannels map[logging.ChannelName]logging.ChannelSettings
 
+// UnmarshalText decodes the channel table and replaces the receiver only on success.
 func (m *LogChannels) UnmarshalText(data []byte) error {
 	schema, err := logging.ChannelSettingsConfigSchema()
 	if err != nil {
@@ -22,11 +24,13 @@ func (m *LogChannels) UnmarshalText(data []byte) error {
 	return nil
 }
 
+// LogSettings configures named logging channels and their default.
 type LogSettings struct {
 	Default  logging.ChannelName
 	Channels LogChannels
 }
 
+// DefaultLogSettings returns logging settings with a single default channel.
 func DefaultLogSettings() LogSettings {
 	return LogSettings{Default: "default", Channels: LogChannels{"default": logging.DefaultChannelSettings()}}
 }

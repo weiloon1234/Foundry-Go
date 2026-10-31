@@ -16,18 +16,24 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// Assignment pairs a translated field with a locale and replacement text.
 type Assignment[M any, K comparable] struct {
 	field  Field[M, K]
 	locale i18n.LocaleID
 	text   string
 }
 
+// SetValue creates a typed field assignment for a locale and text.
 func (f Field[M, K]) SetValue(locale i18n.LocaleID, text string) Assignment[M, K] {
 	return Assignment[M, K]{field: f, locale: locale, text: text}
 }
+
+// Set sets this field's translation for an owner and locale.
 func (f Field[M, K]) Set(ctx context.Context, m *Manager, owner model.Reference[M, K], locale i18n.LocaleID, text string) error {
 	return Set(ctx, m, owner, f.SetValue(locale, text))
 }
+
+// SetIn sets this field's translation in the supplied transaction.
 func (f Field[M, K]) SetIn(ctx context.Context, tx *database.Tx, m *Manager, owner model.Reference[M, K], locale i18n.LocaleID, text string) error {
 	return SetIn(ctx, tx, m, owner, f.SetValue(locale, text))
 }
@@ -37,6 +43,8 @@ func (f Field[M, K]) SetIn(ctx context.Context, tx *database.Tx, m *Manager, own
 func Set[M any, K comparable](ctx context.Context, m *Manager, owner model.Reference[M, K], assignments ...Assignment[M, K]) error {
 	return set(ctx, nil, m, owner, assignments)
 }
+
+// SetIn applies translation assignments in the supplied nonnil transaction.
 func SetIn[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manager, owner model.Reference[M, K], assignments ...Assignment[M, K]) error {
 	if tx == nil {
 		return invalid()
@@ -141,6 +149,8 @@ func upsert[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manage
 	_, err = orm.UpsertMany(ctx, tx, q, orm.OnConflict(orm.ConflictKey(orm.TextExpr(f.KeyColumn))).DoUpdate(orm.ConflictIncoming(orm.TextExpr(f.Value)), orm.ConflictIncoming(orm.TimeExpr(f.UpdatedAt))), drafts)
 	return err
 }
+
+// Forget removes this field's translation for a locale and reports whether it was removed.
 func (f Field[M, K]) Forget(ctx context.Context, m *Manager, owner model.Reference[M, K], locale i18n.LocaleID) (bool, error) {
 	if err := f.check(m); err != nil {
 		return false, err

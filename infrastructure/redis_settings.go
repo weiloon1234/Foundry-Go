@@ -23,19 +23,28 @@ type RedisConnectionSettings struct {
 	MaxValueBytes                                                           int
 }
 
+// RedisSettingsFromConfig converts Redis driver configuration to infrastructure settings.
 func RedisSettingsFromConfig(c redis.Config) RedisConnectionSettings {
 	return RedisConnectionSettings{Host: c.Host, Port: c.Port, Database: c.Database, User: c.User, Password: c.Password, TLS: c.TLS, MaxConnections: c.MaxConnections, MaxOperations: c.MaxOperations, MaxSubscriptions: c.MaxSubscriptions, ConnectTimeout: c.ConnectTimeout, OperationTimeout: c.OperationTimeout, PoolTimeout: c.PoolTimeout, MaxIdleTime: c.MaxIdleTime, MaxLifetime: c.MaxLifetime, MaxValueBytes: c.MaxValueBytes}
 }
+
+// DefaultRedisConnectionSettings returns default Redis connection settings.
 func DefaultRedisConnectionSettings() RedisConnectionSettings {
 	return RedisSettingsFromConfig(redis.DefaultConfig())
 }
+
+// Config converts infrastructure settings to Redis driver configuration.
 func (s RedisConnectionSettings) Config() redis.Config {
 	return redis.Config{Host: s.Host, Port: s.Port, Database: s.Database, User: s.User, Password: s.Password, TLS: s.TLS, MaxConnections: s.MaxConnections, MaxOperations: s.MaxOperations, MaxSubscriptions: s.MaxSubscriptions, ConnectTimeout: s.ConnectTimeout, OperationTimeout: s.OperationTimeout, PoolTimeout: s.PoolTimeout, MaxIdleTime: s.MaxIdleTime, MaxLifetime: s.MaxLifetime, MaxValueBytes: s.MaxValueBytes}
 }
+
+// Validate validates the derived Redis configuration.
 func (s RedisConnectionSettings) Validate() error { return s.Config().Validate() }
 
+// RedisConnections maps Redis connection names to settings.
 type RedisConnections map[redis.ConnectionName]RedisConnectionSettings
 
+// UnmarshalText decodes Redis connection settings, replacing the receiver only on success.
 func (m *RedisConnections) UnmarshalText(data []byte) error {
 	schema, err := RedisConnectionSettingsConfigSchema()
 	if err != nil {
@@ -49,12 +58,16 @@ func (m *RedisConnections) UnmarshalText(data []byte) error {
 	return nil
 }
 
+// RedisSettings configures named Redis connections, their default, and the total connection
+// budget.
 type RedisSettings struct {
 	Default        redis.ConnectionName
 	MaxConnections int
 	Connections    RedisConnections `config:",secret"`
 }
 
+// DefaultRedisSettings returns Redis settings selecting the default name with a 1024-connection
+// budget.
 func DefaultRedisSettings() RedisSettings {
 	return RedisSettings{Default: "default", MaxConnections: 1024}
 }

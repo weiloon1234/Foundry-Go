@@ -82,6 +82,7 @@ type helpWriter struct {
 	failure     error
 }
 
+// Write writes help output and retains the first write failure, including short writes.
 func (w *helpWriter) Write(p []byte) (int, error) {
 	if w.failure != nil {
 		return 0, w.failure
@@ -98,18 +99,23 @@ func (w *helpWriter) Write(p []byte) (int, error) {
 // causes are retained; a parser must avoid embedding credentials in messages.
 type UsageError struct{ cause error }
 
+// Error returns the underlying message, or a default message for an empty error.
 func (e *UsageError) Error() string {
 	if e == nil || e.cause == nil {
 		return "invalid CLI usage"
 	}
 	return e.cause.Error()
 }
+
+// Unwrap returns the underlying cause, or nil for a nil receiver.
 func (e *UsageError) Unwrap() error {
 	if e == nil {
 		return nil
 	}
 	return e.cause
 }
+
+// Usage creates a usage error with the supplied message.
 func Usage(message string) error { return &UsageError{cause: errors.New(message)} }
 
 // InvalidArguments retains a custom parser/validator's cause with usage status.

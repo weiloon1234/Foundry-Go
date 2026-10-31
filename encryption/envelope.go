@@ -26,6 +26,8 @@ type Ciphertext struct {
 	id      KeyID
 }
 
+// ParseCiphertext validates the version, key identifier, canonical base64 encoding, and size of a
+// ciphertext envelope.
 func ParseCiphertext(encoded string) (Ciphertext, error) {
 	invalid := func() (Ciphertext, error) {
 		return Ciphertext{}, safeerror.NewFault(fault.Invalid, "invalid encryption envelope")
@@ -54,9 +56,20 @@ func EnvelopePrefix(id KeyID) (string, error) {
 	return version + ":" + string(id) + ":", nil
 }
 
-func (c Ciphertext) Encoded() string            { return c.encoded }
-func (c Ciphertext) KeyID() KeyID               { return c.id }
-func (c Ciphertext) IsZero() bool               { return c.encoded == "" }
-func (Ciphertext) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte(secret.Redacted)) }
-func (Ciphertext) LogValue() slog.Value         { return slog.StringValue(secret.Redacted) }
+// Encoded returns the encoded ciphertext envelope.
+func (c Ciphertext) Encoded() string { return c.encoded }
+
+// KeyID returns the envelope's key identifier.
+func (c Ciphertext) KeyID() KeyID { return c.id }
+
+// IsZero reports whether the ciphertext is uninitialized.
+func (c Ciphertext) IsZero() bool { return c.encoded == "" }
+
+// Format writes the redaction marker instead of ciphertext.
+func (Ciphertext) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(secret.Redacted)) }
+
+// LogValue returns the redaction marker for logging.
+func (Ciphertext) LogValue() slog.Value { return slog.StringValue(secret.Redacted) }
+
+// MarshalJSON encodes the redaction marker instead of ciphertext.
 func (Ciphertext) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }

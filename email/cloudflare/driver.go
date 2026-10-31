@@ -14,14 +14,17 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
+// Config configures Cloudflare email HTTP transport, account, and credentials.
 type Config struct {
 	HTTP      email.HTTPConfig
 	AccountID string
 	Token     secret.String
 }
 
+// Format writes a fixed label without exposing configuration.
 func (Config) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("Cloudflare email configuration")) }
 
+// Driver submits email through the Cloudflare API.
 type Driver struct {
 	client *httptransport.Client
 	path   string
@@ -44,13 +47,18 @@ func New(config Config) (*Driver, error) {
 	return &Driver{client: client, path: "/accounts/" + config.AccountID + "/email/sending/send_raw", token: config.Token}, nil
 }
 
+// Close closes the driver's HTTP client; a nil driver is harmless.
 func (d *Driver) Close() {
 	if d != nil {
 		d.client.Close()
 	}
 }
+
+// Format writes a fixed label without exposing driver credentials.
 func (Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("Cloudflare email driver")) }
 
+// Send submits an outbound MIME message of at most 5 MiB to Cloudflare. An unconfirmed successful
+// response returns an ambiguous failure.
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	// Use the general sending limit, including MIME encoding and attachments.
 	// The provider's larger verified-destination-only allowance is not assumed.

@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// Mode identifies the maintenance serving mode.
 type Mode string
 
 const (
@@ -165,6 +166,7 @@ func (g *Gate) modeLocked() Mode {
 	return g.mode
 }
 
+// Mode returns the synchronized serving mode; a nil gate is serving.
 func (g *Gate) Mode() Mode {
 	if g == nil {
 		return Serving
@@ -237,6 +239,7 @@ func FromContext(ctx context.Context) *Gate {
 	return gate
 }
 
+// Admit returns the current maintenance or draining error, or nil when serving.
 func (g *Gate) Admit() error {
 	switch g.Mode() {
 	case Paused:

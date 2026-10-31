@@ -27,6 +27,7 @@ const (
 	Ceiling
 )
 
+// Validate checks that the rounding mode is supported.
 func (m RoundingMode) Validate() error {
 	if m < HalfUp || m > Ceiling {
 		return safeerror.NewFault(fault.Invalid, "invalid decimal rounding mode")
@@ -34,6 +35,7 @@ func (m RoundingMode) Validate() error {
 	return nil
 }
 
+// String returns the rounding mode name, or "invalid" for an unsupported mode.
 func (m RoundingMode) String() string {
 	switch m {
 	case HalfUp:

@@ -243,9 +243,15 @@ func registerKernelDeclarations(builder *foundation.Builder, plan *infrastructur
 	}
 	return nil
 }
-func (s Services) Events() (*events.Bus, error)            { return Resolve(s, EventKey) }
+
+// Events resolves the application's event bus.
+func (s Services) Events() (*events.Bus, error) { return Resolve(s, EventKey) }
+
+// Scheduler resolves the application's scheduler.
 func (s Services) Scheduler() (*schedule.Scheduler, error) { return Resolve(s, SchedulerKey) }
-func (s Services) RealtimeHub() (*websocket.Hub, error)    { return Resolve(s, RealtimeKey) }
+
+// RealtimeHub resolves the application's realtime hub.
+func (s Services) RealtimeHub() (*websocket.Hub, error) { return Resolve(s, RealtimeKey) }
 
 // RealtimePublisher returns the hub when this process serves realtime, or the
 // managed cross-process publisher when Realtime.Publisher is enabled. Both accept
@@ -279,6 +285,9 @@ func realtimeRoutes(s Settings) Routes {
 		return []foundryhttp.RouteRegistration{websocket.Route(hub, s.Realtime.Path, d.Middleware...)}, nil
 	}
 }
+
+// RealtimeReady waits for the realtime hub's ready address, or returns an error if realtime is
+// unavailable.
 func (a *App) RealtimeReady(ctx context.Context) (string, error) {
 	if a == nil {
 		return "", safeerror.NewFault(fault.Missing, "realtime is not configured")

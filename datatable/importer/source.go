@@ -174,6 +174,7 @@ type csvGuard struct {
 	quoted    bool
 }
 
+// Read reads CSV input while enforcing context cancellation, input size, and record size limits.
 func (g *csvGuard) Read(p []byte) (int, error) {
 	if err := g.ctx.Err(); err != nil {
 		return 0, err

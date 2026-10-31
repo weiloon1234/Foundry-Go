@@ -26,6 +26,8 @@ func ParseCurrency(code string) (Currency, error) {
 	return c, nil
 }
 
+// Validate checks the currency code against supported monetary currencies, excluding precious
+// metal and special-purpose codes.
 func (c Currency) Validate() error {
 	if len(c) != 3 {
 		return invalidCurrency()
@@ -64,8 +66,10 @@ func (c Currency) MinorUnits() (int, error) {
 	return 2, nil
 }
 
+// String returns the currency code.
 func (c Currency) String() string { return string(c) }
 
+// MarshalText validates the currency and returns its code as text.
 func (c Currency) MarshalText() ([]byte, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
@@ -73,6 +77,7 @@ func (c Currency) MarshalText() ([]byte, error) {
 	return []byte(c), nil
 }
 
+// UnmarshalText parses a currency code, replacing the receiver only on success.
 func (c *Currency) UnmarshalText(data []byte) error {
 	parsed, err := ParseCurrency(string(data))
 	if err != nil {
@@ -82,6 +87,7 @@ func (c *Currency) UnmarshalText(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSON decodes a JSON currency, replacing the receiver only on success.
 func (c *Currency) UnmarshalJSON(data []byte) error {
 	parsed, err := textvalue.Decode(data, ParseCurrency)
 	if err != nil {

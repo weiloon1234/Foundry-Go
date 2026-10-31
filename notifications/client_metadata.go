@@ -15,6 +15,7 @@ type ClientRealtimeInfo struct {
 	Event   websocket.EventID   `json:"event"`
 }
 
+// ClientChannelInfo describes a client-visible notification channel and payload schema.
 type ClientChannelInfo struct {
 	ID       ChannelID           `json:"id"`
 	Kind     string              `json:"kind"`

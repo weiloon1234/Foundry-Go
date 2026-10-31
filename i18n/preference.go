@@ -108,7 +108,10 @@ func AcceptLanguage[S any](header func(S) string) Preference[S] {
 	}}
 }
 
+// Source returns the preference source identifier.
 func (p Preference[S]) Source() PreferenceSource { return p.source }
+
+// Validate checks that the preference has a source and matching callback.
 func (p Preference[S]) Validate() error {
 	if p.match == nil || p.source == "" {
 		return safeerror.NewFault(fault.Invalid, "invalid locale preference")
@@ -138,6 +141,8 @@ type LocaleResolver[S any] struct {
 	steps   []Preference[S]
 }
 
+// NewLocaleResolver validates and copies a bounded preference sequence, rejecting duplicate
+// sources.
 func NewLocaleResolver[S any](locales LocaleCatalog, steps ...Preference[S]) (*LocaleResolver[S], error) {
 	if err := ValidateLocaleCatalog(locales); err != nil {
 		return nil, err

@@ -19,20 +19,24 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
+// Config configures Mailgun HTTP transport, API credentials, and sending domain.
 type Config struct {
 	HTTP   email.HTTPConfig
 	APIKey secret.String
 	Domain string
 }
 
+// Format writes a fixed label without exposing Mailgun configuration.
 func (Config) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("Mailgun configuration")) }
 
+// Driver submits email through the Mailgun API.
 type Driver struct {
 	client *httptransport.Client
 	token  secret.String
 	domain string
 }
 
+// New validates Mailgun credentials and domain and creates its HTTP client.
 func New(config Config) (*Driver, error) {
 	if !httptransport.Token(config.APIKey.Reveal()) || config.Domain == "" || len(config.Domain) > 253 {
 		return nil, emaildiag.Failure(email.Construction)
@@ -48,16 +52,23 @@ func New(config Config) (*Driver, error) {
 	}
 	return &Driver{client: c, token: config.APIKey, domain: config.Domain}, nil
 }
+
+// Close closes the driver's HTTP client; a nil driver is harmless.
 func (d *Driver) Close() {
 	if d != nil {
 		d.client.Close()
 	}
 }
+
+// Format writes a fixed label without exposing driver credentials.
 func (Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("Mailgun driver")) }
 
 // StructuredSubmission reports that this provider API sends native fields, so
 // the mailer skips MIME rendering.
 func (*Driver) StructuredSubmission() bool { return true }
+
+// Send submits a multipart message to Mailgun, returning an ambiguous failure if acceptance lacks
+// a message identifier.
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || d.client == nil || out.Validate() != nil {
 		return email.Receipt{}, emaildiag.Failure(email.Construction)

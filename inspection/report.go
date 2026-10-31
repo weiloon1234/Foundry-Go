@@ -40,6 +40,8 @@ type Sources struct {
 	// package's FoundryExtensions().
 	Models []slots.Declaration
 }
+
+// Report contains inspection data for application assembly and registered declarations.
 type Report struct {
 	Assembly      foundation.Inspection   `json:"assembly"`
 	Routes        []foundryhttp.RouteInfo `json:"routes"`
@@ -106,6 +108,7 @@ func Collect(ctx context.Context, sources Sources) (Report, error) {
 	return result, nil
 }
 
+// Section selects an inspection report section.
 type Section string
 
 const (
@@ -120,6 +123,7 @@ const (
 	Extensions    Section = "extensions"
 )
 
+// Format selects the inspection output encoding.
 type Format string
 
 const (
@@ -127,11 +131,14 @@ const (
 	Text Format = "text"
 )
 
+// Arguments selects the inspection section and output format.
 type Arguments struct {
 	Section Section
 	Format  Format
 }
 
+// Validate validates the requested section and output format, returning usage errors for
+// unsupported values.
 func (a Arguments) Validate() error {
 	switch a.Section {
 	case All, Routes, Jobs, Schedules, Plugins, Commands, Configuration, Contracts, Extensions:
@@ -189,6 +196,8 @@ func Write(ctx context.Context, output io.Writer, report Report, arguments Argum
 		return ctx.Err()
 	})
 }
+
+// Format writes a fixed label without exposing application declarations.
 func (Report) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("application declaration inspection"))
 }

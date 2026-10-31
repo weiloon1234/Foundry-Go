@@ -21,6 +21,7 @@ type UploadSource = upload.Source
 // attachments.File, Attachment and loaded One slots implement this contract.
 // The caller must authorize access to the file before attaching it.
 type StoredAttachment interface {
+	// EmailAttachment returns the stored object's email attachment declaration.
 	EmailAttachment() (Attachment, error)
 }
 

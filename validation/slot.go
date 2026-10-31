@@ -19,6 +19,7 @@ type slotKey struct{ _ byte }
 // Declare slots once, beside the rules that use them. The zero Slot is invalid.
 type Slot[P any] struct{ key *slotKey }
 
+// NewSlot creates a typed validation slot with a distinct identity.
 func NewSlot[P any]() Slot[P] { return Slot[P]{key: new(slotKey)} }
 
 type provided[P any] struct{ value P }

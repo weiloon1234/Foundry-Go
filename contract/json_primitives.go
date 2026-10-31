@@ -11,13 +11,19 @@ import (
 func StringJSON[T ~string]() JSON[T] {
 	return scalarFieldJSON(scalarKeyType[T](Type{Kind: StringKind}))
 }
+
+// BooleanJSON returns a JSON codec for a boolean type.
 func BooleanJSON[T ~bool]() JSON[T] {
 	return scalarFieldJSON(scalarKeyType[T](Type{Kind: BooleanKind}))
 }
+
+// IntegerJSON returns a JSON codec using the integer type's width and signedness.
 func IntegerJSON[T JSONKeyInteger]() JSON[T] {
 	var zero T
 	return scalarFieldJSON(scalarKeyType[T](Type{Kind: IntegerKind, Bits: uint8(reflect.TypeFor[T]().Bits()), Signed: !(^zero > zero)}))
 }
+
+// NumberJSON returns a JSON codec using the floating-point type's width.
 func NumberJSON[T ~float32 | ~float64]() JSON[T] {
 	return scalarFieldJSON(scalarKeyType[T](Type{Kind: NumberKind, Bits: uint8(reflect.TypeFor[T]().Bits())}))
 }

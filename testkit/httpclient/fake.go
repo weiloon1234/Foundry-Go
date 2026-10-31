@@ -27,6 +27,7 @@ var Exhausted = fault.New(fault.Missing, "outbound HTTP fake has no remaining ou
 // Unmatched reports a request that matches no Route of a routed fake.
 var Unmatched = fault.New(fault.Missing, "outbound HTTP fake has no matching route")
 
+// Outcome is a fake HTTP response or transport failure.
 type Outcome struct {
 	status  int
 	headers http.Header
@@ -34,25 +35,41 @@ type Outcome struct {
 	failure error
 }
 
+// Respond copies headers and body into a response outcome, returning a zero outcome if recording
+// bounds are exceeded.
 func Respond(status int, headers http.Header, body []byte) Outcome {
 	if len(body) > MaxRecordedBodyBytes || headerBytes(headers) < 0 {
 		return Outcome{}
 	}
 	return Outcome{status: status, headers: headers.Clone(), body: slices.Clone(body)}
 }
-func Fail(err error) Outcome                   { return Outcome{failure: err} }
+
+// Fail creates a fake outcome containing the supplied error.
+func Fail(err error) Outcome { return Outcome{failure: err} }
+
+// Format writes a fixed label without exposing outcome data.
 func (Outcome) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("HTTP fake outcome")) }
 
+// Request is a recorded outbound HTTP request.
 type Request struct {
 	method, url string
 	headers     http.Header
 	body        []byte
 }
 
-func (r Request) Method() string               { return r.method }
-func (r Request) URL() string                  { return r.url }
-func (r Request) Headers() http.Header         { return r.headers.Clone() }
-func (r Request) Body() []byte                 { return slices.Clone(r.body) }
+// Method returns the recorded HTTP method.
+func (r Request) Method() string { return r.method }
+
+// URL returns the recorded URL.
+func (r Request) URL() string { return r.url }
+
+// Headers returns a copy of the recorded headers.
+func (r Request) Headers() http.Header { return r.headers.Clone() }
+
+// Body returns a copy of the recorded body.
+func (r Request) Body() []byte { return slices.Clone(r.body) }
+
+// Format writes a fixed label without exposing request data.
 func (Request) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("recorded HTTP request")) }
 
 // Route answers requests whose method and URL match, in declaration order of
@@ -65,11 +82,16 @@ type Route struct {
 	next            int
 }
 
+// On declares a fake route with a method, pattern, and outcome sequence.
 func On(method, pattern string, outcomes ...Outcome) Route {
 	return Route{method: method, pattern: pattern, outcomes: outcomes}
 }
+
+// Format writes a fixed label without exposing route data.
 func (Route) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("HTTP fake route")) }
 
+// Fake is a mutex-protected HTTP transport fake with queued outcomes and bounded request
+// recording.
 type Fake struct {
 	mu       sync.Mutex
 	outcomes []Outcome
@@ -183,6 +205,9 @@ func headerBytes(headers http.Header) int {
 	}
 	return total
 }
+
+// RoundTrip records a bounded request and returns the next matching fake outcome. It consumes and
+// closes the request body.
 func (f *Fake) RoundTrip(request *http.Request) (response *http.Response, err error) {
 	if request == nil {
 		return nil, invalid()
@@ -243,6 +268,8 @@ func (f *Fake) RoundTrip(request *http.Request) (response *http.Response, err er
 	}
 	return &http.Response{StatusCode: outcome.status, Header: outcome.headers.Clone(), Body: io.NopCloser(bytes.NewReader(outcome.body)), ContentLength: int64(len(outcome.body)), Request: request}, nil
 }
+
+// Requests returns a synchronized snapshot with independent header maps and body slices.
 func (f *Fake) Requests() []Request {
 	if f == nil {
 		return nil
@@ -256,6 +283,8 @@ func (f *Fake) Requests() []Request {
 	}
 	return result
 }
+
+// Pending returns the synchronized count of unused global and route outcomes.
 func (f *Fake) Pending() int {
 	if f == nil {
 		return 0
@@ -304,6 +333,8 @@ func (f *Fake) count(match func(Request) bool) int {
 	}
 	return count
 }
+
+// Sent returns the synchronized recorded request count; a nil fake returns zero.
 func (f *Fake) Sent() int {
 	if f == nil {
 		return 0
@@ -312,6 +343,8 @@ func (f *Fake) Sent() int {
 	defer f.mu.Unlock()
 	return len(f.requests)
 }
+
+// Format writes a fixed label without exposing fake requests.
 func (*Fake) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("outbound HTTP fake")) }
 func invalid() error {
 	return fault.New(fault.Invalid, "invalid or exhausted HTTP fake resource bound")

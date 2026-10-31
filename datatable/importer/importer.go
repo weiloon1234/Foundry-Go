@@ -54,6 +54,7 @@ type Limits struct {
 	Validation validation.Limits
 }
 
+// DefaultLimits returns default import input, row, validation, and reporting budgets.
 func DefaultLimits() Limits {
 	return Limits{
 		MaxRows: 100_000, MaxColumns: 1024, MaxCellBytes: 32 << 10, MaxRowBytes: 1 << 20,
@@ -62,6 +63,8 @@ func DefaultLimits() Limits {
 		MaxFailures: 1000, ChunkSize: 500, Validation: validation.DefaultLimits(),
 	}
 }
+
+// Validate checks import budgets and nested validation limits.
 func (l Limits) Validate() error {
 	if l.MaxRows < 1 || l.MaxRows >= spreadsheet.MaxRows || l.MaxColumns < 1 || l.MaxColumns > spreadsheet.MaxColumns || l.MaxCellBytes < 1 || l.MaxCellBytes > 1<<20 || l.MaxRowBytes < l.MaxCellBytes || l.MaxRowBytes > 64<<20 {
 		return invalid("invalid import row limits")
@@ -158,6 +161,8 @@ type definition[R any] struct {
 	err      error
 }
 
+// Define copies column declarations and initializes an import definition, retaining validation
+// errors for Validate.
 func Define[R any](spec Spec[R]) Definition[R] {
 	d := &definition[R]{columns: slices.Clone(spec.Columns), heading: spec.HeadingRow, limits: spec.Limits}
 	if d.heading == 0 {
@@ -206,6 +211,9 @@ func (d *definition[R]) initialize(spec Spec[R]) error {
 	}
 	return nil
 }
+
+// Validate returns the definition's initialization error, or an invalid fault for an undefined
+// import.
 func (d Definition[R]) Validate() error {
 	if d.definition == nil {
 		return invalid("import is not defined")
@@ -241,8 +249,13 @@ type Report struct {
 // headings or repeated declared headings. Nothing was passed to the handler.
 type HeadingError struct{ issues []contract.Issue }
 
-func (*HeadingError) Error() string              { return "import headings do not match the declaration" }
-func (*HeadingError) Is(target error) bool       { return target == fault.Invalid }
+// Error returns the heading mismatch message.
+func (*HeadingError) Error() string { return "import headings do not match the declaration" }
+
+// Is reports whether the target is fault.Invalid.
+func (*HeadingError) Is(target error) bool { return target == fault.Invalid }
+
+// Issues returns a copy of the heading issues.
 func (e *HeadingError) Issues() []contract.Issue { return slices.Clone(e.issues) }
 
 // Handler receives each chunk of valid rows in file order. The slice is owned

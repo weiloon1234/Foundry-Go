@@ -19,6 +19,7 @@ type JobDeclaration struct {
 	install    func(*foundation.Registrar, jobs.ConnectionName) error
 }
 
+// Job declares a typed job with a handler constructor and default handler options.
 func Job[P any](definition jobs.Definition[P], construct func(Services) (jobs.Handler[P], error)) JobDeclaration {
 	return JobWith(definition, func(services Services) (jobs.Handler[P], jobs.HandlerOptions[P], error) {
 		if construct == nil {
@@ -56,16 +57,20 @@ func (d JobDeclaration) On(connection jobs.ConnectionName) JobDeclaration {
 	d.connection = connection
 	return d
 }
+
+// Jobs adds job declarations to the builder.
 func (b *Builder) Jobs(declarations ...JobDeclaration) *Builder {
 	b.mutate(func() { b.state.jobs = append(b.state.jobs, declarations...) })
 	return b
 }
 
+// EventDeclaration holds an event registration and optional outbox declaration.
 type EventDeclaration struct {
 	install func(*foundation.Registrar) error
 	outbox  *eventOutboxDeclaration
 }
 
+// Listen declares a typed event listener whose handler is constructed from application services.
 func Listen[E any](topic events.Topic[E], name events.ListenerID, construct func(Services) (events.Handler[E], error)) EventDeclaration {
 	return EventDeclaration{install: func(r *foundation.Registrar) error {
 		if construct == nil {
@@ -114,16 +119,22 @@ func Subscribe(id string, construct func(Services) (events.Subscriber, error)) E
 		})
 	}}
 }
+
+// Topic declares an event topic for registration.
 func Topic[E any](topic events.Topic[E]) EventDeclaration {
 	return EventDeclaration{install: func(r *foundation.Registrar) error { return events.RegisterTopic(r, EventKey, topic) }}
 }
+
+// Events adds event declarations to the builder.
 func (b *Builder) Events(declarations ...EventDeclaration) *Builder {
 	b.mutate(func() { b.state.events = append(b.state.events, declarations...) })
 	return b
 }
 
+// Schedules constructs schedule declarations from application services.
 type Schedules func(Services) ([]schedule.Declaration, error)
 
+// Schedules adds a schedule constructor, recording an invalid fault if it is nil.
 func (b *Builder) Schedules(construct Schedules) *Builder {
 	b.mutate(func() {
 		if construct == nil {
@@ -155,8 +166,11 @@ func (d RealtimeDeclarations) hubOptions() []websocket.Option {
 	return []websocket.Option{websocket.WithTickets(d.Tickets...)}
 }
 
+// Realtime constructs realtime declarations from application services.
 type Realtime func(Services) (RealtimeDeclarations, error)
 
+// Realtime sets the realtime constructor, recording an invalid fault for a nil or duplicate
+// constructor.
 func (b *Builder) Realtime(construct Realtime) *Builder {
 	b.mutate(func() {
 		if construct == nil || b.state.realtime != nil {

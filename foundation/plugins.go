@@ -16,9 +16,13 @@ import (
 // immediately with Runtime.OnShutdown, including resources acquired before a
 // later boot failure. Shutdown is called once only after successful Boot.
 type Plugin interface {
+	// Manifest returns the plugin manifest.
 	Manifest() pluginmanifest.Manifest
+	// Register registers plugin declarations with its registrar.
 	Register(*Registrar) error
+	// Boot boots the plugin with its runtime and context.
 	Boot(context.Context, *Runtime) error
+	// Shutdown shuts down the plugin using its runtime and context.
 	Shutdown(context.Context, *Runtime) error
 }
 
@@ -31,7 +35,10 @@ type pluginProvider struct {
 	plugin   Plugin
 }
 
+// ID returns the plugin's provider identifier.
 func (p pluginProvider) ID() ProviderID { return PluginProvider(p.manifest.ID) }
+
+// Dependencies converts manifest dependencies to plugin provider identifiers.
 func (p pluginProvider) Dependencies() []ProviderID {
 	result := make([]ProviderID, len(p.manifest.Dependencies))
 	for i, dependency := range p.manifest.Dependencies {
@@ -39,7 +46,11 @@ func (p pluginProvider) Dependencies() []ProviderID {
 	}
 	return result
 }
+
+// Register forwards registration to the plugin.
 func (p pluginProvider) Register(r *Registrar) error { return p.plugin.Register(r) }
+
+// Boot boots the plugin and registers its shutdown callback after successful boot.
 func (p pluginProvider) Boot(ctx context.Context, r *Runtime) error {
 	if err := p.plugin.Boot(ctx, r); err != nil {
 		return err

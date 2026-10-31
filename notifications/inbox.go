@@ -27,7 +27,10 @@ type Record[M any] struct {
 	data      string
 }
 
-func (Record[M]) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("notification inbox record")) }
+// Format writes a fixed label without exposing inbox data.
+func (Record[M]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("notification inbox record")) }
+
+// MarshalJSON rejects direct JSON serialization of inbox records.
 func (Record[M]) MarshalJSON() ([]byte, error) { return nil, invalid() }
 
 // Inbox obtains its recipient exclusively from the verified guard in ctx. It
@@ -37,6 +40,8 @@ type Inbox[M model.Identifiable, K any] struct {
 	recipient Recipient[M, K]
 }
 
+// Inbox creates an inbox for a recipient registered with the manager, returning a missing fault
+// otherwise.
 func (r Recipient[M, K]) Inbox(manager *Manager) (Inbox[M, K], error) {
 	if err := r.Validate(); err != nil {
 		return Inbox[M, K]{}, err
@@ -86,6 +91,7 @@ func inboxRecord[M any](row store.Inbox) (Record[M], error) {
 	return Record[M]{ID: model.IDFromBytes[NotificationOf[M]](row.ID.Bytes()), Name: Name(row.Name), Version: Version(row.Version), CreatedAt: row.CreatedAt, ReadAt: row.ReadAt, data: text}, err
 }
 
+// List lists the recipient's inbox newest first, optionally restricting results to unread records.
 func (i Inbox[M, K]) List(ctx context.Context, page orm.PageRequest, unreadOnly bool) (orm.PageResult[Record[M]], error) {
 	if err := page.Validate(); err != nil {
 		return orm.PageResult[Record[M]]{}, err
@@ -124,6 +130,8 @@ func (i Inbox[M, K]) List(ctx context.Context, page orm.PageRequest, unreadOnly 
 	}
 	return result, nil
 }
+
+// UnreadCount counts unread records for the current inbox subject.
 func (i Inbox[M, K]) UnreadCount(ctx context.Context) (int64, error) {
 	ctx, release, err := i.manager.begin(ctx)
 	if err != nil {
@@ -148,6 +156,8 @@ func (i Inbox[M, K]) UnreadCount(ctx context.Context) (int64, error) {
 func (i Inbox[M, K]) MarkRead(ctx context.Context, id ID[M]) (bool, error) {
 	return i.mark(ctx, id, true)
 }
+
+// MarkUnread marks a recipient's notification unread through the inbox update operation.
 func (i Inbox[M, K]) MarkUnread(ctx context.Context, id ID[M]) (bool, error) {
 	return i.mark(ctx, id, false)
 }

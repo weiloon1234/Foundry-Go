@@ -15,5 +15,8 @@ type HTTPConfig struct {
 	Transport http.RoundTripper
 }
 
-func DefaultHTTPConfig() HTTPConfig           { return HTTPConfig{Timeout: DefaultConfig().Timeout} }
+// DefaultHTTPConfig returns HTTP settings with the default mailer timeout.
+func DefaultHTTPConfig() HTTPConfig { return HTTPConfig{Timeout: DefaultConfig().Timeout} }
+
+// Format writes a fixed label without exposing HTTP configuration.
 func (HTTPConfig) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("email HTTP configuration")) }

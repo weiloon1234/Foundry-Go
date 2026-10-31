@@ -18,6 +18,7 @@ import (
 // UploadedFile implements it.
 type File interface {
 	validation.FileValue
+	// Open opens a seekable file reader that the caller must close.
 	Open(context.Context) (io.ReadSeekCloser, error)
 }
 
@@ -32,6 +33,7 @@ type Measurer[F File] struct {
 	engine *imaging.Engine
 }
 
+// NewMeasurer creates an image measurer with the supplied inspection limits.
 func NewMeasurer[F File](limits imaging.Limits) Measurer[F] { return Measurer[F]{limits: limits} }
 
 // NewEngineMeasurer uses an existing engine's backend, bounds and admission.
@@ -40,6 +42,7 @@ func NewEngineMeasurer[F File](engine *imaging.Engine) Measurer[F] {
 	return Measurer[F]{limits: engine.Limits(), engine: engine}
 }
 
+// Validate validates the configured engine or standalone inspection limits.
 func (m Measurer[F]) Validate() error {
 	if m.engine != nil {
 		return m.engine.Validate()
@@ -47,6 +50,8 @@ func (m Measurer[F]) Validate() error {
 	return m.limits.Validate()
 }
 
+// Measure reads and inspects bounded file content, correcting dimensions for orientation. Absent,
+// unsupported, or invalid images return false without an error.
 func (m Measurer[F]) Measure(ctx context.Context, file F) (validation.ImageSize, bool, error) {
 	if err := m.Validate(); err != nil {
 		return validation.ImageSize{}, false, err

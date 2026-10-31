@@ -18,6 +18,8 @@ import (
 // its key in the owner's current scope. Conflicts in a RescopePage are stale
 // rows whose current-scope equivalent already exists.
 type StaleRow = extensionmaintenance.Stale
+
+// RescopePage is the extension maintenance rescope page result.
 type RescopePage = extensionmaintenance.RescopePage
 
 // InspectStale lists, without writing, translations whose owner column names

@@ -10,6 +10,7 @@ import (
 // A bound or related field must have the same concrete type as the input.
 type Temporal interface {
 	time.Time | temporal.Date | temporal.Time | temporal.DateTime | temporal.LocalDateTime
+	// String returns the temporal value's text representation.
 	String() string
 }
 
@@ -82,6 +83,7 @@ func temporalPair[T Temporal](id RuleID, direction int, equal bool) Rule[Pair[T]
 // local date-times with the current wall time in the service's timezone.
 type NowTemporal interface {
 	time.Time | temporal.DateTime | temporal.LocalDateTime
+	// String returns the temporal value's text representation.
 	String() string
 }
 
@@ -89,6 +91,7 @@ type NowTemporal interface {
 // timezone. Instants are first converted to their date in that timezone.
 type TodayTemporal interface {
 	time.Time | temporal.DateTime | temporal.Date | temporal.LocalDateTime
+	// String returns the temporal value's text representation.
 	String() string
 }
 

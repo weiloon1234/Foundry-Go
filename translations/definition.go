@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// Name identifies a translated field.
 type Name string
 
 // MaxBatchRows is the keyset page size of batch loads, not a result cap: a
@@ -36,6 +37,8 @@ type Options struct {
 }
 
 type declarationID struct{ nonzero byte }
+
+// Field is a translated field bound to a concrete model owner and key type.
 type Field[M any, K comparable] struct{ definition *definition[M, K] }
 type definition[M any, K comparable] struct {
 	owner   extensions.Owner[M, K]
@@ -44,24 +47,31 @@ type definition[M any, K comparable] struct {
 	id      *declarationID
 }
 
+// Define declares an owner's translated field, using MaxValueBytes when its byte limit is zero.
 func Define[M any, K comparable](owner extensions.Owner[M, K], name Name, options Options) Field[M, K] {
 	if options.MaxBytes == 0 {
 		options.MaxBytes = MaxValueBytes
 	}
 	return Field[M, K]{&definition[M, K]{owner: owner, name: name, options: options, id: &declarationID{}}}
 }
+
+// Name returns the field name, or an empty name for an undefined field.
 func (f Field[M, K]) Name() Name {
 	if f.definition == nil {
 		return ""
 	}
 	return f.definition.name
 }
+
+// Validate checks the field name, byte limit, locale requirement, and owner.
 func (f Field[M, K]) Validate() error {
 	if f.definition == nil || !identifier.Semantic(string(f.Name())) || f.definition.options.MaxBytes < 1 || f.definition.options.MaxBytes > MaxValueBytes || f.definition.options.Require.Validate() != nil {
 		return invalid()
 	}
 	return f.definition.owner.Validate()
 }
+
+// Format writes a fixed label without exposing the field declaration.
 func (Field[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("translated model field")) }
 func (f Field[M, K]) registrationKey() string {
 	if f.definition == nil {
@@ -70,6 +80,7 @@ func (f Field[M, K]) registrationKey() string {
 	return extensions.Digest(f.definition.owner.Scope(), string(f.Name()))
 }
 
+// Registration holds a translated field's registry identity, scope, and validation callback.
 type Registration struct {
 	key, scope string
 	id         *declarationID
@@ -77,6 +88,8 @@ type Registration struct {
 	maxBytes   int
 }
 
+// Registration returns the field's owner-bound registration, or an empty declaration for an
+// undefined field.
 func (f Field[M, K]) Registration() Registration {
 	if f.definition == nil {
 		return Registration{}
@@ -97,6 +110,8 @@ type Manager struct {
 	fields  map[string]Registration
 }
 
+// New validates and registers translated fields with an extension store and locale catalog,
+// rejecting duplicates and excessive declarations.
 func New(store *extensions.Store, catalog i18n.LocaleCatalog, fields ...Registration) (*Manager, error) {
 	if err := store.Validate(); err != nil {
 		return nil, err
@@ -127,6 +142,8 @@ func New(store *extensions.Store, catalog i18n.LocaleCatalog, fields ...Registra
 	}
 	return m, nil
 }
+
+// Validate checks manager initialization, locale catalog, and extension store.
 func (m *Manager) Validate() error {
 	if m == nil || m.fields == nil {
 		return invalid()

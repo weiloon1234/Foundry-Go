@@ -40,6 +40,7 @@ type MaintenanceSettings struct {
 	BypassTTL    time.Duration
 }
 
+// DefaultMaintenanceSettings returns default maintenance polling and bypass durations.
 func DefaultMaintenanceSettings() MaintenanceSettings {
 	return MaintenanceSettings{PollInterval: maintenance.DefaultPollInterval, BypassTTL: maintenance.DefaultBypassTTL}
 }
@@ -153,6 +154,7 @@ func registerMaintenance(builder *foundation.Builder, s MaintenanceSettings, gat
 	}})
 }
 
+// Maintenance resolves the application's maintenance gate.
 func (s Services) Maintenance() (*maintenance.Gate, error) { return Resolve(s, MaintenanceKey) }
 
 // MaintenanceStore returns the configured shared store, or fault.Missing.

@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/redis"
 )
 
+// JobDriver selects a job transport implementation.
 type JobDriver string
 
 const (
@@ -35,12 +36,16 @@ type JobConnectionSettings struct {
 	Queue        jobs.QueueConfig
 }
 
+// DefaultJobConnectionSettings returns default settings for an in-memory job connection and
+// default queue.
 func DefaultJobConnectionSettings() JobConnectionSettings {
 	return JobConnectionSettings{Driver: MemoryJobs, DefaultQueue: "default", Dispatch: jobs.DefaultDispatchConfig(keyspace.Namespace{}), Queue: jobs.DefaultQueueConfig()}
 }
 
+// JobConnections maps job connection names to settings.
 type JobConnections map[jobs.ConnectionName]JobConnectionSettings
 
+// UnmarshalText decodes job connection settings, replacing the receiver only on success.
 func (m *JobConnections) UnmarshalText(data []byte) error {
 	schema, err := JobConnectionSettingsConfigSchema()
 	if err != nil {
@@ -54,11 +59,13 @@ func (m *JobConnections) UnmarshalText(data []byte) error {
 	return nil
 }
 
+// JobsSettings configures named job connections and their default.
 type JobsSettings struct {
 	Default     jobs.ConnectionName
 	Connections JobConnections
 }
 
+// DefaultJobsSettings returns job settings selecting the default connection name.
 func DefaultJobsSettings() JobsSettings { return JobsSettings{Default: "default"} }
 
 // localEnvironment reports whether a namespace environment is a developer or

@@ -15,6 +15,7 @@ import (
 	"golang.org/x/text/language"
 )
 
+// LocaleID identifies a canonical locale.
 type LocaleID string
 
 const MaxLocales = 64
@@ -31,6 +32,8 @@ func ParseLocale(text string) (LocaleID, error) {
 	}
 	return LocaleID(tag.String()), nil
 }
+
+// Validate checks that the locale identifier is valid and canonical.
 func (id LocaleID) Validate() error {
 	canonical, err := ParseLocale(string(id))
 	if err != nil || canonical != id {
@@ -46,6 +49,8 @@ type LocaleSet struct {
 	defaultLocale LocaleID
 }
 
+// NewLocaleSet copies, sorts, and validates a nonempty locale list containing the default,
+// rejecting duplicates.
 func NewLocaleSet(defaultLocale LocaleID, locales ...LocaleID) (LocaleSet, error) {
 	if len(locales) == 0 || len(locales) > MaxLocales || defaultLocale.Validate() != nil {
 		return LocaleSet{}, invalidLocale()
@@ -62,6 +67,8 @@ func NewLocaleSet(defaultLocale LocaleID, locales ...LocaleID) (LocaleSet, error
 	}
 	return LocaleSet{ids: ids, defaultLocale: defaultLocale}, nil
 }
+
+// Validate checks the locale count and default membership.
 func (s LocaleSet) Validate() error {
 	if len(s.ids) == 0 || len(s.ids) > MaxLocales {
 		return invalidLocale()
@@ -71,8 +78,14 @@ func (s LocaleSet) Validate() error {
 	}
 	return nil
 }
-func (s LocaleSet) Default() LocaleID         { return s.defaultLocale }
-func (s LocaleSet) Locales() []LocaleID       { return slices.Clone(s.ids) }
+
+// Default returns the set's default locale.
+func (s LocaleSet) Default() LocaleID { return s.defaultLocale }
+
+// Locales returns a copy of the sorted locale identifiers.
+func (s LocaleSet) Locales() []LocaleID { return slices.Clone(s.ids) }
+
+// Contains reports whether the locale is in the set.
 func (s LocaleSet) Contains(id LocaleID) bool { _, ok := slices.BinarySearch(s.ids, id); return ok }
 
 // Match returns id when it is supported, otherwise its nearest supported
@@ -152,6 +165,8 @@ func (s LocaleSet) Fallbacks(requested LocaleID) ([]LocaleID, error) {
 	}
 	return result, nil
 }
+
+// Snapshot returns this validated locale set after checking the context.
 func (s LocaleSet) Snapshot(ctx context.Context) (LocaleSet, error) {
 	if ctx == nil {
 		return LocaleSet{}, invalidLocale()
@@ -169,9 +184,11 @@ func (s LocaleSet) Snapshot(ctx context.Context) (LocaleSet, error) {
 // Implementations are borrowed, concurrent-safe and context-aware. Snapshot must
 // not resolve a process-global or goroutine-global request locale.
 type LocaleCatalog interface {
+	// Snapshot returns the current locale set for the supplied context.
 	Snapshot(context.Context) (LocaleSet, error)
 }
 
+// ValidateLocaleCatalog rejects nil locale catalogs, including typed nil values.
 func ValidateLocaleCatalog(c LocaleCatalog) error {
 	if c == nil {
 		return invalidLocale()

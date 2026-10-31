@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
+// ObservabilitySettings configures application metrics, error reporting, and trace collection.
 type ObservabilitySettings struct {
 	Enabled, Maintenance                                             bool
 	MaxSeries, MaxRecent, MaxActive, ErrorQueue, ReporterConcurrency int
@@ -35,11 +36,14 @@ type ErrorLogSettings struct {
 	DontReportStatuses []int        `config:",json"`
 }
 
+// DefaultErrorLogSettings returns default error log deduplication settings.
 func DefaultErrorLogSettings() ErrorLogSettings {
 	c := observability.DefaultLogReporterConfig()
 	return ErrorLogSettings{Window: c.Window, MaxFingerprints: c.MaxFingerprints}
 }
 
+// DefaultObservabilitySettings returns default observability limits, trace settings, and error
+// logging settings.
 func DefaultObservabilitySettings() ObservabilitySettings {
 	c := observability.DefaultConfig()
 	return ObservabilitySettings{MaxSeries: c.MaxSeries, MaxRecent: c.MaxRecent, MaxActive: c.MaxActive, ErrorQueue: c.ErrorQueue, ReporterConcurrency: c.ReporterConcurrency, ReporterTimeout: c.ReporterTimeout, SampleTraces: c.SampleTraces, TraceSampleRatio: c.TraceSampleRatio, TraceQueue: c.TraceQueue, TraceConcurrency: c.TraceConcurrency, TraceBatchSize: c.TraceBatchSize, TraceTimeout: c.TraceTimeout, ErrorLog: DefaultErrorLogSettings()}
@@ -86,6 +90,8 @@ func prepareObservation(s ObservabilitySettings, options options, logger *slog.L
 	}
 	return observability.New(c, reporters...)
 }
+
+// WithErrorReporter adds an error reporter, rejecting a nil reporter.
 func WithErrorReporter(reporter observability.Reporter) Option {
 	return func(o *options) error {
 		if credential.IsNil(reporter) {
@@ -95,6 +101,8 @@ func WithErrorReporter(reporter observability.Reporter) Option {
 		return nil
 	}
 }
+
+// WithTraceExporter adds a trace exporter, rejecting a nil exporter.
 func WithTraceExporter(exporter observability.TraceExporter) Option {
 	return func(o *options) error {
 		if credential.IsNil(exporter) {

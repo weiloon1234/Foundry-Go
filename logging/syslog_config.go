@@ -36,6 +36,7 @@ type SyslogConfig struct {
 	Facility SyslogFacility
 }
 
+// Validate checks the syslog network, address, tag, and facility.
 func (c SyslogConfig) Validate() error {
 	switch c.Network {
 	case "":

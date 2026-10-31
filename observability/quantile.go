@@ -15,6 +15,8 @@ type QuantileEstimate struct {
 	Available, Overflow bool
 }
 
+// EstimateQuantile interpolates a quantile from cumulative duration buckets. Empty observations
+// are unavailable; values beyond the final bound report overflow.
 func EstimateQuantile(buckets []uint64, count uint64, q float64) (QuantileEstimate, error) {
 	if len(buckets) != len(durationBounds) || math.IsNaN(q) || q < 0 || q > 1 {
 		return QuantileEstimate{}, safeerror.NewFault(fault.Invalid, "invalid histogram quantile")

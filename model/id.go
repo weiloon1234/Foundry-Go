@@ -65,8 +65,14 @@ func ParseID[M any](text string) (ID[M], error) {
 
 // IDFromBytes is the explicit binary decoding boundary.
 func IDFromBytes[M any](bytes [16]byte) ID[M] { return ID[M]{value: bytes} }
-func (id ID[M]) Bytes() [16]byte              { return id.value }
-func (id ID[M]) IsZero() bool                 { return id.value == [16]byte{} }
+
+// Bytes returns the identifier's 16 bytes by value.
+func (id ID[M]) Bytes() [16]byte { return id.value }
+
+// IsZero reports whether the identifier is all zero bytes.
+func (id ID[M]) IsZero() bool { return id.value == [16]byte{} }
+
+// String returns the identifier as a lowercase, hyphenated UUID string.
 func (id ID[M]) String() string {
 	var out [36]byte
 	hex.Encode(out[:8], id.value[:4])
@@ -80,7 +86,11 @@ func (id ID[M]) String() string {
 	hex.Encode(out[24:], id.value[10:])
 	return string(out[:])
 }
+
+// MarshalText encodes the identifier's UUID string as text.
 func (id ID[M]) MarshalText() ([]byte, error) { return []byte(id.String()), nil }
+
+// UnmarshalText parses an identifier, replacing the receiver only on success.
 func (id *ID[M]) UnmarshalText(data []byte) error {
 	parsed, err := ParseID[M](string(data))
 	if err != nil {
@@ -89,6 +99,8 @@ func (id *ID[M]) UnmarshalText(data []byte) error {
 	*id = parsed
 	return nil
 }
+
+// UnmarshalJSON decodes a JSON identifier, replacing the receiver only on success.
 func (id *ID[M]) UnmarshalJSON(data []byte) error {
 	parsed, err := textvalue.Decode(data, ParseID[M])
 	if err != nil {

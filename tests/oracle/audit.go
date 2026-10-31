@@ -6,6 +6,8 @@ package oracle
 type ComparisonAudit struct {
 	Files map[string]AuditedSource `json:"files"`
 }
+
+// AuditedSource records a source hash and its paired test inventories.
 type AuditedSource struct {
 	PostgresTests []string `json:"postgres_tests,omitempty"`
 	SHA256        string   `json:"sha256"`

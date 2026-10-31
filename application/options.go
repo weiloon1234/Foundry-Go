@@ -26,6 +26,8 @@ type options struct {
 	infrastructure []infrastructure.Option
 	logHandlers    []logging.ChannelOption
 }
+
+// Option applies configuration to application construction.
 type Option func(*options) error
 
 // WithLogHandler binds a typed slog.Handler to a named log channel. The channel
@@ -42,6 +44,7 @@ func WithLogHandler(name logging.ChannelName, handler slog.Handler) Option {
 	}
 }
 
+// WithClock sets the application clock, rejecting a nil clock.
 func WithClock(c clock.Clock) Option {
 	return func(o *options) error {
 		if credential.IsNil(c) {
@@ -63,6 +66,8 @@ func WithLogger(l *slog.Logger) Option {
 		return nil
 	}
 }
+
+// WithObservability sets the application observability recorder, rejecting nil.
 func WithObservability(r *observability.Recorder) Option {
 	return func(o *options) error {
 		if r == nil {
@@ -72,6 +77,8 @@ func WithObservability(r *observability.Recorder) Option {
 		return nil
 	}
 }
+
+// WithCredentials registers a named cloud credential provider with infrastructure configuration.
 func WithCredentials(name credentials.Name, p credentials.Provider) Option {
 	return func(o *options) error {
 		o.infrastructure = append(o.infrastructure, infrastructure.WithCredentials(name, p))

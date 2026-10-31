@@ -34,6 +34,8 @@ type Command struct {
 
 const usage = "notifications deliveries|resolve|deliver [--format text|json]; deliveries: --state running|uncertain [--limit 20] [--after id]; resolve: --id id --expect running|uncertain --as delivered|rejected|resend; deliver: --notification id"
 
+// Parse parses notification delivery, inspection, and resolution commands; help writes usage and
+// returns flag.ErrHelp.
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
 		return Command{}, safeerror.NewFault(fault.Invalid, "notification commands require help output")

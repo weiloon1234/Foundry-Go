@@ -13,6 +13,8 @@ import (
 
 const Version = 1
 
+// Provenance records the source, command, toolchain, platform, and build environment for oracle
+// evidence.
 type Provenance struct {
 	WorkingDirectory string           `json:"working_directory"`
 	Build            BuildEnvironment `json:"build"`
@@ -22,6 +24,8 @@ type Provenance struct {
 	Toolchain        string           `json:"toolchain"`
 	Platform         string           `json:"platform"`
 }
+
+// Record contains an oracle transcript, assertion identity, kind, and provenance.
 type Record struct {
 	Package    string     `json:"package,omitempty"`
 	Site       string     `json:"site"`
@@ -29,11 +33,15 @@ type Record struct {
 	Transcript string     `json:"transcript"`
 	Provenance Provenance `json:"provenance"`
 }
+
+// Bundle contains versioned frozen oracle records and their source hashes.
 type Bundle struct {
 	Version int               `json:"version"`
 	Sources map[string]string `json:"source_sha256"`
 	Records map[string]Record `json:"records"`
 }
+
+// State records oracle lifecycle phase and optional bundle digest and authorization command.
 type State struct {
 	Version int    `json:"version"`
 	Phase   string `json:"phase"`
@@ -41,7 +49,10 @@ type State struct {
 	Command string `json:"authorization_command,omitempty"`
 }
 
+// Digest returns the lowercase hexadecimal SHA-256 digest of data.
 func Digest(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
+
+// ReadJSON reads a file and decodes its JSON into the supplied destination.
 func ReadJSON(path string, value any) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -49,10 +60,15 @@ func ReadJSON(path string, value any) error {
 	}
 	return json.Unmarshal(data, value)
 }
+
+// JSON returns indented JSON followed by a newline, together with any encoding error.
 func JSON(value any) ([]byte, error) {
 	data, err := json.MarshalIndent(value, "", "  ")
 	return append(data, '\n'), err
 }
+
+// Validate checks bundle version, nonempty records and sources, source hashes, record identities,
+// and provenance.
 func Validate(b Bundle) error {
 	if b.Version != Version || len(b.Records) == 0 {
 		return fmt.Errorf("empty or unsupported oracle bundle")

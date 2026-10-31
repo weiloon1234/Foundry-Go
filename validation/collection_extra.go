@@ -2,6 +2,8 @@ package validation
 
 // Items requires exactly count elements, including on named slice types.
 func Items[S ~[]T, T any](count int) Rule[S] { return ItemsBetween[S](count, count) }
+
+// ItemsBetween combines inclusive minimum and maximum item rules, rejecting reversed bounds.
 func ItemsBetween[S ~[]T, T any](minimum, maximum int) Rule[S] {
 	if minimum > maximum {
 		return failed[S](invalid("item count bounds are reversed"))
@@ -37,6 +39,8 @@ func DistinctBy[S ~[]T, T any, K Scalar](field Field[T, K]) Rule[S] {
 // ContainsItems requires every declared scalar member at least once. It owns
 // the declaration and scans input once; ExcludesItems prohibits any member.
 func ContainsItems[S ~[]T, T Scalar](members ...T) Rule[S] { return itemsMembership[S](true, members) }
+
+// ExcludesItems creates a rule excluding the supplied member values from a slice.
 func ExcludesItems[S ~[]T, T Scalar](members ...T) Rule[S] { return itemsMembership[S](false, members) }
 func itemsMembership[S ~[]T, T Scalar](contains bool, members []T) Rule[S] {
 	allowed := OneOf(members...)

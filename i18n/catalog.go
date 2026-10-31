@@ -25,6 +25,7 @@ type Catalog struct {
 // LocaleSet.Fallbacks. Empty Fallback selects the configured default locale.
 type CatalogOptions struct{ Fallback LocaleID }
 
+// NewCatalog creates a message catalog from locale configuration, definitions, and templates.
 func NewCatalog(ctx context.Context, locales LocaleCatalog, options CatalogOptions, definitions []MessageDefinition, messages map[LocaleID]map[MessageKey]Template) (*Catalog, error) {
 	return newCatalog(ctx, locales, options, definitions, messages, nil)
 }
@@ -113,18 +114,23 @@ func newCatalog(ctx context.Context, locales LocaleCatalog, options CatalogOptio
 	return c, nil
 }
 
+// Validate checks locale configuration and fallback membership.
 func (c *Catalog) Validate() error {
 	if c == nil || c.locales.Validate() != nil || !c.locales.Contains(c.fallback) {
 		return invalidMessage()
 	}
 	return nil
 }
+
+// Snapshot validates the catalog and retrieves the current locale set.
 func (c *Catalog) Snapshot(ctx context.Context) (LocaleSet, error) {
 	if err := c.Validate(); err != nil {
 		return LocaleSet{}, err
 	}
 	return c.locales.Snapshot(ctx)
 }
+
+// Definitions returns owned definition snapshots sorted by message key.
 func (c *Catalog) Definitions() []MessageDefinition {
 	if c == nil {
 		return nil

@@ -18,10 +18,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// Options configures a message's plural parameter and pluralization kind.
 type Options struct {
 	Plural string
 	Kind   i18n.PluralKind
 }
+
+// Message binds a message definition to a concrete argument codec and resolved properties.
 type Message[A any] struct {
 	definition i18n.MessageDefinition
 	arguments  contract.JSON[A]
@@ -90,6 +93,8 @@ func Define[A any](key i18n.MessageKey, arguments contract.JSON[A], options Opti
 	}
 	return result
 }
+
+// Validate checks initialization errors, the argument codec, and parameter bindings.
 func (m Message[A]) Validate() error {
 	if m.err != nil {
 		return m.err
@@ -102,7 +107,11 @@ func (m Message[A]) Validate() error {
 	}
 	return nil
 }
+
+// Key returns the message key.
 func (m Message[A]) Key() i18n.MessageKey { return m.definition.Key }
+
+// Definition returns a validated definition with an owned parameter slice.
 func (m Message[A]) Definition() (i18n.MessageDefinition, error) {
 	if err := m.Validate(); err != nil {
 		return i18n.MessageDefinition{}, err
@@ -112,11 +121,13 @@ func (m Message[A]) Definition() (i18n.MessageDefinition, error) {
 	return d, nil
 }
 
+// Description describes a message definition and its typed argument schema.
 type Description struct {
 	Message   i18n.MessageDefinition `json:"message"`
 	Arguments contract.Schema        `json:"arguments"`
 }
 
+// Description returns the message definition and argument schema.
 func (m Message[A]) Description() (Description, error) {
 	definition, err := m.Definition()
 	if err != nil {
@@ -131,7 +142,10 @@ type Registration struct {
 	definition func() (i18n.MessageDefinition, error)
 }
 
+// Registration returns a registration backed by the message's definition.
 func (m Message[A]) Registration() Registration { return Registration{m.Definition} }
+
+// Definitions collects message definitions from a bounded list of valid registrations.
 func Definitions(registrations ...Registration) ([]i18n.MessageDefinition, error) {
 	if len(registrations) > i18n.MaxMessages {
 		return nil, invalid()
@@ -149,6 +163,8 @@ func Definitions(registrations ...Registration) ([]i18n.MessageDefinition, error
 	}
 	return result, nil
 }
+
+// Load loads a catalog from a filesystem and the registered message definitions.
 func Load(ctx context.Context, source fs.FS, locales i18n.LocaleCatalog, options i18n.CatalogOptions, registrations ...Registration) (*i18n.Catalog, error) {
 	definitions, err := Definitions(registrations...)
 	if err != nil {
@@ -157,6 +173,8 @@ func Load(ctx context.Context, source fs.FS, locales i18n.LocaleCatalog, options
 	return i18n.Load(ctx, source, locales, options, definitions...)
 }
 
+// Format validates and binds typed arguments, then formats the registered message for a supported
+// locale.
 func (m Message[A]) Format(ctx context.Context, catalog *i18n.Catalog, locale i18n.LocaleID, args A) (i18n.Result, error) {
 	if err := m.Validate(); err != nil {
 		return i18n.Result{}, err

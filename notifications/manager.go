@@ -17,6 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+// Config configures notification persistence, clock, capacity, and timeout.
 type Config struct {
 	Schema    string
 	Clock     clock.Clock
@@ -24,9 +25,12 @@ type Config struct {
 	Timeout   time.Duration
 }
 
+// DefaultConfig returns default notification schema, clock, capacity, and timeout settings.
 func DefaultConfig() Config {
 	return Config{Schema: "public", Clock: clock.System{}, MaxActive: 128, Timeout: time.Minute}
 }
+
+// Validate checks the schema, clock, concurrency bound, and operation timeout.
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || nilInterface(c.Clock) || c.MaxActive < 1 || c.MaxActive > 1024 || c.Timeout <= 0 || c.Timeout > 10*time.Minute {
 		return invalid()
@@ -50,6 +54,7 @@ type Manager struct {
 	done     chan struct{}
 }
 
+// New validates dependencies and configuration and creates a manager borrowing the database.
 func New(db *database.DB, registry *Registry, config Config) (*Manager, error) {
 	if db == nil || registry == nil || registry.entries == nil {
 		return nil, invalid()
@@ -117,6 +122,8 @@ func (m *Manager) leave() {
 		close(m.done)
 	}
 }
+
+// Done returns the completion channel; a nil or uninitialized manager returns a closed channel.
 func (m *Manager) Done() <-chan struct{} {
 	if m == nil || m.done == nil {
 		closed := make(chan struct{})
@@ -125,6 +132,9 @@ func (m *Manager) Done() <-chan struct{} {
 	}
 	return m.done
 }
+
+// Close stops admission, cancels operations, and waits for active work. Waiting from the manager's
+// active callback returns a cycle fault.
 func (m *Manager) Close(ctx context.Context) error {
 	if m == nil || m.done == nil || ctx == nil {
 		return invalid()
@@ -155,6 +165,8 @@ func (m *Manager) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
+// Format writes a fixed label without exposing manager data.
 func (*Manager) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("notification manager")) }
 func (m *Manager) within(ctx context.Context, fn func(*database.Tx) error) error {
 	return m.db.Transaction(ctx, func(tx *database.Tx) error {

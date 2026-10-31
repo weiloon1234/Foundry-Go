@@ -24,7 +24,9 @@ const (
 // Admission never reads the store: each instance applies polled records to its
 // local Gate, which is the cache consulted on every request, job and command.
 type Store interface {
+	// Load loads maintenance state and reports whether a record exists.
 	Load(context.Context) (State, bool, error)
+	// Save persists the supplied maintenance state.
 	Save(context.Context, State) error
 }
 

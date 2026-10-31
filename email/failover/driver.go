@@ -64,8 +64,11 @@ func sameDriver(a, b email.Driver) bool {
 	return x.Kind() == reflect.Pointer && y.Kind() == reflect.Pointer && x.Type() == y.Type() && x.Pointer() == y.Pointer()
 }
 
+// Format writes a fixed label without exposing transports.
 func (*Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("email failover driver")) }
 
+// Send tries transports in order, optionally rotating the first choice. Only transient failures
+// permit failover.
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || len(d.transports) == 0 || ctx == nil || out.Validate() != nil {
 		return email.Receipt{}, emaildiag.Failure(email.Construction)

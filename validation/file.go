@@ -12,9 +12,13 @@ import (
 // perform no I/O and never consult a client-declared content type. Metadata
 // methods execute within the ordinary owned validation callback boundary.
 type FileValue interface {
+	// IsZero reports whether the file value is absent.
 	IsZero() bool
+	// Size returns the file size in bytes.
 	Size() int64
+	// ContentType returns the file's content type.
 	ContentType() string
+	// Extension returns the file's extension.
 	Extension() string
 }
 

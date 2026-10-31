@@ -35,8 +35,13 @@ func Days(n int32) Interval { return Interval{days: n} }
 // Elapsed constructs an elapsed-time interval with whole microseconds.
 func Elapsed(d time.Duration) (Interval, error) { return NewInterval(0, 0, d) }
 
-func (v Interval) Months() int32          { return v.months }
-func (v Interval) Days() int32            { return v.days }
+// Months returns the calendar-month component.
+func (v Interval) Months() int32 { return v.months }
+
+// Days returns the calendar-day component.
+func (v Interval) Days() int32 { return v.days }
+
+// Elapsed returns the elapsed-duration component.
 func (v Interval) Elapsed() time.Duration { return v.elapsed }
 
 // String retains every signed component in an unambiguous interval spelling.
@@ -44,7 +49,10 @@ func (v Interval) String() string {
 	return fmt.Sprintf("%+d mons %+d days %+d microseconds", v.months, v.days, v.elapsed/time.Microsecond)
 }
 
+// MarshalText encodes the interval's string representation as text.
 func (v Interval) MarshalText() ([]byte, error) { return []byte(v.String()), nil }
+
+// UnmarshalText parses interval text, replacing the receiver only on success.
 func (v *Interval) UnmarshalText(data []byte) error {
 	parsed, err := ParseInterval(string(data))
 	if err != nil {
@@ -53,6 +61,8 @@ func (v *Interval) UnmarshalText(data []byte) error {
 	*v = parsed
 	return nil
 }
+
+// UnmarshalJSON decodes a JSON interval, replacing the receiver only on success.
 func (v *Interval) UnmarshalJSON(data []byte) error {
 	parsed, err := textvalue.Decode(data, ParseInterval)
 	if err != nil {

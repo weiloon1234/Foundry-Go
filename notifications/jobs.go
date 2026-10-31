@@ -21,17 +21,24 @@ type DeliveryRequest struct {
 	ID NotificationID `json:"id"`
 }
 
+// Format writes a fixed label without exposing the delivery request.
 func (DeliveryRequest) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("notification delivery request"))
 }
 
+// DeliveryJob holds a typed notification delivery job definition.
 type DeliveryJob struct {
 	definition jobs.Definition[DeliveryRequest]
 }
 
+// DefineDeliveryJob defines a version-one notification delivery job with the supplied name and
+// policy.
 func DefineDeliveryJob(name jobs.Name, policy jobs.Policy) DeliveryJob {
 	return DeliveryJob{definition: jobs.Define[DeliveryRequest](name, 1, policy)}
 }
+
+// Declare declares a delivery handler, retaining retries for retryable channel states and
+// classifying terminal failures as permanent.
 func (d DeliveryJob) Declare(manager *Manager) (jobs.Declaration, error) {
 	if manager == nil || manager.done == nil {
 		return jobs.Declaration{}, invalid()

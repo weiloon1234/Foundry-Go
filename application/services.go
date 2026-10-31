@@ -56,6 +56,7 @@ func (s Services) Time() temporal.Service { return s.dates }
 // Calendar constructs schedule declarations inheriting the application timezone.
 func (s Services) Calendar() schedule.Calendar { return s.calendar }
 
+// Image returns the image engine, or a missing fault if image processing is unconfigured.
 func (s Services) Image() (*imaging.Engine, error) {
 	if s.image == nil {
 		return nil, safeerror.NewFault(fault.Missing, "image processing is not configured")
@@ -76,6 +77,7 @@ func FromResolver(r foundation.Resolver) (Services, error) {
 	return services, nil
 }
 
+// Resolve resolves a typed service from the application's resolver.
 func Resolve[T any](s Services, key foundation.Key[T]) (T, error) {
 	return foundation.Resolve(s.resolver, key)
 }
@@ -104,7 +106,11 @@ func (a *App) Models() []slots.Declaration {
 	return slices.Clone(a.models)
 }
 
+// Resources returns the application's service accessors.
 func (a *App) Resources() Services { return a.resources }
+
+// HTTPReady waits for the HTTP server's ready address, returning a missing fault when HTTP is
+// unavailable.
 func (a *App) HTTPReady(ctx context.Context) (string, error) {
 	if a == nil || a.server == nil {
 		return "", safeerror.NewFault(fault.Missing, "HTTP is not configured")
@@ -122,6 +128,11 @@ func (a *App) Migrations() []infrastructure.MigrationTarget {
 	return cloneMigrations(a.migrations)
 }
 
-func (Services) Format(s fmt.State, _ rune)               { _, _ = s.Write([]byte("application services")) }
-func (Services) LogValue() slog.Value                     { return slog.StringValue("application services") }
+// Format writes a fixed label without exposing service values.
+func (Services) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("application services")) }
+
+// LogValue returns a fixed log label without exposing service values.
+func (Services) LogValue() slog.Value { return slog.StringValue("application services") }
+
+// Observability returns the application's observability recorder, which may be nil.
 func (s Services) Observability() *observability.Recorder { return s.recorder }

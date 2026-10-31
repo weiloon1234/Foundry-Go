@@ -27,9 +27,13 @@ type PostgreSQLSettings struct {
 	IdleInTransactionSessionTimeout                 time.Duration
 }
 
+// PostgreSQLSettingsFromConfig converts PostgreSQL driver configuration to infrastructure
+// settings.
 func PostgreSQLSettingsFromConfig(c postgres.Config) PostgreSQLSettings {
 	return PostgreSQLSettings{Host: c.Host, Port: c.Port, Database: c.Database, User: c.User, Password: c.Password, TLS: c.TLS, ApplicationName: c.ApplicationName, Schema: c.Schema, Pool: c.Pool, StatementCacheCapacity: c.StatementCacheCapacity, MaxProtocolMessageBytes: c.MaxProtocolMessageBytes, StatementTimeout: c.StatementTimeout, LockTimeout: c.LockTimeout, IdleInTransactionSessionTimeout: c.IdleInTransactionSessionTimeout}
 }
+
+// Config converts infrastructure settings to PostgreSQL driver configuration.
 func (s PostgreSQLSettings) Config() postgres.Config {
 	return postgres.Config{Host: s.Host, Port: s.Port, Database: s.Database, User: s.User, Password: s.Password, TLS: s.TLS, ApplicationName: s.ApplicationName, Schema: s.Schema, Pool: s.Pool, StatementCacheCapacity: s.StatementCacheCapacity, MaxProtocolMessageBytes: s.MaxProtocolMessageBytes, StatementTimeout: s.StatementTimeout, LockTimeout: s.LockTimeout, IdleInTransactionSessionTimeout: s.IdleInTransactionSessionTimeout}
 }
@@ -50,11 +54,15 @@ type ConnectionSettings struct {
 	StickyReadWindow time.Duration
 }
 
+// DefaultConnectionSettings returns PostgreSQL routing defaults with matching primary and read
+// settings.
 func DefaultConnectionSettings() ConnectionSettings {
 	c := postgres.DefaultConfig()
 	s := PostgreSQLSettingsFromConfig(c)
 	return ConnectionSettings{Primary: s, Read: s, MaxConnections: c.Pool.MaxOpen * 2}
 }
+
+// Config builds routing configuration, including the read pool only when enabled.
 func (s ConnectionSettings) Config() postgres.RoutingConfig {
 	c := postgres.RoutingConfig{Primary: s.Primary.Config(), MaxConnections: s.MaxConnections, SlowQueryThreshold: s.SlowQueryThreshold, StickyReadWindow: s.StickyReadWindow}
 	if s.ReadEnabled {
@@ -62,12 +70,15 @@ func (s ConnectionSettings) Config() postgres.RoutingConfig {
 	}
 	return c
 }
+
+// Validate validates the derived PostgreSQL routing configuration.
 func (s ConnectionSettings) Validate() error { return s.Config().Validate() }
 
 // DatabaseConnections uses generated element keys, including nested durations
 // and secrets. Each input entry starts with DefaultConnectionSettings.
 type DatabaseConnections map[database.ConnectionName]ConnectionSettings
 
+// UnmarshalText decodes database connection settings, replacing the receiver only on success.
 func (m *DatabaseConnections) UnmarshalText(data []byte) error {
 	schema, err := ConnectionSettingsConfigSchema()
 	if err != nil {
@@ -81,12 +92,16 @@ func (m *DatabaseConnections) UnmarshalText(data []byte) error {
 	return nil
 }
 
+// DatabaseSettings configures named database connections, their default, and the total connection
+// budget.
 type DatabaseSettings struct {
 	Default        database.ConnectionName
 	MaxConnections int
 	Connections    DatabaseConnections `config:",secret"`
 }
 
+// DefaultDatabaseSettings returns database settings with the default name and a 128-connection
+// budget.
 func DefaultDatabaseSettings() DatabaseSettings {
 	return DatabaseSettings{Default: "default", MaxConnections: 128}
 }

@@ -42,11 +42,15 @@ func (k KernelKind) valid() bool {
 
 // Kernel owns its accept/work loop and must cooperate with cancellation. Shared
 // infrastructure remains alive until the loop and managed tasks have finished.
-type Kernel interface{ Run(context.Context) error }
+type Kernel interface {
+	// Run runs the kernel with the supplied context.
+	Run(context.Context) error
+}
 
 // KernelFunc adapts a function to a kernel.
 type KernelFunc func(context.Context) error
 
+// Run calls the kernel function.
 func (f KernelFunc) Run(ctx context.Context) error { return f(ctx) }
 
 // KernelFactory constructs a kernel from resolved services after providers boot.
@@ -55,17 +59,23 @@ type KernelFactory func(*Runtime) (Kernel, error)
 // Provider registers constructors and kernel factories. Register must not open
 // resources or start goroutines; resource acquisition belongs in Boot.
 type Provider interface {
+	// ID returns the provider's identifier.
 	ID() ProviderID
+	// Register registers the provider's declarations with its registrar.
 	Register(*Registrar) error
 }
 
 // Dependent declares providers that must register and boot before this one.
-type Dependent interface{ Dependencies() []ProviderID }
+type Dependent interface {
+	// Dependencies returns the provider identifiers required by this provider.
+	Dependencies() []ProviderID
+}
 
 // Booter optionally acquires resources after all services have been resolved.
 // Register each acquired resource with Runtime.OnShutdown before continuing so
 // partial startup failures are cleaned up by the framework.
 type Booter interface {
+	// Boot boots the provider with its runtime and context.
 	Boot(context.Context, *Runtime) error
 }
 
@@ -77,14 +87,21 @@ type Module struct {
 	OnBoot     func(context.Context, *Runtime) error
 }
 
-func (m Module) ID() ProviderID             { return m.Name }
+// ID returns the module's provider name.
+func (m Module) ID() ProviderID { return m.Name }
+
+// Dependencies returns a copy of the required provider identifiers.
 func (m Module) Dependencies() []ProviderID { return append([]ProviderID(nil), m.Requires...) }
+
+// Register calls OnRegister when supplied; otherwise it succeeds.
 func (m Module) Register(r *Registrar) error {
 	if m.OnRegister != nil {
 		return m.OnRegister(r)
 	}
 	return nil
 }
+
+// Boot calls OnBoot when supplied; otherwise it succeeds.
 func (m Module) Boot(ctx context.Context, r *Runtime) error {
 	if m.OnBoot != nil {
 		return m.OnBoot(ctx, r)

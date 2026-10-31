@@ -26,8 +26,10 @@ type Route struct {
 	Name   string
 }
 
+// Format writes a fixed label without exposing route details.
 func (Route) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("attribution route")) }
 
+// Validate checks the route's uppercase method and nonempty, bounded name.
 func (r Route) Validate() error {
 	if r.Method == "" || len(r.Method) > MaxRouteMethodBytes || strings.IndexFunc(r.Method, func(c rune) bool { return c < 'A' || c > 'Z' }) >= 0 {
 		return safeerror.NewFault(fault.Invalid, "invalid attribution route method")

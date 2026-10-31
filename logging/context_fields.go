@@ -149,6 +149,8 @@ func (f ContextFields) Attrs() []slog.Attr {
 	}
 	return attrs
 }
+
+// IsZero reports whether the context fields are empty.
 func (f ContextFields) IsZero() bool { return f.encoded == "" }
 
 // Context restores the snapshot on ctx; existing fields with the same key are
@@ -157,6 +159,7 @@ func (f ContextFields) Context(ctx context.Context) context.Context {
 	return WithAttrs(ctx, f.Attrs()...)
 }
 
+// MarshalJSON returns encoded fields, using an empty JSON object for the zero value.
 func (f ContextFields) MarshalJSON() ([]byte, error) {
 	if f.encoded == "" {
 		return []byte("{}"), nil
@@ -164,6 +167,7 @@ func (f ContextFields) MarshalJSON() ([]byte, error) {
 	return []byte(f.encoded), nil
 }
 
+// UnmarshalJSON decodes and canonicalizes context fields, replacing the receiver only on success.
 func (f *ContextFields) UnmarshalJSON(data []byte) error {
 	if f == nil {
 		return safeerror.NewFault(fault.Invalid, "context fields decoding requires a destination")

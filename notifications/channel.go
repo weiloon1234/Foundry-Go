@@ -20,8 +20,11 @@ type DeliveryContext struct {
 	Version      Version
 	Channel      ChannelID
 }
+
+// Renderer renders a channel payload from a recipient, delivery context, and notification input.
 type Renderer[M, P, D any] func(context.Context, M, DeliveryContext, P) (D, error)
 
+// Channel pairs a channel's delivery definition with its typed renderer.
 type Channel[M, P any] struct {
 	definition channelDefinition
 	render     func(context.Context, M, DeliveryContext, P) ([]byte, error)
@@ -36,21 +39,27 @@ type channelDefinition struct {
 	realtime  *ClientRealtimeInfo
 }
 
+// Validate checks channel identity, callbacks, and payload configuration.
 func (c Channel[M, P]) Validate() error {
 	if !semantic(string(c.definition.id)) || c.render == nil || c.definition.validate == nil || c.definition.deliver == nil {
 		return invalid()
 	}
 	return c.definition.validate()
 }
+
+// ID returns the channel identifier.
 func (c Channel[M, P]) ID() ChannelID { return c.definition.id }
 
 // Transport is the focused custom-channel boundary. It receives a freshly
 // decoded rendered DTO and stable delivery identity. An error is ambiguous;
 // explicit Retry with nil error promises the service definitely did not accept.
 type Transport[D any] interface {
+	// Deliver delivers a typed payload with its delivery identifier.
 	Deliver(context.Context, DeliveryID, D) (Outcome, error)
 }
 
+// Custom declares a typed custom channel that renders and encodes payloads before transport
+// delivery.
 func Custom[M, P, D any](id ChannelID, payload contract.JSON[D], render Renderer[M, P, D], transport Transport[D]) Channel[M, P] {
 	c := Channel[M, P]{definition: channelDefinition{id: id, kind: "custom"}}
 	c.definition.validate = func() error {
@@ -94,6 +103,8 @@ type DatabaseChannel[M, P, D any] struct {
 	payload contract.JSON[D]
 }
 
+// Database declares a typed database channel whose accepted delivery is completed atomically with
+// inbox creation by the manager.
 func Database[M, P, D any](id ChannelID, payload contract.JSON[D], render Renderer[M, P, D]) DatabaseChannel[M, P, D] {
 	c := Channel[M, P]{definition: channelDefinition{id: id, kind: "database"}}
 	c.definition.client = payload.Description
@@ -118,7 +129,12 @@ func Database[M, P, D any](id ChannelID, payload contract.JSON[D], render Render
 	}
 	return DatabaseChannel[M, P, D]{channel: c, payload: payload}
 }
+
+// Channel returns the underlying channel declaration.
 func (c DatabaseChannel[M, P, D]) Channel() Channel[M, P] { return c.channel }
+
+// Decode decodes an inbox record after checking its notification name and version against the
+// definition.
 func (c DatabaseChannel[M, P, D]) Decode(ctx context.Context, definition Definition[P], record Record[M]) (D, error) {
 	if definition.Validate() != nil || record.Name != definition.name || record.Version != definition.version {
 		return *new(D), invalid()

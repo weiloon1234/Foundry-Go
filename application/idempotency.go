@@ -8,12 +8,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
+// IdempotencySettings configures the idempotency store and its database connection.
 type IdempotencySettings struct {
 	Enabled  bool
 	Database database.ConnectionName
 	Config   idempotency.Config
 }
 
+// DefaultIdempotencySettings returns default idempotency store settings.
 func DefaultIdempotencySettings() IdempotencySettings {
 	return IdempotencySettings{Config: idempotency.DefaultConfig()}
 }
@@ -34,4 +36,6 @@ func registerIdempotency(builder *foundation.Builder, settings IdempotencySettin
 		return idempotency.New(db, namespace, settings.Config)
 	}))
 }
+
+// Idempotency resolves the application's idempotency store.
 func (s Services) Idempotency() (*idempotency.Store, error) { return Resolve(s, IdempotencyKey) }

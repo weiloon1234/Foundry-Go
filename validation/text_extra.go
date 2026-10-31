@@ -8,6 +8,8 @@ import (
 
 // Length requires exactly count Unicode code points.
 func Length[S ~string](count int) Rule[S] { return LengthBetween[S](count, count) }
+
+// LengthBetween combines inclusive text length bounds, rejecting reversed bounds.
 func LengthBetween[S ~string](minimum, maximum int) Rule[S] {
 	if minimum > maximum {
 		return failed[S](invalid("text length bounds are reversed"))
@@ -19,14 +21,21 @@ func LengthBetween[S ~string](minimum, maximum int) Rule[S] {
 func DigitsBetween[S ~string](minimum, maximum int) Rule[S] {
 	return Bail(Digits[S](), LengthBetween[S](minimum, maximum))
 }
+
+// MinDigits combines digit-only validation with a minimum length.
 func MinDigits[S ~string](minimum int) Rule[S] { return Bail(Digits[S](), MinLength[S](minimum)) }
+
+// MaxDigits combines digit-only validation with a maximum length.
 func MaxDigits[S ~string](maximum int) Rule[S] { return Bail(Digits[S](), MaxLength[S](maximum)) }
 
+// ASCII creates a rule accepting only ASCII runes.
 func ASCII[S ~string]() Rule[S] {
 	return textRule[S]("foundry.ascii", true, func(v string) bool {
 		return everyRune(v, func(r rune) bool { return r <= unicode.MaxASCII })
 	})
 }
+
+// AlphaDash creates a rule accepting alphabetic runes, Unicode numbers, hyphens, and underscores.
 func AlphaDash[S ~string]() Rule[S] {
 	return textRule[S]("foundry.alpha_dash", true, func(v string) bool {
 		return everyRune(v, func(r rune) bool { return alphabetic(r) || unicode.IsNumber(r) || r == '-' || r == '_' })
@@ -38,18 +47,28 @@ func AlphaDash[S ~string]() Rule[S] {
 func Lowercase[S ~string]() Rule[S] {
 	return textRule[S]("foundry.lowercase", true, func(v string) bool { return v == strings.ToLower(v) })
 }
+
+// Uppercase creates a rule requiring text to equal its uppercase form.
 func Uppercase[S ~string]() Rule[S] {
 	return textRule[S]("foundry.uppercase", true, func(v string) bool { return v == strings.ToUpper(v) })
 }
+
+// Contains creates a rule requiring the supplied substring.
 func Contains[S ~string](part S) Rule[S] {
 	return serverAffix("foundry.contains", part, strings.Contains)
 }
+
+// DoesntContain creates a rule excluding the supplied substring.
 func DoesntContain[S ~string](part S) Rule[S] {
 	return serverAffix("foundry.doesnt_contain", part, func(v, p string) bool { return !strings.Contains(v, p) })
 }
+
+// DoesntStartWith creates a rule excluding the supplied prefix.
 func DoesntStartWith[S ~string](prefix S) Rule[S] {
 	return serverAffix("foundry.doesnt_start_with", prefix, func(v, p string) bool { return !strings.HasPrefix(v, p) })
 }
+
+// DoesntEndWith creates a rule excluding the supplied suffix.
 func DoesntEndWith[S ~string](suffix S) Rule[S] {
 	return serverAffix("foundry.doesnt_end_with", suffix, func(v, p string) bool { return !strings.HasSuffix(v, p) })
 }

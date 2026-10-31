@@ -41,6 +41,7 @@ type OTLPConfig struct {
 const otlpScope = "github.com/weiloon1234/Foundry-Go/observability"
 const maxOTLPResponseBytes = 64 << 10
 
+// Validate checks the OTLP endpoint, service name, timeout, and bounded transport-safe headers.
 func (c OTLPConfig) Validate() error {
 	endpoint, err := url.Parse(c.Endpoint)
 	if err != nil || endpoint.Scheme != "http" && endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.User != nil || endpoint.Fragment != "" || len(c.Endpoint) > 2048 {

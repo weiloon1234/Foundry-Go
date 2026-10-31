@@ -24,6 +24,7 @@ type CleanupRequest struct {
 	Identity model.Identity       `json:"identity"`
 }
 
+// Format writes a fixed label without exposing cleanup request data.
 func (CleanupRequest) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("model extension cleanup request"))
 }
@@ -38,6 +39,7 @@ type CleanupJob struct {
 	definition jobs.Definition[CleanupRequest]
 }
 
+// DefineCleanupJob defines a version-one cleanup job with the supplied name and policy.
 func DefineCleanupJob(name jobs.Name, policy jobs.Policy) CleanupJob {
 	return CleanupJob{definition: jobs.Define[CleanupRequest](name, 1, policy)}
 }
@@ -95,6 +97,8 @@ func (j CleanupJob) ToOutbox(queue jobs.Queue, producers map[*database.DB]*jobs.
 	}
 	return q, nil
 }
+
+// Validate checks the cleanup job, queue, database pools, and outbox producer destinations.
 func (q *CleanupQueue) Validate() error {
 	if q == nil || len(q.producers) == 0 {
 		return safeerror.NewFault(fault.Invalid, "model extension cleanup queue requires outbox producers")
@@ -115,6 +119,8 @@ func (q *CleanupQueue) Validate() error {
 	}
 	return nil
 }
+
+// Format writes a fixed label without exposing queue configuration.
 func (CleanupQueue) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("model extension cleanup queue"))
 }

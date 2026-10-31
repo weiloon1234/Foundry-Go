@@ -19,6 +19,7 @@ const (
 	setValue
 )
 
+// Create creates the setting through the manager's write operation.
 func (k Key[V]) Create(ctx context.Context, m *Manager, input V) error {
 	return k.write(ctx, m, nil, input, createValue)
 }
@@ -44,15 +45,21 @@ func (k Key[V]) EnsureIn(ctx context.Context, tx *database.Tx, m *Manager, input
 func (k Key[V]) Upsert(ctx context.Context, m *Manager, input V) error {
 	return k.write(ctx, m, nil, input, upsertValue)
 }
+
+// Set updates the setting through the manager's write operation.
 func (k Key[V]) Set(ctx context.Context, m *Manager, input V) error {
 	return k.write(ctx, m, nil, input, setValue)
 }
+
+// SetIn updates the setting in the supplied nonnil transaction.
 func (k Key[V]) SetIn(ctx context.Context, tx *database.Tx, m *Manager, input V) error {
 	if tx == nil {
 		return invalid()
 	}
 	return k.write(ctx, m, tx, input, setValue)
 }
+
+// UpsertIn creates or updates the setting in the supplied nonnil transaction.
 func (k Key[V]) UpsertIn(ctx context.Context, tx *database.Tx, m *Manager, input V) error {
 	if tx == nil {
 		return invalid()
@@ -151,6 +158,9 @@ func (k Key[V]) present(ctx context.Context, m *Manager, p Presentation, declare
 		return err
 	})
 }
+
+// Remove removes the setting and reports whether a row was deleted, invalidating its cache around
+// the write.
 func (k Key[V]) Remove(ctx context.Context, m *Manager) (bool, error) {
 	if err := k.check(m); err != nil {
 		return false, err
@@ -169,6 +179,8 @@ func (k Key[V]) Remove(ctx context.Context, m *Manager) (bool, error) {
 	}
 	return removed, nil
 }
+
+// Get finds and decodes the setting, returning an absent optional when missing.
 func (k Key[V]) Get(ctx context.Context, m *Manager) (value.Optional[V], error) {
 	record, err := k.Find(ctx, m)
 	if err != nil {

@@ -265,6 +265,7 @@ func key(t *testing.T, text string) storage.ObjectKey {
 
 type brokenReader struct{ mode string }
 
+// Read simulates a panic, Goexit, or a read that returns data and an error.
 func (r *brokenReader) Read(p []byte) (int, error) {
 	switch r.mode {
 	case "panic":

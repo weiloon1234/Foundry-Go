@@ -17,6 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// Resolved pairs resolved translation text with the locale that supplied it.
 type Resolved struct {
 	Locale i18n.LocaleID
 	Text   string
@@ -31,6 +32,7 @@ type Values struct {
 	values  map[i18n.LocaleID]string
 }
 
+// Exact returns the exact supported locale's text, or an absent optional when missing.
 func (v Values) Exact(locale i18n.LocaleID) (value.Optional[string], error) {
 	if v.values == nil || !v.locales.Contains(locale) {
 		return value.Optional[string]{}, invalid()
@@ -41,6 +43,8 @@ func (v Values) Exact(locale i18n.LocaleID) (value.Optional[string], error) {
 	}
 	return value.Set(text), nil
 }
+
+// Resolve returns the first available translation in locale fallback order, or an absent optional.
 func (v Values) Resolve(locale i18n.LocaleID) (value.Optional[Resolved], error) {
 	if v.values == nil {
 		return value.Optional[Resolved]{}, invalid()
@@ -65,9 +69,14 @@ func (v Values) Entries() map[i18n.LocaleID]string {
 	}
 	return result
 }
-func (Values) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("translated field values")) }
+
+// Format writes a fixed label without exposing translated text.
+func (Values) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("translated field values")) }
+
+// MarshalJSON rejects direct JSON serialization of translated values.
 func (Values) MarshalJSON() ([]byte, error) { return nil, invalid() }
 
+// Batch contains translated values loaded for a batch of typed owners.
 type Batch[M any, K comparable] struct {
 	field  Field[M, K]
 	active map[string]bool
@@ -76,6 +85,7 @@ type Batch[M any, K comparable] struct {
 	subjects []string
 }
 
+// Get returns the loaded values for a typed owner reference.
 func (b Batch[M, K]) Get(owner model.Reference[M, K]) (Values, error) {
 	if b.active == nil || b.values == nil {
 		return Values{}, invalid()
@@ -197,6 +207,8 @@ func (f Field[M, K]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, ow
 		}
 	}
 }
+
+// Values loads translated values for a single owner reference.
 func (f Field[M, K]) Values(ctx context.Context, m *Manager, owner model.Reference[M, K]) (Values, error) {
 	batch, err := f.Load(ctx, m, []model.Reference[M, K]{owner})
 	if err != nil {
@@ -204,6 +216,8 @@ func (f Field[M, K]) Values(ctx context.Context, m *Manager, owner model.Referen
 	}
 	return batch.Get(owner)
 }
+
+// Get loads the owner's field and returns an exact locale match without fallback.
 func (f Field[M, K]) Get(ctx context.Context, m *Manager, owner model.Reference[M, K], locale i18n.LocaleID) (value.Optional[string], error) {
 	values, err := f.Values(ctx, m, owner)
 	if err != nil {
@@ -211,6 +225,8 @@ func (f Field[M, K]) Get(ctx context.Context, m *Manager, owner model.Reference[
 	}
 	return values.Exact(locale)
 }
+
+// Resolve loads the owner's field and resolves its locale fallback sequence.
 func (f Field[M, K]) Resolve(ctx context.Context, m *Manager, owner model.Reference[M, K], locale i18n.LocaleID) (value.Optional[Resolved], error) {
 	values, err := f.Values(ctx, m, owner)
 	if err != nil {

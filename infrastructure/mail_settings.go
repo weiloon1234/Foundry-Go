@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// MailDriver selects an email transport implementation.
 type MailDriver string
 
 const (
@@ -44,6 +45,9 @@ type SMTPSettings struct {
 	MaxIdle     int
 	IdleTimeout time.Duration
 }
+
+// MailAPISettings configures HTTP email providers and their credentials and provider-specific
+// options.
 type MailAPISettings struct {
 	Endpoint         string
 	Timeout          time.Duration
@@ -73,12 +77,16 @@ type MailerSettings struct {
 	Transports     []email.MailerName `config:",json"`
 }
 
+// DefaultMailerSettings returns defaults for logging delivery, mailer budgets, SMTP, HTTP APIs,
+// and memory capture.
 func DefaultMailerSettings() MailerSettings {
 	return MailerSettings{Driver: LogMail, Config: email.DefaultConfig(), SMTP: SMTPSettings{Security: smtp.STARTTLS, Timeout: email.DefaultConfig().Timeout, MaxIdle: 2, IdleTimeout: 30 * time.Second}, API: MailAPISettings{Timeout: email.DefaultHTTPConfig().Timeout}, MemoryCapacity: 128}
 }
 
+// Mailers maps mailer names to settings.
 type Mailers map[email.MailerName]MailerSettings
 
+// UnmarshalText decodes mailer settings, replacing the receiver only on success.
 func (m *Mailers) UnmarshalText(data []byte) error {
 	schema, err := MailerSettingsConfigSchema()
 	if err != nil {
@@ -92,9 +100,11 @@ func (m *Mailers) UnmarshalText(data []byte) error {
 	return nil
 }
 
+// MailSettings configures named mailers and their default.
 type MailSettings struct {
 	Default email.MailerName
 	Mailers Mailers `config:",secret"`
 }
 
+// DefaultMailSettings returns mail settings selecting the default mailer name.
 func DefaultMailSettings() MailSettings { return MailSettings{Default: "default"} }

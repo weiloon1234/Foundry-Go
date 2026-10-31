@@ -18,11 +18,20 @@ type EncodeError struct {
 	cause  error
 }
 
-func (*EncodeError) Error() string        { return "invalid JSON output" }
-func (e *EncodeError) GoString() string   { return e.Error() }
+// Error returns a fixed message without exposing JSON output.
+func (*EncodeError) Error() string { return "invalid JSON output" }
+
+// GoString returns the same safe message as Error.
+func (e *EncodeError) GoString() string { return e.Error() }
+
+// Is reports whether the target is fault.Internal.
 func (*EncodeError) Is(target error) bool { return target == fault.Internal }
-func (e *EncodeError) Unwrap() error      { return e.cause }
-func (e *EncodeError) Issues() []Issue    { return slices.Clone(e.issues) }
+
+// Unwrap returns the underlying encoding cause.
+func (e *EncodeError) Unwrap() error { return e.cause }
+
+// Issues returns a copy of the encoding issues.
+func (e *EncodeError) Issues() []Issue { return slices.Clone(e.issues) }
 
 func encodeFailure(issues []Issue, cause error) error {
 	failure := &EncodeError{issues: issues, cause: cause}

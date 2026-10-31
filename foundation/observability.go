@@ -29,7 +29,10 @@ func WithObservability(recorder *observability.Recorder) Option {
 	}
 }
 
-func (a *App) Observability() *observability.Recorder     { return a.settings.observability }
+// Observability returns the configured observability recorder.
+func (a *App) Observability() *observability.Recorder { return a.settings.observability }
+
+// Observability returns the runtime's observability recorder.
 func (r *Runtime) Observability() *observability.Recorder { return r.core.observability }
 
 // Foundation IDs predate semantic metric names and may contain Unicode or

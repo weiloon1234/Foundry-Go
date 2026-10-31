@@ -55,6 +55,8 @@ func CaptureMessage(message Message) (Snapshot, error) {
 	return Snapshot{data: data}, nil
 }
 
+// Message decodes and validates a version-one message, requiring version or match conditions on
+// storage attachments.
 func (s Snapshot) Message() (Message, error) {
 	wire, err := s.data.Decode()
 	if err != nil || wire.Version != 1 {
@@ -71,12 +73,17 @@ func (s Snapshot) Message() (Message, error) {
 	}
 	return message, nil
 }
+
+// MarshalJSON validates the snapshotted message and returns its JSON representation.
 func (s Snapshot) MarshalJSON() ([]byte, error) {
 	if _, err := s.Message(); err != nil {
 		return nil, err
 	}
 	return s.data.MarshalJSON()
 }
+
+// UnmarshalJSON decodes a bounded JSON snapshot, replacing the receiver only after message
+// validation.
 func (s *Snapshot) UnmarshalJSON(data []byte) error {
 	if s == nil || len(data) > value.JSONMaxBytes {
 		return emaildiag.Failure(Construction)
@@ -91,5 +98,9 @@ func (s *Snapshot) UnmarshalJSON(data []byte) error {
 	*s = result
 	return nil
 }
+
+// Format writes a fixed label without exposing snapshot data.
 func (Snapshot) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("email snapshot")) }
-func (Snapshot) LogValue() slog.Value       { return slog.StringValue("email snapshot") }
+
+// LogValue returns a fixed log label without exposing snapshot data.
+func (Snapshot) LogValue() slog.Value { return slog.StringValue("email snapshot") }

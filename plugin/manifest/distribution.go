@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// DistributionKind identifies a plugin distribution category.
 type DistributionKind string
 
 const (
@@ -22,6 +23,7 @@ type Distribution struct {
 	Name    string           `json:"name"`
 }
 
+// Validate validates the plugin, release, distribution kind, and semantic name.
 func (d Distribution) Validate() error {
 	if err := d.Plugin.Validate(); err != nil {
 		return err
@@ -35,6 +37,7 @@ func (d Distribution) Validate() error {
 	return nil
 }
 
+// SameOwner reports whether plugin, kind, and name match, regardless of release.
 func (d Distribution) SameOwner(other Distribution) bool {
 	return d.Plugin == other.Plugin && d.Kind == other.Kind && d.Name == other.Name
 }

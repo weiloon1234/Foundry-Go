@@ -15,6 +15,7 @@ type Selection struct {
 	disabled  []string
 }
 
+// SelectTests parses test run and skip patterns into an oracle selection.
 func SelectTests(run, skip string) (Selection, error) {
 	r, err := testPatterns(run)
 	if err != nil {
@@ -108,6 +109,8 @@ func matchesTest(patterns [][]*regexp.Regexp, name []string) (match, partial boo
 	return false, false
 }
 
+// Includes reports whether a test matches the selection, excluding disabled roots and descendants
+// of skipped ancestors.
 func (s Selection) Includes(test string) bool {
 	for _, root := range s.disabled {
 		if test == root || strings.HasPrefix(test, root+"/") {

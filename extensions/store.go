@@ -25,9 +25,12 @@ type Config struct {
 	Timeout   time.Duration
 }
 
+// DefaultConfig returns default schema, clock, capacity, and operation timeout settings.
 func DefaultConfig() Config {
 	return Config{Schema: "public", Clock: clock.System{}, MaxActive: 64, Timeout: time.Minute}
 }
+
+// Validate checks the schema, clock, concurrency bound, and timeout.
 func (c Config) Validate() error {
 	if !sqlname.Valid(c.Schema) || c.Clock == nil || c.MaxActive < 1 || c.MaxActive > 1024 || c.Timeout <= 0 || c.Timeout > 10*time.Minute {
 		return invalid("invalid model extension store configuration")
@@ -51,6 +54,8 @@ type Store struct {
 	calls    *workscope.Group
 }
 
+// New validates dependencies and configuration and creates an extension store borrowing the
+// database.
 func New(db *database.DB, registry *Registry, config Config) (*Store, error) {
 	if db == nil {
 		return nil, invalid("model extensions require a database")
@@ -67,24 +72,32 @@ func New(db *database.DB, registry *Registry, config Config) (*Store, error) {
 	}
 	return &Store{db: db, registry: registry, config: config, calls: calls}, nil
 }
+
+// Validate checks that the store and owner registry are initialized.
 func (s *Store) Validate() error {
 	if s == nil || s.db == nil || s.calls == nil {
 		return invalid("invalid model extension store")
 	}
 	return s.registry.Validate()
 }
+
+// Registry returns the owner registry, or nil for a nil store.
 func (s *Store) Registry() *Registry {
 	if s == nil {
 		return nil
 	}
 	return s.registry
 }
+
+// Database returns the underlying database, or nil for a nil store.
 func (s *Store) Database() *database.DB {
 	if s == nil {
 		return nil
 	}
 	return s.db
 }
+
+// Schema returns the configured schema, or an empty string for a nil store.
 func (s *Store) Schema() string {
 	if s == nil {
 		return ""
@@ -100,6 +113,8 @@ func (s *Store) Clock() clock.Clock {
 	}
 	return s.config.Clock
 }
+
+// Now returns validated application time in UTC at microsecond precision.
 func (s *Store) Now() (temporal.DateTime, error) {
 	if err := s.Validate(); err != nil {
 		return temporal.DateTime{}, err
@@ -110,12 +125,16 @@ func (s *Store) Now() (temporal.DateTime, error) {
 	}
 	return now, nil
 }
+
+// Close closes operation admission and waits for tracked work using the supplied context.
 func (s *Store) Close(ctx context.Context) error {
 	if s == nil {
 		return invalid("invalid model extension store")
 	}
 	return s.calls.Close(ctx)
 }
+
+// Done returns the operation group's completion channel.
 func (s *Store) Done() <-chan struct{} {
 	if s == nil {
 		var g *workscope.Group
@@ -123,6 +142,8 @@ func (s *Store) Done() <-chan struct{} {
 	}
 	return s.calls.Done()
 }
+
+// Format writes a fixed label without exposing store data.
 func (*Store) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("model extension store")) }
 
 // Read holds one read-only repeatable snapshot across owner checks and batched

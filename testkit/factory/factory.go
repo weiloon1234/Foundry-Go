@@ -13,12 +13,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 )
 
+// Sequence is a factory sequence number.
 type Sequence uint64
 
 const MaxStates = 64
 const MaxCount = querycore.MaxPerModelWriteRows
 
+// Build constructs factory data using a context and sequence number.
 type Build[D any] func(context.Context, Sequence) (D, error)
+
+// State transforms factory data using a context.
 type State[D any] func(context.Context, D) (D, error)
 
 type sequence struct {

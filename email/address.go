@@ -22,6 +22,7 @@ const MaxAddressBytes = 1024
 const MaxMailboxBytes = 254
 const MaxDisplayNameBytes = 256
 
+// ParseAddress parses an address header and validates its mailbox and display name.
 func ParseAddress(text string) (Address, error) {
 	if len(text) > MaxAddressBytes || !headerText(text) {
 		return Address{}, emaildiag.Failure(Construction)
@@ -32,6 +33,9 @@ func ParseAddress(text string) (Address, error) {
 	}
 	return NewAddress(parsed.Address, parsed.Name)
 }
+
+// NewAddress validates a mailbox and display name, returning a construction failure for invalid
+// input.
 func NewAddress(mailbox, name string) (Address, error) {
 	if len(mailbox) > MaxMailboxBytes || len(name) > MaxDisplayNameBytes || !headerText(mailbox) || !headerText(name) {
 		return Address{}, emaildiag.Failure(Construction)
@@ -51,20 +55,34 @@ func NewAddress(mailbox, name string) (Address, error) {
 	}
 	return Address{mailbox: mailbox, name: name}, nil
 }
+
+// Validate checks the mailbox and display name using NewAddress.
 func (a Address) Validate() error { _, err := NewAddress(a.mailbox, a.name); return err }
+
+// Mailbox returns the mailbox without its display name.
 func (a Address) Mailbox() string { return a.mailbox }
-func (a Address) Name() string    { return a.name }
+
+// Name returns the display name.
+func (a Address) Name() string { return a.name }
 
 // Header explicitly reveals the formatted mailbox. Generic formatting is redacted.
-func (a Address) Header() string           { return (&mail.Address{Address: a.mailbox, Name: a.name}).String() }
+func (a Address) Header() string { return (&mail.Address{Address: a.mailbox, Name: a.name}).String() }
+
+// Format writes a fixed label without exposing the address.
 func (Address) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("email address")) }
-func (Address) LogValue() slog.Value       { return slog.StringValue("email address") }
+
+// LogValue returns a fixed log label without exposing the address.
+func (Address) LogValue() slog.Value { return slog.StringValue("email address") }
+
+// MarshalJSON validates and encodes the address header as a JSON string.
 func (a Address) MarshalJSON() ([]byte, error) {
 	if err := a.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(a.Header())
 }
+
+// UnmarshalJSON decodes and validates an address header, replacing the receiver only on success.
 func (a *Address) UnmarshalJSON(data []byte) error {
 	if a == nil || len(data) > MaxAddressBytes*6+2 {
 		return emaildiag.Failure(Construction)
@@ -108,6 +126,8 @@ func (a Address) MarshalText() ([]byte, error) {
 	}
 	return []byte(a.Header()), nil
 }
+
+// UnmarshalText parses an address header, replacing the receiver only on success.
 func (a *Address) UnmarshalText(data []byte) error {
 	if a == nil {
 		return emaildiag.Failure(Construction)

@@ -25,6 +25,8 @@ type Options struct {
 	// Surfaces adds one client entry per declared surface beside the full one.
 	Surfaces []Surface
 }
+
+// Report lists TypeScript output paths written and removed during generation.
 type Report struct{ Written, Removed []string }
 
 var prefixPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,63}$`)

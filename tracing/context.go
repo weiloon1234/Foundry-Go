@@ -23,13 +23,23 @@ const StateHeader = "tracestate"
 const MaxParentBytes = 512
 const MaxStateBytes = 512
 
+// TraceID is a sixteen-byte trace identifier.
 type TraceID [16]byte
+
+// SpanID is an eight-byte span identifier.
 type SpanID [8]byte
 
-func (id TraceID) String() string               { return hex.EncodeToString(id[:]) }
-func (id SpanID) String() string                { return hex.EncodeToString(id[:]) }
+// String returns the trace identifier as lowercase hexadecimal.
+func (id TraceID) String() string { return hex.EncodeToString(id[:]) }
+
+// String returns the span identifier as lowercase hexadecimal.
+func (id SpanID) String() string { return hex.EncodeToString(id[:]) }
+
+// MarshalText encodes the trace identifier as lowercase hexadecimal text.
 func (id TraceID) MarshalText() ([]byte, error) { return []byte(id.String()), nil }
-func (id SpanID) MarshalText() ([]byte, error)  { return []byte(id.String()), nil }
+
+// MarshalText encodes the span identifier as lowercase hexadecimal text.
+func (id SpanID) MarshalText() ([]byte, error) { return []byte(id.String()), nil }
 
 // Text decoding supports owned diagnostics snapshots, including a zero parent
 // ID for root spans. Propagation Context.Validate separately rejects zero IDs.
@@ -44,6 +54,9 @@ func (id *TraceID) UnmarshalText(text []byte) error {
 	*id = decoded
 	return nil
 }
+
+// UnmarshalText decodes exactly 16 lowercase hexadecimal characters, replacing the receiver only
+// on success.
 func (id *SpanID) UnmarshalText(text []byte) error {
 	if id == nil || len(text) != 16 || !lowerHex(string(text)) {
 		return safeerror.NewFault(fault.Invalid, "invalid span ID text")
@@ -55,8 +68,12 @@ func (id *SpanID) UnmarshalText(text []byte) error {
 	*id = decoded
 	return nil
 }
+
+// IsZero reports whether the trace identifier is all zero bytes.
 func (id TraceID) IsZero() bool { return id == TraceID{} }
-func (id SpanID) IsZero() bool  { return id == SpanID{} }
+
+// IsZero reports whether the span identifier is all zero bytes.
+func (id SpanID) IsZero() bool { return id == SpanID{} }
 
 // Context is an immutable propagation snapshot. Trace IDs correlate operations,
 // not users; do not infer authentication or authorization from trace metadata.
@@ -68,13 +85,24 @@ type Context struct {
 	state   string
 }
 
-func (c Context) TraceID() TraceID   { return c.trace }
-func (c Context) SpanID() SpanID     { return c.span }
-func (c Context) Sampled() bool      { return c.sampled }
+// TraceID returns the trace identifier.
+func (c Context) TraceID() TraceID { return c.trace }
+
+// SpanID returns the span identifier.
+func (c Context) SpanID() SpanID { return c.span }
+
+// Sampled returns the trace sampling flag.
+func (c Context) Sampled() bool { return c.sampled }
+
+// TraceState returns the trace state header value.
 func (c Context) TraceState() string { return c.state }
+
+// IsZero reports whether identifiers, sampling flag, and trace state are all empty.
 func (c Context) IsZero() bool {
 	return c.trace.IsZero() && c.span.IsZero() && !c.sampled && c.state == ""
 }
+
+// Format writes a fixed label without exposing trace identifiers.
 func (Context) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("trace context")) }
 
 // LogValue keeps opaque vendor state out of structured logs even though an
@@ -83,6 +111,7 @@ func (c Context) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("trace_id", c.trace.String()), slog.String("span_id", c.span.String()), slog.Bool("sampled", c.sampled))
 }
 
+// Validate checks that trace and span identifiers are nonzero.
 func (c Context) Validate() error {
 	if c.trace.IsZero() || c.span.IsZero() {
 		return safeerror.NewFault(fault.Invalid, "trace context requires nonzero trace and span IDs")
@@ -128,6 +157,7 @@ func randomID(bytes []byte) error {
 	return safeerror.NewFault(fault.Internal, "cannot create nonzero trace identity")
 }
 
+// New creates random trace and span identifiers with the supplied sampling flag.
 func New(sampled bool) (Context, error) {
 	c := Context{sampled: sampled}
 	if err := randomID(c.trace[:]); err != nil {
@@ -220,6 +250,7 @@ func (c Context) WithState(state string) (Context, error) {
 
 type contextKey struct{}
 
+// FromContext returns the attached trace context, or its zero value when absent or ctx is nil.
 func FromContext(ctx context.Context) Context {
 	if ctx == nil {
 		return Context{}
@@ -235,6 +266,7 @@ func WithoutContext(ctx context.Context) context.Context {
 	return context.WithValue(ctx, contextKey{}, Context{})
 }
 
+// WithContext attaches a validated trace value to a nonnil context.
 func WithContext(ctx context.Context, value Context) (context.Context, error) {
 	if ctx == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "trace attachment requires a context")
@@ -317,6 +349,8 @@ func (c Context) MarshalJSON() ([]byte, error) {
 	return json.Marshal(wireContext{Parent: c.TraceParent(), State: c.state})
 }
 
+// UnmarshalJSON decodes a bounded traceparent and optional tracestate object, replacing the
+// receiver only after validation.
 func (c *Context) UnmarshalJSON(data []byte) error {
 	if c == nil {
 		return safeerror.NewFault(fault.Invalid, "trace decoding requires a destination")

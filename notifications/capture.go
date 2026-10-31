@@ -30,15 +30,20 @@ type captured struct {
 	subject, fingerprint string
 }
 
+// ID returns the captured notification identifier, or zero for an empty pending notification.
 func (p PendingNotification[M, P]) ID() ID[M] {
 	if p.capture == nil {
 		return ID[M]{}
 	}
 	return model.IDFromBytes[NotificationOf[M]](p.capture.id.Bytes())
 }
+
+// Format writes a fixed label without exposing notification data.
 func (PendingNotification[M, P]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("pending notification"))
 }
+
+// MarshalJSON rejects JSON serialization of a pending notification.
 func (PendingNotification[M, P]) MarshalJSON() ([]byte, error) { return nil, invalid() }
 
 // Capture performs no lookup or I/O. A zero ID creates one; an explicit ID is
@@ -128,6 +133,8 @@ func (p PendingNotification[M, P]) Send(ctx context.Context, manager *Manager) (
 	report.Channels, err = manager.deliver(ctx, p.capture.id)
 	return report, err
 }
+
+// Send captures and sends a typed notification with a newly assigned identifier.
 func (b Binding[M, K, P]) Send(ctx context.Context, manager *Manager, recipient model.Reference[M, K], input P) (Report[M], error) {
 	pending, err := b.Capture(ctx, recipient, input, ID[M]{})
 	if err != nil {

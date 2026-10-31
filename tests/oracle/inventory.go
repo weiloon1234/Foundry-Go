@@ -14,6 +14,8 @@ import (
 
 // Inventory finds stable assertion sites and their owning test-file entry points.
 func Inventory(dir string) (map[string]bool, []string, error) { return inventory(dir, nil) }
+
+// SelectedSites returns the assertion sites selected by the supplied tests.
 func SelectedSites(dir string, tests []string) (map[string]bool, error) {
 	sites, _, err := inventory(dir, tests)
 	return sites, err

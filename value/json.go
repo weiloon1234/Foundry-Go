@@ -72,7 +72,11 @@ func invalidJSONCause(err error) error {
 func invalidJSON() error {
 	return safeerror.NewFault(fault.Invalid, "invalid typed JSON value or schema")
 }
-func (v JSON[T]) IsZero() bool     { return v.text == "" }
+
+// IsZero reports whether the JSON document is uninitialized.
+func (v JSON[T]) IsZero() bool { return v.text == "" }
+
+// IsJSONNull reports whether the stored JSON text is the null literal.
 func (v JSON[T]) IsJSONNull() bool { return v.text == "null" }
 
 // Text returns canonical JSON for an explicit transport/codec boundary.
@@ -97,6 +101,8 @@ func decodeJSON[T any](text string) (T, error) {
 	}
 	return result, nil
 }
+
+// MarshalJSON returns the stored JSON text as bytes, propagating Text errors.
 func (v JSON[T]) MarshalJSON() ([]byte, error) {
 	text, err := v.Text()
 	if err != nil {
@@ -104,6 +110,8 @@ func (v JSON[T]) MarshalJSON() ([]byte, error) {
 	}
 	return []byte(text), nil
 }
+
+// UnmarshalJSON parses a bounded JSON document, replacing the receiver only on success.
 func (v *JSON[T]) UnmarshalJSON(data []byte) error {
 	if v == nil || len(data) == 0 || len(data) > JSONMaxBytes {
 		return invalidJSON()

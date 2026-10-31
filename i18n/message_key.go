@@ -11,6 +11,7 @@ import (
 // explicit dynamic-key boundary and does not prove catalog membership.
 type MessageKey string
 
+// Validate checks that the message key is a semantic identifier.
 func (k MessageKey) Validate() error {
 	if !identifier.Semantic(string(k)) {
 		return safeerror.NewFault(fault.Invalid, "invalid message key")

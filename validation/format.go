@@ -85,9 +85,13 @@ func validIP(text string, version int) bool {
 func IP[S ~string]() Rule[S] {
 	return textRule[S]("foundry.ip", false, func(text string) bool { return validIP(text, 0) })
 }
+
+// IPv4 creates an IPv4 address text rule.
 func IPv4[S ~string]() Rule[S] {
 	return textRule[S]("foundry.ipv4", false, func(text string) bool { return validIP(text, 4) })
 }
+
+// IPv6 creates an IPv6 address text rule.
 func IPv6[S ~string]() Rule[S] {
 	return textRule[S]("foundry.ipv6", false, func(text string) bool { return validIP(text, 6) })
 }
@@ -105,12 +109,18 @@ func UUID[S ~string]() Rule[S] {
 func Date[S ~string]() Rule[S] {
 	return textRule[S]("foundry.date", false, func(text string) bool { _, err := temporal.ParseDate(text); return err == nil })
 }
+
+// Time creates a text rule using temporal.ParseTime.
 func Time[S ~string]() Rule[S] {
 	return textRule[S]("foundry.time", false, func(text string) bool { _, err := temporal.ParseTime(text); return err == nil })
 }
+
+// DateTime creates a text rule using temporal.ParseDateTime.
 func DateTime[S ~string]() Rule[S] {
 	return textRule[S]("foundry.datetime", false, func(text string) bool { _, err := temporal.ParseDateTime(text); return err == nil })
 }
+
+// LocalDateTime creates a text rule using temporal.ParseLocalDateTime.
 func LocalDateTime[S ~string]() Rule[S] {
 	return textRule[S]("foundry.local_datetime", false, func(text string) bool { _, err := temporal.ParseLocalDateTime(text); return err == nil })
 }

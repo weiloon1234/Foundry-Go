@@ -49,6 +49,7 @@ type ContributionInfo struct {
 	Replaces ProviderID `json:"replaces,omitempty"`
 }
 
+// ProviderInfo describes a provider and its dependencies.
 type ProviderInfo struct {
 	ID           ProviderID   `json:"id"`
 	Dependencies []ProviderID `json:"dependencies,omitempty"`

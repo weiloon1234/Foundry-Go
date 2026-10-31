@@ -19,4 +19,6 @@ func openSyslog(SyslogConfig) (*syslogConnection, error) {
 func (*syslogConnection) writeRecord([]byte, slog.Level) (int, error) {
 	return 0, safeerror.NewFault(fault.Invalid, "syslog logging is unsupported on this platform")
 }
+
+// Close releases no resources on platforms without syslog support.
 func (*syslogConnection) Close() error { return nil }

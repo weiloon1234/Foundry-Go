@@ -12,7 +12,9 @@ import (
 // Snapshot records structure, not Go formatting. Named model identities are
 // intentionally erased so separately generated and handwritten models compare.
 // Kind tags, lengths, field names and presence survive that normalization.
-func Snapshot(value any) string      { return snapshot(value, false) }
+func Snapshot(value any) string { return snapshot(value, false) }
+
+// ModelSnapshot returns the oracle's model snapshot representation.
 func ModelSnapshot(value any) string { return snapshot(value, true) }
 func snapshot(value any, model bool) string {
 	data, err := json.Marshal(structure(reflect.ValueOf(value), snapshotModeFor(model), 0))

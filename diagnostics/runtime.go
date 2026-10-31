@@ -21,7 +21,10 @@ type Config struct {
 	Profiling     bool
 }
 
+// DefaultConfig returns a diagnostics concurrency limit of eight.
 func DefaultConfig() Config { return Config{MaxConcurrent: 8} }
+
+// Validate checks that diagnostic concurrency is between one and 64.
 func (c Config) Validate() error {
 	if c.MaxConcurrent < 1 || c.MaxConcurrent > 64 {
 		return safeerror.NewFault(fault.Invalid, "invalid diagnostics concurrency limit")
@@ -79,16 +82,21 @@ func (r *Runtime) source() (foundation.State, *observability.Recorder, *maintena
 	return state(), recorder, gate
 }
 
+// LivenessReport reports application liveness and lifecycle state.
 type LivenessReport struct {
 	Live  bool             `json:"live"`
 	State foundation.State `json:"state"`
 }
+
+// ReadinessReport reports readiness, lifecycle state, maintenance mode, and dependency health.
 type ReadinessReport struct {
 	Ready        bool             `json:"ready"`
 	State        foundation.State `json:"state"`
 	Mode         maintenance.Mode `json:"mode"`
 	Dependencies health.Report    `json:"dependencies"`
 }
+
+// Snapshot contains application state and observability data.
 type Snapshot struct {
 	State        foundation.State       `json:"state"`
 	Observations observability.Snapshot `json:"observations"`
@@ -123,6 +131,8 @@ func (r *Runtime) Readiness(ctx context.Context) (ReadinessReport, error) {
 	return report, err
 }
 
+// Snapshot returns application state and observations, including the application's maintenance
+// mode.
 func (r *Runtime) Snapshot() Snapshot {
 	state, recorder, gate := r.source()
 	observations := recorder.Snapshot()

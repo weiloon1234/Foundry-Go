@@ -22,6 +22,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
+// Config configures default sender, capacity, size budgets, timeout, and message identifier
+// domain.
 type Config struct {
 	// From supplies Mailer.Message; explicit NewMessage senders are never replaced.
 	From                                           Address
@@ -32,9 +34,12 @@ type Config struct {
 	MessageIDDomain string
 }
 
+// DefaultConfig returns default mailer capacity, size limits, and timeout.
 func DefaultConfig() Config {
 	return Config{MaxActive: 64, MaxMessageBytes: 10 << 20, MaxAttachmentBytes: 5 << 20, Timeout: 30 * time.Second}
 }
+
+// Validate checks sender, message and attachment budgets, timeout, and message identifier domain.
 func (c Config) Validate() error {
 	if c.From != (Address{}) && c.From.Validate() != nil {
 		return emaildiag.Failure(Construction)
@@ -61,6 +66,7 @@ func messageIDDomain(domain string) bool {
 	return true
 }
 
+// Stage identifies a mailer observation stage.
 type Stage string
 
 const (
@@ -77,12 +83,18 @@ type Notice struct {
 	Failure           Kind
 	Duration          time.Duration
 }
+
+// Observer handles mailer stage notices.
 type Observer func(context.Context, Notice) error
+
+// Diagnostics reports active sends, closing state, and send and observer counters.
 type Diagnostics struct {
 	Active                                    int
 	Closing                                   bool
 	Calls, Accepted, Failed, ObserverFailures uint64
 }
+
+// Mailer coordinates email submission with capacity limits and lifecycle tracking.
 type Mailer struct {
 	driver      Driver
 	storage     *storage.Registry
@@ -351,6 +363,8 @@ func attachmentFailure(err error) error {
 	}
 	return emaildiag.Failure(result)
 }
+
+// Snapshot returns a synchronized diagnostic snapshot; a nil mailer reports closing.
 func (m *Mailer) Snapshot() Diagnostics {
 	if m == nil {
 		return Diagnostics{Closing: true}
@@ -359,6 +373,9 @@ func (m *Mailer) Snapshot() Diagnostics {
 	defer m.mu.Unlock()
 	return m.diagnostics
 }
+
+// Done returns the mailer's completion channel; a nil or uninitialized mailer returns a closed
+// channel.
 func (m *Mailer) Done() <-chan struct{} {
 	if m == nil || m.done == nil {
 		closed := make(chan struct{})
@@ -402,8 +419,11 @@ func (m *Mailer) Close(ctx context.Context) error {
 	}
 }
 
+// Format writes a fixed label without exposing mailer data.
 func (*Mailer) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("email mailer")) }
-func (*Mailer) LogValue() slog.Value       { return slog.StringValue("email mailer") }
+
+// LogValue returns a fixed log label without exposing mailer data.
+func (*Mailer) LogValue() slog.Value { return slog.StringValue("email mailer") }
 
 // Message starts an immutable message using this mailer's configured sender.
 // An unconfigured sender produces a message rejected by Send's normal validation.

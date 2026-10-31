@@ -21,8 +21,12 @@ type UnionValue[T any] struct {
 }
 
 // Tag returns the selected literal, or empty for an unset union.
-func (v UnionValue[T]) Tag() string  { return v.tag }
+func (v UnionValue[T]) Tag() string { return v.tag }
+
+// IsZero reports whether the union value has no encoded representation.
 func (v UnionValue[T]) IsZero() bool { return v.wire == "" }
+
+// MarshalJSON returns the stored JSON representation, rejecting the zero value.
 func (v UnionValue[T]) MarshalJSON() ([]byte, error) {
 	if v.IsZero() {
 		return nil, invalidUnion()

@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
+// Endpoint identifies a diagnostics endpoint.
 type Endpoint string
 
 const (

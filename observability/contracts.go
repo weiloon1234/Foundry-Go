@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/tracing"
 )
 
+// Kind identifies an observed operation category.
 type Kind string
 
 const (
@@ -29,12 +30,16 @@ const (
 	Resource      Kind = "resource"
 )
 
+// Name identifies a declared observed operation.
 type Name string
+
+// Operation pairs an observed operation kind with its declared name.
 type Operation struct {
 	Kind Kind `json:"kind"`
 	Name Name `json:"name"`
 }
 
+// Validate checks the operation kind and bounded semantic name.
 func (o Operation) Validate() error {
 	switch o.Kind {
 	case HTTP, OutboundHTTP, Job, Schedule, Socket, SocketMessage, CLI, Provider, Kernel, Resource:
@@ -47,6 +52,7 @@ func (o Operation) Validate() error {
 	return nil
 }
 
+// Outcome identifies an observed operation result category.
 type Outcome string
 
 const (
@@ -133,6 +139,7 @@ type TraceBatchExporter func(context.Context, []Entry) error
 // DefaultTraceBatchSize bounds one TraceBatchExporter call when unset.
 const DefaultTraceBatchSize = 64
 
+// Config configures recorder budgets, sampling, exporters, and the maintenance gate.
 type Config struct {
 	MaxSeries           int
 	MaxRecent           int
@@ -155,10 +162,12 @@ type Config struct {
 	Maintenance      *maintenance.Gate
 }
 
+// DefaultConfig returns default metric, error reporting, and trace collection budgets.
 func DefaultConfig() Config {
 	return Config{MaxSeries: 512, MaxRecent: 128, MaxActive: 65536, ErrorQueue: 128, ReporterConcurrency: 2, ReporterTimeout: 3 * time.Second, SampleTraces: true, TraceSampleRatio: 1, TraceBatchSize: DefaultTraceBatchSize, TraceQueue: 512, TraceConcurrency: 2, TraceTimeout: 3 * time.Second}
 }
 
+// Validate checks observability budgets, sampling ratio, and exporter declarations.
 func (c Config) Validate() error {
 	if c.MaxSeries < 1 || c.MaxSeries > 4096 || c.MaxRecent < 0 || c.MaxRecent > 4096 || c.MaxActive < 1 || c.MaxActive > 1<<20 || c.ErrorQueue < 1 || c.ErrorQueue > 4096 || c.ReporterConcurrency < 1 || c.ReporterConcurrency > 16 || c.ReporterTimeout <= 0 || c.ReporterTimeout > time.Minute {
 		return safeerror.NewFault(fault.Invalid, "invalid observability resource bounds")

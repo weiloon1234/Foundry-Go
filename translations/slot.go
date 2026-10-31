@@ -67,7 +67,10 @@ func (t Text) ResolveRequest(ctx context.Context) (value.Optional[Resolved], err
 	return t.values.Resolve(locale)
 }
 
-func (Text) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("translated text slot")) }
+// Format writes a fixed label without exposing translated slot data.
+func (Text) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("translated text slot")) }
+
+// MarshalJSON rejects direct JSON serialization of a translated text slot.
 func (Text) MarshalJSON() ([]byte, error) { return nil, invalid() }
 
 func notLoaded() error {
@@ -420,6 +423,7 @@ func boolCount(loaded bool) int {
 	return 0
 }
 
+// Format writes a fixed label without exposing the slot descriptor.
 func (textSlot[M, K]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("translated text slot descriptor"))
 }

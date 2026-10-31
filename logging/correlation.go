@@ -18,15 +18,22 @@ func Correlate(handler slog.Handler) slog.Handler { return correlationHandler{ha
 
 type correlationHandler struct{ next slog.Handler }
 
+// Enabled delegates level filtering to the underlying handler.
 func (h correlationHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return h.next.Enabled(ctx, level)
 }
+
+// WithAttrs returns a correlation handler with the underlying attributes applied.
 func (h correlationHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return correlationHandler{h.next.WithAttrs(attrs)}
 }
+
+// WithGroup returns a correlation handler with the underlying group applied.
 func (h correlationHandler) WithGroup(name string) slog.Handler {
 	return correlationHandler{h.next.WithGroup(name)}
 }
+
+// Handle adds request, trace, and shared context attributes before forwarding the record.
 func (h correlationHandler) Handle(ctx context.Context, record slog.Record) error {
 	var fields []slog.Attr
 	if request := attribution.FromContext(ctx).Request(); request.ID != "" {

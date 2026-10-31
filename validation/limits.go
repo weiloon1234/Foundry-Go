@@ -15,7 +15,10 @@ type Limits struct {
 	ValueBytes int
 }
 
+// DefaultLimits returns default check, issue, depth, and value byte budgets.
 func DefaultLimits() Limits { return Limits{Checks: 65536, Issues: 32, Depth: 32, ValueBytes: 1 << 20} }
+
+// Validate checks positive validation budgets and the supported depth range.
 func (l Limits) Validate() error {
 	if l.Checks <= 0 || l.Issues <= 0 || l.Depth < 0 || l.Depth > jsonwire.MaxDepth || l.ValueBytes <= 0 {
 		return invalid("invalid validation limits")
@@ -27,5 +30,8 @@ func (l Limits) Validate() error {
 // It is distinct from rejected rule input and never establishes a valid result.
 type LimitError struct{}
 
-func (*LimitError) Error() string        { return "validation resource bound exceeded" }
+// Error returns the fixed validation budget exhaustion message.
+func (*LimitError) Error() string { return "validation resource bound exceeded" }
+
+// Is reports whether the target is fault.Invalid.
 func (*LimitError) Is(target error) bool { return target == fault.Invalid }

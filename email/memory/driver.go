@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/email"
 )
 
+// Driver retains outbound messages in a bounded, mutex-protected buffer.
 type Driver struct {
 	mu       sync.Mutex
 	capacity int
@@ -19,13 +20,18 @@ type Driver struct {
 	messages []email.Outbound
 }
 
+// New creates an in-memory driver with capacity between one and 10,000 messages.
 func New(capacity int) (*Driver, error) {
 	if capacity < 1 || capacity > 10000 {
 		return nil, emaildiag.Failure(email.Construction)
 	}
 	return &Driver{capacity: capacity}, nil
 }
+
+// Format writes a fixed label without exposing messages.
 func (*Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("memory email driver")) }
+
+// Send retains a validated outbound message, returning a transient failure if closed or full.
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || ctx == nil || out.Validate() != nil {
 		return email.Receipt{}, emaildiag.Failure(email.Construction)
@@ -41,6 +47,8 @@ func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, e
 	d.messages = append(d.messages, out)
 	return email.Receipt{}, nil
 }
+
+// Messages returns a synchronized copy of the retained message slice.
 func (d *Driver) Messages() []email.Outbound {
 	if d == nil {
 		return nil
@@ -49,6 +57,8 @@ func (d *Driver) Messages() []email.Outbound {
 	defer d.mu.Unlock()
 	return slices.Clone(d.messages)
 }
+
+// Reset clears retained messages without reopening a closed driver.
 func (d *Driver) Reset() {
 	if d == nil {
 		return
@@ -58,6 +68,8 @@ func (d *Driver) Reset() {
 	clear(d.messages)
 	d.messages = nil
 }
+
+// Close closes the driver and clears retained messages under its mutex.
 func (d *Driver) Close() {
 	if d == nil {
 		return

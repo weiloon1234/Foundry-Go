@@ -174,6 +174,7 @@ func (r *Recorder) Close(ctx context.Context) error {
 	}
 }
 
+// Done returns the recorder's completion channel.
 func (r *Recorder) Done() <-chan struct{} { return r.done }
 
 // Ready waits until reporter admission has started or the recorder has closed.

@@ -16,7 +16,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/plugin/manifest"
 )
 
+// ID identifies a scaffold within a plugin.
 type ID string
+
+// Report is the asset distribution publication report.
 type Report = assets.Report
 
 // Scaffold preserves concrete input T. The synchronous renderer must cooperate
@@ -27,6 +30,7 @@ type Scaffold[T any] struct {
 	render func(context.Context, T) ([]assets.File, error)
 }
 
+// New validates the distribution identity and creates a typed scaffold with a nonnil renderer.
 func New[T any](declaration manifest.Manifest, id ID, render func(context.Context, T) ([]assets.File, error)) (*Scaffold[T], error) {
 	if err := declaration.Validate(); err != nil {
 		return nil, err
@@ -41,6 +45,7 @@ func New[T any](declaration manifest.Manifest, id ID, render func(context.Contex
 	return &Scaffold[T]{info, render}, nil
 }
 
+// Info returns distribution metadata, or zero metadata for a nil scaffold.
 func (s *Scaffold[T]) Info() manifest.Distribution {
 	if s == nil {
 		return manifest.Distribution{}
@@ -77,6 +82,8 @@ func (s *Scaffold[T]) Render(ctx context.Context, input T) (map[string][]byte, e
 	return result, nil
 }
 
+// Publish renders scaffold files and publishes or checks their generated distribution in the
+// target directory.
 func (s *Scaffold[T]) Publish(ctx context.Context, dir string, input T, check bool) (Report, error) {
 	files, err := s.Render(ctx, input)
 	if err != nil {
@@ -104,6 +111,7 @@ func Register[T any](r *foundation.Registrar, scaffold *Scaffold[T]) error {
 	return foundation.ContributeAs[T](r, declarations, fmt.Sprintf("%q.%q", declaration.ID, scaffold.info.Name), func(foundation.Resolver) (manifest.Distribution, error) { return scaffold.info, nil })
 }
 
+// Resolve resolves a typed scaffold by plugin owner and scaffold identifier.
 func Resolve[T any](resolver foundation.Resolver, owner manifest.ID, id ID) (*Scaffold[T], error) {
 	return foundation.Resolve(resolver, scaffoldKey[T](owner, id))
 }

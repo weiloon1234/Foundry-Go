@@ -48,6 +48,7 @@ type taskName struct {
 	kernel KernelKind
 }
 
+// String returns a kernel or provider-qualified task name.
 func (n taskName) String() string {
 	if n.kernel != "" {
 		return "kernel:" + string(n.kernel)
@@ -68,11 +69,20 @@ func newRuntime(ctx context.Context, services *Services, logger *slog.Logger, so
 		tasks: newTaskGroup(lifetime, cancel), resourceNames: make(map[resourceName]struct{})}
 }
 
+// Context returns the runtime context.
 func (r *Runtime) Context() context.Context { return r.core.ctx }
-func (r *Runtime) Services() *Services      { return r.core.services }
-func (r *Runtime) Logger() *slog.Logger     { return r.core.logger.With("provider", string(r.owner)) }
-func (r *Runtime) Owner() ProviderID        { return r.owner }
-func (r *Runtime) Clock() clock.Clock       { return r.core.clock }
+
+// Services returns the runtime's service registry.
+func (r *Runtime) Services() *Services { return r.core.services }
+
+// Logger returns a logger annotated with the owning provider.
+func (r *Runtime) Logger() *slog.Logger { return r.core.logger.With("provider", string(r.owner)) }
+
+// Owner returns the owning provider identifier.
+func (r *Runtime) Owner() ProviderID { return r.owner }
+
+// Clock returns the runtime's application clock.
+func (r *Runtime) Clock() clock.Clock { return r.core.clock }
 
 // Maintenance returns the application's admission gate, also carried by Context.
 func (r *Runtime) Maintenance() *maintenance.Gate { return r.core.maintenance }

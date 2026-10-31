@@ -42,6 +42,7 @@ type Runtime struct {
 	CleanupQueue *CleanupQueue
 }
 
+// Format writes a fixed label without exposing runtime data.
 func (Runtime) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("model extension runtime")) }
 
 // Parts lists one model's slot registrations by kind, and each slot's
@@ -122,6 +123,7 @@ func (d Declaration) Register(r *foundation.Registrar, pool foundation.Key[*data
 	return d.install(r, pool, resolve)
 }
 
+// Format writes a fixed label without exposing the declaration.
 func (Declaration) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("model extension declaration"))
 }

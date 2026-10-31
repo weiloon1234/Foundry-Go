@@ -15,6 +15,7 @@ type Service struct {
 	zone   *time.Location
 }
 
+// NewService validates a clock and resolves the named time zone for a date service.
 func NewService(source clock.Clock, name ZoneName) (Service, error) {
 	if err := validateClock(source); err != nil {
 		return Service{}, err
@@ -26,6 +27,7 @@ func NewService(source clock.Clock, name ZoneName) (Service, error) {
 	return Service{source: source, name: name, zone: zone}, nil
 }
 
+// TimeZone returns the service's time zone name.
 func (s Service) TimeZone() ZoneName { return s.name }
 
 // Location returns an owned standard Go location for APIs needing explicit zones.
@@ -39,13 +41,25 @@ func (s Service) Location() *time.Location {
 
 // In returns another service borrowing the same clock with an explicit override.
 func (s Service) In(name ZoneName) (Service, error) { return NewService(s.source, name) }
-func (s Service) Now() (DateTime, error)            { return Now(s.source) }
-func (s Service) Today() (Date, error)              { return Today(s.source, s.zone) }
+
+// Now reads the service's clock as a DateTime.
+func (s Service) Now() (DateTime, error) { return Now(s.source) }
+
+// Today returns today's date using the service's clock and time zone.
+func (s Service) Today() (Date, error) { return Today(s.source, s.zone) }
+
+// Parse parses date-time text using the service's time zone.
 func (s Service) Parse(text string) (DateTime, error) {
 	return ParseDateTimeIn(text, s.zone)
 }
+
+// Format formats the instant in the service's time zone.
 func (s Service) Format(instant DateTime) (string, error) { return instant.FormatIn(s.zone) }
-func (s Service) Date(instant DateTime) (Date, error)     { return instant.DateIn(s.zone) }
+
+// Date returns the instant's calendar date in the service's time zone.
+func (s Service) Date(instant DateTime) (Date, error) { return instant.DateIn(s.zone) }
+
+// Local returns the instant's local fields in the service's time zone.
 func (s Service) Local(instant DateTime) (LocalDateTime, error) {
 	return instant.LocalIn(s.zone)
 }

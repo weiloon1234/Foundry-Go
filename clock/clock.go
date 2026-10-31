@@ -6,7 +6,10 @@ import "time"
 
 // Clock returns the current application time. Consumers pass it explicitly to
 // operations needing deterministic time rather than replacing process globals.
-type Clock interface{ Now() time.Time }
+type Clock interface {
+	// Now returns the current application time.
+	Now() time.Time
+}
 
 // System reads the operating system clock. Application time has database
 // (microsecond) precision.

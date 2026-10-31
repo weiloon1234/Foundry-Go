@@ -41,8 +41,12 @@ func Pick[T any](f *Faker, items ...T) T { return items[f.intN(len(items))] }
 
 // FirstName, LastName and Name return fictional personal names.
 func (f *Faker) FirstName() string { return Pick(f, fakeFirstNames...) }
-func (f *Faker) LastName() string  { return Pick(f, fakeLastNames...) }
-func (f *Faker) Name() string      { return f.FirstName() + " " + f.LastName() }
+
+// LastName selects a last name from the fake name list.
+func (f *Faker) LastName() string { return Pick(f, fakeLastNames...) }
+
+// Name returns a fake first and last name separated by a space.
+func (f *Faker) Name() string { return f.FirstName() + " " + f.LastName() }
 
 // Email returns an address at the reserved example.test domain. Addresses from
 // one Faker are unique because each carries a per-generator counter.
@@ -57,6 +61,8 @@ func (f *Faker) Email() string {
 
 // Word returns one lowercase word; Words returns count words.
 func (f *Faker) Word() string { return Pick(f, fakeWords...) }
+
+// Words returns the requested number of fake words, or an empty slice for a negative count.
 func (f *Faker) Words(count int) []string {
 	result := make([]string, max(count, 0))
 	for i := range result {

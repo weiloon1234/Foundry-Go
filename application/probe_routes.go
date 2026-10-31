@@ -33,6 +33,7 @@ type ProbeSettings struct {
 	ReadinessCache time.Duration
 }
 
+// DefaultProbeSettings returns liveness and readiness route defaults.
 func DefaultProbeSettings() ProbeSettings {
 	return ProbeSettings{LivenessPath: "/up", ReadinessPath: "/ready", ReadinessCache: diagnostics.DefaultReadinessCache}
 }

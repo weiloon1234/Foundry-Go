@@ -35,6 +35,8 @@ type FeatureDeclarations struct {
 	// (features.maintenance); it is ignored while that schedule is disabled.
 	Pruning []Pruning
 }
+
+// Features constructs feature declarations from application services.
 type Features func(Services) (FeatureDeclarations, error)
 
 // Models registers generated model extension declarations, such as a model
@@ -56,6 +58,7 @@ func (b *Builder) Models(declarations ...slots.Declaration) *Builder {
 	return b
 }
 
+// Features adds a feature constructor, recording an invalid fault if it is nil.
 func (b *Builder) Features(construct Features) *Builder {
 	b.mutate(func() {
 		if construct == nil {

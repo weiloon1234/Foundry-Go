@@ -134,6 +134,7 @@ func calendarDay(now time.Time, zone *time.Location) int {
 	return year*10000 + int(month)*100 + day
 }
 
+// Write writes using the current wall-clock time for rotation.
 func (f *rotatingFile) Write(data []byte) (int, error) { return f.writeAt(data, time.Now()) }
 
 // writeAt never drops a record because of rotation or retention. A failed
@@ -354,6 +355,7 @@ func (f *rotatingFile) readArchives(dir *os.File) ([]logArchive, error) {
 	}
 }
 
+// Close stops the background worker and closes the file, lock, and root resources.
 func (f *rotatingFile) Close() error {
 	if f.stop != nil {
 		close(f.stop)

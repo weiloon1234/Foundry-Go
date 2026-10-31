@@ -20,9 +20,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// Name identifies a setting declaration.
 type Name string
+
+// Version identifies a persisted setting schema version.
 type Version uint32
+
+// Group identifies a settings presentation group.
 type Group string
+
+// Kind identifies a setting's presentation kind.
 type Kind string
 
 const (
@@ -47,6 +54,7 @@ const (
 	MaxBatchBytes      = extensionvalue.MaxBatchBytes
 )
 
+// Validate checks that the setting presentation kind is supported.
 func (k Kind) Validate() error {
 	switch k {
 	case Text, Textarea, Number, Boolean, Select, Multiselect, Email, URL, Color, Date, Datetime, File, Image, JSON, Password, Code:
@@ -84,6 +92,8 @@ func (p Presentation) normalized() (Presentation, error) {
 	}
 	return p, p.Validate()
 }
+
+// Validate validates the presentation kind, group, bounded text, and JSON object parameters.
 func (p Presentation) Validate() error {
 	if err := p.Kind.Validate(); err != nil {
 		return err
@@ -113,6 +123,8 @@ func validText(s string, max int) bool {
 }
 
 type declarationID struct{ nonzero byte }
+
+// Key is a typed, versioned setting declaration.
 type Key[V any] struct{ definition *definition[V] }
 type definition[V any] struct {
 	name         Name
@@ -123,22 +135,29 @@ type definition[V any] struct {
 	err          error
 }
 
+// Define creates a typed setting key, retaining presentation normalization errors for validation.
 func Define[V any](name Name, version Version, codec contract.JSON[V], presentation Presentation) Key[V] {
 	p, err := presentation.normalized()
 	return Key[V]{&definition[V]{name: name, version: version, codec: codec, presentation: p, id: &declarationID{}, err: err}}
 }
+
+// Name returns the setting name, or an empty name for an undefined key.
 func (k Key[V]) Name() Name {
 	if k.definition == nil {
 		return ""
 	}
 	return k.definition.name
 }
+
+// Version returns the setting version, or zero for an undefined key.
 func (k Key[V]) Version() Version {
 	if k.definition == nil {
 		return 0
 	}
 	return k.definition.version
 }
+
+// Validate checks the definition, name, version, presentation, and value codec.
 func (k Key[V]) Validate() error {
 	if k.definition == nil || k.definition.err != nil || !identifier.Semantic(string(k.Name())) || k.Version() == 0 {
 		return invalid()
@@ -148,8 +167,12 @@ func (k Key[V]) Validate() error {
 	}
 	return k.definition.codec.Validate()
 }
+
+// Format writes a fixed label without exposing the setting key.
 func (Key[V]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("typed setting key")) }
 
+// Registration holds a setting's registry identity, presentation, codec validation, and upgrade
+// callbacks.
 type Registration struct {
 	name         Name
 	version      Version
@@ -212,7 +235,11 @@ type Options[V any] struct {
 	Upgrades []Upgrade[V]
 }
 
+// Registration returns a registration with default options.
 func (k Key[V]) Registration() Registration { return k.RegistrationWith(Options[V]{}) }
+
+// RegistrationWith returns a registration with cache and upgrade options, copying the upgrade
+// slice.
 func (k Key[V]) RegistrationWith(options Options[V]) Registration {
 	if k.definition == nil {
 		return Registration{}
@@ -277,6 +304,7 @@ type Manager struct {
 	cache *cache
 }
 
+// New validates and registers setting keys against an extension store, rejecting duplicate names.
 func New(store *extensions.Store, keys ...Registration) (*Manager, error) {
 	if err := store.Validate(); err != nil {
 		return nil, err
@@ -302,6 +330,8 @@ func New(store *extensions.Store, keys ...Registration) (*Manager, error) {
 	}
 	return m, nil
 }
+
+// Validate checks that the manager and its extension store are initialized.
 func (m *Manager) Validate() error {
 	if m == nil || m.keys == nil {
 		return invalid()

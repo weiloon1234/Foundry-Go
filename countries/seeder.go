@@ -14,6 +14,7 @@ import (
 
 const SeederID seed.ID = "foundry.countries"
 
+// SeedResult reports the reference data version and seeded row count.
 type SeedResult struct {
 	Version string
 	Rows    int
@@ -24,6 +25,8 @@ type SeedResult struct {
 func Seeder(store *extensions.Store) seed.Definition {
 	return seed.Definition{ID: SeederID, Run: func(ctx context.Context, tx *database.Tx) error { _, err := SeedIn(ctx, tx, store); return err }}
 }
+
+// Seed seeds country reference data in a store write transaction.
 func Seed(ctx context.Context, store *extensions.Store) (SeedResult, error) {
 	var result SeedResult
 	err := store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {

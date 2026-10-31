@@ -111,8 +111,11 @@ func MFACommand() (cli.Declaration, error) {
 	})
 }
 
+// Sessions resolves the application's session store.
 func (s Services) Sessions() (*session.Store, error) { return Resolve(s, SessionKey) }
-func (s Services) Tokens() (*token.Store, error)     { return Resolve(s, TokenKey) }
+
+// Tokens resolves the application's token store.
+func (s Services) Tokens() (*token.Store, error) { return Resolve(s, TokenKey) }
 
 // Authorization returns the application-owned registry shared by configured
 // guards. It contains every contributed guard, policy, permission and hook.
@@ -180,6 +183,8 @@ type BrowserGuard[M model.Identifiable, K any] struct {
 	Binding  http.GuardBinding[M]
 }
 
+// NewBrowserGuard constructs a browser guard using the configured session store and policy. An
+// empty name selects the default browser guard.
 func NewBrowserGuard[M model.Identifiable, K any](s Services, name auth.GuardName, provider auth.Provider[M, K], source auth.CredentialName) (BrowserGuard[M, K], error) {
 	var result BrowserGuard[M, K]
 	if name == "" {
@@ -212,6 +217,7 @@ func NewBrowserGuard[M model.Identifiable, K any](s Services, name auth.GuardNam
 	return BrowserGuard[M, K]{sessions, browser, binding}, nil
 }
 
+// TokenGuard groups typed token operations, HTTP authentication, and their guard binding.
 type TokenGuard[M model.Identifiable, K any] struct {
 	Tokens         *token.Tokens[M, K]
 	Authentication *http.Authentication

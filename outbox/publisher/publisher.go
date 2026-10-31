@@ -33,20 +33,36 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+// MessageID is the typed identifier of an outbox publication.
 type MessageID = model.ID[Publication]
+
+// Publication marks outbox publication identifiers.
 type Publication struct{}
 
 // Message is the explicit heterogeneous publication boundary. Feature adapters
 // validate their own payload schema again. Default formatting omits private data.
 type Message struct{ record outboxstore.Message }
 
-func (m Message) ID() MessageID                       { return model.IDFromBytes[Publication](m.record.ID.Bytes()) }
-func (m Message) Name() string                        { return m.record.Name }
-func (m Message) Version() uint32                     { return m.record.Version }
-func (m Message) Destination() outbox.Destination     { return m.record.Destination }
-func (m Message) PayloadJSON() (string, error)        { return m.record.Payload.Text() }
+// ID returns the publication identifier.
+func (m Message) ID() MessageID { return model.IDFromBytes[Publication](m.record.ID.Bytes()) }
+
+// Name returns the message name.
+func (m Message) Name() string { return m.record.Name }
+
+// Version returns the message version.
+func (m Message) Version() uint32 { return m.record.Version }
+
+// Destination returns the publication destination.
+func (m Message) Destination() outbox.Destination { return m.record.Destination }
+
+// PayloadJSON returns the stored payload's JSON text.
+func (m Message) PayloadJSON() (string, error) { return m.record.Payload.Text() }
+
+// Origin decodes the publication's attribution origin.
 func (m Message) Origin() (attribution.Origin, error) { return m.record.Origin.Decode() }
-func (Message) Format(s fmt.State, _ rune)            { _, _ = s.Write([]byte("outbox publication")) }
+
+// Format writes a fixed label without exposing publication data.
+func (Message) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("outbox publication")) }
 
 // Route must return nil only after durable acceptance, including an unchanged
 // duplicate of this stable ID. It must honor cancellation and never log payloads.
@@ -84,9 +100,13 @@ type Config struct {
 	Observe func(context.Context, Result) error
 }
 
+// DefaultConfig returns default publication retry, polling, concurrency, timeout, and clock
+// settings.
 func DefaultConfig() Config {
 	return Config{MaxAttempts: 1000, RetryDelay: time.Second, MaxRetryDelay: 5 * time.Minute, Jitter: time.Second, OperationTimeout: 10 * time.Second, PollInterval: 100 * time.Millisecond, MaxPollInterval: time.Second, MaxInFlight: 16, Clock: clock.System{}}
 }
+
+// Validate checks retry, polling, concurrency, timeout, and clock configuration bounds.
 func (c Config) Validate() error {
 	if c.MaxAttempts == 0 || c.MaxAttempts > 1000000 || c.RetryDelay <= 0 || c.RetryDelay > 24*time.Hour || c.OperationTimeout <= 0 || c.OperationTimeout > time.Hour || c.PollInterval <= 0 || c.PollInterval > time.Minute || c.MaxInFlight < 1 || c.MaxInFlight > 1024 || nilValue(c.Clock) {
 		return safeerror.NewFault(fault.Invalid, "invalid outbox publication bounds or clock")
@@ -134,12 +154,15 @@ type Result struct {
 	Failure   error
 }
 
+// Format writes a fixed label without exposing publication results.
 func (Result) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("outbox publication result")) }
 
 type routeKey struct {
 	kind        string
 	destination outbox.Destination
 }
+
+// Publisher coordinates routed outbox publication with bounded concurrency.
 type Publisher struct {
 	writer  database.Transactor
 	config  Config

@@ -49,6 +49,8 @@ func RedactHeader(name, value string) string {
 	return value
 }
 
+// Send logs a preview with bounded bodies, redacted headers, and a BCC count, without delivering
+// the message.
 func (d *PreviewDriver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || d.logger == nil || ctx == nil || out.Validate() != nil {
 		return email.Receipt{}, emaildiag.Failure(email.Construction)

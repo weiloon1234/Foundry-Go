@@ -49,4 +49,5 @@ func (c *syslogConnection) writeRecord(data []byte, level slog.Level) (int, erro
 	return len(data), nil
 }
 
+// Close closes the underlying syslog writer.
 func (c *syslogConnection) Close() error { return c.writer.Close() }

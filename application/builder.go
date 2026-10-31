@@ -23,6 +23,8 @@ import (
 // Routes constructs only domain handlers from typed resources; the framework
 // owns router/server creation. It runs once at Build and must perform no I/O.
 type Routes func(Services) ([]http.RouteRegistration, error)
+
+// Builder collects configuration and declarations for a single application build.
 type Builder struct{ state *builderState }
 type builderState struct {
 	mu         sync.Mutex
@@ -79,6 +81,9 @@ func (b *Builder) mutate(fn func()) {
 		fn()
 	}
 }
+
+// HTTP adds route constructors, recording an invalid fault for nil constructors or more than 128
+// total constructors.
 func (b *Builder) HTTP(routes ...Routes) *Builder {
 	b.mutate(func() {
 		for _, r := range routes {
@@ -129,18 +134,27 @@ func (b *Builder) Use(middleware ...http.Middleware) *Builder {
 	b.mutate(func() { b.state.middleware = append(b.state.middleware, middleware...) })
 	return b
 }
+
+// ObserveHTTP adds HTTP request observers to the builder.
 func (b *Builder) ObserveHTTP(observers ...http.RequestObserver) *Builder {
 	b.mutate(func() { b.state.observers = append(b.state.observers, observers...) })
 	return b
 }
+
+// Register adds foundation providers to the builder.
 func (b *Builder) Register(providers ...foundation.Provider) *Builder {
 	b.mutate(func() { b.state.providers = append(b.state.providers, providers...) })
 	return b
 }
+
+// RegisterPlugin adds plugins to the builder.
 func (b *Builder) RegisterPlugin(plugins ...foundation.Plugin) *Builder {
 	b.mutate(func() { b.state.plugins = append(b.state.plugins, plugins...) })
 	return b
 }
+
+// Build consumes the builder and constructs the application. Once construction begins, the
+// builder cannot be reused, even if construction fails.
 func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if b == nil || b.state == nil || ctx == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "application build needs a builder and context")
@@ -285,8 +299,12 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	}
 	return result, err
 }
+
+// Format writes a fixed label without exposing builder configuration.
 func (Builder) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("application builder")) }
-func (Builder) LogValue() slog.Value       { return slog.StringValue("application builder") }
+
+// LogValue returns a fixed log label without exposing builder configuration.
+func (Builder) LogValue() slog.Value { return slog.StringValue("application builder") }
 
 // validateShutdownBudget keeps each enabled listener's drain inside the single
 // application budget so cleanup always receives part of it.

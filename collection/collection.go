@@ -5,6 +5,7 @@
 // SortBy/SortByDesc return new slices ordered by an extracted key.
 package collection
 
+// Map transforms each element into a new slice in input order, preserving nil input.
 func Map[S ~[]T, T, U any](input S, transform func(T) U) []U {
 	if input == nil {
 		return nil
@@ -16,6 +17,7 @@ func Map[S ~[]T, T, U any](input S, transform func(T) U) []U {
 	return result
 }
 
+// Filter returns a new slice of matching elements in input order, preserving nil input.
 func Filter[S ~[]T, T any](input S, keep func(T) bool) S {
 	if input == nil {
 		return nil
@@ -28,6 +30,8 @@ func Filter[S ~[]T, T any](input S, keep func(T) bool) S {
 	}
 	return result
 }
+
+// FlatMap concatenates each transformed slice in input order, preserving nil input.
 func FlatMap[S ~[]T, T, U any](input S, transform func(T) []U) []U {
 	if input == nil {
 		return nil
@@ -74,6 +78,9 @@ func UniqueBy[S ~[]T, T any, K comparable](input S, key func(T) K) S {
 	}
 	return result
 }
+
+// Partition splits input into matching and nonmatching slices, preserving order within each. Nil
+// input returns two nil slices.
 func Partition[S ~[]T, T any](input S, keep func(T) bool) (S, S) {
 	if input == nil {
 		return nil, nil
@@ -88,6 +95,8 @@ func Partition[S ~[]T, T any](input S, keep func(T) bool) (S, S) {
 	}
 	return yes, no
 }
+
+// Reduce combines elements in input order, starting with the supplied initial value.
 func Reduce[S ~[]T, T, U any](input S, initial U, combine func(U, T) U) U {
 	result := initial
 	for _, value := range input {
@@ -95,6 +104,8 @@ func Reduce[S ~[]T, T, U any](input S, initial U, combine func(U, T) U) U {
 	}
 	return result
 }
+
+// Find returns the first matching element, or the zero value and false.
 func Find[S ~[]T, T any](input S, match func(T) bool) (T, bool) {
 	for _, value := range input {
 		if match(value) {
@@ -103,7 +114,11 @@ func Find[S ~[]T, T any](input S, match func(T) bool) (T, bool) {
 	}
 	return *new(T), false
 }
+
+// Any reports whether any element matches.
 func Any[S ~[]T, T any](input S, match func(T) bool) bool { _, ok := Find(input, match); return ok }
+
+// All reports whether every element matches; empty input returns true.
 func All[S ~[]T, T any](input S, match func(T) bool) bool {
 	for _, value := range input {
 		if !match(value) {
@@ -112,6 +127,8 @@ func All[S ~[]T, T any](input S, match func(T) bool) bool {
 	}
 	return true
 }
+
+// Count returns the number of matching elements.
 func Count[S ~[]T, T any](input S, match func(T) bool) int {
 	count := 0
 	for _, value := range input {

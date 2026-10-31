@@ -14,6 +14,7 @@ import (
 
 const MaxCountries = 1000
 
+// Find looks up a validated country code, returning an absent value when missing.
 func Find(ctx context.Context, store *extensions.Store, code Code) (value.Optional[Country], error) {
 	if err := code.Validate(); err != nil {
 		return value.Optional[Country]{}, err
@@ -29,6 +30,8 @@ func Find(ctx context.Context, store *extensions.Store, code Code) (value.Option
 	}
 	return result, nil
 }
+
+// Exists reports whether a validated country code exists in the store.
 func Exists(ctx context.Context, store *extensions.Store, code Code) (bool, error) {
 	if err := code.Validate(); err != nil {
 		return false, err
@@ -44,9 +47,13 @@ func Exists(ctx context.Context, store *extensions.Store, code Code) (bool, erro
 	}
 	return result, nil
 }
+
+// All lists all stored countries.
 func All(ctx context.Context, store *extensions.Store) ([]Country, error) {
 	return list(ctx, store, false)
 }
+
+// Enabled lists enabled stored countries.
 func Enabled(ctx context.Context, store *extensions.Store) ([]Country, error) {
 	return list(ctx, store, true)
 }

@@ -60,6 +60,7 @@ type Document struct {
 	PublicConfig  []PublicSetting               `json:"public_config,omitempty"`
 }
 
+// Operation describes an HTTP operation's route, inputs, response, limits, and errors.
 type Operation struct {
 	// TableOperation binds this operation to one registered table and role.
 	TableOperation    *contract.TableOperationBinding `json:"table_operation,omitempty"`
@@ -83,6 +84,7 @@ type Operation struct {
 	RefreshCookie *foundryhttp.RefreshCookieInfo `json:"refresh_cookie,omitempty"`
 }
 
+// Parameter describes a typed URL parameter and its encoding requirements.
 type Parameter struct {
 	Presentation contract.Presentation  `json:"presentation,omitzero"`
 	Name         string                 `json:"name"`
@@ -94,6 +96,7 @@ type Parameter struct {
 	DefaultURL   value.Optional[string] `json:"default_url,omitzero"`
 }
 
+// Part describes a multipart parameter and its content restrictions.
 type Part struct {
 	Parameter
 	Kind         foundryhttp.MultipartKind `json:"kind"`
@@ -113,12 +116,14 @@ type Payload struct {
 	Example   json.RawMessage               `json:"example,omitempty"`
 }
 
+// Realtime describes the realtime protocol, client limits, and channels.
 type Realtime struct {
 	Protocol websocket.ProtocolInfo `json:"protocol"`
 	Limits   websocket.ClientLimits `json:"limits"`
 	Channels []Channel              `json:"channels"`
 }
 
+// Channel describes a realtime channel and its room, authentication, replay, and event contracts.
 type Channel struct {
 	ID         websocket.ChannelID    `json:"id"`
 	Name       string                 `json:"name"`
@@ -132,6 +137,7 @@ type Channel struct {
 	Events     []Event                `json:"events"`
 }
 
+// Event describes a realtime event's direction and payload contract.
 type Event struct {
 	ID                      websocket.EventID   `json:"id"`
 	Name                    string              `json:"name"`
@@ -141,12 +147,15 @@ type Event struct {
 	Payload                 contract.TypeID     `json:"payload"`
 }
 
+// Notification describes a notification version and its delivery channels.
 type Notification struct {
 	Recipient notifications.RecipientName `json:"recipient"`
 	Name      notifications.Name          `json:"name"`
 	Version   notifications.Version       `json:"version"`
 	Channels  []NotificationChannel       `json:"channels"`
 }
+
+// NotificationChannel describes a notification channel's payload and optional realtime metadata.
 type NotificationChannel struct {
 	ID       notifications.ChannelID           `json:"id"`
 	Kind     string                            `json:"kind"`
@@ -154,6 +163,7 @@ type NotificationChannel struct {
 	Realtime *notifications.ClientRealtimeInfo `json:"realtime,omitempty"`
 }
 
+// Table describes a datatable's row, request, page, columns, and filters.
 type Table struct {
 	ID      contract.TableID `json:"id"`
 	Row     contract.TypeID  `json:"row"`
@@ -166,6 +176,7 @@ type Table struct {
 	Exports     bool                        `json:"exports"`
 }
 
+// Locales describes supported locales and registered message definitions.
 type Locales struct {
 	Default          i18n.LocaleID            `json:"default"`
 	Supported        []i18n.LocaleID          `json:"supported"`

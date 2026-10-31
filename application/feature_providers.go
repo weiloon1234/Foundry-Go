@@ -244,16 +244,36 @@ func registerFeatures(ctx context.Context, builder *foundation.Builder, settings
 	}
 	return nil
 }
-func (s Services) ExtensionStore() (*extensions.Store, error)     { return Resolve(s, ExtensionKey) }
-func (s Services) Settings() (*settings.Manager, error)           { return Resolve(s, SettingsKey) }
-func (s Services) Metadata() (*metadata.Manager, error)           { return Resolve(s, MetadataKey) }
-func (s Services) Translations() (*translations.Manager, error)   { return Resolve(s, TranslationKey) }
+
+// ExtensionStore resolves the application's extension store.
+func (s Services) ExtensionStore() (*extensions.Store, error) { return Resolve(s, ExtensionKey) }
+
+// Settings resolves the application's settings manager.
+func (s Services) Settings() (*settings.Manager, error) { return Resolve(s, SettingsKey) }
+
+// Metadata resolves the application's metadata manager.
+func (s Services) Metadata() (*metadata.Manager, error) { return Resolve(s, MetadataKey) }
+
+// Translations resolves the application's translation manager.
+func (s Services) Translations() (*translations.Manager, error) { return Resolve(s, TranslationKey) }
+
+// Notifications resolves the application's notification manager.
 func (s Services) Notifications() (*notifications.Manager, error) { return Resolve(s, NotificationKey) }
-func (s Services) Attachments() (*attachments.Manager, error)     { return Resolve(s, AttachmentKey) }
-func (s Services) Reports() (*datatable.Manager, error)           { return Resolve(s, ReportKey) }
-func (s Services) Locales() (*i18n.Catalog, error)                { return Resolve(s, LocaleKey) }
-func (s Services) Health() (*health.Registry, error)              { return Resolve(s, HealthKey) }
-func (s Services) Audit() (*audit.Recorder, error)                { return Resolve(s, AuditKey) }
+
+// Attachments resolves the application's attachment manager.
+func (s Services) Attachments() (*attachments.Manager, error) { return Resolve(s, AttachmentKey) }
+
+// Reports resolves the application's datatable manager.
+func (s Services) Reports() (*datatable.Manager, error) { return Resolve(s, ReportKey) }
+
+// Locales resolves the application's locale catalog.
+func (s Services) Locales() (*i18n.Catalog, error) { return Resolve(s, LocaleKey) }
+
+// Health resolves the application's health registry.
+func (s Services) Health() (*health.Registry, error) { return Resolve(s, HealthKey) }
+
+// Audit resolves the application's audit recorder.
+func (s Services) Audit() (*audit.Recorder, error) { return Resolve(s, AuditKey) }
 
 // ModelExtensions returns the managers bound model extension slots use,
 // resolving only enabled features. Bind it once in a constructor with

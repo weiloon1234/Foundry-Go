@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
+// WorkerSettings configures the worker connection, runtime, and archive.
 type WorkerSettings struct {
 	Enabled    bool
 	Connection jobs.ConnectionName
@@ -54,10 +55,12 @@ func prepareJobArchive(s Settings) (JobArchiveSettings, error) {
 	return a, nil
 }
 
+// DefaultWorkerSettings returns default worker settings with an archive in the public schema.
 func DefaultWorkerSettings() WorkerSettings {
 	return WorkerSettings{Config: jobs.DefaultWorkerConfig(keyspace.Namespace{}), Archive: JobArchiveSettings{Schema: "public"}}
 }
 
+// SchedulerSettings configures scheduler concurrency, timing, and retained history.
 type SchedulerSettings struct {
 	Enabled                             bool
 	Group                               schedule.Group
@@ -66,6 +69,7 @@ type SchedulerSettings struct {
 	CapacityWait, DrainTimeout          time.Duration
 }
 
+// DefaultSchedulerSettings returns scheduler defaults for the default group.
 func DefaultSchedulerSettings() SchedulerSettings {
 	c := schedule.DefaultConfig("default")
 	return SchedulerSettings{Group: c.Group, Concurrency: c.Concurrency, MaxHistory: c.MaxHistory, MaxPerTick: c.MaxPerTick, PollInterval: c.PollInterval, LeadershipTTL: c.LeadershipTTL, Grace: c.Grace, CapacityWait: c.CapacityWait, DrainTimeout: c.DrainTimeout}
@@ -74,6 +78,7 @@ func (s SchedulerSettings) runtime(source clock.Clock) schedule.Config {
 	return schedule.Config{Group: s.Group, Clock: source, Concurrency: s.Concurrency, MaxHistory: s.MaxHistory, MaxPerTick: s.MaxPerTick, PollInterval: s.PollInterval, LeadershipTTL: s.LeadershipTTL, Grace: s.Grace, CapacityWait: s.CapacityWait, DrainTimeout: s.DrainTimeout}
 }
 
+// RealtimeServerSettings configures the realtime hub, listener, and publisher mode.
 type RealtimeServerSettings struct {
 	Enabled bool
 	// Shared serves upgrades at Path on the application HTTP listener instead
@@ -90,6 +95,7 @@ type RealtimeServerSettings struct {
 	Path       string
 }
 
+// DefaultRealtimeServerSettings returns default realtime hub and HTTP listener settings.
 func DefaultRealtimeServerSettings() RealtimeServerSettings {
 	server := websocket.DefaultServerConfig()
 	return RealtimeServerSettings{Config: websocket.DefaultConfig(), HTTP: server.HTTP, Path: server.Path}

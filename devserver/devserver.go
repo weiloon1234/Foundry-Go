@@ -297,6 +297,8 @@ func newPrefixWriter(mu *sync.Mutex, out io.Writer, prefix string) *prefixWriter
 	return &prefixWriter{mu: mu, out: out, prefix: prefix}
 }
 
+// Write serializes writes and emits prefixed lines, buffering incomplete lines shorter than 4096
+// bytes.
 func (w *prefixWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()

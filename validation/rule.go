@@ -81,10 +81,17 @@ type Errors struct {
 	truncated bool
 }
 
-func (*Errors) Error() string              { return "validation failed" }
-func (*Errors) Is(target error) bool       { return target == fault.Invalid }
+// Error returns the fixed validation failure message.
+func (*Errors) Error() string { return "validation failed" }
+
+// Is reports whether the target is fault.Invalid.
+func (*Errors) Is(target error) bool { return target == fault.Invalid }
+
+// Issues returns a copy of the validation issues.
 func (e *Errors) Issues() []contract.Issue { return slices.Clone(e.issues) }
-func (e *Errors) Truncated() bool          { return e.truncated }
+
+// Truncated reports whether validation issues were truncated.
+func (e *Errors) Truncated() bool { return e.truncated }
 
 // Check executes owned callbacks and returns nil only after all applicable
 // checks pass. Input and referenced data must remain unchanged until return.

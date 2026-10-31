@@ -162,6 +162,8 @@ type budgetReader struct {
 	scan   markupScanner
 }
 
+// Read reads an XLSX part while enforcing cancellation and shared decompression and XML scan
+// budgets.
 func (b *budgetReader) Read(p []byte) (int, error) {
 	if err := b.ctx.Err(); err != nil {
 		return 0, err
@@ -282,6 +284,8 @@ func (s *markupScanner) tag(c byte) bool {
 func (s *markupScanner) section(closer byte, need int) {
 	s.state, s.closer, s.need, s.seen = scanSection, closer, need, 0
 }
+
+// Close closes the underlying XLSX part reader.
 func (b *budgetReader) Close() error { return b.body.Close() }
 
 func newDecoder(reader io.Reader) *xml.Decoder {

@@ -29,6 +29,7 @@ func Connect(t testing.TB, url string, headers http.Header, maxFrameBytes int) *
 	return client
 }
 
+// AssertType reports a test error when the response type differs from want.
 func AssertType(t testing.TB, response protocol.Response, want protocol.ResponseType) {
 	t.Helper()
 	if response.Type != want {

@@ -31,18 +31,35 @@ type Record struct {
 	created, updated temporal.DateTime
 }
 
-func (r Record) Name() Name                 { return r.name }
-func (r Record) Version() Version           { return r.version }
+// Name returns the record's setting name.
+func (r Record) Name() Name { return r.name }
+
+// Version returns the record's schema version.
+func (r Record) Version() Version { return r.version }
+
+// Presentation returns the record's presentation metadata.
 func (r Record) Presentation() Presentation { return r.presentation }
 
 // Configured reports whether Configure took ownership of the presentation, so
 // declaration changes no longer replace it.
-func (r Record) Configured() bool                       { return r.configured }
-func (r Record) CreatedAt() temporal.DateTime           { return r.created }
-func (r Record) UpdatedAt() temporal.DateTime           { return r.updated }
+func (r Record) Configured() bool { return r.configured }
+
+// CreatedAt returns the record creation timestamp.
+func (r Record) CreatedAt() temporal.DateTime { return r.created }
+
+// UpdatedAt returns the record update timestamp.
+func (r Record) UpdatedAt() temporal.DateTime { return r.updated }
+
+// DynamicValue decodes the stored value as raw JSON.
 func (r Record) DynamicValue() (json.RawMessage, error) { return r.data.Decode() }
-func (Record) Format(s fmt.State, _ rune)               { _, _ = s.Write([]byte("setting record")) }
-func (Record) MarshalJSON() ([]byte, error)             { return nil, invalid() }
+
+// Format writes a fixed label without exposing the record.
+func (Record) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("setting record")) }
+
+// MarshalJSON rejects direct JSON serialization of the record.
+func (Record) MarshalJSON() ([]byte, error) { return nil, invalid() }
+
+// Decode decodes a record whose name and version match this validated key.
 func (k Key[V]) Decode(ctx context.Context, r Record) (V, error) {
 	if err := k.Validate(); err != nil {
 		return *new(V), err
@@ -126,6 +143,7 @@ func (k Key[V]) Find(ctx context.Context, m *Manager) (value.Optional[Record], e
 	return result, nil
 }
 
+// Filter selects settings by group, name prefix, and public visibility.
 type Filter struct {
 	Group      Group
 	Prefix     string
@@ -141,6 +159,7 @@ type Cursor struct {
 	Name  Name
 }
 
+// IsZero reports whether the cursor is empty.
 func (c Cursor) IsZero() bool { return c == Cursor{} }
 
 // After returns the cursor that continues after record r.
@@ -344,6 +363,7 @@ type Batch struct {
 	selected map[Name]value.Optional[Record]
 }
 
+// Format writes a fixed label without exposing batch data.
 func (Batch) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("settings batch")) }
 
 // Load reads the selected registered keys with at most one query. Cached keys

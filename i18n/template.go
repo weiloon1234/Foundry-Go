@@ -14,6 +14,8 @@ type Template struct {
 	Text  string
 	Forms map[PluralForm]string
 }
+
+// PluralForm identifies a plural form.
 type PluralForm string
 
 const (

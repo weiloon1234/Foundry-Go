@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/redis"
 )
 
+// CoordinationDriver selects a coordination implementation.
 type CoordinationDriver string
 
 const (
@@ -13,6 +14,7 @@ const (
 	RedisCoordination  CoordinationDriver = "redis"
 )
 
+// CoordinationSettings configures coordination enablement, backend, leases, and capacity.
 type CoordinationSettings struct {
 	Enabled    bool
 	Driver     CoordinationDriver
@@ -21,6 +23,7 @@ type CoordinationSettings struct {
 	MaxEntries int
 }
 
+// DefaultCoordinationSettings returns default settings for in-memory coordination.
 func DefaultCoordinationSettings() CoordinationSettings {
 	return CoordinationSettings{Driver: MemoryCoordination, Config: lease.DefaultConfig(keyspace.Namespace{}), MaxEntries: 4096}
 }

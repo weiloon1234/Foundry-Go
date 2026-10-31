@@ -26,6 +26,7 @@ const (
 	Overloaded Code = "overloaded"
 )
 
+// Error returns the fault code as an error message.
 func (c Code) Error() string { return string(c) }
 
 // Error retains an internal cause while exposing only its explicit safe message
@@ -53,11 +54,22 @@ func Panic(message string, frames []Frame) *Error {
 	return &Error{code: Panicked, message: message, frames: slices.Clone(frames)}
 }
 
-func (e *Error) Error() string    { return fmt.Sprintf("%s: %s", e.code, e.message) }
+// Error returns the fault code and message.
+func (e *Error) Error() string { return fmt.Sprintf("%s: %s", e.code, e.message) }
+
+// GoString returns the same text as Error.
 func (e *Error) GoString() string { return e.Error() }
-func (e *Error) Unwrap() error    { return e.cause }
-func (e *Error) Code() Code       { return e.code }
-func (e *Error) Message() string  { return e.message }
+
+// Unwrap returns the underlying cause.
+func (e *Error) Unwrap() error { return e.cause }
+
+// Code returns the error's fault code.
+func (e *Error) Code() Code { return e.code }
+
+// Message returns the error's message.
+func (e *Error) Message() string { return e.message }
+
+// Is reports whether the target fault code equals this error's code.
 func (e *Error) Is(target error) bool {
 	code, ok := target.(Code)
 	return ok && e.code == code

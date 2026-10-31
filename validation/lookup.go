@@ -15,7 +15,9 @@ import (
 // retain ownership of its work until return. The database adapter supplies this
 // contract from ORM declarations; applications can provide other typed sources.
 type Lookup[T any] interface {
+	// Validate checks the lookup's configuration.
 	Validate() error
+	// Exists reports whether the supplied value exists.
 	Exists(context.Context, T) (bool, error)
 }
 
@@ -23,14 +25,18 @@ type Lookup[T any] interface {
 // call per value. Implementations retain the same error/ownership contract as
 // Lookup. Empty input succeeds without I/O; use MinItems to require selection.
 type BatchLookup[T any] interface {
+	// Validate checks the lookup's configuration.
 	Validate() error
+	// AllExist reports whether all supplied values exist.
 	AllExist(context.Context, []T) (bool, error)
 }
 
 // AnyLookup reports whether any value of a collection exists, in bounded
 // batches. It backs UniqueAll and UniqueEach with the Lookup ownership contract.
 type AnyLookup[T any] interface {
+	// Validate checks the lookup's configuration.
 	Validate() error
+	// AnyExist reports whether any supplied value exists.
 	AnyExist(context.Context, []T) (bool, error)
 }
 

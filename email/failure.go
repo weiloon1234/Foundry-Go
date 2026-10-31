@@ -17,6 +17,7 @@ const (
 	Ambiguous    Kind = emaildiag.Ambiguous
 )
 
+// Error returns the failure kind's string value.
 func (k Kind) Error() string { return string(k) }
 
 // Classification inspects extension errors inside callback isolation. Unknown

@@ -13,6 +13,7 @@ type Feature string
 // Components contain 1–128 ASCII letters, digits, dots, underscores or hyphens.
 type Namespace struct{ Application, Environment string }
 
+// Validate validates the application and environment names.
 func (n Namespace) Validate() error {
 	if !ValidName(n.Application) || !ValidName(n.Environment) {
 		return safeerror.NewFault(fault.Invalid, "invalid keyspace application or environment")

@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/testkit"
 )
 
+// Harness groups the memory job backend, registry, dispatcher, and namespace for tests.
 type Harness struct {
 	Backend    *memory.Backend
 	Registry   *jobs.Registry

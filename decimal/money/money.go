@@ -65,12 +65,23 @@ func FromMinor(units int64, c Currency) (Money, error) {
 // Zero returns a zero amount in currency c.
 func Zero(c Currency) (Money, error) { return New(decimal.Decimal{}, c) }
 
+// Amount returns the monetary amount.
 func (m Money) Amount() decimal.Decimal { return m.amount }
-func (m Money) Currency() Currency      { return m.currency }
-func (m Money) IsZero() bool            { return m.amount.IsZero() }
-func (m Money) Sign() int               { return m.amount.Sign() }
-func (m Money) Neg() Money              { return Money{amount: m.amount.Neg(), currency: m.currency} }
-func (m Money) Abs() Money              { return Money{amount: m.amount.Abs(), currency: m.currency} }
+
+// Currency returns the money's currency.
+func (m Money) Currency() Currency { return m.currency }
+
+// IsZero reports whether the monetary amount is zero.
+func (m Money) IsZero() bool { return m.amount.IsZero() }
+
+// Sign returns the sign of the monetary amount.
+func (m Money) Sign() int { return m.amount.Sign() }
+
+// Neg returns the negated amount in the same currency.
+func (m Money) Neg() Money { return Money{amount: m.amount.Neg(), currency: m.currency} }
+
+// Abs returns the absolute amount in the same currency.
+func (m Money) Abs() Money { return Money{amount: m.amount.Abs(), currency: m.currency} }
 
 // Validate reports a zero-value or otherwise inconsistent Money.
 func (m Money) Validate() error {
@@ -260,6 +271,8 @@ type wire struct {
 	Currency Currency `json:"currency"`
 }
 
+// MarshalJSON validates and encodes the amount at its currency's minor-unit precision with the
+// currency code.
 func (m Money) MarshalJSON() ([]byte, error) {
 	if err := m.Validate(); err != nil {
 		return nil, err

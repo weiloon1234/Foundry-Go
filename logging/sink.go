@@ -18,6 +18,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+// SinkDriver selects a logging sink implementation.
 type SinkDriver string
 
 const (
@@ -70,6 +71,7 @@ func (c AsyncConfig) resolved() AsyncConfig {
 	return c
 }
 
+// Validate checks asynchronous queue limits and rejects options on a disabled queue.
 func (c AsyncConfig) Validate() error {
 	if !c.Enabled {
 		if c != (AsyncConfig{}) {
@@ -84,7 +86,10 @@ func (c AsyncConfig) Validate() error {
 	return nil
 }
 
+// DefaultSinkConfig returns default settings for a stderr sink.
 func DefaultSinkConfig() SinkConfig { return SinkConfig{Driver: Stderr} }
+
+// Validate checks driver-specific options, log level, time zone, and asynchronous settings.
 func (c SinkConfig) Validate() error {
 	if _, err := c.location(); err != nil {
 		return err
@@ -184,6 +189,7 @@ func (d streamDestination) writeRecord(data []byte, _ slog.Level) (int, error) {
 	return d.writer.Write(data)
 }
 
+// PrepareSink validates configuration and prepares sink state without opening its target.
 func PrepareSink(c SinkConfig) (*Sink, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
@@ -198,6 +204,8 @@ func PrepareSink(c SinkConfig) (*Sink, error) {
 	}
 	return &Sink{state: state}, nil
 }
+
+// Logger returns a correlated logger for the sink, or nil for an uninitialized sink.
 func (s *Sink) Logger() *slog.Logger {
 	if s == nil || s.state == nil {
 		return nil
@@ -208,6 +216,9 @@ func (s *Sink) Logger() *slog.Logger {
 	}
 	return JSON(s, options)
 }
+
+// Start opens the sink and starts asynchronous processing when configured. A closed sink cannot
+// restart.
 func (s *Sink) Start(ctx context.Context) error {
 	if s == nil || s.state == nil || ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "logging sink requires an owner and context")

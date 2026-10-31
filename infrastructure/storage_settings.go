@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// DiskDriver selects a storage disk implementation.
 type DiskDriver string
 
 const (
@@ -20,11 +21,15 @@ const (
 	CompatibleDisk DiskDriver = "s3_compatible"
 )
 
+// LocalDiskSettings configures local disk root, scan budget, and synchronization.
 type LocalDiskSettings struct {
 	Root    string
 	MaxScan int
 	Sync    bool
 }
+
+// CloudDiskSettings configures cloud storage location, credentials, transfer limits, and
+// compatibility options.
 type CloudDiskSettings struct {
 	Bucket, Region, Endpoint, Namespace, PublicBase string
 	Credentials                                     credentials.Name
@@ -49,6 +54,7 @@ type DiskSettings struct {
 	Cloud  CloudDiskSettings
 }
 
+// DefaultDiskSettings returns local disk defaults and cloud transfer defaults.
 func DefaultDiskSettings() DiskSettings {
 	l, c := local.DefaultConfig(""), s3.DefaultConfig("", "")
 	return DiskSettings{Driver: LocalDisk, Config: storage.DefaultConfig(), Local: LocalDiskSettings{MaxScan: l.MaxScan, Sync: l.Sync}, Cloud: CloudDiskSettings{PartBytes: c.PartBytes, MaxUploads: c.MaxUploads, ReadAttempts: c.ReadAttempts, PartAttempts: c.PartAttempts, AbortTimeout: c.AbortTimeout, PartConcurrency: c.PartConcurrency, VerifyPublication: c.VerifyPublication}}
@@ -90,8 +96,10 @@ func (s DiskSettings) cloudConfig(provider credentials.Provider) (s3.Config, err
 	return c, c.Validate()
 }
 
+// Disks maps disk identifiers to settings.
 type Disks map[storage.DiskID]DiskSettings
 
+// UnmarshalText decodes disk settings, replacing the receiver only on success.
 func (m *Disks) UnmarshalText(data []byte) error {
 	schema, err := DiskSettingsConfigSchema()
 	if err != nil {
@@ -105,15 +113,19 @@ func (m *Disks) UnmarshalText(data []byte) error {
 	return nil
 }
 
+// StorageSettings configures named storage disks and their default.
 type StorageSettings struct {
 	Default storage.DiskID
 	Disks   Disks
 }
 
+// DefaultStorageSettings returns storage settings selecting the default disk name.
 func DefaultStorageSettings() StorageSettings { return StorageSettings{Default: "default"} }
 
+// CredentialSources maps credential names to source settings.
 type CredentialSources map[credentials.Name]credentials.Settings
 
+// UnmarshalText decodes credential source settings, replacing the receiver only on success.
 func (m *CredentialSources) UnmarshalText(data []byte) error {
 	schema, err := credentials.SettingsConfigSchema()
 	if err != nil {

@@ -32,6 +32,8 @@ type Command struct {
 
 const usage = "outbox stats|failed|requeue|prune [--format text|json]; failed: [--kind kind] [--id id] [--limit 20]; requeue: --all|--kind kind|--id id [--limit 1000]; prune: --older-than duration [--limit 1000]"
 
+// Parse parses outbox inspection and maintenance commands; help writes usage and returns
+// flag.ErrHelp.
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
 		return Command{}, safeerror.NewFault(fault.Invalid, "outbox commands require help output")

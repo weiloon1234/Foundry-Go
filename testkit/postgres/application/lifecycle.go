@@ -18,11 +18,15 @@ import (
 // assembly into a feature helper. Build it from Environment.Settings through
 // application.Settings.WithDatabaseScopes before handing it to Start.
 type Application interface {
+	// Start starts the application using the supplied context.
 	Start(context.Context) error
+	// Shutdown shuts down the application using the supplied context.
 	Shutdown(context.Context) error
+	// ShutdownTimeout returns the application's shutdown timeout.
 	ShutdownTimeout() time.Duration
 	// Done closes only after all owned work and dependency cleanup finish.
 	Done() <-chan struct{}
+	// Migrations returns application migration targets.
 	Migrations() []infrastructure.MigrationTarget
 }
 

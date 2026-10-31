@@ -46,6 +46,8 @@ func Today(source clock.Clock, zone *time.Location) (Date, error) {
 	}
 	return instant.DateIn(zone)
 }
+
+// DateIn returns the calendar date in the supplied time zone.
 func (v DateTime) DateIn(zone *time.Location) (Date, error) {
 	local, err := v.LocalIn(zone)
 	if err != nil {
@@ -82,5 +84,8 @@ func ParseDateTimeIn(text string, zone *time.Location) (DateTime, error) {
 	return local.In(zone)
 }
 
+// UnixMilli returns milliseconds since the Unix epoch.
 func (v DateTime) UnixMilli() int64 { return v.instant.UnixMilli() }
+
+// UnixMicro returns microseconds since the Unix epoch.
 func (v DateTime) UnixMicro() int64 { return v.instant.UnixMicro() }

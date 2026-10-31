@@ -20,6 +20,7 @@ import (
 // use the reserved foundry namespace; application rules use semantic IDs.
 type RuleID string
 
+// Kind identifies validation metadata kinds.
 type Kind string
 
 const (

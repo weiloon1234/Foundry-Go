@@ -6,6 +6,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/decimal"
 )
 
+// Number is the set of integer and floating-point types supported by numeric rules.
 type Number interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr | ~float32 | ~float64
 }
@@ -22,6 +23,8 @@ func Min[N Number](minimum N) Rule[N] {
 	}
 	return valueRule(Spec{ID: "foundry.min", Parameters: []Parameter{scalarParameter("min", minimum)}}, false, func(_ *execution, input N) (bool, error) { return finite(input) && input >= minimum, nil })
 }
+
+// Max creates an inclusive maximum rule, rejecting nonfinite bounds and inputs.
 func Max[N Number](maximum N) Rule[N] {
 	if !finite(maximum) {
 		return failed[N](invalid("numeric bound must be finite"))
@@ -34,6 +37,8 @@ func Max[N Number](maximum N) Rule[N] {
 func DecimalMin(minimum decimal.Decimal) Rule[decimal.Decimal] {
 	return valueRule(Spec{ID: "foundry.decimal_min", Parameters: []Parameter{parameter("min", minimum.String())}}, false, func(_ *execution, input decimal.Decimal) (bool, error) { return input.Cmp(minimum) >= 0, nil })
 }
+
+// DecimalMax creates a rule requiring a decimal no greater than the maximum.
 func DecimalMax(maximum decimal.Decimal) Rule[decimal.Decimal] {
 	return valueRule(Spec{ID: "foundry.decimal_max", Parameters: []Parameter{parameter("max", maximum.String())}}, false, func(_ *execution, input decimal.Decimal) (bool, error) { return input.Cmp(maximum) <= 0, nil })
 }

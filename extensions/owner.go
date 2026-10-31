@@ -23,6 +23,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// OwnerName identifies a model extension owner.
 type OwnerName string
 type declarationID struct{ nonzero byte }
 
@@ -55,6 +56,7 @@ type OwnerOptions struct {
 	PreviousModels []string
 }
 
+// Validate checks the owner name, model type, storage names, previous models, and identity source.
 func (o Owner[M, K]) Validate() error {
 	if o.definition == nil || !identifier.Semantic(string(o.definition.name)) || reflect.TypeFor[M]().Kind() != reflect.Struct {
 		return invalid("invalid model extension owner")
@@ -87,6 +89,8 @@ func (o Owner[M, K]) RecordedModels() []string {
 	}
 	return append(models, o.definition.previous...)
 }
+
+// Name returns the owner name, or an empty name for an undefined owner.
 func (o Owner[M, K]) Name() OwnerName {
 	if o.definition == nil {
 		return ""
@@ -127,6 +131,8 @@ func (o Owner[M, K]) Parse(identity model.Identity) (model.Reference[M, K], erro
 	}
 	return o.definition.source.Parse(identity)
 }
+
+// Format writes a fixed label without exposing owner details.
 func (o Owner[M, K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("model extension owner")) }
 
 // Subject is frozen infrastructure metadata, not owner authority. It contains
@@ -137,8 +143,10 @@ type Subject struct {
 	Identity   value.JSON[model.Identity]
 }
 
+// Format writes a fixed label without exposing the subject.
 func (Subject) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("model extension subject")) }
 
+// Subject converts a typed reference into an extension subject with a JSON identity snapshot.
 func (o Owner[M, K]) Subject(reference model.Reference[M, K]) (Subject, error) {
 	identity, key, err := o.subjectKey(reference)
 	if err != nil {

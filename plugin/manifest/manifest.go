@@ -18,10 +18,16 @@ import (
 // release. It is independent of the Go toolchain and plugin payload versions.
 const FrameworkVersion Version = "0.1.0"
 
+// ID identifies a plugin.
 type ID string
+
+// Version identifies a plugin release version.
 type Version string
+
+// Requirement expresses a plugin or framework version constraint.
 type Requirement string
 
+// Validate checks that the plugin identifier is semantic.
 func (id ID) Validate() error {
 	if !identifier.Semantic(string(id)) {
 		return safeerror.NewFault(fault.Invalid, "plugin requires a semantic ID")
@@ -40,6 +46,7 @@ func (v Version) parse() (*semver.Version, error) {
 	return parsed, nil
 }
 
+// Validate checks that the version can be parsed.
 func (v Version) Validate() error { _, err := v.parse(); return err }
 
 // Compare uses semantic precedence, ignoring build metadata.
@@ -71,6 +78,7 @@ func (r Requirement) parse() (*semver.Constraints, error) {
 	return parsed, nil
 }
 
+// Validate checks that the version requirement can be parsed.
 func (r Requirement) Validate() error { _, err := r.parse(); return err }
 
 // Accepts supports semantic ranges, including caret, tilde and comparisons.
@@ -87,6 +95,7 @@ func (r Requirement) Accepts(v Version) (bool, error) {
 	return constraint.Check(version), nil
 }
 
+// Dependency declares a plugin dependency and its version requirement.
 type Dependency struct {
 	ID      ID          `json:"id"`
 	Version Requirement `json:"version"`
@@ -105,6 +114,7 @@ type Manifest struct {
 	Dependencies    []Dependency `json:"dependencies,omitempty"`
 }
 
+// Snapshot returns a manifest copy with an independent dependency slice.
 func (m Manifest) Snapshot() Manifest { m.Dependencies = slices.Clone(m.Dependencies); return m }
 
 // Namespace returns the exact configuration prefix; IDs are never sanitized.
@@ -122,6 +132,8 @@ func (m Manifest) Namespace() (string, error) {
 	return namespace, nil
 }
 
+// Validate checks manifest identities, requirements, namespace, declaration bounds, and duplicate
+// dependencies.
 func (m Manifest) Validate() error {
 	if err := m.ID.Validate(); err != nil {
 		return err

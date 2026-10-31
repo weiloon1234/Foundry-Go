@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 )
 
+// ExitCode is a process exit status.
 type ExitCode int
 
 const (

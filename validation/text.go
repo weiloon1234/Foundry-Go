@@ -46,6 +46,7 @@ func MinLength[S ~string](minimum int) Rule[S] {
 	})
 }
 
+// MaxLength creates a rule limiting Unicode rune count, rejecting a negative maximum.
 func MaxLength[S ~string](maximum int) Rule[S] {
 	if maximum < 0 {
 		return failed[S](invalid("maximum text length must not be negative"))

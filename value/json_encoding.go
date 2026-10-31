@@ -26,6 +26,7 @@ type JSONEncodingLimits struct {
 	Steps int
 }
 
+// Validate checks positive encoding budgets and the supported depth range.
 func (l JSONEncodingLimits) Validate() error {
 	if l.Bytes <= 0 || l.Depth < 0 || l.Depth > JSONMaxDepth || l.Nodes <= 0 || l.Steps <= 0 {
 		return safeerror.NewFault(fault.Invalid, "invalid JSON encoding limits")
@@ -91,6 +92,7 @@ type jsonOutput struct {
 	err   error
 }
 
+// Write appends bytes within the output budget, retaining the first cancellation or limit error.
 func (w *jsonOutput) Write(data []byte) (int, error) {
 	if w.err != nil {
 		return 0, w.err

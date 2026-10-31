@@ -12,12 +12,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/translations"
 )
 
+// Command holds parsed translation maintenance options.
 type Command struct{ options extensioncommand.Options }
 
+// Parse parses translation maintenance command options.
 func Parse(args []string, help io.Writer) (Command, error) {
 	options, err := extensioncommand.ParseMaintenance("translations", args, help)
 	return Command{options: options}, err
 }
+
+// Run runs the selected undeclared, rescope, or orphan inspection operation and writes its report.
 func (c Command) Run(ctx context.Context, manager *translations.Manager, out io.Writer) error {
 	if c.options.Undeclared() {
 		return extensioncommand.RunUndeclared(ctx, c.options, out, func(ctx context.Context, owner extensions.OwnerName) (extensionmaintenance.Undeclared, error) {

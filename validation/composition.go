@@ -48,6 +48,7 @@ type Field[T, V any] struct {
 	err         error
 }
 
+// DefineField declares a field selector, retaining an error for an invalid name or nil selector.
 func DefineField[T, V any](name string, selector func(T) V) Field[T, V] {
 	field := Field[T, V]{name: name, selectValue: selector}
 	if !validText(name, false) || selector == nil {

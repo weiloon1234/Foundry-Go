@@ -18,12 +18,14 @@ import (
 const MaxInputBytes = 1 << 20
 const MaxOutputBytes = 4 << 20
 
+// Config configures allowed HTML tags and byte budgets.
 type Config struct {
 	AllowedTags []string
 	InputBytes  int
 	OutputBytes int
 }
 
+// DefaultConfig returns default allowed HTML tags and input and output budgets.
 func DefaultConfig() Config {
 	return Config{AllowedTags: []string{"a", "b", "blockquote", "br", "code", "em", "i", "li", "ol", "p", "pre", "strong", "ul"}, InputBytes: MaxInputBytes, OutputBytes: MaxOutputBytes}
 }
@@ -36,6 +38,8 @@ type Policy struct {
 	inputBytes, outputBytes int
 }
 
+// New validates and copies allowed tags into a sanitization policy with restricted attributes and
+// URL schemes.
 func New(config Config) (*Policy, error) {
 	if config.InputBytes < 1 || config.InputBytes > MaxInputBytes || config.OutputBytes < 1 || config.OutputBytes > MaxOutputBytes || len(config.AllowedTags) > 64 {
 		return nil, invalid()
@@ -68,6 +72,7 @@ func New(config Config) (*Policy, error) {
 	return &Policy{policy: p, inputBytes: config.InputBytes, outputBytes: config.OutputBytes}, nil
 }
 
+// HTML sanitizes valid UTF-8 HTML within input and output budgets, honoring context cancellation.
 func (p *Policy) HTML(ctx context.Context, input string) (string, error) {
 	if p == nil || p.policy == nil || ctx == nil || len(input) > p.inputBytes || !utf8.ValidString(input) || strings.ContainsRune(input, 0) {
 		return "", invalid()
@@ -110,6 +115,7 @@ type contextInput struct {
 	reader io.Reader
 }
 
+// Read checks context cancellation before reading input.
 func (r contextInput) Read(p []byte) (int, error) {
 	if err := r.ctx.Err(); err != nil {
 		return 0, err
@@ -123,6 +129,7 @@ type boundedOutput struct {
 	buffer    bytes.Buffer
 }
 
+// Write writes output within the remaining byte budget after checking cancellation.
 func (w *boundedOutput) Write(p []byte) (int, error) {
 	if err := w.ctx.Err(); err != nil {
 		return 0, err

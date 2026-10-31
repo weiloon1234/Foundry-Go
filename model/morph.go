@@ -10,4 +10,7 @@ type MorphName string
 // pass discriminator strings.
 //
 //	func (Post) MorphName() model.MorphName { return "post" }
-type Morphable interface{ MorphName() MorphName }
+type Morphable interface {
+	// MorphName returns the model's polymorphic name.
+	MorphName() MorphName
+}

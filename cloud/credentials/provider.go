@@ -21,10 +21,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
+// Name identifies a named credential provider.
 type Name string
 
+// Validate validates the credential provider name.
 func (n Name) Validate() error { return namedservice.Validate(string(n)) }
 
+// Mode selects the credential source mode.
 type Mode string
 
 const (
@@ -38,7 +41,10 @@ type Value struct {
 	Expires                            time.Time
 }
 
+// Format writes a fixed label without exposing credentials.
 func (Value) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("cloud credentials")) }
+
+// Validate checks that the access key and secret key are present.
 func (v Value) Validate() error {
 	if v.AccessKey.IsZero() || v.SecretKey.IsZero() {
 		return safeerror.NewFault(fault.Invalid, "cloud credentials are incomplete")
@@ -49,10 +55,15 @@ func (v Value) Validate() error {
 // Provider implementations own refresh and must honor cancellation. Retrieve
 // returns an immutable snapshot; callers never retry ambiguous delivery.
 type Provider interface {
+	// Retrieve retrieves cloud credentials for the supplied context.
 	Retrieve(context.Context) (Value, error)
 }
+
+// ProviderFunc adapts a function to Provider.
 type ProviderFunc func(context.Context) (Value, error)
 
+// Retrieve calls the provider function after rejecting nil functions, nil contexts, and canceled
+// contexts.
 func (f ProviderFunc) Retrieve(ctx context.Context) (Value, error) {
 	if f == nil || ctx == nil {
 		return Value{}, safeerror.NewFault(fault.Invalid, "invalid credential provider")
@@ -73,7 +84,10 @@ type Settings struct {
 	AccessKey, SecretKey, SessionToken secret.String
 }
 
+// DefaultSettings returns credential settings using the AWS provider chain.
 func DefaultSettings() Settings { return Settings{Mode: Chain} }
+
+// Validate checks the selected credential mode and its static key or profile settings.
 func (s Settings) Validate() error {
 	switch s.Mode {
 	case Chain:
@@ -98,6 +112,8 @@ func (s Settings) Validate() error {
 	}
 	return nil
 }
+
+// Format writes a fixed label without exposing credentials.
 func (Settings) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("cloud credential settings")) }
 
 // Source owns the chain's transport. Prepare is pure; Start loads chain settings
@@ -111,12 +127,16 @@ type sourceState struct {
 	started, closed bool
 }
 
+// Prepare validates settings and creates a credential source that must be started before
+// retrieval.
 func Prepare(settings Settings) (*Source, error) {
 	if err := settings.Validate(); err != nil {
 		return nil, err
 	}
 	return &Source{state: &sourceState{settings: settings}}, nil
 }
+
+// Start initializes the configured credential source once. A closed source cannot restart.
 func (s *Source) Start(ctx context.Context) error {
 	if s == nil || s.state == nil || ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "credential source needs context")
@@ -152,6 +172,9 @@ func (s *Source) Start(ctx context.Context) error {
 	s.state.started = true
 	return nil
 }
+
+// Retrieve retrieves and validates credentials from an active source; an inactive source returns a
+// closed fault.
 func (s *Source) Retrieve(ctx context.Context) (Value, error) {
 	if s == nil || s.state == nil || ctx == nil {
 		return Value{}, safeerror.NewFault(fault.Invalid, "credential source needs context")
@@ -182,6 +205,8 @@ func (s *Source) Retrieve(ctx context.Context) (Value, error) {
 	}
 	return value, nil
 }
+
+// Close marks the source closed and closes idle transport connections. A nil source is harmless.
 func (s *Source) Close() error {
 	if s == nil || s.state == nil {
 		return nil
@@ -197,4 +222,6 @@ func (s *Source) Close() error {
 
 // Format and LogValue keep private chain/static state out of diagnostics.
 func (Source) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("cloud credential source")) }
-func (Source) LogValue() slog.Value       { return slog.StringValue("cloud credential source") }
+
+// LogValue returns a fixed log label without exposing credentials.
+func (Source) LogValue() slog.Value { return slog.StringValue("cloud credential source") }

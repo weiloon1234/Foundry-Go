@@ -19,6 +19,9 @@ func WithLocale(ctx context.Context, catalog LocaleCatalog, locale LocaleID) (co
 	}
 	return context.WithValue(ctx, localeContextKey{}, locale), nil
 }
+
+// RequestLocale returns the locale attached to a context and whether it is present; nil contexts
+// return false.
 func RequestLocale(ctx context.Context) (LocaleID, bool) {
 	if ctx == nil {
 		return "", false

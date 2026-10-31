@@ -22,6 +22,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/email/internal/httptransport"
 )
 
+// Config configures SES HTTP transport, region, credentials, and configuration set.
 type Config struct {
 	HTTP             email.HTTPConfig
 	Region           string
@@ -29,8 +30,10 @@ type Config struct {
 	ConfigurationSet string
 }
 
+// Format writes a fixed label without exposing SES configuration.
 func (Config) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("SES configuration")) }
 
+// Driver submits signed raw email through Amazon SES.
 type Driver struct {
 	client                   *httptransport.Client
 	region, configurationSet string
@@ -40,6 +43,7 @@ type Driver struct {
 
 var regionPattern = regexp.MustCompile(`^[a-z]{2}(?:-[a-z]+)+-[0-9]+$`)
 
+// New validates SES region, credentials, and configuration set and creates its HTTP client.
 func New(config Config) (*Driver, error) {
 	if !regionPattern.MatchString(config.Region) || len(config.Region) > 64 || config.Credentials == nil || len(config.ConfigurationSet) > 64 {
 		return nil, emaildiag.Failure(email.Construction)
@@ -59,12 +63,19 @@ func New(config Config) (*Driver, error) {
 	}
 	return &Driver{client: c, region: config.Region, configurationSet: config.ConfigurationSet, credentials: config.Credentials, signer: v4.NewSigner()}, nil
 }
+
+// Close closes the driver's HTTP client; a nil driver is harmless.
 func (d *Driver) Close() {
 	if d != nil {
 		d.client.Close()
 	}
 }
+
+// Format writes a fixed label without exposing driver credentials.
 func (Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("SES driver")) }
+
+// Send submits a signed raw email to SES, enforcing a 10 MiB outbound limit and preserving
+// uncertain acceptance as an ambiguous failure.
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || d.client == nil || out.Validate() != nil || out.Size() > 10<<20 || ctx == nil {
 		return email.Receipt{}, emaildiag.Failure(email.Construction)

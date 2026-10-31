@@ -53,6 +53,7 @@ type Rule struct {
 	Prefix bool   `json:"prefix,omitempty"`
 }
 
+// Validate validates the optional uppercase method and canonical absolute path.
 func (r Rule) Validate() error {
 	if len(r.Method) > 16 || strings.IndexFunc(r.Method, func(c rune) bool { return c < 'A' || c > 'Z' }) >= 0 {
 		return safeerror.NewFault(fault.Invalid, "maintenance exemption method must be an uppercase HTTP method")
@@ -101,6 +102,7 @@ type Policy struct {
 	Keys *encryption.Keyring
 }
 
+// Validate validates exemption rules, allowed addresses, optional keys, and bypass lifetime.
 func (p Policy) Validate() error {
 	if err := validateRules(p.Exempt, p.Allow); err != nil {
 		return err
@@ -151,13 +153,18 @@ func validateRules(rules []Rule, allow []netip.Prefix) error {
 // digest; the plaintext secret is shown once to the operator who created it.
 type SecretDigest [32]byte
 
+// IsZero reports whether the digest is all zero bytes.
 func (d SecretDigest) IsZero() bool { return d == SecretDigest{} }
+
+// MarshalText encodes the digest as lowercase hexadecimal, or empty text for the zero value.
 func (d SecretDigest) MarshalText() ([]byte, error) {
 	if d.IsZero() {
 		return []byte{}, nil
 	}
 	return []byte(hex.EncodeToString(d[:])), nil
 }
+
+// UnmarshalText decodes lowercase hexadecimal, treating empty text as the zero digest.
 func (d *SecretDigest) UnmarshalText(text []byte) error {
 	if d == nil {
 		return safeerror.NewFault(fault.Invalid, "missing maintenance secret digest destination")
@@ -176,6 +183,8 @@ func (d *SecretDigest) UnmarshalText(text []byte) error {
 	*d = decoded
 	return nil
 }
+
+// LogValue returns a fixed log label without exposing the digest.
 func (SecretDigest) LogValue() slog.Value { return slog.StringValue("maintenance secret digest") }
 
 // NewSecret returns a random URL-safe bypass secret for an operator.
@@ -211,6 +220,8 @@ type State struct {
 	Since      time.Time
 }
 
+// Validate checks retry duration, message text, rules, and the absence of maintenance options when
+// serving.
 func (s State) Validate() error {
 	if s.RetryAfter < 0 || s.RetryAfter > MaxRetryAfter || s.RetryAfter%time.Second != 0 {
 		return safeerror.NewFault(fault.Invalid, "maintenance retry interval must be whole seconds up to 24 hours")
@@ -250,6 +261,8 @@ func (s State) MarshalJSON() ([]byte, error) {
 	return json.Marshal(wireState{Version: stateVersion, Down: s.Down, RetryAfter: int64(s.RetryAfter / time.Second), Message: s.Message, Secret: s.Secret, Allow: s.Allow, Exempt: s.Exempt, Since: s.Since.UTC()})
 }
 
+// UnmarshalJSON decodes a bounded versioned maintenance record and replaces the receiver only
+// after validation.
 func (s *State) UnmarshalJSON(data []byte) error {
 	if s == nil {
 		return safeerror.NewFault(fault.Invalid, "missing maintenance state destination")

@@ -68,13 +68,26 @@ func newApp(settings settings, providers []providerEntry, services *Services, ke
 		state: Prepared, startDone: make(chan struct{}), done: make(chan struct{})}
 }
 
-func (a *App) Services() *Services            { return a.services }
-func (a *App) Inspect() Inspection            { return a.inspection.snapshot() }
-func (a *App) Logger() *slog.Logger           { return a.settings.logger }
+// Services returns the application's service registry.
+func (a *App) Services() *Services { return a.services }
+
+// Inspect returns an inspection snapshot.
+func (a *App) Inspect() Inspection { return a.inspection.snapshot() }
+
+// Logger returns the configured application logger.
+func (a *App) Logger() *slog.Logger { return a.settings.logger }
+
+// ShutdownTimeout returns the configured shutdown timeout.
 func (a *App) ShutdownTimeout() time.Duration { return a.settings.shutdownTimeout }
-func (a *App) StopDelay() time.Duration       { return a.settings.stopDelay }
-func (a *App) State() State                   { a.mu.Lock(); defer a.mu.Unlock(); return a.state }
-func (a *App) Done() <-chan struct{}          { return a.done }
+
+// StopDelay returns the configured stop delay.
+func (a *App) StopDelay() time.Duration { return a.settings.stopDelay }
+
+// State returns the lifecycle state under the application mutex.
+func (a *App) State() State { a.mu.Lock(); defer a.mu.Unlock(); return a.state }
+
+// Done returns the application's completion channel.
+func (a *App) Done() <-chan struct{} { return a.done }
 
 // selectedKernels returns an owned copy of the kernels chosen by Run/RunKernels.
 func (a *App) selectedKernels() []KernelKind {

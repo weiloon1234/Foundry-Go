@@ -63,6 +63,7 @@ func SanitizeUserAgent(raw string) string {
 	return sanitized.String()
 }
 
+// Validate checks request identifier and user agent text bounds and rejects scoped IP addresses.
 func (r Request) Validate() error {
 	id := string(r.ID)
 	if len(id) > MaxRequestIDBytes || !utf8.ValidString(id) || strings.TrimSpace(id) != id || strings.IndexFunc(id, unicode.IsControl) >= 0 {
@@ -87,12 +88,22 @@ type Origin struct {
 	request Request
 }
 
+// Model returns the model identity and whether it is present.
 func (o Origin) Model() (model.Identity, bool) { return o.subject.Get() }
-func (o Origin) System() SystemID              { return o.system }
-func (o Origin) Guard() GuardName              { return o.guard }
-func (o Origin) Request() Request              { return o.request }
-func (Origin) Format(state fmt.State, _ rune)  { _, _ = state.Write([]byte("attribution origin")) }
 
+// System returns the origin's system subject identifier.
+func (o Origin) System() SystemID { return o.system }
+
+// Guard returns the origin's authentication guard name.
+func (o Origin) Guard() GuardName { return o.guard }
+
+// Request returns the origin's request metadata.
+func (o Origin) Request() Request { return o.request }
+
+// Format writes a fixed label without exposing attribution details.
+func (Origin) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("attribution origin")) }
+
+// Validate checks subject exclusivity, semantic identifiers, and request metadata.
 func (o Origin) Validate() error {
 	if subject, present := o.subject.Get(); present {
 		if o.system != "" {
@@ -167,6 +178,7 @@ func (o Origin) WithGuard(guard GuardName) (Origin, error) {
 	return o, nil
 }
 
+// WithRequest returns a copy with the supplied request metadata after validation.
 func (o Origin) WithRequest(request Request) (Origin, error) {
 	o.request = request
 	if err := o.Validate(); err != nil {
@@ -206,12 +218,15 @@ type originWire struct {
 	Request Request                        `json:"request"`
 }
 
+// MarshalJSON validates and encodes the origin as JSON.
 func (o Origin) MarshalJSON() ([]byte, error) {
 	if err := o.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(originWire{Subject: o.subject, System: o.system, Guard: o.guard, Request: o.request})
 }
+
+// UnmarshalJSON decodes and validates JSON, replacing the receiver only on success.
 func (o *Origin) UnmarshalJSON(data []byte) error {
 	if o == nil {
 		return safeerror.NewFault(fault.Invalid, "nil attribution destination")

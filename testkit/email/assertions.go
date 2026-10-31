@@ -7,17 +7,24 @@ import (
 	"github.com/weiloon1234/Foundry-Go/email/memory"
 )
 
+// TestingT is the test reporting contract used by email assertions.
 type TestingT interface {
+	// Helper marks the calling function as a test helper.
 	Helper()
+	// Errorf reports a formatted test failure.
 	Errorf(string, ...any)
 }
 
+// AssertCount reports a test error when the recorded message count differs from want.
 func AssertCount(t TestingT, driver *memory.Driver, want int) {
 	t.Helper()
 	if got := len(driver.Messages()); got != want {
 		t.Errorf("recorded email count: got %d, want %d", got, want)
 	}
 }
+
+// AssertRecipientCount reports a test error when the count of messages addressed to the mailbox
+// differs from want.
 func AssertRecipientCount(t TestingT, driver *memory.Driver, recipient email.Address, want int) {
 	t.Helper()
 	got := 0

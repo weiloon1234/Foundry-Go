@@ -77,6 +77,8 @@ type MaintenanceScheduleSettings struct {
 	Custom   MaintenanceTaskSettings
 }
 
+// DefaultMaintenanceScheduleSettings returns default housekeeping intervals, batch limits,
+// timeouts, and retention periods.
 func DefaultMaintenanceScheduleSettings() MaintenanceScheduleSettings {
 	const day = 24 * time.Hour
 	return MaintenanceScheduleSettings{

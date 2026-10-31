@@ -52,9 +52,16 @@ func Describe[E Scalar](packagePath, name string, cases ...Case[E]) Descriptor[E
 	return Descriptor[E]{packagePath, name, slices.Clone(cases), new(validationResult)}
 }
 
+// PackagePath returns the enum package path.
 func (d Descriptor[E]) PackagePath() string { return d.packagePath }
-func (d Descriptor[E]) Name() string        { return d.name }
-func (d Descriptor[E]) Cases() []Case[E]    { return slices.Clone(d.cases) }
+
+// Name returns the enum type name.
+func (d Descriptor[E]) Name() string { return d.name }
+
+// Cases returns a copy of the enum case slice.
+func (d Descriptor[E]) Cases() []Case[E] { return slices.Clone(d.cases) }
+
+// Contains reports whether the value matches a declared case.
 func (d Descriptor[E]) Contains(value E) bool {
 	for _, c := range d.cases {
 		if c.Value == value {
@@ -133,12 +140,16 @@ type Definition struct {
 	Name        string     `json:"name"`
 	Cases       []WireCase `json:"cases"`
 }
+
+// WireCase describes an enum case's name, JSON value, and optional label key.
 type WireCase struct {
 	Name     string          `json:"name"`
 	Value    json.RawMessage `json:"value"`
 	LabelKey i18n.MessageKey `json:"label_key,omitempty"`
 }
 
+// Definition validates the descriptor and builds its wire definition with JSON-encoded case
+// values.
 func (d Descriptor[E]) Definition() (Definition, error) {
 	if err := d.Validate(); err != nil {
 		return Definition{}, err

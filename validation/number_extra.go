@@ -7,6 +7,7 @@ type Integer interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
 }
 
+// Between combines inclusive numeric bounds, rejecting reversed bounds.
 func Between[N Number](minimum, maximum N) Rule[N] {
 	if minimum > maximum {
 		return failed[N](invalid("numeric bounds are reversed"))
@@ -21,21 +22,33 @@ func MultipleOf[N Integer](divisor N) Rule[N] {
 	}
 	return valueRule(Spec{ID: "foundry.multiple_of", Parameters: []Parameter{scalarParameter("divisor", divisor)}}, true, func(_ *execution, input N) (bool, error) { return input%divisor == 0, nil })
 }
+
+// DecimalBetween combines inclusive decimal bounds, rejecting reversed bounds.
 func DecimalBetween(minimum, maximum decimal.Decimal) Rule[decimal.Decimal] {
 	if minimum.Cmp(maximum) > 0 {
 		return failed[decimal.Decimal](invalid("decimal bounds are reversed"))
 	}
 	return Bail(DecimalMin(minimum), DecimalMax(maximum))
 }
+
+// GreaterThan creates a rule requiring the first number in a pair to be greater than the second.
 func GreaterThan[N Number]() Rule[Pair[N]] {
 	return numericPair[N]("foundry.greater_than", func(a, b N) bool { return a > b })
 }
+
+// GreaterOrEqual creates a rule requiring the first number in a pair to be greater than or equal
+// to the second.
 func GreaterOrEqual[N Number]() Rule[Pair[N]] {
 	return numericPair[N]("foundry.greater_or_equal", func(a, b N) bool { return a >= b })
 }
+
+// LessThan creates a rule requiring the first number in a pair to be less than the second.
 func LessThan[N Number]() Rule[Pair[N]] {
 	return numericPair[N]("foundry.less_than", func(a, b N) bool { return a < b })
 }
+
+// LessOrEqual creates a rule requiring the first number in a pair to be less than or equal to the
+// second.
 func LessOrEqual[N Number]() Rule[Pair[N]] {
 	return numericPair[N]("foundry.less_or_equal", func(a, b N) bool { return a <= b })
 }
@@ -47,6 +60,8 @@ func numericPair[N Number](id RuleID, check func(N, N) bool) Rule[Pair[N]] {
 
 // Accepted and Declined use actual booleans. Text coercion belongs to decoding.
 func Accepted[B ~bool]() Rule[B] { return booleanRule[B](true) }
+
+// Declined creates a rule requiring false.
 func Declined[B ~bool]() Rule[B] { return booleanRule[B](false) }
 func booleanRule[B ~bool](want bool) Rule[B] {
 	spec := Spec{ID: "foundry.accepted"}

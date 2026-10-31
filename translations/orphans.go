@@ -15,18 +15,24 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// Cursor is the extension maintenance continuation cursor.
 type Cursor = extensionmaintenance.Cursor
+
+// Orphan identifies an orphaned translation by key, field, and locale.
 type Orphan struct {
 	Key    string        `json:"key"`
 	Field  Name          `json:"field"`
 	Locale i18n.LocaleID `json:"locale"`
 }
+
+// OrphanPage contains orphaned translations, the scanned count, and a continuation cursor.
 type OrphanPage struct {
 	Orphans []Orphan
 	Scanned int
 	Next    Cursor
 }
 
+// InspectOrphans inspects a bounded page of orphaned translations for a registered owner.
 func InspectOrphans(ctx context.Context, m *Manager, owner extensions.OwnerName, cursor Cursor, limit int) (OrphanPage, error) {
 	if err := m.Validate(); err != nil {
 		return OrphanPage{}, err
@@ -41,6 +47,8 @@ func InspectOrphans(ctx context.Context, m *Manager, owner extensions.OwnerName,
 	}
 	return result, nil
 }
+
+// PruneOrphans prunes selected orphan keys through the extension maintenance operation.
 func PruneOrphans(ctx context.Context, m *Manager, owner extensions.OwnerName, keys []string) (int, error) {
 	if err := m.Validate(); err != nil {
 		return 0, err

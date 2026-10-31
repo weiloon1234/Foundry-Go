@@ -20,6 +20,7 @@ type Date struct {
 	day   uint8
 }
 
+// NewDate validates and constructs a calendar date in years one through 9999.
 func NewDate(year int, month time.Month, day int) (Date, error) {
 	if year < 1 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 {
 		return Date{}, safeerror.NewFault(fault.Invalid, "invalid calendar date")
@@ -30,6 +31,8 @@ func NewDate(year int, month time.Month, day int) (Date, error) {
 	}
 	return Date{uint16(year), uint8(month), uint8(day)}, nil
 }
+
+// ParseDate parses a calendar date in YYYY-MM-DD format.
 func ParseDate(text string) (Date, error) {
 	if len(text) != 10 {
 		return Date{}, safeerror.NewFault(fault.Invalid, "expected YYYY-MM-DD")
@@ -40,11 +43,23 @@ func ParseDate(text string) (Date, error) {
 	}
 	return NewDate(v.Year(), v.Month(), v.Day())
 }
-func (d Date) Year() int         { return int(d.year) }
+
+// Year returns the calendar year.
+func (d Date) Year() int { return int(d.year) }
+
+// Month returns the calendar month.
 func (d Date) Month() time.Month { return time.Month(d.month) }
-func (d Date) Day() int          { return int(d.day) }
-func (d Date) IsZero() bool      { return d.year == 0 }
-func (d Date) String() string    { return fmt.Sprintf("%04d-%02d-%02d", d.year, d.month, d.day) }
+
+// Day returns the day of the month.
+func (d Date) Day() int { return int(d.day) }
+
+// IsZero reports whether the date is absent.
+func (d Date) IsZero() bool { return d.year == 0 }
+
+// String returns the date in YYYY-MM-DD format.
+func (d Date) String() string { return fmt.Sprintf("%04d-%02d-%02d", d.year, d.month, d.day) }
+
+// AddDays adds calendar days, rejecting absent dates and results outside supported years.
 func (d Date) AddDays(days int) (Date, error) {
 	if d.IsZero() {
 		return Date{}, safeerror.NewFault(fault.Invalid, "date is absent")
@@ -57,12 +72,16 @@ func (d Date) AddDays(days int) (Date, error) {
 	return NewDate(v.Year(), v.Month(), v.Day())
 }
 func (d Date) wall() time.Time { return time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.UTC) }
+
+// MarshalText encodes the date as text, rejecting an absent date.
 func (d Date) MarshalText() ([]byte, error) {
 	if d.IsZero() {
 		return nil, safeerror.NewFault(fault.Invalid, "date is absent")
 	}
 	return []byte(d.String()), nil
 }
+
+// UnmarshalText parses date text, replacing the receiver only on success.
 func (d *Date) UnmarshalText(data []byte) error {
 	v, err := ParseDate(string(data))
 	if err != nil {
@@ -71,6 +90,8 @@ func (d *Date) UnmarshalText(data []byte) error {
 	*d = v
 	return nil
 }
+
+// UnmarshalJSON decodes a JSON date, replacing the receiver only on success.
 func (d *Date) UnmarshalJSON(data []byte) error {
 	v, err := textvalue.Decode(data, ParseDate)
 	if err != nil {

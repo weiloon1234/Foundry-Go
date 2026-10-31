@@ -48,6 +48,7 @@ type Settings struct {
 	Credentials  CredentialSources `config:",secret"`
 }
 
+// DefaultSettings returns infrastructure defaults for the development application namespace.
 func DefaultSettings() Settings {
 	return Settings{Namespace: keyspace.Namespace{Application: "app", Environment: "development"}, Database: DefaultDatabaseSettings(), Redis: DefaultRedisSettings(), Storage: DefaultStorageSettings(), Cache: DefaultCachesSettings(), Mail: DefaultMailSettings(), Jobs: DefaultJobsSettings(), HTTPClients: DefaultHTTPClientsSettings(), PubSub: DefaultPubSubSettings(), Realtime: DefaultRealtimeSettings(), Coordination: DefaultCoordinationSettings()}
 }
@@ -62,8 +63,11 @@ type options struct {
 	statementDetector *database.StatementDetector
 	queryObserver     database.QueryObserver
 }
+
+// Option applies configuration to infrastructure planning.
 type Option func(*options) error
 
+// WithClock sets the infrastructure clock, rejecting nil.
 func WithClock(source clock.Clock) Option {
 	return func(o *options) error {
 		if credential.IsNil(source) {
@@ -107,6 +111,7 @@ func WithCredentials(name credentials.Name, provider credentials.Provider) Optio
 	}
 }
 
+// Plan holds prepared infrastructure configuration and providers.
 type Plan struct {
 	settings    Settings
 	options     options
@@ -153,6 +158,8 @@ func (p *Plan) Providers() []foundation.Provider {
 	}
 	return slices.Clone(p.providers)
 }
+
+// Register registers the plan's providers with the supplied builder.
 func (p *Plan) Register(builder *foundation.Builder) *foundation.Builder {
 	return builder.Register(p.Providers()...)
 }
@@ -358,7 +365,9 @@ func (s Settings) Validate() error { _, err := Configure(s); return err }
 // Plans retain configuration privately; formatting must not reflect through
 // those private fields and bypass nested secret.String formatting.
 func (Plan) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("infrastructure plan")) }
-func (Plan) LogValue() slog.Value       { return slog.StringValue("infrastructure plan") }
+
+// LogValue returns a fixed log label without exposing plan configuration.
+func (Plan) LogValue() slog.Value { return slog.StringValue("infrastructure plan") }
 
 // WithLogger borrows the containing application's structured logger.
 func WithLogger(logger *slog.Logger) Option {

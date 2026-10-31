@@ -13,9 +13,12 @@ import (
 // The consuming feature validates key size and syntax before backend access.
 type Codec[K any] struct{ encode func(K) (string, error) }
 
+// NewCodec creates a key codec from the supplied encoding function.
 func NewCodec[K any](encode func(K) (string, error)) Codec[K] {
 	return Codec[K]{encode: encode}
 }
+
+// StringKeys creates a codec that uses the string key directly.
 func StringKeys[K ~string]() Codec[K] {
 	return NewCodec(func(k K) (string, error) { return string(k), nil })
 }
@@ -29,9 +32,13 @@ func SignedKeys[K ~int | ~int8 | ~int16 | ~int32 | ~int64]() Codec[K] {
 func UnsignedKeys[K ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr]() Codec[K] {
 	return NewCodec(func(k K) (string, error) { return strconv.FormatUint(uint64(k), 10), nil })
 }
+
+// TextKeys creates a codec that uses each key's MarshalText method.
 func TextKeys[K encoding.TextMarshaler]() Codec[K] {
 	return NewCodec(func(k K) (string, error) { data, err := k.MarshalText(); return string(data), err })
 }
+
+// Validate checks that the codec has an encoding function.
 func (c Codec[K]) Validate() error {
 	if c.encode == nil {
 		return safeerror.NewFault(fault.Invalid, "key codec is not initialized")

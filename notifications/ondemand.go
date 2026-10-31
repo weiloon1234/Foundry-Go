@@ -32,6 +32,7 @@ type Route struct {
 	Address string        `json:"address,omitempty"`
 }
 
+// Validate checks that the route has a valid email or bounded address without control characters.
 func (r Route) Validate() error {
 	if r.Email == (email.Address{}) && r.Address == "" {
 		return safeerror.NewFault(fault.Invalid, "notification route requires an email or address")
@@ -65,6 +66,8 @@ func (r Route) Reference() (model.Reference[Route, string], error) {
 	}
 	return routeReference(string(data)), nil
 }
+
+// FoundryIdentity returns the on-demand route's model identity through its reference.
 func (r Route) FoundryIdentity() (model.Identity, error) {
 	reference, err := r.Reference()
 	if err != nil {

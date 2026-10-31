@@ -26,15 +26,24 @@ type Context struct {
 	binding string
 }
 
+// NewContext constructs a context from a semantic purpose and a nonempty, bounded binding.
 func NewContext(purpose Purpose, binding secret.String) (Context, error) {
 	if !identifier.Semantic(string(purpose)) || binding.IsZero() || len(binding.Reveal()) > MaxBindingBytes {
 		return Context{}, safeerror.NewFault(fault.Invalid, "invalid encryption context")
 	}
 	return Context{purpose: purpose, binding: binding.Reveal()}, nil
 }
-func (c Context) Validate() error            { _, err := NewContext(c.purpose, secret.New(c.binding)); return err }
-func (Context) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("encryption context")) }
-func (Context) LogValue() slog.Value         { return slog.StringValue("encryption context") }
+
+// Validate validates the purpose and binding using NewContext.
+func (c Context) Validate() error { _, err := NewContext(c.purpose, secret.New(c.binding)); return err }
+
+// Format writes a fixed label without exposing the binding.
+func (Context) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("encryption context")) }
+
+// LogValue returns a fixed log label without exposing the binding.
+func (Context) LogValue() slog.Value { return slog.StringValue("encryption context") }
+
+// MarshalJSON encodes the redaction marker instead of context data.
 func (Context) MarshalJSON() ([]byte, error) { return json.Marshal(secret.Redacted) }
 func (c Context) aad(id KeyID) []byte {
 	// Length prefixes preserve exact boundaries, including arbitrary binary

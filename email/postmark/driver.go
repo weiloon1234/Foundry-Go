@@ -15,20 +15,24 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
+// Config configures Postmark HTTP transport, server token, and message stream.
 type Config struct {
 	HTTP          email.HTTPConfig
 	ServerToken   secret.String
 	MessageStream string
 }
 
+// Format writes a fixed label without exposing Postmark configuration.
 func (Config) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("Postmark configuration")) }
 
+// Driver submits email through the Postmark API.
 type Driver struct {
 	client *httptransport.Client
 	token  secret.String
 	stream string
 }
 
+// New validates Postmark credentials and stream settings and creates its HTTP client.
 func New(config Config) (*Driver, error) {
 	if !httptransport.Token(config.ServerToken.Reveal()) || config.MessageStream != "" && !httptransport.Token(config.MessageStream) || len(config.MessageStream) > 128 {
 		return nil, emaildiag.Failure(email.Construction)
@@ -39,11 +43,15 @@ func New(config Config) (*Driver, error) {
 	}
 	return &Driver{client: c, token: config.ServerToken, stream: config.MessageStream}, nil
 }
+
+// Close closes the driver's HTTP client; a nil driver is harmless.
 func (d *Driver) Close() {
 	if d != nil {
 		d.client.Close()
 	}
 }
+
+// Format writes a fixed label without exposing driver credentials.
 func (Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("Postmark driver")) }
 
 // StructuredSubmission reports that this provider API sends native fields, so
@@ -56,6 +64,8 @@ type attachment struct {
 }
 type header struct{ Name, Value string }
 
+// Send submits a structured message to Postmark and classifies provider rejection or uncertain
+// acceptance.
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || d.client == nil || out.Validate() != nil {
 		return email.Receipt{}, emaildiag.Failure(email.Construction)

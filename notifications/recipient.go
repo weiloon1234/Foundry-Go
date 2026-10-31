@@ -21,10 +21,16 @@ type Recipient[M model.Identifiable, K any] struct {
 	preferences func(context.Context, M, Name, ChannelID) (bool, error)
 }
 
+// DefineRecipient declares a recipient with a provider, guard, and channel preference callback.
 func DefineRecipient[M model.Identifiable, K any](name RecipientName, provider auth.Provider[M, K], guard auth.Guard[M], preferences func(context.Context, M, Name, ChannelID) (bool, error)) Recipient[M, K] {
 	return Recipient[M, K]{token: &declarationToken{}, name: name, provider: provider, guard: guard, preferences: preferences}
 }
+
+// Name returns the recipient declaration name.
 func (r Recipient[M, K]) Name() RecipientName { return r.name }
+
+// Validate checks declaration identity, name, preferences callback, and provider guard
+// compatibility.
 func (r Recipient[M, K]) Validate() error {
 	if r.token == nil || !semantic(string(r.name)) || r.preferences == nil {
 		return invalid()
@@ -34,6 +40,8 @@ func (r Recipient[M, K]) Validate() error {
 func (r Recipient[M, K]) scope() string {
 	return digest(string(r.name), string(r.provider.Name()), string(r.guard.Name()), r.provider.ModelName())
 }
+
+// Format writes a fixed label without exposing the recipient declaration.
 func (Recipient[M, K]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("notification recipient declaration"))
 }

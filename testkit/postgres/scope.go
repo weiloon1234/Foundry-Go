@@ -43,6 +43,7 @@ func closePool(db *database.DB) error {
 	return db.Close(ctx)
 }
 
+// Schema returns the test schema name, or an empty string for a nil scope.
 func (s *Scope) Schema() string {
 	if s == nil {
 		return ""
@@ -78,4 +79,5 @@ func (s *Scope) Config() postgres.Config {
 	return s.config
 }
 
+// Format writes a fixed label without exposing scope configuration.
 func (Scope) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("PostgreSQL test scope")) }

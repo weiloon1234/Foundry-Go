@@ -115,12 +115,15 @@ func (r MessageRecipe) Prepare() (PreparedMessage, error) {
 	return PrepareMessage(r.Definition, args, fallback)
 }
 
+// Validate checks that the prepared message has fallback data.
 func (m PreparedMessage) Validate() error {
 	if m.fallback == nil {
 		return invalidMessage()
 	}
 	return nil
 }
+
+// Description returns an owned snapshot of the message recipe.
 func (m PreparedMessage) Description() MessageRecipe {
 	r := m.recipe
 	r.Definition = cloneDefinition(r.Definition)

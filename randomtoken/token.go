@@ -29,6 +29,7 @@ func Bytes(size int) ([]byte, error) {
 	return data, nil
 }
 
+// Hex returns random bytes encoded as a hexadecimal secret, propagating generation errors.
 func Hex(size int) (secret.String, error) {
 	data, err := Bytes(size)
 	if err != nil {

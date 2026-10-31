@@ -51,8 +51,14 @@ type Key[T, V any] struct {
 func NewKey[T, V any](name string, field func(*T) *V, parse func(string) (V, error)) Key[T, V] {
 	return Key[T, V]{id: name, access: field, parse: parse}
 }
-func (k Key[T, V]) Name() string            { return k.id }
-func (k Key[T, V]) Sensitive() Key[T, V]    { k.private = true; return k }
+
+// Name returns the configuration key's identifier.
+func (k Key[T, V]) Name() string { return k.id }
+
+// Sensitive returns a copy of the key marked private.
+func (k Key[T, V]) Sensitive() Key[T, V] { k.private = true; return k }
+
+// Set creates a typed override for the key.
 func (k Key[T, V]) Set(value V) Override[T] { return Override[T]{name: k.id, value: value} }
 func (k Key[T, V]) name() string            { return k.id }
 func (k Key[T, V]) valid() bool {
@@ -103,18 +109,27 @@ func (k Key[T, V]) assign(target *T, value any) error {
 	return nil
 }
 
+// String declares a string configuration key.
 func String[T any](name string, field func(*T) *string) Key[T, string] {
 	return Scalar(name, field)
 }
+
+// Int declares an integer configuration key.
 func Int[T any](name string, field func(*T) *int) Key[T, int] {
 	return Scalar(name, field)
 }
+
+// Bool declares a boolean configuration key.
 func Bool[T any](name string, field func(*T) *bool) Key[T, bool] {
 	return Scalar(name, field)
 }
+
+// Duration declares a duration configuration key parsed with time.ParseDuration.
 func Duration[T any](name string, field func(*T) *time.Duration) Key[T, time.Duration] {
 	return NewKey(name, field, time.ParseDuration)
 }
+
+// Secret declares a sensitive configuration key containing a secret string.
 func Secret[T any](name string, field func(*T) *secret.String) Key[T, secret.String] {
 	return NewKey(name, field, func(raw string) (secret.String, error) { return secret.New(raw), nil }).Sensitive()
 }
@@ -165,6 +180,7 @@ type Entry struct {
 // Report is immutable provenance, suitable for diagnostics without credentials.
 type Report struct{ entries []Entry }
 
+// Entries returns a copy of the report's entries.
 func (r Report) Entries() []Entry { return append([]Entry(nil), r.entries...) }
 
 // Schema owns validated, ordered field declarations. It is safe for concurrent

@@ -21,12 +21,20 @@ func DecimalPositive() Rule[decimal.Decimal] {
 func DecimalGreaterThan() Rule[Pair[decimal.Decimal]] {
 	return decimalPair("foundry.greater_than", func(order int) bool { return order > 0 })
 }
+
+// DecimalGreaterOrEqual creates a rule requiring the first decimal in a pair to be greater than or
+// equal to the second.
 func DecimalGreaterOrEqual() Rule[Pair[decimal.Decimal]] {
 	return decimalPair("foundry.greater_or_equal", func(order int) bool { return order >= 0 })
 }
+
+// DecimalLessThan creates a rule requiring the first decimal in a pair to be less than the second.
 func DecimalLessThan() Rule[Pair[decimal.Decimal]] {
 	return decimalPair("foundry.less_than", func(order int) bool { return order < 0 })
 }
+
+// DecimalLessOrEqual creates a rule requiring the first decimal in a pair to be less than or equal
+// to the second.
 func DecimalLessOrEqual() Rule[Pair[decimal.Decimal]] {
 	return decimalPair("foundry.less_or_equal", func(order int) bool { return order <= 0 })
 }

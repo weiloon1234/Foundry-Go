@@ -22,6 +22,7 @@ type EncryptionKeySettings struct {
 // EncryptionKeys maps retired key IDs to their material.
 type EncryptionKeys map[encryption.KeyID]EncryptionKeySettings
 
+// UnmarshalText decodes the encryption key table and replaces the receiver only on success.
 func (m *EncryptionKeys) UnmarshalText(data []byte) error {
 	schema, err := EncryptionKeySettingsConfigSchema()
 	if err != nil {

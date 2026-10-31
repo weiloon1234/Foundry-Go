@@ -19,6 +19,7 @@ import (
 
 var durationBounds = [...]time.Duration{5 * time.Millisecond, 10 * time.Millisecond, 25 * time.Millisecond, 50 * time.Millisecond, 100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, time.Second, 2500 * time.Millisecond, 5 * time.Second, 10 * time.Second, time.Minute}
 
+// DurationBuckets returns a copy of duration histogram bounds.
 func DurationBuckets() []time.Duration { return slices.Clone(durationBounds[:]) }
 
 type metricKey struct {
@@ -26,6 +27,8 @@ type metricKey struct {
 	Result    Result
 }
 
+// Metric contains an operation's count, total duration, and cumulative duration buckets for a
+// result.
 type Metric struct {
 	Operation Operation                   `json:"operation"`
 	Result    Result                      `json:"result"`
@@ -34,6 +37,7 @@ type Metric struct {
 	Buckets   [len(durationBounds)]uint64 `json:"buckets"`
 }
 
+// Snapshot contains recorder lifecycle, queue, failure, metric, and recent operation data.
 type Snapshot struct {
 	Closing             bool             `json:"closing"`
 	Mode                maintenance.Mode `json:"mode"`
@@ -127,6 +131,7 @@ type Recorder struct {
 	ready  chan struct{}
 }
 
+// New validates configuration and copies reporter and exporter slices into a new recorder.
 func New(config Config, reporters ...Reporter) (*Recorder, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -234,6 +239,7 @@ func (r *Recorder) Start(ctx context.Context, operation Operation) (context.Cont
 	return WithContext(work, r), &Span{recorder: r, entry: entry, started: started, sampled: trace.Sampled()}, nil
 }
 
+// End ends the span with the supplied result and an empty diagnostic.
 func (s *Span) End(result Result) { s.EndWithDiagnostic(result, fault.Diagnostic{}) }
 
 // EndWithDiagnostic completes the span and attaches a redacted failure summary
@@ -341,6 +347,8 @@ func (r *Recorder) reserveSeries() bool {
 	}
 }
 
+// Snapshot collects synchronized metric and recent-entry snapshots, sorting recent entries oldest
+// first.
 func (r *Recorder) Snapshot() Snapshot {
 	if r == nil {
 		return Snapshot{Mode: maintenance.Serving, Metrics: []Metric{}, Recent: []Entry{}}
@@ -393,6 +401,7 @@ func (s *series) snapshot(key metricKey) Metric {
 	return metric
 }
 
+// Gate returns the recorder's maintenance gate, or nil for a nil recorder.
 func (r *Recorder) Gate() *maintenance.Gate {
 	if r == nil {
 		return nil
@@ -428,6 +437,8 @@ type recorderKey struct{}
 func WithContext(ctx context.Context, recorder *Recorder) context.Context {
 	return context.WithValue(ctx, recorderKey{}, recorder)
 }
+
+// FromContext returns the context's recorder, or nil if absent or the context is nil.
 func FromContext(ctx context.Context) *Recorder {
 	if ctx == nil {
 		return nil

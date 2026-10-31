@@ -34,6 +34,8 @@ func (d Declaration) Describe() OwnerDescription {
 	return OwnerDescription{Name: d.name, Model: d.model, StorageModel: d.storage}
 }
 
+// Registration returns the owner's registration callbacks, or an empty declaration for an
+// undefined owner.
 func (o Owner[M, K]) Registration() Declaration {
 	if o.definition == nil {
 		return Declaration{}
@@ -88,11 +90,14 @@ func (o Owner[M, K]) Registration() Declaration {
 	}}
 }
 
+// Registry holds validated model extension owner declarations.
 type Registry struct {
 	owners map[OwnerName]Declaration
 	names  []OwnerName
 }
 
+// NewRegistry validates and registers up to 256 owners, rejecting overlapping names or recorded
+// models.
 func NewRegistry(owners ...Declaration) (*Registry, error) {
 	if len(owners) > 256 {
 		return nil, invalid("too many model extension owners")
@@ -120,12 +125,16 @@ func NewRegistry(owners ...Declaration) (*Registry, error) {
 	slices.Sort(r.names)
 	return r, nil
 }
+
+// Validate checks that the registry is initialized.
 func (r *Registry) Validate() error {
 	if r == nil || r.owners == nil {
 		return invalid("invalid model extension owner registry")
 	}
 	return nil
 }
+
+// Owners returns a copy of the sorted owner names; a nil registry returns nil.
 func (r *Registry) Owners() []OwnerName {
 	if r == nil {
 		return nil
@@ -198,6 +207,8 @@ func (r *Registry) DeclaresScope(owner OwnerName, scope string) bool {
 	}
 	return false
 }
+
+// Scope returns the registered owner's scope, rejecting unknown owners.
 func (r *Registry) Scope(owner OwnerName) (string, error) {
 	if err := r.Validate(); err != nil {
 		return "", err
@@ -208,6 +219,8 @@ func (r *Registry) Scope(owner OwnerName) (string, error) {
 	}
 	return entry.scope, nil
 }
+
+// Check checks that this exact owner declaration is registered.
 func (o Owner[M, K]) Check(r *Registry) error {
 	if err := o.Validate(); err != nil {
 		return err

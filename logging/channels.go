@@ -32,7 +32,11 @@ type ChannelSettings struct {
 	Stack []ChannelName `config:",json"`
 }
 
+// DefaultChannelSettings returns channel settings with the default sink configuration.
 func DefaultChannelSettings() ChannelSettings { return ChannelSettings{Sink: DefaultSinkConfig()} }
+
+// Validate checks sink options and stack children, rejecting unsupported combinations and
+// duplicate children.
 func (s ChannelSettings) Validate() error {
 	if s.Sink.Driver == Custom {
 		sink := s.Sink
@@ -130,6 +134,8 @@ func nilHandler(handler slog.Handler) bool {
 	return false
 }
 
+// PrepareChannels snapshots and validates named channels and stack dependencies, then prepares
+// their sinks. The optional default logger is borrowed.
 func PrepareChannels(selected ChannelName, settings map[ChannelName]ChannelSettings, borrowedDefault *slog.Logger, options ...ChannelOption) (*ChannelSet, error) {
 	if err := selected.Validate(); err != nil {
 		return nil, err
@@ -236,6 +242,8 @@ func PrepareChannels(selected ChannelName, settings map[ChannelName]ChannelSetti
 	state.channels = registry
 	return &ChannelSet{state}, nil
 }
+
+// Channels returns the channel registry, or nil for an uninitialized set.
 func (s *ChannelSet) Channels() *Channels {
 	if s == nil || s.state == nil {
 		return nil
@@ -261,6 +269,8 @@ func (s *ChannelSet) Stats() []ChannelStats {
 	return result
 }
 
+// Start starts owned sinks once. A startup failure closes all owned sinks and permanently closes
+// the set.
 func (s *ChannelSet) Start(ctx context.Context) error {
 	if s == nil || s.state == nil || ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "logging channels require an owner and context")
@@ -287,6 +297,8 @@ func (s *ChannelSet) Start(ctx context.Context) error {
 	state.started = true
 	return nil
 }
+
+// Close closes owned sinks once and retains the close result for later calls.
 func (s *ChannelSet) Close() error {
 	if s == nil || s.state == nil {
 		return nil
@@ -308,11 +320,16 @@ func closeSinks(sinks []*Sink) error {
 	}
 	return result
 }
+
+// Format writes a fixed label without exposing channel configuration.
 func (ChannelSet) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("logging channels")) }
-func (ChannelSet) LogValue() slog.Value       { return slog.StringValue("logging channels") }
+
+// LogValue returns a fixed log label without exposing channel configuration.
+func (ChannelSet) LogValue() slog.Value { return slog.StringValue("logging channels") }
 
 type stackHandler struct{ handlers []slog.Handler }
 
+// Enabled reports whether any child handler enables the level.
 func (h stackHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	for _, child := range h.handlers {
 		if child.Enabled(ctx, level) {
@@ -333,6 +350,8 @@ func (h stackHandler) Handle(ctx context.Context, record slog.Record) error {
 	}
 	return result
 }
+
+// WithAttrs returns a stack whose children each receive an independent attribute slice.
 func (h stackHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	children := make([]slog.Handler, len(h.handlers))
 	for i, child := range h.handlers {
@@ -340,6 +359,8 @@ func (h stackHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	}
 	return stackHandler{children}
 }
+
+// WithGroup returns a stack whose children each have the group applied.
 func (h stackHandler) WithGroup(name string) slog.Handler {
 	children := make([]slog.Handler, len(h.handlers))
 	for i, child := range h.handlers {
@@ -356,9 +377,12 @@ type customHandler struct {
 	events *sinkEvents
 }
 
+// Enabled reports whether both the configured threshold and underlying handler allow the level.
 func (h customHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return level >= h.level && h.next.Enabled(ctx, level)
 }
+
+// Handle forwards the record and updates success or failure counters.
 func (h customHandler) Handle(ctx context.Context, record slog.Record) error {
 	if err := h.next.Handle(ctx, record); err != nil {
 		h.events.failures.Add(1)
@@ -368,10 +392,14 @@ func (h customHandler) Handle(ctx context.Context, record slog.Record) error {
 	h.events.records.Add(1)
 	return nil
 }
+
+// WithAttrs returns a handler with a copied attribute slice passed to the underlying handler.
 func (h customHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	h.next = h.next.WithAttrs(slices.Clone(attrs))
 	return h
 }
+
+// WithGroup returns a handler with the underlying group applied.
 func (h customHandler) WithGroup(name string) slog.Handler {
 	h.next = h.next.WithGroup(name)
 	return h

@@ -52,6 +52,8 @@ func (m *Manifest) JSON() ([]byte, error) {
 	return bytes.Clone(m.data), nil
 }
 
+// Snapshot decodes an independent document from the frozen manifest, rejecting an uninitialized
+// manifest.
 func (m *Manifest) Snapshot() (Document, error) {
 	if m == nil || len(m.data) == 0 {
 		return Document{}, invalid("manifest is not initialized")

@@ -29,12 +29,15 @@ type Recorder[E any] struct {
 	payloads        []value.JSON[E]
 }
 
+// New creates an event recorder with a validated capacity.
 func New[E any](capacity int) (*Recorder[E], error) {
 	if capacity < 1 || capacity > MaxEvents {
 		return nil, fault.New(fault.Invalid, "invalid event recorder capacity")
 	}
 	return &Recorder[E]{capacity: capacity}, nil
 }
+
+// Listener returns an event listener that records payloads in this recorder.
 func (r *Recorder[E]) Listener(id events.ListenerID) events.Listener[E] {
 	return events.Listen(id, r.record)
 }
@@ -72,6 +75,8 @@ func (r *Recorder[E]) record(ctx context.Context, input E) error {
 	r.bytes += size
 	return nil
 }
+
+// Count returns the synchronized payload count; a nil recorder returns zero.
 func (r *Recorder[E]) Count() int {
 	if r == nil {
 		return 0
@@ -109,7 +114,11 @@ func (r *Recorder[E]) Payloads(ctx context.Context) ([]E, error) {
 	}
 	return result, nil
 }
+
+// Format writes a fixed label without exposing recorded events.
 func (*Recorder[E]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("event recorder")) }
+
+// AssertCount reports a test error when the recorded event count differs from want.
 func AssertCount[E any](t testing.TB, recorder *Recorder[E], want int) {
 	t.Helper()
 	if got := recorder.Count(); got != want {

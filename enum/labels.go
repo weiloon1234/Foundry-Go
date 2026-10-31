@@ -24,6 +24,8 @@ func (d Descriptor[E]) LabelKey(value E) (i18n.MessageKey, error) {
 	}
 	return "", safeerror.NewFault(fault.Missing, "enum value has no declared localization label")
 }
+
+// Label resolves the enum value's label through the supplied locale catalog.
 func (d Descriptor[E]) Label(ctx context.Context, catalog *i18n.Catalog, locale i18n.LocaleID, value E) (string, error) {
 	key, err := d.LabelKey(value)
 	if err != nil {

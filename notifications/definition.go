@@ -23,11 +23,18 @@ type Definition[P any] struct {
 	payload contract.JSON[P]
 }
 
+// Define creates a typed notification definition with a distinct declaration identity.
 func Define[P any](name Name, version Version, payload contract.JSON[P]) Definition[P] {
 	return Definition[P]{token: &declarationToken{}, name: name, version: version, payload: payload}
 }
-func (d Definition[P]) Name() Name       { return d.name }
+
+// Name returns the notification name.
+func (d Definition[P]) Name() Name { return d.name }
+
+// Version returns the notification version.
 func (d Definition[P]) Version() Version { return d.version }
+
+// Validate checks declaration identity, semantic name, nonzero version, and payload codec.
 func (d Definition[P]) Validate() error {
 	if d.token == nil || !semantic(string(d.name)) || d.version == 0 {
 		return invalid()
@@ -35,6 +42,7 @@ func (d Definition[P]) Validate() error {
 	return d.payload.Validate()
 }
 
+// Binding binds a typed notification definition to a recipient and channel registration.
 type Binding[M model.Identifiable, K, P any] struct {
 	definition   Definition[P]
 	recipient    Recipient[M, K]
@@ -57,6 +65,8 @@ type registration struct {
 	check           func(context.Context, model.Identity, ChannelID) (any, State, error)
 	render          func(context.Context, int, any, DeliveryContext, json.RawMessage) ([]byte, error)
 }
+
+// Registration holds a notification binding's registry declaration.
 type Registration struct{ definition *registration }
 
 // Bind is the typed registry boundary. A channel renderer for another recipient
@@ -138,7 +148,11 @@ func Bind[M model.Identifiable, K, P any](definition Definition[P], recipient Re
 	parse := func(identity model.Identity) error { _, err := recipient.provider.Parse(identity); return err }
 	return Binding[M, K, P]{definition, recipient, Registration{r}, parse}
 }
+
+// Registration returns the binding's registry declaration.
 func (b Binding[M, K, P]) Registration() Registration { return b.registration }
+
+// Validate validates the binding's registration, rejecting an uninitialized binding.
 func (b Binding[M, K, P]) Validate() error {
 	if b.registration.definition == nil {
 		return invalid()
@@ -152,6 +166,8 @@ type Registry struct {
 	entries map[registrationKey]*registration
 }
 
+// NewRegistry validates notification registrations, rejecting duplicate bindings and conflicting
+// recipient or definition identities.
 func NewRegistry(items ...Registration) (*Registry, error) {
 	r := &Registry{entries: make(map[registrationKey]*registration)}
 	recipients := make(map[RecipientName]*declarationToken)

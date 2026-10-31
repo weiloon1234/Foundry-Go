@@ -37,6 +37,8 @@ type FileRead struct {
 	Offset int64
 	Limit  int
 }
+
+// FileChunk contains a log file chunk and its continuation position.
 type FileChunk struct {
 	File         FileInfo
 	Data         []byte
@@ -176,10 +178,15 @@ func (f *rotatingFile) findFile(id FileID) (FileInfo, error) {
 	}
 	return FileInfo{}, safeerror.NewFault(fault.Conflict, "log file generation expired")
 }
+
+// Files lists files through the sink's file access operation.
 func (s *Sink) Files(ctx context.Context) (files []FileInfo, err error) {
 	err = s.withFile(ctx, func(f *rotatingFile) error { var err error; files, err = f.files(); return err })
 	return
 }
+
+// ReadFile reads a bounded file chunk; offset -1 reads the tail and an offset beyond the file
+// returns a conflict fault.
 func (s *Sink) ReadFile(ctx context.Context, request FileRead) (chunk FileChunk, err error) {
 	if request.Offset < -1 || request.Limit < 1 || request.Limit > MaxFileReadBytes {
 		return chunk, safeerror.NewFault(fault.Invalid, "invalid bounded log read")

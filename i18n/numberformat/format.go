@@ -43,6 +43,7 @@ func New(locale i18n.LocaleID) (*Formatter, error) {
 	return &Formatter{locale: locale, printer: printer, symbols: derived, placement: defaultPlacement(tag)}, nil
 }
 
+// Locale returns the formatter's locale.
 func (f *Formatter) Locale() i18n.LocaleID { return f.locale }
 
 // Number formats the exact value with every canonical fractional digit and
@@ -135,6 +136,7 @@ const (
 	SymbolAfterSpaced
 )
 
+// Validate checks that the currency placement mode is supported.
 func (p Placement) Validate() error {
 	if p < SymbolBefore || p > SymbolAfterSpaced {
 		return invalid("invalid currency placement")
@@ -190,6 +192,7 @@ const (
 	Code
 )
 
+// Validate checks that the currency display mode is supported.
 func (d CurrencyDisplay) Validate() error {
 	if d < Symbol || d > Code {
 		return invalid("invalid currency display")

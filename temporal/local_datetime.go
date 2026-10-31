@@ -16,12 +16,15 @@ type LocalDateTime struct {
 	clock Time
 }
 
+// NewLocalDateTime combines a present calendar date with a wall-clock time.
 func NewLocalDateTime(date Date, clock Time) (LocalDateTime, error) {
 	if date.IsZero() {
 		return LocalDateTime{}, safeerror.NewFault(fault.Invalid, "local date-time requires a date")
 	}
 	return LocalDateTime{date, clock}, nil
 }
+
+// ParseLocalDateTime parses local date and time fields separated by T or a space.
 func ParseLocalDateTime(text string) (LocalDateTime, error) {
 	if len(text) < 19 || (text[10] != 'T' && text[10] != ' ') {
 		return LocalDateTime{}, safeerror.NewFault(fault.Invalid, "expected local YYYY-MM-DDTHH:MM:SS")
@@ -36,10 +39,20 @@ func ParseLocalDateTime(text string) (LocalDateTime, error) {
 	}
 	return NewLocalDateTime(date, clock)
 }
-func (v LocalDateTime) Date() Date     { return v.date }
-func (v LocalDateTime) Time() Time     { return v.clock }
-func (v LocalDateTime) IsZero() bool   { return v.date.IsZero() }
+
+// Date returns the calendar date component.
+func (v LocalDateTime) Date() Date { return v.date }
+
+// Time returns the wall-clock time component.
+func (v LocalDateTime) Time() Time { return v.clock }
+
+// IsZero reports whether the local date-time is absent.
+func (v LocalDateTime) IsZero() bool { return v.date.IsZero() }
+
+// String returns date and time fields separated by T without a time zone.
 func (v LocalDateTime) String() string { return v.date.String() + "T" + v.clock.String() }
+
+// Add adds a duration to wall-clock fields, rejecting an absent value or unsupported result year.
 func (v LocalDateTime) Add(duration time.Duration) (LocalDateTime, error) {
 	if v.IsZero() {
 		return LocalDateTime{}, safeerror.NewFault(fault.Invalid, "local date-time is absent")
@@ -102,12 +115,16 @@ func (v LocalDateTime) In(zone *time.Location) (DateTime, error) {
 	}
 	return NewDateTime(match)
 }
+
+// MarshalText encodes the local date-time as text, rejecting an absent value.
 func (v LocalDateTime) MarshalText() ([]byte, error) {
 	if v.IsZero() {
 		return nil, safeerror.NewFault(fault.Invalid, "local date-time is absent")
 	}
 	return []byte(v.String()), nil
 }
+
+// UnmarshalText parses local date-time text, replacing the receiver only on success.
 func (v *LocalDateTime) UnmarshalText(data []byte) error {
 	parsed, err := ParseLocalDateTime(string(data))
 	if err != nil {
@@ -116,6 +133,8 @@ func (v *LocalDateTime) UnmarshalText(data []byte) error {
 	*v = parsed
 	return nil
 }
+
+// UnmarshalJSON decodes a JSON local date-time, replacing the receiver only on success.
 func (v *LocalDateTime) UnmarshalJSON(data []byte) error {
 	parsed, err := textvalue.Decode(data, ParseLocalDateTime)
 	if err != nil {

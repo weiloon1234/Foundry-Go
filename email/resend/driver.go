@@ -14,18 +14,22 @@ import (
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
+// Config configures Resend HTTP transport and credentials.
 type Config struct {
 	HTTP  email.HTTPConfig
 	Token secret.String
 }
 
+// Format writes a fixed label without exposing Resend configuration.
 func (Config) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("Resend configuration")) }
 
+// Driver submits email through the Resend API.
 type Driver struct {
 	client *httptransport.Client
 	token  secret.String
 }
 
+// New validates the Resend token and creates its HTTP client.
 func New(config Config) (*Driver, error) {
 	if !httptransport.Token(config.Token.Reveal()) {
 		return nil, emaildiag.Failure(email.Construction)
@@ -36,11 +40,15 @@ func New(config Config) (*Driver, error) {
 	}
 	return &Driver{client: c, token: config.Token}, nil
 }
+
+// Close closes the driver's HTTP client; a nil driver is harmless.
 func (d *Driver) Close() {
 	if d != nil {
 		d.client.Close()
 	}
 }
+
+// Format writes a fixed label without exposing driver credentials.
 func (Driver) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("Resend driver")) }
 
 // StructuredSubmission reports that this provider API sends native fields, so
@@ -54,6 +62,8 @@ type attachment struct {
 	ContentID   string `json:"content_id,omitempty"`
 }
 
+// Send submits a structured message to Resend with its optional idempotency key. Missing
+// acceptance identifiers return an ambiguous failure.
 func (d *Driver) Send(ctx context.Context, out email.Outbound) (email.Receipt, error) {
 	if d == nil || d.client == nil || out.Validate() != nil {
 		return email.Receipt{}, emaildiag.Failure(email.Construction)

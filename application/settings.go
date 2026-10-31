@@ -41,6 +41,8 @@ type Settings struct {
 	// StartupTimeout bounds provider boot; zero leaves it unbounded.
 	StartupTimeout time.Duration
 }
+
+// HTTPSettings configures the HTTP server, security headers, probes, and statement detector.
 type HTTPSettings struct {
 	StatementDetector StatementDetectorSettings
 	Enabled           bool
@@ -48,11 +50,14 @@ type HTTPSettings struct {
 	SecurityHeaders   bool
 	Probes            ProbeSettings
 }
+
+// ImageSettings configures the image processing engine.
 type ImageSettings struct {
 	Enabled bool
 	Config  imaging.Config
 }
 
+// DefaultSettings returns the default application configuration.
 func DefaultSettings() Settings {
 	server := http.DefaultServerConfig()
 	server.AccessLog = true

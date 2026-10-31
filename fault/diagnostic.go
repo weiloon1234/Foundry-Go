@@ -14,6 +14,7 @@ type Frame struct {
 	Line     int    `json:"line"`
 }
 
+// String returns the function name and file location.
 func (f Frame) String() string { return f.Function + " " + f.File + ":" + strconv.Itoa(f.Line) }
 
 // Note is one framework fault found in a failure's error graph. Messages come

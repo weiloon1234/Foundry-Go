@@ -14,8 +14,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/notifications"
 )
 
+// TestingT is the test reporting contract used by notification assertions.
 type TestingT interface {
+	// Helper marks the calling function as a test helper.
 	Helper()
+	// Errorf reports a formatted test failure.
 	Errorf(string, ...any)
 }
 
@@ -55,6 +58,8 @@ func (r *Transport[D]) Respond(outcome notifications.Outcome) {
 	r.outcome = outcome
 }
 
+// Deliver returns the configured outcome, recording accepted or unknown deliveries while capacity
+// remains. Cancellation or full capacity requests retry.
 func (r *Transport[D]) Deliver(ctx context.Context, id notifications.DeliveryID, data D) (notifications.Outcome, error) {
 	if r == nil || ctx == nil {
 		return notifications.Reject, fault.New(fault.Invalid, "uninitialized notification test transport")

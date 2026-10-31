@@ -17,13 +17,18 @@ type PasswordOptions struct {
 	Symbols   bool
 }
 
+// DefaultPasswordOptions returns password length bounds of 12 through 128.
 func DefaultPasswordOptions() PasswordOptions { return PasswordOptions{MinLength: 12, MaxLength: 128} }
+
+// Validate checks that password length bounds are positive and ordered.
 func (o PasswordOptions) Validate() error {
 	if o.MinLength < 1 || o.MaxLength < o.MinLength {
 		return invalid("invalid password length bounds")
 	}
 	return nil
 }
+
+// Password creates a password rule using the supplied options.
 func Password[S ~string](options PasswordOptions) Rule[S] {
 	return passwordRule(options, func(v S) string { return string(v) })
 }

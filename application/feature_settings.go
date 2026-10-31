@@ -28,10 +28,13 @@ type StoreSettings struct {
 	Timeout   time.Duration
 }
 
+// DefaultExtensionSettings returns default extension store settings.
 func DefaultExtensionSettings() StoreSettings {
 	c := extensions.DefaultConfig()
 	return StoreSettings{Schema: c.Schema, MaxActive: c.MaxActive, Timeout: c.Timeout}
 }
+
+// DefaultNotificationSettings returns default notification store settings.
 func DefaultNotificationSettings() StoreSettings {
 	c := notifications.DefaultConfig()
 	return StoreSettings{Schema: c.Schema, MaxActive: c.MaxActive, Timeout: c.Timeout}
@@ -48,16 +51,22 @@ type EventsSettings struct {
 	ListenerConnection jobs.ConnectionName
 	ListenerQueue      jobs.Queue
 }
+
+// AuditSettings configures the audit recorder and its database schema.
 type AuditSettings struct {
 	Enabled  bool
 	Database database.ConnectionName
 	Schema   string
 	Config   audit.Config
 }
+
+// AttachmentSettings configures the attachment feature.
 type AttachmentSettings struct {
 	Enabled bool
 	Config  attachments.Config
 }
+
+// ReportSettings configures the datatable report feature and its database connection.
 type ReportSettings struct {
 	Enabled  bool
 	Database database.ConnectionName
@@ -75,6 +84,8 @@ type HealthSettings struct {
 	ConfiguredStorage     bool
 	ConfiguredMail        bool
 }
+
+// LocaleSettings configures supported locales and default and fallback locale identifiers.
 type LocaleSettings struct {
 	Enabled  bool
 	Default  i18n.LocaleID
@@ -101,6 +112,7 @@ type OutboxSettings struct {
 	MaxInFlight                                int
 }
 
+// DefaultOutboxSettings returns default outbox publisher settings in the public schema.
 func DefaultOutboxSettings() OutboxSettings {
 	c := publisher.DefaultConfig()
 	return OutboxSettings{Schema: "public", MaxAttempts: c.MaxAttempts, RetryDelay: c.RetryDelay, OperationTimeout: c.OperationTimeout, PollInterval: c.PollInterval, MaxRetryDelay: c.MaxRetryDelay, Jitter: c.Jitter, MaxPollInterval: c.MaxPollInterval, MaxInFlight: c.MaxInFlight}
@@ -120,6 +132,7 @@ type ExtensionCleanupSettings struct {
 	Jobs jobs.ConnectionName
 }
 
+// FeatureSettings groups configuration for application features.
 type FeatureSettings struct {
 	Idempotency      IdempotencySettings
 	Auth             AuthSettings
@@ -138,6 +151,7 @@ type FeatureSettings struct {
 	Maintenance MaintenanceScheduleSettings
 }
 
+// DefaultFeatureSettings returns default settings for application features.
 func DefaultFeatureSettings() FeatureSettings {
 	return FeatureSettings{Idempotency: DefaultIdempotencySettings(), Auth: DefaultAuthSettings(), Events: EventsSettings{Config: events.DefaultConfig()}, Outbox: DefaultOutboxSettings(), Audit: AuditSettings{Schema: "public", Config: audit.DefaultConfig()}, Locales: LocaleSettings{Default: "en", Locales: []i18n.LocaleID{"en"}}, Extensions: DefaultExtensionSettings(), Notifications: DefaultNotificationSettings(), Attachments: AttachmentSettings{Config: attachments.DefaultConfig()}, Reports: ReportSettings{Config: datatable.DefaultConfig()}, Health: HealthSettings{Config: health.DefaultConfig(), ConfiguredConnections: true}, Observability: DefaultObservabilitySettings(), Maintenance: DefaultMaintenanceScheduleSettings()}
 }

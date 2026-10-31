@@ -19,25 +19,44 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// Name identifies a notification definition.
 type Name string
+
+// Version identifies a notification definition version.
 type Version uint32
+
+// RecipientName identifies a notification recipient declaration.
 type RecipientName string
+
+// ChannelID identifies a notification channel.
 type ChannelID string
+
+// ID is a notification identifier tied to its recipient type.
 type ID[M any] = model.ID[NotificationOf[M]]
+
+// NotificationOf marks notification identities belonging to a recipient type.
 type NotificationOf[M any] struct{ _ [0]*M }
 
 // NotificationID is the heterogeneous transport identity, not inbox authority.
 type NotificationID = model.ID[Notification]
+
+// Notification marks an untyped notification identity.
 type Notification struct{}
 
-func NewID[M any]() (ID[M], error)              { return model.NewIDAt[NotificationOf[M]](time.Now()) }
+// NewID creates a recipient-typed notification identifier using the current time.
+func NewID[M any]() (ID[M], error) { return model.NewIDAt[NotificationOf[M]](time.Now()) }
+
+// ParseID parses a recipient-typed notification identifier.
 func ParseID[M any](text string) (ID[M], error) { return model.ParseID[NotificationOf[M]](text) }
 
 // DeliveryID is a stable external idempotency key, derived from notification and
 // channel identities. It is not recipient authentication or a provider receipt.
 type DeliveryID struct{ key string }
 
+// String returns the delivery key.
 func (id DeliveryID) String() string { return id.key }
+
+// Validate checks that the delivery key is a 64-character hexadecimal string.
 func (id DeliveryID) Validate() error {
 	if len(id.key) != 64 {
 		return invalid()
@@ -48,6 +67,8 @@ func (id DeliveryID) Validate() error {
 	}
 	return nil
 }
+
+// Format writes a fixed label without exposing the delivery identifier.
 func (DeliveryID) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("notification delivery identity"))
 }
@@ -84,6 +105,7 @@ const (
 	Uncertain  State = "uncertain"
 )
 
+// Retryable reports whether the state is pending or prepared.
 func (s State) Retryable() bool { return s == Pending || s == Prepared }
 func (s State) valid() bool {
 	switch s {
@@ -93,16 +115,20 @@ func (s State) valid() bool {
 	return false
 }
 
+// ChannelStatus reports a channel's state and attempt count.
 type ChannelStatus struct {
 	Channel  ChannelID
 	State    State
 	Attempts uint32
 }
+
+// Report contains a notification identifier and channel delivery statuses.
 type Report[M any] struct {
 	ID       ID[M]
 	Channels []ChannelStatus
 }
 
+// Retryable reports whether any channel is pending or prepared.
 func (r Report[M]) Retryable() bool {
 	for _, c := range r.Channels {
 		if c.State.Retryable() {
@@ -111,6 +137,8 @@ func (r Report[M]) Retryable() bool {
 	}
 	return false
 }
+
+// Format writes a fixed label without exposing notification results.
 func (Report[M]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("notification report")) }
 
 // Outcome is returned by custom transports. Retry means definite nonacceptance;

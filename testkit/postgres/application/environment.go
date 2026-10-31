@@ -100,5 +100,8 @@ func (e *Environment) Settings() infrastructure.DatabaseSettings {
 	return result
 }
 
-func (Selection) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("PostgreSQL test selection")) }
+// Format writes a fixed label without exposing PostgreSQL test selection.
+func (Selection) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("PostgreSQL test selection")) }
+
+// Format writes a fixed label without exposing PostgreSQL test configuration.
 func (Environment) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("PostgreSQL test environment")) }

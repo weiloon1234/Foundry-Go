@@ -10,6 +10,7 @@ import (
 // producer. It is separate from a payload's schema name and version.
 type Destination string
 
+// Validate checks that the destination is a semantic identifier.
 func (d Destination) Validate() error {
 	if !identifier.Semantic(string(d)) {
 		return safeerror.NewFault(fault.Invalid, "outbox destination requires a semantic name")

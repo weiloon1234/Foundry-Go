@@ -14,16 +14,25 @@ import (
 	"github.com/weiloon1234/Foundry-Go/plugin/manifest"
 )
 
+// ID identifies an asset bundle within a plugin.
 type ID string
+
+// File contains an asset path and its bytes.
 type File struct {
 	Path string
 	Data []byte
 }
+
+// FileInfo describes an asset path and byte count.
 type FileInfo struct {
 	Path  string `json:"path"`
 	Bytes int    `json:"bytes"`
 }
+
+// Report is the generator's publication report.
 type Report = generate.Report
+
+// Recovery is the generator's distribution recovery information.
 type Recovery = generate.Recovery
 
 const MaxFiles = generate.MaxDistributionFiles
@@ -37,6 +46,7 @@ type Bundle struct {
 	files map[string][]byte
 }
 
+// New validates the plugin distribution and snapshots files into an asset bundle.
 func New(declaration manifest.Manifest, id ID, files ...File) (*Bundle, error) {
 	if err := declaration.Validate(); err != nil {
 		return nil, err
@@ -69,12 +79,15 @@ func Snapshot(files []File) (map[string][]byte, error) {
 	return generate.SnapshotDistribution(outputs)
 }
 
+// Info returns distribution metadata, or zero metadata for a nil bundle.
 func (b *Bundle) Info() manifest.Distribution {
 	if b == nil {
 		return manifest.Distribution{}
 	}
 	return b.info
 }
+
+// Files returns file metadata sorted by path; a nil bundle returns nil.
 func (b *Bundle) Files() []FileInfo {
 	if b == nil {
 		return nil

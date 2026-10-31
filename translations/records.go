@@ -21,6 +21,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+// Record contains a model-typed translation and its timestamps.
 type Record[M any] struct {
 	field            Name
 	locale           i18n.LocaleID
@@ -29,13 +30,26 @@ type Record[M any] struct {
 	_                [0]*M
 }
 
-func (r Record[M]) Field() Name                  { return r.field }
-func (r Record[M]) Locale() i18n.LocaleID        { return r.locale }
-func (r Record[M]) Text() string                 { return r.text }
+// Field returns the translated field name.
+func (r Record[M]) Field() Name { return r.field }
+
+// Locale returns the translation locale.
+func (r Record[M]) Locale() i18n.LocaleID { return r.locale }
+
+// Text returns the translation text.
+func (r Record[M]) Text() string { return r.text }
+
+// CreatedAt returns the translation's creation timestamp.
 func (r Record[M]) CreatedAt() temporal.DateTime { return r.created }
+
+// UpdatedAt returns the translation's update timestamp.
 func (r Record[M]) UpdatedAt() temporal.DateTime { return r.updated }
-func (Record[M]) Format(s fmt.State, _ rune)     { _, _ = s.Write([]byte("model translation record")) }
-func (Record[M]) MarshalJSON() ([]byte, error)   { return nil, invalid() }
+
+// Format writes a fixed label without exposing translation data.
+func (Record[M]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("model translation record")) }
+
+// MarshalJSON rejects direct JSON serialization of a translation record.
+func (Record[M]) MarshalJSON() ([]byte, error) { return nil, invalid() }
 func rowIdentity(row store.Translation) extensionrow.Identity {
 	return extensionrow.Identity{Key: row.Key, Owner: row.Owner, Scope: row.Scope, SubjectKey: row.SubjectKey, Identity: row.Identity}
 }
@@ -149,6 +163,8 @@ func (f Field[M, K]) matchingKeys(ctx context.Context, m *Manager, locale i18n.L
 	}
 	return keys, nil
 }
+
+// Clear clears this field's translations for the owner in a write transaction.
 func (f Field[M, K]) Clear(ctx context.Context, m *Manager, reference model.Reference[M, K]) (int, error) {
 	if err := f.check(m); err != nil {
 		return 0, err
@@ -174,6 +190,8 @@ func (f Field[M, K]) clear(ctx context.Context, tx *database.Tx, m *Manager, ref
 	fields := store.Translations
 	return deleteRows(ctx, tx, store.Translations.Query().Where(orm.TextEq(fields.Scope, subject.Scope), orm.TextEq(fields.SubjectKey, subject.Key), orm.TextEq(fields.Field, string(f.Name()))))
 }
+
+// DeleteAll locks the owner and deletes all its translations in a write transaction.
 func DeleteAll[M any, K comparable](ctx context.Context, m *Manager, owner extensions.Owner[M, K], reference model.Reference[M, K]) (int, error) {
 	if err := m.Validate(); err != nil {
 		return 0, err
@@ -208,6 +226,9 @@ func deleteRows(ctx context.Context, tx *database.Tx, q orm.Query[store.Translat
 	}
 	return int(count), nil
 }
+
+// Cleanup cleans up an owner's translations for delete or force-delete operations; soft deletion
+// retains them.
 func Cleanup[M any, K comparable](ctx context.Context, tx *database.Tx, m *Manager, owner extensions.Owner[M, K], reference model.Reference[M, K], operation lifecycle.Operation) error {
 	if err := m.Validate(); err != nil {
 		return err

@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// ProbeID identifies a readiness probe.
 type ProbeID string
 
 // Probe describes one dependency check. Check must honor its context, perform
@@ -24,6 +25,7 @@ type Probe struct {
 	Check func(context.Context) error
 }
 
+// Config configures probe counts, concurrency, and timeouts.
 type Config struct {
 	MaxProbes     int
 	MaxConcurrent int
@@ -31,10 +33,12 @@ type Config struct {
 	ProbeTimeout  time.Duration
 }
 
+// DefaultConfig returns default probe limits and timeouts.
 func DefaultConfig() Config {
 	return Config{MaxProbes: 64, MaxConcurrent: 8, CheckTimeout: 3 * time.Second, ProbeTimeout: time.Second}
 }
 
+// Validate checks probe counts, concurrency, and timeout bounds.
 func (c Config) Validate() error {
 	if c.MaxProbes < 1 || c.MaxProbes > 256 || c.MaxConcurrent < 1 || c.MaxConcurrent > 64 || c.CheckTimeout <= 0 || c.CheckTimeout > time.Minute || c.ProbeTimeout <= 0 || c.ProbeTimeout > c.CheckTimeout {
 		return safeerror.NewFault(fault.Invalid, "invalid readiness probe resource bounds")
@@ -42,6 +46,7 @@ func (c Config) Validate() error {
 	return nil
 }
 
+// State is a health probe state.
 type State string
 
 const (
@@ -53,6 +58,7 @@ const (
 	Closed         State = "closed"
 )
 
+// Result reports a probe's identifier, state, and elapsed duration.
 type Result struct {
 	ID       ProbeID       `json:"id"`
 	State    State         `json:"state"`
@@ -84,6 +90,8 @@ type Registry struct {
 	done    chan struct{}
 }
 
+// NewRegistry validates and copies probe declarations, rejecting duplicate identifiers and
+// excessive probe counts.
 func NewRegistry(config Config, probes ...Probe) (*Registry, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -104,6 +112,7 @@ func NewRegistry(config Config, probes ...Probe) (*Registry, error) {
 	return &Registry{config: config, probes: append([]Probe(nil), probes...), slots: make(chan struct{}, config.MaxConcurrent), sealed: make(chan struct{}), done: make(chan struct{})}, nil
 }
 
+// Describe returns probe identifiers in registration order.
 func (r *Registry) Describe() []ProbeID {
 	result := make([]ProbeID, len(r.probes))
 	for i, probe := range r.probes {
@@ -250,4 +259,5 @@ func (r *Registry) Close(ctx context.Context) error {
 	}
 }
 
+// Done returns the registry's completion channel.
 func (r *Registry) Done() <-chan struct{} { return r.done }

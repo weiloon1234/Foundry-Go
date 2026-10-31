@@ -18,6 +18,7 @@ type RotationConfig struct {
 	Disabled bool
 }
 
+// DefaultRotationConfig returns default rotation size, file count, and age limits.
 func DefaultRotationConfig() RotationConfig {
 	return RotationConfig{MaxBytes: 20 << 20, MaxFiles: 14, MaxAge: 14 * 24 * time.Hour}
 }
@@ -36,6 +37,7 @@ func (c RotationConfig) resolved() RotationConfig {
 	return c
 }
 
+// Validate resolves defaults and checks rotation limits are positive and bounded.
 func (c RotationConfig) Validate() error {
 	c = c.resolved()
 	if c.MaxBytes < 1 || c.MaxBytes > 1<<30 || c.MaxFiles < 1 || c.MaxFiles > 1000 || c.MaxAge < time.Second || c.MaxAge > 365*24*time.Hour {

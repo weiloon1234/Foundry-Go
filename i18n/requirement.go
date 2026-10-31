@@ -11,6 +11,7 @@ const (
 	AllLocales
 )
 
+// Validate checks that the locale requirement is supported.
 func (r LocaleRequirement) Validate() error {
 	if r > AllLocales {
 		return invalidLocale()

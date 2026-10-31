@@ -23,6 +23,8 @@ type Client struct {
 	write  sync.Mutex
 }
 
+// Dial connects a test client using the Foundry WebSocket subprotocol and the supplied frame
+// limit.
 func Dial(ctx context.Context, url string, headers stdhttp.Header, maxFrameBytes int) (*Client, error) {
 	return dial(ctx, url, headers, maxFrameBytes, protocol.Subprotocol)
 }
@@ -54,12 +56,16 @@ func dial(ctx context.Context, url string, headers stdhttp.Header, maxFrameBytes
 	socket.SetReadLimit(int64(maxFrameBytes))
 	return &Client{socket: socket, limit: maxFrameBytes}, nil
 }
+
+// Close closes the socket immediately; a nil or disconnected client is harmless.
 func (c *Client) Close() error {
 	if c == nil || c.socket == nil {
 		return nil
 	}
 	return c.socket.CloseNow()
 }
+
+// Send JSON-encodes and sends a protocol request.
 func (c *Client) Send(ctx context.Context, request protocol.Request) error {
 	data, err := json.Marshal(request)
 	if err != nil {
@@ -80,6 +86,8 @@ func (c *Client) SendText(ctx context.Context, data []byte) error {
 	defer c.write.Unlock()
 	return c.socket.Write(ctx, transport.MessageText, data)
 }
+
+// Receive reads and validates a bounded text response with the expected protocol version.
 func (c *Client) Receive(ctx context.Context) (protocol.Response, error) {
 	if ctx == nil || c == nil || c.socket == nil {
 		return protocol.Response{}, fault.New(fault.Invalid, "test client is not connected")
