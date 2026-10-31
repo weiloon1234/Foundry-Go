@@ -503,12 +503,12 @@ intentionally accepts byte slices, while identity does not.
 
 | Disposition | Cases |
 | --- | ---: |
-| ported | 595 |
+| ported | 599 |
 | port | 0 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 450 |
-| **Total** | **1045** |
+| **Total** | **1049** |
 
 | Area | Cases |
 | --- | ---: |
@@ -518,7 +518,7 @@ intentionally accepts byte slices, while identity does not.
 | Core reads, writes and codecs | 74 |
 | Events, jobs and messaging | 54 |
 | Expressions and aggregates | 73 |
-| Framework integrations | 85 |
+| Framework integrations | 89 |
 | HTTP, DTOs and transport contracts | 117 |
 | Joins and correlation | 102 |
 | Lifecycle, mutators and observers | 39 |
@@ -539,12 +539,10 @@ intentionally accepts byte slices, while identity does not.
 | 6c | 73 |
 | 6d | 60 |
 | 6e | 61 |
-| 7 | 84 |
+| 7 | 88 |
 | — | 450 |
 
-595 old catalogue rows are covered by 590 distinct Go-way cases.
-
-587 old catalogue rows are covered by 582 distinct Go-way cases.
+599 old catalogue rows are covered by 594 distinct Go-way cases.
 
 ## Emitter audit
 

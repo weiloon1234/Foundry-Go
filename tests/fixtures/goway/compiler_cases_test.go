@@ -10,6 +10,10 @@ func compilerCases() []compilerCase {
 		{"expr_phase_aggregate_row", "cannot use"},
 		{"expr_nullable_operator_nonnullable", "cannot use"},
 		{"d1_alias_join_identity", "cannot use"},
+		{"computed_filter_scope", "cannot use"},
+		{"computed_filter_value", "does not match"},
+		{"computed_filter_phase", "missing method rowValue"},
+		{"computed_nullable_filter_scope", "cannot use"},
 
 		{"orm_d2_predicate_owner", "cannot use"},
 		{"orm_d2_key_owner", "does not match"},
