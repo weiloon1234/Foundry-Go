@@ -12,6 +12,11 @@
   share a pending capacity acquisition, avoiding self-deadlock when the limit is full.
 - Fixed: On Unix, devserver terminates remaining process-group descendants when a
   child leader exits successfully or fails, preventing orphaned helpers and servers.
+- Fixed: Frontend plural discovery rejects ambiguous numeric arguments across
+  forms and locales with an actionable diagnostic instead of guessing from
+  placeholder names or encounter order. Plural forms must use one distinct
+  placeholder; messages with additional arguments need an explicit shared-catalog
+  plural declaration.
 
 - Changed (breaking): HTTP pagination endpoint `Handle` and `URL` methods move to
   documented package functions: `pagination.Handle`, `pagination.URL`,

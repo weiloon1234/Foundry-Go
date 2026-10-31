@@ -1,11 +1,58 @@
 package i18n_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"testing/fstest"
 
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 )
+
+func TestDiscoverDefinitionsRejectsAmbiguousPluralArguments(t *testing.T) {
+	for name, files := range map[string]fstest.MapFS{
+		"user before files": {
+			"en/uploads.json": {Data: []byte(`{"uploads":{"$plural":{"one":"{{user}} uploaded {{files}} file","other":"{{user}} uploaded {{files}} files"}}}`)},
+		},
+		"different form order": {
+			"en/uploads.json": {Data: []byte(`{"uploads":{"$plural":{"one":"{{user}} uploaded {{files}} file","other":"{{files}} files uploaded by {{user}}"}}}`)},
+		},
+		"preferred name is not a declaration": {
+			"en/uploads.json": {Data: []byte(`{"uploads":{"$plural":{"other":"{{user}} uploaded {{count}} files"}}}`)},
+		},
+		"different placeholders across forms": {
+			"en/uploads.json": {Data: []byte(`{"uploads":{"$plural":{"one":"{{user}} uploaded one file","other":"{{files}} files uploaded"}}}`)},
+		},
+		"different placeholders across locales": {
+			"en/uploads.json": {Data: []byte(`{"uploads":{"$plural":{"other":"{{files}} files"}}}`)},
+			"ms/uploads.json": {Data: []byte(`{"uploads":{"$plural":{"other":"{{jumlah}} fail"}}}`)},
+		},
+		"no placeholder": {
+			"en/uploads.json": {Data: []byte(`{"uploads":{"$plural":{"other":"Files uploaded"}}}`)},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			locales := []i18n.LocaleID{"en"}
+			if _, exists := files["ms/uploads.json"]; exists {
+				locales = append(locales, "ms")
+			}
+			set, err := i18n.NewLocaleSet("en", locales...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defs, err := i18n.DiscoverDefinitions(t.Context(), files, set)
+			if !errors.Is(err, fault.Invalid) || defs != nil {
+				t.Fatalf("expected atomic rejection of ambiguous plural arguments, got definitions %+v, error %v", defs, err)
+			}
+			for _, want := range []string{`"uploads"`, "exactly one placeholder", "MessageDefinition.Plural"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("diagnostic %q does not contain %q", err.Error(), want)
+				}
+			}
+		})
+	}
+}
 
 func TestDiscoverDefinitionsInfersParametersAndPlurals(t *testing.T) {
 	files := fstest.MapFS{
@@ -25,8 +72,8 @@ func TestDiscoverDefinitionsInfersParametersAndPlurals(t *testing.T) {
 				"merchants.results_for": "Results for “{{query}}”",
 				"merchants.count_in": {
 					"$plural": {
-						"one": "{{count}} in {{nob}}",
-						"other": "{{count}} in {{nob}}"
+						"one": "{{count}} merchant",
+						"other": "{{count}} merchants"
 					}
 				}
 			}`),
@@ -60,18 +107,15 @@ func TestDiscoverDefinitionsInfersParametersAndPlurals(t *testing.T) {
 		t.Fatalf("unexpected def 1: %+v", defs[1])
 	}
 
-	// 3. merchants.count_in (plural = count, text = nob)
+	// 3. merchants.count_in (plural = count)
 	if defs[2].Key != "merchants.count_in" || defs[2].Plural != "count" || defs[2].Kind != i18n.Cardinal {
 		t.Fatalf("unexpected def 2: %+v", defs[2])
 	}
-	if len(defs[2].Parameters) != 2 {
+	if len(defs[2].Parameters) != 1 {
 		t.Fatalf("unexpected def 2 params len: %+v", defs[2].Parameters)
 	}
 	if defs[2].Parameters[0].Name != "count" || defs[2].Parameters[0].Kind != i18n.NumberParameter {
 		t.Fatalf("unexpected count param: %+v", defs[2].Parameters[0])
-	}
-	if defs[2].Parameters[1].Name != "nob" || defs[2].Parameters[1].Kind != i18n.TextParameter {
-		t.Fatalf("unexpected nob param: %+v", defs[2].Parameters[1])
 	}
 
 	// 4. merchants.results_for (query = text)
@@ -80,6 +124,30 @@ func TestDiscoverDefinitionsInfersParametersAndPlurals(t *testing.T) {
 	}
 	if defs[3].Parameters[0].Name != "query" || defs[3].Parameters[0].Kind != i18n.TextParameter {
 		t.Fatalf("unexpected query param: %+v", defs[3].Parameters[0])
+	}
+}
+
+func TestDiscoverDefinitionsUsesSolePluralPlaceholderAcrossLocalesAndForms(t *testing.T) {
+	files := fstest.MapFS{
+		"en/uploads.json": {Data: []byte(`{"uploads":{"$plural":{"one":"One file uploaded","other":"{{files}} files uploaded ({{files}} total)"}}}`)},
+		"ms/uploads.json": {Data: []byte(`{"uploads":{"$plural":{"other":"{{files}} fail dimuat naik"}}}`)},
+	}
+	set, err := i18n.NewLocaleSet("en", "en", "ms")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defs, err := i18n.DiscoverDefinitions(t.Context(), files, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(defs) != 1 || defs[0].Key != "uploads" || defs[0].Plural != "files" || defs[0].Kind != i18n.Cardinal {
+		t.Fatalf("unexpected plural definition: %+v", defs)
+	}
+	if len(defs[0].Parameters) != 1 || defs[0].Parameters[0] != (i18n.Parameter{Name: "files", Kind: i18n.NumberParameter}) {
+		t.Fatalf("unexpected plural parameters: %+v", defs[0].Parameters)
+	}
+	if _, err := i18n.Load(t.Context(), files, set, i18n.CatalogOptions{}, defs...); err != nil {
+		t.Fatalf("discovered definitions must compile with their templates: %v", err)
 	}
 }
 

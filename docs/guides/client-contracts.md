@@ -727,9 +727,12 @@ root containing a `frontend` directory is also accepted. Applications can embed
 existing catalog reader. Every configured locale must have a catalog directory.
 The manifest stores definitions in `Locales.FrontendMessages`; translation text
 stays in application catalogs. Plural messages use the existing `$plural` form
-map. Discovery prefers `count` as the numeric plural argument, or the sole
-placeholder when there is one. Use one numeric placeholder in plural forms to
-make the choice explicit.
+map. Across all plural forms and locales for a key, discovery requires exactly
+one distinct placeholder and types that argument as numeric. Forms can omit or
+repeat that placeholder. Multiple placeholders are ambiguous, including when one
+is named `count`, and cause export to fail with a diagnostic naming the key.
+For plural messages with additional arguments, move the message to the shared
+catalog and declare its numeric argument with `MessageDefinition.Plural`.
 
 The generated `FrontendMessageKey` union and `FrontendMessageArguments` interface
 keep frontend keys separate from Go-declared `CatalogMessageKey` values.
