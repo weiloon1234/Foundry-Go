@@ -12,7 +12,7 @@ import (
 )
 
 func New(dependencies datatable.Dependencies, config datatable.Config) (*datatable.Manager, error) {
-	return datatable.New(dependencies, config, Members.Registration(), Orders.Registration(), Totals.Registration())
+	return datatable.New(dependencies, config, Members.Registration(), NumericLevels.Registration(), Orders.Registration(), Totals.Registration())
 }
 
 func ListMembers(ctx context.Context, manager *datatable.Manager, guard auth.Guard[Operator], request datatable.Request) (orm.PageResult[MemberRow], error) {

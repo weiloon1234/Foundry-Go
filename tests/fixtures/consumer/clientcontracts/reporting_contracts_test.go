@@ -71,10 +71,31 @@ func reportingContracts(t *testing.T) (*manifest.Manifest, *foundryhttp.Router) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	levelEnum, err := reporting.MemberLevel.EnumDescriptor().Definition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wideEnum, err := reporting.WideMemberLevel.EnumDescriptor().Definition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	levelLabels, err := reporting.MemberLevel.EnumDescriptor().LabelDefinitions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wideLabels, err := reporting.WideMemberLevel.EnumDescriptor().LabelDefinitions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := i18n.NewCatalog(t.Context(), locales, i18n.CatalogOptions{}, append(levelLabels, wideLabels...), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	source, err := manifest.Build(t.Context(), manifest.Sources{
-		HTTP:   router,
-		Tables: manager.Registry(),
-		Enums:  []enum.Definition{stateEnum},
+		HTTP:    router,
+		Tables:  manager.Registry(),
+		Enums:   []enum.Definition{stateEnum, levelEnum, wideEnum},
+		Catalog: catalog,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +184,7 @@ func TestReportingContractCoverage(t *testing.T) {
 			t.Fatal("report lost export capability", table.ID)
 		}
 	}
-	if !slices.Equal(ids, []string{"reports.members", "reports.orders", "reports.totals"}) || len(document.HTTP) != 2 {
+	if !slices.Equal(ids, []string{"reports.members", "reports.numeric_levels", "reports.orders", "reports.totals"}) || len(document.HTTP) != 2 {
 		t.Fatal("incomplete reporting contract", ids, len(document.HTTP))
 	}
 	for _, operation := range document.HTTP {

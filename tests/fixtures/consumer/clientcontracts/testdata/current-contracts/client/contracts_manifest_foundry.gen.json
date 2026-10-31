@@ -404,6 +404,17 @@
       "nullable": false
     },
     {
+      "id": "foundry.test/consumer/reporting.AgentLevel",
+      "kind": "integer",
+      "nullable": false,
+      "bits": 32,
+      "signed": true,
+      "cases": [
+        0,
+        1
+      ]
+    },
+    {
       "id": "foundry.test/consumer/reporting.MemberRow",
       "kind": "object",
       "nullable": false,
@@ -436,12 +447,45 @@
       ]
     },
     {
+      "id": "foundry.test/consumer/reporting.NumericLevelRow",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "id",
+          "type": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
+          "required": true
+        },
+        {
+          "name": "level",
+          "type": "foundry.test/consumer/reporting.AgentLevel",
+          "required": true
+        },
+        {
+          "name": "wideLevel",
+          "type": "foundry.test/consumer/reporting.WideLevel",
+          "required": true
+        }
+      ]
+    },
+    {
       "id": "foundry.test/consumer/reporting.State",
       "kind": "string",
       "nullable": false,
       "cases": [
         "active",
         "disabled"
+      ]
+    },
+    {
+      "id": "foundry.test/consumer/reporting.WideLevel",
+      "kind": "integer",
+      "nullable": false,
+      "bits": 64,
+      "signed": true,
+      "cases": [
+        9007199254740993,
+        9007199254740994
       ]
     },
     {
@@ -5929,6 +5973,90 @@
         {
           "column": "name",
           "direction": "asc"
+        }
+      ],
+      "exports": true
+    },
+    {
+      "id": "reports.numeric_levels",
+      "row": "foundry.test/consumer/reporting.NumericLevelRow",
+      "request": "github.com/weiloon1234/Foundry-Go/datatable.Request",
+      "columns": [
+        {
+          "name": "id",
+          "label": "reports.member.id",
+          "kind": "text",
+          "value": {
+            "property": {
+              "name": "id",
+              "type": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
+              "required": true
+            },
+            "value": {
+              "id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
+              "kind": "string",
+              "nullable": false,
+              "format": "uuid"
+            },
+            "quoted": false
+          },
+          "sortable": false,
+          "searchable": false,
+          "exportable": true
+        },
+        {
+          "name": "level",
+          "label": "reports.numeric_levels.level",
+          "kind": "enum",
+          "value": {
+            "property": {
+              "name": "level",
+              "type": "foundry.test/consumer/reporting.AgentLevel",
+              "required": true
+            },
+            "value": {
+              "id": "foundry.test/consumer/reporting.AgentLevel",
+              "kind": "integer",
+              "nullable": false,
+              "bits": 32,
+              "signed": true,
+              "cases": [
+                0,
+                1
+              ]
+            },
+            "quoted": false
+          },
+          "sortable": false,
+          "searchable": false,
+          "exportable": true
+        },
+        {
+          "name": "wideLevel",
+          "label": "reports.numeric_levels.wide_level",
+          "kind": "enum",
+          "value": {
+            "property": {
+              "name": "wideLevel",
+              "type": "foundry.test/consumer/reporting.WideLevel",
+              "required": true
+            },
+            "value": {
+              "id": "foundry.test/consumer/reporting.WideLevel",
+              "kind": "integer",
+              "nullable": false,
+              "bits": 64,
+              "signed": true,
+              "cases": [
+                9007199254740993,
+                9007199254740994
+              ]
+            },
+            "quoted": false
+          },
+          "sortable": false,
+          "searchable": false,
+          "exportable": true
         }
       ],
       "exports": true

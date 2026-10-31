@@ -210,11 +210,6 @@ export type TableColumnKind =
   | "local_date_time"
   | "time";
 
-export interface EnumCase<T extends string | number = string | number> {
-  readonly value: T;
-  readonly labelKey?: string;
-}
-
 export interface EnumValueObject<T extends string | number = string | number> {
   readonly cases: readonly T[];
   readonly labels?: Readonly<Partial<Record<T, string>>>;
@@ -237,8 +232,7 @@ export interface ScalarTableColumn<Name extends string = string, Op extends stri
 
 export interface EnumTableColumn<Name extends string = string, E extends string | number = string | number, Op extends string = string> extends BaseTableColumn<Name, Op> {
   readonly kind: "enum";
-  readonly enum?: EnumValueObject<E>;
-  readonly cases: readonly EnumCase<E>[];
+  readonly enum: EnumValueObject<E>;
 }
 
 export type TableColumn<Row, Op extends string = string> = {

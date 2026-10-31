@@ -1,9 +1,11 @@
 import * as sdk from "./contracts_foundry.gen.js";
 
 type Member = sdk.ContractTypes["foundry.test/consumer/reporting.MemberRow"];
+type NumericLevel = sdk.ContractTypes["foundry.test/consumer/reporting.NumericLevelRow"];
 type Order = sdk.ContractTypes["foundry.test/consumer/reporting.OrderRow"];
 type Total = sdk.ContractTypes["foundry.test/consumer/reporting.MemberTotal"];
 declare const member: Member;
+declare const numericLevel: NumericLevel;
 declare const order: Order;
 declare const total: Total;
 declare const api: sdk.API;
@@ -24,6 +26,28 @@ export function reportingTypes(): void {
   // S2: typed datatable descriptor and query/export helpers
   const membersTable = sdk.tables["reports.members"];
   const tableMember: sdk.TableRow<"reports.members"> = member;
+  const tableNumericLevel: sdk.TableRow<"reports.numeric_levels"> = numericLevel;
+  const numericLevelsTable = sdk.tables["reports.numeric_levels"];
+  for (const column of numericLevelsTable.columns) {
+    if (column.kind === "enum" && column.name === "level") {
+      for (const level of column.enum.cases) {
+        const value: 0 | 1 = level;
+        // @ts-expect-error Integer enum cases remain numbers.
+        const text: string = level;
+        void [value, text];
+      }
+      // @ts-expect-error Cases belong to the enum value object.
+      void column.cases;
+    }
+    if (column.kind === "enum" && column.name === "wideLevel") {
+      for (const level of column.enum.cases) {
+        const value: "9007199254740993" | "9007199254740994" = level;
+        // @ts-expect-error Wide integer enum cases preserve decimal strings.
+        const rounded: number = level;
+        void [value, rounded];
+      }
+    }
+  }
   if (membersTable.query) {
     void membersTable.query(api, { body: {} });
   }
@@ -32,5 +56,5 @@ export function reportingTypes(): void {
   }
   // @ts-expect-error Filters keep their declared operator set.
   void api.reportsMembersQuery({ body: { filters: [{ op: "raw_sql" }] } });
-  void [amount, count, sum, note, memberID, wrongID, rounded, countNumber, tableMember];
+  void [amount, count, sum, note, memberID, wrongID, rounded, countNumber, tableMember, tableNumericLevel];
 }

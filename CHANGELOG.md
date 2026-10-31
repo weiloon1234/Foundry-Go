@@ -12,6 +12,8 @@
   `Searchable(row)` and `ExportAs(selected, cell)` infer both types.
   Public DSL operations are visible in `go doc`; see the
   [v0.3 migration table](docs/guides/orm-migration.md#v030-expression-and-datatable-migration).
+- Fixed: TypeScript datatable enum columns reference the S1 enum value object for cases and labels instead of duplicating cases as strings. Numeric enum columns now compile with number cases up to 32 bits and decimal strings for wider integers, including enums without registered label metadata.
+
 - Changed (breaking): `Codec.CloneOptional` → `codec.CloneOptional`. Pass the codec as the first argument; the method is removed.
 - Changed (internal compile footprint): HTTP request execution now carries only path, query and body types; typed response completion and endpoint metadata retain the response type. Generated non-generic validation field sets cache pointers with `sync.OnceValue` and return value copies. Generic DTO construction is unchanged.
 

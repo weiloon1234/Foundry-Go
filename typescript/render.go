@@ -655,7 +655,13 @@ func (r *renderer) types() error {
 	for _, typ := range r.document.Types {
 		typeName := r.typeName(typ.ID)
 		fmt.Fprintf(&r.out, "export type %s = %s;\n", typeName, r.expression(typ))
-		if def, ok := enumsByID[typ.ID]; ok {
+		def, registered := enumsByID[typ.ID]
+		if registered || len(typ.Cases) > 0 {
+			if !registered {
+				for _, value := range typ.Cases {
+					def.Cases = append(def.Cases, enum.WireCase{Value: value})
+				}
+			}
 			if topLevelValueNames[typeName] {
 				return safeerror.NewFault(fault.Conflict, fmt.Sprintf("generated enum value name %q collides with top-level declaration", typeName))
 			}

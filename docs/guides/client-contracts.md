@@ -381,7 +381,7 @@ const csv = await membersTable.export(api, {});
 
 Each descriptor in `tables` carries:
 - `id`: unique table identifier string.
-- `columns`: readonly array of `TableColumn<Row>` with `name` typed strictly as `keyof Row & string`, `kind` derived from Go `datatable.ColumnKind`, `nullable`, `sortable`, `searchable`, `exportable`, and declared filter `operators`. Enum columns carry `kind: "enum"`, literal `cases`, and link directly to the S1 enum value object (`enum: typeof Status`) when registered in the manifest.
+- `columns`: readonly array of `TableColumn<Row>` with `name` typed strictly as `keyof Row & string`, `kind` derived from Go `datatable.ColumnKind`, `nullable`, `sortable`, `searchable`, `exportable`, and declared filter `operators`. Enum columns carry `kind: "enum"` and reference the S1 enum value object through `enum`. Read allowed values from `column.enum.cases` and optional label keys from `column.enum.labels`. Integer enums use numbers up to 32 bits and decimal strings for wider integers. Without registered enum metadata, the value object carries schema-owned cases without labels.
 - `defaultSort`: readonly array of `TableSort<keyof Row & string>`.
 - `exports`: boolean flag indicating whether the table supports export operations.
 - `query(client, input, options)` and `export?(client, input, options)`: strongly-typed invokers that call client operations without casts or `any`.

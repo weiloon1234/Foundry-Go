@@ -63,7 +63,7 @@ func TestConsumerClientManifestKeepsRealFeatureBoundaries(t *testing.T) {
 	if document.Version != manifest.Version || len(document.HTTP) != 27 || document.Realtime == nil || len(document.Realtime.Channels) != 2 || document.Locales == nil || len(document.Enums) != 1 || len(document.Permissions) != 1 {
 		t.Fatal("registered metadata missing")
 	}
-	if len(document.Tables) != 1 || document.Tables[0].ID != "reports.members" || !document.Tables[0].Exports || len(document.Notifications) != 1 || len(document.Notifications[0].Channels) != 1 || document.Notifications[0].Channels[0].Payload != "foundry.test/consumer/clientcontracts.Member" {
+	if len(document.Tables) != 2 || document.Tables[0].ID != "reports.members" || !document.Tables[0].Exports || document.Tables[1].ID != "reports.numeric_levels" || !document.Tables[1].Exports || len(document.Notifications) != 1 || len(document.Notifications[0].Channels) != 1 || document.Notifications[0].Channels[0].Payload != "foundry.test/consumer/clientcontracts.Member" {
 		t.Fatal("table or rendered notification metadata missing")
 	}
 	var account, page bool

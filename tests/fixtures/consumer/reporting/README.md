@@ -13,6 +13,12 @@ The client-contract exports are ready for dependent consumers:
 | `reporting.MemberRow` | `MemberRows` | `Members` |
 | `reporting.OrderRow` | `OrderRows` | `Orders` |
 | `reporting.MemberTotal` | `MemberTotals` | `Totals` |
+| `reporting.NumericLevelRow` | `NumericLevelRows` | `NumericLevels` |
+
+`numeric_levels.go` owns the separate `reports.numeric_levels` report. Its
+`AgentLevel` and `WideLevel` columns cover numeric enum cases and labels in the
+TypeScript client, including integers above 2^53. The members report retains its
+frozen SQL and columns.
 
 The `ExportMembers` job DTO and the DTO JSON/validation descriptors retain their
 existing package paths and wire fields. Reporting queries, exports and authority

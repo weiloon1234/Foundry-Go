@@ -115,6 +115,12 @@ assert.equal(metadata.version.text, String(sdk.manifestVersion));
 assert.ok(metadata.locales.supported.includes("ms"));
 assert.equal(metadata.permissions[0].label_key, "permissions.manage");
 assert.equal(metadata.tables[0].id, "reports.members");
+// Table enums retain schema-owned cases even without registered label metadata.
+const levelColumn = sdk.tables["reports.numeric_levels"].columns.find(column => column.name === "level");
+assert.equal(levelColumn.enum, sdk.AgentLevel);
+assert.deepEqual(levelColumn.enum.cases, [0, 1]);
+assert.equal(Object.hasOwn(levelColumn.enum, "labels"), false);
+assert.equal(Object.hasOwn(levelColumn, "cases"), false);
 assert.equal(metadata.notifications[0].channels[0].payload, "foundry.test/consumer/clientcontracts.Member");
 assert.ok(metadata.enums[0].cases.some(item => item.label_key === "enum.localization.status.ready"));
 assert.equal(sdk.manifestJSON.includes("must-not-be-exported"), false);

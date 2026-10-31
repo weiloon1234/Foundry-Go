@@ -99,7 +99,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	if err != nil {
 		return result, err
 	}
-	tables, err := datatable.NewRegistry(reporting.Members.Registration())
+	tables, err := datatable.NewRegistry(reporting.Members.Registration(), reporting.NumericLevels.Registration())
 	if err != nil {
 		return result, err
 	}

@@ -41,6 +41,20 @@
         "type": "object",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/internal/authtransport.AccessTokenResponse"
       },
+      "AgentLevel": {
+        "enum": [
+          0,
+          1
+        ],
+        "format": "int32",
+        "maximum": 2147483647,
+        "minimum": -2147483648,
+        "title": "foundry.test/consumer/reporting.AgentLevel",
+        "type": "integer",
+        "x-foundry-integer-bits": 32,
+        "x-foundry-integer-signed": true,
+        "x-foundry-type-id": "foundry.test/consumer/reporting.AgentLevel"
+      },
       "Array_2_String": {
         "items": {
           "$ref": "#/components/schemas/String"
@@ -874,6 +888,28 @@
         "type": "object",
         "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/httppagination.MemberResponse]"
       },
+      "NumericLevelRow": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Reporting_MemberID"
+          },
+          "level": {
+            "$ref": "#/components/schemas/AgentLevel"
+          },
+          "wideLevel": {
+            "$ref": "#/components/schemas/WideLevel"
+          }
+        },
+        "required": [
+          "id",
+          "level",
+          "wideLevel"
+        ],
+        "title": "foundry.test/consumer/reporting.NumericLevelRow",
+        "type": "object",
+        "x-foundry-type-id": "foundry.test/consumer/reporting.NumericLevelRow"
+      },
       "Operator": {
         "enum": [
           "and",
@@ -1476,6 +1512,20 @@
         "title": "foundry.test/consumer/genericdto.UserDTO",
         "type": "object",
         "x-foundry-type-id": "foundry.test/consumer/genericdto.UserDTO"
+      },
+      "WideLevel": {
+        "enum": [
+          9007199254740993,
+          9007199254740994
+        ],
+        "format": "int64",
+        "maximum": 9223372036854775807,
+        "minimum": -9223372036854775808,
+        "title": "foundry.test/consumer/reporting.WideLevel",
+        "type": "integer",
+        "x-foundry-integer-bits": 64,
+        "x-foundry-integer-signed": true,
+        "x-foundry-type-id": "foundry.test/consumer/reporting.WideLevel"
       }
     },
     "securitySchemes": {

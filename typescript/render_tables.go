@@ -1,14 +1,12 @@
 package typescript
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/datatable"
-	"github.com/weiloon1234/Foundry-Go/enum"
 )
 
 func (r *renderer) tables() {
@@ -173,42 +171,7 @@ func (r *renderer) renderTableColumn(c datatable.ColumnInfo) {
 		r.out.WriteString("        operators: [],\n")
 	}
 	if kind == string(datatable.ColumnEnum) {
-		def := r.findEnumDefinition(c.Value.Value.ID)
-		if def != nil {
-			enumTypeName := r.typeName(c.Value.Value.ID)
-			fmt.Fprintf(&r.out, "        enum: %s,\n", enumTypeName)
-		}
-		r.out.WriteString("        cases: [\n")
-		for _, caseRaw := range c.Value.Value.Cases {
-			valStr := string(caseRaw)
-			var valUnquoted string
-			if c.Value.Value.Kind == contract.StringKind {
-				_ = json.Unmarshal(caseRaw, &valUnquoted)
-			} else {
-				valUnquoted = valStr
-			}
-			labelKey := ""
-			if def != nil {
-				for _, dCase := range def.Cases {
-					var dVal string
-					if c.Value.Value.Kind == contract.StringKind {
-						_ = json.Unmarshal(dCase.Value, &dVal)
-					} else {
-						dVal = string(dCase.Value)
-					}
-					if dVal == valUnquoted {
-						labelKey = string(dCase.LabelKey)
-						break
-					}
-				}
-			}
-			if labelKey != "" {
-				fmt.Fprintf(&r.out, "          { value: %s, labelKey: %s },\n", quote(valUnquoted), quote(labelKey))
-			} else {
-				fmt.Fprintf(&r.out, "          { value: %s },\n", quote(valUnquoted))
-			}
-		}
-		r.out.WriteString("        ],\n")
+		fmt.Fprintf(&r.out, "        enum: %s,\n", r.typeName(c.Value.Value.ID))
 	}
 	fmt.Fprintf(&r.out, "      },\n")
 }
@@ -239,27 +202,4 @@ func columnKindFromType(val contract.Type) datatable.ColumnKind {
 	default:
 		return datatable.ColumnText
 	}
-}
-
-func (r *renderer) findEnumDefinition(id contract.TypeID) *enum.Definition {
-	idStr := string(id)
-	dot := strings.LastIndexByte(idStr, '.')
-	if dot < 0 {
-		return nil
-	}
-	pkg := idStr[:dot]
-	name := idStr[dot+1:]
-	for i := range r.document.Enums {
-		def := &r.document.Enums[i]
-		if def.Name == name && (def.PackagePath == pkg || strings.HasSuffix(pkg, def.PackagePath)) {
-			return def
-		}
-	}
-	for i := range r.document.Enums {
-		def := &r.document.Enums[i]
-		if def.Name == name {
-			return def
-		}
-	}
-	return nil
 }
