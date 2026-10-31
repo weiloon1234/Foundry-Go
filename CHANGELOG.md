@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed: Readable schema naming qualifies map keys as well as values and exhausts
+  structural name candidates before using identity digests, preventing contract,
+  OpenAPI and SDK export hangs on colliding map declarations or reserved names.
+
 - Changed (breaking): HTTP pagination endpoint `Handle` and `URL` methods move to
   documented package functions: `pagination.Handle`, `pagination.URL`,
   `pagination.HandleAuthenticated`, and `pagination.AuthenticatedURL`. Pass the

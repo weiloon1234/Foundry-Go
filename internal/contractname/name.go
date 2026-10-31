@@ -119,6 +119,9 @@ type resolver struct {
 	parents   map[contract.TypeID][]parentRef
 }
 
+// readable has a finite sequence of qualification levels. Structural names
+// exhaust their candidates when their components do, allowing Schemas to reach
+// the identity digest even when every readable candidate collides or is reserved.
 func (r *resolver) readable(id contract.TypeID, level int, depth int) (string, bool) {
 	if depth > 10 {
 		return "", false
@@ -152,9 +155,6 @@ func (r *resolver) readable(id contract.TypeID, level int, depth int) (string, b
 		switch typ.Kind {
 		case contract.ArrayKind:
 			elemName, ok := r.readable(typ.Element, level, depth+1)
-			if !ok && level > 0 {
-				elemName, ok = r.readable(typ.Element, 0, depth+1)
-			}
 			if !ok {
 				return "", false
 			}
@@ -173,25 +173,35 @@ func (r *resolver) readable(id contract.TypeID, level int, depth int) (string, b
 
 		case contract.MapKind:
 			isLocale := typ.Key != nil && (strings.HasSuffix(string(typ.Key.Value.ID), "LocaleID") || strings.Contains(string(typ.Key.Value.ID), "Locale"))
-			valName, ok := r.readable(typ.Element, level, depth+1)
-			if !ok && level > 0 {
-				valName, ok = r.readable(typ.Element, 0, depth+1)
-			}
-			if !ok {
-				return "", false
-			}
+			valName, valOK := r.readable(typ.Element, level, depth+1)
 			if isLocale {
+				if !valOK {
+					return "", false
+				}
 				res := "LocaleMap_" + valName
 				if len(res) > maxReadableBytes {
 					return "", false
 				}
 				return res, true
 			}
-			keyName := "String"
+			keyID := contract.TypeID("string")
 			if typ.Key != nil && typ.Key.Value.ID != "" {
-				if kName, ok := r.readable(typ.Key.Value.ID, 0, depth+1); ok {
-					keyName = kName
-				}
+				keyID = typ.Key.Value.ID
+			}
+			keyName, keyOK := r.readable(keyID, level, depth+1)
+			if !keyOK && !valOK {
+				return "", false
+			}
+			// One component can have fewer qualifiers than the other. Reuse its
+			// base name only while the other still has a candidate at this level.
+			if !keyOK {
+				keyName, keyOK = r.readable(keyID, 0, depth+1)
+			}
+			if !valOK {
+				valName, valOK = r.readable(typ.Element, 0, depth+1)
+			}
+			if !keyOK || !valOK {
+				return "", false
 			}
 			res := fmt.Sprintf("Map_%s_%s", keyName, valName)
 			if len(res) > maxReadableBytes {
@@ -201,9 +211,6 @@ func (r *resolver) readable(id contract.TypeID, level int, depth int) (string, b
 
 		case contract.AliasKind:
 			targetName, ok := r.readable(typ.Element, level, depth+1)
-			if !ok && level > 0 {
-				targetName, ok = r.readable(typ.Element, 0, depth+1)
-			}
 			if !ok {
 				return "", false
 			}
@@ -221,9 +228,6 @@ func (r *resolver) readable(id contract.TypeID, level int, depth int) (string, b
 			if len(refs) > 0 {
 				primary := refs[0]
 				ownerName, ok := r.readable(primary.owner, level, depth+1)
-				if !ok && level > 0 {
-					ownerName, ok = r.readable(primary.owner, 0, depth+1)
-				}
 				if !ok {
 					return "", false
 				}

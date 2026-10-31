@@ -265,3 +265,91 @@ func TestCollectionsAndReservedPrimitives(t *testing.T) {
 		t.Fatalf("ordinary map = %q, want Map_String_Invoice", got)
 	}
 }
+
+func TestMapSchemaNamesQualifyCollidingKeys(t *testing.T) {
+	types := []contract.Type{
+		{
+			ID:      "go:map-a-code-string",
+			Kind:    contract.MapKind,
+			Element: "string",
+			Key: &contract.JSONKeyInfo{
+				Value: contract.Type{ID: "example.com/a.Code", Kind: contract.StringKind},
+			},
+		},
+		{
+			ID:      "go:map-b-code-string",
+			Kind:    contract.MapKind,
+			Element: "string",
+			Key: &contract.JSONKeyInfo{
+				Value: contract.Type{ID: "example.com/b.Code", Kind: contract.StringKind},
+			},
+		},
+	}
+	names, err := Schemas(types, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[contract.TypeID]string{
+		"go:map-a-code-string": "Map_A_Code_GoString",
+		"go:map-b-code-string": "Map_B_Code_GoString",
+	} {
+		if got := names[id]; got != want {
+			t.Errorf("name of %s = %q, want %q", id, got, want)
+		}
+	}
+	t.Run("deeper key qualification", func(t *testing.T) {
+		types[0].Key.Value.ID = "example.com/a/shared.Code"
+		types[1].Key.Value.ID = "example.com/b/shared.Code"
+		names, err := Schemas(types, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for id, want := range map[contract.TypeID]string{
+			"go:map-a-code-string": "Map_A_Shared_Code_String",
+			"go:map-b-code-string": "Map_B_Shared_Code_String",
+		} {
+			if got := names[id]; got != want {
+				t.Errorf("name of %s = %q, want %q", id, got, want)
+			}
+		}
+	})
+}
+
+func TestSchemaNamesExhaustReservedReadableCandidates(t *testing.T) {
+	for _, typ := range []contract.Type{
+		{ID: "go:list-string", Kind: contract.ArrayKind, Element: "string"},
+		{ID: "go:array-string", Kind: contract.ArrayKind, Element: "string", Length: value.Set(2)},
+		{ID: "go:map-string", Kind: contract.MapKind, Element: "string"},
+		{
+			ID: "go:map-code", Kind: contract.MapKind, Element: "string",
+			Key: &contract.JSONKeyInfo{Value: contract.Type{ID: "example.com/keys.Code"}},
+		},
+		{
+			ID: "go:locale-map", Kind: contract.MapKind, Element: "string",
+			Key: &contract.JSONKeyInfo{Value: contract.Type{ID: "example.com/i18n.LocaleID"}},
+		},
+		{ID: "go:nullable-string", Kind: contract.AliasKind, Element: "string", Nullable: true},
+		{ID: "go:alias-string", Kind: contract.AliasKind, Element: "string"},
+		{ID: "go:child-object", Kind: contract.ObjectKind},
+	} {
+		t.Run(string(typ.ID), func(t *testing.T) {
+			types := []contract.Type{
+				typ,
+				{
+					ID: "example.com/owner.Parent", Kind: contract.ObjectKind,
+					Properties: []contract.Property{{Name: "child", Type: typ.ID}},
+				},
+			}
+			want := Symbol(string(typ.ID))
+			names, err := Schemas(types, func(name string) bool {
+				return name != want && name != "Parent"
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := names[typ.ID]; got != want {
+				t.Fatalf("name = %q, want identity digest %q", got, want)
+			}
+		})
+	}
+}
