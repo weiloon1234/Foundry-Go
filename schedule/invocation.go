@@ -12,9 +12,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// Occurrence marks the identity type of an intended schedule occurrence.
 type Occurrence struct{}
+
+// OccurrenceID identifies a stable schedule occurrence across scheduler failover.
 type OccurrenceID = model.ID[Occurrence]
+
+// Execution marks the identity type of an individual schedule execution.
 type Execution struct{}
+
+// ExecutionID identifies an individual schedule execution.
 type ExecutionID = model.ID[Execution]
 
 // Invocation carries stable occurrence identity, not a live service container.

@@ -222,6 +222,7 @@ type snapshotAccess struct {
 	tags   []EntryKey
 }
 
+// Get reads the bound base and tag set through the optional snapshot read capability.
 func (a snapshotAccess) Get(ctx context.Context, _ EntryKey) ([]byte, bool, error) {
 	reader, ok := a.reader.(SnapshotReadBackend)
 	if !ok {
@@ -230,6 +231,8 @@ func (a snapshotAccess) Get(ctx context.Context, _ EntryKey) ([]byte, bool, erro
 	_, data, found, err := reader.ReadSnapshot(ctx, a.base, a.tags, true)
 	return data, found, err
 }
+
+// Exists checks the bound base and tag set through the optional snapshot read capability.
 func (a snapshotAccess) Exists(ctx context.Context, _ EntryKey) (bool, error) {
 	reader, ok := a.reader.(SnapshotReadBackend)
 	if !ok {
@@ -238,18 +241,28 @@ func (a snapshotAccess) Exists(ctx context.Context, _ EntryKey) (bool, error) {
 	_, _, found, err := reader.ReadSnapshot(ctx, a.base, a.tags, false)
 	return found, err
 }
+
+// Put replaces the bound entry while resolving its tags atomically.
 func (a snapshotAccess) Put(ctx context.Context, _ EntryKey, data []byte, ttl TTL) error {
 	return a.writer.PutSnapshot(ctx, a.base, a.tags, data, ttl)
 }
+
+// Add conditionally inserts the bound entry while resolving its tags atomically.
 func (a snapshotAccess) Add(ctx context.Context, _ EntryKey, data []byte, ttl TTL) (bool, error) {
 	return a.writer.AddSnapshot(ctx, a.base, a.tags, data, ttl)
 }
+
+// Forget removes the bound current entry while resolving its tags atomically.
 func (a snapshotAccess) Forget(ctx context.Context, _ EntryKey) (bool, error) {
 	return a.writer.ForgetSnapshot(ctx, a.base, a.tags)
 }
+
+// Increment increments the bound counter while resolving its tags atomically.
 func (a snapshotAccess) Increment(ctx context.Context, _ EntryKey, delta int64, ttl TTL) (int64, error) {
 	return a.writer.IncrementSnapshot(ctx, a.base, a.tags, delta, ttl)
 }
+
+// Expire changes the bound entry's TTL while resolving its tags atomically.
 func (a snapshotAccess) Expire(ctx context.Context, _ EntryKey, ttl TTL) (bool, error) {
 	return a.writer.ExpireSnapshot(ctx, a.base, a.tags, ttl)
 }
@@ -335,18 +348,27 @@ type taggedAccess struct {
 	key     TaggedKey
 }
 
+// Get reads the bound tagged key, ignoring the supplied plain address.
 func (b taggedAccess) Get(ctx context.Context, _ EntryKey) ([]byte, bool, error) {
 	return b.backend.GetTagged(ctx, b.key)
 }
+
+// Put replaces the bound tagged entry, ignoring the supplied plain address.
 func (b taggedAccess) Put(ctx context.Context, _ EntryKey, data []byte, ttl TTL) error {
 	return b.backend.PutTagged(ctx, b.key, data, ttl)
 }
+
+// Add conditionally inserts the bound tagged entry, ignoring the supplied plain address.
 func (b taggedAccess) Add(ctx context.Context, _ EntryKey, data []byte, ttl TTL) (bool, error) {
 	return b.backend.AddTagged(ctx, b.key, data, ttl)
 }
+
+// Forget removes the bound tagged entry, ignoring the supplied plain address.
 func (b taggedAccess) Forget(ctx context.Context, _ EntryKey) (bool, error) {
 	return b.backend.ForgetTagged(ctx, b.key)
 }
+
+// Increment uses the tagged counter capability or returns fault.Invalid when unsupported.
 func (b taggedAccess) Increment(ctx context.Context, _ EntryKey, delta int64, ttl TTL) (int64, error) {
 	backend, ok := b.backend.(TaggedCounterBackend)
 	if !ok {
@@ -355,6 +377,7 @@ func (b taggedAccess) Increment(ctx context.Context, _ EntryKey, delta int64, tt
 	return backend.IncrementTagged(ctx, b.key, delta, ttl)
 }
 
+// PutLeased publishes the bound tagged entry through the coordinated capability, or returns fault.Invalid when unsupported.
 func (b taggedAccess) PutLeased(ctx context.Context, _ EntryKey, data []byte, ttl TTL, proof lease.Proof) error {
 	backend, ok := b.backend.(CoordinatedTaggedBackend)
 	if !ok {

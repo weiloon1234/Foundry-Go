@@ -38,6 +38,8 @@ type ListenerQueue struct {
 	dispatcher atomic.Pointer[jobs.Dispatcher]
 }
 
+// NewListenerQueue attaches one queued-listener runtime to a prepared bus.
+// A second attachment fails with fault.Duplicate.
 func NewListenerQueue(bus *Bus, policy jobs.Policy) (*ListenerQueue, error) {
 	if bus == nil || bus.done == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "listener queue requires a prepared bus")
@@ -51,6 +53,8 @@ func NewListenerQueue(bus *Bus, policy jobs.Policy) (*ListenerQueue, error) {
 	}
 	return queue, nil
 }
+
+// Format writes a fixed description without exposing the bus or dispatcher.
 func (*ListenerQueue) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("event listener queue"))
 }

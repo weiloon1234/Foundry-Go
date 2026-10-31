@@ -16,18 +16,29 @@ type LocalizedBatch[M any, K comparable] struct {
 	batch   Batch[M, K]
 	catalog i18n.LocaleSet
 }
+
+// LocalizedFiles holds loaded attachments and the catalog snapshot used for locale
+// selection.
 type LocalizedFiles[M any, K comparable] struct {
 	files   []Attachment[M, K]
 	catalog i18n.LocaleSet
 }
+
+// Resolved holds attachments from one selected locale without mixing fallback
+// collections.
 type Resolved[M any, K comparable] struct {
 	locale i18n.LocaleID
 	files  []Attachment[M, K]
 }
 
-func (r Resolved[M, K]) Locale() i18n.LocaleID     { return r.locale }
+// Locale returns the selected fallback locale.
+func (r Resolved[M, K]) Locale() i18n.LocaleID { return r.locale }
+
+// Files returns an independent slice of the selected attachments.
 func (r Resolved[M, K]) Files() []Attachment[M, K] { return slices.Clone(r.files) }
 
+// Get returns the loaded owner files and catalog without I/O; absent or unloaded owners
+// return not found.
 func (b LocalizedBatch[M, K]) Get(owner model.Reference[M, K]) (LocalizedFiles[M, K], error) {
 	files, err := b.batch.Get(owner)
 	if err != nil {
@@ -35,6 +46,8 @@ func (b LocalizedBatch[M, K]) Get(owner model.Reference[M, K]) (LocalizedFiles[M
 	}
 	return LocalizedFiles[M, K]{files: files, catalog: b.catalog}, nil
 }
+
+// List returns files for a registered locale in collection order without I/O.
 func (f LocalizedFiles[M, K]) List(locale i18n.LocaleID) ([]Attachment[M, K], error) {
 	if err := f.catalog.Validate(); err != nil {
 		return nil, err
@@ -69,6 +82,9 @@ func (f LocalizedFiles[M, K]) Resolve(requested i18n.LocaleID) (value.Optional[R
 	}
 	return value.Optional[Resolved[M, K]]{}, nil
 }
+
+// LoadLocalized captures a catalog snapshot and loads ready attachments for owners
+// across registered locales.
 func (c Collection[M, K]) LoadLocalized(ctx context.Context, m *Manager, owners []model.Reference[M, K]) (LocalizedBatch[M, K], error) {
 	if err := c.checkRegistered(m); err != nil {
 		return LocalizedBatch[M, K]{}, err
@@ -101,6 +117,9 @@ func (c Collection[M, K]) LoadLocalized(ctx context.Context, m *Manager, owners 
 	}
 	return result, nil
 }
+
+// Resolve loads localized files and selects the first nonempty collection in catalog
+// fallback order.
 func (c Collection[M, K]) Resolve(ctx context.Context, m *Manager, owner model.Reference[M, K], requested i18n.LocaleID) (value.Optional[Resolved[M, K]], error) {
 	if requested.Validate() != nil {
 		return value.Optional[Resolved[M, K]]{}, invalid()

@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// Mode selects ordinary pipelining or a Redis transaction. Zero is invalid.
 type Mode uint8
 
 const (
@@ -15,6 +16,7 @@ const (
 	Transaction
 )
 
+// Validate returns fault.Invalid unless the mode is Pipelined or Transaction.
 func (m Mode) Validate() error {
 	if m != Pipelined && m != Transaction {
 		return safeerror.NewFault(fault.Invalid, "invalid Redis pipeline mode")
@@ -40,6 +42,7 @@ type Pipeline struct {
 	err     error
 }
 
+// NewPipeline validates mode and creates an empty pipeline for one execution.
 func NewPipeline(mode Mode) (*Pipeline, error) {
 	if err := mode.Validate(); err != nil {
 		return nil, err
@@ -57,6 +60,7 @@ type Result[R any] struct {
 	state    *resultState[R]
 }
 
+// Value returns the decoded result after the entire pipeline succeeds, or fault.Conflict while it is pending.
 func (r Result[R]) Value() (R, error) {
 	if r.pipeline == nil || r.state == nil {
 		return *new(R), safeerror.NewFault(fault.Invalid, "invalid Redis pipeline result")
@@ -71,6 +75,8 @@ func (r Result[R]) Value() (R, error) {
 	}
 	return r.state.value, nil
 }
+
+// Queue appends an immutable command and returns its typed result receipt.
 func Queue[R any](p *Pipeline, c Command[R]) (Result[R], error) {
 	state := &resultState[R]{}
 	if c.decoder.decode == nil {
@@ -116,6 +122,9 @@ func (p *Pipeline) enqueue(q queued) error {
 	p.bytes += q.request.Bytes()
 	return nil
 }
+
+// Run consumes the pipeline once and publishes results only after every command and decoder succeeds.
+// A failed execution can still have applied remote mutations.
 func (p *Pipeline) Run(ctx context.Context, s *Store) error {
 	if p == nil || p.done == nil {
 		return safeerror.NewFault(fault.Invalid, "Redis pipeline is uninitialized")
@@ -185,7 +194,11 @@ func (p *Pipeline) Len() int {
 	defer p.mu.Unlock()
 	return len(p.entries)
 }
+
+// IsEmpty reports whether no commands remain queued, including for a nil pipeline.
 func (p *Pipeline) IsEmpty() bool { return p.Len() == 0 }
+
+// Mode returns the selected execution mode, or zero for a nil pipeline.
 func (p *Pipeline) Mode() Mode {
 	if p == nil {
 		return 0

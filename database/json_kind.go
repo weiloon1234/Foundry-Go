@@ -16,6 +16,7 @@ const (
 	JSONNull    JSONKind = "null"
 )
 
+// Validate returns fault.Invalid unless the kind is a recognized JSON shape.
 func (k JSONKind) Validate() error {
 	switch k {
 	case JSONObject, JSONArray, JSONString, JSONNumber, JSONBoolean, JSONNull:

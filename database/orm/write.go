@@ -518,6 +518,7 @@ func (p writePlan) returnCount() int {
 
 type fixedNow struct{ instant time.Time }
 
+// Now returns the captured instant used throughout this write.
 func (c fixedNow) Now() time.Time { return c.instant }
 
 func (p writePlan) compileBatch(c querycore.Compiler) (querycore.Statement, error) {

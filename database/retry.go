@@ -29,6 +29,7 @@ func DefaultRetryPolicy() RetryPolicy {
 // MaxRetryAttempts bounds one Retry call.
 const MaxRetryAttempts = 10
 
+// Validate checks attempt and delay bounds, returning fault.Invalid for invalid settings.
 func (p RetryPolicy) Validate() error {
 	if p.Attempts < 1 || p.Attempts > MaxRetryAttempts || p.InitialDelay <= 0 || p.MaxDelay < p.InitialDelay {
 		return safeerror.NewFault(fault.Invalid, "invalid transaction retry policy")

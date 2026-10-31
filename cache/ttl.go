@@ -14,13 +14,22 @@ type TTL struct {
 	forever  bool
 }
 
+// For constructs a finite TTL whose duration must be positive when validated.
 func For(duration time.Duration) TTL { return TTL{duration: duration} }
-func Forever() TTL                   { return TTL{forever: true} }
+
+// Forever returns an explicitly persistent TTL.
+func Forever() TTL { return TTL{forever: true} }
+
+// Validate returns fault.Invalid unless the TTL is positive or explicitly persistent.
 func (t TTL) Validate() error {
 	if t.forever && t.duration == 0 || !t.forever && t.duration > 0 {
 		return nil
 	}
 	return safeerror.NewFault(fault.Invalid, "cache TTL must be positive or explicitly persistent")
 }
-func (t TTL) IsForever() bool         { return t.forever }
+
+// IsForever reports whether persistence was explicitly selected.
+func (t TTL) IsForever() bool { return t.forever }
+
+// Duration returns the finite duration, or zero for a persistent TTL.
 func (t TTL) Duration() time.Duration { return t.duration }

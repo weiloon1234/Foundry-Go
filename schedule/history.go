@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// State classifies a schedule execution or skipped occurrence.
 type State string
 
 const (
@@ -15,6 +16,7 @@ const (
 	Skipped   State = "skipped"
 )
 
+// Reason classifies an execution outcome without retaining arbitrary callback errors.
 type Reason string
 
 const (
@@ -46,12 +48,16 @@ type Record struct {
 	StartedAt  time.Time
 	FinishedAt time.Time
 }
+
+// ScheduleStatus reports one schedule's enabled state, next occurrence, and active count.
 type ScheduleStatus struct {
 	ID      ID
 	Enabled bool
 	Next    time.Time
 	Active  int
 }
+
+// Snapshot is an owned view of scheduler status and bounded process-local history.
 type Snapshot struct {
 	Running                bool
 	Stopping               bool

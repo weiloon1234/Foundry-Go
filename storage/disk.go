@@ -43,6 +43,8 @@ type Disk struct {
 	closeErr     error
 }
 
+// NewDisk validates configuration and snapshots capabilities while borrowing backend;
+// it performs no storage I/O.
 func NewDisk(id DiskID, backend Backend, config Config) (*Disk, error) {
 	if err := id.Validate(); err != nil {
 		return nil, err
@@ -64,12 +66,17 @@ func NewDisk(id DiskID, backend Backend, config Config) (*Disk, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Disk{id: id, backend: backend, config: config, capabilities: capabilities, operations: admission.New(config.MaxActive), streams: admission.New(config.MaxStreams), ctx: ctx, cancel: cancel, readers: make(map[*ownedReader]struct{}), done: make(chan struct{})}, nil
 }
+
+// ID returns the disk identifier, or an empty identifier for a nil disk.
 func (d *Disk) ID() DiskID {
 	if d == nil {
 		return ""
 	}
 	return d.id
 }
+
+// Capabilities returns the adapter guarantees captured at construction, or zero
+// capabilities for a nil disk.
 func (d *Disk) Capabilities() Capabilities {
 	if d == nil {
 		return Capabilities{}
@@ -85,6 +92,9 @@ func (d *Disk) Config() Config {
 	}
 	return d.config
 }
+
+// Validate rejects a nil or uninitialized disk; it does not check whether shutdown has
+// begun.
 func (d *Disk) Validate() error {
 	if d == nil || d.done == nil {
 		return newFailure(Invalid, OpenOperation, NotApplicable, nil)
@@ -246,6 +256,9 @@ func (d *Disk) validateInfo(key ObjectKey, info ObjectInfo) error {
 	}
 	return nil
 }
+
+// Put streams source within disk limits without closing it; errors retain whether
+// publication was applied or uncertain.
 func (d *Disk) Put(ctx context.Context, key ObjectKey, source io.Reader, options PutOptions) (StoredObject, error) {
 	if err := d.Validate(); err != nil {
 		return StoredObject{}, err
@@ -291,6 +304,8 @@ func (d *Disk) Put(ctx context.Context, key ObjectKey, source io.Reader, options
 	}
 	return StoredObject{Disk: d.id, Object: info}, nil
 }
+
+// PutBytes stores data with its exact length; data must remain unchanged during the call.
 func (d *Disk) PutBytes(ctx context.Context, key ObjectKey, data []byte, options PutOptions) (StoredObject, error) {
 	if size, present := options.Size.Get(); present && size != int64(len(data)) {
 		return StoredObject{}, newFailure(Invalid, PutOperation, Unchanged, nil)
@@ -376,6 +391,8 @@ func (d *Disk) Open(ctx context.Context, key ObjectKey, options ReadOptions) (io
 	}
 	return reader, info, nil
 }
+
+// Stat returns validated complete metadata and rejects byte-range options.
 func (d *Disk) Stat(ctx context.Context, key ObjectKey, options ReadOptions) (ObjectInfo, error) {
 	if err := d.Validate(); err != nil {
 		return ObjectInfo{}, err
@@ -404,6 +421,9 @@ func (d *Disk) Stat(ctx context.Context, key ObjectKey, options ReadOptions) (Ob
 	}
 	return info, nil
 }
+
+// Exists reports false without an error only when Stat classifies the object as not
+// found.
 func (d *Disk) Exists(ctx context.Context, key ObjectKey) (bool, error) {
 	_, err := d.Stat(ctx, key, ReadOptions{})
 	if err == nil {
@@ -415,6 +435,9 @@ func (d *Disk) Exists(ctx context.Context, key ObjectKey) (bool, error) {
 	}
 	return false, err
 }
+
+// Delete removes the selected object using validated provider conditions; failures
+// retain the mutation outcome.
 func (d *Disk) Delete(ctx context.Context, key ObjectKey, options DeleteOptions) error {
 	if err := d.Validate(); err != nil {
 		return err
@@ -436,6 +459,9 @@ func (d *Disk) Delete(ctx context.Context, key ObjectKey, options DeleteOptions)
 	err = callback.Isolated("storage delete", func() error { return d.backend.Delete(op, key, options) })
 	return finish(DeleteOperation, op, err, Applied)
 }
+
+// List returns a validated bounded page, counting objects above the disk size bound as
+// skipped.
 func (d *Disk) List(ctx context.Context, options ListOptions) (Page, error) {
 	if err := d.Validate(); err != nil {
 		return Page{}, err
@@ -506,6 +532,9 @@ func validatePage(options ListOptions, page Page) error {
 	}
 	return nil
 }
+
+// Close cancels work, closes readers and waits for actual release or ctx cancellation;
+// it does not close the backend.
 func (d *Disk) Close(ctx context.Context) error {
 	if err := d.Validate(); err != nil {
 		return err
@@ -537,6 +566,8 @@ func (d *Disk) Close(ctx context.Context) error {
 		return newFailure(Unavailable, CloseOperation, NotApplicable, ctx.Err())
 	}
 }
+
+// Done closes after shutdown and release of all admitted work; a nil disk returns nil.
 func (d *Disk) Done() <-chan struct{} {
 	if d == nil {
 		return nil
@@ -552,6 +583,7 @@ type Stats struct {
 	Closing bool
 }
 
+// Stats returns a synchronized snapshot of admitted work and shutdown state.
 func (d *Disk) Stats() Stats {
 	if d == nil {
 		return Stats{Closing: true}

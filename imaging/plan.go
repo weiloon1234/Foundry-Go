@@ -6,6 +6,7 @@ import (
 	"slices"
 )
 
+// Orientation selects whether input orientation metadata is applied or ignored.
 type Orientation uint8
 
 const (
@@ -13,6 +14,7 @@ const (
 	IgnoreOrientation
 )
 
+// Frames selects whether animation is rejected, reduced to its first frame or preserved.
 type Frames uint8
 
 const (
@@ -33,6 +35,7 @@ const (
 	PreserveColorProfile
 )
 
+// Rotation specifies a supported rotation angle in degrees.
 type Rotation uint16
 
 const (
@@ -120,12 +123,19 @@ const MaxTransforms = 32
 
 // String and GoString redact prepared layer bytes from routine/debug formatting.
 // Format is already the fluent output-format method, so Plan is not a Formatter.
-func (Plan) String() string   { return "image plan" }
+func (Plan) String() string { return "image plan" }
+
+// GoString returns a label without exposing prepared layer bytes.
 func (Plan) GoString() string { return "image plan" }
 
-func NewPlan() Plan                   { return Plan{} }
-func (p Plan) append(s step) Plan     { p.steps = append(slices.Clone(p.steps), s); return p }
-func (p Plan) Format(f Format) Plan   { p.output = f; return p }
+// NewPlan returns a zero plan with no transforms and the detected input format.
+func NewPlan() Plan               { return Plan{} }
+func (p Plan) append(s step) Plan { p.steps = append(slices.Clone(p.steps), s); return p }
+
+// Format returns a plan with the selected output format.
+func (p Plan) Format(f Format) Plan { p.output = f; return p }
+
+// JPEGQuality returns a plan with JPEG quality; zero selects the default quality.
 func (p Plan) JPEGQuality(q int) Plan { p.quality = q; return p }
 
 // AVIFQuality selects AVIF quality 1..100 (100 uses the lowest quantizer).
@@ -136,27 +146,53 @@ func (p Plan) AVIFQuality(q int) Plan { p.avifQuality = q; return p }
 // Background flattens the result over an opaque color before encoding, so a
 // format without alpha (JPEG) does not render transparent pixels as black.
 // It applies to every output format when set.
-func (p Plan) Background(c color.NRGBA) Plan  { p.background, p.flatten = c, true; return p }
+func (p Plan) Background(c color.NRGBA) Plan { p.background, p.flatten = c, true; return p }
+
+// Orientation returns a plan with the selected input orientation policy.
 func (p Plan) Orientation(o Orientation) Plan { p.orientation = o; return p }
-func (p Plan) Frames(f Frames) Plan           { p.frames = f; return p }
-func (p Plan) Metadata(m Metadata) Plan       { p.metadata = m; return p }
+
+// Frames returns a plan with the selected animation handling policy.
+func (p Plan) Frames(f Frames) Plan { p.frames = f; return p }
+
+// Metadata returns a plan with the selected metadata retention policy.
+func (p Plan) Metadata(m Metadata) Plan { p.metadata = m; return p }
+
+// Resize returns a plan resizing exactly to the dimensions, allowing enlargement.
 func (p Plan) Resize(width, height int) Plan {
 	return p.append(step{kind: resizeExact, width: width, height: height, upscale: true})
 }
+
+// Fit returns a plan resizing proportionally within the dimensions, allowing
+// enlargement only when upscale is true.
 func (p Plan) Fit(width, height int, upscale bool) Plan {
 	return p.append(step{kind: resizeFit, width: width, height: height, upscale: upscale})
 }
+
+// Fill returns a plan resizing to cover the dimensions and cropping at the center;
+// insufficient source size fails when upscale is false.
 func (p Plan) Fill(width, height int, upscale bool) Plan {
 	return p.FillAt(width, height, upscale, Center)
 }
+
+// Crop returns a plan cropping the specified rectangle in pixel coordinates.
 func (p Plan) Crop(x, y, width, height int) Plan {
 	return p.append(step{kind: crop, x: x, y: y, width: width, height: height})
 }
+
+// Blur returns a plan with a Gaussian blur using sigma.
 func (p Plan) Blur(sigma float64) Plan { return p.append(step{kind: blur, number: sigma}) }
-func (p Plan) Grayscale() Plan         { return p.append(step{kind: grayscale}) }
-func (p Plan) Rotate(r Rotation) Plan  { return p.append(step{kind: rotate, number: float64(r)}) }
-func (p Plan) FlipHorizontal() Plan    { return p.append(step{kind: flipHorizontal}) }
-func (p Plan) FlipVertical() Plan      { return p.append(step{kind: flipVertical}) }
+
+// Grayscale returns a plan converting pixels to grayscale.
+func (p Plan) Grayscale() Plan { return p.append(step{kind: grayscale}) }
+
+// Rotate returns a plan rotating by the selected quarter-turn angle.
+func (p Plan) Rotate(r Rotation) Plan { return p.append(step{kind: rotate, number: float64(r)}) }
+
+// FlipHorizontal returns a plan mirroring pixels horizontally.
+func (p Plan) FlipHorizontal() Plan { return p.append(step{kind: flipHorizontal}) }
+
+// FlipVertical returns a plan mirroring pixels vertically.
+func (p Plan) FlipVertical() Plan { return p.append(step{kind: flipVertical}) }
 
 // Brightness adds an 8-bit channel offset, preserving alpha.
 func (p Plan) Brightness(offset int) Plan {
@@ -167,6 +203,8 @@ func (p Plan) Brightness(offset int) Plan {
 // around the channel midpoint. Values outside [-100,100] are rejected.
 func (p Plan) Contrast(value float64) Plan { return p.append(step{kind: contrast, number: value}) }
 
+// Validate rejects invalid settings and transforms with an invalid fault; it does not
+// inspect input pixels.
 func (p Plan) Validate() error {
 	if err := p.nativeEncoding.validate(p.output); err != nil {
 		return err

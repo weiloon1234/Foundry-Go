@@ -16,6 +16,8 @@ type MediaType string
 
 const Binary MediaType = "application/octet-stream"
 
+// Validate rejects empty, excessive, wildcard or malformed media types and control
+// characters.
 func (m MediaType) Validate() error {
 	if len(m) == 0 || len(m) > MaxContentTypeBytes {
 		return newFailure(Invalid, PutOperation, Unchanged, nil)
@@ -37,6 +39,7 @@ func (m MediaType) Validate() error {
 // assumed to be an MD5 or other content digest. Zero means no validator.
 type ETag string
 
+// Validate accepts an empty or quoted strong validator and rejects malformed tags.
 func (t ETag) Validate() error {
 	if t == "" {
 		return nil
@@ -56,6 +59,7 @@ func (t ETag) Validate() error {
 // validator is an ETag, not a promise that previous versions remain readable.
 type VersionID string
 
+// Validate checks version length and control characters; an empty version is valid.
 func (v VersionID) Validate() error {
 	if len(v) > 1024 {
 		return newFailure(Invalid, StatOperation, NotApplicable, nil)
@@ -68,8 +72,10 @@ func (v VersionID) Validate() error {
 	return nil
 }
 
+// SHA256 is a full-object SHA-256 digest.
 type SHA256 [32]byte
 
+// ParseSHA256 decodes exactly 32 digest bytes from hexadecimal text.
 func ParseSHA256(text string) (SHA256, error) {
 	var result SHA256
 	raw, err := hex.DecodeString(text)
@@ -79,6 +85,8 @@ func ParseSHA256(text string) (SHA256, error) {
 	copy(result[:], raw)
 	return result, nil
 }
+
+// String returns the lowercase hexadecimal digest.
 func (s SHA256) String() string { return hex.EncodeToString(s[:]) }
 
 // ObjectInfo describes a complete object. Checksum is a full-object SHA-256
@@ -93,6 +101,8 @@ type ObjectInfo struct {
 	Checksum    value.Optional[SHA256]
 }
 
+// Validate checks object metadata, requiring a nonnegative size and nonzero
+// modification time.
 func (i ObjectInfo) Validate() error {
 	for _, err := range []error{i.Key.Validate(), i.ContentType.Validate(), i.ETag.Validate(), i.Version.Validate()} {
 		if err != nil {
@@ -114,6 +124,7 @@ func (i ObjectInfo) ValidateListed() error {
 	return i.Validate()
 }
 
+// StoredObject pairs an object description with its registered disk identifier.
 type StoredObject struct {
 	Disk   DiskID
 	Object ObjectInfo
@@ -149,6 +160,7 @@ type ObjectMetadata struct {
 	Custom             map[string]string
 }
 
+// IsZero reports whether all optional metadata fields are empty.
 func (m ObjectMetadata) IsZero() bool {
 	return m.CacheControl == "" && m.ContentDisposition == "" && m.ContentEncoding == "" && m.StorageClass == "" && m.EncryptionKey == "" && len(m.Custom) == 0
 }
@@ -164,6 +176,9 @@ func (m ObjectMetadata) Clone() ObjectMetadata {
 	}
 	return m
 }
+
+// Validate rejects invalid provider headers, storage classes and custom metadata names
+// or sizes.
 func (m ObjectMetadata) Validate() error {
 	invalid := func() error { return newFailure(Invalid, PutOperation, Unchanged, nil) }
 	for _, text := range []string{m.CacheControl, m.ContentDisposition, m.ContentEncoding, m.EncryptionKey} {

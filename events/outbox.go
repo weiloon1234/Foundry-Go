@@ -39,8 +39,11 @@ func PrepareOutbox(destination outbox.Destination, bus *Bus) (*Outbox, error) {
 	return &Outbox{destination: destination, bus: bus}, nil
 }
 
+// Destination returns the durable destination selected for this outbox.
 func (o *Outbox) Destination() outbox.Destination { return o.destination }
-func (*Outbox) Format(state fmt.State, _ rune)    { _, _ = state.Write([]byte("event outbox")) }
+
+// Format writes a fixed description without exposing the outbox configuration.
+func (*Outbox) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("event outbox")) }
 
 func (o *Outbox) begin(ctx context.Context, key topicKey, typ reflect.Type) (context.Context, registration, outboxstore.Address, func(), error) {
 	if o == nil || o.bus == nil {
@@ -88,9 +91,16 @@ type Stored[E any] struct {
 	createdAt temporal.DateTime
 }
 
-func (s Stored[E]) ID() outbox.ID[E]             { return s.id }
-func (s Stored[E]) Origin() attribution.Origin   { return s.origin }
+// ID returns the persisted event identity, which does not establish delivery.
+func (s Stored[E]) ID() outbox.ID[E] { return s.id }
+
+// Origin returns the attribution captured when the event was enqueued.
+func (s Stored[E]) Origin() attribution.Origin { return s.origin }
+
+// CreatedAt returns the persisted event creation time.
 func (s Stored[E]) CreatedAt() temporal.DateTime { return s.createdAt }
+
+// Format writes a fixed description without exposing the stored payload or origin.
 func (Stored[E]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("stored event")) }
 
 // Payload decodes an independent concrete value and isolates custom codec faults.

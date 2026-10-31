@@ -30,10 +30,14 @@ func (c *Client) Expire(ctx context.Context, key cache.EntryKey, ttl cache.TTL) 
 	_, found, err := c.cacheCommand(ctx, key, "expire", nil, ttl)
 	return found, err
 }
+
+// ExistsTagged checks entry existence under a current tag snapshot without transferring the payload.
 func (c *Client) ExistsTagged(ctx context.Context, key cache.TaggedKey) (bool, error) {
 	_, found, err := c.taggedCommand(ctx, key, "exists", nil, cache.Forever())
 	return found, err
 }
+
+// ExpireTagged atomically checks the tag snapshot and changes a live entry's TTL.
 func (c *Client) ExpireTagged(ctx context.Context, key cache.TaggedKey, ttl cache.TTL) (bool, error) {
 	_, found, err := c.taggedCommand(ctx, key, "expire", nil, ttl)
 	return found, err

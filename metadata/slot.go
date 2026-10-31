@@ -47,7 +47,10 @@ func (v Value[V]) Get() (value.Optional[V], bool) {
 	return value.Set(v.value), v.loaded
 }
 
-func (Value[V]) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("metadata value slot")) }
+// Format writes a fixed label without exposing the slot's value.
+func (Value[V]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("metadata value slot")) }
+
+// MarshalJSON returns fault.Invalid to prevent implicit metadata disclosure.
 func (Value[V]) MarshalJSON() ([]byte, error) { return nil, invalid() }
 
 // valueSlot binds one model's Value field to its typed metadata key.
@@ -243,6 +246,7 @@ func boolCount(present bool) int {
 	return 0
 }
 
+// Format writes a fixed label without exposing the slot declaration.
 func (valueSlot[M, K, V]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("metadata value slot descriptor"))
 }

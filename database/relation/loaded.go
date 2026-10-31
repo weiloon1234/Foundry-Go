@@ -27,6 +27,7 @@ func Single[M any](model value.Optional[M]) One[M] {
 	return result
 }
 
+// IsLoaded reports whether the singular relation was loaded, including a loaded empty relation.
 func (r One[M]) IsLoaded() bool { return r.loaded }
 
 // Get returns the optional related model and whether the relation was loaded.
@@ -45,8 +46,11 @@ type Many[M any] struct {
 	loaded bool
 }
 
+// Collection constructs a loaded relation with a shallow copy of items, including an empty collection.
 func Collection[M any](items []M) Many[M] { return Many[M]{items: slices.Clone(items), loaded: true} }
-func (r Many[M]) IsLoaded() bool          { return r.loaded }
+
+// IsLoaded reports whether the collection was loaded, including a loaded empty collection.
+func (r Many[M]) IsLoaded() bool { return r.loaded }
 
 // Get returns a caller-owned copy and whether the collection was loaded. Use
 // Len and All to read a large collection without copying it.

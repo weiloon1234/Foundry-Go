@@ -8,12 +8,15 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cache"
 )
 
+// ForgetMany validates and atomically removes a canonical batch, counting live entries.
 func (b *Backend) ForgetMany(ctx context.Context, keys []cache.EntryKey) (uint64, error) {
 	if err := cache.ValidateBatchKeys(keys); err != nil {
 		return 0, err
 	}
 	return b.removeBatch(ctx, keys, nil)
 }
+
+// ForgetManyTagged removes a canonical batch atomically under one current tag snapshot.
 func (b *Backend) ForgetManyTagged(ctx context.Context, keys []cache.TaggedKey) (uint64, error) {
 	if err := cache.ValidateTaggedBatch(keys); err != nil {
 		return 0, err

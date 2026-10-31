@@ -23,6 +23,7 @@ const (
 	textWorkspaceBytes = 8 << 20
 )
 
+// TextAlignment selects horizontal alignment within the text block.
 type TextAlignment uint8
 
 const (
@@ -31,6 +32,7 @@ const (
 	AlignRight
 )
 
+// MissingGlyph selects whether unavailable glyphs fail or use the font missing-glyph outline.
 type MissingGlyph uint8
 
 const (
@@ -56,6 +58,8 @@ type TextOptions struct {
 	MissingGlyph MissingGlyph
 }
 
+// Validate rejects an unloaded font or invalid text layout settings with an invalid
+// fault.
 func (o TextOptions) Validate() error {
 	if o.Font.font == nil || !finiteRange(o.Size, 1, 512) || o.Position > BottomRight ||
 		o.X < -65535 || o.X > 65535 || o.Y < -65535 || o.Y > 65535 ||

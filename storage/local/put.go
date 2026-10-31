@@ -16,6 +16,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// Put streams the borrowed source into a staged record and publishes it under the write
+// condition.
 func (b *Backend) Put(ctx context.Context, key storage.ObjectKey, source io.Reader, options storage.PutOptions) (storage.ObjectInfo, error) {
 	if err := b.ready(ctx, storage.PutOperation); err != nil {
 		return storage.ObjectInfo{}, err

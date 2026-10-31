@@ -218,6 +218,9 @@ func (c Cache[K, V]) Add(ctx context.Context, key K, value V, ttl TTL) (bool, er
 	}
 	return added, nil
 }
+
+// Forget removes the current entry and reports whether it was present.
+// A concurrent Remember fill may repopulate the entry afterwards.
 func (c Cache[K, V]) Forget(ctx context.Context, key K) (bool, error) {
 	started := c.startedAt()
 	var removed bool

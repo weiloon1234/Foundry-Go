@@ -10,5 +10,6 @@ import "context"
 // leave an existing entry unchanged. Invalid initialTTL is always an error.
 // Failed remote writes may still have been applied; do not retry implicitly.
 type CounterBackend interface {
+	// Increment atomically adds delta, creating a missing counter with initialTTL and preserving an existing expiry.
 	Increment(ctx context.Context, key EntryKey, delta int64, initialTTL TTL) (int64, error)
 }

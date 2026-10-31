@@ -63,6 +63,7 @@ UNIQUE (execution, retries)
 	}}}
 }
 
+// Archived marks the identity type of an archived failure.
 type Archived struct{}
 
 // ID identifies one archived failure (not the job's execution ID).
@@ -77,12 +78,15 @@ type Store struct {
 
 var _ jobs.FailureSink = (*Store)(nil)
 
+// New validates the database, schema, and clock and constructs a store without performing I/O or migrations.
 func New(db *database.DB, schema string, source clock.Clock) (*Store, error) {
 	if db == nil || !sqlname.Valid(schema) || source == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "job archive requires a database, schema and clock")
 	}
 	return &Store{db: db, schema: schema, clock: source}, nil
 }
+
+// Format writes a fixed description without exposing database configuration.
 func (*Store) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job failure archive")) }
 
 func (s *Store) within(ctx context.Context, fn func(*database.Tx) error, options ...database.TxOptions) error {
@@ -187,15 +191,25 @@ func ParseCursor(text string) (Cursor, error) {
 	}
 	return Cursor{token: text}, nil
 }
-func (c Cursor) IsZero() bool                 { return c.token == "" }
-func (c Cursor) String() string               { return c.token }
+
+// IsZero reports whether the cursor has no continuation token.
+func (c Cursor) IsZero() bool { return c.token == "" }
+
+// String returns the continuation token.
+func (c Cursor) String() string { return c.token }
+
+// MarshalText returns the continuation token as text.
 func (c Cursor) MarshalText() ([]byte, error) { return []byte(c.token), nil }
+
+// UnmarshalText parses a continuation token and replaces the cursor, clearing it on failure.
 func (c *Cursor) UnmarshalText(text []byte) error {
 	parsed, err := ParseCursor(string(text))
 	*c = parsed
 	return err
 }
 
+// List returns archived failure metadata newest first with a continuation cursor.
+// A zero limit selects 20 entries.
 func (s *Store) List(ctx context.Context, options ListOptions) (Page, error) {
 	if options.Limit == 0 {
 		options.Limit = 20

@@ -21,6 +21,7 @@ type Backend struct {
 	streams  map[*stream]struct{}
 }
 
+// New constructs a local backend with a positive subscription capacity.
 func New(maxSubscriptions int) (*Backend, error) {
 	if maxSubscriptions <= 0 {
 		return nil, safeerror.NewFault(fault.Invalid, "memory pub/sub capacity must be positive")
@@ -33,6 +34,8 @@ var _ pubsub.Backend = (*Backend)(nil)
 // FoundryAdapter marks the backend as framework-owned adapter I/O.
 func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}
 
+// Publish queues data for matching local subscriptions and returns their count.
+// A subscription whose buffer overflows terminates instead of silently dropping messages.
 func (b *Backend) Publish(ctx context.Context, channel pubsub.Channel, data []byte) (uint64, error) {
 	if err := pubsub.ValidatePublish(ctx, channel, data); err != nil {
 		return 0, err
@@ -60,6 +63,9 @@ func (b *Backend) Publish(ctx context.Context, channel pubsub.Channel, data []by
 	}
 	return count, nil
 }
+
+// Subscribe creates a ready local stream over the exact channels.
+// Capacity exhaustion returns fault.Overloaded.
 func (b *Backend) Subscribe(ctx context.Context, channels []pubsub.Channel, limits pubsub.Limits) (pubsub.Stream, error) {
 	if err := pubsub.ValidateSubscribe(ctx, channels, limits); err != nil {
 		return nil, err
@@ -90,6 +96,8 @@ func (b *Backend) Subscribe(ctx context.Context, channels []pubsub.Channel, limi
 	b.streams[s] = struct{}{}
 	return s, nil
 }
+
+// Close ends all local subscriptions with pubsub.ErrClosed and rejects further operations.
 func (b *Backend) Close() error {
 	if b == nil || b.streams == nil {
 		return safeerror.NewFault(fault.Invalid, "memory pub/sub adapter is not initialized")
@@ -113,9 +121,16 @@ type stream struct {
 // FoundryAdapter marks the stream as framework-owned adapter I/O.
 func (*stream) FoundryAdapter(frameworkadapter.Seal) {}
 
+// Next waits for the next buffered message using ctx to bound the wait.
 func (s *stream) Next(ctx context.Context) (pubsub.Message, error) { return s.buffer.Next(ctx) }
-func (s *stream) Done() <-chan struct{}                            { return s.buffer.Done() }
-func (s *stream) Err() error                                       { return s.buffer.Err() }
+
+// Done closes when the stream buffer terminates.
+func (s *stream) Done() <-chan struct{} { return s.buffer.Done() }
+
+// Err returns the buffer's terminal error.
+func (s *stream) Err() error { return s.buffer.Err() }
+
+// Close removes the stream and ends pending reads with pubsub.ErrClosed.
 func (s *stream) Close(ctx context.Context) error {
 	if ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "pub/sub stream close needs context")

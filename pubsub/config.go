@@ -17,9 +17,12 @@ type Config struct {
 	Buffer                                                        Limits
 }
 
+// DefaultConfig returns the default broker and buffer bounds for namespace.
 func DefaultConfig(namespace keyspace.Namespace) Config {
 	return Config{Namespace: namespace, MaxDeclarations: 256, MaxKeyBytes: 1024, MaxConcurrent: 128, MaxSubscriptions: 64, Timeout: 5 * time.Second, Buffer: DefaultLimits()}
 }
+
+// Validate checks the namespace, positive broker bounds, and subscription buffer limits.
 func (c Config) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {
 		return err

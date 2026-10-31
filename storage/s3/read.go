@@ -45,6 +45,9 @@ func (b *Backend) info(key storage.ObjectKey, size *int64, media, tag, version *
 	}
 	return info, nil
 }
+
+// Stat reads and validates complete metadata with replayable HEAD retries; byte ranges
+// are rejected.
 func (b *Backend) Stat(ctx context.Context, key storage.ObjectKey, options storage.ReadOptions) (storage.ObjectInfo, error) {
 	if err := b.ready(ctx, storage.StatOperation); err != nil {
 		return storage.ObjectInfo{}, err
@@ -82,6 +85,9 @@ func (b *Backend) Stat(ctx context.Context, key storage.ObjectKey, options stora
 	}
 	return info, nil
 }
+
+// Open returns an owned response body after validating metadata, selectors and any
+// returned range.
 func (b *Backend) Open(ctx context.Context, key storage.ObjectKey, options storage.ReadOptions) (io.ReadCloser, storage.ReadInfo, error) {
 	if err := b.ready(ctx, storage.OpenOperation); err != nil {
 		return nil, storage.ReadInfo{}, err
@@ -169,6 +175,9 @@ func parseContentRange(text string) (offset, length, total int64, err error) {
 	}
 	return offset, last - offset + 1, total, nil
 }
+
+// Delete sends one validated provider deletion and preserves uncertain outcomes; it
+// does not retry publication.
 func (b *Backend) Delete(ctx context.Context, key storage.ObjectKey, options storage.DeleteOptions) error {
 	if err := b.ready(ctx, storage.DeleteOperation); err != nil {
 		return err

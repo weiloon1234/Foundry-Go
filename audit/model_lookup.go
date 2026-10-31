@@ -13,7 +13,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// ParseModelID parses the textual audit-row identifier for model M.
 func ParseModelID[M any](text string) (ModelID[M], error) { return model.ParseID[ModelEntry[M]](text) }
+
+// ParseActionID parses the textual audit-row identifier for payload type P.
 func ParseActionID[P any](text string) (ActionID[P], error) {
 	return model.ParseID[ActionEntry[P]](text)
 }

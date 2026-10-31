@@ -31,6 +31,7 @@ type Broker struct {
 	closeErr      error
 }
 
+// NewBroker validates configuration and constructs a broker borrowing backend without performing I/O.
 func NewBroker(backend Backend, config Config) (*Broker, error) {
 	if backend == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "pub/sub broker requires an adapter")
@@ -41,7 +42,11 @@ func NewBroker(backend Backend, config Config) (*Broker, error) {
 	lifetime, cancel := context.WithCancel(context.Background())
 	return &Broker{backend: backend, config: config, slots: admission.New(config.MaxConcurrent), declarations: make(map[declarationKey]*declarationID), subscriptions: make(map[*subscriptionState]struct{}), lifetime: lifetime, cancel: cancel, done: make(chan struct{})}, nil
 }
+
+// Namespace returns the broker's configured application and environment scope.
 func (b *Broker) Namespace() keyspace.Namespace { return b.config.Namespace }
+
+// Done closes after shutdown drains operations and subscriptions. A nil broker returns nil.
 func (b *Broker) Done() <-chan struct{} {
 	if b == nil {
 		return nil
@@ -204,6 +209,7 @@ type Stats struct {
 	Closing                   bool
 }
 
+// Stats returns a synchronized snapshot of active operations, retained subscriptions, and shutdown state.
 func (b *Broker) Stats() Stats {
 	if b == nil || b.done == nil {
 		return Stats{Closing: true}

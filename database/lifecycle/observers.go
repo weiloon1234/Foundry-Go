@@ -49,6 +49,7 @@ func NewDeletionObserver[M, H any](name string) Observer[M, H] {
 	return Observer[M, H]{name: name, kind: deletionObserver}
 }
 
+// Name returns the observer's declared registration identifier.
 func (o Observer[M, H]) Name() string { return o.name }
 
 // Validate checks the declaration without constructing operation-local hooks.

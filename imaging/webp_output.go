@@ -22,6 +22,8 @@ func newWebPOutput(w io.Writer) *webpOutput {
 	return &webpOutput{out: w, size: 12}
 }
 
+// Write streams encoded WebP bytes while replacing odd-length RIFF chunk padding with
+// zero.
 func (w *webpOutput) Write(data []byte) (int, error) {
 	if w.err != nil {
 		return 0, w.err

@@ -20,6 +20,7 @@ const MaxManualRetries = 1000
 // not authorization. Save it before retrying; reuse it after an ambiguous result.
 type RetryToken string
 
+// Validate checks that the token is a lowercase SHA-256 hexadecimal digest.
 func (t RetryToken) Validate() error {
 	if len(t) != sha256.Size*2 || strings.ToLower(string(t)) != string(t) {
 		return safeerror.NewFault(fault.Invalid, "invalid job retry token")
@@ -62,6 +63,7 @@ type RetryRequest struct {
 	Token  RetryToken
 }
 
+// Validate checks the exact job target and observed-state retry token.
 func (r RetryRequest) Validate() error {
 	if err := r.Target.Validate(); err != nil {
 		return err
@@ -98,6 +100,7 @@ func CheckRetry(record Record, request RetryRequest) (bool, error) {
 // increments Retries and makes work immediately eligible. Only a matching failed
 // independent job may change. Network errors do not establish acceptance.
 type RetryBackend interface {
+	// JobRetry reopens the matching observed failed independent job, preserving identity and resetting the attempt budget.
 	JobRetry(context.Context, Key, RetryRequest) (bool, error)
 }
 
@@ -150,6 +153,7 @@ func (d Definition[P]) Retry(ctx context.Context, dispatcher *Dispatcher, id ID[
 	return dispatcher.Retry(ctx, queue, RetryRequest{Target: Target{ID: model.IDFromBytes[Execution](id.Bytes()), Name: d.name, Version: d.version}, Token: token})
 }
 
+// Retry requests a manual retry using the observed failure token and the connection's default when queue is empty.
 func (b Bound[P]) Retry(ctx context.Context, id ID[P], queue Queue, token RetryToken) (bool, error) {
 	options, err := b.options(Options[P]{Queue: queue})
 	if err != nil {

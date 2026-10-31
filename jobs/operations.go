@@ -24,6 +24,7 @@ type QueueStats struct {
 // StatsBackend is optional; built-in memory and Redis authorities implement it
 // without reading payloads.
 type StatsBackend interface {
+	// JobStats returns queue depth by operational state without reading payloads.
 	JobStats(context.Context, Key) (QueueStats, error)
 }
 
@@ -31,6 +32,7 @@ type StatsBackend interface {
 // not a workflow member, including its deduplication identity: a later dispatch
 // or outbox republication of the same ID is then accepted as new work.
 type ForgetBackend interface {
+	// JobForget removes a retained terminal independent record and its deduplication identity.
 	JobForget(context.Context, Key, Target) (bool, error)
 }
 

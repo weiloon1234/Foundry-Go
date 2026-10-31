@@ -18,15 +18,20 @@ type definition[K, V any] struct {
 // Declaration is an immutable, reusable typed cache family. Its zero value is invalid.
 type Declaration[K, V any] struct{ definition *definition[K, V] }
 
+// Define creates a reusable declaration identity without validating its name or codecs.
 func Define[K, V any](name Name, keys KeyCodec[K], values Codec[V]) Declaration[K, V] {
 	return Declaration[K, V]{definition: &definition[K, V]{name: name, keys: keys, values: values}}
 }
+
+// Name returns the family name, or an empty name for the zero declaration.
 func (d Declaration[K, V]) Name() Name {
 	if d.definition == nil {
 		return ""
 	}
 	return d.definition.name
 }
+
+// Validate checks that the declaration has a valid name and initialized codecs.
 func (d Declaration[K, V]) Validate() error {
 	if d.definition == nil || !validName(string(d.definition.name)) {
 		return safeerror.NewFault(fault.Invalid, "invalid cache declaration")

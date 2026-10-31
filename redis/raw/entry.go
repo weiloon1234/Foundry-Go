@@ -24,6 +24,8 @@ func (k Keys[K]) Exists(ctx context.Context, input K) (bool, error) {
 	}
 	return result, nil
 }
+
+// Expire changes an existing resource's TTL without replacing its contents. Forever removes expiry.
 func (k Keys[K]) Expire(ctx context.Context, input K, ttl cache.TTL) (bool, error) {
 	if err := ttl.Validate(); err != nil {
 		return false, err
@@ -42,6 +44,8 @@ func (k Keys[K]) Expire(ctx context.Context, input K, ttl cache.TTL) (bool, erro
 	}
 	return result, nil
 }
+
+// Delete removes one resource and reports whether it existed.
 func (k Keys[K]) Delete(ctx context.Context, input K) (bool, error) {
 	n, err := k.DeleteMany(ctx, input)
 	return n == 1, err

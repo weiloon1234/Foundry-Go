@@ -41,6 +41,8 @@ func bulk(operation string) bool {
 	return operation == "retry-failed" || operation == "flush-failed" || operation == "clear"
 }
 
+// Parse validates job-operation arguments and required confirmation flags without booting the application.
+// Help is written to help and returns flag.ErrHelp.
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
 		return Command{}, safeerror.NewFault(fault.Invalid, "job commands require help output")

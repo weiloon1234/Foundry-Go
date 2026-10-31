@@ -22,9 +22,14 @@ type RetainedFile struct {
 	Version   storage.VersionID
 }
 
-func (RetainedFile) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("retained attachment object")) }
+// Format writes a label without exposing retained storage pins.
+func (RetainedFile) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("retained attachment object")) }
+
+// MarshalJSON rejects implicit retained storage reference export.
 func (RetainedFile) MarshalJSON() ([]byte, error) { return nil, invalid() }
 
+// RetainResult reports detach publication and the optional storage reference handed to
+// the application.
 type RetainResult struct {
 	Operation   OperationID
 	Publication Publication

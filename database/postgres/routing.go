@@ -31,6 +31,7 @@ type RoutingConfig struct {
 	StickyReadWindow   time.Duration
 }
 
+// Validate checks both configured endpoints, timing settings and their combined connection bound.
 func (c RoutingConfig) Validate() error {
 	if err := c.Primary.Validate(); err != nil {
 		return err

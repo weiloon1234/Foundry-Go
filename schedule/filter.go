@@ -26,6 +26,8 @@ func Between(from, to temporal.Time) Window { return Window{From: from, To: to} 
 func UnlessBetween(from, to temporal.Time) Window { return Window{From: from, To: to, Unless: true} }
 
 func (w Window) enabled() bool { return w != (Window{}) }
+
+// Validate rejects an enabled window whose endpoints are equal. The zero window is valid.
 func (w Window) Validate() error {
 	if w.enabled() && offset(w.From) == offset(w.To) {
 		return safeerror.NewFault(fault.Invalid, "schedule window requires distinct start and end times")

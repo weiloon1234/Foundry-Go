@@ -207,9 +207,16 @@ type subscription struct {
 // FoundryAdapter marks the stream as framework-owned adapter I/O.
 func (*subscription) FoundryAdapter(frameworkadapter.Seal) {}
 
+// Next waits for the next buffered publication or a stream or context error.
 func (s *subscription) Next(ctx context.Context) (pubsub.Message, error) { return s.buffer.Next(ctx) }
-func (s *subscription) Done() <-chan struct{}                            { return s.done }
-func (s *subscription) Err() error                                       { return s.buffer.Err() }
+
+// Done closes after the subscription's owned cleanup completes.
+func (s *subscription) Done() <-chan struct{} { return s.done }
+
+// Err returns the buffer's terminal stream error.
+func (s *subscription) Err() error { return s.buffer.Err() }
+
+// Close stops the stream and waits for cleanup. Context cancellation ends only the wait.
 func (s *subscription) Close(ctx context.Context) error {
 	if ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "Redis subscription close needs context")

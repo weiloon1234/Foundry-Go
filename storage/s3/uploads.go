@@ -25,18 +25,26 @@ type UploadReference struct {
 	upload string
 }
 
+// Format writes a label without exposing the multipart reference.
 func (UploadReference) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("storage multipart reference"))
 }
+
+// MarshalJSON rejects implicit multipart-reference export.
 func (UploadReference) MarshalJSON() ([]byte, error) {
 	return nil, safeerror.Owned(string(storage.Invalid), storage.Invalid)
 }
+
+// Key returns the upload object key relative to the configured namespace.
 func (r UploadReference) Key() storage.ObjectKey { return r.key }
 
+// PendingUpload pairs a staging upload reference with its provider initiation time.
 type PendingUpload struct {
 	Reference UploadReference
 	Initiated temporal.DateTime
 }
+
+// UploadPage holds a bounded staging listing and an optional continuation cursor.
 type UploadPage struct {
 	Uploads []PendingUpload
 	Next    storage.Cursor

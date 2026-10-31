@@ -27,9 +27,12 @@ type Config struct {
 	Clock clock.Clock
 }
 
+// DefaultConfig returns the default queue bounds and system clock.
 func DefaultConfig() Config {
 	return Config{QueueConfig: jobs.DefaultQueueConfig(), Clock: clock.System{}}
 }
+
+// Validate checks queue bounds and requires an injected clock.
 func (c Config) Validate() error {
 	if err := c.QueueConfig.Validate(); err != nil {
 		return err
@@ -79,6 +82,7 @@ type Backend struct {
 	closed        bool
 }
 
+// New validates configuration and constructs an empty local authority without starting goroutines.
 func New(config Config) (*Backend, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -292,6 +296,9 @@ func (b *Backend) owned(key jobs.Key, proof jobs.Ownership) (*entry, bool) {
 	item, ok := b.entries[address{key, proof.ID()}]
 	return item, ok && (item.record.State == jobs.Reserved || item.record.State == jobs.Running) && item.owner == proof.Owner()
 }
+
+// JobEnqueue atomically inserts a new envelope, deduplicating identical retained identities.
+// Live capacity exhaustion returns jobs.ErrQueueFull; conflicting identities return fault.Conflict.
 func (b *Backend) JobEnqueue(ctx context.Context, key jobs.Key, envelope jobs.Envelope) (bool, error) {
 	if err := jobs.ValidateEnqueue(ctx, key, envelope); err != nil {
 		return false, err
@@ -349,6 +356,8 @@ func (b *Backend) JobEnqueue(ctx context.Context, key jobs.Key, envelope jobs.En
 	b.signal(key)
 	return true, nil
 }
+
+// JobReserve leases the earliest eligible job, breaking equal availability times by enqueue order.
 func (b *Backend) JobReserve(ctx context.Context, key jobs.Key, owner lease.Owner, ttl time.Duration) (value.Optional[jobs.Reservation], error) {
 	if err := owner.Validate(); err != nil {
 		return value.Optional[jobs.Reservation]{}, err
@@ -382,6 +391,8 @@ func (b *Backend) JobReserve(ctx context.Context, key jobs.Key, owner lease.Owne
 	}
 	return value.Set(jobs.Reservation{Retries: chosen.record.Retries, Envelope: chosen.record.Envelope, Ownership: proof, Attempts: chosen.record.Attempts, Exceptions: chosen.record.Exceptions, ExpiresAt: chosen.record.LeaseExpiresAt}), nil
 }
+
+// JobStart starts the live reservation and returns its attempt count; repeated starts for the same owner are idempotent.
 func (b *Backend) JobStart(ctx context.Context, key jobs.Key, proof jobs.Ownership) (uint32, error) {
 	if err := proof.Validate(); err != nil {
 		return 0, err
@@ -416,6 +427,8 @@ func (b *Backend) JobStart(ctx context.Context, key jobs.Key, proof jobs.Ownersh
 	b.transition(item, jobs.Running, jobs.NoReason, now)
 	return item.record.Attempts, nil
 }
+
+// JobRenew extends a live reservation and reports whether cancellation was requested.
 func (b *Backend) JobRenew(ctx context.Context, key jobs.Key, proof jobs.Ownership, ttl time.Duration) (jobs.LeaseStatus, error) {
 	if err := proof.Validate(); err != nil {
 		return jobs.LeaseStatus{}, err
@@ -435,6 +448,9 @@ func (b *Backend) JobRenew(ctx context.Context, key jobs.Key, proof jobs.Ownersh
 	item.record.LeaseExpiresAt = now.Add(ttl)
 	return jobs.LeaseStatus{Owned: true, CancellationRequested: item.record.CancellationRequested}, nil
 }
+
+// JobFinish applies the current owner's result, with cancellation taking precedence.
+// An expired or superseded owner changes nothing and returns false.
 func (b *Backend) JobFinish(ctx context.Context, key jobs.Key, proof jobs.Ownership, result jobs.Result) (bool, error) {
 	if err := proof.Validate(); err != nil {
 		return false, err
@@ -474,6 +490,8 @@ func (b *Backend) JobFinish(ctx context.Context, key jobs.Key, proof jobs.Owners
 	b.evict()
 	return true, nil
 }
+
+// JobCancel requests exact-target cancellation; waiting and blocked jobs become terminal immediately.
 func (b *Backend) JobCancel(ctx context.Context, key jobs.Key, target jobs.Target) (bool, error) {
 	if err := target.Validate(); err != nil {
 		return false, err
@@ -497,6 +515,8 @@ func (b *Backend) JobCancel(ctx context.Context, key jobs.Key, target jobs.Targe
 	}
 	return true, nil
 }
+
+// JobInspect returns an owned retained record snapshot, including an independent history slice.
 func (b *Backend) JobInspect(ctx context.Context, key jobs.Key, id jobs.ExecutionID) (value.Optional[jobs.Record], error) {
 	if id.IsZero() {
 		return value.Optional[jobs.Record]{}, safeerror.NewFault(fault.Invalid, "job inspection requires an identity")

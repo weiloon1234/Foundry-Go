@@ -66,6 +66,9 @@ func (c *Client) ExecuteRaw(ctx context.Context, request raw.Request, limits raw
 	}
 	return result.(raw.Reply), nil
 }
+
+// ExecuteRawBatch executes a validated batch once, bounding combined replies.
+// Transaction mode does not roll back successful commands when another command fails.
 func (c *Client) ExecuteRawBatch(ctx context.Context, requests []raw.Request, mode raw.Mode, limits raw.Limits) ([]raw.Reply, error) {
 	if err := mode.Validate(); err != nil {
 		return nil, err
@@ -122,6 +125,8 @@ func (c *Client) ExecuteRawBatch(ctx context.Context, requests []raw.Request, mo
 	}
 	return result.([]raw.Reply), nil
 }
+
+// ExpireRaw atomically changes an existing native key's TTL; Forever removes expiry.
 func (c *Client) ExpireRaw(ctx context.Context, key raw.Key, ttl cache.TTL) (bool, error) {
 	if err := key.Validate(); err != nil {
 		return false, err

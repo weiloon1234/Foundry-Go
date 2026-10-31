@@ -19,6 +19,7 @@ const registrationRequired = "PostgreSQL type registration requires postgres.Con
 type registrationProbe struct{}
 type registrationPlan struct{ marker byte }
 
+// Encode returns the registration-required fault; this sentinel plan never encodes data.
 func (*registrationPlan) Encode(any, []byte) ([]byte, error) {
 	return nil, registrationFailure()
 }

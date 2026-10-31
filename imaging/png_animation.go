@@ -89,6 +89,7 @@ func decodePNGFrame(ctx context.Context, container pngContainer, frame pngFrame,
 // APNG shares one IHDR/color model across every frame.
 type rgbaPNGFrame struct{ image.Image }
 
+// Opaque reports false so PNG encoding retains an alpha channel.
 func (rgbaPNGFrame) Opaque() bool { return false }
 
 func encodeAPNG(ctx context.Context, out *boundedOutput, sequence imageSequence, options encodingOptions, l Limits) error {

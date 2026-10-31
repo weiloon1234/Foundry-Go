@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// Format identifies an image encoding or container.
 type Format string
 
 const (
@@ -30,18 +31,24 @@ const (
 	SVG      Format = "svg"
 )
 
+// Validate rejects unrecognized formats with an invalid fault; it does not check engine
+// availability.
 func (f Format) Validate() error {
 	if _, ok := portableFormat(f); ok || f.native() {
 		return nil
 	}
 	return invalid("unknown image format")
 }
+
+// Extension returns the filename extension without a dot; JPEG uses jpg.
 func (f Format) Extension() string {
 	if f == JPEG {
 		return "jpg"
 	}
 	return string(f)
 }
+
+// MediaType returns the image media type, or an empty string for an unknown format.
 func (f Format) MediaType() string {
 	switch f {
 	case JPEG:

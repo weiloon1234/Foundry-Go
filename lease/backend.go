@@ -22,9 +22,15 @@ func NewKey(namespace keyspace.Namespace, name Name, logical string) (Key, error
 	a, err := keyaddress.New(namespace, string(name), logical)
 	return Key{address: a}, err
 }
-func (k Key) Validate() error               { return k.address.Validate() }
+
+// Validate checks that the key contains a valid namespaced address.
+func (k Key) Validate() error { return k.address.Validate() }
+
+// Namespace returns the application and environment scope of the key.
 func (k Key) Namespace() keyspace.Namespace { return k.address.Namespace }
-func (k Key) String() string                { return k.address.String(KeyFeature) }
+
+// String returns the physical lease address.
+func (k Key) String() string { return k.address.String(KeyFeature) }
 
 // Duration bounds keep expiry finite and leave room for client validity margins.
 const (
@@ -32,6 +38,7 @@ const (
 	MaxDuration = 24 * time.Hour
 )
 
+// ValidateDuration rejects durations outside MinDuration through MaxDuration with fault.Invalid.
 func ValidateDuration(ttl time.Duration) error {
 	if ttl < MinDuration || ttl > MaxDuration {
 		return safeerror.NewFault(fault.Invalid, "lease duration must be between 10ms and 24h")
@@ -45,8 +52,11 @@ func ValidateDuration(ttl time.Duration) error {
 // and bound stored owner reads. TTL begins when the authority accepts a mutation.
 // Renew cannot recreate expired ownership. Callers own adapter lifecycle.
 type Backend interface {
+	// LeaseAcquire sets an absent key to owner for ttl and reports whether ownership was acquired.
 	LeaseAcquire(context.Context, Key, Owner, time.Duration) (bool, error)
+	// LeaseRenew extends ttl only while owner still owns an unexpired key.
 	LeaseRenew(context.Context, Key, Owner, time.Duration) (bool, error)
+	// LeaseRelease removes key only while owner still owns it and reports whether it was removed.
 	LeaseRelease(context.Context, Key, Owner) (bool, error)
 }
 

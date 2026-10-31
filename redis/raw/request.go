@@ -31,6 +31,8 @@ func (r Request) append(arg Argument) Request {
 	r.args = args
 	return r
 }
+
+// Bytes returns the combined byte length of the command name, script source, and arguments.
 func (r Request) Bytes() int {
 	n := len(r.name) + len(r.source)
 	for _, a := range r.args {
@@ -38,6 +40,8 @@ func (r Request) Bytes() int {
 	}
 	return n
 }
+
+// Validate checks request limits and requires explicit keys within the supplied namespace.
 func (r Request) Validate(ns keyspace.Namespace, l Limits) error {
 	if err := ns.Validate(); err != nil {
 		return err
@@ -65,7 +69,11 @@ func (r Request) Validate(ns keyspace.Namespace, l Limits) error {
 	}
 	return nil
 }
+
+// IsScript reports whether the request carries Lua source.
 func (r Request) IsScript() bool { return r.source != "" }
+
+// Source returns the Lua source, or an empty string for an ordinary command.
 func (r Request) Source() string { return r.source }
 
 // Arguments returns owned command arguments (including its name) or script ARGV.
@@ -81,6 +89,8 @@ func (r Request) Arguments() []string {
 	}
 	return result
 }
+
+// Keys returns an owned slice of explicitly declared keys in argument order.
 func (r Request) Keys() []Key {
 	var keys []Key
 	for _, a := range r.args {
@@ -115,6 +125,8 @@ type Builder[R any] struct {
 	decoder Decoder[R]
 }
 
+// NewCommand constructs a builder with an uppercase command name and typed decoder.
+// Invalid names and connection-state commands produce an invalid request.
 func NewCommand[R any](name string, decoder Decoder[R]) Builder[R] {
 	if len(name) > 64 {
 		return Builder[R]{request: Request{invalid: true}, decoder: decoder}
@@ -122,7 +134,11 @@ func NewCommand[R any](name string, decoder Decoder[R]) Builder[R] {
 	name = strings.Clone(strings.ToUpper(name))
 	return Builder[R]{Request{name: name, invalid: !validCommand(name)}, decoder}
 }
+
+// Arg returns a builder with the explicit argument appended.
 func (b Builder[R]) Arg(arg Argument) Builder[R] { b.request = b.request.append(arg); return b }
+
+// Key appends an explicit scoped key and returns an executable command.
 func (b Builder[R]) Key(key Key) Command[R] {
 	return Command[R]{b.request.append(keyArgument(key)), b.decoder}
 }
@@ -134,8 +150,11 @@ type Command[R any] struct {
 	decoder Decoder[R]
 }
 
+// Arg returns a command with the explicit argument appended.
 func (c Command[R]) Arg(arg Argument) Command[R] { c.request = c.request.append(arg); return c }
-func (c Command[R]) Key(key Key) Command[R]      { c.request = c.request.append(keyArgument(key)); return c }
+
+// Key returns a command with an additional explicit scoped key appended.
+func (c Command[R]) Key(key Key) Command[R] { c.request = c.request.append(keyArgument(key)); return c }
 
 // NewScript uses a single EVAL with typed KEYS and explicit ARGV, without script
 // cache fallback. It can also be queued in a Pipeline like any other command.

@@ -13,7 +13,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// Name identifies a metadata key within its owner's scope.
 type Name string
+
+// Version identifies the stored JSON schema revision of a metadata key.
 type Version uint32
 
 const MaxValueBytes = extensionvalue.MaxBytes
@@ -34,9 +37,13 @@ type definition[M any, K comparable, V any] struct {
 	id      *declarationID
 }
 
+// Define declares an owner-bound, versioned metadata key with the supplied JSON contract.
+// The returned declaration retains its identity for registration; validation is deferred.
 func Define[M any, K comparable, V any](owner extensions.Owner[M, K], name Name, version Version, schema contract.JSON[V]) Key[M, K, V] {
 	return Key[M, K, V]{definition: &definition[M, K, V]{owner: owner, name: name, version: version, value: schema, id: &declarationID{}}}
 }
+
+// Validate checks that the key is initialized and its name, version, owner and JSON contract are valid.
 func (k Key[M, K, V]) Validate() error {
 	if k.definition == nil || !identifier.Semantic(string(k.definition.name)) || k.definition.version == 0 {
 		return invalid()
@@ -46,18 +53,24 @@ func (k Key[M, K, V]) Validate() error {
 	}
 	return k.definition.value.Validate()
 }
+
+// Name returns the declared key name, or an empty name for a zero key.
 func (k Key[M, K, V]) Name() Name {
 	if k.definition == nil {
 		return ""
 	}
 	return k.definition.name
 }
+
+// Version returns the declared schema version, or zero for a zero key.
 func (k Key[M, K, V]) Version() Version {
 	if k.definition == nil {
 		return 0
 	}
 	return k.definition.version
 }
+
+// Format writes a fixed label without exposing declaration details.
 func (Key[M, K, V]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("typed metadata key")) }
 func (k Key[M, K, V]) registrationKey() string {
 	if k.definition == nil {
@@ -66,12 +79,14 @@ func (k Key[M, K, V]) registrationKey() string {
 	return extensions.Digest(k.definition.owner.Scope(), string(k.Name()))
 }
 
+// Registration retains a key declaration's identity and validation for manager assembly.
 type Registration struct {
 	key      string
 	id       *declarationID
 	validate func(*extensions.Registry) error
 }
 
+// Registration returns the key's manager registration, or a zero registration for a zero key.
 func (k Key[M, K, V]) Registration() Registration {
 	if k.definition == nil {
 		return Registration{}
@@ -91,6 +106,8 @@ type Manager struct {
 	keys  map[string]*declarationID
 }
 
+// New validates registrations and returns a manager borrowing store.
+// Duplicate owner-scoped key names return fault.Duplicate; no database I/O occurs.
 func New(store *extensions.Store, keys ...Registration) (*Manager, error) {
 	if err := store.Validate(); err != nil {
 		return nil, err
@@ -113,6 +130,8 @@ func New(store *extensions.Store, keys ...Registration) (*Manager, error) {
 	}
 	return m, nil
 }
+
+// Validate checks that the manager is initialized and its borrowed store is valid.
 func (m *Manager) Validate() error {
 	if m == nil || m.keys == nil {
 		return invalid()

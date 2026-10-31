@@ -14,12 +14,21 @@ const MaxDisks = namedservice.MaxEntries
 // from default configuration. Separate domain concerns should declare disks once.
 type Declaration struct{ id DiskID }
 
+// DefineDisk creates an unvalidated reusable declaration for id.
 func DefineDisk(id DiskID) Declaration { return Declaration{id: id} }
-func (d Declaration) ID() DiskID       { return d.id }
-func (d Declaration) Validate() error  { return d.id.Validate() }
+
+// ID returns the declared disk identifier.
+func (d Declaration) ID() DiskID { return d.id }
+
+// Validate checks the declared disk identifier.
+func (d Declaration) Validate() error { return d.id.Validate() }
+
+// Bind constructs a disk for the declared identifier while borrowing backend.
 func (d Declaration) Bind(backend Backend, config Config) (*Disk, error) {
 	return NewDisk(d.id, backend, config)
 }
+
+// Resolve validates the declaration and retrieves its disk from registry.
 func (d Declaration) Resolve(registry *Registry) (*Disk, error) {
 	if err := d.Validate(); err != nil {
 		return nil, err
@@ -35,6 +44,7 @@ type Registry struct {
 	selected DiskID
 }
 
+// NewRegistry borrows valid disks, rejecting duplicate identifiers and excessive entries.
 func NewRegistry(disks ...*Disk) (*Registry, error) {
 	if len(disks) > MaxDisks {
 		return nil, newFailure(LimitExceeded, OpenOperation, NotApplicable, nil)
@@ -53,6 +63,9 @@ func NewRegistry(disks ...*Disk) (*Registry, error) {
 	slices.Sort(registry.names)
 	return registry, nil
 }
+
+// Disk resolves an explicit identifier, returning a missing fault for an unregistered
+// disk.
 func (r *Registry) Disk(id DiskID) (*Disk, error) {
 	if r == nil || r.disks == nil {
 		return nil, newFailure(Invalid, OpenOperation, NotApplicable, nil)
@@ -66,6 +79,8 @@ func (r *Registry) Disk(id DiskID) (*Disk, error) {
 	}
 	return disk, nil
 }
+
+// Disks returns an owned, sorted list of registered identifiers.
 func (r *Registry) Disks() []DiskID {
 	if r == nil {
 		return nil
@@ -86,12 +101,17 @@ func NewDefaultRegistry(selected DiskID, disks ...*Disk) (*Registry, error) {
 	r.selected = selected
 	return r, nil
 }
+
+// Default returns the selected existing disk or a missing fault when no default is
+// configured.
 func (r *Registry) Default() (*Disk, error) {
 	if r == nil || r.selected == "" {
 		return nil, safeerror.NewFault(fault.Missing, "default storage disk is not configured")
 	}
 	return r.Disk(r.selected)
 }
+
+// DefaultName returns the selected identifier, or an empty identifier when absent.
 func (r *Registry) DefaultName() DiskID {
 	if r == nil {
 		return ""

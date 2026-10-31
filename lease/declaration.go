@@ -16,15 +16,20 @@ type definition[K any] struct {
 // Declaration retains the resource key type. Reuse one declared value per family.
 type Declaration[K any] struct{ definition *definition[K] }
 
+// Define constructs a typed lease family with the supplied key codec.
 func Define[K any](name Name, codec keyspace.Codec[K]) Declaration[K] {
 	return Declaration[K]{definition: &definition[K]{name: name, codec: codec}}
 }
+
+// Name returns the family name, or an empty name for a zero declaration.
 func (d Declaration[K]) Name() Name {
 	if d.definition == nil {
 		return ""
 	}
 	return d.definition.name
 }
+
+// Validate checks the family name and key codec; a zero declaration is invalid.
 func (d Declaration[K]) Validate() error {
 	if d.definition == nil || !keyspace.ValidName(string(d.Name())) {
 		return safeerror.NewFault(fault.Invalid, "invalid lease declaration")

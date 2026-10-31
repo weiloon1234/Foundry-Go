@@ -98,18 +98,24 @@ type protectedCodec struct {
 	descriptor *pgtype.Type
 }
 
+// FormatSupported delegates to the native codec, accepting every format when no native codec exists.
 func (c protectedCodec) FormatSupported(format int16) bool {
 	if c.native == nil {
 		return true
 	}
 	return c.native.FormatSupported(format)
 }
+
+// PreferredFormat returns the native preference, or text format when no native codec exists.
 func (c protectedCodec) PreferredFormat() int16 {
 	if c.native == nil {
 		return pgtype.TextFormatCode
 	}
 	return c.native.PreferredFormat()
 }
+
+// PlanEncode selects a protected encoding plan, retaining callback failures in a failing plan.
+// It returns nil when no encoding is available.
 func (c protectedCodec) PlanEncode(m *pgtype.Map, oid uint32, format int16, v any) pgtype.EncodePlan {
 	if c.native == nil && c.registry != nil {
 		if _, ok := v.(registrationProbe); ok {
@@ -132,6 +138,9 @@ func (c protectedCodec) PlanEncode(m *pgtype.Map, oid uint32, format int16, v an
 	}
 	return encodeNativePlan{m: m, codec: c.native, native: plan}
 }
+
+// PlanScan selects a protected scan plan, retaining callback failures in a failing plan.
+// It returns nil when no scan is available.
 func (c protectedCodec) PlanScan(m *pgtype.Map, oid uint32, format int16, v any) pgtype.ScanPlan {
 	if _, ok := outputValue(v); ok {
 		return scanValuePlan{m: m, oid: oid, format: format}
@@ -149,6 +158,9 @@ func (c protectedCodec) PlanScan(m *pgtype.Map, oid uint32, format int16, v any)
 	}
 	return scanNativePlan{codec: c.native, native: plan}
 }
+
+// DecodeDatabaseSQLValue invokes the selected decoder with SQL callback isolation.
+// Without a native codec it decodes binary as bytes and other formats as text.
 func (c protectedCodec) DecodeDatabaseSQLValue(m *pgtype.Map, oid uint32, format int16, src []byte) (value driver.Value, err error) {
 	err = sqlcallback.Invoke("decode PostgreSQL value", func() error {
 		var e error
@@ -157,6 +169,9 @@ func (c protectedCodec) DecodeDatabaseSQLValue(m *pgtype.Map, oid uint32, format
 	})
 	return
 }
+
+// DecodeValue invokes the selected decoder with SQL callback isolation.
+// Without a native codec it decodes binary as bytes and other formats as text.
 func (c protectedCodec) DecodeValue(m *pgtype.Map, oid uint32, format int16, src []byte) (value any, err error) {
 	err = sqlcallback.Invoke("decode PostgreSQL value", func() error {
 		var e error
@@ -173,6 +188,8 @@ type encodeValuePlan struct {
 	descriptor *pgtype.Type
 }
 
+// Encode unwraps and encodes a protected argument with SQL callback isolation.
+// It validates driver.Valuer results before pgx can format invalid values.
 func (p encodeValuePlan) Encode(v any, buf []byte) (result []byte, err error) {
 	err = sqlcallback.Invoke("encode PostgreSQL argument", func() error {
 		source, _ := inputValue(v)
@@ -276,6 +293,8 @@ func planSelectedType(m *pgtype.Map, typ *pgtype.Type, format int16, source any)
 
 type checkedValuer struct{ source driver.Valuer }
 
+// Value invokes the source valuer with SQL callback isolation and rejects invalid driver values.
+// A nil pointer with value-receiver Value semantics yields SQL NULL.
 func (v checkedValuer) Value() (result driver.Value, err error) {
 	rv := reflect.ValueOf(v.source)
 	if rv.Kind() == reflect.Pointer && rv.IsNil() && rv.Type().Elem().Implements(reflect.TypeFor[driver.Valuer]()) {
@@ -302,6 +321,7 @@ type encodeNativePlan struct {
 	native pgtype.EncodePlan
 }
 
+// Encode protects container values and invokes the native plan with SQL callback isolation.
 func (p encodeNativePlan) Encode(v any, buf []byte) (result []byte, err error) {
 	err = sqlcallback.Invoke("encode PostgreSQL value", func() error {
 		var e error
@@ -317,6 +337,7 @@ type scanValuePlan struct {
 	format int16
 }
 
+// Scan unwraps a protected destination and scans it through the type map with SQL callback isolation.
 func (p scanValuePlan) Scan(src []byte, v any) error {
 	return sqlcallback.Invoke("scan PostgreSQL destination", func() error { target, _ := outputValue(v); return p.m.Scan(p.oid, p.format, src, target) })
 }
@@ -326,16 +347,19 @@ type scanNativePlan struct {
 	native pgtype.ScanPlan
 }
 
+// Scan protects container destinations and invokes the native plan with SQL callback isolation.
 func (p scanNativePlan) Scan(src []byte, v any) error {
 	return sqlcallback.Invoke("scan PostgreSQL value", func() error { return p.native.Scan(src, scanContainer(p.codec, v)) })
 }
 
 type failedEncodePlan struct{ err error }
 
+// Encode returns the retained planning failure without encoding the value.
 func (p failedEncodePlan) Encode(any, []byte) ([]byte, error) { return nil, p.err }
 
 type failedScanPlan struct{ err error }
 
+// Scan returns the retained planning failure without writing the destination.
 func (p failedScanPlan) Scan([]byte, any) error { return p.err }
 
 func (c protectedCodec) decodingCodec(format int16) pgtype.Codec {

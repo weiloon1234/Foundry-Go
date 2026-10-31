@@ -35,6 +35,8 @@ type Registry struct {
 	ordered []ID
 }
 
+// New validates and snapshots seeder declarations and orders them by dependency.
+// It rejects invalid, duplicate, missing or cyclic dependencies before execution.
 func New(definitions ...Definition) (*Registry, error) {
 	r := &Registry{byID: make(map[ID]Definition, len(definitions))}
 	for _, definition := range definitions {
@@ -77,6 +79,7 @@ func (r *Registry) order(ids []ID) ([]ID, error) {
 	return ordered, nil
 }
 
+// IDs returns an owned copy of the deterministic dependency order.
 func (r *Registry) IDs() []ID { return append([]ID(nil), r.ordered...) }
 
 // Result lists seeders whose database transactions are confirmed committed.

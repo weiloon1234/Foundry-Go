@@ -103,12 +103,15 @@ func (s *subscriptionState) release() {
 // Terminal stream/decoding failures discard pending delivery and close the stream.
 type Subscription[V any] struct{ state *subscriptionState }
 
+// Done closes after adapter cleanup and active receive work finish. A zero subscription returns nil.
 func (s *Subscription[V]) Done() <-chan struct{} {
 	if s == nil || s.state == nil {
 		return nil
 	}
 	return s.state.done
 }
+
+// Err returns the terminal subscription cause, or nil while no terminal cause is recorded.
 func (s *Subscription[V]) Err() error {
 	if s == nil || s.state == nil {
 		return safeerror.NewFault(fault.Invalid, "pub/sub subscription is not initialized")
@@ -117,6 +120,9 @@ func (s *Subscription[V]) Err() error {
 	defer s.state.mu.Unlock()
 	return s.state.terminal
 }
+
+// Close starts subscription shutdown and waits for cleanup and active receive work.
+// Cancellation ends only the wait; shutdown continues.
 func (s *Subscription[V]) Close(ctx context.Context) error {
 	if s == nil || s.state == nil || ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "pub/sub close needs subscription and context")
@@ -139,6 +145,9 @@ func (s *Subscription[V]) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
+// Receive waits for and decodes the next typed payload.
+// Concurrent receives fail with fault.Conflict; cancellation of a wait preserves the subscription.
 func (s *Subscription[V]) Receive(ctx context.Context) (V, error) {
 	if s == nil || s.state == nil || ctx == nil {
 		return *new(V), safeerror.NewFault(fault.Invalid, "pub/sub receive needs subscription and context")

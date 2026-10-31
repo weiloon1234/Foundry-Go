@@ -22,9 +22,12 @@ type SupervisePolicy struct {
 	InitialBackoff, MaxBackoff time.Duration
 }
 
+// DefaultSupervisePolicy returns the default initial and maximum resubscription delays.
 func DefaultSupervisePolicy() SupervisePolicy {
 	return SupervisePolicy{InitialBackoff: 100 * time.Millisecond, MaxBackoff: 30 * time.Second}
 }
+
+// Validate checks positive, ordered delays within MaxSuperviseBackoff.
 func (p SupervisePolicy) Validate() error {
 	if p.InitialBackoff <= 0 || p.MaxBackoff < p.InitialBackoff || p.MaxBackoff > MaxSuperviseBackoff {
 		return safeerror.NewFault(fault.Invalid, "invalid pub/sub supervision backoff")
@@ -134,7 +137,10 @@ func failedHandler(cause error) error {
 // handlerFailure marks an application callback error, which is never a gap.
 type handlerFailure struct{ cause error }
 
+// Error returns a fixed description without formatting the application error.
 func (e handlerFailure) Error() string { return "pub/sub supervised handler failed" }
+
+// Unwrap returns the application callback failure.
 func (e handlerFailure) Unwrap() error { return e.cause }
 
 // interrupted reports whether a subscription ended by losing delivery, as

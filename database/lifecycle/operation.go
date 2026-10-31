@@ -13,6 +13,7 @@ const (
 	ForceDelete
 )
 
+// String returns the operation name, or a fixed invalid-operation label for unknown values.
 func (o Operation) String() string {
 	switch o {
 	case Create:

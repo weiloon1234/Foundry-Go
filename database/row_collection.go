@@ -57,7 +57,10 @@ func (r *Rows) FoundryCollect(seal sqlowner.CollectionSeal, ctx context.Context,
 
 type collectedRow struct{ rows *Rows }
 
+// Scan decodes the current row while its collection operation holds the stream lock.
 func (r collectedRow) Scan(destinations ...any) error { return r.rows.scan(destinations) }
+
+// FieldEncryption forwards the underlying stream's decryption context and key ring.
 func (r collectedRow) FieldEncryption() (context.Context, *encryption.Keyring) {
 	return r.rows.FieldEncryption()
 }

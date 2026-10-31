@@ -41,6 +41,8 @@ type DepthMonitor struct {
 	readings []QueueDepth
 }
 
+// NewDepthMonitor validates and copies the sample targets without starting background work.
+// A zero interval uses DefaultDepthInterval.
 func NewDepthMonitor(interval time.Duration, targets ...DepthTarget) (*DepthMonitor, error) {
 	if interval == 0 {
 		interval = DefaultDepthInterval

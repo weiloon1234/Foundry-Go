@@ -39,6 +39,8 @@ func QueuedOutboxDefinition(policy jobs.Policy) jobs.Definition[queuedEvent] {
 	return jobs.Define[queuedEvent]("foundry.events.deliver", 1, policy)
 }
 
+// NewQueuedOutbox validates the policy and registers 1 to 128 prepared outboxes.
+// Duplicate destinations fail with fault.Duplicate; the supplied buses remain borrowed.
 func NewQueuedOutbox(policy jobs.Policy, producers ...*Outbox) (*QueuedOutbox, error) {
 	if len(producers) == 0 || len(producers) > 128 {
 		return nil, safeerror.NewFault(fault.Invalid, "queued events require 1 to 128 outbox destinations")
@@ -58,6 +60,8 @@ func NewQueuedOutbox(policy jobs.Policy, producers ...*Outbox) (*QueuedOutbox, e
 	}
 	return result, nil
 }
+
+// Declaration returns the job handler that restores and dispatches registered durable events.
 func (q *QueuedOutbox) Declaration() (jobs.Declaration, error) {
 	if q == nil || q.producers == nil {
 		return jobs.Declaration{}, safeerror.NewFault(fault.Invalid, "queued event delivery is not initialized")
@@ -91,6 +95,9 @@ func (q *QueuedOutbox) Declaration() (jobs.Declaration, error) {
 		return dispatch(operation, producer.bus, entry, captured)
 	})
 }
+
+// PublicationRoute creates a route that enqueues delivery jobs through a durable dispatcher.
+// Jobs reuse the publication identity and captured origin.
 func (q *QueuedOutbox) PublicationRoute(destination outbox.Destination, dispatcher *jobs.Dispatcher) (publisher.Route, error) {
 	if q == nil || q.producers[destination] == nil {
 		return publisher.Route{}, safeerror.NewFault(fault.Missing, "queued event destination is not registered")

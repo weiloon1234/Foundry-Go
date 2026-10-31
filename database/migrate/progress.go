@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// StepState identifies a nontransactional migration statement's durable checkpoint state.
 type StepState string
 
 const (
@@ -43,15 +44,22 @@ const (
 
 var ErrReconciliationRequired = safeerror.New("nontransactional migration requires reconciliation")
 
+// InterruptedMigration retains the checkpoint and cause of an interrupted nontransactional migration.
+// Inspect database state before reconciling an uncertain statement.
 type InterruptedMigration struct {
 	Progress Progress
 	cause    error
 }
 
+// Error returns a fixed reconciliation message without formatting the cause.
 func (*InterruptedMigration) Error() string {
 	return "nontransactional migration interrupted; inspect progress and database state before resuming"
 }
-func (e *InterruptedMigration) Unwrap() error      { return e.cause }
+
+// Unwrap returns the retained interruption cause.
+func (e *InterruptedMigration) Unwrap() error { return e.cause }
+
+// Is reports whether target is ErrReconciliationRequired.
 func (*InterruptedMigration) Is(target error) bool { return target == ErrReconciliationRequired }
 
 func (p *Postgres) ensureProgress(ctx context.Context, session *database.Session) error {

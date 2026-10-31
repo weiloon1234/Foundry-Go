@@ -17,6 +17,7 @@ import (
 // the lease manager's PollInterval). Loaders are bounded by LoadTimeout.
 type CoordinationConfig struct{ LeaseDuration, Wait time.Duration }
 
+// DefaultCoordinationConfig returns a 30-second lease duration and a two-second fill wait.
 func DefaultCoordinationConfig() CoordinationConfig {
 	return CoordinationConfig{LeaseDuration: 30 * time.Second, Wait: 2 * time.Second}
 }

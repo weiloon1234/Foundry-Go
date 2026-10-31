@@ -14,6 +14,7 @@ type Description struct {
 	Policy  Policy  `json:"policy"`
 }
 
+// Describe returns owned declaration metadata sorted by name and version without contacting a backend.
 func (r *Registry) Describe() []Description {
 	if r == nil {
 		return nil

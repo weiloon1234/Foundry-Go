@@ -29,6 +29,7 @@ type Field[M any] struct {
 	excluded      bool
 }
 
+// Format writes a fixed label without exposing captured field data.
 func (Field[M]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("audit field")) }
 
 type fieldWire struct {

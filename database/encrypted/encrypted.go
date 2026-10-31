@@ -33,8 +33,11 @@ const Purpose encryption.Purpose = "foundry.model.field.v1"
 // Equal compares plaintexts for change detection. Generated code calls these;
 // applications assign and read plaintext through each type's own methods.
 type Value[V any] interface {
+	// Seal encrypts assigned plaintext for the supplied record binding.
 	Seal(context.Context, *encryption.Keyring, encryption.Context) (V, error)
+	// Open decrypts a stored envelope for the supplied record binding.
 	Open(context.Context, *encryption.Keyring, encryption.Context) (V, error)
+	// Equal compares values for stored-change detection.
 	Equal(V) bool
 }
 
@@ -134,6 +137,7 @@ func decodeState(source any) (state, error) {
 // and read Reveal. The zero value has no plaintext and cannot be stored.
 type Text struct{ state state }
 
+// NewText returns an assigned plaintext value, including for an empty string.
 func NewText(plain string) Text {
 	return Text{state{plain: secret.New(plain), open: true}}
 }
@@ -145,20 +149,37 @@ func (t Text) Reveal() string { return t.state.plain.Reveal() }
 // IsZero reports a value with neither plaintext nor a stored envelope.
 func (t Text) IsZero() bool { return !t.state.open && t.state.sealed.IsZero() }
 
+// Seal returns a copy with a fresh encrypted envelope for binding.
+// A nil key ring returns fault.Missing; absent plaintext returns fault.Invalid.
 func (t Text) Seal(ctx context.Context, keys *encryption.Keyring, binding encryption.Context) (Text, error) {
 	sealed, err := t.state.seal(ctx, keys, binding)
 	return Text{sealed}, err
 }
+
+// Open returns a copy with plaintext decrypted from the stored envelope for binding.
+// A nil key ring returns fault.Missing; a missing envelope returns fault.Invalid.
 func (t Text) Open(ctx context.Context, keys *encryption.Keyring, binding encryption.Context) (Text, error) {
 	opened, err := t.state.unseal(ctx, keys, binding)
 	return Text{opened}, err
 }
-func (t Text) Equal(other Text) bool      { return t.state.equal(other.state) }
-func (Text) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte(secret.Redacted)) }
-func (Text) LogValue() slog.Value         { return slog.StringValue(secret.Redacted) }
+
+// Equal compares plaintexts when both values are open, otherwise matching nonzero envelopes.
+func (t Text) Equal(other Text) bool { return t.state.equal(other.state) }
+
+// Format writes the redaction marker without exposing plaintext or ciphertext.
+func (Text) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(secret.Redacted)) }
+
+// LogValue returns the redaction marker.
+func (Text) LogValue() slog.Value { return slog.StringValue(secret.Redacted) }
+
+// MarshalJSON encodes the redaction marker as a JSON string.
 func (Text) MarshalJSON() ([]byte, error) { return []byte(strconv.Quote(secret.Redacted)), nil }
+
+// MarshalText returns the redaction marker.
 func (Text) MarshalText() ([]byte, error) { return []byte(secret.Redacted), nil }
-func (t Text) GoString() string           { return secret.Redacted }
+
+// GoString returns the redaction marker.
+func (t Text) GoString() string { return secret.Redacted }
 
 // TextCodec stores the envelope as text. Binding requires a sealed value, so
 // only the framework's write path can store it; hydration yields a sealed value
@@ -202,11 +223,18 @@ func (j JSON[T]) Decode() (T, error) {
 	return snapshot.Decode()
 }
 
+// IsZero reports a value with neither plaintext nor a stored envelope.
 func (j JSON[T]) IsZero() bool { return !j.state.open && j.state.sealed.IsZero() }
+
+// Seal returns a copy with a fresh encrypted envelope for binding.
+// A nil key ring returns fault.Missing; absent plaintext returns fault.Invalid.
 func (j JSON[T]) Seal(ctx context.Context, keys *encryption.Keyring, binding encryption.Context) (JSON[T], error) {
 	sealed, err := j.state.seal(ctx, keys, binding)
 	return JSON[T]{sealed}, err
 }
+
+// Open decrypts the stored envelope for binding and checks that the plaintext fits T.
+// It returns a zero value on failure.
 func (j JSON[T]) Open(ctx context.Context, keys *encryption.Keyring, binding encryption.Context) (JSON[T], error) {
 	opened, err := j.state.unseal(ctx, keys, binding)
 	if err == nil {
@@ -217,12 +245,24 @@ func (j JSON[T]) Open(ctx context.Context, keys *encryption.Keyring, binding enc
 	}
 	return JSON[T]{opened}, err
 }
-func (j JSON[T]) Equal(other JSON[T]) bool   { return j.state.equal(other.state) }
-func (JSON[T]) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte(secret.Redacted)) }
-func (JSON[T]) LogValue() slog.Value         { return slog.StringValue(secret.Redacted) }
+
+// Equal compares plaintexts when both values are open, otherwise matching nonzero envelopes.
+func (j JSON[T]) Equal(other JSON[T]) bool { return j.state.equal(other.state) }
+
+// Format writes the redaction marker without exposing plaintext or ciphertext.
+func (JSON[T]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(secret.Redacted)) }
+
+// LogValue returns the redaction marker.
+func (JSON[T]) LogValue() slog.Value { return slog.StringValue(secret.Redacted) }
+
+// MarshalJSON encodes the redaction marker as a JSON string.
 func (JSON[T]) MarshalJSON() ([]byte, error) { return []byte(strconv.Quote(secret.Redacted)), nil }
+
+// MarshalText returns the redaction marker.
 func (JSON[T]) MarshalText() ([]byte, error) { return []byte(secret.Redacted), nil }
-func (j JSON[T]) GoString() string           { return secret.Redacted }
+
+// GoString returns the redaction marker.
+func (j JSON[T]) GoString() string { return secret.Redacted }
 
 // JSONCodec stores the envelope of a typed JSON plaintext as text.
 func JSONCodec[T any]() codec.Codec[JSON[T]] {

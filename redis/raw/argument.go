@@ -16,19 +16,26 @@ type Argument struct {
 	valid bool
 }
 
+// Text snapshots text as an argument, returning an invalid argument if it exceeds MaxArgumentBytes.
 func Text(text string) Argument {
 	if len(text) > MaxArgumentBytes {
 		return Argument{}
 	}
 	return Argument{text: strings.Clone(text), valid: true}
 }
+
+// Bytes copies data into an argument, returning an invalid argument if it exceeds MaxArgumentBytes.
 func Bytes(data []byte) Argument {
 	if len(data) > MaxArgumentBytes {
 		return Argument{}
 	}
 	return Argument{text: string(data), valid: true}
 }
-func Int64(value int64) Argument   { return Text(strconv.FormatInt(value, 10)) }
+
+// Int64 constructs a signed decimal argument.
+func Int64(value int64) Argument { return Text(strconv.FormatInt(value, 10)) }
+
+// Uint64 constructs an unsigned decimal argument.
 func Uint64(value uint64) Argument { return Text(strconv.FormatUint(value, 10)) }
 func (a Argument) validate() error {
 	if !a.valid {

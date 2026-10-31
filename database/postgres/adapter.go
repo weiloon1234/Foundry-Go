@@ -27,6 +27,8 @@ func New(config Config) (database.Adapter, error) {
 	return database.Adapter{Connector: protectedConnector{source: stdlib.GetConnector(*parsed, connectionOptions(config.Schema, config.Pool.MaxLifetime)...), registerTypes: config.RegisterTypes}, Classify: classify}, nil
 }
 
+// Open validates the PostgreSQL configuration and starts an owned database pool.
+// The caller must close the returned database.
 func Open(ctx context.Context, config Config, options ...database.Option) (*database.DB, error) {
 	adapter, err := New(config)
 	if err != nil {

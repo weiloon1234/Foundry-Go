@@ -42,10 +42,13 @@ type Policy struct {
 	RetryUntil    time.Time       `json:"retry_until,omitzero"`
 }
 
+// DefaultPolicy returns the default attempt, timeout, backoff, and jitter policy for queue.
 func DefaultPolicy(queue Queue) Policy {
 	return Policy{Queue: queue, Attempts: 5, Timeout: 5 * time.Minute,
 		Backoff: []time.Duration{5 * time.Second, 30 * time.Second, time.Minute, 5 * time.Minute}, Jitter: time.Second}
 }
+
+// Validate checks queue, attempt, timeout, backoff, exception-limit, and retry-deadline bounds.
 func (p Policy) Validate() error {
 	if err := p.Queue.Validate(); err != nil {
 		return err

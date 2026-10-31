@@ -50,6 +50,7 @@ type legacyQueueConfig struct {
 	Retention  time.Duration
 }
 
+// NewJobBackend validates queue configuration and borrows a prepared Redis client without I/O.
 func NewJobBackend(client *Client, config jobs.QueueConfig) (*JobBackend, error) {
 	if client == nil || client.done == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "jobs require a prepared Redis client")
@@ -263,6 +264,9 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 	}
 	return reply, nil
 }
+
+// JobEnqueue atomically accepts an envelope and reports whether it was newly inserted.
+// A new insertion wakes this process's waiting workers.
 func (b *JobBackend) JobEnqueue(ctx context.Context, key jobs.Key, envelope jobs.Envelope) (bool, error) {
 	if err := jobs.ValidateEnqueue(ctx, key, envelope); err != nil {
 		return false, err
@@ -292,6 +296,8 @@ func jobAvailableAt(envelope jobs.Envelope) int64 {
 	}
 	return result
 }
+
+// JobReserve atomically leases eligible work to owner, returning an unset result when none is available.
 func (b *JobBackend) JobReserve(ctx context.Context, key jobs.Key, owner lease.Owner, ttl time.Duration) (value.Optional[jobs.Reservation], error) {
 	if err := owner.Validate(); err != nil {
 		return value.Optional[jobs.Reservation]{}, err
@@ -316,6 +322,8 @@ func (b *JobBackend) JobReserve(ctx context.Context, key jobs.Key, owner lease.O
 func proofRequest(op string, proof jobs.Ownership) jobRequest {
 	return jobRequest{Op: op, ID: proof.ID().String(), Owner: hex.EncodeToString(proof.Owner().Bytes())}
 }
+
+// JobStart marks owned work as running and returns its attempt number.
 func (b *JobBackend) JobStart(ctx context.Context, key jobs.Key, proof jobs.Ownership) (uint32, error) {
 	if err := proof.Validate(); err != nil {
 		return 0, err
@@ -323,6 +331,8 @@ func (b *JobBackend) JobStart(ctx context.Context, key jobs.Key, proof jobs.Owne
 	reply, err := b.command(ctx, key, proofRequest("start", proof))
 	return reply.Attempt, err
 }
+
+// JobRenew extends a job lease and returns ownership and cancellation status.
 func (b *JobBackend) JobRenew(ctx context.Context, key jobs.Key, proof jobs.Ownership, ttl time.Duration) (jobs.LeaseStatus, error) {
 	if err := proof.Validate(); err != nil {
 		return jobs.LeaseStatus{}, err
@@ -335,6 +345,8 @@ func (b *JobBackend) JobRenew(ctx context.Context, key jobs.Key, proof jobs.Owne
 	reply, err := b.command(ctx, key, request)
 	return jobs.LeaseStatus{Owned: reply.Owned, CancellationRequested: reply.Cancelled}, err
 }
+
+// JobFinish applies the validated result to owned work and reports whether state changed.
 func (b *JobBackend) JobFinish(ctx context.Context, key jobs.Key, proof jobs.Ownership, result jobs.Result) (bool, error) {
 	if err := proof.Validate(); err != nil {
 		return false, err
@@ -352,6 +364,8 @@ func (b *JobBackend) JobFinish(ctx context.Context, key jobs.Key, proof jobs.Own
 	reply, err := b.command(ctx, key, request)
 	return reply.Changed, err
 }
+
+// JobCancel requests cancellation of the matching target and reports whether state changed.
 func (b *JobBackend) JobCancel(ctx context.Context, key jobs.Key, target jobs.Target) (bool, error) {
 	if err := target.Validate(); err != nil {
 		return false, err
@@ -359,6 +373,8 @@ func (b *JobBackend) JobCancel(ctx context.Context, key jobs.Key, target jobs.Ta
 	reply, err := b.command(ctx, key, jobRequest{Op: "cancel", ID: target.ID.String(), Name: target.Name, Version: target.Version})
 	return reply.Changed, err
 }
+
+// JobInspect returns a decoded retained record, or an unset result when the identity is absent.
 func (b *JobBackend) JobInspect(ctx context.Context, key jobs.Key, id jobs.ExecutionID) (value.Optional[jobs.Record], error) {
 	if id.IsZero() {
 		return value.Optional[jobs.Record]{}, safeerror.NewFault(fault.Invalid, "job inspection requires an identity")
@@ -397,6 +413,7 @@ func (r *jobStoredRecord) decode(key jobs.Key) (jobs.Record, error) {
 	return result, nil
 }
 
+// JobWorkflow atomically accepts the workflow and its members and reports whether it was newly inserted.
 func (b *JobBackend) JobWorkflow(ctx context.Context, key jobs.Key, workflow jobs.WorkflowEnvelope) (bool, error) {
 	if err := workflow.Validate(); err != nil {
 		return false, err
@@ -467,6 +484,7 @@ func (b *JobBackend) JobMigrateLayout(ctx context.Context, key jobs.Key) (bool, 
 	return reply.Changed, err
 }
 
+// JobCancelWorkflow requests cancellation of a workflow and reports whether state changed.
 func (b *JobBackend) JobCancelWorkflow(ctx context.Context, key jobs.Key, id jobs.WorkflowID) (bool, error) {
 	if id.IsZero() {
 		return false, safeerror.NewFault(fault.Invalid, "workflow cancellation requires an identity")
@@ -475,6 +493,7 @@ func (b *JobBackend) JobCancelWorkflow(ctx context.Context, key jobs.Key, id job
 	return reply.Changed, err
 }
 
+// JobList returns a bounded filtered page of decoded job records and its continuation identity.
 func (b *JobBackend) JobList(ctx context.Context, key jobs.Key, options jobs.ListOptions) (jobs.Page, error) {
 	if err := options.Validate(); err != nil {
 		return jobs.Page{}, err

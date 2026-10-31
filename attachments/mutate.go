@@ -12,18 +12,25 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// ChangeResult separates membership publication, affected rows and pending storage
+// cleanup.
 type ChangeResult struct {
 	Publication    Publication
 	Affected       int
 	PendingCleanup []OperationID
 }
 
+// Detach retires ready membership for id and attempts storage cleanup after commit; an
+// absent matching id affects no rows.
 func (c Collection[M, K]) Detach(ctx context.Context, m *Manager, owner model.Reference[M, K], id ID[M]) (ChangeResult, error) {
 	if id.IsZero() {
 		return ChangeResult{}, invalid()
 	}
 	return c.detach(ctx, m, owner, value.Set(id))
 }
+
+// Clear retires all ready membership for the selected owner collection and attempts
+// bounded storage cleanup after commit.
 func (c Collection[M, K]) Clear(ctx context.Context, m *Manager, owner model.Reference[M, K]) (ChangeResult, error) {
 	return c.detach(ctx, m, owner, value.Optional[ID[M]]{})
 }

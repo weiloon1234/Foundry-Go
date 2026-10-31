@@ -25,6 +25,7 @@ type FailedJob struct {
 	FailedAt   time.Time
 }
 
+// Format writes a fixed description without exposing the failed payload or attribution.
 func (FailedJob) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("failed job")) }
 
 // FailureSink receives terminal failures after the queue confirmed them, for
@@ -33,6 +34,7 @@ func (FailedJob) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("failed job
 // job's outcome. Recording is at most once per confirmed failure: a crash
 // between finalization and recording can miss an entry.
 type FailureSink interface {
+	// RecordFailure records a confirmed terminal failure without changing its queue outcome.
 	RecordFailure(context.Context, FailedJob) error
 }
 

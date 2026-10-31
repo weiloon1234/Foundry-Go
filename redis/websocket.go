@@ -24,6 +24,7 @@ var websocketScript string
 // Keep its Client alive until every borrowing Hub/Publisher has actually stopped.
 type WebSocketBackend struct{ client *Client }
 
+// NewWebSocketBackend borrows a prepared Redis client without I/O or a separate connection lifecycle.
 func NewWebSocketBackend(client *Client) (*WebSocketBackend, error) {
 	if client == nil || client.done == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "WebSocket Redis backend requires a prepared client")
@@ -33,12 +34,15 @@ func NewWebSocketBackend(client *Client) (*WebSocketBackend, error) {
 
 var _ websocket.ClusterBackend = (*WebSocketBackend)(nil)
 
+// Publish delegates ephemeral publication to the borrowed client and returns the server subscription count.
 func (b *WebSocketBackend) Publish(ctx context.Context, channel pubsub.Channel, data []byte) (uint64, error) {
 	if b == nil || b.client == nil {
 		return 0, safeerror.NewFault(fault.Invalid, "WebSocket Redis backend is not initialized")
 	}
 	return b.client.Publish(ctx, channel, data)
 }
+
+// Subscribe establishes an exact-channel stream through the borrowed client.
 func (b *WebSocketBackend) Subscribe(ctx context.Context, channels []pubsub.Channel, limits pubsub.Limits) (pubsub.Stream, error) {
 	if b == nil || b.client == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "WebSocket Redis backend is not initialized")
@@ -156,22 +160,32 @@ func (b *WebSocketBackend) connection(ctx context.Context, key websocket.Cluster
 	}
 	return b.command(ctx, key, websocketRequest{Op: op, Instance: instance.String(), Connection: connection.String()})
 }
+
+// WebSocketCheck validates or establishes the cluster policy under Redis authority.
 func (b *WebSocketBackend) WebSocketCheck(ctx context.Context, key websocket.ClusterKey) error {
 	_, err := b.command(ctx, key, websocketRequest{Op: "check"})
 	return err
 }
+
+// WebSocketOpen registers a connection owned by instance within cluster capacity.
 func (b *WebSocketBackend) WebSocketOpen(ctx context.Context, key websocket.ClusterKey, instance websocket.InstanceID, connection websocket.ConnectionID) error {
 	_, err := b.connection(ctx, key, instance, connection, "open")
 	return err
 }
+
+// WebSocketTouch renews the owned connection and its membership leases.
 func (b *WebSocketBackend) WebSocketTouch(ctx context.Context, key websocket.ClusterKey, instance websocket.InstanceID, connection websocket.ConnectionID) error {
 	_, err := b.connection(ctx, key, instance, connection, "touch")
 	return err
 }
+
+// WebSocketClose releases an owned connection and its memberships; an absent connection is a no-op.
 func (b *WebSocketBackend) WebSocketClose(ctx context.Context, key websocket.ClusterKey, instance websocket.InstanceID, connection websocket.ConnectionID) error {
 	_, err := b.connection(ctx, key, instance, connection, "close")
 	return err
 }
+
+// WebSocketJoin registers membership for an owned live connection and returns its presence snapshot.
 func (b *WebSocketBackend) WebSocketJoin(ctx context.Context, key websocket.ClusterKey, instance websocket.InstanceID, connection websocket.ConnectionID, membership websocket.ClusterMembership) (websocket.PresenceSnapshot, error) {
 	if err := websocket.ValidateClusterConnection(ctx, key, instance, connection); err != nil {
 		return websocket.PresenceSnapshot{}, err
@@ -185,6 +199,8 @@ func (b *WebSocketBackend) WebSocketJoin(ctx context.Context, key websocket.Clus
 	}
 	return websocketPresence(result, key)
 }
+
+// WebSocketLeave removes a scope membership for the owned connection; an absent connection is a no-op.
 func (b *WebSocketBackend) WebSocketLeave(ctx context.Context, key websocket.ClusterKey, instance websocket.InstanceID, connection websocket.ConnectionID, scope websocket.Scope) error {
 	if err := websocket.ValidateClusterConnection(ctx, key, instance, connection); err != nil {
 		return err
@@ -195,6 +211,8 @@ func (b *WebSocketBackend) WebSocketLeave(ctx context.Context, key websocket.Clu
 	_, err := b.command(ctx, key, websocketRequest{Op: "leave", Instance: instance.String(), Connection: connection.String(), Scope: scope.Hash()})
 	return err
 }
+
+// WebSocketMembers returns an owned presence snapshot ordered by member identity.
 func (b *WebSocketBackend) WebSocketMembers(ctx context.Context, key websocket.ClusterKey, scope websocket.Scope) (websocket.PresenceSnapshot, error) {
 	if err := scope.Validate(); err != nil {
 		return websocket.PresenceSnapshot{}, err
@@ -235,6 +253,8 @@ func replayRequest(channel websocket.ChannelID, policy websocket.ReplayConfig) (
 	}
 	return websocketRequest{Channel: string(channel), ReplayMessages: policy.Messages, ReplayBytes: policy.Bytes, ReplayTTL: policy.TTL.Milliseconds()}, nil
 }
+
+// WebSocketAppend stores a validated publication in bounded replay history without publishing it.
 func (b *WebSocketBackend) WebSocketAppend(ctx context.Context, key websocket.ClusterKey, channel websocket.ChannelID, policy websocket.ReplayConfig, data []byte) error {
 	if policy.TTL > key.Limits().Retention {
 		return safeerror.NewFault(fault.Invalid, "replay retention exceeds cluster policy")
@@ -256,6 +276,8 @@ func (b *WebSocketBackend) WebSocketAppend(ctx context.Context, key websocket.Cl
 	_, err = b.command(ctx, key, request)
 	return err
 }
+
+// WebSocketHistory returns owned retained frames within the replay count, byte, and retention bounds.
 func (b *WebSocketBackend) WebSocketHistory(ctx context.Context, key websocket.ClusterKey, channel websocket.ChannelID, policy websocket.ReplayConfig) ([][]byte, error) {
 	if policy.TTL > key.Limits().Retention {
 		return nil, safeerror.NewFault(fault.Invalid, "replay retention exceeds cluster policy")

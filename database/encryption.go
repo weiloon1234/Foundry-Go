@@ -52,6 +52,7 @@ func (r *Rows) FieldEncryption() (context.Context, *encryption.Keyring) { return
 // pool, transaction or session implement it; framework row adapters forward it.
 type EncryptedRow interface {
 	Row
+	// FieldEncryption returns the row's decryption context and owning pool's key ring.
 	FieldEncryption() (context.Context, *encryption.Keyring)
 }
 

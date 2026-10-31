@@ -54,8 +54,11 @@ type StorageCursor struct {
 	next       storage.Cursor
 }
 
+// IsZero reports whether no storage inspection continuation is set.
 func (c StorageCursor) IsZero() bool { return c.disk == "" }
 
+// StorageInspection selects a registered disk, owner scope, minimum age and bounded
+// inspection page.
 type StorageInspection struct {
 	Disk       storage.Declaration
 	Owner      extensions.OwnerName
@@ -63,6 +66,9 @@ type StorageInspection struct {
 	Limit      int
 	Cursor     StorageCursor
 }
+
+// StorageOrphanPage reports untracked storage candidates for inspection; candidates do
+// not authorize deletion.
 type StorageOrphanPage struct {
 	Candidates []storage.ObjectInfo
 	Scanned    int

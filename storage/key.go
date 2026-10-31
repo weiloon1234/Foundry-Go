@@ -20,6 +20,7 @@ const MaxKeyBytes = 1024
 // DiskID is an explicit registered disk, not an object key or filesystem path.
 type DiskID string
 
+// Validate rejects an invalid semantic disk identifier with an invalid fault.
 func (d DiskID) Validate() error {
 	if !identifier.Semantic(string(d)) {
 		return safeerror.NewFault(fault.Invalid, "invalid storage disk identifier")
@@ -32,21 +33,32 @@ func (d DiskID) Validate() error {
 // it never cleans, case-folds, percent-decodes or Unicode-normalizes a key.
 type ObjectKey struct{ text string }
 
+// ParseKey validates and copies text without changing its object identity.
 func ParseKey(text string) (ObjectKey, error) {
 	if err := validateName(text, false); err != nil {
 		return ObjectKey{}, err
 	}
 	return ObjectKey{text: strings.Clone(text)}, nil
 }
-func (k ObjectKey) String() string  { return k.text }
-func (k ObjectKey) IsZero() bool    { return k.text == "" }
+
+// String returns the literal object key.
+func (k ObjectKey) String() string { return k.text }
+
+// IsZero reports whether no object key is set.
+func (k ObjectKey) IsZero() bool { return k.text == "" }
+
+// Validate checks the literal key syntax; the zero key is invalid.
 func (k ObjectKey) Validate() error { return validateName(k.text, false) }
+
+// MarshalText validates the key and returns its literal UTF-8 bytes.
 func (k ObjectKey) MarshalText() ([]byte, error) {
 	if err := k.Validate(); err != nil {
 		return nil, err
 	}
 	return []byte(k.text), nil
 }
+
+// UnmarshalText clears the key and replaces it only when text is valid.
 func (k *ObjectKey) UnmarshalText(text []byte) error {
 	if k == nil {
 		return safeerror.NewFault(fault.Invalid, "missing object key destination")
@@ -58,12 +70,16 @@ func (k *ObjectKey) UnmarshalText(text []byte) error {
 	}
 	return err
 }
+
+// MarshalJSON validates the key and encodes it as a JSON string.
 func (k ObjectKey) MarshalJSON() ([]byte, error) {
 	if err := k.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(k.text)
 }
+
+// UnmarshalJSON clears the key and decodes a bounded, validated JSON string.
 func (k *ObjectKey) UnmarshalJSON(data []byte) error {
 	if k == nil {
 		return safeerror.NewFault(fault.Invalid, "missing object key destination")
@@ -78,6 +94,8 @@ func (k *ObjectKey) UnmarshalJSON(data []byte) error {
 	}
 	return k.UnmarshalText([]byte(text))
 }
+
+// JSONContract describes the object key as a JSON string.
 func (ObjectKey) JSONContract() contract.JSON[ObjectKey] {
 	t := reflect.TypeFor[ObjectKey]()
 	id := contract.TypeID(t.PkgPath() + "." + t.Name())
@@ -88,14 +106,21 @@ func (ObjectKey) JSONContract() contract.JSON[ObjectKey] {
 // Zero means every object. A trailing slash is allowed for directory-like use.
 type Prefix struct{ text string }
 
+// ParsePrefix validates and copies a lexical prefix; empty text selects all objects.
 func ParsePrefix(text string) (Prefix, error) {
 	if err := validateName(text, true); err != nil {
 		return Prefix{}, err
 	}
 	return Prefix{text: strings.Clone(text)}, nil
 }
-func (p Prefix) String() string  { return p.text }
+
+// String returns the literal prefix.
+func (p Prefix) String() string { return p.text }
+
+// Validate checks prefix syntax, allowing the zero prefix and a trailing slash.
 func (p Prefix) Validate() error { return validateName(p.text, true) }
+
+// Contains reports whether a valid key begins with the literal prefix.
 func (p Prefix) Contains(key ObjectKey) bool {
 	return key.Validate() == nil && strings.HasPrefix(key.text, p.text)
 }

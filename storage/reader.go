@@ -21,6 +21,8 @@ type putReader struct {
 	failed        error
 }
 
+// Read enforces cancellation and the input byte bound without closing the borrowed
+// source.
 func (r *putReader) Read(p []byte) (int, error) {
 	if r.failed != nil {
 		return 0, r.failed
@@ -81,6 +83,8 @@ type ownedReader struct {
 	checksum     SHA256
 }
 
+// Read serializes reads, checks declared length and full-object checksum, and refreshes
+// the idle deadline on progress.
 func (r *ownedReader) Read(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
@@ -129,6 +133,9 @@ func (r *ownedReader) Read(p []byte) (n int, err error) {
 	}
 	return n, err
 }
+
+// Close cancels the stream, closes its raw reader and waits for reads before releasing
+// disk capacity.
 func (r *ownedReader) Close() error {
 	r.once.Do(func() {
 		r.closing.Store(true)

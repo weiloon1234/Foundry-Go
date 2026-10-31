@@ -69,6 +69,7 @@ func (r Resampling) filter() gift.Resampling {
 	}
 }
 
+// Resampling returns a plan using the selected filter for resize operations.
 func (p Plan) Resampling(r Resampling) Plan { p.resampling = r; return p }
 
 // ResizeDown resizes each axis independently, without enlarging either axis.

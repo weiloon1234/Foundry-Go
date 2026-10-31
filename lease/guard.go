@@ -170,6 +170,8 @@ func (g *Guard) Release(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
+// Done closes after renewal work and owner cleanup finish. A nil guard returns nil.
 func (g *Guard) Done() <-chan struct{} {
 	if g == nil {
 		return nil

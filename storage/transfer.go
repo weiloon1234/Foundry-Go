@@ -113,6 +113,8 @@ type CopyOptions struct {
 // request needs the streamed path, it returns Unsupported with an Unchanged
 // outcome before any provider mutation.
 type ServerCopier interface {
+	// Copy publishes a complete destination within the adapter using the supplied
+	// selectors and size bound.
 	Copy(ctx context.Context, source, target ObjectKey, options CopyOptions, maximum int64) (ObjectInfo, error)
 }
 

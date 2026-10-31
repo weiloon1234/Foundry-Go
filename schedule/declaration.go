@@ -12,7 +12,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
+// ID is the semantic identifier of a registered schedule.
 type ID string
+
+// Handler handles one scheduled invocation and must cooperate with context cancellation.
 type Handler func(context.Context, Invocation) error
 
 // CatchUp is opt-in bounded replay on startup, leadership acquisition and missed
@@ -23,6 +26,7 @@ type CatchUp struct {
 	Max    int
 }
 
+// Validate checks catch-up window and count bounds. The zero policy disables catch-up.
 func (c CatchUp) Validate() error {
 	if c == (CatchUp{}) {
 		return nil
@@ -56,7 +60,10 @@ type Options struct {
 	Failed                func(context.Context, Invocation, error) error
 }
 
+// DefaultOptions returns the default execution timeout and overlap lease duration.
 func DefaultOptions() Options { return Options{Timeout: 5 * time.Minute, OverlapTTL: 30 * time.Second} }
+
+// Validate checks timeout, overlap, catch-up, calendar-filter, and environment bounds.
 func (o Options) Validate() error {
 	if o.Timeout <= 0 || o.Timeout > 24*time.Hour || len(o.Environments) > 64 {
 		return safeerror.NewFault(fault.Invalid, "invalid schedule timeout or environment bounds")
@@ -96,13 +103,22 @@ type Declaration struct {
 	options Options
 }
 
+// Define validates a declaration and snapshots its mutable option slices without performing I/O.
 func Define(id ID, spec Spec, handler Handler, options Options) (Declaration, error) {
 	d := Declaration{id: id, spec: spec, handler: handler, options: options.snapshot()}
 	return d, d.Validate()
 }
-func (d Declaration) ID() ID           { return d.id }
-func (d Declaration) Spec() Spec       { return d.spec }
+
+// ID returns the schedule identifier.
+func (d Declaration) ID() ID { return d.id }
+
+// Spec returns the immutable parsed timing specification.
+func (d Declaration) Spec() Spec { return d.spec }
+
+// Options returns the execution policy with owned copies of mutable slices.
 func (d Declaration) Options() Options { return d.options.snapshot() }
+
+// Validate checks the identifier, handler, timing specification, and execution options.
 func (d Declaration) Validate() error {
 	if !identifier.Semantic(string(d.id)) || d.handler == nil {
 		return safeerror.NewFault(fault.Invalid, "schedule requires a semantic ID and handler")
@@ -112,10 +128,13 @@ func (d Declaration) Validate() error {
 	}
 	return d.options.Validate()
 }
+
+// With returns a validated declaration with replacement options, leaving the receiver unchanged.
 func (d Declaration) With(options Options) (Declaration, error) {
 	return Define(d.id, d.spec, d.handler, options)
 }
 
+// Cron parses an expression in an explicit timezone and declares it with default options.
 func Cron(id ID, expression string, zone *time.Location, handler Handler) (Declaration, error) {
 	spec, err := ParseCron(expression, zone)
 	if err != nil {
@@ -123,6 +142,8 @@ func Cron(id ID, expression string, zone *time.Location, handler Handler) (Decla
 	}
 	return Define(id, spec, handler, DefaultOptions())
 }
+
+// Every declares an elapsed-time interval aligned to the UTC Unix epoch with default options.
 func Every(id ID, every time.Duration, handler Handler) (Declaration, error) {
 	spec, err := Interval(every)
 	if err != nil {
@@ -130,6 +151,8 @@ func Every(id ID, every time.Duration, handler Handler) (Declaration, error) {
 	}
 	return Define(id, spec, handler, DefaultOptions())
 }
+
+// DailyAt declares a daily HH:MM occurrence in zone with default options.
 func DailyAt(id ID, text string, zone *time.Location, handler Handler) (Declaration, error) {
 	spec, err := dailySpec(text, zone)
 	if err != nil {
@@ -137,15 +160,23 @@ func DailyAt(id ID, text string, zone *time.Location, handler Handler) (Declarat
 	}
 	return Define(id, spec, handler, DefaultOptions())
 }
+
+// Hourly declares an occurrence at the start of each local hour in zone.
 func Hourly(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 	return Cron(id, "0 0 * * * *", zone, handler)
 }
+
+// Daily declares an occurrence at local midnight in zone.
 func Daily(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 	return DailyAt(id, "00:00", zone, handler)
 }
+
+// Weekly declares an occurrence at local midnight each Monday in zone.
 func Weekly(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 	return Cron(id, "0 0 0 * * MON", zone, handler)
 }
+
+// Monthly declares an occurrence at local midnight on the first of each month in zone.
 func Monthly(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 	return Cron(id, "0 0 0 1 * *", zone, handler)
 }
@@ -155,15 +186,23 @@ func Monthly(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 func EveryMinute(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 	return Cron(id, "0 * * * * *", zone, handler)
 }
+
+// EveryFiveMinutes declares occurrences at local minutes divisible by five in zone.
 func EveryFiveMinutes(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 	return Cron(id, "0 */5 * * * *", zone, handler)
 }
+
+// EveryTenMinutes declares occurrences at local minutes divisible by ten in zone.
 func EveryTenMinutes(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 	return Cron(id, "0 */10 * * * *", zone, handler)
 }
+
+// EveryFifteenMinutes declares occurrences at local minutes divisible by fifteen in zone.
 func EveryFifteenMinutes(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 	return Cron(id, "0 */15 * * * *", zone, handler)
 }
+
+// EveryThirtyMinutes declares occurrences at local minutes zero and thirty in zone.
 func EveryThirtyMinutes(id ID, zone *time.Location, handler Handler) (Declaration, error) {
 	return Cron(id, "0 */30 * * * *", zone, handler)
 }
@@ -179,8 +218,10 @@ func LastDayOfMonthAt(id ID, text string, zone *time.Location, handler Handler) 
 	return d.With(options)
 }
 
+// Registry retains validated declarations with owned option slices.
 type Registry struct{ entries []Declaration }
 
+// NewRegistry validates and snapshots 1 to 4096 declarations, rejecting duplicate schedule IDs.
 func NewRegistry(declarations ...Declaration) (*Registry, error) {
 	if len(declarations) == 0 || len(declarations) > 4096 {
 		return nil, safeerror.NewFault(fault.Invalid, "schedule registry requires 1 to 4096 declarations")

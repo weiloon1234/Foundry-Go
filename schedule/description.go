@@ -21,6 +21,7 @@ type Description struct {
 	CatchUp        CatchUp       `json:"catch_up"`
 }
 
+// Describe returns owned descriptions sorted by schedule ID, without inspecting runtime state.
 func (r *Registry) Describe() []Description {
 	if r == nil {
 		return nil

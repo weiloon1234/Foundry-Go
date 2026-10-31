@@ -15,6 +15,7 @@ const (
 	Descending
 )
 
+// Validate returns fault.Invalid unless the order is Ascending or Descending.
 func (o Order) Validate() error {
 	if o != Ascending && o != Descending {
 		return safeerror.NewFault(fault.Invalid, "invalid Redis sorted set order")
@@ -58,6 +59,7 @@ func AllScores() ScoreRange { return ScoreRange{Min: math.Inf(-1), Max: math.Inf
 // Between selects scores from min through max inclusive.
 func Between(min, max float64) ScoreRange { return ScoreRange{Min: min, Max: max} }
 
+// Validate returns fault.Invalid for NaN bounds or a minimum above the maximum.
 func (r ScoreRange) Validate() error {
 	if math.IsNaN(r.Min) || math.IsNaN(r.Max) || r.Min > r.Max {
 		return safeerror.NewFault(fault.Invalid, "invalid Redis sorted set score range")
@@ -81,6 +83,7 @@ const (
 	Back
 )
 
+// Validate returns fault.Invalid unless the end is Front or Back.
 func (e End) Validate() error {
 	if e != Front && e != Back {
 		return safeerror.NewFault(fault.Invalid, "invalid Redis list end")

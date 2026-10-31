@@ -33,6 +33,8 @@ type Command struct {
 
 const usage = "failed-jobs list|retry|prune [--format text|json]; list: [--name job] [--limit 20] [--after cursor]; retry: --id id [--connection name]; prune: --older-than duration [--limit 1000]"
 
+// Parse validates failed-jobs list, retry, or prune arguments without booting the application.
+// Help is written to help and returns flag.ErrHelp.
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
 		return Command{}, safeerror.NewFault(fault.Invalid, "failed-job commands require help output")

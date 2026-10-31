@@ -98,6 +98,7 @@ type containedTLSConn struct {
 	boundary *tlsBoundary
 }
 
+// Read receives TLS bytes, closing the underlying connection and sealing errors after a contained failure.
 func (c *containedTLSConn) Read(data []byte) (n int, err error) {
 	var panicked bool
 	defer func() {
@@ -113,6 +114,7 @@ func (c *containedTLSConn) Read(data []byte) (n int, err error) {
 	return n, err
 }
 
+// Write sends TLS bytes, closing the underlying connection and sealing errors after a contained failure.
 func (c *containedTLSConn) Write(data []byte) (n int, err error) {
 	var panicked bool
 	defer func() {
@@ -128,6 +130,7 @@ func (c *containedTLSConn) Write(data []byte) (n int, err error) {
 	return n, err
 }
 
+// Close contains TLS shutdown failures and closes the underlying connection.
 func (c *containedTLSConn) Close() error {
 	defer c.raw.Close()
 	return c.boundary.run(c.Conn.Close)
@@ -192,6 +195,7 @@ type tlsReader struct {
 	reader   io.Reader
 }
 
+// Read invokes the configured reader within the TLS callback boundary.
 func (r tlsReader) Read(p []byte) (n int, err error) {
 	err = r.boundary.protect(func() error { n, err = r.reader.Read(p); return err })
 	return
@@ -202,6 +206,7 @@ type tlsWriter struct {
 	writer   io.Writer
 }
 
+// Write invokes the configured writer within the TLS callback boundary.
 func (w tlsWriter) Write(p []byte) (n int, err error) {
 	err = w.boundary.protect(func() error { n, err = w.writer.Write(p); return err })
 	return
@@ -212,14 +217,19 @@ type tlsSigner struct {
 	signer   crypto.Signer
 }
 
+// Public obtains the signer's key, aborting the TLS operation on a contained callback failure.
 func (s tlsSigner) Public() (key crypto.PublicKey) {
 	s.boundary.require(func() error { key = s.signer.Public(); return nil })
 	return
 }
+
+// Sign invokes the signer through the TLS callback boundary.
 func (s tlsSigner) Sign(random io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
 	err = s.boundary.protect(func() error { signature, err = s.signer.Sign(random, digest, opts); return err })
 	return
 }
+
+// SignMessage signs the message through crypto.SignMessage within the TLS callback boundary.
 func (s tlsSigner) SignMessage(random io.Reader, message []byte, opts crypto.SignerOpts) (signature []byte, err error) {
 	err = s.boundary.protect(func() error { signature, err = crypto.SignMessage(s.signer, random, message, opts); return err })
 	return
@@ -230,10 +240,13 @@ type tlsSessionCache struct {
 	cache    tls.ClientSessionCache
 }
 
+// Get reads the configured session cache, aborting TLS on a contained callback failure.
 func (c tlsSessionCache) Get(key string) (state *tls.ClientSessionState, ok bool) {
 	c.boundary.require(func() error { state, ok = c.cache.Get(key); return nil })
 	return
 }
+
+// Put updates the configured session cache, aborting TLS on a contained callback failure.
 func (c tlsSessionCache) Put(key string, state *tls.ClientSessionState) {
 	c.boundary.require(func() error { c.cache.Put(key, state); return nil })
 }

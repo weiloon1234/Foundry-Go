@@ -11,6 +11,8 @@ import (
 // transaction; Tx creates a savepoint within its existing transaction. Custom
 // implementations must wait for callback completion and preserve outcome errors.
 type Transactor interface {
+	// Transaction runs and waits for a callback in an atomic transaction or nested savepoint scope.
+	// Returned errors must preserve the database outcome.
 	Transaction(context.Context, func(*Tx) error, ...TxOptions) error
 }
 

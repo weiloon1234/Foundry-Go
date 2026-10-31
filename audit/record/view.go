@@ -19,8 +19,13 @@ type FieldValue[V any] struct {
 	decode   func(any) (V, error)
 }
 
-func (v FieldValue[V]) State() State                 { return v.snapshot.state }
-func (v FieldValue[V]) Snapshot() Snapshot           { return v.snapshot }
+// State returns the captured value's disclosure state.
+func (v FieldValue[V]) State() State { return v.snapshot.state }
+
+// Snapshot returns the immutable audit representation of the field value.
+func (v FieldValue[V]) Snapshot() Snapshot { return v.snapshot }
+
+// Format writes a fixed label without exposing the captured value.
 func (FieldValue[V]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("typed audit value")) }
 
 // Get returns absence only when the model snapshot was absent. A nullable field
@@ -65,10 +70,19 @@ type FieldChange[V any] struct {
 	assigned, changed bool
 }
 
+// Before returns the captured value before the operation.
 func (c FieldChange[V]) Before() FieldValue[V] { return c.before }
-func (c FieldChange[V]) After() FieldValue[V]  { return c.after }
-func (c FieldChange[V]) Assigned() bool        { return c.assigned }
-func (c FieldChange[V]) Changed() bool         { return c.changed }
+
+// After returns the captured value after the operation.
+func (c FieldChange[V]) After() FieldValue[V] { return c.after }
+
+// Assigned reports whether the field was explicitly assigned.
+func (c FieldChange[V]) Assigned() bool { return c.assigned }
+
+// Changed reports whether the stored field changed.
+func (c FieldChange[V]) Changed() bool { return c.changed }
+
+// Format writes a fixed label without exposing the captured change.
 func (FieldChange[V]) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("typed audit change"))
 }
@@ -83,8 +97,11 @@ type View[M, K any] struct {
 	fields map[string]capturedField
 }
 
+// Format writes a fixed label without exposing indexed fields.
 func (View[M, K]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("audit view")) }
 
+// Inspect validates the model audit and indexes its fields for typed readers.
+// The returned view owns its index and shares the immutable captured values.
 func Inspect[M, K any](record Model[M, K]) (View[M, K], error) {
 	if err := record.entry.Validate(); err != nil {
 		return View[M, K]{}, err

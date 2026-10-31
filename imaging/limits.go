@@ -21,9 +21,12 @@ type Limits struct {
 	WorkingBytes            int64
 }
 
+// DefaultLimits returns the default input, output, dimension, frame and workspace bounds.
 func DefaultLimits() Limits {
 	return Limits{InputBytes: 50 << 20, OutputBytes: 50 << 20, Width: 12000, Height: 12000, Pixels: 25000000, Frames: 64, WorkingBytes: 640 << 20}
 }
+
+// Validate rejects nonpositive or excessive resource bounds with an invalid fault.
 func (l Limits) Validate() error {
 	if l.InputBytes < 1 || l.InputBytes > 1<<30 || l.OutputBytes < 1 || l.OutputBytes > 1<<30 || l.Width < 1 || l.Width > 65535 || l.Height < 1 || l.Height > 65535 || l.Pixels < 1 || l.Pixels > 1<<30 || l.Frames < 1 || l.Frames > 1024 || l.WorkingBytes < 1 || l.WorkingBytes > 16<<30 {
 		return invalid("invalid image limits")
@@ -108,6 +111,7 @@ func (p Plan) encodeWorkspace(f Format, bounds image.Rectangle) int64 {
 	}
 }
 
+// Config sets codec discovery, resource limits, admission capacity and operation timeout.
 type Config struct {
 	Backend   Backend
 	Limits    Limits
@@ -115,9 +119,13 @@ type Config struct {
 	Timeout   time.Duration
 }
 
+// DefaultConfig returns automatic codec discovery, default limits, two active calls and
+// a one-minute timeout.
 func DefaultConfig() Config {
 	return Config{Backend: AutoBackend, Limits: DefaultLimits(), MaxActive: 2, Timeout: time.Minute}
 }
+
+// Validate rejects invalid limits, backend, concurrency or timeout with an invalid fault.
 func (c Config) Validate() error {
 	if err := c.Limits.Validate(); err != nil {
 		return err

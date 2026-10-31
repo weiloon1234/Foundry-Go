@@ -17,9 +17,12 @@ type Config struct {
 	OperationTimeout, MaxWait, PollInterval time.Duration
 }
 
+// DefaultConfig returns the default manager bounds for namespace.
 func DefaultConfig(namespace keyspace.Namespace) Config {
 	return Config{Namespace: namespace, MaxActive: 128, MaxDeclarations: 256, MaxKeyBytes: 1024, OperationTimeout: 5 * time.Second, MaxWait: 5 * time.Minute, PollInterval: 50 * time.Millisecond}
 }
+
+// Validate checks the namespace and positive operation, capacity, key, and polling bounds.
 func (c Config) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {
 		return err

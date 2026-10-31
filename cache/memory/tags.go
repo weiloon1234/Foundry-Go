@@ -64,6 +64,8 @@ func (b *Backend) existingVersions(ctx context.Context, keys []cache.EntryKey) (
 	}
 	return versions, true, nil
 }
+
+// InvalidateTags atomically replaces the selected metadata with fresh random versions.
 func (b *Backend) InvalidateTags(ctx context.Context, keys []cache.EntryKey) error {
 	_, err := b.versions(ctx, keys, true)
 	return err

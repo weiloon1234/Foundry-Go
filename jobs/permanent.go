@@ -16,5 +16,8 @@ func Permanent(err error) error {
 
 type permanentError struct{ cause error }
 
-func (*permanentError) Error() string   { return "job failed without automatic retry" }
+// Error returns a fixed permanent-failure description without formatting its cause.
+func (*permanentError) Error() string { return "job failed without automatic retry" }
+
+// Unwrap returns the marked failure cause.
 func (e *permanentError) Unwrap() error { return e.cause }

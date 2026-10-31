@@ -18,7 +18,11 @@ type protectedConnector struct {
 	registerTypes func(context.Context, *TypeRegistry) error
 }
 
+// Driver returns the underlying connector's driver.
 func (c protectedConnector) Driver() driver.Driver { return c.source.Driver() }
+
+// Connect opens a connection and initializes its protected type registry before returning it.
+// Registry initialization failure discards the connection.
 func (c protectedConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	source, err := c.source.Connect(ctx)
 	if err != nil {
@@ -34,12 +38,17 @@ func (c protectedConnector) Connect(ctx context.Context) (driver.Conn, error) {
 
 type protectedConnection struct{ *stdlib.Conn }
 
+// CheckNamedValue forwards argument checking to the underlying pgx connection.
 func (c *protectedConnection) CheckNamedValue(v *driver.NamedValue) error {
 	return c.Conn.CheckNamedValue(v)
 }
+
+// ExecContext executes through pgx with protected argument wrappers.
 func (c *protectedConnection) ExecContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Result, error) {
 	return c.Conn.ExecContext(ctx, q, c.arguments(args))
 }
+
+// QueryContext queries through pgx with protected arguments and wraps returned rows for protected scanning.
 func (c *protectedConnection) QueryContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	rows, err := c.Conn.QueryContext(ctx, q, c.arguments(args))
 	if rows == nil {
@@ -72,6 +81,8 @@ type protectedRewriter struct {
 	types  *pgtype.Map
 }
 
+// RewriteQuery isolates the source rewriter and protects its returned arguments.
+// Custom rewriters that fail or alter protected type registration cause connection discard.
 func (r protectedRewriter) RewriteQuery(ctx context.Context, conn *pgx.Conn, query string, args []any) (result string, values []any, err error) {
 	custom := true
 	switch r.source.(type) {
@@ -127,6 +138,8 @@ func (r protectedRewriter) RewriteQuery(ctx context.Context, conn *pgx.Conn, que
 
 type protectedRows struct{ *stdlib.Rows }
 
+// ScanColumn preserves ordinary SQL destination rules and isolates pgx column scanning.
+// Custom destinations receive protected wrappers.
 func (r *protectedRows) ScanColumn(ctx driver.ScanContext, index int, dest any) error {
 	if !sqlDestination(reflect.TypeOf(dest)) {
 		dest = protectTarget(dest)
@@ -162,9 +175,12 @@ func sqlDestination(t reflect.Type) bool {
 	return false
 }
 
+// Prepare prepares a protected statement using a background context.
 func (c *protectedConnection) Prepare(query string) (driver.Stmt, error) {
 	return c.PrepareContext(context.Background(), query)
 }
+
+// PrepareContext prepares a pgx statement and wraps it to protect execution arguments and result scans.
 func (c *protectedConnection) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
 	stmt, err := c.Conn.PrepareContext(ctx, query)
 	if stmt == nil {
@@ -178,9 +194,12 @@ type protectedStatement struct {
 	owner *protectedConnection
 }
 
+// ExecContext executes the prepared statement with protected arguments.
 func (s protectedStatement) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
 	return s.Stmt.ExecContext(ctx, s.owner.arguments(args))
 }
+
+// QueryContext executes the prepared query with protected arguments and wraps returned rows for protected scanning.
 func (s protectedStatement) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
 	rows, err := s.Stmt.QueryContext(ctx, s.owner.arguments(args))
 	if rows == nil {

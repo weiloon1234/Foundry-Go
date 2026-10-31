@@ -30,6 +30,7 @@ type Engine struct {
 	nativeErr    error
 }
 
+// New validates config and creates an engine with bounded admission and codec discovery.
 func New(config Config) (*Engine, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -54,24 +55,32 @@ func New(config Config) (*Engine, error) {
 	}
 	return &Engine{config: config, calls: calls, capabilities: capabilities, nativeErr: nativeErr}, nil
 }
+
+// Validate rejects a nil or uninitialized engine and invalid configuration.
 func (e *Engine) Validate() error {
 	if e == nil || e.calls == nil {
 		return invalid("invalid image engine")
 	}
 	return e.config.Validate()
 }
+
+// Limits returns the configured limits, or zero limits for a nil engine.
 func (e *Engine) Limits() Limits {
 	if e == nil {
 		return Limits{}
 	}
 	return e.config.Limits
 }
+
+// Close cancels admitted work and waits for its exit or ctx cancellation.
 func (e *Engine) Close(ctx context.Context) error {
 	if e == nil {
 		return invalid("invalid image engine")
 	}
 	return e.calls.Close(ctx)
 }
+
+// Done closes after the engine closes and all admitted work exits.
 func (e *Engine) Done() <-chan struct{} {
 	if e == nil {
 		var g *workscope.Group
@@ -79,6 +88,8 @@ func (e *Engine) Done() <-chan struct{} {
 	}
 	return e.calls.Done()
 }
+
+// Format writes a label without exposing engine internals.
 func (*Engine) Format(s fmt.State, _ rune) { safeFormat(s, "image engine") }
 
 // Result owns encoded output. Reader exposes read-only access; Bytes returns an
@@ -88,11 +99,22 @@ type Result struct {
 	info Info
 }
 
-func (r Result) Info() Info               { return r.info }
-func (r Result) Size() int64              { return int64(len(r.data)) }
-func (r Result) Bytes() []byte            { return slices.Clone(r.data) }
-func (r Result) Reader() io.Reader        { return bytes.NewReader(r.data) }
+// Info returns metadata describing the encoded output.
+func (r Result) Info() Info { return r.info }
+
+// Size returns the encoded output length in bytes.
+func (r Result) Size() int64 { return int64(len(r.data)) }
+
+// Bytes returns an independent copy of the encoded output.
+func (r Result) Bytes() []byte { return slices.Clone(r.data) }
+
+// Reader returns a new reader over the immutable encoded output.
+func (r Result) Reader() io.Reader { return bytes.NewReader(r.data) }
+
+// Format writes a label without exposing encoded image bytes.
 func (Result) Format(s fmt.State, _ rune) { safeFormat(s, "image result") }
+
+// MarshalJSON rejects implicit byte export with an invalid fault.
 func (Result) MarshalJSON() ([]byte, error) {
 	return nil, invalid("image result requires explicit byte export")
 }
@@ -448,6 +470,8 @@ type boundedOutput struct {
 	ctx     context.Context
 }
 
+// Write appends output within the byte limit and retains the first cancellation or
+// limit error.
 func (b *boundedOutput) Write(p []byte) (int, error) {
 	if b.err != nil {
 		return 0, b.err

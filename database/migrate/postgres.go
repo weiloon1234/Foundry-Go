@@ -44,10 +44,13 @@ type PostgresConfig struct {
 	SearchPath           string
 }
 
+// DefaultPostgresConfig returns the foundry_ops.schema_migrations namespace and default runner limits.
+// Statement timeout is disabled and the connection's search path is retained.
 func DefaultPostgresConfig() PostgresConfig {
 	return PostgresConfig{Schema: "foundry_ops", Table: "schema_migrations", LockTimeout: 30 * time.Second, LockPollInterval: 50 * time.Millisecond, CleanupTimeout: 5 * time.Second, MaxHistory: 10000, StatementLockTimeout: 10 * time.Second}
 }
 
+// Validate checks identifiers and runner limits, returning fault.Invalid for unsupported settings.
 func (c PostgresConfig) Validate() error {
 	if !sqlname.Valid(c.Schema) || !sqlname.Valid(c.Table) || len(c.Schema) > 63 || len(c.Table) > 63 || c.LockTimeout <= 0 || c.LockPollInterval <= 0 || c.CleanupTimeout <= 0 || c.MaxHistory <= 0 || c.MaxHistory == math.MaxInt || !sessionLimit(c.StatementLockTimeout) || !sessionLimit(c.StatementTimeout) || (c.SearchPath != "" && !sqlname.Valid(c.SearchPath)) {
 		return safeerror.NewFault(fault.Invalid, "invalid PostgreSQL migration configuration")

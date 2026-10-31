@@ -17,6 +17,9 @@ func (b *Backend) readOptions(options storage.ReadOptions) error {
 	}
 	return b.Capabilities().ValidateRead(options)
 }
+
+// Open returns an owned reader for the selected span after checking the validator;
+// close the reader after use.
 func (b *Backend) Open(ctx context.Context, key storage.ObjectKey, options storage.ReadOptions) (io.ReadCloser, storage.ReadInfo, error) {
 	if err := b.ready(ctx, storage.OpenOperation); err != nil {
 		return nil, storage.ReadInfo{}, err
@@ -47,6 +50,9 @@ func (b *Backend) Open(ctx context.Context, key storage.ObjectKey, options stora
 	reader := &objectReader{file: file, ctx: ctx, section: io.NewSectionReader(file, dataOffset+offset, length), length: length}
 	return reader, storage.ReadInfo{Object: info, Offset: offset, Length: length}, nil
 }
+
+// Stat returns complete record metadata, rejecting ranges and closing the temporary
+// record reader.
 func (b *Backend) Stat(ctx context.Context, key storage.ObjectKey, options storage.ReadOptions) (storage.ObjectInfo, error) {
 	if options.Range.IsSet() {
 		return storage.ObjectInfo{}, failure(storage.Invalid, storage.StatOperation, storage.NotApplicable, nil)
@@ -71,6 +77,7 @@ type objectReader struct {
 	closeErr     error
 }
 
+// Read serializes section reads and checks cancellation and premature EOF.
 func (r *objectReader) Read(p []byte) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -89,10 +96,15 @@ func (r *objectReader) Read(p []byte) (int, error) {
 	}
 	return n, err
 }
+
+// Close closes the record file once and retains the classified close error.
 func (r *objectReader) Close() error {
 	r.once.Do(func() { r.closeErr = failureIf(r.file.Close(), storage.CloseOperation, storage.NotApplicable) })
 	return r.closeErr
 }
+
+// Delete removes a record under its key lock; absent unconditional targets succeed and
+// mismatched validators conflict.
 func (b *Backend) Delete(ctx context.Context, key storage.ObjectKey, options storage.DeleteOptions) (err error) {
 	if err = b.ready(ctx, storage.DeleteOperation); err != nil {
 		return err

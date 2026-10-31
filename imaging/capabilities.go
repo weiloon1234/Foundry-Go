@@ -22,6 +22,7 @@ type Capabilities struct {
 	SmartCrop            bool
 }
 
+// ForFormat returns the capability for format and whether it was found.
 func (c Capabilities) ForFormat(format Format) (FormatCapability, bool) {
 	for _, capability := range c.Formats {
 		if capability.Format == format {
@@ -31,6 +32,7 @@ func (c Capabilities) ForFormat(format Format) (FormatCapability, bool) {
 	return FormatCapability{}, false
 }
 
+// Capabilities returns an owned snapshot, or an empty snapshot for an invalid engine.
 func (e *Engine) Capabilities() Capabilities {
 	if e.Validate() != nil {
 		return Capabilities{}

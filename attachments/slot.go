@@ -54,9 +54,16 @@ func (m Many[M]) Len() int { return len(m.files) }
 // All yields each loaded file in collection order without copying the slice.
 func (m Many[M]) All() iter.Seq2[int, File[M]] { return slices.All(m.files) }
 
-func (One[M]) Format(s fmt.State, _ rune)    { _, _ = s.Write([]byte("attachment slot")) }
-func (One[M]) MarshalJSON() ([]byte, error)  { return nil, invalid() }
-func (Many[M]) Format(s fmt.State, _ rune)   { _, _ = s.Write([]byte("attachment collection slot")) }
+// Format writes a label without exposing the loaded file.
+func (One[M]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("attachment slot")) }
+
+// MarshalJSON rejects implicit attachment slot export.
+func (One[M]) MarshalJSON() ([]byte, error) { return nil, invalid() }
+
+// Format writes a label without exposing loaded files.
+func (Many[M]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("attachment collection slot")) }
+
+// MarshalJSON rejects implicit collection slot export.
 func (Many[M]) MarshalJSON() ([]byte, error) { return nil, invalid() }
 
 // slotDefinition shares declaration, binding, manager, loading and links for
@@ -348,9 +355,12 @@ func boolCount(present bool) int {
 	return 0
 }
 
+// Format writes a label without exposing the bound collection descriptor.
 func (oneSlot[M, K]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("attachment slot descriptor"))
 }
+
+// Format writes a label without exposing the bound collection descriptor.
 func (manySlot[M, K]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("attachment collection slot descriptor"))
 }

@@ -13,10 +13,15 @@ type Decoder[R any] struct {
 	decode func(context.Context, Reply) (R, error)
 }
 
+// DecodeWith retains a custom typed reply decoder without invoking it.
 func DecodeWith[R any](fn func(context.Context, Reply) (R, error)) Decoder[R] { return Decoder[R]{fn} }
+
+// DecodeInt64 accepts an integer reply.
 func DecodeInt64() Decoder[int64] {
 	return DecodeWith(func(ctx context.Context, r Reply) (int64, error) { return r.Integer() })
 }
+
+// DecodeUint64 accepts a nonnegative integer reply.
 func DecodeUint64() Decoder[uint64] {
 	return DecodeWith(func(ctx context.Context, r Reply) (uint64, error) {
 		v, err := r.Integer()
@@ -29,6 +34,8 @@ func DecodeUint64() Decoder[uint64] {
 		return uint64(v), nil
 	})
 }
+
+// DecodeBool accepts integer replies of zero or one as false or true.
 func DecodeBool() Decoder[bool] {
 	return DecodeWith(func(ctx context.Context, r Reply) (bool, error) {
 		v, err := r.Integer()
@@ -41,9 +48,13 @@ func DecodeBool() Decoder[bool] {
 		return v == 1, nil
 	})
 }
+
+// DecodeString accepts a text reply.
 func DecodeString() Decoder[string] {
 	return DecodeWith(func(ctx context.Context, r Reply) (string, error) { return r.Text() })
 }
+
+// DecodeBytes accepts a text reply and returns an owned byte slice.
 func DecodeBytes() Decoder[[]byte] {
 	return DecodeWith(func(ctx context.Context, r Reply) ([]byte, error) {
 		v, err := r.Text()
@@ -53,6 +64,8 @@ func DecodeBytes() Decoder[[]byte] {
 		return []byte(v), nil
 	})
 }
+
+// DecodeArray decodes each array element in order and returns no partial result on failure.
 func DecodeArray[R any](element Decoder[R]) Decoder[[]R] {
 	return DecodeWith(func(ctx context.Context, r Reply) ([]R, error) {
 		if element.decode == nil {
@@ -76,6 +89,8 @@ func DecodeArray[R any](element Decoder[R]) Decoder[[]R] {
 		return result, nil
 	})
 }
+
+// DecodeNullable maps a nil reply to null and delegates every other reply to element.
 func DecodeNullable[R any](element Decoder[R]) Decoder[value.Nullable[R]] {
 	return DecodeWith(func(ctx context.Context, r Reply) (value.Nullable[R], error) {
 		if element.decode == nil {

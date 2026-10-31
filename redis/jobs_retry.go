@@ -8,6 +8,8 @@ import (
 
 var _ jobs.RetryBackend = (*JobBackend)(nil)
 
+// JobRetry requeues an eligible failed job using the retry token and an atomically checked record fingerprint.
+// An already applied token reports no change.
 func (b *JobBackend) JobRetry(ctx context.Context, key jobs.Key, request jobs.RetryRequest) (bool, error) {
 	if err := request.Validate(); err != nil {
 		return false, err

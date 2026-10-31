@@ -26,9 +26,12 @@ type DispatchConfig struct {
 	MaxInFlight int
 }
 
+// DefaultDispatchConfig returns default dispatch concurrency for namespace.
 func DefaultDispatchConfig(namespace keyspace.Namespace) DispatchConfig {
 	return DispatchConfig{Namespace: namespace, MaxInFlight: 256}
 }
+
+// Validate checks the namespace and dispatch concurrency bounds.
 func (c DispatchConfig) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {
 		return err
@@ -55,6 +58,7 @@ type Dispatcher struct {
 	inlineErr         error
 }
 
+// NewDispatcher validates configuration and constructs a dispatcher borrowing backend and registry without performing I/O.
 func NewDispatcher(backend Backend, registry *Registry, config DispatchConfig) (*Dispatcher, error) {
 	if backend == nil || isNil(backend) || registry == nil || registry.entries == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "job dispatcher requires a backend and registry")
@@ -118,7 +122,10 @@ type Pending[P any] struct {
 	envelope   Envelope
 }
 
-func (p Pending[P]) ID() ID[P]          { return model.IDFromBytes[ExecutionOf[P]](p.envelope.ID().Bytes()) }
+// ID returns the captured dispatch identity owned by the payload type.
+func (p Pending[P]) ID() ID[P] { return model.IDFromBytes[ExecutionOf[P]](p.envelope.ID().Bytes()) }
+
+// Envelope returns the immutable captured adapter snapshot.
 func (p Pending[P]) Envelope() Envelope { return p.envelope }
 
 // Capture prepares a stable snapshot without backend I/O. Custom payload codecs
@@ -224,6 +231,9 @@ func (d Definition[P]) Dispatch(ctx context.Context, dispatcher *Dispatcher, inp
 	}
 	return receipt, err
 }
+
+// Dispatch submits this captured envelope without rerunning payload codecs.
+// Reuse the same Pending to reconcile an ambiguous acceptance result.
 func (p Pending[P]) Dispatch(ctx context.Context, dispatcher *Dispatcher) (Receipt[P], error) {
 	receipt, key, err := func() (Receipt[P], Key, error) {
 		release, err := dispatcher.begin(ctx)
@@ -280,6 +290,8 @@ func (d Definition[P]) Inspect(ctx context.Context, dispatcher *Dispatcher, id I
 	}
 	return record, nil
 }
+
+// Cancel requests cancellation of the typed job; an empty queue uses the definition's policy queue.
 func (d Definition[P]) Cancel(ctx context.Context, dispatcher *Dispatcher, id ID[P], queue Queue) (bool, error) {
 	release, err := dispatcher.begin(ctx)
 	if err != nil {

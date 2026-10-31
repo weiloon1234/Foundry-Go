@@ -13,6 +13,7 @@ import (
 // Payload validation and ordinary Put semantics still apply. Never retry a write.
 type CoordinatedBackend interface {
 	Backend
+	// PutLeased publishes the bytes only while the proof identifies a live lease.
 	PutLeased(context.Context, EntryKey, []byte, TTL, lease.Proof) error
 }
 
@@ -20,5 +21,6 @@ type CoordinatedBackend interface {
 // with publication. A stale tag returns Conflict and cannot replace newer data.
 type CoordinatedTaggedBackend interface {
 	TaggedBackend
+	// PutTaggedLeased publishes only while both the lease proof and tag snapshot remain current.
 	PutTaggedLeased(context.Context, TaggedKey, []byte, TTL, lease.Proof) error
 }

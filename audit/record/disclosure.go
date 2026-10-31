@@ -23,6 +23,7 @@ const (
 	Redact
 )
 
+// Validate reports fault.Invalid for an unknown disclosure mode.
 func (d Disclosure) Validate() error {
 	if d > Redact {
 		return safeerror.NewFault(fault.Invalid, "invalid audit field disclosure")
@@ -49,6 +50,7 @@ const (
 	CurrentRedaction = RedactionV2
 )
 
+// Validate reports fault.Invalid for an unknown redaction policy version.
 func (r Redaction) Validate() error {
 	if r < RedactionV1 || r > CurrentRedaction {
 		return safeerror.NewFault(fault.Invalid, "unknown audit redaction policy")

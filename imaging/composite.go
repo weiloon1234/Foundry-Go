@@ -33,6 +33,8 @@ type Placement struct {
 	Blend    BlendMode
 }
 
+// Validate rejects invalid anchors, blend modes, offsets and opacity with an invalid
+// fault.
 func (p Placement) Validate() error {
 	if p.Position > BottomRight || p.Blend > BlendExclusion || p.X < -65535 || p.X > 65535 || p.Y < -65535 || p.Y > 65535 {
 		return invalid("invalid image placement")
@@ -57,6 +59,7 @@ func (p Plan) Insert(layer Result, placement Placement) Plan {
 	return p.append(step{kind: insert, layer: layer, placement: placement})
 }
 
+// MaskMode selects alpha-only or luminance-weighted mask coverage.
 type MaskMode uint8
 
 const (

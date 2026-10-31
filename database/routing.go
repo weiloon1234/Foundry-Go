@@ -112,6 +112,7 @@ func prepareReadPool(primary PoolConfig, options poolSettings) (*readPool, int, 
 // Transactions and connection-scoped sessions never implement this capability.
 type ReadRouter interface {
 	Executor
+	// QueryRead executes caller-classified read SQL according to the executor's routing policy.
 	QueryRead(context.Context, string, ...any) (*Rows, error)
 }
 
@@ -148,19 +149,28 @@ func (db *DB) QueryRead(ctx context.Context, statement string, arguments ...any)
 // Its zero value rejects execution.
 type PrimaryExecutor struct{ db *DB }
 
+// Primary returns an executor borrowing this database and pinning work to its primary endpoint.
 func (db *DB) Primary() PrimaryExecutor { return PrimaryExecutor{db: db} }
+
+// Exec executes a parameterized statement on primary, or returns NotReady for a zero executor.
 func (p PrimaryExecutor) Exec(ctx context.Context, statement string, arguments ...any) (Result, error) {
 	if p.db == nil {
 		return Result{}, failure("execute", NotReady)
 	}
 	return p.db.Exec(ctx, statement, arguments...)
 }
+
+// Query opens a result stream on primary, or returns NotReady for a zero executor.
+// The caller must close the returned stream.
 func (p PrimaryExecutor) Query(ctx context.Context, statement string, arguments ...any) (*Rows, error) {
 	if p.db == nil {
 		return nil, failure("query", NotReady)
 	}
 	return p.db.Query(ctx, statement, arguments...)
 }
+
+// Transaction runs the callback in a primary transaction using the owning database's outcome handling.
+// A zero executor returns NotReady.
 func (p PrimaryExecutor) Transaction(ctx context.Context, fn func(*Tx) error, options ...TxOptions) error {
 	if p.db == nil {
 		return failure("transaction", NotReady)
@@ -204,6 +214,7 @@ type PoolStats struct {
 	MaxLifetimeClosed          int64
 }
 
+// RoutingStats combines per-endpoint pool snapshots with the configured connection ceiling.
 type RoutingStats struct {
 	Primary        PoolStats
 	Read           value.Optional[PoolStats]
@@ -221,6 +232,7 @@ func poolStats(role PoolRole, config PoolConfig, raw *sql.DB) PoolStats {
 	return result
 }
 
+// RoutingStats returns a synchronized snapshot of primary and optional read pool utilization.
 func (db *DB) RoutingStats() RoutingStats {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -238,6 +250,7 @@ type PoolHealth struct {
 	Error error
 }
 
+// Health checks primary and each configured read endpoint, retaining their identities and errors.
 func (db *DB) Health(ctx context.Context) []PoolHealth {
 	result := []PoolHealth{{Role: PrimaryPool, Error: db.PingPrimary(ctx)}}
 	if db.read != nil {

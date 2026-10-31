@@ -20,7 +20,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// Name identifies an attachment collection within its declared owner scope.
 type Name string
+
+// Cardinality selects a single-file or multiple-file collection.
 type Cardinality uint8
 
 const (
@@ -34,6 +37,8 @@ const (
 	MaxPropertiesBytes       = 64 << 10
 )
 
+// Policy declares storage, cardinality, accepted media, resource bounds and image
+// processing for a collection.
 type Policy struct {
 	Disk           storage.Declaration
 	Cardinality    Cardinality
@@ -74,6 +79,9 @@ func (p Policy) normalized() Policy {
 	}
 	return p
 }
+
+// Validate checks explicit policy bounds, cardinality, media declarations and image
+// plans without resolving services.
 func (p Policy) Validate() error {
 	if err := p.Disk.Validate(); err != nil {
 		return err
@@ -119,6 +127,9 @@ type Hook[M any, K comparable] struct {
 	AfterStored func(context.Context, *database.Tx, Attachment[M, K]) error
 }
 type declarationID struct{ nonzero byte }
+
+// Collection is an immutable typed declaration with optional locale and borrowed queue
+// bindings.
 type Collection[M any, K comparable] struct {
 	definition   *definition[M, K]
 	locale       value.Optional[i18n.LocaleID]
@@ -133,15 +144,21 @@ type definition[M any, K comparable] struct {
 	id     *declarationID
 }
 
+// Define snapshots policy slices and hooks into a typed collection declaration;
+// validation is deferred.
 func Define[M any, K comparable](owner extensions.Owner[M, K], name Name, policy Policy, hooks ...Hook[M, K]) Collection[M, K] {
 	return Collection[M, K]{definition: &definition[M, K]{owner: owner, name: name, policy: policy.normalized(), hooks: slices.Clone(hooks), id: &declarationID{}}}
 }
+
+// Name returns the declared name, or an empty name for a zero collection.
 func (c Collection[M, K]) Name() Name {
 	if c.definition == nil {
 		return ""
 	}
 	return c.definition.name
 }
+
+// Validate checks declaration identity, owner, hooks, locale, queues and policy.
 func (c Collection[M, K]) Validate() error {
 	if c.definition == nil || !identifier.Semantic(string(c.Name())) || len(c.definition.hooks) > 16 {
 		return invalid()
@@ -174,6 +191,9 @@ func (c Collection[M, K]) Validate() error {
 	}
 	return c.definition.policy.Validate()
 }
+
+// ForLocale returns a collection selecting locale; validation rejects locale selection
+// for nonlocalized policies.
 func (c Collection[M, K]) ForLocale(locale i18n.LocaleID) Collection[M, K] {
 	c.locale = value.Set(locale)
 	return c
@@ -185,6 +205,8 @@ func (c Collection[M, K]) WithReconciliation(queue Queue) Collection[M, K] {
 	c.queue = &queue
 	return c
 }
+
+// Format writes a label without exposing collection internals.
 func (Collection[M, K]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("typed attachment collection"))
 }
@@ -195,6 +217,8 @@ func (c Collection[M, K]) registrationKey() string {
 	return extensions.Digest(c.definition.owner.Scope(), string(c.Name()))
 }
 
+// Registration carries a collection declaration and its validation into manager
+// construction.
 type Registration struct {
 	key      string
 	id       *declarationID
@@ -204,6 +228,8 @@ type Registration struct {
 	validate func(*extensions.Registry) error
 }
 
+// Registration returns a manager registration; zero and locale-selected collections
+// return an invalid registration.
 func (c Collection[M, K]) Registration() Registration {
 	if c.definition == nil || c.locale.IsSet() {
 		return Registration{}

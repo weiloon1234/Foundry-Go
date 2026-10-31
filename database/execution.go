@@ -18,7 +18,9 @@ import (
 // belong in arguments; never concatenate untrusted values into statement text.
 // Model-specific type checking belongs to generated queries above this boundary.
 type Executor interface {
+	// Exec executes a raw parameterized statement and returns its affected-row count.
 	Exec(context.Context, string, ...any) (Result, error)
+	// Query executes a raw parameterized statement and returns a stream that the caller must close.
 	Query(context.Context, string, ...any) (*Rows, error)
 }
 
@@ -148,7 +150,10 @@ func (db *DB) FoundryAutocommitQuery(seal sqlowner.AutocommitSeal, ctx context.C
 
 // Row is the read capability passed to typed hydration callbacks. Standard Go
 // sql.Scanner implementations work at this explicit raw decoding boundary.
-type Row interface{ Scan(...any) error }
+type Row interface {
+	// Scan decodes the current row into the supplied destinations.
+	Scan(...any) error
+}
 
 // Rows owns a sequential result stream. It does not materialize the full result
 // set. Scan destinations may be partially populated on errors and must then be
@@ -194,6 +199,8 @@ func (r *Rows) wrap(operation string, err error) error {
 // the original Rows. Inspecting it never constructs or dispatches model hooks.
 func (r *Rows) Observers() lifecycle.Observers { return r.observers }
 
+// Next advances to the next result row, closing the stream at exhaustion or failure.
+// Check Err after iteration.
 func (r *Rows) Next() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -212,6 +219,8 @@ func (r *Rows) next() bool {
 	return false
 }
 
+// Scan decodes the current row into destinations and closes the stream on a scan failure.
+// It returns Closed if the stream is already closed.
 func (r *Rows) Scan(destinations ...any) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -241,6 +250,7 @@ func (r *Rows) Columns() ([]string, error) {
 	return append([]string(nil), columns...), r.wrap("columns", err)
 }
 
+// Err returns retained scan, iteration and cleanup failures, or the current iteration failure.
 func (r *Rows) Err() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

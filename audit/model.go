@@ -18,6 +18,8 @@ import (
 
 // ModelEntry owns an audit-row ID for one model; it is not a stored model row.
 type ModelEntry[M any] struct{ _ [0]*M }
+
+// ModelID identifies an audit row for model M.
 type ModelID[M any] = model.ID[ModelEntry[M]]
 
 // ModelRecord contains complete audit representations, not a partial model.
@@ -29,8 +31,13 @@ type ModelRecord[M, K any] struct {
 	changes record.Model[M, K]
 }
 
-func (r ModelRecord[M, K]) ID() ModelID[M]              { return r.id }
+// ID returns the typed audit-row identifier.
+func (r ModelRecord[M, K]) ID() ModelID[M] { return r.id }
+
+// Changes returns the captured model audit representation.
 func (r ModelRecord[M, K]) Changes() record.Model[M, K] { return r.changes }
+
+// Format writes a fixed label without exposing captured changes.
 func (ModelRecord[M, K]) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("model audit record"))
 }

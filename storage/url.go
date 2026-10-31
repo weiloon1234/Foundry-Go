@@ -32,6 +32,8 @@ const (
 // decode a path '+' as a space.
 type PublicBase struct{ address string }
 
+// ParsePublicBase validates an HTTP base URL without query, credentials, fragment or
+// dot path segments.
 func ParsePublicBase(address string) (PublicBase, error) {
 	parsed, err := parseStorageURL(address)
 	if err != nil {
@@ -47,7 +49,11 @@ func ParsePublicBase(address string) (PublicBase, error) {
 	}
 	return PublicBase{address: address}, nil
 }
+
+// IsZero reports whether no public base is configured.
 func (b PublicBase) IsZero() bool { return b.address == "" }
+
+// URL appends a validated key, encoding its literal identity once.
 func (b PublicBase) URL(key ObjectKey) (string, error) {
 	if err := key.Validate(); err != nil {
 		return "", err
@@ -76,13 +82,16 @@ func parseStorageURL(address string) (*url.URL, error) {
 	return parsed, nil
 }
 
+// URLProvider supplies stable public addresses without changing provider access policies.
 type URLProvider interface {
+	// PublicURL returns the configured stable public address for key.
 	PublicURL(context.Context, ObjectKey) (string, error)
 }
 
 // SignedURLProvider produces a read-only bearer URL. A URL remains usable until
 // expiry/credential revocation even if the framework disk subsequently closes.
 type SignedURLProvider interface {
+	// TemporaryURL returns a signed read URL constrained by options.
 	TemporaryURL(context.Context, ObjectKey, LinkOptions) (TemporaryURL, error)
 }
 
@@ -99,6 +108,7 @@ type LinkOptions struct {
 
 const MaxLinkLifetime = 7 * 24 * time.Hour
 
+// Validate checks link lifetime, response overrides and version syntax.
 func (o LinkOptions) Validate() error {
 	if o.ExpiresIn < time.Second || o.ExpiresIn > MaxLinkLifetime || !headerText(o.ResponseContentDisposition) {
 		return newFailure(Invalid, SignOperation, NotApplicable, nil)
@@ -115,6 +125,7 @@ func (o LinkOptions) Validate() error {
 // size, media type, optional checksum metadata and optional absence condition
 // are signed; the client must send UploadLink.Headers unchanged.
 type SignedUploadProvider interface {
+	// TemporaryUploadURL returns a signed bearer PUT request constrained by options.
 	TemporaryUploadURL(context.Context, ObjectKey, UploadLinkOptions) (UploadLink, error)
 }
 
@@ -131,6 +142,8 @@ type UploadLinkOptions struct {
 	Condition   WriteCondition
 }
 
+// Validate checks lifetime, media type and a positive size within maximum, rejecting
+// replacement conditions.
 func (o UploadLinkOptions) Validate(maximum int64) error {
 	if o.ExpiresIn < time.Second || o.ExpiresIn > MaxLinkLifetime || o.Condition.Match() != "" {
 		return newFailure(Invalid, SignOperation, NotApplicable, nil)
@@ -160,6 +173,8 @@ type UploadLink struct {
 	expires time.Time
 }
 
+// NewUploadLink validates a signed PUT request, copies headers and normalizes expiry to
+// UTC.
 func NewUploadLink(address, method string, headers http.Header, expires time.Time) (UploadLink, error) {
 	if _, err := parseStorageURL(address); err != nil {
 		return UploadLink{}, err
@@ -176,19 +191,36 @@ func NewUploadLink(address, method string, headers http.Header, expires time.Tim
 	}
 	return UploadLink{address: address, method: method, headers: headers.Clone(), expires: expires.UTC().Round(0)}, nil
 }
-func (l UploadLink) URL() string              { return l.address }
-func (l UploadLink) Method() string           { return l.method }
-func (l UploadLink) Headers() http.Header     { return l.headers.Clone() }
-func (l UploadLink) ExpiresAt() time.Time     { return l.expires }
-func (UploadLink) String() string             { return "temporary storage upload URL" }
+
+// URL explicitly returns the bearer upload request address.
+func (l UploadLink) URL() string { return l.address }
+
+// Method returns the signed request method.
+func (l UploadLink) Method() string { return l.method }
+
+// Headers returns an independent copy of the signed request headers.
+func (l UploadLink) Headers() http.Header { return l.headers.Clone() }
+
+// ExpiresAt returns the stored upper bound on expiry.
+func (l UploadLink) ExpiresAt() time.Time { return l.expires }
+
+// String returns a label without exposing bearer credentials.
+func (UploadLink) String() string { return "temporary storage upload URL" }
+
+// Format writes a label without exposing bearer credentials.
 func (UploadLink) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("temporary storage upload URL")) }
-func (UploadLink) LogValue() slog.Value       { return slog.StringValue("temporary storage upload URL") }
+
+// LogValue returns a label without exposing bearer credentials.
+func (UploadLink) LogValue() slog.Value { return slog.StringValue("temporary storage upload URL") }
+
+// MarshalJSON rejects implicit export of bearer credentials.
 func (UploadLink) MarshalJSON() ([]byte, error) {
 	return nil, newFailure(Invalid, SignOperation, NotApplicable, nil)
 }
 
 // SignedFormProvider presigns a browser form upload (an HTML POST policy).
 type SignedFormProvider interface {
+	// TemporaryUploadForm returns a signed bearer form constrained by options.
 	TemporaryUploadForm(context.Context, ObjectKey, UploadFormOptions) (UploadForm, error)
 }
 
@@ -204,6 +236,7 @@ type UploadFormOptions struct {
 	Checksum         value.Optional[SHA256]
 }
 
+// Validate checks lifetime, media type and upload size bounds against maximum.
 func (o UploadFormOptions) Validate(maximum int64) error {
 	if o.ExpiresIn < time.Second || o.ExpiresIn > MaxLinkLifetime || o.MinSize < 0 || o.MaxSize < 1 || o.MinSize > o.MaxSize {
 		return newFailure(Invalid, SignOperation, NotApplicable, nil)
@@ -236,6 +269,7 @@ type UploadForm struct {
 	expires time.Time
 }
 
+// NewUploadForm validates and copies signed fields and normalizes expiry to UTC.
 func NewUploadForm(address string, fields []FormField, expires time.Time) (UploadForm, error) {
 	if _, err := parseStorageURL(address); err != nil {
 		return UploadForm{}, err
@@ -256,15 +290,30 @@ func NewUploadForm(address string, fields []FormField, expires time.Time) (Uploa
 
 const uploadFormFile = "file"
 
-func (f UploadForm) URL() string          { return f.address }
-func (f UploadForm) Fields() []FormField  { return slices.Clone(f.fields) }
-func (UploadForm) FileField() string      { return uploadFormFile }
+// URL explicitly returns the bearer upload form address.
+func (f UploadForm) URL() string { return f.address }
+
+// Fields returns an independent copy of the signed form fields.
+func (f UploadForm) Fields() []FormField { return slices.Clone(f.fields) }
+
+// FileField returns the field name used for file content.
+func (UploadForm) FileField() string { return uploadFormFile }
+
+// ExpiresAt returns the stored upper bound on expiry.
 func (f UploadForm) ExpiresAt() time.Time { return f.expires }
-func (UploadForm) String() string         { return "temporary storage upload form" }
+
+// String returns a label without exposing bearer credentials.
+func (UploadForm) String() string { return "temporary storage upload form" }
+
+// Format writes a label without exposing bearer credentials.
 func (UploadForm) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("temporary storage upload form"))
 }
+
+// LogValue returns a label without exposing bearer credentials.
 func (UploadForm) LogValue() slog.Value { return slog.StringValue("temporary storage upload form") }
+
+// MarshalJSON rejects implicit export of bearer credentials.
 func (UploadForm) MarshalJSON() ([]byte, error) {
 	return nil, newFailure(Invalid, SignOperation, NotApplicable, nil)
 }
@@ -288,6 +337,7 @@ type TemporaryURL struct {
 	expires time.Time
 }
 
+// NewTemporaryURL validates an HTTP URL and expiry, storing the expiry in UTC.
 func NewTemporaryURL(address string, expires time.Time) (TemporaryURL, error) {
 	if _, err := parseStorageURL(address); err != nil {
 		return TemporaryURL{}, err
@@ -297,15 +347,28 @@ func NewTemporaryURL(address string, expires time.Time) (TemporaryURL, error) {
 	}
 	return TemporaryURL{address: address, expires: expires.UTC().Round(0)}, nil
 }
-func (u TemporaryURL) URL() string              { return u.address }
-func (u TemporaryURL) ExpiresAt() time.Time     { return u.expires }
-func (TemporaryURL) String() string             { return "temporary storage URL" }
+
+// URL explicitly returns the bearer read URL address.
+func (u TemporaryURL) URL() string { return u.address }
+
+// ExpiresAt returns the stored upper bound on expiry.
+func (u TemporaryURL) ExpiresAt() time.Time { return u.expires }
+
+// String returns a label without exposing bearer credentials.
+func (TemporaryURL) String() string { return "temporary storage URL" }
+
+// Format writes a label without exposing bearer credentials.
 func (TemporaryURL) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("temporary storage URL")) }
-func (TemporaryURL) LogValue() slog.Value       { return slog.StringValue("temporary storage URL") }
+
+// LogValue returns a label without exposing bearer credentials.
+func (TemporaryURL) LogValue() slog.Value { return slog.StringValue("temporary storage URL") }
+
+// MarshalJSON rejects implicit export of bearer credentials.
 func (TemporaryURL) MarshalJSON() ([]byte, error) {
 	return nil, newFailure(Invalid, SignOperation, NotApplicable, nil)
 }
 
+// PublicURL returns a validated adapter URL only when the disk has public visibility.
 func (d *Disk) PublicURL(ctx context.Context, key ObjectKey) (string, error) {
 	if err := d.Validate(); err != nil {
 		return "", err
@@ -335,6 +398,9 @@ func (d *Disk) PublicURL(ctx context.Context, key ObjectKey) (string, error) {
 	}
 	return address, nil
 }
+
+// TemporaryURL returns a validated signed read link when the adapter supports the
+// requested selectors.
 func (d *Disk) TemporaryURL(ctx context.Context, key ObjectKey, options LinkOptions) (TemporaryURL, error) {
 	if err := d.Validate(); err != nil {
 		return TemporaryURL{}, err

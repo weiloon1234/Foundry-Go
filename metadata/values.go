@@ -18,6 +18,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// Set validates and stores input for an active owner in the manager's transaction.
+// It replaces an existing value and locks the owner before writing.
 func (k Key[M, K, V]) Set(ctx context.Context, m *Manager, owner model.Reference[M, K], input V) error {
 	if err := k.check(m); err != nil {
 		return err
@@ -90,7 +92,11 @@ type Batch[M any, K comparable, V any] struct {
 	subjects []string
 }
 
+// Format writes a fixed label without exposing loaded metadata.
 func (Batch[M, K, V]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("metadata batch")) }
+
+// Get decodes a fresh value from the loaded snapshot without I/O.
+// It returns database.NotFound for an owner absent from the active set and an unset optional for a missing key.
 func (b Batch[M, K, V]) Get(ctx context.Context, owner model.Reference[M, K]) (value.Optional[V], error) {
 	if ctx == nil || b.active == nil || b.values == nil {
 		return value.Optional[V]{}, invalid()
@@ -130,6 +136,8 @@ func (b Batch[M, K, V]) get(ctx context.Context, subject string) (value.Optional
 	}
 	return value.Set(decoded), nil
 }
+
+// Load reads this key for the supplied owners into a bounded snapshot, checking stored versions and values.
 func (k Key[M, K, V]) Load(ctx context.Context, m *Manager, owners []model.Reference[M, K]) (Batch[M, K, V], error) {
 	if err := k.check(m); err != nil {
 		return Batch[M, K, V]{}, err
@@ -192,6 +200,9 @@ func (k Key[M, K, V]) loadIn(ctx context.Context, tx *database.Tx, m *Manager, o
 	}
 	return result, nil
 }
+
+// Get loads and decodes this key for one owner.
+// A missing key is unset; an inactive owner returns database.NotFound.
 func (k Key[M, K, V]) Get(ctx context.Context, m *Manager, owner model.Reference[M, K]) (value.Optional[V], error) {
 	batch, err := k.Load(ctx, m, []model.Reference[M, K]{owner})
 	if err != nil {
@@ -199,6 +210,9 @@ func (k Key[M, K, V]) Get(ctx context.Context, m *Manager, owner model.Reference
 	}
 	return batch.Get(ctx, owner)
 }
+
+// Forget locks the active owner and removes its value in the manager's transaction.
+// It reports whether a stored value was removed.
 func (k Key[M, K, V]) Forget(ctx context.Context, m *Manager, owner model.Reference[M, K]) (bool, error) {
 	if err := k.check(m); err != nil {
 		return false, err

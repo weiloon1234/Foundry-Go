@@ -20,6 +20,7 @@ const TagVersionBytes = 16
 // version; recreating a previous/default version could resurrect stale values.
 type TagVersion struct{ value [TagVersionBytes]byte }
 
+// NewTagVersion creates a nonzero random version, returning fault.Internal if entropy fails.
 func NewTagVersion() (TagVersion, error) {
 	var v TagVersion
 	if _, err := rand.Read(v.value[:]); err != nil {
@@ -30,6 +31,8 @@ func NewTagVersion() (TagVersion, error) {
 	}
 	return v, nil
 }
+
+// ParseTagVersion copies a fixed-size nonzero version or returns fault.Invalid.
 func ParseTagVersion(data []byte) (TagVersion, error) {
 	if len(data) != TagVersionBytes {
 		return TagVersion{}, safeerror.NewFault(fault.Invalid, "invalid cache tag version size")
@@ -38,12 +41,16 @@ func ParseTagVersion(data []byte) (TagVersion, error) {
 	copy(v.value[:], data)
 	return v, v.Validate()
 }
+
+// Validate returns fault.Invalid for the zero version.
 func (v TagVersion) Validate() error {
 	if v.value == [TagVersionBytes]byte{} {
 		return safeerror.NewFault(fault.Invalid, "cache tag version is not initialized")
 	}
 	return nil
 }
+
+// Bytes returns an owned copy of the version bytes.
 func (v TagVersion) Bytes() []byte { return slices.Clone(v.value[:]) }
 
 // TagStamp is the adapter boundary for a resolved tag identity and version.
@@ -174,6 +181,7 @@ func TaggedDataKey(base EntryKey, tags []EntryKey) (EntryKey, error) {
 	return taggedIdentity(base, texts), nil
 }
 
+// Validate returns fault.Invalid for an uninitialized key.
 func (k TaggedKey) Validate() error {
 	if k.data == nil {
 		return safeerror.NewFault(fault.Invalid, "tagged cache key is not initialized")
@@ -194,24 +202,32 @@ func (k TaggedKey) resolves(base EntryKey, keys []EntryKey) bool {
 	}
 	return true
 }
+
+// DataKey returns the stable payload address, or a zero address for an uninitialized key.
 func (k TaggedKey) DataKey() EntryKey {
 	if k.data == nil {
 		return EntryKey{}
 	}
 	return k.data.key
 }
+
+// FillKey returns the version-specific fill address, or a zero address for an uninitialized key.
 func (k TaggedKey) FillKey() EntryKey {
 	if k.data == nil {
 		return EntryKey{}
 	}
 	return k.data.flight
 }
+
+// Stamps returns an owned copy of the canonical tag stamps, or nil for an uninitialized key.
 func (k TaggedKey) Stamps() []TagStamp {
 	if k.data == nil {
 		return nil
 	}
 	return slices.Clone(k.data.stamps)
 }
+
+// Fingerprint returns the snapshot digest, or a zero digest for an uninitialized key.
 func (k TaggedKey) Fingerprint() [sha256.Size]byte {
 	if k.data == nil {
 		return [sha256.Size]byte{}

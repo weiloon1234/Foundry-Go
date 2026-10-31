@@ -60,6 +60,7 @@ func (l Leases[K]) Export(g *Guard) (Token[K], error) {
 // ttl; otherwise nothing changes and it returns false. Restore requires it so
 // every exported token is single-use. Memory and Redis implement it.
 type TransferBackend interface {
+	// LeaseTransfer atomically replaces from with to and renews ttl only while from owns key.
 	LeaseTransfer(ctx context.Context, key Key, from, to Owner, ttl time.Duration) (bool, error)
 }
 
@@ -191,6 +192,12 @@ func (t *Token[K]) UnmarshalText(data []byte) error {
 	*t = restored
 	return nil
 }
-func (Token[K]) String() string               { return "[lease token]" }
-func (t Token[K]) GoString() string           { return t.String() }
+
+// String returns a redacted description of the transferable token.
+func (Token[K]) String() string { return "[lease token]" }
+
+// GoString returns a redacted description of the transferable token.
+func (t Token[K]) GoString() string { return t.String() }
+
+// Format writes a redacted description without exposing the owner secret.
 func (t Token[K]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(t.String())) }

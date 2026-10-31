@@ -30,23 +30,32 @@ type FieldChange[V any] struct {
 	policy *FieldPolicy[V]
 }
 
+// Before returns the optional pre-write snapshot using the field's clone policy when present.
 func (c FieldChange[V]) Before() value.Optional[V] {
 	if c.policy == nil {
 		return c.before
 	}
 	return cloneOptional(c.policy, c.before)
 }
+
+// After returns the optional post-write snapshot using the field's clone policy when present.
 func (c FieldChange[V]) After() value.Optional[V] {
 	if c.policy == nil {
 		return c.after
 	}
 	return cloneOptional(c.policy, c.after)
 }
+
+// Assigned reports whether the field was effectively assigned during the write.
 func (c FieldChange[V]) Assigned() bool { return c.assigned }
-func (c FieldChange[V]) Changed() bool  { return c.changed }
+
+// Changed reports whether stored value or model existence changed.
+func (c FieldChange[V]) Changed() bool { return c.changed }
 
 // String and GoString keep snapshot values out of routine diagnostics.
-func (FieldChange[V]) String() string     { return "model field change" }
+func (FieldChange[V]) String() string { return "model field change" }
+
+// GoString returns a fixed label without exposing snapshot values.
 func (c FieldChange[V]) GoString() string { return c.String() }
 
 // CompareField constructs change data from stored snapshots, using the field's

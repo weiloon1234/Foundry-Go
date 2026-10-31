@@ -19,10 +19,15 @@ import (
 // true for an existing key even when Forever is already set. The caller owns the
 // adapter lifecycle. A lost acknowledgement leaves the outcome unknown.
 type Backend interface {
+	// ExecuteRaw executes one validated request and returns a bounded owned reply without retrying.
 	ExecuteRaw(context.Context, Request, Limits) (Reply, error)
+	// ExecuteRawBatch executes the batch in the selected mode and bounds its combined replies.
 	ExecuteRawBatch(context.Context, []Request, Mode, Limits) ([]Reply, error)
+	// ExpireRaw atomically changes an existing key's expiry while preserving its contents.
 	ExpireRaw(context.Context, Key, cache.TTL) (bool, error)
 }
+
+// Store borrows an adapter and bounds raw operations by namespace, timeout, and admission capacity.
 type Store struct {
 	backend      Backend
 	config       Config
@@ -31,6 +36,7 @@ type Store struct {
 	declarations map[declarationKey]*declarationID
 }
 
+// NewStore validates configuration and borrows the backend without performing I/O.
 func NewStore(backend Backend, c Config) (*Store, error) {
 	if backend == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "raw Redis store requires a backend")
@@ -99,6 +105,8 @@ func (c Command[R]) run(ctx context.Context, s *Store) (R, error) {
 	}
 	return c.decoder.decode(ctx, reply)
 }
+
+// Run executes and decodes one command under the store's bounds, returning a zero result on failure.
 func (c Command[R]) Run(ctx context.Context, s *Store) (R, error) {
 	var result R
 	err := s.execute(ctx, func(ctx context.Context) error { var err error; result, err = c.run(ctx, s); return err })
@@ -108,6 +116,7 @@ func (c Command[R]) Run(ctx context.Context, s *Store) (R, error) {
 	return result, nil
 }
 
+// Namespace returns the configured namespace, or a zero namespace for a nil store.
 func (s *Store) Namespace() keyspace.Namespace {
 	if s == nil {
 		return keyspace.Namespace{}

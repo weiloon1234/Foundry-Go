@@ -31,9 +31,12 @@ type Config struct {
 // MaxLoadTimeout bounds how long a detached Remember loader can own its fill.
 const MaxLoadTimeout = 24 * time.Hour
 
+// DefaultConfig returns bounded cache defaults for the supplied namespace.
 func DefaultConfig(namespace Namespace) Config {
 	return Config{Namespace: namespace, MaxKeyBytes: 1024, MaxValueBytes: 1 << 20, MaxDeclarations: 256, MaxTags: 16, MaxBatchEntries: 64, MaxFills: 128, MaxFillWaiters: 256, Timeout: 5 * time.Second, LoadTimeout: 30 * time.Second}
 }
+
+// Validate checks the namespace and operation limits, returning fault.Invalid for invalid configuration.
 func (c Config) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {
 		return err

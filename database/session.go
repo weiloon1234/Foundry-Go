@@ -74,6 +74,8 @@ func (s *Session) Exec(ctx context.Context, statement string, arguments ...any) 
 	return s.scope.exec(ctx, s.raw, s.classify, s.owner.instrumented(PrimaryPool), statement, arguments)
 }
 
+// Query opens a result stream on the session's retained connection and marks primary-write stickiness.
+// Close the stream before starting another operation on the session.
 func (s *Session) Query(ctx context.Context, statement string, arguments ...any) (*Rows, error) {
 	s.owner.markWrite(ctx)
 	return s.owner.attachEncryption(s.owner.markOnClose(ctx)(s.scope.query(ctx, s.raw, s.classify, s.owner.instrumented(PrimaryPool), s.observers, statement, arguments)))

@@ -10,11 +10,16 @@ import (
 // Copies reuse the underlying declaration identity. The zero value is invalid.
 type CounterDeclaration[K any] struct{ declaration Declaration[K, int64] }
 
+// DefineCounter creates a declaration with canonical signed decimal int64 values.
 func DefineCounter[K any](name Name, keys KeyCodec[K]) CounterDeclaration[K] {
 	codec := NewCodec(func(value int64) ([]byte, error) { return cacheint.Encode(value), nil }, cacheint.Decode)
 	return CounterDeclaration[K]{declaration: Define(name, keys, codec)}
 }
-func (d CounterDeclaration[K]) Name() Name      { return d.declaration.Name() }
+
+// Name returns the counter family name, or an empty name for the zero declaration.
+func (d CounterDeclaration[K]) Name() Name { return d.declaration.Name() }
+
+// Validate checks the declaration name and key codec.
 func (d CounterDeclaration[K]) Validate() error { return d.declaration.Validate() }
 
 // Bind validates the counter capability and full int64 byte bound before claiming

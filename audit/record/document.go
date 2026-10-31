@@ -20,9 +20,14 @@ type Document[P any] struct {
 	redaction Redaction
 }
 
+// Format writes a fixed label without exposing the audit payload.
 func (Document[P]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("audit document")) }
-func (d Document[P]) Redacted() bool               { return d.redacted }
-func (d Document[P]) Payload() (string, error)     { return d.payload.Text() }
+
+// Redacted reports whether the document contains redacted data.
+func (d Document[P]) Redacted() bool { return d.redacted }
+
+// Payload returns the captured JSON text for explicit audit export, or an error if uninitialized.
+func (d Document[P]) Payload() (string, error) { return d.payload.Text() }
 
 // Redaction reports the sensitive-name policy the payload satisfies: the policy
 // that captured it, or CurrentRedaction when an older document contained keys

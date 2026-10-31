@@ -26,17 +26,26 @@ type entry struct {
 // only expired entries instead of scanning the whole table on every operation.
 type expiryHeap []*entry
 
-func (h expiryHeap) Len() int           { return len(h) }
+// Len returns the number of lease entries in the heap.
+func (h expiryHeap) Len() int { return len(h) }
+
+// Less reports whether entry i expires before entry j.
 func (h expiryHeap) Less(i, j int) bool { return h[i].until.Before(h[j].until) }
+
+// Swap exchanges entries and updates their heap positions.
 func (h expiryHeap) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
 	h[i].index, h[j].index = i, j
 }
+
+// Push appends an entry and records its heap position.
 func (h *expiryHeap) Push(value any) {
 	item := value.(*entry)
 	item.index = len(*h)
 	*h = append(*h, item)
 }
+
+// Pop removes and returns the last heap entry.
 func (h *expiryHeap) Pop() any {
 	old := *h
 	item := old[len(old)-1]
@@ -56,6 +65,7 @@ type Backend struct {
 	expiry  expiryHeap
 }
 
+// New constructs a local lease backend with a positive entry bound.
 func New(maxEntries int) (*Backend, error) {
 	if maxEntries <= 0 {
 		return nil, safeerror.NewFault(fault.Invalid, "memory lease capacity must be positive")
@@ -70,12 +80,17 @@ var _ lease.TransferBackend = (*Backend)(nil)
 // FoundryAdapter marks the backend as framework-owned adapter I/O.
 func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}
 
+// LeaseAcquire acquires an absent or expired key; capacity exhaustion returns fault.Conflict.
 func (b *Backend) LeaseAcquire(ctx context.Context, key lease.Key, owner lease.Owner, ttl time.Duration) (bool, error) {
 	return b.apply(ctx, key, owner, ttl, "acquire")
 }
+
+// LeaseRenew extends the expiry only if owner matches its unexpired owner.
 func (b *Backend) LeaseRenew(ctx context.Context, key lease.Key, owner lease.Owner, ttl time.Duration) (bool, error) {
 	return b.apply(ctx, key, owner, ttl, "renew")
 }
+
+// LeaseRelease removes key only if owner matches its unexpired owner.
 func (b *Backend) LeaseRelease(ctx context.Context, key lease.Key, owner lease.Owner) (bool, error) {
 	return b.apply(ctx, key, owner, lease.MinDuration, "release")
 }

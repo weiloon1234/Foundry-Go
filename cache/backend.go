@@ -10,9 +10,13 @@ import "context"
 // implicitly. Adapter lifecycle is owned by the caller that constructs the backend.
 // Store borrows this capability and does not close a shared adapter.
 type Backend interface {
+	// Get returns owned bytes and reports whether the entry is present.
 	Get(context.Context, EntryKey) ([]byte, bool, error)
+	// Put replaces the entry and its expiry with a copy of the supplied bytes.
 	Put(context.Context, EntryKey, []byte, TTL) error
+	// Add atomically stores the bytes and TTL only when the entry is absent.
 	Add(context.Context, EntryKey, []byte, TTL) (bool, error)
+	// Forget removes the entry and reports whether it was present.
 	Forget(context.Context, EntryKey) (bool, error)
 }
 
@@ -23,5 +27,6 @@ type Backend interface {
 // fence: a Remember fill that started earlier can publish afterwards. It returns
 // the number of removed entries; a remote error may hide a partial removal.
 type FlushBackend interface {
+	// FlushNamespace removes entries in the namespace and returns the removal count.
 	FlushNamespace(context.Context, Namespace) (uint64, error)
 }

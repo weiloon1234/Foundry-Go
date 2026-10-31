@@ -39,6 +39,8 @@ type Command struct {
 
 const usage = "audit prune [--before RFC3339] [--area name] [--batch 500] [--format text|json] [--apply]"
 
+// Parse parses audit prune arguments without database I/O.
+// It requires a help writer and returns flag.ErrHelp after writing requested help.
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
 		return Command{}, safeerror.NewFault(fault.Invalid, "audit commands require help output")

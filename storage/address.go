@@ -12,18 +12,23 @@ import (
 // It is opaque operational metadata, not a URL, authorization token or DB ID.
 type ObjectAddress struct{ store, object string }
 
+// NewObjectAddress creates an opaque identity from nonempty, bounded store and object
+// identifiers.
 func NewObjectAddress(store, object string) (ObjectAddress, error) {
 	if store == "" || object == "" || len(store) > 8192 || len(object) > 8192 {
 		return ObjectAddress{}, newFailure(Invalid, CopyOperation, Unchanged, nil)
 	}
 	return ObjectAddress{store, object}, nil
 }
+
+// Format writes a label without exposing object identity.
 func (ObjectAddress) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("storage object address")) }
 
 // ObjectLocator lets safe moves reject aliases of the same physical object.
 // Locate performs no I/O. Return the same store identity across adapter instances
 // for the same store, and account for Namespace in the complete object key.
 type ObjectLocator interface {
+	// Locate returns the physical object identity without performing I/O.
 	Locate(ObjectKey) (ObjectAddress, error)
 }
 

@@ -47,7 +47,10 @@ type Snapshot struct {
 	digest Digest
 }
 
-func (s Snapshot) State() State                 { return s.state }
+// State returns the snapshot's disclosure state; the zero value is Absent.
+func (s Snapshot) State() State { return s.state }
+
+// Format writes a fixed label without exposing snapshot contents.
 func (Snapshot) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("audit snapshot")) }
 
 // Digest returns the size marker of an Oversized snapshot.
@@ -180,6 +183,7 @@ func (s Snapshot) compact(limit int) (Snapshot, bool, error) {
 
 func invalidSnapshot() error { return safeerror.NewFault(fault.Invalid, "invalid audit snapshot") }
 
+// MarshalJSON validates and encodes the snapshot's explicit audit representation.
 func (s Snapshot) MarshalJSON() ([]byte, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
@@ -187,6 +191,8 @@ func (s Snapshot) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.wire())
 }
 
+// UnmarshalJSON replaces the snapshot only after validating the complete representation.
+// A nil receiver or invalid representation returns fault.Invalid.
 func (s *Snapshot) UnmarshalJSON(data []byte) error {
 	if s == nil {
 		return invalidSnapshot()

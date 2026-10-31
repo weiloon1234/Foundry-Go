@@ -27,9 +27,17 @@ func NewEntryKey(namespace Namespace, name Name, logical string) (EntryKey, erro
 	address, err := keyaddress.New(namespace, string(name), logical)
 	return EntryKey{address: address}, err
 }
-func (k EntryKey) Validate() error      { return k.address.Validate() }
+
+// Validate returns fault.Invalid for an uninitialized address.
+func (k EntryKey) Validate() error { return k.address.Validate() }
+
+// Namespace returns the application and environment namespace.
 func (k EntryKey) Namespace() Namespace { return k.address.Namespace }
-func (k EntryKey) Name() Name           { return Name(k.address.Name) }
+
+// Name returns the declared cache family name.
+func (k EntryKey) Name() Name { return Name(k.address.Name) }
+
+// String returns the physical address, including the namespace and cache feature prefix.
 func (k EntryKey) String() string {
 	if k.namespaceTag {
 		return k.address.String(NamespaceKeyFeature)

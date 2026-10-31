@@ -16,6 +16,8 @@ import (
 // supplied transaction is the real business transaction; returning an error
 // fails its model write. Implementations must support concurrent operations.
 type Writer interface {
+	// RecordModel stores a captured entry using the supplied business transaction.
+	// An error fails the associated model write.
 	RecordModel(context.Context, *database.Tx, Entry) error
 }
 

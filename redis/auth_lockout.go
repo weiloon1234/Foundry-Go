@@ -56,6 +56,8 @@ func (c *Client) LockoutBegin(ctx context.Context, key lockout.Key, policy locko
 	}
 	return result, nil
 }
+
+// LockoutFinish atomically records the outcome against the admitted snapshot and returns the current lockout decision.
 func (c *Client) LockoutFinish(ctx context.Context, key lockout.Key, policy lockout.Policy, snapshot lockout.Snapshot, outcome lockout.Outcome) (lockout.Decision, error) {
 	if err := snapshot.Validate(); err != nil {
 		return lockout.Decision{}, err
@@ -88,6 +90,8 @@ func (c *Client) LockoutFinish(ctx context.Context, key lockout.Key, policy lock
 	}
 	return result, nil
 }
+
+// LockoutReset removes lockout state and reports whether state existed.
 func (c *Client) LockoutReset(ctx context.Context, key lockout.Key, policy lockout.Policy) (bool, error) {
 	parts, err := c.lockoutCommand(ctx, key, policy, "reset", lockout.Snapshot{}, 0)
 	if err != nil {

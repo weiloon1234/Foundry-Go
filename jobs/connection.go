@@ -17,6 +17,7 @@ type Connection struct {
 	queue      Queue
 }
 
+// NewConnection pairs a prepared dispatcher with a validated default queue, borrowing its lifetime.
 func NewConnection(dispatcher *Dispatcher, queue Queue) (*Connection, error) {
 	if dispatcher == nil || dispatcher.slots == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "job connection requires a dispatcher")
@@ -26,6 +27,8 @@ func NewConnection(dispatcher *Dispatcher, queue Queue) (*Connection, error) {
 	}
 	return &Connection{dispatcher, queue}, nil
 }
+
+// DefaultQueue returns the routing default, or an empty queue for a nil connection.
 func (c *Connection) DefaultQueue() Queue {
 	if c == nil {
 		return ""
@@ -40,6 +43,8 @@ func (c *Connection) Dispatcher() *Dispatcher {
 	}
 	return c.dispatcher
 }
+
+// Outbox prepares a transactional producer borrowing this connection's dispatcher.
 func (c *Connection) Outbox(destination outbox.Destination) (*Outbox, error) {
 	return PrepareOutbox(destination, c.Dispatcher())
 }
@@ -52,6 +57,7 @@ type Bound[P any] struct {
 	connection *Connection
 }
 
+// On binds the definition to a connection whose default queue supplies omitted routing.
 func (d Definition[P]) On(connection *Connection) (Bound[P], error) {
 	if err := d.Validate(); err != nil {
 		return Bound[P]{}, err
@@ -70,6 +76,8 @@ func (b Bound[P]) options(options Options[P]) (Options[P], error) {
 	}
 	return options, nil
 }
+
+// Dispatch captures and submits the payload through the connection, defaulting an omitted queue.
 func (b Bound[P]) Dispatch(ctx context.Context, payload P, options Options[P]) (Receipt[P], error) {
 	options, err := b.options(options)
 	if err != nil {
@@ -77,6 +85,8 @@ func (b Bound[P]) Dispatch(ctx context.Context, payload P, options Options[P]) (
 	}
 	return b.definition.Dispatch(ctx, b.connection.dispatcher, payload, options)
 }
+
+// Capture snapshots the payload without backend I/O, defaulting an omitted queue to the connection's default.
 func (b Bound[P]) Capture(ctx context.Context, payload P, options Options[P]) (Pending[P], error) {
 	options, err := b.options(options)
 	if err != nil {
@@ -84,6 +94,8 @@ func (b Bound[P]) Capture(ctx context.Context, payload P, options Options[P]) (P
 	}
 	return b.definition.Capture(ctx, payload, options)
 }
+
+// Inspect returns the matching typed job's retained record, using the connection default when queue is empty.
 func (b Bound[P]) Inspect(ctx context.Context, id ID[P], queue Queue) (value.Optional[Record], error) {
 	options, err := b.options(Options[P]{Queue: queue})
 	if err != nil {
@@ -91,6 +103,8 @@ func (b Bound[P]) Inspect(ctx context.Context, id ID[P], queue Queue) (value.Opt
 	}
 	return b.definition.Inspect(ctx, b.connection.dispatcher, id, options.Queue)
 }
+
+// Cancel requests cancellation of the typed job, using the connection default when queue is empty.
 func (b Bound[P]) Cancel(ctx context.Context, id ID[P], queue Queue) (bool, error) {
 	options, err := b.options(Options[P]{Queue: queue})
 	if err != nil {
@@ -98,6 +112,9 @@ func (b Bound[P]) Cancel(ctx context.Context, id ID[P], queue Queue) (bool, erro
 	}
 	return b.definition.Cancel(ctx, b.connection.dispatcher, id, options.Queue)
 }
+
+// Enqueue captures the payload in tx through an outbox belonging to the same dispatcher.
+// The returned ID does not confirm transaction commit or job execution.
 func (b Bound[P]) Enqueue(ctx context.Context, tx *database.Tx, producer *Outbox, payload P, options Options[P]) (outbox.ID[P], error) {
 	options, err := b.options(options)
 	if err != nil {

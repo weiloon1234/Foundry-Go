@@ -36,10 +36,16 @@ func ParseFont(data []byte) (Font, error) {
 	return Font{data: owned, font: f}, nil
 }
 
-func (Font) String() string             { return "image font" }
-func (Font) GoString() string           { return "image font" }
+// String returns a label without exposing font data.
+func (Font) String() string { return "image font" }
+
+// GoString returns a label without exposing font data.
+func (Font) GoString() string { return "image font" }
+
+// Format writes a label without exposing font data.
 func (Font) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("image font")) }
 
+// FontStyle selects a bundled Go font.
 type FontStyle uint8
 
 const (

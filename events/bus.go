@@ -22,7 +22,10 @@ type Config struct {
 	MaxDepth    int
 }
 
+// DefaultConfig returns the default concurrency and dispatch-depth limits.
 func DefaultConfig() Config { return Config{MaxInFlight: 256, MaxDepth: 32} }
+
+// Validate rejects nonpositive concurrency or dispatch-depth limits with fault.Invalid.
 func (c Config) Validate() error {
 	if c.MaxInFlight <= 0 || c.MaxDepth <= 0 {
 		return safeerror.NewFault(fault.Invalid, "event concurrency and dispatch depth must be positive")
@@ -53,6 +56,7 @@ type Bus struct {
 	done         chan struct{}
 }
 
+// Prepare validates configuration and declarations and constructs an unstarted bus without performing I/O.
 func Prepare(config Config, declarations ...Declaration) (*Bus, error) {
 	bus, err := prepare(config)
 	if err != nil {
@@ -90,6 +94,8 @@ func (b *Bus) bind(declarations []Declaration, managed bool) error {
 	return nil
 }
 
+// Start connects the prepared bus to ctx and begins accepting dispatches.
+// Cancellation of ctx starts shutdown; repeated starts while running succeed.
 func (b *Bus) Start(ctx context.Context) error { return b.start(ctx, false) }
 func (b *Bus) start(ctx context.Context, managed bool) error {
 	if b == nil || ctx == nil {

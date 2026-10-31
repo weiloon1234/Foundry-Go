@@ -28,7 +28,10 @@ type Config struct {
 	MaxBytes   int
 }
 
+// DefaultConfig returns limits of 10,000 entries and 64 MiB of key and payload bytes.
 func DefaultConfig() Config { return Config{MaxEntries: 10000, MaxBytes: 64 << 20} }
+
+// Validate returns fault.Invalid unless both capacity limits are positive.
 func (c Config) Validate() error {
 	if c.MaxEntries <= 0 || c.MaxBytes <= 0 {
 		return safeerror.NewFault(fault.Invalid, "memory cache limits must be positive")
@@ -65,17 +68,26 @@ type entry struct {
 // expired entries (O(log n) each) instead of sweeping the whole map.
 type expiryHeap []*entry
 
-func (h expiryHeap) Len() int           { return len(h) }
+// Len returns the number of indexed entries.
+func (h expiryHeap) Len() int { return len(h) }
+
+// Less reports whether entry i expires before entry j.
 func (h expiryHeap) Less(i, j int) bool { return h[i].expires.Before(h[j].expires) }
+
+// Swap exchanges two entries and updates their heap indexes.
 func (h expiryHeap) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
 	h[i].expiryIndex, h[j].expiryIndex = i, j
 }
+
+// Push appends an entry and sets its heap index.
 func (h *expiryHeap) Push(value any) {
 	item := value.(*entry)
 	item.expiryIndex = len(*h)
 	*h = append(*h, item)
 }
+
+// Pop removes the last entry and clears its heap index.
 func (h *expiryHeap) Pop() any {
 	old := *h
 	item := old[len(old)-1]
@@ -108,6 +120,7 @@ var _ cache.Backend = (*Backend)(nil)
 // FoundryAdapter marks the backend as framework-owned adapter I/O.
 func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}
 
+// New validates limits and borrows a clock without starting goroutines.
 func New(config Config, source clock.Clock) (*Backend, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -188,6 +201,7 @@ func (b *Backend) reclaim(keys []cache.EntryKey, elements []*list.Element, obsol
 	}
 }
 
+// Get returns an owned copy of a live entry and lazily reclaims expired storage.
 func (b *Backend) Get(ctx context.Context, key cache.EntryKey) ([]byte, bool, error) {
 	if err := b.validate(ctx, key); err != nil {
 		return nil, false, err
@@ -213,10 +227,14 @@ func (b *Backend) Get(ctx context.Context, key cache.EntryKey) ([]byte, bool, er
 	// Retained data is immutable, so the owned copy is made outside the lock.
 	return slices.Clone(data), true, nil
 }
+
+// Put copies and replaces the entry and TTL, evicting entries when capacity requires it.
 func (b *Backend) Put(ctx context.Context, key cache.EntryKey, data []byte, ttl cache.TTL) error {
 	_, err := b.write(ctx, key, data, ttl, false)
 	return err
 }
+
+// Add atomically copies and inserts an absent entry, retaining an existing live value and TTL.
 func (b *Backend) Add(ctx context.Context, key cache.EntryKey, data []byte, ttl cache.TTL) (bool, error) {
 	return b.write(ctx, key, data, ttl, true)
 }
@@ -287,6 +305,7 @@ func (b *Backend) retain(item *entry, now time.Time) {
 	b.trackExpiry(item)
 }
 
+// Forget removes a live entry and reports whether it existed.
 func (b *Backend) Forget(ctx context.Context, key cache.EntryKey) (bool, error) {
 	if err := b.validate(ctx, key); err != nil {
 		return false, err
@@ -334,6 +353,7 @@ type Stats struct {
 	Closed    bool
 }
 
+// Stats reclaims expired entries and returns current capacity and eviction totals.
 func (b *Backend) Stats() Stats {
 	if b == nil || b.clock == nil {
 		return Stats{Closed: true}
@@ -343,6 +363,8 @@ func (b *Backend) Stats() Stats {
 	b.purgeExpired(b.clock.Now())
 	return Stats{Entries: len(b.entries), Bytes: b.bytes, Evictions: b.evictions, Closed: b.closed}
 }
+
+// Close rejects new operations and releases retained entries. Repeated calls are safe.
 func (b *Backend) Close(ctx context.Context) error {
 	if b == nil || ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "memory cache close requires a backend and context")

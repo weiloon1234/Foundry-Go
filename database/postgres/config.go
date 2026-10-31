@@ -70,6 +70,8 @@ func DefaultConfig() Config {
 
 func validText(value string) bool { return utf8.ValidString(value) && !strings.ContainsRune(value, 0) }
 
+// Validate checks endpoint text, schema, TLS policy, protocol bounds, timeouts and pool settings.
+// Invalid settings return fault.Invalid before connecting.
 func (c Config) Validate() error {
 	if c.Schema != "" && (!sqlname.Valid(c.Schema) || strings.HasPrefix(strings.ToLower(c.Schema), "pg_") || strings.EqualFold(c.Schema, "information_schema")) {
 		return safeerror.NewFault(fault.Invalid, "PostgreSQL scope requires a non-system schema identifier")

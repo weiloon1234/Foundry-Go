@@ -14,8 +14,13 @@ type Topic[K, V any] struct {
 	definition *definition[K, V]
 }
 
-func (t Topic[K, V]) Name() Name       { return (Declaration[K, V]{t.definition}).Name() }
+// Name returns the topic family name.
+func (t Topic[K, V]) Name() Name { return (Declaration[K, V]{t.definition}).Name() }
+
+// Version returns the payload schema version.
 func (t Topic[K, V]) Version() Version { return (Declaration[K, V]{t.definition}).Version() }
+
+// Validate checks that the topic has a broker and a valid declaration.
 func (t Topic[K, V]) Validate() error {
 	if t.broker == nil || t.broker.done == nil {
 		return safeerror.NewFault(fault.Invalid, "pub/sub topic is not bound")
@@ -173,18 +178,23 @@ type KeyedSubscription[K, V any] struct {
 	keys  []K
 }
 
+// Done closes after the underlying subscription drains and cleans up. A nil subscription returns nil.
 func (s *KeyedSubscription[K, V]) Done() <-chan struct{} {
 	if s == nil {
 		return nil
 	}
 	return s.typed.Done()
 }
+
+// Err returns the terminal cause from the underlying subscription.
 func (s *KeyedSubscription[K, V]) Err() error {
 	if s == nil {
 		return safeerror.NewFault(fault.Invalid, "pub/sub subscription is not initialized")
 	}
 	return s.typed.Err()
 }
+
+// Close starts shutdown and waits for the underlying typed subscription's cleanup.
 func (s *KeyedSubscription[K, V]) Close(ctx context.Context) error {
 	if s == nil {
 		return safeerror.NewFault(fault.Invalid, "pub/sub close needs subscription and context")

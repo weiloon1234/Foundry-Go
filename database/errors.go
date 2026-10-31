@@ -64,6 +64,7 @@ const (
 	IdleInTransactionTimeout Code = "idle_in_transaction_timeout"
 )
 
+// Error returns the classification code as text.
 func (c Code) Error() string { return string(c) }
 
 // Outcome distinguishes a transaction's database outcome from callback success.
@@ -108,19 +109,34 @@ type Error struct {
 	notSent bool
 }
 
-func (e *Error) Error() string        { return "database " + e.operation + ": " + e.detail.Code.Error() }
-func (e *Error) GoString() string     { return e.Error() }
-func (e *Error) Unwrap() error        { return e.cause }
+// Error returns the operation and classification without formatting the driver cause.
+func (e *Error) Error() string { return "database " + e.operation + ": " + e.detail.Code.Error() }
+
+// GoString returns the same safe text as Error.
+func (e *Error) GoString() string { return e.Error() }
+
+// Unwrap returns the retained cause, which may contain private driver details.
+func (e *Error) Unwrap() error { return e.cause }
+
+// Is reports whether target is the same database classification code.
 func (e *Error) Is(target error) bool { code, ok := target.(Code); return ok && e.detail.Code == code }
-func (e *Error) Code() Code           { return e.detail.Code }
-func (e *Error) SQLState() string     { return e.detail.SQLState }
-func (e *Error) Constraint() string   { return e.detail.Constraint }
+
+// Code returns the database failure classification.
+func (e *Error) Code() Code { return e.detail.Code }
+
+// SQLState returns the adapter-reported SQLSTATE, if available.
+func (e *Error) SQLState() string { return e.detail.SQLState }
+
+// Constraint returns the adapter-reported constraint name, if available.
+func (e *Error) Constraint() string { return e.detail.Constraint }
 
 // Schema returns the server-reported relation namespace. Example: failure.Schema().
 func (e *Error) Schema() string { return e.detail.Schema }
 
 // Table returns the server-reported relation name. Example: failure.Table().
-func (e *Error) Table() string    { return e.detail.Table }
+func (e *Error) Table() string { return e.detail.Table }
+
+// Outcome returns the recorded database outcome, independently of callback success.
 func (e *Error) Outcome() Outcome { return e.outcome }
 
 // FoundryDiagnostic contributes the safe classification to redacted failure

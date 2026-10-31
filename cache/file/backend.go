@@ -66,10 +66,13 @@ type Config struct {
 	Logger *slog.Logger
 }
 
+// DefaultConfig returns persistent cache defaults for an existing trusted root directory.
 func DefaultConfig(root string) Config {
 	limits := cacheatomic.DefaultLimits()
 	return Config{Root: root, MaxEntries: limits.MaxEntries, MaxBytes: limits.MaxBytes, MaxValueBytes: limits.MaxValueBytes, Sync: true, Clock: clock.System{}, PruneInterval: cacheatomic.DefaultPruneInterval}
 }
+
+// Validate checks capacity, root, clock, pruning interval, and supported operating system.
 func (c Config) Validate() error {
 	if err := c.limits().Validate(); err != nil {
 		return err
@@ -109,6 +112,7 @@ var _ cache.FlushBackend = (*Backend)(nil)
 // FoundryAdapter marks the backend as framework-owned adapter I/O.
 func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}
 
+// Prepare validates configuration and constructs an unstarted backend without filesystem I/O.
 func Prepare(config Config) (*Backend, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -124,6 +128,8 @@ func Prepare(config Config) (*Backend, error) {
 	}
 	return b, nil
 }
+
+// Open prepares and starts a backend, closing it if startup fails.
 func Open(ctx context.Context, config Config) (*Backend, error) {
 	b, err := Prepare(config)
 	if err != nil {
@@ -322,6 +328,9 @@ func (b *Backend) finish() {
 		close(b.done)
 	}
 }
+
+// Close stops startup and pruning, rejects new operations, and waits for admitted work before closing the root.
+// Context cancellation ends only the wait.
 func (b *Backend) Close(ctx context.Context) error {
 	if b == nil || b.done == nil || ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "file cache close needs context")
@@ -346,6 +355,8 @@ func (b *Backend) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
+// Done closes after shutdown has drained admitted work and closed the root.
 func (b *Backend) Done() <-chan struct{} { return b.done }
 func filename(key cache.EntryKey) string {
 	digest := sha256.Sum256([]byte(key.String()))

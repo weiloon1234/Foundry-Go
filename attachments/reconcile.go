@@ -17,6 +17,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
+// ReconcileResult reports durable operation state, cleanup attempt count and a safe
+// failure classification.
 type ReconcileResult struct {
 	Operation OperationID
 	State     State
@@ -27,6 +29,9 @@ type ReconcileResult struct {
 func status(row store.File) ReconcileResult {
 	return ReconcileResult{Operation: operationID(row.ID), State: State(row.State), Attempts: row.Attempts, Failure: row.LastFailure}
 }
+
+// Reconcile cleans retired or abandoned stored uploads, preserving ready and retained
+// files and refusing unsettled writers.
 func (m *Manager) Reconcile(ctx context.Context, id OperationID) (ReconcileResult, error) {
 	if err := m.Validate(); err != nil {
 		return ReconcileResult{}, err

@@ -224,6 +224,7 @@ func (w *multipartWriter) failure() error {
 	return w.failed
 }
 
+// Write fills the bounded part buffer, flushing full parts before accepting more data.
 func (w *multipartWriter) Write(p []byte) (int, error) {
 	count := 0
 	for len(p) > 0 {

@@ -21,6 +21,8 @@ type Through[M, P any] struct{ items Many[Link[M, P]] }
 func Linked[M, P any](items []Link[M, P]) Through[M, P] {
 	return Through[M, P]{items: Collection(items)}
 }
+
+// IsLoaded reports whether the pivot collection was loaded, including a loaded empty collection.
 func (r Through[M, P]) IsLoaded() bool { return r.items.IsLoaded() }
 
 // Get returns a copied link collection and whether it was loaded. Model fields

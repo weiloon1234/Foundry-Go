@@ -58,6 +58,8 @@ type Scheduler struct {
 	tasks                                       sync.WaitGroup
 }
 
+// New validates settings and binds coordination declarations to the borrowed lease manager.
+// It constructs the scheduler without starting execution.
 func New(manager *lease.Manager, registry *Registry, config Config) (*Scheduler, error) {
 	if manager == nil || registry == nil || len(registry.entries) == 0 {
 		return nil, safeerror.NewFault(fault.Invalid, "scheduler requires leases and registered schedules")
@@ -559,6 +561,8 @@ func (s *Scheduler) shutdown(ctx context.Context, begin func()) error {
 		return ctx.Err()
 	}
 }
+
+// Done closes after scheduler shutdown waits for actual task exit. A nil scheduler returns nil.
 func (s *Scheduler) Done() <-chan struct{} {
 	if s == nil {
 		return nil

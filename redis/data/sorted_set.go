@@ -73,6 +73,8 @@ func (s SortedSet[K, V]) Increment(ctx context.Context, key K, input V, delta fl
 	}
 	return score, nil
 }
+
+// Remove deletes the canonical JSON member and reports whether it existed.
 func (s SortedSet[K, V]) Remove(ctx context.Context, key K, input V) (bool, error) {
 	var removed bool
 	err := s.member(ctx, key, input, func(ctx context.Context, k Key, text string, l Limits) error {

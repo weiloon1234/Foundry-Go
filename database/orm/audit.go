@@ -187,5 +187,8 @@ type auditKeyCodec[K any] struct {
 	decode func(any) (K, error)
 }
 
+// Bind delegates key encoding to the retained declaration binder.
 func (c auditKeyCodec[K]) Bind(v K) (driver.Value, error) { return c.bind(v) }
-func (c auditKeyCodec[K]) Decode(v any) (K, error)        { return c.decode(v) }
+
+// Decode delegates key decoding to the retained declaration decoder.
+func (c auditKeyCodec[K]) Decode(v any) (K, error) { return c.decode(v) }

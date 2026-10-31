@@ -32,9 +32,12 @@ type OverlapOptions struct {
 	Mode  OverlapMode
 }
 
+// DefaultOverlapOptions returns the default overlap lease duration and release delay.
 func DefaultOverlapOptions() OverlapOptions {
 	return OverlapOptions{TTL: 30 * time.Second, Delay: 10 * time.Second}
 }
+
+// Validate checks the lease duration, overlap mode, and release delay bounds.
 func (o OverlapOptions) Validate() error {
 	if err := lease.ValidateDuration(o.TTL); err != nil {
 		return err

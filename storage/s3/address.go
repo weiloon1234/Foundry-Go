@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
+// Locate returns provider, bucket and namespaced object identity without provider I/O.
 func (b *Backend) Locate(key storage.ObjectKey) (storage.ObjectAddress, error) {
 	if b == nil || !b.prepared {
 		return storage.ObjectAddress{}, safeerror.Owned(string(storage.Invalid), storage.Invalid)

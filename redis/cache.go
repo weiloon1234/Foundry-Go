@@ -29,14 +29,20 @@ var _ cache.CounterBackend = (*Client)(nil)
 func (c *Client) Get(ctx context.Context, key cache.EntryKey) ([]byte, bool, error) {
 	return c.cacheCommand(ctx, key, "get", nil, cache.Forever())
 }
+
+// Put atomically replaces a cache entry and its TTL without retrying an uncertain mutation.
 func (c *Client) Put(ctx context.Context, key cache.EntryKey, data []byte, ttl cache.TTL) error {
 	_, _, err := c.cacheCommand(ctx, key, "put", data, ttl)
 	return err
 }
+
+// Add atomically inserts an absent cache entry and reports whether it was added.
 func (c *Client) Add(ctx context.Context, key cache.EntryKey, data []byte, ttl cache.TTL) (bool, error) {
 	_, ok, err := c.cacheCommand(ctx, key, "add", data, ttl)
 	return ok, err
 }
+
+// Forget atomically removes a cache entry and reports whether it existed.
 func (c *Client) Forget(ctx context.Context, key cache.EntryKey) (bool, error) {
 	_, ok, err := c.cacheCommand(ctx, key, "forget", nil, cache.Forever())
 	return ok, err

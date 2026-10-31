@@ -33,6 +33,8 @@ const markerMagic = "FNDLOCAL1\n"
 const tempPrefix = ".foundry-tmp-"
 const MaxPrune = 256
 
+// Config sets the trusted store root, object and scan bounds, durability syncing and
+// clock.
 type Config struct {
 	Root           string
 	MaxObjectBytes int64
@@ -43,9 +45,13 @@ type Config struct {
 	Clock   clock.Clock
 }
 
+// DefaultConfig returns bounded, synchronous storage settings rooted at root.
 func DefaultConfig(root string) Config {
 	return Config{Root: root, MaxObjectBytes: 1 << 30, MaxScan: 100000, Sync: true, Clock: clock.System{}}
 }
+
+// Validate checks the absolute root, bounds, clock and supported host platform without
+// filesystem I/O.
 func (c Config) Validate() error {
 	if !filepath.IsAbs(c.Root) || strings.ContainsRune(c.Root, 0) || c.MaxObjectBytes <= 0 || c.MaxObjectBytes > 1<<50 || c.MaxScan < 1 || c.Clock == nil {
 		return failure(storage.Invalid, storage.OpenOperation, storage.Unchanged, nil)
@@ -56,6 +62,8 @@ func (c Config) Validate() error {
 	return nil
 }
 
+// Backend owns a confined managed store root; prepare and start it before use, then
+// close it after its disks drain.
 type Backend struct {
 	root      *os.Root
 	config    Config
@@ -247,9 +255,13 @@ func initialize(ctx context.Context, config Config) (result *Backend, err error)
 	}
 	return b, nil
 }
+
+// Capabilities returns support for ranges, conditional operations and delimited listings.
 func (b *Backend) Capabilities() storage.Capabilities {
 	return storage.Capabilities{Ranges: true, ConditionalRead: true, ConditionalCreate: true, ConditionalReplace: true, ConditionalDelete: true, DelimitedList: true}
 }
+
+// Close closes the managed root once; callers must drain all disks using it first.
 func (b *Backend) Close() error {
 	if b == nil {
 		return nil

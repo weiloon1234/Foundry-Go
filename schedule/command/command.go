@@ -28,6 +28,8 @@ type Command struct {
 
 const usage = "schedule test --id schedule-id [--format text|json]"
 
+// Parse validates schedule test arguments without booting the application.
+// Help is written to help and returns flag.ErrHelp.
 func Parse(args []string, help io.Writer) (Command, error) {
 	if help == nil {
 		return Command{}, safeerror.NewFault(fault.Invalid, "schedule commands require help output")

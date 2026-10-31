@@ -44,9 +44,14 @@ type Entry struct {
 	data      *entryData
 }
 
-func (e Entry) Identity() model.Identity       { return e.identity }
+// Identity returns the captured subject identity.
+func (e Entry) Identity() model.Identity { return e.identity }
+
+// Operation returns the captured lifecycle operation.
 func (e Entry) Operation() lifecycle.Operation { return e.operation }
-func (Entry) Format(state fmt.State, _ rune)   { _, _ = state.Write([]byte("audit entry")) }
+
+// Format writes a fixed label without exposing captured data.
+func (Entry) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("audit entry")) }
 
 // Redaction reports the sensitive-name policy that captured this entry. Values
 // of an entry captured under an older policy are additionally masked under
@@ -339,9 +344,14 @@ type Model[M, K any] struct {
 	entry    Entry
 }
 
-func (m Model[M, K]) Entry() Entry                   { return m.entry }
+// Entry returns the model audit's heterogeneous storage representation.
+func (m Model[M, K]) Entry() Entry { return m.entry }
+
+// Operation returns the captured lifecycle operation.
 func (m Model[M, K]) Operation() lifecycle.Operation { return m.entry.operation }
-func (Model[M, K]) Format(state fmt.State, _ rune)   { _, _ = state.Write([]byte("model audit")) }
+
+// Format writes a fixed label without exposing captured data.
+func (Model[M, K]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("model audit")) }
 
 // Subject restores a fresh concrete key from the captured identity. It does not
 // reuse a caller's later-mutated key or perform model lookup or getter evaluation.
@@ -378,6 +388,7 @@ type Builder[M, K any] struct {
 	closed        bool
 }
 
+// Format writes a fixed label without exposing pending captured data.
 func (Builder[M, K]) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("audit capture builder"))
 }
@@ -402,6 +413,8 @@ func NewBuilder[M, K any](template model.Reference[M, K], operation lifecycle.Op
 		primary: primary, before: before, after: after, seen: make(map[string]struct{})}, nil
 }
 
+// Add validates and adds a captured field, retaining the first error for Build.
+// An uninitialized builder returns fault.Invalid; a completed builder returns fault.Closed.
 func (b *Builder[M, K]) Add(field Field[M]) error {
 	if b == nil || b.seen == nil {
 		return safeerror.NewFault(fault.Invalid, "audit builder is not initialized")
@@ -481,6 +494,8 @@ func (b *Builder[M, K]) add(item Field[M]) error {
 	return nil
 }
 
+// Build closes the builder and returns an immutable model audit or its retained error.
+// A missing subject field returns fault.Missing; subsequent calls return fault.Closed.
 func (b *Builder[M, K]) Build() (Model[M, K], error) {
 	if b == nil || b.seen == nil {
 		return Model[M, K]{}, safeerror.NewFault(fault.Invalid, "audit builder is not initialized")

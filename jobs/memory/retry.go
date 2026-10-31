@@ -9,6 +9,8 @@ import (
 
 var _ jobs.RetryBackend = (*Backend)(nil)
 
+// JobRetry atomically reopens the matching failed independent record and resets its attempt and exception counters.
+// Reusing the already-applied token returns false without repeating the retry.
 func (b *Backend) JobRetry(ctx context.Context, key jobs.Key, request jobs.RetryRequest) (bool, error) {
 	if err := request.Validate(); err != nil {
 		return false, err

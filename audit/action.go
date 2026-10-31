@@ -17,7 +17,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// ActionName identifies a domain audit schema.
 type ActionName string
+
+// Version identifies a revision of a domain audit schema.
 type Version uint32
 
 // Action declares a versioned domain audit DTO. Declare and reuse one descriptor
@@ -29,11 +32,19 @@ type Action[P any] struct {
 	version Version
 }
 
+// Define returns an action descriptor for the payload type, name and version.
+// Validation is deferred to Validate or use of the descriptor.
 func Define[P any](name ActionName, version Version) Action[P] {
 	return Action[P]{name: name, version: version}
 }
+
+// Name returns the declared action name.
 func (a Action[P]) Name() ActionName { return a.name }
+
+// Version returns the declared schema version.
 func (a Action[P]) Version() Version { return a.version }
+
+// Validate reports fault.Invalid for an invalid name, zero version or interface payload type.
 func (a Action[P]) Validate() error {
 	if !identifier.Semantic(string(a.name)) || a.version == 0 || reflect.TypeFor[P]().Kind() == reflect.Interface {
 		return safeerror.NewFault(fault.Invalid, "audit action requires a name, version and concrete payload type")
@@ -41,7 +52,10 @@ func (a Action[P]) Validate() error {
 	return nil
 }
 
+// ActionEntry distinguishes audit-row IDs by their action payload type.
 type ActionEntry[P any] struct{ _ [0]*P }
+
+// ActionID identifies an audit row for payload type P.
 type ActionID[P any] = model.ID[ActionEntry[P]]
 
 // Record captures a domain event without a model subject. It neither commits
@@ -114,9 +128,16 @@ type ActionRecord[P any] struct {
 	subject  value.Nullable[model.Identity]
 }
 
-func (r ActionRecord[P]) ID() ActionID[P]                         { return r.id }
-func (r ActionRecord[P]) Document() record.Document[P]            { return r.document }
+// ID returns the typed audit-row identifier.
+func (r ActionRecord[P]) ID() ActionID[P] { return r.id }
+
+// Document returns the captured audit representation of the payload.
+func (r ActionRecord[P]) Document() record.Document[P] { return r.document }
+
+// Subject returns the recorded subject identity, or null for an action without a subject.
 func (r ActionRecord[P]) Subject() value.Nullable[model.Identity] { return r.subject }
+
+// Format writes a fixed label without exposing the record's contents.
 func (ActionRecord[P]) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("domain audit record"))
 }

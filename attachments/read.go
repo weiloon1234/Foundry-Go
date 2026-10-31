@@ -31,6 +31,8 @@ const (
 // slot loading retries such a batch in smaller parts.
 var errBatchLimit = attachmentFailure(fault.Conflict, "attachment batch exceeds its row or property limit")
 
+// Batch is a bounded snapshot of ready attachments and owner visibility; lookups
+// perform no I/O.
 type Batch[M any, K comparable] struct {
 	collection Collection[M, K]
 	active     map[string]bool
@@ -39,6 +41,8 @@ type Batch[M any, K comparable] struct {
 	subjects []string
 }
 
+// Get returns an independent slice of loaded ready attachments; inactive or unloaded
+// owners return not found.
 func (b Batch[M, K]) Get(owner model.Reference[M, K]) ([]Attachment[M, K], error) {
 	if b.active == nil || b.files == nil {
 		return nil, invalid()
@@ -64,6 +68,9 @@ func (b Batch[M, K]) get(subject string) ([]Attachment[M, K], error) {
 	}
 	return slices.Clone(b.files[subject]), nil
 }
+
+// Load snapshots owner visibility and ready attachments within the shared row and
+// property budgets.
 func (c Collection[M, K]) Load(ctx context.Context, m *Manager, owners []model.Reference[M, K]) (Batch[M, K], error) {
 	if err := c.check(m); err != nil {
 		return Batch[M, K]{}, err
@@ -160,6 +167,8 @@ func (c Collection[M, K]) scanRows(ctx context.Context, tx *database.Tx, m *Mana
 	}
 	return result, nil
 }
+
+// List returns ready attachments for owner in collection order.
 func (c Collection[M, K]) List(ctx context.Context, m *Manager, owner model.Reference[M, K]) ([]Attachment[M, K], error) {
 	batch, err := c.Load(ctx, m, []model.Reference[M, K]{owner})
 	if err != nil {
@@ -167,6 +176,9 @@ func (c Collection[M, K]) List(ctx context.Context, m *Manager, owner model.Refe
 	}
 	return batch.Get(owner)
 }
+
+// First returns the first ready attachment in collection order, or an unset value for
+// an empty collection.
 func (c Collection[M, K]) First(ctx context.Context, m *Manager, owner model.Reference[M, K]) (value.Optional[Attachment[M, K]], error) {
 	files, err := c.List(ctx, m, owner)
 	if err != nil {
@@ -191,6 +203,9 @@ func (c Collection[M, K]) find(ctx context.Context, m *Manager, owner model.Refe
 	}
 	return files[0], nil
 }
+
+// Find loads one ready attachment belonging to owner and this collection, returning not
+// found when absent.
 func (c Collection[M, K]) Find(ctx context.Context, m *Manager, owner model.Reference[M, K], id ID[M]) (Attachment[M, K], error) {
 	if err := c.check(m); err != nil {
 		return Attachment[M, K]{}, err
@@ -231,6 +246,9 @@ func diskVerified(info storage.ReadInfo, digest storage.SHA256) bool {
 	checksum, ok := info.Object.Checksum.Get()
 	return ok && checksum == digest && info.Offset == 0 && info.Length == info.Object.Size
 }
+
+// ReadBytes reads a ready pinned object within maximum and verifies its length and
+// full-object digest.
 func (c Collection[M, K]) ReadBytes(ctx context.Context, m *Manager, owner model.Reference[M, K], id ID[M], maximum int64) ([]byte, error) {
 	if err := c.check(m); err != nil {
 		return nil, err
@@ -252,6 +270,9 @@ func (c Collection[M, K]) ReadBytes(ctx context.Context, m *Manager, owner model
 	}
 	return result, nil
 }
+
+// Image reads and verifies a ready attachment within image input bounds, then applies
+// plan without changing storage.
 func (c Collection[M, K]) Image(ctx context.Context, m *Manager, owner model.Reference[M, K], id ID[M], plan imaging.Plan) (imaging.Result, error) {
 	if err := c.check(m); err != nil {
 		return imaging.Result{}, err
@@ -464,6 +485,8 @@ type verifiedReader struct {
 	remaining int64
 }
 
+// Read checks the full-object length and digest at EOF while forwarding bytes from the
+// underlying stream.
 func (r *verifiedReader) Read(p []byte) (int, error) {
 	n, err := r.body.Read(p)
 	if n > 0 {
@@ -479,4 +502,6 @@ func (r *verifiedReader) Read(p []byte) (int, error) {
 	}
 	return n, err
 }
+
+// Close closes the underlying attachment stream.
 func (r *verifiedReader) Close() error { return r.body.Close() }

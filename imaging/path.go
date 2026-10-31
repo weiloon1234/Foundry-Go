@@ -34,6 +34,7 @@ type Path struct {
 	invalid  bool
 }
 
+// NewPath returns an empty path; add drawing commands before validating or rendering it.
 func NewPath() Path { return Path{} }
 func (p Path) append(c pathCommand) Path {
 	if len(p.commands) >= MaxPathCommands {
@@ -43,20 +44,33 @@ func (p Path) append(c pathCommand) Path {
 	p.commands = append(slices.Clone(p.commands), c)
 	return p
 }
+
+// MoveTo returns a path with a new contour starting at the supplied coordinates.
 func (p Path) MoveTo(x, y float64) Path {
 	return p.append(pathCommand{op: pathMove, points: [3]Point{{x, y}}})
 }
+
+// LineTo returns a path with a line to the supplied endpoint.
 func (p Path) LineTo(x, y float64) Path {
 	return p.append(pathCommand{op: pathLine, points: [3]Point{{x, y}}})
 }
+
+// QuadraticTo returns a path with a quadratic curve using a control point and an
+// endpoint.
 func (p Path) QuadraticTo(cx, cy, x, y float64) Path {
 	return p.append(pathCommand{op: pathQuad, points: [3]Point{{cx, cy}, {x, y}}})
 }
+
+// CubicTo returns a path with a cubic curve using two control points and an endpoint.
 func (p Path) CubicTo(cx1, cy1, cx2, cy2, x, y float64) Path {
 	return p.append(pathCommand{op: pathCubic, points: [3]Point{{cx1, cy1}, {cx2, cy2}, {x, y}}})
 }
+
+// Close returns a path with the current contour closed.
 func (p Path) Close() Path { return p.append(pathCommand{op: pathClose}) }
 
+// Validate rejects empty, excessive or malformed commands and invalid coordinates with
+// an invalid fault.
 func (p Path) Validate() error {
 	if p.invalid || len(p.commands) == 0 || len(p.commands) > MaxPathCommands {
 		return invalid("invalid image path")
@@ -97,6 +111,7 @@ type ShapeStyle struct {
 	StrokeWidth float64
 }
 
+// Validate rejects nonfinite, negative or excessive stroke widths with an invalid fault.
 func (s ShapeStyle) Validate() error {
 	if !finiteRange(s.StrokeWidth, 0, 4096) {
 		return invalid("invalid image stroke width")
@@ -110,6 +125,8 @@ func (p Plan) Draw(path Path, style ShapeStyle) Plan {
 	return p.append(step{kind: drawPath, path: path, style: style})
 }
 
+// Rectangle returns a plan drawing a rectangle from its top-left corner with positive
+// dimensions.
 func (p Plan) Rectangle(x, y, width, height float64, style ShapeStyle) Plan {
 	path := NewPath().MoveTo(x, y).LineTo(x+width, y).LineTo(x+width, y+height).LineTo(x, y+height).Close()
 	path.invalid = width <= 0 || height <= 0
@@ -122,6 +139,9 @@ func (p Plan) Ellipse(x, y, radiusX, radiusY float64, style ShapeStyle) Plan {
 	path.invalid = radiusX <= 0 || radiusY <= 0
 	return p.Draw(path, style)
 }
+
+// Circle returns a plan drawing a circle with the supplied center, positive radius and
+// style.
 func (p Plan) Circle(x, y, radius float64, style ShapeStyle) Plan {
 	return p.Ellipse(x, y, radius, radius, style)
 }
@@ -140,6 +160,7 @@ func (p Plan) Polygon(points []Point, style ShapeStyle) Plan {
 	return p.Draw(path.Close(), style)
 }
 
+// Line returns a plan drawing a stroke between the supplied endpoints.
 func (p Plan) Line(x1, y1, x2, y2, width float64, c color.NRGBA) Plan {
 	return p.Draw(NewPath().MoveTo(x1, y1).LineTo(x2, y2), ShapeStyle{Stroke: c, StrokeWidth: width})
 }

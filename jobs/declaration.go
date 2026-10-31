@@ -24,12 +24,21 @@ type Definition[P any] struct {
 	keyring *encryption.Keyring
 }
 
+// Define constructs a typed job definition with an owned snapshot of the policy.
 func Define[P any](name Name, version Version, policy Policy) Definition[P] {
 	return Definition[P]{name: name, version: version, policy: policy.snapshot()}
 }
-func (d Definition[P]) Name() Name       { return d.name }
+
+// Name returns the semantic job name.
+func (d Definition[P]) Name() Name { return d.name }
+
+// Version returns the payload schema version.
 func (d Definition[P]) Version() Version { return d.version }
-func (d Definition[P]) Policy() Policy   { return d.policy.snapshot() }
+
+// Policy returns an owned policy snapshot, including its backoff slice.
+func (d Definition[P]) Policy() Policy { return d.policy.snapshot() }
+
+// Validate checks the name, positive version, concrete payload type, and execution policy.
 func (d Definition[P]) Validate() error {
 	if !identifier.Semantic(string(d.name)) || d.version == 0 {
 		return safeerror.NewFault(fault.Invalid, "job requires a semantic name and nonzero payload version")
@@ -64,11 +73,13 @@ type Declaration struct {
 	prepare func(context.Context, Envelope) (preparedJob, error)
 }
 
+// Format writes a fixed description without exposing handler callbacks.
 func (Declaration) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job declaration")) }
 
 // Registry freezes declarations. It owns no connections, goroutines or payloads.
 type Registry struct{ entries map[jobKey]Declaration }
 
+// NewRegistry validates and snapshots declarations, rejecting repeated names and versions.
 func NewRegistry(declarations ...Declaration) (*Registry, error) {
 	entries := make(map[jobKey]Declaration, len(declarations))
 	for _, item := range declarations {
@@ -99,7 +110,10 @@ func (r *Registry) lookup(key jobKey) (Declaration, error) {
 
 type payloadError struct{ cause error }
 
-func (*payloadError) Error() string   { return "job payload does not match its registered schema" }
+// Error returns a fixed schema-failure message without formatting its cause.
+func (*payloadError) Error() string { return "job payload does not match its registered schema" }
+
+// Unwrap returns the payload schema failure cause.
 func (e *payloadError) Unwrap() error { return e.cause }
 
 func payloadFailure(cause error) error {

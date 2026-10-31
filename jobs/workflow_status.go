@@ -60,6 +60,7 @@ func (s WorkflowStatus) Progress() float64 {
 // WorkflowStatusBackend is optional; the memory and Redis authorities
 // implement it. A retired workflow (finished beyond retention) is absent.
 type WorkflowStatusBackend interface {
+	// JobWorkflowStatus returns retained workflow progress without payloads, or absence after retirement.
 	JobWorkflowStatus(context.Context, Key, WorkflowID) (value.Optional[WorkflowStatus], error)
 }
 

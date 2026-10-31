@@ -30,6 +30,7 @@ type Outbox struct {
 	schema      string
 }
 
+// PrepareOutbox validates the destination and prepares a producer borrowing dispatcher without performing I/O.
 func PrepareOutbox(destination outbox.Destination, dispatcher *Dispatcher) (*Outbox, error) {
 	if err := destination.Validate(); err != nil {
 		return nil, err
@@ -54,12 +55,17 @@ func PrepareOutboxIn(destination outbox.Destination, dispatcher *Dispatcher, db 
 	producer.schema = schema
 	return producer, nil
 }
+
+// Destination returns the producer destination, or an empty destination for a nil outbox.
 func (o *Outbox) Destination() outbox.Destination {
 	if o == nil {
 		return ""
 	}
 	return o.destination
 }
+
+// Enqueue captures the payload and appends its envelope through tx.
+// The returned outbox identity does not establish transaction commit or execution.
 func (d Definition[P]) Enqueue(ctx context.Context, tx *database.Tx, producer *Outbox, input P, options Options[P]) (outbox.ID[P], error) {
 	pending, err := d.Capture(ctx, input, options)
 	if err != nil {
@@ -146,9 +152,11 @@ func (w Workflow) Enqueue(ctx context.Context, tx *database.Tx, producer *Outbox
 // persistence/failover policy. A process-local queue cannot publish an outbox.
 type DurableBackend interface {
 	Backend
+	// DurableAcceptance reports durable acceptance under the backend's configured persistence policy.
 	DurableAcceptance() bool
 }
 
+// RequireDurable rejects an uninitialized dispatcher or a backend that does not declare durable acceptance.
 func (d *Dispatcher) RequireDurable() error {
 	if d == nil || d.slots == nil {
 		return safeerror.NewFault(fault.Invalid, "job dispatcher is not initialized")
@@ -159,6 +167,9 @@ func (d *Dispatcher) RequireDurable() error {
 	}
 	return nil
 }
+
+// PublicationRoute creates the durable job publisher route for this destination.
+// It validates committed envelopes and submits their stable identities to the queue.
 func (o *Outbox) PublicationRoute() (publisher.Route, error) {
 	if o == nil {
 		return publisher.Route{}, safeerror.NewFault(fault.Invalid, "job outbox is not initialized")

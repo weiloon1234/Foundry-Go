@@ -50,7 +50,11 @@ func DefineSemaphore[K any](name Name, codec keyspace.Codec[K], slots int) Semap
 	}
 	return SemaphoreDeclaration[K]{leases: Define(name, encode), slots: slots}
 }
+
+// Name returns the semaphore lease family name.
 func (d SemaphoreDeclaration[K]) Name() Name { return d.leases.Name() }
+
+// Validate checks the slot count and underlying lease declaration.
 func (d SemaphoreDeclaration[K]) Validate() error {
 	if d.slots < 1 || d.slots > MaxSemaphoreSlots {
 		return safeerror.NewFault(fault.Invalid, "semaphore slots must be between 1 and 1024")

@@ -12,12 +12,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/extensionmaintenance"
 )
 
+// Command holds parsed attachment inspection options.
 type Command struct{ options extensioncommand.Options }
 
+// Parse reads attachment maintenance arguments and writes usage to help when requested.
 func Parse(args []string, help io.Writer) (Command, error) {
 	options, err := extensioncommand.Parse("attachments", args, help)
 	return Command{options: options}, err
 }
+
+// Run writes the requested owner-orphan or undeclared-name inspection using manager.
 func (c Command) Run(ctx context.Context, manager *attachments.Manager, out io.Writer) error {
 	if c.options.Undeclared() {
 		return extensioncommand.RunUndeclared(ctx, c.options, out, func(ctx context.Context, owner extensions.OwnerName) (extensionmaintenance.Undeclared, error) {

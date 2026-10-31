@@ -63,6 +63,8 @@ func ParseCron(source string, zone *time.Location) (Spec, error) {
 // Interval aligns whole-millisecond occurrences to the UTC Unix epoch. Alignment
 // survives process restarts; use IntervalFrom for an explicit phase/first instant.
 func Interval(every time.Duration) (Spec, error) { return IntervalFrom(every, time.Unix(0, 0)) }
+
+// IntervalFrom constructs a whole-millisecond interval with an explicit UTC-normalized anchor.
 func IntervalFrom(every time.Duration, anchor time.Time) (Spec, error) {
 	if every < time.Millisecond || every > MaxInterval || every%time.Millisecond != 0 || !validInstant(anchor) || anchor.Nanosecond()%int(time.Millisecond) != 0 {
 		return Spec{}, safeerror.NewFault(fault.Invalid, "interval requires whole milliseconds, a bounded period and valid anchor")
@@ -70,12 +72,16 @@ func IntervalFrom(every time.Duration, anchor time.Time) (Spec, error) {
 	return Spec{interval: every, anchor: anchor.UTC(), source: every.String()}, nil
 }
 func validInstant(at time.Time) bool { year := at.UTC().Year(); return year >= 1970 && year <= 9999 }
+
+// Validate rejects an uninitialized timing specification with fault.Invalid.
 func (s Spec) Validate() error {
 	if s.calendar == nil && s.interval == 0 {
 		return safeerror.NewFault(fault.Invalid, "schedule specification is not initialized")
 	}
 	return nil
 }
+
+// String returns the normalized cron expression or interval duration text.
 func (s Spec) String() string { return s.source }
 
 // location is the zone calendar filters evaluate in: the calendar's own zone,
@@ -86,6 +92,8 @@ func (s Spec) location() *time.Location {
 	}
 	return time.UTC
 }
+
+// TimeZone returns the calendar zone, UTC for an interval, or empty text for a zero spec.
 func (s Spec) TimeZone() string {
 	if s.calendar != nil {
 		return s.calendar.Location.String()

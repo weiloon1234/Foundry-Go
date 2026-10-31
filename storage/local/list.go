@@ -129,10 +129,19 @@ type entry struct {
 }
 type candidates []entry
 
-func (h candidates) Len() int           { return len(h) }
+// Len returns the number of queued listing candidates.
+func (h candidates) Len() int { return len(h) }
+
+// Less orders candidates by descending name for the bounded max-heap.
 func (h candidates) Less(i, j int) bool { return h[i].name > h[j].name }
-func (h candidates) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h *candidates) Push(v any)        { *h = append(*h, v.(entry)) }
+
+// Swap exchanges two listing candidates.
+func (h candidates) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+// Push appends a listing entry to the heap storage.
+func (h *candidates) Push(v any) { *h = append(*h, v.(entry)) }
+
+// Pop removes the last candidate and clears its retained entry.
 func (h *candidates) Pop() any {
 	old := *h
 	n := len(old)

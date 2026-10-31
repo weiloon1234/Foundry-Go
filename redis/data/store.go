@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 )
 
+// Config sets the namespace, operation admission, declaration capacity, and collection bounds.
 type Config struct {
 	Namespace                                                 keyspace.Namespace
 	MaxDeclarations, MaxKeyBytes, MaxConcurrent, MaxBatchKeys int
@@ -19,9 +20,12 @@ type Config struct {
 	Limits                                                    Limits
 }
 
+// DefaultConfig returns bounded store defaults for the supplied namespace.
 func DefaultConfig(ns keyspace.Namespace) Config {
 	return Config{ns, 256, 1024, 128, 64, 5 * time.Second, DefaultLimits()}
 }
+
+// Validate checks the namespace, positive store bounds, timeout, and collection limits.
 func (c Config) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {
 		return err
@@ -49,6 +53,7 @@ type Store struct {
 	declarations map[declarationKey]*declarationID
 }
 
+// NewStore validates configuration and borrows the adapter without performing I/O.
 func NewStore(backend Backend, c Config) (*Store, error) {
 	if backend == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "Redis data store requires an adapter")

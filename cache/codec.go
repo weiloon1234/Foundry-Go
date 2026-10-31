@@ -16,14 +16,23 @@ import (
 // KeyCodec preserves the declared key type using the shared keyspace codec.
 type KeyCodec[K any] = keyspace.Codec[K]
 
+// NewKeyCodec wraps the supplied typed key encoder.
 func NewKeyCodec[K any](encode func(K) (string, error)) KeyCodec[K] { return keyspace.NewCodec(encode) }
-func StringKeys[K ~string]() KeyCodec[K]                            { return keyspace.StringKeys[K]() }
+
+// StringKeys encodes string keys without changing their text.
+func StringKeys[K ~string]() KeyCodec[K] { return keyspace.StringKeys[K]() }
+
+// SignedKeys encodes signed integer keys as decimal text.
 func SignedKeys[K ~int | ~int8 | ~int16 | ~int32 | ~int64]() KeyCodec[K] {
 	return keyspace.SignedKeys[K]()
 }
+
+// UnsignedKeys encodes unsigned integer keys as decimal text.
 func UnsignedKeys[K ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr]() KeyCodec[K] {
 	return keyspace.UnsignedKeys[K]()
 }
+
+// TextKeys encodes keys through their MarshalText method.
 func TextKeys[K encoding.TextMarshaler]() KeyCodec[K] { return keyspace.TextKeys[K]() }
 
 // Codec preserves V through serialization. Callbacks must be concurrency-safe,
@@ -35,9 +44,12 @@ type Codec[V any] struct {
 	decode func([]byte) (V, error)
 }
 
+// NewCodec retains the supplied value encoder and decoder without validating them.
 func NewCodec[V any](encode func(V) ([]byte, error), decode func([]byte) (V, error)) Codec[V] {
 	return Codec[V]{encode: encode, decode: decode}
 }
+
+// Validate returns fault.Invalid if either codec callback is missing.
 func (c Codec[V]) Validate() error {
 	if c.encode == nil || c.decode == nil {
 		return safeerror.NewFault(fault.Invalid, "cache value codec is not initialized")

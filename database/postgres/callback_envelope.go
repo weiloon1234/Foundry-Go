@@ -58,7 +58,10 @@ func wrapEnvelopeEncode(value any) (pgtype.WrappedEncodePlanNextSetter, any, boo
 
 type envelopeEncodePlan struct{ next pgtype.EncodePlan }
 
+// SetNext installs the encoding plan used after unwrapping the envelope.
 func (p *envelopeEncodePlan) SetNext(next pgtype.EncodePlan) { p.next = next }
+
+// Encode unwraps the custom argument and invokes the next plan with SQL callback isolation.
 func (p *envelopeEncodePlan) Encode(value any, buf []byte) (result []byte, err error) {
 	err = sqlcallback.Invoke("encode PostgreSQL custom argument", func() error {
 		source, _ := envelopeValue(value)
@@ -78,7 +81,10 @@ func wrapEnvelopeScan(value any) (pgtype.WrappedScanPlanNextSetter, any, bool) {
 
 type envelopeScanPlan struct{ next pgtype.ScanPlan }
 
+// SetNext installs the scan plan used after unwrapping the envelope.
 func (p *envelopeScanPlan) SetNext(next pgtype.ScanPlan) { p.next = next }
+
+// Scan unwraps the custom destination and invokes the next plan with SQL callback isolation.
 func (p *envelopeScanPlan) Scan(src []byte, value any) error {
 	return sqlcallback.Invoke("scan PostgreSQL custom destination", func() error {
 		target, _ := envelopeValue(value)
@@ -102,7 +108,10 @@ func wrapCheckedValuer(value any) (pgtype.WrappedEncodePlanNextSetter, any, bool
 
 type checkedValuerPlan struct{ next pgtype.EncodePlan }
 
+// SetNext installs the plan that receives the checked valuer.
 func (p *checkedValuerPlan) SetNext(next pgtype.EncodePlan) { p.next = next }
+
+// Encode wraps the argument as a checked valuer before passing it to the next plan.
 func (p *checkedValuerPlan) Encode(value any, buf []byte) ([]byte, error) {
 	return p.next.Encode(checkedValuer{value.(driver.Valuer)}, buf)
 }

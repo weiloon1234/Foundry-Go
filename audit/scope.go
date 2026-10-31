@@ -21,6 +21,8 @@ type Scope struct {
 	recorder *Recorder
 }
 
+// NewScope validates and binds a borrowed database and recorder to the audit schema.
+// It acquires no resources and performs no database I/O.
 func NewScope(db *database.DB, schema string, recorder *Recorder) (*Scope, error) {
 	if db == nil || recorder == nil || !sqlname.Valid(schema) {
 		return nil, safeerror.NewFault(fault.Invalid, "audit scope requires a database, schema and recorder")
@@ -40,5 +42,9 @@ func (s *Scope) Within(ctx context.Context, tx *database.Tx, fn func(*database.T
 	}
 	return sqlscope.InSchema(ctx, tx, s.db, s.schema, func(child *database.Tx) error { return fn(child, s.recorder) })
 }
+
+// Format writes a fixed label without exposing the scope's dependencies.
 func (*Scope) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("audit scope")) }
-func (*Scope) LogValue() slog.Value           { return slog.StringValue("audit scope") }
+
+// LogValue returns a fixed label without exposing the scope's dependencies.
+func (*Scope) LogValue() slog.Value { return slog.StringValue("audit scope") }

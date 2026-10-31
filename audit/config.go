@@ -16,6 +16,7 @@ import (
 // not an authorization boundary; applications authorize access to history.
 type Area string
 
+// Validate reports fault.Invalid unless the area is a semantic identifier.
 func (a Area) Validate() error {
 	if !identifier.Semantic(string(a)) {
 		return safeerror.NewFault(fault.Invalid, "audit area requires a semantic identifier")
@@ -41,10 +42,12 @@ type Config struct {
 	MaxValueBytes int
 }
 
+// DefaultConfig returns the application area and default per-value byte limit.
 func DefaultConfig() Config {
 	return Config{Area: "application", MaxValueBytes: DefaultMaxValueBytes}
 }
 
+// Validate checks the area and explicit value limit, returning fault.Invalid for invalid settings.
 func (c Config) Validate() error {
 	if err := c.Area.Validate(); err != nil {
 		return err
@@ -66,12 +69,15 @@ func (c Config) valueLimit() int {
 // use caller-owned executors/transactions and are safe for concurrent operations.
 type Recorder struct{ config Config }
 
+// New validates config and returns a recorder that retains its value copy.
 func New(config Config) (*Recorder, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
 	return &Recorder{config: config}, nil
 }
+
+// Format writes a fixed label without exposing recorder configuration.
 func (*Recorder) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("audit recorder")) }
 
 type areaContextKey struct{}

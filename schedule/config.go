@@ -15,6 +15,8 @@ import (
 // Group isolates independent scheduler elections in one namespace. All replicas
 // of a group must deploy the same registry, timing and environment policy.
 type Group string
+
+// Config supplies scheduler identity, timing, capacity, history, and shutdown policy.
 type Config struct {
 	Group         Group
 	Clock         clock.Clock
@@ -43,6 +45,7 @@ type Config struct {
 	Wake <-chan struct{}
 }
 
+// DefaultConfig returns the default scheduler settings for group using the system clock.
 func DefaultConfig(group Group) Config {
 	return Config{Group: group, Clock: clock.System{}, Concurrency: 16, MaxHistory: 1024, MaxPerTick: 256, PollInterval: 100 * time.Millisecond, LeadershipTTL: 30 * time.Second, Grace: time.Second, CapacityWait: 5 * time.Second, DrainTimeout: 5 * time.Second}
 }
@@ -57,6 +60,8 @@ func nilValue(value any) bool {
 	}
 	return false
 }
+
+// Validate checks scheduler identity, clock, capacity and timing bounds, including the leadership duration.
 func (c Config) Validate() error {
 	if !identifier.Semantic(string(c.Group)) || nilValue(c.Clock) || c.Concurrency < 1 || c.Concurrency > 4096 || c.MaxHistory < 1 || c.MaxHistory > 65536 || c.MaxPerTick < 1 || c.MaxPerTick > 4096 || c.PollInterval <= 0 || c.PollInterval > time.Minute || c.Grace < 0 || c.Grace > 24*time.Hour || c.CapacityWait < 0 || c.CapacityWait > time.Hour || c.DrainTimeout < 0 || c.DrainTimeout > time.Hour {
 		return safeerror.NewFault(fault.Invalid, "invalid scheduler configuration")

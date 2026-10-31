@@ -234,6 +234,7 @@ type Stats struct {
 	Ready        bool
 }
 
+// Stats returns a synchronized snapshot of combined pool utilization and resource ownership.
 func (db *DB) Stats() Stats {
 	db.mu.Lock()
 	defer db.mu.Unlock()

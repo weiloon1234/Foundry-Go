@@ -34,13 +34,28 @@ type Record[M any] struct {
 	_                [0]*M
 }
 
-func (r Record[M]) Name() Name                             { return r.name }
-func (r Record[M]) Version() Version                       { return r.version }
-func (r Record[M]) CreatedAt() temporal.DateTime           { return r.created }
-func (r Record[M]) UpdatedAt() temporal.DateTime           { return r.updated }
+// Name returns the stored key name.
+func (r Record[M]) Name() Name { return r.name }
+
+// Version returns the stored schema version.
+func (r Record[M]) Version() Version { return r.version }
+
+// CreatedAt returns the value's creation timestamp.
+func (r Record[M]) CreatedAt() temporal.DateTime { return r.created }
+
+// UpdatedAt returns the value's last update timestamp.
+func (r Record[M]) UpdatedAt() temporal.DateTime { return r.updated }
+
+// DynamicValue decodes a fresh JSON representation for explicit administrative inspection.
 func (r Record[M]) DynamicValue() (json.RawMessage, error) { return r.data.Decode() }
-func (Record[M]) Format(s fmt.State, _ rune)               { _, _ = s.Write([]byte("model metadata record")) }
-func (Record[M]) MarshalJSON() ([]byte, error)             { return nil, invalid() }
+
+// Format writes a fixed label without exposing the stored value.
+func (Record[M]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("model metadata record")) }
+
+// MarshalJSON returns fault.Invalid to prevent implicit metadata disclosure.
+func (Record[M]) MarshalJSON() ([]byte, error) { return nil, invalid() }
+
+// Decode checks the record's owner scope, name and version against the key, then decodes its value.
 func (k Key[M, K, V]) Decode(ctx context.Context, r Record[M]) (V, error) {
 	if err := k.Validate(); err != nil {
 		return *new(V), err

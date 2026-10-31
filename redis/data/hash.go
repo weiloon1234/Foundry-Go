@@ -35,6 +35,8 @@ func (h Hash[K, F, V]) field(ctx context.Context, field F, l Limits) (string, er
 	}
 	return text, l.ValidateField(text)
 }
+
+// Get decodes a field value and distinguishes a missing field from a stored JSON null.
 func (h Hash[K, F, V]) Get(ctx context.Context, key K, field F) (V, bool, error) {
 	var result V
 	var found bool
@@ -62,6 +64,8 @@ func (h Hash[K, F, V]) Get(ctx context.Context, key K, field F) (V, bool, error)
 	}
 	return result, found, nil
 }
+
+// Set stores a canonical JSON snapshot and reports whether the field was new, preserving the key's expiry.
 func (h Hash[K, F, V]) Set(ctx context.Context, key K, field F, input V) (bool, error) {
 	var added bool
 	err := h.execute(ctx, key, func(ctx context.Context, k Key, l Limits) error {
@@ -84,6 +88,8 @@ func (h Hash[K, F, V]) Set(ctx context.Context, key K, field F, input V) (bool, 
 	}
 	return added, nil
 }
+
+// DeleteField removes a field and reports whether it existed.
 func (h Hash[K, F, V]) DeleteField(ctx context.Context, key K, field F) (bool, error) {
 	var removed bool
 	err := h.execute(ctx, key, func(ctx context.Context, k Key, l Limits) error {

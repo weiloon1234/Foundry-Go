@@ -18,6 +18,7 @@ import (
 // makes its dispatcher run accepted jobs synchronously in the caller instead of
 // waiting for a worker kernel.
 type InlineBackend interface {
+	// JobInline reports whether accepted jobs execute synchronously through their dispatcher.
 	JobInline() bool
 }
 

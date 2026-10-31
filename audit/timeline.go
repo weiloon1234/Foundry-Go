@@ -33,6 +33,7 @@ type TimelineRequest struct {
 	Before value.Optional[Sequence]
 }
 
+// Validate checks the page size and optional positive sequence, returning fault.Invalid on failure.
 func (r TimelineRequest) Validate() error {
 	if r.Size < 1 || r.Size > querycore.MaxPageSize {
 		return safeerror.NewFault(fault.Invalid, "audit timeline size is outside its bounds")
@@ -137,10 +138,16 @@ type Activity struct {
 func (a Activity) Operation() lifecycle.Operation { return a.operation }
 
 // Action returns the domain action name and version; both are zero for model rows.
-func (a Activity) Action() (ActionName, Version)           { return a.action, a.version }
-func (a Activity) IsAction() bool                          { return a.operation == 0 }
+func (a Activity) Action() (ActionName, Version) { return a.action, a.version }
+
+// IsAction reports whether the lifecycle operation is zero, as it is for domain actions.
+func (a Activity) IsAction() bool { return a.operation == 0 }
+
+// Subject returns the recorded subject identity, or null when none was captured.
 func (a Activity) Subject() value.Nullable[model.Identity] { return a.subject }
-func (Activity) Format(state fmt.State, _ rune)            { _, _ = state.Write([]byte("audit activity")) }
+
+// Format writes a fixed label without exposing activity metadata.
+func (Activity) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("audit activity")) }
 
 // ModelActivityID converts a model activity into its typed audit ID when the
 // row belongs to template's model. It performs no lookup or authorization.

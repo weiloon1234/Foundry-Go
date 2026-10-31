@@ -26,19 +26,26 @@ type Reply struct {
 	array   []Reply
 }
 
+// IsNull reports whether the reply is Redis nil, including the zero reply.
 func (r Reply) IsNull() bool { return r.kind == nullKind }
+
+// Integer returns the integer value or fault.Invalid for another reply kind.
 func (r Reply) Integer() (int64, error) {
 	if r.kind != integerKind {
 		return 0, replyError()
 	}
 	return r.integer, nil
 }
+
+// Text returns the text value or fault.Invalid for another reply kind.
 func (r Reply) Text() (string, error) {
 	if r.kind != textKind {
 		return "", replyError()
 	}
 	return r.text, nil
 }
+
+// Array returns an owned slice of immutable children or fault.Invalid for another reply kind.
 func (r Reply) Array() ([]Reply, error) {
 	if r.kind != arrayKind {
 		return nil, replyError()

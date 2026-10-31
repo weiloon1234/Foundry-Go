@@ -24,6 +24,7 @@ type Backend struct {
 var _ jobs.Backend = (*Backend)(nil)
 var _ jobs.InlineBackend = (*Backend)(nil)
 
+// New constructs a bounded local authority whose dispatcher executes accepted jobs synchronously.
 func New(config memory.Config) (*Backend, error) {
 	backend, err := memory.New(config)
 	if err != nil {

@@ -47,6 +47,7 @@ type WorkerConfig struct {
 	FailureBackoff    time.Duration
 }
 
+// DefaultWorkerConfig returns default worker settings with equal reservation weight for each supplied queue.
 func DefaultWorkerConfig(namespace keyspace.Namespace, queues ...Queue) WorkerConfig {
 	subscriptions := make([]Subscription, len(queues))
 	for i, queue := range queues {
@@ -54,6 +55,8 @@ func DefaultWorkerConfig(namespace keyspace.Namespace, queues ...Queue) WorkerCo
 	}
 	return WorkerConfig{FailureLog: true, RetryUnregistered: true, Namespace: namespace, Queues: subscriptions, Concurrency: 4, LeaseDuration: 30 * time.Second, HeartbeatInterval: 5 * time.Second, OperationTimeout: 5 * time.Second, PollInterval: 100 * time.Millisecond, MaxPollInterval: time.Second, DrainTimeout: 5 * time.Second, FailureBackoff: 30 * time.Second}
 }
+
+// Validate checks namespace, queue weights, concurrency, leases, polling, drain, and failure-backoff bounds.
 func (c WorkerConfig) Validate() error {
 	if err := c.Namespace.Validate(); err != nil {
 		return err

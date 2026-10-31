@@ -23,8 +23,10 @@ const (
 	Closed              Code = "storage_closed"
 )
 
+// Error returns the classification string.
 func (c Code) Error() string { return string(c) }
 
+// Operation identifies the storage action associated with a failure.
 type Operation string
 
 const (
@@ -55,10 +57,16 @@ const (
 // It is opaque diagnostic data; ordinary formatting deliberately hides it.
 type CleanupID struct{ text string }
 
-func NewCleanupID(text string) CleanupID     { return CleanupID{text: text} }
-func (id CleanupID) Value() string           { return id.text }
+// NewCleanupID wraps an opaque cleanup reference without validating it.
+func NewCleanupID(text string) CleanupID { return CleanupID{text: text} }
+
+// Value explicitly returns the opaque cleanup reference.
+func (id CleanupID) Value() string { return id.text }
+
+// Format writes a label without exposing the cleanup reference.
 func (CleanupID) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("storage cleanup reference")) }
 
+// Error retains a storage classification, operation, mutation outcome and redacted cause.
 type Error struct {
 	code      Code
 	operation Operation
@@ -67,18 +75,39 @@ type Error struct {
 	cleanup   value.Optional[CleanupID]
 }
 
+// Failure creates a classified error retaining cause without formatting it.
 func Failure(code Code, op Operation, outcome Outcome, cause error) *Error {
 	return &Error{code: code, operation: op, outcome: outcome, cause: cause}
 }
-func (e *Error) Error() string                      { return fmt.Sprintf("%s: %s", e.code, e.operation) }
-func (e *Error) Format(s fmt.State, _ rune)         { _, _ = s.Write([]byte(e.Error())) }
-func (e *Error) LogValue() slog.Value               { return slog.StringValue(e.Error()) }
-func (e *Error) Unwrap() error                      { return e.cause }
-func (e *Error) Is(target error) bool               { code, ok := target.(Code); return ok && code == e.code }
-func (e *Error) Code() Code                         { return e.code }
-func (e *Error) Operation() Operation               { return e.operation }
-func (e *Error) Outcome() Outcome                   { return e.outcome }
+
+// Error returns the classification and operation without formatting the cause.
+func (e *Error) Error() string { return fmt.Sprintf("%s: %s", e.code, e.operation) }
+
+// Format writes the classification and operation without exposing the cause.
+func (e *Error) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte(e.Error())) }
+
+// LogValue returns the classification and operation without exposing the cause.
+func (e *Error) LogValue() slog.Value { return slog.StringValue(e.Error()) }
+
+// Unwrap returns the retained cause.
+func (e *Error) Unwrap() error { return e.cause }
+
+// Is reports whether target is the same storage Code.
+func (e *Error) Is(target error) bool { code, ok := target.(Code); return ok && code == e.code }
+
+// Code returns the storage failure classification.
+func (e *Error) Code() Code { return e.code }
+
+// Operation returns the operation that failed.
+func (e *Error) Operation() Operation { return e.operation }
+
+// Outcome returns the reported mutation visibility.
+func (e *Error) Outcome() Outcome { return e.outcome }
+
+// Cleanup returns the optional provider cleanup reference.
 func (e *Error) Cleanup() value.Optional[CleanupID] { return e.cleanup }
+
+// WithCleanup returns a copy carrying id, leaving the receiver unchanged.
 func (e *Error) WithCleanup(id CleanupID) *Error {
 	next := *e
 	next.cleanup = value.Set(id)

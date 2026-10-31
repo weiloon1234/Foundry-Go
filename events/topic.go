@@ -35,11 +35,18 @@ type Topic[E any] struct {
 	version Version
 }
 
+// Define constructs a typed topic descriptor. Validation occurs through Validate or Declare.
 func Define[E any](name Name, version Version) Topic[E] {
 	return Topic[E]{name: name, version: version}
 }
-func (t Topic[E]) Name() Name       { return t.name }
+
+// Name returns the semantic event name.
+func (t Topic[E]) Name() Name { return t.name }
+
+// Version returns the event payload schema version.
 func (t Topic[E]) Version() Version { return t.version }
+
+// Validate checks the topic name, positive schema version, and concrete payload type.
 func (t Topic[E]) Validate() error {
 	return validateTopic(topicKey{t.name, t.version}, reflect.TypeFor[E]())
 }
@@ -52,6 +59,7 @@ type Listener[E any] struct {
 	queued  bool
 }
 
+// Listen pairs a listener name with its typed handler for declaration.
 func Listen[E any](name ListenerID, handler Handler[E]) Listener[E] {
 	return Listener[E]{name: name, handler: handler}
 }
@@ -60,7 +68,9 @@ func Listen[E any](name ListenerID, handler Handler[E]) Listener[E] {
 // ListenerQueue instead of inline. Sync and queued listeners can be mixed per
 // event; each queued listener is enqueued at its position in declaration order
 // with a fresh payload snapshot, and runs later with its own retries.
-func (l Listener[E]) Queued() Listener[E]          { l.queued = true; return l }
+func (l Listener[E]) Queued() Listener[E] { l.queued = true; return l }
+
+// Format writes a fixed description without exposing the handler.
 func (Listener[E]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("event listener")) }
 
 // Declare contributes this schema and ordered listeners. A declaration with no
@@ -145,6 +155,7 @@ type Declaration struct {
 	listeners []listener
 }
 
+// Format writes a fixed description without exposing registered handlers.
 func (Declaration) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("event declaration")) }
 
 func validateListener(name ListenerID, present bool) error {

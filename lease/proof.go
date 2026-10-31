@@ -19,6 +19,8 @@ func (g *Guard) Proof() (Proof, error) {
 	}
 	return Proof{guard: g}, nil
 }
+
+// Validate checks the guard's current local validity without performing an authority check.
 func (p Proof) Validate() error { return p.guard.Err() }
 
 // Key is the complete namespaced lease address for atomic authority checks.
@@ -36,7 +38,11 @@ func (p Proof) Owner() Owner {
 	}
 	return p.guard.owner
 }
-func (p Proof) String() string   { return "[lease proof]" }
+
+// String returns a redacted description of the proof.
+func (p Proof) String() string { return "[lease proof]" }
+
+// GoString returns a redacted description of the proof.
 func (p Proof) GoString() string { return p.String() }
 
 // WithProof is With for feature/adaptor integration. The callback receives a live

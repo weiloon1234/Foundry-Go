@@ -9,6 +9,7 @@ import (
 // Assembly checks them before boot instead of failing at the first request.
 type Requirements struct{ Tags, Counters, Entries, Batches, DistributedFills bool }
 
+// Require returns fault.Invalid if the store lacks any requested capability.
 func (s *Store) Require(required Requirements) error {
 	if s == nil || s.backend == nil {
 		return safeerror.NewFault(fault.Invalid, "cache store is not initialized")

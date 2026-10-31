@@ -57,6 +57,8 @@ func WithLogger(logger *slog.Logger) StoreOption {
 	}
 }
 
+// NewStore validates configuration and borrows the backend without performing I/O.
+// The caller owns the backend lifecycle and must close the store before the backend.
 func NewStore(backend Backend, config Config, options ...StoreOption) (*Store, error) {
 	if backend == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "cache store requires a backend")
@@ -80,6 +82,8 @@ func NewStore(backend Backend, config Config, options ...StoreOption) (*Store, e
 	}
 	return store, nil
 }
+
+// Namespace returns the store's configured namespace.
 func (s *Store) Namespace() Namespace { return s.config.Namespace }
 
 // Close rejects new operations with fault.Closed, cancels the contexts of
@@ -147,6 +151,7 @@ type Stats struct {
 	SnapshotRetries                     uint64
 }
 
+// Stats returns a snapshot of operation counters, or zero counters for a nil store.
 func (s *Store) Stats() Stats {
 	if s == nil {
 		return Stats{}

@@ -10,6 +10,7 @@ import (
 
 type privateSQLValue struct{}
 
+// Format writes a fixed placeholder without exposing a SQL value.
 func (privateSQLValue) Format(s fmt.State, _ rune) { _, _ = io.WriteString(s, "[SQL value]") }
 func encodeContainer(m *pgtype.Map, codec pgtype.Codec, value any) any {
 	switch codec.(type) {
@@ -60,9 +61,14 @@ type arrayGetter struct {
 	m      *pgtype.Map
 }
 
+// Dimensions forwards the source array's dimensions.
 func (a arrayGetter) Dimensions() []pgtype.ArrayDimension { return a.source.Dimensions() }
-func (a arrayGetter) Index(i int) any                     { return protectValue(a.m, a.source.Index(i)) }
-func (a arrayGetter) IndexType() any                      { return protectValue(a.m, a.source.IndexType()) }
+
+// Index returns the source element wrapped for protected encoding.
+func (a arrayGetter) Index(i int) any { return protectValue(a.m, a.source.Index(i)) }
+
+// IndexType returns the source's representative element wrapped for protected encoding.
+func (a arrayGetter) IndexType() any { return protectValue(a.m, a.source.IndexType()) }
 
 type compositeGetter struct {
 	privateSQLValue
@@ -70,7 +76,10 @@ type compositeGetter struct {
 	m      *pgtype.Map
 }
 
-func (a compositeGetter) IsNull() bool    { return a.source.IsNull() }
+// IsNull forwards the source composite's null state.
+func (a compositeGetter) IsNull() bool { return a.source.IsNull() }
+
+// Index returns the source field wrapped for protected encoding.
 func (a compositeGetter) Index(i int) any { return protectValue(a.m, a.source.Index(i)) }
 
 type rangeGetter struct {
@@ -79,8 +88,13 @@ type rangeGetter struct {
 	m      *pgtype.Map
 }
 
-func (a rangeGetter) IsNull() bool                                     { return a.source.IsNull() }
+// IsNull forwards the source range's null state.
+func (a rangeGetter) IsNull() bool { return a.source.IsNull() }
+
+// BoundTypes forwards the source range's lower and upper bound types.
 func (a rangeGetter) BoundTypes() (pgtype.BoundType, pgtype.BoundType) { return a.source.BoundTypes() }
+
+// Bounds returns the source bounds wrapped for protected encoding.
 func (a rangeGetter) Bounds() (any, any) {
 	lo, hi := a.source.Bounds()
 	return protectValue(a.m, lo), protectValue(a.m, hi)
@@ -92,30 +106,45 @@ type multirangeGetter struct {
 	m      *pgtype.Map
 }
 
-func (a multirangeGetter) IsNull() bool    { return a.source.IsNull() }
-func (a multirangeGetter) Len() int        { return a.source.Len() }
+// IsNull forwards the source multirange's null state.
+func (a multirangeGetter) IsNull() bool { return a.source.IsNull() }
+
+// Len forwards the source multirange's range count.
+func (a multirangeGetter) Len() int { return a.source.Len() }
+
+// Index returns the source range wrapped for protected encoding.
 func (a multirangeGetter) Index(i int) any { return protectValue(a.m, a.source.Index(i)) }
-func (a multirangeGetter) IndexType() any  { return protectValue(a.m, a.source.IndexType()) }
+
+// IndexType returns the source's representative range wrapped for protected encoding.
+func (a multirangeGetter) IndexType() any { return protectValue(a.m, a.source.IndexType()) }
 
 type arraySetter struct {
 	privateSQLValue
 	source pgtype.ArraySetter
 }
 
+// SetDimensions invokes the source array setter with SQL callback isolation.
 func (a arraySetter) SetDimensions(dimensions []pgtype.ArrayDimension) error {
 	return sqlcallback.Invoke("set PostgreSQL array dimensions", func() error { return a.source.SetDimensions(dimensions) })
 }
+
+// ScanIndex returns the source element destination wrapped for protected scanning.
 func (a arraySetter) ScanIndex(i int) any { return protectTarget(a.source.ScanIndex(i)) }
-func (a arraySetter) ScanIndexType() any  { return protectTarget(a.source.ScanIndexType()) }
+
+// ScanIndexType returns the source's representative element destination wrapped for protected scanning.
+func (a arraySetter) ScanIndexType() any { return protectTarget(a.source.ScanIndexType()) }
 
 type compositeSetter struct {
 	privateSQLValue
 	source pgtype.CompositeIndexScanner
 }
 
+// ScanNull invokes the source composite's null scanner with SQL callback isolation.
 func (a compositeSetter) ScanNull() error {
 	return sqlcallback.Invoke("scan PostgreSQL composite null", a.source.ScanNull)
 }
+
+// ScanIndex returns the source field destination wrapped for protected scanning.
 func (a compositeSetter) ScanIndex(i int) any { return protectTarget(a.source.ScanIndex(i)) }
 
 type rangeSetter struct {
@@ -123,13 +152,18 @@ type rangeSetter struct {
 	source pgtype.RangeScanner
 }
 
+// ScanNull invokes the source range's null scanner with SQL callback isolation.
 func (a rangeSetter) ScanNull() error {
 	return sqlcallback.Invoke("scan PostgreSQL range null", a.source.ScanNull)
 }
+
+// ScanBounds returns the source bound destinations wrapped for protected scanning.
 func (a rangeSetter) ScanBounds() (any, any) {
 	lo, hi := a.source.ScanBounds()
 	return protectTarget(lo), protectTarget(hi)
 }
+
+// SetBoundTypes invokes the source range setter with SQL callback isolation.
 func (a rangeSetter) SetBoundTypes(lo, hi pgtype.BoundType) error {
 	return sqlcallback.Invoke("set PostgreSQL range bounds", func() error { return a.source.SetBoundTypes(lo, hi) })
 }
@@ -139,14 +173,21 @@ type multirangeSetter struct {
 	source pgtype.MultirangeSetter
 }
 
+// ScanNull invokes the source multirange's null scanner with SQL callback isolation.
 func (a multirangeSetter) ScanNull() error {
 	return sqlcallback.Invoke("scan PostgreSQL multirange null", a.source.ScanNull)
 }
+
+// SetLen invokes the source multirange length setter with SQL callback isolation.
 func (a multirangeSetter) SetLen(n int) error {
 	return sqlcallback.Invoke("set PostgreSQL multirange length", func() error { return a.source.SetLen(n) })
 }
+
+// ScanIndex returns the source range destination wrapped for protected scanning.
 func (a multirangeSetter) ScanIndex(i int) any { return protectTarget(a.source.ScanIndex(i)) }
-func (a multirangeSetter) ScanIndexType() any  { return protectTarget(a.source.ScanIndexType()) }
+
+// ScanIndexType returns the source's representative range destination wrapped for protected scanning.
+func (a multirangeSetter) ScanIndexType() any { return protectTarget(a.source.ScanIndexType()) }
 
 // Known native containers keep their capabilities for user-registered types that
 // have no default Go-type mapping. Built-in codecs still recover the original

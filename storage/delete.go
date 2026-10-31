@@ -14,6 +14,8 @@ const MaxBatchDelete = 1000
 // Results align with keys; nil means deleted or already absent. A call-level
 // error means the batch outcome is unknown for every key without a result.
 type BatchDeleter interface {
+	// DeleteBatch unconditionally deletes keys and returns aligned per-key results or a
+	// call-level failure.
 	DeleteBatch(ctx context.Context, keys []ObjectKey) ([]error, error)
 }
 
@@ -24,6 +26,7 @@ type DeleteFailure struct {
 	Err error
 }
 
+// DeleteManyResult separates successfully deleted keys from classified per-key failures.
 type DeleteManyResult struct {
 	Deleted []ObjectKey
 	Failed  []DeleteFailure

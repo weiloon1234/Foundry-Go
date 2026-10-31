@@ -29,6 +29,7 @@ type HashDeclaration[K, F, V any] struct {
 	parse      func(string) (F, error)
 }
 
+// DefineHash creates a typed hash declaration without validating or binding it.
 func DefineHash[K, F, V any](name Name, version Version, keys keyspace.Codec[K], fields keyspace.Codec[F]) HashDeclaration[K, F, V] {
 	return HashDeclaration[K, F, V]{definition: &definition[K]{name: name, version: version, kind: HashKind, keys: keys}, fields: fields}
 }
@@ -40,6 +41,8 @@ func (d HashDeclaration[K, F, V]) WithFieldDecoder(parse func(string) (F, error)
 	d.parse = parse
 	return d
 }
+
+// Bind validates the declaration and hash capability and claims its name and version without I/O.
 func (d HashDeclaration[K, F, V]) Bind(s *Store) (Hash[K, F, V], error) {
 	if err := d.definition.validate(); err != nil {
 		return Hash[K, F, V]{}, err
@@ -64,9 +67,12 @@ func (d HashDeclaration[K, F, V]) Bind(s *Store) (Hash[K, F, V], error) {
 // equality, rather than Go pointer identity or the spelling of numeric JSON.
 type SetDeclaration[K, V any] struct{ definition *definition[K] }
 
+// DefineSet creates a typed set declaration without validating or binding it.
 func DefineSet[K, V any](name Name, version Version, keys keyspace.Codec[K]) SetDeclaration[K, V] {
 	return SetDeclaration[K, V]{&definition[K]{name: name, version: version, kind: SetKind, keys: keys}}
 }
+
+// Bind validates the declaration and set capability and claims its name and version without I/O.
 func (d SetDeclaration[K, V]) Bind(s *Store) (Set[K, V], error) {
 	if err := d.definition.validate(); err != nil {
 		return Set[K, V]{}, err
@@ -88,9 +94,12 @@ func (d SetDeclaration[K, V]) Bind(s *Store) (Set[K, V], error) {
 // JSON identity, as in sets, and each carries a float64 score.
 type SortedSetDeclaration[K, V any] struct{ definition *definition[K] }
 
+// DefineSortedSet creates a typed sorted-set declaration without validating or binding it.
 func DefineSortedSet[K, V any](name Name, version Version, keys keyspace.Codec[K]) SortedSetDeclaration[K, V] {
 	return SortedSetDeclaration[K, V]{&definition[K]{name: name, version: version, kind: SortedSetKind, keys: keys}}
 }
+
+// Bind validates the declaration and sorted-set capability and claims its name and version without I/O.
 func (d SortedSetDeclaration[K, V]) Bind(s *Store) (SortedSet[K, V], error) {
 	if err := d.definition.validate(); err != nil {
 		return SortedSet[K, V]{}, err
@@ -112,9 +121,12 @@ func (d SortedSetDeclaration[K, V]) Bind(s *Store) (SortedSet[K, V], error) {
 // JSON snapshots in insertion order; duplicates are allowed.
 type ListDeclaration[K, V any] struct{ definition *definition[K] }
 
+// DefineList creates a typed list declaration without validating or binding it.
 func DefineList[K, V any](name Name, version Version, keys keyspace.Codec[K]) ListDeclaration[K, V] {
 	return ListDeclaration[K, V]{&definition[K]{name: name, version: version, kind: ListKind, keys: keys}}
 }
+
+// Bind validates the declaration and list capability and claims its name and version without I/O.
 func (d ListDeclaration[K, V]) Bind(s *Store) (List[K, V], error) {
 	if err := d.definition.validate(); err != nil {
 		return List[K, V]{}, err

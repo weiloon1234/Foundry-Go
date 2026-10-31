@@ -17,6 +17,7 @@ const (
 	Uncertain      State = "uncertain"
 )
 
+// Validate rejects an unrecognized persisted attachment state.
 func (s State) Validate() error {
 	switch s {
 	case Writing, Stored, Ready, CleanupPending, Cleaned, Uncertain, Retained:

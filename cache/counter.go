@@ -32,6 +32,7 @@ func (c Counter[K]) Add(ctx context.Context, key K, value int64, ttl TTL) (bool,
 	return c.cache.Add(ctx, key, value, ttl)
 }
 
+// Forget removes the current counter and reports whether it was present.
 func (c Counter[K]) Forget(ctx context.Context, key K) (bool, error) { return c.cache.Forget(ctx, key) }
 
 // Increment atomically adds a signed delta and returns the resulting value. A

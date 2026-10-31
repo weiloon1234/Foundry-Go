@@ -11,7 +11,10 @@ import (
 // Checksum is the SHA-256 identity of a complete migration definition.
 type Checksum [32]byte
 
-func (c Checksum) String() string               { return hex.EncodeToString(c[:]) }
+// String returns the checksum's lowercase hexadecimal representation.
+func (c Checksum) String() string { return hex.EncodeToString(c[:]) }
+
+// MarshalText returns the checksum's lowercase hexadecimal bytes.
 func (c Checksum) MarshalText() ([]byte, error) { return []byte(c.String()), nil }
 
 // ParseChecksum requires the exact lowercase hexadecimal history representation.
@@ -26,6 +29,8 @@ func ParseChecksum(text string) (Checksum, error) {
 	return result, nil
 }
 
+// UnmarshalText parses the exact lowercase hexadecimal representation and replaces the checksum on success.
+// A nil receiver returns fault.Invalid.
 func (c *Checksum) UnmarshalText(text []byte) error {
 	value, err := ParseChecksum(string(text))
 	if err != nil {

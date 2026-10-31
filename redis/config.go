@@ -61,6 +61,8 @@ func DefaultConfig() Config {
 		ConnectTimeout: 5 * time.Second, OperationTimeout: 5 * time.Second, PoolTimeout: 5 * time.Second,
 		MaxIdleTime: 5 * time.Minute, MaxLifetime: 30 * time.Minute, MaxValueBytes: 1 << 20}
 }
+
+// Validate checks the explicit endpoint, credentials, capacity, timeouts, and TLS policy without connecting.
 func (c Config) Validate() error {
 	if c.Host == "" || strings.ContainsAny(c.Host, ",/\\ \t\r\n") || !validText(c.Host) || c.Port == 0 || c.Database < 0 || c.Database > int(^uint32(0)>>1) || !validText(c.User) || !validText(c.Password.Reveal()) {
 		return safeerror.NewFault(fault.Invalid, "Redis needs an explicit TCP endpoint and valid credentials/database")

@@ -32,18 +32,25 @@ func (b *Backend) inspectStored(key cache.EntryKey, tags *tagState, now time.Tim
 	return element, item.kind == taggedEntry && item.fingerprint == tags.key.Fingerprint(), nil
 }
 
+// Exists reports whether a usable live plain entry exists without copying its payload.
 func (b *Backend) Exists(ctx context.Context, key cache.EntryKey) (bool, error) {
 	return b.entryOperation(ctx, key, nil, nil)
 }
+
+// Expire changes a live plain entry's TTL without changing its payload.
 func (b *Backend) Expire(ctx context.Context, key cache.EntryKey, ttl cache.TTL) (bool, error) {
 	return b.entryOperation(ctx, key, nil, &ttl)
 }
+
+// ExistsTagged checks a live entry under its tag snapshot, returning fault.Conflict for stale metadata.
 func (b *Backend) ExistsTagged(ctx context.Context, key cache.TaggedKey) (bool, error) {
 	if err := key.Validate(); err != nil {
 		return false, err
 	}
 	return b.entryOperation(ctx, key.DataKey(), &key, nil)
 }
+
+// ExpireTagged atomically validates the tag snapshot and changes a live entry's TTL.
 func (b *Backend) ExpireTagged(ctx context.Context, key cache.TaggedKey, ttl cache.TTL) (bool, error) {
 	if err := key.Validate(); err != nil {
 		return false, err

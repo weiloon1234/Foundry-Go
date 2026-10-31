@@ -35,14 +35,31 @@ type envelopeWire struct {
 	Payload         json.RawMessage                 `json:"payload"`
 }
 
-func (e Envelope) Target() Target             { return Target{ID: e.ID(), Name: e.Name(), Version: e.Version()} }
-func (e Envelope) ID() ExecutionID            { return e.wire.ID }
-func (e Envelope) Name() Name                 { return e.wire.Name }
-func (e Envelope) Version() Version           { return e.wire.Version }
-func (e Envelope) Uniqueness() Uniqueness     { return e.wire.Unique }
-func (e Envelope) Queue() Queue               { return e.wire.Policy.Queue }
-func (e Envelope) Policy() Policy             { return e.wire.Policy.snapshot() }
-func (e Envelope) AvailableAt() time.Time     { return e.wire.AvailableAt }
+// Target returns the dispatch identity, name, and version used for exact cancellation matching.
+func (e Envelope) Target() Target { return Target{ID: e.ID(), Name: e.Name(), Version: e.Version()} }
+
+// ID returns the stable heterogeneous dispatch identity.
+func (e Envelope) ID() ExecutionID { return e.wire.ID }
+
+// Name returns the job name.
+func (e Envelope) Name() Name { return e.wire.Name }
+
+// Version returns the job payload schema version.
+func (e Envelope) Version() Version { return e.wire.Version }
+
+// Uniqueness returns the immutable admission deduplication policy.
+func (e Envelope) Uniqueness() Uniqueness { return e.wire.Unique }
+
+// Queue returns the captured routing destination.
+func (e Envelope) Queue() Queue { return e.wire.Policy.Queue }
+
+// Policy returns an owned execution policy snapshot.
+func (e Envelope) Policy() Policy { return e.wire.Policy.snapshot() }
+
+// AvailableAt returns the captured eligibility time. Zero means immediately eligible.
+func (e Envelope) AvailableAt() time.Time { return e.wire.AvailableAt }
+
+// Origin returns the attribution captured for this dispatch.
 func (e Envelope) Origin() attribution.Origin { return e.wire.Origin }
 
 // Encrypted reports a sealed payload: PayloadJSON is then a JSON string of
@@ -69,18 +86,25 @@ func (w envelopeWire) extended() bool {
 	return w.Policy.extended() || w.Unique.UntilProcessing || w.Encrypted
 }
 
+// WireVersion returns the transport format, treating its omitted value as EnvelopeV1.
 func (e Envelope) WireVersion() EnvelopeVersion {
 	if e.wire.EnvelopeVersion == 0 {
 		return EnvelopeV1
 	}
 	return e.wire.EnvelopeVersion
 }
+
+// Trace returns the optional captured trace context.
 func (e Envelope) Trace() value.Optional[tracing.Context] { return e.wire.Trace }
 
 // PayloadJSON is an explicit inspection boundary; payloads may contain personal
 // data. Default formatting deliberately omits payload and attribution values.
-func (e Envelope) PayloadJSON() string      { return e.payload }
+func (e Envelope) PayloadJSON() string { return e.payload }
+
+// Format writes a fixed description without exposing payload or attribution.
 func (Envelope) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job envelope")) }
+
+// Validate checks transport format, identity, payload bounds, policy, attribution, and eligibility time.
 func (e Envelope) Validate() error {
 	switch e.wire.EnvelopeVersion {
 	case 0:
@@ -123,6 +147,8 @@ func (e Envelope) Validate() error {
 	}
 	return nil
 }
+
+// MarshalJSON validates and encodes the envelope within transport byte and JSON structure bounds.
 func (e Envelope) MarshalJSON() ([]byte, error) {
 	if err := e.Validate(); err != nil {
 		return nil, err

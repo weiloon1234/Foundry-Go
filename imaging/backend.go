@@ -95,6 +95,7 @@ type nativeSource interface {
 	close()
 }
 
+// ValidatePlan checks the plan and rejects features unavailable in this engine.
 func (e *Engine) ValidatePlan(p Plan) error {
 	if err := e.Validate(); err != nil {
 		return err

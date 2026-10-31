@@ -142,6 +142,7 @@ func RegisterQueuedListener[E any](r *foundation.Registrar, busKey foundation.Ke
 // shared dependencies. Declarations returns one Topic.Declare per event it
 // handles; each may mix sync and queued listeners.
 type Subscriber interface {
+	// Declarations returns the event schemas and listeners contributed by the subscriber.
 	Declarations() ([]Declaration, error)
 }
 

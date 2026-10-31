@@ -39,6 +39,7 @@ const (
 // VariantName is a stable semantic identifier stored with each derived file.
 type VariantName string
 
+// Validate rejects invalid or excessive semantic variant identifiers.
 func (n VariantName) Validate() error {
 	if len(n) > 64 || !identifier.Semantic(string(n)) {
 		return invalid()
@@ -55,16 +56,23 @@ type Variant struct {
 	plan imaging.Plan
 }
 
+// DefineVariant creates a named image-plan declaration; validation is deferred.
 func DefineVariant(name VariantName, plan imaging.Plan) Variant {
 	return Variant{name: name, plan: plan}
 }
+
+// Name returns the declared variant identifier.
 func (v Variant) Name() VariantName { return v.name }
+
+// Validate checks the variant name and image plan without checking engine capabilities.
 func (v Variant) Validate() error {
 	if err := v.name.Validate(); err != nil {
 		return err
 	}
 	return v.plan.Validate()
 }
+
+// Format writes a label without exposing the prepared image plan.
 func (Variant) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("attachment variant declaration")) }
 
 // VariantInfo describes one generated variant of a loaded attachment.
@@ -191,6 +199,7 @@ const (
 	VariantUncertain VariantState = "uncertain"
 )
 
+// Validate rejects an unrecognized persisted variant state.
 func (s VariantState) Validate() error {
 	switch s {
 	case VariantWriting, VariantReady, VariantCleanup, VariantCleaned, VariantUncertain:
@@ -810,6 +819,7 @@ type RegenerationCursor struct {
 	after      model.ID[store.File]
 }
 
+// IsZero reports whether no regeneration continuation is set.
 func (c RegenerationCursor) IsZero() bool { return c.after.IsZero() }
 
 // RegenerationPage reports one batch. Failed attachments keep their previous

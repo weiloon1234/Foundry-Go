@@ -13,8 +13,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/metadata"
 )
 
+// Command holds parsed metadata maintenance options for execution with an assembled manager.
 type Command struct{ options extensioncommand.Options }
 
+// Parse parses metadata maintenance arguments without performing store I/O.
 func Parse(args []string, help io.Writer) (Command, error) {
 	options, err := extensioncommand.ParseMaintenance("metadata", args, help)
 	return Command{options: options}, err

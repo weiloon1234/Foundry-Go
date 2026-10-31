@@ -58,6 +58,7 @@ type seekReader struct {
 	closeErr  error
 }
 
+// Read lazily opens a representation-pinned stream and advances the serialized position.
 func (r *seekReader) Read(p []byte) (int, error) {
 	r.operation.Lock()
 	defer r.operation.Unlock()
@@ -101,6 +102,9 @@ func (r *seekReader) Read(p []byte) (int, error) {
 	r.position += int64(n)
 	return n, err
 }
+
+// Seek changes the serialized position and closes the current stream when the position
+// changes.
 func (r *seekReader) Seek(offset int64, whence int) (int64, error) {
 	r.operation.Lock()
 	defer r.operation.Unlock()
@@ -139,6 +143,8 @@ func (r *seekReader) Seek(offset int64, whence int) (int64, error) {
 	r.position = next
 	return next, nil
 }
+
+// Close cancels and drains reads, closes the current body and retains its close error.
 func (r *seekReader) Close() error {
 	r.once.Do(func() {
 		r.cancel()

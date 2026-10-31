@@ -54,6 +54,8 @@ type workerRun struct {
 	reserve context.Context
 }
 
+// NewWorker validates and snapshots configuration and applies options without starting reservation loops.
+// The worker borrows backend and registry.
 func NewWorker(backend Backend, registry *Registry, config WorkerConfig, options ...WorkerOption) (*Worker, error) {
 	if backend == nil || isNil(backend) || registry == nil || registry.entries == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "worker requires a backend and registry")
@@ -378,6 +380,8 @@ func (w *Worker) shutdown(ctx context.Context, begin func()) error {
 		return ctx.Err()
 	}
 }
+
+// Done closes after reservation loops and all owned handlers have exited. A nil worker returns nil.
 func (w *Worker) Done() <-chan struct{} {
 	if w == nil {
 		return nil

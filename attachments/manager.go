@@ -41,9 +41,14 @@ const (
 	MaxOwnerCleanup = 4096
 )
 
+// DefaultConfig returns bounded read, mutation, cleanup and reconciliation timing
+// defaults.
 func DefaultConfig() Config {
 	return Config{MaxActive: 8, MaxReads: DefaultMaxReads, Timeout: 2 * time.Minute, CleanupTimeout: 10 * time.Second, StoredGrace: 5 * time.Minute, SettleAfter: DefaultSettleAfter}
 }
+
+// Validate checks manager capacity and timing bounds, allowing zero read capacity and
+// settlement delay to select defaults.
 func (c Config) Validate() error {
 	if c.MaxActive < 1 || c.MaxActive > 256 || c.MaxReads < 0 || c.MaxReads > 4096 || c.Timeout <= 0 || c.Timeout > 30*time.Minute || c.CleanupTimeout <= 0 || c.CleanupTimeout > time.Minute || c.StoredGrace < time.Minute || c.StoredGrace > 24*time.Hour || c.SettleAfter < 0 || c.SettleAfter != 0 && c.SettleAfter < time.Minute || c.SettleAfter > 7*24*time.Hour {
 		return invalid()
@@ -68,6 +73,9 @@ type Dependencies struct {
 	Image   *imaging.Engine
 	Locales i18n.LocaleCatalog
 }
+
+// Manager owns attachment admission and recovery state while borrowing its store,
+// disks, image engine and locale catalog.
 type Manager struct {
 	store       *extensions.Store
 	disks       *storage.Registry
@@ -87,6 +95,8 @@ type Manager struct {
 	variantWriting map[model.ID[store.Variant]]bool
 }
 
+// New validates registrations and borrowed dependencies, then creates separate
+// admission owners for reads, writes and owner cleanup.
 func New(dependencies Dependencies, config Config, collections ...Registration) (*Manager, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -170,6 +180,8 @@ func New(dependencies Dependencies, config Config, collections ...Registration) 
 	}
 	return m, nil
 }
+
+// Validate rejects an uninitialized manager or invalid backing store.
 func (m *Manager) Validate() error {
 	if m == nil || m.calls == nil || m.reads == nil || m.owners == nil || m.done == nil || m.collections == nil || m.writer.IsZero() {
 		return invalid()
@@ -214,6 +226,9 @@ func (m *Manager) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
+// Done closes when manager shutdown has drained reads, writes and owner cleanup. A nil
+// or uninitialized manager returns a closed channel.
 func (m *Manager) Done() <-chan struct{} {
 	if m == nil || m.done == nil {
 		ch := make(chan struct{})

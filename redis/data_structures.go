@@ -235,6 +235,8 @@ func (c *Client) SortedSetIncrement(ctx context.Context, key data.Key, member st
 	}
 	return parseScore(reply[0])
 }
+
+// SortedSetRemove removes an encoded member and reports whether it existed.
 func (c *Client) SortedSetRemove(ctx context.Context, key data.Key, member string, l data.Limits) (bool, error) {
 	l, err := c.sortedSetMember(ctx, key, member, l)
 	if err != nil {
@@ -242,6 +244,8 @@ func (c *Client) SortedSetRemove(ctx context.Context, key data.Key, member strin
 	}
 	return dataBoolean(c.dataCall(ctx, dataSortedSetScript, key, "zrem", l, member))
 }
+
+// SortedSetScore returns a member's score and distinguishes absence.
 func (c *Client) SortedSetScore(ctx context.Context, key data.Key, member string, l data.Limits) (float64, bool, error) {
 	l, err := c.sortedSetMember(ctx, key, member, l)
 	if err != nil {
@@ -257,6 +261,8 @@ func (c *Client) SortedSetScore(ctx context.Context, key data.Key, member string
 	score, err := parseScore(reply[0])
 	return score, err == nil, err
 }
+
+// SortedSetRank returns a member's zero-based rank in the selected order and distinguishes absence.
 func (c *Client) SortedSetRank(ctx context.Context, key data.Key, member string, order data.Order, l data.Limits) (uint64, bool, error) {
 	if err := order.Validate(); err != nil {
 		return 0, false, err
@@ -299,6 +305,8 @@ func (c *Client) SortedSetRangeByScore(ctx context.Context, key data.Key, scores
 	}
 	return scoredReply(c.dataCall(ctx, dataSortedSetScript, key, "zrangebyscore", l, scoreBound(scores.Min, scores.ExcludeMin), scoreBound(scores.Max, scores.ExcludeMax), strconv.Itoa(window.Offset), strconv.Itoa(window.Count), orderArgument(window.Order)))(window, l)
 }
+
+// SortedSetCountByScore counts members matching the validated score range within the collection bound.
 func (c *Client) SortedSetCountByScore(ctx context.Context, key data.Key, scores data.ScoreRange, l data.Limits) (uint64, error) {
 	if err := scores.Validate(); err != nil {
 		return 0, err

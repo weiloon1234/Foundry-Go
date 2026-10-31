@@ -12,7 +12,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// Name identifies a pub/sub topic family.
 type Name string
+
+// Version identifies a payload schema. Zero is invalid.
 type Version uint32
 
 // Channel is an opaque, versioned adapter address. Redis database numbers do not
@@ -22,6 +25,7 @@ type Channel struct {
 	version Version
 }
 
+// NewChannel constructs a namespaced, versioned adapter address from a logical resource key.
 func NewChannel(namespace keyspace.Namespace, name Name, version Version, logical string) (Channel, error) {
 	if version == 0 {
 		return Channel{}, safeerror.NewFault(fault.Invalid, "pub/sub schema version must be positive")
@@ -29,13 +33,19 @@ func NewChannel(namespace keyspace.Namespace, name Name, version Version, logica
 	address, err := keyaddress.New(namespace, string(name), logical)
 	return Channel{address, version}, err
 }
+
+// Validate checks the address and positive schema version.
 func (c Channel) Validate() error {
 	if c.version == 0 {
 		return safeerror.NewFault(fault.Invalid, "pub/sub channel is not initialized")
 	}
 	return c.address.Validate()
 }
+
+// Namespace returns the channel's application and environment scope.
 func (c Channel) Namespace() keyspace.Namespace { return c.address.Namespace }
+
+// String returns the physical versioned address, or an empty string for an invalid channel.
 func (c Channel) String() string {
 	if c.Validate() != nil {
 		return ""
@@ -47,9 +57,12 @@ func (c Channel) String() string {
 // payload bytes; fixed-size message metadata is additionally bounded by Messages.
 type Limits struct{ Messages, Bytes, PayloadBytes, Channels int }
 
+// DefaultLimits returns the default per-subscription buffer and channel bounds.
 func DefaultLimits() Limits {
 	return Limits{Messages: 64, Bytes: 4 << 20, PayloadBytes: 64 << 10, Channels: 64}
 }
+
+// Validate checks buffer sizes, payload size, and channel count against transport bounds.
 func (l Limits) Validate() error {
 	if l.Messages <= 0 || l.Messages > 65536 || l.Bytes <= 0 || l.Bytes > 64<<20 || l.PayloadBytes <= 0 || l.PayloadBytes > value.JSONMaxBytes || l.Bytes < l.PayloadBytes || l.Channels <= 0 || l.Channels > 1024 {
 		return safeerror.NewFault(fault.Invalid, "invalid pub/sub buffer limits")
@@ -69,9 +82,13 @@ type Message struct {
 // only after adapter work exits. Errors never imply an uninterrupted subscription.
 // Implementations must not silently drop messages or hide reconnection gaps.
 type Stream interface {
+	// Next waits for the next owned message. Cancellation ends this wait without closing the stream.
 	Next(context.Context) (Message, error)
+	// Close ends the subscription and unblocks reads; ctx bounds the shutdown wait.
 	Close(context.Context) error
+	// Done closes after the stream's adapter work exits.
 	Done() <-chan struct{}
+	// Err returns the terminal subscription error.
 	Err() error
 }
 
@@ -82,7 +99,9 @@ type Stream interface {
 // Subscribe's context bounds establishment only; the returned stream is explicitly
 // owned until Close or adapter shutdown. No implicit publish retry or fallback.
 type Backend interface {
+	// Publish sends data to channel and returns the authority's subscriber count, without confirming processing.
 	Publish(context.Context, Channel, []byte) (uint64, error)
+	// Subscribe establishes a ready stream over the exact channels using limits to bound buffering.
 	Subscribe(context.Context, []Channel, Limits) (Stream, error)
 }
 
@@ -90,6 +109,7 @@ var ErrClosed = safeerror.Sentinel(fault.Closed, "pub/sub subscription closed")
 var ErrOverflow = safeerror.Sentinel(fault.Conflict, "pub/sub subscription lost messages because its buffer filled")
 var ErrDisconnected = safeerror.Sentinel(fault.Conflict, "pub/sub subscription disconnected; delivery may have been lost")
 
+// ValidatePublish checks cancellation, channel validity, and nonempty transport payload bounds.
 func ValidatePublish(ctx context.Context, channel Channel, data []byte) error {
 	if ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "pub/sub operation needs context")
@@ -105,6 +125,8 @@ func ValidatePublish(ctx context.Context, channel Channel, data []byte) error {
 	}
 	return nil
 }
+
+// ValidateSubscribe checks cancellation, limits, channel validity, and duplicate channels.
 func ValidateSubscribe(ctx context.Context, channels []Channel, limits Limits) error {
 	if ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "pub/sub subscription needs context")

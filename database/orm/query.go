@@ -383,6 +383,7 @@ func executionContext(ctx context.Context, ex database.Executor) error {
 
 type readExecutor struct{ database.Executor }
 
+// Query routes the caller-classified read through database.ReadQuery.
 func (e readExecutor) Query(ctx context.Context, s string, args ...any) (*database.Rows, error) {
 	return database.ReadQuery(ctx, e.Executor, s, args...)
 }

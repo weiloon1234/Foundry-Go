@@ -25,6 +25,7 @@ const (
 	Cancelled State = "cancelled"
 )
 
+// Terminal reports whether the state is Succeeded, Failed, or Cancelled.
 func (s State) Terminal() bool { return s == Succeeded || s == Failed || s == Cancelled }
 
 // Reason is a bounded operational classification, never arbitrary handler error
@@ -66,6 +67,7 @@ func (r Reason) exception() bool {
 // exception counter when they apply such a result.
 func (r Reason) CountsException() bool { return r.exception() }
 
+// Validate checks that the reason is a recognized operational classification.
 func (r Reason) Validate() error {
 	switch r {
 	case NoReason, HandlerFailed, HandlerPanicked, PayloadInvalid, Unregistered, AttemptLimit, LeaseExpired, TimedOut, CancelRequested, WorkerStopped, RateLimited, DependencyFailed, ManuallyRetried, DeliveryLimit, ExceptionLimit, RetryExpired, NotTriggered:
@@ -82,6 +84,7 @@ type Target struct {
 	Version Version
 }
 
+// Validate checks the nonzero identity, semantic name, and positive payload version.
 func (t Target) Validate() error {
 	if t.ID.IsZero() || !identifier.Semantic(string(t.Name)) || t.Version == 0 {
 		return safeerror.NewFault(fault.Invalid, "invalid job target")
@@ -97,18 +100,27 @@ type Ownership struct {
 	owner lease.Owner
 }
 
+// NewOwnership validates a dispatch identity and reservation owner token.
 func NewOwnership(id ExecutionID, owner lease.Owner) (Ownership, error) {
 	result := Ownership{id: id, owner: owner}
 	return result, result.Validate()
 }
-func (p Ownership) ID() ExecutionID    { return p.id }
+
+// ID returns the stable dispatch identity associated with this reservation.
+func (p Ownership) ID() ExecutionID { return p.id }
+
+// Owner returns the opaque reservation token for adapter ownership checks.
 func (p Ownership) Owner() lease.Owner { return p.owner }
+
+// Validate checks the dispatch identity and nonzero owner token.
 func (p Ownership) Validate() error {
 	if p.id.IsZero() {
 		return safeerror.NewFault(fault.Invalid, "job ownership requires a dispatch identity")
 	}
 	return p.owner.Validate()
 }
+
+// Format writes a fixed description without exposing the reservation owner token.
 func (Ownership) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job ownership")) }
 
 // Reservation is returned only after an atomic ready-to-leased transition.
@@ -146,6 +158,7 @@ type Result struct {
 	Refund bool
 }
 
+// Validate checks completion state, retry delay, refund semantics, and failure classification.
 func (r Result) Validate() error {
 	if r.State != Waiting && r.State != Succeeded && r.State != Failed {
 		return safeerror.NewFault(fault.Invalid, "invalid job completion state")
@@ -201,15 +214,25 @@ type Record struct {
 // Adapters must isolate queues/namespaces, honor context, bound data/metadata and
 // return owned snapshots. Backend lifecycle is owned outside this interface.
 type Backend interface {
+	// JobList returns an owned page of records matching the bounded scan options.
 	JobList(context.Context, Key, ListOptions) (Page, error)
+	// JobWorkflow atomically accepts all workflow members and reports whether the group was inserted.
 	JobWorkflow(context.Context, Key, WorkflowEnvelope) (bool, error)
+	// JobCancelWorkflow requests cancellation of unfinished workflow members.
 	JobCancelWorkflow(context.Context, Key, WorkflowID) (bool, error)
+	// JobEnqueue accepts an envelope and reports whether its identity was newly inserted.
 	JobEnqueue(context.Context, Key, Envelope) (bool, error)
+	// JobReserve atomically leases one ready job to owner for ttl, or returns an absent reservation.
 	JobReserve(context.Context, Key, lease.Owner, time.Duration) (value.Optional[Reservation], error)
+	// JobStart confirms a live reservation's attempt and returns its attempt number.
 	JobStart(context.Context, Key, Ownership) (uint32, error)
+	// JobRenew extends a live reservation and reports ownership and cancellation status.
 	JobRenew(context.Context, Key, Ownership, time.Duration) (LeaseStatus, error)
+	// JobFinish applies result only for the current live reservation and reports whether it changed the record.
 	JobFinish(context.Context, Key, Ownership, Result) (bool, error)
+	// JobCancel requests cancellation only for the matching target.
 	JobCancel(context.Context, Key, Target) (bool, error)
+	// JobInspect returns an owned record snapshot when the identity is retained in key.
 	JobInspect(context.Context, Key, ExecutionID) (value.Optional[Record], error)
 }
 
@@ -218,6 +241,7 @@ type Backend interface {
 // idle local workers subscribed to it poll immediately instead of waiting for
 // their adaptive idle interval. Other queues' work never wakes them.
 type WakeBackend interface {
+	// JobWakeup returns a channel closed after the queue's next accepted enqueue, retry, or workflow.
 	JobWakeup(Key) <-chan struct{}
 }
 
@@ -237,6 +261,7 @@ var ErrLegacyLayout = safeerror.Sentinel(fault.Internal, "job queue uses an olde
 // migrates a queue only when explicitly asked. migrated=false means the queue
 // already used the current layout (or did not exist); repeating is safe.
 type LayoutMigrator interface {
+	// JobMigrateLayout explicitly updates a queue's storage layout and reports whether migration occurred.
 	JobMigrateLayout(context.Context, Key) (bool, error)
 }
 
@@ -254,6 +279,8 @@ func ValidateOperation(ctx context.Context, key Key) error {
 	}
 	return key.Validate()
 }
+
+// ValidateEnqueue checks cancellation, queue address, envelope validity, and matching queue routing.
 func ValidateEnqueue(ctx context.Context, key Key, envelope Envelope) error {
 	if err := ValidateOperation(ctx, key); err != nil {
 		return err

@@ -24,6 +24,7 @@ type ListOptions struct {
 	Limit   int
 }
 
+// Validate checks the page limit, paired schema filter, and recognized state.
 func (o ListOptions) Validate() error {
 	if o.Limit < 1 || o.Limit > MaxListLimit {
 		return safeerror.NewFault(fault.Invalid, "job list limit must be between 1 and 100")
@@ -37,10 +38,13 @@ func (o ListOptions) Validate() error {
 	}
 	return safeerror.NewFault(fault.Invalid, "invalid job list state")
 }
+
+// Matches reports whether the record satisfies the state and schema filters.
 func (o ListOptions) Matches(r Record) bool {
 	return (o.State == "" || o.State == r.State) && (o.Name == "" || (o.Name == r.Envelope.Name() && o.Version == r.Envelope.Version()))
 }
 
+// Page contains owned record snapshots and the cursor for a further bounded scan.
 type Page struct {
 	Records []Record
 	Next    ExecutionID
@@ -66,6 +70,7 @@ type Summary struct {
 	RetryToken  RetryToken  `json:"retry_token,omitempty"`
 }
 
+// Summary returns operational metadata without payloads or origin, including a retry token when eligible.
 func (r Record) Summary() Summary {
 	token, _ := r.RetryToken()
 	result := Summary{ID: r.Envelope.ID(), Name: r.Envelope.Name(), Version: r.Envelope.Version(), Queue: r.Envelope.Queue(), State: r.State, Attempts: r.Attempts, MaxAttempts: r.Envelope.Policy().Attempts, Retries: r.Retries, Exceptions: r.Exceptions, Workflow: r.Workflow, AvailableAt: r.AvailableAt, CreatedAt: r.CreatedAt, FinishedAt: r.FinishedAt, RetryToken: token}

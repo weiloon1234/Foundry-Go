@@ -52,10 +52,13 @@ type Config struct {
 	Logger *slog.Logger
 }
 
+// DefaultConfig returns bounded defaults using the public schema and database authority time.
 func DefaultConfig() Config {
 	limits := cacheatomic.DefaultLimits()
 	return Config{Schema: "public", MaxEntries: limits.MaxEntries, MaxBytes: limits.MaxBytes, MaxValueBytes: limits.MaxValueBytes, PruneInterval: cacheatomic.DefaultPruneInterval}
 }
+
+// Validate checks capacity, schema, optional clock, and pruning interval.
 func (c Config) Validate() error {
 	if err := c.limits().Validate(); err != nil {
 		return err
@@ -93,6 +96,7 @@ var _ cache.FlushBackend = (*Backend)(nil)
 // FoundryAdapter marks the backend as framework-owned adapter I/O.
 func (*Backend) FoundryAdapter(frameworkadapter.Seal) {}
 
+// New validates configuration and borrows the database without I/O or schema creation.
 func New(db *database.DB, config Config) (*Backend, error) {
 	if db == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "PostgreSQL cache requires a database")
@@ -169,6 +173,8 @@ func (b *Backend) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
+// Done closes after shutdown drains admitted operations and the background pruner.
 func (b *Backend) Done() <-chan struct{} { return b.done }
 func (b *Backend) enter(ctx context.Context) (func(), error) {
 	if b == nil || b.db == nil || b.done == nil || ctx == nil {

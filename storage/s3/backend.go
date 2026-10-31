@@ -37,6 +37,8 @@ type Backend struct {
 	readRetry, partRetry func(*awss3.Options)
 }
 
+// Prepare validates configuration and allocates upload admission without loading
+// credentials or making provider requests.
 func Prepare(config Config) (*Backend, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -47,6 +49,8 @@ func Prepare(config Config) (*Backend, error) {
 	b.partRetry = safeRetry(config.PartAttempts)
 	return b, nil
 }
+
+// Open prepares and starts an adapter, closing it if startup fails.
 func Open(ctx context.Context, config Config) (*Backend, error) {
 	backend, err := Prepare(config)
 	if err != nil {
@@ -58,6 +62,9 @@ func Open(ctx context.Context, config Config) (*Backend, error) {
 	}
 	return backend, nil
 }
+
+// Start loads SDK configuration and creates the client once; a closed adapter cannot
+// restart.
 func (b *Backend) Start(ctx context.Context) error {
 	if b == nil || ctx == nil {
 		return newFailure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)
@@ -119,6 +126,9 @@ func (b *Backend) Start(ctx context.Context) error {
 	b.started = true
 	return nil
 }
+
+// Close stops upload admission and closes owned idle connections; callers must drain
+// disks first.
 func (b *Backend) Close() error {
 	if b == nil {
 		return nil
@@ -148,6 +158,8 @@ func (b *Backend) ready(ctx context.Context, op storage.Operation) error {
 	}
 	return failureIf(op, storage.Unchanged, ctx.Err())
 }
+
+// Capabilities returns guarantees selected by the configured provider profile.
 func (b *Backend) Capabilities() storage.Capabilities {
 	capabilities := storage.Capabilities{Ranges: true, ConditionalRead: true, DelimitedList: true, ObjectMetadata: true}
 	if b == nil {

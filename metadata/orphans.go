@@ -17,10 +17,14 @@ import (
 // Cursor resumes a bounded scan for this feature and registered owner. It is
 // not a capability or a stable snapshot across separate pages.
 type Cursor = extensionmaintenance.Cursor
+
+// Orphan identifies an inspected metadata row whose owner is no longer retained.
 type Orphan struct {
 	Key  string `json:"key"`
 	Name Name   `json:"name"`
 }
+
+// OrphanPage contains orphan matches, the number of rows scanned and a continuation cursor.
 type OrphanPage struct {
 	Orphans []Orphan
 	Scanned int
@@ -89,6 +93,8 @@ func orphanTable() extensionmaintenance.Table[store.MetaIndex] {
 // its key in the owner's current scope. RescopePage lists rows inspected or
 // moved; Conflicts are stale rows whose current-scope key already exists.
 type StaleRow = extensionmaintenance.Stale
+
+// RescopePage reports a bounded stale-scope inspection or move, including conflicts and continuation.
 type RescopePage = extensionmaintenance.RescopePage
 
 // InspectStale lists, without writing, rows whose owner column names this

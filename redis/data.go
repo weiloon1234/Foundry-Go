@@ -123,9 +123,13 @@ func checkDataKind(key data.Key, kind data.Kind) error {
 	}
 	return nil
 }
+
+// DataExists checks whether the declared collection exists with the expected native type.
 func (c *Client) DataExists(ctx context.Context, key data.Key) (bool, error) {
 	return dataBoolean(c.dataCommand(ctx, key, "exists", data.DefaultLimits()))
 }
+
+// DataExpire atomically changes an existing collection's TTL while preserving its contents.
 func (c *Client) DataExpire(ctx context.Context, key data.Key, ttl cache.TTL) (bool, error) {
 	expiry, err := milliseconds(ttl)
 	if err != nil {
@@ -133,10 +137,14 @@ func (c *Client) DataExpire(ctx context.Context, key data.Key, ttl cache.TTL) (b
 	}
 	return dataBoolean(c.dataCommand(ctx, key, "expire", data.DefaultLimits(), expiry))
 }
+
+// DataCount returns collection cardinality after checking its type and supplied bounds.
 func (c *Client) DataCount(ctx context.Context, key data.Key, l data.Limits) (uint64, error) {
 	fields, code, err := c.dataCommand(ctx, key, "count", l)
 	return dataCount(fields, code, err, l.Entries)
 }
+
+// DataDeleteMany validates and atomically deletes a canonical batch, returning the number of removed keys.
 func (c *Client) DataDeleteMany(ctx context.Context, keys []data.Key) (uint64, error) {
 	if err := data.ValidateBatch(keys); err != nil {
 		return 0, err
@@ -159,6 +167,8 @@ func (c *Client) DataDeleteMany(ctx context.Context, keys []data.Key) (uint64, e
 	fields, code, err := dataReply(reply)
 	return dataCount(fields, code, err, len(keys))
 }
+
+// HashGet returns a bounded encoded field value and distinguishes absence.
 func (c *Client) HashGet(ctx context.Context, key data.Key, field string, l data.Limits) (string, bool, error) {
 	if err := checkDataKind(key, data.HashKind); err != nil {
 		return "", false, err
@@ -179,36 +189,48 @@ func (c *Client) HashGet(ctx context.Context, key data.Key, field string, l data
 	}
 	return text, true, nil
 }
+
+// HashSet stores a bounded encoded value and reports whether the field was new, preserving existing expiry.
 func (c *Client) HashSet(ctx context.Context, key data.Key, field, value string, l data.Limits) (bool, error) {
 	if err := checkDataKind(key, data.HashKind); err != nil {
 		return false, err
 	}
 	return dataBoolean(c.dataCommand(ctx, key, "hset", l, field, value))
 }
+
+// HashDelete removes a field and reports whether it existed.
 func (c *Client) HashDelete(ctx context.Context, key data.Key, field string, l data.Limits) (bool, error) {
 	if err := checkDataKind(key, data.HashKind); err != nil {
 		return false, err
 	}
 	return dataBoolean(c.dataCommand(ctx, key, "hdel", l, field))
 }
+
+// SetAdd inserts an encoded member within the cardinality bound and reports whether it was new.
 func (c *Client) SetAdd(ctx context.Context, key data.Key, member string, l data.Limits) (bool, error) {
 	if err := checkDataKind(key, data.SetKind); err != nil {
 		return false, err
 	}
 	return dataBoolean(c.dataCommand(ctx, key, "sadd", l, member))
 }
+
+// SetRemove removes an encoded member and reports whether it existed.
 func (c *Client) SetRemove(ctx context.Context, key data.Key, member string, l data.Limits) (bool, error) {
 	if err := checkDataKind(key, data.SetKind); err != nil {
 		return false, err
 	}
 	return dataBoolean(c.dataCommand(ctx, key, "srem", l, member))
 }
+
+// SetContains tests exact encoded member equality after checking collection bounds.
 func (c *Client) SetContains(ctx context.Context, key data.Key, member string, l data.Limits) (bool, error) {
 	if err := checkDataKind(key, data.SetKind); err != nil {
 		return false, err
 	}
 	return dataBoolean(c.dataCommand(ctx, key, "contains", l, member))
 }
+
+// SetMembers returns owned, unique member strings in byte order within the reply bounds.
 func (c *Client) SetMembers(ctx context.Context, key data.Key, l data.Limits) ([]string, error) {
 	if err := checkDataKind(key, data.SetKind); err != nil {
 		return nil, err

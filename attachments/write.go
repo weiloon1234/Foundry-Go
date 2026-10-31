@@ -175,7 +175,11 @@ type Prepared[M any, K comparable] struct {
 
 // Operation is the durable upload intent, for Manager.Inspect.
 func (p Prepared[M, K]) Operation() OperationID { return p.operation }
-func (p Prepared[M, K]) IsZero() bool           { return p.operation.IsZero() }
+
+// IsZero reports whether no prepared upload operation is set.
+func (p Prepared[M, K]) IsZero() bool { return p.operation.IsZero() }
+
+// Format writes a label without exposing the prepared upload reference.
 func (Prepared[M, K]) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("prepared attachment upload"))
 }

@@ -183,5 +183,8 @@ func WithStatementDetector(d *StatementDetector) Option {
 	}
 }
 
-func (*StatementDetector) String() string   { return "database statement detector" }
+// String returns a fixed label without exposing the detector's private fingerprint key.
+func (*StatementDetector) String() string { return "database statement detector" }
+
+// GoString returns a fixed label without exposing the detector's private fingerprint key.
 func (*StatementDetector) GoString() string { return "database statement detector" }

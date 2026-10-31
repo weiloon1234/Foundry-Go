@@ -10,21 +10,29 @@ import (
 	"github.com/weiloon1234/Foundry-Go/jobs"
 )
 
+// ReconcileRequest identifies the durable attachment operation to reconcile.
 type ReconcileRequest struct {
 	Operation OperationID `json:"operation"`
 }
 
+// Format writes a label without exposing the operation identifier.
 func (ReconcileRequest) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("attachment reconciliation request"))
 }
 
+// ReconcileJob declares a typed job for one durable attachment operation.
 type ReconcileJob struct {
 	definition jobs.Definition[ReconcileRequest]
 }
 
+// DefineReconcileJob declares a version-one reconciliation payload with the supplied
+// job policy.
 func DefineReconcileJob(name jobs.Name, policy jobs.Policy) ReconcileJob {
 	return ReconcileJob{definition: jobs.Define[ReconcileRequest](name, 1, policy)}
 }
+
+// Declare binds manager reconciliation, marking invalid operations and unsettled writes
+// as permanent job failures.
 func (j ReconcileJob) Declare(manager *Manager) (jobs.Declaration, error) {
 	if err := manager.Validate(); err != nil {
 		return jobs.Declaration{}, err
@@ -49,6 +57,7 @@ type Queue struct {
 	producer *jobs.Outbox
 }
 
+// ToOutbox returns a validated queue borrowing producer.
 func (j ReconcileJob) ToOutbox(producer *jobs.Outbox) (Queue, error) {
 	q := Queue{job: j, producer: producer}
 	if err := q.Validate(); err != nil {
@@ -56,6 +65,8 @@ func (j ReconcileJob) ToOutbox(producer *jobs.Outbox) (Queue, error) {
 	}
 	return q, nil
 }
+
+// Validate checks the reconcile job and borrowed outbox destination.
 func (q Queue) Validate() error {
 	if err := q.job.definition.Validate(); err != nil {
 		return err
@@ -90,6 +101,7 @@ type VariantRequest struct {
 	Operation OperationID `json:"operation"`
 }
 
+// Format writes a label without exposing the operation identifier.
 func (VariantRequest) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("attachment variant request"))
 }
@@ -100,9 +112,13 @@ type VariantJob struct {
 	definition jobs.Definition[VariantRequest]
 }
 
+// DefineVariantJob declares a version-one variant payload with the supplied job policy.
 func DefineVariantJob(name jobs.Name, policy jobs.Policy) VariantJob {
 	return VariantJob{definition: jobs.Define[VariantRequest](name, 1, policy)}
 }
+
+// Declare binds manager variant generation, marking invalid or missing intents as
+// permanent job failures.
 func (j VariantJob) Declare(manager *Manager) (jobs.Declaration, error) {
 	if err := manager.Validate(); err != nil {
 		return jobs.Declaration{}, err
@@ -128,6 +144,7 @@ type VariantQueue struct {
 	producer *jobs.Outbox
 }
 
+// ToOutbox returns a validated variant queue borrowing producer.
 func (j VariantJob) ToOutbox(producer *jobs.Outbox) (VariantQueue, error) {
 	q := VariantQueue{job: j, producer: producer}
 	if err := q.Validate(); err != nil {
@@ -135,6 +152,8 @@ func (j VariantJob) ToOutbox(producer *jobs.Outbox) (VariantQueue, error) {
 	}
 	return q, nil
 }
+
+// Validate checks the variant job and borrowed outbox destination.
 func (q VariantQueue) Validate() error {
 	if err := q.job.definition.Validate(); err != nil {
 		return err

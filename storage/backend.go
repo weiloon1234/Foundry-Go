@@ -53,11 +53,21 @@ type Capabilities struct {
 // Backend lifetime is borrowed by Disk: close the Disk and wait for Done before
 // closing its adapter.
 type Backend interface {
+	// Capabilities returns the immutable guarantees supported by this adapter.
 	Capabilities() Capabilities
+	// Put streams the borrowed source into a complete publication and reports its mutation
+	// outcome on failure.
 	Put(context.Context, ObjectKey, io.Reader, PutOptions) (ObjectInfo, error)
+	// Open returns metadata and an owned reader for the selected object span; callers must
+	// close any returned reader.
 	Open(context.Context, ObjectKey, ReadOptions) (io.ReadCloser, ReadInfo, error)
+	// Stat returns complete metadata for the selected object version.
 	Stat(context.Context, ObjectKey, ReadOptions) (ObjectInfo, error)
+	// Delete removes the selected object; an unconditional deletion of an absent object
+	// succeeds.
 	Delete(context.Context, ObjectKey, DeleteOptions) error
+	// List returns a bounded page of objects and supported child prefixes, excluding
+	// staging data.
 	List(context.Context, ListOptions) (Page, error)
 }
 

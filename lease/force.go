@@ -12,6 +12,7 @@ import (
 // reject as corrupt (for example a Redis lease key without expiry). It is never
 // used implicitly; ordinary acquisition, renewal and release stay owner-checked.
 type ForceBackend interface {
+	// LeaseForceRelease removes key regardless of its owner and reports whether it existed.
 	LeaseForceRelease(context.Context, Key) (bool, error)
 }
 

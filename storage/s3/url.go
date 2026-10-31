@@ -18,6 +18,8 @@ import (
 // presigned upload.
 const MaxSingleUploadBytes int64 = 5 << 30
 
+// PublicURL constructs a stable URL from the explicit public base and namespaced key
+// without changing access policy.
 func (b *Backend) PublicURL(ctx context.Context, key storage.ObjectKey) (string, error) {
 	if err := b.ready(ctx, storage.SignOperation); err != nil {
 		return "", err
@@ -56,6 +58,9 @@ func (b *Backend) signingLifetime(ctx context.Context, requested time.Duration) 
 	}
 	return lifetime, now, nil
 }
+
+// TemporaryURL signs a read URL bounded by the requested lifetime and any known
+// credential expiry.
 func (b *Backend) TemporaryURL(ctx context.Context, key storage.ObjectKey, options storage.LinkOptions) (storage.TemporaryURL, error) {
 	if err := b.ready(ctx, storage.SignOperation); err != nil {
 		return storage.TemporaryURL{}, err

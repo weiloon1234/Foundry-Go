@@ -9,6 +9,7 @@ const (
 	Introduced        migrate.Version = "v0.1.0"
 )
 
+// Migrations returns fresh definitions for the attachment and variant journal schema.
 func Migrations() []migrate.Definition {
 	return []migrate.Definition{{Key: migrate.Key{Origin: MigrationOrigin, ID: CreateAttachments}, Version: Introduced, SQL: []string{`CREATE TABLE foundry_attachments (
 id uuid PRIMARY KEY,

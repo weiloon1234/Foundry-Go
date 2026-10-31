@@ -259,7 +259,9 @@ func afterCommitFailure(cause error) error {
 }
 
 func (tx *Tx) setState(state TxState) { tx.mu.Lock(); defer tx.mu.Unlock(); tx.state = state }
-func (tx *Tx) State() TxState         { tx.mu.Lock(); defer tx.mu.Unlock(); return tx.state }
+
+// State returns a synchronized snapshot of the transaction scope's lifecycle state.
+func (tx *Tx) State() TxState { tx.mu.Lock(); defer tx.mu.Unlock(); return tx.state }
 
 func (tx *Tx) enter() (func() error, error) {
 	return tx.scope.enter()
@@ -295,10 +297,13 @@ func (tx *Tx) AfterCommit(fn func(context.Context) error) error {
 	return nil
 }
 
+// Exec executes a parameterized statement within this transaction scope without committing it.
 func (tx *Tx) Exec(ctx context.Context, statement string, arguments ...any) (result Result, err error) {
 	return tx.scope.exec(ctx, tx.raw, tx.classify, tx.instrumented(), statement, arguments)
 }
 
+// Query opens a result stream within this transaction scope without committing it.
+// Close the stream before starting another operation on the scope.
 func (tx *Tx) Query(ctx context.Context, statement string, arguments ...any) (*Rows, error) {
 	return tx.owner.attachEncryption(tx.scope.query(ctx, tx.raw, tx.classify, tx.instrumented(), tx.observers, statement, arguments))
 }

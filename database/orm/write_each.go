@@ -63,6 +63,8 @@ func ForceDeleteEach[M any](ctx context.Context, writer database.Transactor, q Q
 // It carries no capabilities and does not call application-provided interfaces.
 type eachTransaction struct{ tx *database.Tx }
 
+// Transaction invokes fn on the retained transaction without opening a savepoint.
+// It rejects options and an already-canceled context; the enclosing batch owns rollback.
 func (e eachTransaction) Transaction(ctx context.Context, fn func(*database.Tx) error, options ...database.TxOptions) error {
 	if len(options) != 0 {
 		return invalid("nested model writes cannot set transaction options")

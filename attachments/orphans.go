@@ -14,19 +14,27 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// Cursor is an opaque owner-orphan inspection continuation.
 type Cursor = extensionmaintenance.Cursor
+
+// Orphan identifies an ownerless attachment journal entry without exposing its storage
+// pins.
 type Orphan struct {
 	Operation  OperationID   `json:"operation"`
 	Collection Name          `json:"collection"`
 	Locale     i18n.LocaleID `json:"locale"`
 	State      State         `json:"state"`
 }
+
+// OrphanPage reports ownerless journal entries, scan count and an optional continuation.
 type OrphanPage struct {
 	Orphans []Orphan
 	Scanned int
 	Next    Cursor
 }
 
+// InspectOrphans reads one bounded page of attachment journal entries whose owners no
+// longer exist.
 func (m *Manager) InspectOrphans(ctx context.Context, owner extensions.OwnerName, cursor Cursor, limit int) (OrphanPage, error) {
 	if err := m.Validate(); err != nil {
 		return OrphanPage{}, err

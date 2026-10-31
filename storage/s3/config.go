@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
+// Provider selects AWS, R2 or explicitly declared S3-compatible behavior.
 type Provider uint8
 
 const (
@@ -91,6 +92,8 @@ type Config struct {
 	Compatible        CompatibleCapabilities
 }
 
+// DefaultConfig returns an AWS profile with bounded multipart uploads, retries and
+// publication verification.
 func DefaultConfig(bucket, region string) Config {
 	return Config{Provider: AWS, Bucket: bucket, Region: region, PartBytes: 8 << 20, MaxUploads: 4, MaxObjectBytes: 1 << 30, ReadAttempts: 3, PartAttempts: 3, AbortTimeout: 15 * time.Second, PartConcurrency: 1, VerifyPublication: true}
 }
@@ -105,6 +108,9 @@ func CompatibleConfig(bucket, region, endpoint string, capabilities CompatibleCa
 	config.Compatible = capabilities
 	return config
 }
+
+// R2Config returns an R2 profile with explicit endpoint and credentials and path-style
+// addressing.
 func R2Config(bucket, endpoint string, credentials aws.CredentialsProvider) Config {
 	config := DefaultConfig(bucket, "auto")
 	config.Provider = R2
@@ -113,6 +119,9 @@ func R2Config(bucket, endpoint string, credentials aws.CredentialsProvider) Conf
 	config.PathStyle = true
 	return config
 }
+
+// Validate rejects invalid provider, bucket, namespace, credentials, endpoint and
+// resource settings without provider I/O.
 func (c Config) Validate() error {
 	invalid := func() error {
 		return newFailure(storage.Invalid, storage.OpenOperation, storage.NotApplicable, nil)

@@ -23,7 +23,9 @@ type progress struct {
 // may expire the entry after ttl. The Redis coordination client implements it;
 // without it the cursor lives only in this scheduler process.
 type CursorBackend interface {
+	// ScheduleCursor returns the latest retained occurrence for key and whether one exists.
 	ScheduleCursor(context.Context, lease.Key) (time.Time, bool, error)
+	// AdvanceScheduleCursor stores the maximum handled instant for key, with optional expiry after ttl.
 	AdvanceScheduleCursor(context.Context, lease.Key, time.Time, time.Duration) error
 }
 

@@ -161,6 +161,7 @@ func (c Cache[K, V]) ForgetMany(ctx context.Context, keys ...K) (uint64, error) 
 	return count, nil
 }
 
+// Exists inspects the bound tagged entry or returns fault.Invalid when unsupported.
 func (b taggedAccess) Exists(ctx context.Context, _ EntryKey) (bool, error) {
 	backend, ok := b.backend.(TaggedEntryBackend)
 	if !ok {
@@ -168,6 +169,8 @@ func (b taggedAccess) Exists(ctx context.Context, _ EntryKey) (bool, error) {
 	}
 	return backend.ExistsTagged(ctx, b.key)
 }
+
+// Expire changes the bound tagged entry's expiry or returns fault.Invalid when unsupported.
 func (b taggedAccess) Expire(ctx context.Context, _ EntryKey, ttl TTL) (bool, error) {
 	backend, ok := b.backend.(TaggedEntryBackend)
 	if !ok {

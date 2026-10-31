@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// WorkerOption configures a worker during NewWorker construction.
 type WorkerOption func(*Worker) error
 
 // WithWorkerLogger borrows a logger until the worker's Done closes. Module and

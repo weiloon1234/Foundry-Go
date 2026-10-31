@@ -265,6 +265,7 @@ type Stats struct {
 	Ready, Closing                         bool
 }
 
+// Stats returns current operation, subscription, and pool counts, treating an uninitialized client as closing.
 func (c *Client) Stats() Stats {
 	if c == nil || c.done == nil {
 		return Stats{Closing: true}

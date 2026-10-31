@@ -15,12 +15,15 @@ import (
 // Its hash is captured in the envelope; raw key text is never persisted.
 type UniqueKey[P any] struct{ text string }
 
+// NewUniqueKey constructs a payload-owned business key containing 1 to 4096 bytes.
 func NewUniqueKey[P any](text string) (UniqueKey[P], error) {
 	if len(text) == 0 || len(text) > 4096 {
 		return UniqueKey[P]{}, safeerror.NewFault(fault.Invalid, "job uniqueness key must contain 1 to 4096 bytes")
 	}
 	return UniqueKey[P]{text: text}, nil
 }
+
+// Format writes a fixed description without exposing raw business key text.
 func (UniqueKey[P]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job uniqueness key")) }
 
 // Unique suppresses other dispatch identities for the same name, version, queue
@@ -43,6 +46,7 @@ type Uniqueness struct {
 	UntilProcessing bool          `json:"until_processing,omitzero"`
 }
 
+// Validate checks the digest and whole-millisecond suppression window. The zero policy disables uniqueness.
 func (u Uniqueness) Validate() error {
 	if u.Digest == "" && u.For == 0 {
 		if u.UntilProcessing {

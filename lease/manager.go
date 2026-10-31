@@ -29,6 +29,7 @@ type Manager struct {
 	closeErr     error
 }
 
+// NewManager validates configuration and constructs a manager borrowing backend without performing I/O.
 func NewManager(backend Backend, config Config) (*Manager, error) {
 	if backend == nil {
 		return nil, safeerror.NewFault(fault.Invalid, "lease manager requires a backend")
@@ -119,6 +120,8 @@ func (m *Manager) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
+// Done closes when shutdown has drained all owned work and cleanup. A nil manager returns nil.
 func (m *Manager) Done() <-chan struct{} {
 	if m == nil {
 		return nil
@@ -132,6 +135,7 @@ type Stats struct {
 	Closing bool
 }
 
+// Stats returns a synchronized snapshot of reserved slots and shutdown state.
 func (m *Manager) Stats() Stats {
 	if m == nil || m.done == nil {
 		return Stats{Closing: true}

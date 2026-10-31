@@ -23,8 +23,13 @@ const MaxWorkflowSteps = 256
 const MaxWorkflowMembers = MaxWorkflowSteps + 3
 const MaxWorkflowBytes = 8 << 20
 
+// WorkflowID identifies an atomic workflow across submission retries.
 type WorkflowID = model.ID[WorkflowExecution]
+
+// WorkflowExecution marks the identity type of an atomic workflow.
 type WorkflowExecution struct{}
+
+// WorkflowKind distinguishes ordered chains from parallel-ready batches.
 type WorkflowKind string
 
 const (
@@ -40,6 +45,7 @@ type Step struct {
 	policy   Policy
 }
 
+// Step returns a workflow member retaining the captured envelope and definition type metadata.
 func (p Pending[P]) Step() Step {
 	return Step{envelope: p.envelope, typ: reflect.TypeFor[P](), policy: p.definition.policy.snapshot()}
 }
@@ -57,12 +63,17 @@ type Workflow struct {
 	envelope WorkflowEnvelope
 	steps    []Step
 }
+
+// WorkflowReceipt reports the workflow identity and whether acceptance inserted a new group.
 type WorkflowReceipt struct {
 	ID       WorkflowID
 	Inserted bool
 }
 
+// NewChain constructs an immutable ordered chain with a fresh identity and snapshots the captured steps.
 func NewChain(steps ...Step) (Workflow, error) { return newWorkflow(ChainKind, steps) }
+
+// NewBatch constructs an immutable batch with a fresh identity and snapshots the captured steps.
 func NewBatch(steps ...Step) (Workflow, error) { return newWorkflow(BatchKind, steps) }
 func newWorkflow(kind WorkflowKind, steps []Step) (Workflow, error) {
 	id, err := model.NewIDAt[WorkflowExecution](time.Now())
@@ -75,7 +86,11 @@ func newWorkflow(kind WorkflowKind, steps []Step) (Workflow, error) {
 	}
 	return result, result.envelope.Validate()
 }
-func (w Workflow) ID() WorkflowID             { return w.envelope.id }
+
+// ID returns the captured workflow identity.
+func (w Workflow) ID() WorkflowID { return w.envelope.id }
+
+// Envelope returns the immutable workflow adapter snapshot.
 func (w Workflow) Envelope() WorkflowEnvelope { return w.envelope }
 
 // WithCompletion returns a new batch snapshot with one success-only final job.
@@ -110,6 +125,8 @@ func (w Workflow) WithFinally(step Step) (Workflow, error) {
 	w.steps = append(slices.Clone(w.steps), step)
 	return w, w.envelope.Validate()
 }
+
+// Dispatch submits this immutable group atomically, preserving identities for acceptance reconciliation.
 func (w Workflow) Dispatch(ctx context.Context, dispatcher *Dispatcher) (WorkflowReceipt, error) {
 	receipt, key, err := w.dispatch(ctx, dispatcher)
 	if err == nil && receipt.Inserted {
@@ -151,6 +168,8 @@ func (w Workflow) check(registry *Registry) error {
 	}
 	return nil
 }
+
+// Cancel requests cancellation of this workflow's unfinished members through dispatcher.
 func (w Workflow) Cancel(ctx context.Context, dispatcher *Dispatcher) (bool, error) {
 	release, err := dispatcher.begin(ctx)
 	if err != nil {
@@ -179,13 +198,22 @@ type WorkflowEnvelope struct {
 	finally    value.Optional[Envelope]
 }
 
-func (w WorkflowEnvelope) ID() WorkflowID                       { return w.id }
-func (w WorkflowEnvelope) Kind() WorkflowKind                   { return w.kind }
-func (w WorkflowEnvelope) Steps() []Envelope                    { return slices.Clone(w.steps) }
+// ID returns the stable workflow identity.
+func (w WorkflowEnvelope) ID() WorkflowID { return w.id }
+
+// Kind returns whether the workflow is a chain or batch.
+func (w WorkflowEnvelope) Kind() WorkflowKind { return w.kind }
+
+// Steps returns an owned slice of immutable step envelopes.
+func (w WorkflowEnvelope) Steps() []Envelope { return slices.Clone(w.steps) }
+
+// Completion returns the optional success-only batch completion job.
 func (w WorkflowEnvelope) Completion() value.Optional[Envelope] { return w.completion }
 
 // Catch and Finally are the optional callback jobs.
-func (w WorkflowEnvelope) Catch() value.Optional[Envelope]   { return w.catch }
+func (w WorkflowEnvelope) Catch() value.Optional[Envelope] { return w.catch }
+
+// Finally returns the optional callback job run after members and completion are terminal.
 func (w WorkflowEnvelope) Finally() value.Optional[Envelope] { return w.finally }
 
 // Members returns every job of the workflow: steps, then the completion, catch
@@ -199,12 +227,16 @@ func (w WorkflowEnvelope) Members() []Envelope {
 	}
 	return members
 }
+
+// Queue returns the first step's queue, or an empty queue when there are no steps.
 func (w WorkflowEnvelope) Queue() Queue {
 	if len(w.steps) == 0 {
 		return ""
 	}
 	return w.steps[0].Queue()
 }
+
+// Validate checks identity, kind, member counts, byte bounds, and distinct non-unique jobs sharing one queue.
 func (w WorkflowEnvelope) Validate() error {
 	if w.id.IsZero() || (w.kind != ChainKind && w.kind != BatchKind) || len(w.steps) == 0 || len(w.steps) > MaxWorkflowSteps {
 		return safeerror.NewFault(fault.Invalid, "invalid job workflow identity, kind or size")
@@ -237,6 +269,8 @@ func (w WorkflowEnvelope) Validate() error {
 	}
 	return nil
 }
+
+// MarshalJSON validates and encodes the workflow and its optional callback jobs.
 func (w WorkflowEnvelope) MarshalJSON() ([]byte, error) {
 	if err := w.Validate(); err != nil {
 		return nil, err
@@ -268,6 +302,7 @@ type workflowWire struct {
 	Finally    json.RawMessage `json:"finally,omitempty"`
 }
 
+// DecodeWorkflow bounds and decodes a workflow transport, rejecting unknown fields and invalid members.
 func DecodeWorkflow(data []byte) (WorkflowEnvelope, error) {
 	if len(data) > MaxWorkflowBytes+64*1024 {
 		return WorkflowEnvelope{}, safeerror.NewFault(fault.Invalid, "job workflow exceeds transport capacity")

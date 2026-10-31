@@ -11,12 +11,15 @@ import (
 // clipped at EOF. An empty object or starting beyond EOF is unsatisfiable.
 type ByteRange struct{ Offset, Length int64 }
 
+// Validate rejects negative offsets, nonpositive lengths and overflowing ranges.
 func (r ByteRange) Validate() error {
 	if r.Offset < 0 || r.Length <= 0 || r.Offset > math.MaxInt64-r.Length {
 		return newFailure(Invalid, OpenOperation, NotApplicable, nil)
 	}
 	return nil
 }
+
+// Resolve clips the range to size or reports an invalid or unsatisfiable range.
 func (r ByteRange) Resolve(size int64) (offset, length int64, err error) {
 	if err = r.Validate(); err != nil {
 		return
@@ -27,12 +30,17 @@ func (r ByteRange) Resolve(size int64) (offset, length int64, err error) {
 	return r.Offset, min(r.Length, size-r.Offset), nil
 }
 
+// WriteCondition declares an atomic publication precondition; zero permits
+// unconditional writes.
 type WriteCondition struct {
 	absent bool
 	match  ETag
 }
 
+// IfAbsent requires the destination object to be absent when publishing.
 func IfAbsent() WriteCondition { return WriteCondition{absent: true} }
+
+// IfMatch validates a nonempty strong validator and requires it to match when publishing.
 func IfMatch(tag ETag) (WriteCondition, error) {
 	if tag == "" {
 		return WriteCondition{}, newFailure(Invalid, PutOperation, Unchanged, nil)
@@ -42,9 +50,15 @@ func IfMatch(tag ETag) (WriteCondition, error) {
 	}
 	return WriteCondition{match: tag}, nil
 }
-func (c WriteCondition) RequiresAbsence() bool { return c.absent }
-func (c WriteCondition) Match() ETag           { return c.match }
 
+// RequiresAbsence reports whether publication requires a missing destination.
+func (c WriteCondition) RequiresAbsence() bool { return c.absent }
+
+// Match returns the required validator, or an empty tag when none is required.
+func (c WriteCondition) Match() ETag { return c.match }
+
+// PutOptions declares publication metadata, optional exact size and checksum, and write
+// conditions.
 type PutOptions struct {
 	ContentType MediaType
 	Size        value.Optional[int64]
@@ -55,6 +69,7 @@ type PutOptions struct {
 	Metadata ObjectMetadata
 }
 
+// Validate checks supplied metadata, conditions and declared size against maximum.
 func (o PutOptions) Validate(maximum int64) error {
 	if o.ContentType != "" {
 		if err := o.ContentType.Validate(); err != nil {
@@ -70,12 +85,14 @@ func (o PutOptions) Validate(maximum int64) error {
 	return o.Condition.match.Validate()
 }
 
+// ReadOptions selects an optional byte range, validator and immutable object version.
 type ReadOptions struct {
 	Range   value.Optional[ByteRange]
 	IfMatch ETag
 	Version VersionID
 }
 
+// Validate checks range, validator and version syntax without checking provider support.
 func (o ReadOptions) Validate() error {
 	if r, ok := o.Range.Get(); ok {
 		if err := r.Validate(); err != nil {
@@ -88,11 +105,14 @@ func (o ReadOptions) Validate() error {
 	return o.Version.Validate()
 }
 
+// DeleteOptions selects an optional validator or immutable version for deletion.
 type DeleteOptions struct {
 	IfMatch ETag
 	Version VersionID
 }
 
+// Validate checks the optional validator and version syntax without checking provider
+// support.
 func (o DeleteOptions) Validate() error {
 	if err := o.IfMatch.Validate(); err != nil {
 		return err
@@ -104,9 +124,14 @@ func (o DeleteOptions) Validate() error {
 // page; it is tied to that disk/prefix, and never grants object authorization.
 type Cursor struct{ text string }
 
+// NewCursor wraps an opaque adapter continuation token without validating it.
 func NewCursor(text string) Cursor { return Cursor{text: text} }
-func (c Cursor) Token() string     { return c.text }
-func (c Cursor) IsZero() bool      { return c.text == "" }
+
+// Token returns the opaque adapter continuation.
+func (c Cursor) Token() string { return c.text }
+
+// IsZero reports whether continuation is absent.
+func (c Cursor) IsZero() bool { return c.text == "" }
 
 const MaxPageSize = 1000
 const MaxCursorBytes = 8192
@@ -122,6 +147,7 @@ type ListOptions struct {
 	Delimited bool
 }
 
+// Validate checks the prefix, page limit and cursor length.
 func (o ListOptions) Validate() error {
 	if err := o.Prefix.Validate(); err != nil {
 		return err
@@ -167,9 +193,14 @@ const (
 	DefaultStreamIdleTimeout = 2 * time.Minute
 )
 
+// DefaultConfig returns private visibility and default object, admission and timeout
+// limits.
 func DefaultConfig() Config {
 	return Config{MaxObjectBytes: 1 << 30, MaxActive: 32, Timeout: 5 * time.Minute, MaxStreams: DefaultMaxStreams, StreamIdleTimeout: DefaultStreamIdleTimeout}
 }
+
+// Validate rejects invalid disk bounds while allowing zero stream settings to select
+// defaults.
 func (c Config) Validate() error {
 	if c.Visibility > Public || c.MaxObjectBytes <= 0 || c.MaxObjectBytes > 1<<50 || c.MaxActive < 1 || c.MaxActive > 4096 || c.Timeout <= 0 || c.Timeout > 24*time.Hour || c.MaxStreams < 0 || c.MaxStreams > 16384 || c.StreamIdleTimeout < 0 || c.StreamIdleTimeout > 24*time.Hour {
 		return newFailure(Invalid, OpenOperation, NotApplicable, nil)

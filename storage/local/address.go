@@ -5,6 +5,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
+// Locate returns the managed store identity and literal key without object I/O.
 func (b *Backend) Locate(key storage.ObjectKey) (storage.ObjectAddress, error) {
 	if b == nil {
 		return storage.ObjectAddress{}, safeerror.Owned(string(storage.Invalid), storage.Invalid)

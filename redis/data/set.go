@@ -33,21 +33,29 @@ func (s Set[K, V]) member(ctx context.Context, key K, input V, fn func(context.C
 	}
 	return result, nil
 }
+
+// Add inserts the canonical JSON member and reports whether it was new.
 func (s Set[K, V]) Add(ctx context.Context, key K, input V) (bool, error) {
 	return s.member(ctx, key, input, func(ctx context.Context, k Key, text string, l Limits) (bool, error) {
 		return s.backend.SetAdd(ctx, k, text, l)
 	})
 }
+
+// Remove deletes the canonical JSON member and reports whether it existed.
 func (s Set[K, V]) Remove(ctx context.Context, key K, input V) (bool, error) {
 	return s.member(ctx, key, input, func(ctx context.Context, k Key, text string, l Limits) (bool, error) {
 		return s.backend.SetRemove(ctx, k, text, l)
 	})
 }
+
+// Contains tests membership by canonical JSON equality.
 func (s Set[K, V]) Contains(ctx context.Context, key K, input V) (bool, error) {
 	return s.member(ctx, key, input, func(ctx context.Context, k Key, text string, l Limits) (bool, error) {
 		return s.backend.SetContains(ctx, k, text, l)
 	})
 }
+
+// Members returns owned decoded members in encoded byte order within the collection and reply bounds.
 func (s Set[K, V]) Members(ctx context.Context, key K) ([]V, error) {
 	var result []V
 	err := s.execute(ctx, key, func(ctx context.Context, k Key, l Limits) error {

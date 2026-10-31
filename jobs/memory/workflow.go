@@ -29,6 +29,7 @@ type workflowEntry struct {
 	bytes       int64
 }
 
+// JobWorkflow atomically accepts all members, deduplicating identical retained workflows and rejecting conflicting identities.
 func (b *Backend) JobWorkflow(ctx context.Context, key jobs.Key, workflow jobs.WorkflowEnvelope) (bool, error) {
 	if err := workflow.Validate(); err != nil {
 		return false, err
@@ -264,6 +265,7 @@ func (b *Backend) JobWorkflowStatus(ctx context.Context, key jobs.Key, id jobs.W
 	return value.Set(status), nil
 }
 
+// JobCancelWorkflow requests cancellation of every unfinished member, including callback jobs.
 func (b *Backend) JobCancelWorkflow(ctx context.Context, key jobs.Key, id jobs.WorkflowID) (bool, error) {
 	if id.IsZero() {
 		return false, safeerror.NewFault(fault.Invalid, "workflow cancellation requires an identity")

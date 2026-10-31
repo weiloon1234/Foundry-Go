@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/jobs"
 )
 
+// JobList scans retained identities in ascending order and returns owned matching records with a continuation cursor.
 func (b *Backend) JobList(ctx context.Context, key jobs.Key, options jobs.ListOptions) (jobs.Page, error) {
 	if err := options.Validate(); err != nil {
 		return jobs.Page{}, err

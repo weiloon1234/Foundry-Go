@@ -21,6 +21,8 @@ func (b *Backend) taggedCost(key cache.EntryKey, size int) (int, error) {
 	}
 	return cost + sha256.Size, nil
 }
+
+// GetTagged returns owned bytes under a current snapshot and reclaims obsolete entries.
 func (b *Backend) GetTagged(ctx context.Context, key cache.TaggedKey) ([]byte, bool, error) {
 	if err := b.validateTagged(ctx, key); err != nil {
 		return nil, false, err
@@ -52,10 +54,14 @@ func (b *Backend) GetTagged(ctx context.Context, key cache.TaggedKey) ([]byte, b
 	// Retained data is immutable, so the owned copy is made outside the lock.
 	return slices.Clone(data), true, nil
 }
+
+// PutTagged copies and replaces an entry under a current tag snapshot.
 func (b *Backend) PutTagged(ctx context.Context, key cache.TaggedKey, data []byte, ttl cache.TTL) error {
 	_, err := b.writeTagged(ctx, key, data, ttl, false)
 	return err
 }
+
+// AddTagged atomically inserts only when the current snapshot has no live value.
 func (b *Backend) AddTagged(ctx context.Context, key cache.TaggedKey, data []byte, ttl cache.TTL) (bool, error) {
 	return b.writeTagged(ctx, key, data, ttl, true)
 }
@@ -100,6 +106,8 @@ func (b *Backend) writeTagged(ctx context.Context, key cache.TaggedKey, data []b
 	b.retain(item, now)
 	return true, nil
 }
+
+// ForgetTagged removes the stored entry under a current snapshot and reports whether its value was current.
 func (b *Backend) ForgetTagged(ctx context.Context, key cache.TaggedKey) (bool, error) {
 	if err := b.validateTagged(ctx, key); err != nil {
 		return false, err
@@ -124,6 +132,8 @@ func (b *Backend) ForgetTagged(ctx context.Context, key cache.TaggedKey) (bool, 
 	b.remove(element)
 	return found, nil
 }
+
+// IncrementTagged atomically increments the counter under a current tag snapshot, preserving an existing expiry.
 func (b *Backend) IncrementTagged(ctx context.Context, key cache.TaggedKey, delta int64, ttl cache.TTL) (int64, error) {
 	if err := b.validateTagged(ctx, key); err != nil {
 		return 0, err
