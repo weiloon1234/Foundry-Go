@@ -1,6 +1,7 @@
 {
   "version": 1,
   "files": {
+    "column_kind_foundry.gen.go": "86499016e6482c1bc2996b2f2666f1de6fb70270220e481cafea43d0e46ec300",
     "direction_foundry.gen.go": "38344571b80b06acf0565194bbf8614f69e888d59d7a41b2b8458f0f5c0c0dc0",
     "export_format_foundry.gen.go": "ed2cd71d6cd1f344c402df515579cd65274c9d92693899a32dd1d2750c2a393f",
     "export_options_foundry.gen.go": "cd83c77512c8d0c7b388039d033a6b37c910519566837aaeea17e34ad2559b93",

@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/datatable"
+	"github.com/weiloon1234/Foundry-Go/enum"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -66,7 +67,15 @@ func reportingContracts(t *testing.T) (*manifest.Manifest, *foundryhttp.Router) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := manifest.Build(t.Context(), manifest.Sources{HTTP: router, Tables: manager.Registry()})
+	stateEnum, err := reporting.Active.EnumDescriptor().Definition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{
+		HTTP:   router,
+		Tables: manager.Registry(),
+		Enums:  []enum.Definition{stateEnum},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

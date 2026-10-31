@@ -198,3 +198,80 @@ function describeOperation(name: string): unknown {
     },
   });
 }
+
+export type TableColumnKind =
+  | "text"
+  | "integer"
+  | "decimal"
+  | "boolean"
+  | "enum"
+  | "date"
+  | "date_time"
+  | "local_date_time"
+  | "time";
+
+export interface EnumCase<T extends string | number = string | number> {
+  readonly value: T;
+  readonly labelKey?: string;
+}
+
+export interface EnumValueObject<T extends string | number = string | number> {
+  readonly cases: readonly T[];
+  readonly labels?: Readonly<Partial<Record<T, string>>>;
+}
+
+export interface BaseTableColumn<Name extends string = string, Op extends string = string> {
+  readonly name: Name;
+  readonly label: string;
+  readonly kind: TableColumnKind;
+  readonly nullable: boolean;
+  readonly sortable: boolean;
+  readonly searchable: boolean;
+  readonly exportable: boolean;
+  readonly operators: readonly Op[];
+}
+
+export interface ScalarTableColumn<Name extends string = string, Op extends string = string> extends BaseTableColumn<Name, Op> {
+  readonly kind: Exclude<TableColumnKind, "enum">;
+}
+
+export interface EnumTableColumn<Name extends string = string, E extends string | number = string | number, Op extends string = string> extends BaseTableColumn<Name, Op> {
+  readonly kind: "enum";
+  readonly enum?: EnumValueObject<E>;
+  readonly cases: readonly EnumCase<E>[];
+}
+
+export type TableColumn<Row, Op extends string = string> = {
+  [K in keyof Row & string]: NonNullable<Row[K]> extends string | number
+    ? ScalarTableColumn<K, Op> | EnumTableColumn<K, NonNullable<Row[K]> & (string | number), Op>
+    : ScalarTableColumn<K, Op>;
+}[keyof Row & string];
+
+export interface TableSort<Name extends string = string> {
+  readonly column: Name;
+  readonly direction: "asc" | "desc";
+}
+
+export interface TableDescriptor<
+  Row = unknown,
+  QueryOp extends keyof Operations & keyof API = keyof Operations & keyof API,
+  ExportOp extends keyof Operations & keyof API = keyof Operations & keyof API,
+> {
+  readonly id: string;
+  readonly queryOperation?: QueryOp;
+  readonly exportOperation?: ExportOp;
+  readonly columns: readonly TableColumn<Row>[];
+  readonly defaultSort: readonly TableSort<keyof Row & string>[];
+  readonly exports: boolean;
+  readonly query?: (client: API, input: Operations[QueryOp]["request"], options?: CallOptions) => Promise<Operations[QueryOp]["response"]>;
+  readonly export?: (client: API, input: Operations[ExportOp]["request"], options?: CallOptions) => Promise<Operations[ExportOp]["response"]>;
+}
+
+export function createTableDescriptor<
+  Row,
+  QueryOp extends keyof Operations & keyof API = never,
+  ExportOp extends keyof Operations & keyof API = never,
+>(descriptor: TableDescriptor<Row, QueryOp, ExportOp>): TableDescriptor<Row, QueryOp, ExportOp> {
+  return Object.freeze(descriptor);
+}
+

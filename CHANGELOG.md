@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Changed (breaking): Deterministic readable type names (S4) and typed datatable descriptors (S2) in TypeScript contract generation:
+  - S4 Type Renaming: Replaced nondeterministic hashed names (`Go_<hash>`, `String_<hash>`, etc.) with deterministic readable identifiers:
+    - `model.ID[T]` generates as `<Model>ID` (e.g., `OrderID`, `UserID`), qualified by package prefix upon collision (e.g., `Reporting_MemberID`, `Models_UserID`).
+    - Anonymous struct fields generate as `<Owner><Field>` (e.g., `ReportItem` for array item fields).
+    - Collections generate as `List_<T>`, `Array_<N>_<T>`, `Map_<K>_<V>`, `LocaleMap_<V>`, and `Nullable_<T>`.
+    - Primitives generate as `GoString` and `GoError` when reserved identifier clashes occur.
+    - Hashing is retained only as a last resort in code comments.
+  - S2 Datatable Descriptors:
+    - Generated SDK entry modules export a frozen `tables` registry for surfaces registering datatables, along with `TableId`, `TableRow<Id>`, and `TableReceivedRow<Id>` helper types.
+    - Table columns are typed against the row model (`name: keyof Row & string`), carrying `kind: TableColumnKind` (derived from Go `datatable.ColumnKind`), declared operators, and for enum columns, direct linkage to the S1 enum value object (`enum: typeof Enum`) with literal cases.
+    - Descriptors provide strongly-typed `query(client, input)` and `export(client, input)` methods calling the existing typed operation paths with zero `any` or casts.
+    - Surfaces without registered tables emit no `tables` descriptor.
 - Added: `devserver` package providing a framework-owned development supervision loop (file watching, debouncing, zero-downtime rebuild with `-ldflags=-w`, graceful child restart, process group isolation, SIGHUP termination, and auxiliary helper supervision).
 - Added: parallel-safe test application boot concurrency in `testkit/postgres/application`. `Environment.Start` bounds concurrently booted applications to `DefaultConcurrency` (8 by default, overridable via `FOUNDRY_TEST_APP_CONCURRENCY`). Multiple applications within the same top-level test or its subtests share that test's slot, eliminating self-deadlock, and the slot is released only after the application completely shuts down and drains its database connections.
 - Added: TypeScript client generator gap additions S1, S5, S7, and S8:

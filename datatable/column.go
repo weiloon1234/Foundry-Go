@@ -56,6 +56,7 @@ func (c Cell[V]) FormatWith(format func(context.Context, V, Presentation) (strin
 type ColumnInfo struct {
 	Name           string                  `json:"name"`
 	Label          i18n.MessageKey         `json:"label"`
+	Kind           ColumnKind              `json:"kind"`
 	Value          contract.ScalarProperty `json:"value"`
 	Sortable       bool                    `json:"sortable"`
 	Searchable     bool                    `json:"searchable"`

@@ -70,7 +70,7 @@ func (m *tableMetadata) initialize(id TableID, row contract.Schema, describeScal
 		if err != nil {
 			return invalid("datatable column must name a declared scalar DTO property")
 		}
-		info := ColumnInfo{Name: c.name, Label: c.label, Value: scalar, Sortable: c.sortable, Searchable: c.searchable, Exportable: c.exportable}
+		info := ColumnInfo{Name: c.name, Label: c.label, Kind: columnKind(scalar.Value), Value: scalar, Sortable: c.sortable, Searchable: c.searchable, Exportable: c.exportable}
 		if c.filter != nil {
 			f := *c.filter
 			if err := m.addFilter(f, filterLocation{column: true, index: len(m.info.Columns)}); err != nil {
@@ -240,4 +240,32 @@ func (m *tableMetadata) validateFilter(filter Filter, depth int, budget *request
 		return filterArity(filter.Op, len(filter.Values))
 	}
 	return nil
+}
+
+func columnKind(val contract.Type) ColumnKind {
+	if len(val.Cases) > 0 {
+		return ColumnEnum
+	}
+	switch val.Kind {
+	case contract.BooleanKind:
+		return ColumnBoolean
+	case contract.IntegerKind:
+		return ColumnInteger
+	case contract.NumberKind:
+		return ColumnDecimal
+	}
+	switch val.Format {
+	case contract.DecimalFormat:
+		return ColumnDecimal
+	case contract.DateFormat:
+		return ColumnDate
+	case contract.DateTimeFormat:
+		return ColumnDateTime
+	case contract.LocalDateTimeFormat:
+		return ColumnLocalDateTime
+	case contract.TimeFormat:
+		return ColumnTime
+	default:
+		return ColumnText
+	}
 }

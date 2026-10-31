@@ -11,6 +11,7 @@ var renderedNames = []string{
 	"EnumLabel", "ErrorCode", "ErrorResponse", "Identity", "Locale", "LocaleMap",
 	"NewIdentity", "OperationInputs", "OperationJSONBodies", "Operations",
 	"PresentationKind", "Realtime", "ReceivedContractTypes", "Schemas",
+	"TableColumn", "TableColumnKind", "TableDescriptor", "TableId", "TableReceivedRow", "TableRow", "TableSort",
 }
 
 var capitalizedIdentifier = regexp.MustCompile(`\b[A-Z][A-Za-z0-9_$]*\b`)

@@ -184,6 +184,7 @@ func (r *renderer) body(source *manifest.Manifest) error {
 		return err
 	}
 	r.descriptors()
+	r.tables()
 	r.messages()
 	r.realtime()
 	return nil

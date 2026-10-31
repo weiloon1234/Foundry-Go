@@ -4,6 +4,7 @@ package contractname
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -27,11 +28,48 @@ const maxReadableBytes = 64
 // select types by identity through the generated ContractTypes index.
 func Schemas(types []contract.Type, reserved func(string) bool) (map[contract.TypeID]string, error) {
 	ids := make([]contract.TypeID, 0, len(types))
+	typesByID := make(map[contract.TypeID]contract.Type, len(types))
 	for _, typ := range types {
 		ids = append(ids, typ.ID)
+		typesByID[typ.ID] = typ
 	}
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
+
+	parents := make(map[contract.TypeID][]parentRef)
+	for _, typ := range types {
+		if typ.Kind == contract.ObjectKind {
+			for _, p := range typ.Properties {
+				if p.Type != "" {
+					parents[p.Type] = append(parents[p.Type], parentRef{owner: typ.ID, field: p.Name})
+					if child, ok := typesByID[p.Type]; ok && child.Kind == contract.ArrayKind && child.Element != "" {
+						itemName := p.Name
+						if strings.HasSuffix(itemName, "s") && len(itemName) > 1 {
+							itemName = strings.TrimSuffix(itemName, "s")
+						} else {
+							itemName += "Item"
+						}
+						parents[child.Element] = append(parents[child.Element], parentRef{owner: typ.ID, field: itemName})
+					}
+				}
+			}
+		} else if typ.Kind == contract.ArrayKind && typ.Element != "" {
+			parents[typ.Element] = append(parents[typ.Element], parentRef{owner: typ.ID, field: "Item"})
+		} else if typ.Kind == contract.MapKind && typ.Element != "" {
+			parents[typ.Element] = append(parents[typ.Element], parentRef{owner: typ.ID, field: "Value"})
+		}
+	}
+	for id, refs := range parents {
+		slices.SortFunc(refs, func(a, b parentRef) int {
+			if c := strings.Compare(string(a.owner), string(b.owner)); c != 0 {
+				return c
+			}
+			return strings.Compare(a.field, b.field)
+		})
+		parents[id] = refs
+	}
+
+	res := &resolver{typesByID: typesByID, parents: parents}
 	result, used := make(map[contract.TypeID]string, len(ids)), make(map[string]contract.TypeID, len(ids))
 	available := func(name string) bool { _, taken := used[name]; return !taken && (reserved == nil || !reserved(name)) }
 	pending := ids
@@ -39,7 +77,7 @@ func Schemas(types []contract.Type, reserved func(string) bool) (map[contract.Ty
 		candidates := make(map[string][]contract.TypeID)
 		var names []string
 		for _, id := range pending {
-			name, ok := readable(string(id), level)
+			name, ok := res.readable(id, level, 0)
 			if !ok {
 				continue
 			}
@@ -60,6 +98,8 @@ func Schemas(types []contract.Type, reserved func(string) bool) (map[contract.Ty
 		pending = slices.DeleteFunc(pending, func(id contract.TypeID) bool { _, named := result[id]; return named })
 	}
 	for _, id := range pending {
+		// Hashing stays only as the absolute last resort when a type
+		// is anonymous with no structural provenance or all qualification levels collide.
 		name := Symbol(string(id))
 		if !available(name) {
 			return nil, safeerror.NewFault(fault.Conflict, "generated schema names collide")
@@ -67,6 +107,223 @@ func Schemas(types []contract.Type, reserved func(string) bool) (map[contract.Ty
 		used[name], result[id] = id, name
 	}
 	return result, nil
+}
+
+type parentRef struct {
+	owner contract.TypeID
+	field string
+}
+
+type resolver struct {
+	typesByID map[contract.TypeID]contract.Type
+	parents   map[contract.TypeID][]parentRef
+}
+
+func (r *resolver) readable(id contract.TypeID, level int, depth int) (string, bool) {
+	if depth > 10 {
+		return "", false
+	}
+	if id == "string" {
+		if level == 0 {
+			return "String", true
+		}
+		if level == 1 {
+			return "GoString", true
+		}
+		return "", false
+	}
+	if id == "error" {
+		if level == 0 {
+			return "Error", true
+		}
+		if level == 1 {
+			return "GoError", true
+		}
+		return "", false
+	}
+	if modelType, outerPkg, ok := parseModelID(string(id)); ok {
+		return r.readableModelID(modelType, outerPkg, level, depth)
+	}
+	if strings.HasPrefix(string(id), "go:") {
+		typ, hasTyp := r.typesByID[id]
+		if !hasTyp {
+			return "", false
+		}
+		switch typ.Kind {
+		case contract.ArrayKind:
+			elemName, ok := r.readable(typ.Element, level, depth+1)
+			if !ok && level > 0 {
+				elemName, ok = r.readable(typ.Element, 0, depth+1)
+			}
+			if !ok {
+				return "", false
+			}
+			if length, hasLen := typ.Length.Get(); hasLen {
+				res := fmt.Sprintf("Array_%d_%s", length, elemName)
+				if len(res) > maxReadableBytes {
+					return "", false
+				}
+				return res, true
+			}
+			res := "List_" + elemName
+			if len(res) > maxReadableBytes {
+				return "", false
+			}
+			return res, true
+
+		case contract.MapKind:
+			isLocale := typ.Key != nil && (strings.HasSuffix(string(typ.Key.Value.ID), "LocaleID") || strings.Contains(string(typ.Key.Value.ID), "Locale"))
+			valName, ok := r.readable(typ.Element, level, depth+1)
+			if !ok && level > 0 {
+				valName, ok = r.readable(typ.Element, 0, depth+1)
+			}
+			if !ok {
+				return "", false
+			}
+			if isLocale {
+				res := "LocaleMap_" + valName
+				if len(res) > maxReadableBytes {
+					return "", false
+				}
+				return res, true
+			}
+			keyName := "String"
+			if typ.Key != nil && typ.Key.Value.ID != "" {
+				if kName, ok := r.readable(typ.Key.Value.ID, 0, depth+1); ok {
+					keyName = kName
+				}
+			}
+			res := fmt.Sprintf("Map_%s_%s", keyName, valName)
+			if len(res) > maxReadableBytes {
+				return "", false
+			}
+			return res, true
+
+		case contract.AliasKind:
+			targetName, ok := r.readable(typ.Element, level, depth+1)
+			if !ok && level > 0 {
+				targetName, ok = r.readable(typ.Element, 0, depth+1)
+			}
+			if !ok {
+				return "", false
+			}
+			if typ.Nullable {
+				res := "Nullable_" + targetName
+				if len(res) > maxReadableBytes {
+					return "", false
+				}
+				return res, true
+			}
+			return targetName, true
+
+		case contract.ObjectKind:
+			refs := r.parents[id]
+			if len(refs) > 0 {
+				primary := refs[0]
+				ownerName, ok := r.readable(primary.owner, level, depth+1)
+				if !ok && level > 0 {
+					ownerName, ok = r.readable(primary.owner, 0, depth+1)
+				}
+				if !ok {
+					return "", false
+				}
+				fieldWord := sanitize(primary.field)
+				if fieldWord != "" {
+					fieldWord = strings.ToUpper(fieldWord[:1]) + fieldWord[1:]
+				}
+				res := ownerName + fieldWord
+				if len(res) == 0 || len(res) > maxReadableBytes {
+					return "", false
+				}
+				return res, true
+			}
+		}
+		return "", false
+	}
+	return readable(string(id), level)
+}
+
+func parseModelID(id string) (modelType, outerPkg string, ok bool) {
+	if !strings.HasSuffix(id, "]") {
+		return "", "", false
+	}
+	open := strings.IndexByte(id, '[')
+	if open < 0 {
+		return "", "", false
+	}
+	outer := id[:open]
+	dot := strings.LastIndexByte(outer, '.')
+	if dot < 0 {
+		return "", "", false
+	}
+	typeName := outer[dot+1:]
+	pkg := outer[:dot]
+	if typeName != "ID" {
+		return "", "", false
+	}
+	if !(pkg == "model" || strings.HasSuffix(pkg, "/model") || strings.HasSuffix(pkg, ".model")) {
+		return "", "", false
+	}
+	modelType = id[open+1 : len(id)-1]
+	return modelType, pkg, true
+}
+
+func (r *resolver) readableModelID(modelType, outerPkg string, level int, depth int) (string, bool) {
+	words := typeWords(modelType)
+	if len(words) == 0 {
+		return "", false
+	}
+	baseModel := words[len(words)-1]
+	base := sanitize(baseModel) + "ID"
+	if base == "ID" {
+		return "", false
+	}
+	base = strings.ToUpper(base[:1]) + base[1:]
+	if level == 0 {
+		return base, true
+	}
+	modelElements := packageElements(modelType)
+	if level <= len(modelElements) {
+		elements := modelElements[len(modelElements)-level:]
+		res := buildQualifiedName(elements, base)
+		return res, res != ""
+	}
+	outerElements := packageElements(outerPkg)
+	outerLevel := level - len(modelElements)
+	if outerLevel <= len(outerElements) {
+		elements := append(slices.Clone(outerElements[len(outerElements)-outerLevel:]), modelElements...)
+		res := buildQualifiedName(elements, base)
+		return res, res != ""
+	}
+	return "", false
+}
+
+func buildQualifiedName(elements []string, stem string) string {
+	var name strings.Builder
+	for _, element := range elements {
+		word := sanitize(element)
+		if word == "" {
+			continue
+		}
+		if name.Len() != 0 {
+			name.WriteByte('_')
+		}
+		name.WriteString(strings.ToUpper(word[:1]) + word[1:])
+	}
+	if stem != "" {
+		if name.Len() != 0 {
+			name.WriteByte('_')
+		}
+		name.WriteString(stem)
+	}
+	result := name.String()
+	if result == "" || len(result) > maxReadableBytes {
+		return ""
+	}
+	if result[0] >= '0' && result[0] <= '9' {
+		result = "Type_" + result
+	}
+	return result
 }
 
 // readable returns the name of identity qualified by level trailing package

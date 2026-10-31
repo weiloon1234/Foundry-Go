@@ -21,7 +21,16 @@ export function reportingTypes(): void {
   const countNumber: number = total.count;
   void api.reportsMembersQuery({ body: { filters: [{ op: "eq", column: "state", values: ["active"] }] } });
   void api.reportsMembersCsv({});
+  // S2: typed datatable descriptor and query/export helpers
+  const membersTable = sdk.tables["reports.members"];
+  const tableMember: sdk.TableRow<"reports.members"> = member;
+  if (membersTable.query) {
+    void membersTable.query(api, { body: {} });
+  }
+  if (membersTable.export) {
+    void membersTable.export(api, {});
+  }
   // @ts-expect-error Filters keep their declared operator set.
   void api.reportsMembersQuery({ body: { filters: [{ op: "raw_sql" }] } });
-  void [amount, count, sum, note, memberID, wrongID, rounded, countNumber];
+  void [amount, count, sum, note, memberID, wrongID, rounded, countNumber, tableMember];
 }

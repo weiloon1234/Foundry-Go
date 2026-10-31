@@ -360,6 +360,57 @@ if (error.code === ErrorCode.ValidationFailed) {
 
 Error codes defined in the manifest are transformed to PascalCase keys (e.g. `validation_failed` → `ValidationFailed`). If two error codes in the manifest collide on the same PascalCase key, code generation fails with a conflict error.
 
+### Typed datatable descriptors
+
+Generated entry modules export a frozen `tables` registry for surfaces that define datatables, together with typed identifiers and row helper types:
+
+```typescript
+import { tables, type TableId, type TableRow } from "./generated/contracts_foundry.gen.js";
+
+const membersTable = tables["reports.members"];
+const memberRow: TableRow<"reports.members"> = member;
+
+// Invoke typed query or export methods directly through the descriptor:
+const page = await membersTable.query(api, {
+  body: {
+    filters: [{ op: "eq", column: "state", values: ["active"] }],
+  },
+});
+const csv = await membersTable.export(api, {});
+```
+
+Each descriptor in `tables` carries:
+- `id`: unique table identifier string.
+- `columns`: readonly array of `TableColumn<Row>` with `name` typed strictly as `keyof Row & string`, `kind` derived from Go `datatable.ColumnKind`, `nullable`, `sortable`, `searchable`, `exportable`, and declared filter `operators`. Enum columns carry `kind: "enum"`, literal `cases`, and link directly to the S1 enum value object (`enum: typeof Status`) when registered in the manifest.
+- `defaultSort`: readonly array of `TableSort<keyof Row & string>`.
+- `exports`: boolean flag indicating whether the table supports export operations.
+- `query(client, input, options)` and `export?(client, input, options)`: strongly-typed invokers that call client operations without casts or `any`.
+
+Surfaces without tables omit the `tables` constant. The framework runtime remains strictly decoupled from UI and state management libraries (such as Zustand, table sources, or display formatters).
+
+### Deterministic readable names and v0.3.0 migration
+
+Beginning in v0.3.0, TypeScript contract generation replaces nondeterministic hashed names (`Go_<hash>`, `String_<hash>`, `ID_<hash>`) with human-readable, deterministic identifiers:
+
+- **Entity IDs**: `model.ID[T]` produces `<Entity>ID` (e.g., `OrderID`, `UserID`). When cross-package type name collisions occur, names qualify with package elements (e.g., `Reporting_MemberID`, `Consumer_MemberID`, `Models_UserID`).
+- **Anonymous Structs**: Anonymous nested structs produce `<Owner><Field>` or `<Owner>Item` for repeated elements (e.g., `ReportItem` for `report.items []struct{...}`).
+- **Collections**: Generic slice and map kinds produce deterministic identifiers:
+  - `[]T` → `List_<T>` (e.g., `List_Filter`, `List_String`)
+  - `[N]T` → `Array_<N>_<T>` (e.g., `Array_2_String`)
+  - `map[K]V` → `Map_<K>_<V>` (e.g., `Map_Int64_String`, `Map_Status_String`)
+  - `i18n.LocaleMap[V]` → `LocaleMap_<V>` (e.g., `LocaleMap_String`)
+  - `value.Nullable[T]` → `Nullable_<T>`
+- **Reserved Primitives**: When Go primitive wrappers clash with reserved global types, deterministic names apply (e.g., `GoString` for Go `string`, `GoError` for Go `error`).
+- **Hashing as Last Resort**: Type hashing is reserved strictly as an insurmountable collision fallback and is accompanied by a code reason.
+
+#### Migrating from v0.2 to v0.3
+
+Applications upgrading from v0.2 to v0.3 should update TypeScript imports and type annotations referencing generated types:
+1. Replace hashed `Go_<hash>` and `String_<hash>` references with their corresponding `List_<T>`, `Map_<K>_<V>`, `Array_<N>_<T>`, or `GoString` names.
+2. Replace `ID_<Entity>` or hashed `User_<hash>` references with `<Entity>ID` or `<Package>_<Entity>ID`.
+3. Replace handwritten datatable metadata parsers with the generated `tables` registry.
+4. Regenerate all client contracts using `foundry contracts` or the application's exported command.
+
 ## Injected HTTP transport
 
 `createClient(transport, options)` owns endpoint paths, query defaults/cardinality,
