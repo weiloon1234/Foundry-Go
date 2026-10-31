@@ -195,7 +195,7 @@ type Settings struct {
 	// Default currency.
 	Currency string ` + "`config:\"currency,public\" client:\"env=VITE_CURRENCY,fallback=USD,kind=currency\"`" + `
 	// Display time zone.
-	TimeZone string ` + "`config:\"time_zone,public\" client:\"env=VITE_TIME_ZONE,kind=time_zone\"`" + `
+	TimeZone string ` + "`config:\"time_zone,public\" client:\"env=VITE_TIME_ZONE,kind=time_zone,optional\"`" + `
 }
 `
 	dir := fixture(t, src)
@@ -212,11 +212,34 @@ type Settings struct {
 		`Name: "appName"`, `Env: "VITE_APP_NAME"`, `Description: "Product name shown in portal chrome."`, `Fallback: "Foundry"`, `MaxLength: 60`, `Kind: config.PublicString`,
 		`Name: "locale"`, `Env: "VITE_LOCALE"`, `Kind: config.PublicLocale`,
 		`Name: "currency"`, `Env: "VITE_CURRENCY"`, `Fallback: "USD"`, `Kind: config.PublicCurrency`,
-		`Name: "timeZone"`, `Env: "VITE_TIME_ZONE"`, `Kind: config.PublicTimeZone`,
+		`Name: "timeZone", Env: "VITE_TIME_ZONE", Description: "Display time zone.", Fallback: "", Optional: true, Kind: config.PublicTimeZone`,
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("generated settings missing %q\nFull content:\n%s", want, content)
 		}
+	}
+}
+
+func TestPublicConfigRejectsInvalidClientFlags(t *testing.T) {
+	for _, test := range []struct {
+		tag  string
+		want string
+	}{
+		{"env=VITE_ZONE,kind=time_zone,optional,fallback=UTC", "optional public config field cannot declare a fallback"},
+		{"env=VITE_ZONE,fallback=UTC,optional", "optional public config field cannot declare a fallback"},
+		{"env=VITE_ZONE,unknown", "invalid client tag option"},
+		{"env=VITE_ZONE,unknown=true", "unknown client tag option"},
+		{"env=VITE_ZONE,optional=true", "unknown client tag option"},
+	} {
+		t.Run(test.tag, func(t *testing.T) {
+			dir := fixture(t, "package sample\n//foundry:config\ntype Settings struct { Zone string `config:\"zone,public\" client:\""+test.tag+"\"` }\n")
+			if _, err := Generate(t.Context(), Options{Dir: dir}); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("expected %q, got %v", test.want, err)
+			}
+			if len(generatedSnapshot(t, dir)) != 0 {
+				t.Fatal("invalid client flag published output")
+			}
+		})
 	}
 }
 

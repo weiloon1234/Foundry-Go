@@ -6193,6 +6193,12 @@
       "env": "VITE_DEFAULT_LOCALE",
       "fallback": "en",
       "kind": "locale"
+    },
+    {
+      "name": "timeZone",
+      "env": "VITE_TIME_ZONE",
+      "optional": true,
+      "kind": "time_zone"
     }
   ]
 }

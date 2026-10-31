@@ -56,6 +56,17 @@ assert.equal(env.defaultLocale, "ms");
 const defaultEnv = sdk.decodePublicEnv({});
 assert.equal(defaultEnv.appName, "ConsumerApp");
 assert.equal(defaultEnv.defaultLocale, "en");
+assert.equal(defaultEnv.timeZone, undefined);
+assert.equal(sdk.decodePublicEnv({ VITE_TIME_ZONE: undefined }).timeZone, undefined);
+assert.equal(sdk.decodePublicEnv({ VITE_TIME_ZONE: "  " }).timeZone, undefined);
+assert.equal(sdk.decodePublicEnv({ VITE_TIME_ZONE: " UTC " }).timeZone, "UTC");
+assert.equal(Object.isFrozen(defaultEnv), true);
+assert.deepEqual(sdk.findPublicEnvProblems({ VITE_TIME_ZONE: "" }, "VITE_"), []);
+assert.throws(() => sdk.decodePublicEnv({ VITE_TIME_ZONE: "private-invalid-zone" }), (error) => {
+  assert.match(error.message, /VITE_TIME_ZONE is invalid/);
+  assert.equal(error.message.includes("private-invalid-zone"), false);
+  return true;
+});
 assert.deepEqual(sdk.findPublicEnvProblems({ VITE_SECRET: "123" }, "VITE_"), ["VITE_SECRET is not a declared public key."]);
 
 console.log("catalog messages ok");

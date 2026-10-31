@@ -30,11 +30,13 @@ func (k PublicKind) Validate() error {
 }
 
 // PublicSetting is a browser-visible configuration setting declared in Go.
+// Optional settings decode missing or blank browser values as undefined and cannot declare a non-empty fallback.
 type PublicSetting struct {
 	Name        string     `json:"name"`
 	Env         string     `json:"env"`
 	Description string     `json:"description,omitempty"`
 	Fallback    string     `json:"fallback,omitzero"`
+	Optional    bool       `json:"optional,omitempty"`
 	Kind        PublicKind `json:"kind"`
 	MaxLength   int        `json:"max_length,omitzero"`
 	EnumCases   []string   `json:"enum_cases,omitempty"`

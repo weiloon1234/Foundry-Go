@@ -708,6 +708,7 @@ can precede `,public`:
 type Settings struct {
 	AppName       string `config:"app_name,public" client:"env=VITE_APP_NAME,fallback=ConsumerApp,max=80"`
 	DefaultLocale string `config:"default_locale,public" client:"env=VITE_DEFAULT_LOCALE,fallback=en,kind=locale"`
+	TimeZone      string `config:"time_zone,public" client:"env=VITE_TIME_ZONE,kind=time_zone,optional"`
 }
 ```
 
@@ -725,6 +726,12 @@ A locale setting uses the catalog's `Locale` union when locale metadata is avail
 kinds are `string`, `boolean`, `number`, `enum`, `locale`, `currency`, and
 `time_zone`; `max` limits string length.
 
+The bare `optional` flag is allowed for every kind. It makes the generated
+property's type `T | undefined`. Missing, empty, or whitespace-only values decode
+to `undefined`. A supplied value keeps the kind's validation. An optional setting
+cannot declare a non-empty `fallback`; generation and manifest validation reject
+that combination.
+
 ```typescript
 import { decodePublicEnv, findPublicEnvProblems } from "./generated/contracts_foundry.gen.js";
 
@@ -732,17 +739,23 @@ const problems = findPublicEnvProblems(rawEnvironment, "VITE_");
 if (problems.length > 0) throw new Error(problems.join("\n"));
 const settings = decodePublicEnv(rawEnvironment);
 console.log(settings.appName, settings.defaultLocale);
+const dates = new Intl.DateTimeFormat(settings.defaultLocale, { timeZone: settings.timeZone });
 ```
 
 Supply the build tool's public environment object as `rawEnvironment`.
 `findPublicEnvProblems` reports unknown prefixed keys and invalid values without
 printing their values. `decodePublicEnv` trims strings, uses declared fallbacks
-for missing or blank values, and returns a frozen object. Invalid supplied values
-throw an error naming the key without printing the value. Generation rejects
-fallbacks outside the setting's declared type, including missing enum fallbacks
-and locale fallbacks outside the catalog. Supply a valid fallback for every
-non-string setting; plain strings may use the empty string. Locale validation
-checks membership in the same catalog used by the emitted `Locale` union.
+for missing or blank non-optional values, and returns a frozen object. Invalid
+supplied values throw an error naming the key without printing the value.
+Generation rejects fallbacks outside the setting's declared type, including
+missing non-optional enum fallbacks and locale fallbacks outside the catalog.
+Supply a valid fallback for every non-optional, non-string setting; plain strings
+may use the empty string. Locale validation checks membership in the same catalog
+used by the emitted `Locale` union.
+
+Go owns absence and fallback behavior; frontends use decoded values directly.
+In this example, a blank `VITE_TIME_ZONE` lets `Intl` use the viewer's browser
+zone. A supplied, validated zone fixes the display zone.
 
 ## Frontend message keys
 

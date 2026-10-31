@@ -187,7 +187,12 @@ func configFields(p *packageInput, typ types.Type, source documentedType, path, 
 			}
 			var envKey, fallback, kind string
 			var maxLen int
+			var optional bool
 			for _, entry := range strings.Split(clientTag, ",") {
+				if entry == "optional" {
+					optional = true
+					continue
+				}
 				k, v, ok := strings.Cut(entry, "=")
 				if !ok || v == "" {
 					return fail("invalid client tag option in public config field")
@@ -208,6 +213,9 @@ func configFields(p *packageInput, typ types.Type, source documentedType, path, 
 				default:
 					return fail("unknown client tag option in public config field: " + k)
 				}
+			}
+			if optional && fallback != "" {
+				return fail("optional public config field cannot declare a fallback")
 			}
 			if envKey == "" {
 				return fail("public config field requires client:\"env=...\" with full environment variable key")
@@ -261,6 +269,7 @@ func configFields(p *packageInput, typ types.Type, source documentedType, path, 
 				Env:         envKey,
 				Description: string(help),
 				Fallback:    fallback,
+				Optional:    optional,
 				Kind:        publicKind,
 				MaxLength:   maxLen,
 			}

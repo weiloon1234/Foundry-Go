@@ -165,6 +165,94 @@ func TestPublicConfigLocaleMatchesCatalog(t *testing.T) {
 	runReleaseTypeScript(t, output, `assert.equal(sdk.isValidPublicValue("VITE_LOCALE", "de"), false); assert.throws(() => sdk.decodePublicEnv({VITE_LOCALE:"de"})); assert.equal(sdk.decodePublicEnv({}).locale,"en"); assert.equal(sdk.decodePublicEnv({VITE_LOCALE:"ms"}).locale,"ms");`)
 }
 
+func TestPublicConfigOptionalValues(t *testing.T) {
+	locales, err := i18n.NewLocaleSet("en", "en", "ms")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := i18n.NewCatalog(t.Context(), locales, i18n.CatalogOptions{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := []manifest.PublicSetting{
+		{Name: "text", Env: "VITE_TEXT", Kind: manifest.PublicString, Optional: true, MaxLength: 4},
+		{Name: "enabled", Env: "VITE_ENABLED", Kind: manifest.PublicBoolean, Optional: true},
+		{Name: "number", Env: "VITE_NUMBER", Kind: manifest.PublicNumber, Optional: true},
+		{Name: "mode", Env: "VITE_MODE", Kind: manifest.PublicEnum, Optional: true, EnumCases: []string{"live", "test"}},
+		{Name: "locale", Env: "VITE_LOCALE", Kind: manifest.PublicLocale, Optional: true},
+		{Name: "currency", Env: "VITE_CURRENCY", Kind: manifest.PublicCurrency, Optional: true},
+		{Name: "timeZone", Env: "VITE_TIME_ZONE", Kind: manifest.PublicTimeZone, Optional: true},
+		{Name: "required", Env: "VITE_REQUIRED", Kind: manifest.PublicString, Fallback: "default"},
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{Catalog: catalog, PublicConfig: settings})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := Render(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output = append(output, []byte(`
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
+type Assert<T extends true> = T;
+type OptionalPublicConfigTypes = [
+  Assert<Equal<PublicEnv["text"], string | undefined>>,
+  Assert<Equal<PublicEnv["enabled"], boolean | undefined>>,
+  Assert<Equal<PublicEnv["number"], number | undefined>>,
+  Assert<Equal<PublicEnv["mode"], "live" | "test" | undefined>>,
+  Assert<Equal<PublicEnv["locale"], Locale | undefined>>,
+  Assert<Equal<PublicEnv["currency"], string | undefined>>,
+  Assert<Equal<PublicEnv["timeZone"], string | undefined>>,
+  Assert<Equal<PublicEnv["required"], string>>
+];
+`)...)
+	runReleaseTypeScript(t, output, `
+const cases = [
+  ["VITE_TEXT", "text", " ok ", "ok", "private-invalid-text"],
+  ["VITE_ENABLED", "enabled", " false ", false, "private-invalid-boolean"],
+  ["VITE_NUMBER", "number", " 0 ", 0, "private-invalid-number"],
+  ["VITE_MODE", "mode", " live ", "live", "private-invalid-mode"],
+  ["VITE_LOCALE", "locale", " ms ", "ms", "de"],
+  ["VITE_CURRENCY", "currency", " USD ", "USD", "private-invalid-currency"],
+  ["VITE_TIME_ZONE", "timeZone", " UTC ", "UTC", "private-invalid-zone"],
+];
+for (const [key, name, raw, expected, invalid] of cases) {
+  for (const env of [{}, {[key]: undefined}, {[key]: ""}, {[key]: " \t\n"}]) {
+    const decoded = sdk.decodePublicEnv(env);
+    assert.equal(decoded[name], undefined, key);
+    assert.equal(Object.hasOwn(decoded, name), true);
+    assert.equal(Object.isFrozen(decoded), true);
+    assert.equal(decoded.required, "default");
+  }
+  assert.equal(sdk.decodePublicEnv({[key]: raw})[name], expected, key);
+  assert.deepEqual(sdk.findPublicEnvProblems({[key]: ""}, "VITE_"), []);
+  assert.equal(sdk.findPublicEnvProblems({[key]: undefined}, "VITE_").length, 1);
+  assert.equal(sdk.findPublicEnvProblems({[key]: invalid}, "VITE_").length, 1);
+  assert.throws(() => sdk.decodePublicEnv({[key]: invalid}), error => {
+    assert.match(error.message, new RegExp(key + " is invalid"));
+    assert.equal(error.message.includes(invalid), false);
+    return true;
+  });
+}
+assert.equal(sdk.decodePublicEnv({VITE_ENABLED: "0"}).enabled, false);
+assert.equal(sdk.decodePublicEnv({VITE_ENABLED: "1"}).enabled, true);
+assert.equal(sdk.decodePublicEnv({VITE_ENABLED: "true"}).enabled, true);
+assert.equal(sdk.decodePublicEnv({VITE_NUMBER: "0x10"}).number, 16);
+assert.equal(sdk.decodePublicEnv({VITE_REQUIRED: " "}).required, "default");
+assert.equal(sdk.decodePublicEnv({VITE_REQUIRED: " supplied "}).required, "supplied");
+`)
+}
+
+func TestPublicConfigOptionalEnumRequiresCases(t *testing.T) {
+	source, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: []manifest.PublicSetting{{Name: "mode", Env: "VITE_MODE", Kind: manifest.PublicEnum, Optional: true}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Render(source); !errors.Is(err, fault.Invalid) {
+		t.Fatalf("optional enum without cases emitted: %v", err)
+	}
+}
+
 func TestExtensionOnlyUploadAcceptHint(t *testing.T) {
 	type form struct{ Document foundryhttp.UploadedFile }
 	field := validation.DefineField("document", func(f form) foundryhttp.UploadedFile { return f.Document })

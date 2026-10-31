@@ -96,6 +96,9 @@ func normalizeFeatures(d *Document, types typeIndex) error {
 		seenName := make(map[string]bool)
 		for i := range d.PublicConfig {
 			s := &d.PublicConfig[i]
+			if s.Optional && s.Fallback != "" {
+				return invalid("optional public config setting cannot declare a fallback: " + s.Env)
+			}
 			if err := s.Kind.Validate(); err != nil {
 				return err
 			}

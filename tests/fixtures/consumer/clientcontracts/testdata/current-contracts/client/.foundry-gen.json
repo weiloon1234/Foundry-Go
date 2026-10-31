@@ -2,9 +2,9 @@
   "version": 2,
   "files": {
     "contracts_browser_foundry.gen.ts": "15425316a29b21c3d4022b9862b716b89fdcc9f9151b03267f78ea48ca9f37d1",
-    "contracts_foundry.gen.ts": "19f100c68c494f553b6e8b203e09a171180d8c97449bf30b0f37c078236ecc99",
+    "contracts_foundry.gen.ts": "fde8b21abdcb528175bb8e1d9e615940b82c54c8f56659e7183f4e446cf3e4d3",
     "contracts_live_foundry.gen.ts": "191760a2a6983814d6ad2274eaccf550f30bf31017368ceb6e412be4a5de7be5",
-    "contracts_manifest_foundry.gen.json": "dea130ff89080ed84578c4299823d08d6792692514f6eeae8878daf0daced8bd",
+    "contracts_manifest_foundry.gen.json": "a6472752895ac9167ae038187b33b2b588a47c0531e71e532cf6b2ac230ea824",
     "contracts_members_foundry.gen.ts": "b0d515a1bfb12945b3671956d10255f371c4c9baae0d40a7d87ab05c581965e9",
     "contracts_openapi_foundry.gen.json": "a493b9d6f70cd6ff4153f7151a88494e23e432e44e6fd0526ecf05badec2fe6b",
     "contracts_react_foundry.gen.ts": "5381e2b076a7f4fdd980708b2e512c3a55198a51bcac5db341667185811c6b23",

@@ -344,3 +344,44 @@ func TestManifestBuildPublicConfigValidationAndOrder(t *testing.T) {
 		t.Fatalf("expected fault.Duplicate on duplicate name, got: %v", err)
 	}
 }
+
+func TestManifestOptionalPublicConfig(t *testing.T) {
+	for _, kind := range []manifest.PublicKind{manifest.PublicString, manifest.PublicBoolean, manifest.PublicNumber, manifest.PublicEnum, manifest.PublicLocale, manifest.PublicCurrency, manifest.PublicTimeZone} {
+		t.Run(string(kind), func(t *testing.T) {
+			setting := manifest.PublicSetting{Name: "setting", Env: "VITE_SETTING", Kind: kind, Optional: true}
+			source, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: []manifest.PublicSetting{setting}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := source.JSON()
+			if err != nil {
+				t.Fatal(err)
+			}
+			restored, err := manifest.Decode(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			doc, err := restored.Snapshot()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(doc.PublicConfig) != 1 || !doc.PublicConfig[0].Optional {
+				t.Fatal("manifest lost optional metadata")
+			}
+			for _, fallback := range []string{"fallback", " "} {
+				setting.Fallback = fallback
+				if _, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: []manifest.PublicSetting{setting}}); !errors.Is(err, fault.Invalid) {
+					t.Fatalf("optional fallback accepted by Build: %v", err)
+				}
+				doc.PublicConfig[0] = setting
+				data, err := json.Marshal(doc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := manifest.Decode(data); !errors.Is(err, fault.Invalid) {
+					t.Fatalf("optional fallback accepted by Decode: %v", err)
+				}
+			}
+		})
+	}
+}

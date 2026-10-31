@@ -51,7 +51,12 @@ export function messageConsumer(): void {
   const env: PublicEnv = decodePublicEnv({ VITE_APP_NAME: "Foundry Consumer", VITE_DEFAULT_LOCALE: "ms" });
   const appName: string = env.appName;
   const defaultLocale: Locale = env.defaultLocale;
-  void [appName, defaultLocale];
+  const timeZone: string | undefined = env.timeZone;
+  const browserZone: PublicEnv["timeZone"] = undefined;
+  void [appName, defaultLocale, timeZone, browserZone];
+  // @ts-expect-error An optional public setting must be narrowed before use as a string.
+  const requiredTimeZone: string = env.timeZone;
+  void requiredTimeZone;
   // @ts-expect-error Undeclared public config property is rejected.
   void env.undeclaredSetting;
   // @ts-expect-error Public config property has typed kind (Locale, not number).

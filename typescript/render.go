@@ -369,7 +369,7 @@ export function findPublicEnvProblems(env: Record<string, unknown>, prefix: stri
   return problems;
 }
 
-/** Blank values are valid: readers use the key's fallback. */
+/** Blank values are valid: readers use the declared fallback or undefined. */
 export function isValidPublicValue(key: PublicEnvKey, value: unknown): boolean {
   if (typeof value !== "string") return false;
   return value.trim() === "" || publicEnvSchema[key].isValid(value.trim());
@@ -398,37 +398,54 @@ export interface PublicEnv {
 				propType = strings.Join(cases, " | ")
 			}
 		}
+		if setting.Optional {
+			propType += " | undefined"
+		}
 		fmt.Fprintf(&r.out, "  readonly %s: %s;\n", setting.Name, propType)
 	}
 	fmt.Fprintf(&r.out, `}
 
-/** Decodes public configuration from raw environment variables, applying declared fallbacks. */
+/** Decodes public configuration, applying declared fallbacks or undefined for optional settings. */
 export function decodePublicEnv(env: Record<string, string | undefined>): PublicEnv {
-  const read = (key: PublicEnvKey): string => {
+  function read(key: PublicEnvKey): string;
+  function read(key: PublicEnvKey, optional: true): string | undefined;
+  function read(key: PublicEnvKey, optional = false): string | undefined {
     const raw = env[key]?.trim();
+    if (!raw && optional) return undefined;
     const value = raw || publicEnvSchema[key].fallback;
     if (publicEnvSchema[key].isValid(value)) return value;
     throw new Error(key + " is invalid: " + publicEnvSchema[key].description);
-  };
-  return Object.freeze({
+  }
 `)
-	for _, setting := range r.document.PublicConfig {
+	for i, setting := range r.document.PublicConfig {
+		if setting.Optional {
+			fmt.Fprintf(&r.out, "  const value%d = read(%s, true);\n", i, quote(setting.Env))
+		}
+	}
+	r.out.WriteString("  return Object.freeze({\n")
+	for i, setting := range r.document.PublicConfig {
+		read := fmt.Sprintf("read(%s)", quote(setting.Env))
+		prefix := ""
+		if setting.Optional {
+			read = fmt.Sprintf("value%d", i)
+			if setting.Kind == manifest.PublicNumber || setting.Kind == manifest.PublicBoolean {
+				prefix = read + " === undefined ? undefined : "
+			}
+		}
+		decoded := read
 		switch setting.Kind {
 		case "number":
-			fmt.Fprintf(&r.out, "    %s: Number(read(%s)),\n", setting.Name, quote(setting.Env))
+			decoded = "Number(" + read + ")"
 		case "boolean":
-			fmt.Fprintf(&r.out, "    %s: read(%s) === \"true\" || read(%s) === \"1\",\n", setting.Name, quote(setting.Env), quote(setting.Env))
+			decoded = read + " === \"true\" || " + read + " === \"1\""
 		case "locale":
 			if r.document.Locales != nil {
-				fmt.Fprintf(&r.out, "    %s: read(%s) as PublicEnv[%s],\n", setting.Name, quote(setting.Env), quote(setting.Name))
-			} else {
-				fmt.Fprintf(&r.out, "    %s: read(%s),\n", setting.Name, quote(setting.Env))
+				decoded += fmt.Sprintf(" as PublicEnv[%s]", quote(setting.Name))
 			}
 		case "enum":
-			fmt.Fprintf(&r.out, "    %s: read(%s) as PublicEnv[%s],\n", setting.Name, quote(setting.Env), quote(setting.Name))
-		default:
-			fmt.Fprintf(&r.out, "    %s: read(%s),\n", setting.Name, quote(setting.Env))
+			decoded += fmt.Sprintf(" as PublicEnv[%s]", quote(setting.Name))
 		}
+		fmt.Fprintf(&r.out, "    %s: %s%s,\n", setting.Name, prefix, decoded)
 	}
 	r.out.WriteString(`  });
 }
@@ -439,6 +456,9 @@ export function decodePublicEnv(env: Record<string, string | undefined>): Public
 // Validate defaults at the same boundary that determines the emitted client
 // type. The decoder also validates the chosen value before returning it.
 func (r *renderer) validPublicFallback(setting manifest.PublicSetting) bool {
+	if setting.Optional {
+		return setting.Fallback == "" && (setting.Kind != manifest.PublicEnum || len(setting.EnumCases) > 0)
+	}
 	value := setting.Fallback
 	if value != strings.TrimSpace(value) {
 		return false

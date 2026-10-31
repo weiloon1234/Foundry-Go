@@ -131,8 +131,12 @@ func emitConfig(p *packageInput, declaration configDeclaration) ([]byte, error) 
 			default:
 				kindConst = fmt.Sprintf("%s.PublicKind(%q)", configuration, s.Kind)
 			}
-			e.line("{Name: %q, Env: %q, Description: %q, Fallback: %q, Kind: %s, MaxLength: %d, EnumCases: %s},",
-				s.Name, s.Env, s.Description, s.Fallback, kindConst, s.MaxLength, casesLit)
+			optional := ""
+			if s.Optional {
+				optional = "Optional: true, "
+			}
+			e.line("{Name: %q, Env: %q, Description: %q, Fallback: %q, %sKind: %s, MaxLength: %d, EnumCases: %s},",
+				s.Name, s.Env, s.Description, s.Fallback, optional, kindConst, s.MaxLength, casesLit)
 		}
 		e.line("}")
 		e.line("}")
