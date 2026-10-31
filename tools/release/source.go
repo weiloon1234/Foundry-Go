@@ -98,6 +98,7 @@ func (policy sourcePolicy) sourceName(path string) bool {
 		"internal/generate/testdata/scaffold/extensions.golden",
 		"database/orm/testdata/joined-has.sql",
 		"database/orm/testdata/public-methods.txt",
+		"testdata/public-api-undocumented.txt",
 		"docs/evidence/goway-6a12-capability-audit.tsv",
 		"docs/evidence/goway-stage8d3a-api-removals.tsv",
 		"docs/evidence/goway-stage8d3a-negative-ports.tsv",

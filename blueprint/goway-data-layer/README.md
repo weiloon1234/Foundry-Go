@@ -503,12 +503,12 @@ intentionally accepts byte slices, while identity does not.
 
 | Disposition | Cases |
 | --- | ---: |
-| ported | 587 |
+| ported | 595 |
 | port | 0 |
 | merge | 0 |
 | obsolete | 0 |
 | unaffected | 450 |
-| **Total** | **1037** |
+| **Total** | **1045** |
 
 | Area | Cases |
 | --- | ---: |
@@ -517,10 +517,10 @@ intentionally accepts byte slices, while identity does not.
 | Cache, Redis and coordination | 61 |
 | Core reads, writes and codecs | 74 |
 | Events, jobs and messaging | 54 |
-| Expressions and aggregates | 70 |
-| Framework integrations | 81 |
+| Expressions and aggregates | 73 |
+| Framework integrations | 85 |
 | HTTP, DTOs and transport contracts | 117 |
-| Joins and correlation | 101 |
+| Joins and correlation | 102 |
 | Lifecycle, mutators and observers | 39 |
 | Other framework services and contracts | 83 |
 | Relations and pivots | 25 |
@@ -534,13 +534,15 @@ intentionally accepts byte slices, while identity does not.
 | 3 | 60 |
 | 4 | 23 |
 | 5 | 39 |
-| 6a | 70 |
-| 6b | 100 |
+| 6a | 73 |
+| 6b | 101 |
 | 6c | 73 |
 | 6d | 60 |
 | 6e | 61 |
-| 7 | 80 |
+| 7 | 84 |
 | — | 450 |
+
+595 old catalogue rows are covered by 590 distinct Go-way cases.
 
 587 old catalogue rows are covered by 582 distinct Go-way cases.
 
