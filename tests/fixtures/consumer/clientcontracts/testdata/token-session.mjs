@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { browserStorage } from "./browser-storage.mjs";
 import { describe, it, mock } from "node:test";
 import { pathToFileURL } from "node:url";
 
-const { accessTokenExpiring, createTokenSession } = await import(pathToFileURL(process.argv[2]).href);
+const { accessTokenExpiring, createTokenSession, SessionCoordinationError } = await import(pathToFileURL(process.argv[2]).href);
 
 /** One exclusive lock shared by the tabs of a test, like Web Locks. */
 function sharedLock() {
@@ -96,7 +97,7 @@ describe("createTokenSession", () => {
       assert.deepEqual(Object.keys(record).sort(), ["identity", "revision", "status"]);
       assert.equal(record.status, "uncertain");
       stored.set("foundry.browser.session.transition", "invalid");
-      assert.throws(() => two.accessToken(), SyntaxError);
+      await assert.rejects(two.accessToken(), SessionCoordinationError);
     } finally {
       one.dispose();
       two.dispose();
@@ -112,7 +113,7 @@ describe("createTokenSession", () => {
       name: "storage-failure", channel: null, refresh,
       coordination: { read: () => null, write: () => { throw unavailable; } },
     });
-    await assert.rejects(session.accessToken(), error => error === unavailable);
+    await assert.rejects(session.accessToken(), SessionCoordinationError);
     assert.equal(refresh.mock.callCount(), 0);
     session.dispose();
   });
@@ -171,13 +172,13 @@ describe("createTokenSession", () => {
       session.signIn(at("account-a", 60_000));
       const version = session.version();
       fail = true;
-      assert.throws(() => session[operation](at("account-b", 60_000)), error => error === unavailable);
+      assert.throws(() => session[operation](at("account-b", 60_000)), SessionCoordinationError);
       assert.equal(session.status(), "signed-out", `N1 ${operation} local invalidation`);
       assert.notEqual(session.version(), version);
-      assert.equal(await session.accessToken(), null);
+      await assert.rejects(session.accessToken(), SessionCoordinationError);
       assert.equal(refresh.mock.callCount(), 0);
       fail = false;
-      assert.equal(await session.accessToken(), null, "storage recovery must not revive the old identity");
+      await assert.rejects(session.accessToken(), SessionCoordinationError, "storage recovery must not revive the old identity");
       session.signIn(at("new-login", 60_000));
       assert.equal(await session.accessToken(), "new-login");
       session.dispose();
@@ -472,4 +473,97 @@ describe("createTokenSession", () => {
       expiresAt: 901_000,
     });
   });
+});
+
+for (const denial of ["getter", "read", "write"]) {
+  for (const active of [false, true]) it(`browser ${denial} denial fails closed (active=${active})`, async t => {
+    const storage = browserStorage(t);
+    const refresh = mock.fn(async () => renewed(at("rotated", 60_000)));
+    if (!active) storage.deny(denial);
+    const session = createTokenSession({ name: "denied", channel: null, now: () => 0, refresh });
+    t.after(() => session.dispose());
+    assert.equal(storage.accesses(), 0, "construction must defer storage access");
+    assert.equal(session.status(), "unknown");
+    if (active) {
+      session.signIn(at("old-bearer", 60_000));
+      assert.equal(await session.accessToken(), "old-bearer");
+      session.rejected("old-bearer");
+      storage.deny(denial);
+    }
+    assert.doesNotThrow(() => session.version());
+    await assert.rejects(session.accessToken(), SessionCoordinationError);
+    assert.equal(session.status(), "signed-out");
+    assert.throws(() => session.signIn(at("unsafe", 60_000)), error => {
+      assert.ok(error instanceof SessionCoordinationError);
+      assert.equal(error.name, "SessionCoordinationError");
+      assert.equal(error.message, "Session coordination is unavailable");
+      assert.equal(error.cause, undefined);
+      return true;
+    });
+    let sent = false;
+    await assert.rejects(session.runCredentials(async () => { sent = true; }), SessionCoordinationError);
+    assert.equal(sent, false);
+    assert.equal(refresh.mock.callCount(), 0);
+    storage.deny(null);
+    await assert.rejects(session.accessToken(), SessionCoordinationError, "readable old metadata cannot revive credentials");
+    session.signIn(at("new-bearer", 60_000));
+    assert.equal(await session.accessToken(), "new-bearer");
+    assert.equal(JSON.stringify([...storage.stored.values()]).includes("bearer"), false);
+  });
+
+  it(`browser ${denial} denial clears an existing fresh bearer`, async t => {
+    const storage = browserStorage(t);
+    const session = createTokenSession({ name: "fresh", channel: null, now: () => 0, refresh: async () => renewed(at("unsafe", 60_000)) });
+    t.after(() => session.dispose());
+    session.signIn(at("old", 60_000));
+    const before = session.version();
+    storage.deny(denial);
+    assert.throws(() => session.signIn(at("new", 60_000)), SessionCoordinationError);
+    assert.equal(session.status(), "signed-out");
+    assert.notEqual(session.version(), before);
+    storage.deny(null);
+    await assert.rejects(session.accessToken(), SessionCoordinationError);
+  });
+}
+
+for (const denial of ["getter", "read"]) it(`cross-tab messages contain browser ${denial} denial`, async t => {
+  const storage = browserStorage(t);
+  const channel = sharedChannel(true);
+  const lock = sharedLock();
+  const one = createTokenSession({ name: "messages", lock, channel: channel(), now: () => 0, refresh: async () => ({ kind: "signed-out" }) });
+  const two = createTokenSession({ name: "messages", lock, channel: channel(), now: () => 0, refresh: async () => ({ kind: "signed-out" }) });
+  t.after(() => { one.dispose(); two.dispose(); });
+  await one.runCredentials(async () => one.signIn(at("old", 60_000)));
+  channel.deliver();
+  assert.equal(await two.accessToken(), "old");
+  await one.runCredentials(async () => one.signIn(at("new", 60_000)));
+  storage.deny(denial);
+  assert.doesNotThrow(() => channel.deliver());
+  assert.equal(two.status(), "signed-out");
+  await assert.rejects(two.accessToken(), SessionCoordinationError);
+});
+
+it("custom coordination read errors are redacted and clear a fresh bearer", async t => {
+  let transition = null;
+  let denied = false;
+  const session = createTokenSession({
+    name: "custom-read", channel: null, now: () => 0,
+    refresh: async () => renewed(at("unsafe", 60_000)),
+    coordination: {
+      read() { if (denied) throw new Error("private storage detail"); return transition; },
+      write: next => { transition = next; },
+    },
+  });
+  t.after(() => session.dispose());
+  session.signIn(at("old", 60_000));
+  denied = true;
+  await assert.rejects(session.accessToken(), error => {
+    assert.ok(error instanceof SessionCoordinationError);
+    assert.equal(error.message, "Session coordination is unavailable");
+    assert.equal(error.cause, undefined);
+    return true;
+  });
+  assert.equal(session.status(), "signed-out");
+  denied = false;
+  await assert.rejects(session.accessToken(), SessionCoordinationError);
 });

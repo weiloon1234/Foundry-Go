@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.3.1 — 2026-11-01
+
+- Fixed: Browser portal and token sessions construct safely when localStorage is
+  denied. Credential coordination fails closed with `SessionCoordinationError`
+  on getter, read or write denial, clearing bearer tokens without exposing storage
+  values or falling back to independent tab state.
+- Added: Public configuration `kind=format_locale` accepts Intl formatting locales
+  independently of the message catalog. Canonical BCP 47 fallbacks are validated
+  in Go; supplied values use `Intl.getCanonicalLocales`. Optional settings emit
+  `string | undefined`. Catalog `kind=locale` keeps exact membership validation.
+
 ## v0.3.0 — 2026-11-01
 
 **Highlights:** Go declarations now generate the remaining client contract

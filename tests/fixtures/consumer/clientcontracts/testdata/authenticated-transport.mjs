@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
 import { pathToFileURL } from "node:url";
 
-const { authenticatedTransport, createTokenSession } = await import(pathToFileURL(process.argv[2]).href);
+const { authenticatedTransport, createTokenSession, SessionCoordinationError } = await import(pathToFileURL(process.argv[2]).href);
 
 function request(overrides = {}) {
   return {
@@ -74,10 +74,10 @@ describe("authenticatedTransport", () => {
     });
     tokens.signIn({ value: "account-a", expiresAt: Date.now() + 60_000 });
     fail = true;
-    assert.throws(() => tokens.signIn({ value: "account-b", expiresAt: Date.now() + 60_000 }), error => error === unavailable);
+    assert.throws(() => tokens.signIn({ value: "account-b", expiresAt: Date.now() + 60_000 }), SessionCoordinationError);
     const api = backend(200);
-    await authenticatedTransport(api.transport, tokens)(request());
-    assert.deepEqual(api.sent.map(authorization), [undefined], "N1 old bearer must not escape through transport");
+    await assert.rejects(authenticatedTransport(api.transport, tokens)(request()), SessionCoordinationError);
+    assert.deepEqual(api.sent, [], "N1 failed coordination must block transport before any bearer can escape");
     tokens.dispose();
   });
 

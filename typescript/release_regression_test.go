@@ -176,9 +176,11 @@ func TestPublicConfigOptionalValues(t *testing.T) {
 		{Name: "number", Env: "VITE_NUMBER", Kind: manifest.PublicNumber, Optional: true},
 		{Name: "mode", Env: "VITE_MODE", Kind: manifest.PublicEnum, Optional: true, EnumCases: []string{"live", "test"}},
 		{Name: "locale", Env: "VITE_LOCALE", Kind: manifest.PublicLocale, Optional: true},
+		{Name: "formatLocale", Env: "VITE_FORMAT_LOCALE", Kind: manifest.PublicFormatLocale, Optional: true},
 		{Name: "currency", Env: "VITE_CURRENCY", Kind: manifest.PublicCurrency, Optional: true},
 		{Name: "timeZone", Env: "VITE_TIME_ZONE", Kind: manifest.PublicTimeZone, Optional: true},
 		{Name: "required", Env: "VITE_REQUIRED", Kind: manifest.PublicString, Fallback: "default"},
+		{Name: "requiredFormatLocale", Env: "VITE_REQUIRED_FORMAT_LOCALE", Kind: manifest.PublicFormatLocale, Fallback: "en-MY"},
 	}
 	source, err := manifest.Build(t.Context(), manifest.Sources{Catalog: catalog, PublicConfig: settings})
 	if err != nil {
@@ -197,8 +199,10 @@ type OptionalPublicConfigTypes = [
   Assert<Equal<PublicEnv["number"], number | undefined>>,
   Assert<Equal<PublicEnv["mode"], "live" | "test" | undefined>>,
   Assert<Equal<PublicEnv["locale"], Locale | undefined>>,
+  Assert<Equal<PublicEnv["formatLocale"], string | undefined>>,
   Assert<Equal<PublicEnv["currency"], string | undefined>>,
   Assert<Equal<PublicEnv["timeZone"], string | undefined>>,
+  Assert<Equal<PublicEnv["requiredFormatLocale"], string>>,
   Assert<Equal<PublicEnv["required"], string>>
 ];
 `)...)
@@ -209,6 +213,7 @@ const cases = [
   ["VITE_NUMBER", "number", " 0 ", 0, "private-invalid-number"],
   ["VITE_MODE", "mode", " live ", "live", "private-invalid-mode"],
   ["VITE_LOCALE", "locale", " ms ", "ms", "de"],
+  ["VITE_FORMAT_LOCALE", "formatLocale", " en-MY ", "en-MY", "en_MY"],
   ["VITE_CURRENCY", "currency", " USD ", "USD", "private-invalid-currency"],
   ["VITE_TIME_ZONE", "timeZone", " UTC ", "UTC", "private-invalid-zone"],
 ];
@@ -219,6 +224,7 @@ for (const [key, name, raw, expected, invalid] of cases) {
     assert.equal(Object.hasOwn(decoded, name), true);
     assert.equal(Object.isFrozen(decoded), true);
     assert.equal(decoded.required, "default");
+    assert.equal(decoded.requiredFormatLocale, "en-MY");
   }
   assert.equal(sdk.decodePublicEnv({[key]: raw})[name], expected, key);
   assert.deepEqual(sdk.findPublicEnvProblems({[key]: ""}, "VITE_"), []);
@@ -316,5 +322,37 @@ func TestTableOperationBindingsUseOnlyExplicitMetadata(t *testing.T) {
 	bindings := r.tableBindings()
 	if bindings["members"] != (tableOperations{query: "unrelatedName", export: "ticket", download: "download", exportKind: "ticket"}) || bindings["orders"] != (tableOperations{export: "file", exportKind: "file"}) {
 		t.Fatal(bindings)
+	}
+}
+
+func TestPublicConfigFormatLocaleFallback(t *testing.T) {
+	for _, test := range []struct {
+		value string
+		valid bool
+	}{
+		{"en-MY", true},
+		{"zh-Hant-TW", true},
+		{"de-DE-u-nu-latn", true},
+		{"", false},
+		{"en_MY", false},
+		{"en--MY", false},
+		{"en-my", false},
+		{" en-MY", false},
+	} {
+		t.Run(test.value, func(t *testing.T) {
+			source, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: []manifest.PublicSetting{
+				{Name: "formatLocale", Env: "VITE_FORMAT_LOCALE", Kind: manifest.PublicFormatLocale, Fallback: test.value},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			output, err := Render(source)
+			if (err == nil) != test.valid {
+				t.Fatalf("fallback %q: Render error = %v, want valid = %v", test.value, err, test.valid)
+			}
+			if test.valid && !strings.Contains(string(output), "readonly formatLocale: string;") {
+				t.Fatal("formatting locale must have string type")
+			}
+		})
 	}
 }

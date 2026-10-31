@@ -143,33 +143,34 @@ type Options struct{ Mode Mode }
 
 func TestInvalidConfigurationDeclarationsDoNotPublish(t *testing.T) {
 	for name, source := range map[string]string{
-		"not a struct":             "//foundry:config\ntype Settings string",
-		"generic":                  "//foundry:config\ntype Settings[T any] struct{ Value T }",
-		"alias":                    "type Original struct{}\n//foundry:config\ntype Settings = Original",
-		"directive options":        "//foundry:config format=toml\ntype Settings struct{}",
-		"private":                  "//foundry:config\ntype Settings struct{ private string }",
-		"embedded":                 "type Child struct{Port int}\n//foundry:config\ntype Settings struct{Child}",
-		"pointer":                  "//foundry:config\ntype Settings struct{Value *int}",
-		"interface":                "//foundry:config\ntype Settings struct{Value any}",
-		"func":                     "//foundry:config\ntype Settings struct{Value func()}",
-		"map key":                  "//foundry:config\ntype Settings struct{Value map[int]string}",
-		"map dynamic":              "//foundry:config\ntype Settings struct{Value map[string]any}",
-		"invalid tag":              "//foundry:config\ntype Settings struct{Value string `config:\"bad-name\"`}",
-		"invalid option":           "//foundry:config\ntype Settings struct{Value string `config:\"value,unknown\"`}",
-		"duplicate option":         "//foundry:config\ntype Settings struct{Value string `config:\"value,secret,secret\"`}",
-		"duplicate key":            "//foundry:config\ntype Settings struct{One string `config:\"same\"`;Two string `config:\"same\"`}",
-		"environment collision":    "//foundry:config\ntype Settings struct{One string `config:\"a.b\"`;Two string `config:\"a__b\"`}",
-		"namespace collision":      "//foundry:config\ntype Settings struct{One string `config:\"a\"`;Two string `config:\"a.b\"`}",
-		"empty group":              "//foundry:config\ntype Settings struct{Group struct{}}",
-		"group symbol collision":   "//foundry:config\ntype Settings struct{AB struct{C int};A struct{B struct{C int}}}",
-		"handwritten collision":    "//foundry:config\ntype Settings struct{}\nfunc SettingsConfigKeys(){}",
-		"text decoder":             "type Code string\nfunc(*Code)UnmarshalText(string)error{return nil}\n//foundry:config\ntype Settings struct{Value Code}",
-		"public secret tag":        "//foundry:config\ntype Settings struct{ Password string `config:\"pass,public,secret\" client:\"env=PASS\"` }",
-		"public missing env":       "//foundry:config\ntype Settings struct{ Name string `config:\"name,public\"` }",
-		"public non-scalar":        "//foundry:config\ntype Settings struct{ List []string `config:\"list,public\" client:\"env=LIST\"` }",
-		"public unknown kind":      "//foundry:config\ntype Settings struct{ Name string `config:\"name,public\" client:\"env=NAME,kind=unknown\"` }",
-		"public enum non-enum":     "//foundry:config\ntype Settings struct{ Name string `config:\"name,public\" client:\"env=NAME,kind=enum\"` }",
-		"public locale non-string": "//foundry:config\ntype Settings struct{ Count int `config:\"count,public\" client:\"env=COUNT,kind=locale\"` }",
+		"not a struct":                    "//foundry:config\ntype Settings string",
+		"generic":                         "//foundry:config\ntype Settings[T any] struct{ Value T }",
+		"alias":                           "type Original struct{}\n//foundry:config\ntype Settings = Original",
+		"directive options":               "//foundry:config format=toml\ntype Settings struct{}",
+		"private":                         "//foundry:config\ntype Settings struct{ private string }",
+		"embedded":                        "type Child struct{Port int}\n//foundry:config\ntype Settings struct{Child}",
+		"pointer":                         "//foundry:config\ntype Settings struct{Value *int}",
+		"interface":                       "//foundry:config\ntype Settings struct{Value any}",
+		"func":                            "//foundry:config\ntype Settings struct{Value func()}",
+		"map key":                         "//foundry:config\ntype Settings struct{Value map[int]string}",
+		"map dynamic":                     "//foundry:config\ntype Settings struct{Value map[string]any}",
+		"invalid tag":                     "//foundry:config\ntype Settings struct{Value string `config:\"bad-name\"`}",
+		"invalid option":                  "//foundry:config\ntype Settings struct{Value string `config:\"value,unknown\"`}",
+		"duplicate option":                "//foundry:config\ntype Settings struct{Value string `config:\"value,secret,secret\"`}",
+		"duplicate key":                   "//foundry:config\ntype Settings struct{One string `config:\"same\"`;Two string `config:\"same\"`}",
+		"environment collision":           "//foundry:config\ntype Settings struct{One string `config:\"a.b\"`;Two string `config:\"a__b\"`}",
+		"namespace collision":             "//foundry:config\ntype Settings struct{One string `config:\"a\"`;Two string `config:\"a.b\"`}",
+		"empty group":                     "//foundry:config\ntype Settings struct{Group struct{}}",
+		"group symbol collision":          "//foundry:config\ntype Settings struct{AB struct{C int};A struct{B struct{C int}}}",
+		"handwritten collision":           "//foundry:config\ntype Settings struct{}\nfunc SettingsConfigKeys(){}",
+		"text decoder":                    "type Code string\nfunc(*Code)UnmarshalText(string)error{return nil}\n//foundry:config\ntype Settings struct{Value Code}",
+		"public secret tag":               "//foundry:config\ntype Settings struct{ Password string `config:\"pass,public,secret\" client:\"env=PASS\"` }",
+		"public missing env":              "//foundry:config\ntype Settings struct{ Name string `config:\"name,public\"` }",
+		"public non-scalar":               "//foundry:config\ntype Settings struct{ List []string `config:\"list,public\" client:\"env=LIST\"` }",
+		"public unknown kind":             "//foundry:config\ntype Settings struct{ Name string `config:\"name,public\" client:\"env=NAME,kind=unknown\"` }",
+		"public enum non-enum":            "//foundry:config\ntype Settings struct{ Name string `config:\"name,public\" client:\"env=NAME,kind=enum\"` }",
+		"public locale non-string":        "//foundry:config\ntype Settings struct{ Count int `config:\"count,public\" client:\"env=COUNT,kind=locale\"` }",
+		"public format locale non-string": "//foundry:config\ntype Settings struct{ Count int `config:\"count,public\" client:\"env=COUNT,kind=format_locale\"` }",
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := fixture(t, "package sample\n"+source)
@@ -192,6 +193,8 @@ type Settings struct {
 	AppName string ` + "`config:\"app_name,public\" client:\"env=VITE_APP_NAME,fallback=Foundry,max=60\"`" + `
 	// Display locale.
 	Locale string ` + "`config:\"locale,public\" client:\"env=VITE_LOCALE,kind=locale\"`" + `
+	// Formatting locale independent of the catalog.
+	FormatLocale string ` + "`config:\"format_locale,public\" client:\"env=VITE_FORMAT_LOCALE,kind=format_locale,optional\"`" + `
 	// Default currency.
 	Currency string ` + "`config:\"currency,public\" client:\"env=VITE_CURRENCY,fallback=USD,kind=currency\"`" + `
 	// Display time zone.
@@ -211,6 +214,7 @@ type Settings struct {
 		"SettingsPublicConfig() []config.PublicSetting",
 		`Name: "appName"`, `Env: "VITE_APP_NAME"`, `Description: "Product name shown in portal chrome."`, `Fallback: "Foundry"`, `MaxLength: 60`, `Kind: config.PublicString`,
 		`Name: "locale"`, `Env: "VITE_LOCALE"`, `Kind: config.PublicLocale`,
+		`Name: "formatLocale", Env: "VITE_FORMAT_LOCALE", Description: "Formatting locale independent of the catalog.", Fallback: "", Optional: true, Kind: config.PublicFormatLocale`,
 		`Name: "currency"`, `Env: "VITE_CURRENCY"`, `Fallback: "USD"`, `Kind: config.PublicCurrency`,
 		`Name: "timeZone", Env: "VITE_TIME_ZONE", Description: "Display time zone.", Fallback: "", Optional: true, Kind: config.PublicTimeZone`,
 	} {
@@ -225,6 +229,7 @@ func TestPublicConfigRejectsInvalidClientFlags(t *testing.T) {
 		tag  string
 		want string
 	}{
+		{"env=VITE_FORMAT_LOCALE,kind=format_locale,optional,fallback=en-MY", "optional public config field cannot declare a fallback"},
 		{"env=VITE_ZONE,kind=time_zone,optional,fallback=UTC", "optional public config field cannot declare a fallback"},
 		{"env=VITE_ZONE,fallback=UTC,optional", "optional public config field cannot declare a fallback"},
 		{"env=VITE_ZONE,unknown", "invalid client tag option"},

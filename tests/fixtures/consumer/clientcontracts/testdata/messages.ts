@@ -52,6 +52,12 @@ export function messageConsumer(): void {
   const appName: string = env.appName;
   const defaultLocale: Locale = env.defaultLocale;
   const timeZone: string | undefined = env.timeZone;
+  const formatLocale: string | undefined = env.formatLocale;
+  const regionalLocale: PublicEnv["formatLocale"] = "en-MY";
+  void [formatLocale, regionalLocale];
+  // @ts-expect-error An optional formatting locale must be narrowed before use.
+  const requiredFormatLocale: string = env.formatLocale;
+  void requiredFormatLocale;
   const browserZone: PublicEnv["timeZone"] = undefined;
   void [appName, defaultLocale, timeZone, browserZone];
   // @ts-expect-error An optional public setting must be narrowed before use as a string.

@@ -107,6 +107,7 @@ type Settings struct {
 	Services      infrastructure.Settings
 	AppName       string `config:"app_name,public" client:"env=VITE_APP_NAME,fallback=ConsumerApp"`
 	DefaultLocale string `config:"default_locale,public" client:"env=VITE_DEFAULT_LOCALE,fallback=en,kind=locale"`
+	FormatLocale  string `config:"format_locale,public" client:"env=VITE_FORMAT_LOCALE,kind=format_locale,optional"`
 	TimeZone      string `config:"time_zone,public" client:"env=VITE_TIME_ZONE,kind=time_zone,optional"`
 }
 ```
@@ -119,9 +120,9 @@ secret groups and secret/password types cannot be public.
 
 The client tag also accepts the bare `optional` flag, `fallback`, a positive `max`
 length, and `kind`:
-`string`, `boolean`, `number`, `locale`, `currency`, `time_zone` or `enum`.
-Locale, currency and timezone kinds require string fields; enum kind requires
-a declared enum. The TypeScript entry exports `PublicEnv`, `publicEnvSchema`,
+`string`, `boolean`, `number`, `locale`, `format_locale`, `currency`, `time_zone` or `enum`.
+Catalog locale, formatting locale, currency and timezone kinds require string
+fields; enum kind requires a declared enum. The TypeScript entry exports `PublicEnv`, `publicEnvSchema`,
 `decodePublicEnv` and `findPublicEnvProblems` from this metadata.
 
 For example, `client:"env=VITE_TIME_ZONE,kind=time_zone,optional"` declares an
@@ -137,3 +138,12 @@ and scientific notation (such as `-12.5` or `1e2`), or unsigned integers with
 and client validation. Non-optional numeric fallbacks must be nonempty and have no
 surrounding whitespace. Supplied environment values are trimmed; absent or blank
 values use the declared fallback only for non-optional settings.
+
+`kind=locale` requires exact membership in the message catalog and uses the
+catalog's TypeScript `Locale` union. `kind=format_locale` is independent of that
+catalog and emits `string`, or `string | undefined` with `optional`. Use it for
+Intl date, number and money formatting; for example, `en-MY` is valid even if the
+catalog only contains `en` and `ms`. Go validates non-optional fallbacks with
+`golang.org/x/text/language`: they must be well-formed canonical BCP 47 tags.
+Supplied browser values must be accepted by `Intl.getCanonicalLocales`. Malformed
+tags such as `en_MY` are rejected; optional absent or blank values stay undefined.

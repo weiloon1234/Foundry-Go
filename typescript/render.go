@@ -31,6 +31,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 	"golang.org/x/text/currency"
+	"golang.org/x/text/language"
 )
 
 //go:embed runtime/*.ts
@@ -322,6 +323,8 @@ export const publicEnvSchema = {
 				}
 				validator = fmt.Sprintf(`(value: string) => %s(value) && ([%s] as readonly string[]).includes(value)`, r.ref("isLocale"), strings.Join(locales, ", "))
 			}
+		case "format_locale":
+			validator = r.ref("isLocale")
 		case "currency":
 			validator = r.ref("isCurrency")
 		case "time_zone":
@@ -472,6 +475,9 @@ func (r *renderer) validPublicFallback(setting manifest.PublicSetting) bool {
 		}
 		_, err := i18n.ParseLocale(value)
 		return err == nil
+	case manifest.PublicFormatLocale:
+		tag, err := language.Parse(value)
+		return err == nil && tag.String() == value
 	case manifest.PublicCurrency:
 		unit, err := currency.ParseISO(value)
 		return err == nil && unit.String() == value

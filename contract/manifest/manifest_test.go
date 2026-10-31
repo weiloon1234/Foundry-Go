@@ -346,7 +346,7 @@ func TestManifestBuildPublicConfigValidationAndOrder(t *testing.T) {
 }
 
 func TestManifestOptionalPublicConfig(t *testing.T) {
-	for _, kind := range []manifest.PublicKind{manifest.PublicString, manifest.PublicBoolean, manifest.PublicNumber, manifest.PublicEnum, manifest.PublicLocale, manifest.PublicCurrency, manifest.PublicTimeZone} {
+	for _, kind := range []manifest.PublicKind{manifest.PublicString, manifest.PublicBoolean, manifest.PublicNumber, manifest.PublicEnum, manifest.PublicLocale, manifest.PublicFormatLocale, manifest.PublicCurrency, manifest.PublicTimeZone} {
 		t.Run(string(kind), func(t *testing.T) {
 			setting := manifest.PublicSetting{Name: "setting", Env: "VITE_SETTING", Kind: kind, Optional: true}
 			source, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: []manifest.PublicSetting{setting}})
@@ -365,7 +365,7 @@ func TestManifestOptionalPublicConfig(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(doc.PublicConfig) != 1 || !doc.PublicConfig[0].Optional {
+			if len(doc.PublicConfig) != 1 || !doc.PublicConfig[0].Optional || doc.PublicConfig[0].Kind != kind {
 				t.Fatal("manifest lost optional metadata")
 			}
 			for _, fallback := range []string{"fallback", " "} {

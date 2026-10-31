@@ -760,8 +760,18 @@ readable. That session requires a successful local credential publication before
 it can adopt credentials again. Applications own error presentation and disposal.
 
 Browser coordination defaults to localStorage and stores only revision, identity
-and status metadata, never tokens. Custom coordination must provide synchronous
-shared reads and writes under the same credential lock. Direct synchronous
+and status metadata, never tokens. Storage access is deferred until an operation
+needs it, so constructing a portal or token session and reading page status work
+when the browser denies storage. Getter, read or write denial rejects credential
+operations (including sign-in and refresh/restoration) with the auth runtime's
+exported `SessionCoordinationError`. It clears in-memory bearer tokens and
+invalidates pending profiles, with no storage values or underlying error details
+in the error. Denial never falls back to independent browser tab state; a
+successful local credential publication is required to recover.
+
+Custom coordination must provide synchronous
+shared reads and writes under the same credential lock. Custom read/write failures
+use the same redacted `SessionCoordinationError` and clear local credentials. Direct synchronous
 `signIn`/`signOut` calls do not acquire that lock; custom integrations should use
 `runCredentials` around server credential changes. Shared uncertainty prevents
 other tabs from retrying a possibly changed cookie, including tabs without
@@ -778,6 +788,7 @@ can precede `,public`:
 type Settings struct {
 	AppName       string `config:"app_name,public" client:"env=VITE_APP_NAME,fallback=ConsumerApp,max=80"`
 	DefaultLocale string `config:"default_locale,public" client:"env=VITE_DEFAULT_LOCALE,fallback=en,kind=locale"`
+	FormatLocale  string `config:"format_locale,public" client:"env=VITE_FORMAT_LOCALE,kind=format_locale,optional"`
 	TimeZone      string `config:"time_zone,public" client:"env=VITE_TIME_ZONE,kind=time_zone,optional"`
 }
 ```
@@ -793,8 +804,16 @@ TypeScript scalar types; enums decode to their declared cases. Local and importe
 enums read those cases from their enum descriptor, including its alias and
 ignored-constant rules. Enum fields infer `kind=enum` without an explicit tag.
 A locale setting uses the catalog's `Locale` union when locale metadata is available. The supported
-kinds are `string`, `boolean`, `number`, `enum`, `locale`, `currency`, and
+kinds are `string`, `boolean`, `number`, `enum`, `locale`, `format_locale`, `currency`, and
 `time_zone`; `max` limits string length.
+
+`locale` requires exact catalog membership. Use `format_locale` for Intl date,
+number and money formatting independently of that catalog: `en-MY` can be a
+formatting locale even when messages only support `en` and `ms`. It requires a
+string field and emits TypeScript `string` (`string | undefined` with `optional`).
+Non-optional fallbacks must be canonical BCP 47 tags validated by Go's
+`golang.org/x/text/language`; malformed or noncanonical fallbacks are rejected.
+Supplied browser values must be accepted by `Intl.getCanonicalLocales`.
 
 The bare `optional` flag is allowed for every kind. It makes the generated
 property's type `T | undefined`. Missing, empty, or whitespace-only values decode
@@ -809,7 +828,7 @@ const problems = findPublicEnvProblems(rawEnvironment, "VITE_");
 if (problems.length > 0) throw new Error(problems.join("\n"));
 const settings = decodePublicEnv(rawEnvironment);
 console.log(settings.appName, settings.defaultLocale);
-const dates = new Intl.DateTimeFormat(settings.defaultLocale, { timeZone: settings.timeZone });
+const dates = new Intl.DateTimeFormat(settings.formatLocale ?? settings.defaultLocale, { timeZone: settings.timeZone });
 ```
 
 Supply the build tool's public environment object as `rawEnvironment`.

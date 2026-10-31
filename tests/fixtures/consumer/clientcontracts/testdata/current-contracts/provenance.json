@@ -1,5 +1,5 @@
 {
-  "base_commit": "db7a461c274c1b0d9fa10fdfe363355b60bd62b0",
+  "base_commit": "4e0b1e4d374ae7282f152eea6c5993159f62252a",
   "command": "make publish-client-contracts",
   "source_sha256": {
     "client_publication_test.go": "56a014d6902a05c25ccaf939bb4409f39a4523255817ff4e6ac233ba58856c93",
@@ -8,24 +8,24 @@
   },
   "artifacts": {
     "client/.foundry-gen.json": {
-      "old_sha256": "8280eb131a84a60463ef99e981e5708a43cab8597bf6925114034be55da3184f",
-      "new_sha256": "8280eb131a84a60463ef99e981e5708a43cab8597bf6925114034be55da3184f"
+      "old_sha256": "1b341285488e2e947916f238b2d916f9eed742ea5f2d0eec9df56b88f7889e89",
+      "new_sha256": "1b341285488e2e947916f238b2d916f9eed742ea5f2d0eec9df56b88f7889e89"
     },
     "client/contracts_browser_foundry.gen.ts": {
       "old_sha256": "ddeb09246b7ec609bd11ddde04e0371438ea05de0c3ddd5b3fb3de35f178a5ad",
       "new_sha256": "ddeb09246b7ec609bd11ddde04e0371438ea05de0c3ddd5b3fb3de35f178a5ad"
     },
     "client/contracts_foundry.gen.ts": {
-      "old_sha256": "6bdab88589ed6140a9fd92393e2bfba59bdbb72abf55c1c6ab502602a1933f64",
-      "new_sha256": "6bdab88589ed6140a9fd92393e2bfba59bdbb72abf55c1c6ab502602a1933f64"
+      "old_sha256": "26149cd33e08868dc389b33797633198d56ec598926565eae3395eaab526d864",
+      "new_sha256": "26149cd33e08868dc389b33797633198d56ec598926565eae3395eaab526d864"
     },
     "client/contracts_live_foundry.gen.ts": {
       "old_sha256": "2a2a2d09ac26b58e26c8335ae77cac332d9f151e04ece0d349d9f20cf4f3f00f",
       "new_sha256": "2a2a2d09ac26b58e26c8335ae77cac332d9f151e04ece0d349d9f20cf4f3f00f"
     },
     "client/contracts_manifest_foundry.gen.json": {
-      "old_sha256": "488b4839a8a700f6aed08fba62916bcfbc7181ec470db4326b36f193aa96ac2c",
-      "new_sha256": "488b4839a8a700f6aed08fba62916bcfbc7181ec470db4326b36f193aa96ac2c"
+      "old_sha256": "058f2062ecade9dcc03d32a9bd726453435746a1e5f09c4b0472941da68d40b0",
+      "new_sha256": "058f2062ecade9dcc03d32a9bd726453435746a1e5f09c4b0472941da68d40b0"
     },
     "client/contracts_members_foundry.gen.ts": {
       "old_sha256": "d7cd29b7d1a85b156758e70f42259140cacc793ed8950a23cabecf93105d41e7",
@@ -40,8 +40,8 @@
       "new_sha256": "5381e2b076a7f4fdd980708b2e512c3a55198a51bcac5db341667185811c6b23"
     },
     "client/contracts_runtime_auth_foundry.gen.ts": {
-      "old_sha256": "36808a7603f977bbb22f32fed2c1b3625935c5eaa1727963bcde4ad9fc66deaa",
-      "new_sha256": "36808a7603f977bbb22f32fed2c1b3625935c5eaa1727963bcde4ad9fc66deaa"
+      "old_sha256": "43ca0a78a1369f13c31c9a2cd2f99410191410cc34953122612947694003e422",
+      "new_sha256": "43ca0a78a1369f13c31c9a2cd2f99410191410cc34953122612947694003e422"
     },
     "client/contracts_runtime_foundry.gen.ts": {
       "old_sha256": "f885a116979a5f9b714e11c1ab3a33b74bdf89af09411c9b8714a2a75ce39965",

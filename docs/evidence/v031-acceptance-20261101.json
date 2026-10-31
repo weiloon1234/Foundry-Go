@@ -1,0 +1,173 @@
+{
+  "date": "2026-11-01",
+  "scope": "Foundry-Go v0.3.1 targeted acceptance from the user brief",
+  "result": "passed in segments after one regression assertion correction",
+  "base": "4e0b1e4d374ae7282f152eea6c5993159f62252a",
+  "toolchain": {
+    "go": "go1.27.3 darwin/arm64",
+    "node": "v24.21.0",
+    "typescript": "7.0.2"
+  },
+  "commands": [
+    {
+      "command": "go build ./...",
+      "cwd": ".",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "command": "go vet ./config ./contract/manifest ./typescript ./internal/generate",
+      "cwd": ".",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "command": "go vet ./configured ./clientcontracts",
+      "cwd": "tests/fixtures/consumer",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "command": "go test -timeout=20m ./config ./contract/manifest ./typescript",
+      "cwd": ".",
+      "result": "passed",
+      "exit_code": 0,
+      "environment": {
+        "FOUNDRY_TEST_NODE": "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "FOUNDRY_TEST_TYPESCRIPT": "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js"
+      }
+    },
+    {
+      "command": "go test -timeout=20m ./internal/generate -run 'Test.*Config'",
+      "cwd": ".",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "command": "make generate-check",
+      "cwd": ".",
+      "result": "passed",
+      "exit_code": 0,
+      "details": "All 15 generation directories reported current output."
+    },
+    {
+      "command": "make publish-client-contracts",
+      "cwd": ".",
+      "result": "passed",
+      "exit_code": 0,
+      "details": "TestPublishClientContracts passed; only current-contracts was published."
+    },
+    {
+      "command": "go test -count=1 ./clientcontracts",
+      "cwd": "tests/fixtures/consumer",
+      "result": "passed",
+      "exit_code": 0,
+      "details": "External TypeScript runtime and React/Vue suites are covered by the explicit TypeScript gate below."
+    },
+    {
+      "command": "make typescript-check",
+      "cwd": ".",
+      "result": "failed",
+      "exit_code": 2,
+      "environment": {
+        "FOUNDRY_TEST_NODE": "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "FOUNDRY_TEST_TYPESCRIPT": "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js"
+      },
+      "details": "Authenticated transport regression still expected the raw storage error and an anonymous HTTP request. TestOptionalFormAdaptersWithRealReactAndVue passed."
+    },
+    {
+      "command": "go test -count=1 ./guideadapters ./guideexamples",
+      "cwd": "tests/fixtures/goway",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "command": "make release-tools-check",
+      "cwd": ".",
+      "result": "passed",
+      "exit_code": 0,
+      "details": "Go vet/tests and all 38 Python tests passed."
+    },
+    {
+      "command": "make docs-check",
+      "cwd": ".",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "command": "go test -timeout=20m -count=1 -v ./clientcontracts -run '^TestTypeScriptClientAgainstRealHTTPAndWebSocket$'",
+      "cwd": "tests/fixtures/consumer",
+      "result": "passed",
+      "exit_code": 0,
+      "environment": {
+        "FOUNDRY_TEST_NODE": "/Users/weiloon/Library/Application Support/Herd/config/nvm/versions/node/v24.21.0/bin/node",
+        "FOUNDRY_TEST_TYPESCRIPT": "/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js",
+        "FOUNDRY_TEST_TYPESCRIPT_REQUIRED": "1",
+        "GOFLAGS": "-trimpath",
+        "GOWORK": "off"
+      },
+      "details": "Passed after correcting the stale transport regression. 40 token-session, 4 cookie-refresh, 10 authenticated-transport and 13 portal-session tests passed with zero skips; real HTTP/WebSocket, strict TypeScript, surfaces and locale decoder coverage passed."
+    },
+    {
+      "command": "git diff --check",
+      "cwd": ".",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --exit-code -- tests/fixtures/consumer/clientcontracts/testdata/contracts-v0.3.0",
+      "cwd": ".",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "command": "test ! -e tests/fixtures/consumer/clientcontracts/testdata/contracts-v0.3.1",
+      "cwd": ".",
+      "result": "passed",
+      "exit_code": 0
+    }
+  ],
+  "corrections": [
+    {
+      "file": "tests/fixtures/consumer/clientcontracts/testdata/authenticated-transport.mjs",
+      "reason": "Storage unavailability now has a typed redacted failure contract.",
+      "change": "Require SessionCoordinationError from signIn and authenticated transport, and assert zero HTTP requests. This strengthens the existing no-stale-bearer guarantee; no runtime code or test coverage was removed."
+    }
+  ],
+  "reuse": "Only the failing TypeScript/real-transport test was rerun. The independent React/Vue segment and unchanged Go build/vet/tests, generation and consumer results retain their passes.",
+  "release": {
+    "contracts-v0.3.0": "unchanged",
+    "contracts-v0.3.1": "absent",
+    "current-contracts": "published with the project publisher"
+  },
+  "source_sha256": {
+    "CHANGELOG.md": "24e224e710f05038a8f955dd0b8cfd3eb3e420fc4e2ab7087fbdf1ec84eb5d67",
+    "config/public.go": "cbefcad0824896926da3a8ae7160a6f6fdb2cc43a728ee5f5e3eb0dcbc092e85",
+    "config/public_test.go": "838383603777fa651b70f5667bbbb16c30beca5d577df5b1d4d97d3cda238416",
+    "contract/manifest/document.go": "96d8dc01e54f6c6f197ddcb0a27452861eb8ad14a7798d574b0a61e4f93bfc7e",
+    "contract/manifest/manifest_test.go": "e5006b07a9da078117181c539f0a09dc0f4872b4e893cb2554b68e67ce50a12d",
+    "docs/guides/client-contracts.md": "8ac3ac8fe16d62abfd9a073a11a79a8b0d7327de9ecf0d993c07cbcfc3588a18",
+    "docs/guides/generated-configuration.md": "f0ed1b2aaae99b26e00f57177949654460fa85768d49140744ad3b8c5ac67d73",
+    "internal/generate/config_test.go": "355b1f2f09dade57b73186d493676d2eb8038ea0cfb449a751314a8896a1415b",
+    "internal/generate/discover_config.go": "b5a4fb9ca35d466536876062f9a6605348159cb0e89fd8fe16ead1921f60aa30",
+    "internal/generate/emit_config.go": "d0b8cb879d0197e929f315f3a7c778e410b4c75ff28188438bf9b2d0daec78aa",
+    "tests/fixtures/consumer/clientcontracts/contracts_test.go": "dd3d8309f3ff51c8a2fa795314a8a4705c27cb086569a8e4aa0838e697caba04",
+    "tests/fixtures/consumer/clientcontracts/testdata/authenticated-transport.mjs": "3072255541816fae2595f75e48d2bef39218ebcb81e28426abbfeed4f4ca744a",
+    "tests/fixtures/consumer/clientcontracts/testdata/browser-storage.mjs": "06550f905bf26799bf159a26a3fe407201047b8455b60d72cf4797a317064c71",
+    "tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/.foundry-gen.json": "1b341285488e2e947916f238b2d916f9eed742ea5f2d0eec9df56b88f7889e89",
+    "tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/contracts_foundry.gen.ts": "26149cd33e08868dc389b33797633198d56ec598926565eae3395eaab526d864",
+    "tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/contracts_manifest_foundry.gen.json": "058f2062ecade9dcc03d32a9bd726453435746a1e5f09c4b0472941da68d40b0",
+    "tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/contracts_runtime_auth_foundry.gen.ts": "43ca0a78a1369f13c31c9a2cd2f99410191410cc34953122612947694003e422",
+    "tests/fixtures/consumer/clientcontracts/testdata/current-contracts/provenance.json": "8ceacd23e81215e4a8fbc598e1462c807b0bb45c9bdb245cfb1922d8c61cec6a",
+    "tests/fixtures/consumer/clientcontracts/testdata/messages.mjs": "c0eec60a9f950f03265c0d027d11a3cb11a14920dd915c976efc77af97587cc6",
+    "tests/fixtures/consumer/clientcontracts/testdata/messages.ts": "f4d309cb9acbcc818a351e91d467d723cc187d7b812f70efd0347ccd1f67503e",
+    "tests/fixtures/consumer/clientcontracts/testdata/portal-session.mjs": "c7c441dd6c919268f75d57f52a79ef49d8a028dd1aac4b57ee8ba4f3c8b742f9",
+    "tests/fixtures/consumer/clientcontracts/testdata/token-session.mjs": "d7f81b1e22886936c5978ef9f0e4cdc878e0f73ba827146d5544b1b59b3e58e5",
+    "tests/fixtures/consumer/configured/.foundry-gen.json": "4dc74dcbe9c876335e1ad61a55d87f8df0b5f78f53cff7732d63be46395980e9",
+    "tests/fixtures/consumer/configured/settings.go": "462ba66de089e870ebcea4b0e054dbf9ae96b115d59000e345d7e86b0bc2a2de",
+    "tests/fixtures/consumer/configured/settings_foundry.gen.go": "33f60c87daef8c501888a9b7151d9322da0ce3ea0a289b20e074b194c1798291",
+    "typescript/release_regression_test.go": "c69611d96acb103e5d2935aac3d532c10d9388d1bb54d2e3f48be8bc4c141f9f",
+    "typescript/render.go": "e8c2a821fc4b88ac4daae5f2acd91a8d515b15004e1309ea2a198a74788a9335",
+    "typescript/runtime/auth.ts": "1b355ae63ba160fd271092d2e0064a9f33e68187041f70956ffddfb58938b328"
+  }
+}

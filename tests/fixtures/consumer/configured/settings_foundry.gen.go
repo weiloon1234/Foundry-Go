@@ -26,6 +26,8 @@ type SettingsConfigKeySet struct {
 	AppName config.Key[Settings, string]
 	// DefaultLocale selects default_locale. Set accepts string.
 	DefaultLocale config.Key[Settings, string]
+	// FormatLocale selects format_locale. Set accepts string.
+	FormatLocale config.Key[Settings, string]
 	// TimeZone selects time_zone. Set accepts string.
 	TimeZone config.Key[Settings, string]
 }
@@ -247,6 +249,7 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 		},
 		AppName:       config.Scalar[Settings, string]("app_name", func(settings *Settings) *string { return &settings.AppName }),
 		DefaultLocale: config.Scalar[Settings, string]("default_locale", func(settings *Settings) *string { return &settings.DefaultLocale }),
+		FormatLocale:  config.Scalar[Settings, string]("format_locale", func(settings *Settings) *string { return &settings.FormatLocale }),
 		TimeZone:      config.Scalar[Settings, string]("time_zone", func(settings *Settings) *string { return &settings.TimeZone }),
 	}
 })
@@ -292,6 +295,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Services.Credentials,
 		keys.AppName,
 		keys.DefaultLocale,
+		keys.FormatLocale,
 		keys.TimeZone,
 	)
 }
@@ -301,6 +305,7 @@ func SettingsPublicConfig() []config.PublicSetting {
 	return []config.PublicSetting{
 		{Name: "appName", Env: "VITE_APP_NAME", Description: "", Fallback: "ConsumerApp", Kind: config.PublicString, MaxLength: 0, EnumCases: nil},
 		{Name: "defaultLocale", Env: "VITE_DEFAULT_LOCALE", Description: "", Fallback: "en", Kind: config.PublicLocale, MaxLength: 0, EnumCases: nil},
+		{Name: "formatLocale", Env: "VITE_FORMAT_LOCALE", Description: "", Fallback: "", Optional: true, Kind: config.PublicFormatLocale, MaxLength: 0, EnumCases: nil},
 		{Name: "timeZone", Env: "VITE_TIME_ZONE", Description: "", Fallback: "", Optional: true, Kind: config.PublicTimeZone, MaxLength: 0, EnumCases: nil},
 	}
 }

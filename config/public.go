@@ -11,18 +11,19 @@ import (
 type PublicKind string
 
 const (
-	PublicString   PublicKind = "string"
-	PublicBoolean  PublicKind = "boolean"
-	PublicNumber   PublicKind = "number"
-	PublicLocale   PublicKind = "locale"
-	PublicCurrency PublicKind = "currency"
-	PublicTimeZone PublicKind = "time_zone"
-	PublicEnum     PublicKind = "enum"
+	PublicString       PublicKind = "string"
+	PublicBoolean      PublicKind = "boolean"
+	PublicNumber       PublicKind = "number"
+	PublicLocale       PublicKind = "locale"
+	PublicFormatLocale PublicKind = "format_locale"
+	PublicCurrency     PublicKind = "currency"
+	PublicTimeZone     PublicKind = "time_zone"
+	PublicEnum         PublicKind = "enum"
 )
 
 func (k PublicKind) Validate() error {
 	switch k {
-	case "", PublicString, PublicBoolean, PublicNumber, PublicLocale, PublicCurrency, PublicTimeZone, PublicEnum:
+	case "", PublicString, PublicBoolean, PublicNumber, PublicLocale, PublicFormatLocale, PublicCurrency, PublicTimeZone, PublicEnum:
 		return nil
 	default:
 		return safeerror.NewFault(fault.Invalid, fmt.Sprintf("unsupported public config kind %q", string(k)))

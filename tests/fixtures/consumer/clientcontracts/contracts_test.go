@@ -226,7 +226,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "non_streaming.ts"), nonStreaming, 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs", "messages.ts", "messages.mjs", "auth.ts", "portal-session.mjs", "token-session.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs"} {
+	for _, name := range []string{"types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs", "messages.ts", "messages.mjs", "auth.ts", "portal-session.mjs", "token-session.mjs", "browser-storage.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs"} {
 		data, err := os.ReadFile(filepath.Join("testdata", name))
 		if err != nil {
 			t.Fatal(err)

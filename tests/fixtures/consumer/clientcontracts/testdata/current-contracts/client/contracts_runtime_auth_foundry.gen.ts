@@ -36,6 +36,14 @@ export interface SessionCoordination {
   write(transition: SessionTransition): void;
 }
 
+/** Credential coordination metadata cannot be read or published. */
+export class SessionCoordinationError extends Error {
+  constructor() {
+    super("Session coordination is unavailable");
+    this.name = "SessionCoordinationError";
+  }
+}
+
 /** Messages between the portal's tabs (a BroadcastChannel). */
 type SessionEvent =
   | { readonly type: "signed-in"; readonly token: AccessToken }
@@ -115,7 +123,7 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
   if (!Number.isSafeInteger(refreshTimeoutMs) || refreshTimeoutMs <= 0 || refreshTimeoutMs > 2_147_483_647)
     throw new TypeError("invalid refresh timeout");
   const lock = options.lock ?? webLock();
-  const coordination = options.coordination ?? sessionCoordination(options.name);
+  const storage = options.coordination ?? sessionCoordination(options.name);
   const channel =
     options.channel === undefined
       ? broadcastChannel(`foundry.${options.name}.session`)
@@ -131,6 +139,7 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
   let identity = 0;
   let appliedRevision = 0;
   let publicationFailed = false;
+  let coordinationError: SessionCoordinationError | null = null;
 
   const fresh = (candidate: AccessToken | null): candidate is AccessToken =>
     candidate !== null && candidate.expiresAt - marginMs > now();
@@ -139,10 +148,38 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
     current = next;
     for (const listener of [...listeners]) listener(next);
   };
+  const failCoordination = (error: unknown) => {
+    if (!publicationFailed) version++;
+    publicationFailed = true;
+    if (error instanceof SessionCoordinationError) coordinationError = error;
+    token = null;
+    setStatus("signed-out");
+  };
+  const coordination: SessionCoordination = {
+    read() {
+      try { return storage.read(); }
+      catch {
+        const error = new SessionCoordinationError();
+        failCoordination(error);
+        throw error;
+      }
+    },
+    write(transition) {
+      try { storage.write(transition); }
+      catch {
+        const error = new SessionCoordinationError();
+        failCoordination(error);
+        throw error;
+      }
+    },
+  };
   const synchronize = () => {
     // A failed write can leave the old active record readable. Only a new
     // successful local publication can release this session's failure latch.
-    if (publicationFailed) return null;
+    if (publicationFailed) {
+      if (coordinationError !== null) throw coordinationError;
+      return null;
+    }
     const transition = coordination.read();
     if (transition !== null && transition.identity !== identity) {
       identity = transition.identity;
@@ -188,13 +225,11 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
         event.type !== "token",
       );
     } catch (error) {
-      publicationFailed = true;
-      version++;
-      token = null;
-      setStatus("signed-out");
+      failCoordination(error);
       throw error;
     }
     publicationFailed = false;
+    coordinationError = null;
     const message: SessionMessage = { ...event, transition };
     if (!disposed) {
       apply(message);
@@ -204,7 +239,12 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
 
   const stopListening = channel?.listen((message) => {
     if (disposed || publicationFailed) return;
-    const latest = coordination.read();
+    let latest: SessionTransition | null;
+    try { latest = coordination.read(); }
+    catch (error) {
+      if (error instanceof SessionCoordinationError) return;
+      throw error;
+    }
     if (latest === null || message.transition.revision !== latest.revision ||
         message.transition.identity !== latest.identity || message.transition.status !== latest.status ||
         message.transition.revision <= appliedRevision) return;
@@ -251,7 +291,15 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
 
   return {
     status: () => current,
-    version: () => { if (!disposed) synchronize(); return version; },
+    version() {
+      if (!disposed) {
+        try { synchronize(); }
+        catch (error) {
+          if (!(error instanceof SessionCoordinationError)) throw error;
+        }
+      }
+      return version;
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -259,7 +307,8 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
     accessToken(signal) {
       if (signal?.aborted) return Promise.reject(signal.reason);
       if (disposed) return Promise.resolve(null);
-      synchronize();
+      try { synchronize(); }
+      catch (error) { return Promise.reject(error); }
       if (fresh(token)) return Promise.resolve(token.value);
       if (current === "signed-out") return Promise.resolve(null);
       if (renewing === null) {
@@ -330,17 +379,16 @@ function sessionCoordination(name: string): SessionCoordination {
     let transition: SessionTransition | null = null;
     return { read: () => transition, write: next => { transition = next; } };
   }
-  const storage = window.localStorage;
   const key = `foundry.${name}.session.transition`;
   return {
     read() {
-      const value = storage.getItem(key);
+      const value = window.localStorage.getItem(key);
       if (value === null) return null;
       const transition: unknown = JSON.parse(value);
-      if (!isSessionTransition(transition)) throw new TypeError("invalid session transition");
+      if (!isSessionTransition(transition)) throw new SessionCoordinationError();
       return transition;
     },
-    write: transition => storage.setItem(key, JSON.stringify(transition)),
+    write: transition => window.localStorage.setItem(key, JSON.stringify(transition)),
   };
 }
 

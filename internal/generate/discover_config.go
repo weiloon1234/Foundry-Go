@@ -231,6 +231,8 @@ func configFields(p *packageInput, typ types.Type, source documentedType, path, 
 					publicKind = config.PublicNumber
 				case "locale":
 					publicKind = config.PublicLocale
+				case "format_locale":
+					publicKind = config.PublicFormatLocale
 				case "currency":
 					publicKind = config.PublicCurrency
 				case "time_zone":
@@ -243,7 +245,7 @@ func configFields(p *packageInput, typ types.Type, source documentedType, path, 
 				if publicKind == config.PublicEnum && node.codec != "Enum" {
 					return fail("public config enum kind requires an enum field")
 				}
-				if publicKind == config.PublicLocale || publicKind == config.PublicCurrency || publicKind == config.PublicTimeZone {
+				if publicKind == config.PublicLocale || publicKind == config.PublicFormatLocale || publicKind == config.PublicCurrency || publicKind == config.PublicTimeZone {
 					if basic, ok := base.Underlying().(*types.Basic); !ok || basic.Info()&types.IsString == 0 {
 						return fail("public config " + string(publicKind) + " kind requires a string field")
 					}

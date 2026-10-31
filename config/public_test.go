@@ -27,3 +27,12 @@ func TestPublicSettingOptionalJSON(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicFormatLocaleKind(t *testing.T) {
+	if config.PublicFormatLocale != "format_locale" {
+		t.Fatal("formatting locale kind changed")
+	}
+	if err := config.PublicFormatLocale.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

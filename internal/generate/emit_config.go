@@ -122,6 +122,8 @@ func emitConfig(p *packageInput, declaration configDeclaration) ([]byte, error) 
 				kindConst = configuration + ".PublicNumber"
 			case config.PublicLocale:
 				kindConst = configuration + ".PublicLocale"
+			case config.PublicFormatLocale:
+				kindConst = configuration + ".PublicFormatLocale"
 			case config.PublicCurrency:
 				kindConst = configuration + ".PublicCurrency"
 			case config.PublicTimeZone:

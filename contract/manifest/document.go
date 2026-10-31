@@ -177,13 +177,14 @@ type Locales struct {
 type PublicKind = config.PublicKind
 
 const (
-	PublicString   = config.PublicString
-	PublicBoolean  = config.PublicBoolean
-	PublicNumber   = config.PublicNumber
-	PublicLocale   = config.PublicLocale
-	PublicCurrency = config.PublicCurrency
-	PublicTimeZone = config.PublicTimeZone
-	PublicEnum     = config.PublicEnum
+	PublicString       = config.PublicString
+	PublicBoolean      = config.PublicBoolean
+	PublicNumber       = config.PublicNumber
+	PublicLocale       = config.PublicLocale
+	PublicFormatLocale = config.PublicFormatLocale
+	PublicCurrency     = config.PublicCurrency
+	PublicTimeZone     = config.PublicTimeZone
+	PublicEnum         = config.PublicEnum
 )
 
 // PublicSetting is a browser-visible configuration setting declared in Go.

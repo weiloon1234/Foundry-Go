@@ -57,6 +57,22 @@ const defaultEnv = sdk.decodePublicEnv({});
 assert.equal(defaultEnv.appName, "ConsumerApp");
 assert.equal(defaultEnv.defaultLocale, "en");
 assert.equal(defaultEnv.timeZone, undefined);
+for (const value of [undefined, "", "  "]) {
+  assert.equal(sdk.decodePublicEnv({ VITE_FORMAT_LOCALE: value }).formatLocale, undefined);
+}
+for (const value of ["en-MY", "zh-Hant-TW", "de-DE-u-nu-latn", "en-my"]) {
+  assert.equal(sdk.decodePublicEnv({ VITE_FORMAT_LOCALE: ` ${value} ` }).formatLocale, value);
+  assert.deepEqual(sdk.findPublicEnvProblems({ VITE_FORMAT_LOCALE: value }, "VITE_"), []);
+}
+for (const value of ["en_MY", "en--MY", "private invalid locale"]) {
+  assert.throws(() => sdk.decodePublicEnv({ VITE_FORMAT_LOCALE: value }), error => {
+    assert.match(error.message, /VITE_FORMAT_LOCALE is invalid/);
+    assert.equal(error.message.includes(value), false);
+    return true;
+  });
+  assert.equal(sdk.findPublicEnvProblems({ VITE_FORMAT_LOCALE: value }, "VITE_").length, 1);
+}
+assert.throws(() => sdk.decodePublicEnv({ VITE_DEFAULT_LOCALE: "en-MY" }));
 assert.equal(sdk.decodePublicEnv({ VITE_TIME_ZONE: undefined }).timeZone, undefined);
 assert.equal(sdk.decodePublicEnv({ VITE_TIME_ZONE: "  " }).timeZone, undefined);
 assert.equal(sdk.decodePublicEnv({ VITE_TIME_ZONE: " UTC " }).timeZone, "UTC");
