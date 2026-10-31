@@ -28,6 +28,19 @@ type Surface struct {
 	Channels []websocket.ChannelID
 	Paths    []string
 	Guards   []auth.GuardName
+	Auth     *SurfaceAuth
+}
+
+// SurfaceAuth explicitly declares the routes and credentials of a portal's
+// session guard. Every referenced route must be a valid registered endpoint.
+// Identifier must exactly match a non-secret JSON property in the login body.
+type SurfaceAuth struct {
+	Guard      auth.GuardName
+	Login      foundryhttp.RouteID
+	Refresh    foundryhttp.RouteID
+	Logout     foundryhttp.RouteID
+	Profile    foundryhttp.RouteID
+	Identifier string // Case-sensitive JSON property name of the login identifier (e.g. "email").
 }
 
 // reservedSurfaceNames are artifact names of the same prefix. Names beginning
@@ -51,7 +64,21 @@ func validateSurfaces(surfaces []Surface) ([]Surface, error) {
 			return nil, safeerror.NewFault(fault.Duplicate, "client surface name is repeated")
 		}
 		seen[folded] = true
-		result[i] = Surface{Name: surface.Name, Routes: slices.Clone(surface.Routes), Channels: slices.Clone(surface.Channels), Paths: slices.Clone(surface.Paths), Guards: slices.Clone(surface.Guards)}
+		var surfaceAuth *SurfaceAuth
+		if surface.Auth != nil {
+			if surface.Auth.Guard == "" || surface.Auth.Login == "" || surface.Auth.Refresh == "" || surface.Auth.Logout == "" || surface.Auth.Profile == "" || surface.Auth.Identifier == "" {
+				return nil, safeerror.NewFault(fault.Invalid, "surface auth requires guard, login, refresh, logout, profile and identifier")
+			}
+			surfaceAuth = &SurfaceAuth{
+				Guard:      surface.Auth.Guard,
+				Login:      surface.Auth.Login,
+				Refresh:    surface.Auth.Refresh,
+				Logout:     surface.Auth.Logout,
+				Profile:    surface.Auth.Profile,
+				Identifier: surface.Auth.Identifier,
+			}
+		}
+		result[i] = Surface{Name: surface.Name, Routes: slices.Clone(surface.Routes), Channels: slices.Clone(surface.Channels), Paths: slices.Clone(surface.Paths), Guards: slices.Clone(surface.Guards), Auth: surfaceAuth}
 	}
 	return result, nil
 }

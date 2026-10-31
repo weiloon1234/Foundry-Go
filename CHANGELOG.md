@@ -14,6 +14,8 @@
     - Table columns are typed against the row model (`name: keyof Row & string`), carrying `kind: TableColumnKind` (derived from Go `datatable.ColumnKind`), declared operators, and for enum columns, direct linkage to the S1 enum value object (`enum: typeof Enum`) with literal cases.
     - Descriptors provide strongly-typed `query(client, input)` and `export(client, input)` methods calling the existing typed operation paths with zero `any` or casts.
     - Surfaces without registered tables emit no `tables` descriptor.
+- Added: portal sign-in sessions (S3) through `typescript.Surface.Auth`, generated typed credentials and auth descriptors, and an optional auth runtime with `createPortalSession`. Access tokens stay in memory; refresh-cookie exchanges coordinate through Web Locks and BroadcastChannel, and authenticated requests retry once after a 401 with credential-version checks.
+
 - Added: `devserver` package providing a framework-owned development supervision loop (file watching, debouncing, zero-downtime rebuild with `-ldflags=-w`, graceful child restart, process group isolation, SIGHUP termination, and auxiliary helper supervision).
 - Added: parallel-safe test application boot concurrency in `testkit/postgres/application`. `Environment.Start` bounds concurrently booted applications to `DefaultConcurrency` (8 by default, overridable via `FOUNDRY_TEST_APP_CONCURRENCY`). Multiple applications within the same top-level test or its subtests share that test's slot, eliminating self-deadlock, and the slot is released only after the application completely shuts down and drains its database connections.
 - Added: TypeScript client generator gap additions S1, S5, S7, and S8:
@@ -21,6 +23,9 @@
   - Upload constraints (S5): `manifest.Part` captures structured `content_types`, `extensions`, and `max_bytes` from validation rules and multipart limits; TypeScript runtime composes `FieldDescriptor.accept` and `FieldDescriptor.maxBytes`.
   - Schema constants & identity (S7): each entry module exports surface-filtered `schemas` mapping type names to Go `TypeID` strings; shared runtime exports generic `newIdentity(owner, id?)` helper.
   - Error codes (S8): application-wide `ErrorCode` const object and union type derived from manifest errors, with deterministic collision detection on PascalCase keys.
+- Added: TypeScript client generator gap additions S6 and S9:
+  - Frontend i18n keys (S9): framework-owned message discovery via `i18n.DiscoverDefinitions` from `lang/frontend`, populating `manifest.Locales.FrontendMessages`; TypeScript emits `FrontendMessageArguments`, `FrontendMessageKey`, and `formatFrontendMessage` mirroring backend `CatalogMessage*` rendering and plural patterns.
+  - Public configuration (S6): `//foundry:config` supports `,public` tags on scalar and declared enum fields with `client:"env=...,fallback=...,kind=...,max=..."` metadata, rejecting secrets; Go generator emits `<Config>PublicConfig() []config.PublicSetting` for manifests; TypeScript client emits typed `PublicEnv`, `publicEnvSchema`, `decodePublicEnv`, `findPublicEnvProblems(env, prefix)`, and shared format validators (`isLocale`, `isCurrency`, `isTimeZone`).
 - Removed: the v0.1 → v0.2 codemod (use `go run …@v0.2.0`).
 - Fixed: the retirement exposure check finds deprecated declarations in imported export data built with `-trimpath`; tests no longer depend on the build-time GOROOT.
 - Fixed: migration guide workflow now documents running `GOWORK=off go run github.com/weiloon1234/Foundry-Go/cmd/foundry@v0.2.0 codemod` while on v0.1.0 rather than invoking `go tool foundry codemod` before the tool directive is bumped.

@@ -60,7 +60,7 @@ func TestConsumerClientManifestKeepsRealFeatureBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if document.Version != manifest.Version || len(document.HTTP) != 23 || document.Realtime == nil || len(document.Realtime.Channels) != 2 || document.Locales == nil || len(document.Enums) != 1 || len(document.Permissions) != 1 {
+	if document.Version != manifest.Version || len(document.HTTP) != 27 || document.Realtime == nil || len(document.Realtime.Channels) != 2 || document.Locales == nil || len(document.Enums) != 1 || len(document.Permissions) != 1 {
 		t.Fatal("registered metadata missing")
 	}
 	if len(document.Tables) != 1 || document.Tables[0].ID != "reports.members" || !document.Tables[0].Exports || len(document.Notifications) != 1 || len(document.Notifications[0].Channels) != 1 || document.Notifications[0].Channels[0].Payload != "foundry.test/consumer/clientcontracts.Member" {
@@ -225,7 +225,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "non_streaming.ts"), nonStreaming, 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs", "messages.ts", "messages.mjs"} {
+	for _, name := range []string{"types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs", "messages.ts", "messages.mjs", "auth.ts", "portal-session.mjs", "token-session.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs"} {
 		data, err := os.ReadFile(filepath.Join("testdata", name))
 		if err != nil {
 			t.Fatal(err)
@@ -258,6 +258,9 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 		t.Logf("%s: %s", name, strings.TrimSpace(string(output)))
 	}
 	run("strict TypeScript and negative contracts", compiler, "--project", filepath.Join(dir, "tsconfig.json"))
+	for _, name := range []string{"token-session", "cookie-refresh", "authenticated-transport", "portal-session"} {
+		run(name+" runtime behavior", filepath.Join(dir, name+".mjs"), filepath.Join(dir, "dist", "contracts_runtime_auth_foundry.gen.js"), filepath.Join(dir, "dist", "contracts_foundry.gen.js"), filepath.Join(dir, "dist", "contracts_browser_foundry.gen.js"))
+	}
 	hub, err := websocket.New(f.Registry, f.Authentication, f.Config)
 	if err != nil {
 		t.Fatal(err)
@@ -305,9 +308,9 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	bundles(t, node, compiler, dir)
 }
 
-// surfaces are two portals of the fixture: the member pages below /members, and
-// the account with its guard's private channel and the public updates channel.
+// surfaces select member pages, private realtime channels, and browser auth routes.
 var surfaces = []typescript.Surface{
+	{Name: "browser", Routes: []foundryhttp.RouteID{"browser"}, Auth: &typescript.SurfaceAuth{Guard: "browser_accounts", Login: "browser.login", Refresh: "browser.refresh", Logout: "browser.logout", Profile: "browser.profile", Identifier: "login_id"}},
 	{Name: "members", Paths: []string{"/members"}},
 	{Name: "live", Routes: []foundryhttp.RouteID{"account.show"}, Channels: []websocket.ChannelID{"updates"}, Guards: []auth.GuardName{"client_accounts"}},
 }

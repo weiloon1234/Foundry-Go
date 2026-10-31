@@ -21,4 +21,6 @@ export function surfaceConsumer(): void {
   void live.createRealtime;
   // @ts-expect-error A surface without channels has no realtime client.
   void members.createRealtime;
+  // @ts-expect-error A surface without Auth has no portal session helper.
+  void members.createPortalSession;
 }

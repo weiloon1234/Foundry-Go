@@ -1,0 +1,18 @@
+{
+  "ui": {
+    "welcome": "مرحبا, {{name}}!",
+    "farewell": "مع السلامة"
+  },
+  "auth": {
+    "notice": {
+      "$plural": {
+        "zero": "لا محاولات متبقية",
+        "one": "محاولة واحدة متبقية: {{attempts}}",
+        "two": "محاولتان متبقيتان: {{attempts}}",
+        "few": "{{attempts}} محاولات متبقية",
+        "many": "{{attempts}} محاولة متبقية",
+        "other": "{{attempts}} محاولة متبقية"
+      }
+    }
+  }
+}

@@ -9,12 +9,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/enum"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/openapi"
 	"github.com/weiloon1234/Foundry-Go/typescript"
 	"github.com/weiloon1234/Foundry-Go/validation"
@@ -418,5 +420,101 @@ func TestRenderFileUploadConstraints(t *testing.T) {
 	output := string(outputBytes)
 	if !strings.Contains(output, "accept") || !strings.Contains(output, "maxBytes") {
 		t.Error("expected accept and maxBytes in descriptor implementation")
+	}
+}
+
+func TestRenderFrontendMessages(t *testing.T) {
+	frontendFS := fstest.MapFS{
+		"frontend/en/auth.json": {
+			Data: []byte(`{
+				"auth.welcome": "Welcome back.",
+				"auth.locked_minutes": {
+					"$plural": {
+						"one": "Try again in {{minutes}} minute.",
+						"other": "Try again in {{minutes}} minutes."
+					}
+				}
+			}`),
+		},
+	}
+	locSet, err := i18n.NewLocaleSet("en", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{Frontend: frontendFS, Locales: locSet})
+	if err != nil {
+		t.Fatalf("unexpected build error: %v", err)
+	}
+	outputBytes, err := typescript.Render(source)
+	if err != nil {
+		t.Fatalf("unexpected render error: %v", err)
+	}
+	output := string(outputBytes)
+
+	for _, want := range []string{
+		"export interface FrontendMessageArguments {",
+		`readonly "auth.locked_minutes": { readonly "minutes": number | string };`,
+		`readonly "auth.welcome": Readonly<Record<string, never>>;`,
+		"export type FrontendMessageKey = keyof FrontendMessageArguments;",
+		"function frontendDefinitions(): ReadonlyMap<string, { readonly plural?: string; readonly plural_kind?: \"cardinal\" | \"ordinal\" }>",
+		"export function formatFrontendMessage<K extends FrontendMessageKey>(messages: ValidationMessages | undefined, key: K,",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("missing %q in output\nOutput excerpt:\n%s", want, output)
+		}
+	}
+}
+
+func TestRenderPublicConfig(t *testing.T) {
+	settings := []manifest.PublicSetting{
+		{Name: "appName", Env: "VITE_APP_NAME", Description: "Product name", Fallback: "Foundry", Kind: "string", MaxLength: 60},
+		{Name: "locale", Env: "VITE_LOCALE", Description: "BCP 47 locale", Kind: "locale"},
+		{Name: "currency", Env: "VITE_CURRENCY", Description: "ISO currency", Fallback: "USD", Kind: "currency"},
+		{Name: "timeZone", Env: "VITE_TIME_ZONE", Description: "IANA zone", Kind: "time_zone"},
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: settings})
+	if err != nil {
+		t.Fatalf("unexpected build error: %v", err)
+	}
+	outputBytes, err := typescript.Render(source)
+	if err != nil {
+		t.Fatalf("unexpected render error: %v", err)
+	}
+	output := string(outputBytes)
+
+	for _, want := range []string{
+		"export interface PublicEnvEntry {",
+		"export const publicEnvSchema = {",
+		`VITE_APP_NAME: {`,
+		`description: "Product name"`,
+		`fallback: "Foundry"`,
+		`isValid: (value: string) => value.trim().length <= 60`,
+		`VITE_LOCALE: {`,
+		`isValid: isLocale`,
+		`VITE_CURRENCY: {`,
+		`isValid: isCurrency`,
+		`VITE_TIME_ZONE: {`,
+		`isValid: isTimeZone`,
+		"export type PublicEnvKey = keyof typeof publicEnvSchema;",
+		"export function isPublicEnvKey(key: string): key is PublicEnvKey",
+		"export function findPublicEnvProblems(env: Record<string, unknown>, prefix: string): string[]",
+		"export function isValidPublicValue(key: PublicEnvKey, value: unknown): boolean",
+		"export interface PublicEnv {",
+		"readonly appName: string;",
+		"readonly locale: string;",
+		"readonly currency: string;",
+		"readonly timeZone: string;",
+		"export function decodePublicEnv(env: Record<string, string | undefined>): PublicEnv",
+		`appName: read("VITE_APP_NAME")`,
+		`locale: read("VITE_LOCALE")`,
+		`currency: read("VITE_CURRENCY")`,
+		`timeZone: read("VITE_TIME_ZONE")`,
+		"function isLocale(value: string): boolean",
+		"function isCurrency(value: string): boolean",
+		"function isTimeZone(value: string): boolean",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("missing %q in output\nOutput excerpt:\n%s", want, output)
+		}
 	}
 }

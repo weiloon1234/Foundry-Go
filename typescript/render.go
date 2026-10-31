@@ -186,6 +186,8 @@ func (r *renderer) body(source *manifest.Manifest) error {
 	r.descriptors()
 	r.tables()
 	r.messages()
+	r.frontendMessages()
+	r.publicConfig()
 	r.realtime()
 	return nil
 }
@@ -227,6 +229,180 @@ export function formatMessage<K extends CatalogMessageKey>(messages: %s | undefi
   return %s(messages, key, (args[0] ?? {}) as Readonly<Record<string, string | number | boolean>>, { plural: definition?.plural, pluralKind: definition?.plural_kind });
 }
 `, r.ref("ValidationMessages"), r.ref("formatText"))
+}
+
+// frontendMessages types each declared frontend message's arguments from its
+// parameter kinds and formats it with the shared renderer, taking the plural
+// parameter from the declaration.
+func (r *renderer) frontendMessages() {
+	if r.document.Locales == nil || len(r.document.Locales.FrontendMessages) == 0 {
+		return
+	}
+	r.out.WriteString("\n/** Arguments of each declared frontend message; numbers may also be exact decimal strings. */\nexport interface FrontendMessageArguments {\n")
+	for _, definition := range r.document.Locales.FrontendMessages {
+		fields := make([]string, 0, len(definition.Parameters))
+		for _, parameter := range definition.Parameters {
+			typ := "string"
+			switch parameter.Kind {
+			case i18n.NumberParameter:
+				typ = "number | string"
+			case i18n.BooleanParameter:
+				typ = "boolean"
+			}
+			fields = append(fields, "readonly "+quote(parameter.Name)+": "+typ)
+		}
+		arguments := "Readonly<Record<string, never>>"
+		if len(fields) != 0 {
+			arguments = "{ " + strings.Join(fields, "; ") + " }"
+		}
+		fmt.Fprintf(&r.out, "  readonly %s: %s;\n", quote(string(definition.Key)), arguments)
+	}
+	fmt.Fprintf(&r.out, `}
+export type FrontendMessageKey = keyof FrontendMessageArguments;
+let frontendDefinitionsCache: ReadonlyMap<string, { readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }> | undefined;
+function frontendDefinitions(): ReadonlyMap<string, { readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }> {
+  return frontendDefinitionsCache ??= new Map((runtimeDocument().locales?.frontend_messages ?? []).map(definition => [definition.key, definition]));
+}
+/** Format a declared frontend message with typed arguments; its plural parameter comes from its declaration. Missing or unrenderable text returns the key. */
+export function formatFrontendMessage<K extends FrontendMessageKey>(messages: %s | undefined, key: K, ...args: {} extends FrontendMessageArguments[K] ? [args?: FrontendMessageArguments[K]] : [args: FrontendMessageArguments[K]]): string {
+  const definition = frontendDefinitions().get(key);
+  return %s(messages, key, (args[0] ?? {}) as Readonly<Record<string, string | number | boolean>>, { plural: definition?.plural, pluralKind: definition?.plural_kind });
+}
+`, r.ref("ValidationMessages"), r.ref("formatText"))
+}
+
+// publicConfig types the public configuration schema, validator, and decoder.
+func (r *renderer) publicConfig() {
+	if len(r.document.PublicConfig) == 0 {
+		return
+	}
+	r.out.WriteString(`
+export interface PublicEnvEntry {
+  /** What the value controls. Public: bundled into browser code and quoted in guard errors. */
+  readonly description: string;
+  /** Used when the key is absent or empty. */
+  readonly fallback: string;
+  readonly isValid: (value: string) => boolean;
+}
+
+export const publicEnvSchema = {
+`)
+	for _, setting := range r.document.PublicConfig {
+		validator := "(value: string) => true"
+		switch setting.Kind {
+		case "locale":
+			validator = r.ref("isLocale")
+		case "currency":
+			validator = r.ref("isCurrency")
+		case "time_zone":
+			validator = r.ref("isTimeZone")
+		case "number":
+			validator = "(value: string) => !Number.isNaN(Number(value))"
+		case "boolean":
+			validator = `(value: string) => value === "true" || value === "false" || value === "1" || value === "0"`
+		case "enum":
+			cases := make([]string, len(setting.EnumCases))
+			for i, c := range setting.EnumCases {
+				cases[i] = quote(c)
+			}
+			validator = fmt.Sprintf(`(value: string) => ([%s] as readonly string[]).includes(value)`, strings.Join(cases, ", "))
+		default:
+			if setting.MaxLength > 0 {
+				validator = fmt.Sprintf("(value: string) => value.trim().length <= %d", setting.MaxLength)
+			}
+		}
+		fmt.Fprintf(&r.out, "  %s: {\n    description: %s,\n    fallback: %s,\n    isValid: %s,\n  },\n",
+			setting.Env, quote(setting.Description), quote(setting.Fallback), validator)
+	}
+	fmt.Fprintf(&r.out, `} as const satisfies Record<string, PublicEnvEntry>;
+
+export type PublicEnvKey = keyof typeof publicEnvSchema;
+
+export function isPublicEnvKey(key: string): key is PublicEnvKey {
+  return Object.hasOwn(publicEnvSchema, key);
+}
+
+/**
+ * Checks everything the build tool inlines: one problem per undeclared or invalid key.
+ * Messages name keys only; values are never echoed because an undeclared key may hold a secret.
+ */
+export function findPublicEnvProblems(env: Record<string, unknown>, prefix: string): string[] {
+  const problems: string[] = [];
+  for (const [key, value] of Object.entries(env)) {
+    if (prefix !== "" && !key.startsWith(prefix)) continue;
+    if (!isPublicEnvKey(key)) {
+      problems.push(key + " is not a declared public key.");
+    } else if (!isValidPublicValue(key, value)) {
+      problems.push(key + " is invalid: " + publicEnvSchema[key].description);
+    }
+  }
+  return problems;
+}
+
+/** Blank values are valid: readers use the key's fallback. */
+export function isValidPublicValue(key: PublicEnvKey, value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  return value.trim() === "" || publicEnvSchema[key].isValid(value.trim());
+}
+
+/** Validated public configuration read from environment variables. */
+export interface PublicEnv {
+`)
+	for _, setting := range r.document.PublicConfig {
+		propType := "string"
+		switch setting.Kind {
+		case "number":
+			propType = "number"
+		case "boolean":
+			propType = "boolean"
+		case "locale":
+			if r.document.Locales != nil {
+				propType = "Locale"
+			}
+		case "enum":
+			if len(setting.EnumCases) > 0 {
+				cases := make([]string, len(setting.EnumCases))
+				for i, c := range setting.EnumCases {
+					cases[i] = quote(c)
+				}
+				propType = strings.Join(cases, " | ")
+			}
+		}
+		fmt.Fprintf(&r.out, "  readonly %s: %s;\n", setting.Name, propType)
+	}
+	fmt.Fprintf(&r.out, `}
+
+/** Decodes public configuration from raw environment variables, applying declared fallbacks. */
+export function decodePublicEnv(env: Record<string, string | undefined>): PublicEnv {
+  const read = (key: PublicEnvKey): string => {
+    const raw = env[key]?.trim();
+    if (!raw) return publicEnvSchema[key].fallback;
+    if (isValidPublicValue(key, raw)) return raw;
+    return publicEnvSchema[key].fallback;
+  };
+  return Object.freeze({
+`)
+	for _, setting := range r.document.PublicConfig {
+		switch setting.Kind {
+		case "number":
+			fmt.Fprintf(&r.out, "    %s: Number(read(%s)),\n", setting.Name, quote(setting.Env))
+		case "boolean":
+			fmt.Fprintf(&r.out, "    %s: read(%s) === \"true\" || read(%s) === \"1\",\n", setting.Name, quote(setting.Env), quote(setting.Env))
+		case "locale":
+			if r.document.Locales != nil {
+				fmt.Fprintf(&r.out, "    %s: read(%s) as PublicEnv[%s],\n", setting.Name, quote(setting.Env), quote(setting.Name))
+			} else {
+				fmt.Fprintf(&r.out, "    %s: read(%s),\n", setting.Name, quote(setting.Env))
+			}
+		case "enum":
+			fmt.Fprintf(&r.out, "    %s: read(%s) as PublicEnv[%s],\n", setting.Name, quote(setting.Env), quote(setting.Name))
+		default:
+			fmt.Fprintf(&r.out, "    %s: read(%s),\n", setting.Name, quote(setting.Env))
+		}
+	}
+	r.out.WriteString(`  });
+}
+`)
 }
 
 func quote(value string) string                        { data, _ := json.Marshal(value); return string(data) }
@@ -592,13 +768,16 @@ var topLevelValueNames = map[string]bool{
 	"manifestJSON": true, "catalogLocales": true, "createClient": true,
 	"validateRequest": true, "operation": true, "schema": true,
 	"decodeContract": true, "decodeReceived": true, "encodeContract": true,
-	"contractValue": true, "formatMessage": true, "createRealtime": true,
+	"contractValue": true, "formatMessage": true, "formatFrontendMessage": true, "createRealtime": true,
 	"realtimeProtocols": true, "realtimeSubprotocol": true,
 	"schemas": true, "ErrorCode": true,
 	"API": true, "UnknownEnumValue": true, "JSONNumber": true,
 	"ContractError": true, "ResponseContractError": true,
 	"HTTPTransportError": true, "AbortError": true, "RealtimeError": true,
 	"enumLabel": true, "newIdentity": true, "catalogTranslations": true, "formatText": true,
+	"publicEnvSchema": true, "isPublicEnvKey": true, "findPublicEnvProblems": true,
+	"isValidPublicValue": true, "decodePublicEnv": true,
+	"isLocale": true, "isCurrency": true, "isTimeZone": true,
 }
 
 func isJSIdentifier(name string) bool {
@@ -782,7 +961,7 @@ func (r *renderer) http() error {
 		r.out.WriteString(documentationComment(op.Route.Documentation))
 		fmt.Fprintf(&r.out, "  %s(request: Operations[%s][\"request\"], options?: CallOptions): Promise<Operations[%s][\"response\"]>;\n", quote(op.Name), quote(op.Name), quote(op.Name))
 	}
-	r.out.WriteString("}\nexport function createClient(transport: HTTPTransport, options: ClientOptions = {}): API {\n  const engine = createHTTPInvoker(runtimeDocument(), transport, options);\n  return Object.freeze({\n")
+	r.out.WriteString("}\nexport type Client = API;\nexport function createClient(transport: HTTPTransport, options: ClientOptions = {}): API {\n  const engine = createHTTPInvoker(runtimeDocument(), transport, options);\n  return Object.freeze({\n")
 	for _, op := range r.document.HTTP {
 		fmt.Fprintf(&r.out, "    [%s]: (request: Operations[%s][\"request\"], options?: CallOptions) => engine.invoke(%s, request, options) as Promise<Operations[%s][\"response\"]>,\n", quote(op.Name), quote(op.Name), quote(op.Name), quote(op.Name))
 	}

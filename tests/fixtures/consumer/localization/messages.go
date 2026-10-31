@@ -51,6 +51,14 @@ const (
 //go:embed locales
 var catalogs embed.FS
 
+//go:embed frontend
+var frontendCatalogs embed.FS
+
+// FrontendFS exposes the embedded frontend translation directory.
+func FrontendFS() (fs.FS, error) {
+	return fs.Sub(frontendCatalogs, "frontend")
+}
+
 func Catalog(ctx context.Context) (*i18n.Catalog, error) {
 	definitions, err := message.Definitions(WelcomeArgsMessage().Registration(), CartArgsMessage().Registration(), PositionArgsMessage().Registration(), LiteralArgsMessage().Registration(), NameLabelMessage().Registration(), ManageLabelMessage().Registration())
 	if err != nil {

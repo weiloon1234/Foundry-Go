@@ -3,6 +3,9 @@ package generate
 import (
 	"fmt"
 	"go/types"
+	"strings"
+
+	"github.com/weiloon1234/Foundry-Go/config"
 )
 
 func emitConfig(p *packageInput, declaration configDeclaration) ([]byte, error) {
@@ -81,5 +84,43 @@ func emitConfig(p *packageInput, declaration configDeclaration) ([]byte, error) 
 	e.line("return %s.New[%s](", configuration, declaration.name)
 	walkConfigLeaves(declaration.fields, func(field configField) { e.line("%s.%s,", keys, field.path) })
 	e.line(")}")
+	if len(declaration.publicSettings) > 0 {
+		e.line("// %sPublicConfig returns the public configuration declared on %s.", declaration.name, declaration.name)
+		e.line("func %sPublicConfig() []%s.PublicSetting {", declaration.name, configuration)
+		e.line("return []%s.PublicSetting{", configuration)
+		for _, s := range declaration.publicSettings {
+			casesLit := "nil"
+			if len(s.EnumCases) > 0 {
+				quoted := make([]string, len(s.EnumCases))
+				for i, c := range s.EnumCases {
+					quoted[i] = fmt.Sprintf("%q", c)
+				}
+				casesLit = fmt.Sprintf("[]string{%s}", strings.Join(quoted, ", "))
+			}
+			kindConst := ""
+			switch s.Kind {
+			case config.PublicString:
+				kindConst = configuration + ".PublicString"
+			case config.PublicBoolean:
+				kindConst = configuration + ".PublicBoolean"
+			case config.PublicNumber:
+				kindConst = configuration + ".PublicNumber"
+			case config.PublicLocale:
+				kindConst = configuration + ".PublicLocale"
+			case config.PublicCurrency:
+				kindConst = configuration + ".PublicCurrency"
+			case config.PublicTimeZone:
+				kindConst = configuration + ".PublicTimeZone"
+			case config.PublicEnum:
+				kindConst = configuration + ".PublicEnum"
+			default:
+				kindConst = fmt.Sprintf("%s.PublicKind(%q)", configuration, s.Kind)
+			}
+			e.line("{Name: %q, Env: %q, Description: %q, Fallback: %q, Kind: %s, MaxLength: %d, EnumCases: %s},",
+				s.Name, s.Env, s.Description, s.Fallback, kindConst, s.MaxLength, casesLit)
+		}
+		e.line("}")
+		e.line("}")
+	}
 	return e.finish(declaration.position.Filename)
 }

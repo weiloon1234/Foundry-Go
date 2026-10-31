@@ -1,0 +1,412 @@
+import { APIError } from "./runtime.js";
+import type { HTTPRequest, HTTPTransport } from "./runtime.js";
+
+/** A bearer access token held in memory only. */
+export interface AccessToken {
+  readonly value: string;
+  /** Epoch milliseconds after which the server rejects it. */
+  readonly expiresAt: number;
+}
+
+/** The result of exchanging the refresh cookie for a new access token. */
+export type RefreshOutcome =
+  | { readonly kind: "renewed"; readonly token: AccessToken }
+  /** The server holds no valid refresh credential for this browser. */
+  | { readonly kind: "signed-out" };
+
+/** Runs work exclusively across the portal's tabs (the Web Locks API). */
+export interface TabLock {
+  run<T>(name: string, work: () => Promise<T>): Promise<T>;
+}
+
+/** Messages between the portal's tabs (a BroadcastChannel). */
+export type SessionMessage =
+  | { readonly type: "signed-in"; readonly token: AccessToken }
+  | { readonly type: "token"; readonly token: AccessToken }
+  | { readonly type: "signed-out" };
+
+export interface TabChannel {
+  post(message: SessionMessage): void;
+  /** Returns a function that stops listening and releases the channel. */
+  listen(receive: (message: SessionMessage) => void): () => void;
+}
+
+/** "unknown" until the first renewal or sign-in settles it. */
+export type SessionStatus = "unknown" | "signed-in" | "signed-out";
+
+export interface TokenSessionOptions {
+  /** The portal's name; it names the lock and channel, so portals stay apart. */
+  readonly name: string;
+  /**
+   * Resolves "signed-out" when the server rejects the refresh credential and
+   * throws when the outcome is unknown (no response).
+   */
+  readonly refresh: () => Promise<RefreshOutcome>;
+  /** Renew this long before expiry (default 30 seconds). */
+  readonly marginMs?: number;
+  readonly now?: () => number;
+  /** Defaults to the Web Locks API, or in-tab serialization without it. */
+  readonly lock?: TabLock;
+  /** Defaults to a BroadcastChannel; null disables cross-tab messages. */
+  readonly channel?: TabChannel | null;
+}
+
+export interface TokenSession {
+  status(): SessionStatus;
+  /** Changes on sign-in/out, including another tab; renewal keeps the version. */
+  version(): number;
+  subscribe(listener: (status: SessionStatus) => void): () => void;
+  /**
+   * A fresh access token, renewing it when needed (one renewal at a time across
+   * tabs), or null when signed out.
+   */
+  accessToken(): Promise<string | null>;
+  /** Serialize login/logout cookie writes with renewal across this portal's tabs. */
+  runCredentials<T>(work: () => Promise<T>): Promise<T>;
+  /** Adopts the access token from a sign-in response and shares it with other tabs. */
+  signIn(token: AccessToken): void;
+  /** Reports a token the server rejected (401), so the next call renews it. */
+  rejected(value: string): void;
+  /** Ends the session in every tab. Revoke it on the server first. */
+  signOut(): void;
+  dispose(): void;
+}
+
+/** An access token from a response's `expires_in` (whole seconds remaining). */
+export function accessTokenExpiring(
+  value: string,
+  expiresInSeconds: number,
+  now: () => number = Date.now,
+): AccessToken {
+  return { value, expiresAt: now() + expiresInSeconds * 1000 };
+}
+
+export function createTokenSession(options: TokenSessionOptions): TokenSession {
+  const now = options.now ?? Date.now;
+  const marginMs = options.marginMs ?? 30_000;
+  const lock = options.lock ?? webLock();
+  const channel =
+    options.channel === undefined
+      ? broadcastChannel(`foundry.${options.name}.session`)
+      : options.channel;
+  const lockName = `foundry.${options.name}.refresh`;
+  const listeners = new Set<(status: SessionStatus) => void>();
+  let token: AccessToken | null = null;
+  let current: SessionStatus = "unknown";
+  let version = 0;
+  let disposed = false;
+  let renewing: Promise<string | null> | null = null;
+
+  const fresh = (candidate: AccessToken | null): candidate is AccessToken =>
+    candidate !== null && candidate.expiresAt - marginMs > now();
+  const setStatus = (next: SessionStatus, notify = false) => {
+    if (next === current && !notify) return;
+    current = next;
+    for (const listener of [...listeners]) listener(next);
+  };
+  const adopt = (next: AccessToken, signingIn = false) => {
+    if (signingIn) version++;
+    token = next;
+    setStatus("signed-in", signingIn);
+  };
+  const end = () => {
+    version++;
+    token = null;
+    setStatus("signed-out");
+  };
+
+  const stopListening = channel?.listen((message) => {
+    if (message.type === "signed-out") end();
+    else if (message.type === "signed-in") adopt(message.token, true);
+    else if (current !== "signed-out" && !fresh(token)) adopt(message.token);
+  });
+
+  const renew = (startedVersion: number) =>
+    lock.run(lockName, async () => {
+      if (disposed || startedVersion !== version) return null;
+      // Another tab may have renewed while this one waited for the lock.
+      if (fresh(token)) return token.value;
+      let outcome: RefreshOutcome;
+      try {
+        outcome = await options.refresh();
+      } catch {
+        if (disposed || startedVersion !== version) return null;
+        // The server may already have rotated the credential; resending it
+        // would be a replay that revokes the whole session. Sign this tab out.
+        end();
+        return null;
+      }
+      // A sign-out or a new login owns the tab now. An older response must
+      // neither restore a revoked token nor end/share the newer session.
+      if (disposed || startedVersion !== version) return null;
+      if (outcome.kind === "signed-out") {
+        end();
+        channel?.post({ type: "signed-out" });
+        return null;
+      }
+      adopt(outcome.token);
+      channel?.post({ type: "token", token: outcome.token });
+      return outcome.token.value;
+    });
+
+  return {
+    status: () => current,
+    version: () => version,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    accessToken() {
+      if (disposed) return Promise.resolve(null);
+      if (fresh(token)) return Promise.resolve(token.value);
+      if (current === "signed-out") return Promise.resolve(null);
+      renewing ??= renew(version).finally(() => {
+        renewing = null;
+      });
+      return renewing;
+    },
+    runCredentials: (work) => lock.run(lockName, work),
+    signIn(next) {
+      if (disposed) return;
+      adopt(next, true);
+      channel?.post({ type: "signed-in", token: next });
+    },
+    rejected(value) {
+      if (token?.value === value) token = null;
+    },
+    signOut() {
+      if (disposed) return;
+      end();
+      channel?.post({ type: "signed-out" });
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      version++;
+      token = null;
+      stopListening?.();
+      listeners.clear();
+    },
+  };
+}
+
+function webLock(): TabLock {
+  const locks = globalThis.navigator?.locks;
+  if (locks === undefined) {
+    // Without Web Locks, serialize within this tab only.
+    let tail: Promise<unknown> = Promise.resolve();
+    return {
+      run(_name, work) {
+        const result = tail.then(work);
+        tail = result.catch(() => undefined);
+        return result;
+      },
+    };
+  }
+  return {
+    run<T>(name: string, work: () => Promise<T>): Promise<T> {
+      // The DOM typing nests the callback's promise; the runtime flattens it.
+      return locks.request(name, work) as Promise<T>;
+    },
+  };
+}
+
+function broadcastChannel(name: string): TabChannel | null {
+  if (typeof BroadcastChannel === "undefined") return null;
+  const channel = new BroadcastChannel(name);
+  return {
+    post: (message) => channel.postMessage(message),
+    listen(receive) {
+      const handle = (event: MessageEvent<unknown>) => {
+        if (isSessionMessage(event.data)) receive(event.data);
+      };
+      channel.addEventListener("message", handle);
+      return () => {
+        channel.removeEventListener("message", handle);
+        channel.close();
+      };
+    },
+  };
+}
+
+/** Same-origin scripts can post to the channel; accept only well-formed messages. */
+function isSessionMessage(data: unknown): data is SessionMessage {
+  if (typeof data !== "object" || data === null) return false;
+  const message = data as { type?: unknown; token?: unknown };
+  if (message.type === "signed-out") return true;
+  if (message.type !== "token" && message.type !== "signed-in") return false;
+  const token = message.token as { value?: unknown; expiresAt?: unknown };
+  return (
+    typeof token === "object" &&
+    token !== null &&
+    typeof token.value === "string" &&
+    token.value !== "" &&
+    typeof token.expiresAt === "number" &&
+    Number.isFinite(token.expiresAt)
+  );
+}
+
+/** A browser login or refresh response: the access token only. */
+export interface IssuedAccess {
+  readonly tokens: {
+    readonly access_token: string;
+    readonly expires_in: string;
+  };
+}
+
+/** The access token of a browser login or refresh response. */
+export function accessTokenFrom(
+  issued: IssuedAccess,
+  now: () => number = Date.now,
+): AccessToken {
+  const seconds = Number(issued.tokens.expires_in);
+  if (!Number.isSafeInteger(seconds) || seconds < 0)
+    throw new TypeError("invalid access token lifetime");
+  return accessTokenExpiring(issued.tokens.access_token, seconds, now);
+}
+
+/**
+ * Runs a refresh-cookie call for a token session. A 401 means the server holds
+ * no valid refresh credential for this browser (signed out). Any other failure
+ * is an unknown outcome, which the session never resends.
+ */
+export async function cookieRefresh(
+  call: () => Promise<IssuedAccess>,
+  now: () => number = Date.now,
+): Promise<RefreshOutcome> {
+  try {
+    return { kind: "renewed", token: accessTokenFrom(await call(), now) };
+  } catch (error) {
+    if (error instanceof APIError && error.status === 401)
+      return { kind: "signed-out" };
+    throw error;
+  }
+}
+
+/**
+ * Wraps the generated client's transport with the portal's bearer token. A 401
+ * renews the token once and resends the request once: Foundry authenticates
+ * before it reads a request, so a rejected request had no effect. This is the
+ * only automatic retry of a mutation, and only for bodies that can be sent
+ * again (never a stream). A request carrying its own Authorization header
+ * passes through untouched. Sign-in and refresh calls use the plain transport.
+ */
+export function authenticatedTransport(
+  base: HTTPTransport,
+  session: TokenSession,
+): HTTPTransport {
+  return async (request) => {
+    if (hasAuthorization(request)) return base(request);
+    const version = session.version();
+    const token = await session.accessToken();
+    const response = await base(withBearer(request, token));
+    if (
+      response.status !== 401 ||
+      token === null ||
+      !replayable(request) ||
+      session.version() !== version
+    ) {
+      return response;
+    }
+    session.rejected(token);
+    const renewed = await session.accessToken();
+    if (renewed === null || renewed === token || session.version() !== version)
+      return response;
+    await response.close();
+    return base(withBearer(request, renewed));
+  };
+}
+
+function withBearer(request: HTTPRequest, token: string | null): HTTPRequest {
+  if (token === null) return request;
+  return {
+    ...request,
+    headers: { ...request.headers, authorization: `Bearer ${token}` },
+  };
+}
+
+function hasAuthorization(request: HTTPRequest): boolean {
+  return Object.keys(request.headers).some(
+    (name) => name.toLowerCase() === "authorization",
+  );
+}
+
+function replayable(request: HTTPRequest): boolean {
+  return (
+    request.body === undefined ||
+    typeof request.body === "string" ||
+    request.body instanceof Blob
+  );
+}
+
+/** Surface authentication descriptor binding this portal's operations to the runtime. */
+export interface SurfaceAuthDescriptor<TClient, TProfile, TCredentials> {
+  readonly guard: string;
+  readonly identifier: keyof TCredentials;
+  readonly login: (client: TClient, credentials: TCredentials) => Promise<IssuedAccess>;
+  readonly refresh: (client: TClient) => Promise<IssuedAccess>;
+  readonly logout: (client: TClient) => Promise<void>;
+  readonly profile: (client: TClient) => Promise<TProfile>;
+}
+
+export interface PortalSessionOptions {
+  readonly now?: () => number;
+  readonly lock?: TabLock;
+  readonly channel?: TabChannel | null;
+  readonly marginMs?: number;
+}
+
+/** A credential transition superseded a pending sign-in profile response. */
+export class SessionChangedError extends Error {}
+
+export interface PortalSession<TClient, TProfile, TCredentials> {
+  readonly session: TokenSession;
+  readonly api: TClient;
+  readonly credentials: TClient;
+  readonly identifier: keyof TCredentials;
+  signInWithPassword(input: TCredentials): Promise<TProfile>;
+  restoreSession(): Promise<TProfile | null>;
+  signOut(): Promise<void>;
+}
+
+export function createPortalSession<TClient, TProfile, TCredentials>(
+  descriptor: SurfaceAuthDescriptor<TClient, TProfile, TCredentials>,
+  createClient: (transport: HTTPTransport) => TClient,
+  baseTransport: HTTPTransport,
+  options?: PortalSessionOptions,
+): PortalSession<TClient, TProfile, TCredentials> {
+  const credentialsClient = createClient(baseTransport);
+  const session = createTokenSession({
+    ...options,
+    name: descriptor.guard,
+    refresh: () => cookieRefresh(() => descriptor.refresh(credentialsClient), options?.now),
+  });
+  const apiClient = createClient(authenticatedTransport(baseTransport, session));
+  return {
+    session,
+    api: apiClient,
+    credentials: credentialsClient,
+    identifier: descriptor.identifier,
+    async signInWithPassword(input: TCredentials): Promise<TProfile> {
+      const version = await session.runCredentials(async () => {
+        const issued = await descriptor.login(credentialsClient, input);
+        session.signIn(accessTokenFrom(issued, options?.now));
+        return session.version();
+      });
+      const profile = await descriptor.profile(apiClient);
+      if (session.version() !== version) {
+        throw new SessionChangedError();
+      }
+      return profile;
+    },
+    async restoreSession(): Promise<TProfile | null> {
+      return (await session.accessToken()) === null ? null : descriptor.profile(apiClient);
+    },
+    async signOut(): Promise<void> {
+      await session.runCredentials(async () => {
+        await descriptor.logout(credentialsClient);
+        session.signOut();
+      });
+    },
+  };
+}

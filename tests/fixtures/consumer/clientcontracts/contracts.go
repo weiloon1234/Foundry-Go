@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"foundry.test/consumer/configured"
 	"foundry.test/consumer/genericdto"
 	"foundry.test/consumer/httppagination"
 	"foundry.test/consumer/httpuploads"
@@ -78,12 +79,15 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	if err != nil {
 		return result, err
 	}
-	strategy := auth.DefineStrategy("client_cookie", func(_ context.Context, input secret.String) (value.Optional[auth.Proof[Account, int64]], error) {
+	verify := func(_ context.Context, input secret.String) (value.Optional[auth.Proof[Account, int64]], error) {
 		if input.Reveal() != "fixture-only" {
 			return value.Optional[auth.Proof[Account, int64]]{}, nil
 		}
 		return value.Set(proof), nil
-	})
+	}
+	strategy := auth.DefineStrategy("client_cookie", verify)
+	browserStrategy := auth.DefineStrategy("client_bearer", verify)
+	browserGuard := auth.DefineGuard("browser_accounts", provider, browserStrategy)
 	guard := auth.DefineGuard("client_accounts", provider, strategy)
 	recipient := notifications.DefineRecipient("client_accounts", provider, guard, func(context.Context, Account, notifications.Name, notifications.ChannelID) (bool, error) {
 		return true, nil
@@ -99,12 +103,12 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	if err != nil {
 		return result, err
 	}
-	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration(), Manage.Registration())
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration(), browserGuard.Registration(), Manage.Registration())
 	if err != nil {
 		return result, err
 	}
 	cookie := foundryhttp.DefineCookie("fixture_session", foundryhttp.SecretCookie(), foundryhttp.DefaultCookieOptions())
-	transport, err := foundryhttp.NewAuthentication(registry, foundryhttp.CookieCredential("client_cookie", cookie).WithoutOriginProtection())
+	transport, err := foundryhttp.NewAuthentication(registry, foundryhttp.CookieCredential("client_cookie", cookie).WithoutOriginProtection(), foundryhttp.BearerCredential("client_bearer"))
 	if err != nil {
 		return result, err
 	}
@@ -132,7 +136,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	if err != nil {
 		return result, err
 	}
-	router, err := foundryhttp.NewRouter(append(append(pluralRoutes, transportRoutes(signer)...),
+	router, err := foundryhttp.NewRouter(append(append(append(pluralRoutes, transportRoutes(signer)...), browserAuthRoutes(transport, browserGuard)...),
 		requestflow.Submit.Handle(requestflow.Handle),
 		unions.Echo.Handle(unions.Handle),
 		unions.Method.Handle(unions.HandleMethod),
@@ -208,7 +212,22 @@ func (f Fixture) Manifest(ctx context.Context) (*manifest.Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
-	return manifest.Build(ctx, manifest.Sources{HTTP: f.Router, Realtime: &realtime, Notifications: f.Notifications, Tables: f.Tables, Catalog: catalog, Enums: []enum.Definition{enumeration}, Permissions: []auth.PermissionDescription{permission}, Schemas: []contract.Schema{dynamic, labelSchema, ownerIndex}})
+	frontend, err := localization.FrontendFS()
+	if err != nil {
+		return nil, err
+	}
+	return manifest.Build(ctx, manifest.Sources{
+		HTTP:          f.Router,
+		Realtime:      &realtime,
+		Notifications: f.Notifications,
+		Tables:        f.Tables,
+		Catalog:       catalog,
+		Frontend:      frontend,
+		PublicConfig:  configured.SettingsPublicConfig(),
+		Enums:         []enum.Definition{enumeration},
+		Permissions:   []auth.PermissionDescription{permission},
+		Schemas:       []contract.Schema{dynamic, labelSchema, ownerIndex},
+	})
 }
 
 func Export(ctx context.Context, source *manifest.Manifest, options typescript.Options) (typescript.Report, error) {

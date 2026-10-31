@@ -1,0 +1,14 @@
+{
+  "ui": {
+    "welcome": "Welcome, {{name}}!",
+    "farewell": "Goodbye"
+  },
+  "auth": {
+    "notice": {
+      "$plural": {
+        "one": "{{attempts}} attempt remaining",
+        "other": "{{attempts}} attempts remaining"
+      }
+    }
+  }
+}

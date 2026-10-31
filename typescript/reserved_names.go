@@ -7,10 +7,12 @@ import (
 
 // renderedNames are module-level declarations the renderer itself emits.
 var renderedNames = []string{
-	"API", "CatalogMessageArguments", "CatalogMessageKey", "ContractTypes",
-	"EnumLabel", "ErrorCode", "ErrorResponse", "Identity", "Locale", "LocaleMap",
+	"API", "CatalogMessageArguments", "CatalogMessageKey", "Client", "ContractTypes",
+	"EnumLabel", "ErrorCode", "ErrorResponse", "FrontendMessageArguments", "FrontendMessageKey",
+	"Identity", "Locale", "LocaleMap",
 	"NewIdentity", "OperationInputs", "OperationJSONBodies", "Operations",
-	"PresentationKind", "Realtime", "ReceivedContractTypes", "Schemas",
+	"PasswordCredentials", "PresentationKind", "PublicEnv", "PublicEnvEntry", "PublicEnvKey",
+	"Realtime", "ReceivedContractTypes", "Schemas",
 	"TableColumn", "TableColumnKind", "TableDescriptor", "TableId", "TableReceivedRow", "TableRow", "TableSort",
 }
 

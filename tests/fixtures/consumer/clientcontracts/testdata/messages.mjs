@@ -38,4 +38,24 @@ assert.deepEqual(members.catalogLocales, sdk.catalogLocales);
 // Surfaces keep every declared message and share the runtime renderer.
 assert.equal(members.formatMessage(messages, "welcome", { name: "Ada" }), "Helo Ada");
 assert.equal(members.formatText, sdk.formatText);
+
+// S9: formatFrontendMessage runtime tests
+const feTranslations = sdk.catalogTranslations([
+  { ui: { welcome: "Hello, {{name}}!", farewell: "Goodbye" }, auth: { notice: { $plural: { one: "{{attempts}} attempt remaining", other: "{{attempts}} attempts remaining" } } } }
+]);
+const feMessages = { locale: "en", translations: feTranslations };
+assert.equal(sdk.formatFrontendMessage(feMessages, "ui.welcome", { name: "Ada" }), "Hello, Ada!");
+assert.equal(sdk.formatFrontendMessage(feMessages, "ui.farewell"), "Goodbye");
+assert.equal(sdk.formatFrontendMessage(feMessages, "auth.notice", { attempts: 1 }), "1 attempt remaining");
+assert.equal(sdk.formatFrontendMessage(feMessages, "auth.notice", { attempts: 3 }), "3 attempts remaining");
+
+// S6: decodePublicEnv runtime tests
+const env = sdk.decodePublicEnv({ VITE_APP_NAME: "My App", VITE_DEFAULT_LOCALE: "ms" });
+assert.equal(env.appName, "My App");
+assert.equal(env.defaultLocale, "ms");
+const defaultEnv = sdk.decodePublicEnv({});
+assert.equal(defaultEnv.appName, "ConsumerApp");
+assert.equal(defaultEnv.defaultLocale, "en");
+assert.deepEqual(sdk.findPublicEnvProblems({ VITE_SECRET: "123" }, "VITE_"), ["VITE_SECRET is not a declared public key."]);
+
 console.log("catalog messages ok");

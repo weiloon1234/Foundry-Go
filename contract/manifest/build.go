@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"slices"
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
@@ -225,6 +227,74 @@ func Build(ctx context.Context, sources Sources) (*Manifest, error) {
 			return nil, err
 		}
 		document.Locales = &Locales{Default: locales.Default(), Supported: locales.Locales(), Messages: sources.Catalog.Definitions()}
+	}
+	if sources.Frontend != nil {
+		frontendSource := sources.Frontend
+		if sub, err := fs.Sub(sources.Frontend, "frontend"); err == nil {
+			if entries, readErr := fs.ReadDir(sub, "."); readErr == nil && len(entries) > 0 {
+				frontendSource = sub
+			}
+		}
+		localesCatalog := sources.Locales
+		if localesCatalog == nil && sources.Catalog != nil {
+			localesCatalog = sources.Catalog
+		}
+		if localesCatalog == nil {
+			return nil, safeerror.NewFault(fault.Invalid, "frontend messages require a declared locale catalog (sources.Catalog or sources.Locales)")
+		}
+		frontendDefs, err := i18n.DiscoverDefinitions(ctx, frontendSource, localesCatalog)
+		if err != nil {
+			return nil, err
+		}
+		existingKeys := make(map[i18n.MessageKey]bool)
+		if document.Locales != nil {
+			for _, def := range document.Locales.Messages {
+				existingKeys[def.Key] = true
+			}
+		}
+		for _, def := range frontendDefs {
+			if existingKeys[def.Key] {
+				return nil, safeerror.NewFault(fault.Duplicate, fmt.Sprintf("frontend message %q is already declared in catalog", string(def.Key)))
+			}
+		}
+		if document.Locales == nil {
+			locSet, err := i18n.SnapshotLocales(ctx, localesCatalog)
+			if err != nil {
+				return nil, err
+			}
+			document.Locales = &Locales{Default: locSet.Default(), Supported: locSet.Locales()}
+		}
+		document.Locales.FrontendMessages = frontendDefs
+	}
+	if len(sources.PublicConfig) > 0 {
+		seenEnv := make(map[string]bool)
+		seenName := make(map[string]bool)
+		for _, setting := range sources.PublicConfig {
+			if setting.Name == "" {
+				return nil, invalid("public config setting requires a name")
+			}
+			if setting.Env == "" {
+				return nil, invalid("public config setting requires an env key")
+			}
+			if setting.Kind == "" {
+				setting.Kind = PublicString
+			}
+			if err := setting.Kind.Validate(); err != nil {
+				return nil, err
+			}
+			if seenEnv[setting.Env] {
+				return nil, safeerror.NewFault(fault.Duplicate, "duplicate public config env key "+setting.Env)
+			}
+			seenEnv[setting.Env] = true
+			if seenName[setting.Name] {
+				return nil, safeerror.NewFault(fault.Duplicate, "duplicate public config name "+setting.Name)
+			}
+			seenName[setting.Name] = true
+			document.PublicConfig = append(document.PublicConfig, setting)
+		}
+		slices.SortFunc(document.PublicConfig, func(a, b PublicSetting) int {
+			return strings.Compare(a.Env, b.Env)
+		})
 	}
 	if g.err != nil {
 		return nil, g.err

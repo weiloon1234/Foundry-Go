@@ -94,8 +94,11 @@ func parseTemplate(text string, parameters map[string]bool) ([]templatePart, tem
 		if end < 0 {
 			return nil, "template contains an unterminated {{ placeholder"
 		}
-		if !parameters[text[:end]] {
+		if parameters != nil && !parameters[text[:end]] {
 			return nil, templateProblem("placeholder " + boundedQuote(text[:end]) + " is not a declared parameter")
+		}
+		if parameters == nil && !ParameterName(text[:end]) {
+			return nil, templateProblem("placeholder " + boundedQuote(text[:end]) + " is not a valid parameter name")
 		}
 		result = append(result, templatePart{parameter: text[:end]})
 		text = text[end+2:]

@@ -5,16 +5,19 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/weiloon1234/Foundry-Go/config"
 )
 
 type configDeclaration struct {
-	name     string
-	typ      *types.Named
-	fields   []configField
-	position token.Position
+	name           string
+	typ            *types.Named
+	fields         []configField
+	position       token.Position
+	publicSettings []config.PublicSetting
 }
 
 type configField struct {
@@ -23,6 +26,7 @@ type configField struct {
 	secret                 bool
 	children               []configField
 	help                   fieldHelp
+	public                 *config.PublicSetting
 }
 
 func discoverConfig(p *packageInput, spec *ast.TypeSpec, named *types.Named, args map[string]string) (configDeclaration, error) {
@@ -55,6 +59,13 @@ func resolveConfig(p *packageInput, declaration *configDeclaration) error {
 	if _, err := config.New(fields...); err != nil {
 		return fmt.Errorf("%s: %w", declaration.position, err)
 	}
+	var publicSettings []config.PublicSetting
+	walkConfigLeaves(declaration.fields, func(field configField) {
+		if field.public != nil {
+			publicSettings = append(publicSettings, *field.public)
+		}
+	})
+	declaration.publicSettings = publicSettings
 	return nil
 }
 
@@ -90,10 +101,13 @@ func configFields(p *packageInput, typ types.Type, source documentedType, path, 
 		}
 		options := make(map[string]bool)
 		for _, option := range parts[1:] {
-			if (option != "secret" && option != "json") || options[option] {
+			if (option != "secret" && option != "json" && option != "public") || options[option] {
 				return fail("unknown or repeated config tag option")
 			}
 			options[option] = true
+		}
+		if options["public"] && (options["secret"] || sensitive) {
+			return fail("public config field cannot be secret or contain secret/password types")
 		}
 		help, err := p.sourceDocumentation().help(source, field.Name())
 		if err != nil {
@@ -102,6 +116,9 @@ func configFields(p *packageInput, typ types.Type, source documentedType, path, 
 		node := configField{help: help, name: field.Name(), path: path + field.Name(), key: prefix + name, typ: field.Type(), secret: sensitive || options["secret"]}
 		base := types.Unalias(field.Type())
 		if named, ok := base.(*types.Named); ok {
+			if options["public"] && (isNamed(named, framework+"/secret", "String") || isNamed(named, framework+"/auth/password", "Plaintext") || isNamed(named, framework+"/auth/password", "Hash")) {
+				return fail("public config field cannot be secret or contain secret/password types")
+			}
 			switch {
 			case isNamed(named, "time", "Duration"):
 				node.codec = "Duration"
@@ -159,6 +176,107 @@ func configFields(p *packageInput, typ types.Type, source documentedType, path, 
 				return fail(err.Error())
 			}
 			node.secret = node.secret || secret
+		}
+		if options["public"] {
+			if node.codec != "Scalar" && node.codec != "Enum" && node.codec != "Text" {
+				return fail("public config field must be a concrete scalar or declared enum")
+			}
+			clientTag := tags["client"]
+			if clientTag == "" {
+				return fail("public config field requires client:\"env=...\" tag")
+			}
+			var envKey, fallback, kind string
+			var maxLen int
+			for _, entry := range strings.Split(clientTag, ",") {
+				k, v, ok := strings.Cut(entry, "=")
+				if !ok || v == "" {
+					return fail("invalid client tag option in public config field")
+				}
+				switch k {
+				case "env":
+					envKey = v
+				case "fallback":
+					fallback = v
+				case "kind":
+					kind = v
+				case "max":
+					n, err := strconv.Atoi(v)
+					if err != nil || n <= 0 {
+						return fail("invalid max option in client tag")
+					}
+					maxLen = n
+				default:
+					return fail("unknown client tag option in public config field: " + k)
+				}
+			}
+			if envKey == "" {
+				return fail("public config field requires client:\"env=...\" with full environment variable key")
+			}
+			var publicKind config.PublicKind
+			if kind != "" {
+				switch kind {
+				case "string":
+					publicKind = config.PublicString
+				case "boolean":
+					publicKind = config.PublicBoolean
+				case "number":
+					publicKind = config.PublicNumber
+				case "locale":
+					publicKind = config.PublicLocale
+				case "currency":
+					publicKind = config.PublicCurrency
+				case "time_zone":
+					publicKind = config.PublicTimeZone
+				case "enum":
+					publicKind = config.PublicEnum
+				default:
+					return fail("unsupported public config kind: " + kind)
+				}
+				if publicKind == config.PublicEnum && node.codec != "Enum" {
+					return fail("public config enum kind requires an enum field")
+				}
+				if publicKind == config.PublicLocale || publicKind == config.PublicCurrency || publicKind == config.PublicTimeZone {
+					if basic, ok := base.Underlying().(*types.Basic); !ok || basic.Info()&types.IsString == 0 {
+						return fail("public config " + string(publicKind) + " kind requires a string field")
+					}
+				}
+			} else {
+				if basic, ok := base.Underlying().(*types.Basic); ok {
+					switch {
+					case basic.Info()&types.IsBoolean != 0:
+						publicKind = config.PublicBoolean
+					case basic.Info()&(types.IsInteger|types.IsFloat) != 0:
+						publicKind = config.PublicNumber
+					default:
+						publicKind = config.PublicString
+					}
+				} else if node.codec == "Enum" {
+					publicKind = config.PublicEnum
+				} else {
+					publicKind = config.PublicString
+				}
+			}
+			var enumCases []string
+			if node.codec == "Enum" {
+				if named, ok := base.(*types.Named); ok {
+					for _, name := range p.types.Scope().Names() {
+						v, ok := p.types.Scope().Lookup(name).(*types.Const)
+						if ok && types.Identical(v.Type(), named) && v.Exported() {
+							val := strings.Trim(v.Val().ExactString(), `"`)
+							enumCases = append(enumCases, val)
+						}
+					}
+				}
+			}
+			node.public = &config.PublicSetting{
+				Name:        camelCase(field.Name()),
+				Env:         envKey,
+				Description: string(help),
+				Fallback:    fallback,
+				Kind:        publicKind,
+				MaxLength:   maxLen,
+				EnumCases:   enumCases,
+			}
 		}
 		fields = append(fields, node)
 	}
@@ -242,6 +360,9 @@ func configKeySetName(owner, path string) string {
 
 func configSymbols(declaration configDeclaration) []string {
 	result := []string{declaration.name + "ConfigKeys", declaration.name + "ConfigSchema", configKeySetName(declaration.name, "")}
+	if len(declaration.publicSettings) > 0 {
+		result = append(result, declaration.name+"PublicConfig")
+	}
 	var groups func([]configField)
 	groups = func(fields []configField) {
 		for _, field := range fields {
@@ -253,4 +374,20 @@ func configSymbols(declaration configDeclaration) []string {
 	}
 	groups(declaration.fields)
 	return result
+}
+
+func camelCase(name string) string {
+	runes := []rune(name)
+	if len(runes) == 0 {
+		return ""
+	}
+	i := 0
+	for i < len(runes) && unicode.IsUpper(runes[i]) {
+		if i > 0 && i+1 < len(runes) && unicode.IsLower(runes[i+1]) {
+			break
+		}
+		runes[i] = unicode.ToLower(runes[i])
+		i++
+	}
+	return string(runes)
 }

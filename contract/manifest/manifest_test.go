@@ -7,10 +7,13 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"testing/fstest"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
@@ -252,5 +255,92 @@ func TestExtractFileConstraints(t *testing.T) {
 	}
 	if part.MaxBytes != 1024 {
 		t.Errorf("max bytes = %d, want 1024", part.MaxBytes)
+	}
+}
+
+func TestManifestBuildFrontendMessagesAndCollisions(t *testing.T) {
+	locales, err := i18n.NewLocaleSet("en", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := i18n.NewCatalog(t.Context(), locales, i18n.CatalogOptions{}, []i18n.MessageDefinition{{Key: "app.shared"}}, map[i18n.LocaleID]map[i18n.MessageKey]i18n.Template{"en": {"app.shared": {Text: "Shared"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	frontendFS := fstest.MapFS{
+		"frontend/en/auth.json": {
+			Data: []byte(`{"auth.welcome": "Welcome", "auth.locked": {"$plural": {"one": "{{minutes}} min", "other": "{{minutes}} mins"}}}`),
+		},
+	}
+
+	source, err := manifest.Build(t.Context(), manifest.Sources{Catalog: catalog, Frontend: frontendFS})
+	if err != nil {
+		t.Fatalf("unexpected build error: %v", err)
+	}
+	doc, err := source.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Locales == nil || len(doc.Locales.FrontendMessages) != 2 {
+		t.Fatalf("expected 2 frontend messages, got %+v", doc.Locales)
+	}
+	if doc.Locales.FrontendMessages[0].Key != "auth.locked" || doc.Locales.FrontendMessages[0].Plural != "minutes" {
+		t.Errorf("unexpected frontend message 0: %+v", doc.Locales.FrontendMessages[0])
+	}
+	if doc.Locales.FrontendMessages[1].Key != "auth.welcome" {
+		t.Errorf("unexpected frontend message 1: %+v", doc.Locales.FrontendMessages[1])
+	}
+
+	// Collision test: frontend declares a key that catalog already has
+	collidingFS := fstest.MapFS{
+		"en/app.json": {
+			Data: []byte(`{"app.shared": "Collision"}`),
+		},
+	}
+	if _, err := manifest.Build(t.Context(), manifest.Sources{Catalog: catalog, Frontend: collidingFS}); !errors.Is(err, fault.Duplicate) {
+		t.Fatalf("expected fault.Duplicate for collision, got: %v", err)
+	}
+}
+
+func TestManifestBuildPublicConfigValidationAndOrder(t *testing.T) {
+	config := []manifest.PublicSetting{
+		{Name: "appName", Env: "VITE_APP_NAME", Fallback: "Foundry", Kind: "string"},
+		{Name: "locale", Env: "VITE_LOCALE", Kind: "locale"},
+		{Name: "currency", Env: "VITE_CURRENCY", Fallback: "USD", Kind: "currency"},
+	}
+
+	source, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: config})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	doc, err := source.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.PublicConfig) != 3 {
+		t.Fatalf("expected 3 public settings, got %d", len(doc.PublicConfig))
+	}
+	// Sorted by Env: VITE_APP_NAME, VITE_CURRENCY, VITE_LOCALE
+	if doc.PublicConfig[0].Env != "VITE_APP_NAME" || doc.PublicConfig[1].Env != "VITE_CURRENCY" || doc.PublicConfig[2].Env != "VITE_LOCALE" {
+		t.Errorf("unexpected public config order: %+v", doc.PublicConfig)
+	}
+
+	// Duplicate Env
+	dupEnv := []manifest.PublicSetting{
+		{Name: "a", Env: "VITE_SAME"},
+		{Name: "b", Env: "VITE_SAME"},
+	}
+	if _, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: dupEnv}); !errors.Is(err, fault.Duplicate) {
+		t.Fatalf("expected fault.Duplicate on duplicate env, got: %v", err)
+	}
+
+	// Duplicate Name
+	dupName := []manifest.PublicSetting{
+		{Name: "same", Env: "VITE_A"},
+		{Name: "same", Env: "VITE_B"},
+	}
+	if _, err := manifest.Build(t.Context(), manifest.Sources{PublicConfig: dupName}); !errors.Is(err, fault.Duplicate) {
+		t.Fatalf("expected fault.Duplicate on duplicate name, got: %v", err)
 	}
 }

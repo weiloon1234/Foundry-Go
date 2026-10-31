@@ -49,6 +49,17 @@ integers as strings; each type's choices are decoded once and shared. Metadata
 and descriptors are immutable snapshots checked against the manifest version. Unknown
 JavaScript operations, fields, locations and variants throw `ContractError`.
 
+## Portal authentication descriptors
+
+A surface with `Surface.Auth` exports `authDescriptor` with its guard, typed
+credential identifier, and login, refresh, logout, and profile functions.
+`PasswordCredentials` comes from the login request DTO; `signInIdentifier` is one
+of its JSON keys. `Surface.Auth.Identifier` must match that JSON key exactly,
+including case. `createPortalSession` connects that descriptor to an injected
+transport and the shared optional auth runtime. See
+[portal sign-in sessions](client-contracts.md#portal-sign-in-sessions) for route
+declarations, cookie requirements, and session ownership.
+
 ## Declare presentation once
 
 ```go

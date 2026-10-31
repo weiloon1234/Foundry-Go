@@ -4,8 +4,10 @@ package manifest
 
 import (
 	"encoding/json"
+	"io/fs"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/config"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/datatable"
 	"github.com/weiloon1234/Foundry-Go/enum"
@@ -31,9 +33,12 @@ type Sources struct {
 	Notifications *notifications.Registry
 	Tables        *datatable.Registry
 	Catalog       *i18n.Catalog
+	Locales       i18n.LocaleCatalog
+	Frontend      fs.FS
 	Enums         []enum.Definition
 	Permissions   []auth.PermissionDescription
 	Schemas       []contract.Schema
+	PublicConfig  []PublicSetting
 }
 
 // Document is the serialized inspection boundary. All payload references point
@@ -52,6 +57,7 @@ type Document struct {
 	Locales       *Locales                      `json:"locales,omitempty"`
 	Enums         []enum.Definition             `json:"enums,omitempty"`
 	Permissions   []auth.PermissionDescription  `json:"permissions,omitempty"`
+	PublicConfig  []PublicSetting               `json:"public_config,omitempty"`
 }
 
 type Operation struct {
@@ -157,10 +163,27 @@ type Table struct {
 }
 
 type Locales struct {
-	Default   i18n.LocaleID            `json:"default"`
-	Supported []i18n.LocaleID          `json:"supported"`
-	Messages  []i18n.MessageDefinition `json:"messages"`
+	Default          i18n.LocaleID            `json:"default"`
+	Supported        []i18n.LocaleID          `json:"supported"`
+	Messages         []i18n.MessageDefinition `json:"messages"`
+	FrontendMessages []i18n.MessageDefinition `json:"frontend_messages,omitempty"`
 }
+
+// PublicKind classifies the browser validation and decoding applied to a public setting.
+type PublicKind = config.PublicKind
+
+const (
+	PublicString   = config.PublicString
+	PublicBoolean  = config.PublicBoolean
+	PublicNumber   = config.PublicNumber
+	PublicLocale   = config.PublicLocale
+	PublicCurrency = config.PublicCurrency
+	PublicTimeZone = config.PublicTimeZone
+	PublicEnum     = config.PublicEnum
+)
+
+// PublicSetting is a browser-visible configuration setting declared in Go.
+type PublicSetting = config.PublicSetting
 
 // Manifest owns its canonical serialized document. Neither source mutation nor
 // mutation of a Snapshot can change another exporter or a concurrent reader.

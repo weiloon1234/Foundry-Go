@@ -62,11 +62,13 @@ func normalizeFeatures(d *Document, types typeIndex) error {
 	}
 	slices.SortFunc(d.Permissions, func(a, b auth.PermissionDescription) int { return cmp.Compare(a.Name, b.Name) })
 	if l := d.Locales; l != nil {
-		set, err := i18n.NewLocaleSet(l.Default, l.Supported...)
-		if err != nil {
-			return err
+		if l.Default != "" || len(l.Supported) > 0 {
+			set, err := i18n.NewLocaleSet(l.Default, l.Supported...)
+			if err != nil {
+				return err
+			}
+			l.Supported = set.Locales()
 		}
-		l.Supported = set.Locales()
 		if len(l.Messages) > i18n.MaxMessages {
 			return invalid("too many message definitions")
 		}
@@ -78,6 +80,38 @@ func normalizeFeatures(d *Document, types typeIndex) error {
 			keys[message.Key] = true
 		}
 		slices.SortFunc(l.Messages, func(a, b i18n.MessageDefinition) int { return cmp.Compare(a.Key, b.Key) })
+		if len(l.FrontendMessages) > i18n.MaxMessages {
+			return invalid("too many frontend message definitions")
+		}
+		for _, message := range l.FrontendMessages {
+			if message.Validate() != nil || keys[message.Key] {
+				return invalid("invalid or duplicate message definition")
+			}
+			keys[message.Key] = true
+		}
+		slices.SortFunc(l.FrontendMessages, func(a, b i18n.MessageDefinition) int { return cmp.Compare(a.Key, b.Key) })
+	}
+	if len(d.PublicConfig) > 0 {
+		seenEnv := make(map[string]bool)
+		seenName := make(map[string]bool)
+		for i := range d.PublicConfig {
+			s := &d.PublicConfig[i]
+			if err := s.Kind.Validate(); err != nil {
+				return err
+			}
+			if s.Kind == "" {
+				s.Kind = PublicString
+			}
+			if s.Env == "" || s.Name == "" {
+				return invalid("public config setting requires both env and name")
+			}
+			if seenEnv[s.Env] || seenName[s.Name] {
+				return invalid("duplicate public config setting")
+			}
+			seenEnv[s.Env] = true
+			seenName[s.Name] = true
+		}
+		slices.SortFunc(d.PublicConfig, func(a, b PublicSetting) int { return cmp.Compare(a.Env, b.Env) })
 	}
 	if err := normalizeNotifications(d, types); err != nil {
 		return err

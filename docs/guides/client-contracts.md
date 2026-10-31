@@ -592,6 +592,162 @@ subscription. `close()` rejects pending operations and releases timers,
 listeners and handles. Dispose unused room handles to release their capacity.
 For a new connection, create a new client and deliberately request replay.
 
+## Portal sign-in sessions
+
+Declare `Surface.Auth` alongside the portal's route selection. The referenced
+login, refresh, logout, and profile routes must all belong to the surface:
+
+```go
+typescript.Surface{
+	Name: "browser",
+	Routes: []http.RouteID{"browser"},
+	Auth: &typescript.SurfaceAuth{
+		Guard: "browser_accounts",
+		Login: "browser.login",
+		Refresh: "browser.refresh",
+		Logout: "browser.logout",
+		Profile: "browser.profile",
+		Identifier: "login_id",
+	},
+}
+```
+
+`Identifier` is the case-sensitive JSON property name in the login body. It must
+exactly match a non-secret manifest property; generation performs no case folding
+or Go-field-name conversion. The emitted `signInIdentifier` and
+`authDescriptor.identifier` use that same name, typed as `keyof PasswordCredentials`.
+The login body must declare exactly one password field with `client:"kind=password"`.
+
+The profile route must use the declared guard. Login uses `TokenCookieResponse`;
+refresh pairs `RefreshTokenCookie` with `TokenCookieResponse`; logout pairs
+`RefreshTokenCookieLogout` with `ClearRefreshCookie`. All three share one
+`http.DefineRefreshCookie` declaration with a `__Host-` name. See
+[browser refresh cookies](tokens.md#browser-refresh-cookies) for the server's cookie protections.
+
+The surface entry exports `PasswordCredentials`, `signInIdentifier`,
+`authDescriptor`, and `createPortalSession`. The descriptor binds the surface's
+typed client operations and includes no cookie name, UI messages, or catalog keys.
+Its session helper imports the separate
+`<prefix>_runtime_auth_foundry.gen.ts` module. Generation emits that module only
+when at least one surface declares `Auth`; other entries do not import it.
+
+```typescript
+import { createPortalSession } from "./generated/contracts_browser_foundry.gen.js";
+
+const portal = createPortalSession(transport, { clientOptions: { baseURL } });
+const profile = await portal.signInWithPassword({ login_id: email, password });
+const restored = await portal.restoreSession();
+await portal.signOut();
+portal.session.dispose();
+```
+
+Use the login DTO's JSON keys for credentials. This example follows the
+[client-contract consumer](../../tests/fixtures/consumer/clientcontracts/browser_auth.go),
+whose `Email` field has `json:"login_id"` and whose surface declares
+`Identifier: "login_id"`. Declaring `Identifier: "Email"` fails generation.
+`portal.api` is the authenticated client; `portal.credentials` is the plain
+client used by cookie operations.
+The transport must honor generated request credentials and release response
+bodies through `close()`.
+
+Access tokens stay in memory. The browser alone stores the HttpOnly refresh
+cookie. A session coalesces concurrent renewals in a tab, uses Web Locks to
+serialize renewal and login/logout cookie writes across tabs of its guard, and
+shares access-token transitions over BroadcastChannel. Without Web Locks,
+serialization covers only the current tab. An unknown refresh outcome signs that
+tab out and is never resent.
+
+The authenticated transport renews after a 401 and retries once for replayable
+bodies. Streams are never retried. Explicit Authorization headers pass through.
+Credential versions prevent a request from replaying under a later login;
+a superseded sign-in profile throws `SessionChangedError` from the auth runtime
+without assigning an HTTP status or UI message. Logout clears local state after
+the server call succeeds. Applications own error presentation and disposal.
+
+## Public browser configuration
+
+Mark browser-visible scalar or enum fields in a `//foundry:config` declaration
+with `config:",public"` and a full environment key. Existing configuration paths
+can precede `,public`:
+
+```go
+//foundry:config
+type Settings struct {
+	AppName       string `config:"app_name,public" client:"env=VITE_APP_NAME,fallback=ConsumerApp,max=80"`
+	DefaultLocale string `config:"default_locale,public" client:"env=VITE_DEFAULT_LOCALE,fallback=en,kind=locale"`
+}
+```
+
+Pass the generated `SettingsPublicConfig()` to `manifest.Sources.PublicConfig`.
+This exports declaration metadata and public fallbacks, without reading runtime
+settings. Secret fields cannot be public. Treat descriptions and fallbacks as
+browser-visible data.
+
+The generated entry exports `PublicEnv`, `publicEnvSchema`, `decodePublicEnv`,
+and `findPublicEnvProblems`. Boolean and numeric settings decode to their
+TypeScript scalar types; enums decode to their declared cases. A locale setting
+uses the catalog's `Locale` union when locale metadata is available. The supported
+kinds are `string`, `boolean`, `number`, `enum`, `locale`, `currency`, and
+`time_zone`; `max` limits string length.
+
+```typescript
+import { decodePublicEnv, findPublicEnvProblems } from "./generated/contracts_foundry.gen.js";
+
+const problems = findPublicEnvProblems(rawEnvironment, "VITE_");
+if (problems.length > 0) throw new Error(problems.join("\n"));
+const settings = decodePublicEnv(rawEnvironment);
+console.log(settings.appName, settings.defaultLocale);
+```
+
+Supply the build tool's public environment object as `rawEnvironment`.
+`findPublicEnvProblems` reports unknown prefixed keys and invalid values without
+printing their values. `decodePublicEnv` trims strings, uses declared fallbacks
+for missing, blank, or invalid values, and returns a frozen object. Run the
+problem check when invalid build configuration must fail instead of using a
+fallback.
+
+## Frontend message keys
+
+Pass a filesystem of frontend JSON catalogs to `manifest.Sources.Frontend`, with
+one directory per supported locale, such as `en/ui.json` and `ms/ui.json`.
+Provide the locale set through `Sources.Catalog` or `Sources.Locales`. A filesystem
+root containing a `frontend` directory is also accepted. Applications can embed
+`lang/frontend` and pass a sub-filesystem rooted there.
+
+```json
+{
+  "ui": {
+    "welcome": "Hello, {{name}}!",
+    "farewell": "Goodbye"
+  }
+}
+```
+
+`i18n.DiscoverDefinitions` discovers keys and placeholder arguments through the
+existing catalog reader. Every configured locale must have a catalog directory.
+The manifest stores definitions in `Locales.FrontendMessages`; translation text
+stays in application catalogs. Plural messages use the existing `$plural` form
+map. Discovery prefers `count` as the numeric plural argument, or the sole
+placeholder when there is one. Use one numeric placeholder in plural forms to
+make the choice explicit.
+
+The generated `FrontendMessageKey` union and `FrontendMessageArguments` interface
+keep frontend keys separate from Go-declared `CatalogMessageKey` values.
+`formatFrontendMessage` uses the same translations, fallback catalogs, and plural
+renderer as `formatMessage`:
+
+```typescript
+import { catalogTranslations, formatFrontendMessage } from "./generated/contracts_foundry.gen.js";
+
+const messages = { locale: "en", translations: catalogTranslations([frontendEnglish]) };
+const greeting = formatFrontendMessage(messages, "ui.welcome", { name: "Ada" });
+const farewell = formatFrontendMessage(messages, "ui.farewell");
+```
+
+Unknown keys and missing arguments fail TypeScript compilation. Missing or
+unrenderable translation text returns the key at runtime. Applications own
+catalog text and error presentation.
+
 ## Validation and UI metadata
 
 `validateRequest(operationName, request)` uses the same codec and portable rule

@@ -1,0 +1,134 @@
+package i18n_test
+
+import (
+	"testing"
+	"testing/fstest"
+
+	"github.com/weiloon1234/Foundry-Go/i18n"
+)
+
+func TestDiscoverDefinitionsInfersParametersAndPlurals(t *testing.T) {
+	files := fstest.MapFS{
+		"en/auth.json": {
+			Data: []byte(`{
+				"auth.sign_in.welcome": "Welcome back.",
+				"auth.sign_in.locked_minutes": {
+					"$plural": {
+						"one": "Try again in {{minutes}} minute.",
+						"other": "Try again in {{minutes}} minutes."
+					}
+				}
+			}`),
+		},
+		"en/merchants.json": {
+			Data: []byte(`{
+				"merchants.results_for": "Results for “{{query}}”",
+				"merchants.count_in": {
+					"$plural": {
+						"one": "{{count}} in {{nob}}",
+						"other": "{{count}} in {{nob}}"
+					}
+				}
+			}`),
+		},
+	}
+
+	set, err := i18n.NewLocaleSet("en", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defs, err := i18n.DiscoverDefinitions(t.Context(), files, set)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(defs) != 4 {
+		t.Fatalf("expected 4 definitions, got %d", len(defs))
+	}
+
+	// 1. auth.sign_in.locked_minutes (plural = minutes)
+	if defs[0].Key != "auth.sign_in.locked_minutes" || defs[0].Plural != "minutes" || defs[0].Kind != i18n.Cardinal {
+		t.Fatalf("unexpected def 0: %+v", defs[0])
+	}
+	if len(defs[0].Parameters) != 1 || defs[0].Parameters[0].Name != "minutes" || defs[0].Parameters[0].Kind != i18n.NumberParameter {
+		t.Fatalf("unexpected def 0 params: %+v", defs[0].Parameters)
+	}
+
+	// 2. auth.sign_in.welcome (no params)
+	if defs[1].Key != "auth.sign_in.welcome" || defs[1].Plural != "" || len(defs[1].Parameters) != 0 {
+		t.Fatalf("unexpected def 1: %+v", defs[1])
+	}
+
+	// 3. merchants.count_in (plural = count, text = nob)
+	if defs[2].Key != "merchants.count_in" || defs[2].Plural != "count" || defs[2].Kind != i18n.Cardinal {
+		t.Fatalf("unexpected def 2: %+v", defs[2])
+	}
+	if len(defs[2].Parameters) != 2 {
+		t.Fatalf("unexpected def 2 params len: %+v", defs[2].Parameters)
+	}
+	if defs[2].Parameters[0].Name != "count" || defs[2].Parameters[0].Kind != i18n.NumberParameter {
+		t.Fatalf("unexpected count param: %+v", defs[2].Parameters[0])
+	}
+	if defs[2].Parameters[1].Name != "nob" || defs[2].Parameters[1].Kind != i18n.TextParameter {
+		t.Fatalf("unexpected nob param: %+v", defs[2].Parameters[1])
+	}
+
+	// 4. merchants.results_for (query = text)
+	if defs[3].Key != "merchants.results_for" || defs[3].Plural != "" || len(defs[3].Parameters) != 1 {
+		t.Fatalf("unexpected def 3: %+v", defs[3])
+	}
+	if defs[3].Parameters[0].Name != "query" || defs[3].Parameters[0].Kind != i18n.TextParameter {
+		t.Fatalf("unexpected query param: %+v", defs[3].Parameters[0])
+	}
+}
+
+func TestDiscoverDefinitionsRejectsMalformedPlaceholders(t *testing.T) {
+	for name, file := range map[string]string{
+		"unmatched right": `{"test": "hello }}"}`,
+		"unterminated":    `{"test": "hello {{name"}`,
+		"bad param name":  `{"test": "hello {{bad-name}}"`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			files := fstest.MapFS{
+				"en/test.json": {Data: []byte(file)},
+			}
+			set, _ := i18n.NewLocaleSet("en", "en")
+			if _, err := i18n.DiscoverDefinitions(t.Context(), files, set); err == nil {
+				t.Fatalf("expected error for %s", name)
+			}
+		})
+	}
+}
+
+func TestDiscoverDefinitionsValidatesLocalesStrictly(t *testing.T) {
+	files := fstest.MapFS{
+		"en/test.json": {Data: []byte(`{"test": "hello"}`)},
+	}
+	// 1. nil locales fails clearly
+	if _, err := i18n.DiscoverDefinitions(t.Context(), files, nil); err == nil {
+		t.Fatal("expected error for nil locales")
+	}
+
+	// 2. missing declared supported locale fails clearly
+	setMulti, err := i18n.NewLocaleSet("en", "en", "ms")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := i18n.DiscoverDefinitions(t.Context(), files, setMulti); err == nil {
+		t.Fatal("expected error for missing declared supported locale ms")
+	}
+
+	// 3. directory outside declared supported locale set fails clearly
+	filesExtra := fstest.MapFS{
+		"en/test.json": {Data: []byte(`{"test": "hello"}`)},
+		"fr/test.json": {Data: []byte(`{"test": "bonjour"}`)},
+	}
+	setEn, err := i18n.NewLocaleSet("en", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := i18n.DiscoverDefinitions(t.Context(), filesExtra, setEn); err == nil {
+		t.Fatal("expected error for directory outside supported set fr")
+	}
+}

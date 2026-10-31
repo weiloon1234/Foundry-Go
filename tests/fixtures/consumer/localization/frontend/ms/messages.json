@@ -1,0 +1,13 @@
+{
+  "ui": {
+    "welcome": "Selamat datang, {{name}}!",
+    "farewell": "Selamat tinggal"
+  },
+  "auth": {
+    "notice": {
+      "$plural": {
+        "other": "{{attempts}} percubaan lagi"
+      }
+    }
+  }
+}
