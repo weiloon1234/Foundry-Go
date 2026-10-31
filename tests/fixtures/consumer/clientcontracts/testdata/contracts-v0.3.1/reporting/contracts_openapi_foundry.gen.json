@@ -1,0 +1,1722 @@
+{
+  "components": {
+    "schemas": {
+      "AgentLevel": {
+        "enum": [
+          0,
+          1
+        ],
+        "format": "int32",
+        "maximum": 2147483647,
+        "minimum": -2147483648,
+        "title": "foundry.test/consumer/reporting.AgentLevel",
+        "type": "integer",
+        "x-foundry-integer-bits": 32,
+        "x-foundry-integer-signed": true,
+        "x-foundry-type-id": "foundry.test/consumer/reporting.AgentLevel"
+      },
+      "Bool": {
+        "title": "bool",
+        "type": "boolean",
+        "x-foundry-type-id": "bool"
+      },
+      "Decimal": {
+        "title": "github.com/weiloon1234/Foundry-Go/decimal.Decimal",
+        "type": "string",
+        "x-foundry-format": "decimal",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/decimal.Decimal"
+      },
+      "Direction": {
+        "enum": [
+          "asc",
+          "desc"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/datatable.Direction",
+        "type": "string",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/datatable.Direction"
+      },
+      "ErrorCode": {
+        "title": "github.com/weiloon1234/Foundry-Go/http.ErrorCode",
+        "type": "string",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http.ErrorCode"
+      },
+      "ErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "error_code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "issues": {
+            "$ref": "#/components/schemas/List_Issue"
+          },
+          "issues_truncated": {
+            "$ref": "#/components/schemas/Bool"
+          },
+          "message": {
+            "$ref": "#/components/schemas/String"
+          },
+          "request_id": {
+            "$ref": "#/components/schemas/RequestID"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Int"
+          }
+        },
+        "required": [
+          "error_code",
+          "message",
+          "status"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http.ErrorResponse",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http.ErrorResponse"
+      },
+      "Filter": {
+        "additionalProperties": false,
+        "properties": {
+          "children": {
+            "$ref": "#/components/schemas/List_Filter"
+          },
+          "column": {
+            "$ref": "#/components/schemas/String"
+          },
+          "op": {
+            "$ref": "#/components/schemas/Operator"
+          },
+          "values": {
+            "$ref": "#/components/schemas/List_String"
+          }
+        },
+        "required": [
+          "op"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/datatable.Filter",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/datatable.Filter"
+      },
+      "Int": {
+        "format": "int64",
+        "maximum": 9223372036854775807,
+        "minimum": -9223372036854775808,
+        "title": "int",
+        "type": "integer",
+        "x-foundry-integer-bits": 64,
+        "x-foundry-integer-signed": true,
+        "x-foundry-type-id": "int"
+      },
+      "Int64": {
+        "format": "int64",
+        "maximum": 9223372036854775807,
+        "minimum": -9223372036854775808,
+        "title": "int64",
+        "type": "integer",
+        "x-foundry-integer-bits": 64,
+        "x-foundry-integer-signed": true,
+        "x-foundry-type-id": "int64"
+      },
+      "Issue": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/IssueCode"
+          },
+          "label": {
+            "$ref": "#/components/schemas/String"
+          },
+          "label_key": {
+            "$ref": "#/components/schemas/MessageKey"
+          },
+          "message": {
+            "$ref": "#/components/schemas/String"
+          },
+          "path": {
+            "$ref": "#/components/schemas/String"
+          }
+        },
+        "required": [
+          "code",
+          "path"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/contract.Issue",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/contract.Issue"
+      },
+      "IssueCode": {
+        "title": "github.com/weiloon1234/Foundry-Go/contract.IssueCode",
+        "type": "string",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/contract.IssueCode"
+      },
+      "Links": {
+        "additionalProperties": false,
+        "properties": {
+          "first": {
+            "$ref": "#/components/schemas/String"
+          },
+          "last": {
+            "$ref": "#/components/schemas/String"
+          },
+          "next": {
+            "$ref": "#/components/schemas/Nullable_String"
+          },
+          "prev": {
+            "$ref": "#/components/schemas/Nullable_String"
+          },
+          "window": {
+            "$ref": "#/components/schemas/List_PageLink"
+          }
+        },
+        "required": [
+          "next",
+          "prev"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.Links",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.Links"
+      },
+      "List_Filter": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/Filter"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b",
+        "x-foundry-type-id": "go:16e835e6349558afbd479c09a2594198a865b078bc0752db56616a0a9e011e4b"
+      },
+      "List_Issue": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "[]contract.Issue",
+        "x-foundry-type-id": "[]contract.Issue"
+      },
+      "List_PageLink": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/PageLink"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "[]pagination.PageLink",
+        "x-foundry-type-id": "[]pagination.PageLink"
+      },
+      "List_Sort": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/Sort"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528",
+        "x-foundry-type-id": "go:582b06c611e8fd832b8bbf5c28362494a8661c3a365aeebe7f074f815d8a5528"
+      },
+      "List_String": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/String"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0",
+        "x-foundry-type-id": "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0"
+      },
+      "MemberID": {
+        "format": "uuid",
+        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]",
+        "type": "string",
+        "x-foundry-format": "uuid",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Member]"
+      },
+      "MemberRow": {
+        "additionalProperties": false,
+        "properties": {
+          "balance": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "id": {
+            "$ref": "#/components/schemas/MemberID"
+          },
+          "name": {
+            "$ref": "#/components/schemas/String"
+          },
+          "nickname": {
+            "$ref": "#/components/schemas/Nullable_String"
+          },
+          "state": {
+            "$ref": "#/components/schemas/State"
+          }
+        },
+        "required": [
+          "balance",
+          "id",
+          "name",
+          "nickname",
+          "state"
+        ],
+        "title": "foundry.test/consumer/reporting.MemberRow",
+        "type": "object",
+        "x-foundry-type-id": "foundry.test/consumer/reporting.MemberRow"
+      },
+      "MemberTotal": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "$ref": "#/components/schemas/Int64"
+          },
+          "memberId": {
+            "$ref": "#/components/schemas/MemberID"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Nullable_Decimal"
+          }
+        },
+        "required": [
+          "count",
+          "memberId",
+          "total"
+        ],
+        "title": "foundry.test/consumer/reporting.MemberTotal",
+        "type": "object",
+        "x-foundry-type-id": "foundry.test/consumer/reporting.MemberTotal"
+      },
+      "MessageKey": {
+        "title": "github.com/weiloon1234/Foundry-Go/i18n.MessageKey",
+        "type": "string",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/i18n.MessageKey"
+      },
+      "Nullable_Decimal": {
+        "anyOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "not": {
+              "type": "null"
+            }
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/value.Nullable[github.com/weiloon1234/Foundry-Go/decimal.Decimal]"
+      },
+      "Nullable_String": {
+        "anyOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "not": {
+              "type": "null"
+            }
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/value.Nullable[string]",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/value.Nullable[string]"
+      },
+      "NumberedMeta": {
+        "additionalProperties": false,
+        "properties": {
+          "current_page": {
+            "$ref": "#/components/schemas/Int"
+          },
+          "last_page": {
+            "$ref": "#/components/schemas/Int64"
+          },
+          "per_page": {
+            "$ref": "#/components/schemas/Int"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Int64"
+          }
+        },
+        "required": [
+          "current_page",
+          "last_page",
+          "per_page",
+          "total"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedMeta",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedMeta"
+      },
+      "NumberedResponse_MemberRow": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Pagination_Items_MemberRow"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/NumberedMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberRow]"
+      },
+      "NumberedResponse_MemberTotal": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Pagination_Items_MemberTotal"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/NumberedMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberTotal]",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.MemberTotal]"
+      },
+      "NumberedResponse_NumericLevelRow": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Pagination_Items_NumericLevelRow"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/NumberedMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.NumericLevelRow]",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.NumericLevelRow]"
+      },
+      "NumberedResponse_OrderRow": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Pagination_Items_OrderRow"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/NumberedMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.OrderRow]",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/reporting.OrderRow]"
+      },
+      "NumericLevelRow": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/MemberID"
+          },
+          "level": {
+            "$ref": "#/components/schemas/AgentLevel"
+          },
+          "wideLevel": {
+            "$ref": "#/components/schemas/WideLevel"
+          }
+        },
+        "required": [
+          "id",
+          "level",
+          "wideLevel"
+        ],
+        "title": "foundry.test/consumer/reporting.NumericLevelRow",
+        "type": "object",
+        "x-foundry-type-id": "foundry.test/consumer/reporting.NumericLevelRow"
+      },
+      "Operator": {
+        "enum": [
+          "and",
+          "between",
+          "contains",
+          "eq",
+          "gt",
+          "gte",
+          "icontains",
+          "in",
+          "is_not_null",
+          "is_null",
+          "like",
+          "lt",
+          "lte",
+          "ne",
+          "not",
+          "not_in",
+          "or"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/datatable.Operator",
+        "type": "string",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/datatable.Operator"
+      },
+      "OrderID": {
+        "format": "uuid",
+        "title": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]",
+        "type": "string",
+        "x-foundry-format": "uuid",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/reporting.Order]"
+      },
+      "OrderRow": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "id": {
+            "$ref": "#/components/schemas/OrderID"
+          },
+          "label": {
+            "$ref": "#/components/schemas/String"
+          },
+          "memberName": {
+            "$ref": "#/components/schemas/String"
+          }
+        },
+        "required": [
+          "amount",
+          "id",
+          "label",
+          "memberName"
+        ],
+        "title": "foundry.test/consumer/reporting.OrderRow",
+        "type": "object",
+        "x-foundry-type-id": "foundry.test/consumer/reporting.OrderRow"
+      },
+      "PageLink": {
+        "additionalProperties": false,
+        "properties": {
+          "page": {
+            "$ref": "#/components/schemas/Int"
+          },
+          "url": {
+            "$ref": "#/components/schemas/String"
+          }
+        },
+        "required": [
+          "page",
+          "url"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/http/pagination.PageLink",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/http/pagination.PageLink"
+      },
+      "Pagination_Items_MemberRow": {
+        "items": {
+          "$ref": "#/components/schemas/MemberRow"
+        },
+        "title": "pagination:items:foundry.test/consumer/reporting.MemberRow",
+        "type": "array",
+        "x-foundry-type-id": "pagination:items:foundry.test/consumer/reporting.MemberRow"
+      },
+      "Pagination_Items_MemberTotal": {
+        "items": {
+          "$ref": "#/components/schemas/MemberTotal"
+        },
+        "title": "pagination:items:foundry.test/consumer/reporting.MemberTotal",
+        "type": "array",
+        "x-foundry-type-id": "pagination:items:foundry.test/consumer/reporting.MemberTotal"
+      },
+      "Pagination_Items_NumericLevelRow": {
+        "items": {
+          "$ref": "#/components/schemas/NumericLevelRow"
+        },
+        "title": "pagination:items:foundry.test/consumer/reporting.NumericLevelRow",
+        "type": "array",
+        "x-foundry-type-id": "pagination:items:foundry.test/consumer/reporting.NumericLevelRow"
+      },
+      "Pagination_Items_OrderRow": {
+        "items": {
+          "$ref": "#/components/schemas/OrderRow"
+        },
+        "title": "pagination:items:foundry.test/consumer/reporting.OrderRow",
+        "type": "array",
+        "x-foundry-type-id": "pagination:items:foundry.test/consumer/reporting.OrderRow"
+      },
+      "Request": {
+        "additionalProperties": false,
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/List_Filter"
+          },
+          "page": {
+            "$ref": "#/components/schemas/Int"
+          },
+          "search": {
+            "$ref": "#/components/schemas/String"
+          },
+          "size": {
+            "$ref": "#/components/schemas/Int"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/List_Sort"
+          }
+        },
+        "title": "github.com/weiloon1234/Foundry-Go/datatable.Request",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/datatable.Request"
+      },
+      "RequestID": {
+        "title": "github.com/weiloon1234/Foundry-Go/attribution.RequestID",
+        "type": "string",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/attribution.RequestID"
+      },
+      "Sort": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "$ref": "#/components/schemas/String"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/Direction"
+          }
+        },
+        "required": [
+          "column",
+          "direction"
+        ],
+        "title": "github.com/weiloon1234/Foundry-Go/datatable.Sort",
+        "type": "object",
+        "x-foundry-type-id": "github.com/weiloon1234/Foundry-Go/datatable.Sort"
+      },
+      "State": {
+        "enum": [
+          "active",
+          "disabled"
+        ],
+        "title": "foundry.test/consumer/reporting.State",
+        "type": "string",
+        "x-foundry-type-id": "foundry.test/consumer/reporting.State"
+      },
+      "String": {
+        "title": "string",
+        "type": "string",
+        "x-foundry-type-id": "string"
+      },
+      "WideLevel": {
+        "enum": [
+          9007199254740993,
+          9007199254740994
+        ],
+        "format": "int64",
+        "maximum": 9223372036854775807,
+        "minimum": -9223372036854775808,
+        "title": "foundry.test/consumer/reporting.WideLevel",
+        "type": "integer",
+        "x-foundry-integer-bits": 64,
+        "x-foundry-integer-signed": true,
+        "x-foundry-type-id": "foundry.test/consumer/reporting.WideLevel"
+      }
+    },
+    "securitySchemes": {
+      "Credential_Authorization_2ebb9371f7115088": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Consumer",
+    "version": "1"
+  },
+  "openapi": "3.1.1",
+  "paths": {
+    "/reports/members.csv": {
+      "get": {
+        "operationId": "reports.members.csv",
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv; charset=utf-8": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "206": {
+            "content": {
+              "multipart/byteranges": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "text/csv; charset=utf-8": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Partial representation"
+          },
+          "304": {
+            "description": "Representation has not changed"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "bad_request"
+                          ]
+                        },
+                        "status": {
+                          "const": 400
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "bad_request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "unauthenticated"
+                          ]
+                        },
+                        "status": {
+                          "const": 401
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "forbidden",
+                            "mfa_required"
+                          ]
+                        },
+                        "status": {
+                          "const": 403
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "forbidden, mfa_required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "not_found"
+                          ]
+                        },
+                        "status": {
+                          "const": 404
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "method_not_allowed"
+                          ]
+                        },
+                        "status": {
+                          "const": 405
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "method_not_allowed"
+          },
+          "406": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "not_acceptable"
+                          ]
+                        },
+                        "status": {
+                          "const": 406
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "not_acceptable"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "request_timeout"
+                          ]
+                        },
+                        "status": {
+                          "const": 408
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "request_timeout"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "conflict"
+                          ]
+                        },
+                        "status": {
+                          "const": 409
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "precondition_failed"
+                          ]
+                        },
+                        "status": {
+                          "const": 412
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "precondition_failed"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "payload_too_large"
+                          ]
+                        },
+                        "status": {
+                          "const": 413
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "payload_too_large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "unsupported_media_type"
+                          ]
+                        },
+                        "status": {
+                          "const": 415
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "unsupported_media_type"
+          },
+          "416": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "range_not_satisfiable"
+                          ]
+                        },
+                        "status": {
+                          "const": 416
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "range_not_satisfiable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "validation_failed"
+                          ]
+                        },
+                        "status": {
+                          "const": 422
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "validation_failed"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "rate_limited"
+                          ]
+                        },
+                        "status": {
+                          "const": 429
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "internal_error"
+                          ]
+                        },
+                        "status": {
+                          "const": 500
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "internal_error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "unavailable"
+                          ]
+                        },
+                        "status": {
+                          "const": 503
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "unavailable"
+          }
+        },
+        "security": [
+          {
+            "Credential_Authorization_2ebb9371f7115088": []
+          }
+        ],
+        "x-foundry-access": "guarded",
+        "x-foundry-authentication": {
+          "guard": "report.contract",
+          "provider": "report.operators",
+          "optional": false,
+          "credential": {
+            "source": "report.contract",
+            "kind": "bearer",
+            "name": "Authorization"
+          }
+        },
+        "x-foundry-client-name": "reportsMembersCsv",
+        "x-foundry-file-transfer-bytes": 1073744652,
+        "x-foundry-limits": {
+          "Multipart": {
+            "Bytes": 2097152,
+            "FileBytes": 2097152,
+            "Parts": 128,
+            "Files": 16,
+            "Readers": 16,
+            "HeaderBytes": 32768,
+            "FieldBytes": 65536,
+            "FieldsBytes": 262144,
+            "Issues": 16
+          },
+          "Files": {
+            "Bytes": 1073741824,
+            "Ranges": 16,
+            "RangeBytes": 4096
+          },
+          "Query": {
+            "Bytes": 16384,
+            "Pairs": 128,
+            "Issues": 16
+          },
+          "Form": {
+            "Bytes": 2097152,
+            "Pairs": 1024,
+            "Issues": 16
+          },
+          "Body": {
+            "Bytes": 2097152,
+            "Depth": 32,
+            "Nodes": 65536,
+            "Steps": 262144,
+            "Issues": 16
+          },
+          "Response": {
+            "Bytes": 33554432,
+            "Depth": 32,
+            "Nodes": 1048576,
+            "Steps": 4194304,
+            "Issues": 16
+          },
+          "Validation": {
+            "Checks": 65536,
+            "Issues": 32,
+            "Depth": 32,
+            "ValueBytes": 1048576
+          },
+          "Raw": {
+            "Bytes": 2097152
+          }
+        }
+      }
+    },
+    "/reports/members/query": {
+      "post": {
+        "operationId": "reports.members.query",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberedResponse_MemberRow"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "bad_request"
+                          ]
+                        },
+                        "status": {
+                          "const": 400
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "bad_request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "unauthenticated"
+                          ]
+                        },
+                        "status": {
+                          "const": 401
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "forbidden",
+                            "mfa_required"
+                          ]
+                        },
+                        "status": {
+                          "const": 403
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "forbidden, mfa_required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "not_found"
+                          ]
+                        },
+                        "status": {
+                          "const": 404
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "method_not_allowed"
+                          ]
+                        },
+                        "status": {
+                          "const": 405
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "method_not_allowed"
+          },
+          "406": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "not_acceptable"
+                          ]
+                        },
+                        "status": {
+                          "const": 406
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "not_acceptable"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "request_timeout"
+                          ]
+                        },
+                        "status": {
+                          "const": 408
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "request_timeout"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "conflict"
+                          ]
+                        },
+                        "status": {
+                          "const": 409
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "precondition_failed"
+                          ]
+                        },
+                        "status": {
+                          "const": 412
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "precondition_failed"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "payload_too_large"
+                          ]
+                        },
+                        "status": {
+                          "const": 413
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "payload_too_large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "unsupported_media_type"
+                          ]
+                        },
+                        "status": {
+                          "const": 415
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "unsupported_media_type"
+          },
+          "416": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "range_not_satisfiable"
+                          ]
+                        },
+                        "status": {
+                          "const": 416
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "range_not_satisfiable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "validation_failed"
+                          ]
+                        },
+                        "status": {
+                          "const": 422
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "validation_failed"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "rate_limited"
+                          ]
+                        },
+                        "status": {
+                          "const": 429
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "internal_error"
+                          ]
+                        },
+                        "status": {
+                          "const": 500
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "internal_error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "unavailable"
+                          ]
+                        },
+                        "status": {
+                          "const": 503
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "unavailable"
+          }
+        },
+        "security": [
+          {
+            "Credential_Authorization_2ebb9371f7115088": []
+          }
+        ],
+        "x-foundry-access": "guarded",
+        "x-foundry-authentication": {
+          "guard": "report.contract",
+          "provider": "report.operators",
+          "optional": false,
+          "credential": {
+            "source": "report.contract",
+            "kind": "bearer",
+            "name": "Authorization"
+          }
+        },
+        "x-foundry-client-name": "reportsMembersQuery",
+        "x-foundry-limits": {
+          "Multipart": {
+            "Bytes": 2097152,
+            "FileBytes": 2097152,
+            "Parts": 128,
+            "Files": 16,
+            "Readers": 16,
+            "HeaderBytes": 32768,
+            "FieldBytes": 65536,
+            "FieldsBytes": 262144,
+            "Issues": 16
+          },
+          "Files": {
+            "Bytes": 1073741824,
+            "Ranges": 16,
+            "RangeBytes": 4096
+          },
+          "Query": {
+            "Bytes": 16384,
+            "Pairs": 128,
+            "Issues": 16
+          },
+          "Form": {
+            "Bytes": 2097152,
+            "Pairs": 1024,
+            "Issues": 16
+          },
+          "Body": {
+            "Bytes": 2097152,
+            "Depth": 32,
+            "Nodes": 65536,
+            "Steps": 262144,
+            "Issues": 16
+          },
+          "Response": {
+            "Bytes": 33554432,
+            "Depth": 32,
+            "Nodes": 1048576,
+            "Steps": 4194304,
+            "Issues": 16
+          },
+          "Validation": {
+            "Checks": 65536,
+            "Issues": 32,
+            "Depth": 32,
+            "ValueBytes": 1048576
+          },
+          "Raw": {
+            "Bytes": 2097152
+          }
+        }
+      }
+    }
+  },
+  "x-foundry-manifest-version": 7
+}
