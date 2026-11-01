@@ -631,7 +631,8 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
                     "backup_expired", "The selected database backup is no longer retained in the repository.")
             size = selected[0].get("info", {}).get("size")
             require(type(size) is int and size > 0, "backup_drill_size", "Repository metadata must provide the restored database size.")
-            directory.parent.mkdir(parents=True, exist_ok=True)
+            # The cluster account restores into it; implicit creation would be root-only.
+            _cluster_owned_directory(host, f"{postgres.CLUSTER_HOME}/drills")
             require(shutil.disk_usage(directory.parent).free >= size * 2 + 256 * 1024 * 1024,
                     "backup_space", "Insufficient space for an isolated restore and WAL replay.")
             directory.mkdir(parents=True, mode=0o700, exist_ok=True)
@@ -749,6 +750,7 @@ def _restore_database(host, unit, path, options):
                     "backup_drill_restore_failed", "The isolated restore command failed.")
             _stop_drill(host, unit)
             return
+        require(fields.get("ActiveState") != "failed", "backup_drill_restore_failed", "The isolated restore command failed.")
         require(fields.get("ActiveState") in ("activating", "inactive") and time.monotonic() < deadline,
                 "backup_drill_restore_failed", "The isolated restore did not complete within its deadline.")
         time.sleep(.5)

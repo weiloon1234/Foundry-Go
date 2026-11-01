@@ -317,6 +317,8 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(result["retained"])
         self.assertTrue(Path(result["data_path"]).parent.is_dir())
+        drills = self.host.paths.p(backup.postgres.CLUSTER_HOME + "/drills")
+        self.assertEqual(0o700, drills.stat().st_mode & 0o777)
         self.assertNotIn("verification", result)
 
     def test_cluster_and_backup_config_use_allocated_nondefault_postgres_port(self):
