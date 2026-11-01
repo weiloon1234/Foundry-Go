@@ -1344,6 +1344,19 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual("credentials_missing", missing.exception.code)
         self.assertEqual(before[1], key_file.read_bytes())
 
+    def test_bootstrap_initial_configuration_reaches_first_environment_only_for_app_keys(self):
+        for owned in ({ENCRYPTION_KEYS[1]: "x"}, {"APP__SERVICES__STORAGE__DISKS_FILE": "/etc/x"},
+                      {sorted(release.PIPELINE_KEYS)[0]: "x"}, {"ADMINS__SEED__SUPERADMIN_PASSWORD": 1}, {}):
+            with self.subTest(owned=sorted(owned)), self.assertRaises(DeployError):
+                initialize_bootstrap_secrets(self.host, self.entry, {"configuration": owned})
+        self.assertFalse(self.env_file.with_name("bootstrap-secrets.json").exists())
+        intake = {"configuration": {"ADMINS__SEED__SUPERADMIN_PASSWORD": "seed-canary"}}
+        credentials = initialize_bootstrap_secrets(self.host, self.entry, intake)
+        self.assertEqual("seed-canary", runtime_environment(self.entry, credentials)["ADMINS__SEED__SUPERADMIN_PASSWORD"])
+        self.assertEqual(credentials, initialize_bootstrap_secrets(self.host, self.entry))
+        with self.assertRaises(DeployError):
+            initialize_bootstrap_secrets(self.host, self.entry, {"configuration": {"ADMINS__SEED__SUPERADMIN_PASSWORD": "other"}})
+
     def test_rotation_retains_all_prior_material_and_rejects_reuse_and_overflow(self):
         values = runtime_environment(self.entry, initialize_bootstrap_secrets(self.host, self.entry))
         for _ in range(2):

@@ -297,7 +297,7 @@ these environment variables:
 | `FOUNDRY_SECRET_AGE_RECIPIENTS_FILE` | Nonempty JSON array of public age recipients |
 | `FOUNDRY_SECRET_APP_STORAGE_FILE` | JSON object with `credentials` and `disks` tables |
 | `FOUNDRY_SECRET_ENCRYPTION_FILE` | Optional JSON object with `key_id` and `key` |
-| `FOUNDRY_SECRET_CONFIG_FILE` | JSON object of 1 through 16 configuration keys and string values for `ACTION=config` |
+| `FOUNDRY_SECRET_CONFIG_FILE` | JSON object of 1 through 16 configuration keys and string values for `ACTION=config`, or the initial application configuration at bootstrap |
 
 The client sends these values in the JSON request on SSH stdin under `secrets`.
 Values never belong in command arguments, tracked profiles, or release archives.
@@ -306,6 +306,13 @@ The server records bootstrap intake as root-only mode 0600
 App-readable runtime values are separate from root-only control credentials.
 Retries preserve acknowledged credentials; missing or conflicting credentials
 require recovery rather than regeneration.
+
+Bootstrap also accepts initial application configuration that the first deploy
+needs before any release exists, such as default-admin seed credentials
+(`ADMINS__SEED__SUPERADMIN_PASSWORD`). The same key rules as `ACTION=config`
+apply. Encryption and storage keys use their own inputs. Interactive bootstrap
+asks for it once; leave it blank when the application needs none. Later changes
+use `ACTION=config`.
 
 When encryption input is absent, the server generates the key ID and 32-byte key
 together. Key material uses canonical unpadded base64url. The initial previous-key

@@ -24,8 +24,8 @@ from contracts import (DeployError, LAYOUT_VERSION, SCHEMA, VERSION_PATTERN,
                        check_path, digest, dump_env, now,
                        parse_env, parse_json, read_json, require, valid_timestamp, valid_uuid, instance_paths,
                        reserve_runtime_storage, select_runtime_storage)
-from runtime_config import (ENCRYPTION_KEYS, PIPELINE_KEYS, validate_runtime_environment, candidate_values,
-                            rotation_changes, _read_value_file)
+from runtime_config import (ENCRYPTION_KEYS, MAX_CONFIGURATION_CHANGES, PIPELINE_KEYS, validate_runtime_environment,
+                            candidate_values, rotation_changes, validate_configuration_changes, _read_value_file)
 from topology import instance_units
 from host import OperationTimeout, wall_clock_budget
 from redis_acl import (granted_redis_patterns, granted_redis_channels, reconcile_redis_grants,
@@ -997,26 +997,8 @@ def require_configuration_keys(host, entry, release, env_file, keys):
     require(all(key.removesuffix("_FILE") in names for key in keys), "unknown_configuration", "The candidate does not declare this configuration key; no settings were changed.")
 
 
-# Settings that validate only together (a key ring's ID and material) change in
-# one validated revision; each change set stays small and explicit.
-MAX_CONFIGURATION_CHANGES = 16
-
-
-def _validate_changes(changes):
-    require(isinstance(changes, dict) and 0 < len(changes) <= MAX_CONFIGURATION_CHANGES,
-            "invalid_configuration", "Name between one and sixteen configuration keys to change together.")
-    for key in changes:
-        require(isinstance(key, str) and re.fullmatch(r"[A-Z][A-Z0-9_]*", key),
-                "invalid_configuration", "Configuration key name is invalid.")
-        logical = key.removesuffix("_FILE")
-        require(not any(logical == owned or logical.startswith(owned + "__") for owned in PIPELINE_KEYS)
-                and not key.startswith(("DEPLOY_", "FOUNDRY_", "VITE_")),
-                "owned_configuration", "Identity, infrastructure and seed credentials cannot be edited by generic configuration commands.")
-    dump_env({key: value for key, value in changes.items() if value is not None})
-
-
 def config_set(host, project, profile, changes):
-    _validate_changes(changes)
+    validate_configuration_changes(changes)
     _, entry = host.require_identity(project, profile)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)

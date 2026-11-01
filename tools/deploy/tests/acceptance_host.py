@@ -16,6 +16,7 @@ import itertools
 import json
 import os
 from pathlib import Path
+import secrets
 import socket
 import ssl
 import sys
@@ -85,11 +86,16 @@ def bootstrap_secrets(disks):
             bucket=settings["app_bucket"], credentials="acceptance", path_style=True,
             compatible={"requires_nfc_keys": True, "conditional_create": True, "conditional_replace": True,
                         "single_request_conditions": True})
-    return {"backup_s3": {"endpoint": settings["endpoint"], "region": "us-east-1",
+    private = {"backup_s3": {"endpoint": settings["endpoint"], "region": "us-east-1",
         "bucket": settings["backup_bucket"], "access_key_id": settings["access_key"],
         "secret_access_key": settings["secret_key"]}, "age_recipients": [recipient],
         "app_storage": {"credentials": {"acceptance": {"mode": "static", "access_key": settings["access_key"],
             "secret_key": settings["secret_key"]}}, "disks": disks}}
+    keys = [key for key in os.environ.get("ACCEPTANCE_SECRET_CONFIG_KEYS", "").split(",") if key]
+    if keys:
+        # First-deploy application settings travel with the bootstrap intake.
+        private["configuration"] = {key: secrets.token_urlsafe(24) for key in keys}
+    return private
 
 
 def fixture_topology():

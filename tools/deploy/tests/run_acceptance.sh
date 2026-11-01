@@ -18,7 +18,9 @@ DOCKER_CONFIG and DOCKER_HOST are inherited. No host ports are published.
 Public reports must show live roles/readiness; Linux may withhold cross-UID
 executable identity, which must be reported as unverified. Root reports must
 prove every running role matches its selected release.
-Optional: ACCEPTANCE_LOG_DIR, ACCEPTANCE_SCHEDULE_MESSAGE (see acceptance_roles.py).
+Optional: ACCEPTANCE_LOG_DIR, ACCEPTANCE_SCHEDULE_MESSAGE (see acceptance_roles.py),
+ACCEPTANCE_SECRET_CONFIG_KEYS (comma-separated keys the first deploy needs, such as
+seed passwords; each receives a random bootstrap value).
 EOF
 }
 
@@ -121,6 +123,7 @@ ACCEPTANCE_S3_SECRET_KEY=$secret
 ACCEPTANCE_APP_BUCKET=app-$token
 ACCEPTANCE_BACKUP_BUCKET=backup-$token
 ACCEPTANCE_SCHEDULE_MESSAGE=${ACCEPTANCE_SCHEDULE_MESSAGE:-acceptance schedule completed}
+ACCEPTANCE_SECRET_CONFIG_KEYS=${ACCEPTANCE_SECRET_CONFIG_KEYS:-}
 EOF
 # A private disposable CA signs both the S3 stand-in endpoint and synthetic site
 # lineages. pgBackRest/rclone/app clients use the normal host trust store.

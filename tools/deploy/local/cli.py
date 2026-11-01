@@ -114,6 +114,19 @@ def bootstrap_secrets(required):
     if recipients is not None and (not isinstance(recipients, list) or not recipients
                                    or not all(isinstance(item, str) and item for item in recipients)):
         raise LocalError("age_recipients must be a nonempty JSON array of recipient strings")
+    # Initial application settings the first deploy needs, such as seed credentials.
+    configuration = secret_input("config", "Configuration values JSON", structured=True, required=False)
+    if configuration is None and required and sys.stdin.isatty():
+        supplied = ask("Initial application configuration JSON (hidden; blank for none)", secret=True)
+        try:
+            configuration = parse_json(supplied) if supplied else None
+        except DeployError as error:
+            raise LocalError("private configuration input must be valid JSON") from error
+    if configuration is not None:
+        if (not isinstance(configuration, dict) or not 1 <= len(configuration) <= MAX_CONFIGURATION_CHANGES
+                or not all(isinstance(key, str) and isinstance(value, str) for key, value in configuration.items())):
+            raise LocalError("initial configuration requires 1–16 string keys and values")
+        result["configuration"] = configuration
     return result
 
 

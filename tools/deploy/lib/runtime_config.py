@@ -14,10 +14,11 @@ import stat
 import uuid
 
 from contracts import (CLEANUP_GRACE_KEY, DEFAULT_CLEANUP_GRACE, DeployError, POSTGRES_PORT, REDIS_PORT, check_path,
-                       instance_paths, parse_env, read_json, require)
+                       dump_env, instance_paths, parse_env, read_json, require)
 
 CREDENTIAL_KEYS = ("database_password", "redis_password")
 ENCRYPTION_KEYS = tuple("APP__ENCRYPTION__" + suffix for suffix in ("KEY_ID", "KEY", "PREVIOUS"))
+BOOTSTRAP_OWNED_KEYS = frozenset({*ENCRYPTION_KEYS, "APP__SERVICES__CREDENTIALS", "APP__SERVICES__STORAGE__DISKS"})
 MAX_VALUE_BYTES = 1 << 20  # config.MaxTableBytes
 MAX_ENCRYPTION_KEYS = 32  # encryption.MaxKeys
 
@@ -71,6 +72,24 @@ _FIELDS = {
 PIPELINE_KEYS = frozenset(_FIELDS) - {"PROJECT__NAME"} | {"DEVELOPER__RELEASE"}
 
 
+# Settings that validate only together (a key ring's ID and material) change in
+# one validated revision; each change set stays small and explicit.
+MAX_CONFIGURATION_CHANGES = 16
+
+
+def validate_configuration_changes(changes):
+    require(isinstance(changes, dict) and 0 < len(changes) <= MAX_CONFIGURATION_CHANGES,
+            "invalid_configuration", "Name between one and sixteen configuration keys to change together.")
+    for key in changes:
+        require(isinstance(key, str) and re.fullmatch(r"[A-Z][A-Z0-9_]*", key),
+                "invalid_configuration", "Configuration key name is invalid.")
+        logical = key.removesuffix("_FILE")
+        require(not any(logical == owned or logical.startswith(owned + "__") for owned in PIPELINE_KEYS)
+                and not key.startswith(("DEPLOY_", "FOUNDRY_", "VITE_")),
+                "owned_configuration", "Identity, infrastructure and seed credentials cannot be edited by generic configuration commands.")
+    dump_env({key: value for key, value in changes.items() if value is not None})
+
+
 def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
     require(type(postgres_port) is int and POSTGRES_PORT <= postgres_port <= POSTGRES_PORT + 99,
             "postgres_identity", "Invalid allocated Foundry PostgreSQL port.")
@@ -89,6 +108,8 @@ def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
         values["APP__SERVICES__CREDENTIALS"] = _json(storage["credentials"])
         values["APP__SERVICES__STORAGE__DISKS"] = _json(storage["disks"])
         values[CLEANUP_GRACE_KEY] = DEFAULT_CLEANUP_GRACE
+    # Initial application settings (such as first-deploy seed credentials) apply last.
+    values.update(credentials.get("configuration") or {})
     return values
 
 
@@ -133,7 +154,7 @@ def initialize_bootstrap_secrets(host, entry, private_secrets=None):
     """Persist private stdin intake once; retries never rotate or replace secrets."""
     credentials = read_credentials(host, entry)
     supplied = {} if private_secrets is None else private_secrets
-    allowed = {"cloudflare_dns_token", "backup_s3", "age_recipients", "app_storage", "encryption"}
+    allowed = {"cloudflare_dns_token", "backup_s3", "age_recipients", "app_storage", "encryption", "configuration"}
     require(isinstance(supplied, dict) and not set(supplied) - allowed,
             "invalid_secrets", "Bootstrap secret input contains unsupported fields.")
     supplied = dict(supplied)
@@ -168,6 +189,12 @@ def initialize_bootstrap_secrets(host, entry, private_secrets=None):
                     raise DeployError("invalid_secrets", "App storage JSON is invalid.") from None
             require(isinstance(storage[key], dict) and storage[key], "invalid_secrets", "App storage JSON must be a nonempty object.")
         supplied["app_storage"] = storage
+    if "configuration" in supplied:
+        configuration = supplied["configuration"]
+        validate_configuration_changes(configuration)
+        require(all(isinstance(value, str) for value in configuration.values())
+                and not any(key.removesuffix("_FILE") in BOOTSTRAP_OWNED_KEYS for key in configuration),
+                "owned_configuration", "Encryption and storage are supplied through their own bootstrap inputs.")
     prior = _read_bootstrap_secrets(host, entry)
     if prior is not None:
         require(all(prior.get(key) == value for key, value in supplied.items()),
@@ -193,7 +220,7 @@ def initialize_bootstrap_secrets(host, entry, private_secrets=None):
                 "provision_conflict", "Bootstrap encryption value file differs from its recorded key.")
     else:
         host.owned_write(key_file, material + "\n", 0o640, group=entry["name"])
-    credentials.update({key: prior[key] for key in ("encryption", "app_storage") if key in prior})
+    credentials.update({key: prior[key] for key in ("encryption", "app_storage", "configuration") if key in prior})
     credentials["encryption"] = {**credentials["encryption"], "key_file": str(key_file)}
     return credentials
 
