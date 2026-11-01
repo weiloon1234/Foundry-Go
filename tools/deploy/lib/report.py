@@ -1,0 +1,316 @@
+"""Read-only host reporting. Never include configuration, command output or logs."""
+
+from __future__ import annotations
+
+import datetime as dt
+import os
+import re
+import shutil
+import socket
+import ssl
+import time
+import urllib.error
+import urllib.request
+
+from contracts import DeployError, PREFIX, SCHEMA, SLUG_PATTERN, check_path, instance_paths, now, parse_json, valid_uuid
+from topology import instance_units
+from host import OperationTimeout as ReportBudgetExceeded, wall_clock_budget
+
+REPORT_SCHEMA = 2
+CHECK_TIMEOUT = 1.0
+REPORT_BUDGET = 15.0
+MAX_INSTANCES = 256
+STATUSES = {"never_deployed", "deploying", "healthy", "failed", "rolled_back", "stopped", "unknown"}
+DOMAIN = re.compile(r"(?=.{1,253}\Z)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\Z")
+
+
+
+def problem(problems, code, instance=None):
+    item = {"code": code}
+    if instance:
+        item["instance_id"] = instance
+    if item not in problems:
+        problems.append(item)
+
+
+def string(value, maximum=256):
+    return value if isinstance(value, str) and len(value) <= maximum and not any(ord(c) < 32 for c in value) else None
+
+
+def integer(value):
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def identifier(value):
+    return value if valid_uuid(value) else None
+
+
+def release(value):
+    if not isinstance(value, dict):
+        return None
+    # The release manifest is extensible. Explicitly select public report fields.
+    return {key: string(value.get(key)) for key in ("version", "commit", "tree_state", "built_at", "architecture")}
+
+
+def attempt(value):
+    if not isinstance(value, dict):
+        return None
+    result = {key: string(value.get(key)) for key in ("id", "action", "release", "started_at", "finished_at", "outcome", "phase")}
+    # Failure details may contain command diagnostics; publish only the machine code.
+    error = value.get("error")
+    code = error.get("code") if isinstance(error, dict) else error
+    result["error_code"] = code if isinstance(code, str) and len(code) <= 128 and re.fullmatch(r"[a-z][a-z0-9_]*", code) else None
+    return result
+
+
+def remaining(deadline):
+    budget = deadline - time.monotonic()
+    if budget <= 0:
+        raise ReportBudgetExceeded("report budget exhausted")
+    return min(CHECK_TIMEOUT, budget)
+
+
+def service(host, unit, deadline):
+    result = host.run(
+        ["systemctl", "show", unit, "--property=LoadState,ActiveState,SubState", "--no-pager"],
+        timeout=remaining(deadline), check=False,
+    )
+    if result.returncode:
+        raise OSError("service check failed")
+    values = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+    active = values.get("ActiveState")
+    substate = values.get("SubState")
+    load = values.get("LoadState")
+    if load not in {"stub", "loaded", "not-found", "bad-setting", "error", "merged", "masked"}:
+        raise ValueError("invalid unit load status")
+    if active not in {"active", "inactive", "failed", "activating", "deactivating", "reloading", "maintenance", "refreshing"}:
+        raise ValueError("invalid service status")
+    return {"load": load, "active": active, "substate": string(substate, 64)}
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def readiness(port, deadline):
+    if not isinstance(port, int) or isinstance(port, bool) or not 1024 <= port <= 65535:
+        raise ValueError("invalid port")
+    # Never honor operator proxy variables or follow a redirect off loopback.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/health/ready", method="GET")
+    try:
+        with opener.open(request, timeout=remaining(deadline)) as response:
+            payload = response.read(4097)
+            try:
+                body = parse_json(payload) if len(payload) <= 4096 else None
+                ready = isinstance(body, dict) and set(body) == {"ready"} and body["ready"] is True
+            except (DeployError, ValueError, UnicodeError):
+                ready = False
+            return {"ready": response.status == 200 and ready, "http_status": response.status}
+    except urllib.error.HTTPError as error:
+        return {"ready": False, "http_status": error.code}
+
+
+def certificate(domain, deadline):
+    if not domain:
+        return {"status": "unconfigured", "expires_at": None}
+    if not isinstance(domain, str) or not DOMAIN.fullmatch(domain):
+        raise ValueError("invalid domain")
+    context = ssl.create_default_context()
+    try:
+        with socket.create_connection(("127.0.0.1", 443), timeout=remaining(deadline)) as connection:
+            connection.settimeout(remaining(deadline))
+            with context.wrap_socket(connection, server_hostname=domain) as tls:
+                expires = ssl.cert_time_to_seconds(tls.getpeercert()["notAfter"])
+                return {"status": "valid", "expires_at": dt.datetime.fromtimestamp(expires, dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")}
+    except ssl.SSLCertVerificationError:
+        return {"status": "invalid", "expires_at": None}
+
+
+def resources(host, problems, result):
+    result["cpu_count"] = os.cpu_count()
+    try:
+        result["load_average"] = list(os.getloadavg())
+    except ReportBudgetExceeded:
+        raise
+    except (AttributeError, OSError):
+        problem(problems, "load_unavailable")
+    try:
+        memory = {}
+        for line in host.paths.p("/proc/meminfo").read_text().splitlines():
+            key, value = line.split(":", 1)
+            if key in {"MemTotal", "MemAvailable"}:
+                memory[key] = int(value.strip().split()[0]) * 1024
+        result["memory_total_bytes"] = memory["MemTotal"]
+        result["memory_available_bytes"] = memory["MemAvailable"]
+    except ReportBudgetExceeded:
+        raise
+    except (OSError, ValueError, KeyError, IndexError):
+        problem(problems, "memory_unavailable")
+    try:
+        disk = shutil.disk_usage(host.paths.p("/"))
+        result["disk_total_bytes"], result["disk_available_bytes"] = disk.total, disk.free
+    except ReportBudgetExceeded:
+        raise
+    except OSError:
+        problem(problems, "disk_unavailable")
+    try:
+        result["uptime_seconds"] = int(float(host.paths.p("/proc/uptime").read_text().split()[0]))
+    except ReportBudgetExceeded:
+        raise
+    except (OSError, ValueError, IndexError):
+        problem(problems, "uptime_unavailable")
+    return result
+
+
+def checked(problems, code, instance_id, function, *args):
+    try:
+        return function(*args)
+    except ReportBudgetExceeded:
+        raise
+    except (DeployError, OSError, ValueError, KeyError):
+        problem(problems, code, instance_id)
+        return None
+
+
+def instance_report(host, entry, deadline, problems):
+    name = entry.get("name")
+    instance_id = identifier(entry.get("profile", {}).get("instance_id"))
+    if not isinstance(name, str) or len(name) > 31 or not SLUG_PATTERN.fullmatch(name) or not instance_id:
+        problem(problems, "instance_identity_invalid")
+        return None
+    profile = entry.get("profile") if isinstance(entry.get("profile"), dict) else {}
+    provisioning = entry.get("provisioning") if isinstance(entry.get("provisioning"), dict) else {}
+    state = None
+    try:
+        state = host.load_state(entry)
+        if not isinstance(state, dict) or state.get("instance_id") != instance_id or state.get("schema") != SCHEMA:
+            raise ValueError("state identity mismatch")
+    except ReportBudgetExceeded:
+        raise
+    except Exception:
+        # Host errors are deliberately not rendered: their text can carry paths/diagnostics.
+        problem(problems, "instance_state_unavailable", instance_id)
+        state = {}
+    recorded_status = state.get("status")
+    if recorded_status not in STATUSES:
+        recorded_status = "unknown"
+        problem(problems, "instance_status_unknown", instance_id)
+    expected_unit = instance_units(entry)["http"]
+    unit_status = checked(problems, "service_check_unavailable", instance_id, service, host, expected_unit, deadline)
+    topology = {role: {"unit": unit, "state": checked(problems, "service_check_unavailable", instance_id, service, host, unit, deadline)}
+                for role, unit in instance_units(entry).items() if role != "http"}
+    topology["http"] = {"unit": expected_unit, "state": unit_status}
+    ready = None if recorded_status == "never_deployed" and not state.get("current") else checked(problems, "readiness_check_unavailable", instance_id, readiness, entry["allocations"]["http_port"], deadline)
+    cert = checked(problems, "certificate_check_unavailable", instance_id, certificate, profile.get("domain"), deadline)
+    current, previous = release(state.get("current")), release(state.get("previous"))
+    consistent = True
+    if recorded_status in {"healthy", "rolled_back"} and (not current or not ready or not ready["ready"] or not unit_status or unit_status["active"] != "active"):
+        consistent = False
+    if recorded_status in {"healthy", "rolled_back"} and any(not item["state"] or item["state"]["active"] != "active" for item in topology.values()):
+        consistent = False
+    if recorded_status == "never_deployed" and (current or (unit_status and unit_status["active"] not in {"inactive", "failed"})):
+        consistent = False
+    if recorded_status in {"never_deployed", "stopped"} and any(item["state"] and item["state"]["active"] not in {"inactive", "failed"} for item in topology.values()):
+        consistent = False
+    if provisioning.get("state") == "ready" and unit_status and unit_status.get("load") != "loaded":
+        consistent = False
+    if provisioning.get("state") == "ready" and any(not item["state"] or item["state"].get("load") != "loaded" for item in topology.values()):
+        consistent = False
+    if state.get("configuration_revision") != entry.get("configuration_revision"):
+        consistent = False
+    current_path = host.paths.opt(name) / "current"
+    try:
+        if current:
+            expected = host.paths.opt(name) / "releases" / (current["version"] or "")
+            # A matching dangling link or a release-directory symlink is stale
+            # metadata, even if an already running process still serves traffic.
+            check_path(expected, "directory")
+            consistent = consistent and expected.is_dir() and current_path.is_symlink() and current_path.resolve(strict=True) == expected
+        elif current_path.exists() or current_path.is_symlink():
+            consistent = False
+    except ReportBudgetExceeded:
+        raise
+    except (DeployError, OSError, RuntimeError):
+        consistent = False
+    if not consistent:
+        problem(problems, "instance_state_inconsistent", instance_id)
+    namespace = entry.get("namespace") if isinstance(entry.get("namespace"), dict) else {}
+    paths = instance_paths(name)
+    return {
+        "instance_id": instance_id, "name": name, "environment": string(entry.get("environment")),
+        "runtime_environment": string(profile.get("runtime_environment")), "domain": string(profile.get("domain")),
+        "architecture": string(profile.get("architecture")), "port": integer(entry["allocations"]["http_port"]),
+        "database": string(entry.get("database")), "redis_user": string(entry.get("redis_user")),
+        "namespace": {key: string(namespace.get(key)) for key in ("application", "environment")},
+        "unit": expected_unit, "paths": {key: paths[key] for key in ("application", "data")},
+        "provisioning": {"state": string(provisioning.get("state")), "steps": [item for item in provisioning.get("steps", []) if string(item, 64)] if isinstance(provisioning.get("steps"), list) else []},
+        "configuration_revision": integer(entry.get("configuration_revision")),
+        "status": "unknown" if recorded_status in {"healthy", "rolled_back"} and not consistent else recorded_status,
+        "recorded_status": recorded_status, "metadata_consistent": consistent,
+        "current_release": current, "previous_release": previous, "last_attempt": attempt(state.get("last_attempt")),
+        "service": unit_status, "services": topology, "readiness": ready, "certificate": cert,
+        "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),
+    }
+
+
+def collect_report(host):
+    """Collect on the main Unix thread, retaining partial results at the deadline."""
+    deadline = time.monotonic() + REPORT_BUDGET
+    problems = []
+    result = {"schema": REPORT_SCHEMA, "generated_at": now(), "complete": True,
+              "host": {"host_id": None, "hostname": None, "layout_version": None,
+                       "registry_updated_at": None, "resources": dict.fromkeys(("cpu_count", "load_average", "memory_total_bytes", "memory_available_bytes", "disk_total_bytes", "disk_available_bytes", "uptime_seconds"))},
+              "shared_services": dict.fromkeys(("postgresql", "redis", "nginx")), "projects": [], "problems": problems}
+    try:
+        with wall_clock_budget(REPORT_BUDGET):
+            collect_inventory(host, result, deadline)
+    except ReportBudgetExceeded:
+        problem(problems, "report_budget_exhausted")
+    if time.monotonic() >= deadline:
+        # A dependency can translate the alarm exception into its own I/O error.
+        problem(problems, "report_budget_exhausted")
+    result["projects"].sort(key=lambda p: (p["project"] or "", p["project_id"]))
+    for project in result["projects"]:
+        project["instances"].sort(key=lambda i: (i["environment"] or "", i["instance_id"]))
+    result["complete"] = not problems
+    return result
+
+
+def collect_inventory(host, result, deadline):
+    problems = result["problems"]
+    result["host"]["hostname"] = string(checked(problems, "hostname_unavailable", None, socket.gethostname))
+    resources(host, problems, result["host"]["resources"])
+    try:
+        registry = host.read_registry(missing=False)
+        if not isinstance(registry, dict) or registry.get("schema") != 2 or registry.get("layout_version") != 2 or not identifier(registry.get("host_id")) or not isinstance(registry.get("instances"), dict):
+            raise ValueError("invalid registry")
+    except ReportBudgetExceeded:
+        raise
+    except Exception:
+        problem(problems, "registry_unavailable")
+        return
+    result["host"].update({"host_id": registry["host_id"], "layout_version": registry["layout_version"], "registry_updated_at": string(registry.get("updated_at"))})
+    for name in ("postgresql", "redis", "nginx"):
+        unit = registry["shared"].get(name, {}).get("unit")
+        if not unit:
+            continue
+        result["shared_services"][name] = checked(problems, "shared_service_check_unavailable", None, service, host, unit, deadline)
+    projects = {}
+    entries = list(registry["instances"].values())
+    if len(entries) > MAX_INSTANCES:
+        problem(problems, "instance_limit_exceeded")
+    for entry in entries[:MAX_INSTANCES]:
+        if not isinstance(entry, dict) or not identifier(entry.get("project_id")) or entry.get("host_id") != registry["host_id"]:
+            problem(problems, "instance_identity_invalid")
+            continue
+        item = instance_report(host, entry, deadline, problems)
+        if item is None:
+            continue
+        project = projects.get(entry["project_id"])
+        if project is None:
+            project = {"project_id": entry["project_id"], "project": string(entry["allocations"]["namespace"]["application"]), "instances": []}
+            projects[entry["project_id"]] = project
+            result["projects"].append(project)
+        project["instances"].append(item)

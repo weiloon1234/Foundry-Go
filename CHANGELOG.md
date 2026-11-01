@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Added: Framework-owned Python deployment foundation under `tools/deploy`, with
+  explicit app roots, layout and registry v2, declared process topology,
+  metadata-safe atomic publication, and generation-bound host tool upgrades.
+  Provisioning integrations remain assigned to follow-up lanes F1, F2, and F3;
+  this foundation is not ready for production bootstrap.
+
 ## v0.4.0 — 2026-11-01
 
 - Added: `http.TicketAuthenticated` and typed ticket URLs for guarded GET routes,

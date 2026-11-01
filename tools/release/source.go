@@ -93,7 +93,16 @@ func (policy sourcePolicy) sourceName(path string) bool {
 	// fixtures. Keep allowances at exact paths rather than broadening extensions.
 	// The TOML is loaded by mailing/configured_test.go; SPA assets by portals.go.
 	switch relative {
-	case "blueprint/goway-data-layer/compilefail-mapping.tsv",
+	case "tools/deploy/server/templates/app.service",
+		"tools/deploy/server/templates/nginx-http.conf",
+		"tools/deploy/server/templates/nginx-https.conf",
+		"tools/deploy/server/templates/nginx-proxy.conf",
+		"tools/deploy/server/templates/nginx-upgrade.conf",
+		"tools/deploy/server/templates/scheduler.service",
+		"tools/deploy/server/templates/worker.service",
+		"tools/deploy/docker/builder.Dockerfile",
+		"tools/deploy/tests/host.Dockerfile",
+		"blueprint/goway-data-layer/compilefail-mapping.tsv",
 		"internal/generate/testdata/scaffold/model.golden",
 		"internal/generate/testdata/scaffold/extensions.golden",
 		"database/orm/testdata/joined-has.sql",
