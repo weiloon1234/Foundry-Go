@@ -75,6 +75,19 @@ def _read(path):
     return path.read_text(encoding="utf-8")
 
 
+def _read_system_file(host, path, roots=("/etc", "/usr/lib")):
+    # Distro identity files are not deployment control paths: Ubuntu ships
+    # /etc/os-release as a symlink into /usr/lib. Follow it only to a bounded
+    # regular file under a system root; control paths keep check_path's rule.
+    resolved = Path(os.path.realpath(host.paths.p(path)))
+    allowed = [Path(os.path.realpath(host.paths.p(root))) for root in roots]
+    if not any(resolved == root or root in resolved.parents for root in allowed) or not resolved.is_file():
+        raise DeployError("unsafe_path", "A system identity file resolves outside the system roots.")
+    if resolved.stat().st_size > 65536:
+        raise DeployError("unsafe_path", "A system identity file is unexpectedly large.")
+    return resolved.read_text(encoding="utf-8")
+
+
 def _installed(host, package):
     return _text(_probe(host, ["dpkg-query", "-W", "-f=${Status}", package])) == "install ok installed"
 
@@ -250,7 +263,7 @@ def _install_unit(host, registry, entry, tools_dir):
 def inspect_host(host):
     """Read public host identity and platform without touching foreign services."""
     registry = host.read_registry(missing=True)
-    os_release = _read(host.paths.p("/etc/os-release"))
+    os_release = _read_system_file(host, "/etc/os-release")
     values = dict(line.split("=", 1) for line in os_release.splitlines() if "=" in line)
     architecture = _text(_probe(host, ["dpkg", "--print-architecture"]))
     return {"schema": 2, "host_id": registry["host_id"] if registry else None,
