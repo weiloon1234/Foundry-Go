@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
@@ -257,5 +258,54 @@ func TestRouterRejectsLegacyMuxMode(t *testing.T) {
 	command.Env = append(os.Environ(), "FOUNDRY_HTTP_LEGACY_PROBE=1", "GODEBUG=httpmuxgo121=1")
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("legacy mode probe: %v\n%s", err, output)
+	}
+}
+
+func TestRouterTicketPrivacyLeavesMatchedPublicRoutesUnchanged(t *testing.T) {
+	router, err := NewRouter(HandleRaw(staticRoute("folder", GET, "/folder/"), noContent))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := ApplyMiddleware(router, CacheControl(CachePolicy{Visibility: CachePublic, MaxAge: time.Hour}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{"ticket", "ticket=", "%74icket=one", "%74%69%63%6b%65%74=one"} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest("GET", "/folder?"+query, nil))
+		if w.Result().StatusCode != 404 || w.Result().Header.Get("Location") != "" || w.Result().Header.Get("Cache-Control") != "no-store" || w.Result().Header.Get("Referrer-Policy") != "no-referrer" || decodeFailure(t, w).Code != NotFound {
+			t.Fatal("ticket redirect did not become a private ordinary 404")
+		}
+	}
+	for _, query := range []string{"", "tickets=one", "%74ick%65t-extra=one", "ticket%ZZ=one"} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest("GET", "/folder?"+query, nil))
+		if w.Result().StatusCode != 307 || w.Result().Header.Get("Location") == "" || w.Result().Header.Get("Cache-Control") != "public, max-age=3600" || w.Result().Header.Get("Referrer-Policy") != "" {
+			t.Fatal("ordinary redirect changed")
+		}
+	}
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/folder/?ticket=one", nil))
+	if w.Result().StatusCode != 204 || w.Result().Header.Get("Cache-Control") != "public, max-age=3600" || w.Result().Header.Get("Referrer-Policy") != "" {
+		t.Fatal("matched public handler was changed by ticket routing protection")
+	}
+}
+
+func TestRouterTicketPrivacyOnNativeError(t *testing.T) {
+	router, err := NewRouter()
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := ApplyMiddleware(router, CacheControl(CachePolicy{Visibility: CachePublic, MaxAge: time.Hour}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest("GET", "/?%74icket=private-canary", nil)
+	// Exercise ServeMux's native 400 branch, as a request rewrite can expose it.
+	request.RequestURI = "*"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, request)
+	if w.Result().StatusCode != 400 || w.Result().Header.Get("Cache-Control") != "no-store" || w.Result().Header.Get("Referrer-Policy") != "no-referrer" || w.Result().Header.Get("Location") != "" || strings.Contains(w.Body.String(), "private-canary") {
+		t.Fatal("native routing error bypassed ticket privacy")
 	}
 }

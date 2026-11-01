@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"iter"
 	stdhttp "net/http"
 	"net/url"
 	"strings"
@@ -116,15 +117,7 @@ func ticketInputs(redeemer auth.TicketRedeemer) func(*stdhttp.Request) (auth.Cre
 		if r.URL == nil {
 			return auth.Credentials{}, Unauthenticated
 		}
-		for pair := range strings.SplitSeq(r.URL.RawQuery, "&") {
-			name, raw, _ := strings.Cut(pair, "=")
-			if len(name) > 3*len(ticketParameter) {
-				continue
-			}
-			decoded, err := url.QueryUnescape(name)
-			if err != nil || decoded != ticketParameter {
-				continue
-			}
+		for raw := range ticketQueryValues(r.URL.RawQuery) {
 			if !ticket.IsZero() || len(raw) == 0 || len(raw) > 3*auth.MaxCredentialBytes {
 				return auth.Credentials{}, Unauthenticated
 			}
@@ -147,4 +140,29 @@ func ticketInputs(redeemer auth.TicketRedeemer) func(*stdhttp.Request) (auth.Cre
 			return auth.Credentials{}, Unauthenticated
 		}
 	}
+}
+
+// ticketQueryValues scans without parsing unrelated values or allocating a query
+// map. Encoded names share the same bounded comparison at both HTTP boundaries.
+func ticketQueryValues(query string) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for pair := range strings.SplitSeq(query, "&") {
+			name, raw, _ := strings.Cut(pair, "=")
+			if len(name) > 3*len(ticketParameter) {
+				continue
+			}
+			decoded, err := url.QueryUnescape(name)
+			if err == nil && decoded == ticketParameter && !yield(raw) {
+				return
+			}
+		}
+	}
+}
+
+func ticketPrivacyResponse(w stdhttp.ResponseWriter) stdhttp.ResponseWriter {
+	protected := &observedResponse{native: w, protectedHeaders: stdhttp.Header{
+		"Cache-Control": {"no-store"}, "Referrer-Policy": {"no-referrer"}, "WWW-Authenticate": nil,
+	}}
+	protected.protectHeaders()
+	return responseCapabilities(protected)
 }

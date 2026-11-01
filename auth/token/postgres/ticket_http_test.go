@@ -2,10 +2,12 @@ package postgres_test
 
 import (
 	"context"
+	stdhttp "net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/auth/token"
@@ -58,11 +60,19 @@ func TestPostgresTicketAuthenticatedRoutes(t *testing.T) {
 		r.Header.Set("Authorization", "Bearer "+access.AccessSecret().Reveal())
 		r.Header.Set("Cookie", "session=ignored")
 		w := httptest.NewRecorder()
+		before := called
 		router.ServeHTTP(w, r)
 		if w.Code != status {
 			t.Fatalf("response status %d, want %d", w.Code, status)
 		}
-		if w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Referrer-Policy") != "no-referrer" || w.Header().Get("WWW-Authenticate") != "" {
+		wantCalls := before
+		if status == 204 {
+			wantCalls++
+		}
+		if called != wantCalls {
+			t.Fatal("ticket request reached the handler an unexpected number of times")
+		}
+		if w.Result().Header.Get("Cache-Control") != "no-store" || w.Result().Header.Get("Referrer-Policy") != "no-referrer" || w.Result().Header.Get("WWW-Authenticate") != "" {
 			t.Fatal("ticket privacy/challenge headers")
 		}
 		return w
@@ -80,7 +90,7 @@ func TestPostgresTicketAuthenticatedRoutes(t *testing.T) {
 	})
 	t.Run("head-and-replay", func(t *testing.T) {
 		raw := fresh()
-		if w := request("HEAD", location(raw), 405); w.Header().Get("Allow") != "GET" {
+		if w := request("HEAD", location(raw), 405); w.Result().Header.Get("Allow") != "GET" {
 			t.Fatal("HEAD Allow")
 		}
 		request("GET", location(raw), 204)
@@ -162,6 +172,56 @@ func TestPostgresTicketAuthenticatedRoutes(t *testing.T) {
 		}
 		request("GET", location(ticket.Secret()), 403)
 	})
+	t.Run("routing-responses-preserve-ticket", func(t *testing.T) {
+		folder := h.TicketAuthenticated(h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "folder", Method: h.GET, Access: h.Guarded}, h.StaticPath("/folder/")), h.EmptyQuery(), h.EmptyBody(), h.EmptyResponse(204)), binding, s.tokens)
+		routes, err := h.NewRouter(endpoint.Handle(func(context.Context, member, h.Input[h.NoPath, h.NoQuery, h.NoBody]) (h.NoContent, error) {
+			t.Error("routing failure reached download handler")
+			return h.NoContent{}, nil
+		}), folder.Handle(func(context.Context, member, h.Input[h.NoPath, h.NoQuery, h.NoBody]) (h.NoContent, error) {
+			t.Error("routing failure reached folder handler")
+			return h.NoContent{}, nil
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, publicCache := range []bool{false, true} {
+			var handler stdhttp.Handler = routes
+			if publicCache {
+				handler, err = h.ApplyMiddleware(routes, h.CacheControl(h.CachePolicy{Visibility: h.CachePublic, MaxAge: time.Hour}))
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, tc := range []struct {
+				method, path string
+				status       int
+			}{
+				{"GET", "//download", 404},
+				{"GET", "/files/../download", 404},
+				{"GET", "/folder", 404},
+				{"POST", "/download", 405},
+				{"OPTIONS", "/download", 405},
+				{"GET", "/unknown", 404},
+				{"GET", "/folder/%2F", 400},
+			} {
+				for _, name := range []string{"ticket", "%74icket", "%74%69%63%6b%65%74"} {
+					raw := fresh()
+					w := httptest.NewRecorder()
+					handler.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path+"?"+name+"="+url.QueryEscape(raw.Reveal()), nil))
+					result := w.Result()
+					if result.StatusCode != tc.status || result.Header.Get("Cache-Control") != "no-store" || result.Header.Get("Referrer-Policy") != "no-referrer" || result.Header.Get("Location") != "" {
+						t.Fatalf("routing privacy failed: method=%s path=%s public-cache=%t status=%d", tc.method, tc.path, publicCache, result.StatusCode)
+					}
+					if w.Body.Len() == 0 || strings.Contains(w.Body.String(), raw.Reveal()) || strings.Contains(w.Body.String(), "href=") {
+						t.Fatal("routing response leaked a ticket or returned a redirect body")
+					}
+					if found, err := s.tokens.RedeemTicket(t.Context(), raw); err != nil || !found.IsSet() {
+						t.Fatal("routing response consumed the ticket", err)
+					}
+				}
+			}
+		}
+	})
 	t.Run("revoked", func(t *testing.T) {
 		raw := fresh()
 		if _, err := s.tokens.RevokeID(t.Context(), member{ID: 7}.reference(), access.Info().ID()); err != nil {
@@ -169,7 +229,4 @@ func TestPostgresTicketAuthenticatedRoutes(t *testing.T) {
 		}
 		request("GET", location(raw), 401)
 	})
-	if called != 3 {
-		t.Fatal("denied request reached handler", called)
-	}
 }

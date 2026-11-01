@@ -282,6 +282,9 @@ func TestTicketDownloadContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	var wire struct {
+		Paths map[string]map[string]struct {
+			Security []map[string][]string `json:"security"`
+		} `json:"paths"`
 		Components struct {
 			SecuritySchemes map[string]struct {
 				Type string `json:"type"`
@@ -293,14 +296,15 @@ func TestTicketDownloadContracts(t *testing.T) {
 	if err := json.Unmarshal(api, &wire); err != nil {
 		t.Fatal(err)
 	}
-	ticketScheme := false
-	for _, scheme := range wire.Components.SecuritySchemes {
-		if scheme.Name == "ticket" {
-			ticketScheme = scheme.Type == "apiKey" && scheme.In == "query"
-		}
+	requirements := wire.Paths["/reports/tables/reports.numeric_levels/download"]["get"].Security
+	if len(requirements) != 1 || len(requirements[0]) != 1 {
+		t.Fatal("download must require exactly its ticket security scheme")
 	}
-	if !ticketScheme {
-		t.Fatal("OpenAPI ticket security scheme missing")
+	for name, scopes := range requirements[0] {
+		scheme, exists := wire.Components.SecuritySchemes[name]
+		if !exists || scheme.Type != "apiKey" || scheme.In != "query" || scheme.Name != "ticket" || len(scopes) != 0 {
+			t.Fatal("download does not reference the query ticket apiKey scheme")
+		}
 	}
 	client, err := typescript.Render(source)
 	if err != nil {

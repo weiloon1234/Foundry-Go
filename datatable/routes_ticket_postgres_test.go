@@ -3,6 +3,7 @@ package datatable
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -43,7 +44,7 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := auth.DefineProvider("table.actors", routeReference(0), func(_ context.Context, id int64) (value.Optional[routeActor], error) {
-		return value.Set(routeActor{ID: id, Allowed: true}), nil
+		return value.Set(routeActor{ID: id, Allowed: id != 8}), nil
 	}, func(context.Context, routeActor) (bool, error) { return true, nil })
 	scopes, err := auth.NewAccessScopes(auth.DefineAccessScope[routeActor]("tables.export"))
 	if err != nil {
@@ -53,7 +54,8 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry, err := auth.NewRegistry(auth.DefaultConfig(), tokens.Guard().Registration())
+	permission := auth.DefinePermission("tables.export", func(_ context.Context, actor routeActor) (bool, error) { return actor.Allowed, nil })
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), tokens.Guard().Registration(), permission.Registration())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,6 +113,69 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 		t.Fatal("download replaced privacy headers")
 	}
 	routeRequest(t, router, "GET", "https://example.test"+ticket.URL, "", "ignored", 401)
+	t.Run("download-export-access-independent-of-table-authorization", func(t *testing.T) {
+		allowing := reportSpec()
+		tableAuthorizations := 0
+		allowing.Authorize = func(context.Context, reportActor, Action) error {
+			tableAuthorizations++
+			return nil
+		}
+		manager, table := reportManager(t, fixture, allowing, nil)
+		isolated := config
+		isolated.Manager = manager
+		isolated.Authority = func(context.Context, routeActor) (reportActor, error) {
+			return reportActor{Tenant: 7, Allowed: true}, nil
+		}
+		guarded := routeRouter(t, table, isolated, ExportAccess(h.Scopes(scopes), h.Permissions(permission)))
+		tableOnly := routeRouter(t, table, isolated)
+		for _, tc := range []struct {
+			name   string
+			id     int64
+			scopes auth.AccessScopes[routeActor]
+		}{
+			{"scope", 7, auth.AccessScopes[routeActor]{}},
+			{"permission", 8, scopes},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				proof, err := auth.NewProof(routeReference(tc.id), auth.Authenticated)
+				if err != nil {
+					t.Fatal(err)
+				}
+				access, err := tokens.Issue(t.Context(), proof, token.IssueOptions[routeActor]{Scopes: tc.scopes})
+				if err != nil {
+					t.Fatal(err)
+				}
+				location := func() string {
+					t.Helper()
+					credentials, err := auth.NewCredentials(auth.Credential{Name: tokens.TicketSource(), Secret: access.AccessSecret()})
+					if err != nil {
+						t.Fatal(err)
+					}
+					scope, err := registry.NewScope(t.Context(), credentials)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer scope.Close()
+					ticket, err := tokens.IssueTicket(scope.Context())
+					if err != nil {
+						t.Fatal(err)
+					}
+					return "https://example.test/tables/reports.members/download?format=csv&request=%7B%7D&ticket=" + url.QueryEscape(ticket.Secret().Reveal())
+				}
+				before := tableAuthorizations
+				denied := routeRequest(t, guarded, "GET", location(), "", "ignored", 403)
+				if tableAuthorizations != before || denied.Result().Header.Get("Cache-Control") != "no-store" || denied.Result().Header.Get("Referrer-Policy") != "no-referrer" {
+					t.Fatal("export access did not deny before table authorization")
+				}
+				// Same actor and token ceiling, without HTTP ExportAccess: the
+				// table itself allows the download and actually produces rows.
+				allowed := routeRequest(t, tableOnly, "GET", location(), "", "ignored", 200)
+				if tableAuthorizations <= before || allowed.Body.Len() == 0 {
+					t.Fatal("table authorization control did not allow download")
+				}
+			})
+		}
+	})
 	disabled := tokenConfig
 	disabled.TicketLifetime = 0
 	disabled.MaxTicketsPerFamily = 0

@@ -21,8 +21,9 @@ Manifest 8 describes the ticket credential; OpenAPI and current TypeScript
 contracts carry the guarded download boundary. The [evidence](../docs/evidence/ticket-routes-20261101.md)
 records API migrations, real PostgreSQL denials and successes, compiler mirrors,
 editor probes, client contracts and the requested acceptance commands.
-Full verification, races, the fresh independent pre-merge review, application
-migrations and release tagging remain separate steps.
+Independent review found B22-1 in native routing privacy; the linked evidence
+records its correction and strengthened regression tests. Full verification,
+races, application migrations and release tagging remain separate steps.
 
 ## Framework-owned table routes (Part B) — v0.3.2, 2026-11-01
 

@@ -152,7 +152,10 @@ output. No generated artifact was hand-edited.
 
 ## Review and deviations
 
-No unresolved deviation from PLAN §2. The user-approved
+The initial review incorrectly claimed no unresolved deviation from PLAN §2.
+Independent review of `61cd8bb5` found B22-1: native routing responses bypassed
+ticket privacy, and canonical redirects echoed an unconsumed ticket. The
+follow-up below records the correction and the strengthened evidence. The user-approved
 `TokenTickets[M model.Identifiable, K any]` constraint is now in §2.1; `Tickets[M any]`
 remains unchanged. The only extra public capability check is
 `Tokens.ValidateTickets`, expressly allowed by §2.5 to reject disabled tickets
@@ -266,3 +269,96 @@ The inventory and source fingerprint below are recorded after final source revie
 Changed source/contract fingerprint (SHA-256 of sorted relative path, NUL, bytes,
 NUL; `.go`, `.ts`, `.mjs`, `.py`, `.tsv`, `.json`; excludes documentation):
 `b00f5aa5d282e152267610ad6c219339d68ad04e94fadc6401aa77e0b6071dca`.
+
+
+## Independent review follow-up — B22-1
+
+The read-only review of `61cd8bb5` found one Medium defect and seven test blind
+spots. Its source inspection correctly identified that native path redirects and
+method failures bypassed the matched-route wrapper. Earlier PASS results remain
+historical test results; they did not establish privacy on those routing paths.
+
+B22-1 is corrected at the router boundary. Authentication and routing share one
+bounded decoded-name iterator and the existing unexported `ticketParameter`
+constant. Router errors for ticket-bearing requests enforce no-store/no-referrer.
+Native redirects are suppressed and become ordinary 404 responses without copying
+staged headers or redirect bodies. Matched public routes retain their behavior;
+matched ticket routes retain their existing privacy and authentication policy.
+
+| Finding or blind spot | Strengthened evidence |
+| --- | --- |
+| B22-1; canonical-only privacy coverage | `TestPostgresTicketAuthenticatedRoutes/routing-responses-preserve-ticket`: repeated-slash and trailing-slash redirects, POST/OPTIONS 405, unknown-path 404 and ambiguous-path 400; ordinary and encoded parameter names; each with/without router-wide public CacheControl; committed headers, body non-disclosure, no Location and subsequent real ticket redemption |
+| Mutable header assertions | `TestTicketPrivacyHeadersWinOverRouteMiddleware`, `TestTicketEndpointFailuresAndRecovery` and `TestPostgresTicketAuthenticatedRoutes` inspect `Result().Header` |
+| Missing isolated download scope evidence | `TestPostgresTokenRoutesKeepScopeThroughDeferredDownload/download-export-access-independent-of-table-authorization/scope`: missing scope denies before table authorization, while a control route without ExportAccess permits the same actor/ceiling |
+| Missing isolated download permission evidence | The same subtest's `permission` case: denied actor permission, independently permissive table authorization and successful control download |
+| Streaming scope lifetime and closure | `TestTicketScopeSurvivesStreamingAndCloses`: guard lookup on each bounded CSV row read, a later chunk after bytes are written, lookup during body closure, then failed lookup on a captured context after success/error/panic; `context.WithoutCancel` prevents request cancellation from masking a leaked scope |
+| Scheme exists but operation could be public | Consumer `TestTicketDownloadContracts` requires exactly one security alternative referencing the query ticket apiKey scheme, with no anonymous alternative |
+| Cookie-only browser bypass evidence | `TestTicketEndpointBypassesBrowserSessionAdapter` uses `NewBrowserSessions` with the existing PostgreSQL session fixture; the ordinary authenticated control rejects insecure repeated malformed cookies, while the ticket route resolves its actor without session loading or Set-Cookie |
+
+`TestRouterTicketPrivacyLeavesMatchedPublicRoutesUnchanged` additionally covers
+empty ticket parameters, decoded aliases, ordinary non-ticket redirects and a
+matched public route carrying an unrelated ticket parameter.
+`TestRouterTicketPrivacyOnNativeError` covers the mux's native 400 passthrough
+branch. The authentication guide now explains routing errors and redirect
+suppression.
+
+No public API, generated schema or contract artifact changed in this follow-up.
+The fresh read-only review has occurred; this follow-up does not claim a separate
+review of its corrections. No commit was made.
+
+### Follow-up acceptance
+
+Native commands used `GOFLAGS=-trimpath` and the existing warm cache (137 GiB
+free at entry). PostgreSQL tests sourced
+`/Users/weiloon/Projects/rust-go/Foundry-Go/.env.test`, then exported
+`FOUNDRY_TEST_POSTGRES_URL` and `FOUNDRY_TEST_POSTGRES_REQUIRED=1`. No database
+reset, destructive cleanup or duplicate service was used. Logs are retained at
+`/tmp/b22-review-fixes/`.
+
+| Command | Result |
+| --- | --- |
+| `go build ./...` | PASS, including final source |
+| `go vet ./http ./auth/token/postgres ./datatable` | PASS, including final source |
+| Consumer: `go vet ./clientcontracts` | PASS |
+| `go test -timeout=20m -count=1 ./http ./auth/token/postgres ./datatable` | PASS with PostgreSQL required; rerun after native-error passthrough coverage |
+| `go test -timeout=20m -count=1 ./auth/token/postgres -run '^TestPostgresTicketAuthenticatedRoutes$'` | PASS after making handler-count assertions independent of subtest selection |
+| Consumer: `go test -timeout=20m -count=1 ./clientcontracts -run TestTicketDownloadContracts` | PASS |
+| `go test -timeout=20m -count=1 . -run '^TestConsumerAPI(Documentation\|MethodVisibility\|DSLGoDocSurface)$'` | PASS |
+| `make docs-check` | PASS |
+| `git diff --check` | PASS |
+
+The package tests passed on the first run. Final source review added protection
+for native mux errors other than staged 404/405 responses; the affected package
+batch passed again. The PostgreSQL test now checks handler invocation counts per
+request, allowing focused subtests to run independently.
+
+### Mutation checks
+
+Six temporary Go overlays deliberately restored broken behavior without editing
+working source. Every selected regression test failed for the intended reason;
+none failed compilation. These expected failures are evidence that the assertions
+distinguish the guarantee, not acceptance failures.
+
+Each command used `go test -timeout=20m -count=1
+-overlay=/tmp/b22-review-fixes/mutations/<name>.json <package> -run '<pattern>'`.
+PostgreSQL required mode and the native cache settings above remained enabled.
+
+| Overlay name | Package / test pattern | Observed failure |
+| --- | --- | --- |
+| `router-before-fix` (router from `61cd8bb5`) | `./auth/token/postgres`, `^TestPostgresTicketAuthenticatedRoutes$/^routing-responses-preserve-ticket$` | Repeated-slash URL returned 307 instead of 404 |
+| `download-without-export-access` | `./datatable`, `^TestPostgresTokenRoutesKeepScopeThroughDeferredDownload$/^download-export-access-independent-of-table-authorization$` | Both scope and permission cases returned 200 instead of 403 |
+| `scope-not-closed` | `./http`, `^TestTicketScopeSurvivesStreamingAndCloses$` | Captured scope remained usable after success, handler error and handler panic |
+| `browser-wrapper-runs` | `./http`, `^TestTicketEndpointBypassesBrowserSessionAdapter$` | Ticket route failed to bypass the actual browser adapter |
+| `headers-not-pinned-at-commit` | `./http`, `^TestTicketPrivacyHeadersWinOverRouteMiddleware$` | Committed privacy headers were overwritten |
+| `operation-without-security` | Consumer `./clientcontracts`, `^TestTicketDownloadContracts$` | Download operation had no required ticket scheme |
+
+The corrections change only `http/router.go`, `http/ticket_endpoint.go`, their
+regression tests, `auth/token/postgres/ticket_http_test.go`,
+`datatable/routes_ticket_postgres_test.go`, the consumer contract test, the
+authentication guide, this evidence and master status. Released cohorts, frozen
+oracles and generated files are untouched.
+
+
+Follow-up changed-source SHA-256 (sorted relative path, NUL, bytes, NUL;
+source/contract extensions from the original fingerprint, excluding docs):
+`6cdd8eae80b95ed9597167d5291240460a79b30d9f9c93c5e95d4db510a5b087`.

@@ -553,9 +553,14 @@ without giving the secret to the handler.
 Missing, malformed, expired, unknown, replayed, revoked and wrong-guard tickets
 return 401 without a `WWW-Authenticate` challenge. Scope and permission denials
 return 403. An undecided redemption, including an error or panic, returns 503.
-HEAD returns 405 with `Allow: GET` and leaves the ticket unconsumed. All matched
-ticket-route responses enforce `Cache-Control: no-store` and
+HEAD on a matched ticket route returns 405 with `Allow: GET` and leaves the ticket
+unconsumed. Ticket-route responses enforce `Cache-Control: no-store` and
 `Referrer-Policy: no-referrer`, including download writers and failures.
+Router-generated responses to requests carrying a `ticket` query parameter also enforce these headers, including
+404, 405 and OPTIONS errors. Encoded parameter names count too. If the mux would
+redirect such a request to clean its path or add a trailing slash, the router
+returns its ordinary 404 without a `Location` header or an echoed query. These
+routing failures leave the ticket unconsumed; use the canonical URL to redeem it.
 
 Use HTTPS. Redact `ticket` from proxy, ingress, analytics and access logs; the
 framework cannot sanitize upstream logs or browser history. Do not place access

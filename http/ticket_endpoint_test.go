@@ -28,11 +28,15 @@ func (r *endpointRedeemer) RedeemTicket(ctx context.Context, raw secret.String) 
 }
 
 func ticketEndpointSetup(t *testing.T) (h.GuardBinding[authAccount], *endpointRedeemer) {
+	return ticketEndpointSetupWithSource(t, "ticket.source")
+}
+
+func ticketEndpointSetupWithSource(t *testing.T, source auth.CredentialName) (h.GuardBinding[authAccount], *endpointRedeemer) {
 	t.Helper()
 	provider := auth.DefineProvider("accounts", authAccount{}.reference(), func(_ context.Context, id int64) (value.Optional[authAccount], error) {
 		return value.Set(authAccount{ID: id, Enabled: true}), nil
 	}, func(context.Context, authAccount) (bool, error) { return true, nil })
-	strategy, binder := auth.BindStrategy(auth.DefineStrategy("ticket.source", func(context.Context, secret.String) (value.Optional[auth.Proof[authAccount, int64]], error) {
+	strategy, binder := auth.BindStrategy(auth.DefineStrategy(source, func(context.Context, secret.String) (value.Optional[auth.Proof[authAccount, int64]], error) {
 		t.Error("transport credential read")
 		return value.Optional[auth.Proof[authAccount, int64]]{}, nil
 	}), func(_ context.Context, id int64) (value.Optional[auth.Proof[authAccount, int64]], error) {
@@ -44,7 +48,7 @@ func ticketEndpointSetup(t *testing.T) (h.GuardBinding[authAccount], *endpointRe
 	if err != nil {
 		t.Fatal(err)
 	}
-	transport, err := h.NewAuthentication(registry, h.BearerCredential("ticket.source"))
+	transport, err := h.NewAuthentication(registry, h.BearerCredential(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +56,7 @@ func ticketEndpointSetup(t *testing.T) (h.GuardBinding[authAccount], *endpointRe
 	if err != nil {
 		t.Fatal(err)
 	}
-	return binding, &endpointRedeemer{source: "ticket.source", redeem: func(context.Context, secret.String) (value.Optional[auth.BoundCredential], error) {
+	return binding, &endpointRedeemer{source: source, redeem: func(context.Context, secret.String) (value.Optional[auth.BoundCredential], error) {
 		bound, err := binder.Bind(int64(7))
 		return value.Set(bound), err
 	}}
@@ -86,7 +90,7 @@ func TestTicketEndpointFailuresAndRecovery(t *testing.T) {
 		if w.Code != status {
 			t.Fatalf("status %d want %d", w.Code, status)
 		}
-		if w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Referrer-Policy") != "no-referrer" || w.Header().Get("WWW-Authenticate") != "" || strings.Contains(w.Body.String(), "private-canary") {
+		if w.Result().Header.Get("Cache-Control") != "no-store" || w.Result().Header.Get("Referrer-Policy") != "no-referrer" || w.Result().Header.Get("WWW-Authenticate") != "" || strings.Contains(w.Body.String(), "private-canary") {
 			t.Fatal("unsafe ticket response")
 		}
 	}
@@ -231,7 +235,137 @@ func TestTicketEndpointIgnoresCookieAndCSRFTransport(t *testing.T) {
 	r.Header.Set("Cookie", "session=a; session=b")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)
-	if w.Code != 204 || w.Header().Get("Set-Cookie") != "" {
+	if w.Code != 204 || w.Result().Header.Get("Set-Cookie") != "" {
 		t.Fatal("ticket entered browser credential transport", w.Code)
+	}
+}
+
+// ticketRowsReader checks the guard on every bounded read, including after the
+// first response bytes have reached the writer.
+type ticketRowsReader struct {
+	reader     *strings.Reader
+	ctx        context.Context
+	guard      auth.Guard[authAccount]
+	t          *testing.T
+	response   *httptest.ResponseRecorder
+	reads      int
+	laterChunk bool
+	closed     bool
+}
+
+func (r *ticketRowsReader) Read(p []byte) (int, error) {
+	r.reads++
+	actor, err := r.guard.Require(r.ctx)
+	if err != nil || actor.ID != 7 {
+		r.t.Error("streaming read lost guard scope", err)
+	}
+	if r.reads > 1 && r.response.Body.Len() > 0 {
+		r.laterChunk = true
+	}
+	return r.reader.Read(p[:min(len(p), len("row-one\n"))])
+}
+
+func (r *ticketRowsReader) Seek(offset int64, whence int) (int64, error) {
+	return r.reader.Seek(offset, whence)
+}
+
+func (r *ticketRowsReader) Close() error {
+	r.closed = true
+	_, err := r.guard.Require(r.ctx)
+	if err != nil {
+		r.t.Error("download cleanup lost guard scope", err)
+	}
+	return nil
+}
+
+func TestTicketScopeSurvivesStreamingAndCloses(t *testing.T) {
+	for _, mode := range []string{"success", "handler-error", "handler-panic"} {
+		t.Run(mode, func(t *testing.T) {
+			binding, redeemer := ticketEndpointSetup(t)
+			endpoint := h.TicketAuthenticated(h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "stream", Method: h.GET, Access: h.Guarded}, h.StaticPath("/stream")), h.EmptyQuery(), h.EmptyBody(), h.DownloadResponse("text/csv; charset=utf-8")), binding, redeemer)
+			w := httptest.NewRecorder()
+			var held context.Context
+			var body *ticketRowsReader
+			router := newAuthRouter(t, endpoint.Handle(func(ctx context.Context, _ authAccount, _ authInput) (h.Download, error) {
+				// Ignore route cancellation so the post-request lookup proves scope
+				// closure itself, rather than a canceled request budget.
+				held = context.WithoutCancel(ctx)
+				if mode == "handler-error" {
+					return h.Download{}, h.Forbidden
+				}
+				if mode == "handler-panic" {
+					panic("ticket handler failed")
+				}
+				return h.DownloadFrom(func(ctx context.Context) (h.DownloadContent, error) {
+					body = &ticketRowsReader{reader: strings.NewReader("row-one\nrow-two\nrow-end\n"), ctx: ctx, guard: binding.Guard(), t: t, response: w}
+					return h.DownloadContent{Body: body, MediaType: "text/csv; charset=utf-8"}, nil
+				}), nil
+			}))
+			router.ServeHTTP(w, httptest.NewRequest("GET", "/stream?ticket=one", nil))
+			want := 200
+			if mode == "handler-error" {
+				want = 403
+			} else if mode == "handler-panic" {
+				want = 500
+			}
+			if w.Result().StatusCode != want || held == nil {
+				t.Fatalf("handler %s status=%d", mode, w.Code)
+			}
+			if mode == "success" && (body == nil || !body.closed || !body.laterChunk || body.reads < 3 || w.Body.String() != "row-one\nrow-two\nrow-end\n") {
+				t.Fatal("download did not retain scope through multiple streamed chunks and cleanup")
+			}
+			if _, err := binding.Guard().Require(held); err == nil {
+				t.Fatal("authentication scope remained usable after response completion")
+			}
+		})
+	}
+}
+
+func TestTicketEndpointBypassesBrowserSessionAdapter(t *testing.T) {
+	s := browserPrepare(t)
+	initial, redeemer := ticketEndpointSetupWithSource(t, s.sessions.Guard().Source())
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), s.sessions.Guard().Registration(), initial.Guard().Registration())
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := h.DefaultBrowserSessionConfig()
+	config.Clock = s.clock
+	browser, err := h.NewBrowserSessions(registry, s.sessions, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, err := h.BindGuard(browser.Authentication(), initial.Guard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticket := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer)
+	calls := 0
+	router := newAuthRouter(t, ticket.Handle(func(ctx context.Context, actor authAccount, _ authInput) (h.NoContent, error) {
+		calls++
+		if actor.ID != 7 {
+			t.Error("ticket actor lost")
+		}
+		return h.NoContent{}, nil
+	}))
+	request := func(handler stdhttp.Handler) *httptest.ResponseRecorder {
+		// The actual adapter rejects this insecure request and malformed,
+		// repeated cookies if its wrapper or credential reader runs.
+		r := httptest.NewRequest("GET", "http://app.test/profile?ticket=one", nil)
+		r.Header.Set("Cookie", string(config.Cookie)+"=invalid; "+string(config.Cookie)+"=again")
+		r.Header.Set("Sec-Fetch-Site", "cross-site")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	ordinary := newAuthRouter(t, h.Authenticated(authEndpoint(h.Guarded), binding).Handle(func(context.Context, authAccount, authInput) (h.NoContent, error) {
+		t.Error("ordinary browser authentication accepted malformed transport")
+		return h.NoContent{}, nil
+	}))
+	if w := request(ordinary); w.Code == 204 {
+		t.Fatal("browser adapter control did not reject request")
+	}
+	w := request(router)
+	if w.Result().StatusCode != 204 || calls != 1 || s.loads.Load() != 0 || w.Result().Header.Get("Set-Cookie") != "" {
+		t.Fatal("ticket route did not bypass the actual browser adapter")
 	}
 }

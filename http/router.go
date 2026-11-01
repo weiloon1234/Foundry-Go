@@ -101,11 +101,7 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 				return
 			}
 			if info.Authentication != nil && info.Authentication.Credential.Kind == TicketCredentialKind {
-				protected := &observedResponse{native: w, protectedHeaders: stdhttp.Header{
-					"Cache-Control": {"no-store"}, "Referrer-Policy": {"no-referrer"}, "WWW-Authenticate": nil,
-				}}
-				protected.protectHeaders()
-				w = responseCapabilities(protected)
+				w = ticketPrivacyResponse(w)
 				request = request.WithContext(withConsumedQueryParameter(request.Context(), ticketParameter))
 				if request.Method == stdhttp.MethodHead {
 					w.Header().Set("Allow", stdhttp.MethodGet)
@@ -162,22 +158,35 @@ func (r *Router) Routes() []RouteInfo {
 // ServeHTTP dispatches registered routes, rejects ambiguous encoded paths and applies
 // framework errors and configured fallbacks to unmatched requests.
 func (r *Router) ServeHTTP(w stdhttp.ResponseWriter, request *stdhttp.Request) {
+	carriesTicket := false
+	if request.URL != nil {
+		for range ticketQueryValues(request.URL.RawQuery) {
+			carriesTicket = true
+			break
+		}
+	}
+	writeError := func(err error) {
+		if carriesTicket {
+			w = ticketPrivacyResponse(w)
+		}
+		writeRoutingError(w, request, err)
+	}
 	if r == nil || r.mux == nil {
-		writeRoutingError(w, request, Unavailable)
+		writeError(Unavailable)
 		return
 	}
 	if ambiguousEncodedPath(request.URL.EscapedPath()) {
-		writeRoutingError(w, request, BadRequest)
+		writeError(BadRequest)
 		return
 	}
 	// Match once. A registered route unwraps this probe and continues with the
 	// original writer. Otherwise the native fallback retains its method
 	// matching/Allow source of truth: 404 and 405 become Foundry's shared error,
-	// and a native canonical redirect passes through unchanged.
+	// and native canonical redirects pass through only without a ticket.
 	if len(r.spas) != 0 {
 		request = request.WithContext(context.WithValue(request.Context(), spaRoutesKey{}, r.spas))
 	}
-	probe := &routingResponse{native: w}
+	probe := &routingResponse{native: w, carriesTicket: carriesTicket}
 	r.mux.ServeHTTP(probe, request)
 	if probe.matched || probe.passthrough {
 		return
@@ -187,12 +196,12 @@ func (r *Router) ServeHTTP(w stdhttp.ResponseWriter, request *stdhttp.Request) {
 		if r.serveSPA(w, request) || r.fallback.serve(w, request) {
 			return
 		}
-		writeRoutingError(w, request, NotFound)
+		writeError(NotFound)
 	case stdhttp.StatusMethodNotAllowed:
 		w.Header().Set("Allow", probe.header.Get("Allow"))
-		writeRoutingError(w, request, MethodNotAllowed)
+		writeError(MethodNotAllowed)
 	default:
-		writeRoutingError(w, request, NotFound)
+		writeError(NotFound)
 	}
 }
 
@@ -206,13 +215,14 @@ func writeRoutingError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) 
 // routingResponse receives only the native mux's own fallback responses. A
 // matched route replaces it with the original writer before any application
 // code runs. Missing-route and method errors are held for Foundry's shared error;
-// any other native response, such as a canonical redirect, passes through.
+// canonical redirects are also held when they would expose a ticket query.
 type routingResponse struct {
-	native      stdhttp.ResponseWriter
-	header      stdhttp.Header
-	status      int
-	matched     bool
-	passthrough bool
+	native        stdhttp.ResponseWriter
+	header        stdhttp.Header
+	status        int
+	matched       bool
+	passthrough   bool
+	carriesTicket bool
 }
 
 // Header returns staged fallback headers, or the native headers after passthrough
@@ -227,17 +237,20 @@ func (r *routingResponse) Header() stdhttp.Header {
 	return r.header
 }
 
-// WriteHeader captures native 404 and 405 statuses and forwards other first statuses
-// and staged headers.
+// WriteHeader captures native errors and protected redirects. Other statuses
+// and staged headers pass through.
 func (r *routingResponse) WriteHeader(status int) {
 	if r.status != 0 {
 		return
 	}
 	r.status = status
-	if status == stdhttp.StatusNotFound || status == stdhttp.StatusMethodNotAllowed {
+	if status == stdhttp.StatusNotFound || status == stdhttp.StatusMethodNotAllowed || (r.carriesTicket && status >= 300 && status < 400) {
 		return
 	}
 	r.passthrough = true
+	if r.carriesTicket {
+		r.native = ticketPrivacyResponse(r.native)
+	}
 	header := r.native.Header()
 	for name, values := range r.header {
 		header[name] = values
