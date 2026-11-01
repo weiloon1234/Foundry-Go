@@ -13,7 +13,8 @@ import secrets
 import stat
 import uuid
 
-from contracts import DeployError, POSTGRES_PORT, REDIS_PORT, check_path, instance_paths, parse_env, read_json, require
+from contracts import (CLEANUP_GRACE_KEY, DEFAULT_CLEANUP_GRACE, DeployError, POSTGRES_PORT, REDIS_PORT, check_path,
+                       instance_paths, parse_env, read_json, require)
 
 CREDENTIAL_KEYS = ("database_password", "redis_password")
 ENCRYPTION_KEYS = tuple("APP__ENCRYPTION__" + suffix for suffix in ("KEY_ID", "KEY", "PREVIOUS"))
@@ -87,6 +88,7 @@ def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
     if storage:
         values["APP__SERVICES__CREDENTIALS"] = _json(storage["credentials"])
         values["APP__SERVICES__STORAGE__DISKS"] = _json(storage["disks"])
+        values[CLEANUP_GRACE_KEY] = DEFAULT_CLEANUP_GRACE
     return values
 
 

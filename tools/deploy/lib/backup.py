@@ -31,7 +31,7 @@ from urllib.parse import urlsplit
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from contracts import (BACKUP_POLICY, DeployError, POSTGRES_PORT, check_path, instance_paths,
+from contracts import (BACKUP_POLICY, CLEANUP_GRACE_KEY, DeployError, POSTGRES_PORT, check_path, instance_paths,
                        now, parse_env, read_json, require, valid_uuid, storage_bindings,
                        check_storage_bindings, bind_storage, runtime_storage)
 from host import Host
@@ -322,7 +322,7 @@ def _runtime_storage(host, entry):
 
 
 def _cleanup_grace(host, entry, values):
-    key = "APP__FEATURES__ATTACHMENTS__CONFIG__CLEANUP_GRACE"
+    key = CLEANUP_GRACE_KEY
     text = (runtime_config._read_value_file(host, entry, values[key + "_FILE"])
             if key + "_FILE" in values else values.get(key, ""))
     parts = re.findall(r"([0-9]+(?:\.[0-9]+)?)(h|ms|us|µs|ns|m|s)", text)

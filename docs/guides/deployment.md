@@ -459,7 +459,8 @@ backups and required WAL, to cover at least 28 days of PITR. Per-instance bundle
 counts never control expiration. Profiles may omit `backup_policy` or select
 `interval_hours: 24`, `full_retention_days: 35`, and `pitr_days: 28`.
 
-Set `APP__FEATURES__ATTACHMENTS__CONFIG__CLEANUP_GRACE` to `72h` for Boss Club.
+Bootstrap writes `APP__FEATURES__ATTACHMENTS__CONFIG__CLEANUP_GRACE=72h` with the
+storage configuration; raise it through a configuration change when needed.
 The deploy tooling requires an explicit duration longer than the object-copy
 interval plus timer jitter. Allow additional margin for outages and copy duration.
 The application must retain replaced and retired objects for that grace period.

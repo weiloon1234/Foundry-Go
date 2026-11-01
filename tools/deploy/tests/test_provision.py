@@ -12,7 +12,8 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
-from contracts import DeployError, instance_paths, validate_registry, bind_storage
+from contracts import (CLEANUP_GRACE_KEY, DEFAULT_CLEANUP_GRACE, DeployError, instance_paths, parse_env,
+                       validate_registry, bind_storage)
 from host import Host, Paths
 from topology import instance_units
 import provision
@@ -339,6 +340,7 @@ class FoundationProvisionTests(unittest.TestCase):
         self.assertNotIn("pending_storage_bindings", selected)
         self.assertIn("configuration", selected["provisioning"]["completed_steps"])
         self.assertEqual(storage_fixture("initial/"), provision.backup._runtime_storage(self.host, selected)[0])
+        self.assertEqual(DEFAULT_CLEANUP_GRACE, parse_env(path.read_text())[CLEANUP_GRACE_KEY])
         self.assertNotIn("canary-secret", json.dumps(self.host.registry_value))
 
     def test_bootstrap_retry_selects_published_storage_instead_of_new_intake(self):
