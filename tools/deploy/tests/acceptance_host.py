@@ -113,7 +113,9 @@ def certificate_renewal(host):
         with socket.create_connection(("127.0.0.1", 443), timeout=5) as raw:
             with context.wrap_socket(raw, server_hostname=entry["profile"]["domain"]) as secured:
                 return hashlib.sha256(secured.getpeercert(binary_form=True)).hexdigest()
-    previous = {entry["name"]: served(entry) for entry in entries}
+    # systemctl reload returns before new workers serve the latest site.
+    previous = {entry["name"]: wait_for(lambda entry=entry: served(entry), "Nginx did not serve " + entry["name"], timeout=30)
+                for entry in entries}
     master = host.run(["systemctl", "show", "nginx", "-p", "MainPID", "--value"]).stdout
     host.run(["systemctl", "start", _timer(selected) + ".service"], timeout=180)
     result = host.run(["systemctl", "show", _timer(selected) + ".service", "-p", "ExecMainStatus", "--value"]).stdout
