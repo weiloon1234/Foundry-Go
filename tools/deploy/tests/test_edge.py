@@ -57,6 +57,10 @@ class EdgeTests(unittest.TestCase):
         self.assertNotIn("return 444", text)
         variable = re.search(r"^map \$http_upgrade \$(\S+) \{$", text, re.M).group(1)
         self.assertLessEqual(len(variable), 46)
+        profile["edge_origin_lockdown"] = True
+        text = _template(TOOLS, "nginx-https.conf", entry)
+        for variable in re.findall(r"^(?:map|geo) \$\S+ \$(\S+) \{$", text, re.M):
+            self.assertLessEqual(len(variable), 46, variable)
 
     def test_data_validation_and_warning(self):
         value = json.loads((TOOLS / "lib/cloudflare-ranges.json").read_text())

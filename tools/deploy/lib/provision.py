@@ -20,7 +20,7 @@ from contracts import (DeployError, HOST_ROOTS, PREFIX, REDIS_UNIT, REGISTRY_SCH
 from topology import instance_units, validate_topology
 from runtime_config import (CREDENTIAL_KEYS, read_credentials as _credentials, runtime_environment,
     validate_runtime_environment, initialize_bootstrap_secrets, _instance_group, _read_value_file)
-from edge import edge_findings, edge_template
+from edge import edge_findings, edge_template, nginx_variable
 import packages
 import postgres
 import redis_acl
@@ -29,7 +29,6 @@ import backup
 import upgrades
 
 _marker = marker
-NGINX_VARIABLE_MAX = 46
 
 
 def _journal(host, registry, entry=None):
@@ -266,11 +265,7 @@ def _template(tools_dir, name, entry, *, postgres_unit=""):
         content = content.replace("@PROXY@", (Path(tools_dir) / "server/templates/nginx-proxy.conf").read_text().rstrip())
     if "@UPGRADE_MAP@" in content:
         content = content.replace("@UPGRADE_MAP@", (Path(tools_dir) / "server/templates/nginx-upgrade.conf").read_text().rstrip())
-    # nginx's default variables_hash_bucket_size (64) fits names up to 46 bytes on
-    # 64-bit hosts; the shared http-level limit belongs to the host administrator.
-    variable = entry["allocations"]["database"] + "_upgrade"
-    require(len(variable) <= NGINX_VARIABLE_MAX, "nginx_invalid", "The site variable exceeds nginx's default hash bucket.")
-    replacements["@VARIABLE@"] = variable
+    replacements["@VARIABLE@"] = nginx_variable(entry, "upgrade")
     for key, value in replacements.items():
         content = content.replace(key, value)
     return content

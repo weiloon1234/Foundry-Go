@@ -13,7 +13,9 @@ No application/shared-service restart, database reset, or Redis flush is used.
 """
 
 import argparse
+from contextlib import contextmanager
 import copy
+import fcntl
 import io
 import json
 import os
@@ -299,6 +301,15 @@ def kill_at(boundary, observe):
             os.close(write_fd)
 
 
+@contextmanager
+def exclusive_run():
+    # Fixture-private exclusion: the deploy locks accept only "host" or an instance
+    # UUID, and bootstrap must still take the real host lock inside this window.
+    with open(WORK / "nginx-acceptance.lock", "w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+
+
 def run(rounds):
     host = Host()
     entries = guard(host)
@@ -311,7 +322,7 @@ def run(rounds):
     assert not DROP_IN.exists() and not DROP_IN.is_symlink(), "Refusing an existing nginx acceptance override"
     baseline = preserved(host, entries, name)
     check_preserved(host, entries, name, baseline)
-    with host.lock("acceptance-nginx", timeout=0):
+    with exclusive_run():
         try:
             for round_number in range(1, rounds + 1):
                 value = f"round-{round_number}-failed-reload"

@@ -4,7 +4,7 @@ import hashlib
 import ipaddress
 from pathlib import Path
 
-from contracts import PREFIX, read_json, require
+from contracts import read_json, require
 
 
 def cloudflare_ranges(directory: Path) -> tuple[date, list[str]]:
@@ -39,6 +39,18 @@ def edge_findings(profile: dict, directory: Path) -> list[dict]:
     return findings
 
 
+# nginx's default variables_hash_bucket_size (64) fits names up to 46 bytes on
+# 64-bit hosts; the shared http-level limit belongs to the host administrator.
+NGINX_VARIABLE_MAX = 46
+
+
+def nginx_variable(entry: dict, suffix: str) -> str:
+    """Name a per-site nginx variable after the instance's f_<uuid> allocation."""
+    variable = entry["allocations"]["database"] + "_" + suffix
+    require(len(variable) <= NGINX_VARIABLE_MAX, "nginx_invalid", "The site variable exceeds nginx's default hash bucket.")
+    return variable
+
+
 def edge_template(entry: dict, directory: Path) -> dict[str, str]:
     """Render per-site real IP and optional origin lockdown from versioned ranges."""
     profile = entry["profile"]
@@ -48,7 +60,7 @@ def edge_template(entry: dict, directory: Path) -> dict[str, str]:
     result["@EDGE_SERVER@"] += "\n    real_ip_header CF-Connecting-IP;"
     result["@EDGE_SERVER@"] += "\n    real_ip_recursive off;"
     if profile.get("edge_origin_lockdown", False):
-        variable = PREFIX.replace("-", "_") + "_" + entry["allocations"]["database"] + "_edge_peer"
+        variable = nginx_variable(entry, "edge_peer")
         result["@EDGE_GEO@"] = ("geo $realip_remote_addr $" + variable + " {\n    default 0;\n"
                                   + "\n".join("    " + cidr + " 1;" for cidr in [*ranges, "127.0.0.1/32", "::1/128"])
                                   + "\n}")
