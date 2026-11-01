@@ -59,7 +59,11 @@ def main():
     from acceptance_host import WORK as HOST_WORK
     identity = HOST_WORK / "age-identity.txt"
     assert identity.is_file(), "Bootstrap recovery identity is missing"
-    object_key = "attachments/acceptance-" + uuid.uuid4().hex
+    # Backups copy registered disk namespaces only; place the probe inside one.
+    source = next(iter(host.read_registry()["instances"][entry["profile"]["instance_id"]]["storage_bindings"].values()))
+    assert source["bucket"] == settings["app_bucket"]
+    relative = "acceptance-" + uuid.uuid4().hex
+    object_key = source["namespace"] + relative
     object_file = work / "attachment.txt"
     object_file.write_text("attachment-original-" + uuid.uuid4().hex)
     rclone(settings, "copyto", str(object_file), f"acceptance:{settings['app_bucket']}/{object_key}")
@@ -148,8 +152,9 @@ def main():
             member = archive.getmember(name)
             assert member.isfile() and member.size == len(expected)
             assert archive.extractfile(member).read() == expected, "Recovered key/config bytes differ"
-    binding = next(item for item in backup["object_copy"]["bindings"] if item["bucket"] == settings["app_bucket"])
-    copied = f"acceptance:{settings['backup_bucket']}/{binding['objects_prefix'].rstrip('/')}/{object_key}"
+    binding = next(item for item in backup["object_copy"]["bindings"]
+                   if item["bucket"] == settings["app_bucket"] and item["namespace"] == source["namespace"])
+    copied = f"acceptance:{settings['backup_bucket']}/{binding['objects_prefix'].rstrip('/')}/{relative}"
     assert rclone(settings, "cat", copied).stdout == object_file.read_text(), "Attachment backup bytes differ"
     assert rclone(settings, "cat", f"acceptance:{settings['app_bucket']}/{object_key}").stdout == object_file.read_text()
     # No schema/database/bucket reset. Resources expire with this owned container.
