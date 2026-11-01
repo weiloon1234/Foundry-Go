@@ -44,7 +44,7 @@ def scheduler(host, entry):
     # literal inventory prefixes include a named coordination child
     # and portal cache child. No broad wildcard is accepted by this fixture.
     coordination = [prefix for prefix in grants if prefix.startswith("foundry:lease:") and ".coordination:" in prefix]
-    portal = [prefix for prefix in grants if prefix.startswith("foundry:cache:") and ".portal:" in prefix]
+    portal = [prefix for prefix in grants if prefix.startswith("foundry:cache:") and ".portal-runtime:" in prefix]
     assert coordination and portal, "Archive must declare scheduler coordination and portal cache"
     assert not any(any(char in prefix for char in "*?[]\\") for prefix in grants)
     namespace = entry["allocations"]["namespace"]

@@ -581,7 +581,7 @@ tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
 
 The archive must implement the console commands used by deployment, declare
 scheduler configuration and Redis inventories, and expose readiness. It needs
-HTTP and scheduler roles, `.coordination` lease and `.portal` cache child
+HTTP and scheduler roles, `.coordination` lease and `.portal-runtime` cache child
 namespaces, and a schedule running at least once every 60 seconds. Its successful
 handler must emit a JSON `msg` matching `ACCEPTANCE_SCHEDULE_MESSAGE`, whose
 default is `acceptance schedule completed`. Fixture identity is generated for
