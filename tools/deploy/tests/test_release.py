@@ -7,6 +7,7 @@ import copy
 import base64
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -40,6 +41,7 @@ class ProcessHost(Host):
                                           {"Name": "developer.enabled", "Source": "defaults", "Secret": False}])
         self.commands_output = json.dumps([{"name": "about"}, {"name": "config.check"}])
         self.redis_keys_output = json.dumps([])
+        self.role_states = {}
 
     def run(self, args, **kwargs):
         args = list(map(str, args))
@@ -49,6 +51,14 @@ class ProcessHost(Host):
         if self.fail and self.fail in args:
             raise DeployError("injected_failure", "Synthetic failure")
         output = ""
+        if args[:2] == ["systemctl", "show"]:
+            output = "ActiveState=" + self.role_states.get(args[2], "inactive") + "\n"
+        if args[:2] == ["systemctl", "start"]:
+            for unit in args[2:]:
+                self.role_states[unit] = "active"
+        if args[:2] == ["systemctl", "stop"]:
+            for unit in args[2:]:
+                self.role_states[unit] = "inactive"
         if "migrate:status" in args:
             output = json.dumps({"targets": [{"schema": "public", "problems": [], "migrations": [
                 {"state": "pending" if self.pending else "applied"}]}]})
@@ -138,6 +148,247 @@ class ReleaseTests(unittest.TestCase):
 
     def state(self):
         return self.host.load_state(self.entry)
+
+    def stop_after_persist(self, owner, name, predicate, operation):
+        """Exit a child without unwinding finally blocks, then reload its files."""
+        original = getattr(owner, name)
+        pid = os.fork()
+        if pid == 0:
+            def boundary(*args, **kwargs):
+                result = original(*args, **kwargs)
+                if predicate(*args, **kwargs):
+                    os._exit(77)
+                return result
+            try:
+                with patch.object(owner, name, side_effect=boundary):
+                    operation()
+            except BaseException:
+                os._exit(78)
+            os._exit(79)
+        _, status = os.waitpid(pid, 0)
+        self.assertEqual(77, os.waitstatus_to_exitcode(status), "persisted boundary was not reached")
+
+    def encryption_configuration(self):
+        values = runtime_environment(self.entry, initialize_bootstrap_secrets(self.host, self.entry))
+        atomic_write(self.env_file, dump_env(values), 0o640)
+        self.host.inspect_output = json.dumps([
+            {"Name": key.replace("__", ".").lower(), "Source": "defaults", "Secret": True}
+            for key in ENCRYPTION_KEYS] + [{"Name": "project.name", "Source": "defaults", "Secret": False}])
+        return values
+
+    def test_key_archive_survives_publication_exit_and_blocks_reconcile_restart_and_correction(self):
+        self.encryption_configuration()
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        operation = str(uuid.uuid4())
+        self.stop_after_persist(release.os, "replace", lambda source, target: Path(target) == self.env_file,
+                                lambda: release.keys_rotate(self.host, self.project, self.profile, operation))
+        self.assertTrue(self.state()["key_archive"]["pending"])
+        with patch.object(release.backup, "archive_keys", side_effect=DeployError("archive_failed", "fixture")):
+            self.host.commands.clear()
+            with self.assertRaises(DeployError):
+                release.reconcile(self.host, self.project, self.profile)
+            self.assertTrue(self.state()["key_archive"]["pending"])
+            self.assertEqual("failed_applied", self.state()["last_attempt"]["outcome"])
+            _, entry = self.host.require_identity(self.project, self.profile)
+            with self.assertRaises(DeployError):
+                release.restart(self.host, entry)
+            with self.assertRaises(DeployError):
+                release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Corrected"})
+            self.assertFalse(any(args[:2] in (["systemctl", "restart"], ["systemctl", "start"])
+                                 for args, _ in self.host.commands))
+        release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Corrected"})
+        self.assertFalse(self.state()["key_archive"]["pending"])
+        self.assertEqual(2, self.state()["key_archive"]["configuration_revision"])
+        self.assertEqual(3, self.state()["configuration_revision"])
+
+    def test_key_archive_completion_exit_repeats_archive_before_restart(self):
+        self.encryption_configuration()
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        self.stop_after_persist(release.backup, "archive_keys", lambda *args: True,
+                                lambda: release.keys_rotate(self.host, self.project, self.profile, str(uuid.uuid4())))
+        self.assertTrue(self.state()["key_archive"]["pending"])
+        release.backup.archive_keys.reset_mock()
+        release.reconcile(self.host, self.project, self.profile)
+        release.backup.archive_keys.assert_called_once()
+        self.assertFalse(self.state()["key_archive"]["pending"])
+
+    def test_success_journals_final_acl_for_deploy_config_and_rollback(self):
+        first, one = self.bundle(1)
+        second, two = self.bundle(2)
+        self.deploy(first)
+        operations = [lambda: self.deploy(second),
+                      lambda: release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Changed"}),
+                      lambda: release.rollback(self.host, self.project, self.profile, one["version"], two["version"], str(uuid.uuid4()))]
+        for operation in operations:
+            with self.subTest(operation=operations.index(operation)):
+                self.stop_after_persist(self.host, "save_state", lambda entry, state:
+                                        state["last_attempt"]["outcome"] == "succeeded", operation)
+                attempt = self.state()["last_attempt"]
+                self.assertTrue(attempt["redis_pending"])
+                self.assertEqual(attempt["redis_inventory"], attempt["redis_target"])
+                self.grants.reset_mock()
+                release.reconcile(self.host, self.project, self.profile)
+                self.assertEqual(attempt["redis_target"]["patterns"], self.grants.call_args.args[3])
+                self.assertFalse(self.state()["last_attempt"]["redis_pending"])
+
+    def test_next_mutation_finishes_acl_before_replacing_attempt(self):
+        archive, _ = self.bundle()
+        self.stop_after_persist(self.host, "save_state", lambda entry, state:
+                                state["last_attempt"]["outcome"] == "succeeded", lambda: self.deploy(archive))
+        self.grants.reset_mock()
+        release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Changed"})
+        self.assertEqual(3, self.grants.call_count)  # old narrowing, new widening, new narrowing
+        self.assertFalse(self.state()["last_attempt"]["redis_pending"])
+
+    def test_terminal_configuration_candidates_are_cleaned_by_hash(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        for changes in ({"PROJECT__NAME": self.entry["allocations"]["namespace"]["application"]},
+                        {"UNKNOWN__KEY": "invalid"}):
+            with self.subTest(changes=list(changes)):
+                self.stop_after_persist(self.host, "save_state", lambda entry, state:
+                                        state["last_attempt"]["outcome"] in ("succeeded", "failed"),
+                                        lambda: release.config_set(self.host, self.project, self.profile, changes))
+                candidate = self.env_file.with_name("app.env.next")
+                self.assertTrue(candidate.exists())
+                original = candidate.read_bytes()
+                candidate.write_bytes(b"foreign")
+                with self.assertRaises(DeployError):
+                    release.reconcile(self.host, self.project, self.profile)
+                self.assertEqual(b"foreign", candidate.read_bytes())
+                candidate.write_bytes(original)
+                self.assertFalse(release.reconcile(self.host, self.project, self.profile)["unchanged"])
+                self.assertFalse(candidate.exists())
+                self.assertTrue(release.reconcile(self.host, self.project, self.profile)["unchanged"])
+
+    def test_backup_failure_recovers_only_previously_running_roles(self):
+        first, _ = self.bundle(1)
+        second, _ = self.bundle(2)
+        self.deploy(first)
+        units = instance_units(self.entry)
+        self.host.role_states[units["scheduler"]] = "active"
+        self.host.role_states[units["worker"]] = "inactive"
+        self.host.pending, self.host.fail = True, "recovery_point"
+        self.host.commands.clear()
+        with self.assertRaises(DeployError):
+            self.deploy(second)
+        self.assertEqual("active", self.host.role_states[units["scheduler"]])
+        self.assertFalse(self.state()["last_attempt"]["role_recovery_pending"])
+        self.assertEqual("inactive", self.host.role_states[units["worker"]])
+        self.assertFalse(any(args[:2] == ["systemctl", "restart"] for args, _ in self.host.commands))
+
+    def test_pre_migration_exit_and_failed_role_recovery_remain_reconcilable(self):
+        first, _ = self.bundle(1)
+        second, _ = self.bundle(2)
+        self.deploy(first)
+        scheduler = instance_units(self.entry)["scheduler"]
+        self.host.role_states[scheduler] = "active"
+        self.host.pending = True
+        self.stop_after_persist(self.host, "save_state", lambda entry, state:
+                                state["last_attempt"]["phase"] == "backup", lambda: self.deploy(second))
+        self.host.role_states[scheduler] = "inactive"
+        self.host.fail = "start"
+        with self.assertRaises(DeployError):
+            release.reconcile(self.host, self.project, self.profile)
+        self.assertTrue(self.state()["last_attempt"]["role_recovery_pending"])
+        self.host.fail = None
+        release.reconcile(self.host, self.project, self.profile)
+        self.assertEqual("active", self.host.role_states[scheduler])
+        self.assertFalse(self.state()["last_attempt"]["role_recovery_pending"])
+        self.assertTrue(release.reconcile(self.host, self.project, self.profile)["unchanged"])
+
+    def test_rotation_replays_prepared_candidate_and_success_after_lost_response(self):
+        self.encryption_configuration()
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        operation = str(uuid.uuid4())
+        rotate = lambda: release.keys_rotate(self.host, self.project, self.profile, operation)
+        self.stop_after_persist(release, "_save_operation", lambda host, entry, receipt:
+                                receipt.get("outcome") == "prepared", rotate)
+        path = release._operation_path(self.host, self.entry, operation)
+        prepared = json.loads(path.read_text())
+        encryption = {"key_id": prepared["changes"][ENCRYPTION_KEYS[0]], "key": prepared["changes"][ENCRYPTION_KEYS[1]]}
+        self.assertEqual(0o600, path.stat().st_mode & 0o777)
+        self.stop_after_persist(self.host, "save_state", lambda entry, state:
+                                state["last_attempt"]["outcome"] == "succeeded", rotate)
+        result = rotate()
+        self.assertEqual(prepared["result"], result)
+        self.assertEqual(encryption["key"], parse_env(self.env_file.read_text())[ENCRYPTION_KEYS[1]])
+        self.assertEqual(result, rotate())
+        self.assertEqual(result, release.keys_rotate(self.host, self.project, self.profile, operation, encryption))
+        self.assertEqual(1, len(json.loads(parse_env(self.env_file.read_text())[ENCRYPTION_KEYS[2]])))
+        self.assertNotIn(encryption["key"], json.dumps(release.public_state(self.state())))
+        with self.assertRaises(DeployError):
+            release.keys_rotate(self.host, self.project, self.profile, operation, {"key_id": "other", "key": "other"})
+
+    def test_failed_rotation_replays_original_error_after_corrective_revision(self):
+        self.encryption_configuration()
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        operation = str(uuid.uuid4())
+        with patch.object(release.backup, "archive_keys", side_effect=DeployError("archive_failed", "fixture")):
+            with self.assertRaises(DeployError) as initial:
+                release.keys_rotate(self.host, self.project, self.profile, operation)
+        release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Corrected"})
+        with self.assertRaises(DeployError) as replay:
+            release.keys_rotate(self.host, self.project, self.profile, operation)
+        self.assertEqual(initial.exception.code, replay.exception.code)
+
+    def test_unpublished_rotation_cancels_archive_obligation_without_claiming_rotation(self):
+        self.encryption_configuration()
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        before = self.env_file.read_bytes()
+        operation = str(uuid.uuid4())
+        self.stop_after_persist(self.host, "save_state", lambda entry, state:
+                                state["last_attempt"]["phase"] == "configuration",
+                                lambda: release.keys_rotate(self.host, self.project, self.profile, operation))
+        self.assertTrue(self.state()["key_archive"]["pending"])
+        release.backup.archive_keys.reset_mock()
+        release.reconcile(self.host, self.project, self.profile)
+        release.backup.archive_keys.assert_not_called()
+        self.assertEqual(before, self.env_file.read_bytes())
+        self.assertNotIn("key_archive", self.state())
+        self.assertFalse(self.env_file.with_name("app.env.next").exists())
+        with self.assertRaises(DeployError) as replay:
+            release.keys_rotate(self.host, self.project, self.profile, operation)
+        self.assertEqual("rotation_not_applied", replay.exception.code)
+
+    def test_next_config_cleans_terminal_candidate_and_preserves_rotation_receipt(self):
+        self.encryption_configuration()
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        operation = str(uuid.uuid4())
+        self.stop_after_persist(self.host, "save_state", lambda entry, state:
+                                state["last_attempt"]["outcome"] == "succeeded",
+                                lambda: release.keys_rotate(self.host, self.project, self.profile, operation))
+        result = json.loads(release._operation_path(self.host, self.entry, operation).read_text())["result"]
+        release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Changed"})
+        self.assertEqual(result, release.keys_rotate(self.host, self.project, self.profile, operation))
+        self.stop_after_persist(self.host, "save_state", lambda entry, state:
+                                state["last_attempt"]["outcome"] == "succeeded",
+                                lambda: release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Changed"}))
+        self.assertTrue(self.env_file.with_name("app.env.next").exists())
+        release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Again"})
+        self.assertFalse(self.env_file.with_name("app.env.next").exists())
+
+    def test_failed_role_restoration_is_durable_after_terminal_failure(self):
+        first, _ = self.bundle(1)
+        second, _ = self.bundle(2)
+        self.deploy(first)
+        scheduler = instance_units(self.entry)["scheduler"]
+        self.host.role_states[scheduler] = "active"
+        self.host.pending, self.host.fail = True, "start"
+        with patch.object(release.backup, "recovery_point", side_effect=DeployError("backup_failed", "fixture")):
+            self.stop_after_persist(self.host, "save_state", lambda entry, state:
+                                    state["last_attempt"]["outcome"] == "failed", lambda: self.deploy(second))
+        self.assertTrue(self.state()["last_attempt"]["role_recovery_pending"])
+        self.host.role_states[scheduler], self.host.fail = "inactive", None
+        release.reconcile(self.host, self.project, self.profile)
+        self.assertEqual("active", self.host.role_states[scheduler])
+        self.assertFalse(self.state()["last_attempt"]["role_recovery_pending"])
 
     def process_observations(self):
         archive, manifest = self.bundle()

@@ -117,7 +117,7 @@ def execute(host, action, request):
         require(request.get("confirm") is True, "confirmation_required", "Confirm encryption key rotation.")
         private = request.get("secrets", {})
         require(isinstance(private, dict) and set(private) <= {"encryption"}, "invalid_secrets", "Invalid rotation secret fields.")
-        return release.keys_rotate(host, project, profile, private.get("encryption"))
+        return release.keys_rotate(host, project, profile, request.get("operation_id"), private.get("encryption"))
     if action == "config-keys":
         values = parse_env(check_path(host.paths.instance_config(entry["name"]) / "app.env", "file").read_text())
         return {"keys": sorted(values), "locked_keys": sorted(release.PIPELINE_KEYS), "configuration_revision": entry["configuration_revision"]}
@@ -137,7 +137,13 @@ def execute(host, action, request):
             release.validate_runtime_environment(host, entry)
             state = host.load_state(entry)
             if action == "restart":
+                release.resume_terminal_obligations(host, registry, entry, state)
+            else:
+                release.require_idle(state)
+                release.cleanup_configuration_candidate(host, entry, state)
                 release.resume_redis_transition(host, registry, entry, state)
+                if (state.get("last_attempt") or {}).get("rotation_operation_id"):
+                    release.save_rotation_outcome(host, entry, state["last_attempt"])
             release.check_live_state(host, entry, state)
             require(state["current"] is not None, "no_release", "No release has been deployed.")
             release.verified_release(host, entry, state["current"])
@@ -148,7 +154,7 @@ def execute(host, action, request):
                     release.stop(host, entry)
                     state["status"] = "stopped"
                 else:
-                    release.restart(host, entry)
+                    release.restart(host, entry, state)
                     state["status"] = "healthy"
                 release.finish(host, entry, state, "succeeded")
             except (DeployError, OSError) as error:

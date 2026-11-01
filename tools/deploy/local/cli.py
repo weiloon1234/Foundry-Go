@@ -905,8 +905,6 @@ def deploy(project, profile, settings):
         confirm(f"Validate and set {', '.join(changes)} for {instance_name(project, profile)}")
         display(ssh.request("config-set", {**request, "secrets": {"configuration": changes}, "confirm": True}))
     elif action == "keys rotate":
-        if os.environ.get("OPERATION"):
-            raise LocalError("keys rotate cannot resume by OPERATION; inspect the current key before requesting another rotation")
         encryption = secret_input("encryption", "Encryption JSON (key_id and key)", structured=True, required=False)
         if encryption is None and sys.stdin.isatty():
             supplied = ask("New encryption key JSON (key_id and key; blank generates both on the server)", secret=True)
@@ -918,8 +916,9 @@ def deploy(project, profile, settings):
         if encryption is not None and (not isinstance(encryption, dict) or set(encryption) != {"key_id", "key"}):
             raise LocalError("provide the encryption key ID and material together")
         confirm(f"Rotate the encryption key and retain old keys for {instance_name(project, profile)}")
+        operation = operation_id(profile, "keys-rotate", {})
         display(ssh.request("keys-rotate", {**request, "secrets": {"encryption": encryption} if encryption else {},
-                                            "confirm": True}))
+                                            "operation_id": operation, "confirm": True}))
     elif action == "rollback":
         previous_intent = {}
         supplied_operation = os.environ.get("OPERATION")

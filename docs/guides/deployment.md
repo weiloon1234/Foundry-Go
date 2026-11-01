@@ -247,6 +247,25 @@ or encryption keys independently.
 retains the prior active key and all older keys. A ring holds at most 32 keys.
 Existing IDs cannot acquire different material. Rotation does not rewrite stored
 application data or retire keys needed by old records or retained backups.
+The CLI records and prints an operation UUID before sending the request. Retry
+with `OPERATION=<uuid>` to reuse the server's privately persisted candidate and
+original result, including after a lost response. An interrupted attempt must be
+reconciled before replay; a failed attempt keeps its original failure result.
+Keys and candidate hashes stay in root-only receipts, outside public status.
+
+Every keyring change journals a key-archive prerequisite for its configuration
+revision before selecting `app.env`. Reconcile, restart and corrective revisions
+must complete `backup.archive_keys` before starting roles with those keys. Archive
+failure leaves `key_archive.pending` visible in status. A completed archive records
+its revision and completion time.
+
+Success records the final Redis ACL target and pending narrowing together;
+reconcile and the next lifecycle mutation finish outstanding narrowing. Terminal
+configuration attempts also remove a leftover `app.env.next` only when its hash
+matches their private intent. Before deployment stops background roles, it records
+which were active. A proven failure before migration or seeding restores those
+roles; failed restoration remains a visible `role_recovery_pending` obligation.
+Uncertain migration or seeding outcomes still require explicit reconciliation.
 
 Production builds require a clean committed tree and use `git archive` of HEAD.
 Staging may use a dirty snapshot, recorded in release provenance. Build ownership

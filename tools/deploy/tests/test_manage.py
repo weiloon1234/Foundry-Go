@@ -44,6 +44,16 @@ class ManagerTests(unittest.TestCase):
             manager.execute(self.host, "stop", {**self.request, "unreviewed": True})
         self.assertEqual("invalid_request", error.exception.code)
 
+    def test_rotation_requires_and_dispatches_stable_operation_id(self):
+        import release
+        with self.assertRaises(DeployError) as missing:
+            manager.execute(self.host, "keys-rotate", {**self.request, "confirm": True})
+        self.assertEqual("invalid_operation", missing.exception.code)
+        operation = str(uuid.uuid4())
+        with patch.object(release, "keys_rotate", return_value={"ok": True}) as rotate:
+            manager.execute(self.host, "keys-rotate", {**self.request, "confirm": True, "operation_id": operation})
+        self.assertEqual((operation, None), rotate.call_args.args[-2:])
+
     def test_bound_host_mismatch_rejects_read_requests(self):
         request = copy.deepcopy(self.request)
         request["profile"]["host"]["host_id"] = str(uuid.uuid4())

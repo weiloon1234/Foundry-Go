@@ -87,6 +87,28 @@ class UploadRemote:
 
 
 class LocalDeploymentTests(unittest.TestCase):
+
+    def test_rotation_reuses_operation_without_recording_private_material_locally(self):
+        project, profile = fixture()
+        operation = str(uuid.uuid4())
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            calls = []
+            class Remote:
+                def request(self, action, request):
+                    calls.append((action, request))
+                    return {"ok": True}
+            with patch.object(cli, "ROOT", root), patch.object(cli, "SSH", return_value=Remote()), \
+                    patch.object(cli, "remember_releases"), patch.object(cli, "confirm"), \
+                    patch.object(cli, "secret_input", return_value=None), patch.object(cli.sys.stdin, "isatty", return_value=False), \
+                    patch.dict(os.environ, {"ACTION": "keys rotate", "OPERATION": operation}, clear=True), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                cli.deploy(project, profile, {})
+                cli.deploy(project, profile, {})
+            rotations = [request for action, request in calls if action == "keys-rotate"]
+            self.assertEqual([operation, operation], [request["operation_id"] for request in rotations])
+            receipt = json.loads((root / ".deploy" / "operations" / (operation + ".json")).read_text())
+            self.assertEqual({"action", "instance_id", "host_id"}, set(receipt))
     def setUp(self):
         # Resolve macOS's /var and /tmp aliases: deployment metadata refuses
         # symlink ancestors, including in test fixtures.

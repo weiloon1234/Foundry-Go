@@ -12,6 +12,10 @@
   journal-proven recovery of interrupted, never-started cluster initialization.
   Certbot uses isolated Foundry directories and renewal units, and accepted nginx
   binaries always undergo effective-configuration collision inspection.
+- Fixed: Deployment lifecycle journals revision-bound key archival, final Redis
+  ACL narrowing and prior background-role recovery before their interruption
+  boundaries. Reconcile cleans terminal configuration candidates by recorded hash,
+  and encryption rotation replays a private candidate/result using a stable UUID.
 - Fixed: Deployment source snapshots preserve relative symlinks that stay inside
   the snapshot root, including starter skill links. Absolute and escaping links,
   unsafe link chains, hardlinks, and special files remain refused.
