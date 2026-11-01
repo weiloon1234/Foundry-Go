@@ -49,6 +49,13 @@ HOST_PATHS = {
     "launcher": f"/usr/local/sbin/{PREFIX}-host",
     "report": f"/usr/local/bin/{PREFIX}-host-report",
 }
+# Root-owned directories every Foundry account must traverse. Each child sets
+# its own stricter mode; parents created implicitly would follow the umask.
+HOST_ROOTS = (
+    (f"/etc/{PREFIX}", 0o755), (f"/var/lib/{PREFIX}", 0o755), (f"/var/lib/{PREFIX}/private", 0o700),
+    (f"/var/lib/{PREFIX}/apps", 0o755), (f"/var/lib/{PREFIX}/instances", 0o755),
+    (f"/opt/{PREFIX}", 0o755), (f"/run/{PREFIX}", 0o755), (f"/run/lock/{PREFIX}", 0o755),
+)
 
 
 def unit_name(name: str, role: str) -> str:

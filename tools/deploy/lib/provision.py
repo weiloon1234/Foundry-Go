@@ -14,7 +14,7 @@ import re
 import secrets
 import uuid
 
-from contracts import (DeployError, PREFIX, REDIS_UNIT, REGISTRY_SCHEMA, LAYOUT_VERSION, PORT_FIRST, PORT_LAST,
+from contracts import (DeployError, HOST_ROOTS, PREFIX, REDIS_UNIT, REGISTRY_SCHEMA, LAYOUT_VERSION, PORT_FIRST, PORT_LAST,
     atomic_json, check_path, dump_env, identity, instance_paths, marker, now, read_json, require,
     validate_profile, validate_project)
 from topology import instance_units, validate_topology
@@ -40,6 +40,23 @@ def _mkdir(host, path, mode=0o755, owner="root", group="root"):
     path.mkdir(parents=True, exist_ok=True)
     host.run(["chmod", f"{mode:05o}", str(path)])
     host.run(["chown", owner + ":" + group, str(path)])
+
+
+def _ensure_roots(host):
+    # Establish traversal roots before any child, independent of the umask that
+    # implicit parent creation would otherwise inherit.
+    for path, mode in HOST_ROOTS:
+        target = host.paths.p(path)
+        check_path(target, "directory")
+        target.mkdir(parents=True, exist_ok=True)
+        check_path(target, "directory")
+        info = target.stat()
+        if host.paths.root == Path("/"):
+            require(info.st_uid == 0, "unsafe_path", "A Foundry root directory is not root-owned.")
+            if info.st_gid != 0:
+                os.chown(target, 0, 0)
+        if info.st_mode & 0o7777 != mode:
+            os.chmod(target, mode)
 
 
 def _owned_write(host, path, content, mode=0o644, owner="root", group="root"):
@@ -427,6 +444,7 @@ def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topol
                 "bootstrap_blocked", "Bootstrap plan contains blocking findings.")
         require(isinstance(plan_token, str) and secrets.compare_digest(plan_token, plan["plan_token"]), "plan_changed", "Review a fresh bootstrap plan.")
         with host.lock(profile["instance_id"]):
+            _ensure_roots(host)
             registry = host.read_registry(missing=True) or new_registry(profile["host"]["host_id"], tools_dir)
             entry = plan["entry"]
             existing = registry["instances"].get(profile["instance_id"])
