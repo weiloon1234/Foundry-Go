@@ -60,6 +60,17 @@ rewrites SQL, creates a database/server, or wraps the whole test in rollback.
 
 For the production HTTP kernel, run `app.Run(ctx, foundation.HTTP)`, obtain its
 address with `app.HTTPReady(ctx)`, and use `testkit/http.Connect(t, "http://"+address)`.
+For test-owned kernels, import `testkit/application` as `appstest` and use
+`appstest.RunHTTP(t, app)` to obtain the base URL. It waits up to 10 seconds for
+HTTP readiness and stops waiting when the application finishes. A boot failure
+stops the kernel and fails the test with its run error.
+
+`appstest.RunKernel(t, app, foundation.Worker)` returns an idempotent stop function
+and registers it with test cleanup. Stop cancels the run and waits for
+`StopDelay() + ShutdownTimeout() + 2*time.Second`. A nil or cancellation-only run
+result succeeds. A failure joined with cancellation or an expired drain wait
+fails the test. Call stop explicitly to assert on shutdown before the test ends.
+
 The [complete integration test](../../tests/fixtures/consumer/isolatedhttp/isolation_test.go)
 shows client, kernel and application ownership. Register clients after the app
 so client cleanup runs first. The application drains handlers/tasks before pools.

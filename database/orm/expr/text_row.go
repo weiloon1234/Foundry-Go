@@ -27,6 +27,20 @@ type nullableTextRowExpression[S any, V ~string] struct {
 	data     rowData[value.Nullable[V]]
 }
 
+// TextRowValue exposes text comparisons on a computed row value without changing it.
+//
+// Example: expr.TextLike(expr.TextRowValue(v), "a%")
+func TextRowValue[S any, V ~string](v RowValue[S, V]) TextRowExpression[S, V] {
+	return TextRowExpression[S, V]{data: checkedTextColumn(rowInput(v).data)}
+}
+
+// TextNullableRowValue exposes present-value text comparisons on a nullable row value.
+//
+// Example: expr.NullableTextIContains(expr.TextNullableRowValue(v), "name")
+func TextNullableRowValue[S any, V ~string](v RowValue[S, value.Nullable[V]]) NullableTextRowExpression[S, V] {
+	return NullableTextRowExpression[S, V]{data: checkedTextColumn(rowInput(v).data)}
+}
+
 func textRow[S any](v Selected[S, string]) TextRowExpression[S, string] {
 	return TextRowExpression[S, string]{data: v.data}
 }

@@ -60,6 +60,35 @@ explicit sealed adapter when an expression API accepts a column, for example
 `expr.Value(orm.TextExpr(Users.Email))`. Adapters preserve the column family,
 model, value and role constraints.
 
+Use `expr.TextRowValue(v)` or `expr.TextNullableRowValue(v)` to compare a
+computed `RowValue`, including a correlated scalar, as text. These lifts preserve
+the exact string type, scope, codec and SQL NULL semantics without applying
+`lower()`. Stored column metadata must grant text capability; string enums are
+rejected. Use `TextRow` or `TextNullableRow` for stored text columns.
+
+<!-- go-source: tests/fixtures/consumer/scalarqueries/text_row_test.go -->
+```go
+type noteSide struct{}
+
+func noteSearch(term scalarqueries.Label) orm.Query[scalarqueries.Sample] {
+	source := rows.From(scalarqueries.Samples.Query())
+	lookup := rows.As[noteSide](scalarqueries.Samples.Query(), "note_lookup")
+	correlation := rows.Correlate(source, lookup)
+	outer := rows.OuterScope(correlation, rows.ModelScope(scalarqueries.Samples.Query()))
+	inner := rows.InnerScope(correlation, rows.Scope(lookup))
+	scalar := rows.SelectCorrelatedScalar(correlation,
+		expr.AsSelected(expr.Row(expr.At(inner, orm.NullableTextExpr(scalarqueries.Samples.Note))))).
+		Where(expr.Equal(expr.At(inner, orm.NumberKeyExpr(scalarqueries.Samples.ID)), expr.At(outer, orm.NumberKeyExpr(scalarqueries.Samples.ID)))).Limit(1)
+	text := expr.TextNullableRowValue(rows.CorrelatedScalarNullableRowQuery(scalar))
+	return expr.Where(scalarqueries.Samples.Query(), expr.NullableTextIContains(text, term))
+}
+```
+
+`NullableTextIContains` escapes literal pattern characters and ignores case.
+`NullableTextLike` accepts a SQL pattern and preserves database case semantics.
+For datatable filters, pass the lifted value to `expr.NullableTextFilter` and
+`datatable.NullableWhere`; enable SQL patterns explicitly with `AllowLike()`.
+
 [Conditional values](conditional-expressions.md), [arithmetic/text](scalar-calculations.md),
 [temporal values](temporal-calculations.md) and [JSON paths](json-models.md) preserve
 scope, phase and codecs. Aggregate/window selections do not become row predicates.

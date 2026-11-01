@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Added: `expr.TextRowValue` and `expr.TextNullableRowValue` expose text predicates
+  on computed row values, including correlated scalars, while preserving types,
+  codecs, scope and SQL NULL semantics.
+- Added: `testkit/application.RunKernel` and `RunHTTP` run application kernels with
+  test-owned cleanup, bounded drain waits and lifecycle failure reporting.
+
 ## v0.3.3 — 2026-11-01
 
 - Docs: Every exported declaration now has a Go doc comment written from its

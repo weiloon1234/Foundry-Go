@@ -400,8 +400,10 @@ from another embedded relation cannot change them.
 `CompareRow(Value(Users.State))` supplies equality and membership
 without adding ordered or text operations to enums. `CompareNullableRow` retains
 present-value comparisons and adds null tests for nullable fields. Use `OrderRow` or
-`OrderNullableRow` for computed ordered values. Stored text adapters take the
-column itself: `TextRow(Users.Name)` and `TextNullableRow(Users.Nickname)`. Their
+`OrderNullableRow` for computed ordered values. Use `TextRowValue` or
+`TextNullableRowValue` for computed text row values, including correlated scalars.
+They preserve scope, codecs and NULL semantics without applying `lower()`.
+Stored text adapters take the column itself: `TextRow(Users.Name)` and `TextNullableRow(Users.Nickname)`. Their
 `orm.TextExpressionColumn` input rejects direct non-text handles; `Value`
 erases that static capability and cannot be passed to these adapters. Both
 adapters validate the retrieved column's own text metadata before granting

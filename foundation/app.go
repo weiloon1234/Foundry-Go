@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
+	"github.com/weiloon1234/Foundry-Go/internal/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/maintenance"
 	"github.com/weiloon1234/Foundry-Go/observability"
@@ -195,7 +196,7 @@ func (a *App) completeBoot(err error) {
 	// Providers usually return ctx.Err() when the startup deadline cancels
 	// them; report the deadline itself, not an interrupt. Error classification
 	// runs outside the application mutex.
-	if err != nil && cancellationOnly(err) {
+	if err != nil && lifecycle.CancellationOnly(err) {
 		a.mu.Lock()
 		expired := a.startupExpired
 		a.mu.Unlock()
@@ -208,7 +209,7 @@ func (a *App) completeBoot(err error) {
 	a.mu.Unlock()
 	// Log before releasing Start's waiters (and so the shutdown that follows
 	// a failure), so the record precedes anything a caller observes next.
-	if err != nil && !cancellationOnly(err) {
+	if err != nil && !lifecycle.CancellationOnly(err) {
 		a.settings.logger.LogAttrs(context.Background(), slog.LevelError, "application startup failed", slog.Duration("duration", elapsed), slog.Any("diagnostic", errordiag.Describe(err)))
 	} else if err == nil && !stopping {
 		a.settings.logger.LogAttrs(context.Background(), slog.LevelInfo, "application ready", slog.Duration("duration", elapsed))
@@ -365,7 +366,7 @@ func (r *runtimeState) runKernel(lifetime, caller context.Context, kind KernelKi
 	}
 	// A drained service kernel stopped gracefully. A one-shot command that was
 	// interrupted did not complete, so its cancellation remains its result.
-	if kind != CLI && runCtx.Err() != nil && cancellationOnly(err) {
+	if kind != CLI && runCtx.Err() != nil && lifecycle.CancellationOnly(err) {
 		return nil
 	}
 	return err
@@ -525,7 +526,7 @@ func (a *App) stop(delay time.Duration) {
 	// Shutdown also reports a boot failure; Run reported it through Start.
 	// Inspect callback errors outside the application mutex.
 	shutdownErr := result
-	if bootErr != nil && !cancellationOnly(bootErr) {
+	if bootErr != nil && !lifecycle.CancellationOnly(bootErr) {
 		shutdownErr = safeerror.Join("operation failed", bootErr, result)
 	}
 	// Log before releasing waiters: a process that exits as soon as Run or
