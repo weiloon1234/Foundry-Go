@@ -15,7 +15,8 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
 from contracts import (DeployError, MAX_JSON, atomic_json, atomic_write, check_path,
-                       identity, parse_json, read_json, validate_profile,
+                       identity, parse_json, read_json, validate_profile, storage_bindings, bind_storage,
+                       runtime_storage, reserve_runtime_storage, select_runtime_storage,
                        validate_project, validate_registry, valid_timestamp)
 from topology import instance_units
 from host import Host, Paths
@@ -296,6 +297,81 @@ class DeploymentContractTests(unittest.TestCase):
             self.assertEqual(error.exception.code, "operation_locked")
         with self.host.lock(production, timeout=0.01):
             pass
+
+
+class StorageBindingTests(unittest.TestCase):
+    def storage(self, namespace="", bucket="shared-bucket"):
+        return {"credentials": {"app": {"mode": "static", "access_key": "canary-access", "secret_key": "canary-secret"}},
+                "disks": {"uploads": {"driver": "r2", "config": {"visibility": 0}, "cloud": {
+                    "endpoint": "https://account.example.invalid", "bucket": bucket, "region": "auto",
+                    "namespace": namespace, "credentials": "app"}}}}
+
+    def entries(self):
+        _, _, first = fixture()
+        _, _, second = fixture(project_slug="second", host_id=first["host_id"], port=8101)
+        first["storage_bindings"], second["storage_bindings"] = {}, {}
+        return registry(first, second), first, second
+
+    def test_overlapping_and_duplicate_namespaces_are_exclusive_across_instances(self):
+        for namespace in ("", "tenant/", "tenant/child/"):
+            with self.subTest(namespace=namespace):
+                value, first, second = self.entries()
+                bind_storage(value, first, self.storage("tenant/"))
+                with self.assertRaises(DeployError) as caught:
+                    bind_storage(value, second, self.storage(namespace))
+                self.assertEqual(caught.exception.code, "storage_binding_conflict")
+        value, first, second = self.entries()
+        bind_storage(value, first, self.storage("tenant/"))
+        bind_storage(value, second, self.storage("tenant-other/"))
+        validate_registry(value)
+        self.assertNotIn("canary-secret", json.dumps(value))
+        self.assertNotIn("canary-access", json.dumps(value))
+
+    def test_endpoint_alias_does_not_bypass_bucket_ownership(self):
+        value, first, second = self.entries()
+        bind_storage(value, first, self.storage())
+        changed = self.storage()
+        changed["disks"]["uploads"]["cloud"]["endpoint"] = "https://other-endpoint.example.invalid"
+        with self.assertRaises(DeployError):
+            bind_storage(value, second, changed)
+
+    def test_same_instance_aliases_require_identical_definitions(self):
+        storage = self.storage("tenant/")
+        storage["disks"]["alias"] = copy.deepcopy(storage["disks"]["uploads"])
+        self.assertEqual(len(storage_bindings(storage)), 2)
+        for change in ({"namespace": "tenant/child/"}, {"region": "other"}):
+            changed = copy.deepcopy(storage)
+            changed["disks"]["alias"]["cloud"].update(change)
+            with self.assertRaises(DeployError):
+                storage_bindings(changed)
+
+    def test_registry_revalidates_overlaps_on_read(self):
+        value, first, second = self.entries()
+        first["storage_bindings"] = storage_bindings(self.storage("tenant/"))
+        second["storage_bindings"] = storage_bindings(self.storage("tenant/child/"))
+        with self.assertRaises(DeployError):
+            validate_registry(value)
+
+    def test_candidate_reservation_survives_until_selected_revision_is_known(self):
+        value, first, second = self.entries()
+        bind_storage(value, first, self.storage("old/"))
+        candidate = self.storage("new/")
+        values = {"APP__SERVICES__CREDENTIALS": json.dumps(candidate["credentials"]),
+                  "APP__SERVICES__STORAGE__DISKS_FILE": "/private/disks"}
+        reader = lambda path: json.dumps(candidate["disks"])
+        reserve_runtime_storage(value, first, values, reader)
+        for namespace in ("old/", "new/"):
+            with self.assertRaises(DeployError):
+                bind_storage(value, second, self.storage(namespace))
+        select_runtime_storage(value, first, values, reader)
+        self.assertNotIn("pending_storage_bindings", first)
+        bind_storage(value, second, self.storage("old/"))
+
+    def test_nested_override_cannot_bypass_physical_binding_validation(self):
+        for values in ({"APP__SERVICES__STORAGE__DISKS__UPLOADS__CLOUD__BUCKET": "other"},
+                       {"APP__SERVICES__STORAGE__DISKS": "{}", "APP__SERVICES__STORAGE__DISKS_FILE": "/private/disks"}):
+            with self.assertRaises(DeployError):
+                runtime_storage(values, lambda path: "{}")
 
 
 if __name__ == "__main__":

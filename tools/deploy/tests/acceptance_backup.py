@@ -42,7 +42,7 @@ def admin(shared, sql):
     socket = run(["pg_conftool", str(shared["major"]), "foundry", "show", "unix_socket_directories"]).stdout
     socket = socket.split("=", 1)[-1].strip().strip("'").split(",")[0].strip()
     assert socket.startswith("/") and socket != "/var/run/postgresql", "Expected Foundry-specific socket"
-    return run(["runuser", "-u", "postgres", "--", "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1",
+    return run(["runuser", "-u", "foundry-postgres", "--", "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1",
                 "-h", socket, "-p", str(shared["port"]), "-d", "postgres"], input=sql).stdout.strip()
 
 
@@ -75,7 +75,7 @@ def main():
     assert psql(pg, "SELECT 1;").stdout.strip() == "1"
     assert psql(pg, "SHOW archive_mode;").stdout.strip() == "on"
     archive_command = psql(pg, "SHOW archive_command;").stdout
-    assert "sudo -n /usr/bin/python3 -I " in archive_command and archive_command.strip().endswith("/backup.py archive-push %p")
+    assert "sudo" not in archive_command and "/usr/bin/python3 -I " in archive_command and archive_command.strip().endswith("/backup.py archive-push %p")
     assert Path(admin(shared, "SHOW data_directory;")).resolve() == Path(shared["data_path"]).resolve()
     _backrest(host, ["check"], timeout=300)
     table = "acceptance_pitr_" + uuid.uuid4().hex
@@ -120,9 +120,9 @@ def main():
     assert Path(drill["data_path"]).resolve() != Path(shared["data_path"]).resolve()
     assert drill["unit"] != shared["unit"]
     assert restored["sslmode"] == "disable" and restored["host"].startswith("/")
-    assert restored["user"] == "postgres"
+    assert restored["user"] == "foundry-postgres"
     def restored_sql(sql):
-        return run(["runuser", "-u", "postgres", "--", "psql", "-X", "-qAt", "--no-password",
+        return run(["runuser", "-u", "foundry-postgres", "--", "psql", "-X", "-qAt", "--no-password",
                     "-v", "ON_ERROR_STOP=1", "-h", restored["host"], "-p", str(restored["port"]),
                     "-d", restored["database"]], input=sql).stdout.strip()
     assert restored_sql("SELECT 1;") == "1"
@@ -148,7 +148,8 @@ def main():
             member = archive.getmember(name)
             assert member.isfile() and member.size == len(expected)
             assert archive.extractfile(member).read() == expected, "Recovered key/config bytes differ"
-    copied = f"acceptance:{settings['backup_bucket']}/{backup['objects_prefix'].rstrip('/')}/{object_key}"
+    binding = next(item for item in backup["object_copy"]["bindings"] if item["bucket"] == settings["app_bucket"])
+    copied = f"acceptance:{settings['backup_bucket']}/{binding['objects_prefix'].rstrip('/')}/{object_key}"
     assert rclone(settings, "cat", copied).stdout == object_file.read_text(), "Attachment backup bytes differ"
     assert rclone(settings, "cat", f"acceptance:{settings['app_bucket']}/{object_key}").stdout == object_file.read_text()
     # No schema/database/bucket reset. Resources expire with this owned container.

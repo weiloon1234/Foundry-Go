@@ -95,7 +95,11 @@ class ReportTests(unittest.TestCase):
         self.host.registry["instances"][INSTANCE_ID]["backup"] = {
             "destination_ref": "/etc/foundry/private-repository.json", "last_complete_id": "backup-1",
             "last_complete_at": completed.isoformat(), "last_attempt_outcome": "complete",
-            "policy": {"interval_hours": 24, "daily": 7, "secret": SECRET},
+            "policy": {"interval_hours": 24, "full_retention_days": 35, "pitr_days": 28, "secret": SECRET},
+            "database": {"status": "complete", "configuration_revision": self.host.registry["instances"][INSTANCE_ID].get("configuration_revision"),
+                "database_point": {"status": "complete", "completed_at": completed.isoformat()}},
+            "objects": {"status": "complete", "completed_at": completed.isoformat(), "cleanup_grace_seconds": 259200,
+                "configuration_revision": self.host.registry["instances"][INSTANCE_ID].get("configuration_revision")},
             "credentials": {"secret": SECRET}, "configuration_sha256": SECRET}
         result = report.collect_report(self.host)
         backup = self.item(result)["backup"]
@@ -123,6 +127,20 @@ class ReportTests(unittest.TestCase):
                 self.assertIsNone(result["age_seconds"])
                 self.assertFalse(result["fresh"])
                 self.assertIn({"code": "backup_state_invalid", "instance_id": INSTANCE_ID}, problems)
+
+    def test_grace_freshness_uses_database_and_copy_from_the_same_revision(self):
+        clock = report.dt.datetime.now(report.dt.timezone.utc)
+        entry = {"configuration_revision": 2, "backup": {"destination_ref": "configured", "last_complete_id": "bundle",
+            "database": {"status": "complete", "configuration_revision": 2,
+                "database_point": {"status": "complete", "completed_at": (clock - report.dt.timedelta(hours=36)).isoformat()}},
+            "objects": {"status": "complete", "configuration_revision": 2, "completed_at": clock.isoformat(),
+                "cleanup_grace_seconds": 72 * 3600}}}
+        self.assertTrue(report.backup_freshness(entry, [], INSTANCE_ID)["fresh"])
+        entry["backup"]["database"]["database_point"]["completed_at"] = (clock - report.dt.timedelta(hours=80)).isoformat()
+        self.assertFalse(report.backup_freshness(entry, [], INSTANCE_ID)["fresh"])
+        entry["backup"]["database"]["database_point"]["completed_at"] = clock.isoformat()
+        entry["backup"]["objects"]["configuration_revision"] = 1
+        self.assertFalse(report.backup_freshness(entry, [], INSTANCE_ID)["fresh"])
 
     def test_service_exposes_live_process_identity_and_restart_count(self):
         patch.stopall()

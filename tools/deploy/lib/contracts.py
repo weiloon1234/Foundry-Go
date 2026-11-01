@@ -15,6 +15,7 @@ import re
 import stat
 import tempfile
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 import uuid
 
 PREFIX = "foundry"
@@ -29,7 +30,7 @@ SLUG_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 
 POSTGRES_PORT = 55432
 REDIS_PORT = 56379
-BACKUP_POLICY = {"interval_hours": 24, "daily": 7, "weekly": 4, "monthly": 0}
+BACKUP_POLICY = {"interval_hours": 24, "full_retention_days": 35, "pitr_days": 28}
 REDIS_ACCOUNT = PREFIX + "-redis"
 REDIS_ADMIN = PREFIX + "-admin"
 REDIS_UNIT = "redis-server@" + PREFIX + ".service"
@@ -157,9 +158,9 @@ def validate_profile(value, project=None):
     require(type(value["edge_origin_lockdown"]) is bool, "invalid_profile", "edge_origin_lockdown must be a boolean; Cloudflare is mandatory.")
     require(type(value["schema"]) is int and value["schema"] == PROFILE_SCHEMA and slug(value["environment"]) and valid_uuid(value["instance_id"]), "invalid_profile", "Invalid environment identity.")
     if "backup_policy" in value:
-        fields(value["backup_policy"], "interval_hours daily weekly monthly", "backup policy")
-        require(all(type(v) is int and (0 if k == "monthly" else 1) <= v <= 365 for k, v in value["backup_policy"].items()), "invalid_profile", "Invalid backup policy counts.")
-        require(value["backup_policy"] == BACKUP_POLICY, "invalid_profile", "Only the supported daily/weekly backup retention policy is available.")
+        fields(value["backup_policy"], " ".join(BACKUP_POLICY), "backup policy")
+        require(all(type(v) is int and 1 <= v <= 365 for k, v in value["backup_policy"].items()), "invalid_profile", "Invalid time-based backup policy.")
+        require(value["backup_policy"] == BACKUP_POLICY, "invalid_profile", "Only the supported 35-day full retention and 28-day PITR policy is available.")
     fields(value["host"], "address port host_id", "host")
     h = value["host"]
     require(isinstance(h["address"], str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.:-]{0,252}", h["address"]) is not None, "invalid_host", "Host address must be a hostname or IP address, without an SSH login.")
@@ -203,6 +204,113 @@ def identity(project, profile):
                 "redis_user": PREFIX + "-" + profile["instance_id"],
                 "namespace": {"application": project["slug"], "environment": profile["environment"]},
                 "paths": instance_paths(name)}}
+
+
+def storage_bindings(storage):
+    """Extract public physical ownership; compare aliases before dropping secrets."""
+    require(isinstance(storage, dict), "storage_binding_invalid", "Storage must declare credentials and disks.")
+    credentials, disks = storage.get("credentials"), storage.get("disks")
+    credentials = parse_json(credentials) if isinstance(credentials, str) else credentials
+    disks = parse_json(disks) if isinstance(disks, str) else disks
+    require(isinstance(credentials, dict) and isinstance(disks, dict),
+            "storage_binding_invalid", "Storage credentials and disks must be objects.")
+    result, definitions = {}, {}
+    for name, disk in disks.items():
+        require(isinstance(name, str) and isinstance(disk, dict), "storage_binding_invalid", "Invalid storage disk.")
+        require(disk.get("driver") in ("r2", "s3", "s3_compatible"),
+                "storage_binding_invalid", "Deployment storage bindings require explicit cloud disks.")
+        cloud = disk.get("cloud", {})
+        require(isinstance(cloud, dict), "storage_binding_invalid", "Invalid cloud binding.")
+        binding = _physical_storage_binding(cloud)
+        credential_name = cloud.get("credentials")
+        require(isinstance(credential_name, str), "storage_binding_invalid", "Invalid storage credential name.")
+        credential = credentials.get(credential_name)
+        require(isinstance(credential, dict), "storage_binding_invalid", "Unknown storage credential binding.")
+        for previous, other in result.items():
+            if storage_overlaps(binding, other):
+                require(binding == other and definitions[previous] == (disk, credential),
+                        "storage_binding_conflict", "Aliasing disks must have byte-identical bindings.")
+        result[name], definitions[name] = binding, (disk, credential)
+    return result
+
+
+def _physical_storage_binding(cloud):
+    bucket, namespace = cloud.get("bucket"), cloud.get("namespace", "")
+    endpoint = cloud.get("endpoint", "")
+    require(isinstance(endpoint, str), "storage_binding_invalid", "Invalid storage endpoint.")
+    try:
+        url = urlsplit(endpoint)
+        valid_endpoint = (url.scheme in ("https", "http") and url.hostname and not url.username and not url.password
+                          and url.path in ("", "/") and not url.query and not url.fragment)
+    except ValueError:
+        valid_endpoint = False
+    require(valid_endpoint, "storage_binding_invalid", "Storage requires an explicit credential-free endpoint.")
+    require(isinstance(bucket, str) and re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", bucket)
+            and isinstance(namespace, str) and (not namespace or namespace.endswith("/"))
+            and len(namespace) <= 1024 and not namespace.startswith("/")
+            and (not namespace or all(part not in ("", ".", "..") for part in namespace[:-1].split("/")))
+            and all(32 <= ord(c) < 127 for c in namespace) and "\\" not in namespace,
+            "storage_binding_invalid", "Use a valid bucket and an empty or slash-terminated namespace prefix.")
+    return {"endpoint": endpoint.rstrip("/").lower(), "bucket": bucket, "namespace": namespace}
+
+
+def storage_overlaps(left, right):
+    # Endpoint spelling/credentials cannot establish separate physical ownership.
+    return (left["bucket"] == right["bucket"]
+            and (left["namespace"].startswith(right["namespace"])
+                 or right["namespace"].startswith(left["namespace"])))
+
+
+def check_storage_bindings(registry, entry, bindings):
+    """Check both selected bindings and reservations held by interrupted config."""
+    for instance_id, other in registry["instances"].items():
+        if instance_id == entry["profile"]["instance_id"]:
+            continue
+        require(not bindings or "storage_bindings" in other or other.get("provisioning", {}).get("state") != "ready",
+                "storage_binding_missing", "Import existing instances' runtime storage bindings before allocating another namespace.")
+        for records in (other.get("storage_bindings", {}), other.get("pending_storage_bindings", {})):
+            require(not any(storage_overlaps(left, right) for left in bindings.values() for right in records.values()),
+                    "storage_binding_conflict", "Application storage overlaps another instance's binding.")
+    return bindings
+
+
+def reserve_runtime_storage(registry, entry, values, read_value):
+    """Call before publishing a config candidate, under the host operation lock.
+
+    Persist the registry reservation before app.env can change. Reconciliation
+    selects either the old or new bindings from the proven selected revision.
+    """
+    return bind_storage(registry, entry, runtime_storage(values, read_value), pending=True)
+
+
+def select_runtime_storage(registry, entry, values, read_value):
+    bindings = bind_storage(registry, entry, runtime_storage(values, read_value))
+    entry.pop("pending_storage_bindings", None)
+    return bindings
+
+
+def bind_storage(registry, entry, storage, *, pending=False):
+    bindings = check_storage_bindings(registry, entry, storage_bindings(storage))
+    entry["pending_storage_bindings" if pending else "storage_bindings"] = bindings
+    return bindings
+
+
+def runtime_storage(values, read_value):
+    """Resolve the same collection values used by the selected runtime revision.
+
+    Fine-grained collection overrides must be consolidated into the collection
+    before deployment can prove physical ownership.
+    """
+    names = {"credentials": "APP__SERVICES__CREDENTIALS", "disks": "APP__SERVICES__STORAGE__DISKS"}
+    result = {}
+    for field, key in names.items():
+        require(not any(name.startswith(key + "__") for name in values)
+                and not (key in values and key + "_FILE" in values),
+                "storage_binding_invalid", "Use one complete storage collection, without nested overrides or conflicting aliases.")
+        text = read_value(values[key + "_FILE"]) if key + "_FILE" in values else values.get(key, "{}")
+        result[field] = parse_json(text)
+    storage_bindings(result)
+    return result
 
 
 def validate_registry(value):
@@ -256,6 +364,22 @@ def validate_registry(value):
                 and isinstance(entry["provisioning"].get("completed_steps"), list), "invalid_registry", "Invalid provisioning state.")
         require(type(entry.get("configuration_revision")) is int and entry["configuration_revision"] >= 1, "invalid_registry", "Invalid configuration revision.")
         require(valid_timestamp(entry.get("created_at")) and valid_timestamp(entry.get("updated_at")), "invalid_registry", "Invalid instance timestamps.")
+    for entry in value["instances"].values():
+        for field in ("storage_bindings", "pending_storage_bindings"):
+            records = entry.get(field, {})
+            require(isinstance(records, dict), "invalid_registry", "Invalid storage bindings.")
+            for record in records.values():
+                require(isinstance(record, dict) and set(record) == {"endpoint", "bucket", "namespace"}
+                        and all(isinstance(item, str) for item in record.values()),
+                        "invalid_registry", "Invalid storage binding record.")
+                require(record == _physical_storage_binding(record), "invalid_registry", "Noncanonical storage binding record.")
+            records = list(records.values())
+            require(all(left == right or not storage_overlaps(left, right)
+                        for index, left in enumerate(records) for right in records[index + 1:]),
+                    "storage_binding_conflict", "Nonidentical storage aliases overlap within an instance.")
+    for entry in value["instances"].values():
+        for field in ("storage_bindings", "pending_storage_bindings"):
+            check_storage_bindings(value, entry, entry.get(field, {}))
     return value
 
 

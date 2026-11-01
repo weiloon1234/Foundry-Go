@@ -318,6 +318,10 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
     journal["phase"] = "selected"
     atomic_json(journal_path, journal, 0o600)
     _installed(host, registry["tools"])
+    if registry.get("shared", {}).get("backup"):
+        # Execute the selected bundle's implementation, not this old process's imports.
+        host.run(["/usr/bin/python3", "-I", str(destination / "lib/backup.py"), "rebind"], timeout=1800)
+        registry = host.read_registry()
     journal["phase"] = "complete"
     atomic_json(journal_path, journal, 0o600)
     registry["tools"]["upgrade_operation"] = None

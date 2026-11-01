@@ -16,6 +16,19 @@
   ACL narrowing and prior background-role recovery before their interruption
   boundaries. Reconcile cleans terminal configuration candidates by recorded hash,
   and encryption rotation replays a private candidate/result using a stable UUID.
+- Fixed: Deployment backup sources follow registered runtime storage bindings.
+  Bucket namespaces are exclusive across instances. Bundles persist component
+  progress, failed schedules allow later backups, and restore drills retain
+  stable identities and prove process exit before cleanup.
+- Changed: Cluster backup retention uses 35 days of full backups. Pre-migration
+  recovery reuses a recent backup or takes a differential before its named WAL
+  point. Backup freshness uses the database point and object copy within the
+  attachment cleanup grace period. Object copies are not pruned.
+- Fixed: Tool upgrades rebind backup timers, service commands, and live WAL
+  archival before completion. pgBackRest uses the dedicated PostgreSQL owner
+  and mode-0600 configuration. Repository credentials stay out of process
+  arguments and environments; the obsolete WAL sudo bridge is removed.
+
 - Fixed: Deployment source snapshots preserve relative symlinks that stay inside
   the snapshot root, including starter skill links. Absolute and escaping links,
   unsafe link chains, hardlinks, and special files remain refused.

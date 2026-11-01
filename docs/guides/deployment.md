@@ -95,7 +95,7 @@ new UUIDv4 identities, not identities to copy between applications.
   "public_env": {},
   "edge_origin_lockdown": true,
   "retention": {"local_releases": 3, "server_releases": 5, "pre_migration_dumps": 7},
-  "backup_policy": {"interval_hours": 24, "daily": 7, "weekly": 4, "monthly": 0}
+  "backup_policy": {"interval_hours": 24, "full_retention_days": 35, "pitr_days": 28}
 }
 ```
 
@@ -412,9 +412,21 @@ as server-side settings. Each disk uses `driver: "r2"`,
 source has `mode: "static"`, `access_key`, and `secret_key`. R2 uses region `auto`
 and its explicit HTTPS account endpoint. The buckets must already exist.
 
-The current backup copier requires all declared attachment disks to use one
-private application bucket and one credential binding. The backup repository
-uses a distinct bucket. App credentials must be scoped to the app bucket;
+The backup copier reads private cloud disks and their static credentials from
+the selected, validated runtime configuration revision. Bootstrap storage secrets
+do not select the source of later copies. The registry records each disk's bucket
+and namespace prefix. Overlapping prefixes across instances are refused, even
+when endpoint spellings differ. Within an instance, overlapping aliases must have
+identical bindings. The backup repository uses a distinct bucket.
+
+Storage namespaces must be empty or end in `/`. Storage collections must use
+complete JSON values or their `_FILE` aliases.
+Consolidate nested environment overrides into those collections before changing
+storage. `contracts.reserve_runtime_storage` checks candidate bindings. Configuration
+callers must persist that reservation before publication, then call
+`select_runtime_storage` after proving which revision is selected. An interrupted
+change must keep both old bindings and candidate reservations until selection is
+known. App credentials must be scoped to the app bucket;
 provider policy and denial probes establish that isolation. The framework does
 not create buckets or edit provider policies. Local upload staging beneath
 `/var/lib/foundry/apps/<name>/uploads` is not the durable attachment store.
@@ -431,19 +443,25 @@ trips and R2 credential isolation still require application acceptance.
 pgBackRest provides continuous WAL archiving for the dedicated Foundry cluster.
 Its S3 repository uses HTTPS with certificate verification, a distinct backup
 bucket, and a server-generated repository encryption passphrase. The private
-repository binding is `/etc/foundry/backup/repository.json`; the public
-pgBackRest configuration does not contain credentials. Every instance sharing
+repository binding is `/etc/foundry/backup/repository.json`. pgBackRest reads its
+credentials from `/etc/pgbackrest/foundry.conf`, owned by `foundry-postgres` with
+mode 0600. Every instance sharing
 the cluster must use the same repository and preserve its passphrase.
 
 The installed schedule runs a full database backup on Sunday at 02:00 UTC and
 a differential backup daily at 05:00 UTC. If no base backup exists, the first
 differential request takes a full backup. A daily 08:00 UTC job also archives
 keys and copies attachment objects. Timers use persistence and jitter. Retention
-keeps four full backups and seven differential backups, with WAL retained for
-the full-backup window. Monthly retention is not implemented. The public policy
-records the implemented daily, weekly, and monthly counts as 7, 4, and 0.
-Profiles may omit `backup_policy` or select exactly that supported policy with
-`interval_hours: 24`; unsupported policy values refuse validation.
+is cluster-wide and time-based. `repo1-retention-full-type=time` and
+`repo1-retention-full=35` retain full backups for 35 days, with their differential
+backups and required WAL, to cover at least 28 days of PITR. Per-instance bundle
+counts never control expiration. Profiles may omit `backup_policy` or select
+`interval_hours: 24`, `full_retention_days: 35`, and `pitr_days: 28`.
+
+Set `APP__FEATURES__ATTACHMENTS__CONFIG__CLEANUP_GRACE` to `72h` for Boss Club.
+The deploy tooling requires an explicit duration longer than the object-copy
+interval plus timer jitter. Allow additional margin for outages and copy duration.
+The application must retain replaced and retired objects for that grace period.
 
 `ACTION=backup-run` creates a completed receipt only after the database backup,
 age-encrypted key/config archive, and object copy succeed. The receipt contains
@@ -451,36 +469,66 @@ age-encrypted key/config archive, and object copy succeed. The receipt contains
 time. The archive contains the instance configuration and referenced files,
 including active and retained keys and repository recovery material. Only public
 age recipients are stored on the host. `rclone copy` preserves deleted source
-objects; replaced destination objects move to an object-history prefix.
+objects; replaced destination objects move to an object-history prefix. Neither
+`objects/` nor object history is pruned in this release, so storage use grows with
+retired objects and changes. Each physical binding has its own destination beneath
+`objects/<instance UUID>/`; the receipt's `object_copy.bindings` maps sources to
+these paths. A storage change keeps the previous copy available.
 
-Before pending migrations, the lifecycle obtains a full backup, creates a named
-PostgreSQL restore point, forces WAL archival, and completes the key and object
-components. Unknown publication outcomes remain unresolved and cannot be reused
-as a successful backup. `state["backup"]` retains completion and attempt status
-across later lifecycle writes. The host report exposes freshness from completion
-receipts, flags missing or older-than-24-hour completion, and reports failed
-attempts and the latest restore drill. A database-only success does not make the
-bundle fresh.
+Before pending migrations, the lifecycle checks the latest full or differential
+backup. If it is less than 24 hours old, the lifecycle reuses it. Otherwise it
+takes a differential, or a full when the repository has no base. It then creates
+a named PostgreSQL restore point and forces WAL archival. Migrations do not
+create an extra full backup each time.
 
-### Restricted WAL sudo bridge
+A bundle records its database point, key archive, and object copy separately
+under its operation UUID. Completed phases survive retries. Unknown outcomes
+require explicit reconciliation. A bundle is complete only when both the database
+point and successful object copy are newer than `cleanup_grace`. The host report
+uses the older component time for freshness and rejects a mismatched runtime
+revision. A new object copy cannot make an old database point fresh.
 
-The PostgreSQL archiver runs as `postgres`, while S3 credentials and the repository
-passphrase remain root-only. `/etc/sudoers.d/foundry-backup-archive` permits that
-account to execute one fixed command as root: `/usr/bin/python3 -I` with the
-registered immutable bundle's `lib/backup.py`, subcommand `archive-push`, and one
-WAL pathname. The sudoers candidate is checked with `visudo` before publication.
-The bridge does not permit a shell, arbitrary Python, backup scheduling, restore,
-or caller-selected pgBackRest options or configuration.
+Each scheduled database run has a separate journal beneath
+`/etc/foundry/backup/operations/`. A failed bundle retains its evidence and does
+not block the next scheduled database backup or other instances' components.
+Instance journals live beneath `/var/lib/foundry/private/instances/<name>/backups/`.
+Use the registered bundle's `lib/backup.py` as root for explicit reconciliation:
 
-The entrypoint requires exactly one WAL argument and checks the registered
-Foundry cluster and repository ownership token. The path must be `pg_wal/` or
-the allocated cluster's absolute `pg_wal/` path, followed by an uppercase WAL
-segment, timeline history, or backup history filename. Canonical path checks
-reject symlink components and traversal. The input must be a bounded regular
-file of at most 1 GiB. Only then does the bridge invoke fixed
-`pgbackrest archive-push` as `postgres`, passing root-owned credentials in the
-child environment. The shared `postgres` OS account can request archival of
-Foundry WAL; the bridge does not grant arbitrary root command execution.
+```sh
+python3 -I /usr/local/lib/foundry/current/lib/backup.py reconcile INSTANCE_UUID OPERATION_UUID
+python3 -I /usr/local/lib/foundry/current/lib/backup.py reconcile-scheduled OPERATION_UUID
+```
+
+If the database outcome is unknown, inspect pgBackRest's inventory and append the
+original completed label to the command. Reconciliation checks that label against
+the recorded inventory and operation time window, then checks WAL availability.
+It never takes another database backup under the unknown operation. A named
+restore point with an unknown outcome remains unresolved because recreating the
+same name would make recovery ambiguous. After investigating an unprovable outcome, append `--abandon` instead of a
+label to preserve its evidence and prevent further reuse. Abandonment does not
+claim rollback or absence of uploaded data. Start a new recovery operation. Unknown key or object uploads are copied and checked
+again only during explicit reconciliation. Existing completed components remain
+selected.
+
+### Repository credential custody
+
+The Foundry cluster and pgBackRest run as the dedicated `foundry-postgres` OS
+account. The WAL command directly invokes the selected bundle as that account.
+The obsolete `/etc/sudoers.d/foundry-backup-archive` bridge is removed before the
+direct command is selected. If rebinding fails, reconcile the pending upgrade
+to restore WAL archival. The shared distro `postgres` account receives no
+repository credential access.
+
+Repository credentials and the encryption passphrase stay in private files.
+They are absent from process arguments and environments. Restore drills use the
+same pgBackRest configuration. Root-run rclone commands use temporary mode-0600
+configuration files. The encrypted off-host key archive includes the repository
+recovery material.
+
+A tool upgrade rebinds the owned backup services and timers and the live
+`archive_command`. It verifies systemd's loaded commands and PostgreSQL's live
+setting before clearing the upgrade operation. A failed rebind leaves the upgrade
+pending so a retry can complete it.
 
 ### PITR and restore drills
 
@@ -490,15 +538,17 @@ selects a timestamp with timezone for PITR. Without a timestamp, the drill uses
 the receipt's named pre-migration point or its first consistent recovery point.
 The drill pauses WAL replay at the selected target and checks the database
 catalog. Its PostgreSQL instance listens only on a private Unix socket and uses
-peer authentication as `postgres`; it has no TCP listener or app roles running.
+peer authentication as `foundry-postgres`; it has no TCP listener or app roles running.
 
-The drill uses a fresh configuration, HBA, and service unit. It cannot overwrite
+The drill persists its identity, paths, target, and phase before allocation.
+Retries with the same backup and target options reattach to that drill. The
+restore command and PostgreSQL replay each use a named systemd service. The
+drill uses a fresh configuration, HBA, and service unit. It cannot overwrite
 live data or start application schedulers. Successful temporary resources are
-removed only after the service process is proven stopped. Retained or failed
-drills preserve their data for inspection. `Host.run` starts commands in their
-own process group and kills that group on timeout before reporting failure.
-Processes that deliberately detach into another session remain outside that
-guarantee; service cleanup separately verifies systemd process exit.
+removed only after both services have stopped, their main PIDs are zero, and
+their cgroups contain no processes. Retained or failed drills preserve their
+paths and phases for inspection. Interrupted restore allocation can be retried
+only after proving process exit for those same owned resources.
 
 Database drill success does not establish business invariants, age decryption,
 or an atomic snapshot across database and objects. Recovery acceptance must

@@ -12,7 +12,7 @@ import time
 import urllib.error
 import urllib.request
 
-from contracts import DeployError, PREFIX, SCHEMA, SLUG_PATTERN, check_path, instance_paths, now, parse_json, valid_uuid
+from contracts import BACKUP_POLICY, DeployError, PREFIX, SCHEMA, SLUG_PATTERN, check_path, instance_paths, now, parse_json, valid_uuid
 from topology import instance_units
 from release import service as role_service
 from host import OperationTimeout as ReportBudgetExceeded, wall_clock_budget
@@ -179,7 +179,23 @@ def checked(problems, code, instance_id, function, *args):
 def backup_freshness(entry, problems, instance_id):
     """Project only F3's recorded completion receipts; never probe a repository."""
     value = entry.get("backup") if isinstance(entry.get("backup"), dict) else {}
+    bundle = value.get("database") if isinstance(value.get("database"), dict) else {}
+    point = bundle.get("database_point") if isinstance(bundle.get("database_point"), dict) else {}
+    objects = value.get("objects") if isinstance(value.get("objects"), dict) else {}
     complete_at = string(value.get("last_complete_at"), 64)
+    grace = objects.get("cleanup_grace_seconds")
+    components_valid = (bundle.get("status") == point.get("status") == objects.get("status") == "complete"
+                        and bundle.get("configuration_revision") == objects.get("configuration_revision") == entry.get("configuration_revision")
+                        and isinstance(grace, (int, float)) and not isinstance(grace, bool) and grace > 0)
+    if components_valid:
+        try:
+            dates = [dt.datetime.fromisoformat(component["completed_at"].replace("Z", "+00:00")) for component in (point, objects)]
+            if any(date.tzinfo is None or date > dt.datetime.now(dt.timezone.utc) for date in dates):
+                raise ValueError("invalid component timestamp")
+            complete_at = min(dates).isoformat()
+        except (KeyError, TypeError, ValueError, AttributeError):
+            components_valid = False
+            problem(problems, "backup_state_invalid", instance_id)
     age = None
     if complete_at:
         try:
@@ -194,11 +210,10 @@ def backup_freshness(entry, problems, instance_id):
             complete_at = None
             problem(problems, "backup_state_invalid", instance_id)
     policy = value.get("policy") if isinstance(value.get("policy"), dict) else {}
-    public_policy = {key: integer(policy.get(key)) for key in ("interval_hours", "daily", "weekly", "monthly")}
-    interval = public_policy["interval_hours"] or 24
+    public_policy = {key: integer(policy.get(key)) for key in BACKUP_POLICY}
     configured = bool(value.get("destination_ref"))
     complete_id = string(value.get("last_complete_id"))
-    fresh = bool(complete_id) and age is not None and age <= interval * 3600 if configured else None
+    fresh = bool(complete_id) and components_valid and age is not None and age < grace if configured else None
     outcome = value.get("last_attempt_outcome")
     allowed_outcomes = {"complete", "succeeded", "failed", "running", "unknown"}
     outcome = outcome if isinstance(outcome, str) and outcome in allowed_outcomes else None
@@ -210,6 +225,7 @@ def backup_freshness(entry, problems, instance_id):
         problem(problems, "backup_failed", instance_id)
     return {"last_complete_id": complete_id, "last_complete_at": complete_at,
             "last_attempt_outcome": outcome, "age_seconds": age, "fresh": fresh,
+            "cleanup_grace_seconds": grace if components_valid else None,
             "retention_policy": public_policy, "last_restore_drill_at": string(value.get("last_restore_drill_at"), 64),
             "restore_drill_outcome": drill_outcome}
 
@@ -295,7 +311,7 @@ def instance_report(host, entry, deadline, problems):
     namespace = entry["allocations"].get("namespace", {})
     paths = instance_paths(name)
     registered_backup, recorded_backup = entry.get("backup"), state.get("backup")
-    backup = backup_freshness({"backup": {
+    backup = backup_freshness({"configuration_revision": entry.get("configuration_revision"), "backup": {
         **(registered_backup if isinstance(registered_backup, dict) else {}),
         **(recorded_backup if isinstance(recorded_backup, dict) else {}),
     }}, problems, instance_id)

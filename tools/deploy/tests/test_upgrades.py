@@ -3,6 +3,7 @@ import copy
 from contextlib import nullcontext
 import json
 import os
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -194,6 +195,28 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaises(DeployError) as caught:
             self.install(allow_upgrade=True)
         self.assertEqual("tools_downgrade", caught.exception.code)
+
+    def test_upgrade_stays_pending_until_new_bundle_rebinds_backup_commands(self):
+        self.install()
+        self.host.registry["shared"] = {"backup": {"owner": "foundry"}}
+        (self.source / "lib/new_module.py").write_text("# updated bundle\n")
+        operation = str(uuid.uuid4())
+        calls = []
+        def command(args, **kwargs):
+            calls.append(args)
+            if len(calls) == 1:
+                raise DeployError("backup_rebind_failed", "loaded command is old")
+            return subprocess.CompletedProcess(args, 0, "", "")
+        with patch.object(self.host, "run", side_effect=command, create=True):
+            with self.assertRaises(DeployError):
+                self.install(allow_upgrade=True, operation_id=operation)
+            self.assertEqual(self.host.registry["tools"]["upgrade_operation"], operation)
+            result = self.install(allow_upgrade=True, operation_id=operation)
+        self.assertEqual(result["outcome"], "succeeded")
+        self.assertEqual(calls[0], calls[1])
+        self.assertEqual(calls[0][-1], "rebind")
+        self.assertIn(self.host.registry["tools"]["bundle_sha256"], calls[0][-2])
+        self.assertIsNone(self.host.registry["tools"]["upgrade_operation"])
 
 
 if __name__ == "__main__":
