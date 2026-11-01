@@ -14,10 +14,10 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
-from contracts import (DeployError, MAX_JSON, atomic_json, atomic_write, check_path,
+from contracts import (DeployError, HOST_ROOTS, MAX_JSON, atomic_json, atomic_write, check_path,
                        identity, parse_json, read_json, validate_profile, storage_bindings, bind_storage,
                        runtime_storage, reserve_runtime_storage, select_runtime_storage,
-                       validate_project, validate_registry, valid_timestamp)
+                       validate_project, validate_registry, valid_timestamp, instance_paths)
 from topology import instance_units
 from host import Host, Paths
 
@@ -50,6 +50,12 @@ def registry(*entries):
 
 class DeploymentContractTests(unittest.TestCase):
 
+
+    def test_instance_accounts_can_traverse_every_shared_parent(self):
+        roots = dict(HOST_ROOTS)
+        paths = instance_paths("abc-production")
+        for key in ("application", "data", "configuration", "state"):
+            self.assertEqual(roots.get(str(Path(paths[key]).parent)), 0o755, key)
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve())
