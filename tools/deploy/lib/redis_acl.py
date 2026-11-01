@@ -240,7 +240,7 @@ def _verify_runtime(host: Host) -> None:
     value = _redis(host, "CONFIG", "GET", *expected)
     require(isinstance(value, dict) and all(value.get(key) == wanted for key, wanted in expected.items()),
             "redis_configuration", "Foundry Redis effective settings differ from the owned plan.")
-    info = _redis(host, "INFO", "persistence")
+    info = _redis(host, "INFO", "persistence", raw=True)
     require(isinstance(info, str), "redis_persistence", "Cannot inspect Foundry Redis persistence.")
     fields = dict(line.split(":", 1) for line in info.splitlines() if ":" in line and not line.startswith("#"))
     require(fields.get("aof_enabled") == "1" and fields.get("aof_last_write_status") == "ok"
@@ -550,11 +550,18 @@ def _host_secrets(host: Host) -> dict:
     return value
 
 
-def _redis(host: Host, *args: str, allow_denied: bool = False):
+def _redis(host: Host, *args: str, allow_denied: bool = False, raw: bool = False):
+    # raw: INFO replies are verbatim strings that redis-cli --json prints as
+    # plain text on Redis 7.0, so they are read unformatted instead.
     credentials = _host_secrets(host)
-    command = ["redis-cli", "-3", "--no-auth-warning", "--json", "--tls", "--cacert", ROOTS,
+    command = ["redis-cli", "-3", "--no-auth-warning", *([] if raw else ["--json"]), "--tls", "--cacert", ROOTS,
                "--sni", "localhost", "-h", "localhost", "-p", str(REDIS_PORT), "--user", credentials["redis_user"]]
     result = host.run(command + list(args), env={"REDISCLI_AUTH": credentials["redis_password"]}, timeout=15)
+    if raw:
+        text = result.stdout.decode() if isinstance(result.stdout, bytes) else (result.stdout or "")
+        require(not text.startswith("(error)") and not text.startswith("ERR"), "redis_inspection",
+                "Redis administration refused; check administrator access.")
+        return text
     try:
         value = json.loads(result.stdout)
     except (ValueError, TypeError):
