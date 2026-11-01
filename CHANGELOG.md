@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed: Deployment source snapshots preserve relative symlinks that stay inside
+  the snapshot root, including starter skill links. Absolute and escaping links,
+  unsafe link chains, hardlinks, and special files remain refused.
 - Added: Framework-owned deployment tooling under `tools/deploy`, with explicit
   app roots, layout and registry v2, digest-bound host upgrades, declared HTTP,
   scheduler and worker roles, atomic configuration/keyring changes, and explicit

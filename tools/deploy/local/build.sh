@@ -10,8 +10,9 @@ esac
 work=/work
 stage=/stage
 mkdir -p "$work" "$stage"
-# The local snapshot owner already excluded private paths and froze these bytes.
-cp -R /src/. "$work/"
+# The snapshot owner validated links and froze these bytes. Preserve links
+# without following their targets while copying into the writable build tree.
+cp -RP /src/. "$work/"
 chmod -R u+w "$work"
 python3 /foundry-deploy/local/build_metadata.py public-env /request.json "$work/.env"
 for frontend in client web; do

@@ -253,6 +253,12 @@ Staging may use a dirty snapshot, recorded in release provenance. Build ownershi
 records prevent a second build from overwriting an orphaned container's output.
 No automatic cleanup removes an unproven active Docker writer.
 
+Both source snapshots preserve relative symlinks whose targets and link chains
+stay inside the snapshot root, including `system/.agents/skills -> ../.claude/skills`.
+Copying preserves each link without copying its target. Absolute or escaping
+symlinks, cycles, entries beneath symlinked directories, hardlinks, and special
+files are refused.
+
 ## Bootstrap prompts and secrets
 
 The CLI creates project and instance UUIDs when their files do not exist. Its

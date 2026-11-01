@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -472,6 +473,39 @@ def source_allowed(name):
                 or name.startswith("config/") and name.endswith(".local.toml"))
 
 
+def validate_source_links(names, links):
+    """Resolve link components without touching targets or leaving the root."""
+    for target in links.values():
+        if not target or PurePosixPath(target).is_absolute() or "\\" in target or any(ord(c) < 32 for c in target):
+            raise LocalError("source symlink must have a relative in-tree target")
+    for name in names:
+        if any(parent.as_posix() in links for parent in PurePosixPath(name).parents):
+            raise LocalError("source entry has a symlink ancestor")
+    for name in links:
+        resolved, active = [], set()
+        pending = [(part, False) for part in reversed(PurePosixPath(name).parts)]
+        while pending:
+            part, finished = pending.pop()
+            if finished:
+                active.remove(part)
+            elif part in {"", "."}:
+                continue
+            elif part == "..":
+                if not resolved:
+                    raise LocalError("source symlink escapes the snapshot root")
+                resolved.pop()
+            else:
+                resolved.append(part)
+                link = "/".join(resolved)
+                if link in links:
+                    if link in active:
+                        raise LocalError("source symlink chain contains a cycle")
+                    active.add(link)
+                    resolved.pop()
+                    pending.append((link, True))
+                    pending.extend((component, False) for component in reversed(links[link].split("/")))
+
+
 def source_inventory():
     paths = execute(["git", "-C", str(ROOT), "ls-files", "--cached", "--others", "--exclude-standard", "-z"])
     result = {}
@@ -479,14 +513,19 @@ def source_inventory():
         if not source_allowed(name):
             continue
         path = ROOT / name
-        if path.is_symlink():
-            raise LocalError("source symlinks require an explicit immutable build-input contract")
-        if not path.exists():
+        check_path(path.parent, "directory")
+        try:
+            details = path.lstat()
+        except FileNotFoundError:
             continue
-        check_path(path, "file")
-        if not path.is_file():
-            raise LocalError("source includes an unsupported nonregular file")
-        result[name] = {"sha256": digest(path), "mode": 0o755 if path.stat().st_mode & 0o111 else 0o644}
+        if stat.S_ISLNK(details.st_mode):
+            result[name] = {"symlink": os.readlink(path)}
+        elif stat.S_ISREG(details.st_mode) and details.st_nlink == 1:
+            check_path(path, "file")
+            result[name] = {"sha256": digest(path), "mode": 0o755 if details.st_mode & 0o111 else 0o644}
+        else:
+            raise LocalError("source includes an unsupported hardlink or special file")
+    validate_source_links(result, {name: details["symlink"] for name, details in result.items() if "symlink" in details})
     return result
 
 
@@ -504,14 +543,25 @@ def source_snapshot(project, profile, request, directory):
     if production:
         execute(["git", "-C", str(ROOT), "archive", "--format=tar", "--output=" + str(archive), manifest["commit"]])
         with tarfile.open(archive, "r:") as bundle:
+            members = {}
             for member in bundle:
                 if not source_allowed(member.name):
                     continue
-                if not (member.isfile() or member.isdir()):
-                    raise LocalError("source archive contains unsupported links or special files")
-                destination = snapshot / member.name
+                if not (member.isfile() or member.isdir() or member.issym()):
+                    raise LocalError("source archive contains unsupported hardlinks or special files")
+                name = PurePosixPath(member.name).as_posix()
+                if name in members:
+                    raise LocalError("source archive contains duplicate paths")
+                members[name] = member
+            links = {name: member.linkname for name, member in members.items() if member.issym()}
+            validate_source_links(members, links)
+            for name, member in members.items():
+                destination = snapshot / name
                 if member.isdir():
                     destination.mkdir(parents=True, exist_ok=True)
+                elif member.issym():
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.symlink_to(member.linkname)
                 else:
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     with bundle.extractfile(member) as source, destination.open("xb") as output:
@@ -528,19 +578,28 @@ def source_snapshot(project, profile, request, directory):
             for name, details in before.items():
                 destination = snapshot / name
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(ROOT / name, destination, follow_symlinks=False)
-                if destination.is_symlink() or digest(destination) != details["sha256"]:
-                    raise LocalError("source changed during snapshot capture; retry after edits finish")
-                destination.chmod(details["mode"])
+                if "symlink" in details:
+                    destination.symlink_to(details["symlink"])
+                else:
+                    check_path(ROOT / name, "file")
+                    shutil.copyfile(ROOT / name, destination, follow_symlinks=False)
+                    if destination.is_symlink() or digest(destination) != details["sha256"]:
+                        raise LocalError("source changed during snapshot capture; retry after edits finish")
+                    destination.chmod(details["mode"])
                 info = bundle.gettarinfo(str(destination), name)
                 info.uid = info.gid = info.mtime = 0
                 info.uname = info.gname = ""
-                with destination.open("rb") as source:
-                    bundle.addfile(info, source)
+                if info.issym():
+                    bundle.addfile(info)
+                else:
+                    with destination.open("rb") as source:
+                        bundle.addfile(info, source)
         if source_inventory() != before:
             raise LocalError("source changed during snapshot capture; retry after edits finish")
         manifest["source_kind"] = "working_tree"
     for attributes in snapshot.rglob(".gitattributes"):
+        if attributes.is_symlink():
+            continue
         if re.search(r"filter\s*=\s*lfs", attributes.read_text()):
             raise LocalError("Git LFS inputs need an explicit immutable build-input contract")
     module = (snapshot / "go.mod").read_text()
@@ -552,7 +611,7 @@ def source_snapshot(project, profile, request, directory):
     manifest["source_sha256"] = digest(archive)
     manifest["topology_sha256"] = load_topology(snapshot)["sha256"]
     for path in snapshot.rglob("*"):
-        if path.is_file():
+        if not path.is_symlink() and path.is_file():
             path.chmod(0o555 if path.stat().st_mode & 0o111 else 0o444)
     return snapshot
 

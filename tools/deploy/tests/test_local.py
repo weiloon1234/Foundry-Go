@@ -615,17 +615,136 @@ class LocalDeploymentTests(unittest.TestCase):
                 cli.source_snapshot(project, profile, {"manifest": {"tree_state": "dirty"}}, self.root)
         execute.assert_not_called()
 
-    def snapshot_files(self, project, profile):
+    def snapshot_files(self, project, profile, root=None):
+        root = self.root if root is None else root
         files = {"go.mod": "module example.com/app\ngo 1.26\n",
                  "deploy/project.json": json.dumps(project),
                  "deploy/environments/" + profile["environment"] + ".json": json.dumps(profile),
                  "deploy/topology.json": '{"schema":1,"roles":[{"name":"http"}]}',
                  "main.go": "package main\n", ".env": "private-canary"}
         for name, value in files.items():
-            path = self.root / name
+            path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(value)
         return files
+
+    def snapshot_with_links(self, production, links=(), special=None):
+        root = self.root / uuid.uuid4().hex
+        root.mkdir()
+        project, profile = fixture()
+        if not production:
+            profile["runtime_environment"] = "staging"
+        files = self.snapshot_files(project, profile, root)
+        name = "system/.claude/skills/rule.md"
+        files[name] = "skill content\n"
+        (root / name).parent.mkdir(parents=True)
+        (root / name).write_text(files[name])
+        members = []
+        for name, target in links:
+            info = tarfile.TarInfo(name)
+            info.type, info.linkname = tarfile.SYMTYPE, target
+            members.append(info)
+            if not production:
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).symlink_to(target)
+        if special is not None:
+            info = tarfile.TarInfo("special")
+            info.type, info.linkname = special, "main.go" if special == tarfile.LNKTYPE else ""
+            members.append(info)
+            if not production:
+                if special == tarfile.LNKTYPE:
+                    os.link(root / "main.go", root / "special")
+                elif special == tarfile.FIFOTYPE:
+                    os.mkfifo(root / "special")
+        work = root / "snapshot"
+        work.mkdir()
+        request = {"manifest": {"tree_state": "clean" if production else "dirty", "commit": "a" * 40}}
+
+        def execute(args, **_):
+            if "archive" in args:
+                target = next(value.removeprefix("--output=") for value in args if value.startswith("--output="))
+                with tarfile.open(target, "w") as archive:
+                    # Put links first to exercise forward references and avoid
+                    # depending on git archive's member order.
+                    for info in members:
+                        archive.addfile(info)
+                    for name, content in files.items():
+                        info = tarfile.TarInfo(name)
+                        data = content.encode()
+                        info.size = len(data)
+                        archive.addfile(info, io.BytesIO(data))
+            if "-z" in args:
+                return "\0".join([*files, *(info.name for info in members)]) + "\0"
+            return ""
+
+        with patch.object(cli, "ROOT", root), patch.object(cli, "execute", side_effect=execute), \
+                patch.object(cli, "build_request", return_value=request):
+            snapshot = cli.source_snapshot(project, profile, request, work)
+        return snapshot, work / "source.tar"
+
+    def test_source_snapshot_preserves_relative_in_tree_symlinks(self):
+        links = [("system/.agents/skills", "../.claude/skills"),
+                 ("skill-alias", "system/.agents/skills"),
+                 ("dangling", "missing/target")]
+        for production in (True, False):
+            with self.subTest(production=production):
+                snapshot, archive = self.snapshot_with_links(production, links)
+                for name, target in links:
+                    self.assertTrue((snapshot / name).is_symlink())
+                    self.assertEqual(os.readlink(snapshot / name), target)
+                self.assertEqual((snapshot / "skill-alias/rule.md").read_text(), "skill content\n")
+                with tarfile.open(archive) as bundle:
+                    for name, target in links:
+                        self.assertTrue(bundle.getmember(name).issym())
+                        self.assertEqual(bundle.getmember(name).linkname, target)
+
+    def test_source_snapshot_refuses_absolute_symlink_targets(self):
+        for production in (True, False):
+            with self.subTest(production=production), self.assertRaisesRegex(cli.LocalError, "symlink"):
+                self.snapshot_with_links(production, [("link", str(self.root))])
+
+    def test_source_snapshot_refuses_parent_escape_symlinks(self):
+        for production in (True, False):
+            with self.subTest(production=production), self.assertRaisesRegex(cli.LocalError, "symlink"):
+                self.snapshot_with_links(production, [("nested/link", "../../outside")])
+
+    def test_source_snapshot_refuses_escaping_symlink_chains(self):
+        # Each target is lexically inside the root in isolation. Expanding the
+        # intermediate directory link makes the final '..' escape.
+        links = [("alias", "."), ("nested/link", "../alias/../outside")]
+        for production in (True, False):
+            with self.subTest(production=production), self.assertRaisesRegex(cli.LocalError, "symlink"):
+                self.snapshot_with_links(production, links)
+
+    def test_source_snapshot_refuses_symlink_cycles(self):
+        for production in (True, False):
+            with self.subTest(production=production), self.assertRaisesRegex(cli.LocalError, "symlink"):
+                self.snapshot_with_links(production, [("first", "second"), ("second", "first")])
+
+    def test_source_snapshot_refuses_hardlinks_and_special_files(self):
+        for production in (True, False):
+            kinds = (tarfile.LNKTYPE, tarfile.FIFOTYPE, tarfile.CHRTYPE, tarfile.BLKTYPE) if production else (
+                tarfile.LNKTYPE, tarfile.FIFOTYPE)
+            for kind in kinds:
+                with self.subTest(production=production, kind=kind), self.assertRaisesRegex(cli.LocalError, "unsupported"):
+                    self.snapshot_with_links(production, special=kind)
+
+    def test_source_archive_refuses_entries_beneath_symlinked_directories(self):
+        with self.assertRaisesRegex(cli.LocalError, "symlink ancestor"):
+            self.snapshot_with_links(True, [("system/.claude/skills", "..")])
+
+    def test_source_inventory_does_not_follow_symlinked_ancestors(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "private").write_text("private-canary")
+        root = self.root / "app"
+        root.mkdir()
+        (root / "alias").symlink_to(outside)
+        with patch.object(cli, "ROOT", root), patch.object(cli, "execute", return_value="alias/private\0"), \
+                patch.object(cli, "digest") as digest:
+            with self.assertRaisesRegex(cli.DeployError, "symlink"):
+                cli.source_inventory()
+        digest.assert_not_called()
 
     def test_production_build_uses_exact_commit_archive_and_not_checkout(self):
         project, profile = fixture()
