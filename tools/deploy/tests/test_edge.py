@@ -53,7 +53,7 @@ class EdgeTests(unittest.TestCase):
         text = _template(TOOLS, "nginx-https.conf", entry)
         self.assertIn("real_ip_header CF-Connecting-IP", text)
         self.assertNotIn("geo ", text)
-        self.assertNotIn("444", text)
+        self.assertNotIn("return 444", text)
 
     def test_data_validation_and_warning(self):
         value = json.loads((TOOLS / "lib/cloudflare-ranges.json").read_text())

@@ -912,11 +912,10 @@ def _install_configuration(host, cluster):
                      owner=postgres.cluster_owner(), group=postgres.cluster_owner())
 
 
-def _archive_command(registry):
-    script = registry["tools"]["active_path"] + "/lib/backup.py"
-    require(re.fullmatch(r"/usr/local/lib/foundry/tools/[a-f0-9]{64}/lib/backup\.py", script),
-            "backup_tools_identity", "Use the immutable registered Foundry tool bundle for backup jobs.")
-    return f"/usr/bin/python3 -I {script} archive-push %p"
+def _archive_command():
+    # pgBackRest's own check requires PostgreSQL to call it directly; the cluster
+    # already runs as the dedicated account that owns the private config.
+    return f"/usr/bin/pgbackrest --config={CONFIG} --stanza={STANZA} archive-push %p"
 
 
 def _remove_wal_bridge(host):
@@ -945,10 +944,10 @@ def rebind(host, registry):
     host.write_registry(registry)
     _install_configuration(host, cluster)
     plan = postgres.cluster_settings(host, registry)
-    plan["archive_command"] = _archive_command(registry)
+    plan["archive_command"] = _archive_command()
     postgres.prepare(host, registry, shared_service_plan=plan)
     observed = _admin(host, cluster, "SHOW archive_command;\n").stdout.strip()
-    require(observed == plan["archive_command"], "backup_rebind_failed", "The live WAL command does not select the new bundle.")
+    require(observed == plan["archive_command"], "backup_rebind_failed", "The live WAL command is not the Foundry pgBackRest command.")
     for entry in registry["instances"].values():
         if _instance_settings_path(host, entry).exists():
             _install_timers(host, registry, entry)
@@ -986,27 +985,6 @@ def _wal_pattern(cluster):
     # Accept only PostgreSQL WAL, timeline and backup-history filenames.
     return (r"(pg_wal/|" + cluster["data_path"] + r"/pg_wal/)"
             r"([0-9A-F]{24}|[0-9A-F]{8}[.]history|[0-9A-F]{24}[.][0-9A-F]{8}[.]backup)")
-
-
-def archive_push(host: Host, wal: str) -> None:
-    """Run directly as the dedicated cluster owner, without a sudo bridge."""
-    path = check_path(host.paths.p(CONFIG), "file")
-    info = path.stat()
-    require(stat.S_IMODE(info.st_mode) == 0o600 and (host.paths.root != Path("/")
-            or info.st_uid == os.geteuid() == pwd.getpwnam(postgres.cluster_owner()).pw_uid),
-            "backup_private_permissions", "WAL archival requires the dedicated cluster owner and private config.")
-    config = configparser.ConfigParser(interpolation=None)
-    config.read(path)
-    data = config.get(STANZA, "pg1-path")
-    require(re.fullmatch(re.escape(postgres.CLUSTER_HOME) + r"/(16|18)/foundry", data),
-            "backup_cluster_ownership", "WAL archival requires the dedicated Foundry cluster.")
-    require(isinstance(wal, str) and re.fullmatch(_wal_pattern({"data_path": data}), wal),
-            "backup_wal_path", "WAL archival accepts only an allocated cluster WAL filename.")
-    canonical = wal if wal.startswith("/") else data + "/" + wal
-    source = check_path(host.paths.p(canonical), "file")
-    require(source.exists() and source.stat().st_size <= 1024 * 1024 * 1024,
-            "backup_wal_path", "WAL input is absent or exceeds its bound.")
-    host.run(["pgbackrest", "--config=" + str(path), "--stanza=" + STANZA, "archive-push", str(source)], timeout=300)
 
 
 def _schedule_path(host, operation):
@@ -1085,9 +1063,7 @@ def _scheduled(host, task, identity):
 
 def _main(arguments):
     host = Host()
-    if len(arguments) == 2 and arguments[0] == "archive-push":
-        archive_push(host, arguments[1])
-    elif len(arguments) == 3 and arguments[0] == "scheduled":
+    if len(arguments) == 3 and arguments[0] == "scheduled":
         require(os.geteuid() == 0, "root_required", "Backup control operations require root.")
         _scheduled(host, arguments[1], arguments[2])
     elif arguments == ["rebind"]:

@@ -72,7 +72,7 @@ class BackupTests(unittest.TestCase):
         elif "--property=LoadState,ActiveState,MainPID,ControlGroup" in args:
             output = "LoadState=loaded\nActiveState=inactive\nMainPID=0\nControlGroup=\n"
         elif "SHOW archive_command" in kwargs.get("input", ""):
-            output = backup._archive_command(self.registry)
+            output = backup._archive_command()
         return subprocess.CompletedProcess(args, 0, output, "")
 
     def test_archive_is_encrypted_before_copy_and_contains_referenced_values(self):
@@ -259,25 +259,14 @@ class BackupTests(unittest.TestCase):
         self.assertTrue(all("Persistent=true" in timer.read_text() for timer in timers))
         self.assertFalse(self.host.paths.p("/etc/postgresql/16/foundry/postgresql.conf").exists())
 
-    def test_direct_wal_command_refuses_arbitrary_paths_options_and_symlinks(self):
-        cluster = self.cluster()
-        backup._write_private(self.host, self.host.paths.p(backup.REPOSITORY),
-                              {**self.repository, "host_id": self.registry["host_id"], "cluster_token": cluster["ownership_token"]})
-        backup._install_configuration(self.host, cluster)
-        for value in ("/etc/shadow", "pg_wal/../../etc/shadow", "--config=/etc/foreign", "pg_wal/" + "A" * 24 + " more"):
-            with self.subTest(value=value), self.assertRaises(DeployError):
-                backup.archive_push(self.host, value)
-        path = self.host.paths.p(cluster["data_path"] + "/pg_wal/" + "A" * 24)
-        path.parent.mkdir(parents=True)
-        path.symlink_to(self.host.paths.p(backup.REPOSITORY))
-        with self.assertRaises(DeployError):
-            backup.archive_push(self.host, "pg_wal/" + path.name)
-        self.assertEqual(self.commands, [])
-        path.unlink()
-        path.write_bytes(b"wal")
-        backup.archive_push(self.host, "pg_wal/" + path.name)
-        self.assertEqual(self.commands[-1][0][-2:], ["archive-push", str(path)])
-        self.assertNotIn("env", self.commands[-1][1])
+    def test_wal_command_calls_pgbackrest_directly_with_foundry_config(self):
+        command = backup._archive_command()
+        self.assertTrue(command.startswith("/usr/bin/pgbackrest "))
+        self.assertIn("--config=" + backup.CONFIG, command)
+        self.assertIn("--stanza=" + backup.STANZA, command)
+        self.assertTrue(command.endswith(" archive-push %p"))
+        self.assertNotIn("sudo", command)
+        self.assertNotIn("python", command)
 
     def test_restore_is_new_private_cluster_and_records_timing(self):
         cluster = self.cluster()
@@ -330,7 +319,7 @@ class BackupTests(unittest.TestCase):
         self.assertTrue(Path(result["data_path"]).parent.is_dir())
         self.assertNotIn("verification", result)
 
-    def test_cluster_and_archive_use_allocated_nondefault_postgres_port(self):
+    def test_cluster_and_backup_config_use_allocated_nondefault_postgres_port(self):
         cluster = self.cluster()
         cluster["port"] = backup.POSTGRES_PORT + 7
         self.host.write_registry(self.registry)
@@ -338,12 +327,7 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(backup._cluster(self.host, self.registry)["port"], cluster["port"])
         backup._write_private(self.host, self.host.paths.p(backup.REPOSITORY),
                               {**self.repository, "host_id": self.registry["host_id"], "cluster_token": cluster["ownership_token"]})
-        path = self.host.paths.p(cluster["data_path"] + "/pg_wal/" + "B" * 24)
-        path.parent.mkdir(parents=True)
-        path.write_bytes(b"wal")
         backup._install_configuration(self.host, cluster)
-        backup.archive_push(self.host, "pg_wal/" + path.name)
-        self.assertEqual(self.commands[-1][0][-2:], ["archive-push", str(path)])
         self.assertIn("pg1-port=" + str(cluster["port"]), backup._configuration(self.host, cluster, self.repository))
 
     def select_storage(self, storage):

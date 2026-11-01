@@ -514,7 +514,8 @@ selected.
 ### Repository credential custody
 
 The Foundry cluster and pgBackRest run as the dedicated `foundry-postgres` OS
-account. The WAL command directly invokes the selected bundle as that account.
+account. PostgreSQL's `archive_command` invokes `pgbackrest archive-push` directly
+as that account with the Foundry configuration, as `pgbackrest check` requires.
 The obsolete `/etc/sudoers.d/foundry-backup-archive` bridge is removed before the
 direct command is selected. If rebinding fails, reconcile the pending upgrade
 to restore WAL archival. The shared distro `postgres` account receives no

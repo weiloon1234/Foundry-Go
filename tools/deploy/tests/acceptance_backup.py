@@ -67,7 +67,7 @@ def main():
 
     # Bootstrap consumes request["secrets"] and configures the shared repository.
     # Manual backup uses that same persisted binding; it does not reconfigure it.
-    from backup import STANZA, CONFIG, _backrest
+    from backup import STANZA, CONFIG, _archive_command, _backrest
     stanza, config = STANZA, CONFIG
     shared = host.read_registry()["shared"]["postgresql"]
     assert shared["cluster"] == "foundry" and shared["port"] != 5432
@@ -75,7 +75,7 @@ def main():
     assert psql(pg, "SELECT 1;").stdout.strip() == "1"
     assert psql(pg, "SHOW archive_mode;").stdout.strip() == "on"
     archive_command = psql(pg, "SHOW archive_command;").stdout
-    assert "sudo" not in archive_command and "/usr/bin/python3 -I " in archive_command and archive_command.strip().endswith("/backup.py archive-push %p")
+    assert archive_command.strip() == _archive_command()
     assert Path(admin(shared, "SHOW data_directory;")).resolve() == Path(shared["data_path"]).resolve()
     _backrest(host, ["check"], timeout=300)
     table = "acceptance_pitr_" + uuid.uuid4().hex
