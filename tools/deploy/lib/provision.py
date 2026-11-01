@@ -29,6 +29,7 @@ import backup
 import upgrades
 
 _marker = marker
+NGINX_VARIABLE_MAX = 46
 
 
 def _journal(host, registry, entry=None):
@@ -248,6 +249,7 @@ def _provision_environment(host, registry, entry, credentials):
     _step(host, registry, entry, "configuration")
 
 
+
 def _template(tools_dir, name, entry, *, postgres_unit=""):
     """Render one owned template; caller supplies the registered Foundry cluster unit."""
     content = (Path(tools_dir) / "server" / "templates" / name).read_text()
@@ -264,7 +266,11 @@ def _template(tools_dir, name, entry, *, postgres_unit=""):
         content = content.replace("@PROXY@", (Path(tools_dir) / "server/templates/nginx-proxy.conf").read_text().rstrip())
     if "@UPGRADE_MAP@" in content:
         content = content.replace("@UPGRADE_MAP@", (Path(tools_dir) / "server/templates/nginx-upgrade.conf").read_text().rstrip())
-    replacements["@VARIABLE@"] = PREFIX.replace("-", "_") + "_" + entry["allocations"]["database"] + "_upgrade"
+    # nginx's default variables_hash_bucket_size (64) fits names up to 46 bytes on
+    # 64-bit hosts; the shared http-level limit belongs to the host administrator.
+    variable = entry["allocations"]["database"] + "_upgrade"
+    require(len(variable) <= NGINX_VARIABLE_MAX, "nginx_invalid", "The site variable exceeds nginx's default hash bucket.")
+    replacements["@VARIABLE@"] = variable
     for key, value in replacements.items():
         content = content.replace(key, value)
     return content

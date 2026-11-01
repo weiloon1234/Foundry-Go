@@ -2,6 +2,7 @@
 import copy
 from datetime import date, timedelta
 import json
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -54,6 +55,8 @@ class EdgeTests(unittest.TestCase):
         self.assertIn("real_ip_header CF-Connecting-IP", text)
         self.assertNotIn("geo ", text)
         self.assertNotIn("return 444", text)
+        variable = re.search(r"^map \$http_upgrade \$(\S+) \{$", text, re.M).group(1)
+        self.assertLessEqual(len(variable), 46)
 
     def test_data_validation_and_warning(self):
         value = json.loads((TOOLS / "lib/cloudflare-ranges.json").read_text())
