@@ -349,11 +349,23 @@ disables tickets), the first redemption consumes it, and deleting its family
 at most `MaxTicketsPerFamily` (default 8) unexpired tickets; issuing past the cap
 drops the oldest. While tickets are enabled, `Prune` also removes expired tickets.
 
-The WebSocket hub redeems tickets through `RedeemTicket`/`TicketSource` (see
+The WebSocket hub and HTTP ticket routes share `auth.TicketRedeemer`, implemented
+by `token.Tokens` through `RedeemTicket` and `TicketSource` (see
 [handshake tickets](websocket.md#handshake-tickets-for-bearer-token-browsers)). A
 redeemed ticket becomes a bound credential that every later auth scope re-checks
 against the live family, so revocation still ends the connection while ordinary
 refreshes do not. Rate-limit the issuance route like other credential endpoints.
+
+`ValidateTickets()` checks that a token binding supports enabled tickets without
+issuing one. `datatable.TokenTickets(tokens)` uses this check during registration.
+For ordinary GET downloads, use [ticket-authenticated routes](authentication.md#ticket-authenticated-routes).
+Deliver only the single-use ticket through `TicketEndpoint.URL`, never an access
+or refresh token. The response must be no-store and the URL must stay out of logs.
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/table_routes.go -->
+```go
+return datatable.TokenTickets(tokens)
+```
 
 ## Pruning
 

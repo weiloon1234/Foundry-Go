@@ -1993,3 +1993,7 @@ See the [lane B report](../../docs/evidence/goway-stage10-b-docs.md),
 [lane D report](../../docs/evidence/goway-stage10-lane-d-report.md),
 [Stage 11 preparation](../../docs/evidence/goway-stage11-lane-c-preparation.md)
 and [integration evidence](../../docs/evidence/goway-batch10-integration.json).
+
+The B22 ticket-route update reuses `datatable_routes_ticket_actor` for the new
+`TokenTickets` model mismatch in both consumer catalogues. It replaces the
+removed callback mismatch, so the catalogue remains at 1058 cases.

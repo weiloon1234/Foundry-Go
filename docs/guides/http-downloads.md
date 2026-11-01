@@ -104,3 +104,17 @@ checks passed before publication. Canonical acceptance and the complete combined
 regression with unseekable streams also passed. [Storage-backed downloads](storage.md) use explicitly selected disks; [static/SPA integration](http-assets.md) is delivered. Typed
 unseekable streams are documented in [stream responses](http-streams.md). The documented example is compiled from the independent
 consumer module as part of acceptance.
+
+## Single-use ticket downloads
+
+Use [ticket-authenticated routes](authentication.md#ticket-authenticated-routes)
+when a browser cannot supply the Authorization header. The guard scope remains
+open through deferred file generation and streaming. Ticket privacy headers
+outlive a download writer's cache policy. HEAD returns 405 without consuming the
+ticket. A consumed ticket cannot resume a transfer with Range or If-Range; obtain
+a fresh ticket for each retry or range request.
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/ticket_route.go -->
+```go
+return http.TicketAuthenticated(endpoint, binding, tokens)
+```

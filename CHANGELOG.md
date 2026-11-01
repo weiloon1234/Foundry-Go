@@ -2,11 +2,21 @@
 
 ## Unreleased
 
+- Added: `http.TicketAuthenticated` and typed ticket URLs for guarded GET routes,
+  with single-use redemption, current actor/scope checks and enforced no-store
+  and no-referrer response headers.
 - Added: `expr.TextRowValue` and `expr.TextNullableRowValue` expose text predicates
   on computed row values, including correlated scalars, while preserving types,
   codecs, scope and SQL NULL semantics.
 - Added: `testkit/application.RunKernel` and `RunHTTP` run application kernels with
   test-owned cleanup, bounded drain waits and lifecycle failure reporting.
+- Changed: HTTP and WebSocket share isolated ticket redemption through
+  `auth.TicketRedeemer`. Datatable downloads enforce `ExportAccess` and retain
+  their guard scope through deferred loading and streaming.
+- Breaking: Manifest 8 adds the ticket credential kind. Replace
+  `websocket.TicketRedeemer` with `auth.TicketRedeemer` and datatable ticket
+  callbacks with `datatable.TokenTickets(tokens)`. Remove `datatable.IssuedTicket`
+  and `DownloadQuery.Ticket`; standard downloads reject HEAD without consumption.
 
 ## v0.3.3 — 2026-11-01
 

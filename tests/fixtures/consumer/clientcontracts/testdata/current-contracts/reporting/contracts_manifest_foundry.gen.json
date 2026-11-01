@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "types": [
     {
       "id": "[]contract.Issue",
@@ -892,8 +892,21 @@
         "method": "GET",
         "path": "/reports/tables/reports.numeric_levels/download",
         "parameters": [],
-        "access": "public",
-        "raw": false
+        "access": "guarded",
+        "raw": false,
+        "middlewares": [
+          "foundry.authentication"
+        ],
+        "authentication": {
+          "guard": "report.contract",
+          "provider": "report.operators",
+          "optional": false,
+          "credential": {
+            "source": "report.contract",
+            "kind": "ticket",
+            "name": "ticket"
+          }
+        }
       },
       "name": "reportsTablesReportsNumericLevelsDownload",
       "path": [],
@@ -914,13 +927,6 @@
         },
         {
           "name": "request",
-          "type": "string",
-          "syntax": "text",
-          "required": true,
-          "repeated": false
-        },
-        {
-          "name": "ticket",
           "type": "string",
           "syntax": "text",
           "required": true,

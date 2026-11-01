@@ -269,6 +269,9 @@ type consumerEditorProbe struct {
 
 func consumerEditorProbes() []consumerEditorProbe {
 	return []consumerEditorProbe{
+		{"ticket-http-endpoint", "reporting/ticket_route.go", "return http.", "TicketAuthenticated", []string{"TicketAuthenticated", "ValidateTicketAuthenticated", "InspectTicketAuthenticated"}, []string{"GuardBinding", "TicketRedeemer", "TicketEndpoint"}, "/http/ticket_endpoint.go"},
+		{"ticket-http-url", "reporting/ticket_route.go", "MemberTicketEndpoint(binding, tokens).", "URL", []string{"URL", "Handle"}, []string{"secret.String", "NoPath", "NoQuery"}, "/http/ticket_endpoint.go"},
+		{"ticket-datatable-model", "reporting/table_routes.go", "return datatable.", "TokenTickets", []string{"TokenTickets", "Routes"}, []string{"Identifiable", "Tokens", "Tickets"}, "/datatable/routes.go"},
 		{"client-presentation", "clientcontracts/presentation.go", "parameter.", "WithPresentation", []string{"WithPresentation"}, []string{"Presentation", "QueryParameter"}, "/http/presentation.go"},
 		{"application-spa-portal", "spaportals/portals.go", "builder.", "SPA", []string{"SPA", "HTTP", "Register", "Build"}, []string{"RouteID", "Assets", "SPAConfig", "Builder"}, "/application/builder.go"},
 		{"configured-dates", "configuredprofile/timezone_test.go", "dates.", "Today", []string{"Now", "Today", "Parse", "Format", "AddDays"}, []string{"Date", "error"}, "/temporal/service.go"},

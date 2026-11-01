@@ -19,9 +19,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
-// Version 7 adds explicit table operation bindings and canonical page schemas. Earlier
+// Version 8 adds ticket-authenticated HTTP credential metadata. Earlier
 // formats must be regenerated; older readers reject unsupported versions.
-const Version = 7
+const Version = 8
 const MaxBytes = 16 << 20
 const MaxOperations = 4096
 

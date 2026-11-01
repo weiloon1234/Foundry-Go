@@ -18,11 +18,10 @@ type ExportRequest struct {
 
 // DownloadQuery opens a ticket export with its bounded JSON request.
 //
-// Example: datatable.DownloadQuery{Ticket: ticketSecret.Reveal(), Format: datatable.CSV, Request: "{}"}
+// Example: datatable.DownloadQuery{Format: datatable.CSV, Request: "{}"}
 //
 //foundry:query
 type DownloadQuery struct {
-	Ticket  string       `query:"ticket"`
 	Format  ExportFormat `query:"format"`
 	Request string       `query:"request"`
 	// Locale preserves the issuing request's language. Omitted values use the

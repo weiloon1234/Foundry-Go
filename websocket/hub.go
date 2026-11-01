@@ -24,7 +24,7 @@ type Hub struct {
 	registry       *Registry
 	config         Config
 	authentication *foundryhttp.Authentication
-	tickets        []TicketRedeemer
+	tickets        []auth.TicketRedeemer
 	logger         atomic.Pointer[slog.Logger]
 	ctx            context.Context
 	cancel         context.CancelFunc
@@ -79,7 +79,7 @@ type operationFrame struct {
 type Option func(*options) error
 type options struct {
 	logger  *slog.Logger
-	tickets []TicketRedeemer
+	tickets []auth.TicketRedeemer
 }
 
 // WithLogger reports cluster degradation, stream loss/recovery and terminal

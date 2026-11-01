@@ -24,6 +24,5 @@ var foundryDownloadQueryDescriptor = sync.OnceValue(func() foundryhttp.Query[Dow
 		foundryhttp.QueryParam[DownloadQuery, ExportFormat]("format", foundryhttp.URLType("github.com/weiloon1234/Foundry-Go/datatable.ExportFormat", foundryhttp.EnumQuery[ExportFormat, *ExportFormat](ExportFormat("").EnumDescriptor())), func(query *DownloadQuery) *ExportFormat { return &query.Format }),
 		foundryhttp.OptionalQueryParam[DownloadQuery, i18n.LocaleID]("locale", foundryhttp.URLType("github.com/weiloon1234/Foundry-Go/i18n.LocaleID", foundryhttp.StringQuery[i18n.LocaleID]()), func(query *DownloadQuery) *foundryvalue.Optional[i18n.LocaleID] { return &query.Locale }),
 		foundryhttp.QueryParam[DownloadQuery, string]("request", foundryhttp.URLType("string", foundryhttp.StringQuery[string]()), func(query *DownloadQuery) *string { return &query.Request }),
-		foundryhttp.QueryParam[DownloadQuery, string]("ticket", foundryhttp.URLType("string", foundryhttp.StringQuery[string]()), func(query *DownloadQuery) *string { return &query.Ticket }),
 	)
 })

@@ -6,6 +6,26 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## Ticket-authenticated routes: manifest 8, v0.4.0
+
+Regenerate Go descriptors, manifest, OpenAPI and TypeScript together. Manifest 8
+adds credential kind `ticket`; version 7 documents must be regenerated. The
+OpenAPI scheme is `apiKey` in query parameter `ticket`. TypeScript credential
+metadata retains its string kind and domain query DTOs omit the ticket.
+
+Move `websocket.TicketRedeemer` references to `auth.TicketRedeemer`, including
+`application.RealtimeDeclarations.Tickets`. There is no compatibility alias.
+Replace `datatable.Tickets[M, A]{Issue, Redeem}` with
+`datatable.TokenTickets(tokens)`, which returns `datatable.Tickets[M]`.
+`datatable.IssuedTicket` and `DownloadQuery.Ticket` are removed.
+
+Standard table downloads are guarded ticket routes and enforce `ExportAccess`.
+Their handler resolves the actor through `Authority(ctx, actor)` in a scope that
+stays open through streaming. Remove manual ticket redemption and temporary
+redeemed-actor authority modes. Preserve separate queued-export authority where
+needed. HEAD now returns 405 and does not consume a ticket. Follow the
+[ticket security notes](guides/authentication.md#ticket-authenticated-routes).
+
 ## Framework-owned table routes — v0.3.2
 
 `datatable.Routes` is additive; custom protocols continue to use the endpoint

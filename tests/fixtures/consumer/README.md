@@ -366,5 +366,10 @@ TypeScript sources are unchanged. The lead runs that integration gate.
 `reporting.NumericLevelRoutes` exercises `datatable.Routes` with distinct HTTP
 operator and table authority types. The reporting client cohort covers framework
 export request, download query and ticket DTOs. Compiler negatives reject the
-wrong authority result, access-option actor and ticket-issuer actor; Go-way mirrors
+wrong authority result, access-option actor and TokenTickets model; Go-way mirrors
 retain all three checks.
+
+The reporting ticket examples use `http.TicketAuthenticated`, `TicketEndpoint.URL`
+and `datatable.TokenTickets`. Downloads are guarded in manifest 8 and retain the
+actor scope through deferred row loading. `datatable_routes_ticket_actor` now
+rejects another model's token adapter; the existing catalogue count is unchanged.

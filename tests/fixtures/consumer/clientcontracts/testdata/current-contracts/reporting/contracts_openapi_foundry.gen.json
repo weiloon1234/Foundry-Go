@@ -729,6 +729,11 @@
       "Credential_Authorization_2ebb9371f7115088": {
         "scheme": "bearer",
         "type": "http"
+      },
+      "Credential_Ticket_c9746066dfd8fab7": {
+        "in": "query",
+        "name": "ticket",
+        "type": "apiKey"
       }
     }
   },
@@ -2322,17 +2327,6 @@
             },
             "style": "form",
             "x-foundry-url-syntax": "text"
-          },
-          {
-            "explode": true,
-            "in": "query",
-            "name": "ticket",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/String"
-            },
-            "style": "form",
-            "x-foundry-url-syntax": "text"
           }
         ],
         "responses": {
@@ -2797,7 +2791,22 @@
             "description": "unavailable"
           }
         },
-        "x-foundry-access": "public",
+        "security": [
+          {
+            "Credential_Ticket_c9746066dfd8fab7": []
+          }
+        ],
+        "x-foundry-access": "guarded",
+        "x-foundry-authentication": {
+          "guard": "report.contract",
+          "provider": "report.operators",
+          "optional": false,
+          "credential": {
+            "source": "report.contract",
+            "kind": "ticket",
+            "name": "ticket"
+          }
+        },
         "x-foundry-client-name": "reportsTablesReportsNumericLevelsDownload",
         "x-foundry-file-transfer-bytes": 1073745324,
         "x-foundry-limits": {
@@ -3366,5 +3375,5 @@
       }
     }
   },
-  "x-foundry-manifest-version": 7
+  "x-foundry-manifest-version": 8
 }

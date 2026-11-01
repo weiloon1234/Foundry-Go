@@ -3,7 +3,7 @@
   "files": {
     "column_kind_foundry.gen.go": "0ff10a933cfd5c6c8d0b74b465cbd8ae491ea4edbcdeb201dd0b6be0623ac1f3",
     "direction_foundry.gen.go": "b94b1a5b7201cb25298446cf74519541ebd0f747e876a5711e99e792db4698b5",
-    "download_query_foundry.gen.go": "f60654e25a822b70a835f57010bb6a69aa617f94658f632d0b6436758abaac46",
+    "download_query_foundry.gen.go": "a8937de5966397f69963c6cf398f1f7e9f46dc0d7b09c2fe79638b968cfaf387",
     "export_format_foundry.gen.go": "958d52c67c7d7224ec323988f4149e72bc04ca9a0ae7b71cccb42ab5cc2055f9",
     "export_options_foundry.gen.go": "f5f3e059f7338fe0fab3e2b4b5404bfd1d326ddc6c53786c8dbc116d81a537f2",
     "export_request_foundry.gen.go": "9973d7e39f76a1dcf3cd9e4482403e5a80593ff1b37857f646d24b4ac32d4d38",

@@ -220,6 +220,9 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 			if a.Credential.Kind == foundryhttp.CookieCredentialKind {
 				scheme = object{"type": "apiKey", "in": "cookie", "name": a.Credential.Name}
 			}
+			if a.Credential.Kind == foundryhttp.TicketCredentialKind {
+				scheme = object{"type": "apiKey", "in": "query", "name": a.Credential.Name}
+			}
 			security[name] = scheme
 			credentials = []object{{name: []string{}}}
 			if a.Optional {

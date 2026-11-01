@@ -8,6 +8,22 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Ticket-authenticated HTTP routes (B22) — v0.4.0 candidate, 2026-11-01
+
+Status: **implemented and passed the requested targeted gate**.
+
+Ticket-only GET routes reuse the existing guard, permission, scope and response
+lifecycle. HTTP and WebSocket share ticket redemption and failure classification.
+Datatable downloads now enforce their guard and export requirements, including
+during deferred row loading. Token bindings own issuance and redemption.
+
+Manifest 8 describes the ticket credential; OpenAPI and current TypeScript
+contracts carry the guarded download boundary. The [evidence](../docs/evidence/ticket-routes-20261101.md)
+records API migrations, real PostgreSQL denials and successes, compiler mirrors,
+editor probes, client contracts and the requested acceptance commands.
+Full verification, races, the fresh independent pre-merge review, application
+migrations and release tagging remain separate steps.
+
 ## Framework-owned table routes (Part B) — v0.3.2, 2026-11-01
 
 Status: **implemented and passed the requested targeted gate**.

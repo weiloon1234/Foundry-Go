@@ -178,44 +178,48 @@ func (a *Authentication) inputs(r *stdhttp.Request) (auth.Credentials, error) {
 	return credentials, nil
 }
 func (a *Authentication) middleware(source auth.CredentialName, resolve func(context.Context) (context.Context, error)) Middleware {
+	return a.credentialsMiddleware(source, resolve, a.inputs, true)
+}
+
+func (a *Authentication) credentialsMiddleware(source auth.CredentialName, resolve func(context.Context) (context.Context, error), inputs func(*stdhttp.Request) (auth.Credentials, error), transport bool) Middleware {
 	return defineReplayMiddleware("foundry.authentication", func(next stdhttp.Handler) (stdhttp.Handler, error) {
 		if err := a.validate(); err != nil {
 			return nil, err
 		}
 		var handler stdhttp.Handler = stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			for _, input := range a.sources {
-				if input.info.Kind == CookieCredentialKind {
+				if transport && input.info.Kind == CookieCredentialKind {
 					privateCookieResponse(w.Header())
 					break
 				}
 			}
-			if a.csrf != nil {
+			if transport && a.csrf != nil {
 				csrfVary(w.Header(), r)
 				if err := a.csrf.check(r); err != nil {
 					writeRoutingError(w, r, err)
 					return
 				}
 			}
-			credentials, err := a.inputs(r)
+			credentials, err := inputs(r)
 			if err != nil {
-				a.writeFailure(w, r, source, err)
+				a.writeCredentialFailure(w, r, source, err, transport)
 				return
 			}
 			scope, err := a.registry.NewScope(r.Context(), credentials)
 			if err != nil {
-				a.writeFailure(w, r, source, err)
+				a.writeCredentialFailure(w, r, source, err, transport)
 				return
 			}
 			defer scope.Close()
 			r = r.WithContext(scope.Context())
 			ctx, err := resolve(r.Context())
 			if err != nil {
-				a.writeFailure(w, r, source, err)
+				a.writeCredentialFailure(w, r, source, err, transport)
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
-		if a.browser != nil {
+		if transport && a.browser != nil {
 			handler = a.browser.wrap(handler)
 		}
 		return handler, nil
@@ -307,9 +311,13 @@ type AuthenticationInfo struct {
 }
 
 func (a *Authentication) writeFailure(w stdhttp.ResponseWriter, r *stdhttp.Request, source auth.CredentialName, err error) {
+	a.writeCredentialFailure(w, r, source, err, true)
+}
+
+func (a *Authentication) writeCredentialFailure(w stdhttp.ResponseWriter, r *stdhttp.Request, source auth.CredentialName, err error, challenge bool) {
 	mapped := authenticationError(err)
 	failure, _ := errorResponse(r.Context(), mapped)
-	if failure.Code == Unauthenticated {
+	if challenge && failure.Code == Unauthenticated {
 		for _, input := range a.sources {
 			if input.name == source && input.challenge != "" {
 				w.Header().Set("WWW-Authenticate", input.challenge)

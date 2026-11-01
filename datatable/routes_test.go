@@ -38,6 +38,15 @@ func routeReference(id int64) model.Reference[routeActor, int64] {
 	return model.NewReference[routeActor]("table_actors", id, codec.Signed[int64]())
 }
 
+type routeTicketRedeemer struct {
+	redeem func(context.Context, secret.String) (value.Optional[auth.BoundCredential], error)
+}
+
+func (routeTicketRedeemer) TicketSource() auth.CredentialName { return "tables.bearer" }
+func (r routeTicketRedeemer) RedeemTicket(ctx context.Context, raw secret.String) (value.Optional[auth.BoundCredential], error) {
+	return r.redeem(ctx, raw)
+}
+
 func routeConfig(t *testing.T, manager *Manager) (RoutesConfig[routeActor, reportActor], []h.GuardOption[routeActor]) {
 	t.Helper()
 	required, err := auth.NewAccessScopes(auth.DefineAccessScope[routeActor]("tables.read"))
@@ -47,7 +56,7 @@ func routeConfig(t *testing.T, manager *Manager) (RoutesConfig[routeActor, repor
 	provider := auth.DefineProvider("table.actors", routeReference(0), func(_ context.Context, id int64) (value.Optional[routeActor], error) {
 		return value.Set(routeActor{ID: id, Allowed: id != 2}), nil
 	}, func(context.Context, routeActor) (bool, error) { return true, nil })
-	strategy := auth.DefineStrategy("tables.bearer", func(_ context.Context, ticket secret.String) (value.Optional[auth.Proof[routeActor, int64]], error) {
+	verify := func(_ context.Context, ticket secret.String) (value.Optional[auth.Proof[routeActor, int64]], error) {
 		scopes := required
 		id := int64(1)
 		if ticket.Reveal() == "scope-denied" {
@@ -58,7 +67,8 @@ func routeConfig(t *testing.T, manager *Manager) (RoutesConfig[routeActor, repor
 		}
 		proof, err := auth.NewScopedProof(routeReference(id), auth.Authenticated, scopes)
 		return value.Set(proof), err
-	})
+	}
+	strategy, binder := auth.BindStrategy(auth.DefineStrategy("tables.bearer", verify), verify)
 	guard := auth.DefineGuard("table.guard", provider, strategy)
 	permission := auth.DefinePermission("table.read", func(_ context.Context, actor routeActor) (bool, error) { return actor.Allowed, nil })
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration(), permission.Registration())
@@ -79,11 +89,15 @@ func routeConfig(t *testing.T, manager *Manager) (RoutesConfig[routeActor, repor
 	}
 	return RoutesConfig[routeActor, reportActor]{Manager: manager, Guard: binding, Clock: clock.System{}, Authority: func(_ context.Context, actor routeActor) (reportActor, error) {
 		return reportActor{Tenant: 7, Allowed: actor.Allowed}, nil
-	}, Tickets: Tickets[routeActor, reportActor]{Issue: func(context.Context, routeActor) (IssuedTicket, error) {
-		return IssuedTicket{Secret: secret.New("one"), ExpiresAt: expiry}, nil
-	}, Redeem: func(context.Context, secret.String) (reportActor, error) {
-		return reportActor{Tenant: 7, Allowed: true}, nil
-	}}, Quota: h.DefineMiddleware("table.quota", func(next stdhttp.Handler) (stdhttp.Handler, error) { return next, nil })}, []h.GuardOption[routeActor]{h.Scopes(required), h.Permissions(permission)}
+	}, Tickets: Tickets[routeActor]{issue: func(context.Context) (secret.String, temporal.DateTime, error) {
+		return secret.New("one"), expiry, nil
+	}, validate: func() error { return nil }, redeemer: routeTicketRedeemer{redeem: func(_ context.Context, raw secret.String) (value.Optional[auth.BoundCredential], error) {
+		if raw.Reveal() == "denied" {
+			raw = secret.New("permission-denied")
+		}
+		bound, err := binder.Bind(raw)
+		return value.Set(bound), err
+	}}}, Quota: h.DefineMiddleware("table.quota", func(next stdhttp.Handler) (stdhttp.Handler, error) { return next, nil })}, []h.GuardOption[routeActor]{h.Scopes(required), h.Permissions(permission)}
 }
 
 func routeRouter(t *testing.T, table Table[reportRecord, ReportRow, reportActor], config RoutesConfig[routeActor, reportActor], options ...RouteOption[routeActor]) *h.Router {
@@ -137,8 +151,8 @@ func TestRoutesValidateDeclarationsAndSnapshotAccess(t *testing.T) {
 		{"guard", func(c *RoutesConfig[routeActor, reportActor]) { c.Guard = h.GuardBinding[routeActor]{} }},
 		{"authority", func(c *RoutesConfig[routeActor, reportActor]) { c.Authority = nil }},
 		{"clock", func(c *RoutesConfig[routeActor, reportActor]) { c.Clock = nil }},
-		{"issue", func(c *RoutesConfig[routeActor, reportActor]) { c.Tickets.Issue = nil }},
-		{"redeem", func(c *RoutesConfig[routeActor, reportActor]) { c.Tickets.Redeem = nil }},
+		{"issue", func(c *RoutesConfig[routeActor, reportActor]) { c.Tickets.issue = nil }},
+		{"redeem", func(c *RoutesConfig[routeActor, reportActor]) { c.Tickets.redeemer = nil }},
 		{"quota", func(c *RoutesConfig[routeActor, reportActor]) { c.Quota = h.Middleware{} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -174,7 +188,7 @@ func TestRoutesValidateDeclarationsAndSnapshotAccess(t *testing.T) {
 		t.Fatal("wrong route count")
 	}
 	for _, route := range router.Routes() {
-		if strings.HasSuffix(string(route.ID), ".download") && (route.Access != h.Public || route.Timeout != manager.DownloadTimeout()) {
+		if strings.HasSuffix(string(route.ID), ".download") && (route.Access != h.Guarded || route.Timeout != manager.DownloadTimeout()) {
 			t.Fatal("download access/deadline", route)
 		}
 		issuance := strings.HasSuffix(string(route.ID), ".export")
@@ -198,10 +212,10 @@ func TestPostgresRoutesTicketLifecycle(t *testing.T) {
 	manager, table := reportManager(t, fixture, spec, nil)
 	config, access := routeConfig(t, manager)
 	var issued, redeemed, quota atomic.Int32
-	issue := config.Tickets.Issue
-	config.Tickets.Issue = func(ctx context.Context, actor routeActor) (IssuedTicket, error) {
+	issue := config.Tickets.issue
+	config.Tickets.issue = func(ctx context.Context) (secret.String, temporal.DateTime, error) {
 		issued.Add(1)
-		return issue(ctx, actor)
+		return issue(ctx)
 	}
 	config.Quota = h.DefineMiddleware("table.quota", func(next stdhttp.Handler) (stdhttp.Handler, error) {
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) { quota.Add(1); next.ServeHTTP(w, r) }), nil
@@ -212,16 +226,15 @@ func TestPostgresRoutesTicketLifecycle(t *testing.T) {
 		}
 		return actor
 	}
-	config.Tickets.Redeem = func(_ context.Context, ticket secret.String) (reportActor, error) {
+	baseRedeemer := config.Tickets.redeemer
+	config.Tickets.redeemer = routeTicketRedeemer{redeem: func(ctx context.Context, ticket secret.String) (value.Optional[auth.BoundCredential], error) {
 		redeemed.Add(1)
 		switch ticket.Reveal() {
 		case "disabled", "revoked", "expired", "replayed":
-			return reportActor{}, auth.Unauthenticated
-		case "denied":
-			return reportActor{}, nil
+			return value.Optional[auth.BoundCredential]{}, auth.Unauthenticated
 		}
-		return reportActor{Tenant: 7, Allowed: true}, nil
-	}
+		return baseRedeemer.RedeemTicket(ctx, ticket)
+	}}
 	router := routeRouter(t, table, config, ReadAccess(access...), ExportAccess(access...))
 	base := "https://example.test/tables/reports.members"
 	for _, body := range []string{`{`, `{"format":"pdf","request":{}}`, `{"format":"csv","request":{"sort":[{"column":"absent","direction":"asc"}]}}`, `{"format":"csv","request":{"page":-1}}`} {
@@ -305,9 +318,9 @@ func TestPostgresRoutesTicketLifecycle(t *testing.T) {
 	if !strings.Contains(page.Body.String(), `"total":4`) {
 		t.Fatal("wrong page", page.Body.String())
 	}
-	config.Tickets.Issue = func(context.Context, routeActor) (IssuedTicket, error) {
+	config.Tickets.issue = func(context.Context) (secret.String, temporal.DateTime, error) {
 		issued.Add(1)
-		return IssuedTicket{Secret: secret.New(strings.Repeat("x", 20<<10))}, nil
+		return secret.New(strings.Repeat("x", 20<<10)), temporal.DateTime{}, nil
 	}
 	router = routeRouter(t, table, config)
 	before = issued.Load()
@@ -327,7 +340,7 @@ func TestPostgresRoutesQueryOnlyAndEmptyPage(t *testing.T) {
 	config, access := routeConfig(t, manager)
 	config.Clock = nil
 	config.Quota = h.Middleware{}
-	config.Tickets = Tickets[routeActor, reportActor]{}
+	config.Tickets = Tickets[routeActor]{}
 	config.Authority = func(context.Context, routeActor) (reportActor, error) {
 		return reportActor{Tenant: 999, Allowed: true}, nil
 	}
@@ -361,9 +374,15 @@ func TestPostgresRoutesCallbackFailureAndCancellation(t *testing.T) {
 				case "authority":
 					broken.Authority = func(context.Context, routeActor) (reportActor, error) { fail(); return reportActor{}, nil }
 				case "issue":
-					broken.Tickets.Issue = func(context.Context, routeActor) (IssuedTicket, error) { fail(); return IssuedTicket{}, nil }
+					broken.Tickets.issue = func(context.Context) (secret.String, temporal.DateTime, error) {
+						fail()
+						return secret.String{}, temporal.DateTime{}, nil
+					}
 				case "redeem":
-					broken.Tickets.Redeem = func(context.Context, secret.String) (reportActor, error) { fail(); return reportActor{}, nil }
+					broken.Tickets.redeemer = routeTicketRedeemer{redeem: func(context.Context, secret.String) (value.Optional[auth.BoundCredential], error) {
+						fail()
+						return value.Optional[auth.BoundCredential]{}, nil
+					}}
 				case "locale":
 					broken.WithLocale = func(reportActor, i18n.LocaleID) reportActor { fail(); return reportActor{} }
 				}
@@ -372,7 +391,11 @@ func TestPostgresRoutesCallbackFailureAndCancellation(t *testing.T) {
 					location = "https://example.test/tables/reports.members/download?ticket=one&format=csv&request=%7B%7D"
 					body = ""
 				}
-				response := routeRequest(t, routeRouter(t, table, broken), method, location, body, "valid", 500)
+				status := 500
+				if boundary == "redeem" {
+					status = 503
+				}
+				response := routeRequest(t, routeRouter(t, table, broken), method, location, body, "valid", status)
 				if strings.Contains(response.Body.String(), "private-canary") {
 					t.Fatal("panic payload disclosed")
 				}
@@ -380,23 +403,23 @@ func TestPostgresRoutesCallbackFailureAndCancellation(t *testing.T) {
 		}
 	}
 	var deadline time.Duration
-	config.Tickets.Redeem = func(ctx context.Context, _ secret.String) (reportActor, error) {
+	config.Tickets.redeemer = routeTicketRedeemer{redeem: func(ctx context.Context, _ secret.String) (value.Optional[auth.BoundCredential], error) {
 		end, ok := ctx.Deadline()
 		if !ok {
-			return reportActor{}, errors.New("missing deadline")
+			return value.Optional[auth.BoundCredential]{}, errors.New("missing deadline")
 		}
 		deadline = time.Until(end)
 		<-ctx.Done()
-		return reportActor{}, ctx.Err()
-	}
+		return value.Optional[auth.BoundCredential]{}, ctx.Err()
+	}}
 	routeRequest(t, routeRouter(t, table, config), "GET", "https://example.test/tables/reports.members/download?ticket=one&format=csv&request=%7B%7D", "", "valid", 503)
 	if deadline <= 0 || deadline > manager.DownloadTimeout() {
 		t.Fatal("wrong download deadline", deadline)
 	}
-	config.Tickets.Redeem = func(ctx context.Context, _ secret.String) (reportActor, error) { return reportActor{}, ctx.Err() }
+	config.Authority = func(ctx context.Context, _ routeActor) (reportActor, error) { return reportActor{}, ctx.Err() }
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err := tableDownload(table, config)(ctx, h.Input[h.NoPath, DownloadQuery, h.NoBody]{Query: DownloadQuery{Ticket: "one", Format: CSV, Request: `{}`}})
+	_, err := tableDownload(table, config)(ctx, routeActor{}, h.Input[h.NoPath, DownloadQuery, h.NoBody]{Query: DownloadQuery{Format: CSV, Request: `{}`}})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatal("client cancellation lost", err)
 	}
@@ -409,13 +432,13 @@ func TestPostgresRoutesCancellationRetainsCallbackOwnership(t *testing.T) {
 	manager, table := reportManager(t, fixture, reportSpec(), nil)
 	config, _ := routeConfig(t, manager)
 	entered, canceled, release, returned := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
-	config.Tickets.Redeem = func(ctx context.Context, _ secret.String) (reportActor, error) {
+	config.Tickets.redeemer = routeTicketRedeemer{redeem: func(ctx context.Context, _ secret.String) (value.Optional[auth.BoundCredential], error) {
 		close(entered)
 		<-ctx.Done()
 		close(canceled)
 		<-release
-		return reportActor{}, ctx.Err()
-	}
+		return value.Optional[auth.BoundCredential]{}, ctx.Err()
+	}}
 	router := routeRouter(t, table, config)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()

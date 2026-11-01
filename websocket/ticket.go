@@ -8,12 +8,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
-	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/authticket"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/secret"
-	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 // TicketSubprotocolPrefix marks a single-use handshake ticket offered as one
@@ -24,23 +22,12 @@ const TicketSubprotocolPrefix = "foundry.ticket."
 // MaxTicketRedeemers bounds the guards one hub accepts tickets for.
 const MaxTicketRedeemers = auth.MaxCredentials
 
-// TicketRedeemer exchanges a single-use handshake ticket for a bound credential
-// of the guard whose credential source it names. token.Tokens implements it.
-// An unknown, expired or already redeemed ticket is omitted, not an error.
-type TicketRedeemer interface {
-	// TicketSource returns the credential source whose tickets this redeemer accepts.
-	TicketSource() auth.CredentialName
-	// RedeemTicket consumes a single-use handshake ticket, returning omission for unknown,
-	// expired or already redeemed tickets.
-	RedeemTicket(context.Context, secret.String) (value.Optional[auth.BoundCredential], error)
-}
-
 // WithTickets lets browsers, which cannot send an Authorization header on a
 // WebSocket, authenticate with a ticket from TicketSubprotocolPrefix. The hub
 // redeems it after the origin check, trying redeemers in order; the first that
 // knows it authenticates that guard's channels for the connection. Every later
 // auth scope re-verifies the bound credential, so revocation still disconnects.
-func WithTickets(redeemers ...TicketRedeemer) Option {
+func WithTickets(redeemers ...auth.TicketRedeemer) Option {
 	return func(o *options) error {
 		if len(redeemers) == 0 || len(redeemers)+len(o.tickets) > MaxTicketRedeemers {
 			return safeerror.NewFault(fault.Invalid, "WebSocket tickets require a bounded set of redeemers")
@@ -101,47 +88,13 @@ func (h *Hub) redeemTicket(r *stdhttp.Request, credentials auth.Credentials, tic
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.config.OperationTimeout)
 	defer cancel()
-	failure := foundryhttp.Unauthenticated
-	for _, redeemer := range h.tickets {
-		var found value.Optional[auth.BoundCredential]
-		var returned error
-		if err := callback.Isolated("redeem WebSocket ticket", func() error {
-			found, returned = redeemer.RedeemTicket(ctx, ticket)
-			return nil
-		}); err != nil {
-			failure = foundryhttp.Unavailable
-			continue
-		}
-		if returned != nil {
-			if ticketFailure(returned) == foundryhttp.Unavailable {
-				failure = foundryhttp.Unavailable
-			}
-			continue
-		}
-		bound, present := found.Get()
-		if !present {
-			continue
-		}
-		withTicket, err := credentials.WithBound(redeemer.TicketSource(), bound)
-		if err != nil {
-			return auth.Credentials{}, foundryhttp.Unauthenticated
-		}
-		return withTicket, ""
+	credentials, outcome := authticket.Redeem(ctx, credentials, ticket, h.tickets...)
+	switch outcome {
+	case authticket.Success:
+		return credentials, ""
+	case authticket.Unavailable:
+		return auth.Credentials{}, foundryhttp.Unavailable
+	default:
+		return auth.Credentials{}, foundryhttp.Unauthenticated
 	}
-	return auth.Credentials{}, failure
-}
-
-// ticketFailure classifies a redeemer error with bounded inspection. Only an
-// authentication failure means the ticket is unusable; anything else, including
-// an incomplete inspection, is a transient failure the client may retry.
-func ticketFailure(err error) foundryhttp.ErrorCode {
-	unauthenticated := false
-	complete := callback.ErrorWalk(err, func(current error) bool {
-		unauthenticated = errorgraph.Matches(current, auth.Unauthenticated)
-		return !unauthenticated
-	})
-	if complete && unauthenticated {
-		return foundryhttp.Unauthenticated
-	}
-	return foundryhttp.Unavailable
 }

@@ -3,6 +3,7 @@ package clientcontracts_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"foundry.test/consumer/internal/clientfixture"
 	"foundry.test/consumer/reporting"
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/auth/token"
+	tokenpg "github.com/weiloon1234/Foundry-Go/auth/token/postgres"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/contract/manifest"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -21,9 +24,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/enum"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/openapi"
-	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/typescript"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -40,10 +43,19 @@ func reportingContracts(t *testing.T) (*manifest.Manifest, *foundryhttp.Router) 
 	provider := reporting.Operators(func(context.Context, model.ID[reporting.Operator]) (value.Optional[reporting.Operator], error) {
 		return value.Optional[reporting.Operator]{}, nil
 	})
-	strategy := auth.DefineStrategy("report.contract", func(context.Context, secret.String) (value.Optional[auth.Proof[reporting.Operator, model.ID[reporting.Operator]]], error) {
-		return value.Optional[auth.Proof[reporting.Operator, model.ID[reporting.Operator]]]{}, nil
-	})
-	guard := auth.DefineGuard("report.contract", provider, strategy)
+	backend, err := tokenpg.New(new(database.DB), tokenpg.DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := token.NewStore(backend, token.DefaultConfig(keyspace.Namespace{Application: "report-contracts", Environment: "test"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := token.New(store, "report.contract", provider, "report.contract", auth.AccessScopes[reporting.Operator]{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	guard := tokens.Guard()
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration(), reporting.Access.Registration())
 	if err != nil {
 		t.Fatal(err)
@@ -74,15 +86,8 @@ func reportingContracts(t *testing.T) (*manifest.Manifest, *foundryhttp.Router) 
 		Authority: func(context.Context, reporting.Operator) (reporting.Authority, error) {
 			return reporting.FromGuard(guard), nil
 		},
-		Tickets: datatable.Tickets[reporting.Operator, reporting.Authority]{
-			Issue: func(context.Context, reporting.Operator) (datatable.IssuedTicket, error) {
-				return datatable.IssuedTicket{}, auth.Unauthenticated
-			},
-			Redeem: func(context.Context, secret.String) (reporting.Authority, error) {
-				return reporting.Authority{}, auth.Unauthenticated
-			},
-		},
-		Quota: foundryhttp.DefineMiddleware("reports.quota", func(next http.Handler) (http.Handler, error) { return next, nil }),
+		Tickets: datatable.TokenTickets(tokens),
+		Quota:   foundryhttp.DefineMiddleware("reports.quota", func(next http.Handler) (http.Handler, error) { return next, nil }),
 	}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -242,4 +247,71 @@ func checkTableBindingsClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	tools.Check(t, source, "", filepath.Join("testdata", "table-bindings"))
+}
+
+func TestTicketDownloadContracts(t *testing.T) {
+	source, router := reportingContracts(t)
+	document, err := source.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if document.Version != 8 {
+		t.Fatal("ticket credential requires manifest 8")
+	}
+	found := false
+	for _, operation := range document.HTTP {
+		if operation.Route.ID != "reports.tables.reports.numeric_levels.download" {
+			continue
+		}
+		found = true
+		authentication := operation.Route.Authentication
+		if operation.Route.Access != foundryhttp.Guarded || authentication == nil || authentication.Credential.Kind != foundryhttp.TicketCredentialKind || authentication.Credential.Name != "ticket" {
+			t.Fatal("download lost ticket authentication")
+		}
+		for _, parameter := range operation.Query {
+			if parameter.Name == "ticket" {
+				t.Fatal("credential entered domain query")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing standard download")
+	}
+	api, err := openapi.Render(source, openapi.Options{Title: "Tickets", APIVersion: "1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire struct {
+		Components struct {
+			SecuritySchemes map[string]struct {
+				Type string `json:"type"`
+				In   string `json:"in"`
+				Name string `json:"name"`
+			} `json:"securitySchemes"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(api, &wire); err != nil {
+		t.Fatal(err)
+	}
+	ticketScheme := false
+	for _, scheme := range wire.Components.SecuritySchemes {
+		if scheme.Name == "ticket" {
+			ticketScheme = scheme.Type == "apiKey" && scheme.In == "query"
+		}
+	}
+	if !ticketScheme {
+		t.Fatal("OpenAPI ticket security scheme missing")
+	}
+	client, err := typescript.Render(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(client, []byte(`\"kind\":\"ticket\"`)) && !bytes.Contains(client, []byte(`\"kind\": \"ticket\"`)) {
+		t.Fatal("TypeScript ticket metadata missing")
+	}
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest("GET", "/reports/tables/reports.numeric_levels/download?format=csv&request=%7B%7D", nil))
+	if response.Code != 401 {
+		t.Fatal("download contract admits anonymous request", response.Code)
+	}
 }

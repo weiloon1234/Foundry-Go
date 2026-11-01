@@ -19,6 +19,7 @@ type authenticationBinding[M any] struct {
 	requiredPermissions []auth.Permission[M]
 	actorMiddleware     []Middleware
 	requirementError    error
+	ticket              auth.TicketRedeemer
 }
 
 // authenticationWithActorMiddleware appends middleware that runs after authentication and its
@@ -117,10 +118,13 @@ func authenticationInfo[M any](b authenticationBinding[M], optional bool) *Authe
 	for _, permission := range b.requiredPermissions {
 		info.RequiredPermissions = append(info.RequiredPermissions, permission.Name())
 	}
+	if b.ticket != nil {
+		info.Credential = CredentialInfo{Source: b.guard.Source(), Kind: TicketCredentialKind, Name: ticketParameter}
+	}
 	return info
 }
 func authenticationMiddleware[M any](b authenticationBinding[M], optional bool) Middleware {
-	return b.authentication.middleware(b.guard.Source(), func(ctx context.Context) (context.Context, error) {
+	resolve := func(ctx context.Context) (context.Context, error) {
 		if optional {
 			subject, err := b.guard.Optional(ctx)
 			if err != nil {
@@ -151,5 +155,9 @@ func authenticationMiddleware[M any](b authenticationBinding[M], optional bool) 
 			}
 		}
 		return attributed, nil
-	})
+	}
+	if b.ticket != nil {
+		return b.authentication.credentialsMiddleware(b.guard.Source(), resolve, ticketInputs(b.ticket), false)
+	}
+	return b.authentication.middleware(b.guard.Source(), resolve)
 }

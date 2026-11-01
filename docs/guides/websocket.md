@@ -106,7 +106,7 @@ rejected.
 
 A browser that authenticates with bearer tokens cannot set `Authorization` on a
 WebSocket. `websocket.WithTickets(tokens...)` (in a configured application,
-`RealtimeDeclarations.Tickets`) accepts a single-use ticket instead. A guarded
+`RealtimeDeclarations.Tickets`, typed as `[]auth.TicketRedeemer`) accepts a single-use ticket instead. A guarded
 HTTPS endpoint returns one from `tokens.IssueTicket(ctx)` through
 `http.TicketResponse` (see [tokens](tokens.md#websocket-handshake-tickets)); the
 browser offers `foundry.ticket.<ticket>` (`websocket.TicketSubprotocolPrefix`)
@@ -276,3 +276,8 @@ The [protocol test client](../../testkit/websocket/client.go) performs bounded r
 HTTP/WebSocket I/O for independent fixtures. Verification covers typing, room
 isolation, protocol failures, origin policy, auth freshness, safe presence,
 cancellation/races, native kernel ownership and the common compiler/editor gate.
+
+HTTP GET downloads can use the same token binding through
+[ticket-authenticated routes](authentication.md#ticket-authenticated-routes).
+WebSocket tickets remain in the offered subprotocol, never the WebSocket URL.
+The shared redemption owner retains the same 401 and 503 classification.

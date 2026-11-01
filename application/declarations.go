@@ -1,6 +1,7 @@
 package application
 
 import (
+	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/events"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -155,7 +156,7 @@ type RealtimeDeclarations struct {
 	Channels       []websocket.Registration
 	Authentication *http.Authentication
 	Middleware     []http.Middleware
-	Tickets        []websocket.TicketRedeemer
+	Tickets        []auth.TicketRedeemer
 }
 
 // hubOptions turns declared collaborators into hub construction options.

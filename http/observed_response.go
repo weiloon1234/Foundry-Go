@@ -11,11 +11,12 @@ import (
 // response bytes. Native controls retain the same ownership/capability adapter
 // used by compression and conditional responses.
 type observedResponse struct {
-	native   stdhttp.ResponseWriter
-	status   int
-	bytes    int64
-	hijacked bool
-	err      error
+	native           stdhttp.ResponseWriter
+	protectedHeaders stdhttp.Header
+	status           int
+	bytes            int64
+	hijacked         bool
+	err              error
 }
 
 // Header returns the native writer's mutable response headers.
@@ -28,6 +29,7 @@ func (w *observedResponse) Unwrap() stdhttp.ResponseWriter { return responseCont
 // WriteHeader forwards status and records the first final status unless the response
 // was hijacked.
 func (w *observedResponse) WriteHeader(status int) {
+	w.protectHeaders()
 	w.native.WriteHeader(status)
 	if !w.hijacked && w.status == 0 && (status >= 200 || status == stdhttp.StatusSwitchingProtocols) {
 		w.status = status
@@ -36,6 +38,7 @@ func (w *observedResponse) WriteHeader(status int) {
 
 // Write forwards body data and records the status, written byte count and error.
 func (w *observedResponse) Write(data []byte) (int, error) {
+	w.protectHeaders()
 	if !w.hijacked && w.status == 0 {
 		w.status = stdhttp.StatusOK
 	}
@@ -51,6 +54,7 @@ func (w *observedResponse) Write(data []byte) (int, error) {
 // local file can reach the kernel's sendfile path; the byte count is recorded
 // from its result. Otherwise Write is used, hiding ReaderFrom to avoid recursion.
 func (w *observedResponse) ReadFrom(source io.Reader) (int64, error) {
+	w.protectHeaders()
 	if !w.hijacked && w.status == 0 {
 		w.status = stdhttp.StatusOK
 	}
@@ -71,6 +75,7 @@ func (w *observedResponse) ReadFrom(source io.Reader) (int64, error) {
 // FlushError flushes the native writer and records the status or error, rejecting
 // unsupported flushing.
 func (w *observedResponse) FlushError() error {
+	w.protectHeaders()
 	if !responseFlushSupported(w.native) {
 		return stdhttp.ErrNotSupported
 	}
@@ -93,4 +98,18 @@ func (w *observedResponse) hijackResponse() (net.Conn, *bufio.ReadWriter, error)
 
 func (w *observedResponse) enableFullDuplexResponse() error {
 	return stdhttp.NewResponseController(w.native).EnableFullDuplex()
+}
+
+// protectHeaders pins framework-owned transport policy before the first commit.
+// An empty slice removes a header, including an inapplicable credential challenge.
+func (w *observedResponse) protectHeaders() {
+	if w.status != 0 {
+		return
+	}
+	for name, values := range w.protectedHeaders {
+		w.Header().Del(name)
+		for _, value := range values {
+			w.Header().Add(name, value)
+		}
+	}
 }

@@ -53,11 +53,23 @@ func (t *Tokens[M, K]) ticketBackend() (TicketBackend, error) {
 	return backend, nil
 }
 
+// ValidateTickets checks the binding and whether its configured store supports
+// enabled tickets, without acquiring resources or issuing a credential.
+func (t *Tokens[M, K]) ValidateTickets() error {
+	if err := t.Validate(); err != nil {
+		return err
+	}
+	_, err := t.ticketBackend()
+	return err
+}
+
 // IssueTicket mints a single-use ticket for the token family that authenticated
 // this guard in the current request. Only its hash is stored. It expires after
 // Config.TicketLifetime, the first redemption consumes it, and revoking the family
 // deletes it. Mount it behind this binding's guard and deliver it through a
-// no-store credential response; never put it in a URL.
+// no-store credential response. Only a TicketEndpoint.URL delivery boundary may
+// put the single-use ticket in a URL; never put access or refresh tokens there.
+// Redact ticket query parameters from ingress logs and use HTTPS.
 func (t *Tokens[M, K]) IssueTicket(ctx context.Context) (Ticket[M, K], error) {
 	if err := t.Validate(); err != nil {
 		return Ticket[M, K]{}, err

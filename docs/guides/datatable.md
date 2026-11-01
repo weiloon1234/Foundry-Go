@@ -535,13 +535,17 @@ permission and credential-scope declarations. Each access option may appear once
 the helper snapshots its slice. Table authorization still runs for every query
 and export.
 
-Exportable tables also require `Clock`, `Quota` and `Tickets[M, A]`. `Issue`
-returns `IssuedTicket{Secret, ExpiresAt}`. `Redeem` consumes the secret once,
-checks current credentials and actor eligibility, and returns authority usable
-through deferred row loading. Keep revocation, expiry, replay protection and
-fresh auth scopes in those callbacks. Do not return a scope that you close before
-the download opens. Callbacks must honor cancellation; request ownership lasts
-until they exit. Query-only tables need no ticket, clock or quota configuration.
+Exportable tables also require `Clock`, `Quota` and `Tickets[M]`. Construct tickets
+from the same model's token binding. Registration rejects disabled tickets or a
+redeemer whose source differs from the route guard.
+
+<!-- go-source: tests/fixtures/consumer/reporting/table_routes.go -->
+```go
+return datatable.TokenTickets(tokens)
+```
+
+Query-only tables need no ticket, clock or quota configuration. The framework owns
+redemption and the fresh authentication scope, including deferred row loading.
 
 For table ID `reports.numeric_levels`, the helper registers these paths below
 your scope. The normal declared status is 200; downloads also support 206
@@ -556,11 +560,12 @@ your scope. The normal declared status is 200; downloads also support 206
 Route IDs append the table ID and `.query`, `.export` or `.download` to the scope
 ID. Issuance alone receives `CredentialRequests()` and your quota middleware.
 It requires secure transport, authorizes the table, validates the bounded request,
-and encodes the download URL before calling `Issue`. It checks the URL again with
+and encodes the download URL before issuing a ticket. It checks the URL again with
 the issued secret; final rejection can leave an unused expiring ticket.
 
-The download is public at the HTTP guard boundary and authenticates through
-`Redeem`. It decodes the request, resolves the optional locale and calls
+The download uses `TicketAuthenticated` and enforces the same `ExportAccess`
+options as issuance. Its concrete actor passes through `Authority(ctx, actor)`.
+It decodes the request, resolves the optional locale and calls
 `Table.Download`, which authorizes again when the file opens. Set `WithLocale`
 when your authority carries language into deferred row loading. Omitted locale
 uses the download request's negotiated language. The route deadline comes from
@@ -571,3 +576,8 @@ The framework generates `ExportRequestJSON`, `ExportRequestValidationFields`,
 `DownloadQueryDescriptor` and `ExportTicketJSON` from its transport declarations.
 The format field carries no application translation key; keep visual labels in
 your UI. For other wire shapes, use the [endpoint constructors and binders](#declare-http-operation-bindings).
+
+`DownloadQuery` contains format, request and optional locale. The ticket is a
+server-issued credential consumed before typed decoding. Follow the
+[ticket-route security notes](authentication.md#ticket-authenticated-routes): use
+HTTPS, redact query credentials and obtain a fresh ticket for retries and ranges.

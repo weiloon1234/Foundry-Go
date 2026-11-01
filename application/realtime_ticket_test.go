@@ -64,7 +64,7 @@ func TestRealtimeTicketsAuthenticateBrowserSocketsUntilRevocation(t *testing.T) 
 			return application.RealtimeDeclarations{}, err
 		}
 		inbox := websocket.OwnedRooms[ticketInbox]("inbox", websocket.DefineRooms(http.IntegerPath[int64]()), guard.Tokens.Guard(), (ticketMember{}).FoundryReference())
-		return application.RealtimeDeclarations{Channels: []websocket.Registration{websocket.Register(inbox)}, Authentication: guard.Authentication, Tickets: []websocket.TicketRedeemer{guard.Tokens}}, nil
+		return application.RealtimeDeclarations{Channels: []websocket.Registration{websocket.Register(inbox)}, Authentication: guard.Authentication, Tickets: []auth.TicketRedeemer{guard.Tokens}}, nil
 	}).Build(t.Context())
 	if err != nil {
 		t.Fatal(err)

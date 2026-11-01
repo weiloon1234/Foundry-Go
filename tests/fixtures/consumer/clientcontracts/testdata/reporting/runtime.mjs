@@ -57,5 +57,11 @@ const ticketKey = "github.com/weiloon1234/Foundry-Go/datatable.ExportTicket";
 const ticket = {url: "/reports/tables/reports.numeric_levels/download?ticket=one", expires_at: "2026-11-01T12:00:00Z"};
 assert.deepEqual({...sdk.decodeReceived(ticketKey, sdk.encodeContract(ticketKey, sdk.contractValue(ticketKey, ticket)))}, ticket);
 await assert.rejects(sdk.tableQueries["reports.numeric_levels"](api, {body: {}}), error => error instanceof sdk.APIError && error.status === 401);
-await assert.rejects(sdk.tableDownloads["reports.numeric_levels"](api, {query: {ticket: "expired", format: "csv", request: "{}"}}), error => error instanceof sdk.APIError && error.status === 401);
+await assert.rejects(sdk.tableDownloads["reports.numeric_levels"](api, {query: {format: "csv", request: "{}"}}), error => error instanceof sdk.APIError && error.status === 401);
 assert.equal(sdk.tableExportKinds["reports.numeric_levels"], "ticket");
+
+const ticketDownload = metadata.http.find(operation => operation.route.id === "reports.tables.reports.numeric_levels.download");
+assert.equal(metadata.version.text, "8");
+assert.equal(ticketDownload.route.access, "guarded");
+assert.deepEqual({...ticketDownload.route.authentication.credential}, {source: "report.contract", kind: "ticket", name: "ticket"});
+assert.equal(ticketDownload.query.some(parameter => parameter.name === "ticket"), false);

@@ -1,11 +1,14 @@
 package compilefail
 
 import (
-	"context"
+	"foundry.test/goway/models/identity"
+	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/datatable"
+	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-type actor struct{ ID int }
+type admin struct{ ID int }
 type authority struct{ Tenant int }
 
-var _ = datatable.Tickets[actor, authority]{Issue: func(context.Context, authority) (datatable.IssuedTicket, error) { return datatable.IssuedTicket{}, nil }}
+var otherTokens *token.Tokens[identity.Member, model.ID[identity.Member]]
+var _ = datatable.RoutesConfig[admin, authority]{Tickets: datatable.TokenTickets(otherTokens)}

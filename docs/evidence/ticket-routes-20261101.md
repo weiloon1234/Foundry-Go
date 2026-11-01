@@ -1,0 +1,268 @@
+# Ticket-authenticated HTTP routes — B22
+
+Implemented PLAN §2 on `lane/b22-tickets`, base `21f82017` (v0.3.3), for
+v0.4.0. The requested targeted acceptance gate passed in retained segments.
+No application, released cohort or frozen oracle changed. No commit, push,
+merge, tag or external publication was performed. Only local `current-contracts`
+were republished.
+
+## Final public API: before → after
+
+Package qualifiers below identify the owning package; `http` is Foundry HTTP.
+All new declarations have doc comments. Datatable declarations retain compiled
+examples and the required `Example:` lines.
+
+| Before | After |
+| --- | --- |
+| `websocket.TicketRedeemer` | Moved to `auth.TicketRedeemer`, with the same methods: `TicketSource() auth.CredentialName` and `RedeemTicket(context.Context, secret.String) (value.Optional[auth.BoundCredential], error)`. No alias remains. |
+| `websocket.WithTickets(redeemers ...websocket.TicketRedeemer) websocket.Option` | `websocket.WithTickets(redeemers ...auth.TicketRedeemer) websocket.Option` |
+| `application.RealtimeDeclarations.Tickets []websocket.TicketRedeemer` | `application.RealtimeDeclarations.Tickets []auth.TicketRedeemer` |
+| No ticket credential kind | `const http.TicketCredentialKind http.CredentialKind = "ticket"` |
+| No typed ticket endpoint | `type http.TicketEndpoint[P, Q, B, M, R any] struct` with private fields |
+| No ticket constructor | `func http.TicketAuthenticated[P, Q, B, M, R any](endpoint http.Endpoint[P, Q, B, R], binding http.GuardBinding[M], redeemer auth.TicketRedeemer, options ...http.GuardOption[M]) http.TicketEndpoint[P, Q, B, M, R]` |
+| No ticket handler binding | `func (e http.TicketEndpoint[P, Q, B, M, R]) Handle(handler func(context.Context, M, http.Input[P, Q, B]) (R, error)) http.RouteRegistration` |
+| No ticket URL boundary | `func (e http.TicketEndpoint[P, Q, B, M, R]) URL(ctx context.Context, path P, query Q, ticket secret.String) (string, error)` |
+| No ticket declaration validator | `func http.ValidateTicketAuthenticated[P, Q, B, M, R any](e http.TicketEndpoint[P, Q, B, M, R]) error` |
+| No ticket inspector | `func http.InspectTicketAuthenticated[P, Q, B, M, R any](e http.TicketEndpoint[P, Q, B, M, R]) (http.EndpointInfo, error)` |
+| `type datatable.Tickets[M, A any] struct { Issue func(context.Context, M) (datatable.IssuedTicket, error); Redeem func(context.Context, secret.String) (A, error) }` | `type datatable.Tickets[M any] struct` with private issuance, redemption and validation fields; public `Issue` and `Redeem` fields removed |
+| No token adapter | `func datatable.TokenTickets[M model.Identifiable, K any](tokens *token.Tokens[M, K]) datatable.Tickets[M]` |
+| `datatable.RoutesConfig[M, A].Tickets datatable.Tickets[M, A]` | `datatable.RoutesConfig[M, A].Tickets datatable.Tickets[M]` |
+| `type datatable.IssuedTicket struct { Secret secret.String; ExpiresAt temporal.DateTime }` | Removed, including both fields; token issuance owns the result |
+| `datatable.DownloadQuery.Ticket string` | Removed; remaining fields are `Format datatable.ExportFormat`, `Request string`, `Locale value.Optional[i18n.LocaleID]` |
+| No ticket capability validator | `func (t *token.Tokens[M, K]) ValidateTickets() error` (the receiver retains its existing `M model.Identifiable, K any` constraints) |
+| `manifest.Version = 7` | `manifest.Version = 8` |
+
+No compatibility aliases or deprecated leftovers were added. Existing
+`datatable.Routes`, `ExportAccess`, `DownloadQueryDescriptor`, `CredentialInfo.Validate`
+and `Tokens.IssueTicket` signatures are unchanged. Their behavior/documentation
+now describes guarded ticket downloads, ticket credential metadata and the
+explicit secret-to-URL boundary.
+
+Compiled consumer helpers added (all previously absent):
+
+- `reporting.NumericLevelTokenTickets(tokens *token.Tokens[reporting.Operator, model.ID[reporting.Operator]]) datatable.Tickets[reporting.Operator]`
+- `reporting.MemberTicketEndpoint(binding http.GuardBinding[reporting.Operator], tokens *token.Tokens[reporting.Operator, model.ID[reporting.Operator]]) http.TicketEndpoint[http.NoPath, http.NoQuery, http.NoBody, reporting.Operator, http.Download]`
+- `reporting.MemberTicketURL(ctx context.Context, binding http.GuardBinding[reporting.Operator], tokens *token.Tokens[reporting.Operator, model.ID[reporting.Operator]], ticket secret.String) (string, error)`
+- `reporting.MemberTicketRoute(manager *datatable.Manager, binding http.GuardBinding[reporting.Operator], tokens *token.Tokens[reporting.Operator, model.ID[reporting.Operator]]) http.RouteRegistration`
+
+## PLAN §2.6 evidence
+
+`TestPostgresTicketAuthenticatedRoutes` below lives in `auth/token/postgres` and
+uses the existing real PostgreSQL token fixture, with required mode enabled.
+
+| Required evidence | Test covering it |
+| --- | --- |
+| Success with actor and scopes | `TestPostgresTicketAuthenticatedRoutes` checks the concrete actor and `tokens.Current(ctx).Scopes()` in the successful handler |
+| Missing, empty, repeated, oversized ticket | Same test, `malformed-does-not-consume`; includes an encoded repeated parameter name and verifies persisted ticket count is unchanged |
+| Unknown, expired, replayed | Same test, `unknown-and-expired`, `head-and-replay` |
+| Another guard's tokens | Same test, `wrong-guard`; verifies the rightful redeemer can still consume it afterward |
+| Family revoked between issue and use | Same test, `revoked` |
+| Disabled subject | Same test, `ineligible` |
+| Missing export scope → 403 | Same test, `scope-ceiling` |
+| Permission denial → 403 | Same test, `permission` |
+| Authorization without a ticket → 401 | Same test, `malformed-does-not-consume`; every request includes a valid bearer header |
+| HEAD → 405, unconsumed ticket | Same test, `head-and-replay`; checks `Allow: GET`, then successful GET, then replay denial |
+| Redeemer error/panic → 503 | `http.TestTicketEndpointFailuresAndRecovery`; also Goexit, cyclic errors and panicking error methods, followed by a healthy request. `internal/authticket.TestRedemptionContainsErrorMethods` verifies bounded traversal and redaction |
+| Query declares `ticket` → rejected | `http.TestTicketEndpointDeclarationAndMetadata` |
+| Non-GET rejected | `http.TestTicketEndpointDeclarationAndMetadata` |
+| Privacy headers on success/failure | Every PostgreSQL route response checks no-store/no-referrer/no challenge; `TestTicketPrivacyHeadersWinOverRouteMiddleware` and the real datatable download check override resistance |
+| Typed query ignores consumed ticket | PostgreSQL test `url-and-typed-decoding` uses `EmptyQuery`; the datatable PostgreSQL test decodes its nonempty domain query |
+| Manifest, OpenAPI, TypeScript | Consumer `TestTicketDownloadContracts`, strict reporting `types.ts`, reporting runtime branch of `TestTypeScriptClientAgainstRealHTTPAndWebSocket`, full `./typescript` |
+| Deferred row loading resolves guard, locale propagated | `datatable.TestPostgresTokenRoutesKeepScopeThroughDeferredDownload`; actual token storage, current guard/scope during deferred source loading, locale and CSV headings/rows |
+| WebSocket behavior unchanged | `websocket.TestTicketHandshakeAuthenticatesOnlyItsGuardAndRefreshRevokes`, `TestTicketsRequireHubAuthenticationAndUniqueSources`; `application.TestRealtimeTicketsAuthenticateBrowserSocketsUntilRevocation` with PostgreSQL |
+| Wrong model's TokenTickets rejected | Consumer and Go-way `TestInvalidPublicContractsFailCompilation/datatable_routes_ticket_actor` |
+
+Additional tests cover sticky validation, zero/nil bindings and redeemers, source
+mismatch, invalid options, ticket metadata validation, actor middleware and
+attribution, cookie/CSRF bypass, disabled ticket configuration and nil token
+bindings. Existing datatable lifecycle, authorization-before-issuance, URL bounds,
+quota, cancellation, callback ownership and timeout tests passed.
+
+Real gopls completion, hover and definition probes cover `ticket-http-endpoint`,
+`ticket-http-url` and `ticket-datatable-model` in the compiled consumer.
+
+## Acceptance commands and results
+
+Commands ran natively with `GOFLAGS=-trimpath`, warm caches and approximately
+141 GiB disk headroom before the gate. Approved sandbox escalation allowed native
+cache, local listener and existing database access. No dependency was installed.
+Raw logs are retained locally in `/tmp/b22-acceptance/`.
+
+PostgreSQL commands sourced the user-specified private file without displaying
+credentials, then explicitly exported `FOUNDRY_TEST_POSTGRES_URL` and
+`FOUNDRY_TEST_POSTGRES_REQUIRED=1`. Sourcing alone did not export the URL; the
+first required-backend run failed rather than silently skipping. Only affected
+packages were resumed. Existing services and isolated fixture data were used;
+no reset, drop, truncate or duplicate server was run.
+
+TypeScript commands used `FOUNDRY_TEST_NODE=$(command -v node)` and
+`FOUNDRY_TEST_TYPESCRIPT=/Users/weiloon/Projects/rust-go/Foundry-Go/tools/typescript/node_modules/typescript/lib/tsc.js`.
+The client gate enables `FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1`.
+
+| Command (root unless noted) | Result |
+| --- | --- |
+| `go build ./...` | PASS on final source |
+| `go vet ./http/... ./auth/... ./websocket/... ./datatable/... ./openapi/... ./contract/... ./application/... ./internal/authticket` | PASS on final source |
+| `go vet ./internal/agent` | PASS |
+| Consumer: `go vet ./reporting ./clientcontracts` | PASS |
+| `go test -timeout=20m -count=1 ./http/... ./auth/... ./websocket/... ./datatable/... ./openapi/... ./contract/... ./application/... ./internal/authticket` | Segmented PASS; required PostgreSQL failures resumed in the next row |
+| `go test -timeout=20m -count=1 ./http ./auth/challenge/postgres ./auth/mfa/postgres ./auth/session/postgres ./auth/token/postgres ./datatable ./application` | PASS with exported PostgreSQL URL and required mode |
+| `go test -timeout=20m -count=1 ./http ./websocket ./datatable ./application` | PASS after final response-writer refinement, PostgreSQL required |
+| `go test -timeout=20m -count=1 ./auth/token/postgres -run '^TestPostgresTicketAuthenticatedRoutes$'` | PASS after final response-writer refinement, PostgreSQL required |
+| `go test -timeout=20m -count=1 ./typescript` | Full package PASS after current-contract publication, with native Node/TypeScript configured |
+| `make generate-check` | PASS, all 15 configured roots |
+| `make publish-client-contracts` | PASS, only current cohort |
+| Consumer: `go test -timeout=20m -count=1 ./clientcontracts ./reporting` | Segmented PASS; reporting passed, the single new metadata assertion was corrected and resumed below |
+| Consumer: `go test -timeout=20m -count=1 ./clientcontracts -run '^TestTicketDownloadContracts$'` | PASS |
+| `make typescript-check` with the specified tools | Segmented PASS; strict clients, HTTP/WebSocket and React/Vue adapters passed; reporting runtime assertion resumed below |
+| Consumer: `go test -timeout=20m -count=1 -v ./clientcontracts -run '^TestTypeScriptClientAgainstRealHTTPAndWebSocket$/^reporting$'` | PASS with required native TypeScript tools |
+| Go-way: `go test -timeout=20m -count=1 ./guideadapters ./guideexamples` | PASS |
+| `go test -timeout=20m -count=1 . -run '^TestConsumerAPI(Documentation\|MethodVisibility\|DSLGoDocSurface)$'` | PASS |
+| Consumer and Go-way, separately: `go test -timeout=20m -count=1 . -run '^TestInvalidPublicContractsFailCompilation$/^datatable_routes_ticket_actor$'` | PASS in both modules |
+| `go test -timeout=20m -count=1 ./internal/agent -run '^(TestConsumerEditorProbeAnchors\|TestRealGoplsConsumer)$/(ticket-http-endpoint\|ticket-http-url\|ticket-datatable-model)$'` | PASS with `FOUNDRY_TEST_GOPLS=/Users/weiloon/Projects/rust-go/Foundry-Go/bin/gopls` |
+| `make release-tools-check` | Segmented PASS; release Go vet/tests and other Python suites passed; catalogue correction resumed below |
+| `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'goway_catalogue_test.py'` | PASS, 12 tests; together with the original 26 passing Python tests, all 38 passed |
+| `make docs-check` | PASS |
+| `git diff --check` | PASS |
+
+Initial compile corrections were a missing `auth` import in application, an
+incorrect package qualifier in a same-package manifest test, and a missing return
+after a test callback's `runtime.Goexit`. Assertions were corrected for the
+successful-handler count, escaped embedded TypeScript metadata and the existing
+lossless runtime `JSONNumber.text` representation of manifest version 8.
+These did not change the required runtime guarantees. The initial full TypeScript
+package run correctly rejected stale manifest-7 current contracts before publication.
+
+The compile-negative case initially declared its own model identity method; the
+catalogue scanner treats that name as a retired generated symbol. Both mirrors
+now use existing concrete fixture models and still reject the intended actor
+type mismatch. The existing `datatable_routes_ticket_actor` catalogue entry was
+repurposed for the replacement API: both `compiler_cases_test.go` entries already
+cover it, the sorted mapping and README were updated, and the existing 1,058 count
+in `tools/goway_catalogue_test.py` remains correct. No new non-Go testdata path
+required a release-source allowlist change.
+
+Generation initially could not compile against the stale generated
+`DownloadQuery.Ticket` field. The unchanged framework generator was built from a
+read-only archive of base `21f82017` into `/tmp/b22-framework-toolchain` using
+`go build -o /tmp/b22-acceptance/foundry ./cmd/foundry`, then run in this worktree
+as `/tmp/b22-acceptance/foundry generate --recursive --field-docs --dir datatable`.
+The current framework's `make generate-check` subsequently verified identical
+output. No generated artifact was hand-edited.
+
+## Review and deviations
+
+No unresolved deviation from PLAN §2. The user-approved
+`TokenTickets[M model.Identifiable, K any]` constraint is now in §2.1; `Tickets[M any]`
+remains unchanged. The only extra public capability check is
+`Tokens.ValidateTickets`, expressly allowed by §2.5 to reject disabled tickets
+before registration.
+
+Source review traced declaration validation, isolated shared redemption, guard
+resolution, request-scope closure after response writing, consumed-query decoding,
+HEAD interception and privacy header enforcement. HTTP uses the same guard
+requirements, actor middleware, attribution and failure writer as existing
+authenticated endpoints. The existing response capability wrapper preserves
+streaming/native controls while fixing headers before commitment. Redeemer
+source lookup is inside the shared isolated callback. No separate token or
+authorization implementation was introduced.
+
+The authentication guide documents HTTPS, upstream query-log redaction, browser
+history exposure, no access/refresh tokens in URLs, lack of resource/filter/route
+binding, current resource authorization, rate limits, privacy headers and fresh
+tickets for retry/Range/If-Range after consumption.
+
+Full `make verify`, race suites, the fresh independent read-only pre-merge review,
+application migrations and release tagging are outside this implementation gate
+and are not claimed. No performance claim is made.
+
+## Changed files, grouped
+
+The inventory and source fingerprint below are recorded after final source review.
+
+### Guides, compatibility, catalogue and evidence
+
+- `CHANGELOG.md`
+- `blueprint/00-master-architecture-and-parity.md`
+- `blueprint/goway-data-layer/README.md`
+- `blueprint/goway-data-layer/compilefail-mapping.tsv`
+- `docs/compatibility.md`
+- `docs/evidence/ticket-routes-20261101.md`
+- `docs/guides/authentication.md`
+- `docs/guides/datatable.md`
+- `docs/guides/http-downloads.md`
+- `docs/guides/tokens.md`
+- `docs/guides/websocket.md`
+
+### Framework implementation
+
+- `application/declarations.go`
+- `auth/ticket.go`
+- `auth/token/ticket.go`
+- `contract/manifest/document.go`
+- `datatable/routes.go`
+- `datatable/routes_transport.go`
+- `http/authentication.go`
+- `http/authentication_binding.go`
+- `http/credential_metadata.go`
+- `http/observed_response.go`
+- `http/router.go`
+- `http/ticket_endpoint.go`
+- `internal/authticket/redeem.go`
+- `openapi/openapi.go`
+- `websocket/hub.go`
+- `websocket/ticket.go`
+
+### Framework regression tests
+
+- `application/realtime_ticket_test.go`
+- `auth/token/postgres/ticket_http_test.go`
+- `contract/manifest/table_operations_test.go`
+- `datatable/routes_test.go`
+- `datatable/routes_ticket_postgres_test.go`
+- `http/ticket_endpoint_test.go`
+- `internal/authticket/redeem_test.go`
+- `websocket/public_error_graph_test.go`
+
+### Generated datatable DTO
+
+- `datatable/.foundry-gen.json`
+- `datatable/download_query_foundry.gen.go`
+
+### Editor acceptance
+
+- `internal/agent/gopls_acceptance_test.go`
+
+### Independent consumers and compiler mirrors
+
+- `tests/fixtures/consumer/README.md`
+- `tests/fixtures/consumer/clientcontracts/reporting_contracts_test.go`
+- `tests/fixtures/consumer/clientcontracts/testdata/reporting/runtime.mjs`
+- `tests/fixtures/consumer/clientcontracts/testdata/reporting/types.ts`
+- `tests/fixtures/consumer/reporting/table_routes.go`
+- `tests/fixtures/consumer/reporting/ticket_route.go`
+- `tests/fixtures/consumer/testdata/compilefail/datatable_routes_ticket_actor/invalid.go`
+- `tests/fixtures/goway/testdata/compilefail/datatable_routes_ticket_actor/invalid.go`
+
+### Published current client contracts
+
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/.foundry-gen.json`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/contracts_browser_foundry.gen.ts`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/contracts_foundry.gen.ts`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/contracts_live_foundry.gen.ts`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/contracts_manifest_foundry.gen.json`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/contracts_members_foundry.gen.ts`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/contracts_openapi_foundry.gen.json`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/client/contracts_runtime_foundry.gen.ts`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/provenance.json`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/reporting/.foundry-gen.json`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/reporting/contracts_exports_foundry.gen.ts`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/reporting/contracts_foundry.gen.ts`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/reporting/contracts_manifest_foundry.gen.json`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/reporting/contracts_openapi_foundry.gen.json`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/reporting/contracts_reports_foundry.gen.ts`
+- `tests/fixtures/consumer/clientcontracts/testdata/current-contracts/reporting/contracts_runtime_foundry.gen.ts`
+
+Changed source/contract fingerprint (SHA-256 of sorted relative path, NUL, bytes,
+NUL; `.go`, `.ts`, `.mjs`, `.py`, `.tsv`, `.json`; excludes documentation):
+`b00f5aa5d282e152267610ad6c219339d68ad04e94fadc6401aa77e0b6071dca`.

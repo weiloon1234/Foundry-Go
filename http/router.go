@@ -100,6 +100,19 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 			if handoff != nil && handoff(w, request) {
 				return
 			}
+			if info.Authentication != nil && info.Authentication.Credential.Kind == TicketCredentialKind {
+				protected := &observedResponse{native: w, protectedHeaders: stdhttp.Header{
+					"Cache-Control": {"no-store"}, "Referrer-Policy": {"no-referrer"}, "WWW-Authenticate": nil,
+				}}
+				protected.protectHeaders()
+				w = responseCapabilities(protected)
+				request = request.WithContext(withConsumedQueryParameter(request.Context(), ticketParameter))
+				if request.Method == stdhttp.MethodHead {
+					w.Header().Set("Allow", stdhttp.MethodGet)
+					writeRoutingError(w, request, MethodNotAllowed)
+					return
+				}
+			}
 			var kernel *requestBudget
 			if scope := requestScopeFrom(request.Context()); scope != nil {
 				kernel = scope.budget

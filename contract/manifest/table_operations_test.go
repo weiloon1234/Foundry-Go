@@ -81,7 +81,7 @@ func TestTableBindingsBuildDecodeAndProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc, _ := restored.Snapshot()
-	if doc.Version != 7 || len(doc.Tables) != 2 {
+	if doc.Version != Version || len(doc.Tables) != 2 {
 		t.Fatal("full metadata inventory changed")
 	}
 	for _, test := range []struct {

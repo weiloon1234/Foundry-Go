@@ -6,6 +6,8 @@ import (
 	"errors"
 	"slices"
 
+	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/auth/token"
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -13,28 +15,31 @@ import (
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// IssuedTicket carries an application-issued credential and its expiry.
+// Tickets retains token-owned issuance and single-use redemption for one actor.
+// Construct it with TokenTickets; its zero value cannot serve export routes.
 //
-// Example: datatable.IssuedTicket{Secret: ticketSecret, ExpiresAt: expiresAt}
-type IssuedTicket struct {
-	Secret    secret.String
-	ExpiresAt temporal.DateTime
+// Example: datatable.TokenTickets(adminTokens)
+type Tickets[M any] struct {
+	issue    func(context.Context) (secret.String, temporal.DateTime, error)
+	redeemer auth.TicketRedeemer
+	validate func() error
 }
 
-// Tickets adapts application-owned issuance and single-use redemption. Redeem
-// must check current credentials and actor eligibility, and return authority
-// usable through deferred row loading (not an already-closed auth scope).
-// Callbacks must honor cancellation; HTTP retains ownership until they exit.
+// TokenTickets adapts tokens for table export routes. Routes checks that tickets
+// are enabled and that their credential source matches the route's guard.
 //
-// Example: datatable.Tickets[Actor, Authority]{Issue: issueTicket, Redeem: redeemTicket}
-type Tickets[M, A any] struct {
-	Issue  func(context.Context, M) (IssuedTicket, error)
-	Redeem func(context.Context, secret.String) (A, error)
+// Example: datatable.TokenTickets(adminTokens)
+func TokenTickets[M model.Identifiable, K any](tokens *token.Tokens[M, K]) Tickets[M] {
+	return Tickets[M]{redeemer: tokens, validate: tokens.ValidateTickets, issue: func(ctx context.Context) (secret.String, temporal.DateTime, error) {
+		ticket, err := tokens.IssueTicket(ctx)
+		return ticket.Secret(), ticket.ExpiresAt(), err
+	}}
 }
 
 // RoutesConfig supplies borrowed services and typed application authority.
@@ -47,7 +52,7 @@ type RoutesConfig[M, A any] struct {
 	Manager    *Manager
 	Guard      foundryhttp.GuardBinding[M]
 	Authority  func(context.Context, M) (A, error)
-	Tickets    Tickets[M, A]
+	Tickets    Tickets[M]
 	Clock      clock.Clock
 	Quota      foundryhttp.Middleware
 	WithLocale func(A, i18n.LocaleID) A
@@ -71,8 +76,8 @@ func ReadAccess[M any](options ...foundryhttp.GuardOption[M]) RouteOption[M] {
 }
 
 // ExportAccess snapshots guard options applied before ticket request decoding.
-// Supplying ExportAccess more than once is an error. Download authority remains
-// the responsibility of Tickets.Redeem and the table's own authorization.
+// Supplying ExportAccess more than once is an error. These requirements also
+// apply to ticket-authenticated downloads before table authorization.
 //
 // Example: datatable.ExportAccess(http.Scopes(exportScopes), http.Permissions(exportPermission))
 func ExportAccess[M any](options ...foundryhttp.GuardOption[M]) RouteOption[M] {
@@ -83,8 +88,8 @@ func ExportAccess[M any](options ...foundryhttp.GuardOption[M]) RouteOption[M] {
 // POST /<table ID>/export for tickets and GET /<table ID>/download for files.
 // IDs within group end in <table ID>.query, .export and .download. The normal
 // declared status is 200; downloads also support 206 (partial content) and 304
-// (not modified). Issuance uses CredentialRequests and Quota; downloads are public
-// at the HTTP guard boundary and authenticate through Tickets.Redeem.
+// (not modified). Issuance uses CredentialRequests and Quota; downloads resolve
+// the guard through a single-use ticket and enforce ExportAccess.
 //
 // All declarations are validated before registrations are returned. HTTP owns
 // callback isolation and request lifetime; Manager owns deferred export work.
@@ -126,14 +131,17 @@ func Routes[S, R, M, A any](group foundryhttp.Scope, table Table[S, R, A], confi
 	if !table.definition.metadata.info.Exports {
 		return registrations, nil
 	}
-	if config.Clock == nil || config.Tickets.Issue == nil || config.Tickets.Redeem == nil {
-		return nil, invalid("datatable export routes require clock and ticket callbacks")
+	if config.Clock == nil || config.Tickets.issue == nil || config.Tickets.redeemer == nil || config.Tickets.validate == nil {
+		return nil, invalid("datatable export routes require clock and token tickets")
+	}
+	if err := config.Tickets.validate(); err != nil {
+		return nil, err
 	}
 	if err := config.Quota.Validate(); err != nil {
 		return nil, err
 	}
-	download := DownloadEndpoint(table, route(foundryhttp.GET, "/download", "download", foundryhttp.Public), DownloadQueryDescriptor(), foundryhttp.DownloadResponse("text/csv; charset=utf-8", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), foundryhttp.Timeout(config.Manager.DownloadTimeout()))
-	if err := foundryhttp.ValidateEndpoint(download); err != nil {
+	download := foundryhttp.TicketAuthenticated(DownloadEndpoint(table, route(foundryhttp.GET, "/download", "download", foundryhttp.Guarded), DownloadQueryDescriptor(), foundryhttp.DownloadResponse("text/csv; charset=utf-8", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), foundryhttp.Timeout(config.Manager.DownloadTimeout())), config.Guard, config.Tickets.redeemer, export...)
+	if err := foundryhttp.ValidateTicketAuthenticated(download); err != nil {
 		return nil, err
 	}
 	issueRoute := foundryhttp.ConfigureRoute(route(foundryhttp.POST, "/export", "export", foundryhttp.Guarded), foundryhttp.Use(foundryhttp.CredentialRequests(), config.Quota))
@@ -162,7 +170,7 @@ func tablePage[S, R, M, A any](table Table[S, R, A], config RoutesConfig[M, A]) 
 	}
 }
 
-func tableTicket[S, R, M, A any](table Table[S, R, A], config RoutesConfig[M, A], download foundryhttp.Endpoint[foundryhttp.NoPath, DownloadQuery, foundryhttp.NoBody, foundryhttp.Download]) func(context.Context, M, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, ExportRequest]) (ExportTicket, error) {
+func tableTicket[S, R, M, A any](table Table[S, R, A], config RoutesConfig[M, A], download foundryhttp.TicketEndpoint[foundryhttp.NoPath, DownloadQuery, foundryhttp.NoBody, M, foundryhttp.Download]) func(context.Context, M, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, ExportRequest]) (ExportTicket, error) {
 	return func(ctx context.Context, actor M, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, ExportRequest]) (ExportTicket, error) {
 		authority, err := config.Authority(ctx, actor)
 		if err != nil {
@@ -182,25 +190,24 @@ func tableTicket[S, R, M, A any](table Table[S, R, A], config RoutesConfig[M, A]
 		if locale, present := i18n.RequestLocale(ctx); present {
 			query.Locale = value.Set(locale)
 		}
-		if _, err := download.URL(ctx, foundryhttp.NoPath{}, query); err != nil {
+		if _, err := download.URL(ctx, foundryhttp.NoPath{}, query, secret.New("preflight")); err != nil {
 			return ExportTicket{}, exportQueryError(err)
 		}
-		ticket, err := config.Tickets.Issue(ctx, actor)
+		ticket, expires, err := config.Tickets.issue(ctx)
 		if err != nil {
 			return ExportTicket{}, err
 		}
-		query.Ticket = ticket.Secret.Reveal()
-		location, err := download.URL(ctx, foundryhttp.NoPath{}, query)
+		location, err := download.URL(ctx, foundryhttp.NoPath{}, query, ticket)
 		if err != nil {
 			return ExportTicket{}, exportQueryError(err)
 		}
-		return ExportTicket{URL: location, ExpiresAt: ticket.ExpiresAt}, nil
+		return ExportTicket{URL: location, ExpiresAt: expires}, nil
 	}
 }
 
-func tableDownload[S, R, M, A any](table Table[S, R, A], config RoutesConfig[M, A]) func(context.Context, foundryhttp.Input[foundryhttp.NoPath, DownloadQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
-	return func(ctx context.Context, in foundryhttp.Input[foundryhttp.NoPath, DownloadQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
-		authority, err := config.Tickets.Redeem(ctx, secret.New(in.Query.Ticket))
+func tableDownload[S, R, M, A any](table Table[S, R, A], config RoutesConfig[M, A]) func(context.Context, M, foundryhttp.Input[foundryhttp.NoPath, DownloadQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
+	return func(ctx context.Context, actor M, in foundryhttp.Input[foundryhttp.NoPath, DownloadQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
+		authority, err := config.Authority(ctx, actor)
 		if err != nil {
 			return foundryhttp.Download{}, err
 		}

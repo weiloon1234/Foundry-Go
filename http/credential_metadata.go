@@ -15,6 +15,8 @@ const authorizationHeader = "Authorization"
 const (
 	BearerCredentialKind CredentialKind = "bearer"
 	CookieCredentialKind CredentialKind = "cookie"
+	// TicketCredentialKind identifies a server-issued, single-use query credential.
+	TicketCredentialKind CredentialKind = "ticket"
 )
 
 // CredentialInfo describes where the selected guard reads a credential. It
@@ -27,7 +29,7 @@ type CredentialInfo struct {
 	OriginProtection bool                `json:"origin_protection,omitempty"`
 }
 
-// Validate checks the credential source and supported bearer or cookie transport
+// Validate checks the credential source and supported credential transport
 // metadata.
 func (info CredentialInfo) Validate() error {
 	if !identifier.Semantic(string(info.Source)) {
@@ -36,6 +38,10 @@ func (info CredentialInfo) Validate() error {
 	switch info.Kind {
 	case BearerCredentialKind:
 		if info.Name == authorizationHeader && !info.OriginProtection {
+			return nil
+		}
+	case TicketCredentialKind:
+		if info.Name == ticketParameter && !info.OriginProtection {
 			return nil
 		}
 	case CookieCredentialKind:

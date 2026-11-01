@@ -64,11 +64,13 @@ export async function standardTableRoutes(body: ExportRequest): Promise<ExportTi
   const ticket: ExportTicket = await sdk.tableExports["reports.numeric_levels"](api, { body });
   const expires: string = ticket.expires_at;
   const file: sdk.FileResult = await sdk.tableDownloads["reports.numeric_levels"](api, {
-    query: { ticket: "one", format: body.format, request: "{}", locale: "ms" },
+    query: { format: body.format, request: "{}", locale: "ms" },
   });
   await file.close();
   // @ts-expect-error The download requires the serialized table request.
-  void sdk.tableDownloads["reports.numeric_levels"](api, { query: { ticket: "one", format: "csv" } });
+  void sdk.tableDownloads["reports.numeric_levels"](api, { query: { format: "csv" } });
+  // @ts-expect-error Ticket credentials are server-issued and absent from domain query DTOs.
+  void sdk.tableDownloads["reports.numeric_levels"](api, { query: { ticket: "one", format: "csv", request: "{}" } });
   // @ts-expect-error Framework export formats are closed.
   void sdk.tableExports["reports.numeric_levels"](api, { body: { format: "pdf", request: {} } });
   // @ts-expect-error The ticket response is not a file response.
