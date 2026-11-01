@@ -38,7 +38,7 @@ local state remains in the application directory.
 | `ACTION=tools-apply make deploy` | Apply the reviewed tool plan with `PLAN_TOKEN` and `OPERATION` |
 | `ACTION=upgrade-resume make deploy` | Resume that same tool operation after interruption |
 | `ACTION=backup-configure make deploy` | Reconcile the persisted backup binding and schedules |
-| `ACTION=backup-run BACKUP_KIND=full make deploy` | Complete a database, key, and object backup |
+| `ACTION=backup-run BACKUP_KIND=full make deploy` | Complete a database and encrypted key/config backup |
 | `ACTION=restore-drill BACKUP_ID=<UUID> make deploy` | Restore an isolated PostgreSQL recovery target |
 
 `ENVIRONMENT` selects an existing profile. `RELEASE` selects an exact retained
@@ -419,12 +419,10 @@ as server-side settings. Each disk uses `driver: "r2"`,
 source has `mode: "static"`, `access_key`, and `secret_key`. R2 uses region `auto`
 and its explicit HTTPS account endpoint. The buckets must already exist.
 
-The backup copier reads private cloud disks and their static credentials from
-the selected, validated runtime configuration revision. Bootstrap storage secrets
-do not select the source of later copies. The registry records each disk's bucket
-and namespace prefix. Overlapping prefixes across instances are refused, even
-when endpoint spellings differ. Within an instance, overlapping aliases must have
-identical bindings. The backup repository uses a distinct bucket.
+The registry records each runtime disk's bucket and namespace prefix.
+Overlapping prefixes across instances are refused, even when endpoint spellings
+differ. Within an instance, overlapping aliases must have identical bindings.
+Use a distinct bucket for the backup repository.
 
 Storage namespaces must be empty or end in `/`. Storage collections must use
 complete JSON values or their `_FILE` aliases.
@@ -433,8 +431,7 @@ storage. Bootstrap and configuration changes persist candidate binding reservati
 before publishing `app.env`. After proving the selected configuration, they record
 its bindings and clear the reservation. Reconciliation selects the proven old or
 new revision; an unresolved change retains both old bindings and candidate
-reservations and blocks object copies. Backups use registered runtime storage from
-the first bootstrap configuration. App credentials must be scoped to the app bucket;
+reservations. App credentials must be scoped to the app bucket;
 provider policy and denial probes establish that isolation. The framework does
 not create buckets or edit provider policies. Local upload staging beneath
 `/var/lib/foundry/apps/<name>/uploads` is not the durable attachment store.
@@ -448,6 +445,10 @@ trips and R2 credential isolation still require application acceptance.
 
 ## Backups
 
+Backups cover PostgreSQL data (full/differential backups and WAL for point-in-time
+recovery) and an age-encrypted key/config archive. Attachments remain in the
+application's object storage and are not copied.
+
 pgBackRest provides continuous WAL archiving for the dedicated Foundry cluster.
 Its S3 repository uses HTTPS with certificate verification, a distinct backup
 bucket, and a server-generated repository encryption passphrase. The private
@@ -458,9 +459,9 @@ the cluster must use the same repository and preserve its passphrase.
 
 The installed schedule runs a full database backup on Sunday at 02:00 UTC and
 a differential backup daily at 05:00 UTC. If no base backup exists, the first
-differential request takes a full backup. A daily 08:00 UTC job also archives
-keys and copies attachment objects. Timers use persistence and jitter. Retention
-is cluster-wide and time-based. `repo1-retention-full-type=time` and
+differential request takes a full backup. Each database run also archives each
+configured instance's keys and configuration. These two timers use persistence
+and up to ten minutes of jitter. Retention is cluster-wide and time-based. `repo1-retention-full-type=time` and
 `repo1-retention-full=35` retain full backups for 35 days, with their differential
 backups and required WAL, to cover at least 28 days of PITR. Per-instance bundle
 counts never control expiration. Profiles may omit `backup_policy` or select
@@ -468,23 +469,19 @@ counts never control expiration. Profiles may omit `backup_policy` or select
 
 Bootstrap writes `APP__FEATURES__ATTACHMENTS__CONFIG__CLEANUP_GRACE=72h` with the
 storage configuration; raise it through a configuration change when needed.
-The deploy tooling requires an explicit duration longer than the object-copy
-interval plus timer jitter. Allow additional margin for outages and copy duration.
-The application must retain replaced and retired objects for that grace period.
+A database restore older than the application's attachment cleanup grace may
+reference objects the application has already removed. Backups do not read or
+require this setting.
 
-`ACTION=backup-run` creates a completed receipt only after the database backup,
-age-encrypted key/config archive, and object copy succeed. The receipt contains
-`backup_id`, `pgbackrest_label`, `key_archive`, `objects_prefix`, and completion
-time. The archive contains the instance configuration and referenced files,
-including active and retained keys and repository recovery material. Only public
-age recipients are stored on the host. `rclone copy` preserves deleted source
-objects; replaced destination objects move to an object-history prefix. Copy and
-verification compare listed sizes and checksums, so each run transfers only new
-or changed objects and never downloads the whole bucket. Neither
-`objects/` nor object history is pruned in this release, so storage use grows with
-retired objects and changes. Each physical binding has its own destination beneath
-`objects/<instance UUID>/`; the receipt's `object_copy.bindings` maps sources to
-these paths. A storage change keeps the previous copy available.
+`ACTION=backup-run` creates a completed receipt after the database backup and
+age-encrypted key/config archive succeed. The receipt contains `backup_id`,
+`pgbackrest_label`, `key_archive`, completion time, and configuration revision;
+a recovery bundle also records its named `restore_point`. The archive contains
+the instance configuration and referenced files, including active and retained
+keys and repository recovery material. Only public age recipients are stored
+on the host. `rclone` uploads and verifies only the encrypted key/config archive.
+`ACTION=backup-configure` accepts `backup_s3` and `age_recipients`; application
+storage credentials remain part of bootstrap runtime configuration.
 
 Before pending migrations, the lifecycle checks the latest full or differential
 backup. If it is less than 24 hours old, the lifecycle reuses it. Otherwise it
@@ -492,12 +489,13 @@ takes a differential, or a full when the repository has no base. It then creates
 a named PostgreSQL restore point and forces WAL archival. Migrations do not
 create an extra full backup each time.
 
-A bundle records its database point, key archive, and object copy separately
-under its operation UUID. Completed phases survive retries. Unknown outcomes
-require explicit reconciliation. A bundle is complete only when both the database
-point and successful object copy are newer than `cleanup_grace`. The host report
-uses the older component time for freshness and rejects a mismatched runtime
-revision. A new object copy cannot make an old database point fresh.
+A bundle records its database point and key archive separately under its
+operation UUID. Completed phases survive retries. Unknown outcomes require
+explicit reconciliation. The host report considers a completed bundle fresh
+when its database point is younger than the 24-hour backup interval plus ten
+minutes of timer jitter and the 30-minute backup deadline, and its configuration
+revision matches the current revision.
+A new key archive cannot make an old database point fresh.
 
 Each scheduled database run has a separate journal beneath
 `/etc/foundry/backup/operations/`. A failed bundle retains its evidence and does
@@ -565,8 +563,7 @@ only after proving process exit for those same owned resources.
 Database drill success does not establish business invariants, age decryption,
 or an atomic snapshot across database and objects. Recovery acceptance must
 retrieve and decrypt the key archive with an operator-held age identity, verify
-its members, replay a timestamp-bounded row change, and read copied attachment
-bytes. Keep the release artifact and operator recovery identities independently
+its members, and replay a timestamp-bounded row change. Keep the release artifact and operator recovery identities independently
 recoverable. Actual disaster recovery and traffic cutover remain explicit
 operator procedures; the drill does not rebind host identity.
 

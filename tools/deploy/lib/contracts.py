@@ -31,8 +31,11 @@ SLUG_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 POSTGRES_PORT = 55432
 REDIS_PORT = 56379
 BACKUP_POLICY = {"interval_hours": 24, "full_retention_days": 35, "pitr_days": 28}
-# Written with the bootstrap storage configuration; backups require it to exceed
-# the object-copy interval plus timer jitter. Operators may raise it later.
+BACKUP_JITTER_SECONDS = 600
+# A backup is fresh for one interval plus timer jitter and the database backup deadline.
+BACKUP_FRESH_SECONDS = BACKUP_POLICY["interval_hours"] * 3600 + BACKUP_JITTER_SECONDS + 1800
+# Bootstrap retention protects recent database restores from attachment cleanup.
+# Operators may raise it later.
 CLEANUP_GRACE_KEY = "APP__FEATURES__ATTACHMENTS__CONFIG__CLEANUP_GRACE"
 DEFAULT_CLEANUP_GRACE = "72h"
 REDIS_ACCOUNT = PREFIX + "-redis"

@@ -3,14 +3,14 @@
 ## Unreleased
 
 - Fixed: Deployment config changes and bootstrap persist runtime storage
-  reservations before publication and select backup bindings from the proven
+  reservations before publication and select bindings from the proven
   configuration, including interrupted-operation recovery.
 - Fixed: Deployment acceptance uses a digest-pinned VersityGW S3 stand-in with
   HTTPS and authenticated readiness instead of the unavailable MinIO image.
 - Fixed: Attachment sweeps delete only database-owned tombstoned keys; unknown
   keys remain intact and appear in inspection counts and samples. Configurable
   `cleanup_grace` delays retired/replaced and stale-writer object deletion
-  (default zero; at least 72h recommended with daily object backups).
+  (default zero; deploy bootstrap uses 72h to protect recent database restores).
 - Fixed: Deployment PostgreSQL uses a dedicated `foundry-postgres` account and
   journal-proven recovery of interrupted, never-started cluster initialization.
   Certbot uses isolated Foundry directories and renewal units, and accepted nginx
@@ -19,14 +19,16 @@
   ACL narrowing and prior background-role recovery before their interruption
   boundaries. Reconcile cleans terminal configuration candidates by recorded hash,
   and encryption rotation replays a private candidate/result using a stable UUID.
-- Fixed: Deployment backup sources follow registered runtime storage bindings.
-  Bucket namespaces are exclusive across instances. Bundles persist component
-  progress, failed schedules allow later backups, and restore drills retain
+- Fixed: Runtime storage bucket namespaces are exclusive across instances.
+  Backup bundles persist component progress, failed schedules allow later
+  backups, and restore drills retain
   stable identities and prove process exit before cleanup.
 - Changed: Cluster backup retention uses 35 days of full backups. Pre-migration
   recovery reuses a recent backup or takes a differential before its named WAL
-  point. Backup freshness uses the database point and object copy within the
-  attachment cleanup grace period. Object copies are not pruned.
+  point. Backups cover PostgreSQL data and the encrypted key/config archive;
+  attachments remain in application storage and are not copied. Backup freshness
+  uses the database point within the daily interval, timer jitter and the
+  backup deadline.
 - Fixed: Tool upgrades rebind backup timers, service commands, and live WAL
   archival before completion. pgBackRest uses the dedicated PostgreSQL owner
   and mode-0600 configuration. Repository credentials stay out of process
@@ -40,7 +42,7 @@
   scheduler and worker roles, atomic configuration/keyring changes, and explicit
   rollback/reconciliation. Dedicated PostgreSQL and TLS Redis services preserve
   foreign services; Cloudflare DNS-01 and per-site edge policy accompany
-  pgBackRest WAL recovery, age key archives, and R2 object backups. The packaged
+  pgBackRest WAL recovery and age key/config archives. The packaged
   bundle includes operator documentation and isolated HTTPS S3 stand-in and
   certificate acceptance fixtures. Live container and provider acceptance remain required
   before production use.

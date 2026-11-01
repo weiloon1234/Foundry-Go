@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Real pgBackRest PITR, age recovery and rclone copy against an isolated S3 stand-in.
+"""Real pgBackRest PITR, age key/config recovery against an isolated S3 stand-in.
 
 Required environment: ACCEPTANCE_S3_ENDPOINT, ACCEPTANCE_S3_ACCESS_KEY,
-ACCEPTANCE_S3_SECRET_KEY, ACCEPTANCE_APP_BUCKET, ACCEPTANCE_BACKUP_BUCKET.
+ACCEPTANCE_S3_SECRET_KEY, ACCEPTANCE_BACKUP_BUCKET.
 Credentials and decrypted archives remain private inside the disposable host.
 """
 import json
@@ -16,14 +16,17 @@ from acceptance_support import (WORK, action, fixture, guard, postgres_settings,
                                 psql, request, run, service, wait_for)
 
 
-def s3_settings():
-    names = ("ENDPOINT", "ACCESS_KEY", "SECRET_KEY", "APP_BUCKET", "BACKUP_BUCKET")
+def s3_settings(*, include_app=False):
+    names = ("ENDPOINT", "ACCESS_KEY", "SECRET_KEY", "BACKUP_BUCKET")
+    if include_app:
+        names += ("APP_BUCKET",)
     values = {key.lower(): os.environ["ACCEPTANCE_" + ("S3_" if key in names[:3] else "") + key]
               for key in names}
     endpoint = urlparse(values["endpoint"])
     assert endpoint.scheme == "https" and endpoint.hostname
     assert not endpoint.username and not endpoint.password
-    assert values["app_bucket"] != values["backup_bucket"]
+    if include_app:
+        assert values["app_bucket"] != values["backup_bucket"]
     return values
 
 
@@ -51,24 +54,11 @@ def main():
     host, project, profile, entry = fixture()
     from contracts import parse_env
     settings = s3_settings()
-    for bucket in (settings["app_bucket"], settings["backup_bucket"]):
-        # Buckets belong exclusively to this runner's S3 stand-in volume/network.
-        rclone(settings, "mkdir", "acceptance:" + bucket)
     work = WORK / ("backup-" + uuid.uuid4().hex)
     work.mkdir(mode=0o700)
     from acceptance_host import WORK as HOST_WORK
     identity = HOST_WORK / "age-identity.txt"
     assert identity.is_file(), "Bootstrap recovery identity is missing"
-    # Backups copy registered disk namespaces only; place the probe inside one.
-    source = next(iter(host.read_registry()["instances"][entry["profile"]["instance_id"]]["storage_bindings"].values()))
-    assert source["bucket"] == settings["app_bucket"]
-    relative = "acceptance-" + uuid.uuid4().hex
-    object_key = source["namespace"] + relative
-    object_file = work / "attachment.txt"
-    object_file.write_text("attachment-original-" + uuid.uuid4().hex)
-    rclone(settings, "copyto", str(object_file), f"acceptance:{settings['app_bucket']}/{object_key}")
-    assert rclone(settings, "cat", f"acceptance:{settings['app_bucket']}/{object_key}").stdout == object_file.read_text()
-
     # Bootstrap consumes request["secrets"] and configures the shared repository.
     # Manual backup uses that same persisted binding; it does not reconfigure it.
     from backup import STANZA, CONFIG, _archive_command, _backrest
@@ -96,7 +86,7 @@ def main():
             assert source.is_absolute() and source.is_file() and source.stat().st_size <= 16 * 1024 * 1024
             originals["files/" + str(source).lstrip("/")] = source.read_bytes()
     # backup-run(kind=full) returns backup_id, pgbackrest_label,
-    # key_archive.object_key, and objects_prefix. Completion means uploaded bytes.
+    # and key_archive.object_key. Completion means uploaded bytes.
     backup = action("backup-run", request(project, profile, kind="full"), timeout=1800)
     info = json.loads(_backrest(host, ["--output=json", "info"]).stdout)
     found = [item for item in info if item["name"] == stanza]
@@ -152,14 +142,9 @@ def main():
             member = archive.getmember(name)
             assert member.isfile() and member.size == len(expected)
             assert archive.extractfile(member).read() == expected, "Recovered key/config bytes differ"
-    binding = next(item for item in backup["object_copy"]["bindings"]
-                   if item["bucket"] == settings["app_bucket"] and item["namespace"] == source["namespace"])
-    copied = f"acceptance:{settings['backup_bucket']}/{binding['objects_prefix'].rstrip('/')}/{relative}"
-    assert rclone(settings, "cat", copied).stdout == object_file.read_text(), "Attachment backup bytes differ"
-    assert rclone(settings, "cat", f"acceptance:{settings['app_bucket']}/{object_key}").stdout == object_file.read_text()
     # No schema/database/bucket reset. Resources expire with this owned container.
     decrypted.unlink()
-    print("PASS pgBackRest full/WAL/PITR boundary; live cluster preserved; age key/config and attachment round trips")
+    print("PASS pgBackRest full/WAL/PITR boundary; live cluster preserved; age key/config round trip")
 
 
 if __name__ == "__main__":

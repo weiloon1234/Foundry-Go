@@ -93,7 +93,7 @@ def secret_input(name, label, *, structured=False, required=True):
     return value
 
 
-def bootstrap_secrets(required):
+def bootstrap_secrets(required, *, backup_only=False):
     result = {}
     for name, label, structured in (
         ("cloudflare_dns_token", "Cloudflare zone DNS token", False),
@@ -102,6 +102,8 @@ def bootstrap_secrets(required):
         ("age_recipients", "Age recovery recipients JSON array", True),
         ("encryption", "Encryption JSON (key_id and key)", True),
     ):
+        if backup_only and name not in {"backup_s3", "age_recipients"}:
+            continue
         value = secret_input(name, label, structured=structured, required=required and name != "encryption")
         if value is not None:
             result[name] = value
@@ -114,6 +116,8 @@ def bootstrap_secrets(required):
     if recipients is not None and (not isinstance(recipients, list) or not recipients
                                    or not all(isinstance(item, str) and item for item in recipients)):
         raise LocalError("age_recipients must be a nonempty JSON array of recipient strings")
+    if backup_only:
+        return result
     # Initial application settings the first deploy needs, such as seed credentials.
     configuration = secret_input("config", "Configuration values JSON", structured=True, required=False)
     if configuration is None and required and sys.stdin.isatty():
@@ -869,9 +873,7 @@ def deploy(project, profile, settings):
     if action in {"backup-configure", "backup-run", "restore-drill"}:
         arguments = {}
         if action == "backup-configure":
-            private = bootstrap_secrets(False)
-            private = {key: value for key, value in private.items() if key in {"backup_s3", "age_recipients", "app_storage"}}
-            arguments["secrets"] = private
+            arguments["secrets"] = bootstrap_secrets(False, backup_only=True)
         elif action == "backup-run":
             arguments["kind"] = os.environ.get("BACKUP_KIND", "full")
             if arguments["kind"] not in {"full", "diff"}:

@@ -97,9 +97,8 @@ class ReportTests(unittest.TestCase):
             "last_complete_at": completed.isoformat(), "last_attempt_outcome": "complete",
             "policy": {"interval_hours": 24, "full_retention_days": 35, "pitr_days": 28, "secret": SECRET},
             "database": {"status": "complete", "configuration_revision": self.host.registry["instances"][INSTANCE_ID].get("configuration_revision"),
-                "database_point": {"status": "complete", "completed_at": completed.isoformat()}},
-            "objects": {"status": "complete", "completed_at": completed.isoformat(), "cleanup_grace_seconds": 259200,
-                "configuration_revision": self.host.registry["instances"][INSTANCE_ID].get("configuration_revision")},
+                "database_point": {"status": "complete", "completed_at": completed.isoformat()},
+                "key_archive": {"status": "complete"}},
             "credentials": {"secret": SECRET}, "configuration_sha256": SECRET}
         result = report.collect_report(self.host)
         backup = self.item(result)["backup"]
@@ -128,19 +127,36 @@ class ReportTests(unittest.TestCase):
                 self.assertFalse(result["fresh"])
                 self.assertIn({"code": "backup_state_invalid", "instance_id": INSTANCE_ID}, problems)
 
-    def test_grace_freshness_uses_database_and_copy_from_the_same_revision(self):
+    def test_freshness_uses_database_interval_and_bundle_revision(self):
         clock = report.dt.datetime.now(report.dt.timezone.utc)
         entry = {"configuration_revision": 2, "backup": {"destination_ref": "configured", "last_complete_id": "bundle",
-            "database": {"status": "complete", "configuration_revision": 2,
-                "database_point": {"status": "complete", "completed_at": (clock - report.dt.timedelta(hours=36)).isoformat()}},
-            "objects": {"status": "complete", "configuration_revision": 2, "completed_at": clock.isoformat(),
-                "cleanup_grace_seconds": 72 * 3600}}}
-        self.assertTrue(report.backup_freshness(entry, [], INSTANCE_ID)["fresh"])
-        entry["backup"]["database"]["database_point"]["completed_at"] = (clock - report.dt.timedelta(hours=80)).isoformat()
-        self.assertFalse(report.backup_freshness(entry, [], INSTANCE_ID)["fresh"])
+            "last_complete_at": clock.isoformat(),
+            "database": {"status": "complete", "configuration_revision": 2, "completed_at": clock.isoformat(),
+                "database_point": {"status": "complete", "completed_at": clock.isoformat()},
+                "key_archive": {"status": "complete", "completed_at": clock.isoformat()}}}}
+        maximum_age = report.BACKUP_FRESH_SECONDS
+        for age, fresh in ((2 * 3600, True), (maximum_age - 60, True), (maximum_age + 60, False), (36 * 3600, False)):
+            with self.subTest(age=age):
+                point_time = (clock - report.dt.timedelta(seconds=age)).isoformat()
+                entry["backup"]["database"]["database_point"]["completed_at"] = point_time
+                result = report.backup_freshness(entry, [], INSTANCE_ID)
+                self.assertEqual(result["fresh"], fresh)
+                self.assertEqual(result["last_complete_at"], point_time)
         entry["backup"]["database"]["database_point"]["completed_at"] = clock.isoformat()
-        entry["backup"]["objects"]["configuration_revision"] = 1
+        entry["backup"]["database"]["configuration_revision"] = 1
         self.assertFalse(report.backup_freshness(entry, [], INSTANCE_ID)["fresh"])
+        entry["backup"]["database"]["configuration_revision"] = 2
+        for component in ("database_point", "key_archive"):
+            with self.subTest(component=component):
+                entry["backup"]["database"][component]["status"] = "running"
+                self.assertFalse(report.backup_freshness(entry, [], INSTANCE_ID)["fresh"])
+                entry["backup"]["database"][component]["status"] = "complete"
+        for timestamp in ("not-a-timestamp", "2026-01-01T00:00:00", "9999-01-01T00:00:00Z", None):
+            with self.subTest(timestamp=timestamp):
+                entry["backup"]["database"]["database_point"]["completed_at"] = timestamp
+                problems = []
+                self.assertFalse(report.backup_freshness(entry, problems, INSTANCE_ID)["fresh"])
+                self.assertIn({"code": "backup_state_invalid", "instance_id": INSTANCE_ID}, problems)
 
     def test_service_exposes_live_process_identity_and_restart_count(self):
         patch.stopall()

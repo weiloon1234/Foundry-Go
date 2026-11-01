@@ -70,7 +70,7 @@ def archive_contract(source):
 
 def bootstrap_secrets(disks):
     from acceptance_backup import rclone, s3_settings
-    settings = s3_settings()
+    settings = s3_settings(include_app=True)
     for bucket in (settings["app_bucket"], settings["backup_bucket"]):
         rclone(settings, "mkdir", "acceptance:" + bucket)
     identity_file = WORK / "age-identity.txt"
@@ -414,7 +414,7 @@ def main():
     topology, disks = archive_contract(args.archive)
     private = bootstrap_secrets(disks)
     from acceptance_backup import rclone, s3_settings
-    settings = s3_settings()
+    settings = s3_settings(include_app=True)
     for number, fixture in enumerate(fixtures(), 1):
         instance_private = copy.deepcopy(private)
         bucket = settings["app_bucket"] if number == 1 else settings["app_bucket"] + "-" + str(number)

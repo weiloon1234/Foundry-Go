@@ -13,7 +13,7 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
 from contracts import (CLEANUP_GRACE_KEY, DEFAULT_CLEANUP_GRACE, DeployError, instance_paths, parse_env,
-                       validate_registry, bind_storage)
+                       validate_registry, bind_storage, runtime_storage, storage_bindings)
 from host import Host, Paths
 from topology import instance_units
 import provision
@@ -321,7 +321,7 @@ class FoundationProvisionTests(unittest.TestCase):
         self.host.owned_write(path.with_name("secrets.json"), json.dumps(credentials), 0o600)
         return registry, entry, credentials, path
 
-    def test_bootstrap_reserves_before_first_configuration_and_registers_backup_source(self):
+    def test_bootstrap_reserves_before_first_configuration_and_registers_storage(self):
         registry, entry, credentials, path = self.bootstrap_storage()
         original = provision._owned_write
         observed = []
@@ -339,7 +339,10 @@ class FoundationProvisionTests(unittest.TestCase):
         selected = self.host.read_registry()["instances"][self.profile["instance_id"]]
         self.assertNotIn("pending_storage_bindings", selected)
         self.assertIn("configuration", selected["provisioning"]["completed_steps"])
-        self.assertEqual(storage_fixture("initial/"), provision.backup._runtime_storage(self.host, selected)[0])
+        storage = runtime_storage(provision.validate_runtime_environment(self.host, selected),
+                                  lambda value: provision._read_value_file(self.host, selected, value))
+        self.assertEqual(storage_fixture("initial/"), storage)
+        self.assertEqual(storage_bindings(storage), selected["storage_bindings"])
         self.assertEqual(DEFAULT_CLEANUP_GRACE, parse_env(path.read_text())[CLEANUP_GRACE_KEY])
         self.assertNotIn("canary-secret", json.dumps(self.host.registry_value))
 
@@ -361,7 +364,10 @@ class FoundationProvisionTests(unittest.TestCase):
         provision._provision_environment(self.host, registry, entry, credentials)
         selected = self.host.read_registry()["instances"][self.profile["instance_id"]]
         self.assertNotIn("pending_storage_bindings", selected)
-        self.assertEqual(storage_fixture("initial/"), provision.backup._runtime_storage(self.host, selected)[0])
+        storage = runtime_storage(provision.validate_runtime_environment(self.host, selected),
+                                  lambda value: provision._read_value_file(self.host, selected, value))
+        self.assertEqual(storage_fixture("initial/"), storage)
+        self.assertEqual(storage_bindings(storage), selected["storage_bindings"])
 
     def test_bootstrap_storage_collision_refuses_first_configuration(self):
         registry, entry, credentials, path = self.bootstrap_storage()

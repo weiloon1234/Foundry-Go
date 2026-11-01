@@ -606,6 +606,13 @@ class LocalDeploymentTests(unittest.TestCase):
             self.assertEqual(cli.bootstrap_secrets(True), values)
             self.assertTrue(all(call.kwargs["secret"] for call in ask.call_args_list))
 
+    def test_backup_private_envelope_reads_only_repository_and_recipients(self):
+        values = {"backup_s3": {key: "fixture" for key in ("endpoint", "region", "bucket", "access_key_id", "secret_access_key")},
+                  "age_recipients": ["age1fixture"]}
+        with patch.object(cli, "secret_input", side_effect=lambda name, *args, **kwargs: values[name]) as read:
+            self.assertEqual(cli.bootstrap_secrets(False, backup_only=True), values)
+        self.assertEqual([call.args[0] for call in read.call_args_list], ["backup_s3", "age_recipients"])
+
     def test_build_provenance_waits_for_both_locks_and_orphan_checks(self):
         project, profile = fixture()
         events = []

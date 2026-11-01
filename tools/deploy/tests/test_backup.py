@@ -1,5 +1,4 @@
 """Backup failure boundaries use private fixture files and mocked host commands."""
-import copy
 import json
 import time
 from pathlib import Path
@@ -14,7 +13,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import backup
-from contracts import DeployError, bind_storage, dump_env, parse_env, now, read_json
+from contracts import DeployError, now, read_json
 from host import Host, Paths
 from test_contracts import fixture, registry
 
@@ -33,28 +32,15 @@ class BackupTests(unittest.TestCase):
         owner = patch.object(backup.postgres, "cluster_owner", return_value="foundry-postgres", create=True)
         owner.start()
         self.addCleanup(owner.stop)
-        runtime = patch.object(backup.runtime_config, "validate_runtime_environment",
-            side_effect=lambda host, entry: parse_env((host.paths.instance_config(entry["name"]) / "app.env").read_text()))
-        runtime.start()
-        self.addCleanup(runtime.stop)
         self.commands = []
         self.host.run = self.run_command
         self.repository = {"endpoint": "https://r2.example.invalid", "region": "auto", "bucket": "private-backups",
                            "access_key_id": "private-access", "secret_access_key": "private-secret", "cipher_pass": "x" * 43}
-        self.source = {**self.repository, "bucket": "private-attachments"}
-        self.storage = {"credentials": {"uploads": {"mode": "static", "access_key": "private-access", "secret_key": "private-secret"}},
-                        "disks": {"uploads": {"driver": "r2", "config": {"visibility": 0}, "cloud": {
-                            "endpoint": "https://r2.example.invalid", "region": "auto", "bucket": "private-attachments", "credentials": "uploads"}}}}
-        bind_storage(self.registry, self.entry, self.storage)
-        self.host.write_registry(self.registry)
         backup._write_private(self.host, self.host.paths.p(backup.REPOSITORY), self.repository)
         path = backup._instance_settings_path(self.host, self.entry)
         backup._write_private(self.host, path, {"instance_id": self.entry["profile"]["instance_id"],
-                                               "source": self.source, "age_recipients": [RECIPIENT]})
-        self.host.owned_write(path.parent / "app.env", dump_env({"PROJECT__ENV": "production",
-            "APP__SERVICES__CREDENTIALS": json.dumps(self.storage["credentials"]),
-            "APP__SERVICES__STORAGE__DISKS": json.dumps(self.storage["disks"]),
-            "APP__FEATURES__ATTACHMENTS__CONFIG__CLEANUP_GRACE": "72h"}), mode=0o640)
+                                               "age_recipients": [RECIPIENT]})
+        self.host.owned_write(path.parent / "app.env", "PROJECT__ENV=production\n", mode=0o640)
         self.host.owned_write(path.parent / "secrets.json", '{"key":"private-key-canary"}', mode=0o600)
 
     def run_command(self, args, **kwargs):
@@ -117,16 +103,28 @@ class BackupTests(unittest.TestCase):
                     backup.archive_keys(self.host, self.entry)
                 self.assertNotIn("backup", self.host.load_state(self.entry))
 
-    def test_object_copy_keeps_source_and_overwrite_history(self):
-        receipt = backup.copy_objects(self.host, self.entry)
-        command = self.commands[0][0]
-        self.assertIn("copy", command)
-        self.assertIn("--backup-dir", command)
-        self.assertFalse(any(word in command for word in ("sync", "delete", "purge", "move")))
-        self.assertIn("check", self.commands[1][0])
-        self.assertIn("--one-way", self.commands[1][0])
-        self.assertNotIn("private-secret", json.dumps(receipt))
-        self.assertEqual(receipt["objects_prefix"], "objects/" + self.entry["profile"]["instance_id"])
+    def test_bundle_completes_with_only_database_and_key_archive(self):
+        operation = str(uuid.uuid4())
+        inventory = [{"label": LABEL, "type": "full", "timestamp": {"stop": int(time.time())}}]
+        with patch.object(backup, "_info", return_value=inventory), \
+                patch.object(backup, "_database_backup", return_value=LABEL) as database, \
+                patch.object(backup, "_backrest"):
+            receipt = backup.run_backup(self.host, self.entry, operation)
+            again = backup.run_backup(self.host, self.entry, operation)
+        database.assert_called_once_with(self.host, "full")
+        self.assertEqual(receipt, again)
+        self.assertEqual(receipt["status"], "complete")
+        self.assertEqual(receipt["configuration_revision"], self.entry["configuration_revision"])
+        self.assertEqual(receipt["fresh_at"], receipt["database_point"]["completed_at"])
+        journal = read_json(backup._operation_path(self.host, self.entry, operation))
+        self.assertEqual(set(journal["components"]), {"database", "keys"})
+        commands = [args for args, _ in self.commands]
+        self.assertEqual([args[0] for args in commands], ["age", "rclone", "rclone"])
+        self.assertIn("copyto", commands[1])
+        self.assertIn(receipt["key_archive"]["object_key"], commands[1][-2])
+        self.assertIn("check", commands[2])
+        self.assertTrue(all("/keys/" in arg for args in commands for arg in args if arg.startswith("backup:")))
+        self.assertFalse(any(arg.startswith("app:") or arg == "copy" for args in commands for arg in args))
 
     def test_recovery_point_backs_up_before_named_point_and_checks_wal(self):
         operation = str(uuid.uuid4())
@@ -143,8 +141,7 @@ class BackupTests(unittest.TestCase):
                 patch.object(backup, "_info", return_value=[{"label": LABEL, "type": "full", "timestamp": {"stop": int(time.time()) - 172800}}]), \
                 patch.object(backup, "_admin", side_effect=admin), \
                 patch.object(backup, "_backrest", side_effect=lambda h, args, **k: events.append(args[0])), \
-                patch.object(backup, "archive_keys", return_value={"status": "complete", "completed_at": now(), "object_key": "keys/fixture"}), \
-                patch.object(backup, "copy_objects", return_value={"status": "complete", "completed_at": now(), "objects_prefix": "objects/fixture", "cleanup_grace_seconds": 259200}):
+                patch.object(backup, "archive_keys", return_value={"status": "complete", "completed_at": now(), "object_key": "keys/fixture"}):
             receipt = backup.recovery_point(self.host, self.entry, operation)
             again = backup.recovery_point(self.host, self.entry, operation)
         self.assertEqual(events, ["backup", "restore-point", "check", "expire"])
@@ -178,16 +175,12 @@ class BackupTests(unittest.TestCase):
                 self.assertEqual("backup_archive_path", caught.exception.code)
         self.assertEqual(self.commands, [])
 
-    def test_private_keys_http_and_same_bucket_are_rejected(self):
+    def test_private_keys_and_unapproved_http_are_rejected(self):
         with self.assertRaises(DeployError):
             backup._recipients(["AGE-SECRET-KEY-private-canary"])
         with self.assertRaises(DeployError):
             backup._repository({**self.repository, "endpoint": "http://minio.invalid"})
         backup._repository({**self.repository, "endpoint": "http://minio.invalid:9000", "allow_http": True})
-        self.storage["disks"]["uploads"]["cloud"]["bucket"] = self.repository["bucket"]
-        self.select_storage(self.storage)
-        with self.assertRaises(DeployError):
-            backup.copy_objects(self.host, self.entry)
         self.assertEqual(self.commands, [])
 
     def test_restore_rejects_incomplete_foreign_and_invalid_targets_before_start(self):
@@ -220,10 +213,7 @@ class BackupTests(unittest.TestCase):
                               {**self.repository, "host_id": self.registry["host_id"], "cluster_token": cluster["ownership_token"]})
         intake = {"instance_id": self.entry["profile"]["instance_id"],
                   "backup_s3": {key: self.repository[key] for key in ("endpoint", "region", "bucket", "access_key_id", "secret_access_key")},
-                  "age_recipients": [RECIPIENT], "app_storage": {
-                      "credentials": {"uploads": {"mode": "static", "access_key": "private-access", "secret_key": "private-secret"}},
-                      "disks": {"uploads": {"driver": "r2", "config": {"visibility": 0}, "cloud": {
-                          "endpoint": "https://r2.example.invalid", "region": "auto", "bucket": "private-attachments", "credentials": "uploads"}}}}}
+                  "age_recipients": [RECIPIENT]}
         backup._write_private(self.host, self.host.paths.instance_config(self.entry["name"]) / "bootstrap-secrets.json", intake)
         with patch.object(backup, "_cluster", return_value=cluster), \
                 patch.object(backup.packages, "install_missing") as install, \
@@ -255,7 +245,11 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(self.host.paths.p(backup.REPOSITORY).stat().st_mode & 0o777, 0o600)
         units = self.host.paths.p("/etc/systemd/system")
         timers = list(units.glob("foundry-backup-*.timer"))
-        self.assertEqual(len(timers), 3)
+        self.assertEqual({timer.name for timer in timers},
+                         {"foundry-backup-full-cluster.timer", "foundry-backup-diff-cluster.timer"})
+        self.assertTrue(all(f"RandomizedDelaySec={backup.BACKUP_JITTER_SECONDS}" in timer.read_text() for timer in timers))
+        self.assertEqual(read_json(backup._instance_settings_path(self.host, self.entry)),
+                         {"instance_id": self.entry["profile"]["instance_id"], "age_recipients": [RECIPIENT]})
         self.assertTrue(all("Persistent=true" in timer.read_text() for timer in timers))
         self.assertFalse(self.host.paths.p("/etc/postgresql/16/foundry/postgresql.conf").exists())
 
@@ -332,37 +326,6 @@ class BackupTests(unittest.TestCase):
         backup._install_configuration(self.host, cluster)
         self.assertIn("pg1-port=" + str(cluster["port"]), backup._configuration(self.host, cluster, self.repository))
 
-    def select_storage(self, storage):
-        path = self.host.paths.instance_config(self.entry["name"]) / "app.env"
-        values = parse_env(path.read_text())
-        values["APP__SERVICES__CREDENTIALS"] = json.dumps(storage["credentials"])
-        values["APP__SERVICES__STORAGE__DISKS"] = json.dumps(storage["disks"])
-        self.host.owned_write(path, dump_env(values), mode=0o640)
-        bind_storage(self.registry, self.entry, storage)
-        self.entry["configuration_revision"] += 1
-        self.host.write_registry(self.registry)
-
-    def test_object_copy_follows_selected_revision_and_namespace(self):
-        changed = copy.deepcopy(self.storage)
-        changed["disks"]["uploads"]["cloud"].update(bucket="new-attachments", namespace="tenant/")
-        changed["credentials"]["uploads"]["secret_key"] = "rotated-secret"
-        self.select_storage(changed)
-        with patch.object(backup, "_rclone") as copy_objects:
-            result = backup.copy_objects(self.host, self.entry)
-        args = copy_objects.call_args_list[0].args
-        self.assertIn("app:new-attachments/tenant/", args[1])
-        self.assertEqual(args[2]["secret_access_key"], "rotated-secret")
-        self.assertEqual(result["configuration_revision"], self.entry["configuration_revision"])
-        self.assertNotIn("rotated-secret", json.dumps(result))
-
-    def test_unregistered_runtime_storage_change_fails_closed(self):
-        path = self.host.paths.instance_config(self.entry["name"]) / "app.env"
-        self.host.owned_write(path, path.read_text().replace("private-attachments", "unregistered-bucket"), mode=0o640)
-        with self.assertRaises(DeployError) as caught:
-            backup.copy_objects(self.host, self.entry)
-        self.assertEqual(caught.exception.code, "storage_binding_unregistered")
-        self.assertEqual(self.commands, [])
-
     def test_repository_credentials_use_private_files_not_process_metadata(self):
         self.cluster()
         captured = []
@@ -371,34 +334,63 @@ class BackupTests(unittest.TestCase):
                 path = Path(next(arg.split("=", 1)[1] for arg in args if arg.startswith("--config=")))
                 self.assertEqual(path.stat().st_mode & 0o777, 0o600)
                 self.assertIn("private-secret", path.read_text())
+                self.assertNotIn("[app]", path.read_text())
                 captured.append(path)
             return self.run_command(args, **kwargs)
         self.host.run = command
         backup._backrest(self.host, ["check"])
-        backup._rclone(self.host, ["copy", "app:bucket", "backup:bucket"], self.source)
+        backup._rclone(self.host, ["copyto", "/private/key.tar.age", "backup:bucket/keys/key.tar.age"])
         self.assertEqual(self.commands[0][0][2], "foundry-postgres")
         self.assertTrue(all(not path.exists() for path in captured))
         self.assertNotIn("private-secret", json.dumps(self.commands))
         self.assertNotIn("PGBACKREST_REPO", json.dumps(self.commands))
 
-    def test_component_resume_does_not_repeat_completed_keys_or_database(self):
+    def test_component_resume_requires_reconciliation_and_reuses_database(self):
         operation = str(uuid.uuid4())
-        database = {"status": "complete", "completed_at": now(), "pgbackrest_label": LABEL}
+        inventory = [{"label": LABEL, "type": "full", "timestamp": {"stop": int(time.time())}}]
         keys = {"status": "complete", "completed_at": now(), "object_key": "keys/one"}
-        objects = {"status": "complete", "completed_at": now(), "objects_prefix": "objects/one", "cleanup_grace_seconds": 259200}
-        with patch.object(backup, "archive_keys", return_value=keys) as archive, \
-                patch.object(backup, "copy_objects", side_effect=[DeployError("copy_failed", "unknown"), objects]) as copier:
+        with patch.object(backup, "_info", return_value=inventory), \
+                patch.object(backup, "_database_backup", return_value=LABEL) as database, \
+                patch.object(backup, "_backrest"), \
+                patch.object(backup, "archive_keys", side_effect=[DeployError("upload_failed", "unknown"), keys]) as archive:
             with self.assertRaises(DeployError):
-                backup._complete(self.host, self.entry, operation, database)
+                backup.run_backup(self.host, self.entry, operation)
             with self.assertRaises(DeployError) as caught:
-                backup._complete(self.host, self.entry, operation, database)
+                backup.run_backup(self.host, self.entry, operation)
             self.assertEqual(caught.exception.code, "backup_outcome_unknown")
-            result = backup._complete(self.host, self.entry, operation, database, reconcile=True)
-        self.assertEqual(archive.call_count, 1)
-        self.assertEqual(copier.call_count, 2)
+            result = backup.reconcile_backup(self.host, self.entry, operation)
+            again = backup.run_backup(self.host, self.entry, operation)
+        database.assert_called_once_with(self.host, "full")
+        self.assertEqual(archive.call_count, 2)
+        self.assertEqual(result, again)
         self.assertEqual(result["status"], "complete")
         journal = read_json(backup._operation_path(self.host, self.entry, operation))
         self.assertTrue(all(item["status"] == "complete" for item in journal["components"].values()))
+
+    def test_completed_keys_survive_interrupted_receipt_publication(self):
+        operation = str(uuid.uuid4())
+        database = {"status": "complete", "completed_at": now(), "pgbackrest_label": LABEL}
+        keys = {"status": "complete", "completed_at": now(), "object_key": "keys/one"}
+        write = backup._write_private
+        def interrupt(host, path, value):
+            if path == backup._receipt_path(host, self.entry, operation):
+                raise KeyboardInterrupt()
+            return write(host, path, value)
+        with patch.object(backup, "archive_keys", return_value=keys) as archive:
+            with patch.object(backup, "_write_private", side_effect=interrupt):
+                with self.assertRaises(KeyboardInterrupt):
+                    backup._complete(self.host, self.entry, operation, database)
+            result = backup._complete(self.host, self.entry, operation, database)
+        archive.assert_called_once_with(self.host, self.entry)
+        self.assertEqual(result["key_archive"], keys)
+
+    def test_schedule_accepts_only_cluster_database_tasks(self):
+        for task, identity in (("objects", self.entry["profile"]["instance_id"]), ("keys", "cluster"),
+                               ("full", self.entry["profile"]["instance_id"]), ("diff", "unknown")):
+            with self.subTest(task=task, identity=identity), self.assertRaises(DeployError) as caught:
+                backup._scheduled(self.host, task, identity)
+            self.assertEqual(caught.exception.code, "backup_schedule_invalid")
+        self.assertEqual(self.commands, [])
 
     def test_unknown_database_requires_operator_label_and_repository_evidence(self):
         operation = str(uuid.uuid4())
@@ -495,30 +487,23 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(replay, result)
         self.assertFalse(Path(result["data_path"]).parent.exists())
 
-    def test_database_or_object_age_outside_grace_cannot_complete_bundle(self):
+    def test_key_archival_does_not_refresh_an_old_database_point(self):
+        operation = str(uuid.uuid4())
         old = backup.datetime.fromtimestamp(time.time() - 4 * 86400, backup.timezone.utc).isoformat()
-        for stale in ("database", "objects"):
-            with self.subTest(stale=stale):
-                operation = str(uuid.uuid4())
-                point = {"status": "complete", "pgbackrest_label": LABEL, "completed_at": old if stale == "database" else now()}
-                objects = {"status": "complete", "objects_prefix": "objects/one", "cleanup_grace_seconds": 259200,
-                           "completed_at": old if stale == "objects" else now()}
-                with patch.object(backup, "archive_keys", return_value={"status": "complete", "object_key": "keys/one"}), \
-                        patch.object(backup, "copy_objects", return_value=objects):
-                    with self.assertRaises(DeployError) as caught:
-                        backup._complete(self.host, self.entry, operation, point)
-                self.assertEqual(caught.exception.code, "backup_stale")
-                self.assertFalse(backup._receipt_path(self.host, self.entry, operation).exists())
+        point = {"status": "complete", "pgbackrest_label": LABEL, "completed_at": old}
+        receipt = backup._complete(self.host, self.entry, operation, point)
+        self.assertEqual(receipt["fresh_at"], old)
+        self.assertEqual(self.host.load_state(self.entry)["backup"]["last_complete_at"], old)
 
     def test_timer_rebinding_checks_loaded_commands_even_when_files_match(self):
-        backup._install_timers(self.host, self.registry, self.entry)
+        backup._install_timers(self.host, self.registry)
         def command(args, **kwargs):
             if "--property=ExecStart" in args:
                 return subprocess.CompletedProcess(args, 0, "/usr/bin/python3 -I /old/lib/backup.py scheduled full cluster", "")
             return self.run_command(args, **kwargs)
         self.host.run = command
         with self.assertRaises(DeployError) as caught:
-            backup._install_timers(self.host, self.registry, self.entry)
+            backup._install_timers(self.host, self.registry)
         self.assertEqual(caught.exception.code, "backup_rebind_failed")
 
     def test_rebinding_removes_bridge_and_requires_live_archive_command(self):

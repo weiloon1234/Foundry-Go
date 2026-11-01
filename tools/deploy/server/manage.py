@@ -83,7 +83,7 @@ def execute(host, action, request):
             if action == "backup-configure":
                 from runtime_config import initialize_bootstrap_secrets
                 private = request.get("secrets", {})
-                require(isinstance(private, dict) and set(private) <= {"backup_s3", "age_recipients", "app_storage"},
+                require(isinstance(private, dict) and set(private) <= {"backup_s3", "age_recipients"},
                         "invalid_secrets", "Invalid backup secret envelope.")
                 initialize_bootstrap_secrets(host, entry, private)
                 backup.configure(host, registry, entry)

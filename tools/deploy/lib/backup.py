@@ -9,7 +9,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 import configparser
 import fcntl
-import hashlib
 from datetime import datetime, timezone
 import json
 import os
@@ -31,13 +30,11 @@ from urllib.parse import urlsplit
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from contracts import (BACKUP_POLICY, CLEANUP_GRACE_KEY, DeployError, POSTGRES_PORT, check_path, instance_paths,
-                       now, parse_env, read_json, require, valid_uuid, storage_bindings,
-                       check_storage_bindings, bind_storage, runtime_storage)
+from contracts import (BACKUP_POLICY, BACKUP_JITTER_SECONDS, DeployError, POSTGRES_PORT, check_path, instance_paths,
+                       now, parse_env, read_json, require, valid_uuid)
 from host import Host
 import packages
 import postgres
-import runtime_config
 
 STANZA = "foundry"
 # Foundry-owned paths only: never the distro /etc/pgbackrest or /var/lib/pgbackrest,
@@ -221,21 +218,16 @@ def _database_backup(host, kind):
     return completed[0]["label"]
 
 
-def _rclone(host, arguments, source=None):
-    repositories = {"backup": _repository_settings(host)}
-    if source:
-        repositories["app"] = source
+def _rclone(host, arguments):
+    repository = _repository_settings(host)
     root = _private_directory(host, host.paths.p("/etc/foundry/backup"))
     with tempfile.TemporaryDirectory(prefix="rclone-", dir=root) as temporary:
         config = Path(temporary) / "rclone.conf"
-        sections = []
-        for name, repository in repositories.items():
-            _repository(repository)
-            sections.append(f"[{name}]\ntype = s3\nprovider = Other\nenv_auth = false\n"
-                            f"endpoint = {repository['endpoint']}\nregion = {repository['region']}\n"
-                            f"access_key_id = {repository['access_key_id']}\nsecret_access_key = {repository['secret_access_key']}\n"
-                            f"force_path_style = {str(repository.get('uri_style', 'path') == 'path').lower()}\n")
-        host.owned_write(config, "\n".join(sections), mode=0o600)
+        content = (f"[backup]\ntype = s3\nprovider = Other\nenv_auth = false\n"
+                   f"endpoint = {repository['endpoint']}\nregion = {repository['region']}\n"
+                   f"access_key_id = {repository['access_key_id']}\nsecret_access_key = {repository['secret_access_key']}\n"
+                   f"force_path_style = {str(repository.get('uri_style', 'path') == 'path').lower()}\n")
+        host.owned_write(config, content, mode=0o600)
         return host.run(["rclone", "--config=" + str(config), "--retries=1", "--low-level-retries=1", *arguments],
                         timeout=1800)
 
@@ -306,59 +298,6 @@ def archive_keys(host: Host, entry: dict) -> dict:
                        "--include", "/" + encrypted.name, "--one-way", "--download"])
     receipt = {"object_key": key, "completed_at": now(), "status": "complete"}
     _record(host, entry, "keys", receipt)
-    return receipt
-
-
-def _runtime_storage(host, entry):
-    require("pending_storage_bindings" not in entry, "storage_binding_pending",
-            "Reconcile the selected configuration before copying application objects.")
-    values = runtime_config.validate_runtime_environment(host, entry)
-    storage = runtime_storage(values, lambda path: runtime_config._read_value_file(host, entry, path))
-    bindings = storage_bindings(storage)
-    check_storage_bindings(host.read_registry(), entry, bindings)
-    require(bindings == entry.get("storage_bindings"), "storage_binding_unregistered",
-            "Register the selected runtime storage bindings through configuration before backup.")
-    return storage, values
-
-
-def _cleanup_grace(host, entry, values):
-    key = CLEANUP_GRACE_KEY
-    text = (runtime_config._read_value_file(host, entry, values[key + "_FILE"])
-            if key + "_FILE" in values else values.get(key, ""))
-    parts = re.findall(r"([0-9]+(?:\.[0-9]+)?)(h|ms|us|µs|ns|m|s)", text)
-    require(parts and "".join(number + unit for number, unit in parts) == text,
-            "backup_cleanup_grace", "Configure an explicit attachment cleanup_grace duration before completing backups.")
-    units = {"h": 3600, "m": 60, "s": 1, "ms": .001, "us": .000001, "µs": .000001, "ns": .000000001}
-    seconds = sum(float(number) * units[unit] for number, unit in parts)
-    require(seconds > BACKUP_POLICY["interval_hours"] * 3600 + 600,
-            "backup_cleanup_grace", "cleanup_grace must exceed the object-copy interval plus timer jitter; use 72h or longer.")
-    return seconds
-
-
-def copy_objects(host: Host, entry: dict) -> dict:
-    """Copy selected runtime bindings; preserve removed objects indefinitely."""
-    storage, values = _runtime_storage(host, entry)
-    repository = _repository_settings(host)
-    prefix = f"objects/{entry['profile']['instance_id']}"
-    copies = []
-    for source in _storage_sources(storage):
-        require(source["bucket"] != repository["bucket"],
-                "backup_bucket_conflict", "Attachment and backup buckets must be distinct.")
-        physical = {key: source[key] for key in ("endpoint", "bucket", "namespace")}
-        binding_id = hashlib.sha256(json.dumps(physical, sort_keys=True).encode()).hexdigest()
-        destination_prefix = prefix + "/" + binding_id
-        origin = f"app:{source['bucket']}/{source['namespace']}"
-        destination = f"backup:{repository['bucket']}/{destination_prefix}"
-        history = f"backup:{repository['bucket']}/object-history/{entry['profile']['instance_id']}/{uuid.uuid4().hex}"
-        # Compare listed sizes and checksums: no per-object HEAD or full download on
-        # every run, so only new or changed objects cost transfer and operations.
-        _rclone(host, ["copy", origin, destination, "--backup-dir", history, "--checksum", "--fast-list"], source)
-        _rclone(host, ["check", origin, destination, "--one-way", "--fast-list"], source)
-        copies.append({**physical, "objects_prefix": destination_prefix})
-    require(copies, "backup_storage_missing", "No runtime object storage bindings are configured.")
-    receipt = {"objects_prefix": prefix, "bindings": copies, "configuration_revision": entry["configuration_revision"],
-               "cleanup_grace_seconds": _cleanup_grace(host, entry, values), "completed_at": now(), "status": "complete"}
-    _record(host, entry, "objects", receipt)
     return receipt
 
 
@@ -441,17 +380,11 @@ def _complete(host, entry, backup_id, database, *, restore_point=None, reconcile
     journal["components"]["database"] = database
     _write_private(host, path, journal)
     keys = _component(host, path, journal, "keys", lambda: archive_keys(host, entry), reconcile=reconcile)
-    objects = _component(host, path, journal, "objects", lambda: copy_objects(host, entry), reconcile=reconcile)
-    require(objects.get("configuration_revision", entry["configuration_revision"]) == entry["configuration_revision"],
-            "backup_operation_conflict", "Object-copy revision differs from the bundle revision.")
-    oldest = min(datetime.fromisoformat(value["completed_at"].replace("Z", "+00:00")) for value in (database, objects))
-    require(0 <= (datetime.now(timezone.utc) - oldest).total_seconds() < objects["cleanup_grace_seconds"],
-            "backup_stale", "Database point and object copy must both be newer than cleanup_grace.")
     receipt = {"backup_id": backup_id, "pgbackrest_label": database["pgbackrest_label"],
                "instance_id": entry["profile"]["instance_id"], "database_point": database,
-               "key_archive": keys, "object_copy": objects, "objects_prefix": objects["objects_prefix"],
-               "configuration_revision": entry["configuration_revision"], "kind": journal.get("kind", "scheduled"), "fresh_at": oldest.isoformat(),
-               "cleanup_grace_seconds": objects["cleanup_grace_seconds"], "completed_at": now(), "status": "complete"}
+               "key_archive": keys, "configuration_revision": entry["configuration_revision"],
+               "kind": journal.get("kind", "scheduled"), "fresh_at": database["completed_at"],
+               "completed_at": now(), "status": "complete"}
     if restore_point:
         receipt["restore_point"] = restore_point
     _write_private(host, _receipt_path(host, entry, backup_id), receipt)
@@ -512,12 +445,6 @@ def reconcile_backup(host: Host, entry: dict, operation: str, database_label=Non
     require(not journal.get("abandoned_at"), "backup_abandoned", "Select a new operation UUID; the abandoned outcome remains unknown.")
     if journal.get("schedule_operation"):
         raise DeployError("backup_schedule_reconcile", "Reconcile this bundle's parent scheduled operation.")
-    if journal["kind"] == "objects":
-        with _repository_lock(host):
-            require(journal["configuration_revision"] == entry["configuration_revision"],
-                    "backup_operation_conflict", "The runtime revision changed; use a new operation.")
-            _component(host, path, journal, "keys", lambda: archive_keys(host, entry), reconcile=True)
-            return _component(host, path, journal, "objects", lambda: copy_objects(host, entry), reconcile=True)
     return _run_bundle(host, entry, operation, journal["kind"], reconcile=True, database_label=database_label)
 
 
@@ -776,40 +703,16 @@ def _stop_drill(host, unit):
                         "backup_drill_cleanup_pending", "Drill cgroup still contains processes.")
 
 
-def _storage_sources(storage):
-    bindings = storage_bindings(storage)
-    credentials, disks = storage["credentials"], storage["disks"]
-    credentials = json.loads(credentials) if isinstance(credentials, str) else credentials
-    disks = json.loads(disks) if isinstance(disks, str) else disks
-    sources = []
-    for name, binding in bindings.items():
-        disk = disks[name]
-        cloud = disk["cloud"]
-        credential = credentials[cloud["credentials"]]
-        require(disk.get("config", {}).get("visibility") == 0 and credential.get("mode") == "static",
-                "backup_storage_invalid", "Backup requires private cloud disks with explicit static credentials.")
-        candidate = {**binding, "region": cloud.get("region"), "access_key_id": credential.get("access_key"),
-                     "secret_access_key": credential.get("secret_key")}
-        _repository(candidate)
-        if candidate not in sources:
-            sources.append(candidate)
-    return sources
-
-
 def _stage_settings(host, registry, entry, cluster):
     intake = read_json(_private(host, host.paths.instance_config(entry["name"]) / "bootstrap-secrets.json"))
     require(intake.get("instance_id") == entry["profile"]["instance_id"], "backup_ownership", "Private backup intake belongs to another instance.")
     repository = intake.get("backup_s3")
     _repository(repository)
     recipients = _recipients(intake.get("age_recipients"))
-    storage, _ = _runtime_storage(host, entry)
-    sources = _storage_sources(storage)
-    require(all(source["bucket"] != repository["bucket"] for source in sources),
-            "backup_bucket_conflict", "The attachment and backup buckets must be different.")
     record = {"instance_id": entry["profile"]["instance_id"], "age_recipients": recipients}
     existing_instance = _instance_settings_path(host, entry)
     if existing_instance.exists():
-        require({key: value for key, value in read_json(_private(host, existing_instance)).items() if key != "source"} == record,
+        require(read_json(_private(host, existing_instance)) == record,
                 "backup_configuration_conflict", "Backup settings already exist; use an explicit reviewed credential or destination change.")
     path = host.paths.p(REPOSITORY)
     if path.exists():
@@ -860,15 +763,15 @@ def _owned_public(host, path, content, marker, mode=0o644):
     return host.owned_write(path, content, mode=mode)
 
 
-def _install_timers(host, registry, entry):
+def _install_timers(host, registry):
     script = registry["tools"]["active_path"] + "/lib/backup.py"
     template = Path(__file__).resolve().parents[1] / "server/templates"
     timers = []
     for task, calendar, identity in (("full", "Sun *-*-* 02:00:00 UTC", "cluster"),
-                                     ("diff", "*-*-* 05:00:00 UTC", "cluster"),
-                                     ("objects", "*-*-* 08:00:00 UTC", entry["profile"]["instance_id"])):
+                                     ("diff", "*-*-* 05:00:00 UTC", "cluster")):
         name = "foundry-backup-" + task + "-" + identity
-        values = {"@TASK@": task, "@IDENTITY@": identity, "@SCRIPT@": script, "@CALENDAR@": calendar}
+        values = {"@TASK@": task, "@IDENTITY@": identity, "@SCRIPT@": script, "@CALENDAR@": calendar,
+                  "@JITTER_SECONDS@": str(BACKUP_JITTER_SECONDS)}
         for suffix in ("service", "timer"):
             content = (template / ("foundry-backup." + suffix)).read_text()
             for token, value in values.items():
@@ -936,25 +839,13 @@ def rebind(host, registry):
         return
     cluster = _cluster(host, registry)
     _remove_wal_bridge(host)
-    # Old registries did not record physical ownership. Import every existing
-    # runtime binding together; overlapping legacy allocations refuse the upgrade.
-    for entry in registry["instances"].values():
-        if "storage_bindings" not in entry:
-            values = runtime_config.validate_runtime_environment(host, entry)
-            storage = runtime_storage(values, lambda path: runtime_config._read_value_file(host, entry, path))
-            entry["storage_bindings"] = storage_bindings(storage)
-    for entry in registry["instances"].values():
-        check_storage_bindings(registry, entry, entry["storage_bindings"])
-    host.write_registry(registry)
     _install_configuration(host, cluster)
     plan = postgres.cluster_settings(host, registry)
     plan["archive_command"] = _archive_command()
     postgres.prepare(host, registry, shared_service_plan=plan)
     observed = _admin(host, cluster, "SHOW archive_command;\n").stdout.strip()
     require(observed == plan["archive_command"], "backup_rebind_failed", "The live WAL command is not the Foundry pgBackRest command.")
-    for entry in registry["instances"].values():
-        if _instance_settings_path(host, entry).exists():
-            _install_timers(host, registry, entry)
+    _install_timers(host, registry)
     _backrest(host, ["check"], timeout=300)
     registry["shared"]["backup"] = {"stanza": STANZA, "pgbackrest_config": CONFIG, "owner": "foundry",
                                      "retention_full_type": "time", "retention_full_days": BACKUP_POLICY["full_retention_days"]}
@@ -969,10 +860,6 @@ def configure(host: Host, registry: dict, entry: dict) -> None:
     cluster = _cluster(host, registry)
     with _repository_lock(host):
         _remove_wal_bridge(host)
-        values = runtime_config.validate_runtime_environment(host, entry)
-        storage = runtime_storage(values, lambda path: runtime_config._read_value_file(host, entry, path))
-        bind_storage(registry, entry, storage)
-        host.journal(registry, entry)
         _stage_settings(host, registry, entry, cluster)
         packages.install_missing(host, ["pgbackrest", "age", "rclone"])
         for path in (CONFIG_DIR, WORK):
@@ -1041,28 +928,15 @@ def reconcile_scheduled(host, operation, database_label=None):
 
 
 def _scheduled(host, task, identity):
-    require(task in ("full", "diff", "objects") and (identity == "cluster" or valid_uuid(identity)),
+    require(task in ("full", "diff") and identity == "cluster",
             "backup_schedule_invalid", "Unknown Foundry backup schedule.")
     with host.lock("host"):
         registry = host.read_registry()
-        if task == "objects":
-            require(identity in registry["instances"], "backup_schedule_invalid", "Unknown backup instance UUID.")
-            entry = registry["instances"][identity]
-            with host.lock(identity), _repository_lock(host), _attempt(host, entry):
-                operation = str(uuid.uuid4())
-                path = _operation_path(host, entry, operation)
-                journal = {"operation_id": operation, "kind": "objects", "configuration_revision": entry["configuration_revision"], "components": {}}
-                _write_private(host, path, journal)
-                _component(host, path, journal, "keys", lambda: archive_keys(host, entry))
-                _component(host, path, journal, "objects", lambda: copy_objects(host, entry))
-                host.journal(registry, entry)
-        else:
-            require(identity == "cluster", "backup_schedule_invalid", "Database schedules belong to the Foundry cluster.")
-            _cluster(host, registry)
-            with _repository_lock(host):
-                # Every calendar invocation gets its own identity. Unresolved older
-                # operations retain their evidence and never disable this schedule.
-                _scheduled_bundle(host, registry, str(uuid.uuid4()), task)
+        _cluster(host, registry)
+        with _repository_lock(host):
+            # Every calendar invocation gets its own identity. Unresolved older
+            # operations retain their evidence and never disable this schedule.
+            _scheduled_bundle(host, registry, str(uuid.uuid4()), task)
 
 
 def _main(arguments):
