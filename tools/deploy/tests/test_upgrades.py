@@ -72,6 +72,18 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual("unchanged", self.install()["outcome"])
         self.assertEqual(before, self.host.read_registry())
 
+    def test_bundle_is_traversable_under_a_hardened_umask(self):
+        previous = os.umask(0o077)
+        try:
+            self.assertEqual("succeeded", self.install()["outcome"])
+        finally:
+            os.umask(previous)
+        destination = self.host.paths.tools / "tools" / self.digest
+        directories = [self.host.paths.tools, destination.parent, destination,
+                       *[path for path in destination.rglob("*") if path.is_dir()]]
+        for directory in directories:
+            self.assertEqual(0o755, directory.stat().st_mode & 0o777, directory)
+
     def test_bundle_digest_binds_paths_content_and_excludes_bytecode(self):
         (self.source / "lib/__pycache__").mkdir()
         (self.source / "lib/__pycache__/untrusted.pyc").write_bytes(b"ignored")

@@ -114,6 +114,14 @@ def _installed(host, record: dict) -> Path:
     return path
 
 
+def _bundle_directory(path: Path) -> None:
+    # Instance accounts and the public report execute the bundle; a hardened
+    # root umask must not make it root-only.
+    check_path(path, "directory")
+    path.mkdir(parents=True, exist_ok=True)
+    os.chmod(path, 0o755)
+
+
 def _active_record(tools_dir: Path, digest: str, operation: str | None) -> dict:
     metadata = protocol(tools_dir)
     return {"framework_version": metadata["framework_version"], "generation": metadata["generation"],
@@ -281,14 +289,18 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
         current["upgrade_operation"] = operation
         _save_registry(host, registry)
     destination = check_path(_bundle_path(host, digest), "directory")
-    destination.mkdir(parents=True, exist_ok=True, mode=0o755)
+    for directory in (host.paths.tools, host.paths.tools / "tools", destination):
+        _bundle_directory(directory)
     for path in files:
         if path.suffix == ".py":
             try:
                 ast.parse(path.read_bytes(), filename=str(path.relative_to(source)))
             except (SyntaxError, ValueError, UnicodeError):
                 raise DeployError("tools_syntax_invalid", "A candidate Python source is invalid.") from None
-        target = check_path(destination / path.relative_to(source), "file")
+        relative = path.relative_to(source)
+        for parent in reversed(relative.parents[:-1]):
+            _bundle_directory(destination / parent)
+        target = check_path(destination / relative, "file")
         if target.exists():
             require(target.read_bytes() == path.read_bytes(), "tools_version_conflict", "The staged immutable bundle has drifted.")
         atomic_write(target, path.read_bytes(), 0o644)
