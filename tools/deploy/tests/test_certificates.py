@@ -1,0 +1,161 @@
+"""DNS-01 ownership and A03 refusals without ACME or host service mutations."""
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+import certificates
+from contracts import DeployError
+from host import Host, Paths
+from test_contracts import fixture, registry
+
+
+class CertificateTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.host = Host(Paths(Path(self.temporary.name)))
+        _, _, self.entry = fixture()
+        self.registry = registry(self.entry)
+        self.entry["certificate"]["zone_ref"] = "example.invalid"
+        self.calls = []
+        self.host.run = self.run_command
+
+    def run_command(self, args, **kwargs):
+        self.calls.append((list(map(str, args)), kwargs))
+        output = "public-key\n" if "-pubkey" in args or "-pubout" in args else ""
+        return subprocess.CompletedProcess(args, 0, output, "")
+
+    def credential(self):
+        directory = self.host.paths.p("/etc/foundry/cloudflare/zones")
+        directory.mkdir(parents=True, mode=0o700)
+        path = directory / "example.invalid.ini"
+        self.host.owned_write(path, "dns_cloudflare_api_token = " + "private-canary-" * 3 + "\n", mode=0o600)
+        return path
+
+    def existing(self):
+        token = self.credential()
+        lineage = self.entry["profile"]["domain"]
+        archive = self.host.paths.p("/etc/letsencrypt/archive/" + lineage)
+        live = self.host.paths.p("/etc/letsencrypt/live/" + lineage)
+        archive.mkdir(parents=True)
+        live.mkdir(parents=True)
+        for name in ("cert", "chain", "privkey", "fullchain"):
+            (archive / (name + "1.pem")).write_text("fixture")
+            (live / (name + ".pem")).symlink_to(archive / (name + "1.pem"))
+        self.host.owned_write(certificates._claim_path(self.host, self.entry),
+                              json.dumps(certificates._claim(self.entry)), mode=0o600)
+        renewal = certificates._renewal_path(self.host, self.entry)
+        self.host.owned_write(renewal, "\n".join(f"{key} = {live / name}" for key, name in (
+            ("cert", "cert.pem"), ("chain", "chain.pem"), ("privkey", "privkey.pem"), ("fullchain", "fullchain.pem")))
+            + "\n[renewalparams]\nauthenticator = dns-cloudflare\n"
+            + f"dns_cloudflare_credentials = {token}\ndns_cloudflare_propagation_seconds = 60\n"
+            + f"deploy_hook = {certificates.RELOAD_HOOK}\n")
+        for name, content in certificates._units(self.entry).items():
+            self.host.owned_write(self.host.paths.p("/etc/systemd/system/" + name), content)
+        self.host.write_registry(self.registry)
+        return renewal
+
+    def test_inspection_of_missing_lineage_is_read_only(self):
+        self.assertEqual(certificates.inspect(self.host, self.entry)["state"], "missing")
+        self.assertEqual(self.calls, [])
+
+    def test_existing_lineage_requires_dns_credentials_hook_and_timer(self):
+        renewal = self.existing()
+        original = renewal.read_text()
+        for old, replacement in (("authenticator = dns-cloudflare", "authenticator = nginx"),
+                                 ("dns_cloudflare_propagation_seconds = 60", "dns_cloudflare_propagation_seconds = 0"),
+                                 (certificates.RELOAD_HOOK, "/bin/true"),
+                                 ("zones/example.invalid.ini", "zones/foreign.ini")):
+            with self.subTest(field=old):
+                renewal.write_text(original.replace(old, replacement))
+                with patch.object(certificates.packages, "install_missing") as install:
+                    with self.assertRaises(DeployError):
+                        certificates.provision(self.host, self.registry, self.entry)
+                    install.assert_not_called()
+                self.assertFalse(any(command[0] == "certbot" for command, _ in self.calls))
+        renewal.write_text(original)
+        self.host.paths.p("/etc/systemd/system/" + certificates._timer(self.entry) + ".timer").unlink()
+        self.assertEqual(certificates.inspect(self.host, self.entry)["state"], "conflict")
+
+    def test_foreign_lineage_is_not_adopted(self):
+        self.existing()
+        certificates._claim_path(self.host, self.entry).unlink()
+        self.assertEqual(certificates.inspect(self.host, self.entry)["state"], "conflict")
+        with self.assertRaises(DeployError):
+            certificates.provision(self.host, self.registry, self.entry)
+
+    def test_existing_valid_lineage_still_runs_dry_run(self):
+        self.existing()
+        with patch.object(certificates.packages, "install_missing"):
+            certificates.provision(self.host, self.registry, self.entry)
+        commands = [command for command, _ in self.calls]
+        dry_runs = [command for command in commands if command[0] == "certbot"]
+        self.assertEqual(dry_runs, [["certbot", "renew", "--cert-name", self.entry["profile"]["domain"],
+                                    "--dry-run", "--run-deploy-hooks"]])
+        self.assertIsNotNone(self.entry["certificate"]["last_renewal_check_at"])
+        self.assertNotIn("private-canary", json.dumps(self.registry))
+        self.assertNotIn("private-canary", json.dumps(commands))
+
+    def test_failed_dry_run_has_no_success_receipt(self):
+        self.existing()
+        def run(args, **kwargs):
+            if args[:2] == ["certbot", "renew"]:
+                raise DeployError("command_failed", "private provider diagnostics")
+            return self.run_command(args, **kwargs)
+        self.host.run = run
+        with patch.object(certificates.packages, "install_missing"), self.assertRaises(DeployError) as error:
+            certificates.provision(self.host, self.registry, self.entry)
+        self.assertIsNone(self.entry["certificate"]["last_renewal_check_at"])
+        self.assertNotIn("private provider", str(error.exception))
+
+    def test_unsafe_token_permissions_refused(self):
+        token = self.credential()
+        token.chmod(0o644)
+        with self.assertRaises(DeployError):
+            certificates.provision(self.host, self.registry, self.entry)
+        self.assertEqual(self.calls, [])
+
+    def test_hostname_and_expiry_are_separate_checks(self):
+        self.existing()
+        self.assertTrue(certificates.certificate_ready(self.host, self.entry))
+        commands = [command for command, _ in self.calls]
+        self.assertEqual(sum("-checkend" in command for command in commands), 1)
+        self.assertEqual(sum("-checkhost" in command for command in commands), 1)
+        self.assertFalse(any("-checkend" in command and "-checkhost" in command for command in commands))
+
+    def test_private_stdin_intake_persists_only_zone_reference_publicly(self):
+        token = "zone-private-token-" * 3
+        self.entry["certificate"]["zone_ref"] = None
+        path = self.host.paths.instance_config(self.entry["name"]) / "bootstrap-secrets.json"
+        self.host.owned_write(path, json.dumps({"instance_id": self.entry["profile"]["instance_id"],
+                                              "cloudflare_dns_token": token}), mode=0o600)
+        with patch.object(certificates, "_resolve_zone", return_value="a" * 32) as resolve:
+            certificates._stage_credentials(self.host, self.registry, self.entry)
+        resolve.assert_called_once_with(token, self.entry["profile"]["domain"])
+        stored = self.host.paths.p("/etc/foundry/cloudflare/zones/" + "a" * 32 + ".ini")
+        self.assertEqual(stored.read_text(), "dns_cloudflare_api_token = " + token + "\n")
+        self.assertEqual(stored.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(stored.parent.stat().st_mode & 0o777, 0o700)
+        self.assertNotIn(token, json.dumps(self.registry))
+        self.assertNotIn(token, json.dumps(self.calls))
+        stored.write_text("dns_cloudflare_api_token = existing-working-token-canary\n")
+        with self.assertRaises(DeployError):
+            certificates._stage_credentials(self.host, self.registry, self.entry)
+        self.assertIn("existing-working-token", stored.read_text())
+
+    def test_disabled_renewal_timer_refuses_existing_certificate(self):
+        self.existing()
+        def command(args, **kwargs):
+            if args[:2] == ["systemctl", "is-enabled"]:
+                return subprocess.CompletedProcess(args, 1, "disabled", "")
+            return self.run_command(args, **kwargs)
+        self.host.run = command
+        self.assertEqual(certificates.inspect(self.host, self.entry)["state"], "conflict")
+        with self.assertRaises(DeployError):
+            certificates.provision(self.host, self.registry, self.entry)
+        self.assertFalse(any(args[0] == "certbot" for args, _ in self.calls))

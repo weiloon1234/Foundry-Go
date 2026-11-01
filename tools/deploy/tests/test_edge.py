@@ -74,3 +74,33 @@ class EdgeTests(unittest.TestCase):
                 path.write_text(json.dumps(broken))
                 with self.assertRaises((DeployError, ValueError)):
                     cloudflare_ranges(directory)
+
+    def test_rendering_is_site_local_and_does_not_modify_range_data(self):
+        _, _, first = fixture()
+        _, _, second = fixture(project_slug="other")
+        first["profile"]["edge_origin_lockdown"] = True
+        second["profile"]["edge_origin_lockdown"] = True
+        ranges = (TOOLS / "lib/cloudflare-ranges.json").read_bytes()
+        from edge import edge_template
+        a, b = edge_template(first, TOOLS / "lib"), edge_template(second, TOOLS / "lib")
+        self.assertNotEqual(a["@EDGE_GEO@"], b["@EDGE_GEO@"])
+        self.assertIn("$realip_remote_addr", a["@EDGE_GEO@"])
+        self.assertNotIn("set_real_ip_from", a["@EDGE_GEO@"])
+        self.assertIn("real_ip_recursive off;", a["@EDGE_SERVER@"])
+        self.assertNotIn("nginx.conf", json.dumps(a))
+        self.assertNotIn("conf.d", json.dumps(a))
+        self.assertEqual((TOOLS / "lib/cloudflare-ranges.json").read_bytes(), ranges)
+        text = _template(TOOLS, "nginx-http.conf", first)
+        self.assertIn("proxy_set_header X-Forwarded-For $remote_addr;", text)
+        self.assertIn("proxy_set_header X-Real-IP $remote_addr;", text)
+
+    def test_expired_ranges_block_planning_but_remain_renderable_for_recovery(self):
+        value = json.loads((TOOLS / "lib/cloudflare-ranges.json").read_text())
+        value["retrieved_at"] = (date.today() - timedelta(days=181)).isoformat()
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "cloudflare-ranges.json").write_text(json.dumps(value))
+            self.assertEqual(edge_findings({}, directory)[-1]["kind"], "stop")
+            from edge import edge_template
+            _, _, entry = fixture()
+            self.assertIn("CF-Connecting-IP", edge_template(entry, directory)["@EDGE_SERVER@"])

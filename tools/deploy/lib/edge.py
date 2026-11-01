@@ -33,6 +33,9 @@ def edge_findings(profile: dict, directory: Path) -> list[dict]:
     if (date.today() - retrieved).days > 90:
         findings.append({"kind": "warning", "code": "cloudflare_ranges_stale", "detail":
                          "Cloudflare IP ranges are older than 90 days; review the published lists and update the versioned file."})
+    if (date.today() - retrieved).days > 180:
+        findings.append({"kind": "stop", "code": "cloudflare_ranges_expired", "detail":
+                         "Review and update the bundled Cloudflare ranges before creating or changing a site. Existing traffic and renewal remain available."})
     return findings
 
 
@@ -43,6 +46,7 @@ def edge_template(entry: dict, directory: Path) -> dict[str, str]:
     _, ranges = cloudflare_ranges(directory)
     result["@EDGE_SERVER@"] = "\n".join("    set_real_ip_from " + cidr + ";" for cidr in ranges)
     result["@EDGE_SERVER@"] += "\n    real_ip_header CF-Connecting-IP;"
+    result["@EDGE_SERVER@"] += "\n    real_ip_recursive off;"
     if profile.get("edge_origin_lockdown", False):
         variable = PREFIX.replace("-", "_") + "_" + entry["allocations"]["database"] + "_edge_peer"
         result["@EDGE_GEO@"] = ("geo $realip_remote_addr $" + variable + " {\n    default 0;\n"

@@ -1,0 +1,11 @@
+# Foundry owned backup
+[Unit]
+Description=Foundry @TASK@ backup timer (@IDENTITY@)
+
+[Timer]
+OnCalendar=@CALENDAR@
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
