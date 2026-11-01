@@ -67,7 +67,9 @@ def _synthetic_issue(host, entry):
                   "-out", str(staging / "request.pem")], timeout=30)
         host.owned_write(staging / "extensions", "subjectAltName=DNS:" + lineage + "\n"
                          "basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\n"
-                         "extendedKeyUsage=serverAuth\n", mode=0o600)
+                         "extendedKeyUsage=serverAuth\n"
+                         # Strict X.509 verifiers (Python 3.13+ on Ubuntu 26.04) require key identifiers.
+                         "subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n", mode=0o600)
         host.run(["openssl", "x509", "-req", "-in", str(staging / "request.pem"),
                   "-CA", str(ca / "ca.crt"), "-CAkey", str(ca / "ca.key"),
                   "-set_serial", "0x" + generation, "-days", "30", "-sha256",

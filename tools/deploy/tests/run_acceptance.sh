@@ -137,6 +137,8 @@ basicConstraints=critical,CA:FALSE
 keyUsage=critical,digitalSignature,keyEncipherment
 extendedKeyUsage=serverAuth
 subjectAltName=DNS:s3
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid,issuer
 EOF
 openssl x509 -req -in "$certs/s3.csr" -CA "$certs/ca.crt" -CAkey "$certs/ca.key" \
   -CAcreateserial -days 2 -sha256 -extfile "$certs/s3.ext" -out "$certs/public.crt" \
