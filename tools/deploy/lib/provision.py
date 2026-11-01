@@ -1,7 +1,7 @@
-"""Bootstrap orchestration (F1); service owners are replaceable lane interfaces.
+"""Bootstrap orchestration across the shared service and lifecycle owners.
 
-No default PostgreSQL/Redis service is adopted or restarted. F2/F3 stubs refuse
-before mutation until the dedicated-service and DNS/backup owners are complete.
+No default PostgreSQL/Redis service is adopted or restarted. Shared services,
+certificates and backups keep their own validated ownership boundaries.
 """
 from __future__ import annotations
 
@@ -206,7 +206,7 @@ def _provision_environment(host, registry, entry, credentials):
     elif "configuration" in entry["provisioning"]["completed_steps"]:
         raise DeployError("configuration_missing", "Server-owned runtime configuration is missing; restore it explicitly.")
     else:
-        _owned_write(host, path, dump_env(runtime_environment(entry, credentials)), 0o640, "root", entry["name"])
+        _owned_write(host, path, dump_env(runtime_environment(entry, credentials, postgres_port=registry["shared"]["postgresql"]["port"])), 0o640, "root", entry["name"])
     _step(host, registry, entry, "configuration")
 
 
@@ -288,8 +288,8 @@ def new_entry(project, profile, topology, port, metadata):
 def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     """Bind platform, service observations, identity and topology to one digest.
 
-    F2/F3 inspect functions must be read-only and return public findings; missing
-    implementations raise NotImplementedError before any registry/resource write.
+    Service inspect functions are read-only and return public findings before
+    any registry or runtime resource is written.
     """
     tools_dir = Path(tools_dir) if tools_dir else Path(__file__).resolve().parents[1]
     validate_project(project)
@@ -307,7 +307,7 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     existing = registry["instances"].get(profile["instance_id"])
     if existing:
         require(existing["project_id"] == project["id"] and existing["name"] == identity(project, profile)["name"], "identity_mismatch", "Instance UUID belongs to a different identity.")
-        require(existing["topology"] == topology, "topology_change_required", "Topology changes require a release plan (F1).")
+        require(existing["topology"] == topology, "topology_change_required", "Topology changes require a release plan.")
         entry = copy.deepcopy(existing)
         entry["profile"] = bound
     else:
@@ -340,10 +340,42 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
             "findings": findings, "observations": observations, "plan_token": token}
 
 
-def _install_site(host, registry, entry, tools_dir):
-    """Use F3 DNS-01 issuance before publishing this instance's owned HTTPS site."""
+def _ready_configuration(host, registry, entry, tools_dir):
+    """An acknowledged bootstrap is unchanged only while its owned files match."""
+    if "site" not in entry["provisioning"]["completed_steps"]:
+        return False
+    unit = registry["shared"].get("postgresql", {}).get("unit", "")
+    for role, name in instance_units(entry).items():
+        path = host.paths.p(f"/etc/systemd/system/{name}")
+        if not path.exists() or path.read_text() != _template(tools_dir, f"foundry-{role}@.service", entry, postgres_unit=unit):
+            return False
+    site = host.paths.p(f"/etc/nginx/sites-available/{PREFIX}-{entry['name']}.conf")
+    enabled = host.paths.p(f"/etc/nginx/sites-enabled/{PREFIX}-{entry['name']}.conf")
+    return (site.exists() and site.read_text() == _template(tools_dir, "nginx-https.conf", entry)
+            and enabled.is_symlink() and os.readlink(enabled) == f"../sites-available/{PREFIX}-{entry['name']}.conf")
+
+
+def _ensure_nginx(host, registry):
+    shared = registry.setdefault("shared", {})
+    if host.run(["systemctl", "is-active", "--quiet", "nginx"], check=False).returncode == 0:
+        shared.setdefault("nginx", {"owner": "external", "installed_by_foundry": False})["unit"] = "nginx.service"
+        return
+    claim = shared.get("nginx", {})
+    require(claim.get("owner") == "foundry" and claim.get("installed_by_foundry") is True,
+            "nginx_inactive", "An existing inactive nginx service must be started by its administrator.")
+    claim["unit"] = "nginx.service"
+    host.run(["nginx", "-t", "-q"])
+    host.run(["systemctl", "enable", "--now", "nginx"])
+    require(host.run(["systemctl", "is-active", "--quiet", "nginx"], check=False).returncode == 0,
+            "nginx_inactive", "The newly installed nginx service did not become active.")
+
+
+def _install_site(host, registry, entry, tools_dir, *, certificate_ready=False):
+    """Use owned DNS-01 issuance before publishing this instance's owned HTTPS site."""
     _site_checks(host, entry)
-    certificates.provision(host, registry, entry)
+    _ensure_nginx(host, registry)
+    if not certificate_ready:
+        certificates.provision(host, registry, entry)
     name = entry["name"]
     site = host.paths.p(f"/etc/nginx/sites-available/{PREFIX}-{name}.conf")
     enabled = host.paths.p(f"/etc/nginx/sites-enabled/{PREFIX}-{name}.conf")
@@ -351,6 +383,10 @@ def _install_site(host, registry, entry, tools_dir):
     _mkdir(host, enabled.parent)
     previous = site.read_bytes() if site.exists() else None
     existed = enabled.is_symlink()
+    if "site" in entry["provisioning"]["completed_steps"]:
+        entry["provisioning"]["completed_steps"].remove("site")
+    entry["provisioning"]["state"] = "preparing"
+    _journal(host, registry, entry)
     changed = _owned_write(host, site, _template(tools_dir, "nginx-https.conf", entry))
     if not existed:
         enabled.symlink_to(f"../sites-available/{PREFIX}-{name}.conf")
@@ -367,20 +403,49 @@ def _install_site(host, registry, entry, tools_dir):
 
 
 def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topology, private_secrets=None):
-    """Replan under the host lock, then call the F2/F3 owners in dependency order."""
+    """Replan under the host lock, then call service owners in dependency order."""
     require(profile["host"]["host_id"] is not None, "host_binding_required", "Persist the proposed host UUID before apply.")
     with host.lock("host"):
         plan = bootstrap_plan(host, project, profile, tools_dir, topology=topology)
-        require(plan["ok"], "bootstrap_blocked", "Bootstrap plan contains blocking findings.")
+        require(plan["ok"] and not any(item.get("kind") == "stop" for item in plan["findings"]),
+                "bootstrap_blocked", "Bootstrap plan contains blocking findings.")
         require(isinstance(plan_token, str) and secrets.compare_digest(plan_token, plan["plan_token"]), "plan_changed", "Review a fresh bootstrap plan.")
         with host.lock(profile["instance_id"]):
             registry = host.read_registry(missing=True) or new_registry(profile["host"]["host_id"], tools_dir)
             entry = plan["entry"]
+            existing = registry["instances"].get(profile["instance_id"])
+            prepared = {"secrets", "bootstrap_secrets", "database", "redis", "configuration", "backup", "unit", "certificate"}
+            if (existing == entry and prepared.issubset(entry["provisioning"]["completed_steps"])
+                    and not plan["observations"]["packages"].get("missing")
+                    and all(plan["observations"][key].get("state") == "ready" for key in ("postgresql", "redis", "certificate"))
+                    and registry["tools"]["bundle_sha256"] == upgrades.tool_bundle(tools_dir)[2]):
+                validate_runtime_environment(host, entry)
+                initialize_bootstrap_secrets(host, entry, private_secrets or {})
+                files_ready = _ready_configuration(host, registry, entry, tools_dir)
+                unchanged = files_ready and entry["provisioning"]["state"] == "ready"
+                if not files_ready:
+                    try:
+                        _install_unit(host, registry, entry, tools_dir)
+                        _install_site(host, registry, entry, tools_dir, certificate_ready=True)
+                        _step(host, registry, entry, "site")
+                    except (DeployError, OSError, ValueError):
+                        entry["provisioning"]["state"] = "failed"
+                        _journal(host, registry, entry)
+                        raise
+                if not unchanged:
+                    entry["provisioning"]["state"] = "ready"
+                    _journal(host, registry, entry)
+                return {"ok": True, "unchanged": unchanged, "host_id": registry["host_id"],
+                        "instance": entry["name"], "provisioning": "ready"}
             upgrades.install_tools(host, registry, tools_dir)
             registry["projects"].setdefault(project["id"], {"slug": project["slug"], "created_at": now()})
             _journal(host, registry, entry)
             try:
-                packages.install_missing(host, plan["observations"]["packages"].get("missing", []))
+                missing_packages = plan["observations"]["packages"].get("missing", [])
+                if "nginx" in missing_packages and "nginx" not in registry["shared"]:
+                    registry["shared"]["nginx"] = {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"}
+                    _journal(host, registry, entry)
+                packages.install_missing(host, missing_packages)
                 postgres.prepare(host, registry)
                 redis_acl.prepare(host, registry)
                 _prepare_instance(host, registry, entry)
@@ -398,7 +463,7 @@ def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topol
                 entry["provisioning"]["state"] = "ready"
                 _journal(host, registry, entry)
                 return {"ok": True, "host_id": registry["host_id"], "instance": entry["name"], "provisioning": "ready"}
-            except (DeployError, NotImplementedError, OSError, ValueError):
+            except (DeployError, OSError, ValueError):
                 entry["provisioning"]["state"] = "failed"
                 _journal(host, registry, entry)
                 raise

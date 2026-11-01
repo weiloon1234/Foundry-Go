@@ -1,4 +1,4 @@
-"""Exact, journaled grants for the dedicated Foundry Redis instance (lane F2).
+"""Exact, journaled grants for the dedicated Foundry Redis instance.
 
 The grant engine is inherited from ooo's corrected disk-before-live reconciler.
 Public registry entries contain literal prefixes; credential-derived ACL digests
@@ -674,7 +674,7 @@ def reconcile_redis_grants(host: Host, registry: dict, entry: dict, patterns: Se
 
     Lifecycle supplies the running/candidate union before activation and selected
     inventory after every role is ready. Each call has its own durable intent;
-    failures during narrowing retain an explicit cleanup obligation for F1.
+    failures during narrowing retain an explicit cleanup obligation for the lifecycle owner.
     """
     patterns = _validated_patterns(entry, patterns)
     channels = _validated_patterns(entry, granted_redis_channels(entry) if channels is None else channels)

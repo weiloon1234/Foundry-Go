@@ -1,9 +1,5 @@
 """Verified HTTPS requests to the disposable host's fixture nginx sites."""
 
-# Moved from the upstream deploy harness; F4 must port this before acceptance.
-if __name__ == "__main__":
-    raise SystemExit("F4 acceptance port pending; this moved harness is not runnable yet.")
-
 import http.client
 from pathlib import Path
 import socket

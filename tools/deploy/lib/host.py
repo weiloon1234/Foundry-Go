@@ -80,9 +80,26 @@ class Host:
         if env:
             environment.update(env)
         try:
-            result = subprocess.run([str(a) for a in args], input=input, text=True,
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    env=environment, timeout=timeout, cwd=cwd)
+            process = subprocess.Popen([str(a) for a in args], text=True,
+                                       stdin=subprocess.PIPE if input is not None else None,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       env=environment, cwd=cwd, start_new_session=True)
+            try:
+                stdout, stderr = process.communicate(input=input, timeout=timeout)
+            except BaseException:
+                # A killed runuser/shell parent does not stop its descendants.
+                # Own the session until cancellation has killed the whole group.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
+                process.stdout.close()
+                process.stderr.close()
+                if process.stdin is not None:
+                    process.stdin.close()
+                raise
+            result = subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
         except (OSError, subprocess.TimeoutExpired):
             raise DeployError("command_unavailable", "Required host command failed to start or exceeded its deadline.") from None
         if check and result.returncode:
@@ -169,7 +186,11 @@ class Host:
         info = path.stat()
         require(stat.S_IMODE(info.st_mode) == 0o644 and (info.st_uid == 0 or self.paths.root != Path("/")),
                 "state_ownership", "Deployment state must be root-owned with mode 0644.")
-        return self.validate_state(entry, read_json(path))
+        state = self.validate_state(entry, read_json(path))
+        if os.geteuid() == 0 or self.paths.root != Path("/"):
+            from release import load_configuration_intents
+            state = self.validate_state(entry, load_configuration_intents(self, entry, state))
+        return state
 
     def validate_state(self, entry, state):
         # Load only at the operation boundary: release imports Host for deadlines,
@@ -180,7 +201,7 @@ class Host:
         required = {"schema", "instance_id", "current", "previous", "status", "last_attempt", "history", "configuration_revision"}
         require(isinstance(state, dict) and required.issubset(state)
                 and type(state["schema"]) is int and state["schema"] == SCHEMA and state["instance_id"] == entry["profile"]["instance_id"]
-                and state["status"] in ("never_deployed", "deploying", "healthy", "failed", "rolled_back", "stopped", "unknown")
+                and state["status"] in ("never_deployed", "deploying", "healthy", "failed", "failed_applied", "rolled_back", "stopped", "unknown")
                 and type(state["configuration_revision"]) is int and state["configuration_revision"] >= 1
                 and isinstance(state["history"], list) and len(state["history"]) <= 50
                 and ("updated_at" not in state or valid_timestamp(state["updated_at"])), code, detail)
@@ -200,4 +221,6 @@ class Host:
     def save_state(self, entry, state):
         state["updated_at"] = now()
         self.validate_state(entry, state)
-        atomic_json(self.paths.instance_state(entry["name"]) / "state.json", state)
+        from release import persist_configuration_intents, public_state
+        persist_configuration_intents(self, entry, state)
+        atomic_json(self.paths.instance_state(entry["name"]) / "state.json", public_state(state))

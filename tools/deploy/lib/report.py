@@ -276,16 +276,29 @@ def instance_report(host, entry, deadline, problems):
         raise
     except (DeployError, OSError, RuntimeError):
         consistent = False
-    if any(item["state"] and item["state"]["active"] == "active"
-           and (not expected_executable or item["state"].get("exe") != expected_executable
-                or not integer(item["state"].get("main_pid"))) for item in topology.values()):
+    for item in topology.values():
+        observed = item["state"]
+        if not observed or observed["active"] != "active":
+            continue
+        if not expected_executable or not integer(observed.get("main_pid")):
+            code = "running_release_mismatch"
+        elif observed.get("exe") is None:
+            code = "running_release_unverified"
+        elif observed["exe"] != expected_executable:
+            code = "running_release_mismatch"
+        else:
+            continue
         consistent = False
-        problem(problems, "running_release_mismatch", instance_id)
+        problem(problems, code, instance_id)
     if not consistent:
         problem(problems, "instance_state_inconsistent", instance_id)
     namespace = entry["allocations"].get("namespace", {})
     paths = instance_paths(name)
-    backup = backup_freshness(entry, problems, instance_id)
+    registered_backup, recorded_backup = entry.get("backup"), state.get("backup")
+    backup = backup_freshness({"backup": {
+        **(registered_backup if isinstance(registered_backup, dict) else {}),
+        **(recorded_backup if isinstance(recorded_backup, dict) else {}),
+    }}, problems, instance_id)
     return {
         "instance_id": instance_id, "name": name, "environment": string(entry.get("environment")),
         "runtime_environment": string(profile.get("runtime_environment")), "domain": string(profile.get("domain")),

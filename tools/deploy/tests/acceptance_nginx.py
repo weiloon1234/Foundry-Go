@@ -12,10 +12,6 @@ selected site and temporary nginx drop-in are changed; cleanup restores them.
 No application/shared-service restart, database reset, or Redis flush is used.
 """
 
-# Moved from the upstream deploy harness; F4 must port this before acceptance.
-if __name__ == "__main__":
-    raise SystemExit("F4 acceptance port pending; this moved harness is not runnable yet.")
-
 import argparse
 import copy
 import io
@@ -31,11 +27,13 @@ import sys
 import time
 
 sys.dont_write_bytecode = True
-from acceptance_host import HOST_ID, TOOLS, WORK, Host, fixtures, snapshot
+from acceptance_host import HOST_ID, TOOLS, WORK, Host, fixtures, fixture_topology, snapshot
 from topology import instance_units
 from contracts import PREFIX, atomic_write, check_path, digest, identity
-from provision import _template, _verify_tools, bootstrap_plan
+from provision import _template, bootstrap_plan
+from upgrades import tool_bundle
 from acceptance_http import https_response
+from acceptance_support import request as host_request, run as command
 
 HEADER = "X-Foundry-Acceptance-Reload"
 DROP_IN = Path("/etc/systemd/system/nginx.service.d/foundry-acceptance-reload.conf")
@@ -52,15 +50,15 @@ def guard(host):
     host.check_control_directory(WORK)
     registry = host.read_registry()
     expected = {identity(project, profile)["name"]: (project, profile) for project, profile in fixtures()}
-    if registry["host_id"] != HOST_ID or set(registry["instances"]) != set(expected):
+    if registry["host_id"] != HOST_ID or {item["name"] for item in registry["instances"].values()} != set(expected):
         raise RuntimeError("Refusing a host outside the exact three-instance acceptance fixture")
     for name, (project, profile) in expected.items():
         _, entry = host.require_identity(project, profile)
         state = host.load_state(entry)
         if entry["provisioning"]["state"] != "ready" or state["status"] != "healthy" or state["current"] is None:
             raise RuntimeError("All acceptance instances must already be provisioned and deployed healthy")
-    _verify_tools(host, registry, TOOLS)
-    return registry["instances"]
+    assert registry["tools"]["bundle_sha256"] == tool_bundle(TOOLS)[2]
+    return {item["name"]: item for item in registry["instances"].values()}
 
 
 def service(host, unit, properties):
@@ -132,12 +130,13 @@ def wait_header(entry, expected):
 def preserved(host, entries, selected):
     registry = copy.deepcopy(host.read_registry())
     registry.pop("updated_at")
-    changed = registry["instances"][selected]
+    registry.pop("revision")
+    changed = registry["instances"][entries[selected]["profile"]["instance_id"]]
     changed.pop("updated_at")
     changed.pop("provisioning")
     postgres = registry["shared"]["postgresql"]
-    units = [entry["unit"] for entry in entries.values()] + ["postgresql.service", "redis-server.service",
-             f"postgresql@{postgres['version']}-{postgres['cluster']}.service", "foundry-acceptance-unrelated.service"]
+    units = [unit for entry in entries.values() for unit in instance_units(entry).values()]
+    units += [postgres["unit"], registry["shared"]["redis"]["unit"], "foundry-acceptance-unrelated.service"]
     properties = ("MainPID", "NRestarts", "ActiveEnterTimestampMonotonic", "ExecMainStartTimestampMonotonic", "ActiveState", "SubState")
     services = {unit: service(host, unit, properties) for unit in units}
     assert all(value["ActiveState"] == "active" for value in services.values()), "A protected service is not active"
@@ -160,12 +159,12 @@ def check_preserved(host, entries, selected, baseline, header=None):
 
 
 def bootstrap(host, project, profile, expect_failure=False):
-    request = {"project": project, "profile": profile}
-    command = [sys.executable, str(TOOLS / "server/manage.py")]
-    plan = json.loads(host.run(command + ["bootstrap-plan"], input=json.dumps(request), timeout=120).stdout)
+    request = host_request(project, profile, topology=fixture_topology())
+    argv = [sys.executable, str(TOOLS / "server/manage.py")]
+    plan = json.loads(command(argv + ["bootstrap-plan"], input=json.dumps(request), timeout=120).stdout)
     assert plan.get("ok") is True, "Live bootstrap inspection unexpectedly refused"
     request.update(confirm=True, plan_token=plan["plan_token"])
-    result = host.run(command + ["bootstrap-apply"], input=json.dumps(request), timeout=180, check=False)
+    result = command(argv + ["bootstrap-apply"], input=json.dumps(request), timeout=180, check=False)
     answer = json.loads(result.stdout)
     if expect_failure:
         assert result.returncode == 1 and answer.get("error", {}).get("code") == "command_failed", "Expected an actual failed systemd reload"
@@ -192,13 +191,13 @@ def repeat_noop(host, entries, selected, baseline):
 
 
 def pending(host, name, expected_state):
-    provisioning = host.read_registry()["instances"][name]["provisioning"]
-    assert provisioning["state"] == expected_state and "site" not in provisioning["steps"], "Reload completion was incorrectly acknowledged"
+    provisioning = next(item for item in host.read_registry()["instances"].values() if item["name"] == name)["provisioning"]
+    assert provisioning["state"] == expected_state and "site" not in provisioning["completed_steps"], "Reload completion was incorrectly acknowledged"
 
 
 def acknowledged(host, name, state="ready"):
-    provisioning = host.read_registry()["instances"][name]["provisioning"]
-    assert provisioning["state"] == state and "site" in provisioning["steps"], f"Reload acknowledgement differs: instance={name} expected_state={state}"
+    provisioning = next(item for item in host.read_registry()["instances"].values() if item["name"] == name)["provisioning"]
+    assert provisioning["state"] == state and "site" in provisioning["completed_steps"], f"Reload acknowledgement differs: instance={name} expected_state={state}"
 
 
 def clear_drop_in(host):
@@ -247,8 +246,8 @@ class BoundaryHost(Host):
 
     def write_registry(self, registry):
         super().write_registry(registry)
-        provisioning = registry["instances"].get(self.name, {}).get("provisioning", {})
-        if self.reloaded and "site" in provisioning.get("steps", []):
+        provisioning = next((item for item in registry["instances"].values() if item["name"] == self.name), {}).get("provisioning", {})
+        if self.reloaded and "site" in provisioning.get("completed_steps", []):
             if provisioning.get("state") == "preparing":
                 self.stop_at("after-ack")
             elif provisioning.get("state") == "ready":
@@ -259,9 +258,9 @@ def child(boundary, ready_fd):
     host = Host()
     guard(host)
     project, profile = fixtures()[0]
-    plan = bootstrap_plan(host, project, profile)
+    plan = bootstrap_plan(host, project, profile, topology=fixture_topology())
     assert plan.get("ok") is True
-    request = {"project": project, "profile": profile, "confirm": True, "plan_token": plan["plan_token"]}
+    request = host_request(project, profile, plan_token=plan["plan_token"], topology=fixture_topology())
     # Invoke the unchanged public JSON entrypoint. Only its Host constructor is
     # replaced inside this disposable child process; commands still run for real.
     import host as host_module

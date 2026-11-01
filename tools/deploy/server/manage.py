@@ -13,7 +13,7 @@ from topology import instance_units
 from host import Host
 
 ACTIONS = ("hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect", "bootstrap-plan", "bootstrap-apply", "activate", "status", "rollback", "restart", "stop",
-           "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report")
+           "backup-configure", "backup-run", "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report")
 
 
 def execute(host, action, request):
@@ -29,6 +29,8 @@ def execute(host, action, request):
     arguments = {"bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
                  "activate": {"archive", "archive_sha256"}, "config-set": {"values", "secrets"},
                  "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current"},
+                 "backup-configure": {"secrets"}, "backup-run": {"kind"},
+                 "restore-drill": {"backup_id", "target_time", "target_inclusive", "retain"},
                  "tools-apply": {"plan_token"}, "upgrade-resume": {"plan_token"}}
     if action not in upgrades.READ_ACTIONS:
         require(set(request) <= common | arguments.get(action, set()), "invalid_request", "Unknown mutation request field.")
@@ -72,6 +74,28 @@ def execute(host, action, request):
         require(entry is not None and entry["project_id"] == project["id"], "identity_mismatch", "Unknown project/instance UUID.")
         return {"profile": entry["profile"], "topology": entry["topology"]}
     _, entry = host.require_identity(project, profile)
+    if action in ("backup-configure", "backup-run", "restore-drill"):
+        import backup
+        from contracts import valid_uuid
+        require(request.get("confirm") is True, "confirmation_required", "Confirm this backup operation.")
+        with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
+            registry, entry = host.require_identity(project, profile)
+            if action == "backup-configure":
+                from runtime_config import initialize_bootstrap_secrets
+                private = request.get("secrets", {})
+                require(isinstance(private, dict) and set(private) <= {"backup_s3", "age_recipients", "app_storage"},
+                        "invalid_secrets", "Invalid backup secret envelope.")
+                initialize_bootstrap_secrets(host, entry, private)
+                backup.configure(host, registry, entry)
+                return {"ok": True, "instance": entry["name"]}
+            if action == "backup-run":
+                require(valid_uuid(request.get("operation_id")), "invalid_operation", "A stable backup UUIDv4 is required.")
+                receipt = backup.run_backup(host, entry, request["operation_id"], request.get("kind", "full"))
+            else:
+                receipt = backup.restore_drill(host, entry, request.get("backup_id"),
+                                              target_time=request.get("target_time"),
+                                              target_inclusive=request.get("target_inclusive", True), retain=request.get("retain", False))
+            return {**receipt, "ok": True}
     if action == "activate":
         require(isinstance(request.get("archive"), str), "invalid_request", "A staged release archive is required.")
         return release.activate(host, project, profile, request["archive"], request.get("archive_sha256"),
@@ -109,9 +133,11 @@ def execute(host, action, request):
         return {"instance": entry, "state": release.public_state(host.load_state(entry)), "live_version": release.current_version(host, entry), "services": release.services(host, entry)}
     if action in ("restart", "stop"):
         with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
-            _, entry = host.require_identity(project, profile)
+            registry, entry = host.require_identity(project, profile)
             release.validate_runtime_environment(host, entry)
             state = host.load_state(entry)
+            if action == "restart":
+                release.resume_redis_transition(host, registry, entry, state)
             release.check_live_state(host, entry, state)
             require(state["current"] is not None, "no_release", "No release has been deployed.")
             release.verified_release(host, entry, state["current"])
@@ -144,8 +170,6 @@ def main():
         return 0
     except DeployError as error:
         print(json.dumps({"error": {"code": error.code, "detail": error.detail}}))
-    except NotImplementedError:
-        print(json.dumps({"error": {"code": "lane_not_implemented", "detail": "This foundation bundle requires the F1/F2/F3 implementations before host deployment."}}))
     except (OSError, ValueError, KeyError, TypeError):
         # Never expose malformed config values, subprocess inputs or credentials.
         print(json.dumps({"error": {"code": "host_operation_failed", "detail": "Host operation could not complete; inspect its registry and operation state."}}))

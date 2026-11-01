@@ -23,7 +23,7 @@ from acceptance_support import (ROOTS, WORK, action, fixture, guard, postgres_de
 def redis(host, entry, *args, admin=False):
     shared = host.read_registry()["shared"]["redis"]
     if admin:
-        # CONTRACT: F0 private host-secrets.json retains inherited redis_password.
+        # private host-secrets.json retains inherited redis_password.
         secrets = json.loads(Path("/etc/foundry/host-secrets.json").read_text())
         username, password = shared["admin_user"], secrets["redis_password"]
     else:
@@ -37,11 +37,11 @@ def redis(host, entry, *args, admin=False):
 
 
 def scheduler(host, entry):
-    from contracts import instance_units
+    from topology import instance_units
     unit = instance_units(entry)["scheduler"]
     service(unit)
     grants = entry["redis_grants"]["keys"]
-    # CONTRACT: literal inventory prefixes include a named coordination child
+    # literal inventory prefixes include a named coordination child
     # and portal cache child. No broad wildcard is accepted by this fixture.
     coordination = [prefix for prefix in grants if prefix.startswith("foundry:lease:") and ".coordination:" in prefix]
     portal = [prefix for prefix in grants if prefix.startswith("foundry:cache:") and ".portal:" in prefix]
@@ -76,7 +76,7 @@ def scheduler(host, entry):
         assert redis(host, entry, "GET", key) == "portal-cache-roundtrip"
         assert redis(host, entry, "DEL", key) == 1
 
-    # CONTRACT: the supplied app has a <=60s fixture schedule whose successful
+    # the supplied app has a <=60s fixture schedule whose successful
     # handler emits this JSON message (override for an existing app's schedule).
     # Unit activity and a leader lease alone do not prove an occurrence happened.
     message = os.environ.get("ACCEPTANCE_SCHEDULE_MESSAGE", "acceptance schedule completed")
@@ -98,7 +98,7 @@ def scheduler(host, entry):
 
 
 def running(entry):
-    from contracts import instance_units
+    from topology import instance_units
     result = {}
     for role, unit in instance_units(entry).items():
         process = service(unit)
@@ -123,7 +123,7 @@ def prove_running(host, entry):
 
 def second_archive(source, project, profile):
     from acceptance_host import archive_for
-    # CONTRACT: reuse inherited fixture-only archive identity rebinding. A second
+    # reuse inherited fixture-only archive identity rebinding. A second
     # valid release ID and renamed private-source-map directory reuse the input
     # binary; this checks lifecycle/executable ownership, not code differences.
     source = archive_for(source, project, profile)
@@ -154,7 +154,7 @@ def config_edit(host, project, profile, entry):
     import release
     path = host.paths.instance_config(entry["name"]) / "app.env"
     before = parse_env(path.read_text())
-    # CONTRACT: fixture archive uses application.Settings under APP, including
+    # fixture archive uses application.Settings under APP, including
     # generated encryption settings. Bootstrap MUST initialize both active fields.
     key_id, key, previous = ("APP__ENCRYPTION__" + suffix for suffix in ("KEY_ID", "KEY", "PREVIOUS"))
     assert before.get(key_id), "Bootstrap omitted encryption key ID"
@@ -167,21 +167,41 @@ def config_edit(host, project, profile, entry):
     revision = entry["configuration_revision"]
     old_ring = json.loads(material(before, previous) or "{}")
     old_ring[before[key_id]] = {"key": original}
-    changes = {key_id: "acceptance_" + uuid.uuid4().hex[:12],
-               key: base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("="),
-               previous: json.dumps(old_ring)}
-    # CONTRACT: config-set takes <=16 values atomically; direct writes supersede
-    # the corresponding _FILE alias through the production config owner.
-    action("config-set", request(project, profile, values=changes))
+    encryption = {"key_id": "acceptance_" + uuid.uuid4().hex[:12],
+                  "key": base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("=")}
+    action("keys-rotate", request(project, profile, secrets={"encryption": encryption}))
     _, updated = host.require_identity(project, profile)
     assert updated["configuration_revision"] == revision + 1
     after = parse_env(path.read_text())
-    assert after[key_id] == changes[key_id]
-    assert material(after, key) == changes[key]
+    assert after[key_id] == encryption["key_id"]
+    assert material(after, key) == encryption["key"]
     assert json.loads(material(after, previous)) == old_ring
+    prove_running(host, updated)
+
+    # Change the named credential binding and every referencing disk atomically.
+    # Either half by itself would leave an unresolved storage credential name.
+    credentials_key = "APP__SERVICES__CREDENTIALS"
+    disks_key = "APP__SERVICES__STORAGE__DISKS"
+    credentials = json.loads(material(after, credentials_key))
+    disks = json.loads(material(after, disks_key))
+    alias = "acceptance_" + uuid.uuid4().hex[:12]
+    prior = {disk["cloud"]["credentials"] for disk in disks.values()}
+    assert len(prior) == 1
+    credentials[alias] = credentials.pop(prior.pop())
+    for disk in disks.values():
+        disk["cloud"]["credentials"] = alias
+    changes = {credentials_key: json.dumps(credentials), disks_key: json.dumps(disks),
+               "PROJECT__NAME": "Acceptance configured"}
+    action("config-set", request(project, profile, secrets={"configuration": changes}))
+    _, updated = host.require_identity(project, profile)
+    assert updated["configuration_revision"] == revision + 2
+    configured = parse_env(path.read_text())
+    assert all(material(configured, name) == value for name, value in changes.items())
+    assert material(configured, key) == encryption["key"]
+    assert json.loads(material(configured, previous)) == old_ring
     release.app(host, updated, selected(host, updated), "config:check")
     prove_running(host, updated)
-    print("PASS bootstrap keyring initialization and atomic three-key rotation retaining the old key")
+    print("PASS bootstrap keyring, retained-key rotation, and atomic credential/disk/name edit")
     return updated
 
 
@@ -190,7 +210,7 @@ def child(payload_file, ready_fd):
     from acceptance_host import TOOLS
     import release
     original = release.switch_to
-    # CONTRACT: F0 release.switch_to(host, entry, version) publishes current and
+    # release.switch_to(host, entry, version) publishes current and
     # returns before restart. Patch only this disposable child, never source files.
     def barrier(*args, **kwargs):
         original(*args, **kwargs)
@@ -198,7 +218,7 @@ def child(payload_file, ready_fd):
         while True:
             signal.pause()
     release.switch_to = barrier
-    sys.stdin = io.StringIO(Path(payload_file).read_text())
+    sys.stdin = io.TextIOWrapper(io.BytesIO(Path(payload_file).read_bytes()))
     sys.argv = [str(TOOLS / "server/manage.py"), "activate"]
     runpy.run_path(sys.argv[0], run_name="__main__")
 
@@ -254,7 +274,7 @@ def main(archive):
     action("activate", activate)
     assert selected(host, entry).name == version
     prove_running(host, entry)
-    # CONTRACT: F0 explicit target + expected_current + operation_id; replaying
+    # explicit target + expected_current + operation_id; replaying
     # the SAME operation after its expected_current changed is an unchanged success.
     rollback = request(project, profile, target=original, expected_current=version)
     action("rollback", rollback)

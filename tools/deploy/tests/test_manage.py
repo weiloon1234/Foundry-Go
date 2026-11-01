@@ -70,3 +70,17 @@ class ManagerTests(unittest.TestCase):
         self.assertEqual({"major": 2, "minor": 0}, response["protocol"])
         self.assertEqual({"minimum": 1, "maximum": 1}, response["client_generation"])
         self.assertEqual(loaded["tools"]["bundle_sha256"], response["tools"]["bundle_sha256"])
+
+
+    def test_backup_requests_dispatch_under_the_registered_identity(self):
+        import backup
+        operation = str(uuid.uuid4())
+        with patch.object(backup, "run_backup", return_value={"backup_id": operation}) as run:
+            result = manager.execute(self.host, "backup-run", {**self.request, "confirm": True,
+                                     "operation_id": operation, "kind": "diff"})
+        self.assertEqual(operation, result["backup_id"])
+        self.assertEqual((operation, "diff"), run.call_args.args[-2:])
+        with patch.object(backup, "restore_drill", return_value={"status": "complete"}) as restore:
+            manager.execute(self.host, "restore-drill", {**self.request, "confirm": True, "backup_id": operation})
+        self.assertEqual(operation, restore.call_args.args[-1])
+        self.assertEqual({"target_time": None, "target_inclusive": True, "retain": False}, restore.call_args.kwargs)

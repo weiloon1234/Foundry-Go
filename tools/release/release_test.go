@@ -430,6 +430,53 @@ func TestReviewedConsumerAssets(t *testing.T) {
 	}
 }
 
+func TestDeploymentBundleAssets(t *testing.T) {
+	policy, err := policyFor("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := policy.inventory("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	present := make(map[string]bool, len(files))
+	for _, file := range files {
+		present[file.Path] = true
+	}
+	for _, name := range []string{
+		"server/templates/foundry-http@.service",
+		"server/templates/foundry-scheduler@.service",
+		"server/templates/foundry-worker@.service",
+		"server/templates/redis-server@foundry.service",
+		"server/templates/foundry-backup.service",
+		"server/templates/foundry-backup.timer",
+		"server/templates/nginx-http.conf",
+		"server/templates/nginx-https.conf",
+		"server/templates/nginx-proxy.conf",
+		"server/templates/nginx-upgrade.conf",
+		"local/Makefile.example",
+		"lib/cloudflare-ranges.json",
+		"docker/builder.Dockerfile",
+		"tests/host.Dockerfile",
+		"tests/acceptance.Dockerfile",
+	} {
+		if !present["tools/deploy/"+name] {
+			t.Errorf("deployment bundle asset omitted: %s", name)
+		}
+	}
+	for _, name := range []string{
+		"tools/deploy/server/templates/unreviewed.service",
+		"tools/deploy/server/templates/unreviewed.timer",
+		"tools/deploy/server/templates/unreviewed.conf",
+		"tools/deploy/local/Other.example",
+		"tools/deploy/tests/private.Dockerfile",
+	} {
+		if policy.sourceName(name) {
+			t.Errorf("deployment asset allowance leaked to %s", name)
+		}
+	}
+}
+
 func TestRetiredFixtureEvidencePolicy(t *testing.T) {
 	_, policy := sourceFixture(t)
 	for _, path := range []string{"testdata/compilefail/query_id/invalid.go.txt", "testdata/footprint/extension_files_old/probe.go.txt", "testdata/footprint/extension_matching_old/probe.go.txt"} {

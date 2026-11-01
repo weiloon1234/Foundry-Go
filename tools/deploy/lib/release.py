@@ -1,7 +1,7 @@
 """Verified SSH release activation, instance-scoped operations and recovery.
 
 Shared service provisioning stays in its owning modules. Releases reconcile
-instance Redis grants through F2 and request recovery points/key archives from F3.
+instance Redis grants through redis_acl and request recovery points/key archives from backup.
 Configuration and key rotation share the same candidate validation and selection.
 """
 from __future__ import annotations
@@ -16,12 +16,13 @@ import shutil
 import sys
 import tarfile
 import time
+import tomllib
 import urllib.request
 import uuid
 
 from contracts import (DeployError, LAYOUT_VERSION, SCHEMA, VERSION_PATTERN,
                        check_path, digest, dump_env, now,
-                       parse_json, read_json, require, valid_timestamp, valid_uuid, instance_paths)
+                       parse_env, parse_json, read_json, require, valid_timestamp, valid_uuid, instance_paths)
 from runtime_config import (PIPELINE_KEYS, validate_runtime_environment, candidate_values,
                             rotation_changes)
 from topology import instance_units
@@ -233,7 +234,7 @@ def migration_status(host, entry, release):
 
 
 def backup_database(host, entry, attempt_id):
-    """Require F3's durable PITR recovery point before running migrations."""
+    """Require a durable PITR recovery point before running migrations."""
     return backup.recovery_point(host, entry, attempt_id)
 
 
@@ -255,9 +256,34 @@ def _remaining(deadline, maximum=5):
     return min(maximum, available)
 
 
+def prepare_worker(host, entry):
+    """Select the explicit worker connection from the selected release/config."""
+    if "worker" not in instance_units(entry):
+        return
+    version = current_version(host, entry)
+    require(version is not None, "worker_configuration", "A selected release is required for the worker.")
+    configuration = host.paths.instance_config(entry["name"])
+    values = parse_env(check_path(configuration / "app.env", "file").read_text())
+    key = "APP__WORKER__CONNECTION"
+    if key + "_FILE" in values:
+        from runtime_config import _read_value_file
+        connection = _read_value_file(host, entry, values[key + "_FILE"])
+    elif key in values:
+        connection = values[key]
+    else:
+        with (release_path(host, entry, version) / "config/deploy.toml").open("rb") as source:
+            settings = tomllib.load(source)
+        connection = settings.get("app", {}).get("worker", {}).get("connection")
+    require(isinstance(connection, str) and re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,127}", connection),
+            "worker_configuration", "Declare app.worker.connection explicitly for the worker role.")
+    host.owned_write(configuration / "worker.env", dump_env({"FOUNDRY_WORKER_CONNECTION": connection}),
+                     mode=0o640, group=entry["name"])
+
+
 def restart(host, entry):
     """HTTP and all declared background roles share one readiness deadline."""
     units = instance_units(entry)
+    prepare_worker(host, entry)
     stop_background(host, entry)
     try:
         with wall_clock_budget(READINESS_SECONDS):
@@ -437,11 +463,6 @@ def phase(host, entry, state, name):
 
 
 def finish(host, entry, state, outcome, error=None):
-    # F0's persisted enum still uses failed; retain the precise applied result
-    # separately until that shared schema admits failed_applied.
-    if outcome == "failed_applied":
-        state["last_attempt"]["result"] = outcome
-        outcome = "failed"
     state["last_attempt"].update(outcome=outcome, finished_at=now(), error=error)
     state["history"] = [*state["history"], copy.deepcopy(state["last_attempt"])][-50:]
     host.save_state(entry, state)
@@ -450,12 +471,45 @@ def finish(host, entry, state, outcome, error=None):
         _save_operation(host, entry, attempt)
 
 
+def persist_configuration_intents(host, entry, state):
+    """Keep secret-derived configuration hashes outside public state."""
+    for attempt in [state.get("last_attempt"), *state.get("history", [])]:
+        if not attempt or attempt.get("action") != "config":
+            continue
+        require(not attempt.get("configuration_redacted"), "configuration_reconciliation",
+                "Private configuration intent is required before writing operation state.")
+        path = host.paths.p(instance_paths(entry["name"])["private"]) / ("configuration-" + attempt["id"] + ".json")
+        host.check_control_directory(path.parent)
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        from contracts import atomic_json
+        atomic_json(path, {key: attempt[key] for key in ("id", "configuration_revision", "configuration_sha256", "previous_configuration_sha256")}, mode=0o600)
+
+
+def load_configuration_intents(host, entry, state):
+    for attempt in [state.get("last_attempt"), *state.get("history", [])]:
+        if not attempt or not attempt.get("configuration_redacted"):
+            continue
+        path = host.paths.p(instance_paths(entry["name"])["private"]) / ("configuration-" + attempt["id"] + ".json")
+        check_path(path, "file")
+        require(path.exists() and path.stat().st_mode & 0o777 == 0o600
+                and (host.paths.root != Path("/") or path.stat().st_uid == 0),
+                "configuration_reconciliation", "Restore the private configuration intent before operating this instance.")
+        intent = read_json(path)
+        require(intent.get("id") == attempt["id"] and intent.get("configuration_revision") == attempt["configuration_revision"],
+                "configuration_reconciliation", "Private configuration intent identity differs.")
+        attempt.update({key: intent[key] for key in ("configuration_sha256", "previous_configuration_sha256")})
+        attempt.pop("configuration_redacted")
+    return state
+
+
 def public_state(state):
     value = copy.deepcopy(state)
     for item in [value.get("last_attempt"), *value.get("history", [])]:
         if item:
-            item.pop("configuration_sha256", None)
-            item.pop("previous_configuration_sha256", None)
+            if item.get("action") == "config":
+                item.pop("configuration_sha256", None)
+                item.pop("previous_configuration_sha256", None)
+                item["configuration_redacted"] = True
             if item.get("result") == "failed_applied":
                 item["outcome"] = "failed_applied"
     return value
@@ -592,7 +646,10 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                 stop_background(host, entry)
                 if migration_status(host, entry, release):
                     phase(host, entry, state, "backup")
-                    attempt["backup"] = backup_database(host, entry, attempt["recovery_operation_id"])
+                    try:
+                        attempt["backup"] = backup_database(host, entry, attempt["recovery_operation_id"])
+                    finally:
+                        state["backup"] = copy.deepcopy(host.load_state(entry).get("backup", entry.get("backup", {})))
                     phase(host, entry, state, "migration")
                     app(host, entry, release, "migrate", extra=("--database", "primary"), timeout=900)
                 phase(host, entry, state, "seed")
@@ -725,7 +782,9 @@ def reconcile(host, project, profile):
         attempt = state.get("last_attempt")
         require(attempt is not None, "no_attempt", "There is no operation to reconcile.")
         if attempt["outcome"] not in ("running", "needs_reconciliation"):
-            return {"ok": True, "unchanged": True, "status": state["status"],
+            pending = bool(attempt.get("redis_pending"))
+            resume_redis_transition(host, registry, entry, state)
+            return {"ok": True, "unchanged": not pending, "status": state["status"],
                     "version": (state.get("current") or {}).get("version")}
         validate_runtime_environment(host, entry)
         candidate = None

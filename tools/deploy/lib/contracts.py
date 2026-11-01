@@ -29,6 +29,7 @@ SLUG_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 
 POSTGRES_PORT = 55432
 REDIS_PORT = 56379
+BACKUP_POLICY = {"interval_hours": 24, "daily": 7, "weekly": 4, "monthly": 0}
 REDIS_ACCOUNT = PREFIX + "-redis"
 REDIS_ADMIN = PREFIX + "-admin"
 REDIS_UNIT = "redis-server@" + PREFIX + ".service"
@@ -97,18 +98,27 @@ def validate_attempt(value):
             and value["action"] in ("deploy", "rollback", "restart", "stop", "config")
             and (value["release"] is None or isinstance(value["release"], str) and VERSION_PATTERN.fullmatch(value["release"]) is not None)
             and valid_timestamp(value["started_at"]), code, detail)
-    require(value["outcome"] in ("running", "succeeded", "failed", "needs_reconciliation", "reconciled")
+    require(value["outcome"] in ("running", "succeeded", "failed", "failed_applied", "needs_reconciliation", "reconciled")
             and value["phase"] in ("validation", "redis", "backup", "migration", "seed", "switch", "health", "configuration")
             and (value["error"] is None or isinstance(value["error"], str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", value["error"]) is not None), code, detail)
     require(value["finished_at"] is None if value["outcome"] == "running" else valid_timestamp(value["finished_at"]), code, detail)
     configuration = {"configuration_revision", "configuration_sha256", "previous_configuration_sha256"}
     if value["action"] == "config":
-        require(configuration.issubset(value) and type(value["configuration_revision"]) is int and value["configuration_revision"] >= 2, code, detail)
-        for key in ("configuration_sha256", "previous_configuration_sha256"):
-            require(isinstance(value[key], str) and re.fullmatch(r"[a-f0-9]{64}", value[key]) is not None, code, detail)
+        require(type(value.get("configuration_revision")) is int and value["configuration_revision"] >= 2, code, detail)
+        hashes = {"configuration_sha256", "previous_configuration_sha256"}
+        redacted = value.get("configuration_redacted", False)
+        require(type(redacted) is bool, code, detail)
+        if redacted:
+            require(not hashes.intersection(value), code, detail)
+        else:
+            require(hashes.issubset(value), code, detail)
+            for key in hashes:
+                require(isinstance(value[key], str) and re.fullmatch(r"[a-f0-9]{64}", value[key]) is not None, code, detail)
         require("configuration_applied" not in value or type(value["configuration_applied"]) is bool, code, detail)
     else:
-        require(not ((configuration | {"configuration_applied"}) & value.keys()), code, detail)
+        require(not ((configuration | {"configuration_applied", "configuration_redacted"}) & value.keys()), code, detail)
+    require(value["outcome"] != "failed_applied" or value["action"] == "config" and value.get("configuration_applied") is True, code, detail)
+    require("result" not in value or value["result"] == "failed_applied" and value["action"] == "config" and value.get("configuration_applied") is True, code, detail)
     return value
 
 
@@ -141,7 +151,8 @@ def validate_profile(value, project=None):
     require(type(value["schema"]) is int and value["schema"] == PROFILE_SCHEMA and slug(value["environment"]) and valid_uuid(value["instance_id"]), "invalid_profile", "Invalid environment identity.")
     if "backup_policy" in value:
         fields(value["backup_policy"], "interval_hours daily weekly monthly", "backup policy")
-        require(all(type(v) is int and 1 <= v <= 365 for v in value["backup_policy"].values()), "invalid_profile", "Invalid backup policy counts.")
+        require(all(type(v) is int and (0 if k == "monthly" else 1) <= v <= 365 for k, v in value["backup_policy"].items()), "invalid_profile", "Invalid backup policy counts.")
+        require(value["backup_policy"] == BACKUP_POLICY, "invalid_profile", "Only the supported daily/weekly backup retention policy is available.")
     fields(value["host"], "address port host_id", "host")
     h = value["host"]
     require(isinstance(h["address"], str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.:-]{0,252}", h["address"]) is not None, "invalid_host", "Host address must be a hostname or IP address, without an SSH login.")

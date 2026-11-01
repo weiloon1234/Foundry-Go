@@ -23,7 +23,17 @@ UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
 REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", "lib/upgrades.py",
                             "lib/provision.py", "lib/release.py", "lib/runtime_config.py",
                             "lib/topology.py", "lib/report.py", "server/manage.py",
-                            "server/report.py", "server/launcher.py"})
+                            "server/report.py", "server/launcher.py", "lib/packages.py",
+                            "lib/postgres.py", "lib/redis_acl.py", "lib/edge.py",
+                            "lib/certificates.py", "lib/backup.py", "lib/cloudflare-ranges.json",
+                            "server/templates/foundry-http@.service",
+                            "server/templates/foundry-scheduler@.service",
+                            "server/templates/foundry-worker@.service",
+                            "server/templates/redis-server@foundry.service",
+                            "server/templates/foundry-backup.service",
+                            "server/templates/foundry-backup.timer",
+                            "server/templates/nginx-http.conf", "server/templates/nginx-https.conf",
+                            "server/templates/nginx-proxy.conf", "server/templates/nginx-upgrade.conf"})
 
 
 def _hash(value: object) -> str:

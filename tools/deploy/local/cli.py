@@ -24,7 +24,7 @@ ROOT: Path | None = None
 sys.path.insert(0, str(TOOLS_ROOT / "lib"))
 from edge import edge_findings
 
-from contracts import (DeployError, PREFIX, SCHEMA, PROFILE_SCHEMA, LAYOUT_VERSION, VERSION_PATTERN, atomic_json, check_path, digest, identity, instance_name, now, parse_json, read_json, slug,
+from contracts import (BACKUP_POLICY, DeployError, PREFIX, SCHEMA, PROFILE_SCHEMA, LAYOUT_VERSION, VERSION_PATTERN, atomic_json, check_path, digest, identity, instance_name, now, parse_json, read_json, slug,
                        validate_profile, validate_project)
 from release import MAX_CONFIGURATION_CHANGES, validate_manifest
 from topology import load_topology
@@ -36,7 +36,7 @@ COMMANDS = {
     "deploy": "interactive deployment, status, rollback and configuration",
     "release": "build a local Docker release without contacting a server",
 }
-ACTIONS = ("deploy", "status", "rollback", "restart", "stop", "logs", "config", "keys rotate", "reconcile", "report", "sync", "tools-plan", "tools-apply", "upgrade-resume")
+ACTIONS = ("deploy", "status", "rollback", "restart", "stop", "logs", "config", "keys rotate", "reconcile", "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run", "restore-drill")
 
 
 class LocalError(Exception):
@@ -246,7 +246,7 @@ def profile_config(environment, project):
         "architecture": "amd64", "public_env": {},
         "edge_origin_lockdown": True,
         "retention": {"server_releases": 5, "local_releases": 3, "pre_migration_dumps": 7},
-        "backup_policy": {"interval_hours": 24, "daily": 7, "weekly": 4, "monthly": 12},
+        "backup_policy": dict(BACKUP_POLICY),
     }
     validate_profile(profile, project)
     atomic_json(path, profile)
@@ -793,6 +793,24 @@ def deploy(project, profile, settings):
             confirm("Apply the reviewed forward-only host tool upgrade")
             display(ssh.request(action, {**request, "plan_token": plan_token,
                                         "operation_id": operation}, remote))
+        return
+    if action in {"backup-configure", "backup-run", "restore-drill"}:
+        arguments = {}
+        if action == "backup-configure":
+            private = bootstrap_secrets(False)
+            private = {key: value for key, value in private.items() if key in {"backup_s3", "age_recipients", "app_storage"}}
+            arguments["secrets"] = private
+        elif action == "backup-run":
+            arguments["kind"] = os.environ.get("BACKUP_KIND", "full")
+            if arguments["kind"] not in {"full", "diff"}:
+                raise LocalError("BACKUP_KIND must be full or diff")
+            arguments["operation_id"] = operation_id(profile, action, {"kind": arguments["kind"]})
+        else:
+            arguments["backup_id"] = operation_uuid(os.environ.get("BACKUP_ID") or ask("Completed backup UUID"))
+            if os.environ.get("TARGET_TIME"):
+                arguments["target_time"] = os.environ["TARGET_TIME"]
+        confirm(f"{action} for {instance_name(project, profile)}")
+        display(ssh.request(action, {**request, **arguments, "confirm": True}))
         return
     status = ssh.request("status", request)
     remember_releases(profile, status)

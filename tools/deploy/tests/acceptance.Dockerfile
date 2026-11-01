@@ -6,3 +6,9 @@ FROM ${BASE_IMAGE}
 RUN apt-get update -qq \
     && apt-get install -y --no-install-recommends age rclone pgbackrest \
     && rm -rf /var/lib/apt/lists/*
+# Some Ubuntu image builds provide a package-autostart policy. Retain it as
+# evidence outside the active path before this image becomes a fixture host.
+# Production still refuses an existing policy-rc.d rather than replacing it.
+RUN if [ -e /usr/sbin/policy-rc.d ] || [ -L /usr/sbin/policy-rc.d ]; then \
+      mv /usr/sbin/policy-rc.d /usr/sbin/policy-rc.d.acceptance-image; \
+    fi

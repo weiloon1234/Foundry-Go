@@ -182,8 +182,7 @@ class ReportTests(unittest.TestCase):
         healthy = {"load": "loaded", "active": "active", "substate": "running",
                    "main_pid": 42, "exe": str(selected / "artisan")}
         for role, field, value in (("scheduler", "exe", str(selected.parent / "v1" / "artisan")),
-                                   ("http", "main_pid", None), ("worker", "main_pid", 0),
-                                   ("worker", "exe", None)):
+                                   ("http", "main_pid", None), ("worker", "main_pid", 0)):
             with self.subTest(role=role, field=field):
                 self.service.reset_mock()
                 def observed(host, unit, deadline):
@@ -195,6 +194,25 @@ class ReportTests(unittest.TestCase):
                 self.assertFalse(item["metadata_consistent"])
                 self.assertIn({"code": "running_release_mismatch", "instance_id": INSTANCE_ID}, result["problems"])
                 self.assertEqual(3, self.service.call_count)
+
+    def test_unreadable_process_executable_is_unverified_without_claiming_a_mismatch(self):
+        selected = self.host.paths.opt("abc-production") / "releases" / "v2"
+        selected.mkdir(parents=True)
+        (self.host.paths.opt("abc-production") / "current").symlink_to(selected)
+        self.host.states[INSTANCE_ID].update({"status": "healthy", "current": {"version": "v2"}})
+        self.service.return_value = {"load": "loaded", "active": "active", "substate": "running",
+                                     "main_pid": 42, "exe": None}
+        result = report.collect_report(self.host)
+        item = self.item(result)
+        self.assertFalse(item["metadata_consistent"])
+        self.assertEqual("unknown", item["status"])
+        self.assertEqual("healthy", item["recorded_status"])
+        self.assertIn({"code": "running_release_unverified", "instance_id": INSTANCE_ID}, result["problems"])
+        self.assertNotIn({"code": "running_release_mismatch", "instance_id": INSTANCE_ID}, result["problems"])
+        self.service.return_value["exe"] = str(selected / "artisan")
+        verified = self.item(report.collect_report(self.host))
+        self.assertTrue(verified["metadata_consistent"])
+        self.assertEqual("healthy", verified["status"])
 
     def test_missing_or_linked_release_directory_is_inconsistent_even_with_healthy_process(self):
         self.service.return_value = {"load": "loaded", "active": "active", "substate": "running"}

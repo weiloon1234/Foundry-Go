@@ -9,8 +9,15 @@ Usage: run_acceptance.sh --ubuntu 24.04|26.04 --platform linux/arm64|linux/amd64
   --archive /absolute/app.tar.gz --framework-root /absolute/Foundry-Go --foreign|--fresh
 
 Run each OS/architecture/mode separately with a matching Linux app archive.
+The archive must declare HTTP + scheduler (worker optional), private R2 disks,
+coordination and portal-cache Redis children, and a <=60s successful schedule.
+The default schedule JSON msg is "acceptance schedule completed"; set
+ACCEPTANCE_SCHEDULE_MESSAGE to the archive's actual completion message.
 amd64 is emulated on arm64 Docker hosts and can be substantially slower.
 DOCKER_CONFIG and DOCKER_HOST are inherited. No host ports are published.
+Public reports must show live roles/readiness; Linux may withhold cross-UID
+executable identity, which must be reported as unverified. Root reports must
+prove every running role matches its selected release.
 Optional: ACCEPTANCE_LOG_DIR, ACCEPTANCE_SCHEDULE_MESSAGE (see acceptance_roles.py).
 EOF
 }
@@ -38,11 +45,7 @@ done
 framework=$(cd "$framework" && pwd -P)
 archive=$(cd "$(dirname "$archive")" && pwd -P)/$(basename "$archive")
 tests="$framework/tools/deploy/tests"
-# CONTRACT: F0 host.Dockerfile remains the systemd/inspection-only base image;
-# acceptance_host accepts --archive/--redis-source and covers bootstrap/repeat/
-# concurrent operations against dedicated Foundry services. acceptance_nginx
-# preserves the nginx master and handles schema-2/optional worker topology.
-for required in host.Dockerfile acceptance.Dockerfile acceptance_host.py acceptance_nginx.py acceptance_foreign.py acceptance_roles.py acceptance_backup.py; do
+for required in host.Dockerfile acceptance.Dockerfile acceptance_host.py acceptance_nginx.py acceptance_foreign.py acceptance_roles.py acceptance_backup.py acceptance_edge.py acceptance_support.py acceptance_http.py; do
   [[ -f "$tests/$required" ]] || { echo "Missing integrated fixture: $required" >&2; exit 2; }
 done
 if [[ -n "${ACCEPTANCE_LOG_DIR:-}" ]]; then
@@ -60,6 +63,8 @@ image=foundry-acceptance-host:$token
 base_image=foundry-acceptance-base:$token
 minio_image=minio/minio:RELEASE.2025-04-22T22-12-26Z
 env_file=$logs/.private-env
+certs=$logs/.private-tls
+mkdir -m 700 "$certs"
 baseline_done=0
 foreign_verified=0
 network_created=0
@@ -88,6 +93,7 @@ cleanup() {
   if ((image_created)); then docker image rm "$image" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((base_created)); then docker image rm "$base_image" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   rm -f "$env_file"
+  rm -rf "$certs"  # Task-owned private CA and MinIO key material only.
   ((cleanup_failed == 0)) || result=1
   echo "Acceptance exit=$result; logs: $logs"
   exit "$result"
@@ -100,10 +106,12 @@ access=acceptance-$token
 secret=$(openssl rand -hex 32)
 cat >"$env_file" <<EOF
 FOUNDRY_DISPOSABLE_HOST=1
+FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT=1
+FOUNDRY_NGINX_EDGE_ACCEPTANCE=1
 PYTHONDONTWRITEBYTECODE=1
 MINIO_ROOT_USER=$access
 MINIO_ROOT_PASSWORD=$secret
-ACCEPTANCE_S3_ENDPOINT=http://minio:9000
+ACCEPTANCE_S3_ENDPOINT=https://minio:9000
 ACCEPTANCE_S3_ACCESS_KEY=$access
 ACCEPTANCE_S3_SECRET_KEY=$secret
 ACCEPTANCE_APP_BUCKET=app-$token
@@ -111,6 +119,23 @@ ACCEPTANCE_BACKUP_BUCKET=backup-$token
 ACCEPTANCE_SCHEDULE_MESSAGE=${ACCEPTANCE_SCHEDULE_MESSAGE:-acceptance schedule completed}
 EOF
 unset secret access
+# A private disposable CA signs both the MinIO endpoint and synthetic site
+# lineages. pgBackRest/rclone/app clients use the normal host trust store.
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 -sha256 \
+  -subj /CN=Foundry-acceptance-CA -keyout "$certs/ca.key" -out "$certs/ca.crt" \
+  >"$logs/tls-setup.log" 2>&1
+openssl req -new -newkey rsa:2048 -nodes -subj /CN=minio \
+  -keyout "$certs/private.key" -out "$certs/minio.csr" >>"$logs/tls-setup.log" 2>&1
+cat >"$certs/minio.ext" <<'EOF'
+basicConstraints=critical,CA:FALSE
+keyUsage=critical,digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=DNS:minio
+EOF
+openssl x509 -req -in "$certs/minio.csr" -CA "$certs/ca.crt" -CAkey "$certs/ca.key" \
+  -CAcreateserial -days 2 -sha256 -extfile "$certs/minio.ext" -out "$certs/public.crt" \
+  >>"$logs/tls-setup.log" 2>&1
+chmod 600 "$certs/ca.key" "$certs/private.key"
 printf 'ubuntu=%s\nplatform=%s\nmode=%s\nminio=%s\n' "$ubuntu" "$platform" "$mode" "$minio_image" >"$logs/run.txt"
 echo "Acceptance logs: $logs"
 if [[ "$platform" == linux/amd64 ]]; then
@@ -127,10 +152,13 @@ network_created=1
 docker volume create "$volume" >"$logs/volume.log" 2>&1
 volume_created=1
 # No -p/-P flags: S3 and all application ports stay on the dedicated network.
-docker create --platform "$platform" --name "$minio" --network "$network" --network-alias minio \
+docker create --platform "$platform" --user 0:0 --name "$minio" --network "$network" --network-alias minio \
   --env-file "$env_file" --mount "type=volume,source=$volume,target=/data" \
-  "$minio_image" server /data --console-address :9001 >"$logs/minio-create.log" 2>&1
+  "$minio_image" server /data --certs-dir /certs --console-address :9001 >"$logs/minio-create.log" 2>&1
 minio_created=1
+mkdir -m 700 "$certs/minio"
+cp "$certs/public.crt" "$certs/private.key" "$certs/minio/"
+docker cp "$certs/minio" "$minio:/certs" >"$logs/minio-tls-copy.log" 2>&1
 docker start "$minio" >"$logs/minio-start.log" 2>&1
 docker create --platform "$platform" --name "$host" --network "$network" \
   --privileged --cgroupns=private --memory=4g --cpus=2 \
@@ -141,7 +169,14 @@ docker create --platform "$platform" --name "$host" --network "$network" \
 host_created=1
 docker start "$host" >"$logs/host-start.log" 2>&1
 docker exec "$host" systemctl start multi-user.target >"$logs/systemd.log" 2>&1
-docker exec "$host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a
+docker exec "$host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a /etc/foundry/acceptance-ca
+docker cp "$certs/ca.crt" "$host:/etc/foundry/acceptance-ca/ca.crt" >"$logs/host-tls-copy.log" 2>&1
+docker cp "$certs/ca.key" "$host:/etc/foundry/acceptance-ca/ca.key" >>"$logs/host-tls-copy.log" 2>&1
+docker exec "$host" chown -R root:root /etc/foundry/acceptance-ca
+docker exec "$host" chmod 600 /etc/foundry/acceptance-ca/ca.key /etc/foundry/acceptance-ca/ca.crt
+docker exec "$host" cp /etc/foundry/acceptance-ca/ca.crt /usr/local/share/ca-certificates/foundry-acceptance.crt
+docker exec "$host" chmod 644 /usr/local/share/ca-certificates/foundry-acceptance.crt
+docker exec "$host" update-ca-certificates >"$logs/host-trust.log" 2>&1
 docker cp "$archive" "$host:/var/lib/foundry-acceptance-f4a/input.tar.gz" >"$logs/archive-copy.log" 2>&1
 docker exec --env-file "$env_file" -i "$host" python3 - >"$logs/minio-ready.log" 2>&1 <<'PY'
 import os, time, urllib.request
@@ -163,6 +198,9 @@ phase() {
   echo "Running $name"
   docker exec --env-file "$env_file" "$host" python3 -B "$@" >"$logs/$name.log" 2>&1
 }
+# Refresh before foreign ownership/audit capture; production package planning
+# deliberately never changes the repository view underneath its reviewed plan.
+docker exec "$host" apt-get update -qq >"$logs/package-index.log" 2>&1
 phase foreign-baseline /verification/deploy/tests/acceptance_foreign.py baseline --mode "$mode"
 baseline_done=1
 phase host /verification/deploy/tests/acceptance_host.py \
@@ -170,8 +208,9 @@ phase host /verification/deploy/tests/acceptance_host.py \
 phase roles /verification/deploy/tests/acceptance_roles.py --archive /var/lib/foundry-acceptance-f4a/input.tar.gz
 phase backup /verification/deploy/tests/acceptance_backup.py
 phase nginx /verification/deploy/tests/acceptance_nginx.py --rounds 1
+phase edge /verification/deploy/tests/acceptance_edge.py
 # Set before invocation: a failed verify must not be repeated after it has closed
 # its Redis observation window.
 foreign_verified=1
 phase foreign-verify /verification/deploy/tests/acceptance_foreign.py verify
-echo 'PASS all acceptance phases; external Cloudflare DNS/ACME and real R2 remain separate gates.'
+echo 'PASS all acceptance phases, including synthetic CA lineage/renewal/reload; real Cloudflare DNS/ACME and R2 remain separate gates.'

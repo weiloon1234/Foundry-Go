@@ -2,11 +2,15 @@
 
 ## Unreleased
 
-- Added: Framework-owned Python deployment foundation under `tools/deploy`, with
-  explicit app roots, layout and registry v2, declared process topology,
-  metadata-safe atomic publication, and generation-bound host tool upgrades.
-  Provisioning integrations remain assigned to follow-up lanes F1, F2, and F3;
-  this foundation is not ready for production bootstrap.
+- Added: Framework-owned deployment tooling under `tools/deploy`, with explicit
+  app roots, layout and registry v2, digest-bound host upgrades, declared HTTP,
+  scheduler and worker roles, atomic configuration/keyring changes, and explicit
+  rollback/reconciliation. Dedicated PostgreSQL and TLS Redis services preserve
+  foreign services; Cloudflare DNS-01 and per-site edge policy accompany
+  pgBackRest WAL recovery, age key archives, and R2 object backups. The packaged
+  bundle includes operator documentation and isolated HTTPS MinIO/certificate
+  acceptance fixtures. Live container and provider acceptance remain required
+  before production use.
 - Added: R2 attachment cleanup through write-once keys, durable tombstones,
   stale-writer fencing, and a bounded scope-prefix orphan sweep in
   `ReconcilePending`. Conditional create and read remain required; AWS cleanup

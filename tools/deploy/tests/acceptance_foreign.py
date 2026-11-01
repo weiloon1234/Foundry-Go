@@ -52,12 +52,15 @@ def http():
         client.close()
 
 
-def config_snapshot():
+def config_snapshot(known_paths=None):
     paths = set(Path("/etc/redis").rglob("*"))
     for root in Path("/etc/postgresql").glob("*/main"):
         paths.add(root)
         paths.update(root.rglob("*"))
     paths.update((Path("/etc/redis"), SITE, ENABLED, PAGE, Path("/etc/nginx/nginx.conf")))
+    if known_paths is not None:
+        # New Foundry-owned Redis files coexist beside the frozen foreign files.
+        paths = {Path(name) for name in known_paths}
     result = {}
     for path in sorted(paths):
         stat = path.lstat()
@@ -79,7 +82,6 @@ def config_snapshot():
 def install():
     assert not Path("/etc/foundry/registry.json").exists(), "Baseline must precede Foundry bootstrap"
     assert not BASELINE.exists(), "Never overwrite a prior baseline"
-    run(["apt-get", "update", "-qq"], timeout=600)
     run(["apt-get", "install", "-y", "--no-install-recommends", "redis-server", "postgresql", "nginx"],
         env={"DEBIAN_FRONTEND=noninteractive"}, timeout=1200)
     clusters = run(["pg_lsclusters", "--no-header"]).stdout.splitlines()
@@ -175,7 +177,7 @@ def verify():
         b"connection received", b"connection authenticated", b"connection authorized",
         b"statement:", b"execute ", b"password authentication failed", b"pg_hba.conf"
     )), "Unexpected connection/query on foreign PostgreSQL (private audit retained)"
-    assert config_snapshot() == before["config"], "Foreign configuration bytes or metadata changed"
+    assert config_snapshot(before["config"]) == before["config"], "Foreign configuration bytes or metadata changed"
     assert {unit: service(unit) for unit in before["services"]} == before["services"], "Foreign service restarted"
     assert redis("GET", "foreign:rust:sentinel") == before["redis"]
     assert redis("DBSIZE") == before["redis_size"]

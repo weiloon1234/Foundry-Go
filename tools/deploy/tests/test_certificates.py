@@ -159,3 +159,72 @@ class CertificateTests(unittest.TestCase):
         with self.assertRaises(DeployError):
             certificates.provision(self.host, self.registry, self.entry)
         self.assertFalse(any(args[0] == "certbot" for args, _ in self.calls))
+
+    def synthetic_fixture(self):
+        self.entry["profile"].update(environment="acceptance", runtime_environment="testing",
+                                     domain="app.acceptance.invalid")
+        self.entry["certificate"].update(zone_ref=None, lineage="app.acceptance.invalid")
+        self.host.paths.p("/.dockerenv").touch()
+        directory = self.host.paths.p("/etc/foundry/acceptance-ca")
+        directory.mkdir(mode=0o700, parents=True)
+        self.host.owned_write(directory / "ca.key", "fixture-private-ca", mode=0o600)
+        self.host.owned_write(directory / "ca.crt", "fixture-ca", mode=0o600)
+        # Avoid rewriting fixture identity: this test exercises certificate ownership.
+        self.host.journal = lambda *args: None
+
+    def test_synthetic_mode_refuses_production_and_incomplete_fixture_guards(self):
+        self.synthetic_fixture()
+        for field, value in (("runtime_environment", "production"), ("runtime_environment", "staging"),
+                             ("environment", "production"), ("domain", "production.example.com")):
+            with self.subTest(field=field, value=value):
+                original = self.entry["profile"][field]
+                self.entry["profile"][field] = value
+                with patch.dict(certificates.os.environ, {"FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT": "1"}):
+                    with self.assertRaises(DeployError):
+                        certificates.provision(self.host, self.registry, self.entry)
+                self.entry["profile"][field] = original
+        self.host.paths.p("/.dockerenv").unlink()
+        with patch.dict(certificates.os.environ, {"FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT": "1"}):
+            with self.assertRaises(DeployError):
+                certificates.provision(self.host, self.registry, self.entry)
+        self.assertEqual(self.calls, [])
+
+    def test_synthetic_certificates_use_owned_lineage_renewal_and_reload_checks(self):
+        self.synthetic_fixture()
+        def command(args, **kwargs):
+            if args[:2] == ["openssl", "req"]:
+                Path(args[args.index("-keyout") + 1]).write_text("fixture-private-key")
+            if args[:2] == ["openssl", "x509"] and "-req" in args:
+                Path(args[args.index("-out") + 1]).write_text("fixture-certificate\n")
+            return self.run_command(args, **kwargs)
+        self.host.run = command
+        with patch.dict(certificates.os.environ, {"FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT": "1"}), \
+                patch.object(certificates, "_resolve_zone") as resolve, \
+                patch.object(certificates.packages, "install_missing") as install:
+            certificates.provision(self.host, self.registry, self.entry)
+            self.assertEqual(certificates.inspect(self.host, self.entry)["state"], "ready")
+            renewal = certificates._renewal_path(self.host, self.entry)
+            renewal.write_text(renewal.read_text().replace(certificates.RELOAD_HOOK, "/bin/true"))
+            self.assertEqual(certificates.inspect(self.host, self.entry)["state"], "conflict")
+        resolve.assert_not_called()
+        install.assert_not_called()
+        commands = [args for args, _ in self.calls]
+        self.assertFalse(any(args[0] == "certbot" for args in commands))
+        self.assertEqual(commands.count(["/usr/bin/systemctl", "reload", "nginx"]), 2)
+        self.assertTrue(any(args[:2] == ["openssl", "verify"] for args in commands))
+        self.assertEqual(len(list(self.host.paths.p("/etc/letsencrypt/archive/app.acceptance.invalid").glob("*.pem"))), 8)
+        self.assertIsNotNone(self.entry["certificate"]["last_renewal_check_at"])
+        with patch.dict(certificates.os.environ, {"FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT": "0"}):
+            with self.assertRaises(DeployError):
+                certificates.provision(self.host, self.registry, self.entry)
+
+    def test_synthetic_timer_uses_stable_tools_pointer_from_every_caller(self):
+        self.synthetic_fixture()
+        self.entry["certificate"]["zone_ref"] = "acceptance-synthetic"
+        with patch.object(certificates, "__file__", "/verification/deploy/lib/certificates.py"):
+            staged = certificates._units(self.entry)
+        with patch.object(certificates, "__file__", "/usr/local/lib/foundry/tools/" + "a" * 64 + "/lib/certificates.py"):
+            installed = certificates._units(self.entry)
+        self.assertEqual(staged, installed)
+        service = staged[certificates._timer(self.entry) + ".service"]
+        self.assertIn("/usr/local/lib/foundry/current/lib/certificates.py synthetic-renew ", service)

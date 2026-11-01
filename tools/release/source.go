@@ -94,6 +94,14 @@ func (policy sourcePolicy) sourceName(path string) bool {
 	// The TOML is loaded by mailing/configured_test.go; SPA assets by portals.go.
 	switch relative {
 	case "tools/deploy/server/templates/app.service",
+		"tools/deploy/server/templates/foundry-http@.service",
+		"tools/deploy/server/templates/foundry-scheduler@.service",
+		"tools/deploy/server/templates/foundry-worker@.service",
+		"tools/deploy/server/templates/redis-server@foundry.service",
+		"tools/deploy/server/templates/foundry-backup.service",
+		"tools/deploy/server/templates/foundry-backup.timer",
+		"tools/deploy/local/Makefile.example",
+		"tools/deploy/lib/cloudflare-ranges.json",
 		"tools/deploy/server/templates/nginx-http.conf",
 		"tools/deploy/server/templates/nginx-https.conf",
 		"tools/deploy/server/templates/nginx-proxy.conf",
@@ -102,6 +110,7 @@ func (policy sourcePolicy) sourceName(path string) bool {
 		"tools/deploy/server/templates/worker.service",
 		"tools/deploy/docker/builder.Dockerfile",
 		"tools/deploy/tests/host.Dockerfile",
+		"tools/deploy/tests/acceptance.Dockerfile",
 		"blueprint/goway-data-layer/compilefail-mapping.tsv",
 		"internal/generate/testdata/scaffold/model.golden",
 		"internal/generate/testdata/scaffold/extensions.golden",

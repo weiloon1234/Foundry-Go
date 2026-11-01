@@ -130,16 +130,6 @@ class FoundationProvisionTests(unittest.TestCase):
         self.assertFalse(plan["ok"])
         self.assertIn("host_upgrade_required", {finding["code"] for finding in plan["findings"]})
 
-    def test_unimplemented_service_refuses_before_any_registry_or_resource_write(self):
-        self.inspections[0].stop()
-        with patch.object(provision.upgrades, "install_tools") as install:
-            with self.assertRaises(NotImplementedError):
-                self.plan()
-            install.assert_not_called()
-        self.assertEqual([], self.host.writes)
-        self.assertFalse(self.host.paths.registry.exists())
-        self.assertFalse(self.host.paths.opt(self.project["slug"] + "-" + self.profile["environment"]).exists())
-
     def test_installs_only_declared_hardened_units_without_starting(self):
         entry = self.plan()["entry"]
         registry = {"shared": {"postgresql": {"unit": "postgresql@16-foundry.service"}}}
@@ -165,8 +155,8 @@ class FoundationProvisionTests(unittest.TestCase):
         topology = {"schema": 1, "roles": [{"name": "http"}, {"name": "worker"}]}
         entry = self.plan(topology=topology)["entry"]
         content = provision._template(TOOLS, "foundry-worker@.service", entry, postgres_unit="postgresql@16-foundry.service")
-        self.assertIn("artisan queue:work --config", content)
-        self.assertNotIn("--connection", content)
+        self.assertIn("artisan queue:work --connection ${FOUNDRY_WORKER_CONNECTION} --config", content)
+        self.assertIn("EnvironmentFile=" + entry["allocations"]["paths"]["configuration"] + "/worker.env", content)
         self.assertNotIn("@WORKER_CONNECTION@", content)
 
     def test_foreign_unit_template_and_dropin_refuse_before_install(self):
@@ -194,6 +184,73 @@ class FoundationProvisionTests(unittest.TestCase):
                      patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, config, "")), \
                      self.assertRaises(DeployError):
                     provision._site_checks(self.host, entry)
+
+    def test_only_fresh_foundry_nginx_is_started_after_validation(self):
+        active = subprocess.CompletedProcess([], 0, "", "")
+        inactive = subprocess.CompletedProcess([], 3, "", "")
+        with patch.object(self.host, "run", side_effect=[inactive, active, active, active]) as run:
+            provision._ensure_nginx(self.host, {"shared": {"nginx": {"owner": "foundry", "installed_by_foundry": True}}})
+        self.assertEqual([["systemctl", "is-active", "--quiet", "nginx"], ["nginx", "-t", "-q"],
+                          ["systemctl", "enable", "--now", "nginx"], ["systemctl", "is-active", "--quiet", "nginx"]],
+                         [call.args[0] for call in run.call_args_list])
+        with patch.object(self.host, "run", return_value=inactive) as run, self.assertRaises(DeployError):
+            provision._ensure_nginx(self.host, {"shared": {}})
+        self.assertEqual(1, run.call_count)
+        registry = {"shared": {}}
+        with patch.object(self.host, "run", return_value=active) as run:
+            provision._ensure_nginx(self.host, registry)
+        self.assertEqual(1, run.call_count)
+        self.assertEqual("nginx.service", registry["shared"]["nginx"]["unit"])
+        self.assertFalse(registry["shared"]["nginx"]["installed_by_foundry"])
+        with patch.object(self.host, "run", return_value=inactive) as run, self.assertRaises(DeployError):
+            provision._ensure_nginx(self.host, registry)
+        self.assertEqual(1, run.call_count)
+
+    def test_ready_instance_repairs_site_without_reprovisioning_shared_services(self):
+        plan = self.plan()
+        plan["entry"]["provisioning"] = {"state": "preparing", "completed_steps": [
+            "secrets", "bootstrap_secrets", "database", "redis", "configuration", "backup", "unit", "certificate"]}
+        for key in ("postgresql", "redis", "certificate"):
+            plan["observations"][key] = {"state": "ready"}
+        self.register(plan)
+        self.profile["host"]["host_id"] = plan["host_id"]
+        with patch.object(provision, "bootstrap_plan", return_value=plan), \
+             patch.object(provision, "validate_runtime_environment"), \
+             patch.object(provision, "initialize_bootstrap_secrets"), \
+             patch.object(provision, "_ready_configuration", return_value=False), \
+             patch.object(provision, "_install_unit"), patch.object(provision, "_install_site") as site, \
+             patch.object(provision.postgres, "prepare") as postgres, \
+             patch.object(provision.backup, "configure") as backup:
+            result = provision.bootstrap_apply(self.host, self.project, self.profile, TOOLS,
+                                              plan["plan_token"], topology=TOPOLOGY)
+        self.assertFalse(result["unchanged"])
+        self.assertTrue(site.call_args.kwargs["certificate_ready"])
+        postgres.assert_not_called()
+        backup.assert_not_called()
+        recorded = self.host.registry_value["instances"][self.profile["instance_id"]]
+        self.assertEqual("ready", recorded["provisioning"]["state"])
+        self.assertIn("site", recorded["provisioning"]["completed_steps"])
+
+    def test_prepared_site_reload_failure_records_failed_for_recovery(self):
+        plan = self.plan()
+        plan["entry"]["provisioning"] = {"state": "preparing", "completed_steps": [
+            "secrets", "bootstrap_secrets", "database", "redis", "configuration", "backup", "unit", "certificate"]}
+        for key in ("postgresql", "redis", "certificate"):
+            plan["observations"][key] = {"state": "ready"}
+        self.register(plan)
+        self.profile["host"]["host_id"] = plan["host_id"]
+        with patch.object(provision, "bootstrap_plan", return_value=plan), \
+             patch.object(provision, "validate_runtime_environment"), \
+             patch.object(provision, "initialize_bootstrap_secrets"), \
+             patch.object(provision, "_ready_configuration", return_value=False), \
+             patch.object(provision, "_install_unit"), \
+             patch.object(provision, "_install_site", side_effect=DeployError("nginx_reload", "Reload failed")), \
+             self.assertRaises(DeployError):
+            provision.bootstrap_apply(self.host, self.project, self.profile, TOOLS,
+                                      plan["plan_token"], topology=TOPOLOGY)
+        recorded = self.host.registry_value["instances"][self.profile["instance_id"]]
+        self.assertEqual("failed", recorded["provisioning"]["state"])
+        self.assertNotIn("site", recorded["provisioning"]["completed_steps"])
 
     def test_bootstrap_configures_backup_after_database_and_private_environment(self):
         plan = self.plan()

@@ -2,9 +2,9 @@
 
 Foundry-Go owns the Python deployment tooling under `tools/deploy`. Applications
 own their identity, profiles, topology, and nonsecret application configuration.
-The F0 foundation establishes layout v2 and the interfaces for follow-up lanes.
-F2 and F3 provisioning functions still raise `NotImplementedError` where marked.
-Production bootstrap requires those implementations and F4 acceptance.
+The bundle implements layout v2, dedicated shared services, role lifecycle,
+Cloudflare certificates, and off-host recovery. Container acceptance remains a
+release requirement; unit tests do not establish live package or provider behavior.
 
 ## Invocation
 
@@ -37,6 +37,9 @@ local state remains in the application directory.
 | `ACTION=tools-plan make deploy` | Stage the selected framework bundle and inspect an upgrade plan |
 | `ACTION=tools-apply make deploy` | Apply the reviewed tool plan with `PLAN_TOKEN` and `OPERATION` |
 | `ACTION=upgrade-resume make deploy` | Resume that same tool operation after interruption |
+| `ACTION=backup-configure make deploy` | Reconcile the persisted backup binding and schedules |
+| `ACTION=backup-run BACKUP_KIND=full make deploy` | Complete a database, key, and object backup |
+| `ACTION=restore-drill BACKUP_ID=<UUID> make deploy` | Restore an isolated PostgreSQL recovery target |
 
 `ENVIRONMENT` selects an existing profile. `RELEASE` selects an exact retained
 release version, or `build`. Interactive operations request confirmation after
@@ -92,7 +95,7 @@ new UUIDv4 identities, not identities to copy between applications.
   "public_env": {},
   "edge_origin_lockdown": true,
   "retention": {"local_releases": 3, "server_releases": 5, "pre_migration_dumps": 7},
-  "backup_policy": {"interval_hours": 24, "daily": 7, "weekly": 4, "monthly": 12}
+  "backup_policy": {"interval_hours": 24, "daily": 7, "weekly": 4, "monthly": 0}
 }
 ```
 
@@ -136,6 +139,12 @@ SHA-256. `instance_units(entry)` is the single owner of the role-to-unit mapping
 | `http` | `foundry-http@<name>.service` |
 | `scheduler` | `foundry-scheduler@<name>.service` |
 | `worker` | `foundry-worker@<name>.service` |
+
+The worker runs `queue:work --connection <app.worker.connection>`. Its connection
+must be explicit in `config/deploy.toml` or the corresponding server environment
+setting, including a supported `_FILE` alias. Restart resolves that selection
+into the root-owned `worker.env` consumed by systemd. No product-specific queue
+name is assumed.
 
 ## Host layout and registry
 
@@ -195,85 +204,316 @@ move forward only. Interrupted application resumes the recorded operation rather
 than creating a second upgrade or downgrading the host. Bundle staging excludes
 Python bytecode and preserves the manifest's ownership of installed files.
 
-## TODO F1: Release lifecycle and configuration
+## Release lifecycle and configuration
 
-Lane F1 owns `release.py`, `runtime_config.py`, `server/manage.py`, `local/cli.py`,
-and provisioning lifecycle integration. Remaining acceptance covers background
-stop ordering, HTTP readiness before scheduler startup, live per-role status and
-logs, running-executable reconciliation, explicit-target rollback, atomic
-configuration changes, encryption key retention, orphan builder recovery, and
-production builds from committed `git archive` inputs. F0's inherited build path
-is not the completed production-source policy. Native-image requirements must
-come from app inspection rather than a profile switch.
+Activation validates the release identity and configuration before switching the
+`current` pointer. It stops background roles before forward migrations, obtains
+an off-host recovery point when migrations are pending, starts HTTP, waits for
+readiness, and then starts the declared background roles. Readiness checks every
+role and verifies its running executable through `/proc/<pid>/exe` against the
+selected release. `ACTION=status` returns live observations per role;
+`ACTION=logs ROLE=scheduler` reads that role's journal.
 
-## TODO F2: Mixed-host packages, PostgreSQL, and Redis
+The nonroot report can read systemd state and HTTP readiness, but Linux may deny
+access to another account's executable link. In that case it reports
+`running_release_unverified` and an unknown overall instance status. A privileged
+report must prove the executable identity; a matching unit configuration alone
+does not establish which release is running.
 
-Lane F2 owns `packages.py`, `postgres.py`, and `redis_acl.py`. Its contract covers
-pure-install package simulation, a journaled temporary `policy-rc.d`, and
-`NEEDRESTART_SUSPEND=1`. Foundry owns a dedicated PostgreSQL cluster on 55432 and
-Redis TLS instance on 56379. Foreign services remain untouched. Redis grants
-come from the app's exact inventory and use journaled widening and narrowing.
-Production bootstrap remains blocked until these implementations are complete.
+Rollback requires an explicit retained `TARGET`, `EXPECTED_CURRENT`, and durable
+operation UUID. The local CLI records the operation under `.deploy/operations/`
+and prints its ID before sending the request. Repeating the same intent and UUID
+returns its recorded result; changing the intent refuses. Rollback selects code
+and does not reverse database migrations. `ACTION=reconcile` inspects interrupted
+operations and requires process identity evidence before adopting a live release.
+An unproven outcome remains blocked for reconciliation.
 
-## TODO F3: Certificates, edge, and backups
+Configuration edits accept 1 through 16 string-valued settings in one revision.
+The current application's `config:inspect` and `config:check` commands own key
+validation, including supported `_FILE` aliases. The server snapshots referenced
+files under the instance configuration directory before activation. It validates
+candidate Redis key and channel inventories, widens grants before the switch,
+and narrows them after every required role is ready. Failed narrowing remains a
+durable cleanup obligation retried by reconciliation and later transitions.
 
-Lane F3 owns `certificates.py`, `edge.py`, and `backup.py`. Its contract covers
-Cloudflare DNS-01, existing-lineage checks, renewal validation, and per-site real
-IP and origin restrictions. Backups require pgBackRest continuous WAL archiving,
-weekly full and daily differential backups, an age-encrypted key and config
-archive, object copies through rclone, and an isolated restore drill. Recovery
-identities remain in the operator's password manager. Provisioning stubs are not
-backup or certificate guarantees.
+A failed restart after configuration publication is `failed_applied`: the new
+revision is on disk, and the operator can submit a corrective revision. The
+operation's known outcome does not leave an unresolved lock. Public state records
+configuration key names and redaction markers; private recovery metadata holds
+secret-derived hashes. Generic editing cannot change allocated service identity
+or encryption keys independently.
 
-## TODO F4: Host acceptance and packaging acceptance
+`ACTION="keys rotate"` replaces the active encryption ID and key atomically and
+retains the prior active key and all older keys. A ring holds at most 32 keys.
+Existing IDs cannot acquire different material. Rotation does not rewrite stored
+application data or retire keys needed by old records or retained backups.
 
-F4 lanes own the moved container acceptance files under `tools/deploy/tests`.
-They still need adaptation and execution for Ubuntu 24.04 and 26.04 on native
-arm64 and emulated amd64. Acceptance must preserve foreign PostgreSQL and Redis
-configuration, PIDs, and data, plus foreign nginx site availability through a
-graceful reload. MinIO supplies the object-storage fixture. Module packaging,
-read-only module-cache invocation, restore drills, scheduler occurrence, and
-interrupted lifecycle operations require acceptance before production use.
+Production builds require a clean committed tree and use `git archive` of HEAD.
+Staging may use a dirty snapshot, recorded in release provenance. Build ownership
+records prevent a second build from overwriting an orphaned container's output.
+No automatic cleanup removes an unproven active Docker writer.
 
-## Lane interface contract
+## Bootstrap prompts and secrets
 
-These are Python interfaces within the bundle, not application APIs. `host` is
-`host.Host`; registry/entry/profile arguments are validated dictionaries from
-`contracts.py`. Functions never return credentials in public observations.
-F2/F3 planning stubs raise `NotImplementedError` before bootstrap mutations.
-Their safe entrypoint response is `lane_not_implemented`.
+The CLI creates project and instance UUIDs when their files do not exist. Its
+public prompts collect the project slug, environment, canonical SSH hostname,
+port, runtime environment, public domain, and certificate contact email. Host
+inspection discovers the architecture. `deploy/topology.json` must already declare
+the application's roles. Bootstrap presents package, allocation, and site findings
+before applying the digest-bound plan.
 
-| Module | Interface | Owner |
-| --- | --- | --- |
-| `contracts` | `identity(project, profile) -> dict`; `instance_paths(name) -> dict`; `validate_registry(value) -> dict`; `atomic_write(path, data, mode=0o644, owner=None, group=None) -> bool` | F0 |
-| `topology` | `load_topology(app_root: Path) -> dict`; `validate_topology(value: dict, *, registered: bool = False) -> dict`; `instance_units(entry: dict) -> dict[str, str]` | F0 |
-| `packages` | `inspect(host: Host) -> dict`; `install_missing(host: Host, names: Sequence[str]) -> None` | F2 |
-| `postgres` | `inspect(host: Host, registry: dict) -> dict`; `prepare(host: Host, registry: dict) -> None`; `provision(host: Host, registry: dict, entry: dict, credentials: dict) -> None` | F2 |
-| `redis_acl` | `inspect(host: Host, registry: dict) -> dict`; `prepare(host: Host, registry: dict) -> None`; `provision(host: Host, registry: dict, entry: dict, credentials: dict) -> None` | F2 |
-| `redis_acl` | `redis_grant_patterns(entry: dict, inventory: list) -> list[str]`; `redis_channel_patterns(entry: dict, inventory: list) -> list[str]`; `granted_redis_patterns(entry: dict) -> list[str]`; `granted_redis_channels(entry: dict) -> list[str]` | F2 |
-| `redis_acl` | `redis_rules(entry: dict, password: str, patterns: Sequence[str] \| None = None, *, channels: Sequence[str] \| None = None) -> list[str]`; `reconcile_redis_grants(host: Host, registry: dict, entry: dict, patterns: Sequence[str], *, channels: Sequence[str] \| None = None) -> bool` | F2 |
-| `certificates` | `inspect(host: Host, entry: dict) -> dict`; `certificate_ready(host: Host, entry: dict) -> bool`; `provision(host: Host, registry: dict, entry: dict) -> None` | F3 |
-| `edge` | `cloudflare_ranges(directory: Path) -> tuple[date, list[str]]`; `edge_findings(profile: dict, directory: Path) -> list[dict]`; `edge_template(entry: dict, directory: Path) -> dict[str, str]` | F3 |
-| `backup` | `configure(host: Host, registry: dict, entry: dict) -> None`; `recovery_point(host: Host, entry: dict, operation_id: str) -> dict`; `archive_keys(host: Host, entry: dict) -> dict`; `copy_objects(host: Host, entry: dict) -> dict`; `restore_drill(host: Host, entry: dict, backup_id: str) -> dict` | F3 |
-| `provision` | `bootstrap_plan(host, project, profile, tools_dir=None, *, topology) -> dict`; `bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topology) -> dict` | F1 lifecycle |
-| `release` | `activate(host, project, profile, archive, checksum) -> dict`; `rollback(host, project, profile) -> dict`; `reconcile(host, project, profile) -> dict`; `config_set(host, project, profile, changes) -> dict`; `services(host, entry) -> dict` | F1 |
-| `runtime_config` | `read_credentials(host, entry, missing=False) -> dict \| None`; `runtime_environment(entry, credentials) -> dict`; `validate_runtime_environment(host, entry) -> dict` | F1 |
-| `upgrades` | `protocol(tools_dir: Path \| None = None) -> dict`; `protocol_metadata(tools_dir: Path \| None = None) -> dict`; `hello(host) -> dict`; `check_client(host, request: dict, action: str) -> None`; `tool_bundle(tools_dir: Path) -> tuple[Path, list[Path], str]` | F0 |
-| `upgrades` | `tools_upgrade(host, registry: dict, tools_dir: Path) -> dict \| None`; `verify_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = False) -> tuple[Path, list[Path], str]`; `install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = False, operation_id: str \| None = None) -> dict` | F0 |
-| `upgrades` | `plan_upgrade(host, tools_dir: Path) -> dict`; `apply_upgrade(host, tools_dir: Path, plan_token: str, operation_id: str) -> dict` | F0 |
-| `server/manage` | `execute(host, action, request) -> dict` | F1 |
-| `local/cli` | `resolve_app_root(argument: str \| None) -> Path`; `bootstrap(project, profile, settings, fresh)`; `build(project, profile) -> Path`; `deploy(project, profile, settings)` | F1 |
+Secret prompts do not echo input. Automation supplies private file paths through
+these environment variables:
 
-`topology` snapshots carry `schema`, `roles`, and a canonical `sha256`. Files on
-the application side contain only `schema` and `roles`. Package inspection
-returns a `missing` list. PostgreSQL inspection must prove `state`, `owner`,
-`cluster`, `port`, and `ownership_token` before role provisioning. Planning
-observations must be deterministic, JSON-serializable public data: their bytes
-are included in the approval digest. Lane F2 records the exact PostgreSQL unit
-under `shared.postgresql.unit`; unit rendering consumes that allocation.
+| Variable | File contents |
+| --- | --- |
+| `FOUNDRY_SECRET_CLOUDFLARE_DNS_TOKEN_FILE` | Zone-scoped Cloudflare token |
+| `FOUNDRY_SECRET_BACKUP_S3_FILE` | JSON object with `endpoint`, `region`, `bucket`, `access_key_id`, and `secret_access_key` |
+| `FOUNDRY_SECRET_AGE_RECIPIENTS_FILE` | Nonempty JSON array of public age recipients |
+| `FOUNDRY_SECRET_APP_STORAGE_FILE` | JSON object with `credentials` and `disks` tables |
+| `FOUNDRY_SECRET_ENCRYPTION_FILE` | Optional JSON object with `key_id` and `key` |
+| `FOUNDRY_SECRET_CONFIG_FILE` | JSON object of 1 through 16 configuration keys and string values for `ACTION=config` |
 
-Redis registry grants hold literal prefixes. The ACL API uses suffix-wildcard
-patterns derived from those exact prefixes, with optional separate channel
-patterns. Credential-derived hashes and interrupted grant targets live in
-`redis-acl.json` under the private instance path. F1 must integrate both key and
-channel inventories when completing activation and configuration transitions.
+The client sends these values in the JSON request on SSH stdin under `secrets`.
+Values never belong in command arguments, tracked profiles, or release archives.
+The server records bootstrap intake as root-only mode 0600
+`/etc/foundry/instances/<name>/bootstrap-secrets.json`, bound to the instance UUID.
+App-readable runtime values are separate from root-only control credentials.
+Retries preserve acknowledged credentials; missing or conflicting credentials
+require recovery rather than regeneration.
+
+When encryption input is absent, the server generates the key ID and 32-byte key
+together. Key material uses canonical unpadded base64url. The initial previous-key
+table is empty. Recovery identities for age remain in the operator's password
+manager or offline custody, never on the production host.
+
+## PostgreSQL, Redis, and foreign services
+
+Foundry uses the distro PostgreSQL major for the supported Ubuntu release:
+16 on Ubuntu 24.04 and 18 on Ubuntu 26.04. Its cluster is `<major>/foundry`, with
+`postgresql@<major>-foundry.service`, its own configuration and data directories,
+and an explicit Unix socket for peer administration. TCP allocation starts at
+55432 and can use the next free port through 55531. Runtime configuration uses
+the recorded allocation. App connections require verified TLS and exact
+instance database and role grants.
+
+Redis uses `redis-server@foundry.service`, `/etc/foundry/redis/`, and
+`/var/lib/foundry/redis/`. Its TLS port is 56379 and its plaintext listener is
+disabled. The default ACL user is disabled. Each instance receives only literal
+key and channel prefixes reported by its application's `redis:keys` command,
+including validated dot-delimited child namespaces. ACL changes preserve other
+users' bytes and retain private transition journals. Redis uses AOF with
+`appendfsync everysec`, RDB snapshots, and `noeviction`; host failure can lose
+roughly the last second of acknowledged Redis writes.
+
+Installed compatible binaries are reused. Missing packages require an apt
+simulation containing only new installations at approved versions. An upgrade,
+removal, reconfiguration of an existing package, or unrelated broken package
+blocks provisioning. Installation uses `NEEDRESTART_SUSPEND=1` and a journaled
+`policy-rc.d` that denies service starts. An existing unknown policy causes a
+refusal. Recovery is limited to the owned transaction.
+
+Foreign PostgreSQL clusters and Redis instances are never adopted, authenticated
+to, reconfigured, or restarted. Package-created unused defaults may be disabled
+only when the installation journal proves they were absent beforehand; their
+data remains intact. Shared nginx changes affect only the owned site and use
+configuration validation followed by a graceful reload. Foreign configuration,
+PostgreSQL and Redis process identities, data, and reachability must remain
+unchanged. Nginx retains its master PID while a reload may replace workers.
+Capacity uses fixed conservative allocations and a memory sanity check; a
+workload-based capacity calculator is deferred.
+
+## Cloudflare and certificates
+
+Each site replaces forwarding headers and trusts `CF-Connecting-IP` only from
+the versioned Cloudflare ranges. Optional origin lockdown is site-local, with
+loopback available for host probes. Ranges older than 90 days produce a warning;
+older than 180 days block site planning while existing configuration remains
+renderable for recovery. No server-side network fetch updates the range file.
+
+The token needs Zone Read and DNS Edit for exactly one active zone containing
+the profile domain. Bootstrap resolves that zone and stores its token at
+`/etc/foundry/cloudflare/zones/<zone-id>.ini`, root-owned mode 0600. Existing
+credentials are immutable during ordinary bootstrap; rotation requires an
+explicit operator procedure.
+
+Certbot uses DNS-01 with `python3-certbot-dns-cloudflare`. The owned lineage is
+named for the domain. Reuse checks instance ownership, hostname, expiry, renewal
+configuration, token path, timer state, and the reload hook. Each instance has a
+`foundry-cert-renew-<instance UUID>.timer` and service. The hook runs `nginx -t`
+before gracefully reloading nginx. Provisioning requires a renewal dry-run with
+deploy hooks; an existing certificate alone does not satisfy readiness.
+
+Container acceptance uses a guarded synthetic CA path described below. It does
+not call Cloudflare or Let's Encrypt and cannot establish real DNS-01 provider
+acceptance.
+
+## R2 attachments
+
+Applications declare private disks in their configuration. Bootstrap's
+`app_storage` envelope supplies the full named `credentials` and `disks` tables
+as server-side settings. Each disk uses `driver: "r2"`,
+`config: {"visibility": 0}`, and a `cloud` object containing `bucket`, `region`,
+`endpoint`, `namespace`, and the named `credentials` reference. The credential
+source has `mode: "static"`, `access_key`, and `secret_key`. R2 uses region `auto`
+and its explicit HTTPS account endpoint. The buckets must already exist.
+
+The current backup copier requires all declared attachment disks to use one
+private application bucket and one credential binding. The backup repository
+uses a distinct bucket. App credentials must be scoped to the app bucket;
+provider policy and denial probes establish that isolation. The framework does
+not create buckets or edit provider policies. Local upload staging beneath
+`/var/lib/foundry/apps/<name>/uploads` is not the durable attachment store.
+
+R2 attachment cleanup relies on write-once original and variant-generation keys,
+conditional creation, writer fencing, and durable retirement before unconditional
+delete. R2 is not advertised as supporting conditional delete. Existing variant
+keys remain readable. See [attachments](attachments.md) for the storage lifecycle.
+A MinIO object probe proves transport behavior; real attachment round trips and
+R2 credential isolation still require application acceptance.
+
+## Backups
+
+pgBackRest provides continuous WAL archiving for the dedicated Foundry cluster.
+Its S3 repository uses HTTPS with certificate verification, a distinct backup
+bucket, and a server-generated repository encryption passphrase. The private
+repository binding is `/etc/foundry/backup/repository.json`; the public
+pgBackRest configuration does not contain credentials. Every instance sharing
+the cluster must use the same repository and preserve its passphrase.
+
+The installed schedule runs a full database backup on Sunday at 02:00 UTC and
+a differential backup daily at 05:00 UTC. If no base backup exists, the first
+differential request takes a full backup. A daily 08:00 UTC job also archives
+keys and copies attachment objects. Timers use persistence and jitter. Retention
+keeps four full backups and seven differential backups, with WAL retained for
+the full-backup window. Monthly retention is not implemented. The public policy
+records the implemented daily, weekly, and monthly counts as 7, 4, and 0.
+Profiles may omit `backup_policy` or select exactly that supported policy with
+`interval_hours: 24`; unsupported policy values refuse validation.
+
+`ACTION=backup-run` creates a completed receipt only after the database backup,
+age-encrypted key/config archive, and object copy succeed. The receipt contains
+`backup_id`, `pgbackrest_label`, `key_archive`, `objects_prefix`, and completion
+time. The archive contains the instance configuration and referenced files,
+including active and retained keys and repository recovery material. Only public
+age recipients are stored on the host. `rclone copy` preserves deleted source
+objects; replaced destination objects move to an object-history prefix.
+
+Before pending migrations, the lifecycle obtains a full backup, creates a named
+PostgreSQL restore point, forces WAL archival, and completes the key and object
+components. Unknown publication outcomes remain unresolved and cannot be reused
+as a successful backup. `state["backup"]` retains completion and attempt status
+across later lifecycle writes. The host report exposes freshness from completion
+receipts, flags missing or older-than-24-hour completion, and reports failed
+attempts and the latest restore drill. A database-only success does not make the
+bundle fresh.
+
+### Restricted WAL sudo bridge
+
+The PostgreSQL archiver runs as `postgres`, while S3 credentials and the repository
+passphrase remain root-only. `/etc/sudoers.d/foundry-backup-archive` permits that
+account to execute one fixed command as root: `/usr/bin/python3 -I` with the
+registered immutable bundle's `lib/backup.py`, subcommand `archive-push`, and one
+WAL pathname. The sudoers candidate is checked with `visudo` before publication.
+The bridge does not permit a shell, arbitrary Python, backup scheduling, restore,
+or caller-selected pgBackRest options or configuration.
+
+The entrypoint requires exactly one WAL argument and checks the registered
+Foundry cluster and repository ownership token. The path must be `pg_wal/` or
+the allocated cluster's absolute `pg_wal/` path, followed by an uppercase WAL
+segment, timeline history, or backup history filename. Canonical path checks
+reject symlink components and traversal. The input must be a bounded regular
+file of at most 1 GiB. Only then does the bridge invoke fixed
+`pgbackrest archive-push` as `postgres`, passing root-owned credentials in the
+child environment. The shared `postgres` OS account can request archival of
+Foundry WAL; the bridge does not grant arbitrary root command execution.
+
+### PITR and restore drills
+
+`ACTION=restore-drill BACKUP_ID=<completed UUID>` restores into a newly owned
+`/var/lib/postgresql/foundry-drills/<drill ID>/` cluster. Optional `TARGET_TIME`
+selects a timestamp with timezone for PITR. Without a timestamp, the drill uses
+the receipt's named pre-migration point or its first consistent recovery point.
+The drill pauses WAL replay at the selected target and checks the database
+catalog. Its PostgreSQL instance listens only on a private Unix socket and uses
+peer authentication as `postgres`; it has no TCP listener or app roles running.
+
+The drill uses a fresh configuration, HBA, and service unit. It cannot overwrite
+live data or start application schedulers. Successful temporary resources are
+removed only after the service process is proven stopped. Retained or failed
+drills preserve their data for inspection. `Host.run` starts commands in their
+own process group and kills that group on timeout before reporting failure.
+Processes that deliberately detach into another session remain outside that
+guarantee; service cleanup separately verifies systemd process exit.
+
+Database drill success does not establish business invariants, age decryption,
+or an atomic snapshot across database and objects. Recovery acceptance must
+retrieve and decrypt the key archive with an operator-held age identity, verify
+its members, replay a timestamp-bounded row change, and read copied attachment
+bytes. Keep the release artifact and operator recovery identities independently
+recoverable. Actual disaster recovery and traffic cutover remain explicit
+operator procedures; the drill does not rebind host identity.
+
+## Container acceptance
+
+The runner accepts an application release archive and the integrated framework
+root, with Ubuntu 24.04 or 26.04, arm64 or amd64, and `--foreign` or `--fresh`.
+For example, from the framework checkout:
+
+```sh
+tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
+  --archive /absolute/app.tar.gz --framework-root "$PWD" --foreign
+```
+
+The archive must implement the console commands used by deployment, declare
+scheduler configuration and Redis inventories, and expose readiness. It needs
+HTTP and scheduler roles, `.coordination` lease and `.portal` cache child
+namespaces, and a schedule running at least once every 60 seconds. Its successful
+handler must emit a JSON `msg` matching `ACCEPTANCE_SCHEDULE_MESSAGE`, whose
+default is `acceptance schedule completed`. Fixture
+identity is generated for the disposable host. The runner uses HTTPS MinIO with
+a test CA trusted inside that host. It keeps private logs and uses isolated
+containers and storage. It does not publish host ports.
+
+The foreign fixture records configuration bytes, PostgreSQL and Redis PIDs,
+data, and reachability before bootstrap and compares them after deployment and
+recovery. T1 checks verified PostgreSQL TLS success before and after each
+cross-instance denial, so an unavailable database cannot satisfy isolation.
+Other phases cover scheduler occurrence, exact Redis grants, atomic key/config
+changes, rollback replay, interrupted-switch reconciliation, backup freshness,
+WAL replay, age recovery, attachment copies, nginx, and certificate renewal.
+
+Synthetic certificates require `FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT=1`, the Docker
+marker, runtime environment `testing`, an `acceptance*` profile environment,
+a `.acceptance.invalid` hostname, and private CA files under
+`/etc/foundry/acceptance-ca/`. Production profiles refuse the switch.
+The fixture exercises owned lineage files, renewal
+configuration, timer checks, certificate validation, and nginx reload using a
+local CA. Real Cloudflare and Let's Encrypt integration needs separate authorized
+provider acceptance.
+
+Python unit tests cover state machines and fault paths. Release-tool tests cover
+source packaging. Neither proves Ubuntu package side effects, live TLS/service
+behavior, restore correctness, or the application console contract. Those remain
+requirements of the lead's container matrix before production use.
+
+## Bundle interfaces
+
+These interfaces are internal to one installed bundle. `contracts.py` owns
+identity and path derivation; `topology.instance_units(entry)` owns role names.
+Registry and profile inputs must pass their validators. Inspection results are
+bounded public data, never secret values or secret-derived hashes.
+
+`postgres.cluster_settings(host, registry)` returns the allocated shared-service
+settings. Backup configuration adds its archive command and passes those settings
+to `postgres.prepare(host, registry, shared_service_plan=plan)`. PostgreSQL owns
+the archive transition journal and cluster reload. Redis key and channel
+inventories pass together through the same widen/narrow transition owner.
+
+`server/manage.py` receives the stdin envelope and routes lifecycle, backup, and
+upgrade commands under the owning locks. Certificate and backup provisioners
+consume the same instance-bound `bootstrap-secrets.json`. Reports project public
+state; private operation receipts stay beneath the private instance directory.
+Tool inventory requires every runtime module, range file, and service/nginx
+template, and the release source policy includes each exceptional asset by exact
+path. Removing a required component makes the bundle incomplete before install.

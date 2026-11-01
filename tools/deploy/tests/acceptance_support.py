@@ -69,7 +69,7 @@ def service(unit):
 
 
 def fixture():
-    # CONTRACT: F0 retains acceptance_host.fixtures(), Host.require_identity(),
+    # Schema-2 helpers expose acceptance_host.fixtures(), Host.require_identity(),
     # paths.instance_config() and load_state(); registry entries use DESIGN §4.
     from acceptance_host import Host, fixtures
     host = Host()
@@ -81,9 +81,12 @@ def fixture():
 
 
 def request(project, profile, **fields):
-    # CONTRACT: launcher accepts one action and a JSON stdin request, retaining
+    # The launcher accepts one action and a JSON stdin request, retaining
     # the inherited project/profile envelope plus a persisted operation UUID.
-    return {"project": project, "profile": profile, "confirm": True,
+    from upgrades import protocol
+    metadata = protocol()
+    return {"protocol": metadata["protocol"], "client": {"generation": metadata["generation"]},
+            "project": project, "profile": profile, "confirm": True,
             "operation_id": str(uuid.uuid4()), **fields}
 
 
@@ -97,7 +100,7 @@ def postgres_settings(host, entry):
     shared = host.read_registry()["shared"]["postgresql"]
     allocation = entry["allocations"]
     secrets = json.loads((host.paths.instance_config(entry["name"]) / "secrets.json").read_text())
-    # CONTRACT: F0 retains the private database_password secret key.
+    # Schema-2 helpers expose the private database_password secret key.
     return {"host": "localhost", "port": shared["port"], "user": allocation["database_role"],
             "database": allocation["database"], "password": secrets["database_password"],
             "sslmode": "verify-full", "sslrootcert": ROOTS}

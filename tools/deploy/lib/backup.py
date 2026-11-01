@@ -28,7 +28,7 @@ from urllib.parse import urlsplit
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from contracts import (DeployError, POSTGRES_PORT, check_path, instance_paths,
+from contracts import (BACKUP_POLICY, DeployError, POSTGRES_PORT, check_path, instance_paths,
                        now, parse_env, read_json, require, valid_uuid)
 from host import Host
 import packages
@@ -124,7 +124,8 @@ def _cluster(host, registry):
     require(cluster.get("owner") == observed.get("owner") == "foundry"
             and cluster.get("cluster") == observed.get("cluster") == "foundry"
             and cluster.get("state") == observed.get("state") == "ready"
-            and cluster.get("port") == observed.get("port") == POSTGRES_PORT
+            and cluster.get("port") == observed.get("port")
+            and type(cluster.get("port")) is int and POSTGRES_PORT <= cluster["port"] <= POSTGRES_PORT + 99
             and cluster.get("ownership_token") and cluster["ownership_token"] == observed.get("ownership_token")
             and cluster.get("major") in (16, 18)
             and cluster.get("unit") == f"postgresql@{cluster.get('major')}-foundry.service",
@@ -338,7 +339,7 @@ def _complete(host, entry, backup_id, label, *, restore_point=None):
 
 
 def run_backup(host: Host, entry: dict, backup_id: str, kind: str = "full") -> dict:
-    """F1 manual backup entrypoint; caller holds the instance operation lock."""
+    """Manual backup entrypoint; caller holds the instance operation lock."""
     complete = _receipt_path(host, entry, backup_id)
     if complete.exists():
         return read_json(_private(host, complete))
@@ -526,8 +527,8 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
     finally:
         try:
             if result["status"] != "complete":
-                # Host.run cannot prove that a timed-out runuser child exited.
-                # Keep failed restores rather than unlink a surviving writer.
+                # Preserve failed recovery evidence for reconciliation even when
+                # Host.run has killed the timed-out command's process group.
                 result["retained"] = True
                 if started:
                     host.run(["systemctl", "stop", unit], timeout=150)
@@ -618,8 +619,9 @@ def _configuration(host, cluster, repository):
             "repo1-storage-verify-tls=y\n"
             f"repo1-s3-bucket={repository['bucket']}\nrepo1-s3-region={repository['region']}\n"
             f"repo1-s3-uri-style={repository.get('uri_style', 'path')}\n"
-            "repo1-cipher-type=aes-256-cbc\nrepo1-retention-full=4\nrepo1-retention-diff=7\n"
-            "repo1-retention-archive-type=full\nrepo1-retention-archive=4\n"
+            "repo1-cipher-type=aes-256-cbc\n"
+            f"repo1-retention-full={BACKUP_POLICY['weekly']}\nrepo1-retention-diff={BACKUP_POLICY['daily']}\n"
+            f"repo1-retention-archive-type=full\nrepo1-retention-archive={BACKUP_POLICY['weekly']}\n"
             "log-level-console=error\nlog-level-file=off\nstart-fast=y\narchive-timeout=120\n"
             f"lock-path={host.paths.p('/var/lib/pgbackrest/foundry/lock')}\n"
             f"spool-path={host.paths.p('/var/lib/pgbackrest/foundry/spool')}\n"
@@ -666,7 +668,7 @@ def _install_timers(host, registry, entry):
 def configure(host: Host, registry: dict, entry: dict) -> None:
     """Install the cluster repository, restricted WAL bridge and owned schedules.
 
-    Called under F1's host/instance locks. F2 owns the PostgreSQL configuration
+    Called under host/instance locks. The PostgreSQL module owns the PostgreSQL configuration
     write and reload, including its archive-transition journal.
     """
     cluster = _cluster(host, registry)
@@ -694,7 +696,7 @@ def configure(host: Host, registry: dict, entry: dict) -> None:
         require(re.fullmatch(r"/usr/local/lib/foundry/tools/[a-f0-9]{64}/lib/backup\.py", script),
                 "backup_tools_identity", "Use the immutable registered Foundry tool bundle for backup jobs.")
         bridge = ("# Foundry owned WAL archive bridge\n"
-                  f"postgres ALL=(root) NOPASSWD: /usr/bin/python3 -I {script} archive-push *\n")
+                  f"postgres ALL=(root) NOPASSWD: /usr/bin/python3 ^-I {script.replace('.', '[.]')} archive-push {_wal_pattern(cluster)}$\n")
         sudoers = host.paths.p("/etc/sudoers.d/foundry-backup-archive")
         # Validate a root-only candidate before making the privilege rule live.
         candidate = host.paths.p("/etc/foundry/backup/archive-sudoers.candidate")
@@ -711,9 +713,16 @@ def configure(host: Host, registry: dict, entry: dict) -> None:
         _backrest(host, ["check"], timeout=300)
         _install_timers(host, registry, entry)
         registry["shared"]["backup"] = {"stanza": STANZA, "pgbackrest_config": CONFIG,
-                                         "owner": "foundry", "retention_full": 4, "retention_diff": 7}
-        entry["backup"].update(destination_ref=CONFIG, policy={"interval_hours": 24, "daily": 7, "weekly": 4, "monthly": 0})
+                                         "owner": "foundry", "retention_full": BACKUP_POLICY["weekly"],
+                                         "retention_diff": BACKUP_POLICY["daily"]}
+        entry["backup"].update(destination_ref=CONFIG, policy=dict(BACKUP_POLICY))
         host.journal(registry, entry)
+
+
+def _wal_pattern(cluster):
+    # POSIX ERE syntax is shared by sudo's anchored argument rule and Python.
+    return (r"(pg_wal/|" + cluster["data_path"] + r"/pg_wal/)"
+            r"([0-9A-F]{24}|[0-9A-F]{8}[.]history|[0-9A-F]{24}[.][0-9A-F]{8}[.]backup)")
 
 
 def archive_push(host: Host, wal: str) -> None:
@@ -725,15 +734,16 @@ def archive_push(host: Host, wal: str) -> None:
     registry = host.read_registry()
     cluster = registry.get("shared", {}).get("postgresql", {})
     require(cluster.get("owner") == "foundry" and cluster.get("cluster") == "foundry"
-            and cluster.get("port") == POSTGRES_PORT and cluster.get("major") in (16, 18)
+            and cluster.get("state") == "ready" and bool(cluster.get("ownership_token"))
+            and cluster.get("unit") == f"postgresql@{cluster.get('major')}-foundry.service"
+            and type(cluster.get("port")) is int and POSTGRES_PORT <= cluster["port"] <= POSTGRES_PORT + 99
+            and cluster.get("major") in (16, 18)
             and cluster.get("data_path") == f"/var/lib/postgresql/{cluster.get('major')}/foundry",
             "backup_cluster_ownership", "WAL bridge requires the registered Foundry cluster.")
     repository = _repository_settings(host)
     require(repository.get("host_id") == registry["host_id"] and repository.get("cluster_token") == cluster.get("ownership_token"),
             "backup_cluster_ownership", "WAL repository identity does not match the registered cluster.")
-    require(isinstance(wal, str) and re.fullmatch(
-        r"(?:pg_wal/|" + re.escape(cluster["data_path"] + "/pg_wal/") + r")"
-        r"(?:[0-9A-F]{24}|[0-9A-F]{8}\.history|[0-9A-F]{24}\.[0-9A-F]{8}\.backup)", wal),
+    require(isinstance(wal, str) and re.fullmatch(_wal_pattern(cluster), wal),
         "backup_wal_path", "WAL bridge accepts only an allocated cluster WAL filename.")
     canonical = wal if wal.startswith("/") else cluster["data_path"] + "/" + wal
     path = check_path(host.paths.p(canonical), "file")

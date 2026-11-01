@@ -57,7 +57,7 @@ _FIELDS = {
     "APP__SERVICES__NAMESPACE__APPLICATION": lambda e, c: e["allocations"]["namespace"]["application"],
     "APP__SERVICES__NAMESPACE__ENVIRONMENT": lambda e, c: e["allocations"]["namespace"]["environment"],
     "APP__SERVICES__DATABASE__CONNECTIONS": lambda e, c: _json({"primary": {"primary": {
-        "host": "localhost", "port": POSTGRES_PORT, "user": e["allocations"]["database"], "password": c["database_password"],
+        "host": "localhost", "port": c["postgres_port"], "user": e["allocations"]["database"], "password": c["database_password"],
         "database": e["allocations"]["database"], "tls": "verify-full"}}}),
     "APP__SERVICES__REDIS__CONNECTIONS": lambda e, c: _json({name: {
         "host": "localhost", "port": REDIS_PORT, "user": e["allocations"]["redis_user"], "password": c["redis_password"], "tls": "verify-full"}
@@ -70,7 +70,10 @@ _FIELDS = {
 PIPELINE_KEYS = frozenset(_FIELDS) - {"PROJECT__NAME"} | {"DEVELOPER__RELEASE"}
 
 
-def runtime_environment(entry, credentials):
+def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
+    require(type(postgres_port) is int and POSTGRES_PORT <= postgres_port <= POSTGRES_PORT + 99,
+            "postgres_identity", "Invalid allocated Foundry PostgreSQL port.")
+    credentials = {**credentials, "postgres_port": postgres_port}
     values = {key: resolve(entry, credentials) for key, resolve in _FIELDS.items()}
     encryption = credentials.get("encryption")
     if encryption:
@@ -338,7 +341,11 @@ def validate_runtime_environment(host, entry):
     if group is not None and info.st_gid != group:
         raise DeployError("configuration_ownership", "Instance environment group differs from the selected service account.")
     values = parse_env(path.read_text(encoding="utf-8"))
-    expected = runtime_environment(entry, credentials)
+    registry = host.read_registry()
+    postgres_port = registry["shared"].get("postgresql", {}).get("port", POSTGRES_PORT)
+    require(host.paths.root != Path("/") or "postgresql" in registry["shared"],
+            "postgres_identity", "The Foundry PostgreSQL allocation is missing.")
+    expected = runtime_environment(entry, credentials, postgres_port=postgres_port)
     if any(values.get(key) != value for key, value in expected.items() if key in PIPELINE_KEYS):
         raise DeployError("configuration_identity", "Pipeline-owned runtime configuration differs from registered identity/credentials.")
     for key in values:

@@ -98,7 +98,7 @@ class EdgeTests(unittest.TestCase):
         value = json.loads((TOOLS / "lib/cloudflare-ranges.json").read_text())
         value["retrieved_at"] = (date.today() - timedelta(days=181)).isoformat()
         with tempfile.TemporaryDirectory() as tmp:
-            directory = Path(tmp)
+            directory = Path(tmp).resolve()
             (directory / "cloudflare-ranges.json").write_text(json.dumps(value))
             self.assertEqual(edge_findings({}, directory)[-1]["kind"], "stop")
             from edge import edge_template

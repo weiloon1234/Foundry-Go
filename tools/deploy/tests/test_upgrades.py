@@ -78,6 +78,22 @@ class UpgradeTests(unittest.TestCase):
         (self.source / "lib/additional.py").write_text("# new file\n")
         self.assertNotEqual(self.digest, upgrades.tool_bundle(self.source)[2])
 
+    def test_incomplete_integration_bundle_refuses_before_install(self):
+        for name in ("lib/backup.py", "lib/cloudflare-ranges.json",
+                     "server/templates/foundry-worker@.service",
+                     "server/templates/foundry-backup.timer"):
+            with self.subTest(name=name):
+                path = self.source / name
+                content = path.read_bytes()
+                path.unlink()
+                try:
+                    with self.assertRaises(DeployError) as caught:
+                        self.install()
+                    self.assertEqual(caught.exception.code, "tools_incomplete")
+                    self.assertFalse(self.host.paths.tools.exists())
+                finally:
+                    path.write_bytes(content)
+
     def test_partial_copy_resumes_only_same_digest(self):
         original = upgrades.atomic_write
 

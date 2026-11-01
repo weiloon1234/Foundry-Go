@@ -107,7 +107,7 @@ class ReleaseTests(unittest.TestCase):
         version = f"20261013T00000{sequence}Z-0123456789abcdef"
         source = self.root / f"source-{sequence}"
         source.mkdir()
-        files = {"artisan": b"fixture executable", "config/deploy.toml": b"[project]\n",
+        files = {"artisan": b"fixture executable", "config/deploy.toml": b"[project]\n[app.worker]\nconnection = \"background\"\n",
                  "public/admin/index.html": b"portal", f"private-source-maps/{version}/admin.js.map": b"private map"}
         for path, data in files.items():
             destination = source / path
@@ -174,6 +174,9 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn(self.secret, json.dumps(self.state()))
 
     def test_background_starts_after_http_readiness_and_failed_http_keeps_it_stopped(self):
+        archive, manifest = self.bundle()
+        release.unpack_archive(archive, release.release_path(self.host, self.entry, manifest["version"]), self.entry, digest(archive))
+        release.switch_to(self.host, self.entry, manifest["version"])
         units = instance_units(self.entry)
         self.health.return_value = False
         with self.assertRaises(DeployError) as failure:
@@ -484,7 +487,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual("Changed", parse_env(self.env_file.read_text())["PROJECT__NAME"])
         self.assertEqual(2, self.state()["configuration_revision"])
         self.assertEqual("failed", self.state()["status"])
-        self.assertEqual("failed_applied", self.state()["last_attempt"]["result"])
+        self.assertEqual("failed_applied", self.state()["last_attempt"]["outcome"])
         self.assertEqual("failed_applied", release.public_state(self.state())["last_attempt"]["outcome"])
         self.assertNotIn(self.secret, json.dumps(self.state()))
         before = self.host.paths.registry.read_bytes(), self.env_file.read_bytes()
@@ -781,6 +784,9 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual("failed", self.state()["status"])
 
     def test_required_background_failure_uses_one_remaining_deadline(self):
+        archive, manifest = self.bundle()
+        release.unpack_archive(archive, release.release_path(self.host, self.entry, manifest["version"]), self.entry, digest(archive))
+        release.switch_to(self.host, self.entry, manifest["version"])
         self.health.side_effect = [True, False]
         with self.assertRaises(DeployError) as failure:
             release.restart(self.host, self.entry)
@@ -858,16 +864,18 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("redis_grants_not_narrowed", result["warnings"])
         self.assertTrue(self.state()["last_attempt"]["redis_pending"])
         before = self.state()
-        self.assertTrue(release.reconcile(self.host, self.project, self.profile)["unchanged"])
-        self.assertEqual(before, self.state())
+        self.assertFalse(release.reconcile(self.host, self.project, self.profile)["unchanged"])
+        self.assertFalse(self.state()["last_attempt"]["redis_pending"])
+        self.assertEqual(before["current"], self.state()["current"])
+        self.assertEqual(before["last_attempt"]["id"], self.state()["last_attempt"]["id"])
+        self.assertEqual([], self.grants.call_args.args[3])
         namespace = self.entry["allocations"]["namespace"]
         prefix = "foundry:cache:v1:" + namespace["application"] + ":" + namespace["environment"] + ":"
         self.host.redis_keys_output = json.dumps([{"connection": "main", "keys": [{"prefix": prefix}], "channels": []}])
         self.grants.reset_mock()
         self.grants.side_effect = self.reconcile_grants
         release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Corrected"})
-        resumed, widened, narrowed = self.grants.call_args_list
-        self.assertEqual([], resumed.args[3])
+        widened, narrowed = self.grants.call_args_list
         self.assertEqual([prefix + "*"], widened.args[3])
         self.assertEqual([prefix + "*"], narrowed.args[3])
         self.assertFalse(self.state()["last_attempt"]["redis_pending"])
@@ -993,7 +1001,50 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("configuration_sha256", state["last_attempt"])
         self.assertNotIn("configuration_sha256", json.dumps(public))
         self.assertNotIn("previous_configuration_sha256", json.dumps(public))
+        persisted = (self.host.paths.instance_state(self.entry["name"]) / "state.json").read_text()
+        self.assertNotIn("configuration_sha256", persisted)
+        self.assertIn('"configuration_redacted": true', persisted)
 
+
+    def test_worker_selects_toml_then_private_environment_connection(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        selected = self.env_file.with_name("worker.env")
+        self.assertEqual("background", parse_env(selected.read_text())["FOUNDRY_WORKER_CONNECTION"])
+        values = parse_env(self.env_file.read_text())
+        values["APP__WORKER__CONNECTION"] = "custom-jobs"
+        atomic_write(self.env_file, dump_env(values), 0o640)
+        release.prepare_worker(self.host, self.entry)
+        self.assertEqual("custom-jobs", parse_env(selected.read_text())["FOUNDRY_WORKER_CONNECTION"])
+        values["APP__WORKER__CONNECTION"] = "jobs --arbitrary-command"
+        atomic_write(self.env_file, dump_env(values), 0o640)
+        before = selected.read_bytes()
+        with self.assertRaises(DeployError):
+            release.prepare_worker(self.host, self.entry)
+        self.assertEqual(before, selected.read_bytes())
+
+    def test_lifecycle_preserves_backup_freshness_written_by_backup_owner(self):
+        archive, _ = self.bundle()
+        self.host.pending = True
+        def record(host, entry, operation):
+            state = host.load_state(entry)
+            state["backup"] = {"last_complete_id": operation, "last_complete_at": now(), "last_attempt_outcome": "complete"}
+            host.save_state(entry, state)
+            return {"backup_id": operation}
+        with patch.object(release.backup, "recovery_point", side_effect=record):
+            self.deploy(archive)
+        self.assertEqual("complete", self.state()["backup"]["last_attempt_outcome"])
+        self.assertEqual(self.state()["last_attempt"]["recovery_operation_id"], self.state()["backup"]["last_complete_id"])
+
+
+
+class RuntimePortTests(unittest.TestCase):
+    def test_runtime_uses_the_allocated_postgres_port(self):
+        from test_contracts import fixture
+        _, _, entry = fixture()
+        values = runtime_environment(entry, {"database_password": "private", "redis_password": "private"}, postgres_port=55433)
+        databases = json.loads(values["APP__SERVICES__DATABASE__CONNECTIONS"])
+        self.assertEqual(55433, databases["primary"]["primary"]["port"])
 
 
 if __name__ == "__main__":

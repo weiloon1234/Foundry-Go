@@ -1,6 +1,7 @@
 """Backup failure boundaries use private fixture files and mocked host commands."""
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tarfile
@@ -194,14 +195,25 @@ class BackupTests(unittest.TestCase):
         backup._write_private(self.host, self.host.paths.instance_config(self.entry["name"]) / "bootstrap-secrets.json", intake)
         with patch.object(backup, "_cluster", return_value=cluster), \
                 patch.object(backup.packages, "install_missing") as install, \
-                patch.object(backup.postgres, "cluster_settings", create=True, return_value=dict(cluster)), \
+                patch.object(backup.postgres, "cluster_settings", return_value=dict(cluster)) as settings, \
                 patch.object(backup.postgres, "prepare") as prepare, \
                 patch.object(backup, "_backrest"):
             backup.configure(self.host, self.registry, self.entry)
         install.assert_called_once_with(self.host, ["pgbackrest", "age", "rclone"])
+        settings.assert_called_once_with(self.host, self.registry)
         plan = prepare.call_args.kwargs["shared_service_plan"]
         self.assertIn("archive-push %p", plan["archive_command"])
         self.assertEqual(plan["ownership_token"], cluster["ownership_token"])
+        sudoers = self.host.paths.p("/etc/sudoers.d/foundry-backup-archive").read_text()
+        rule = sudoers.split("/usr/bin/python3 ", 1)[1].strip()
+        self.assertTrue(rule.startswith("^") and rule.endswith("$"))
+        script = self.registry["tools"]["active_path"] + "/lib/backup.py"
+        self.assertRegex("-I " + script + " archive-push pg_wal/" + "A" * 24, rule)
+        for arguments in ("-I " + script + " scheduled full cluster",
+                          "-I " + script + " archive-push pg_wal/" + "A" * 24 + " extra",
+                          "-I " + script + " archive-push /etc/shadow",
+                          "-c print(1)"):
+            self.assertIsNone(re.fullmatch(rule, arguments))
         config = self.host.paths.p(backup.CONFIG).read_text()
         for value in ("repo1-type=s3", "repo1-s3-uri-style=path", "repo1-cipher-type=aes-256-cbc",
                       "repo1-retention-full=4", "repo1-retention-diff=7", "pg1-port=55432"):
@@ -286,3 +298,19 @@ class BackupTests(unittest.TestCase):
         self.assertTrue(result["retained"])
         self.assertTrue(Path(result["data_path"]).parent.is_dir())
         self.assertNotIn("verification", result)
+
+    def test_cluster_and_archive_use_allocated_nondefault_postgres_port(self):
+        cluster = self.cluster()
+        cluster["port"] = backup.POSTGRES_PORT + 7
+        self.host.write_registry(self.registry)
+        with patch.object(backup.postgres, "inspect", return_value=dict(cluster)):
+            self.assertEqual(backup._cluster(self.host, self.registry)["port"], cluster["port"])
+        backup._write_private(self.host, self.host.paths.p(backup.REPOSITORY),
+                              {**self.repository, "host_id": self.registry["host_id"], "cluster_token": cluster["ownership_token"]})
+        path = self.host.paths.p(cluster["data_path"] + "/pg_wal/" + "B" * 24)
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"wal")
+        with patch.object(backup, "_backrest") as archive:
+            backup.archive_push(self.host, "pg_wal/" + path.name)
+        archive.assert_called_once_with(self.host, ["archive-push", str(path)], timeout=300)
+        self.assertIn("pg1-port=" + str(cluster["port"]), backup._configuration(self.host, cluster, self.repository))

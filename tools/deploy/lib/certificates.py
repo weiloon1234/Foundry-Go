@@ -1,25 +1,90 @@
 """Owned Cloudflare DNS-01 lineages; no HTTP fallback or global Certbot edits.
 
-F1 stages private intake before provision. Existing credentials are immutable:
+Bootstrap stages private intake before provision. Existing credentials are immutable:
 rotation needs an explicit operator procedure, never a speculative overwrite.
 """
 from __future__ import annotations
 
 import configparser
 import json
+import os
 from pathlib import Path
 import re
 import stat
+import sys
+import tempfile
+import uuid
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from contracts import DeployError, check_path, now, read_json, require
+if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from contracts import DeployError, HOST_PATHS, check_path, now, read_json, require, valid_uuid
 from host import Host, wall_clock_budget
 import packages
 
-RELOAD_HOOK = "/usr/sbin/nginx -t -q && /usr/bin/systemctl reload nginx"
+RELOAD_COMMANDS = (["/usr/sbin/nginx", "-t", "-q"], ["/usr/bin/systemctl", "reload", "nginx"])
+RELOAD_HOOK = " && ".join(" ".join(command) for command in RELOAD_COMMANDS)
 REMEDIATION = ("Repair the owned lineage's DNS-01 credentials, renewal configuration and "
                "Foundry renewal timer, then retry; foreign lineages require explicit adoption or reissue.")
+
+
+def _synthetic(host, entry):
+    requested = os.environ.get("FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT") == "1"
+    fixture_lineage = entry["certificate"].get("zone_ref") == "acceptance-synthetic"
+    if not requested and not fixture_lineage:
+        return False
+    profile = entry["profile"]
+    require(requested and profile["runtime_environment"] == "testing"
+            and profile["environment"].startswith("acceptance")
+            and profile["domain"].endswith(".acceptance.invalid")
+            and host.paths.p("/.dockerenv").is_file(),
+            "certificate_fixture_forbidden", "Synthetic certificates require the explicit disposable acceptance container and testing profile.")
+    directory = _private(host, host.paths.p("/etc/foundry/acceptance-ca"), directory=True)
+    _private(host, directory / "ca.key")
+    _private(host, directory / "ca.crt")
+    return True
+
+
+def _synthetic_issue(host, entry):
+    require(_synthetic(host, entry), "certificate_fixture_forbidden", "Synthetic issuance is acceptance-only.")
+    lineage = _lineage(entry)
+    ca = host.paths.p("/etc/foundry/acceptance-ca")
+    archive = check_path(host.paths.p("/etc/letsencrypt/archive/" + lineage), "directory")
+    live = check_path(host.paths.p("/etc/letsencrypt/live/" + lineage), "directory")
+    archive.mkdir(parents=True, mode=0o700, exist_ok=True)
+    live.mkdir(parents=True, mode=0o700, exist_ok=True)
+    generation = uuid.uuid4().hex
+    with tempfile.TemporaryDirectory(prefix="issue-", dir=archive) as temporary:
+        staging = Path(temporary)
+        host.run(["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes",
+                  "-subj", "/CN=" + lineage, "-keyout", str(staging / "privkey.pem"),
+                  "-out", str(staging / "request.pem")], timeout=30)
+        host.owned_write(staging / "extensions", "subjectAltName=DNS:" + lineage + "\n"
+                         "basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\n"
+                         "extendedKeyUsage=serverAuth\n", mode=0o600)
+        host.run(["openssl", "x509", "-req", "-in", str(staging / "request.pem"),
+                  "-CA", str(ca / "ca.crt"), "-CAkey", str(ca / "ca.key"),
+                  "-set_serial", "0x" + generation, "-days", "30", "-sha256",
+                  "-extfile", str(staging / "extensions"), "-out", str(staging / "cert.pem")])
+        host.owned_write(staging / "chain.pem", (ca / "ca.crt").read_text(), mode=0o600)
+        host.owned_write(staging / "fullchain.pem", (staging / "cert.pem").read_text()
+                         + (staging / "chain.pem").read_text(), mode=0o600)
+        for name in ("cert", "chain", "fullchain", "privkey"):
+            destination = archive / (name + generation + ".pem")
+            host.owned_write(destination, (staging / (name + ".pem")).read_text(), mode=0o600)
+            temporary_link = live / ("." + name + "-" + generation)
+            temporary_link.symlink_to(destination)
+            os.replace(temporary_link, live / (name + ".pem"))
+    renewal = "\n".join(f"{name} = {live / filename}" for name, filename in (
+        ("cert", "cert.pem"), ("privkey", "privkey.pem"), ("chain", "chain.pem"), ("fullchain", "fullchain.pem")))
+    host.owned_write(_renewal_path(host, entry), renewal + "\n[renewalparams]\nauthenticator = acceptance-synthetic\n"
+                     + "deploy_hook = " + RELOAD_HOOK + "\n", mode=0o600)
+    _identity_ready(host, entry)
+    _renewal_ready(host, entry)
+    for command in RELOAD_COMMANDS:
+        host.run(command)
 
 
 def _lineage(entry):
@@ -82,7 +147,14 @@ def _resolve_zone(token, domain):
 
 
 def _stage_credentials(host, registry, entry):
-    """Consume F1's root-only stdin intake; never rotate a working token."""
+    """Consume root-only bootstrap stdin intake; never rotate a working token."""
+    if _synthetic(host, entry):
+        require(entry["certificate"].get("zone_ref") in (None, "acceptance-synthetic"),
+                "certificate_ownership", REMEDIATION)
+        if entry["certificate"].get("zone_ref") is None:
+            entry["certificate"]["zone_ref"] = "acceptance-synthetic"
+            host.journal(registry, entry)
+        return
     intake = host.paths.instance_config(entry["name"]) / "bootstrap-secrets.json"
     if not intake.exists():
         return  # Already-configured lineages can operate from their zone reference.
@@ -127,10 +199,15 @@ def _timer(entry):
 
 def _units(entry):
     name = _timer(entry)
+    command = f"/usr/bin/certbot renew --cert-name {_lineage(entry)} --quiet"
+    fixture_environment = ""
+    if entry["certificate"].get("zone_ref") == "acceptance-synthetic":
+        command = f"/usr/bin/python3 -I {HOST_PATHS['current']}/lib/certificates.py synthetic-renew {entry['profile']['instance_id']}"
+        fixture_environment = "Environment=FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT=1\n"
     return {
         name + ".service": ("# Foundry owned DNS-01 renewal\n[Unit]\nDescription=Foundry certificate renewal\n"
                             "[Service]\nType=oneshot\nUMask=0077\n"
-                            f"ExecStart=/usr/bin/certbot renew --cert-name {_lineage(entry)} --quiet\n"
+                            f"{fixture_environment}ExecStart={command}\n"
                             "TimeoutStartSec=1800\n"),
         name + ".timer": ("# Foundry owned DNS-01 renewal\n[Unit]\nDescription=Foundry certificate renewal timer\n"
                           "[Timer]\nOnCalendar=*-*-* 00,12:00:00 UTC\nRandomizedDelaySec=3600\n"
@@ -150,17 +227,19 @@ def _timer_ready(host, entry):
 
 
 def _renewal_ready(host, entry):
-    credentials = _credentials(host, entry)
+    synthetic = _synthetic(host, entry)
+    credentials = None if synthetic else _credentials(host, entry)
     path = _renewal_path(host, entry)
     require(path.exists(), "certificate_renewal_invalid", REMEDIATION)
     parser = configparser.ConfigParser(interpolation=None, strict=True)
     try:
         parser.read_string("[lineage]\n" + path.read_text())
         params = parser["renewalparams"]
-        require(params.get("authenticator") == "dns-cloudflare"
-                and params.get("dns_cloudflare_credentials") == str(credentials)
-                and params.get("dns_cloudflare_propagation_seconds") == "60"
-                and params.get("deploy_hook") == RELOAD_HOOK,
+        provider_ready = (params.get("authenticator") == "acceptance-synthetic" if synthetic else
+                          params.get("authenticator") == "dns-cloudflare"
+                          and params.get("dns_cloudflare_credentials") == str(credentials)
+                          and params.get("dns_cloudflare_propagation_seconds") == "60")
+        require(provider_ready and params.get("deploy_hook") == RELOAD_HOOK,
                 "certificate_renewal_invalid", REMEDIATION)
         live = host.paths.p("/etc/letsencrypt/live/" + _lineage(entry))
         for key, name in (("cert", "cert.pem"), ("privkey", "privkey.pem"),
@@ -226,10 +305,12 @@ def inspect(host: Host, entry: dict) -> dict:
 def provision(host: Host, registry: dict, entry: dict) -> None:
     """Reconcile only owned DNS lineages; A03 applies on every reuse."""
     _stage_credentials(host, registry, entry)
-    credentials = _credentials(host, entry)
+    synthetic = _synthetic(host, entry)
+    credentials = None if synthetic else _credentials(host, entry)
     observed = inspect(host, entry)
     require(observed["state"] != "conflict", "certificate_renewal_invalid", REMEDIATION)
-    packages.install_missing(host, ["certbot", "python3-certbot-dns-cloudflare"])
+    if not synthetic:
+        packages.install_missing(host, ["certbot", "python3-certbot-dns-cloudflare"])
     if observed["state"] == "missing":
         claim = _claim_path(host, entry)
         if claim.exists():
@@ -243,17 +324,49 @@ def provision(host: Host, registry: dict, entry: dict) -> None:
             host.owned_write(path, content)
         host.run(["systemctl", "daemon-reload"])
         host.run(["systemctl", "enable", "--now", _timer(entry) + ".timer"])
-        host.run(["certbot", "certonly", "--non-interactive", "--agree-tos", "--dns-cloudflare",
-                  "--dns-cloudflare-credentials", str(credentials), "--dns-cloudflare-propagation-seconds", "60",
-                  "--cert-name", _lineage(entry), "--email", entry["profile"]["certbot_email"],
-                  "--domain", entry["profile"]["domain"], "--deploy-hook", RELOAD_HOOK], timeout=900)
+        if synthetic:
+            _synthetic_issue(host, entry)
+        else:
+            host.run(["certbot", "certonly", "--non-interactive", "--agree-tos", "--dns-cloudflare",
+                      "--dns-cloudflare-credentials", str(credentials), "--dns-cloudflare-propagation-seconds", "60",
+                      "--cert-name", _lineage(entry), "--email", entry["profile"]["certbot_email"],
+                      "--domain", entry["profile"]["domain"], "--deploy-hook", RELOAD_HOOK], timeout=900)
     _identity_ready(host, entry)
     _renewal_ready(host, entry)
     try:
-        host.run(["certbot", "renew", "--cert-name", _lineage(entry), "--dry-run", "--run-deploy-hooks"], timeout=900)
+        if synthetic:
+            # Exercise a second issuance and the real lineage/reload checks.
+            _synthetic_issue(host, entry)
+        else:
+            host.run(["certbot", "renew", "--cert-name", _lineage(entry), "--dry-run", "--run-deploy-hooks"], timeout=900)
     except DeployError:
         raise DeployError("certificate_renewal_failed", "DNS-01 renewal dry-run failed. " + REMEDIATION) from None
     entry["certificate"]["last_renewal_check_at"] = now()
     if "certificate" not in entry["provisioning"]["completed_steps"]:
         entry["provisioning"]["completed_steps"].append("certificate")
     host.journal(registry, entry)
+
+
+def _main(arguments):
+    require(os.geteuid() == 0 and len(arguments) == 2 and arguments[0] == "synthetic-renew"
+            and valid_uuid(arguments[1]),
+            "certificate_fixture_forbidden", "Unknown certificate fixture operation.")
+    host = Host()
+    with host.lock("host"), host.lock(arguments[1]):
+        registry = host.read_registry()
+        entry = registry["instances"].get(arguments[1])
+        require(entry is not None and _synthetic(host, entry),
+                "certificate_fixture_forbidden", "Synthetic renewal requires its registered acceptance instance.")
+        _identity_ready(host, entry)
+        _renewal_ready(host, entry)
+        _synthetic_issue(host, entry)
+        entry["certificate"]["last_renewal_check_at"] = now()
+        host.journal(registry, entry)
+
+
+if __name__ == "__main__":
+    try:
+        _main(sys.argv[1:])
+    except (DeployError, OSError, ValueError, KeyError):
+        sys.stderr.write("Foundry certificate fixture failed; inspect the private host configuration.\n")
+        sys.exit(1)

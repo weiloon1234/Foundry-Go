@@ -4,10 +4,6 @@ FOUNDRY_NGINX_EDGE_ACCEPTANCE=1 python3 -m unittest deploy/tests/acceptance_edge
 Requires an already installed nginx. The milestone-gate owner runs this test.
 """
 
-# Moved from the upstream deploy harness; F4 must port this before acceptance.
-if __name__ == "__main__":
-    raise SystemExit("F4 acceptance port pending; this moved harness is not runnable yet.")
-
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -24,6 +20,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from provision import _template
+from acceptance_host import fixtures, HOST_ID
+from contracts import identity, marker
 
 
 @unittest.skipUnless(os.environ.get("FOUNDRY_NGINX_EDGE_ACCEPTANCE") == "1", "milestone nginx gate only")
@@ -55,7 +53,7 @@ class NginxEdgeAcceptance(unittest.TestCase):
             (tools / "lib").mkdir()
             # Model a Cloudflare TCP peer locally without trusting all loopback.
             (tools / "lib/cloudflare-ranges.json").write_text(json.dumps({
-                "retrieved_at": "2026-10-21", "ipv4": ["127.0.0.2/32"], "ipv6": ["2001:db8::/32"]}))
+                "retrieved_at": time.strftime("%Y-%m-%d"), "ipv4": ["127.0.0.2/32"], "ipv6": ["2001:db8::/32"]}))
             acme = root / "acme/.well-known/acme-challenge"
             acme.mkdir(parents=True)
             (acme / "probe").write_text("challenge")
@@ -64,9 +62,14 @@ class NginxEdgeAcceptance(unittest.TestCase):
                     with socket.socket() as reservation:
                         reservation.bind(("127.0.0.1", 0))
                         port = reservation.getsockname()[1]
-                    entry = {"name": "edge-test", "database": "edge_test", "instance_id": "edge-test",
-                             "port": upstream.server_port,
-                             "profile": {"domain": "edge.example.invalid", "edge": "cloudflare", "edge_origin_lockdown": lockdown}}
+                    project, profile = fixtures()[0]
+                    profile.update(domain="edge.example.invalid", edge_origin_lockdown=lockdown)
+                    entry = identity(project, profile)
+                    entry.update(profile=profile, host_id=HOST_ID)
+                    entry["allocations"]["http_port"] = upstream.server_port
+                    entry["topology"] = {"schema": 1, "roles": [{"name": "http"}]}
+                    from topology import validate_topology
+                    entry["topology"] = validate_topology(entry["topology"])
                     site = _template(tools, "nginx-http.conf", entry)
                     site = site.replace("listen 80;", f"listen 127.0.0.1:{port};").replace("    listen [::]:80;\n", "")
                     site = site.replace("/var/www/letsencrypt", str(root / "acme"))
@@ -106,3 +109,7 @@ class NginxEdgeAcceptance(unittest.TestCase):
                     finally:
                         process.terminate()
                         process.wait(timeout=5)
+
+
+if __name__ == "__main__":
+    unittest.main()

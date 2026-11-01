@@ -93,6 +93,13 @@ class DeploymentContractTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(DeployError):
                 validate_profile({**self.profile, **change}, self.project)
 
+    def test_backup_policy_is_the_supported_policy_without_silent_customization(self):
+        from contracts import BACKUP_POLICY
+        validate_profile({**self.profile, "backup_policy": dict(BACKUP_POLICY)}, self.project)
+        for monthly in (12, False):
+            with self.subTest(monthly=monthly), self.assertRaises(DeployError):
+                validate_profile({**self.profile, "backup_policy": {**BACKUP_POLICY, "monthly": monthly}}, self.project)
+
     def test_registry_refuses_identity_binding_and_resource_collisions(self):
         _, _, sibling = fixture(environment="staging", project_id=self.project["id"], host_id=self.entry["host_id"], port=8101)
         changes = [lambda v: v["instances"][sibling["profile"]["instance_id"]]["allocations"].update(http_port=8100),
@@ -149,6 +156,7 @@ class DeploymentContractTests(unittest.TestCase):
                     "instance_id": self.entry["profile"]["instance_id"], "instance": self.entry["name"],
                     "environment": self.entry["environment"], "architecture": "arm64", "native_imaging": False,
                     "version": version, "commit": "0123456789abcdef", "tree_state": "clean", "built_at": "2026-10-13T00:00:00Z",
+                    "source_kind": "git_archive", "source_sha256": "b" * 64,
                     "files": dict.fromkeys(("artisan", "config/deploy.toml", "public/index.html", "private-source-maps/" + version + "/index.map"), "a" * 64)}
         attempt = {"id": version, "action": "deploy", "release": version, "started_at": "2026-10-13T00:00:00Z",
                    "finished_at": "2026-10-13T00:00:01Z", "outcome": "succeeded", "phase": "health", "error": None}
