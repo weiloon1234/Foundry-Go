@@ -207,7 +207,7 @@ class BackupTests(unittest.TestCase):
     def cluster(self):
         cluster = {"owner": "foundry", "cluster": "foundry", "state": "ready", "major": 16, "port": 55432,
                    "unit": "postgresql@16-foundry.service", "ownership_token": "owned-cluster",
-                   "data_path": "/var/lib/postgresql/16/foundry", "socket_directory": "/run/postgresql-foundry"}
+                   "data_path": "/var/lib/foundry/postgresql/16/foundry", "socket_directory": "/run/foundry/postgresql"}
         self.registry["shared"]["postgresql"] = cluster
         self.host.write_registry(self.registry)
         return cluster

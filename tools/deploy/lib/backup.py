@@ -135,7 +135,7 @@ def _cluster(host, registry):
             and cluster.get("unit") == f"postgresql@{cluster.get('major')}-foundry.service",
             "backup_cluster_ownership", "Only the verified Foundry PostgreSQL cluster may be backed up.")
     data = cluster.get("data_path")
-    require(data == f"/var/lib/postgresql/{cluster['major']}/foundry",
+    require(data == f"{postgres.CLUSTER_HOME}/{cluster['major']}/foundry",
             "backup_cluster_ownership", "Foundry data directory must match its dedicated cluster allocation.")
     return cluster
 
@@ -565,7 +565,7 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
     intent = {"backup_id": backup_id, "target_time": target_time, "target_inclusive": target_inclusive, "retain": retain}
     drill_id = uuid.uuid5(uuid.UUID(backup_id), json.dumps(intent, sort_keys=True)).hex
     journal_path = _private_root(host, entry) / "drills" / (drill_id + ".json")
-    directory = check_path(host.paths.p("/var/lib/postgresql/foundry-drills/" + drill_id), "directory")
+    directory = check_path(host.paths.p(f"{postgres.CLUSTER_HOME}/drills/" + drill_id), "directory")
     data, socket = directory / "data", directory / "socket"
     unit = "foundry-restore-" + drill_id + ".service"
     unit_path = check_path(host.paths.p("/etc/systemd/system/" + unit), "file")
@@ -987,7 +987,7 @@ def archive_push(host: Host, wal: str) -> None:
     config = configparser.ConfigParser(interpolation=None)
     config.read(path)
     data = config.get(STANZA, "pg1-path")
-    require(re.fullmatch(r"/var/lib/postgresql/(16|18)/foundry", data),
+    require(re.fullmatch(re.escape(postgres.CLUSTER_HOME) + r"/(16|18)/foundry", data),
             "backup_cluster_ownership", "WAL archival requires the dedicated Foundry cluster.")
     require(isinstance(wal, str) and re.fullmatch(_wal_pattern({"data_path": data}), wal),
             "backup_wal_path", "WAL archival accepts only an allocated cluster WAL filename.")
