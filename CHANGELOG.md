@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.0 — 2026-11-01
 
 - Added: `http.TicketAuthenticated` and typed ticket URLs for guarded GET routes,
   with single-use redemption, current actor/scope checks and enforced no-store
