@@ -1,0 +1,25 @@
+# Foundry-owned Redis: @OWNERSHIP_TOKEN@
+[Unit]
+Description=Foundry shared Redis (TLS only)
+After=network.target
+
+[Service]
+Type=simple
+User=foundry-redis
+Group=foundry-redis
+ExecStart=/usr/bin/redis-server /etc/foundry/redis/redis.conf
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=90
+KillSignal=SIGTERM
+LimitNOFILE=4096
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/foundry/redis
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

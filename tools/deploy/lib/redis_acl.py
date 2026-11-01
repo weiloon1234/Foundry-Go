@@ -8,18 +8,30 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 import hashlib
+import grp
+import os
+import stat
 import json
 from pathlib import Path
 import re
+import secrets
+import socket
+import ssl
+import uuid
 from typing import TYPE_CHECKING
 
 from contracts import (DeployError, REDIS_PORT, REDIS_ACCOUNT, REDIS_ADMIN,
-                       REDIS_ACLFILE, check_path, instance_paths, read_json, require)
+                       REDIS_ACLFILE, REDIS_UNIT, HOST_PATHS, MAX_JSON, check_path, instance_paths, read_json, require)
 from runtime_config import read_credentials
 if TYPE_CHECKING:
     from host import Host
 
 ROOTS = "/etc/ssl/certs/ca-certificates.crt"
+REDIS_CONFIG = "/etc/foundry/redis/redis.conf"
+REDIS_DATA = "/var/lib/foundry/redis"
+REDIS_CERT = "/etc/foundry/redis/server.crt"
+REDIS_KEY = "/etc/foundry/redis/server.key"
+REDIS_UNIT_PATH = "/etc/systemd/system/" + REDIS_UNIT
 REDIS_COMMANDS = frozenset("""
 ping hello auth quit select client|setname multi exec discard
 get set mget mset del unlink exists type strlen getdel getex
@@ -39,32 +51,354 @@ REDIS_GLOB = re.compile(r"[*?\[\]\\\s]")
 MAX_REDIS_PATTERNS = 64
 
 
-def inspect(host: Host, registry: dict) -> dict:
-    """Inspect only the dedicated Foundry Redis unit, TLS and persistent ACL state.
+def _service_claim(host: Host, registry: dict) -> tuple[dict | None, dict]:
+    shared = registry.get("shared", {}).get("redis")
+    path = check_path(host.paths.p(HOST_PATHS["private"]) / "redis-prepare.json", "file")
+    if not path.exists():
+        return shared, {}
+    info = path.stat()
+    require(not info.st_mode & 0o077 and (info.st_uid == 0 or host.paths.root != Path("/")),
+            "redis_ownership", "Redis preparation journal must be root-owned and private.")
+    claim = read_json(path)
+    require(isinstance(claim, dict) and claim.get("host_id") == registry["host_id"],
+            "redis_ownership", "Redis preparation journal belongs to another host.")
+    return shared, claim
 
-    Return public planning findings. Foreign instances (including passwordless
-    port 6379) are never authenticated to, adopted, modified, or restarted.
-    """
-    raise NotImplementedError("F2: dedicated Redis inspection")
+
+def _save_claim(host: Host, claim: dict) -> None:
+    directory = host.check_control_directory(host.paths.p(HOST_PATHS["private"]))
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    require(not directory.stat().st_mode & 0o077, "redis_ownership", "Redis preparation journal directory must be private.")
+    host.owned_write(directory / "redis-prepare.json", json.dumps(claim, sort_keys=True, indent=2) + "\n", mode=0o600)
+
+
+def _unit(host: Host) -> dict:
+    result = host.run(["systemctl", "show", REDIS_UNIT, "--property=LoadState,ActiveState,FragmentPath,MainPID,UnitFileState,DropInPaths"], check=False)
+    value = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+    require(result.returncode == 0 or value.get("LoadState") == "not-found",
+            "redis_inspection", "Cannot inspect the dedicated Redis unit.")
+    return value
+
+
+def _unused_template(unit: dict) -> bool:
+    return (unit.get("FragmentPath") in {"/lib/systemd/system/redis-server@.service", "/usr/lib/systemd/system/redis-server@.service"}
+            and unit.get("ActiveState") == "inactive" and unit.get("UnitFileState") in {"disabled", "static", "indirect"}
+            and not unit.get("DropInPaths"))
+
+
+def _port_busy(host: Host) -> bool:
+    result = host.run(["ss", "-H", "-ltn", "sport", "=", str(REDIS_PORT)])
+    return bool(result.stdout.strip())
+
+
+def _owned_service(shared: dict | None, claim: dict) -> None:
+    require(bool(shared) and shared.get("owner") == "foundry" and shared.get("unit") == REDIS_UNIT
+            and shared.get("port") == REDIS_PORT and shared.get("aclfile") == REDIS_ACLFILE
+            and shared.get("ownership_token") == claim.get("ownership_token") and bool(claim),
+            "redis_ownership", "The dedicated Redis allocation has no matching ownership journal.")
+
+
+def _claimed_files(host: Host, claim: dict, *, complete: bool = False) -> None:
+    for absolute, digest in claim.get("files", {}).items():
+        require(absolute in {REDIS_CONFIG, REDIS_UNIT_PATH, REDIS_CERT, REDIS_KEY},
+                "redis_ownership", "Unexpected file in Redis preparation journal.")
+        path = check_path(host.paths.p(absolute), "file")
+        require(not complete or path.exists(), "redis_ownership", "An owned Redis service file is missing.")
+        if path.exists():
+            require(hashlib.sha256(path.read_bytes()).hexdigest() == digest,
+                    "redis_ownership", "An owned Redis service file changed outside its recorded plan.")
+
+
+def inspect(host: Host, registry: dict) -> dict:
+    """Inspect dedicated metadata only; no requests ever reach foreign Redis."""
+    shared, claim = _service_claim(host, registry)
+    unit = _unit(host)
+    paths = ("/etc/foundry/redis", REDIS_DATA, REDIS_UNIT_PATH)
+    present = any(check_path(host.paths.p(path)).exists() for path in paths)
+    if not shared and not claim:
+        account = host.run(["getent", "passwd", REDIS_ACCOUNT], check=False)
+        require(account.returncode in (0, 2), "redis_inspection", "Cannot inspect the Redis service account.")
+        return {"state": "conflict" if present or (unit.get("LoadState") != "not-found" and not _unused_template(unit)) or account.returncode == 0 or _port_busy(host) else "absent",
+                "owner": None, "unit": REDIS_UNIT, "port": REDIS_PORT, "aclfile": REDIS_ACLFILE}
+    shared = shared or claim.get("allocation")
+    _owned_service(shared, claim)
+    _claimed_files(host, claim, complete=shared.get("state") == "ready")
+    active = unit.get("ActiveState") == "active"
+    require(not unit.get("DropInPaths") and (unit.get("LoadState") == "not-found"
+            or unit.get("FragmentPath") == REDIS_UNIT_PATH or (claim["phase"] != "ready" and _unused_template(unit))),
+            "redis_ownership", "The dedicated Redis unit resolves to an unowned fragment.")
+    return {"state": "ready" if shared.get("state") == "ready" and active else "resume",
+            "owner": "foundry", "unit": REDIS_UNIT, "port": REDIS_PORT, "aclfile": REDIS_ACLFILE,
+            "ownership_token": shared["ownership_token"], "active": active}
+
+
+def _read_acl(host: Host) -> str:
+    path = check_path(host.paths.p(REDIS_ACLFILE), "file")
+    require(path.exists(), "redis_ownership", "The owned Redis ACL file is missing.")
+    info = path.stat()
+    expected_uid = 0 if host.paths.root == Path("/") else os.geteuid()
+    expected_gid = grp.getgrnam(REDIS_ACCOUNT).gr_gid if host.paths.root == Path("/") else os.getegid()
+    require(stat.S_IMODE(info.st_mode) == 0o640 and info.st_uid == expected_uid and info.st_gid == expected_gid,
+            "redis_ownership", "Redis ACL file must be root:foundry-redis 0640.")
+    try:
+        return path.read_bytes().decode("utf-8")
+    except UnicodeError:
+        raise DeployError("redis_ownership", "Redis ACL file is not valid UTF-8.") from None
+
+
+def _admin_line(credentials: dict) -> str:
+    return "user " + REDIS_ADMIN + " reset on #" + hashlib.sha256(credentials["redis_password"].encode()).hexdigest() + " ~* &* +@all"
+
+
+def _verify_admin(host: Host) -> None:
+    credentials = _host_secrets(host)
+    lines = _read_acl(host).splitlines()
+    for user, expected in (("default", "user default reset off"), (REDIS_ADMIN, _admin_line(credentials))):
+        index = _acl_index(lines, {"allocations": {"redis_user": user}})
+        require(index is not None and lines[index] == expected, "redis_ownership", "Redis administrator disk policy changed.")
+    value = _redis(host, "ACL", "GETUSER", REDIS_ADMIN)
+    require(isinstance(value, dict) and "on" in value.get("flags", [])
+            and not set(value.get("flags", [])) & {"off", "nopass"}
+            and value.get("passwords") == [hashlib.sha256(credentials["redis_password"].encode()).hexdigest()]
+            and value.get("commands") == "+@all" and value.get("keys") == "~*"
+            and value.get("channels") == "&*" and not value.get("selectors"),
+            "redis_ownership", "Foundry Redis administrator permissions or credential changed.")
+    default = _redis(host, "ACL", "GETUSER", "default")
+    require(isinstance(default, dict) and "off" in default.get("flags", [])
+            and "on" not in default.get("flags", []) and not default.get("passwords")
+            and default.get("commands") == "-@all" and not default.get("keys")
+            and not default.get("channels") and not default.get("selectors"),
+            "redis_ownership", "Foundry Redis default user is not disabled and reset.")
+
+
+def _verify_connection(host: Host) -> None:
+    """Authenticate through a hostname-verified TLS connection using system roots."""
+    credentials = _host_secrets(host)
+    context = ssl.create_default_context(cafile=str(host.paths.p(ROOTS)))
+    try:
+        with socket.create_connection(("localhost", REDIS_PORT), timeout=10) as connection:
+            with context.wrap_socket(connection, server_hostname="localhost") as encrypted:
+                with encrypted.makefile("rb") as reader:
+                    for parts, expected in ((("AUTH", REDIS_ADMIN, credentials["redis_password"]), b"+OK\r\n"),
+                                            (("PING",), b"+PONG\r\n")):
+                        encoded = [part.encode() for part in parts]
+                        payload = b"*" + str(len(encoded)).encode() + b"\r\n"
+                        for part in encoded:
+                            payload += b"$" + str(len(part)).encode() + b"\r\n" + part + b"\r\n"
+                        encrypted.sendall(payload)
+                        require(reader.readline(1024) == expected, "redis_tls", "Foundry Redis TLS authentication probe failed.")
+    except (OSError, ssl.SSLError):
+        raise DeployError("redis_tls", "Foundry Redis must verify its hostname and system trust before use.") from None
+
+
+def _redis_config(token: str) -> str:
+    return f"""# Foundry-owned Redis: {token}
+bind 127.0.0.1 ::1
+protected-mode yes
+port 0
+tls-port {REDIS_PORT}
+tls-cert-file {REDIS_CERT}
+tls-key-file {REDIS_KEY}
+tls-ca-cert-file {ROOTS}
+tls-auth-clients no
+aclfile {REDIS_ACLFILE}
+dir {REDIS_DATA}
+daemonize no
+supervised no
+logfile ""
+appendonly yes
+appendfsync everysec
+save 900 1
+save 300 10
+save 60 10000
+stop-writes-on-bgsave-error yes
+maxmemory 128mb
+maxmemory-policy noeviction
+maxclients 256
+"""
+
+
+def _verify_runtime(host: Host) -> None:
+    _verify_connection(host)
+    _verify_admin(host)
+    expected = {"port": "0", "tls-port": str(REDIS_PORT), "bind": "127.0.0.1 ::1", "appendonly": "yes",
+                "appendfsync": "everysec", "save": "900 1 300 10 60 10000", "maxmemory-policy": "noeviction",
+                "maxmemory": str(128 * 1024 * 1024), "maxclients": "256", "dir": REDIS_DATA,
+                "aclfile": REDIS_ACLFILE, "tls-auth-clients": "no", "stop-writes-on-bgsave-error": "yes"}
+    value = _redis(host, "CONFIG", "GET", *expected)
+    require(isinstance(value, dict) and all(value.get(key) == wanted for key, wanted in expected.items()),
+            "redis_configuration", "Foundry Redis effective settings differ from the owned plan.")
+    info = _redis(host, "INFO", "persistence")
+    require(isinstance(info, str), "redis_persistence", "Cannot inspect Foundry Redis persistence.")
+    fields = dict(line.split(":", 1) for line in info.splitlines() if ":" in line and not line.startswith("#"))
+    require(fields.get("aof_enabled") == "1" and fields.get("aof_last_write_status") == "ok"
+            and fields.get("rdb_last_bgsave_status") == "ok", "redis_persistence", "Foundry Redis persistence is unhealthy.")
 
 
 def prepare(host: Host, registry: dict) -> None:
-    """Prepare the owned Redis instance on TLS 56379 using guarded package installs.
+    """Create/resume the reserved Redis service without changing any foreign unit."""
+    from packages import install_missing
+    from postgres import prepare_tls, record_trust_probe
 
-    Journal the administrator credential before service creation; enable AOF,
-    explicit RDB, noeviction, default off, and the dedicated account/data paths.
-    """
-    raise NotImplementedError("F2: dedicated Redis preparation")
+    observation = inspect(host, registry)
+    require(observation["state"] != "conflict", "redis_ownership", "Redis allocation is occupied or unclaimed.")
+    shared, claim = _service_claim(host, registry)
+    if not shared and claim:
+        shared = registry["shared"]["redis"] = claim["allocation"]
+        host.journal(registry)
+    if not shared:
+        token = str(uuid.uuid4())
+        shared = registry["shared"]["redis"] = {
+            "owner": "foundry", "state": "installing", "ownership_token": token,
+            "unit": REDIS_UNIT, "port": REDIS_PORT, "aclfile": REDIS_ACLFILE,
+            "admin_user": REDIS_ADMIN, "config_path": REDIS_CONFIG, "data_path": REDIS_DATA,
+            "capacity": {"budget_bytes": 256 * 1024 * 1024, "maxmemory_bytes": 128 * 1024 * 1024, "maxclients": 256},
+        }
+        claim = {"host_id": registry["host_id"], "ownership_token": token, "phase": "reserved", "files": {}, "allocation": dict(shared)}
+        _save_claim(host, claim)
+        host.journal(registry)
+    _owned_service(shared, claim)
+    # A crash between private reservation and the public journal is recoverable
+    # only by the matching reservation; unknown paths are never adopted.
+    memory = check_path(host.paths.p("/proc/meminfo"), "file").read_text()
+    match = re.search(r"^MemTotal:\s+(\d+) kB$", memory, re.MULTILINE)
+    require(match and int(match[1]) >= 1280 * 1024, "host_capacity", "Foundry requires at least 1 GiB PostgreSQL plus 256 MiB Redis memory.")
+    needed = [package for binary, package in (("redis-server", "redis-server"), ("redis-cli", "redis-tools"))
+              if not host.paths.p("/usr/bin/" + binary).is_file()]
+    if needed:
+        install_missing(host, needed)
+    version = host.run(["/usr/bin/redis-server", "--version"]).stdout
+    found = re.search(r"\bv=(\d+)\.(\d+)\.(\d+)\b", version)
+    require(found and int(found[1]) >= 7, "redis_version", "Foundry requires Redis 7 or newer with TLS and ACL DRYRUN support.")
+    help_text = host.run(["redis-cli", "--help"]).stdout
+    require("--tls" in help_text and "--sni" in help_text, "redis_capability", "Installed Redis CLI lacks required TLS capabilities.")
+    tls = prepare_tls(host, registry)
+    marker = "foundry-host=" + registry["host_id"]
+    account = host.run(["getent", "passwd", REDIS_ACCOUNT], check=False)
+    require(account.returncode in (0, 2), "redis_account", "Cannot inspect Foundry Redis account.")
+    if account.returncode == 0:
+        fields = account.stdout.strip().split(":")
+        require(len(fields) == 7 and fields[4] == marker and fields[5] == REDIS_DATA and fields[6] == "/usr/sbin/nologin",
+                "redis_account", "Foundry Redis account is occupied by a different owner.")
+    else:
+        require(shared["state"] != "ready", "redis_account", "The acknowledged Redis service account disappeared.")
+        group = host.run(["getent", "group", REDIS_ACCOUNT], check=False)
+        require(group.returncode == 2, "redis_account", "Foundry Redis group exists without its owned account.")
+        host.run(["useradd", "--system", "--user-group", "--home-dir", REDIS_DATA, "--no-create-home",
+                  "--shell", "/usr/sbin/nologin", "--comment", marker, REDIS_ACCOUNT])
+    if observation["state"] == "ready":
+        _verify_runtime(host)
+        record_trust_probe(host, registry, "redis")
+        return
+    secret_path = check_path(host.paths.etc / "host-secrets.json", "file")
+    secrets_value = {}
+    if secret_path.exists():
+        info = secret_path.stat()
+        require(stat.S_IMODE(info.st_mode) == 0o600 and (info.st_uid == 0 or host.paths.root != Path("/")),
+                "redis_credentials_invalid", "Host credentials must be root-owned and private.")
+        secrets_value = read_json(secret_path)
+        require(isinstance(secrets_value, dict), "redis_credentials_invalid", "Host credentials have an invalid shape.")
+    if "redis_user" not in secrets_value and "redis_password" not in secrets_value:
+        require(not claim.get("credentials_installed"), "redis_credentials_missing", "Restore the persisted Redis administrator credential.")
+        secrets_value.update(redis_user=REDIS_ADMIN, redis_password=secrets.token_urlsafe(48))
+        host.owned_write(secret_path, json.dumps(secrets_value, sort_keys=True) + "\n", mode=0o600)
+    credentials = _host_secrets(host)
+    claim["credentials_installed"] = True
+    _save_claim(host, claim)
+    for absolute, owner, group in (("/etc/foundry/redis", "root", REDIS_ACCOUNT), (REDIS_DATA, REDIS_ACCOUNT, REDIS_ACCOUNT)):
+        path = check_path(host.paths.p(absolute), "directory")
+        host.run(["install", "-d", "-m", "0750", "-o", owner, "-g", group, str(path)])
+    template = Path(__file__).resolve().parents[1] / "server/templates/redis-server@foundry.service"
+    unit_text = template.read_text().replace("@OWNERSHIP_TOKEN@", shared["ownership_token"])
+    files = {REDIS_CONFIG: _redis_config(shared["ownership_token"]), REDIS_UNIT_PATH: unit_text,
+             REDIS_CERT: Path(tls["cert"]).read_text(), REDIS_KEY: Path(tls["key"]).read_text()}
+    _claimed_files(host, claim)
+    for absolute, content in files.items():
+        digest = hashlib.sha256(content.encode()).hexdigest()
+        previous = claim["files"].get(absolute)
+        require(previous is None or previous == digest, "redis_service_plan", "Redis certificate or settings changes require an explicit shared-service plan.")
+        path = check_path(host.paths.p(absolute), "file")
+        require(not path.exists() or previous == digest, "redis_ownership", "Unclaimed Redis service file already exists.")
+        claim["files"][absolute] = digest
+    claim["phase"] = "publishing"
+    _save_claim(host, claim)
+    for absolute, content in files.items():
+        host.owned_write(host.paths.p(absolute), content, mode=0o640 if absolute in (REDIS_CONFIG, REDIS_KEY) else 0o644,
+                         group=REDIS_ACCOUNT if absolute in (REDIS_CONFIG, REDIS_KEY) else "root")
+    aclpath = check_path(host.paths.p(REDIS_ACLFILE), "file")
+    initial_acl = "user default reset off\n" + _admin_line(credentials) + "\n"
+    if not aclpath.exists():
+        require(not claim.get("acl_installed"), "redis_ownership", "The persistent Redis ACL file disappeared.")
+        host.owned_write(aclpath, initial_acl, mode=0o640, group=REDIS_ACCOUNT)
+    else:
+        lines = aclpath.read_text().splitlines()
+        require(lines.count("user default reset off") == 1 and lines.count(_admin_line(credentials)) == 1
+                and (claim.get("acl_installed") or aclpath.read_bytes() == initial_acl.encode()),
+                "redis_ownership", "Foundry Redis administrator ACL ownership mismatch.")
+    claim["acl_installed"] = True
+    claim["phase"] = "starting"
+    _save_claim(host, claim)
+    if _unit(host).get("ActiveState") != "active":
+        require(not _port_busy(host), "redis_port_conflict", "The reserved Redis TLS port is occupied.")
+        host.run(["systemctl", "daemon-reload"])
+        host.run(["systemctl", "enable", "--now", REDIS_UNIT])
+    _verify_runtime(host)
+    record_trust_probe(host, registry, "redis")
+    claim["phase"] = "ready"
+    _save_claim(host, claim)
+    shared["state"] = "ready"
+    shared["version"] = ".".join(found.groups())
+    host.journal(registry)
 
 
 def provision(host: Host, registry: dict, entry: dict, credentials: dict) -> None:
-    """Create this instance's UUID-named ACL user with initially empty grants.
-
-    Persist its line digest via _save_state before disk then live publication;
-    reuse owned credentials, verify exact permissions and record completed_steps.
-    Resume pending transitions through reconcile_redis_grants under both locks.
-    """
-    raise NotImplementedError("F2: dedicated Redis user provisioning")
+    """Publish an empty-grant owned user, with private intent before disk/live."""
+    shared = registry["shared"]["redis"]
+    require(shared.get("owner") == "foundry" and shared.get("state") == "ready"
+            and shared.get("port") == REDIS_PORT and shared.get("aclfile") == REDIS_ACLFILE,
+            "redis_ownership", "Redis instance provisioning requires the ready owned service.")
+    password = credentials["redis_password"]
+    path = check_path(host.paths.p(REDIS_ACLFILE), "file")
+    content = _read_acl(host)
+    state = _load_state(host, entry)
+    pending = state.get("pending")
+    committed = state.get("committed")
+    live = _redis(host, "ACL", "GETUSER", entry["allocations"]["redis_user"])
+    owned = _acl_owned(content, entry, password, state)
+    if committed:
+        require(owned, "redis_ownership", "An acknowledged Redis ACL declaration disappeared.")
+        if pending:
+            reconcile_redis_grants(host, registry, entry, pending["patterns"], channels=pending["channels"])
+            return
+        require(_validate_redis_live(live, entry, password, host, [committed]), "redis_ownership", "An acknowledged Redis user disappeared.")
+        _redis_scope_probes(host, entry, committed["patterns"], committed["channels"])
+    else:
+        require("redis" not in entry["provisioning"].get("completed_steps", []), "redis_ownership", "An acknowledged Redis ownership journal disappeared.")
+        require(not live or (pending is not None and owned), "redis_ownership", "Existing Redis user has no persistent claim.")
+        target = _policy(entry, password, [], [])
+        require(pending is None or pending == target, "redis_ownership", "Unexpected initial Redis grant transition.")
+        if live:
+            _validate_redis_live(live, entry, password, host, [target])
+        state["pending"] = target
+        state["phase"] = "provision_intent"
+        _save_state(host, entry, state)
+        if not owned:
+            content += ("" if not content or content.endswith("\n") else "\n") + _acl_line(entry, password, [], []) + "\n"
+            host.owned_write(path, content, mode=0o640, group=REDIS_ACCOUNT)
+        state["phase"] = "provision_disk"
+        _save_state(host, entry, state)
+        require(_redis(host, "ACL", "SETUSER", entry["allocations"]["redis_user"], *redis_rules(entry, password, [], channels=[])) == "OK",
+                "redis_acl", "Redis refused the initial instance ACL policy.")
+        require(_validate_redis_live(_redis(host, "ACL", "GETUSER", entry["allocations"]["redis_user"]), entry, password, host, [target]),
+                "redis_acl", "Redis did not apply the initial instance ACL policy.")
+        _redis_scope_probes(host, entry, [], [])
+        state["committed"] = target
+        state.pop("pending", None)
+        state["phase"] = "committed"
+        _save_state(host, entry, state)
+    if "redis" not in entry["provisioning"].setdefault("completed_steps", []):
+        entry["provisioning"]["completed_steps"].append("redis")
+        host.journal(registry, entry)
 
 
 def _validate_prefix(entry: dict, prefix: str) -> None:
@@ -72,13 +406,15 @@ def _validate_prefix(entry: dict, prefix: str) -> None:
     match = REDIS_PREFIX.fullmatch(prefix) if isinstance(prefix, str) else None
     require(match is not None and not REDIS_GLOB.search(prefix)
             and match["environment"] == namespace["environment"]
+            and re.fullmatch(r"[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*", match["application"])
             and (match["application"] == namespace["application"]
                  or match["application"].startswith(namespace["application"] + ".")),
             "redis_inventory", "Redis inventory contains a malformed or foreign namespace prefix.")
 
 
 def _inventory_patterns(entry: dict, inventory: list, kind: str) -> list[str]:
-    require(isinstance(inventory, list) and len(inventory) <= MAX_REDIS_PATTERNS,
+    require(isinstance(inventory, list) and len(inventory) <= MAX_REDIS_PATTERNS
+            and len(json.dumps(inventory, ensure_ascii=True).encode()) <= MAX_JSON,
             "redis_inventory", "Redis inventory is malformed or exceeds its bound.")
     prefixes = {"keys": set(), "channels": set()}
     connections = set()
@@ -119,7 +455,7 @@ def granted_redis_channels(entry: dict) -> list[str]:
 
 
 def _validated_patterns(entry: dict, patterns: Sequence[str]) -> list[str]:
-    require(not isinstance(patterns, (str, bytes)) and len(patterns) <= MAX_REDIS_PATTERNS,
+    require(not isinstance(patterns, (str, bytes)) and len(patterns) <= 2 * MAX_REDIS_PATTERNS,
             "redis_inventory", "Redis patterns exceed their bound or have an invalid shape.")
     for pattern in patterns:
         require(isinstance(pattern, str) and pattern.endswith("*"), "redis_inventory", "Invalid Redis ACL pattern.")
@@ -205,7 +541,7 @@ def _host_secrets(host: Host) -> dict:
 def _redis(host: Host, *args: str, allow_denied: bool = False):
     credentials = _host_secrets(host)
     command = ["redis-cli", "-3", "--no-auth-warning", "--json", "--tls", "--cacert", ROOTS,
-               "-h", "localhost", "-p", str(REDIS_PORT), "--user", credentials["redis_user"]]
+               "--sni", "localhost", "-h", "localhost", "-p", str(REDIS_PORT), "--user", credentials["redis_user"]]
     result = host.run(command + list(args), env={"REDISCLI_AUTH": credentials["redis_password"]}, timeout=15)
     try:
         value = json.loads(result.stdout)
@@ -221,6 +557,8 @@ def _redis_patterns_match(wire, rules, prefix):
 
 
 def _redis_commands_match(host, wire):
+    if not isinstance(wire, str):
+        return False
     tokens = wire.split()
     explicit = {"-@all"} | {"+" + command for command in REDIS_COMMANDS}
     if tokens and tokens[0] == "-@all" and set(tokens) == explicit:
@@ -270,7 +608,7 @@ def _validate_redis_live(value, entry: dict, password: str, host: Host | None = 
         candidates = [{"patterns": granted_redis_patterns(entry), "channels": granted_redis_channels(entry)}]
     for candidate in candidates:
         rules = redis_rules(entry, password, candidate["patterns"], channels=candidate["channels"])
-        if not ("on" not in flags or flags & {"nopass", "allkeys", "allchannels"}
+        if not ("on" not in flags or flags & {"off", "nopass", "allkeys", "allchannels"}
                 or value.get("passwords") != [next(rule[1:] for rule in rules if rule.startswith("#"))]
                 or not _redis_patterns_match(value.get("keys"), rules, "~")
                 or not _redis_patterns_match(value.get("channels"), rules, "&") or value.get("selectors")
@@ -280,33 +618,63 @@ def _validate_redis_live(value, entry: dict, password: str, host: Host | None = 
 
 
 def _redis_scope_probes(host: Host, entry: dict, patterns: Sequence[str], channels: Sequence[str]) -> None:
-    """Prove every granted prefix and deny foreign/crafted names and global commands."""
+    """Prove the selected union/target and reject explicit ACL permission denials."""
     namespace = entry["allocations"]["namespace"]
     application, environment = namespace["application"], namespace["environment"]
     user = entry["allocations"]["redis_user"]
-    denied = [("FLUSHDB",), ("KEYS", "*"), ("SCAN", "0"), ("CONFIG", "GET", "*"),
-              ("GET", f"foundry:jobs:v1:{application}-other:{environment}:key"),
-              ("GET", f"foundry:jobs:v1:{application}.other:staging:{environment}:key"),
-              ("PUBLISH", "foreign", "probe")]
+    denied = [("FLUSHDB",), ("FLUSHALL",), ("KEYS", "*"), ("SCAN", "0"), ("CONFIG", "GET", "*"),
+              ("ACL", "WHOAMI"), ("SCRIPT", "FLUSH"), ("PUBLISH", "foreign", "probe"),
+              ("GET", f"foundry:cache:v1:{application}-other:{environment}:probe")]
+    for pattern in set(patterns) | set(channels):
+        matched = REDIS_PREFIX.fullmatch(pattern[:-1])
+        feature, owner = matched["feature"], matched["application"]
+        for key in (f"foundry:{feature}:v1:{application}-other:{environment}:probe",
+                    f"foundry:{feature}:v1:{owner}:other-{environment}:probe",
+                    f"foundry:{feature}:v1:{owner}:other-{environment}:{environment}:probe",
+                    f"foundry:{feature}:v1:{application}-other.{owner}:{environment}:probe"):
+            denied.extend((("GET", key), ("PUBLISH", key, "probe")))
     for command in denied:
-        require(_redis(host, "ACL", "DRYRUN", user, *command, allow_denied=True) != "OK",
-                "redis_acl", "Redis instance ACL permits an out-of-scope operation.")
+        result = _redis(host, "ACL", "DRYRUN", user, *command, allow_denied=True)
+        denial = result.get("error") if isinstance(result, dict) else result
+        require(isinstance(denial, str) and (denial == "NOPERM" or denial.startswith("NOPERM ")
+                or denial.startswith("This user has no permissions ")),
+                "redis_acl", "Redis scope probe must prove a permission denial, not a connection/command error.")
     for pattern in patterns:
         require(_redis(host, "ACL", "DRYRUN", user, "GET", pattern[:-1] + "probe", allow_denied=True) == "OK",
                 "redis_acl", "Redis instance ACL is missing a required key prefix.")
+        require(_redis(host, "ACL", "DRYRUN", user, "SET", pattern[:-1] + "probe", "probe", allow_denied=True) == "OK",
+                "redis_acl", "Redis instance ACL is missing required cache writes.")
     for pattern in channels:
-        require(_redis(host, "ACL", "DRYRUN", user, "PUBLISH", pattern[:-1] + "probe", "probe", allow_denied=True) == "OK",
-                "redis_acl", "Redis instance ACL is missing a required channel prefix.")
+        for command in (("PUBLISH", pattern[:-1] + "probe", "probe"), ("SUBSCRIBE", pattern[:-1] + "probe")):
+            require(_redis(host, "ACL", "DRYRUN", user, *command, allow_denied=True) == "OK",
+                    "redis_acl", "Redis instance ACL is missing a required channel prefix.")
+
+
+def _policy(entry: dict, password: str, patterns: list[str], channels: list[str]) -> dict:
+    line = _acl_line(entry, password, patterns, channels)
+    return {"patterns": patterns, "channels": channels, "sha256": hashlib.sha256(line.encode()).hexdigest()}
+
+
+def _inventory(policy: dict) -> dict:
+    return {"keys": [item[:-1] for item in policy["patterns"]], "channels": [item[:-1] for item in policy["channels"]]}
+
+
+def _publish_policy(host: Host, entry: dict, path: Path, content: str, password: str, target: dict) -> None:
+    lines = content.splitlines(keepends=True)
+    index = _acl_index(lines, entry)
+    require(index is not None, "redis_ownership", "The owned Redis user declaration disappeared.")
+    ending = "\r\n" if lines[index].endswith("\r\n") else "\n" if lines[index].endswith("\n") else ""
+    lines[index] = _acl_line(entry, password, target["patterns"], target["channels"]) + ending
+    host.owned_write(path, "".join(lines), mode=0o640, owner="root", group=REDIS_ACCOUNT)
 
 
 def reconcile_redis_grants(host: Host, registry: dict, entry: dict, patterns: Sequence[str],
                            *, channels: Sequence[str] | None = None) -> bool:
-    """Converge this instance to exact grants under the host and instance locks.
+    """Converge one user under host/instance locks, preserving all unrelated bytes.
 
-    Return whether anything changed. Durable private intent precedes disk, then
-    ACL SETUSER, verification, and public commitment. A pending target must be
-    resumed before starting a different transition. All unrelated ACL bytes stay
-    unchanged; neither ACL LOAD nor ACL SAVE is used. None preserves channels.
+    Lifecycle supplies the running/candidate union before activation and selected
+    inventory after every role is ready. Each call has its own durable intent;
+    failures during narrowing retain an explicit cleanup obligation for F1.
     """
     patterns = _validated_patterns(entry, patterns)
     channels = _validated_patterns(entry, granted_redis_channels(entry) if channels is None else channels)
@@ -318,7 +686,7 @@ def reconcile_redis_grants(host: Host, registry: dict, entry: dict, patterns: Se
             "redis_ownership", "Only the dedicated Foundry Redis ACL may be changed.")
     password = read_credentials(host, entry)["redis_password"]
     path = check_path(host.paths.p(REDIS_ACLFILE), "file")
-    content = path.read_bytes().decode("utf-8")
+    content = _read_acl(host)
     state = _load_state(host, entry)
     require(_acl_owned(content, entry, password, state), "redis_ownership", "Redis user has no owned persistent declaration.")
     pending = state.get("pending")
@@ -326,29 +694,54 @@ def reconcile_redis_grants(host: Host, registry: dict, entry: dict, patterns: Se
         require(pending["patterns"] == patterns and pending["channels"] == channels,
                 "redis_acl_pending", "Resume the pending Redis grant transition before changing its target.")
     candidates = [candidate for candidate in (state.get("committed"), pending) if candidate]
-    live_matches = _validate_redis_live(_redis(host, "ACL", "GETUSER", entry["allocations"]["redis_user"]),
-                                        entry, password, host, candidates)
-    if live_matches and not pending and patterns == sorted(granted_redis_patterns(entry)) and channels == sorted(granted_redis_channels(entry)):
+    require(any(candidate["patterns"] == sorted(granted_redis_patterns(entry))
+                and candidate["channels"] == sorted(granted_redis_channels(entry)) for candidate in candidates),
+            "redis_ownership", "Public Redis grants differ from every durably recorded policy.")
+    require(_validate_redis_live(_redis(host, "ACL", "GETUSER", entry["allocations"]["redis_user"]),
+                                entry, password, host, candidates),
+            "redis_ownership", "The acknowledged Redis user disappeared.")
+    if not pending and patterns == sorted(granted_redis_patterns(entry)) and channels == sorted(granted_redis_channels(entry)):
+        _redis_scope_probes(host, entry, patterns, channels)
         return False
-    line = _acl_line(entry, password, patterns, channels)
-    target = {"patterns": patterns, "channels": channels, "sha256": hashlib.sha256(line.encode()).hexdigest()}
-    state["pending"] = target
+    target = _policy(entry, password, patterns, channels)
+    if not pending:
+        old = state["committed"]
+        narrowing = bool(set(old["patterns"]) - set(patterns) or set(old["channels"]) - set(channels))
+        operation = str(uuid.uuid4())
+        state["transition"] = {
+            "operation_id": operation, "credential_identity": hashlib.sha256(password.encode()).hexdigest(),
+            "old_inventory": _inventory(old), "candidate_inventory": _inventory(target),
+            "widened_union": {"keys": sorted(set(_inventory(old)["keys"]) | set(_inventory(target)["keys"])),
+                              "channels": sorted(set(_inventory(old)["channels"]) | set(_inventory(target)["channels"]))},
+            "final_target": _inventory(target), "old_line_sha256": old["sha256"], "new_line_sha256": target["sha256"],
+            "phase": "narrow_intent" if narrowing else "widen_intent", "narrowing": narrowing,
+        }
+        state["pending"] = target
+        _save_state(host, entry, state)
+    transition = state["transition"]
+    entry["redis_grants"]["pending_operation"] = transition["operation_id"]
+    if transition["narrowing"]:
+        entry.setdefault("cleanup_pending", {})["redis_acl"] = {"operation_id": transition["operation_id"]}
+    host.journal(registry, entry)
+    _publish_policy(host, entry, path, content, password, target)
+    transition["phase"] = "disk_published"
     _save_state(host, entry, state)
-    lines = content.splitlines(keepends=True)
-    index = _acl_index(lines, entry)
-    ending = "\r\n" if lines[index].endswith("\r\n") else "\n" if lines[index].endswith("\n") else ""
-    lines[index] = line + ending
-    host.owned_write(path, "".join(lines), mode=0o640, owner="root", group=REDIS_ACCOUNT)
     require(_redis(host, "ACL", "SETUSER", entry["allocations"]["redis_user"],
                    *redis_rules(entry, password, patterns, channels=channels)) == "OK",
             "redis_acl", "Redis refused the instance ACL policy.")
+    transition["phase"] = "live_applied"
+    _save_state(host, entry, state)
     require(_validate_redis_live(_redis(host, "ACL", "GETUSER", entry["allocations"]["redis_user"]),
                                  entry, password, host, [target]),
             "redis_acl", "Redis did not apply the instance ACL policy.")
     _redis_scope_probes(host, entry, patterns, channels)
-    entry["redis_grants"].update(keys=[pattern[:-1] for pattern in patterns], channels=[pattern[:-1] for pattern in channels])
+    transition["phase"] = "verified"
+    _save_state(host, entry, state)
+    entry["redis_grants"].update(_inventory(target), pending_operation=None)
+    entry.get("cleanup_pending", {}).pop("redis_acl", None)
     host.journal(registry, entry)
     state["committed"] = target
     state.pop("pending", None)
+    transition["phase"] = "committed"
     _save_state(host, entry, state)
     return True
