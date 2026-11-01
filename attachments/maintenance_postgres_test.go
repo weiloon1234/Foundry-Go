@@ -213,13 +213,17 @@ func TestPostgresAttachmentStorageInspectionPagesWithFixedCutoff(t *testing.T) {
 	}()
 	options := StorageInspection{Disk: testDisk, Owner: extensiontest.Members.Name(), MinimumAge: time.Hour, Limit: 1}
 	var candidates []storage.ObjectInfo
-	scanned := 0
+	scanned, unknown := 0, 0
 	for i := 0; i < 5; i++ {
 		page, err := manager.InspectStorage(t.Context(), options)
 		if err != nil {
 			t.Fatal(err)
 		}
+		if page.Unknown != len(page.Candidates) || page.Unknown > page.Scanned {
+			t.Fatal("unknown-object count differs from inspected keys", page.Unknown, len(page.Candidates), page.Scanned)
+		}
 		scanned += page.Scanned
+		unknown += page.Unknown
 		candidates = append(candidates, page.Candidates...)
 		if page.Next.IsZero() {
 			break
@@ -234,7 +238,7 @@ func TestPostgresAttachmentStorageInspectionPagesWithFixedCutoff(t *testing.T) {
 		}
 		options.Cursor = page.Next
 	}
-	if scanned != 2 || len(candidates) != 1 || candidates[0].Key.String() != key.String() {
+	if scanned != 2 || unknown != 1 || len(candidates) != 1 || candidates[0].Key.String() != key.String() {
 		t.Fatal("inspection failed to page past referenced objects")
 	}
 	if _, err := f.disk.Stat(t.Context(), key, storage.ReadOptions{}); err != nil {

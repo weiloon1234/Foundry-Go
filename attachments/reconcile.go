@@ -98,8 +98,12 @@ func (m *Manager) reconcile(ctx context.Context, id model.ID[store.File], allowS
 	}
 	// Derived variants are removed first; the original stays pending (and is
 	// retried) until every variant is confirmed deleted.
-	deleteErr := m.cleanupVariantsOf(ctx, id)
+	pending, deleteErr := m.cleanupVariantsOf(ctx, id)
 	if deleteErr == nil {
+		eligible, err := m.cleanupEligible(row.UpdatedAt)
+		if err != nil || !eligible || pending {
+			return status(row), err
+		}
 		deleteErr = disk.Delete(ctx, key, attachmentDelete(disk, row.ObjectVersion, row.ETag))
 		if deleteErr != nil && (callback.ErrorIs(deleteErr, storage.PreconditionFailed) || callback.ErrorIs(deleteErr, storage.NotFound)) {
 			// Conditional deletion of an already absent version may conflict. Only
@@ -204,7 +208,7 @@ func (m *Manager) settleCutoff(now temporal.DateTime) (temporal.DateTime, error)
 // or present with this intent's exact size and full checksum. Anything else
 // stays Uncertain for operator Settle. Locally active writers are excluded.
 // The same sweep retries variant cleanup, settles aged variant intents and
-// scans one scoped object page for abandoned keys older than both grace periods.
+// scans one scoped object page for tombstoned keys after the age and cleanup grace limits.
 func (m *Manager) ReconcilePending(ctx context.Context, limit int) ([]ReconcileResult, error) {
 	if err := m.Validate(); err != nil {
 		return nil, err

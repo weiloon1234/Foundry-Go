@@ -7,6 +7,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
@@ -23,6 +24,7 @@ func (m *Manager) fenceOriginal(ctx context.Context, id model.ID[store.File], di
 	ctx, cancel := m.cleanupContext(ctx)
 	defer cancel()
 	ended := false
+	var retiredAt temporal.DateTime
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
 		ended = false
 		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Files.Query()).Where(orm.KeyEq(store.Files.Key(), id)))
@@ -40,16 +42,23 @@ func (m *Manager) fenceOriginal(ctx context.Context, id model.ID[store.File], di
 			if err != nil {
 				return err
 			}
-			if _, err := orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.TextSet(store.Files.State, string(Cleaned)), orm.TextSet(store.Files.LastFailure, "writer_fenced"), orm.TimeSet(store.Files.UpdatedAt, now)); err != nil {
+			row, err = orm.Update(ctx, tx, store.Files.Query(), store.Files.Key(), id, orm.TextSet(store.Files.State, string(Cleaned)), orm.TextSet(store.Files.LastFailure, "writer_fenced"), orm.TimeSet(store.Files.UpdatedAt, now))
+			if err != nil {
 				return err
 			}
 			ended = true
+			retiredAt = row.UpdatedAt
 		} else {
 			ended = row.State == string(Cleaned) || row.State == string(CleanupPending)
+			retiredAt = row.UpdatedAt
 		}
 		return nil
 	})
 	if err != nil || !ended {
+		return err
+	}
+	eligible, err := m.cleanupEligible(retiredAt)
+	if err != nil || !eligible {
 		return err
 	}
 	return deleteEndedObject(ctx, disk, key, temporal.DateTime{})
@@ -59,6 +68,7 @@ func (m *Manager) fenceVariant(ctx context.Context, original store.File, id mode
 	ctx, cancel := m.cleanupContext(ctx)
 	defer cancel()
 	ended := false
+	var retiredAt temporal.DateTime
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
 		ended = false
 		row, err := orm.RequireLocked(ctx, tx, orm.Lock(store.Variants.Query()).Where(orm.KeyEq(store.Variants.Key(), id)))
@@ -76,16 +86,23 @@ func (m *Manager) fenceVariant(ctx context.Context, original store.File, id mode
 			if err != nil {
 				return err
 			}
-			if _, err := orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, orm.TextSet(store.Variants.State, string(VariantCleaned)), orm.TextSet(store.Variants.LastFailure, "writer_fenced"), orm.TimeSet(store.Variants.UpdatedAt, now)); err != nil {
+			row, err = orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, orm.TextSet(store.Variants.State, string(VariantCleaned)), orm.TextSet(store.Variants.LastFailure, "writer_fenced"), orm.TimeSet(store.Variants.UpdatedAt, now))
+			if err != nil {
 				return err
 			}
 			ended = true
+			retiredAt = row.UpdatedAt
 		} else {
 			ended = row.State == string(VariantCleaned) || row.State == string(VariantCleanup)
+			retiredAt = row.UpdatedAt
 		}
 		return nil
 	})
 	if err != nil || !ended {
+		return err
+	}
+	eligible, err := m.cleanupEligible(retiredAt)
+	if err != nil || !eligible {
 		return err
 	}
 	return deleteEndedObject(ctx, disk, key, temporal.DateTime{})
@@ -149,10 +166,9 @@ func (m *Manager) initObjectSweep() error {
 // sweepObjects visits one bounded page per call, rotating registered disk/scope
 // pairs and retaining each cursor. Repeated scheduled calls progress past live
 // objects; restart safely starts over. Only canonical attachment IDs are eligible.
-// Rows are committed before Put and IDs are never reused, so absence cannot race
-// with a new legitimate publication of the same key. Every nonterminal row,
-// including Writing, Uncertain and Retained, prevents deletion. Cleaned is an
-// irreversible tombstone, allowing recovery of a late provider create.
+// Only a durable Cleaned tombstone in this database authorizes deletion. Missing
+// rows can belong to another database sharing the namespace and never authorize
+// reclamation. Every other state protects its key, including unknown states.
 func (m *Manager) sweepObjects(ctx context.Context, cutoff temporal.DateTime, limit int) error {
 	if !m.orphanMu.TryLock() {
 		return nil
@@ -174,11 +190,15 @@ func (m *Manager) sweepObjects(ctx context.Context, cutoff temporal.DateTime, li
 			keys = append(keys, object.Key.String())
 		}
 	}
-	var referenced map[string]bool
+	var referenced map[string]objectReference
+	cleanupCutoff, err := m.cleanupCutoff()
+	if err != nil {
+		return err
+	}
 	if len(keys) > 0 {
 		err = m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 			var err error
-			referenced, err = objectReferences(ctx, tx, target.disk.ID(), keys, false)
+			referenced, err = objectReferences(ctx, tx, target.disk.ID(), keys)
 			return err
 		})
 		if err != nil {
@@ -187,7 +207,8 @@ func (m *Manager) sweepObjects(ctx context.Context, cutoff temporal.DateTime, li
 	}
 	var failures error
 	for _, keyText := range keys {
-		if referenced[keyText] {
+		reference, known := referenced[keyText]
+		if !known || !reference.cleaned || reference.updatedAt.UTC().After(cleanupCutoff.UTC()) {
 			continue
 		}
 		key, err := storage.ParseKey(keyText)
@@ -215,31 +236,73 @@ func canonicalAttachmentKey(prefix storage.Prefix, key storage.ObjectKey) bool {
 	return err == nil && !id.IsZero() && id.String() == suffix
 }
 
-// objectReferences batches both journals so inspection and sweeping agree about
-// variant ownership. Inspection includes tombstones; reclamation excludes only
-// irreversible Cleaned rows. Unknown states conservatively protect their keys.
-func objectReferences(ctx context.Context, tx *database.Tx, disk storage.DiskID, keys []string, includeCleaned bool) (map[string]bool, error) {
-	f, v := store.Files, store.Variants
-	files := f.Query().Where(orm.TextEq(f.Disk, string(disk)), orm.TextIn(f.ObjectKey, keys...))
-	variants := v.Query().Where(orm.TextEq(v.Disk, string(disk)), orm.TextIn(v.ObjectKey, keys...))
-	if !includeCleaned {
-		files = files.Where(orm.TextNe(f.State, string(Cleaned)))
-		variants = variants.Where(orm.TextNe(v.State, string(VariantCleaned)))
+// cleanupEligible uses the journal timestamp, never object creation time: a
+// long-lived ready object must still survive a full grace after retirement.
+func (m *Manager) cleanupEligible(retiredAt temporal.DateTime) (bool, error) {
+	cutoff, err := m.cleanupCutoff()
+	return err == nil && !retiredAt.UTC().After(cutoff.UTC()), err
+}
+
+func (m *Manager) cleanupCutoff() (temporal.DateTime, error) {
+	now, err := m.store.Now()
+	if err != nil {
+		return temporal.DateTime{}, err
 	}
-	originals, err := rows.Read(rows.SelectValue(files.Limit(storage.MaxPageSize+1), orm.TextExpr(f.ObjectKey))).All(ctx, tx)
+	return temporal.NewDateTime(now.UTC().Add(-m.config.CleanupGrace))
+}
+
+type objectReference struct {
+	cleaned   bool
+	updatedAt temporal.DateTime
+}
+
+type objectJournal struct {
+	Key       string
+	State     string
+	UpdatedAt temporal.DateTime
+}
+
+type objectJournalFields struct {
+	rows.Row[objectJournal]
+	Key       rows.Field[objectJournal, string]
+	State     rows.Field[objectJournal, string]
+	UpdatedAt rows.Field[objectJournal, temporal.DateTime]
+}
+
+var objectJournalColumns = rows.Define(func(b rows.Builder[objectJournal], r *objectJournal) objectJournalFields {
+	return objectJournalFields{b.Row(), rows.TextOf(b, &r.Key), rows.TextOf(b, &r.State), rows.TimeOf(b, &r.UpdatedAt)}
+})
+
+// objectReferences batches both journals for inspection and reclamation. Missing
+// keys are unknown, not retired. A nonterminal reference always protects a key.
+func objectReferences(ctx context.Context, tx *database.Tx, disk storage.DiskID, keys []string) (map[string]objectReference, error) {
+	f, v, c := store.Files, store.Variants, objectJournalColumns
+	files := f.Query().Where(orm.TextEq(f.Disk, string(disk)), orm.TextIn(f.ObjectKey, keys...)).Limit(storage.MaxPageSize + 1)
+	variants := v.Query().Where(orm.TextEq(v.Disk, string(disk)), orm.TextIn(v.ObjectKey, keys...)).Limit(storage.MaxPageSize + 1)
+	originals, err := rows.Read(rows.Select(rows.From(files), c, rows.Map(c.Key, expr.Value(orm.TextExpr(f.ObjectKey))), rows.Map(c.State, expr.Value(orm.TextExpr(f.State))), rows.Map(c.UpdatedAt, expr.Value(orm.TimeExpr(f.UpdatedAt))))).All(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
-	derived, err := rows.Read(rows.SelectValue(variants.Limit(storage.MaxPageSize+1), orm.TextExpr(v.ObjectKey))).All(ctx, tx)
+	derived, err := rows.Read(rows.Select(rows.From(variants), c, rows.Map(c.Key, expr.Value(orm.TextExpr(v.ObjectKey))), rows.Map(c.State, expr.Value(orm.TextExpr(v.State))), rows.Map(c.UpdatedAt, expr.Value(orm.TimeExpr(v.UpdatedAt))))).All(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
-	referenced := make(map[string]bool, len(originals)+len(derived))
-	for _, key := range originals {
-		referenced[key] = true
+	referenced := make(map[string]objectReference, len(originals)+len(derived))
+	add := func(row objectJournal, cleaned bool) {
+		previous, exists := referenced[row.Key]
+		if exists {
+			cleaned = cleaned && previous.cleaned
+			if previous.updatedAt.UTC().After(row.UpdatedAt.UTC()) {
+				row.UpdatedAt = previous.updatedAt
+			}
+		}
+		referenced[row.Key] = objectReference{cleaned: cleaned, updatedAt: row.UpdatedAt}
 	}
-	for _, key := range derived {
-		referenced[key] = true
+	for _, row := range originals {
+		add(row, row.State == string(Cleaned))
+	}
+	for _, row := range derived {
+		add(row, row.State == string(VariantCleaned))
 	}
 	return referenced, nil
 }

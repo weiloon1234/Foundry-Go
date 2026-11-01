@@ -300,9 +300,13 @@ use a unique file ID; each variant generation uses a new variant ID. Every
 object is created with `IfAbsent`, and cleanup commits a terminal row state
 before deleting. A key can never name a later live generation, so unconditional
 cleanup cannot delete data that attachments must keep. Stale writers are fenced
-after put; scheduled reconciliation sweeps old orphan objects only within
-registered attachment scope prefixes. The [attachment recovery contract](attachments.md#publication-and-recovery)
-describes grace periods, retained files, and legacy variant keys. This does not
+after put; scheduled reconciliation sweeps old objects only within
+registered attachment scope prefixes and only with a durable `cleaned` tombstone
+in the current database. Unknown keys are reported with per-page counts and
+key samples by `InspectStorage`, never deleted, even when disks or databases
+share a namespace. Retired objects and stale-writer tombstones also wait the
+configured attachment `CleanupGrace` before physical deletion.
+The [attachment recovery contract](attachments.md#publication-and-recovery) describes grace periods, retained files, and legacy variant keys. This does not
 add conditional delete to R2 or change the requirements of `MoveTo`.
 
 R2's upload-generation response header is also not a retained-version selector:
@@ -431,3 +435,19 @@ Local resource measurements use `go test ./storage/local -run '^$' -bench
 BenchmarkLocalStream -benchmem`; these report throughput/allocations, not a claim
 that cumulative allocation equals peak retained memory. Hard input/part/page and
 active-operation bounds have separate behavioral cases.
+
+## Attachment backups
+
+Set `features.attachments.config.cleanup_grace = "72h"` or longer when object
+backups run daily. In Go, set `CleanupGrace` on `attachments.Config`. The default
+is `0` for development. The grace must exceed the object-copy interval plus margin so a database snapshot can still find objects retired during
+the copy. It covers replacement, variant cleanup, reconciliation and stale-writer
+cleanup. Schedule attachment reconciliation to finish deletion after the grace.
+
+Use `rclone copy`, never a deleting mirror, for the backup object copy. The backup
+bucket's `objects/` prefix is not pruned in this release: old objects accumulate,
+with corresponding storage costs. Treat a backup bundle as complete only when both
+its database recovery point and the last successful object copy are newer than the
+grace window; report stale or missing copies explicitly. The grace does not prove
+that a copy succeeded. See [attachment recovery](attachments.md#publication-and-recovery)
+for journal ownership and inspection behavior.

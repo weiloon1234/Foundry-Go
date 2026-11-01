@@ -386,7 +386,8 @@ func (m *Manager) produceVariant(ctx context.Context, original store.File, varia
 		err = joinFailures(err, m.fenceVariant(ctx, original, id, disk, key))
 	}
 	for _, previous := range retired {
-		err = joinFailures(err, m.cleanupVariant(publishCtx, previous))
+		_, cleanupErr := m.cleanupVariant(publishCtx, previous)
+		err = joinFailures(err, cleanupErr)
 	}
 	return err
 }
@@ -519,8 +520,8 @@ func (m *Manager) retireVariants(ctx context.Context, tx *database.Tx, fileID mo
 }
 
 // cleanupVariantsOf retires and deletes every derived file of an original
-// that is leaving ready ownership. Any failure keeps the caller pending.
-func (m *Manager) cleanupVariantsOf(ctx context.Context, fileID model.ID[store.File]) error {
+// that is leaving ready ownership. It reports pending work during grace or failure.
+func (m *Manager) cleanupVariantsOf(ctx context.Context, fileID model.ID[store.File]) (bool, error) {
 	var ids []model.ID[store.Variant]
 	err := m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
@@ -528,18 +529,22 @@ func (m *Manager) cleanupVariantsOf(ctx context.Context, fileID model.ID[store.F
 		return err
 	})
 	if err != nil {
-		return err
+		return true, err
 	}
 	var failures error
+	pending := false
 	for _, id := range ids {
-		failures = joinFailures(failures, m.cleanupVariant(ctx, id))
+		waiting, err := m.cleanupVariant(ctx, id)
+		pending = pending || waiting
+		failures = joinFailures(failures, err)
 	}
-	return failures
+	return pending, failures
 }
 
 // cleanupVariant deletes exactly the pinned object of a retired variant and
-// journals the result. Confirmed absence is success.
-func (m *Manager) cleanupVariant(ctx context.Context, id model.ID[store.Variant]) error {
+// journals the result. It reports whether cleanup is still pending.
+// Confirmed absence is success; grace waiting does not count as an attempt.
+func (m *Manager) cleanupVariant(ctx context.Context, id model.ID[store.Variant]) (bool, error) {
 	var row store.Variant
 	var original store.File
 	err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
@@ -551,21 +556,25 @@ func (m *Manager) cleanupVariant(ctx context.Context, id model.ID[store.Variant]
 		return err
 	})
 	if err != nil {
-		return err
+		return true, err
 	}
 	if row.State != string(VariantCleanup) {
-		return nil
+		return false, nil
 	}
 	if err := m.validateVariant(row, original); err != nil {
-		return err
+		return true, err
+	}
+	eligible, err := m.cleanupEligible(row.UpdatedAt)
+	if err != nil || !eligible {
+		return true, err
 	}
 	disk, err := m.disks.Disk(storage.DiskID(row.Disk))
 	if err != nil {
-		return err
+		return true, err
 	}
 	key, err := storage.ParseKey(row.ObjectKey)
 	if err != nil {
-		return err
+		return true, err
 	}
 	deleteErr := disk.Delete(ctx, key, attachmentDelete(disk, row.ObjectVersion, row.ETag))
 	if deleteErr != nil && (callback.ErrorIs(deleteErr, storage.PreconditionFailed) || callback.ErrorIs(deleteErr, storage.NotFound)) {
@@ -607,7 +616,7 @@ func (m *Manager) cleanupVariant(ctx context.Context, id model.ID[store.Variant]
 		_, err = orm.Update(ctx, tx, store.Variants.Query(), store.Variants.Key(), id, draft...)
 		return err
 	})
-	return joinFailures(deleteErr, journalErr)
+	return deleteErr != nil || journalErr != nil, joinFailures(deleteErr, journalErr)
 }
 
 // sweepVariants retries variant cleanup and settles variant intents whose
@@ -641,7 +650,8 @@ func (m *Manager) sweepVariants(ctx context.Context, cutoff temporal.DateTime, l
 			return joinFailures(failures, err)
 		}
 		if row.State == string(VariantCleanup) {
-			failures = joinFailures(failures, m.cleanupVariant(ctx, row.ID))
+			_, cleanupErr := m.cleanupVariant(ctx, row.ID)
+			failures = joinFailures(failures, cleanupErr)
 		} else {
 			failures = joinFailures(failures, m.settleVariant(ctx, row.ID, cutoff))
 		}
@@ -716,7 +726,8 @@ func (m *Manager) settleVariant(ctx context.Context, id model.ID[store.Variant],
 	if err != nil || absent {
 		return err
 	}
-	return m.cleanupVariant(ctx, id)
+	_, err = m.cleanupVariant(ctx, id)
+	return err
 }
 
 // loadVariants attaches ready declared variants to loaded attachments using

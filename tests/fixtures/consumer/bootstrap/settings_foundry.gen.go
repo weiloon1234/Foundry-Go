@@ -1069,6 +1069,8 @@ type SettingsAppFeaturesAttachmentsConfigConfigKeySet struct {
 	Timeout config.Key[Settings, time.Duration]
 	// CleanupTimeout selects app.features.attachments.config.cleanup_timeout. Set accepts time.Duration.
 	CleanupTimeout config.Key[Settings, time.Duration]
+	// CleanupGrace selects app.features.attachments.config.cleanup_grace. Set accepts time.Duration.
+	CleanupGrace config.Key[Settings, time.Duration]
 	// StoredGrace selects app.features.attachments.config.stored_grace. Set accepts time.Duration.
 	StoredGrace config.Key[Settings, time.Duration]
 	// SettleAfter selects app.features.attachments.config.settle_after. Set accepts time.Duration.
@@ -2112,8 +2114,9 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 						CleanupTimeout: config.Duration[Settings]("app.features.attachments.config.cleanup_timeout", func(settings *Settings) *time.Duration {
 							return &settings.App.Features.Attachments.Config.CleanupTimeout
 						}),
-						StoredGrace: config.Duration[Settings]("app.features.attachments.config.stored_grace", func(settings *Settings) *time.Duration { return &settings.App.Features.Attachments.Config.StoredGrace }),
-						SettleAfter: config.Duration[Settings]("app.features.attachments.config.settle_after", func(settings *Settings) *time.Duration { return &settings.App.Features.Attachments.Config.SettleAfter }),
+						CleanupGrace: config.Duration[Settings]("app.features.attachments.config.cleanup_grace", func(settings *Settings) *time.Duration { return &settings.App.Features.Attachments.Config.CleanupGrace }),
+						StoredGrace:  config.Duration[Settings]("app.features.attachments.config.stored_grace", func(settings *Settings) *time.Duration { return &settings.App.Features.Attachments.Config.StoredGrace }),
+						SettleAfter:  config.Duration[Settings]("app.features.attachments.config.settle_after", func(settings *Settings) *time.Duration { return &settings.App.Features.Attachments.Config.SettleAfter }),
 					},
 				},
 				Reports: SettingsAppFeaturesReportsConfigKeySet{
@@ -2579,6 +2582,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.Features.Attachments.Config.MaxReads,
 		keys.App.Features.Attachments.Config.Timeout,
 		keys.App.Features.Attachments.Config.CleanupTimeout,
+		keys.App.Features.Attachments.Config.CleanupGrace,
 		keys.App.Features.Attachments.Config.StoredGrace,
 		keys.App.Features.Attachments.Config.SettleAfter,
 		keys.App.Features.Reports.Enabled,

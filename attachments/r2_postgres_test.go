@@ -424,12 +424,23 @@ func TestPostgresR2AttachmentOrphanSweepScopeGraceAndProgress(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, key := range []storage.ObjectKey{lateKey, orphan, variantOrphan} {
-		assertObjectAbsent(t, f.disk, key)
-	}
-	for _, key := range append(protected, outside, foreign) {
+	assertObjectAbsent(t, f.disk, lateKey)
+	for _, key := range append(protected, orphan, variantOrphan, outside, foreign) {
 		if _, err := f.disk.Stat(t.Context(), key, storage.ReadOptions{}); err != nil {
 			t.Fatal("sweep removed protected object", err)
+		}
+	}
+	inspection, err := f.manager.InspectStorage(t.Context(), StorageInspection{Disk: testDisk, Owner: extensiontest.Members.Name(), MinimumAge: time.Minute, Limit: 100})
+	if err != nil || inspection.Unknown != 3 || len(inspection.Candidates) != 3 {
+		t.Fatal("unknown objects were not reported", inspection.Unknown, err)
+	}
+	unknown := make(map[storage.ObjectKey]bool)
+	for _, candidate := range inspection.Candidates {
+		unknown[candidate.Key] = true
+	}
+	for _, key := range []storage.ObjectKey{orphan, variantOrphan, foreign} {
+		if !unknown[key] {
+			t.Fatal("unknown key missing from inspection", key)
 		}
 	}
 	for _, options := range backend.lists {

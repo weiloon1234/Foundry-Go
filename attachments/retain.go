@@ -98,8 +98,8 @@ func (c Collection[M, K]) DetachKeepFile(ctx context.Context, m *Manager, owner 
 			if err == nil {
 				cleanupCtx, cancel := m.cleanupContext(ctx)
 				defer cancel()
-				// A failed deletion stays in cleanup for ReconcilePending.
-				err = m.cleanupVariantsOf(cleanupCtx, model.IDFromBytes[store.File](id.Bytes()))
+				// Deferred or failed deletion stays in cleanup for ReconcilePending.
+				_, err = m.cleanupVariantsOf(cleanupCtx, model.IDFromBytes[store.File](id.Bytes()))
 			}
 		case database.Unknown:
 			result.Publication = PublicationUnknown

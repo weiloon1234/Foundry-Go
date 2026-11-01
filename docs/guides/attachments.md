@@ -122,9 +122,9 @@ replace objects there. Reads still use their pinned validators.
 
 After a rejected put acknowledgement or publication, the writer checks the row
 again. If settlement fenced the writer, cleanup first commits a tombstone and
-then deletes that writer's key. A late create is never adopted. If a provider
-completes after the writer exits, `ReconcilePending` recovers the object through
-its orphan sweep. Database or storage failures leave recovery to later calls.
+then deletes that writer's key once `CleanupGrace` has elapsed. A late create is
+never adopted. If a provider completes after the writer exits, `ReconcilePending`
+recovers the object through its orphan sweep. Database or storage failures leave recovery to later calls.
 
 The orphan sweep lists at most `limit` objects in one registered disk and scope
 per call, under `foundry-attachments/<scope>/` only. It rotates scopes and keeps
@@ -132,7 +132,10 @@ per-scope cursors in the manager, so repeated scheduled calls progress past
 live objects. Restarting the manager restarts those cursors safely. An object
 must be older than both `StoredGrace` and the disk settlement delay
 (longest registered disk timeout plus `SettleAfter`). Only canonical original
-or variant keys with no row or a `cleaned` tombstone are eligible. All other
+or variant keys with a durable `cleaned` tombstone in this database are
+eligible, and that tombstone must also satisfy `CleanupGrace`. Keys with no
+row are never deleted: they may belong to another database or an aliased disk
+sharing this namespace. `InspectStorage` reports those unknown keys. All other
 rows, including `writing`, `uncertain`, `stored`, `ready`, and `retained`, prevent
 orphan deletion. Journal cleanup runs separately and remains retryable.
 
@@ -152,8 +155,8 @@ Framework diagnostics survive containment; application hook errors retain their
 causes through `errors.Is/As` without exposing their text. They lock the owner, recount its intents and
 publish; the attachment is part of the caller's commit. A failed or rolled-back
 publication leaves the upload `stored`, ready for another attempt; `Discard`
-reclaims it at once, and `ReconcilePending` cleans it after `StoredGrace`. Old-file
-cleanup and unqueued variant generation run after the commit, so a failure there
+retires it at once, and `ReconcilePending` retires it after `StoredGrace`. Physical
+deletion then waits `CleanupGrace`. Old-file cleanup and unqueued variant generation run after the commit, so a failure there
 is the transaction's after-commit error and leaves `cleanup` intents for
 reconciliation. `Publication` is `Published` once the savepoint succeeds, subject
 to that commit. A
@@ -171,7 +174,8 @@ Always inspect `Result.Publication` when an upload returns an error:
 | `Published` | Ownership committed. `Attachment` is available even if a later hook or old-file cleanup failed. |
 | `PublicationUnknown` | The ownership commit outcome is uncertain. Inspect the durable operation and fresh collection before deciding whether to retry. |
 
-`PendingCleanup` contains durable operations whose object cleanup remains open.
+`PendingCleanup` contains durable operations whose object cleanup remains open,
+including operations waiting for `CleanupGrace`; waiting is not a cleanup error.
 `Manager.Inspect` reads an operation's current state, attempt count and safe
 failure category. It does not expose provider errors or private upload metadata.
 Cleanup failure never rolls back an already published replacement or deletes a
@@ -186,6 +190,32 @@ explicit bounded sweep of cleanup and abandoned stored intents. Stored intents
 must exceed `StoredGrace` (five minutes by default), and locally active writers
 are excluded. Moving stored to cleanup locks and fences any later publication
 before deleting bytes. There is no hidden background worker.
+
+`Config.CleanupGrace` (`features.attachments.config.cleanup_grace` in application
+configuration) sets the minimum time before physically deleting a retired or
+replaced object. Its default is `0`, suitable for development; negative durations
+are rejected. Configure **at least 72 hours** when backups copy objects daily,
+and keep the grace longer than the object-copy interval plus an operational
+margin. For example:
+
+```toml
+[features.attachments.config]
+cleanup_grace = "72h"
+```
+
+The grace applies to originals, replaced variants, reconciliation and stale-writer
+tombstones. It starts from the retirement journal timestamp, not the object's
+creation time; later journal updates can conservatively extend the wait. Repeated
+grace-only reconciliation leaves the timestamp and attempt count unchanged.
+Publication and logical removal take effect immediately. The original remains
+pending until its retired variants are cleaned. Run `ReconcilePending` periodically
+to finish deferred cleanup, including after a queued reconciliation job completes
+during the grace window. Keep the same grace on all managers using a database.
+
+Backups must copy objects without deletion (`rclone copy`, not `sync`). The backup
+bucket's `objects/` prefix is not pruned in this release, so budget for accumulating
+retired objects. The grace supplies a copy window; it does not replace monitoring
+successful database and object-backup freshness. See the [storage backup guidance](storage.md#attachment-backups).
 
 An uncertain storage write is different from a known stored object. `writing`
 and `uncertain` intents are never reclaimed merely because a deadline passed or
@@ -367,8 +397,12 @@ stored collection names no registered collection declares; it has no delete flag
 `InspectStorage` lists one bounded provider page under the selected registered
 owner's framework prefix and a registered collection disk. Its opaque cursor
 retains the first-page age cutoff and disk/owner policy. Every journal state
-protects its key. Untracked old objects are reported as candidates only; this
-listing is not a transactional snapshot and does not authorize deletion.
+protects its key. `Unknown` counts age-qualified untracked objects in that page;
+`Candidates` supplies their keys and metadata as bounded inspection samples. Sum
+`Unknown` while following `Next` for a complete scan count. Counts reflect this
+disk ID and database only, so aliases and other databases may own these objects.
+They are never deleted automatically. This listing is not a transactional snapshot
+and does not authorize deletion.
 
 The manager borrows the extension store, disks, image engine, locale catalog and
 optional outbox producer. Stop workers first; then close the manager and await

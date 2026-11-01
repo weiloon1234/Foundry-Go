@@ -1050,6 +1050,8 @@ type SettingsFeaturesAttachmentsConfigConfigKeySet struct {
 	Timeout config.Key[Settings, time.Duration]
 	// CleanupTimeout selects features.attachments.config.cleanup_timeout. Set accepts time.Duration.
 	CleanupTimeout config.Key[Settings, time.Duration]
+	// CleanupGrace selects features.attachments.config.cleanup_grace. Set accepts time.Duration.
+	CleanupGrace config.Key[Settings, time.Duration]
 	// StoredGrace selects features.attachments.config.stored_grace. Set accepts time.Duration.
 	StoredGrace config.Key[Settings, time.Duration]
 	// SettleAfter selects features.attachments.config.settle_after. Set accepts time.Duration.
@@ -2048,6 +2050,7 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 					MaxReads:       config.Scalar[Settings, int]("features.attachments.config.max_reads", func(settings *Settings) *int { return &settings.Features.Attachments.Config.MaxReads }),
 					Timeout:        config.Duration[Settings]("features.attachments.config.timeout", func(settings *Settings) *time.Duration { return &settings.Features.Attachments.Config.Timeout }),
 					CleanupTimeout: config.Duration[Settings]("features.attachments.config.cleanup_timeout", func(settings *Settings) *time.Duration { return &settings.Features.Attachments.Config.CleanupTimeout }),
+					CleanupGrace:   config.Duration[Settings]("features.attachments.config.cleanup_grace", func(settings *Settings) *time.Duration { return &settings.Features.Attachments.Config.CleanupGrace }),
 					StoredGrace:    config.Duration[Settings]("features.attachments.config.stored_grace", func(settings *Settings) *time.Duration { return &settings.Features.Attachments.Config.StoredGrace }),
 					SettleAfter:    config.Duration[Settings]("features.attachments.config.settle_after", func(settings *Settings) *time.Duration { return &settings.Features.Attachments.Config.SettleAfter }),
 				},
@@ -2494,6 +2497,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Features.Attachments.Config.MaxReads,
 		keys.Features.Attachments.Config.Timeout,
 		keys.Features.Attachments.Config.CleanupTimeout,
+		keys.Features.Attachments.Config.CleanupGrace,
 		keys.Features.Attachments.Config.StoredGrace,
 		keys.Features.Attachments.Config.SettleAfter,
 		keys.Features.Reports.Enabled,

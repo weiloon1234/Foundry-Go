@@ -24,12 +24,14 @@ import (
 // joined from model observers uses its own MaxOwnerCleanup pool so it does not
 // compete with application reads/writes. SettleAfter is added to a disk's
 // operation Timeout before ReconcilePending may inspect an unresolved write.
-// Zero MaxReads or SettleAfter selects its default.
+// CleanupGrace is the minimum retirement age before object deletion (zero for
+// immediate development cleanup). Zero MaxReads or SettleAfter selects its default.
 type Config struct {
 	MaxActive      int
 	MaxReads       int
 	Timeout        time.Duration
 	CleanupTimeout time.Duration
+	CleanupGrace   time.Duration
 	StoredGrace    time.Duration
 	SettleAfter    time.Duration
 }
@@ -50,7 +52,7 @@ func DefaultConfig() Config {
 // Validate checks manager capacity and timing bounds, allowing zero read capacity and
 // settlement delay to select defaults.
 func (c Config) Validate() error {
-	if c.MaxActive < 1 || c.MaxActive > 256 || c.MaxReads < 0 || c.MaxReads > 4096 || c.Timeout <= 0 || c.Timeout > 30*time.Minute || c.CleanupTimeout <= 0 || c.CleanupTimeout > time.Minute || c.StoredGrace < time.Minute || c.StoredGrace > 24*time.Hour || c.SettleAfter < 0 || c.SettleAfter != 0 && c.SettleAfter < time.Minute || c.SettleAfter > 7*24*time.Hour {
+	if c.MaxActive < 1 || c.MaxActive > 256 || c.MaxReads < 0 || c.MaxReads > 4096 || c.Timeout <= 0 || c.Timeout > 30*time.Minute || c.CleanupTimeout <= 0 || c.CleanupTimeout > time.Minute || c.CleanupGrace < 0 || c.StoredGrace < time.Minute || c.StoredGrace > 24*time.Hour || c.SettleAfter < 0 || c.SettleAfter != 0 && c.SettleAfter < time.Minute || c.SettleAfter > 7*24*time.Hour {
 		return invalid()
 	}
 	return nil

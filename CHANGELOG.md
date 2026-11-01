@@ -4,6 +4,10 @@
 
 - Fixed: Deployment acceptance uses a digest-pinned VersityGW S3 stand-in with
   HTTPS and authenticated readiness instead of the unavailable MinIO image.
+- Fixed: Attachment sweeps delete only database-owned tombstoned keys; unknown
+  keys remain intact and appear in inspection counts and samples. Configurable
+  `cleanup_grace` delays retired/replaced and stale-writer object deletion
+  (default zero; at least 72h recommended with daily object backups).
 - Fixed: Deployment source snapshots preserve relative symlinks that stay inside
   the snapshot root, including starter skill links. Absolute and escaping links,
   unsafe link chains, hardlinks, and special files remain refused.

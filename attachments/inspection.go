@@ -70,8 +70,11 @@ type StorageInspection struct {
 // not authorize deletion.
 type StorageOrphanPage struct {
 	Candidates []storage.ObjectInfo
-	Scanned    int
-	Next       StorageCursor
+	// Unknown is the number of age-qualified untracked objects in this page.
+	// Candidates contains their keys and metadata; sum Unknown across pages.
+	Unknown int
+	Scanned int
+	Next    StorageCursor
 }
 
 // InspectStorage lists one bounded page under this owner's exact framework
@@ -133,19 +136,20 @@ func (m *Manager) InspectStorage(ctx context.Context, options StorageInspection)
 		for i, object := range page.Objects {
 			keys[i] = object.Key.String()
 		}
-		referenced := make(map[string]bool, len(keys))
+		referenced := make(map[string]objectReference, len(keys))
 		if len(keys) > 0 {
 			if err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 				var err error
-				referenced, err = objectReferences(ctx, tx, options.Disk.ID(), keys, true)
+				referenced, err = objectReferences(ctx, tx, options.Disk.ID(), keys)
 				return err
 			}); err != nil {
 				return err
 			}
 		}
 		for _, object := range page.Objects {
-			if !referenced[object.Key.String()] && !object.Modified.UTC().After(cursor.cutoff.UTC()) {
+			if _, known := referenced[object.Key.String()]; !known && !object.Modified.UTC().After(cursor.cutoff.UTC()) {
 				result.Candidates = append(result.Candidates, object)
+				result.Unknown++
 			}
 		}
 		if !page.Next.IsZero() {
