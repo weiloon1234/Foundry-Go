@@ -655,8 +655,9 @@ def _redis_scope_probes(host: Host, entry: dict, patterns: Sequence[str], channe
     for command in denied:
         result = _redis(host, "ACL", "DRYRUN", user, *command, allow_denied=True)
         denial = result.get("error") if isinstance(result, dict) else result
+        # Redis 7 says "This user has no permissions"; Redis 8 names the probed user.
         require(isinstance(denial, str) and (denial == "NOPERM" or denial.startswith("NOPERM ")
-                or denial.startswith("This user has no permissions ")),
+                or denial.startswith(("This user has no permissions ", f"User {user} has no permissions "))),
                 "redis_acl", "Redis scope probe must prove a permission denial, not a connection/command error.")
     for pattern in patterns:
         require(_redis(host, "ACL", "DRYRUN", user, "GET", pattern[:-1] + "probe", allow_denied=True) == "OK",

@@ -229,6 +229,20 @@ class RedisGrantTransitionTests(unittest.TestCase):
         with patch.object(redis_acl, "_redis", side_effect=denied):
             self.assertFalse(redis_acl.reconcile_redis_grants(self.host, self.registry, self.entry, []))
 
+    def test_redis_8_denials_must_name_the_probed_user(self):
+        user = self.entry["allocations"]["redis_user"]
+        for reply, accepted in ((f"User {user} has no permissions to run the 'flushdb' command", True),
+                                ("User foundry-other has no permissions to run the 'flushdb' command", False)):
+            def denied(host, *args, **kwargs):
+                value = self.redis_command(host, *args, **kwargs)
+                return reply if isinstance(value, dict) and "error" in value else value
+            with self.subTest(accepted=accepted), patch.object(redis_acl, "_redis", side_effect=denied):
+                if accepted:
+                    self.assertFalse(redis_acl.reconcile_redis_grants(self.host, self.registry, self.entry, []))
+                else:
+                    with self.assertRaises(DeployError):
+                        redis_acl.reconcile_redis_grants(self.host, self.registry, self.entry, [])
+
     def test_public_grant_drift_cannot_skip_reconciliation(self):
         self.entry["redis_grants"]["keys"] = [self.patterns[0][:-1]]
         with self.assertRaises(DeployError) as raised:
