@@ -350,8 +350,10 @@ def copy_objects(host: Host, entry: dict) -> dict:
         origin = f"app:{source['bucket']}/{source['namespace']}"
         destination = f"backup:{repository['bucket']}/{destination_prefix}"
         history = f"backup:{repository['bucket']}/object-history/{entry['profile']['instance_id']}/{uuid.uuid4().hex}"
-        _rclone(host, ["copy", origin, destination, "--backup-dir", history], source)
-        _rclone(host, ["check", origin, destination, "--one-way", "--download"], source)
+        # Compare listed sizes and checksums: no per-object HEAD or full download on
+        # every run, so only new or changed objects cost transfer and operations.
+        _rclone(host, ["copy", origin, destination, "--backup-dir", history, "--checksum", "--fast-list"], source)
+        _rclone(host, ["check", origin, destination, "--one-way", "--fast-list"], source)
         copies.append({**physical, "objects_prefix": destination_prefix})
     require(copies, "backup_storage_missing", "No runtime object storage bindings are configured.")
     receipt = {"objects_prefix": prefix, "bindings": copies, "configuration_revision": entry["configuration_revision"],

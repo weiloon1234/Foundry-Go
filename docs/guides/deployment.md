@@ -478,7 +478,9 @@ age-encrypted key/config archive, and object copy succeed. The receipt contains
 time. The archive contains the instance configuration and referenced files,
 including active and retained keys and repository recovery material. Only public
 age recipients are stored on the host. `rclone copy` preserves deleted source
-objects; replaced destination objects move to an object-history prefix. Neither
+objects; replaced destination objects move to an object-history prefix. Copy and
+verification compare listed sizes and checksums, so each run transfers only new
+or changed objects and never downloads the whole bucket. Neither
 `objects/` nor object history is pruned in this release, so storage use grows with
 retired objects and changes. Each physical binding has its own destination beneath
 `objects/<instance UUID>/`; the receipt's `object_copy.bindings` maps sources to
