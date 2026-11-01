@@ -40,8 +40,22 @@ def run(argv, *, input=None, env=None, timeout=120, check=True):
         raise RuntimeError("Acceptance subprocess interrupted (output withheld)") from None
     result = subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
     if check and result.returncode:
-        raise RuntimeError("Acceptance subprocess failed (output withheld)")
+        raise RuntimeError("Acceptance subprocess failed" + _safe_failure(argv, stdout))
     return result
+
+
+def _safe_failure(argv, stdout):
+    # Deployment entrypoints answer with a designed-safe {"error": {code, detail}}
+    # object; surface only those two fields and the program/action names.
+    try:
+        error = json.loads(stdout or "").get("error")
+    except (ValueError, AttributeError):
+        error = None
+    if not isinstance(error, dict):
+        return " (output withheld)"
+    names = " ".join(Path(str(item)).name for item in argv[1:3])
+    code, detail = str(error.get("code", ""))[:80], str(error.get("detail", ""))[:300]
+    return f" [{names}]: {code}: {detail}"
 
 
 def private_json(path, value):
