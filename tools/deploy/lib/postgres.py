@@ -252,7 +252,7 @@ def inspect(host: Host, registry: dict) -> dict:
                 "An unclaimed Foundry cluster or directory already exists.")
         require(not check_path(host.paths.p(f"/var/log/postgresql/postgresql-{major}-foundry.log"), "file").exists(),
                 "postgres_ownership", "An unclaimed Foundry PostgreSQL log exists.")
-        require(not host.paths.p(SOCKET).exists() and not host.paths.p("/etc/tmpfiles.d/foundry-postgresql.conf").exists(),
+        require(not host.paths.p(SOCKET).exists(),
                 "postgres_ownership", "An unclaimed Foundry PostgreSQL runtime path exists.")
         ports = _listeners(host) | {item["port"] for item in clusters}
         port = next((number for number in range(POSTGRES_PORT, POSTGRES_PORT + 100) if number not in ports), None)
@@ -598,7 +598,6 @@ def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = No
         host.owned_write(config / "conf.d/foundry.conf", _configuration(allocation),
                          owner=cluster_owner(), group=cluster_owner())
         _publish_hba(host, registry, running=False)
-        host.owned_write(host.paths.p("/etc/tmpfiles.d/foundry-postgresql.conf"), f"d {SOCKET} 0755 {cluster_owner()} {cluster_owner()} -\n")
         host.owned_write(host.paths.p("/etc/systemd/system/" + allocation["unit"]), _unit(allocation))
         host.run(["systemctl", "daemon-reload"])
         journal = _cluster_journal(host, registry)

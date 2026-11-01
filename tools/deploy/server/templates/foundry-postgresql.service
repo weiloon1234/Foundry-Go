@@ -7,6 +7,10 @@ After=network.target
 Type=forking
 User=@OWNER@
 Group=@OWNER@
+# /run is emptied on boot; systemd recreates the owned socket/PID directory.
+RuntimeDirectory=foundry/postgresql
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
 PIDFile=@PID_FILE@
 ExecStart=/usr/bin/pg_ctlcluster --skip-systemctl-redirect @MAJOR@ foundry start
 ExecStop=/usr/bin/pg_ctlcluster --skip-systemctl-redirect -m fast @MAJOR@ foundry stop
