@@ -449,6 +449,12 @@ class PostgreSQLTests(unittest.TestCase):
         with self.assertRaises(DeployError):
             postgres._prepare_account(self.host, self.registry, journal)
 
+    def test_settings_bytes_survive_sorted_registry_round_trip(self):
+        allocation = {"port": 55432, "config_path": "/etc/postgresql/16/foundry", "archive_command": "",
+                      "capacity": dict(postgres.CAPACITY)}
+        persisted = json.loads(json.dumps(allocation, sort_keys=True))
+        self.assertEqual(postgres._configuration(allocation), postgres._configuration(persisted))
+
     def test_archive_command_needs_explicit_owned_plan_and_reloads_only_foundry(self):
         allocation = self.claimed()
         command = 'pgbackrest --stanza=foundry archive-push "%p"'

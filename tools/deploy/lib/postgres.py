@@ -310,7 +310,8 @@ def _configuration(allocation):
               "ssl_key_file": _sql(allocation["config_path"] + "/foundry.key"),
               "fsync": "on", "full_page_writes": "on", "synchronous_commit": "on", "wal_level": "replica",
               "archive_mode": "on", "archive_command": _sql(allocation.get("archive_command", "").replace("\\", "\\\\"))}
-    for key, value in allocation["capacity"].items():
+    # Sorted: the registry persists sorted JSON, so in-memory order must not decide the bytes.
+    for key, value in sorted(allocation["capacity"].items()):
         if key != "budget_mib":
             values[key] = str(value) if isinstance(value, int) else _sql(value)
     return "# Foundry-owned cluster settings\n" + "".join(f"{key} = {value}\n" for key, value in values.items())
