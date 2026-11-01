@@ -114,7 +114,8 @@ def install():
     run(["nginx", "-t"])
     run(["systemctl", "enable", "--now", "nginx.service"])
     run(["systemctl", "reload", "nginx.service"])
-    wait_for(lambda: foreign_http(), "Foreign HTTP did not become ready")
+    # A graceful reload briefly leaves old workers serving; require a stable run.
+    wait_for(lambda: all(foreign_http() for _ in range(10)), "Foreign HTTP did not become ready")
     return major
 
 
