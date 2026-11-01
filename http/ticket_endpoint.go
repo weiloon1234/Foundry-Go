@@ -115,29 +115,29 @@ func ticketInputs(redeemer auth.TicketRedeemer) func(*stdhttp.Request) (auth.Cre
 	return func(r *stdhttp.Request) (auth.Credentials, error) {
 		var ticket secret.String
 		if r.URL == nil {
-			return auth.Credentials{}, Unauthenticated
+			return auth.Credentials{}, Unauthenticated.WithCause(nil)
 		}
 		for raw := range ticketQueryValues(r.URL.RawQuery) {
 			if !ticket.IsZero() || len(raw) == 0 || len(raw) > 3*auth.MaxCredentialBytes {
-				return auth.Credentials{}, Unauthenticated
+				return auth.Credentials{}, Unauthenticated.WithCause(nil)
 			}
 			text, err := url.QueryUnescape(raw)
 			if err != nil || len(text) == 0 || len(text) > auth.MaxCredentialBytes {
-				return auth.Credentials{}, Unauthenticated
+				return auth.Credentials{}, Unauthenticated.WithCause(nil)
 			}
 			ticket = secret.New(text)
 		}
 		if ticket.IsZero() {
-			return auth.Credentials{}, Unauthenticated
+			return auth.Credentials{}, Unauthenticated.WithCause(nil)
 		}
 		credentials, outcome := authticket.Redeem(r.Context(), auth.Credentials{}, ticket, redeemer)
 		switch outcome {
 		case authticket.Success:
 			return credentials, nil
 		case authticket.Unavailable:
-			return auth.Credentials{}, Unavailable
+			return auth.Credentials{}, Unavailable.WithCause(nil)
 		default:
-			return auth.Credentials{}, Unauthenticated
+			return auth.Credentials{}, Unauthenticated.WithCause(nil)
 		}
 	}
 }
