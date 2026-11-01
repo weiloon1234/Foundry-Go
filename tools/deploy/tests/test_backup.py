@@ -210,6 +210,7 @@ class BackupTests(unittest.TestCase):
                    "data_path": "/var/lib/foundry/postgresql/16/foundry", "socket_directory": "/run/foundry/postgresql"}
         self.registry["shared"]["postgresql"] = cluster
         self.host.write_registry(self.registry)
+        self.host.paths.p(backup.postgres.CLUSTER_HOME).mkdir(parents=True, exist_ok=True)
         return cluster
 
     def test_configure_uses_guarded_packages_f2_plan_and_owned_timers(self):
@@ -238,6 +239,10 @@ class BackupTests(unittest.TestCase):
         self.assertFalse(self.host.paths.p("/etc/sudoers.d/foundry-backup-archive").exists())
         self.assertNotIn("sudo", plan["archive_command"])
         self.assertEqual(self.host.paths.p(backup.CONFIG).stat().st_mode & 0o777, 0o600)
+        for path in (backup.CONFIG_DIR, backup.WORK):
+            self.assertEqual(self.host.paths.p(path).stat().st_mode & 0o777, 0o700)
+        for path in ("/etc/pgbackrest", "/var/lib/pgbackrest"):
+            self.assertFalse(self.host.paths.p(path).exists())
         config = self.host.paths.p(backup.CONFIG).read_text()
         for value in ("repo1-type=s3", "repo1-s3-uri-style=path", "repo1-cipher-type=aes-256-cbc",
                       "repo1-retention-full=35", "repo1-retention-full-type=time", "pg1-port=55432"):

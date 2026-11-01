@@ -40,7 +40,11 @@ import postgres
 import runtime_config
 
 STANZA = "foundry"
-CONFIG = "/etc/pgbackrest/foundry.conf"
+# Foundry-owned paths only: never the distro /etc/pgbackrest or /var/lib/pgbackrest,
+# which a foreign pgBackRest may use and foundry-postgres cannot traverse.
+CONFIG_DIR = "/etc/foundry/pgbackrest"
+CONFIG = CONFIG_DIR + "/foundry.conf"
+WORK = postgres.CLUSTER_HOME + "/pgbackrest"
 REPOSITORY = "/etc/foundry/backup/repository.json"
 BACKUP_LABEL = r"[0-9]{8}-[0-9]{6}F(?:_[0-9]{8}-[0-9]{6}[DI])?"
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
@@ -836,8 +840,8 @@ def _configuration(host, cluster, repository):
             f"repo1-retention-full={BACKUP_POLICY['full_retention_days']}\n"
             "repo1-retention-archive-type=full\n"
             "log-level-console=error\nlog-level-file=off\nstart-fast=y\narchive-timeout=120\n"
-            f"lock-path={host.paths.p('/var/lib/pgbackrest/foundry/lock')}\n"
-            f"spool-path={host.paths.p('/var/lib/pgbackrest/foundry/spool')}\n"
+            f"lock-path={host.paths.p(WORK + '/lock')}\n"
+            f"spool-path={host.paths.p(WORK + '/spool')}\n"
             f"[{STANZA}]\npg1-path={cluster['data_path']}\npg1-port={cluster['port']}\n"
             f"pg1-socket-path={cluster['socket_directory']}\npg1-user={postgres.cluster_owner()}\n")
 
@@ -882,6 +886,20 @@ def _install_timers(host, registry, entry):
                 and host.run(["systemctl", "is-active", timer], check=False).returncode == 0,
                 "backup_timer_failed", "Foundry backup timer is not enabled and active.")
 
+
+
+def _cluster_owned_directory(host, path):
+    """Create or verify a private directory owned by the dedicated cluster account."""
+    directory = check_path(host.paths.p(path), "directory")
+    if directory.exists():
+        require(not directory.stat().st_mode & 0o077
+                and (host.paths.root != Path("/") or directory.stat().st_uid == pwd.getpwnam(postgres.cluster_owner()).pw_uid),
+                "backup_resource_conflict", "A pgBackRest directory has unexpected ownership or permissions.")
+        return
+    require(directory.parent.is_dir(), "backup_resource_conflict", "A pgBackRest directory parent is missing.")
+    directory.mkdir(mode=0o700)
+    if host.paths.root == Path("/"):
+        shutil.chown(directory, user=postgres.cluster_owner(), group=postgres.cluster_owner())
 
 def _install_configuration(host, cluster):
     path = check_path(host.paths.p(CONFIG), "file")
@@ -954,15 +972,8 @@ def configure(host: Host, registry: dict, entry: dict) -> None:
         host.journal(registry, entry)
         _stage_settings(host, registry, entry, cluster)
         packages.install_missing(host, ["pgbackrest", "age", "rclone"])
-        directory = check_path(host.paths.p("/var/lib/pgbackrest/foundry"), "directory")
-        if directory.exists():
-            require(not directory.stat().st_mode & 0o077
-                    and (host.paths.root != Path("/") or directory.stat().st_uid == pwd.getpwnam(postgres.cluster_owner()).pw_uid),
-                    "backup_resource_conflict", "The existing pgBackRest work directory has unexpected ownership or permissions.")
-        else:
-            directory.mkdir(parents=True, mode=0o700)
-            if host.paths.root == Path("/"):
-                shutil.chown(directory, user=postgres.cluster_owner(), group=postgres.cluster_owner())
+        for path in (CONFIG_DIR, WORK):
+            _cluster_owned_directory(host, path)
         _install_configuration(host, cluster)
         _backrest(host, ["stanza-create"], timeout=300)
         registry["shared"]["backup"] = {"owner": "foundry"}

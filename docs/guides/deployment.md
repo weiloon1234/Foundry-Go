@@ -445,7 +445,7 @@ pgBackRest provides continuous WAL archiving for the dedicated Foundry cluster.
 Its S3 repository uses HTTPS with certificate verification, a distinct backup
 bucket, and a server-generated repository encryption passphrase. The private
 repository binding is `/etc/foundry/backup/repository.json`. pgBackRest reads its
-credentials from `/etc/pgbackrest/foundry.conf`, owned by `foundry-postgres` with
+credentials from `/etc/foundry/pgbackrest/foundry.conf`, owned by `foundry-postgres` with
 mode 0600. Every instance sharing
 the cluster must use the same repository and preserve its passphrase.
 
