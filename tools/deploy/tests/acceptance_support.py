@@ -1,4 +1,5 @@
 """Private, bounded helpers for disposable deployment acceptance only."""
+import http.client
 import json
 import os
 from pathlib import Path
@@ -50,13 +51,18 @@ def private_json(path, value):
 
 
 def wait_for(probe, message, timeout=120):
+    # Readiness probes may race asynchronous reloads; retry until the deadline.
     deadline = time.monotonic() + timeout
+    last = None
     while time.monotonic() < deadline:
-        value = probe()
+        try:
+            value = probe()
+        except (AssertionError, OSError, http.client.HTTPException, subprocess.CalledProcessError) as error:
+            last, value = error, None
         if value:
             return value
         time.sleep(0.2)
-    raise AssertionError(message)
+    raise AssertionError(message) from last
 
 
 def service(unit):
