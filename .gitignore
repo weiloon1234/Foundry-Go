@@ -16,3 +16,4 @@ go.work.sum
 .foundry-generate.guard
 .foundry-generate.guard-directory/
 .foundry-generate.finished-*/
+__pycache__/
