@@ -57,11 +57,11 @@ fi
 token=$(openssl rand -hex 8)
 network=foundry-acceptance-$token
 host=foundry-host-$token
-minio=foundry-minio-$token
-volume=foundry-minio-data-$token
+s3=foundry-s3-$token
+volume=foundry-s3-data-$token
 image=foundry-acceptance-host:$token
 base_image=foundry-acceptance-base:$token
-minio_image=minio/minio:RELEASE.2025-04-22T22-12-26Z
+s3_image=versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316
 env_file=$logs/.private-env
 certs=$logs/.private-tls
 mkdir -m 700 "$certs"
@@ -70,7 +70,7 @@ foreign_verified=0
 network_created=0
 volume_created=0
 host_created=0
-minio_created=0
+s3_created=0
 image_created=0
 base_created=0
 
@@ -87,13 +87,13 @@ cleanup() {
   fi
   cleanup_failed=0
   if ((host_created)); then docker rm -f -v "$host" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
-  if ((minio_created)); then docker rm -f -v "$minio" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
+  if ((s3_created)); then docker rm -f -v "$s3" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((volume_created)); then docker volume rm "$volume" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((network_created)); then docker network rm "$network" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((image_created)); then docker image rm "$image" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((base_created)); then docker image rm "$base_image" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   rm -f "$env_file"
-  rm -rf "$certs"  # Task-owned private CA and MinIO key material only.
+  rm -rf "$certs"  # Task-owned private CA and S3 stand-in key material only.
   ((cleanup_failed == 0)) || result=1
   echo "Acceptance exit=$result; logs: $logs"
   exit "$result"
@@ -109,34 +109,31 @@ FOUNDRY_DISPOSABLE_HOST=1
 FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT=1
 FOUNDRY_NGINX_EDGE_ACCEPTANCE=1
 PYTHONDONTWRITEBYTECODE=1
-MINIO_ROOT_USER=$access
-MINIO_ROOT_PASSWORD=$secret
-ACCEPTANCE_S3_ENDPOINT=https://minio:9000
+ACCEPTANCE_S3_ENDPOINT=https://s3:9000
 ACCEPTANCE_S3_ACCESS_KEY=$access
 ACCEPTANCE_S3_SECRET_KEY=$secret
 ACCEPTANCE_APP_BUCKET=app-$token
 ACCEPTANCE_BACKUP_BUCKET=backup-$token
 ACCEPTANCE_SCHEDULE_MESSAGE=${ACCEPTANCE_SCHEDULE_MESSAGE:-acceptance schedule completed}
 EOF
-unset secret access
-# A private disposable CA signs both the MinIO endpoint and synthetic site
+# A private disposable CA signs both the S3 stand-in endpoint and synthetic site
 # lineages. pgBackRest/rclone/app clients use the normal host trust store.
 openssl req -x509 -newkey rsa:2048 -nodes -days 2 -sha256 \
   -subj /CN=Foundry-acceptance-CA -keyout "$certs/ca.key" -out "$certs/ca.crt" \
   >"$logs/tls-setup.log" 2>&1
-openssl req -new -newkey rsa:2048 -nodes -subj /CN=minio \
-  -keyout "$certs/private.key" -out "$certs/minio.csr" >>"$logs/tls-setup.log" 2>&1
-cat >"$certs/minio.ext" <<'EOF'
+openssl req -new -newkey rsa:2048 -nodes -subj /CN=s3 \
+  -keyout "$certs/private.key" -out "$certs/s3.csr" >>"$logs/tls-setup.log" 2>&1
+cat >"$certs/s3.ext" <<'EOF'
 basicConstraints=critical,CA:FALSE
 keyUsage=critical,digitalSignature,keyEncipherment
 extendedKeyUsage=serverAuth
-subjectAltName=DNS:minio
+subjectAltName=DNS:s3
 EOF
-openssl x509 -req -in "$certs/minio.csr" -CA "$certs/ca.crt" -CAkey "$certs/ca.key" \
-  -CAcreateserial -days 2 -sha256 -extfile "$certs/minio.ext" -out "$certs/public.crt" \
+openssl x509 -req -in "$certs/s3.csr" -CA "$certs/ca.crt" -CAkey "$certs/ca.key" \
+  -CAcreateserial -days 2 -sha256 -extfile "$certs/s3.ext" -out "$certs/public.crt" \
   >>"$logs/tls-setup.log" 2>&1
 chmod 600 "$certs/ca.key" "$certs/private.key"
-printf 'ubuntu=%s\nplatform=%s\nmode=%s\nminio=%s\n' "$ubuntu" "$platform" "$mode" "$minio_image" >"$logs/run.txt"
+printf 'ubuntu=%s\nplatform=%s\nmode=%s\ns3=%s\n' "$ubuntu" "$platform" "$mode" "$s3_image" >"$logs/run.txt"
 echo "Acceptance logs: $logs"
 if [[ "$platform" == linux/amd64 ]]; then
   echo 'linux/amd64 uses emulation on arm64 hosts; expect substantially slower startup and execution.'
@@ -152,14 +149,17 @@ network_created=1
 docker volume create "$volume" >"$logs/volume.log" 2>&1
 volume_created=1
 # No -p/-P flags: S3 and all application ports stay on the dedicated network.
-docker create --platform "$platform" --user 0:0 --name "$minio" --network "$network" --network-alias minio \
-  --env-file "$env_file" --mount "type=volume,source=$volume,target=/data" \
-  "$minio_image" server /data --certs-dir /certs --console-address :9001 >"$logs/minio-create.log" 2>&1
-minio_created=1
-mkdir -m 700 "$certs/minio"
-cp "$certs/public.crt" "$certs/private.key" "$certs/minio/"
-docker cp "$certs/minio" "$minio:/certs" >"$logs/minio-tls-copy.log" 2>&1
-docker start "$minio" >"$logs/minio-start.log" 2>&1
+ROOT_ACCESS_KEY_ID=$access ROOT_SECRET_ACCESS_KEY=$secret \
+docker create --platform "$platform" --user 0:0 --name "$s3" --network "$network" --network-alias s3 \
+  -e ROOT_ACCESS_KEY_ID -e ROOT_SECRET_ACCESS_KEY --mount "type=volume,source=$volume,target=/data" \
+  "$s3_image" --cert /certs/public.crt --key /certs/private.key --port :9000 \
+  --region us-east-1 posix /data >"$logs/s3-create.log" 2>&1
+s3_created=1
+unset secret access
+mkdir -m 700 "$certs/s3"
+cp "$certs/public.crt" "$certs/private.key" "$certs/s3/"
+docker cp "$certs/s3" "$s3:/certs" >"$logs/s3-tls-copy.log" 2>&1
+docker start "$s3" >"$logs/s3-start.log" 2>&1
 docker create --platform "$platform" --name "$host" --network "$network" \
   --privileged --cgroupns=private --memory=4g --cpus=2 \
   --tmpfs /run --tmpfs /run/lock --tmpfs /tmp \
@@ -178,19 +178,22 @@ docker exec "$host" cp /etc/foundry/acceptance-ca/ca.crt /usr/local/share/ca-cer
 docker exec "$host" chmod 644 /usr/local/share/ca-certificates/foundry-acceptance.crt
 docker exec "$host" update-ca-certificates >"$logs/host-trust.log" 2>&1
 docker cp "$archive" "$host:/var/lib/foundry-acceptance-f4a/input.tar.gz" >"$logs/archive-copy.log" 2>&1
-docker exec --env-file "$env_file" -i "$host" python3 - >"$logs/minio-ready.log" 2>&1 <<'PY'
-import os, time, urllib.request
+docker exec --env-file "$env_file" -i "$host" python3 - >"$logs/s3-ready.log" 2>&1 <<'PY'
+import sys, time
+sys.path.insert(0, "/verification/deploy/tests")
+from acceptance_backup import rclone, s3_settings
+settings = s3_settings()
 deadline = time.monotonic() + 180
 while time.monotonic() < deadline:
     try:
-        with urllib.request.urlopen(os.environ['ACCEPTANCE_S3_ENDPOINT'] + '/minio/health/ready', timeout=5) as response:
-            if response.status == 200:
-                break
-    except OSError:
+        rclone(settings, "lsd", "acceptance:", "--retries", "1",
+               "--low-level-retries", "1", "--contimeout", "5s", "--timeout", "5s", timeout=5)
+        break
+    except RuntimeError:
         pass
     time.sleep(1)
 else:
-    raise SystemExit('MinIO readiness deadline exceeded')
+    raise SystemExit('S3 stand-in readiness deadline exceeded')
 PY
 
 phase() {

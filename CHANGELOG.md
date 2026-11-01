@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: Deployment acceptance uses a digest-pinned VersityGW S3 stand-in with
+  HTTPS and authenticated readiness instead of the unavailable MinIO image.
 - Fixed: Deployment source snapshots preserve relative symlinks that stay inside
   the snapshot root, including starter skill links. Absolute and escaping links,
   unsafe link chains, hardlinks, and special files remain refused.
@@ -11,8 +13,8 @@
   rollback/reconciliation. Dedicated PostgreSQL and TLS Redis services preserve
   foreign services; Cloudflare DNS-01 and per-site edge policy accompany
   pgBackRest WAL recovery, age key archives, and R2 object backups. The packaged
-  bundle includes operator documentation and isolated HTTPS MinIO/certificate
-  acceptance fixtures. Live container and provider acceptance remain required
+  bundle includes operator documentation and isolated HTTPS S3 stand-in and
+  certificate acceptance fixtures. Live container and provider acceptance remain required
   before production use.
 - Added: R2 attachment cleanup through write-once keys, durable tombstones,
   stale-writer fencing, and a bounded scope-prefix orphan sweep in

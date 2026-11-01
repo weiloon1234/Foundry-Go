@@ -375,8 +375,8 @@ R2 attachment cleanup relies on write-once original and variant-generation keys,
 conditional creation, writer fencing, and durable retirement before unconditional
 delete. R2 is not advertised as supporting conditional delete. Existing variant
 keys remain readable. See [attachments](attachments.md) for the storage lifecycle.
-A MinIO object probe proves transport behavior; real attachment round trips and
-R2 credential isolation still require application acceptance.
+An S3 stand-in object probe proves transport behavior. Real attachment round
+trips and R2 credential isolation still require application acceptance.
 
 ## Backups
 
@@ -476,10 +476,15 @@ scheduler configuration and Redis inventories, and expose readiness. It needs
 HTTP and scheduler roles, `.coordination` lease and `.portal` cache child
 namespaces, and a schedule running at least once every 60 seconds. Its successful
 handler must emit a JSON `msg` matching `ACCEPTANCE_SCHEDULE_MESSAGE`, whose
-default is `acceptance schedule completed`. Fixture
-identity is generated for the disposable host. The runner uses HTTPS MinIO with
-a test CA trusted inside that host. It keeps private logs and uses isolated
-containers and storage. It does not publish host ports.
+default is `acceptance schedule completed`. Fixture identity is generated for
+the disposable host. The runner uses VersityGW as an HTTPS S3 stand-in with a
+test CA trusted inside that host. The image is pinned to
+`versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316`.
+The `s3` network alias matches the certificate SAN. The POSIX backend stores
+buckets in a dedicated volume. Acceptance creates the application and backup
+buckets through the S3 API. The stand-in and clients use region `us-east-1`.
+The runner keeps private logs and uses isolated containers and storage. It does
+not publish host ports.
 
 The foreign fixture records configuration bytes, PostgreSQL and Redis PIDs,
 data, and reachability before bootstrap and compares them after deployment and

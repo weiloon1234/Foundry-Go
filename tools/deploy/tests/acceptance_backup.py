@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real pgBackRest PITR, age recovery and rclone copy against isolated MinIO.
+"""Real pgBackRest PITR, age recovery and rclone copy against an isolated S3 stand-in.
 
 Required environment: ACCEPTANCE_S3_ENDPOINT, ACCEPTANCE_S3_ACCESS_KEY,
 ACCEPTANCE_S3_SECRET_KEY, ACCEPTANCE_APP_BUCKET, ACCEPTANCE_BACKUP_BUCKET.
@@ -27,14 +27,14 @@ def s3_settings():
     return values
 
 
-def rclone(settings, *args):
+def rclone(settings, *args, timeout=600):
     return run(["rclone", *args], env={
-        "RCLONE_CONFIG_ACCEPTANCE_TYPE": "s3", "RCLONE_CONFIG_ACCEPTANCE_PROVIDER": "Minio",
+        "RCLONE_CONFIG_ACCEPTANCE_TYPE": "s3", "RCLONE_CONFIG_ACCEPTANCE_PROVIDER": "Other",
         "RCLONE_CONFIG_ACCEPTANCE_ENDPOINT": settings["endpoint"],
         "RCLONE_CONFIG_ACCEPTANCE_ACCESS_KEY_ID": settings["access_key"],
         "RCLONE_CONFIG_ACCEPTANCE_SECRET_ACCESS_KEY": settings["secret_key"],
         "RCLONE_CONFIG_ACCEPTANCE_REGION": "us-east-1", "RCLONE_CONFIG_ACCEPTANCE_ENV_AUTH": "false",
-    }, timeout=600)
+    }, timeout=timeout)
 
 
 def admin(shared, sql):
@@ -52,7 +52,7 @@ def main():
     from contracts import parse_env
     settings = s3_settings()
     for bucket in (settings["app_bucket"], settings["backup_bucket"]):
-        # Buckets belong exclusively to this runner's MinIO volume/network.
+        # Buckets belong exclusively to this runner's S3 stand-in volume/network.
         rclone(settings, "mkdir", "acceptance:" + bucket)
     work = WORK / ("backup-" + uuid.uuid4().hex)
     work.mkdir(mode=0o700)
