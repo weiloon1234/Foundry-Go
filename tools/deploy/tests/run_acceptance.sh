@@ -168,6 +168,11 @@ docker create --platform "$platform" --name "$host" --network "$network" \
   "$image" >"$logs/host-create.log" 2>&1
 host_created=1
 docker start "$host" >"$logs/host-start.log" 2>&1
+# PID 1 needs a moment to create its private bus; systemctl fails until then.
+for _ in $(seq 60); do
+  docker exec "$host" test -S /run/systemd/private 2>/dev/null && break
+  sleep 1
+done
 docker exec "$host" systemctl start multi-user.target >"$logs/systemd.log" 2>&1
 docker exec "$host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a /etc/foundry/acceptance-ca
 docker cp "$certs/ca.crt" "$host:/etc/foundry/acceptance-ca/ca.crt" >"$logs/host-tls-copy.log" 2>&1
