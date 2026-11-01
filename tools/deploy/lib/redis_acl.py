@@ -17,6 +17,7 @@ import re
 import secrets
 import socket
 import ssl
+import time
 import uuid
 from typing import TYPE_CHECKING
 
@@ -175,6 +176,17 @@ def _verify_connection(host: Host) -> None:
     """Authenticate through a hostname-verified TLS connection using system roots."""
     credentials = _host_secrets(host)
     context = ssl.create_default_context(cafile=str(host.paths.p(ROOTS)))
+    # A just-started unit may not listen yet; wait only for the listener.
+    # Verification and authentication failures are never retried.
+    deadline = time.monotonic() + 30
+    while True:
+        try:
+            socket.create_connection(("localhost", REDIS_PORT), timeout=2).close()
+            break
+        except (ConnectionRefusedError, ConnectionResetError, socket.timeout):
+            if time.monotonic() >= deadline:
+                raise DeployError("redis_tls", "Foundry Redis did not start listening.") from None
+            time.sleep(0.5)
     try:
         with socket.create_connection(("localhost", REDIS_PORT), timeout=10) as connection:
             with context.wrap_socket(connection, server_hostname="localhost") as encrypted:
