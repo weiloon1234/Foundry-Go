@@ -556,11 +556,15 @@ return 403. An undecided redemption, including an error or panic, returns 503.
 HEAD on a matched ticket route returns 405 with `Allow: GET` and leaves the ticket
 unconsumed. Ticket-route responses enforce `Cache-Control: no-store` and
 `Referrer-Policy: no-referrer`, including download writers and failures.
-Router-generated responses to requests carrying a `ticket` query parameter also enforce these headers, including
-404, 405 and OPTIONS errors. Encoded parameter names count too. If the mux would
-redirect such a request to clean its path or add a trailing slash, the router
-returns its ordinary 404 without a `Location` header or an echoed query. These
-routing failures leave the ticket unconsumed; use the canonical URL to redeem it.
+Routing responses receive this protection only when the request carries a `ticket`
+query parameter and its path resolves to a registered ticket route when evaluated
+as GET after the mux's canonicalization. Encoded parameter names count too. For
+these requests, routing errors (including 405 and OPTIONS errors) enforce the
+same headers. A path-cleaning or trailing-slash redirect becomes the router's
+ordinary 404 without a `Location` header or an echoed query. These routing
+failures leave the ticket unconsumed; use the canonical URL to redeem it.
+Non-ticket routes and unknown paths keep their ordinary routing behavior and
+headers, even when a domain query parameter is named `ticket`.
 
 Use HTTPS. Redact `ticket` from proxy, ingress, analytics and access logs; the
 framework cannot sanitize upstream logs or browser history. Do not place access

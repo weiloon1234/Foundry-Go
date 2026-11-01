@@ -209,7 +209,11 @@ func TestPostgresTicketAuthenticatedRoutes(t *testing.T) {
 					w := httptest.NewRecorder()
 					handler.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path+"?"+name+"="+url.QueryEscape(raw.Reveal()), nil))
 					result := w.Result()
-					if result.StatusCode != tc.status || result.Header.Get("Cache-Control") != "no-store" || result.Header.Get("Referrer-Policy") != "no-referrer" || result.Header.Get("Location") != "" {
+					referrer := "no-referrer"
+					if tc.path == "/unknown" {
+						referrer = ""
+					}
+					if result.StatusCode != tc.status || result.Header.Get("Cache-Control") != "no-store" || result.Header.Get("Referrer-Policy") != referrer || result.Header.Get("Location") != "" {
 						t.Fatalf("routing privacy failed: method=%s path=%s public-cache=%t status=%d", tc.method, tc.path, publicCache, result.StatusCode)
 					}
 					if w.Body.Len() == 0 || strings.Contains(w.Body.String(), raw.Reveal()) || strings.Contains(w.Body.String(), "href=") {

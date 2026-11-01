@@ -280,10 +280,11 @@ historical test results; they did not establish privacy on those routing paths.
 
 B22-1 is corrected at the router boundary. Authentication and routing share one
 bounded decoded-name iterator and the existing unexported `ticketParameter`
-constant. Router errors for ticket-bearing requests enforce no-store/no-referrer.
-Native redirects are suppressed and become ordinary 404 responses without copying
-staged headers or redirect bodies. Matched public routes retain their behavior;
-matched ticket routes retain their existing privacy and authentication policy.
+constant. At `03d622b1`, router errors for any ticket-bearing request enforced
+no-store/no-referrer, and native redirects became ordinary 404 responses without
+copying staged headers or bodies. Re-review found this rule was too broad for
+domain parameters named `ticket`; B22-2/B22-3 below supersede that policy. Matched
+ticket routes retain their existing privacy and authentication policy.
 
 | Finding or blind spot | Strengthened evidence |
 | --- | --- |
@@ -362,3 +363,57 @@ oracles and generated files are untouched.
 Follow-up changed-source SHA-256 (sorted relative path, NUL, bytes, NUL;
 source/contract extensions from the original fingerprint, excluding docs):
 `6cdd8eae80b95ed9597167d5291240460a79b30d9f9c93c5e95d4db510a5b087`.
+
+
+## Re-review follow-up — B22-2 and B22-3
+
+The read-only re-review of `03d622b1` confirmed B22-1 and all seven original test
+blind spots were closed. It identified two regressions caused by the preceding
+lead decision's broad parameter-presence rule. The replacement decision scopes
+routing protection to ticket-route ownership.
+
+The router records ticket-route patterns from its registrations. For a request
+with a decoded `ticket` query parameter, it asks `ServeMux.Handler` for the pattern
+on a GET clone. The mux owns canonicalization and redirect-destination matching;
+there is no second matcher or parsing of pattern strings. Only a pattern in the
+registered ticket set activates routing-response privacy and redirect suppression.
+
+| Fix | Evidence |
+| --- | --- |
+| B22-2: restore non-ticket redirects | `TestRouterTicketPrivacyLeavesMatchedPublicRoutesUnchanged` now requires the original trailing-slash 307 and exact Location for domain ticket parameters, empty values and encoded names. `TestTicketRoutingPreservesDomainTicketParameters` repeats the redirect control in a router that also contains a ticket route, with public CacheControl and outer headers |
+| B22-3: preserve non-ticket routing headers | `TestTicketRoutingPreservesDomainTicketParameters` compares committed headers and body against the no-query baseline for POST/OPTIONS 405 and unknown-path 404; outer Referrer-Policy and WWW-Authenticate must survive |
+| Retain ticket-route privacy and non-consumption | `TestPostgresTicketAuthenticatedRoutes/routing-responses-preserve-ticket` retains repeated-slash, dot-segment, trailing-slash, POST/OPTIONS and ambiguous-path checks, committed privacy headers, no Location or secret body, public-cache variants, decoded aliases and subsequent real redemption |
+| Native routing errors remain protected for ticket destinations | `TestRouterTicketPrivacyOnNativeError` now registers an actual ticket route and exercises the native mux error for that destination |
+| Unknown paths remain ordinary routes | The mixed-router control compares the complete committed response to its no-query baseline. The PostgreSQL unknown-path case retains the non-consumption assertion but expects the ordinary Referrer-Policy behavior |
+
+The authentication guide now states this scoped rule. Public API signatures,
+generated output, released cohorts and frozen oracles are unchanged. No commit
+was made. Earlier acceptance and mutation results describe their recorded source;
+the preceding broad-policy claims are historical, not the current contract.
+
+### Re-review acceptance
+
+Commands use native tools and `GOFLAGS=-trimpath`. PostgreSQL tests source
+`/Users/weiloon/Projects/rust-go/Foundry-Go/.env.test`, explicitly export
+`FOUNDRY_TEST_POSTGRES_URL`, and set `FOUNDRY_TEST_POSTGRES_REQUIRED=1`.
+Logs are retained in `/tmp/b22-route-scope/`. No database reset or destructive
+cleanup was performed.
+
+| Command | Result |
+| --- | --- |
+| `go build ./...` | PASS |
+| `go vet ./http` | PASS |
+| `go test -timeout=20m -count=1 ./http ./auth/token/postgres ./datatable` | Segmented PASS: PostgreSQL token and datatable packages passed; HTTP resumed below after a test compile correction |
+| `go test -timeout=20m -count=1 ./http` | PASS with PostgreSQL required |
+| `go test -timeout=20m -count=1 . -run '^TestConsumerAPI(Documentation\|MethodVisibility\|DSLGoDocSurface)$'` | PASS |
+| `make docs-check` | PASS |
+| `git diff --check` | PASS |
+
+The first HTTP test compilation rejected a variadic call to the existing
+single-route helper. The new mixed-route fixture now calls `http.NewRouter`
+directly; the full HTTP package passed on rerun. No runtime fix was needed
+after the initial verification.
+
+Re-review changed-source SHA-256 (sorted relative path, NUL, bytes, NUL;
+source/contract extensions from the original fingerprint, excluding docs):
+`364b4700358d73a44eafc0e2cdd6b90cdf3a3bb8ef7c430bc42ba62066af56b5`.

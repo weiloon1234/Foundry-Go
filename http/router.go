@@ -17,12 +17,13 @@ import (
 // validation completes before it is returned; startup never partially registers
 // into a shared/global ServeMux. Registration order does not resolve ambiguity.
 type Router struct {
-	spas      []*spaFallback
-	fallback  *routeFallback
-	mux       *stdhttp.ServeMux
-	routes    []RouteInfo
-	endpoints map[RouteID]func() EndpointInfo
-	errors    []ErrorDefinition
+	spas           []*spaFallback
+	fallback       *routeFallback
+	mux            *stdhttp.ServeMux
+	routes         []RouteInfo
+	endpoints      map[RouteID]func() EndpointInfo
+	errors         []ErrorDefinition
+	ticketPatterns map[string]bool
 	// bodyCeiling is the largest declared route body limit; see WithBodyLimit.
 	bodyCeiling int64
 }
@@ -56,7 +57,7 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 	if !nativeRoutingAvailable() {
 		return nil, safeerror.NewFault(fault.Invalid, "Foundry routing requires modern net/http ServeMux behavior")
 	}
-	router := &Router{mux: stdhttp.NewServeMux(), endpoints: make(map[RouteID]func() EndpointInfo)}
+	router := &Router{mux: stdhttp.NewServeMux(), endpoints: make(map[RouteID]func() EndpointInfo), ticketPatterns: make(map[string]bool)}
 	ids := make(map[RouteID]bool, len(registrations))
 	errorCatalog := make(map[ErrorCode]ErrorDefinition)
 	for _, definition := range ErrorDefinitions() {
@@ -130,6 +131,9 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 		}); err != nil {
 			return nil, safeerror.WrapFault(fault.Conflict, "route conflicts with an existing pattern: "+string(registration.info.ID), err)
 		}
+		if info.Authentication != nil && info.Authentication.Credential.Kind == TicketCredentialKind {
+			router.ticketPatterns[registration.pattern] = true
+		}
 		router.routes = append(router.routes, registration.info.clone())
 		if registration.endpoint != nil {
 			router.endpoints[registration.info.ID] = registration.endpoint
@@ -158,15 +162,21 @@ func (r *Router) Routes() []RouteInfo {
 // ServeHTTP dispatches registered routes, rejects ambiguous encoded paths and applies
 // framework errors and configured fallbacks to unmatched requests.
 func (r *Router) ServeHTTP(w stdhttp.ResponseWriter, request *stdhttp.Request) {
-	carriesTicket := false
-	if request.URL != nil {
+	protectTicket := false
+	if r != nil && r.mux != nil && len(r.ticketPatterns) != 0 && request.URL != nil {
 		for range ticketQueryValues(request.URL.RawQuery) {
-			carriesTicket = true
+			// Handler returns the destination pattern for native redirects.
+			// Use GET to identify route ownership independently of the method
+			// that may cause the mux to produce a routing error.
+			probe := request.Clone(request.Context())
+			probe.Method = stdhttp.MethodGet
+			_, pattern := r.mux.Handler(probe)
+			protectTicket = r.ticketPatterns[pattern]
 			break
 		}
 	}
 	writeError := func(err error) {
-		if carriesTicket {
+		if protectTicket {
 			w = ticketPrivacyResponse(w)
 		}
 		writeRoutingError(w, request, err)
@@ -179,14 +189,14 @@ func (r *Router) ServeHTTP(w stdhttp.ResponseWriter, request *stdhttp.Request) {
 		writeError(BadRequest)
 		return
 	}
-	// Match once. A registered route unwraps this probe and continues with the
+	// Dispatch through the mux. A registered route unwraps this probe and uses the
 	// original writer. Otherwise the native fallback retains its method
 	// matching/Allow source of truth: 404 and 405 become Foundry's shared error,
-	// and native canonical redirects pass through only without a ticket.
+	// and redirects to ticket routes are suppressed when carrying a ticket.
 	if len(r.spas) != 0 {
 		request = request.WithContext(context.WithValue(request.Context(), spaRoutesKey{}, r.spas))
 	}
-	probe := &routingResponse{native: w, carriesTicket: carriesTicket}
+	probe := &routingResponse{native: w, protectTicket: protectTicket}
 	r.mux.ServeHTTP(probe, request)
 	if probe.matched || probe.passthrough {
 		return
@@ -222,7 +232,7 @@ type routingResponse struct {
 	status        int
 	matched       bool
 	passthrough   bool
-	carriesTicket bool
+	protectTicket bool
 }
 
 // Header returns staged fallback headers, or the native headers after passthrough
@@ -244,11 +254,11 @@ func (r *routingResponse) WriteHeader(status int) {
 		return
 	}
 	r.status = status
-	if status == stdhttp.StatusNotFound || status == stdhttp.StatusMethodNotAllowed || (r.carriesTicket && status >= 300 && status < 400) {
+	if status == stdhttp.StatusNotFound || status == stdhttp.StatusMethodNotAllowed || (r.protectTicket && status >= 300 && status < 400) {
 		return
 	}
 	r.passthrough = true
-	if r.carriesTicket {
+	if r.protectTicket {
 		r.native = ticketPrivacyResponse(r.native)
 	}
 	header := r.native.Header()

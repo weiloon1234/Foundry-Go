@@ -5,9 +5,11 @@ import (
 	"errors"
 	stdhttp "net/http"
 	"net/http/httptest"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/auth"
@@ -367,5 +369,67 @@ func TestTicketEndpointBypassesBrowserSessionAdapter(t *testing.T) {
 	w := request(router)
 	if w.Result().StatusCode != 204 || calls != 1 || s.loads.Load() != 0 || w.Result().Header.Get("Set-Cookie") != "" {
 		t.Fatal("ticket route did not bypass the actual browser adapter")
+	}
+}
+
+func TestTicketRoutingPreservesDomainTicketParameters(t *testing.T) {
+	binding, redeemer := ticketEndpointSetup(t)
+	ticket := h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer)
+	registrations := []h.RouteRegistration{ticket.Handle(func(context.Context, authAccount, authInput) (h.NoContent, error) {
+		t.Error("routing probe invoked ticket handler")
+		return h.NoContent{}, nil
+	})}
+	for _, path := range []string{"/folder/", "/support"} {
+		registrations = append(registrations, h.HandleRaw(h.DefineRoute(h.RouteSpec{ID: h.RouteID(strings.Trim(path, "/")), Method: h.GET, Access: h.Public}, h.StaticPath(path)), func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ h.NoPath) { w.WriteHeader(204) }))
+	}
+	router, err := h.NewRouter(registrations...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := h.ApplyMiddleware(router, h.CacheControl(h.CachePolicy{Visibility: h.CachePublic, MaxAge: time.Hour}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	serve := func(method, path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		w.Header().Set("Referrer-Policy", "origin")
+		w.Header().Set("WWW-Authenticate", "Basic realm=\"support\"")
+		handler.ServeHTTP(w, httptest.NewRequest(method, path, nil))
+		return w
+	}
+	for _, query := range []string{"ticket=case-123", "%74icket=case-123"} {
+		redirect := serve("GET", "/folder?"+query)
+		if redirect.Result().StatusCode != 307 || redirect.Result().Header.Get("Location") != "/folder/?"+query || redirect.Result().Header.Get("Cache-Control") != "public, max-age=3600" || redirect.Result().Header.Get("Referrer-Policy") != "origin" || redirect.Result().Header.Get("WWW-Authenticate") != "Basic realm=\"support\"" {
+			t.Fatal("non-ticket redirect changed")
+		}
+		for _, tc := range []struct {
+			method, path string
+			status       int
+		}{{"POST", "/support", 405}, {"OPTIONS", "/support", 405}, {"GET", "/unknown", 404}} {
+			baseline, actual := serve(tc.method, tc.path), serve(tc.method, tc.path+"?"+query)
+			if actual.Result().StatusCode != tc.status || !reflect.DeepEqual(actual.Result().Header, baseline.Result().Header) || actual.Body.String() != baseline.Body.String() || actual.Result().Header.Get("Referrer-Policy") != "origin" || actual.Result().Header.Get("WWW-Authenticate") != "Basic realm=\"support\"" {
+				t.Fatalf("domain ticket parameter changed %s %s", tc.method, tc.path)
+			}
+		}
+	}
+}
+
+func TestRouterTicketPrivacyOnNativeError(t *testing.T) {
+	binding, redeemer := ticketEndpointSetup(t)
+	router := newAuthRouter(t, h.TicketAuthenticated(authEndpoint(h.Guarded), binding, redeemer).Handle(func(context.Context, authAccount, authInput) (h.NoContent, error) {
+		t.Error("native error reached handler")
+		return h.NoContent{}, nil
+	}))
+	handler, err := h.ApplyMiddleware(router, h.CacheControl(h.CachePolicy{Visibility: h.CachePublic, MaxAge: time.Hour}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest("GET", "/profile?%74icket=private-canary", nil)
+	// Exercise ServeMux's native 400 branch for a ticket-route destination.
+	request.RequestURI = "*"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, request)
+	if w.Result().StatusCode != 400 || w.Result().Header.Get("Cache-Control") != "no-store" || w.Result().Header.Get("Referrer-Policy") != "no-referrer" || w.Result().Header.Get("Location") != "" || strings.Contains(w.Body.String(), "private-canary") {
+		t.Fatal("native routing error bypassed ticket-route privacy")
 	}
 }
