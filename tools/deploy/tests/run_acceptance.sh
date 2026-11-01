@@ -127,9 +127,23 @@ ACCEPTANCE_SECRET_CONFIG_KEYS=${ACCEPTANCE_SECRET_CONFIG_KEYS:-}
 EOF
 # A private disposable CA signs both the S3 stand-in endpoint and synthetic site
 # lineages. pgBackRest/rclone/app clients use the normal host trust store.
-openssl req -x509 -newkey rsa:2048 -nodes -days 2 -sha256 \
-  -subj /CN=Foundry-acceptance-CA -keyout "$certs/ca.key" -out "$certs/ca.crt" \
-  >"$logs/tls-setup.log" 2>&1
+# Explicit CA extensions: LibreSSL adds none by default, and strict X.509
+# verifiers (Python 3.13+ on Ubuntu 26.04) require CA:TRUE and key identifiers.
+cat >"$certs/ca.cnf" <<'CA_CONFIG'
+[req]
+distinguished_name = dn
+x509_extensions = v3_ca
+prompt = no
+[dn]
+CN = Foundry-acceptance-CA
+[v3_ca]
+basicConstraints = critical,CA:TRUE
+keyUsage = critical,keyCertSign,cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always
+CA_CONFIG
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 -sha256 -config "$certs/ca.cnf" \
+  -keyout "$certs/ca.key" -out "$certs/ca.crt" >"$logs/tls-setup.log" 2>&1
 openssl req -new -newkey rsa:2048 -nodes -subj /CN=s3 \
   -keyout "$certs/private.key" -out "$certs/s3.csr" >>"$logs/tls-setup.log" 2>&1
 cat >"$certs/s3.ext" <<'EOF'
