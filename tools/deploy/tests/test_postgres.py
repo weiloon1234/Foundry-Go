@@ -69,6 +69,8 @@ class PostgreSQLHost(Host):
         elif args[0] == "pg_createcluster":
             config = self.paths.p(f"/etc/postgresql/{args[1]}/foundry")
             data = self.paths.p(args[args.index("--datadir") + 1])
+            # initdb runs as the cluster account and must traverse the version directory.
+            assert data.parent.stat().st_mode & 0o777 == 0o755, "version directory must be prepared"
             config.mkdir(parents=True)
             data.mkdir(parents=True)
             (config / "postgresql.conf").write_text("# initdb configuration\n")

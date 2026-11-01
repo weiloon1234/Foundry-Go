@@ -576,6 +576,9 @@ def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = No
         if config.exists() or data.exists():
             _discard_initialization(host, registry, journal)
         _directory(host, host.paths.p(SOCKET), 0o755, cluster_owner(), cluster_owner())
+        # initdb runs as the cluster account; newer postgresql-common creates this
+        # version directory through the caller's umask, which may make it root-only.
+        _directory(host, data.parent, 0o755, cluster_owner(), cluster_owner())
         journal["phase"] = "creating"
         _save_cluster(host, journal)
         host.run(["pg_createcluster", str(major), "foundry", "--user", cluster_owner(),
