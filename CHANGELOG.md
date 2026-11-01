@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.3.3 — 2026-11-01
 
 - Docs: Every exported declaration now has a Go doc comment written from its
   implementation (3,716 previously undocumented), so `go doc`,
