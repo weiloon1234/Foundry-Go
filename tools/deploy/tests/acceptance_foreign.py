@@ -40,7 +40,7 @@ def pg(major, sql, database="postgres"):
                 "-d", database], input=sql).stdout.strip()
 
 
-def http():
+def foreign_http():
     client = http.client.HTTPConnection("127.0.0.1", 80, timeout=5)
     try:
         client.request("GET", "/", headers={"Host": DOMAIN})
@@ -114,7 +114,7 @@ def install():
     run(["nginx", "-t"])
     run(["systemctl", "enable", "--now", "nginx.service"])
     run(["systemctl", "reload", "nginx.service"])
-    wait_for(lambda: http(), "Foreign HTTP did not become ready")
+    wait_for(lambda: foreign_http(), "Foreign HTTP did not become ready")
     return major
 
 
@@ -134,7 +134,7 @@ def baseline(mode):
              "services": {unit: service(unit) for unit in (
                  "redis-server.service", f"postgresql@{major}-main.service", "nginx.service")},
              "redis": redis("GET", "foreign:rust:sentinel"), "redis_size": redis("DBSIZE"),
-             "postgres": pg(major, "TABLE sentinel;", "foreign_rust"), "http": http()}
+             "postgres": pg(major, "TABLE sentinel;", "foreign_rust"), "http": foreign_http()}
     assert value["redis"] == SENTINEL and value["postgres"] == "1|" + SENTINEL
     log = Path(f"/var/log/postgresql/postgresql-{major}-main.log")
     # Last fixture connection has exited; only Foundry runs until verify().
@@ -182,7 +182,7 @@ def verify():
     assert redis("GET", "foreign:rust:sentinel") == before["redis"]
     assert redis("DBSIZE") == before["redis_size"]
     assert pg(before["major"], "TABLE sentinel;", "foreign_rust") == before["postgres"]
-    assert http() == before["http"]
+    assert foreign_http() == before["http"]
     print("PASS foreign config/data/PIDs/HTTP preserved; no observed Redis commands or PostgreSQL connections")
 
 
