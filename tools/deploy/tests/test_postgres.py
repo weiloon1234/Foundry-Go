@@ -2,6 +2,7 @@
 import copy
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -24,6 +25,8 @@ class PostgreSQLHost(Host):
         self.clusters = ""
         self.listeners = ""
         self.refresh_failure = False
+        self.account = ""
+        self.group = ""
         for name, data in (("/etc/os-release", 'ID=ubuntu\nVERSION_ID="24.04"\n'),
                            ("/proc/meminfo", "MemTotal: 4194304 kB\n")):
             path = self.paths.p(name)
@@ -42,6 +45,34 @@ class PostgreSQLHost(Host):
         output = ""
         if args == ["pg_lsclusters", "--no-header"]:
             output = self.clusters
+        elif args[:2] == ["getent", "passwd"]:
+            return subprocess.CompletedProcess(args, 0 if self.account else 2, self.account, "")
+        elif args[:2] == ["getent", "group"]:
+            return subprocess.CompletedProcess(args, 0 if self.group else 2, self.group, "")
+        elif args[0] == "groupadd":
+            self.group = "foundry-postgres:x:999:\n"
+        elif args[0] == "useradd":
+            self.account = "foundry-postgres:x:999:999:" + args[args.index("--comment") + 1] + ":" + postgres.CLUSTER_HOME + ":/usr/sbin/nologin\n"
+        elif args[:2] == ["systemctl", "is-active"]:
+            return subprocess.CompletedProcess(args, 3, "", "")
+        elif args[0] == "pgrep":
+            return subprocess.CompletedProcess(args, 1, "", "")
+        elif args == ["systemctl", "daemon-reload"]:
+            pass
+        elif args[0].endswith("/pg_controldata"):
+            output = "Database cluster state:               shut down\n"
+        elif args[0] == "pg_dropcluster":
+            for path in (f"/etc/postgresql/{args[1]}/foundry", f"{postgres.CLUSTER_HOME}/{args[1]}/foundry"):
+                directory = self.paths.p(path)
+                if directory.exists():
+                    shutil.rmtree(directory)
+        elif args[0] == "pg_createcluster":
+            config = self.paths.p(f"/etc/postgresql/{args[1]}/foundry")
+            data = self.paths.p(args[args.index("--datadir") + 1])
+            config.mkdir(parents=True)
+            data.mkdir(parents=True)
+            (config / "postgresql.conf").write_text("# initdb configuration\n")
+            (data / "PG_VERSION").write_text(args[1] + "\n")
         elif args == ["ss", "-Hltn"]:
             output = self.listeners
         elif args == ["update-ca-certificates"]:
@@ -119,6 +150,7 @@ class PostgreSQLTests(unittest.TestCase):
         with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, "1\n", "")) as command:
             postgres._psql(self.host, self.registry, "SELECT 1")
         args = command.call_args.args[0]
+        self.assertEqual(["runuser", "-u", "foundry-postgres", "--"], args[:4])
         self.assertIn("/usr/lib/postgresql/16/bin/psql", args)
         self.assertEqual(postgres.SOCKET, args[args.index("-h") + 1])
         self.assertEqual("55439", args[args.index("-p") + 1])
@@ -132,6 +164,8 @@ class PostgreSQLTests(unittest.TestCase):
             name = entry["allocations"]["database"]
             self.assertIn(f"hostssl {name} {name} 127.0.0.1/32 scram-sha-256", text)
             self.assertIn(f"hostssl {name} {name} ::1/128 scram-sha-256", text)
+        self.assertIn('local all "foundry-postgres" peer', text)
+        self.assertNotIn("local all postgres peer", text)
         self.assertIn("local all all reject", text)
         self.assertNotIn("hostssl all", text)
         self.assertTrue(text.endswith("host all all ::/0 reject\n"))
@@ -256,12 +290,164 @@ class PostgreSQLTests(unittest.TestCase):
         config.mkdir(parents=True)
         (config / "postgresql.conf").write_text("partial")
         self.host.paths.p(allocation["data_path"]).mkdir(parents=True)
-        with patch.object(postgres.packages, "install_missing"), patch.object(postgres, "prepare_tls", return_value={}):
+        with patch.object(postgres.packages, "install_missing"), patch.object(postgres, "prepare_tls", return_value={}), \
+                patch.object(postgres, "_prepare_account"):
             with self.assertRaises(DeployError) as raised:
                 postgres.prepare(self.host, self.registry)
         self.assertEqual("postgres_partial_install", raised.exception.code)
         self.assertFalse(any(args[0] == "pg_createcluster" for args, _ in self.host.calls))
         self.assertTrue(config.exists())
+
+    def initial_creation(self):
+        allocation = self.claimed(state="preparing", phase="creating")
+        journal = postgres._cluster_journal(self.host, self.registry)
+        journal.update(creation_intent=True, start_attempted=False, start_succeeded=False)
+        postgres._save_cluster(self.host, journal)
+        config = self.host.paths.p(allocation["config_path"])
+        config.mkdir(parents=True)
+        data = self.host.paths.p(allocation["data_path"])
+        data.mkdir(parents=True)
+        (data / "PG_VERSION").write_text("16\n")
+        return journal, config, data
+
+    def test_d08_partial_initialization_drops_only_reserved_cluster_and_recreates(self):
+        journal, config, data = self.initial_creation()
+        # Reserve the dedicated account before creating the simulated partial tree.
+        journal["account_intent"] = True
+        postgres._save_cluster(self.host, journal)
+        foreign = self.host.paths.p("/var/lib/postgresql/16/main/foreign-data")
+        foreign.parent.mkdir(parents=True)
+        foreign.write_text("preserved")
+        tls = {}
+        for name in ("cert", "key"):
+            tls[name] = self.host.paths.root / (name + ".fixture")
+            tls[name].write_text(name)
+        with patch.object(postgres.packages, "install_missing"), \
+                patch.object(postgres, "prepare_tls", return_value=tls), \
+                patch.object(postgres, "_verify_settings"), patch.object(postgres, "_publish_hba"):
+            postgres.prepare(self.host, self.registry)
+        commands = [args for args, _ in self.host.calls]
+        self.assertEqual([["pg_dropcluster", "16", "foundry"]], [args for args in commands if args[0] == "pg_dropcluster"])
+        create = next(args for args in commands if args[0] == "pg_createcluster")
+        self.assertEqual("foundry-postgres", create[create.index("--user") + 1])
+        self.assertEqual("/" + str(data.relative_to(self.host.paths.root)), create[create.index("--datadir") + 1])
+        self.assertEqual("preserved", foreign.read_text())
+        final = postgres._cluster_journal(self.host, self.registry)
+        self.assertEqual("ready", final["phase"])
+        self.assertTrue(final["start_attempted"])
+        self.assertTrue(final["start_succeeded"])
+        unit = self.host.paths.p("/etc/systemd/system/" + journal["allocation"]["unit"]).read_text()
+        self.assertIn("User=foundry-postgres\nGroup=foundry-postgres", unit)
+        self.assertIn(postgres.SOCKET + "/postmaster.pid", unit)
+        self.assertEqual(0o600, (config / "foundry.key").stat().st_mode & 0o777)
+        self.assertFalse(any(args[:3] == ["runuser", "-u", "postgres"] for args in commands))
+
+    def test_d08_start_history_and_user_data_are_never_discarded(self):
+        journal, config, data = self.initial_creation()
+        for relative in ("postmaster.opts", "postmaster.pid", "base/16384/12345", "base/5/16384",
+                         "pg_wal/000000010000000000000002", "pg_tblspc/16384", "backup_label"):
+            with self.subTest(artifact=relative):
+                path = data / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("keep")
+                with self.assertRaises(DeployError):
+                    postgres._discard_initialization(self.host, self.registry, journal)
+                self.assertEqual("keep", path.read_text())
+                path.unlink()
+                while path.parent != data and not any(path.parent.iterdir()):
+                    path = path.parent
+                    path.rmdir()
+        for field in ("start_attempted", "start_succeeded"):
+            with self.subTest(field=field), self.assertRaises(DeployError):
+                postgres._discard_initialization(self.host, self.registry, dict(journal, **{field: True}))
+        self.assertFalse(any(args[0] == "pg_dropcluster" for args, _ in self.host.calls))
+
+    def test_d08_interrupted_drop_retries_same_allocation(self):
+        journal, config, data = self.initial_creation()
+        original = self.host.run
+        def interrupted(args, **kwargs):
+            if args[0] == "pg_dropcluster":
+                shutil.rmtree(data)
+                raise DeployError("interrupted", "drop interrupted")
+            return original(args, **kwargs)
+        with patch.object(self.host, "run", side_effect=interrupted), self.assertRaises(DeployError):
+            postgres._discard_initialization(self.host, self.registry, journal)
+        resumed = postgres._cluster_journal(self.host, self.registry)
+        self.assertEqual("recreating", resumed["phase"])
+        postgres._discard_initialization(self.host, self.registry, resumed)
+        self.assertFalse(config.exists())
+        self.assertFalse(data.exists())
+
+    def test_d08_symlink_or_running_cluster_refuses_deletion(self):
+        journal, config, data = self.initial_creation()
+        (data / "pg_wal").symlink_to(self.host.paths.root)
+        with self.assertRaises(DeployError):
+            postgres._discard_initialization(self.host, self.registry, journal)
+        (data / "pg_wal").unlink()
+        original = self.host.run
+        def running(args, **kwargs):
+            if args[:2] == ["systemctl", "is-active"]:
+                return subprocess.CompletedProcess(args, 0, "", "")
+            return original(args, **kwargs)
+        with patch.object(self.host, "run", side_effect=running), self.assertRaises(DeployError):
+            postgres._discard_initialization(self.host, self.registry, journal)
+        self.assertFalse(any(args[0] == "pg_dropcluster" for args, _ in self.host.calls))
+
+    def test_d08_half_written_configuration_does_not_require_pg_lsclusters(self):
+        journal, config, data = self.initial_creation()
+        (config / "postgresql.conf").write_text("port = '")
+        with patch.object(postgres, "_inventory", side_effect=DeployError("invalid_config", "partial file")) as inventory:
+            self.assertEqual("preparing", postgres.inspect(self.host, self.registry)["state"])
+            postgres._discard_initialization(self.host, self.registry, journal)
+        inventory.assert_not_called()
+        self.assertFalse(config.exists())
+        self.assertFalse(data.exists())
+
+    def test_d08_surviving_creator_process_refuses_deletion(self):
+        journal, config, data = self.initial_creation()
+        original = self.host.run
+        for flag in ("-u", "-f"):
+            def running(args, **kwargs):
+                if args[:2] == ["pgrep", flag]:
+                    return subprocess.CompletedProcess(args, 0, "12345\n", "")
+                return original(args, **kwargs)
+            with self.subTest(flag=flag), patch.object(self.host, "run", side_effect=running):
+                with self.assertRaises(DeployError):
+                    postgres._discard_initialization(self.host, self.registry, journal)
+        self.assertFalse(any(args[0] == "pg_dropcluster" for args, _ in self.host.calls))
+
+    def test_d08_unclean_control_state_or_server_log_refuses_deletion(self):
+        journal, config, data = self.initial_creation()
+        (data / "global").mkdir()
+        (data / "global/pg_control").write_bytes(b"fixture")
+        original = self.host.run
+        def unclean(args, **kwargs):
+            if args[0].endswith("/pg_controldata"):
+                return subprocess.CompletedProcess(args, 0, "Database cluster state: in production\n", "")
+            return original(args, **kwargs)
+        with patch.object(self.host, "run", side_effect=unclean), self.assertRaises(DeployError):
+            postgres._discard_initialization(self.host, self.registry, journal)
+        log = self.host.paths.p("/var/log/postgresql/postgresql-16-foundry.log")
+        log.parent.mkdir(parents=True)
+        log.write_text("database system is ready to accept connections\n")
+        with self.assertRaises(DeployError):
+            postgres._discard_initialization(self.host, self.registry, journal)
+        self.assertFalse(any(args[0] == "pg_dropcluster" for args, _ in self.host.calls))
+
+    def test_dedicated_account_resumes_group_creation_and_refuses_foreign_account(self):
+        self.claimed(state="preparing", phase="reserved")
+        journal = postgres._cluster_journal(self.host, self.registry)
+        journal["account_intent"] = True
+        postgres._save_cluster(self.host, journal)
+        self.host.group = "foundry-postgres:x:999:\n"
+        postgres._prepare_account(self.host, self.registry, journal)
+        command = next(args for args, _ in self.host.calls if args[0] == "useradd")
+        self.assertIn("--system", command)
+        self.assertIn("/usr/sbin/nologin", command)
+        self.assertEqual(postgres.CLUSTER_HOME, command[command.index("--home-dir") + 1])
+        self.host.account = self.host.account.replace("/usr/sbin/nologin", "/bin/bash")
+        with self.assertRaises(DeployError):
+            postgres._prepare_account(self.host, self.registry, journal)
 
     def test_archive_command_needs_explicit_owned_plan_and_reloads_only_foundry(self):
         allocation = self.claimed()

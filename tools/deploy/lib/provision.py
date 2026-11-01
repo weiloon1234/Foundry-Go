@@ -136,11 +136,13 @@ def _site_checks(host, entry):
         raise DeployError("provision_conflict", "nginx enabled-site path is not the owned link")
     # nginx -T expands includes, so custom conf.d paths and wildcard server
     # names are examined as well as the distribution sites directories.
-    if _installed(host, "nginx") or _installed(host, "nginx-core"):
-        result = host.run(["nginx", "-T"], check=False)
-        if result.returncode:
+    if packages.binary_available(host, "nginx") or _installed(host, "nginx") or _installed(host, "nginx-core"):
+        result = _probe(host, ["nginx", "-T"])
+        if not _ok(result):
             raise DeployError("provision_conflict", "nginx configuration inspection failed")
         files = re.split(r"(?m)^# configuration file (.+):$", result.stdout or "")
+        require(len(files) > 1 and any(content.strip() for content in files[2::2]),
+                "provision_conflict", "nginx effective configuration is uninspectable")
         for index in range(1, len(files), 2):
             current, content = files[index], files[index + 1]
             if current in {str(site), str(enabled)}:
@@ -228,6 +230,7 @@ def _template(tools_dir, name, entry, *, postgres_unit=""):
     content = (Path(tools_dir) / "server" / "templates" / name).read_text()
     replacements = {"@MARKER@": _marker(entry), "@SERVICE@": entry["name"], "@DOMAIN@": entry["profile"]["domain"], "@PORT@": str(entry["allocations"]["http_port"])}
     replacements.update(edge_template(entry, Path(tools_dir) / "lib"))
+    replacements["@CERTIFICATE_ROOT@"] = certificates.CONFIG_DIR
     replacements["@POSTGRES_UNIT@"] = postgres_unit
     replacements["@REDIS_UNIT@"] = REDIS_UNIT
     replacements["@STATE_DIRECTORY@"] = f"{PREFIX}/apps/{entry['name']}"

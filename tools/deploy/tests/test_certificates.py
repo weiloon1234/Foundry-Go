@@ -38,10 +38,11 @@ class CertificateTests(unittest.TestCase):
         return path
 
     def existing(self):
+        certificates._directories(self.host, create=True)
         token = self.credential()
         lineage = self.entry["profile"]["domain"]
-        archive = self.host.paths.p("/etc/letsencrypt/archive/" + lineage)
-        live = self.host.paths.p("/etc/letsencrypt/live/" + lineage)
+        archive = self.host.paths.p("/etc/foundry/letsencrypt/archive/" + lineage)
+        live = self.host.paths.p("/etc/foundry/letsencrypt/live/" + lineage)
         archive.mkdir(parents=True)
         live.mkdir(parents=True)
         for name in ("cert", "chain", "privkey", "fullchain"):
@@ -62,6 +63,14 @@ class CertificateTests(unittest.TestCase):
 
     def test_inspection_of_missing_lineage_is_read_only(self):
         self.assertEqual(certificates.inspect(self.host, self.entry)["state"], "missing")
+        self.assertEqual(self.calls, [])
+
+    def test_dangling_lineage_link_cannot_escape_isolated_directories(self):
+        live = self.host.paths.p(certificates.CONFIG_DIR + "/live/" + self.entry["profile"]["domain"])
+        live.parent.mkdir(parents=True)
+        live.symlink_to(self.host.paths.p("/etc/letsencrypt/live/foreign"))
+        with self.assertRaises(DeployError):
+            certificates.inspect(self.host, self.entry)
         self.assertEqual(self.calls, [])
 
     def test_existing_lineage_requires_dns_credentials_hook_and_timer(self):
@@ -96,10 +105,59 @@ class CertificateTests(unittest.TestCase):
         commands = [command for command, _ in self.calls]
         dry_runs = [command for command in commands if command[0] == "certbot"]
         self.assertEqual(dry_runs, [["certbot", "renew", "--cert-name", self.entry["profile"]["domain"],
-                                    "--dry-run", "--run-deploy-hooks"]])
+                                    "--dry-run", "--run-deploy-hooks"] + certificates._options()])
         self.assertIsNotNone(self.entry["certificate"]["last_renewal_check_at"])
         self.assertNotIn("private-canary", json.dumps(self.registry))
         self.assertNotIn("private-canary", json.dumps(commands))
+
+    def test_distro_lineage_hooks_and_timer_are_outside_foundry_inspection(self):
+        foreign = self.host.paths.p("/etc/letsencrypt/renewal/" + self.entry["profile"]["domain"] + ".conf")
+        foreign.parent.mkdir(parents=True)
+        foreign.write_text("[renewalparams]\npre_hook = stop-foreign-nginx\n")
+        timer = self.host.paths.p("/etc/systemd/system/certbot.timer")
+        timer.parent.mkdir(parents=True)
+        timer.write_text("foreign timer")
+        self.assertEqual("missing", certificates.inspect(self.host, self.entry)["state"])
+        self.existing()
+        with patch.object(certificates.packages, "install_missing"):
+            certificates.provision(self.host, self.registry, self.entry)
+        self.assertIn("stop-foreign-nginx", foreign.read_text())
+        self.assertEqual("foreign timer", timer.read_text())
+        self.assertFalse(any("certbot.timer" in args for args, _ in self.calls))
+        self.assertFalse(any("/etc/letsencrypt" in arg for args, _ in self.calls for arg in args))
+
+    def test_issuance_dry_run_and_timer_share_isolated_directories_and_hook_policy(self):
+        self.credential()
+        original = self.run_command
+        def issue(args, **kwargs):
+            if args[:2] == ["certbot", "certonly"]:
+                # Model the provider's publication; readiness is asserted separately.
+                certificates._renewal_path(self.host, self.entry).parent.mkdir(parents=True, exist_ok=True)
+            return original(args, **kwargs)
+        self.host.run = issue
+        with patch.object(certificates.packages, "install_missing"), \
+                patch.object(certificates, "_identity_ready"), patch.object(certificates, "_renewal_ready"):
+            certificates.provision(self.host, self.registry, self.entry)
+        commands = [args for args, _ in self.calls if args[0] == "certbot"]
+        self.assertEqual(["certonly", "renew"], [args[1] for args in commands])
+        for args in commands:
+            self.assertEqual(certificates._options(), args[-len(certificates._options()):])
+        service = certificates._units(self.entry)["foundry-certbot-renew.service"]
+        self.assertIn(" ".join(certificates._options()), service)
+        self.assertIn("--no-directory-hooks", service)
+        self.assertEqual("foundry-certbot-renew", certificates._timer(self.entry))
+        self.assertIn(["systemctl", "enable", "--now", "foundry-certbot-renew.timer"],
+                      [args for args, _ in self.calls])
+
+    def test_a03_refuses_owned_pre_post_hooks_and_global_configuration_edits(self):
+        renewal = self.existing()
+        original = renewal.read_text()
+        for hook in ("pre_hook", "post_hook"):
+            renewal.write_text(original + hook + " = stop-nginx\n")
+            self.assertEqual("conflict", certificates.inspect(self.host, self.entry)["state"])
+        renewal.write_text(original)
+        self.host.paths.p(certificates.CONFIG_DIR + "/cli.ini").write_text("pre-hook = stop-nginx\n")
+        self.assertEqual("conflict", certificates.inspect(self.host, self.entry)["state"])
 
     def test_failed_dry_run_has_no_success_receipt(self):
         self.existing()
@@ -212,7 +270,7 @@ class CertificateTests(unittest.TestCase):
         self.assertFalse(any(args[0] == "certbot" for args in commands))
         self.assertEqual(commands.count(["/usr/bin/systemctl", "reload", "nginx"]), 2)
         self.assertTrue(any(args[:2] == ["openssl", "verify"] for args in commands))
-        self.assertEqual(len(list(self.host.paths.p("/etc/letsencrypt/archive/app.acceptance.invalid").glob("*.pem"))), 8)
+        self.assertEqual(len(list(self.host.paths.p("/etc/foundry/letsencrypt/archive/app.acceptance.invalid").glob("*.pem"))), 8)
         self.assertIsNotNone(self.entry["certificate"]["last_renewal_check_at"])
         with patch.dict(certificates.os.environ, {"FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT": "0"}):
             with self.assertRaises(DeployError):

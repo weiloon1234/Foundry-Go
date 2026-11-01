@@ -24,6 +24,10 @@ from contracts import DeployError, HOST_PATHS, check_path, now, read_json, requi
 from host import Host, wall_clock_budget
 import packages
 
+CONFIG_DIR = "/etc/foundry/letsencrypt"
+WORK_DIR = "/var/lib/foundry/letsencrypt"
+LOGS_DIR = "/var/log/foundry/letsencrypt"
+TEMPLATES = Path(__file__).resolve().parents[1] / "server/templates"
 RELOAD_COMMANDS = (["/usr/sbin/nginx", "-t", "-q"], ["/usr/bin/systemctl", "reload", "nginx"])
 RELOAD_HOOK = " && ".join(" ".join(command) for command in RELOAD_COMMANDS)
 REMEDIATION = ("Repair the owned lineage's DNS-01 credentials, renewal configuration and "
@@ -51,8 +55,8 @@ def _synthetic_issue(host, entry):
     require(_synthetic(host, entry), "certificate_fixture_forbidden", "Synthetic issuance is acceptance-only.")
     lineage = _lineage(entry)
     ca = host.paths.p("/etc/foundry/acceptance-ca")
-    archive = check_path(host.paths.p("/etc/letsencrypt/archive/" + lineage), "directory")
-    live = check_path(host.paths.p("/etc/letsencrypt/live/" + lineage), "directory")
+    archive = check_path(host.paths.p(CONFIG_DIR + "/archive/" + lineage), "directory")
+    live = check_path(host.paths.p(CONFIG_DIR + "/live/" + lineage), "directory")
     archive.mkdir(parents=True, mode=0o700, exist_ok=True)
     live.mkdir(parents=True, mode=0o700, exist_ok=True)
     generation = uuid.uuid4().hex
@@ -190,29 +194,45 @@ def _claim(entry):
 
 
 def _renewal_path(host, entry):
-    return check_path(host.paths.p(f"/etc/letsencrypt/renewal/{_lineage(entry)}.conf"), "file")
+    return check_path(host.paths.p(f"{CONFIG_DIR}/renewal/{_lineage(entry)}.conf"), "file")
+
+
+def _options():
+    return ["--config-dir", CONFIG_DIR, "--work-dir", WORK_DIR, "--logs-dir", LOGS_DIR,
+            "--no-directory-hooks", "--config", CONFIG_DIR + "/cli.ini"]
+
+
+def _directories(host, *, create=False):
+    for directory in (CONFIG_DIR, WORK_DIR, LOGS_DIR):
+        path = check_path(host.paths.p(directory), "directory")
+        if create:
+            path.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _private(host, path, directory=True)
+    config = check_path(host.paths.p(CONFIG_DIR + "/cli.ini"), "file")
+    content = "# Foundry-owned Certbot configuration; options are explicit.\n"
+    if create and not config.exists():
+        host.owned_write(config, content, mode=0o600)
+    require(_private(host, config).read_text() == content, "certificate_renewal_invalid", REMEDIATION)
 
 
 def _timer(entry):
-    return "foundry-cert-renew-" + entry["profile"]["instance_id"]
+    if entry["certificate"].get("zone_ref") == "acceptance-synthetic":
+        return "foundry-cert-renew-" + entry["profile"]["instance_id"]
+    return "foundry-certbot-renew"
 
 
 def _units(entry):
     name = _timer(entry)
-    command = f"/usr/bin/certbot renew --cert-name {_lineage(entry)} --quiet"
+    command = "/usr/bin/certbot renew --quiet " + " ".join(_options())
     fixture_environment = ""
     if entry["certificate"].get("zone_ref") == "acceptance-synthetic":
         command = f"/usr/bin/python3 -I {HOST_PATHS['current']}/lib/certificates.py synthetic-renew {entry['profile']['instance_id']}"
         fixture_environment = "Environment=FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT=1\n"
-    return {
-        name + ".service": ("# Foundry owned DNS-01 renewal\n[Unit]\nDescription=Foundry certificate renewal\n"
-                            "[Service]\nType=oneshot\nUMask=0077\n"
-                            f"{fixture_environment}ExecStart={command}\n"
-                            "TimeoutStartSec=1800\n"),
-        name + ".timer": ("# Foundry owned DNS-01 renewal\n[Unit]\nDescription=Foundry certificate renewal timer\n"
-                          "[Timer]\nOnCalendar=*-*-* 00,12:00:00 UTC\nRandomizedDelaySec=3600\n"
-                          "Persistent=true\n[Install]\nWantedBy=timers.target\n"),
-    }
+    result = {}
+    for suffix in ("service", "timer"):
+        content = (TEMPLATES / ("foundry-certbot-renew." + suffix)).read_text()
+        result[name + "." + suffix] = content.replace("@COMMAND@", command).replace("@ENVIRONMENT@", fixture_environment)
+    return result
 
 
 def _timer_ready(host, entry):
@@ -228,6 +248,7 @@ def _timer_ready(host, entry):
 
 def _renewal_ready(host, entry):
     synthetic = _synthetic(host, entry)
+    _directories(host)
     credentials = None if synthetic else _credentials(host, entry)
     path = _renewal_path(host, entry)
     require(path.exists(), "certificate_renewal_invalid", REMEDIATION)
@@ -239,9 +260,10 @@ def _renewal_ready(host, entry):
                           params.get("authenticator") == "dns-cloudflare"
                           and params.get("dns_cloudflare_credentials") == str(credentials)
                           and params.get("dns_cloudflare_propagation_seconds") == "60")
-        require(provider_ready and params.get("deploy_hook") == RELOAD_HOOK,
+        require(provider_ready and params.get("deploy_hook") == RELOAD_HOOK
+                and not params.get("pre_hook") and not params.get("post_hook"),
                 "certificate_renewal_invalid", REMEDIATION)
-        live = host.paths.p("/etc/letsencrypt/live/" + _lineage(entry))
+        live = host.paths.p(CONFIG_DIR + "/live/" + _lineage(entry))
         for key, name in (("cert", "cert.pem"), ("privkey", "privkey.pem"),
                           ("chain", "chain.pem"), ("fullchain", "fullchain.pem")):
             require(parser["lineage"].get(key) == str(live / name), "certificate_renewal_invalid", REMEDIATION)
@@ -253,7 +275,7 @@ def _renewal_ready(host, entry):
 def certificate_ready(host: Host, entry: dict) -> bool:
     """Check expiry and hostname separately (openssl otherwise drops a check)."""
     domain = entry["profile"]["domain"]
-    certificate = host.paths.p(f"/etc/letsencrypt/live/{domain}/fullchain.pem")
+    certificate = host.paths.p(f"{CONFIG_DIR}/live/{domain}/fullchain.pem")
     if not certificate.exists():
         return False
     command = ["openssl", "x509", "-noout", "-in", str(certificate)]
@@ -271,8 +293,8 @@ def _identity_ready(host, entry):
     require(read_json(_private(host, _claim_path(host, entry))) == _claim(entry),
             "certificate_ownership", REMEDIATION)
     lineage = _lineage(entry)
-    live = host.paths.p("/etc/letsencrypt/live/" + lineage)
-    archive = check_path(host.paths.p("/etc/letsencrypt/archive/" + lineage), "directory")
+    live = host.paths.p(CONFIG_DIR + "/live/" + lineage)
+    archive = check_path(host.paths.p(CONFIG_DIR + "/archive/" + lineage), "directory")
     # Certbot live files must resolve within this lineage's archive, not another site.
     check_path(live, "directory")
     for name in ("cert.pem", "chain.pem", "fullchain.pem", "privkey.pem"):
@@ -291,7 +313,8 @@ def _identity_ready(host, entry):
 def inspect(host: Host, entry: dict) -> dict:
     """Read-only deterministic observation. A dry-run is required by provision."""
     lineage = _lineage(entry)
-    live = host.paths.p("/etc/letsencrypt/live/" + lineage)
+    live = check_path(host.paths.p(CONFIG_DIR + "/live/" + lineage), "directory")
+    check_path(host.paths.p(CONFIG_DIR + "/archive/" + lineage), "directory")
     if not live.exists() and not _renewal_path(host, entry).exists():
         return {"state": "missing", "lineage": lineage}
     try:
@@ -312,6 +335,7 @@ def provision(host: Host, registry: dict, entry: dict) -> None:
     if not synthetic:
         packages.install_missing(host, ["certbot", "python3-certbot-dns-cloudflare"])
     if observed["state"] == "missing":
+        _directories(host, create=True)
         claim = _claim_path(host, entry)
         if claim.exists():
             require(read_json(_private(host, claim)) == _claim(entry), "certificate_ownership", REMEDIATION)
@@ -330,7 +354,7 @@ def provision(host: Host, registry: dict, entry: dict) -> None:
             host.run(["certbot", "certonly", "--non-interactive", "--agree-tos", "--dns-cloudflare",
                       "--dns-cloudflare-credentials", str(credentials), "--dns-cloudflare-propagation-seconds", "60",
                       "--cert-name", _lineage(entry), "--email", entry["profile"]["certbot_email"],
-                      "--domain", entry["profile"]["domain"], "--deploy-hook", RELOAD_HOOK], timeout=900)
+                      "--domain", entry["profile"]["domain"], "--deploy-hook", RELOAD_HOOK] + _options(), timeout=900)
     _identity_ready(host, entry)
     _renewal_ready(host, entry)
     try:
@@ -338,7 +362,7 @@ def provision(host: Host, registry: dict, entry: dict) -> None:
             # Exercise a second issuance and the real lineage/reload checks.
             _synthetic_issue(host, entry)
         else:
-            host.run(["certbot", "renew", "--cert-name", _lineage(entry), "--dry-run", "--run-deploy-hooks"], timeout=900)
+            host.run(["certbot", "renew", "--cert-name", _lineage(entry), "--dry-run", "--run-deploy-hooks"] + _options(), timeout=900)
     except DeployError:
         raise DeployError("certificate_renewal_failed", "DNS-01 renewal dry-run failed. " + REMEDIATION) from None
     entry["certificate"]["last_renewal_check_at"] = now()

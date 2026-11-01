@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import pwd
 import re
 import secrets
+import stat
 import uuid
 
 from host import Host
@@ -15,9 +17,15 @@ import packages
 
 ROOTS = "/etc/ssl/certs/ca-certificates.crt"
 SOCKET = "/run/foundry/postgresql"
+CLUSTER_HOME = "/var/lib/foundry/postgresql"
+TEMPLATES = Path(__file__).resolve().parents[1] / "server/templates"
 CAPACITY = {"budget_mib": 1024, "max_connections": 40, "shared_buffers": "128MB",
             "work_mem": "4MB", "maintenance_work_mem": "64MB"}
 
+
+def cluster_owner() -> str:
+    """The OS and peer database identity of the dedicated Foundry cluster."""
+    return "foundry-postgres"
 
 def _directory(host, path, mode=0o700, owner="root", group="root"):
     check_path(path, "directory")
@@ -172,7 +180,8 @@ def _inventory(host):
 def _allocation(major, port, token):
     return {"owner": "foundry", "cluster": "foundry", "major": major, "version": major,
             "port": port, "socket_directory": SOCKET, "unit": f"postgresql@{major}-foundry.service",
-            "config_path": f"/etc/postgresql/{major}/foundry", "data_path": f"/var/lib/postgresql/{major}/foundry",
+            "config_path": f"/etc/postgresql/{major}/foundry", "data_path": f"{CLUSTER_HOME}/{major}/foundry",
+            "cluster_owner": cluster_owner(),
             "ownership_token": token, "capacity": dict(CAPACITY), "archive_command": ""}
 
 
@@ -181,7 +190,7 @@ def _allocation_valid(value):
             or not POSTGRES_PORT <= value["port"] <= POSTGRES_PORT + 99 or not value.get("ownership_token")):
         return False
     expected = _allocation(value["major"], value["port"], value["ownership_token"])
-    return all(value.get(key) == expected[key] for key in ("owner", "cluster", "unit", "socket_directory", "config_path", "data_path", "capacity"))
+    return all(value.get(key) == expected[key] for key in ("owner", "cluster", "unit", "socket_directory", "config_path", "data_path", "capacity", "cluster_owner"))
 
 
 def _cluster_journal(host, registry):
@@ -189,7 +198,7 @@ def _cluster_journal(host, registry):
     if value is not None:
         require(isinstance(value, dict) and value.get("host_id") == registry["host_id"] and _allocation_valid(value.get("allocation", {})),
                 "postgres_ownership", "PostgreSQL preparation journal identity mismatch.")
-        require(value.get("phase") in {"reserved", "creating", "configuring", "starting", "ready"},
+        require(value.get("phase") in {"reserved", "creating", "recreating", "configuring", "starting", "ready"},
                 "postgres_ownership", "Unknown PostgreSQL preparation phase.")
     return value
 
@@ -200,6 +209,12 @@ def _save_cluster(host, value):
 
 def _owner_path(host, allocation):
     return check_path(host.paths.p(allocation["config_path"]) / "foundry-owner.json", "file")
+
+
+def _initial_creation(journal):
+    return (journal is not None and journal["phase"] in {"creating", "recreating"}
+            and journal.get("creation_intent") is True and journal.get("start_attempted") is False
+            and journal.get("start_succeeded") is False and journal["allocation"].get("state") != "ready")
 
 
 def inspect(host: Host, registry: dict) -> dict:
@@ -215,19 +230,28 @@ def inspect(host: Host, registry: dict) -> dict:
                 "postgres_ownership", "Foundry cluster has no matching private creation journal.")
     elif journal:
         owned = journal["allocation"]
-    clusters = _inventory(host)
+    # pg_lsclusters itself can fail on a half-written postgresql.conf. Only the
+    # private never-started creation intent permits filesystem-based recovery.
+    clusters = [] if _initial_creation(journal) else _inventory(host)
     foundry = [item for item in clusters if item["cluster"] == "foundry"]
     configuration = host.paths.p(f"/etc/postgresql/{major}/foundry")
-    data = host.paths.p(f"/var/lib/postgresql/{major}/foundry")
+    data = host.paths.p(f"{CLUSTER_HOME}/{major}/foundry")
     check_path(configuration, "directory")
     check_path(data, "directory")
     unit = f"postgresql@{major}-foundry.service"
-    require(all(not path.exists() and not path.is_symlink() for path in
-                (host.paths.p("/etc/systemd/system/" + unit), host.paths.p("/etc/systemd/system/" + unit + ".d"))),
-            "postgres_ownership", "An unclaimed override for the Foundry cluster unit exists.")
+    unit_path = check_path(host.paths.p("/etc/systemd/system/" + unit), "file")
+    override = host.paths.p("/etc/systemd/system/" + unit + ".d")
+    require(not override.exists() and not override.is_symlink(), "postgres_ownership",
+            "An unclaimed override for the Foundry cluster unit exists.")
+    if unit_path.exists():
+        require(owned and journal["phase"] in {"configuring", "starting", "ready"}
+                and unit_path.read_text() == _unit(owned), "postgres_ownership",
+                "The Foundry PostgreSQL unit differs from its journaled ownership.")
     if not owned:
         require(not foundry and not configuration.exists() and not data.exists(), "postgres_ownership",
                 "An unclaimed Foundry cluster or directory already exists.")
+        require(not check_path(host.paths.p(f"/var/log/postgresql/postgresql-{major}-foundry.log"), "file").exists(),
+                "postgres_ownership", "An unclaimed Foundry PostgreSQL log exists.")
         require(not host.paths.p(SOCKET).exists() and not host.paths.p("/etc/tmpfiles.d/foundry-postgresql.conf").exists(),
                 "postgres_ownership", "An unclaimed Foundry PostgreSQL runtime path exists.")
         ports = _listeners(host) | {item["port"] for item in clusters}
@@ -235,18 +259,21 @@ def inspect(host: Host, registry: dict) -> dict:
         require(port is not None, "postgres_ports_exhausted", "No free port in the Foundry PostgreSQL range.")
         return {"state": "absent", "major": major, "port": port, "cluster": "foundry", "owner": "foundry"}
     require(len(foundry) <= 1, "postgres_ownership", "Unexpected additional Foundry-named clusters.")
+    if _initial_creation(journal):
+        require(all(path == configuration for path in host.paths.p("/etc/postgresql").glob("*/foundry")),
+                "postgres_ownership", "Unexpected additional Foundry-named clusters.")
     if foundry:
         row = foundry[0]
         require(row["major"] == major and row["port"] == owned["port"] and row["data_path"] == owned["data_path"]
-                and row["owner"] == "postgres", "postgres_ownership", "Foundry cluster metadata does not match its reservation.")
+                and row["owner"] == cluster_owner(), "postgres_ownership", "Foundry cluster metadata does not match its reservation.")
     owner_path = _owner_path(host, owned)
     if owner_path.exists():
         require(read_json(owner_path) == {"host_id": registry["host_id"], "ownership_token": owned["ownership_token"]},
                 "postgres_ownership", "Foundry cluster ownership marker changed.")
-    elif journal["phase"] not in {"reserved", "creating"}:
+    elif journal["phase"] not in {"reserved", "creating", "recreating"}:
         raise DeployError("postgres_ownership", "The claimed PostgreSQL cluster ownership marker is missing.")
     if owned.get("state") == "ready":
-        require(foundry and foundry[0]["status"] == "online" and owner_path.exists(), "postgres_unavailable",
+        require(foundry and foundry[0]["status"] == "online" and owner_path.exists() and unit_path.exists(), "postgres_unavailable",
                 "The ready Foundry cluster is unavailable; reconcile its recorded allocation.")
         _verify_settings(host, registry)
         configuration = host.paths.p(owned["config_path"]) / "conf.d/foundry.conf"
@@ -277,7 +304,8 @@ def cluster_settings(host: Host, registry: dict) -> dict:
 
 def _configuration(allocation):
     values = {"port": str(allocation["port"]), "listen_addresses": "'127.0.0.1,::1'",
-              "unix_socket_directories": _sql(SOCKET), "password_encryption": "'scram-sha-256'", "ssl": "on",
+              "unix_socket_directories": _sql(SOCKET),
+              "external_pid_file": _sql(SOCKET + "/postmaster.pid"), "password_encryption": "'scram-sha-256'", "ssl": "on",
               "ssl_cert_file": _sql(allocation["config_path"] + "/foundry.crt"),
               "ssl_key_file": _sql(allocation["config_path"] + "/foundry.key"),
               "fsync": "on", "full_page_writes": "on", "synchronous_commit": "on", "wal_level": "replica",
@@ -289,7 +317,7 @@ def _configuration(allocation):
 
 
 def _hba(registry):
-    lines = ["# Foundry-owned exact database/role pairs", "local all postgres peer", "local all all reject"]
+    lines = ["# Foundry-owned exact database/role pairs", f'local all "{cluster_owner()}" peer', "local all all reject"]
     for entry in sorted(registry.get("instances", {}).values(), key=lambda item: item["profile"]["instance_id"]):
         expected = "f_" + uuid.UUID(entry["profile"]["instance_id"]).hex
         allocation = entry["allocations"]
@@ -322,7 +350,7 @@ def _publish_hba(host, registry, *, running):
         return
     journal["hba"] = {"old": current, "new": content, "phase": "publishing"}
     _save_cluster(host, journal)
-    host.owned_write(path, content, mode=0o640, owner="postgres", group="postgres")
+    host.owned_write(path, content, mode=0o640, owner=cluster_owner(), group=cluster_owner())
     if running:
         errors = _psql(host, registry, "SELECT count(*) FROM pg_hba_file_rules WHERE error IS NOT NULL;")
         require(_text(errors) == "0", "postgres_hba_invalid", "Foundry HBA syntax validation failed; reload withheld.")
@@ -369,6 +397,117 @@ def _archive_plan(cluster, plan):
     return plan["archive_command"]
 
 
+def _unit(allocation):
+    content = (TEMPLATES / "foundry-postgresql.service").read_text()
+    for key, value in {"OWNER": cluster_owner(), "MAJOR": str(allocation["major"]),
+                       "PID_FILE": SOCKET + "/postmaster.pid"}.items():
+        content = content.replace("@" + key + "@", value)
+    return content
+
+
+def _prepare_account(host, registry, journal):
+    name = cluster_owner()
+    account = host.run(["getent", "passwd", name], check=False)
+    group = host.run(["getent", "group", name], check=False)
+    require(account.returncode in (0, 2) and group.returncode in (0, 2),
+            "postgres_account", "Cannot inspect the Foundry PostgreSQL account.")
+    if not journal.get("account_intent"):
+        require(account.returncode == group.returncode == 2
+                and not host.paths.p(CLUSTER_HOME).exists(),
+                "postgres_account", "An unclaimed Foundry PostgreSQL account, group or home exists.")
+        journal["account_intent"] = True
+        _save_cluster(host, journal)
+    if group.returncode == 2:
+        require(account.returncode == 2, "postgres_account", "The owned PostgreSQL group disappeared.")
+        host.run(["groupadd", "--system", name])
+        group = host.run(["getent", "group", name])
+    fields = group.stdout.strip().split(":")
+    require(len(fields) == 4 and fields[0] == name and fields[2].isdigit()
+            and int(fields[2]) > 0 and not fields[3],
+            "postgres_account", "The Foundry PostgreSQL group has foreign ownership or members.")
+    marker = "foundry-host=" + registry["host_id"]
+    if account.returncode == 2:
+        require(not journal.get("start_attempted") and journal["phase"] != "ready",
+                "postgres_account", "Restore the missing established PostgreSQL account.")
+        host.run(["useradd", "--system", "--gid", name, "--home-dir", CLUSTER_HOME,
+                  "--no-create-home", "--shell", "/usr/sbin/nologin", "--comment", marker, name])
+        account = host.run(["getent", "passwd", name])
+    user = account.stdout.strip().split(":")
+    require(len(user) == 7 and user[0] == name and user[2].isdigit() and int(user[2]) > 0
+            and user[3] == fields[2] and user[4:] == [marker, CLUSTER_HOME, "/usr/sbin/nologin"],
+            "postgres_account", "The Foundry PostgreSQL account has foreign ownership.")
+    _directory(host, host.paths.p(CLUSTER_HOME), 0o700, name, name)
+
+
+def _discard_initialization(host, registry, journal):
+    """Drop only an owned, never-started initdb tree; uncertain state is retained."""
+    allocation = journal["allocation"]
+    message = "Cluster initialization has data or uncertain start history; operator reconciliation is required."
+    require(_initial_creation(journal), "postgres_partial_install", message)
+    config = check_path(host.paths.p(allocation["config_path"]), "directory")
+    data = check_path(host.paths.p(allocation["data_path"]), "directory")
+    require(all(path == config for path in host.paths.p("/etc/postgresql").glob("*/foundry")),
+            "postgres_partial_install", message)
+    if host.paths.root == Path("/"):
+        owner = pwd.getpwnam(cluster_owner()).pw_uid
+        require((not data.exists() or data.stat().st_uid == owner)
+                and (not config.exists() or config.stat().st_uid in (0, owner)),
+                "postgres_partial_install", message)
+    active = host.run(["systemctl", "is-active", "--quiet", allocation["unit"]], check=False)
+    require(active.returncode in (3, 4) and allocation["port"] not in _listeners(host),
+            "postgres_partial_install", message)
+    # A killed provisioner may leave its process group running. Do not race a
+    # surviving initdb or pg_createcluster, even though no server has started.
+    for command in (["pgrep", "-u", cluster_owner()],
+                    ["pgrep", "-f", r"(^|/| )pg_createcluster( |$)"]):
+        require(host.run(command, check=False).returncode == 1, "postgres_partial_install", message)
+    # initdb creates only the three built-in databases and low-OID relations.
+    # postmaster.opts survives a clean shutdown; any start artifact forbids reset.
+    directories = {"base", "base/1", "base/4", "base/5", "global", "pg_wal",
+                   "pg_wal/archive_status", "pg_wal/summaries", "pg_xact", "pg_multixact",
+                   "pg_multixact/members", "pg_multixact/offsets", "pg_commit_ts", "pg_dynshmem",
+                   "pg_logical", "pg_logical/mappings", "pg_logical/snapshots", "pg_notify",
+                   "pg_replslot", "pg_serial", "pg_snapshots", "pg_stat", "pg_stat_tmp",
+                   "pg_subtrans", "pg_tblspc", "pg_twophase"}
+    files = {"PG_VERSION", "postgresql.conf", "postgresql.auto.conf", "pg_hba.conf", "pg_ident.conf",
+             "global/pg_control", "global/pg_filenode.map", "pg_logical/replorigin_checkpoint",
+             "pg_wal/000000010000000000000001", "pg_xact/0000", "pg_subtrans/0000",
+             "pg_multixact/members/0000", "pg_multixact/offsets/0000"}
+    for path in data.rglob("*"):
+        relative = path.relative_to(data).as_posix()
+        info = path.lstat()
+        relation = re.fullmatch(r"(?:base/(?:1|4|5)|global)/([0-9]+)(?:_(?:fsm|vm))?(?:\.[0-9]+)?", relative)
+        catalog = bool(relation and 0 < int(relation[1]) < 16384)
+        metadata = bool(re.fullmatch(r"base/(?:1|4|5)/(?:PG_VERSION|pg_filenode.map)", relative))
+        require((stat.S_ISDIR(info.st_mode) and relative in directories)
+                or (stat.S_ISREG(info.st_mode) and (relative in files or catalog or metadata)),
+                "postgres_partial_install", message)
+    control = data / "global/pg_control"
+    if control.exists():
+        result = host.run([f"/usr/lib/postgresql/{allocation['major']}/bin/pg_controldata", str(data)], check=False)
+        require(result.returncode == 0 and re.search(r"(?m)^Database cluster state:\s+shut down\s*$", result.stdout),
+                "postgres_partial_install", message)
+    log = f"/var/log/postgresql/postgresql-{allocation['major']}-foundry.log"
+    log_path = check_path(host.paths.p(log), "file")
+    require(not log_path.exists() or log_path.stat().st_size == 0, "postgres_partial_install", message)
+    for path in config.rglob("*"):
+        relative = path.relative_to(config).as_posix()
+        require((path.is_symlink() and relative == "log" and os.readlink(path) == log)
+                or (not path.is_symlink() and path.is_dir() and relative == "conf.d")
+                or (not path.is_symlink() and path.is_file() and relative in {
+                    "postgresql.conf", "pg_hba.conf", "pg_ident.conf", "start.conf", "pg_ctl.conf",
+                    "environment", "foundry-owner.json"}), "postgres_partial_install", message)
+    journal["phase"] = "recreating"
+    _save_cluster(host, journal)
+    # pg_dropcluster needs configuration even when initdb died before publishing
+    # it. Pin its deletion target instead of trusting a partial config's paths.
+    _directory(host, config, owner=cluster_owner(), group=cluster_owner())
+    host.owned_write(config / "postgresql.conf", "data_directory = " + _sql(allocation["data_path"])
+                     + "\nport = " + str(allocation["port"]) + "\n", owner=cluster_owner(), group=cluster_owner())
+    host.run(["pg_dropcluster", str(allocation["major"]), "foundry"], timeout=180)
+    require(not config.exists() and not data.exists(), "postgres_partial_install", message)
+
+
 def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = None) -> None:
     observed = inspect(host, registry)
     if observed["state"] == "ready":
@@ -387,7 +526,8 @@ def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = No
                 journal["archive_transition"] = {"old": cluster.get("archive_command", ""), "new": command, "phase": "publishing"}
                 _save_cluster(host, journal)
                 changed = dict(cluster, archive_command=command)
-                host.owned_write(host.paths.p(cluster["config_path"]) / "conf.d/foundry.conf", _configuration(changed))
+                host.owned_write(host.paths.p(cluster["config_path"]) / "conf.d/foundry.conf", _configuration(changed),
+                                 owner=cluster_owner(), group=cluster_owner())
                 host.run(["pg_ctlcluster", str(cluster["major"]), "foundry", "reload"])
                 result = _psql(host, registry, "SHOW archive_command;")
                 require(_text(result) == command, "postgres_archive_pending", "Archive command publication awaits reconciliation.")
@@ -424,32 +564,43 @@ def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = No
                 "ca-certificates": "/usr/sbin/update-ca-certificates"}
     missing = [name for name, binary in required.items() if not host.paths.p(binary).is_file()]
     packages.install_missing(host, missing)
+    _prepare_account(host, registry, journal)
     tls = prepare_tls(host, registry)
     config, data = host.paths.p(allocation["config_path"]), host.paths.p(allocation["data_path"])
     if journal["phase"] == "reserved":
         require(not config.exists() and not data.exists(), "postgres_ownership", "A cluster appeared after the Foundry reservation.")
+        journal.update(phase="creating", creation_intent=True, start_attempted=False, start_succeeded=False)
+        _save_cluster(host, journal)
+    if journal["phase"] in {"creating", "recreating"}:
+        if config.exists() or data.exists():
+            _discard_initialization(host, registry, journal)
+        _directory(host, host.paths.p(SOCKET), 0o755, cluster_owner(), cluster_owner())
         journal["phase"] = "creating"
         _save_cluster(host, journal)
-    if journal["phase"] == "creating":
-        _directory(host, host.paths.p(SOCKET), 0o755, "postgres", "postgres")
-        if not config.exists() and not data.exists():
-            host.run(["pg_createcluster", str(major), "foundry", "--port", str(allocation["port"]),
-                      "--socketdir", SOCKET, "--start-conf=manual", "--", "--data-checksums", "--encoding=UTF8",
-                      "--auth-local=peer", "--auth-host=scram-sha-256"], timeout=180)
+        host.run(["pg_createcluster", str(major), "foundry", "--user", cluster_owner(),
+                  "--group", cluster_owner(), "--datadir", allocation["data_path"],
+                  "--port", str(allocation["port"]), "--socketdir", SOCKET, "--start-conf=manual",
+                  "--", "--data-checksums", "--encoding=UTF8",
+                  "--auth-local=peer", "--auth-host=scram-sha-256"], timeout=180)
         require(config.is_dir() and (data / "PG_VERSION").is_file()
                 and (data / "PG_VERSION").read_text().strip() == str(major)
                 and (config / "postgresql.conf").is_file(), "postgres_partial_install",
-                "The claimed cluster creation is incomplete; reconcile this same cluster before retrying.")
+                "The claimed cluster creation is incomplete; retry the same allocation.")
         host.owned_write(_owner_path(host, allocation), json.dumps({"host_id": registry["host_id"], "ownership_token": allocation["ownership_token"]}) + "\n")
         journal["phase"] = "configuring"
         _save_cluster(host, journal)
     if journal["phase"] == "configuring":
-        _directory(host, config / "conf.d", 0o755)
-        host.owned_write(config / "foundry.crt", tls["cert"].read_bytes(), group="postgres")
-        host.owned_write(config / "foundry.key", tls["key"].read_bytes(), mode=0o640, group="postgres")
-        host.owned_write(config / "conf.d/foundry.conf", _configuration(allocation))
+        _directory(host, config, 0o750, cluster_owner(), cluster_owner())
+        _directory(host, data, 0o700, cluster_owner(), cluster_owner())
+        _directory(host, config / "conf.d", 0o755, cluster_owner(), cluster_owner())
+        host.owned_write(config / "foundry.crt", tls["cert"].read_bytes(), owner=cluster_owner(), group=cluster_owner())
+        host.owned_write(config / "foundry.key", tls["key"].read_bytes(), mode=0o600, owner=cluster_owner(), group=cluster_owner())
+        host.owned_write(config / "conf.d/foundry.conf", _configuration(allocation),
+                         owner=cluster_owner(), group=cluster_owner())
         _publish_hba(host, registry, running=False)
-        host.owned_write(host.paths.p("/etc/tmpfiles.d/foundry-postgresql.conf"), f"d {SOCKET} 0755 postgres postgres -\n")
+        host.owned_write(host.paths.p("/etc/tmpfiles.d/foundry-postgresql.conf"), f"d {SOCKET} 0755 {cluster_owner()} {cluster_owner()} -\n")
+        host.owned_write(host.paths.p("/etc/systemd/system/" + allocation["unit"]), _unit(allocation))
+        host.run(["systemctl", "daemon-reload"])
         journal = _cluster_journal(host, registry)
         journal["phase"] = "starting"
         _save_cluster(host, journal)
@@ -458,7 +609,11 @@ def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = No
     if not _ok(active):
         require(allocation["port"] not in _listeners(host), "postgres_port_conflict", "The reserved Foundry PostgreSQL port is occupied.")
         host.run(["systemctl", "enable", allocation["unit"]])
+        journal["start_attempted"] = True
+        _save_cluster(host, journal)
         host.run(["systemctl", "start", allocation["unit"]], timeout=120)
+    journal["start_succeeded"] = True
+    _save_cluster(host, journal)
     cluster["state"] = "ready"
     _verify_settings(host, registry)
     _publish_hba(host, registry, running=True)
@@ -498,7 +653,7 @@ def _cluster(registry: dict) -> dict:
 
 def _psql(host: Host, registry: dict, sql: str, database: str = "postgres", transaction: bool = False):
     cluster = _cluster(registry)
-    command = ["runuser", "-u", "postgres", "--", f"/usr/lib/postgresql/{cluster['major']}/bin/psql",
+    command = ["runuser", "-u", cluster_owner(), "--", f"/usr/lib/postgresql/{cluster['major']}/bin/psql",
                "-X", "-qAt", "--no-password", "-h", cluster["socket_directory"],
                "-p", str(cluster["port"]), "-d", database, "-v", "ON_ERROR_STOP=1", "-f", "-"]
     if transaction:

@@ -36,6 +36,12 @@ REQUIREMENTS = {
 }
 
 
+def binary_available(host: Host, package: str) -> bool:
+    """Use the same accepted binary paths for planning and service inspection."""
+    binaries = REQUIREMENTS.get(package, ())
+    return bool(binaries) and all(host.paths.p(path).is_file() for path in binaries)
+
+
 def _inventory(host: Host) -> dict:
     result = host.run(["dpkg-query", "-W", "-f=${binary:Package}\t${Status}\t${Version}\n"])
     rows = {}
@@ -103,7 +109,8 @@ def _required(host: Host, inventory: dict) -> list[str]:
                      f"postgresql-client-{major}": (f"/usr/lib/postgresql/{major}/bin/psql",),
                      "postgresql-common": ("/usr/bin/pg_createcluster",)})
     return sorted(name for name, binaries in required.items()
-                  if not _installed(inventory, name) and not (binaries and all(host.paths.p(p).is_file() for p in binaries)))
+                  if not _installed(inventory, name) and not (binary_available(host, name) if name in REQUIREMENTS
+                          else binaries and all(host.paths.p(p).is_file() for p in binaries)))
 
 
 def _journal_path(host: Host) -> Path:

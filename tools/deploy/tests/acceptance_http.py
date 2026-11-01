@@ -8,7 +8,7 @@ import ssl
 
 def https_response(entry, path, byte_limit=65536):
     domain = entry["profile"]["domain"]
-    certificate = Path("/etc/letsencrypt/live") / domain / "fullchain.pem"
+    certificate = Path("/etc/foundry/letsencrypt/live") / domain / "fullchain.pem"
     context = ssl.create_default_context(cafile=str(certificate))
     raw = socket.create_connection(("127.0.0.1", 443), timeout=5)
     connection = http.client.HTTPConnection(domain, 443, timeout=5)

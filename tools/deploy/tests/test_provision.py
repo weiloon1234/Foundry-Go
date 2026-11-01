@@ -185,6 +185,32 @@ class FoundationProvisionTests(unittest.TestCase):
                      self.assertRaises(DeployError):
                     provision._site_checks(self.host, entry)
 
+    def test_d07_source_installed_nginx_is_inspected_and_conflicts_refused(self):
+        entry = self.plan()["entry"]
+        binary = self.host.paths.p("/usr/sbin/nginx")
+        binary.parent.mkdir(parents=True)
+        binary.touch()
+        config = "# configuration file /etc/nginx/custom.conf:\nserver { server_name " + entry["profile"]["domain"] + "; }\n"
+        with patch.object(provision, "_installed", return_value=False), \
+                patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, config, "")) as run:
+            with self.assertRaises(DeployError):
+                provision._site_checks(self.host, entry)
+        run.assert_called_once_with(["nginx", "-T"], check=False)
+
+    def test_d07_uninspectable_binary_configuration_refuses(self):
+        entry = self.plan()["entry"]
+        binary = self.host.paths.p("/usr/sbin/nginx")
+        binary.parent.mkdir(parents=True)
+        binary.touch()
+        for result in (subprocess.CompletedProcess([], 1, "", "invalid config"),
+                       subprocess.CompletedProcess([], 0, "", ""),
+                       subprocess.CompletedProcess([], 0, "# configuration file /etc/nginx/nginx.conf:\n", "")):
+            with self.subTest(result=result), patch.object(self.host, "run", return_value=result):
+                with self.assertRaises(DeployError):
+                    provision._site_checks(self.host, entry)
+        with patch.object(self.host, "run", side_effect=OSError("unavailable")), self.assertRaises(DeployError):
+            provision._site_checks(self.host, entry)
+
     def test_only_fresh_foundry_nginx_is_started_after_validation(self):
         active = subprocess.CompletedProcess([], 0, "", "")
         inactive = subprocess.CompletedProcess([], 3, "", "")
@@ -303,7 +329,7 @@ class MovedServiceBoundaryTests(unittest.TestCase):
         _, _, entry = fixture()
         with tempfile.TemporaryDirectory() as temporary:
             host = Host(Paths(Path(temporary)))
-            certificate = host.paths.p(f"/etc/letsencrypt/live/{entry['profile']['domain']}/fullchain.pem")
+            certificate = host.paths.p(f"/etc/foundry/letsencrypt/live/{entry['profile']['domain']}/fullchain.pem")
             certificate.parent.mkdir(parents=True)
             certificate.write_text("certificate fixture")
             with patch.object(host, "run", return_value=subprocess.CompletedProcess([], 0, "", "")) as command:

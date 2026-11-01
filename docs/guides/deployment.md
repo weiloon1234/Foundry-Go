@@ -303,6 +303,24 @@ and an explicit Unix socket for peer administration. TCP allocation starts at
 the recorded allocation. App connections require verified TLS and exact
 instance database and role grants.
 
+The cluster runs as the dedicated system user and group `foundry-postgres`,
+with `nologin` and home `/var/lib/foundry/postgresql`. Data lives beneath that
+home at `<major>/foundry`; configuration lives at `/etc/postgresql/<major>/foundry`.
+`pg_createcluster --user foundry-postgres` initializes the matching database
+superuser. Peer administration uses that account on `/run/foundry/postgresql`
+at the allocated port. The distro `postgres` account and foreign clusters are
+not used. `postgres.cluster_owner()` exposes the service identity;
+`postgres.cluster_settings(host, registry)` includes its `archive_command`,
+which PostgreSQL executes directly as `foundry-postgres`.
+
+An interrupted first creation can retry under its private install journal.
+Only a journaled creation that has never attempted a start, has no successful
+start record, and contains only recognized initdb artifacts may be dropped
+with `pg_dropcluster <major> foundry` and recreated at the same allocation.
+Start artifacts, user database/relation files, unknown paths, active services,
+nonempty server logs, and uncertain ownership require operator reconciliation.
+Established clusters are never reset by this recovery path.
+
 Redis uses `redis-server@foundry.service`, `/etc/foundry/redis/`, and
 `/var/lib/foundry/redis/`. Its TLS port is 56379 and its plaintext listener is
 disabled. The default ACL user is disabled. Each instance receives only literal
@@ -318,6 +336,10 @@ removal, reconfiguration of an existing package, or unrelated broken package
 blocks provisioning. Installation uses `NEEDRESTART_SUSPEND=1` and a journaled
 `policy-rc.d` that denies service starts. An existing unknown policy causes a
 refusal. Recovery is limited to the owned transaction.
+
+Every accepted nginx binary, including one installed outside distro packages,
+must expose its effective configuration through `nginx -T`. Uninspectable
+configuration and conflicting domain declarations block provisioning.
 
 Foreign PostgreSQL clusters and Redis instances are never adopted, authenticated
 to, reconfigured, or restarted. Package-created unused defaults may be disabled
@@ -345,10 +367,17 @@ explicit operator procedure.
 
 Certbot uses DNS-01 with `python3-certbot-dns-cloudflare`. The owned lineage is
 named for the domain. Reuse checks instance ownership, hostname, expiry, renewal
-configuration, token path, timer state, and the reload hook. Each instance has a
-`foundry-cert-renew-<instance UUID>.timer` and service. The hook runs `nginx -t`
-before gracefully reloading nginx. Provisioning requires a renewal dry-run with
-deploy hooks; an existing certificate alone does not satisfy readiness.
+configuration, token path, timer state, and the reload hook. Foundry uses
+`--config-dir /etc/foundry/letsencrypt`,
+`--work-dir /var/lib/foundry/letsencrypt`,
+`--logs-dir /var/log/foundry/letsencrypt`, and `--no-directory-hooks` for issuance,
+renewal, and the renewal dry-run. The `foundry-certbot-renew.timer` and service
+renew these isolated lineages. An explicit private `cli.ini` excludes inherited
+Certbot options; owned renewal files may not contain pre/post hooks. The deploy
+hook runs `nginx -t` before gracefully reloading nginx. Foundry never reads or
+changes `/etc/letsencrypt` or manages the distro `certbot.timer`. A03 readiness
+checks apply only inside Foundry's certificate namespace. Provisioning requires
+a renewal dry-run with deploy hooks; a certificate alone does not satisfy readiness.
 
 Container acceptance uses a guarded synthetic CA path described below. It does
 not call Cloudflare or Let's Encrypt and cannot establish real DNS-01 provider

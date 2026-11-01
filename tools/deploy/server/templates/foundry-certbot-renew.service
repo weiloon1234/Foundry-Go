@@ -1,0 +1,9 @@
+# Foundry owned DNS-01 renewal
+[Unit]
+Description=Foundry certificate renewal
+
+[Service]
+Type=oneshot
+UMask=0077
+@ENVIRONMENT@ExecStart=@COMMAND@
+TimeoutStartSec=1800

@@ -1,0 +1,18 @@
+# Foundry-owned dedicated PostgreSQL cluster
+[Unit]
+Description=Foundry PostgreSQL cluster
+After=network.target
+
+[Service]
+Type=forking
+User=@OWNER@
+Group=@OWNER@
+PIDFile=@PID_FILE@
+ExecStart=/usr/bin/pg_ctlcluster --skip-systemctl-redirect @MAJOR@ foundry start
+ExecStop=/usr/bin/pg_ctlcluster --skip-systemctl-redirect -m fast @MAJOR@ foundry stop
+ExecReload=/usr/bin/pg_ctlcluster --skip-systemctl-redirect @MAJOR@ foundry reload
+TimeoutStartSec=120
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

@@ -8,6 +8,10 @@
   keys remain intact and appear in inspection counts and samples. Configurable
   `cleanup_grace` delays retired/replaced and stale-writer object deletion
   (default zero; at least 72h recommended with daily object backups).
+- Fixed: Deployment PostgreSQL uses a dedicated `foundry-postgres` account and
+  journal-proven recovery of interrupted, never-started cluster initialization.
+  Certbot uses isolated Foundry directories and renewal units, and accepted nginx
+  binaries always undergo effective-configuration collision inspection.
 - Fixed: Deployment source snapshots preserve relative symlinks that stay inside
   the snapshot root, including starter skill links. Absolute and escaping links,
   unsafe link chains, hardlinks, and special files remain refused.
