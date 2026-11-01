@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
-	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/extensions"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
 	"github.com/weiloon1234/Foundry-Go/storage"
@@ -76,7 +75,7 @@ type StorageOrphanPage struct {
 }
 
 // InspectStorage lists one bounded page under this owner's exact framework
-// prefix on a registered collection disk, then checks those keys in one query.
+// prefix on a registered collection disk, then checks both journals in two queries.
 // Every journal state protects its object, including unsettled writes. Untracked
 // candidates are inspection results only: their age never authorizes deletion.
 func (m *Manager) InspectStorage(ctx context.Context, options StorageInspection) (StorageOrphanPage, error) {
@@ -137,15 +136,9 @@ func (m *Manager) InspectStorage(ctx context.Context, options StorageInspection)
 		referenced := make(map[string]bool, len(keys))
 		if len(keys) > 0 {
 			if err := m.store.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
-				f := store.Files
-				rows, err := rows.Read(rows.SelectValue(store.Files.Query().Where(orm.TextEq(f.Disk, string(options.Disk.ID())), orm.TextIn(f.ObjectKey, keys...)).Limit(storage.MaxPageSize+1), orm.TextExpr(f.ObjectKey))).All(ctx, tx)
-				if err != nil {
-					return err
-				}
-				for _, key := range rows {
-					referenced[key] = true
-				}
-				return nil
+				var err error
+				referenced, err = objectReferences(ctx, tx, options.Disk.ID(), keys, true)
+				return err
 			}); err != nil {
 				return err
 			}

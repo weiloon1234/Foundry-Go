@@ -100,7 +100,7 @@ func (m *Manager) reconcile(ctx context.Context, id model.ID[store.File], allowS
 	// retried) until every variant is confirmed deleted.
 	deleteErr := m.cleanupVariantsOf(ctx, id)
 	if deleteErr == nil {
-		deleteErr = disk.Delete(ctx, key, cleanupDelete(row))
+		deleteErr = disk.Delete(ctx, key, attachmentDelete(disk, row.ObjectVersion, row.ETag))
 		if deleteErr != nil && (callback.ErrorIs(deleteErr, storage.PreconditionFailed) || callback.ErrorIs(deleteErr, storage.NotFound)) {
 			// Conditional deletion of an already absent version may conflict. Only
 			// confirmed absence is success; a changed current object is never deleted.
@@ -158,16 +158,22 @@ func (m *Manager) reconcile(ctx context.Context, id model.ID[store.File], allowS
 	return result, deleteErr
 }
 
-// cleanupDelete selects exactly the pinned object. A retained version ID is
-// immutable, so it is deleted by version alone: that removes the version (no
-// delete marker is left on a versioned bucket) and needs no ETag condition,
-// which providers such as AWS cannot combine with a version. Without a version
-// the ETag condition preserves a concurrent replacement.
-func cleanupDelete(row store.File) storage.DeleteOptions {
-	return pinnedDelete(row.ObjectVersion, row.ETag)
+// attachmentDelete is only for validated attachment keys whose cleanup/tombstone
+// state has committed. Originals use a fresh file ID; each variant generation
+// uses a fresh variant ID. Both are created once with IfAbsent, never replaced,
+// and terminal rows never become live again. Therefore an unconditional delete
+// cannot remove a later live generation. The namespace must remain exclusively
+// attachment-owned. General storage operations must still require capabilities.
+func attachmentDelete(disk *storage.Disk, version, etag string) storage.DeleteOptions {
+	if disk.Capabilities().ConditionalDelete {
+		return pinnedDelete(version, etag)
+	}
+	return storage.DeleteOptions{}
 }
 
-// pinnedDelete is shared by originals and variants.
+// pinnedDelete selects the immutable version alone when present (AWS cannot
+// combine a version selector with IfMatch). Otherwise the ETag preserves a
+// concurrent replacement. Originals and variants share this strategy.
 func pinnedDelete(version, etag string) storage.DeleteOptions {
 	if version != "" {
 		return storage.DeleteOptions{Version: storage.VersionID(version)}
@@ -197,7 +203,8 @@ func (m *Manager) settleCutoff(now temporal.DateTime) (temporal.DateTime, error)
 // are inspected with Stat and settled only when storage is unambiguous: absent,
 // or present with this intent's exact size and full checksum. Anything else
 // stays Uncertain for operator Settle. Locally active writers are excluded.
-// The same sweep retries variant cleanup and settles aged variant intents.
+// The same sweep retries variant cleanup, settles aged variant intents and
+// scans one scoped object page for abandoned keys older than both grace periods.
 func (m *Manager) ReconcilePending(ctx context.Context, limit int) ([]ReconcileResult, error) {
 	if err := m.Validate(); err != nil {
 		return nil, err
@@ -262,7 +269,11 @@ func (m *Manager) ReconcilePending(ctx context.Context, limit int) ([]ReconcileR
 			failures = joinFailures(failures, err)
 		}
 		// Variant journal rows share the same bounded sweep and cutoff.
-		return joinFailures(failures, m.sweepVariants(ctx, settleCutoff, limit))
+		failures = joinFailures(failures, m.sweepVariants(ctx, settleCutoff, limit))
+		if cutoff.UTC().Before(settleCutoff.UTC()) {
+			settleCutoff = cutoff
+		}
+		return joinFailures(failures, m.sweepObjects(ctx, settleCutoff, limit))
 	})
 	return result, err
 }

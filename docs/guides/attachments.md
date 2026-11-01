@@ -101,12 +101,40 @@ owner and acknowledged object identity after these hooks.
 
 ## Publication and recovery
 
-The storage disk must implement conditional creation, reading and deletion.
+The storage disk must implement conditional creation and reading. Missing either
+capability rejects manager construction. Conditional deletion selects pinned
+cleanup (including AWS); disks without it, including R2, select write-once cleanup.
 The workflow commits a `writing` intent before `Put` with an absence condition.
 Successful storage is pinned by ETag and optional version, then journaled as
 `stored`. A separate owner-locked transaction publishes `ready` membership and
 retires superseded files as `cleanup`. Old files are deleted only after that
-transaction's commit is confirmed, using their exact validators/versions.
+transaction's commit is confirmed. Pinned cleanup uses their exact ETag or
+immutable version. Write-once cleanup uses an unconditional delete after the
+row enters `cleanup` or an irreversible `cleaned` tombstone.
+
+Original keys are `foundry-attachments/<scope>/<file ID>`. New variant keys are
+`foundry-attachments/<scope>/variants/<variant ID>`, with a fresh ID for every
+generation. Each row commits before its single `IfAbsent` put, and neither key
+is replaced in place or reused by another row. Terminal rows cannot become live
+again, so unconditional deletion cannot remove a later live generation. Keep
+these prefixes exclusively owned by attachments; external writers must not
+replace objects there. Reads still use their pinned validators.
+
+After a rejected put acknowledgement or publication, the writer checks the row
+again. If settlement fenced the writer, cleanup first commits a tombstone and
+then deletes that writer's key. A late create is never adopted. If a provider
+completes after the writer exits, `ReconcilePending` recovers the object through
+its orphan sweep. Database or storage failures leave recovery to later calls.
+
+The orphan sweep lists at most `limit` objects in one registered disk and scope
+per call, under `foundry-attachments/<scope>/` only. It rotates scopes and keeps
+per-scope cursors in the manager, so repeated scheduled calls progress past
+live objects. Restarting the manager restarts those cursors safely. An object
+must be older than both `StoredGrace` and the disk settlement delay
+(longest registered disk timeout plus `SettleAfter`). Only canonical original
+or variant keys with no row or a `cleaned` tombstone are eligible. All other
+rows, including `writing`, `uncertain`, `stored`, `ready`, and `retained`, prevent
+orphan deletion. Journal cleanup runs separately and remains retryable.
 
 To publish inside a caller's transaction, split the workflow in two.
 `Prepare` runs the intent, storage and pin steps in the manager's own
@@ -207,7 +235,11 @@ job calls `Manager.GenerateVariants`, which is idempotent: it generates only
 variants without a ready file.
 
 Each variant has its own journal row (`foundry_attachment_variants`, migration
-`000002_create_variants`) and object key under `foundry-attachment-variants/`.
+`000002_create_variants`) and a generation-specific object key under
+`foundry-attachments/<scope>/variants/`. Existing keys under
+`foundry-attachment-variants/<scope>/` remain readable and use normal journal
+cleanup; the orphan sweep never lists that legacy prefix. Regeneration moves
+variants to the new prefix without changing the database schema.
 It is written with an absence condition and becomes ready only while its
 original is still ready, replacing the previous ready variant of that name.
 Variants follow the original: replace, detach, clear, owner deletion and orphan
@@ -216,8 +248,7 @@ is retried) until every variant is confirmed deleted. `DetachKeepFile` hands
 over only the original; its variants are removed. `ReconcilePending` retries
 variant cleanup and settles aged `writing`/`uncertain` variant intents with the
 same cutoff as originals; because an unresolved variant is never ready, a
-present object is deleted rather than published. Storage inspection of
-originals does not list the variant prefix.
+present object is deleted rather than published.
 
 Loaded attachments (`Collection.Load`, `List`, `First`, `Find`, `LoadLocalized`) carry their
 ready variants from one extra bounded query. `Attachment.Variant(v)` and
@@ -257,8 +288,9 @@ outbox rows commit in the same transaction, including owner lifecycle cleanup.
 Normal synchronous cleanup still runs after commit; the queued job is an
 idempotent recovery path. A rollback publishes neither row. Configure and run the
 existing outbox publisher and worker explicitly. A periodic ordinary job can call
-`ReconcilePending` to recover stored intents left by a crashed publisher.
-Unknown writers require operator settlement; worker retries do not infer it.
+`ReconcilePending` to recover intents and orphan objects left by a crashed
+publisher. Aged unresolved writes with ambiguous storage still require operator
+settlement.
 
 ## Reads and localization
 

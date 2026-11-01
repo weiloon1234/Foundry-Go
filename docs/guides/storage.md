@@ -294,6 +294,17 @@ completion, conditional deletion and historical versions remain unsupported. AWS
 conditional deletion cannot be combined with historical-version selection; the
 provider evaluates its condition against the current object. S3's mutable `null`
 version is not an immutable VersionID and is rejected as an explicit selector.
+
+Attachments support R2 through their own write-once key lifecycle. Originals
+use a unique file ID; each variant generation uses a new variant ID. Every
+object is created with `IfAbsent`, and cleanup commits a terminal row state
+before deleting. A key can never name a later live generation, so unconditional
+cleanup cannot delete data that attachments must keep. Stale writers are fenced
+after put; scheduled reconciliation sweeps old orphan objects only within
+registered attachment scope prefixes. The [attachment recovery contract](attachments.md#publication-and-recovery)
+describes grace periods, retained files, and legacy variant keys. This does not
+add conditional delete to R2 or change the requirements of `MoveTo`.
+
 R2's upload-generation response header is also not a retained-version selector:
 its `ObjectInfo.Version` stays empty and follow-up reads pin the ETag. Supported
 provider options must never be silently ignored. Separate live R2 and AWS checks

@@ -6,6 +6,15 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## R2 attachments
+
+New variant generations use `foundry-attachments/<scope>/variants/<variant ID>`.
+Existing `foundry-attachment-variants/<scope>/<variant ID>` keys remain readable
+and eligible for journal cleanup. Regeneration creates a new key and retires
+the previous row. No database migration or generated contract change is needed.
+The bounded orphan sweep only lists the new scope prefix. Legacy variants use
+their journal for recovery. See [attachment recovery](guides/attachments.md#publication-and-recovery).
+
 ## Ticket-authenticated routes: manifest 8, v0.4.0
 
 Regenerate Go descriptors, manifest, OpenAPI and TypeScript together. Manifest 8

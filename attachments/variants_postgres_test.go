@@ -108,7 +108,7 @@ func TestPostgresAttachmentVariantsGenerateAndFollowTheOriginal(t *testing.T) {
 	before := links.stats
 	links.mu.Unlock()
 	address, err := testPhotos.VariantPublicURLOf(t.Context(), m, files[0], testThumbnail)
-	if err != nil || !strings.HasPrefix(address, "https://cdn.example/foundry-attachment-variants/") {
+	if err != nil || !strings.HasPrefix(address, "https://cdn.example/foundry-attachments/") || !strings.Contains(address, "/variants/") {
 		t.Fatal("variant public URL", err, address)
 	}
 	if _, err := testPhotos.VariantTemporaryURLOf(t.Context(), m, files[0], testPreview, storage.LinkOptions{ExpiresIn: time.Minute}); err != nil {
@@ -176,7 +176,7 @@ func TestPostgresAttachmentVariantsGenerateAndFollowTheOriginal(t *testing.T) {
 func TestPostgresAttachmentVariantFailuresKeepCleanupRetryable(t *testing.T) {
 	f := openAttachments(t, testPhotos.Registration())
 	owner := member(t, 1)
-	variantKey := func(key storage.ObjectKey) bool { return strings.HasPrefix(key.String(), variantPrefix) }
+	variantKey := func(key storage.ObjectKey) bool { return strings.Contains(key.String(), "/variants/") }
 	// A lost variant acknowledgement never unpublishes the original.
 	f.backend.setPut(func(ctx context.Context, key storage.ObjectKey, source io.Reader, options storage.PutOptions) (storage.ObjectInfo, error) {
 		if variantKey(key) {

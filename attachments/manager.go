@@ -93,6 +93,9 @@ type Manager struct {
 	writing     map[model.ID[store.File]]bool
 	// variantWriting excludes locally active variant writers from sweeps.
 	variantWriting map[model.ID[store.Variant]]bool
+	orphanMu       sync.Mutex
+	orphanTargets  []objectSweepTarget
+	orphanNext     int
 }
 
 // New validates registrations and borrowed dependencies, then creates separate
@@ -124,7 +127,7 @@ func New(dependencies Dependencies, config Config, collections ...Registration) 
 			return nil, err
 		}
 		capabilities := disk.Capabilities()
-		if !capabilities.ConditionalCreate || !capabilities.ConditionalRead || !capabilities.ConditionalDelete {
+		if !capabilities.ConditionalCreate || !capabilities.ConditionalRead {
 			return nil, storageFailure(storage.Unsupported, storage.PutOperation, storage.Unchanged, nil)
 		}
 		if err := capabilities.ValidatePut(storage.PutOptions{Size: value.Set(collection.policy.MaxStoredBytes), Condition: storage.IfAbsent()}); err != nil {
@@ -163,6 +166,9 @@ func New(dependencies Dependencies, config Config, collections ...Registration) 
 			}
 		}
 		m.collections[collection.key] = collection
+	}
+	if err := m.initObjectSweep(); err != nil {
+		return nil, err
 	}
 	var err error
 	m.writer, err = model.NewIDAt[store.Writer](time.Now())

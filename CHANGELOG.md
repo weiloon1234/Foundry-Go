@@ -7,6 +7,13 @@
   metadata-safe atomic publication, and generation-bound host tool upgrades.
   Provisioning integrations remain assigned to follow-up lanes F1, F2, and F3;
   this foundation is not ready for production bootstrap.
+- Added: R2 attachment cleanup through write-once keys, durable tombstones,
+  stale-writer fencing, and a bounded scope-prefix orphan sweep in
+  `ReconcilePending`. Conditional create and read remain required; AWS cleanup
+  keeps its ETag or immutable version pin.
+- Changed: New variant generations use
+  `foundry-attachments/<scope>/variants/<variant ID>`. Existing variant keys
+  remain readable and use journal cleanup.
 
 ## v0.4.0 — 2026-11-01
 

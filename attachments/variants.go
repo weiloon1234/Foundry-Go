@@ -25,9 +25,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// Variant objects live under their own framework prefix, so storage
-// inspection of originals never reports them as untracked.
-const variantPrefix = "foundry-attachment-variants/"
+// Legacy variant keys remain readable and eligible for journal cleanup.
+const legacyVariantPrefix = "foundry-attachment-variants/"
 
 const (
 	// MaxVariants bounds declared variants per collection.
@@ -159,7 +158,15 @@ func (p Policy) variant(name VariantName) (Variant, bool) {
 }
 
 func variantKey(scope string, id model.ID[store.Variant]) (storage.ObjectKey, error) {
-	return storage.ParseKey(variantPrefix + scope + "/" + id.String())
+	return storage.ParseKey(objectPrefix + scope + "/variants/" + id.String())
+}
+
+// Older persisted variants keep their exact key and normal journal cleanup.
+// New generations live inside the scope prefix so orphan recovery never needs
+// a bucket-wide or legacy-prefix listing.
+func validVariantKey(scope string, id model.ID[store.Variant], key string) bool {
+	expected, err := variantKey(scope, id)
+	return err == nil && (expected.String() == key || key == legacyVariantPrefix+scope+"/"+id.String())
 }
 
 // validateVariant treats a variant row as a checked persistence boundary
@@ -168,8 +175,7 @@ func (m *Manager) validateVariant(row store.Variant, original store.File) error 
 	if row.ID.IsZero() || row.FileID != original.ID || row.Disk != original.Disk || row.WriterID.IsZero() || VariantName(row.Name).Validate() != nil || VariantState(row.State).Validate() != nil {
 		return invalid()
 	}
-	expected, err := variantKey(original.Scope, row.ID)
-	if err != nil || expected.String() != row.ObjectKey {
+	if !validVariantKey(original.Scope, row.ID, row.ObjectKey) {
 		return invalid()
 	}
 	if row.Size < 0 || row.Size > MaxUploadBytes || row.Width < 0 || row.Height < 0 || row.Width > 65535 || row.Height > 65535 {
@@ -367,11 +373,18 @@ func (m *Manager) produceVariant(ctx context.Context, original store.File, varia
 		putErr = storageFailure(storage.IntegrityFailed, storage.PutOperation, storage.Applied, nil)
 	}
 	if putErr != nil {
-		return joinFailures(putErr, m.recordVariantFailure(ctx, id, putErr))
+		journalErr := m.recordVariantFailure(ctx, id, putErr)
+		if journalErr != nil {
+			journalErr = joinFailures(journalErr, m.fenceVariant(ctx, original, id, disk, key))
+		}
+		return joinFailures(putErr, journalErr)
 	}
 	publishCtx, cancel := m.cleanupContext(ctx)
 	defer cancel()
 	retired, err := m.publishVariant(publishCtx, original.ID, id, stored.Object)
+	if err != nil {
+		err = joinFailures(err, m.fenceVariant(ctx, original, id, disk, key))
+	}
 	for _, previous := range retired {
 		err = joinFailures(err, m.cleanupVariant(publishCtx, previous))
 	}
@@ -554,7 +567,7 @@ func (m *Manager) cleanupVariant(ctx context.Context, id model.ID[store.Variant]
 	if err != nil {
 		return err
 	}
-	deleteErr := disk.Delete(ctx, key, pinnedDelete(row.ObjectVersion, row.ETag))
+	deleteErr := disk.Delete(ctx, key, attachmentDelete(disk, row.ObjectVersion, row.ETag))
 	if deleteErr != nil && (callback.ErrorIs(deleteErr, storage.PreconditionFailed) || callback.ErrorIs(deleteErr, storage.NotFound)) {
 		_, statErr := disk.Stat(ctx, key, storage.ReadOptions{Version: storage.VersionID(row.ObjectVersion)})
 		if callback.ErrorIs(statErr, storage.NotFound) {
@@ -741,8 +754,7 @@ func (c Collection[M, K]) loadVariants(ctx context.Context, tx *database.Tx, m *
 		if VariantName(row.Name).Validate() != nil || storage.DiskID(row.Disk) != c.definition.policy.Disk.ID() || storage.MediaType(row.ContentType).Validate() != nil || storage.ETag(row.ETag).Validate() != nil || row.ETag == "" || storage.VersionID(row.ObjectVersion).Validate() != nil {
 			return invalid()
 		}
-		expected, err := variantKey(c.definition.owner.Scope(), row.ID)
-		if err != nil || expected != key {
+		if !validVariantKey(c.definition.owner.Scope(), row.ID, key.String()) {
 			return invalid()
 		}
 		byFile[row.FileID.Bytes()] = append(byFile[row.FileID.Bytes()], storedVariant{info: VariantInfo{Name: VariantName(row.Name), MediaType: storage.MediaType(row.ContentType), Size: row.Size, Width: int(row.Width), Height: int(row.Height)}, disk: storage.DiskID(row.Disk), key: key, etag: storage.ETag(row.ETag), version: storage.VersionID(row.ObjectVersion)})

@@ -152,15 +152,27 @@ func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner m
 	}
 	stored, putErr := disk.Put(ctx, key, candidate.open(), storage.PutOptions{ContentType: candidate.info.MediaType, Size: value.Set(candidate.info.Size), Checksum: value.Set(candidate.digest), Condition: storage.IfAbsent()})
 	if putErr != nil {
-		return id, release, joinFailures(putErr, m.recordPutFailure(ctx, id, putErr))
+		journalErr := m.recordPutFailure(ctx, id, putErr)
+		if journalErr != nil {
+			journalErr = joinFailures(journalErr, m.fenceOriginal(ctx, id, disk, key))
+		}
+		return id, release, joinFailures(putErr, journalErr)
 	}
 	if stored.Object.ETag == "" {
 		cause := storageFailure(storage.IntegrityFailed, storage.PutOperation, storage.Applied, nil)
-		return id, release, joinFailures(cause, m.recordPutFailure(ctx, id, cause))
+		journalErr := m.recordPutFailure(ctx, id, cause)
+		if journalErr != nil {
+			journalErr = joinFailures(journalErr, m.fenceOriginal(ctx, id, disk, key))
+		}
+		return id, release, joinFailures(cause, journalErr)
 	}
 	pinCtx, pinCancel := m.cleanupContext(ctx)
 	defer pinCancel()
-	return id, release, m.pinStored(pinCtx, id, stored.Object)
+	err = m.pinStored(pinCtx, id, stored.Object)
+	if err != nil {
+		err = joinFailures(err, m.fenceOriginal(ctx, id, disk, key))
+	}
+	return id, release, err
 }
 
 // Prepared is an upload read, checked and stored for one owner's collection
