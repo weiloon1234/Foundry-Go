@@ -112,16 +112,21 @@ def unpack_archive(archive, destination, entry, checksum):
             manifest = validate_manifest(manifest, entry)
             actual = {name for item, name in members if item.isfile() and name != "manifest.json"}
             require(actual == set(manifest["files"]), "release_inventory", "Archive files differ from the manifest.")
+            # Explicit modes: the service account executes the release, and a
+            # hardened root umask must not make it root-only.
             destination.mkdir(mode=0o755, parents=True)
+            destination.chmod(0o755)
             for item, name in members:
                 if not item.isfile():
                     continue
                 target = destination / name
                 check_path(target, "file")
-                if name.startswith("private-source-maps/"):
-                    # Private from the first write, including failed extraction.
-                    (destination / "private-source-maps").mkdir(mode=0o700, exist_ok=True)
-                target.parent.mkdir(parents=True, exist_ok=True)
+                for parent in reversed(Path(name).parents[:-1]):
+                    directory = destination / parent
+                    # Source maps stay private from the first write, including failed extraction.
+                    mode = 0o700 if parent.parts[0] == "private-source-maps" else 0o755
+                    directory.mkdir(mode=0o700, exist_ok=True)
+                    directory.chmod(mode)
                 with bundle.extractfile(item) as source, target.open("xb") as output:
                     shutil.copyfileobj(source, output, length=1024 * 1024)
                 target.chmod(0o755 if name == "artisan" else 0o600 if name.startswith("private-source-maps/") else 0o644)

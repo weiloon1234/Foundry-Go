@@ -470,6 +470,19 @@ class ReleaseTests(unittest.TestCase):
             if path.endswith(".map"):
                 self.assertEqual(0o600, (destination / path).stat().st_mode & 0o777)
 
+    def test_public_release_tree_is_traversable_under_a_hardened_umask(self):
+        archive, manifest = self.bundle()
+        destination = self.root / "extract"
+        previous = os.umask(0o077)
+        try:
+            release.unpack_archive(archive, destination, self.entry, digest(archive))
+        finally:
+            os.umask(previous)
+        for path in [destination, *destination.rglob("*")]:
+            if path.is_dir():
+                private = path.relative_to(destination).parts[:1] == ("private-source-maps",)
+                self.assertEqual(0o700 if private else 0o755, path.stat().st_mode & 0o777, path)
+
     def test_backup_precedes_migration_failure_and_retry_requires_reconciliation(self):
         archive, _ = self.bundle()
         self.host.pending, self.host.fail = True, "migrate"
