@@ -83,7 +83,7 @@ def install():
     assert not Path("/etc/foundry/registry.json").exists(), "Baseline must precede Foundry bootstrap"
     assert not BASELINE.exists(), "Never overwrite a prior baseline"
     run(["apt-get", "install", "-y", "--no-install-recommends", "redis-server", "postgresql", "nginx"],
-        env={"DEBIAN_FRONTEND=noninteractive"}, timeout=1200)
+        env={"DEBIAN_FRONTEND": "noninteractive"}, timeout=1200)
     clusters = run(["pg_lsclusters", "--no-header"]).stdout.splitlines()
     mains = [line.split()[0] for line in clusters if line.split()[1] == "main"]
     assert len(mains) == 1, "Expected exactly one distro main cluster"

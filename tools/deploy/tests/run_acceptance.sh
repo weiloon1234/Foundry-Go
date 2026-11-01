@@ -86,6 +86,12 @@ cleanup() {
     (( $? == 0 )) || result=1
   fi
   cleanup_failed=0
+  # Debugging only: leave a failed environment running for phase reruns.
+  if ((result != 0)) && [[ "${FOUNDRY_ACCEPTANCE_KEEP:-}" == 1 ]]; then
+    echo "Kept for debugging: host=$host s3=$s3 network=$network volume=$volume env_file=$env_file certs=$certs"
+    echo "Acceptance exit=$result; logs: $logs"
+    exit "$result"
+  fi
   if ((host_created)); then docker rm -f -v "$host" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((s3_created)); then docker rm -f -v "$s3" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((volume_created)); then docker volume rm "$volume" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
