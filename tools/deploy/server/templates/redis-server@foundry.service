@@ -4,12 +4,14 @@ Description=Foundry shared Redis (TLS only)
 After=network.target
 
 [Service]
-Type=simple
+# Notify readiness only after the dataset loads, so restarts and After= ordering wait for it.
+Type=notify
 User=foundry-redis
 Group=foundry-redis
 ExecStart=/usr/bin/redis-server /etc/foundry/redis/redis.conf
 Restart=on-failure
 RestartSec=5
+TimeoutStartSec=90
 TimeoutStopSec=90
 KillSignal=SIGTERM
 LimitNOFILE=4096

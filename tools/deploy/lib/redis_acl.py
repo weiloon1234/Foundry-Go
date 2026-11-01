@@ -216,7 +216,7 @@ tls-auth-clients no
 aclfile {REDIS_ACLFILE}
 dir {REDIS_DATA}
 daemonize no
-supervised no
+supervised systemd
 logfile ""
 appendonly yes
 appendfsync everysec
