@@ -422,11 +422,12 @@ identical bindings. The backup repository uses a distinct bucket.
 Storage namespaces must be empty or end in `/`. Storage collections must use
 complete JSON values or their `_FILE` aliases.
 Consolidate nested environment overrides into those collections before changing
-storage. `contracts.reserve_runtime_storage` checks candidate bindings. Configuration
-callers must persist that reservation before publication, then call
-`select_runtime_storage` after proving which revision is selected. An interrupted
-change must keep both old bindings and candidate reservations until selection is
-known. App credentials must be scoped to the app bucket;
+storage. Bootstrap and configuration changes persist candidate binding reservations
+before publishing `app.env`. After proving the selected configuration, they record
+its bindings and clear the reservation. Reconciliation selects the proven old or
+new revision; an unresolved change retains both old bindings and candidate
+reservations and blocks object copies. Backups use registered runtime storage from
+the first bootstrap configuration. App credentials must be scoped to the app bucket;
 provider policy and denial probes establish that isolation. The framework does
 not create buckets or edit provider policies. Local upload staging beneath
 `/var/lib/foundry/apps/<name>/uploads` is not the durable attachment store.

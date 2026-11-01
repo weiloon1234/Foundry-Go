@@ -19,13 +19,14 @@ from unittest.mock import MagicMock, patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import DeployError, atomic_json, atomic_write, digest, dump_env, identity, now, parse_env
+from contracts import DeployError, atomic_json, atomic_write, bind_storage, digest, dump_env, identity, now, parse_env
 from host import Host, Paths
 import release
 from runtime_config import (CREDENTIAL_KEYS, ENCRYPTION_KEYS, runtime_environment,
                             initialize_bootstrap_secrets, candidate_values, rotation_changes,
                             validate_keyring_change)
 from topology import instance_units
+from test_contracts import fixture, registry, storage_fixture
 
 CHECK_READY = release.ready
 
@@ -79,7 +80,6 @@ class ReleaseTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
         self.host = ProcessHost(self.root)
-        from test_contracts import fixture, registry
         self.project, self.profile, self.entry = fixture()
         self.profile["retention"] = {"server_releases": 1, "local_releases": 1, "pre_migration_dumps": 1}
         self.registry = registry(self.entry)
@@ -762,6 +762,153 @@ class ReleaseTests(unittest.TestCase):
         release.reconcile(self.host, self.project, self.profile)
         self.assertTrue(any("restart" in args for args, _ in self.host.commands))
         self.assertEqual(2, self.state()["configuration_revision"])
+
+    def storage_changes(self, namespace):
+        storage = storage_fixture(namespace)
+        changes = {"APP__SERVICES__CREDENTIALS": json.dumps(storage["credentials"]),
+                   "APP__SERVICES__STORAGE__DISKS": json.dumps(storage["disks"])}
+        self.host.inspect_output = json.dumps([
+            {"Name": key.lower().replace("__", "."), "Source": "defaults", "Secret": True}
+            for key in changes])
+        return changes
+
+    def test_configuration_persists_storage_reservation_before_publication_and_selects_backup_source(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        release.config_set(self.host, self.project, self.profile, self.storage_changes("old/"))
+        changes = self.storage_changes("new/")
+        credentials_file = self.env_file.with_name("cloud.secret")
+        self.host.owned_write(credentials_file, changes.pop("APP__SERVICES__CREDENTIALS"), 0o640)
+        changes["APP__SERVICES__CREDENTIALS_FILE"] = str(credentials_file)
+        original = release.os.replace
+        observed = []
+        def publish(source, destination):
+            if destination == self.env_file:
+                entry = self.host.read_registry()["instances"][self.profile["instance_id"]]
+                self.assertEqual("old/", entry["storage_bindings"]["uploads"]["namespace"])
+                self.assertEqual("new/", entry["pending_storage_bindings"]["uploads"]["namespace"])
+                with self.assertRaises(DeployError) as caught:
+                    release.backup._runtime_storage(self.host, entry)
+                self.assertEqual("storage_binding_pending", caught.exception.code)
+                observed.append(True)
+            return original(source, destination)
+        with patch.object(release.os, "replace", side_effect=publish):
+            release.config_set(self.host, self.project, self.profile, changes)
+        self.assertEqual([True], observed)
+        credentials_file.write_text("changed after selection")
+        entry = self.host.read_registry()["instances"][self.profile["instance_id"]]
+        self.assertNotIn("pending_storage_bindings", entry)
+        storage, _ = release.backup._runtime_storage(self.host, entry)
+        self.assertEqual(storage_fixture("new/"), storage)
+        self.assertEqual(3, entry["configuration_revision"])
+        self.assertNotIn("canary-secret", self.host.paths.registry.read_text())
+
+    def test_configuration_storage_reconcile_selects_proven_old_or_new_revision(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        release.config_set(self.host, self.project, self.profile, self.storage_changes("old/"))
+        for published in (False, True):
+            with self.subTest(published=published):
+                changes = self.storage_changes("new/")
+                original = release.os.replace
+                def interrupt(source, destination):
+                    if destination == self.env_file:
+                        if published:
+                            original(source, destination)
+                        raise KeyboardInterrupt()
+                    return original(source, destination)
+                with patch.object(release.os, "replace", side_effect=interrupt), self.assertRaises(KeyboardInterrupt):
+                    release.config_set(self.host, self.project, self.profile, changes)
+                entry = self.host.read_registry()["instances"][self.profile["instance_id"]]
+                self.assertEqual("old/", entry["storage_bindings"]["uploads"]["namespace"])
+                self.assertEqual("new/", entry["pending_storage_bindings"]["uploads"]["namespace"])
+                release.reconcile(self.host, self.project, self.profile)
+                entry = self.host.read_registry()["instances"][self.profile["instance_id"]]
+                self.assertNotIn("pending_storage_bindings", entry)
+                storage, _ = release.backup._runtime_storage(self.host, entry)
+                self.assertEqual(storage_fixture("new/" if published else "old/"), storage)
+                self.assertEqual(3 if published else 2, entry["configuration_revision"])
+
+    def test_configuration_storage_collision_is_refused_before_publication(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        release.config_set(self.host, self.project, self.profile, self.storage_changes("old/"))
+        _, _, other = fixture(project_slug="second", host_id=self.entry["host_id"], port=8101)
+        registry = self.host.read_registry()
+        registry["projects"][other["project_id"]] = {"slug": "second", "created_at": now()}
+        registry["instances"][other["profile"]["instance_id"]] = other
+        bind_storage(registry, other, storage_fixture("taken/"))
+        self.host.write_registry(registry)
+        before = self.env_file.read_bytes(), self.host.paths.registry.read_bytes()
+        with self.assertRaises(DeployError) as caught:
+            release.config_set(self.host, self.project, self.profile, self.storage_changes("taken/child/"))
+        self.assertEqual("storage_binding_conflict", caught.exception.code)
+        self.assertEqual(before, (self.env_file.read_bytes(), self.host.paths.registry.read_bytes()))
+
+    def test_configuration_storage_failure_releases_reservation_for_known_selection(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        release.config_set(self.host, self.project, self.profile, self.storage_changes("old/"))
+        original = release.os.replace
+        def fail(source, destination):
+            if destination == self.env_file:
+                raise OSError("publication failed")
+            return original(source, destination)
+        with patch.object(release.os, "replace", side_effect=fail), self.assertRaises(OSError):
+            release.config_set(self.host, self.project, self.profile, self.storage_changes("new/"))
+        entry = self.host.read_registry()["instances"][self.profile["instance_id"]]
+        self.assertNotIn("pending_storage_bindings", entry)
+        self.assertEqual(storage_fixture("old/"), release.backup._runtime_storage(self.host, entry)[0])
+        self.health.return_value = False
+        with self.assertRaises(DeployError):
+            release.config_set(self.host, self.project, self.profile, self.storage_changes("new/"))
+        entry = self.host.read_registry()["instances"][self.profile["instance_id"]]
+        self.assertNotIn("pending_storage_bindings", entry)
+        self.assertEqual(storage_fixture("new/"), release.backup._runtime_storage(self.host, entry)[0])
+
+    def test_configuration_storage_error_after_publication_selects_applied_revision(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        release.config_set(self.host, self.project, self.profile, self.storage_changes("old/"))
+        original = release.os.replace
+        def fail_after_publication(source, destination):
+            result = original(source, destination)
+            if destination == self.env_file:
+                raise OSError("publication acknowledgement failed")
+            return result
+        with patch.object(release.os, "replace", side_effect=fail_after_publication), self.assertRaises(DeployError) as caught:
+            release.config_set(self.host, self.project, self.profile, self.storage_changes("new/"))
+        self.assertEqual("configuration_readiness", caught.exception.code)
+        entry = self.host.read_registry()["instances"][self.profile["instance_id"]]
+        self.assertNotIn("pending_storage_bindings", entry)
+        self.assertEqual(storage_fixture("new/"), release.backup._runtime_storage(self.host, entry)[0])
+        self.assertEqual(3, entry["configuration_revision"])
+
+    def test_configuration_storage_ambiguous_reconcile_retains_both_bindings(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        release.config_set(self.host, self.project, self.profile, self.storage_changes("old/"))
+        original = release.os.replace
+        def interrupt(source, destination):
+            if destination == self.env_file:
+                raise KeyboardInterrupt()
+            return original(source, destination)
+        with patch.object(release.os, "replace", side_effect=interrupt), self.assertRaises(KeyboardInterrupt):
+            release.config_set(self.host, self.project, self.profile, self.storage_changes("new/"))
+        values = parse_env(self.env_file.read_text())
+        values["PROJECT__NAME"] = "unrecorded change"
+        self.host.owned_write(self.env_file, dump_env(values), 0o640)
+        before = self.host.paths.registry.read_bytes()
+        with self.assertRaises(DeployError) as caught:
+            release.reconcile(self.host, self.project, self.profile)
+        self.assertEqual("configuration_reconciliation", caught.exception.code)
+        self.assertEqual(before, self.host.paths.registry.read_bytes())
+        entry = self.host.read_registry()["instances"][self.profile["instance_id"]]
+        self.assertEqual("old/", entry["storage_bindings"]["uploads"]["namespace"])
+        self.assertEqual("new/", entry["pending_storage_bindings"]["uploads"]["namespace"])
+        with self.assertRaises(DeployError) as caught:
+            release.backup._runtime_storage(self.host, entry)
+        self.assertEqual("storage_binding_pending", caught.exception.code)
 
     def test_configuration_interrupt_before_replace_reconciles_unchanged_file(self):
         archive, _ = self.bundle()

@@ -16,10 +16,10 @@ import uuid
 
 from contracts import (DeployError, HOST_ROOTS, PREFIX, REDIS_UNIT, REGISTRY_SCHEMA, LAYOUT_VERSION, PORT_FIRST, PORT_LAST,
     atomic_json, check_path, dump_env, identity, instance_paths, marker, now, read_json, require,
-    validate_profile, validate_project)
+    validate_profile, validate_project, reserve_runtime_storage, select_runtime_storage)
 from topology import instance_units, validate_topology
 from runtime_config import (CREDENTIAL_KEYS, read_credentials as _credentials, runtime_environment,
-    validate_runtime_environment, initialize_bootstrap_secrets, _instance_group)
+    validate_runtime_environment, initialize_bootstrap_secrets, _instance_group, _read_value_file)
 from edge import edge_findings, edge_template
 import packages
 import postgres
@@ -238,7 +238,13 @@ def _provision_environment(host, registry, entry, credentials):
     elif "configuration" in entry["provisioning"]["completed_steps"]:
         raise DeployError("configuration_missing", "Server-owned runtime configuration is missing; restore it explicitly.")
     else:
-        _owned_write(host, path, dump_env(runtime_environment(entry, credentials, postgres_port=registry["shared"]["postgresql"]["port"])), 0o640, "root", entry["name"])
+        values = runtime_environment(entry, credentials, postgres_port=registry["shared"]["postgresql"]["port"])
+        reserve_runtime_storage(registry, entry, values, lambda value: _read_value_file(host, entry, value))
+        _journal(host, registry, entry)
+        _owned_write(host, path, dump_env(values), 0o640, "root", entry["name"])
+    select_runtime_storage(registry, entry, validate_runtime_environment(host, entry),
+                           lambda value: _read_value_file(host, entry, value))
+    _journal(host, registry, entry)
     _step(host, registry, entry, "configuration")
 
 

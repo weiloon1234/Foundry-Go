@@ -22,9 +22,10 @@ import uuid
 
 from contracts import (DeployError, LAYOUT_VERSION, SCHEMA, VERSION_PATTERN,
                        check_path, digest, dump_env, now,
-                       parse_env, parse_json, read_json, require, valid_timestamp, valid_uuid, instance_paths)
+                       parse_env, parse_json, read_json, require, valid_timestamp, valid_uuid, instance_paths,
+                       reserve_runtime_storage, select_runtime_storage)
 from runtime_config import (ENCRYPTION_KEYS, PIPELINE_KEYS, validate_runtime_environment, candidate_values,
-                            rotation_changes)
+                            rotation_changes, _read_value_file)
 from topology import instance_units
 from host import OperationTimeout, wall_clock_budget
 from redis_acl import (granted_redis_patterns, granted_redis_channels, reconcile_redis_grants,
@@ -930,6 +931,8 @@ def reconcile(host, project, profile):
             require(entry["configuration_revision"] in (revision - 1, revision), "configuration_reconciliation", "Configuration revision changed unexpectedly.")
             if applied:
                 entry["configuration_revision"] = revision
+            select_runtime_storage(registry, entry, validate_runtime_environment(host, entry),
+                                   lambda value: _read_value_file(host, entry, value))
             state["configuration_revision"] = entry["configuration_revision"]
             attempt["configuration_applied"] = applied
             host.journal(registry, entry)
@@ -1107,6 +1110,8 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
             state["status"] = prior_status
             finish(host, entry, state, "succeeded")
             return {"ok": True, "unchanged": True, "configuration_revision": entry["configuration_revision"]}
+        reserve_runtime_storage(registry, entry, updated, lambda value: _read_value_file(host, entry, value))
+        host.journal(registry, entry)
         attempt["redis_inventory"] = release_redis_inventory(host, entry, live, candidate)
         phase(host, entry, state, "redis")
         widen_redis_grants(host, registry, entry, attempt["redis_inventory"], state)
@@ -1123,6 +1128,10 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
             os.fsync(directory)
         finally:
             os.close(directory)
+        require(digest(path) == attempt["configuration_sha256"], "configuration_reconciliation",
+                "Published configuration differs from the validated candidate.")
+        select_runtime_storage(registry, entry, validate_runtime_environment(host, entry),
+                               lambda value: _read_value_file(host, entry, value))
         entry["configuration_revision"] = attempt["configuration_revision"]
         entry["updated_at"] = registry["updated_at"] = now()
         host.journal(registry, entry)
@@ -1152,8 +1161,11 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
             state["status"] = prior_status if unchanged else "failed"
             # Repair the receipt only for an exact known selection. A failed
             # registry write stays unresolved; an unhealthy applied revision does not.
-            if applied:
-                entry["configuration_revision"] = attempt["configuration_revision"]
+            if applied or (unchanged and "pending_storage_bindings" in entry):
+                if applied:
+                    entry["configuration_revision"] = attempt["configuration_revision"]
+                select_runtime_storage(registry, entry, validate_runtime_environment(host, entry),
+                                       lambda value: _read_value_file(host, entry, value))
                 host.journal(registry, entry)
                 state["configuration_revision"] = entry["configuration_revision"]
             outcome = "failed_applied" if applied else "failed" if unchanged else "needs_reconciliation"

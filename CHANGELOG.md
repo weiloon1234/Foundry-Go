@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed: Deployment config changes and bootstrap persist runtime storage
+  reservations before publication and select backup bindings from the proven
+  configuration, including interrupted-operation recovery.
 - Fixed: Deployment acceptance uses a digest-pinned VersityGW S3 stand-in with
   HTTPS and authenticated readiness instead of the unavailable MinIO image.
 - Fixed: Attachment sweeps delete only database-owned tombstoned keys; unknown

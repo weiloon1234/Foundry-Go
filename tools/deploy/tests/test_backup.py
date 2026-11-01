@@ -170,12 +170,12 @@ class BackupTests(unittest.TestCase):
 
     def test_unrelated_or_unsafe_archive_inputs_are_refused(self):
         directory = self.host.paths.instance_config(self.entry["name"])
-        backup._install_configuration(self.host, cluster)
         for value in ("/etc/shadow", "/etc/foundry/instances/other/key", "relative/key"):
             with self.subTest(value=value):
                 self.host.owned_write(directory / "app.env", f"APP_KEYS_FILE={value}\n", mode=0o640)
-                with self.assertRaises(DeployError):
+                with self.assertRaises(DeployError) as caught:
                     backup.archive_keys(self.host, self.entry)
+                self.assertEqual("backup_archive_path", caught.exception.code)
         self.assertEqual(self.commands, [])
 
     def test_private_keys_http_and_same_bucket_are_rejected(self):

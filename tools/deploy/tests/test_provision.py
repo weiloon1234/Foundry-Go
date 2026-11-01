@@ -1,6 +1,7 @@
 """Foundation bootstrap planning with read-only service adapters and no processes."""
 import copy
 from contextlib import ExitStack
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -11,11 +12,11 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
-from contracts import DeployError, instance_paths, validate_registry
+from contracts import DeployError, instance_paths, validate_registry, bind_storage
 from host import Host, Paths
 from topology import instance_units
 import provision
-from test_contracts import fixture
+from test_contracts import fixture, storage_fixture
 
 TOOLS = Path(__file__).resolve().parents[1]
 TOPOLOGY = {"schema": 1, "roles": [{"name": "http"}, {"name": "scheduler"}]}
@@ -305,6 +306,73 @@ class FoundationProvisionTests(unittest.TestCase):
         self.assertLess(calls.index("backup"), calls.index("units"))
         self.assertIn("bootstrap_secrets", plan["entry"]["provisioning"]["completed_steps"])
         self.assertIn("backup", plan["entry"]["provisioning"]["completed_steps"])
+
+    def bootstrap_storage(self):
+        plan = self.plan()
+        self.register(plan)
+        registry = self.host.read_registry()
+        registry["shared"]["postgresql"] = {"port": 55432}
+        self.host.write_registry(registry)
+        entry = registry["instances"][self.profile["instance_id"]]
+        credentials = {"instance_id": self.profile["instance_id"], "database_password": "d" * 43,
+                       "redis_password": "r" * 43, "app_storage": storage_fixture("initial/")}
+        path = self.host.paths.instance_config(entry["name"]) / "app.env"
+        self.host.owned_write(path.with_name("secrets.json"), json.dumps(credentials), 0o600)
+        return registry, entry, credentials, path
+
+    def test_bootstrap_reserves_before_first_configuration_and_registers_backup_source(self):
+        registry, entry, credentials, path = self.bootstrap_storage()
+        original = provision._owned_write
+        observed = []
+        def publish(host, destination, *args, **kwargs):
+            if destination == path:
+                selected = host.read_registry()["instances"][self.profile["instance_id"]]
+                self.assertFalse(path.exists())
+                self.assertNotIn("storage_bindings", selected)
+                self.assertEqual("initial/", selected["pending_storage_bindings"]["uploads"]["namespace"])
+                observed.append(True)
+            return original(host, destination, *args, **kwargs)
+        with patch.object(provision, "_owned_write", side_effect=publish):
+            provision._provision_environment(self.host, registry, entry, credentials)
+        self.assertEqual([True], observed)
+        selected = self.host.read_registry()["instances"][self.profile["instance_id"]]
+        self.assertNotIn("pending_storage_bindings", selected)
+        self.assertIn("configuration", selected["provisioning"]["completed_steps"])
+        self.assertEqual(storage_fixture("initial/"), provision.backup._runtime_storage(self.host, selected)[0])
+        self.assertNotIn("canary-secret", json.dumps(self.host.registry_value))
+
+    def test_bootstrap_retry_selects_published_storage_instead_of_new_intake(self):
+        registry, entry, credentials, path = self.bootstrap_storage()
+        original = provision._owned_write
+        def interrupt(host, destination, *args, **kwargs):
+            result = original(host, destination, *args, **kwargs)
+            if destination == path:
+                raise KeyboardInterrupt()
+            return result
+        with patch.object(provision, "_owned_write", side_effect=interrupt), self.assertRaises(KeyboardInterrupt):
+            provision._provision_environment(self.host, registry, entry, credentials)
+        self.assertTrue(path.exists())
+        registry = self.host.read_registry()
+        entry = registry["instances"][self.profile["instance_id"]]
+        self.assertIn("pending_storage_bindings", entry)
+        credentials["app_storage"] = storage_fixture("unselected/")
+        provision._provision_environment(self.host, registry, entry, credentials)
+        selected = self.host.read_registry()["instances"][self.profile["instance_id"]]
+        self.assertNotIn("pending_storage_bindings", selected)
+        self.assertEqual(storage_fixture("initial/"), provision.backup._runtime_storage(self.host, selected)[0])
+
+    def test_bootstrap_storage_collision_refuses_first_configuration(self):
+        registry, entry, credentials, path = self.bootstrap_storage()
+        _, _, other = fixture(project_slug="second", host_id=entry["host_id"], port=8101)
+        registry["projects"][other["project_id"]] = {"slug": "second", "created_at": other["created_at"]}
+        registry["instances"][other["profile"]["instance_id"]] = other
+        bind_storage(registry, other, storage_fixture("initial/"))
+        self.host.write_registry(registry)
+        with self.assertRaises(DeployError) as caught:
+            provision._provision_environment(self.host, registry, entry, credentials)
+        self.assertEqual("storage_binding_conflict", caught.exception.code)
+        self.assertFalse(path.exists())
+        self.assertNotIn("pending_storage_bindings", self.host.read_registry()["instances"][self.profile["instance_id"]])
 
 
 class MovedServiceBoundaryTests(unittest.TestCase):
