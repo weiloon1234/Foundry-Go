@@ -77,9 +77,14 @@ def bootstrap_secrets(disks):
     recipient = run(["age-keygen", "-y", str(identity_file)]).stdout.strip()
     for disk in disks.values():
         assert disk["driver"] == "r2", "Acceptance archive must select the R2 attachment contract"
+        # The framework accepts only real R2 endpoints for the r2 driver, so the
+        # local stand-in is declared S3-compatible with R2's exact guarantees.
+        disk["driver"] = "s3_compatible"
         disk.setdefault("config", {})["visibility"] = 0
         disk.setdefault("cloud", {}).update(endpoint=settings["endpoint"], region="us-east-1",
-            bucket=settings["app_bucket"], credentials="acceptance", path_style=True)
+            bucket=settings["app_bucket"], credentials="acceptance", path_style=True,
+            compatible={"requires_nfc_keys": True, "conditional_create": True, "conditional_replace": True,
+                        "single_request_conditions": True})
     return {"backup_s3": {"endpoint": settings["endpoint"], "region": "us-east-1",
         "bucket": settings["backup_bucket"], "access_key_id": settings["access_key"],
         "secret_access_key": settings["secret_key"]}, "age_recipients": [recipient],
