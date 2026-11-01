@@ -4,13 +4,21 @@ Shared by bootstrap, release activation and explicit configuration operations.
 Never include returned credential values in logs, reports, or exceptions.
 """
 from pathlib import Path
+import base64
+import binascii
 import json
+import os
 import re
+import secrets
 import stat
+import uuid
 
-from contracts import DeployError, POSTGRES_PORT, REDIS_PORT, check_path, instance_paths, parse_env, read_json
+from contracts import DeployError, POSTGRES_PORT, REDIS_PORT, check_path, instance_paths, parse_env, read_json, require
 
 CREDENTIAL_KEYS = ("database_password", "redis_password")
+ENCRYPTION_KEYS = tuple("APP__ENCRYPTION__" + suffix for suffix in ("KEY_ID", "KEY", "PREVIOUS"))
+MAX_VALUE_BYTES = 1 << 20  # config.MaxTableBytes
+MAX_ENCRYPTION_KEYS = 32  # encryption.MaxKeys
 
 
 def read_credentials(host, entry, missing=False):
@@ -28,6 +36,11 @@ def read_credentials(host, entry, missing=False):
     for key in CREDENTIAL_KEYS:
         if not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", value.get(key, "")):
             raise DeployError("provision_conflict", "instance credential file invalid")
+    bootstrap = _read_bootstrap_secrets(host, entry)
+    if bootstrap is not None:
+        value.update({key: bootstrap[key] for key in ("encryption", "app_storage") if key in bootstrap})
+        value["encryption"] = dict(value["encryption"])
+        value["encryption"]["key_file"] = str(host.paths.instance_config(entry["name"]) / "bootstrap-encryption.key")
     return value
 
 
@@ -58,7 +71,230 @@ PIPELINE_KEYS = frozenset(_FIELDS) - {"PROJECT__NAME"} | {"DEVELOPER__RELEASE"}
 
 
 def runtime_environment(entry, credentials):
-    return {key: resolve(entry, credentials) for key, resolve in _FIELDS.items()}
+    values = {key: resolve(entry, credentials) for key, resolve in _FIELDS.items()}
+    encryption = credentials.get("encryption")
+    if encryption:
+        values[ENCRYPTION_KEYS[0]] = encryption["key_id"]
+        if encryption.get("key_file"):
+            values[ENCRYPTION_KEYS[1] + "_FILE"] = encryption["key_file"]
+        else:
+            values[ENCRYPTION_KEYS[1]] = encryption["key"]
+        values[ENCRYPTION_KEYS[2]] = "{}"
+    storage = credentials.get("app_storage")
+    if storage:
+        values["APP__SERVICES__CREDENTIALS"] = _json(storage["credentials"])
+        values["APP__SERVICES__STORAGE__DISKS"] = _json(storage["disks"])
+    return values
+
+
+def _validate_key(key_id, material):
+    require(isinstance(key_id, str) and len(key_id) <= 128 and re.fullmatch(r"[a-z0-9][a-z0-9_.-]*", key_id),
+            "invalid_encryption", "Encryption key ID is invalid.")
+    require(isinstance(material, str) and re.fullmatch(r"[A-Za-z0-9_-]{43}", material),
+            "invalid_encryption", "Encryption key must be canonical unpadded base64url for 32 bytes.")
+    try:
+        raw = base64.b64decode(material + "=", altchars=b"-_", validate=True)
+    except (ValueError, binascii.Error):
+        raise DeployError("invalid_encryption", "Encryption key encoding is invalid.") from None
+    require(len(raw) == 32 and base64.urlsafe_b64encode(raw).decode().rstrip("=") == material,
+            "invalid_encryption", "Encryption key encoding is not canonical.")
+
+
+def _encryption_pair(encryption=None):
+    if encryption is None:
+        encryption = {"key_id": "app_" + uuid.uuid4().hex, "key": secrets.token_urlsafe(32)}
+    require(isinstance(encryption, dict) and set(encryption) == {"key_id", "key"},
+            "invalid_encryption", "Supply the encryption key ID and key together.")
+    _validate_key(encryption["key_id"], encryption["key"])
+    return dict(encryption)
+
+
+def _read_bootstrap_secrets(host, entry):
+    path = check_path(host.paths.instance_config(entry["name"]) / "bootstrap-secrets.json", "file")
+    if not path.exists():
+        return None
+    info = path.stat()
+    require(stat.S_IMODE(info.st_mode) == 0o600 and (info.st_uid == 0 or host.paths.root != Path("/")),
+            "configuration_ownership", "Bootstrap secrets must be root-owned with mode 0600.")
+    value = read_json(path)
+    require(isinstance(value, dict) and value.get("instance_id") == entry["profile"]["instance_id"],
+            "provision_conflict", "Bootstrap secret identity differs from the selected instance.")
+    require(isinstance(value.get("encryption"), dict), "credentials_missing", "Restore the initialized encryption key; it must never be regenerated.")
+    _encryption_pair(value["encryption"])
+    return value
+
+
+def initialize_bootstrap_secrets(host, entry, private_secrets=None):
+    """Persist private stdin intake once; retries never rotate or replace secrets."""
+    credentials = read_credentials(host, entry)
+    supplied = {} if private_secrets is None else private_secrets
+    allowed = {"cloudflare_dns_token", "backup_s3", "age_recipients", "app_storage", "encryption"}
+    require(isinstance(supplied, dict) and not set(supplied) - allowed,
+            "invalid_secrets", "Bootstrap secret input contains unsupported fields.")
+    supplied = dict(supplied)
+    if "encryption" in supplied:
+        require(isinstance(supplied["encryption"], dict), "invalid_encryption", "Supply the encryption key ID and key together.")
+        supplied["encryption"] = _encryption_pair(supplied["encryption"])
+    if "cloudflare_dns_token" in supplied:
+        token = supplied["cloudflare_dns_token"]
+        require(isinstance(token, str) and token and len(token) <= 4096 and not any(c.isspace() for c in token),
+                "invalid_secrets", "Cloudflare DNS token is invalid.")
+    if "backup_s3" in supplied:
+        repository = supplied["backup_s3"]
+        required = {"endpoint", "region", "bucket", "access_key_id", "secret_access_key"}
+        require(isinstance(repository, dict) and set(repository) == required
+                and all(isinstance(value, str) and value and not any(c in value for c in "\x00\r\n") for value in repository.values()),
+                "invalid_secrets", "Backup credentials are incomplete or invalid.")
+    if "age_recipients" in supplied:
+        recipients = supplied["age_recipients"]
+        require(isinstance(recipients, list) and 1 <= len(recipients) <= 32
+                and all(isinstance(value, str) and value and not any(c.isspace() for c in value) for value in recipients),
+                "invalid_secrets", "Supply public age recipients as a bounded nonempty list.")
+    if "app_storage" in supplied:
+        storage = supplied["app_storage"]
+        require(isinstance(storage, dict) and set(storage) == {"credentials", "disks"},
+                "invalid_secrets", "App storage requires credentials and disks JSON together.")
+        storage = dict(storage)
+        for key in storage:
+            if isinstance(storage[key], str):
+                try:
+                    storage[key] = json.loads(storage[key])
+                except ValueError:
+                    raise DeployError("invalid_secrets", "App storage JSON is invalid.") from None
+            require(isinstance(storage[key], dict) and storage[key], "invalid_secrets", "App storage JSON must be a nonempty object.")
+        supplied["app_storage"] = storage
+    prior = _read_bootstrap_secrets(host, entry)
+    if prior is not None:
+        require(all(prior.get(key) == value for key, value in supplied.items()),
+                "provision_conflict", "Bootstrap secrets already exist; use an explicit configuration or credential rotation operation.")
+    else:
+        key_file = host.paths.instance_config(entry["name"]) / "bootstrap-encryption.key"
+        require(not key_file.exists() and not key_file.is_symlink()
+                and "bootstrap_secrets" not in entry.get("provisioning", {}).get("completed_steps", []),
+                "credentials_missing", "Restore the bootstrap secret record before retrying.")
+        env = host.paths.instance_config(entry["name"]) / "app.env"
+        if env.exists():
+            existing = parse_env(check_path(env, "file").read_text())
+            require(not any(key.startswith("APP__ENCRYPTION__") for key in existing),
+                    "credentials_missing", "Restore the bootstrap encryption record before retrying.")
+        prior = {"instance_id": entry["profile"]["instance_id"], **supplied}
+        if "encryption" not in prior:
+            prior["encryption"] = _encryption_pair()
+        host.owned_write(host.paths.instance_config(entry["name"]) / "bootstrap-secrets.json", _json(prior) + "\n", 0o600)
+    key_file = check_path(host.paths.instance_config(entry["name"]) / "bootstrap-encryption.key", "file")
+    material = prior["encryption"]["key"]
+    if key_file.exists():
+        require(_read_value_file(host, entry, str(key_file)) == material,
+                "provision_conflict", "Bootstrap encryption value file differs from its recorded key.")
+    else:
+        host.owned_write(key_file, material + "\n", 0o640, group=entry["name"])
+    credentials.update({key: prior[key] for key in ("encryption", "app_storage") if key in prior})
+    credentials["encryption"] = {**credentials["encryption"], "key_file": str(key_file)}
+    return credentials
+
+
+def _read_value_file(host, entry, value):
+    """Read only app-readable, root-owned files inside this instance's config."""
+    require(isinstance(value, str) and value and "\x00" not in value,
+            "invalid_configuration", "Configuration file reference is invalid.")
+    directory = host.check_control_directory(host.paths.instance_config(entry["name"]))
+    path = Path(value)
+    require(path.is_absolute() and path.is_relative_to(directory) and ".." not in path.parts,
+            "configuration_ownership", "Configuration value files must belong to the selected instance.")
+    check_path(path, "file")
+    for parent in path.parents:
+        if parent == directory:
+            break
+        host.check_control_directory(parent)
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as source:
+            info = os.fstat(source.fileno())
+            group = _instance_group(host, entry)
+            require(stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o640
+                    and (info.st_uid == 0 or host.paths.root != Path("/"))
+                    and (group is None or info.st_gid == group),
+                    "configuration_ownership", "Configuration value files must be root-owned and readable only by the instance group.")
+            if host.paths.root == Path("/"):
+                readable = host.run(["runuser", "-u", entry["name"], "--", "test", "-r", str(path)], check=False)
+                require(readable.returncode == 0, "configuration_ownership", "Configuration value file is not readable by the instance account.")
+            data = source.read(MAX_VALUE_BYTES + 1)
+        require(len(data) <= MAX_VALUE_BYTES, "invalid_configuration", "Configuration value file exceeds its byte limit.")
+        text = data.decode("utf-8")
+    except (OSError, UnicodeError):
+        raise DeployError("invalid_configuration", "Configuration value file cannot be read safely.") from None
+    return text[:-1].removesuffix("\r") if text.endswith("\n") else text
+
+
+def candidate_values(host, entry, existing, changes):
+    """Resolve aliases together and snapshot external inputs before selection."""
+    values = dict(existing)
+    logical = set()
+    for key in changes:
+        name = key.removesuffix("_FILE")
+        require(name not in logical, "invalid_configuration", "A configuration key and its _FILE alias cannot both be changed.")
+        logical.add(name)
+    for key, value in changes.items():
+        name = key.removesuffix("_FILE")
+        values.pop(name, None)
+        values.pop(name + "_FILE", None)
+        if value is not None:
+            values[key] = value
+    validate_keyring_change(host, entry, existing, values)
+    for key in changes:
+        if key.endswith("_FILE") and key in values:
+            content = _read_value_file(host, entry, values[key])
+            destination = host.paths.instance_config(entry["name"]) / ("value-" + uuid.uuid4().hex + ".secret")
+            host.owned_write(destination, content + "\n", 0o640, group=entry["name"])
+            values[key] = str(destination)
+    return values
+
+
+def _keyring(host, entry, values):
+    def value(name):
+        require(not (name in values and name + "_FILE" in values), "invalid_encryption", "Encryption configuration contains conflicting aliases.")
+        return _read_value_file(host, entry, values[name + "_FILE"]) if name + "_FILE" in values else values.get(name, "")
+    key_id, material, previous = (value(name) for name in ENCRYPTION_KEYS)
+    try:
+        retained = json.loads(previous or "{}")
+    except ValueError:
+        raise DeployError("invalid_encryption", "Retained encryption keys must be a valid JSON object.") from None
+    require(isinstance(retained, dict), "invalid_encryption", "Retained encryption keys must be a JSON object.")
+    prefix = ENCRYPTION_KEYS[2] + "__"
+    for name in values:
+        if name.startswith(prefix):
+            logical = name.removesuffix("_FILE")
+            parts = logical[len(prefix):].split("__")
+            require(len(parts) == 2 and parts[1] == "KEY", "invalid_encryption", "Retained encryption override is invalid.")
+            retained[parts[0].lower()] = {"key": value(logical)}
+    if not key_id and not material and not retained:
+        return {}
+    _validate_key(key_id, material)
+    require(key_id not in retained and len(retained) < MAX_ENCRYPTION_KEYS,
+            "invalid_encryption", "Encryption keyring exceeds its limit or duplicates the active key.")
+    ring = {key_id: material}
+    for previous_id, item in retained.items():
+        require(isinstance(item, dict) and set(item) == {"key"}, "invalid_encryption", "Retained encryption key is invalid.")
+        _validate_key(previous_id, item["key"])
+        require(item["key"] not in ring.values(), "invalid_encryption", "Encryption key material cannot be reused under another ID.")
+        ring[previous_id] = item["key"]
+    return ring
+
+
+def validate_keyring_change(host, entry, before, after):
+    old = _keyring(host, entry, before)
+    new = _keyring(host, entry, after)
+    require(all(new.get(key_id) == material for key_id, material in old.items()),
+            "encryption_retention", "Configuration cannot remove retained encryption keys or replace their material.")
+
+
+def rotation_changes(host, entry, values, encryption=None):
+    ring = _keyring(host, entry, values)
+    new = _encryption_pair(encryption)
+    require(new["key_id"] not in ring and new["key"] not in ring.values() and len(ring) < MAX_ENCRYPTION_KEYS,
+            "invalid_encryption", "Rotation requires a new key ID and material within the 32-key limit.")
+    return {ENCRYPTION_KEYS[0]: new["key_id"], ENCRYPTION_KEYS[1]: new["key"],
+            ENCRYPTION_KEYS[2]: _json({key_id: {"key": material} for key_id, material in ring.items()})}
 
 
 def _instance_group(host, entry, account=None):
@@ -105,6 +341,9 @@ def validate_runtime_environment(host, entry):
     expected = runtime_environment(entry, credentials)
     if any(values.get(key) != value for key, value in expected.items() if key in PIPELINE_KEYS):
         raise DeployError("configuration_identity", "Pipeline-owned runtime configuration differs from registered identity/credentials.")
-    if "DEVELOPER__RELEASE" in values:
-        raise DeployError("configuration_identity", "Release identity comes from the compiled binary; remove the environment override.")
+    for key in values:
+        logical = key.removesuffix("_FILE")
+        if (logical in PIPELINE_KEYS and (logical not in expected or key != logical)
+                or any(logical.startswith(owner + "__") for owner in PIPELINE_KEYS)):
+            raise DeployError("configuration_identity", "Pipeline-owned runtime configuration contains an overriding alias or collection field.")
     return values

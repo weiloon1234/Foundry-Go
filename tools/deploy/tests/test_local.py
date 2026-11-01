@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import tarfile
 import unittest
 from unittest.mock import patch
 import uuid
@@ -182,7 +183,7 @@ class LocalDeploymentTests(unittest.TestCase):
             ssh = cli.SSH(profile, settings)
         result = type("Result", (), {"stdout": b'{"ok":true}', "returncode": 0})()
         with patch.object(cli.subprocess, "run", return_value=result) as run:
-            ssh.request("config-set", {"value": "runtime-secret-canary"})
+            ssh.request("config-set", {"secrets": {"configuration": {"APP__KEY": "runtime-secret-canary"}}})
         self.assertNotIn("runtime-secret-canary", " ".join(run.call_args.args[0]))
         self.assertIn(b"runtime-secret-canary", run.call_args.kwargs["input"])
         self.assertIn("sudo -n", run.call_args.args[0][-1])
@@ -213,7 +214,7 @@ class LocalDeploymentTests(unittest.TestCase):
         run(["APP__ENCRYPTION__KEY_ID", "fixture_2026", "APP__ENCRYPTION__KEY", "key-material-canary", ""])
         action, payload = requests[-1]
         self.assertEqual("config-set", action)
-        self.assertEqual({"APP__ENCRYPTION__KEY_ID": "fixture_2026", "APP__ENCRYPTION__KEY": "key-material-canary"}, payload["values"])
+        self.assertEqual({"APP__ENCRYPTION__KEY_ID": "fixture_2026", "APP__ENCRYPTION__KEY": "key-material-canary"}, payload["secrets"]["configuration"])
         requests.clear()
         with self.assertRaises(cli.LocalError):
             run(["PROJECT__NAME", "one", "PROJECT__NAME"])
@@ -323,7 +324,8 @@ class LocalDeploymentTests(unittest.TestCase):
         (maps / "manifest.json").write_text('{}')
         manifest = {"schema": 1, "layout_version": 2, "project_id": project["id"], "instance_id": profile["instance_id"],
                     "instance": "abc-prod", "environment": "prod", "architecture": "amd64", "version": version,
-                    "commit": "a" * 40, "tree_state": "clean", "built_at": "2026-10-13T12:00:00Z", "native_imaging": False}
+                    "commit": "a" * 40, "tree_state": "clean", "built_at": "2026-10-13T12:00:00Z", "native_imaging": False,
+                    "source_kind": "git_archive", "source_sha256": "e" * 64}
         archive = metadata.package({"manifest": manifest}, stage, self.root / "release")
         extracted = self.root / "extracted"
         result = release.unpack_archive(archive, extracted, entry, cli.digest(archive))
@@ -385,7 +387,8 @@ class LocalDeploymentTests(unittest.TestCase):
         return {"schema": 1, "layout_version": 2, "project_id": project["id"], "instance_id": profile["instance_id"],
                 "instance": cli.instance_name(project, profile), "environment": profile["environment"],
                 "architecture": profile["architecture"], "native_imaging": False, "version": version,
-                "commit": "a" * 40, "tree_state": "clean", "built_at": "2026-10-13T12:00:00Z", "files": {
+                "commit": "a" * 40, "tree_state": "clean", "built_at": "2026-10-13T12:00:00Z",
+                "source_kind": "git_archive", "source_sha256": "e" * 64, "files": {
                     "artisan": "a" * 64, "config/deploy.toml": "b" * 64, "public/index.html": "c" * 64,
                     f"private-source-maps/{version}/admin/manifest.json": "d" * 64}}
 
@@ -451,6 +454,7 @@ class LocalDeploymentTests(unittest.TestCase):
         stack.enter_context(patch.object(cli, "load_topology", return_value={
             "schema": 1, "roles": [{"name": "http"}], "sha256": "a" * 64}))
         stack.enter_context(patch.object(cli, "confirm"))
+        stack.enter_context(patch.object(cli, "bootstrap_secrets", return_value={"cloudflare_dns_token": "private-token-canary"}))
         stack.enter_context(patch.dict(os.environ, {"ACTION": "prepare"}))
         stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
         return stack
@@ -468,6 +472,8 @@ class LocalDeploymentTests(unittest.TestCase):
         self.assertEqual(remote.calls[-1][1]["plan_token"], "reviewed-plan")
         self.assertEqual(remote.calls[-1][1]["topology"]["roles"], [{"name": "http"}])
         self.assertEqual(remote.calls[-1][1]["profile"]["host"]["host_id"], host_id)
+        self.assertEqual(remote.calls[-1][1]["secrets"], {"cloudflare_dns_token": "private-token-canary"})
+        self.assertNotIn("private-token-canary", json.dumps(remote.calls[:-1]))
         self.assertFalse(marker.exists())
         self.assertIsNone(pending)
         self.assertEqual(json.loads((self.root / "deploy/environments/prod.json").read_text()), profile)
@@ -555,6 +561,181 @@ class LocalDeploymentTests(unittest.TestCase):
             with self.assertRaisesRegex(cli.LocalError, "identity differs"):
                 cli.bootstrap(project, profile, {}, False)
         self.assertEqual([action for action, _ in remote.calls], ["inspect"])
+
+    def test_secret_files_are_read_privately_and_parse_errors_are_redacted(self):
+        secret = self.root / "backup.json"
+        value = {"bucket": "private-bucket", "secret_access_key": "credential-canary"}
+        secret.write_text(json.dumps(value))
+        with patch.dict(os.environ, {"FOUNDRY_SECRET_BACKUP_S3_FILE": str(secret)}), patch.object(cli, "ask") as ask:
+            self.assertEqual(cli.secret_input("backup_s3", "Backup", structured=True), value)
+            ask.assert_not_called()
+            secret.write_text("credential-canary invalid JSON")
+            with self.assertRaises(cli.LocalError) as error:
+                cli.secret_input("backup_s3", "Backup", structured=True)
+            self.assertNotIn("credential-canary", str(error.exception))
+
+    def test_bootstrap_private_envelope_requires_all_recovery_inputs(self):
+        values = {"cloudflare_dns_token": "token-canary",
+                  "app_storage": {"credentials": {}, "disks": {}},
+                  "backup_s3": {key: "fixture" for key in ("endpoint", "region", "bucket", "access_key_id", "secret_access_key")},
+                  "age_recipients": ["age1fixture"]}
+        with patch.dict(os.environ, {}, clear=True), patch.object(cli, "ask", side_effect=[
+                value if isinstance(value, str) else json.dumps(value) for value in values.values()]) as ask:
+            self.assertEqual(cli.bootstrap_secrets(True), values)
+            self.assertTrue(all(call.kwargs["secret"] for call in ask.call_args_list))
+
+    def test_build_provenance_waits_for_both_locks_and_orphan_checks(self):
+        project, profile = fixture()
+        events = []
+
+        @contextlib.contextmanager
+        def locked(path):
+            events.append("lock")
+            yield
+
+        def provenance(*_):
+            self.assertEqual(events, ["lock", "lock", "containers", "builder"])
+            events.append("provenance")
+            return {"manifest": {"version": "20261101T000000Z-abcdef123456"}}
+
+        with patch.object(cli, "ROOT", self.root), patch.object(cli, "lock", locked), \
+                patch.object(cli, "execute", return_value=""), \
+                patch.object(cli, "recover_build_containers", side_effect=lambda _: events.append("containers")), \
+                patch.object(cli, "refuse_orphan_builder", side_effect=lambda _: events.append("builder")), \
+                patch.object(cli, "build_request", side_effect=provenance), \
+                patch.object(cli, "source_snapshot", side_effect=cli.LocalError("snapshot boundary")):
+            with self.assertRaisesRegex(cli.LocalError, "snapshot boundary"):
+                cli.build(project, profile)
+        self.assertEqual(events[-1], "provenance")
+
+    def test_dirty_production_refuses_before_archive_or_docker(self):
+        project, profile = fixture()
+        with patch.object(cli, "execute") as execute:
+            with self.assertRaisesRegex(cli.LocalError, "clean committed HEAD"):
+                cli.source_snapshot(project, profile, {"manifest": {"tree_state": "dirty"}}, self.root)
+        execute.assert_not_called()
+
+    def snapshot_files(self, project, profile):
+        files = {"go.mod": "module example.com/app\ngo 1.26\n",
+                 "deploy/project.json": json.dumps(project),
+                 "deploy/environments/" + profile["environment"] + ".json": json.dumps(profile),
+                 "deploy/topology.json": '{"schema":1,"roles":[{"name":"http"}]}',
+                 "main.go": "package main\n", ".env": "private-canary"}
+        for name, value in files.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(value)
+        return files
+
+    def test_production_build_uses_exact_commit_archive_and_not_checkout(self):
+        project, profile = fixture()
+        files = self.snapshot_files(project, profile)
+        work = self.root / "snapshot"
+        work.mkdir()
+        request = {"manifest": {"tree_state": "clean", "commit": "a" * 40}}
+        commands = []
+
+        def execute(args, **_):
+            commands.append(args)
+            if "archive" in args:
+                self.assertEqual(args[-1], "a" * 40)
+                target = next(value.removeprefix("--output=") for value in args if value.startswith("--output="))
+                with tarfile.open(target, "w") as archive:
+                    for name in files:
+                        archive.add(self.root / name, arcname=name)
+            return ""
+
+        with patch.object(cli, "ROOT", self.root), patch.object(cli, "execute", side_effect=execute), \
+                patch.object(cli, "build_request", return_value=request):
+            snapshot = cli.source_snapshot(project, profile, request, work)
+        (self.root / "main.go").write_text("package changed\n")
+        self.assertEqual((snapshot / "main.go").read_text(), "package main\n")
+        self.assertFalse((snapshot / ".env").exists())
+        self.assertEqual(request["manifest"]["source_kind"], "git_archive")
+        self.assertEqual(request["manifest"]["source_sha256"], cli.digest(work / "source.tar"))
+        self.assertFalse((snapshot / "main.go").stat().st_mode & 0o222)
+
+    def test_staging_snapshot_records_dirty_content_and_refuses_unstable_capture(self):
+        project, profile = fixture()
+        profile["runtime_environment"] = "staging"
+        self.snapshot_files(project, profile)
+        request = {"manifest": {"tree_state": "dirty", "commit": "a" * 40}}
+        inventory = {name: {"sha256": cli.digest(self.root / name), "mode": 0o644}
+                     for name in ("go.mod", "main.go", "deploy/topology.json")}
+        for unstable in (False, True):
+            work = self.root / str(unstable)
+            work.mkdir()
+            after = {} if unstable else inventory
+            with self.subTest(unstable=unstable), patch.object(cli, "ROOT", self.root), \
+                    patch.object(cli, "execute", return_value=""), \
+                    patch.object(cli, "source_inventory", side_effect=[inventory, after]), \
+                    patch.object(cli, "build_request", return_value=request):
+                if unstable:
+                    with self.assertRaisesRegex(cli.LocalError, "source changed"):
+                        cli.source_snapshot(project, profile, request, work)
+                else:
+                    snapshot = cli.source_snapshot(project, profile, request, work)
+                    self.assertEqual((snapshot / "main.go").read_text(), "package main\n")
+                    self.assertEqual(request["manifest"]["tree_state"], "dirty")
+                    self.assertEqual(request["manifest"]["source_kind"], "working_tree")
+
+    def test_orphan_writer_requires_matching_record_and_exit_before_removal(self):
+        project, _ = fixture()
+        operation = str(uuid.uuid4())
+        name = "foundry-build-" + project["id"]
+        record = {"project_id": project["id"], "operation_id": operation, "containers": [name]}
+        path = self.root / ".deploy" / "builds" / (operation + ".json")
+        cli.atomic_json(path, record, mode=0o600)
+        observed = {"Name": "/" + name, "Config": {"Labels": {
+            "foundry.project": project["id"], "foundry.operation": operation}},
+                    "State": {"Running": True, "Status": "running"}}
+        for state, matching in (("running", True), ("exited", False), ("exited", True)):
+            calls = []
+            observed["State"] = {"Running": state == "running", "Status": state}
+            observed["Config"]["Labels"]["foundry.project"] = project["id"] if matching else str(uuid.uuid4())
+
+            def execute(args, **_):
+                calls.append(args)
+                if args[1] == "inspect":
+                    return json.dumps([observed])
+                if args[1] == "ps" and "name=^/" + name + "$" in args:
+                    return "container-id\n"
+                return ""
+
+            with self.subTest(state=state, matching=matching), patch.object(cli, "ROOT", self.root), \
+                    patch.object(cli, "execute", side_effect=execute):
+                if state == "running" or not matching:
+                    with self.assertRaises(cli.LocalError):
+                        cli.recover_build_containers(project)
+                    self.assertFalse(any(args[1] == "rm" for args in calls))
+                else:
+                    cli.recover_build_containers(project)
+                    self.assertIn(["docker", "rm", "container-id"], calls)
+
+    def test_rollback_resume_keeps_original_target_and_expectation(self):
+        project, profile = fixture()
+        target, current = "20261101T000000Z-abcdef123456", "20261101T010000Z-abcdef123456"
+        operation = str(uuid.uuid4())
+        requests = []
+
+        class Remote:
+            def request(self, action, payload):
+                requests.append((action, payload))
+                return {"state": {"current": {"version": current}, "previous": {"version": target}}}
+
+        with patch.object(cli, "ROOT", self.root), patch.object(cli, "SSH", return_value=Remote()), \
+                patch.object(cli, "remember_releases"), patch.object(cli, "confirm"), \
+                patch.dict(os.environ, {"ACTION": "rollback", "TARGET": target, "OPERATION": operation}, clear=True), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            cli.deploy(project, profile, {})
+            os.environ.pop("TARGET")
+            current = target
+            cli.deploy(project, profile, {})
+        rollbacks = [request for action, request in requests if action == "rollback"]
+        self.assertEqual(rollbacks[0], rollbacks[1])
+        self.assertEqual(rollbacks[0]["target"], target)
+        self.assertNotEqual(rollbacks[0]["expected_current"], target)
+        self.assertEqual(rollbacks[0]["operation_id"], operation)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 """Foundation bootstrap planning with read-only service adapters and no processes."""
 import copy
+from contextlib import ExitStack
 from pathlib import Path
 import subprocess
 import sys
@@ -138,6 +139,89 @@ class FoundationProvisionTests(unittest.TestCase):
         self.assertEqual([], self.host.writes)
         self.assertFalse(self.host.paths.registry.exists())
         self.assertFalse(self.host.paths.opt(self.project["slug"] + "-" + self.profile["environment"]).exists())
+
+    def test_installs_only_declared_hardened_units_without_starting(self):
+        entry = self.plan()["entry"]
+        registry = {"shared": {"postgresql": {"unit": "postgresql@16-foundry.service"}}}
+        written = {}
+        def write(host, path, content, *args):
+            written[path.name] = content
+            return True
+        with patch.object(provision, "_owned_write", side_effect=write), patch.object(self.host, "run") as run:
+            provision._install_unit(self.host, registry, entry, TOOLS)
+        self.assertEqual(set(instance_units(entry).values()), set(written))
+        self.assertFalse(any("worker" in name for name in written))
+        for content in written.values():
+            self.assertIn("ProtectSystem=strict", content)
+            self.assertIn("NoNewPrivileges=yes", content)
+            self.assertIn("KillMode=control-group", content)
+            self.assertIn("postgresql@16-foundry.service", content)
+            self.assertNotIn("postgresql.service", content)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(["systemctl", "daemon-reload"], commands[0])
+        self.assertEqual(["systemctl", "enable", *instance_units(entry).values()], commands[1])
+
+    def test_declared_worker_has_no_product_specific_connection(self):
+        topology = {"schema": 1, "roles": [{"name": "http"}, {"name": "worker"}]}
+        entry = self.plan(topology=topology)["entry"]
+        content = provision._template(TOOLS, "foundry-worker@.service", entry, postgres_unit="postgresql@16-foundry.service")
+        self.assertIn("artisan queue:work --config", content)
+        self.assertNotIn("--connection", content)
+        self.assertNotIn("@WORKER_CONNECTION@", content)
+
+    def test_foreign_unit_template_and_dropin_refuse_before_install(self):
+        entry = self.plan()["entry"]
+        unit = instance_units(entry)["http"]
+        paths = [f"/etc/systemd/system/{unit}", "/etc/systemd/system/foundry-http@.service",
+                 f"/run/systemd/system/{unit}", f"/etc/systemd/system/{unit}.d"]
+        for relative in paths:
+            with self.subTest(path=relative):
+                path = self.host.paths.p(relative)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("foreign unit")
+                with patch.object(provision, "_owned_write") as write, self.assertRaises(DeployError):
+                    provision._install_unit(self.host, {"shared": {"postgresql": {"unit": "postgresql@16-foundry.service"}}}, entry, TOOLS)
+                write.assert_not_called()
+                path.unlink()
+
+    def test_nginx_exact_and_wildcard_domains_compare_case_insensitively(self):
+        entry = self.plan()["entry"]
+        domain = entry["profile"]["domain"]
+        for declared in (domain.upper(), "*." + domain.split(".", 1)[1].upper(), "." + domain.upper()):
+            with self.subTest(declared=declared):
+                config = "# configuration file /etc/nginx/conf.d/foreign.conf:\nserver { server_name " + declared + "; }\n"
+                with patch.object(provision, "_installed", return_value=True), \
+                     patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, config, "")), \
+                     self.assertRaises(DeployError):
+                    provision._site_checks(self.host, entry)
+
+    def test_bootstrap_configures_backup_after_database_and_private_environment(self):
+        plan = self.plan()
+        self.profile["host"]["host_id"] = plan["host_id"]
+        calls = []
+        private = {"age_recipients": ["age1fixture"]}
+        credentials = {"database_password": "fixture", "redis_password": "fixture"}
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(provision, "bootstrap_plan", return_value=plan))
+            stack.enter_context(patch.object(provision.upgrades, "install_tools"))
+            stack.enter_context(patch.object(provision, "_journal"))
+            stack.enter_context(patch.object(provision, "_prepare_instance"))
+            initialize = stack.enter_context(patch.object(provision, "initialize_bootstrap_secrets", return_value=credentials))
+            for module, name, label in ((provision.packages, "install_missing", "packages"),
+                    (provision.postgres, "prepare", "pg_prepare"), (provision.redis_acl, "prepare", "redis_prepare"),
+                    (provision.postgres, "provision", "postgres"), (provision.redis_acl, "provision", "redis"),
+                    (provision, "_provision_environment", "environment"), (provision.backup, "configure", "backup"),
+                    (provision, "_install_unit", "units"), (provision, "_install_site", "site")):
+                stack.enter_context(patch.object(module, name, side_effect=lambda *args, label=label: calls.append(label)))
+            result = provision.bootstrap_apply(self.host, self.project, self.profile, TOOLS, plan["plan_token"],
+                                               topology=TOPOLOGY, private_secrets=private)
+        self.assertTrue(result["ok"])
+        initialize.assert_called_once_with(self.host, plan["entry"], private)
+        self.assertLess(calls.index("postgres"), calls.index("backup"))
+        self.assertLess(calls.index("environment"), calls.index("backup"))
+        self.assertLess(calls.index("backup"), calls.index("units"))
+        self.assertIn("bootstrap_secrets", plan["entry"]["provisioning"]["completed_steps"])
+        self.assertIn("backup", plan["entry"]["provisioning"]["completed_steps"])
 
 
 class MovedServiceBoundaryTests(unittest.TestCase):

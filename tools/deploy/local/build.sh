@@ -10,13 +10,9 @@ esac
 work=/work
 stage=/stage
 mkdir -p "$work" "$stage"
-# Never copy operator settings, runtime files, environment files or key material.
-tar -C /src --exclude=.git --exclude='.env*' --exclude=.deploy --exclude=dist --exclude=bin \
-	--exclude=.aws --exclude=.ssh --exclude=.netrc --exclude=.npmrc --exclude=.codex \
-	--exclude=./.claude/settings.local.json --exclude=./CLAUDE.local.md \
-	--exclude=storage --exclude=./public/build --exclude=./config/app.toml --exclude='./config/*.local.toml' \
-	--exclude=node_modules --exclude='*.pem' --exclude='*.key' --exclude='*.p12' --exclude='*.pfx' \
-	--exclude=go.work --exclude=go.work.sum -cf - . | tar -C "$work" -xf -
+# The local snapshot owner already excluded private paths and froze these bytes.
+cp -R /src/. "$work/"
+chmod -R u+w "$work"
 python3 /foundry-deploy/local/build_metadata.py public-env /request.json "$work/.env"
 for frontend in client web; do
 	if [ -f "$work/$frontend/package.json" ]; then

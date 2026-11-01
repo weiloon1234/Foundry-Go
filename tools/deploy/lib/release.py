@@ -1,9 +1,8 @@
 """Verified SSH release activation, instance-scoped operations and recovery.
 
-Provisioning is deliberately absent from this module. A release cannot install
-packages, change shared services, rotate credentials or replace deployment tools.
-The one exception is its own instance's Redis key grants: they follow the
-release's verified `redis:keys` inventory through provisioning's owned reconcile.
+Shared service provisioning stays in its owning modules. Releases reconcile
+instance Redis grants through F2 and request recovery points/key archives from F3.
+Configuration and key rotation share the same candidate validation and selection.
 """
 from __future__ import annotations
 
@@ -21,12 +20,14 @@ import urllib.request
 import uuid
 
 from contracts import (DeployError, LAYOUT_VERSION, SCHEMA, VERSION_PATTERN,
-                       atomic_write, check_path, digest, dump_env, now, parse_env,
-                       parse_json, read_json, require, valid_timestamp)
-from runtime_config import PIPELINE_KEYS, validate_runtime_environment
+                       check_path, digest, dump_env, now,
+                       parse_json, read_json, require, valid_timestamp, valid_uuid, instance_paths)
+from runtime_config import (PIPELINE_KEYS, validate_runtime_environment, candidate_values,
+                            rotation_changes)
 from topology import instance_units
 from host import OperationTimeout, wall_clock_budget
-from redis_acl import granted_redis_patterns, reconcile_redis_grants, redis_grant_patterns
+from redis_acl import (granted_redis_patterns, granted_redis_channels, reconcile_redis_grants,
+                       redis_grant_patterns, redis_channel_patterns)
 import backup
 
 MAX_ARCHIVE_BYTES = 2 * 1024**3
@@ -47,6 +48,15 @@ def validate_manifest(manifest, entry):
     require(valid_version(manifest.get("version")) and manifest.get("tree_state") in ("clean", "dirty", "unknown")
             and valid_timestamp(manifest.get("built_at")), "invalid_release", "Invalid release version or provenance.")
     require(manifest.get("commit") is None or isinstance(manifest.get("commit"), str) and re.fullmatch(r"[a-f0-9]{7,64}", manifest["commit"]), "invalid_release", "Invalid source revision.")
+    if entry["profile"]["runtime_environment"] == "production" or entry["environment"] == "production":
+        require(manifest.get("tree_state") == "clean" and manifest.get("commit") is not None
+                and manifest.get("source_kind") == "git_archive"
+                and isinstance(manifest.get("source_sha256"), str)
+                and re.fullmatch(r"[a-f0-9]{64}", manifest["source_sha256"]),
+                "production_source", "Production requires a clean committed HEAD archive and source provenance.")
+    if "topology_sha256" in manifest and "topology" in entry:
+        require(manifest["topology_sha256"] == entry["topology"]["sha256"], "release_topology",
+                "Release topology differs from the bootstrapped role declaration.")
     files = manifest.get("files")
     require(isinstance(files, dict) and 1 <= len(files) <= MAX_FILES, "invalid_release", "Invalid release file inventory.")
     for path, checksum in files.items():
@@ -149,7 +159,6 @@ def current_version(host, entry):
 def switch_to(host, entry, version):
     release_path(host, entry, version)
     current_version(host, entry)  # refuse a foreign/non-symlink current
-    stop(host, entry)
     opt = host.paths.opt(entry["name"])
     temporary = opt / (".current-" + uuid.uuid4().hex)
     try:
@@ -174,27 +183,40 @@ def app(host, entry, release, command, env_file=None, extra=(), timeout=90):
                     cwd=check_path(host.paths.data(entry["name"]), "directory"))
 
 
-def release_redis_patterns(host, entry, release):
-    """Require the release's exact inventory; v2 has no broad legacy grants."""
-    return redis_grant_patterns(entry, parse_json(app(host, entry, release, "redis:keys").stdout))
+def release_redis_inventory(host, entry, release, env_file=None):
+    """One candidate invocation supplies both exact key and channel inventories."""
+    inventory = parse_json(app(host, entry, release, "redis:keys", env_file).stdout)
+    return {"patterns": redis_grant_patterns(entry, inventory),
+            "channels": redis_channel_patterns(entry, inventory)}
 
 
-def widen_redis_grants(host, registry, entry, patterns):
-    """Before a switch, grant what both the running and the next release need."""
-    granted = granted_redis_patterns(entry)
-    if not set(patterns) <= set(granted):
-        reconcile_redis_grants(host, registry, entry, [*granted, *patterns])
+def _redis_transition(host, registry, entry, inventory, state=None):
+    if state is not None:
+        state["last_attempt"].update(redis_target=inventory, redis_pending=True)
+        host.save_state(entry, state)
+    reconcile_redis_grants(host, registry, entry, inventory["patterns"], channels=inventory["channels"])
+    if state is not None:
+        state["last_attempt"]["redis_pending"] = False
+        host.save_state(entry, state)
 
 
-def narrow_redis_grants(host, registry, entry, patterns):
-    """After a verified switch; a failure leaves the wider grant for the next deploy."""
-    if sorted(granted_redis_patterns(entry)) == sorted(set(patterns)) and not entry["provisioning"].get("redis_acl_pending"):
-        return []
+def resume_redis_transition(host, registry, entry, state):
+    attempt = state.get("last_attempt") or {}
+    if attempt.get("redis_pending"):
+        _redis_transition(host, registry, entry, attempt["redis_target"], state)
+
+
+def widen_redis_grants(host, registry, entry, inventory, state=None):
+    target = {"patterns": sorted(set(granted_redis_patterns(entry)) | set(inventory["patterns"])),
+              "channels": sorted(set(granted_redis_channels(entry)) | set(inventory["channels"]))}
+    _redis_transition(host, registry, entry, target, state)
+
+
+def narrow_redis_grants(host, registry, entry, inventory, state=None):
     try:
-        reconcile_redis_grants(host, registry, entry, patterns)
+        _redis_transition(host, registry, entry, inventory, state)
         return []
     except (DeployError, OSError, KeyError, TypeError, ValueError):
-        # The verified switch already succeeded; never turn this into its failure.
         return ["redis_grants_not_narrowed"]
 
 
@@ -215,90 +237,161 @@ def backup_database(host, entry, attempt_id):
     return backup.recovery_point(host, entry, attempt_id)
 
 
-def restart(host, entry):
+READINESS_SECONDS = 90
+STABILITY_SECONDS = 5
+
+
+def stop_background(host, entry, timeout=100):
     units = instance_units(entry)
     background = [units[role] for role in ("scheduler", "worker") if role in units]
     if background:
-        host.run(["systemctl", "stop", *background], timeout=100)
-    host.run(["systemctl", "reset-failed", *units.values()], check=False)
-    host.run(["systemctl", "restart", units["http"]], timeout=60)
-    if ready(host, entry, include_background=False):
-        for role in ("worker", "scheduler"):
-            if role in units:
-                host.run(["systemctl", "start", units[role]], timeout=60)
+        host.run(["systemctl", "stop", *background], timeout=timeout)
+
+
+def _remaining(deadline, maximum=5):
+    available = deadline - time.monotonic()
+    if available <= 0:
+        raise OperationTimeout("readiness budget exhausted")
+    return min(maximum, available)
+
+
+def restart(host, entry):
+    """HTTP and all declared background roles share one readiness deadline."""
+    units = instance_units(entry)
+    stop_background(host, entry)
+    try:
+        with wall_clock_budget(READINESS_SECONDS):
+            deadline = time.monotonic() + READINESS_SECONDS
+            host.run(["systemctl", "reset-failed", *units.values()], timeout=_remaining(deadline, 10))
+            host.run(["systemctl", "restart", units["http"]], timeout=_remaining(deadline, 60))
+            require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS), include_background=False),
+                    "readiness_failed", "HTTP did not become ready; background roles remain stopped.")
+            for role in ("worker", "scheduler"):
+                if role in units:
+                    host.run(["systemctl", "start", units[role]], timeout=_remaining(deadline, 60))
+            require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS)),
+                    "readiness_failed", "Required roles did not become ready within the activation deadline.")
+    except OperationTimeout:
+        raise DeployError("readiness_failed", "Required roles exhausted the activation deadline.") from None
 
 
 def stop(host, entry):
-    units = instance_units(entry)
-    # Stop admission/maintenance and drain workers before stopping HTTP.
-    background = [units[role] for role in ("scheduler", "worker") if role in units]
-    if background:
-        host.run(["systemctl", "stop", *background], timeout=100)
-    host.run(["systemctl", "stop", units["http"]], timeout=60)
+    stop_background(host, entry)
+    host.run(["systemctl", "stop", instance_units(entry)["http"]], timeout=60)
+
+
+def _process(host, pid):
+    """Read the kernel executable and reject a PID reused during inspection."""
+    if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
+        return None
+    proc = host.paths.p(f"/proc/{pid}")
+    try:
+        before = (proc / "stat").read_text().rsplit(") ", 1)[1].split()[19]
+        exe = os.readlink(proc / "exe")
+        info = (proc / "exe").stat()
+        groups = (proc / "cgroup").read_text().splitlines()
+        after = (proc / "stat").read_text().rsplit(") ", 1)[1].split()[19]
+        if before != after or exe.endswith(" (deleted)") or not Path(exe).is_absolute():
+            return None
+        return {"exe": exe, "start": before, "device": info.st_dev, "inode": info.st_ino,
+                "groups": [line.split(":", 2)[2] for line in groups]}
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def service(host, unit, timeout=5):
+    found = host.run(["systemctl", "show", unit,
+                      "--property=LoadState,ActiveState,SubState,MainPID,NRestarts,ControlGroup", "--no-pager"],
+                     check=False, timeout=timeout)
+    if found.returncode:
+        raise DeployError("service_inspection", "Required service could not be inspected.")
+    values = dict(line.split("=", 1) for line in found.stdout.splitlines() if "=" in line)
+    result = {"unit": unit, **{key: values.get(key) for key in
+              ("LoadState", "ActiveState", "SubState", "MainPID", "NRestarts", "ControlGroup")}}
+    process = _process(host, result["MainPID"])
+    result.update(exe=process["exe"] if process else None, process=process)
+    return result
+
+
+def _matches_executable(observation, executable):
+    process = observation.get("process")
+    if not process or observation["LoadState"] != "loaded" or observation["ActiveState"] != "active":
+        return False
+    try:
+        expected = executable.stat()
+        return (process["exe"] == str(executable.resolve(strict=True))
+                and (process["device"], process["inode"]) == (expected.st_dev, expected.st_ino)
+                and observation["ControlGroup"] in process["groups"])
+    except OSError:
+        return False
 
 
 def services(host, entry):
-    """Bounded, payload-free live topology for the status command."""
     result = {}
+    selected = current_version(host, entry)
+    executable = release_path(host, entry, selected) / "artisan" if selected else None
     for role, unit in instance_units(entry).items():
-        found = host.run(["systemctl", "show", unit, "--property=LoadState,ActiveState,SubState,MainPID,NRestarts"], check=False, timeout=5)
-        values = dict(line.split("=", 1) for line in found.stdout.splitlines() if "=" in line)
-        result[role] = {"unit": unit, **{key: values.get(key) for key in ("LoadState", "ActiveState", "SubState", "MainPID", "NRestarts")}}
+        try:
+            observed = service(host, unit)
+            observed["executable_matches"] = bool(executable and _matches_executable(observed, executable))
+            observed.pop("process", None)
+            result[role] = observed
+        except (DeployError, OSError):
+            result[role] = {"unit": unit, "LoadState": None, "ActiveState": "unknown", "SubState": None,
+                            "MainPID": None, "NRestarts": None, "exe": None, "executable_matches": False}
     return result
 
 
 def ready(host, entry, timeout=90, include_background=True):
     try:
         with wall_clock_budget(timeout):
-            deadline = time.monotonic() + timeout
-            if not _ready(host, entry, deadline):
-                return False
-            if not include_background:
-                return True
-            while time.monotonic() < deadline:
-                live = services(host, entry)
-                children = [live[role] for role in ("worker", "scheduler") if role in live]
-                if any(item["ActiveState"] == "failed" or item["NRestarts"] not in ("0", None) for item in children):
-                    return False
-                if all(item["ActiveState"] == "active" and (item["MainPID"] or "").isdigit() and int(item["MainPID"]) > 0 for item in children):
-                    return True
-                time.sleep(min(0.1, max(0, deadline - time.monotonic())))
-            return False
-    except (OperationTimeout, DeployError, OSError):
+            return _ready(host, entry, time.monotonic() + timeout, include_background)
+    except (OperationTimeout, DeployError, OSError, ValueError):
         return False
 
 
-def _ready(host, entry, deadline):
-    def remaining(maximum):
-        available = deadline - time.monotonic()
-        if available <= 0:
-            raise OperationTimeout("readiness budget exhausted")
-        return min(maximum, available)
-
+def _ready(host, entry, deadline, include_background=True):
+    version = current_version(host, entry)
+    if version is None:
+        return False
+    path = release_path(host, entry, version)
+    verified_release(host, entry, read_json(path / "manifest.json"))
+    units = instance_units(entry)
+    if not include_background:
+        units = {"http": units["http"]}
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-    initial = host.run(["systemctl", "show", instance_units(entry)["http"], "--property=NRestarts", "--value"], check=False, timeout=remaining(5)).stdout.strip()
-    if not initial.isdigit():
-        return False
+    tokens, stable_since = None, None
     while time.monotonic() < deadline:
-        result = host.run(["systemctl", "show", instance_units(entry)["http"], "--property=ActiveState", "--property=NRestarts", "--property=MainPID"], check=False, timeout=remaining(5))
-        state = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
-        if result.returncode or state.get("ActiveState") == "failed" or state.get("NRestarts", initial) != initial:
+        live = {role: service(host, unit, timeout=_remaining(deadline)) for role, unit in units.items()}
+        if any(item["ActiveState"] == "failed" or item["NRestarts"] != "0" for item in live.values()):
             return False
-        try:
-            with opener.open(f"http://127.0.0.1:{entry['allocations']['http_port']}/health/ready", timeout=remaining(3)) as response:
-                payload = response.read(4097)
-                body = parse_json(payload) if len(payload) <= 4096 else None
-                if (state.get("ActiveState") == "active" and response.status == 200
-                        and isinstance(body, dict) and set(body) == {"ready"} and body["ready"] is True):
-                    pid = state.get("MainPID", "")
-                    listeners = host.run(["ss", "-Hltpn", f"sport = :{entry['allocations']['http_port']}"], check=False, timeout=remaining(5))
-                    if pid.isdigit() and int(pid) > 0 and listeners.returncode == 0 and f"pid={pid}," in listeners.stdout:
-                        return True
-        except OperationTimeout:
-            raise
-        except (OSError, ValueError):
-            pass
-        time.sleep(remaining(1))
+        healthy = all(_matches_executable(item, path / "artisan") for item in live.values())
+        if healthy:
+            try:
+                with opener.open(f"http://127.0.0.1:{entry['allocations']['http_port']}/health/ready", timeout=_remaining(deadline, 3)) as response:
+                    payload = response.read(4097)
+                    body = parse_json(payload) if len(payload) <= 4096 else None
+                    healthy = response.status == 200 and isinstance(body, dict) and set(body) == {"ready"} and body["ready"] is True
+                listeners = host.run(["ss", "-Hltpn", f"sport = :{entry['allocations']['http_port']}"],
+                                     check=False, timeout=_remaining(deadline))
+                healthy = (healthy and listeners.returncode == 0
+                           and any(f"pid={live['http']['MainPID']}," in line
+                                   and f"127.0.0.1:{entry['allocations']['http_port']}" in line
+                                   for line in listeners.stdout.splitlines()))
+            except (OSError, ValueError):
+                healthy = False
+        observed = tuple((role, item["MainPID"], (item.get("process") or {}).get("start"), item["NRestarts"])
+                         for role, item in live.items())
+        if tokens is not None and observed != tokens:
+            return False
+        if healthy:
+            if stable_since is None:
+                tokens, stable_since = observed, time.monotonic()
+            if time.monotonic() - stable_since >= STABILITY_SECONDS:
+                return True
+        else:
+            stable_since = None
+        time.sleep(_remaining(deadline, 0.1))
     return False
 
 
@@ -329,6 +422,9 @@ def begin(host, entry, state, action, version, metadata=None):
                "outcome": "running", "phase": "validation", "error": None}
     if metadata:
         attempt.update(metadata)
+    previous = state.get("last_attempt") or {}
+    if previous.get("redis_pending"):
+        attempt.update(redis_pending=True, redis_target=copy.deepcopy(previous["redis_target"]))
     state["last_attempt"] = attempt
     state["status"] = "deploying"
     host.save_state(entry, state)
@@ -341,9 +437,47 @@ def phase(host, entry, state, name):
 
 
 def finish(host, entry, state, outcome, error=None):
+    # F0's persisted enum still uses failed; retain the precise applied result
+    # separately until that shared schema admits failed_applied.
+    if outcome == "failed_applied":
+        state["last_attempt"]["result"] = outcome
+        outcome = "failed"
     state["last_attempt"].update(outcome=outcome, finished_at=now(), error=error)
     state["history"] = [*state["history"], copy.deepcopy(state["last_attempt"])][-50:]
     host.save_state(entry, state)
+    attempt = state["last_attempt"]
+    if attempt.get("operation_id"):
+        _save_operation(host, entry, attempt)
+
+
+def public_state(state):
+    value = copy.deepcopy(state)
+    for item in [value.get("last_attempt"), *value.get("history", [])]:
+        if item:
+            item.pop("configuration_sha256", None)
+            item.pop("previous_configuration_sha256", None)
+            if item.get("result") == "failed_applied":
+                item["outcome"] = "failed_applied"
+    return value
+
+
+def _operation_path(host, entry, operation_id):
+    require(valid_uuid(operation_id), "invalid_operation", "An operation UUIDv4 is required.")
+    parent = host.paths.p(instance_paths(entry["name"])["private"])
+    host.check_control_directory(parent)
+    path = check_path(parent / ("operation-" + operation_id + ".json"), "file")
+    if path.exists():
+        info = path.stat()
+        require(info.st_mode & 0o777 == 0o600 and (info.st_uid == 0 or host.paths.root != Path("/")),
+                "operation_ownership", "Operation receipts must be root-owned and private.")
+    return path
+
+
+def _save_operation(host, entry, attempt):
+    path = _operation_path(host, entry, attempt["operation_id"])
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    host.owned_write(path,
+                     json.dumps(attempt, sort_keys=True) + "\n", mode=0o600)
 
 
 def check_live_state(host, entry, state):
@@ -358,7 +492,7 @@ def restore_code(host, entry, state, current, previous, recovered_status):
         switch_to(host, entry, current["version"])
     state["current"], state["previous"] = current, previous
     restart(host, entry)
-    state["status"] = recovered_status if ready(host, entry) else "failed"
+    state["status"] = recovered_status
 
 
 def protect_maps(host, entry, release):
@@ -413,16 +547,10 @@ def prune(host, entry, state):
     for path in releases.glob(".stage-*"):
         if re.fullmatch(r"\.stage-[a-f0-9]{32}", path.name) and path.is_dir() and not path.is_symlink():
             shutil.rmtree(check_path(path, "directory"))
-    backups = host.paths.instance_state(entry["name"]) / "backups"
-    if backups.exists():
-        dumps = sorted((p for p in backups.iterdir() if p.suffix in (".dump", ".partial")
-                        and valid_version(p.stem) and p.is_file() and not p.is_symlink()), reverse=True)
-        for path in dumps[keep["pre_migration_dumps"]:]:
-            if path.stem != (state.get("last_attempt") or {}).get("id"):
-                path.unlink()
 
 
-def activate(host, project, profile, archive, checksum):
+def activate(host, project, profile, archive, checksum, operation_id=None):
+    require(operation_id is None or valid_uuid(operation_id), "invalid_operation", "Deployment operation ID must be a UUIDv4.")
     _, entry = host.require_identity(project, profile)
     require(entry["provisioning"]["state"] == "ready", "bootstrap_incomplete", "Bootstrap must finish before deployment.")
     # The host lock covers the shared Redis ACL file and registry grant record,
@@ -433,6 +561,7 @@ def activate(host, project, profile, archive, checksum):
         state = host.load_state(entry)
         require_idle(state)
         check_live_state(host, entry, state)
+        resume_redis_transition(host, registry, entry, state)
         staging = host.paths.opt(entry["name"]) / "releases" / (".stage-" + uuid.uuid4().hex)
         try:
             manifest = unpack_archive(Path(archive), staging, entry, checksum)
@@ -448,19 +577,22 @@ def activate(host, project, profile, archive, checksum):
                 verified_release(host, entry, manifest)
             else:
                 os.rename(staging, release)
-            attempt = begin(host, entry, state, "deploy", version)
+            attempt = begin(host, entry, state, "deploy", version,
+                            metadata={"recovery_operation_id": operation_id or str(uuid.uuid4())})
             prior_current, prior_previous = state["current"], state["previous"]
             switched = False
             try:
                 native_runtime(host, entry)
                 protect_maps(host, entry, release)
                 app(host, entry, release, "config:check")
+                redis_patterns = release_redis_inventory(host, entry, release)
+                attempt["redis_inventory"] = redis_patterns
                 phase(host, entry, state, "redis")
-                redis_patterns = release_redis_patterns(host, entry, release)
-                widen_redis_grants(host, registry, entry, redis_patterns)
+                widen_redis_grants(host, registry, entry, redis_patterns, state)
+                stop_background(host, entry)
                 if migration_status(host, entry, release):
                     phase(host, entry, state, "backup")
-                    attempt["backup"] = backup_database(host, entry, attempt["id"])
+                    attempt["backup"] = backup_database(host, entry, attempt["recovery_operation_id"])
                     phase(host, entry, state, "migration")
                     app(host, entry, release, "migrate", extra=("--database", "primary"), timeout=900)
                 phase(host, entry, state, "seed")
@@ -471,7 +603,6 @@ def activate(host, project, profile, archive, checksum):
                 phase(host, entry, state, "health")
                 host.run(["systemctl", "enable", *instance_units(entry).values()])
                 restart(host, entry)
-                require(ready(host, entry), "readiness_failed", "Candidate did not become ready.")
                 if (state["current"] or {}).get("version") != version:
                     state["previous"] = state["current"]
                 state["current"] = manifest
@@ -503,7 +634,7 @@ def activate(host, project, profile, archive, checksum):
                     pass  # retained diagnostics are safer than masking failure
                 raise DeployError(code, "Deployment failed; status records the phase and recovery outcome. Inspect the instance before retrying.") from None
             result = {"ok": True, "instance": entry["name"], "version": version}
-            warnings = narrow_redis_grants(host, registry, entry, redis_patterns)
+            warnings = narrow_redis_grants(host, registry, entry, redis_patterns, state)
             try:
                 prune(host, entry, state)
             except (DeployError, OSError):
@@ -516,38 +647,59 @@ def activate(host, project, profile, archive, checksum):
                 shutil.rmtree(staging)
 
 
-def rollback(host, project, profile):
+def rollback(host, project, profile, target, expected_current, operation_id):
+    require(valid_version(target) and valid_version(expected_current) and valid_uuid(operation_id),
+            "invalid_rollback", "Rollback requires explicit target, expected current and an operation UUIDv4.")
     _, entry = host.require_identity(project, profile)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
-        validate_runtime_environment(host, entry)
         state = host.load_state(entry)
+        receipt = _operation_path(host, entry, operation_id)
+        recorded = next((item for item in [state.get("last_attempt"), *reversed(state["history"])]
+                         if item and item.get("operation_id") == operation_id), None)
+        durable = read_json(receipt) if receipt.exists() else None
+        prior = recorded if recorded and recorded["outcome"] not in ("running", "needs_reconciliation") else durable or recorded
+        if prior:
+            require(prior.get("action") == "rollback" and prior.get("release") == target
+                    and prior.get("expected_current") == expected_current,
+                    "operation_conflict", "Operation ID already belongs to a different request.")
+            if prior["outcome"] in ("succeeded", "reconciled"):
+                if durable != prior:
+                    _save_operation(host, entry, prior)
+                return {"ok": True, "unchanged": True, "version": target, "operation_id": operation_id}
+            require(prior["outcome"] not in ("running", "needs_reconciliation"),
+                    "reconciliation_required", "Reconcile the interrupted rollback before retrying.")
+            raise DeployError(prior.get("error") or "rollback_failed", "This rollback completed unsuccessfully; use a new operation ID.")
         require_idle(state)
         check_live_state(host, entry, state)
-        previous = state.get("previous")
-        require(previous is not None, "no_previous_release", "There is no previous successful release.")
-        release = verified_release(host, entry, previous)
+        validate_runtime_environment(host, entry)
+        require(current_version(host, entry) == expected_current, "stale_current", "Current release differs from the expected release; refresh status.")
+        manifest = read_json(release_path(host, entry, target) / "manifest.json")
+        release = verified_release(host, entry, manifest)
+        if target == expected_current:
+            require(ready(host, entry), "rollback_readiness", "Selected target is not ready.")
         original_current, original_previous = state["current"], state["previous"]
-        verified_release(host, entry, original_current)
+        resume_redis_transition(host, registry, entry, state)
         app(host, entry, release, "config:check")
-        # Rollback is compatible code only; no migrations or database reversal.
-        begin(host, entry, state, "rollback", previous["version"])
+        attempt = begin(host, entry, state, "rollback", target,
+                        metadata={"operation_id": operation_id, "expected_current": expected_current})
+        _save_operation(host, entry, attempt)
+        if target == expected_current:
+            state["status"] = "healthy"
+            finish(host, entry, state, "succeeded")
+            return {"ok": True, "unchanged": True, "version": target, "operation_id": operation_id}
         try:
+            attempt["redis_inventory"] = release_redis_inventory(host, entry, release)
             phase(host, entry, state, "redis")
-            redis_patterns = release_redis_patterns(host, entry, release)
-            widen_redis_grants(host, registry, entry, redis_patterns)
+            widen_redis_grants(host, registry, entry, attempt["redis_inventory"], state)
+            stop_background(host, entry)
             phase(host, entry, state, "switch")
-            switch_to(host, entry, previous["version"])
+            switch_to(host, entry, target)
+            phase(host, entry, state, "health")
             restart(host, entry)
-            require(ready(host, entry), "rollback_readiness", "Rollback failed its readiness check.")
-            state["current"], state["previous"] = previous, state["current"]
+            state["current"], state["previous"] = manifest, original_current
             state["status"] = "rolled_back"
             finish(host, entry, state, "succeeded")
-            result = {"ok": True, "version": previous["version"]}
-            warnings = narrow_redis_grants(host, registry, entry, redis_patterns)
-            if warnings:
-                result["warnings"] = warnings
-            return result
         except (DeployError, OSError) as error:
             code = error.code if isinstance(error, DeployError) else "filesystem_failed"
             try:
@@ -555,66 +707,94 @@ def rollback(host, project, profile):
             except (DeployError, OSError):
                 state["status"] = "unknown"
                 finish(host, entry, state, "needs_reconciliation", "code_recovery_failed")
-                raise DeployError("code_recovery_failed", "Rollback recovery could not be verified; inspect and reconcile the instance before retrying.") from None
+                raise DeployError("code_recovery_failed", "Rollback recovery failed; reconcile before retrying.") from None
             finish(host, entry, state, "failed", code)
             raise DeployError(code, "Rollback failed; status records the original code's recovery outcome.") from None
+        result = {"ok": True, "version": target, "operation_id": operation_id}
+        warnings = narrow_redis_grants(host, registry, entry, attempt["redis_inventory"], state)
+        if warnings:
+            result["warnings"] = warnings
+        return result
 
 
 def reconcile(host, project, profile):
     _, entry = host.require_identity(project, profile)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
-        validate_runtime_environment(host, entry)
         state = host.load_state(entry)
         attempt = state.get("last_attempt")
         require(attempt is not None, "no_attempt", "There is no operation to reconcile.")
-        candidate = release_path(host, entry, attempt["release"]) if attempt.get("release") else None
-        if candidate is not None:
-            require(candidate.is_dir(), "release_missing", "The attempted release is missing; restore its verified archive before reconciliation.")
+        if attempt["outcome"] not in ("running", "needs_reconciliation"):
+            return {"ok": True, "unchanged": True, "status": state["status"],
+                    "version": (state.get("current") or {}).get("version")}
+        validate_runtime_environment(host, entry)
+        candidate = None
+        if attempt.get("release"):
+            candidate = release_path(host, entry, attempt["release"])
             candidate = verified_release(host, entry, read_json(candidate / "manifest.json"))
         active = current_version(host, entry)
-        manifest = None
-        if active:
-            manifest = read_json(release_path(host, entry, active) / "manifest.json")
+        manifest = read_json(release_path(host, entry, active) / "manifest.json") if active else None
+        if manifest:
             verified_release(host, entry, manifest)
         else:
-            require(not state.get("current"), "state_drift", "A recorded live release is missing; administrator inspection required.")
-        # Only these deployment phases can follow database writes. A first
-        # candidate interrupted during configuration validation must remain
-        # recoverable even while an application setting is still missing.
+            require(not state.get("current"), "state_drift", "A recorded live release is missing.")
         if candidate and attempt["action"] == "deploy" and attempt["phase"] in ("migration", "seed", "switch", "health"):
-            migration_status(host, entry, candidate)
-        if attempt.get("action") == "config":
+            require(not migration_status(host, entry, candidate), "migration_reconciliation",
+                    "Pending migrations remain; reconcile their outcome before starting roles.")
+        if attempt["action"] == "stop":
+            stop(host, entry)
+            state["status"] = "stopped"
+            finish(host, entry, state, "reconciled")
+            return {"ok": True, "status": "stopped", "version": active}
+        applied = False
+        if attempt["action"] == "config":
             path = host.paths.instance_config(entry["name"]) / "app.env"
-            revision = attempt.get("configuration_revision")
+            revision = attempt["configuration_revision"]
             current_hash = digest(path)
-            applied = current_hash == attempt.get("configuration_sha256")
-            unchanged = current_hash == attempt.get("previous_configuration_sha256")
-            require(type(revision) is int and (applied or unchanged), "configuration_reconciliation", "Configuration outcome is ambiguous; inspect private configuration before reconciliation.")
+            applied = current_hash == attempt["configuration_sha256"]
+            unchanged = current_hash == attempt["previous_configuration_sha256"]
+            require(applied or unchanged, "configuration_reconciliation", "Configuration outcome is ambiguous; inspect private configuration.")
             require(entry["configuration_revision"] in (revision - 1, revision), "configuration_reconciliation", "Configuration revision changed unexpectedly.")
-            # A crash before rename leaves the previous file intact. Preserve
-            # the monotonic registry revision and acknowledge that exact outcome.
             if applied:
                 entry["configuration_revision"] = revision
             state["configuration_revision"] = entry["configuration_revision"]
             attempt["configuration_applied"] = applied
             host.journal(registry, entry)
+            candidate_env = path.with_name("app.env.next")
+            check_path(candidate_env, "file")
+            if candidate_env.exists():
+                require(digest(candidate_env) == attempt["configuration_sha256"], "configuration_reconciliation", "Configuration candidate differs from its recorded intent.")
+                candidate_env.unlink()
+        try:
+            resume_redis_transition(host, registry, entry, state)
+            inventory = attempt.get("redis_inventory")
+            if inventory:
+                widen_redis_grants(host, registry, entry, inventory, state)
             if active:
-                restart(host, entry)  # an interrupted change may precede restart
-            candidate = path.with_name("app.env.next")
-            check_path(candidate, "file")
-            if candidate.exists():
-                require(digest(candidate) == attempt["configuration_sha256"], "configuration_reconciliation", "Configuration candidate differs from its recorded intent.")
-                candidate.unlink()
+                # Always restart interrupted transitions: neither a matching link
+                # nor a healthy listener proves the executable/config was selected.
+                restart(host, entry)
+                if (state.get("current") or {}).get("version") != active:
+                    state["previous"], state["current"] = state["current"], manifest
+                state["status"] = "healthy"
+            else:
+                state["status"] = "never_deployed"
+        except (DeployError, OSError) as error:
+            state["status"] = "failed"
+            outcome = "failed_applied" if attempt["action"] == "config" and applied else "needs_reconciliation"
+            finish(host, entry, state, outcome, error.code if isinstance(error, DeployError) else "filesystem_failed")
+            raise DeployError("reconciliation_health", "Recovery could not establish healthy roles; inspect the recorded outcome.") from None
+        rollback_applied = attempt["action"] != "rollback" or active == attempt["release"]
+        finish(host, entry, state, "reconciled" if rollback_applied else "failed",
+               None if rollback_applied else "rollback_not_applied")
+        result = {"ok": True, "status": state["status"], "version": active,
+                  "outcome": "reconciled" if rollback_applied else "failed"}
         if active:
-            require(ready(host, entry, timeout=10), "reconciliation_health", "Live code is not ready; inspect the service before acknowledging recovery.")
-            if (state.get("current") or {}).get("version") != active:
-                state["previous"], state["current"] = state["current"], manifest
-            state["status"] = "healthy"
-        else:
-            state["status"] = "never_deployed"
-        finish(host, entry, state, "reconciled")
-        return {"ok": True, "status": state["status"], "version": active}
+            inventory = release_redis_inventory(host, entry, release_path(host, entry, active))
+            warnings = narrow_redis_grants(host, registry, entry, inventory, state)
+            if warnings:
+                result["warnings"] = warnings
+        return result
 
 
 def require_configuration_keys(host, entry, release, env_file, keys):
@@ -634,7 +814,7 @@ def require_configuration_keys(host, entry, release, env_file, keys):
         name = item["Name"].replace(".", "__").upper()
         require(name not in names, code, detail)
         names.add(name)
-    require(all(key in names for key in keys), "unknown_configuration", "The candidate does not declare this configuration key; no settings were changed.")
+    require(all(key.removesuffix("_FILE") in names for key in keys), "unknown_configuration", "The candidate does not declare this configuration key; no settings were changed.")
 
 
 # Settings that validate only together (a key ring's ID and material) change in
@@ -642,77 +822,129 @@ def require_configuration_keys(host, entry, release, env_file, keys):
 MAX_CONFIGURATION_CHANGES = 16
 
 
-def config_set(host, project, profile, changes):
-    require(isinstance(changes, dict) and 0 < len(changes) <= MAX_CONFIGURATION_CHANGES, "invalid_configuration", "Name between one and sixteen configuration keys to change together.")
+def _validate_changes(changes):
+    require(isinstance(changes, dict) and 0 < len(changes) <= MAX_CONFIGURATION_CHANGES,
+            "invalid_configuration", "Name between one and sixteen configuration keys to change together.")
     for key in changes:
-        require(isinstance(key, str) and key not in PIPELINE_KEYS and not key.startswith(("DEPLOY_", "VITE_")), "owned_configuration", "Identity, infrastructure and seed credentials cannot be edited by generic configuration commands.")
-    dump_env(changes)
+        require(isinstance(key, str) and re.fullmatch(r"[A-Z][A-Z0-9_]*", key),
+                "invalid_configuration", "Configuration key name is invalid.")
+        logical = key.removesuffix("_FILE")
+        require(not any(logical == owned or logical.startswith(owned + "__") for owned in PIPELINE_KEYS)
+                and not key.startswith(("DEPLOY_", "FOUNDRY_", "VITE_")),
+                "owned_configuration", "Identity, infrastructure and seed credentials cannot be edited by generic configuration commands.")
+    dump_env({key: value for key, value in changes.items() if value is not None})
+
+
+def config_set(host, project, profile, changes):
+    _validate_changes(changes)
     _, entry = host.require_identity(project, profile)
-    # Shared registry revision and instance env are reconciled under both locks,
-    # using the same host -> instance ordering as bootstrap.
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
-        values = validate_runtime_environment(host, entry)
-        state = host.load_state(entry)
-        require_idle(state)
-        check_live_state(host, entry, state)
-        manifest = state.get("current")
-        if manifest is None:
-            # A first candidate may require an additional application setting.
-            # Validate against those retained immutable bytes without starting
-            # an unactivated release or uploading private settings with code.
-            version = (state.get("last_attempt") or {}).get("release")
-            require(version is not None, "no_release", "Upload the first candidate with deploy before editing application configuration.")
-            manifest = read_json(release_path(host, entry, version) / "manifest.json")
-        live = verified_release(host, entry, manifest)
-        path = host.paths.instance_config(entry["name"]) / "app.env"
-        if all(values.get(key) == value for key, value in changes.items()):
-            return {"ok": True, "unchanged": True}
-        values.update(changes)
-        candidate = path.with_name("app.env.next")
-        require(not candidate.exists(), "configuration_reconciliation", "A previous configuration candidate remains; inspect it before retrying.")
-        payload = dump_env(values)
-        prior_status = state["status"]
-        # Durable intent precedes even candidate creation/validation, so every
-        # interruption can reconcile the previous or target bytes explicitly.
-        begin(host, entry, state, "config", manifest["version"], metadata={
-            "configuration_revision": entry["configuration_revision"] + 1,
-            "configuration_sha256": hashlib.sha256(payload.encode()).hexdigest(),
-            "previous_configuration_sha256": digest(path)})
+        return _config_set(host, registry, entry, changes)
+
+
+def keys_rotate(host, project, profile, encryption=None):
+    _, entry = host.require_identity(project, profile)
+    with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
+        registry, entry = host.require_identity(project, profile)
+        changes = rotation_changes(host, entry, validate_runtime_environment(host, entry), encryption)
+        return _config_set(host, registry, entry, changes)
+
+
+def _config_set(host, registry, entry, changes):
+    values = validate_runtime_environment(host, entry)
+    state = host.load_state(entry)
+    require_idle(state)
+    check_live_state(host, entry, state)
+    resume_redis_transition(host, registry, entry, state)
+    manifest = state.get("current")
+    if manifest is None:
+        version = (state.get("last_attempt") or {}).get("release")
+        require(version is not None, "no_release", "Upload the first candidate before editing application configuration.")
+        manifest = read_json(release_path(host, entry, version) / "manifest.json")
+    live = verified_release(host, entry, manifest)
+    path = host.paths.instance_config(entry["name"]) / "app.env"
+    # Even an unchanged request must reject unknown keys and conflicting aliases.
+    updated = candidate_values(host, entry, values, changes)
+    candidate = check_path(path.with_name("app.env.next"), "file")
+    require(not candidate.exists(), "configuration_reconciliation", "A previous configuration candidate remains; reconcile it before retrying.")
+    payload = dump_env(updated)
+    prior_status = state["status"]
+    roles_stopped = False
+    attempt = begin(host, entry, state, "config", manifest["version"], metadata={
+        "configuration_revision": entry["configuration_revision"] + 1,
+        "configuration_sha256": hashlib.sha256(payload.encode()).hexdigest(),
+        "previous_configuration_sha256": digest(path)})
+    try:
+        host.owned_write(candidate, payload, 0o640, group=entry["name"])
+        app(host, entry, live, "config:check", candidate)
+        require_configuration_keys(host, entry, live, candidate, list(changes))
+        if updated == values:
+            state["status"] = prior_status
+            finish(host, entry, state, "succeeded")
+            return {"ok": True, "unchanged": True, "configuration_revision": entry["configuration_revision"]}
+        attempt["redis_inventory"] = release_redis_inventory(host, entry, live, candidate)
+        phase(host, entry, state, "redis")
+        widen_redis_grants(host, registry, entry, attempt["redis_inventory"], state)
+        if state.get("current"):
+            roles_stopped = True
+            stop(host, entry)
+        phase(host, entry, state, "configuration")
+        os.replace(candidate, path)
+        directory = os.open(path.parent, os.O_RDONLY)
         try:
-            host.owned_write(candidate, payload, 0o640, group=entry["name"])
-            app(host, entry, live, "config:check", candidate)
-            require_configuration_keys(host, entry, live, candidate, list(changes))
-            phase(host, entry, state, "configuration")
-            os.replace(candidate, path)
-            directory = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory)
-            finally:
-                os.close(directory)
-            entry["configuration_revision"] += 1
-            entry["updated_at"] = registry["updated_at"] = now()
-            host.journal(registry, entry)
-            state["configuration_revision"] = entry["configuration_revision"]
-            if state.get("current"):
-                restart(host, entry)
-                state["status"] = "healthy" if ready(host, entry) else "failed"
-            else:
-                state["status"] = "never_deployed"
-            healthy = state["status"] in ("healthy", "never_deployed")
-            finish(host, entry, state, "succeeded" if healthy else "failed", None if healthy else "configuration_readiness")
-            require(healthy, "configuration_readiness", "Configuration was saved but readiness failed; correct it explicitly.")
-            return {"ok": True, "configuration_revision": entry["configuration_revision"]}
-        except (DeployError, OSError) as error:
-            if state["last_attempt"]["outcome"] == "running":
-                unchanged = digest(path) == state["last_attempt"]["previous_configuration_sha256"]
-                state["status"] = prior_status if unchanged else "failed"
-                finish(host, entry, state, "failed" if unchanged else "needs_reconciliation",
-                       error.code if isinstance(error, DeployError) else "filesystem_failed")
-            raise
+            os.fsync(directory)
         finally:
-            if candidate.exists():
-                candidate.unlink()
+            os.close(directory)
+        entry["configuration_revision"] = attempt["configuration_revision"]
+        entry["updated_at"] = registry["updated_at"] = now()
+        host.journal(registry, entry)
+        state["configuration_revision"] = entry["configuration_revision"]
+        attempt["configuration_applied"] = True
+        phase(host, entry, state, "health")
+        if any(key.startswith("APP__ENCRYPTION__") for key in changes):
+            backup.archive_keys(host, entry)
+        if state.get("current"):
+            restart(host, entry)
+            state["status"] = "healthy"
+        else:
+            state["status"] = "never_deployed"
+        finish(host, entry, state, "succeeded")
+        result = {"ok": True, "configuration_revision": entry["configuration_revision"]}
+        warnings = narrow_redis_grants(host, registry, entry, attempt["redis_inventory"], state)
+        if warnings:
+            result["warnings"] = warnings
+        return result
+    except (DeployError, OSError) as error:
+        code = error.code if isinstance(error, DeployError) else "filesystem_failed"
+        if attempt["outcome"] == "running":
+            selected = digest(path)
+            unchanged = selected == attempt["previous_configuration_sha256"]
+            applied = selected == attempt["configuration_sha256"]
+            attempt["configuration_applied"] = applied
+            state["status"] = prior_status if unchanged else "failed"
+            # Repair the receipt only for an exact known selection. A failed
+            # registry write stays unresolved; an unhealthy applied revision does not.
+            if applied:
+                entry["configuration_revision"] = attempt["configuration_revision"]
+                host.journal(registry, entry)
+                state["configuration_revision"] = entry["configuration_revision"]
+            outcome = "failed_applied" if applied else "failed" if unchanged else "needs_reconciliation"
+            if unchanged and roles_stopped:
+                try:
+                    restart(host, entry)
+                    state["status"] = "healthy"
+                except (DeployError, OSError):
+                    state["status"] = "failed"
+                    outcome = "needs_reconciliation"
+            finish(host, entry, state, outcome, "configuration_readiness" if applied else code)
+            if applied:
+                raise DeployError("configuration_readiness", "Configuration was applied but is unhealthy; a corrective revision is allowed.") from None
+        raise
+    finally:
+        # Keep unresolved candidate bytes as reconciliation evidence.
+        if attempt["outcome"] not in ("running", "needs_reconciliation") and candidate.exists():
+            candidate.unlink()
 
 
 if __name__ == "__main__":

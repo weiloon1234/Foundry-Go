@@ -90,6 +90,57 @@ class ReportTests(unittest.TestCase):
         self.assertEqual((self.host.registry, self.host.states), before)
         self.assertEqual(files, {str(p): p.read_bytes() for p in self.host.paths.root.rglob("*") if p.is_file()})
 
+    def test_backup_freshness_projects_only_recorded_public_receipts(self):
+        completed = report.dt.datetime.now(report.dt.timezone.utc) - report.dt.timedelta(hours=2)
+        self.host.registry["instances"][INSTANCE_ID]["backup"] = {
+            "destination_ref": "/etc/foundry/private-repository.json", "last_complete_id": "backup-1",
+            "last_complete_at": completed.isoformat(), "last_attempt_outcome": "complete",
+            "policy": {"interval_hours": 24, "daily": 7, "secret": SECRET},
+            "credentials": {"secret": SECRET}, "configuration_sha256": SECRET}
+        result = report.collect_report(self.host)
+        backup = self.item(result)["backup"]
+        self.assertEqual("backup-1", backup["last_complete_id"])
+        self.assertTrue(backup["fresh"])
+        self.assertGreaterEqual(backup["age_seconds"], 7200)
+        self.assertNotIn(SECRET, json.dumps(result))
+        self.assertNotIn("destination_ref", backup)
+
+    def test_stale_and_failed_backups_are_reported_without_repository_io(self):
+        completed = report.dt.datetime.now(report.dt.timezone.utc) - report.dt.timedelta(days=2)
+        self.host.registry["instances"][INSTANCE_ID]["backup"] = {
+            "destination_ref": "configured", "last_complete_at": completed.isoformat(),
+            "last_attempt_outcome": "failed", "policy": {"interval_hours": 24}}
+        result = report.collect_report(self.host)
+        self.assertFalse(self.item(result)["backup"]["fresh"])
+        self.assertIn({"code": "backup_stale", "instance_id": INSTANCE_ID}, result["problems"])
+        self.assertIn({"code": "backup_failed", "instance_id": INSTANCE_ID}, result["problems"])
+
+    def test_invalid_backup_timestamp_cannot_claim_freshness(self):
+        for timestamp in ("2026-01-01T00:00:00", "not-a-timestamp", "9999-01-01T00:00:00Z"):
+            with self.subTest(timestamp=timestamp):
+                problems = []
+                result = report.backup_freshness({"backup": {"destination_ref": "configured", "last_complete_at": timestamp}}, problems, INSTANCE_ID)
+                self.assertIsNone(result["age_seconds"])
+                self.assertFalse(result["fresh"])
+                self.assertIn({"code": "backup_state_invalid", "instance_id": INSTANCE_ID}, problems)
+
+    def test_service_exposes_live_process_identity_and_restart_count(self):
+        patch.stopall()
+        with patch.object(report, "role_service", return_value={"LoadState": "loaded", "ActiveState": "active",
+                "SubState": "running", "MainPID": "421", "NRestarts": "3", "exe": "/opt/foundry/apps/abc-production/releases/v1/artisan"}) as observe:
+            result = report.service(self.host, "foundry-http@abc-production.service", time.monotonic() + 10)
+        self.assertEqual(421, result["main_pid"])
+        self.assertEqual(3, result["restarts"])
+        self.assertEqual("/opt/foundry/apps/abc-production/releases/v1/artisan", result["exe"])
+        observe.assert_called_once()
+
+    def test_undeclared_worker_is_not_probed_or_reported(self):
+        from topology import validate_topology
+        self.host.registry["instances"][INSTANCE_ID]["topology"] = validate_topology({"schema": 1, "roles": [{"name": "http"}, {"name": "scheduler"}]})
+        item = self.item(report.collect_report(self.host))
+        self.assertEqual({"http", "scheduler"}, set(item["services"]))
+        self.assertFalse(any("worker" in call.args[1] for call in self.service.call_args_list))
+
     def test_projects_group_multiple_environments(self):
         for name, env, iid, pid, project in [
             ("abc-staging", "staging", "30000000-0000-4000-8000-000000000004", PROJECT_ID, "abc"),
@@ -113,6 +164,7 @@ class ReportTests(unittest.TestCase):
         release_dir.mkdir(parents=True)
         (self.host.paths.opt("abc-production") / "current").symlink_to(release_dir)
         self.host.states[INSTANCE_ID].update({"status": "healthy", "current": {"version": "v1"}})
+        self.service.return_value.update(main_pid=42, exe=str(release_dir / "artisan"))
         self.assertTrue(self.item(report.collect_report(self.host))["metadata_consistent"])
         self.ready.return_value = {"ready": False, "http_status": 503}
         result = report.collect_report(self.host)
@@ -121,6 +173,28 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(self.item(result)["status"], "unknown")
         self.assertEqual(self.item(result)["recorded_status"], "healthy")
         self.assertIn({"code": "instance_state_inconsistent", "instance_id": INSTANCE_ID}, result["problems"])
+
+    def test_active_roles_must_match_selected_executable_and_have_a_live_pid(self):
+        selected = self.host.paths.opt("abc-production") / "releases" / "v2"
+        selected.mkdir(parents=True)
+        (self.host.paths.opt("abc-production") / "current").symlink_to(selected)
+        self.host.states[INSTANCE_ID].update({"status": "healthy", "current": {"version": "v2"}})
+        healthy = {"load": "loaded", "active": "active", "substate": "running",
+                   "main_pid": 42, "exe": str(selected / "artisan")}
+        for role, field, value in (("scheduler", "exe", str(selected.parent / "v1" / "artisan")),
+                                   ("http", "main_pid", None), ("worker", "main_pid", 0),
+                                   ("worker", "exe", None)):
+            with self.subTest(role=role, field=field):
+                self.service.reset_mock()
+                def observed(host, unit, deadline):
+                    return {**healthy, field: value} if unit.startswith("foundry-" + role + "@") else dict(healthy)
+                self.service.side_effect = observed
+                result = report.collect_report(self.host)
+                item = self.item(result)
+                self.assertEqual("unknown", item["status"])
+                self.assertFalse(item["metadata_consistent"])
+                self.assertIn({"code": "running_release_mismatch", "instance_id": INSTANCE_ID}, result["problems"])
+                self.assertEqual(3, self.service.call_count)
 
     def test_missing_or_linked_release_directory_is_inconsistent_even_with_healthy_process(self):
         self.service.return_value = {"load": "loaded", "active": "active", "substate": "running"}
@@ -224,6 +298,11 @@ class ReportTests(unittest.TestCase):
                 response.read.return_value = payload
                 self.assertEqual(report.readiness(8100, report.time.monotonic() + 1), {"ready": expected, "http_status": 200})
                 response.read.assert_called_with(4097)
+
+    def test_applied_config_failure_preserves_public_outcome(self):
+        result = report.attempt({"outcome": "failed", "result": "failed_applied", "secret": SECRET})
+        self.assertEqual("failed_applied", result["outcome"])
+        self.assertNotIn(SECRET, json.dumps(result))
 
     def test_attempt_error_accepts_machine_codes_only(self):
         self.assertEqual(report.attempt({"error": "readiness_failed"})["error_code"], "readiness_failed")

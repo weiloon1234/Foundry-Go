@@ -14,13 +14,14 @@ import urllib.request
 
 from contracts import DeployError, PREFIX, SCHEMA, SLUG_PATTERN, check_path, instance_paths, now, parse_json, valid_uuid
 from topology import instance_units
+from release import service as role_service
 from host import OperationTimeout as ReportBudgetExceeded, wall_clock_budget
 
 REPORT_SCHEMA = 2
 CHECK_TIMEOUT = 1.0
 REPORT_BUDGET = 15.0
 MAX_INSTANCES = 256
-STATUSES = {"never_deployed", "deploying", "healthy", "failed", "rolled_back", "stopped", "unknown"}
+STATUSES = {"never_deployed", "deploying", "healthy", "failed", "failed_applied", "rolled_back", "stopped", "unknown"}
 DOMAIN = re.compile(r"(?=.{1,253}\Z)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\Z")
 
 
@@ -56,6 +57,8 @@ def attempt(value):
     if not isinstance(value, dict):
         return None
     result = {key: string(value.get(key)) for key in ("id", "action", "release", "started_at", "finished_at", "outcome", "phase")}
+    if value.get("result") == "failed_applied":
+        result["outcome"] = "failed_applied"
     # Failure details may contain command diagnostics; publish only the machine code.
     error = value.get("error")
     code = error.get("code") if isinstance(error, dict) else error
@@ -71,13 +74,7 @@ def remaining(deadline):
 
 
 def service(host, unit, deadline):
-    result = host.run(
-        ["systemctl", "show", unit, "--property=LoadState,ActiveState,SubState", "--no-pager"],
-        timeout=remaining(deadline), check=False,
-    )
-    if result.returncode:
-        raise OSError("service check failed")
-    values = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+    values = role_service(host, unit, timeout=remaining(deadline))
     active = values.get("ActiveState")
     substate = values.get("SubState")
     load = values.get("LoadState")
@@ -85,7 +82,12 @@ def service(host, unit, deadline):
         raise ValueError("invalid unit load status")
     if active not in {"active", "inactive", "failed", "activating", "deactivating", "reloading", "maintenance", "refreshing"}:
         raise ValueError("invalid service status")
-    return {"load": load, "active": active, "substate": string(substate, 64)}
+    pid = values.get("MainPID")
+    restarts = values.get("NRestarts")
+    return {"load": load, "active": active, "substate": string(substate, 64),
+            "main_pid": int(pid) if isinstance(pid, (str, int)) and str(pid).isdigit() else None,
+            "restarts": int(restarts) if isinstance(restarts, (str, int)) and str(restarts).isdigit() else None,
+            "exe": string(values.get("exe"), 4096)}
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -174,6 +176,44 @@ def checked(problems, code, instance_id, function, *args):
         return None
 
 
+def backup_freshness(entry, problems, instance_id):
+    """Project only F3's recorded completion receipts; never probe a repository."""
+    value = entry.get("backup") if isinstance(entry.get("backup"), dict) else {}
+    complete_at = string(value.get("last_complete_at"), 64)
+    age = None
+    if complete_at:
+        try:
+            completed = dt.datetime.fromisoformat(complete_at.replace("Z", "+00:00"))
+            if completed.tzinfo is None:
+                raise ValueError("completion timestamp lacks timezone")
+            elapsed = (dt.datetime.now(dt.timezone.utc) - completed).total_seconds()
+            if elapsed < 0:
+                raise ValueError("completion timestamp is in the future")
+            age = int(elapsed)
+        except ValueError:
+            complete_at = None
+            problem(problems, "backup_state_invalid", instance_id)
+    policy = value.get("policy") if isinstance(value.get("policy"), dict) else {}
+    public_policy = {key: integer(policy.get(key)) for key in ("interval_hours", "daily", "weekly", "monthly")}
+    interval = public_policy["interval_hours"] or 24
+    configured = bool(value.get("destination_ref"))
+    complete_id = string(value.get("last_complete_id"))
+    fresh = bool(complete_id) and age is not None and age <= interval * 3600 if configured else None
+    outcome = value.get("last_attempt_outcome")
+    allowed_outcomes = {"complete", "succeeded", "failed", "running", "unknown"}
+    outcome = outcome if isinstance(outcome, str) and outcome in allowed_outcomes else None
+    drill_outcome = value.get("restore_drill_outcome")
+    drill_outcome = drill_outcome if isinstance(drill_outcome, str) and drill_outcome in allowed_outcomes else None
+    if configured and not fresh:
+        problem(problems, "backup_stale", instance_id)
+    if outcome == "failed":
+        problem(problems, "backup_failed", instance_id)
+    return {"last_complete_id": complete_id, "last_complete_at": complete_at,
+            "last_attempt_outcome": outcome, "age_seconds": age, "fresh": fresh,
+            "retention_policy": public_policy, "last_restore_drill_at": string(value.get("last_restore_drill_at"), 64),
+            "restore_drill_outcome": drill_outcome}
+
+
 def instance_report(host, entry, deadline, problems):
     name = entry.get("name")
     instance_id = identifier(entry.get("profile", {}).get("instance_id"))
@@ -221,12 +261,14 @@ def instance_report(host, entry, deadline, problems):
     if state.get("configuration_revision") != entry.get("configuration_revision"):
         consistent = False
     current_path = host.paths.opt(name) / "current"
+    expected_executable = None
     try:
         if current:
             expected = host.paths.opt(name) / "releases" / (current["version"] or "")
             # A matching dangling link or a release-directory symlink is stale
             # metadata, even if an already running process still serves traffic.
             check_path(expected, "directory")
+            expected_executable = str(expected / "artisan")
             consistent = consistent and expected.is_dir() and current_path.is_symlink() and current_path.resolve(strict=True) == expected
         elif current_path.exists() or current_path.is_symlink():
             consistent = False
@@ -234,23 +276,29 @@ def instance_report(host, entry, deadline, problems):
         raise
     except (DeployError, OSError, RuntimeError):
         consistent = False
+    if any(item["state"] and item["state"]["active"] == "active"
+           and (not expected_executable or item["state"].get("exe") != expected_executable
+                or not integer(item["state"].get("main_pid"))) for item in topology.values()):
+        consistent = False
+        problem(problems, "running_release_mismatch", instance_id)
     if not consistent:
         problem(problems, "instance_state_inconsistent", instance_id)
-    namespace = entry.get("namespace") if isinstance(entry.get("namespace"), dict) else {}
+    namespace = entry["allocations"].get("namespace", {})
     paths = instance_paths(name)
+    backup = backup_freshness(entry, problems, instance_id)
     return {
         "instance_id": instance_id, "name": name, "environment": string(entry.get("environment")),
         "runtime_environment": string(profile.get("runtime_environment")), "domain": string(profile.get("domain")),
         "architecture": string(profile.get("architecture")), "port": integer(entry["allocations"]["http_port"]),
-        "database": string(entry.get("database")), "redis_user": string(entry.get("redis_user")),
+        "database": string(entry["allocations"].get("database")), "redis_user": string(entry["allocations"].get("redis_user")),
         "namespace": {key: string(namespace.get(key)) for key in ("application", "environment")},
         "unit": expected_unit, "paths": {key: paths[key] for key in ("application", "data")},
-        "provisioning": {"state": string(provisioning.get("state")), "steps": [item for item in provisioning.get("steps", []) if string(item, 64)] if isinstance(provisioning.get("steps"), list) else []},
+        "provisioning": {"state": string(provisioning.get("state")), "steps": [item for item in provisioning.get("completed_steps", []) if string(item, 64)] if isinstance(provisioning.get("completed_steps"), list) else []},
         "configuration_revision": integer(entry.get("configuration_revision")),
         "status": "unknown" if recorded_status in {"healthy", "rolled_back"} and not consistent else recorded_status,
         "recorded_status": recorded_status, "metadata_consistent": consistent,
         "current_release": current, "previous_release": previous, "last_attempt": attempt(state.get("last_attempt")),
-        "service": unit_status, "services": topology, "readiness": ready, "certificate": cert,
+        "service": unit_status, "services": topology, "readiness": ready, "certificate": cert, "backup": backup,
         "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),
     }
 

@@ -19,7 +19,7 @@ from contracts import (DeployError, PREFIX, REDIS_UNIT, REGISTRY_SCHEMA, LAYOUT_
     validate_profile, validate_project)
 from topology import instance_units, validate_topology
 from runtime_config import (CREDENTIAL_KEYS, read_credentials as _credentials, runtime_environment,
-    validate_runtime_environment, _instance_group)
+    validate_runtime_environment, initialize_bootstrap_secrets, _instance_group)
 from edge import edge_findings, edge_template
 import packages
 import postgres
@@ -109,7 +109,7 @@ def _account(host, entry):
 
 
 def _site_checks(host, entry):
-    name, domain = entry["name"], entry["profile"]["domain"]
+    name, domain = entry["name"], entry["profile"]["domain"].lower()
     site = host.paths.p(f"/etc/nginx/sites-available/{PREFIX}-{name}.conf")
     enabled = host.paths.p(f"/etc/nginx/sites-enabled/{PREFIX}-{name}.conf")
     check_path(site)
@@ -142,11 +142,28 @@ def _site_checks(host, entry):
                                 or item.startswith(".") and (domain == item[1:] or domain.endswith(item)))
                     if conflict:
                         raise DeployError("provision_conflict", "domain conflicts with an existing or uninspectable nginx server_name")
+    _unit_checks(host, entry)
+
+
+def _unit_checks(host, entry):
     for name in instance_units(entry).values():
         unit = host.paths.p(f"/etc/systemd/system/{name}")
         check_path(unit)
         if unit.exists() and not _read(unit).startswith("# " + _marker(entry) + "\n"):
             raise DeployError("provision_conflict", "service unit has foreign ownership")
+        if unit.exists():
+            info = unit.stat()
+            require(not info.st_mode & 0o022 and (info.st_uid == 0 or host.paths.root != Path("/")),
+                    "provision_conflict", "service unit ownership or permissions are unsafe")
+        template = name.split("@", 1)[0] + "@.service"
+        for directory in ("/etc/systemd/system", "/run/systemd/system", "/usr/lib/systemd/system", "/lib/systemd/system"):
+            base = host.paths.p(directory)
+            for candidate in (base / template, base / (template + ".d"), base / (name + ".d")):
+                if candidate.exists() or candidate.is_symlink():
+                    raise DeployError("provision_conflict", "service template or override has unregistered ownership")
+            alternate = base / name
+            if alternate != unit and (alternate.exists() or alternate.is_symlink()):
+                raise DeployError("provision_conflict", "service unit has an alternate unregistered definition")
 
 
 def _prepare_instance(host, registry, entry):
@@ -202,9 +219,6 @@ def _template(tools_dir, name, entry, *, postgres_unit=""):
     replacements["@REDIS_UNIT@"] = REDIS_UNIT
     replacements["@STATE_DIRECTORY@"] = f"{PREFIX}/apps/{entry['name']}"
     replacements["@RUNTIME_DIRECTORY@"] = f"{PREFIX}/{entry['profile']['instance_id']}"
-    replacements["@WORKER_CONNECTION@"] = entry.get("worker_connection", "")
-    if name == "worker.service":
-        require(bool(re.fullmatch(r"[a-zA-Z0-9_-]+", replacements["@WORKER_CONNECTION@"])), "worker_configuration_required", "F1 must resolve app.worker.connection before rendering the worker unit.")
     replacements["@HTTP_UNIT@"] = instance_units(entry)["http"]
     replacements.update({"@" + key.upper() + "@": value for key, value in instance_paths(entry["name"]).items()})
     if "@PROXY@" in content:
@@ -220,11 +234,12 @@ def _template(tools_dir, name, entry, *, postgres_unit=""):
 def _install_unit(host, registry, entry, tools_dir):
     postgres_unit = registry["shared"]["postgresql"]["unit"]
     require(bool(re.fullmatch(r"postgresql@[0-9]+-foundry\.service", postgres_unit)), "postgres_identity", "Only the Foundry PostgreSQL cluster may be a dependency.")
+    _unit_checks(host, entry)
     changed = False
     units = instance_units(entry)
     for role, name in units.items():
         unit = host.paths.p(f"/etc/systemd/system/{name}")
-        content = _template(tools_dir, "app.service" if role == "http" else role + ".service", entry, postgres_unit=postgres_unit)
+        content = _template(tools_dir, f"foundry-{role}@.service", entry, postgres_unit=postgres_unit)
         changed = _owned_write(host, unit, content) or changed
     if changed:
         host.run(["systemctl", "daemon-reload"])
@@ -351,7 +366,7 @@ def _install_site(host, registry, entry, tools_dir):
         host.run(["systemctl", "reload", "nginx"])
 
 
-def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topology):
+def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topology, private_secrets=None):
     """Replan under the host lock, then call the F2/F3 owners in dependency order."""
     require(profile["host"]["host_id"] is not None, "host_binding_required", "Persist the proposed host UUID before apply.")
     with host.lock("host"):
@@ -368,15 +383,18 @@ def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topol
                 packages.install_missing(host, plan["observations"]["packages"].get("missing", []))
                 postgres.prepare(host, registry)
                 redis_acl.prepare(host, registry)
-                credentials = _prepare_instance(host, registry, entry)
+                _prepare_instance(host, registry, entry)
+                credentials = initialize_bootstrap_secrets(host, entry, private_secrets if private_secrets is not None else getattr(host, "secrets", {}))
+                _step(host, registry, entry, "bootstrap_secrets")
                 postgres.provision(host, registry, entry, credentials)
                 redis_acl.provision(host, registry, entry, credentials)
                 _provision_environment(host, registry, entry, credentials)
+                backup.configure(host, registry, entry)
+                _step(host, registry, entry, "backup")
                 _install_unit(host, registry, entry, tools_dir)
                 _step(host, registry, entry, "unit")
                 _install_site(host, registry, entry, tools_dir)
                 _step(host, registry, entry, "site")
-                backup.configure(host, registry, entry)
                 entry["provisioning"]["state"] = "ready"
                 _journal(host, registry, entry)
                 return {"ok": True, "host_id": registry["host_id"], "instance": entry["name"], "provisioning": "ready"}

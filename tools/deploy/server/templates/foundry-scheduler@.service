@@ -1,0 +1,41 @@
+# @MARKER@
+[Unit]
+Description=Foundry-Go @SERVICE@ scheduler
+Wants=network-online.target
+After=network-online.target @POSTGRES_UNIT@ @REDIS_UNIT@ @HTTP_UNIT@
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=@SERVICE@
+Group=@SERVICE@
+WorkingDirectory=@DATA@
+StateDirectory=@STATE_DIRECTORY@
+StateDirectoryMode=0750
+UMask=0077
+RuntimeDirectory=@RUNTIME_DIRECTORY@/scheduler
+RuntimeDirectoryMode=0750
+ExecStart=@APPLICATION@/current/artisan schedule:work --config @APPLICATION@/current/config/deploy.toml --env-file @CONFIGURATION@/app.env
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGTERM
+KillMode=control-group
+TimeoutStopSec=45s
+SuccessExitStatus=130
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=@SERVICE@-scheduler
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

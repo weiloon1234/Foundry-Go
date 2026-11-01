@@ -1,0 +1,12 @@
+# Copy these thin entry points into the application's Makefile.
+# ENVIRONMENT selects the profile. ACTION selects prepare/inspect for bootstrap,
+# build for release, and deploy/status/rollback/restart/stop/logs/config/
+# "keys rotate"/reconcile/report/sync/tools-plan/tools-apply for deploy.
+# Rollback: make deploy ACTION=rollback TARGET=<release> EXPECTED_CURRENT=<release>
+# Resume: add OPERATION=<UUID printed before the original request>.
+# Secrets: use the hidden prompts or FOUNDRY_SECRET_<NAME>_FILE paths.
+FOUNDRY_DEPLOY = $(shell GOWORK=off go list -m -f '{{.Dir}}' github.com/weiloon1234/Foundry-Go)/tools/deploy/local/cli.py
+
+.PHONY: bootstrap deploy release
+bootstrap deploy release:
+	python3 -B "$(FOUNDRY_DEPLOY)" --app-root "$(CURDIR)" "$@"
