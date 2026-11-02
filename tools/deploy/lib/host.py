@@ -14,6 +14,10 @@ from contracts import (DeployError, PREFIX, SCHEMA, HOST_PATHS, atomic_write, at
                        identity, instance_paths, now, read_json, require, validate_attempt,
                        validate_registry, valid_timestamp, valid_uuid)
 
+# Mutations queue behind one running deployment, backup or renewal. A deploy holds the
+# host lock through unpack, backup, migration and readiness, which takes minutes on small hosts.
+LOCK_WAIT_SECONDS = 600
+
 
 class OperationTimeout(TimeoutError):
     """Interrupt blocking reads as well as checks between probes."""
@@ -147,7 +151,7 @@ class Host:
         self.write_registry(registry)
 
     @contextmanager
-    def lock(self, name, timeout=30):
+    def lock(self, name, timeout=LOCK_WAIT_SECONDS):
         require(name == "host" or valid_uuid(name), "invalid_lock", "Invalid deployment lock name.")
         path = check_path(self.paths.p(HOST_PATHS["locks"]) / ("host.lock" if name == "host" else f"instances/{name}.lock"), "file")
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -176,6 +176,10 @@ configuration revision.
 | `/opt/foundry/<name>/current` | Active application release pointer |
 | `/var/lib/foundry/apps/<name>/` | Application-owned durable working directory |
 
+Mutating operations take the host lock before the instance lock. A second
+deployment, scheduled backup or certificate renewal waits up to 10 minutes for
+the running one, then fails with `operation_locked` without changing anything.
+
 The Linux account is `<project>-<environment>`. Database names use `f_` followed
 by the instance UUID's 32 hexadecimal digits. Redis usernames use
 `foundry-<instance UUID>`. The allocator selects HTTP ports from 8100 through

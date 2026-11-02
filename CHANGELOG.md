@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed: Deployment operations queue up to 10 minutes on the host and instance
+  locks instead of 30 seconds, so a scheduled backup, renewal or second deploy
+  no longer fails while a multi-minute deploy runs on a small host.
 - Fixed: Deployment config changes and bootstrap persist runtime storage
   reservations before publication and select bindings from the proven
   configuration, including interrupted-operation recovery.

@@ -7,6 +7,8 @@ from pathlib import Path
 import stat
 import sys
 import tempfile
+import threading
+import time
 import tomllib
 import unittest
 from unittest.mock import patch
@@ -303,6 +305,21 @@ class DeploymentContractTests(unittest.TestCase):
             self.assertEqual(error.exception.code, "operation_locked")
         with self.host.lock(production, timeout=0.01):
             pass
+
+    def test_lock_queues_behind_a_holder_that_finishes(self):
+        production, held = str(uuid.uuid4()), threading.Event()
+
+        def holder():
+            with self.host.lock(production):
+                held.set()
+                time.sleep(0.3)
+
+        thread = threading.Thread(target=holder)
+        thread.start()
+        self.assertTrue(held.wait(5))
+        with self.host.lock(production, timeout=5):
+            pass
+        thread.join()
 
 
 def storage_fixture(namespace="", bucket="shared-bucket"):
