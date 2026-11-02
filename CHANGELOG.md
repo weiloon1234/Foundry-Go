@@ -8,8 +8,9 @@
 - Fixed: Bootstrap validates storage and backup endpoints before saving them, so
   a refused value can be corrected on retry instead of `provision_conflict`.
 - Fixed: Key archive uploads work on real R2 with object-scoped credentials. Rclone
-  now skips the bucket check and, on R2, uses its Cloudflare provider with an
-  explicit private ACL; the generic configuration was denied or answered with 501.
+  skips its bucket check and its post-upload `HEAD ?versionId=`, which R2 answers
+  with 501 after accepting the object. The existing download check still verifies
+  the uploaded bytes.
 - Fixed: Package installation waits up to 10 minutes for apt/dpkg locks, such as
   Ubuntu's daily unattended upgrades, before reporting `package_locked`.
 - Changed: Bootstrap intake adds a missing `https://` and removes a path equal to

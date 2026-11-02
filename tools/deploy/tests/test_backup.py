@@ -23,14 +23,12 @@ RECIPIENT = "age1" + "a" * 58
 
 class BackupTests(unittest.TestCase):
     def test_rclone_config_works_with_object_scoped_credentials(self):
-        common = dict(region="auto", access_key_id="id", secret_access_key="secret", bucket="backups")
-        r2 = backup._rclone_config({**common, "endpoint": "https://account.r2.cloudflarestorage.com"})
-        for line in ("provider = Cloudflare", "acl = private", "no_check_bucket = true"):
-            self.assertIn(line + "\n", r2)
-        other = backup._rclone_config({**common, "endpoint": "https://s3:9000"})
-        for line in ("provider = Other", "no_check_bucket = true"):
-            self.assertIn(line + "\n", other)
-        self.assertNotIn("acl =", other)
+        config = backup._rclone_config(dict(region="auto", access_key_id="id", secret_access_key="secret",
+                                            bucket="backups", endpoint="https://account.r2.cloudflarestorage.com"))
+        # Found on real R2: object-scoped credentials cannot create a bucket, and its
+        # 501 to the post-upload HEAD ?versionId= fails an upload that succeeded.
+        for line in ("no_check_bucket = true", "no_head = true"):
+            self.assertIn(line + "\n", config)
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

@@ -220,10 +220,9 @@ def _database_backup(host, kind):
 
 def _rclone_config(repository):
     # Buckets exist up front and credentials are object-scoped, so never probe or
-    # create one. R2 answers 501 to an upload without an explicit canned ACL.
-    r2 = (urlsplit(repository["endpoint"]).hostname or "").endswith(".r2.cloudflarestorage.com")
-    provider = "provider = Cloudflare\nacl = private\n" if r2 else "provider = Other\n"
-    return (f"[backup]\ntype = s3\n{provider}no_check_bucket = true\nenv_auth = false\n"
+    # create one. R2 returns a version ID on upload and answers 501 to rclone's
+    # following HEAD ?versionId=; archive_keys checks the uploaded bytes instead.
+    return ("[backup]\ntype = s3\nprovider = Other\nno_check_bucket = true\nno_head = true\nenv_auth = false\n"
             f"endpoint = {repository['endpoint']}\nregion = {repository['region']}\n"
             f"access_key_id = {repository['access_key_id']}\nsecret_access_key = {repository['secret_access_key']}\n"
             f"force_path_style = {str(repository.get('uri_style', 'path') == 'path').lower()}\n")
