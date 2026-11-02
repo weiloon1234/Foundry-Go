@@ -22,6 +22,16 @@ RECIPIENT = "age1" + "a" * 58
 
 
 class BackupTests(unittest.TestCase):
+    def test_rclone_config_works_with_object_scoped_credentials(self):
+        common = dict(region="auto", access_key_id="id", secret_access_key="secret", bucket="backups")
+        r2 = backup._rclone_config({**common, "endpoint": "https://account.r2.cloudflarestorage.com"})
+        for line in ("provider = Cloudflare", "acl = private", "no_check_bucket = true"):
+            self.assertIn(line + "\n", r2)
+        other = backup._rclone_config({**common, "endpoint": "https://s3:9000"})
+        for line in ("provider = Other", "no_check_bucket = true"):
+            self.assertIn(line + "\n", other)
+        self.assertNotIn("acl =", other)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

@@ -218,16 +218,23 @@ def _database_backup(host, kind):
     return completed[0]["label"]
 
 
+def _rclone_config(repository):
+    # Buckets exist up front and credentials are object-scoped, so never probe or
+    # create one. R2 answers 501 to an upload without an explicit canned ACL.
+    r2 = (urlsplit(repository["endpoint"]).hostname or "").endswith(".r2.cloudflarestorage.com")
+    provider = "provider = Cloudflare\nacl = private\n" if r2 else "provider = Other\n"
+    return (f"[backup]\ntype = s3\n{provider}no_check_bucket = true\nenv_auth = false\n"
+            f"endpoint = {repository['endpoint']}\nregion = {repository['region']}\n"
+            f"access_key_id = {repository['access_key_id']}\nsecret_access_key = {repository['secret_access_key']}\n"
+            f"force_path_style = {str(repository.get('uri_style', 'path') == 'path').lower()}\n")
+
+
 def _rclone(host, arguments):
     repository = _repository_settings(host)
     root = _private_directory(host, host.paths.p("/etc/foundry/backup"))
     with tempfile.TemporaryDirectory(prefix="rclone-", dir=root) as temporary:
         config = Path(temporary) / "rclone.conf"
-        content = (f"[backup]\ntype = s3\nprovider = Other\nenv_auth = false\n"
-                   f"endpoint = {repository['endpoint']}\nregion = {repository['region']}\n"
-                   f"access_key_id = {repository['access_key_id']}\nsecret_access_key = {repository['secret_access_key']}\n"
-                   f"force_path_style = {str(repository.get('uri_style', 'path') == 'path').lower()}\n")
-        host.owned_write(config, content, mode=0o600)
+        host.owned_write(config, _rclone_config(repository), mode=0o600)
         return host.run(["rclone", "--config=" + str(config), "--retries=1", "--low-level-retries=1", *arguments],
                         timeout=1800)
 

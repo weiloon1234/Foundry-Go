@@ -147,9 +147,20 @@ class PackageTransactionTests(unittest.TestCase):
         self.assertTrue(self.host.paths.p(packages.POLICY).is_symlink())
 
     def test_busy_dpkg_refuses_without_intent(self):
-        with patch.object(packages, "_locks", return_value=["/var/lib/dpkg/lock"]), self.assertRaises(DeployError):
+        with patch.object(packages, "_locks", return_value=["/var/lib/dpkg/lock"]), \
+                patch.object(packages, "LOCK_WAIT_SECONDS", 0), self.assertRaises(DeployError):
             packages.install_missing(self.host, ["new"])
         self.assertFalse(packages._journal_path(self.host).exists())
+
+    def test_busy_dpkg_waits_for_a_daily_upgrade_to_finish(self):
+        busy = ["/var/lib/dpkg/lock"]
+        with patch.object(packages, "_locks", side_effect=[busy, busy, [], []]), \
+                patch.object(packages.time, "sleep") as sleep, \
+                patch.object(packages, "_transaction_active", side_effect=DeployError("past_the_lock", "reached")), \
+                self.assertRaises(DeployError) as error:
+            packages.install_missing(self.host, ["new"])
+        self.assertEqual("past_the_lock", error.exception.code)
+        self.assertEqual(2, sleep.call_count)
 
     def test_owned_partial_install_resumes_even_with_empty_missing_list(self):
         self.host.interrupt = True

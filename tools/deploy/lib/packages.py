@@ -14,10 +14,11 @@ from pathlib import Path
 import re
 import signal
 import subprocess
+import time
 import uuid
 
 from contracts import DeployError, HOST_PATHS, check_path, read_json, require
-from host import Host
+from host import Host, LOCK_WAIT_SECONDS
 
 POLICY = "/usr/sbin/policy-rc.d"
 LOCKS = ("/var/lib/dpkg/lock-frontend", "/var/lib/dpkg/lock",
@@ -67,6 +68,9 @@ def _package_key(inventory: dict, name: str) -> str:
     matches = [key for key in inventory if key.split(":")[0] == name]
     require(len(matches) <= 1, "package_inventory", "Ambiguous multi-architecture package: " + name)
     return matches[0] if matches else name
+
+
+LOCK_POLL_SECONDS = 5
 
 
 def _locks(host: Host) -> list[str]:
@@ -416,6 +420,10 @@ def install_missing(host: Host, names: Sequence[str]) -> None:
     require(not isinstance(names, (str, bytes)) and all(isinstance(n, str) and PACKAGE.fullmatch(n) for n in names),
             "package_names", "Package names must be literal distro package identifiers.")
     journal = _load(host)
+    # Ubuntu's daily unattended-upgrades holds these for minutes on a healthy host.
+    deadline = time.monotonic() + LOCK_WAIT_SECONDS
+    while _locks(host) and time.monotonic() < deadline:
+        time.sleep(LOCK_POLL_SECONDS)
     require(not _locks(host), "package_locked", "apt/dpkg is busy; retry after the current transaction exits.")
     require(not _transaction_active(host, journal), "package_locked", "The recorded package process tree is still running.")
     if journal and (journal["state"] == "installing" or journal.get("policy_state") != "restored"):

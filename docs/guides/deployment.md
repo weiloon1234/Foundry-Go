@@ -431,6 +431,9 @@ separate buckets yourself. Use a distinct bucket for the backup repository, and
 one backup bucket per host: the repository path is fixed, so two hosts cannot
 share one.
 
+Credentials limited to object access on their bucket are enough; the tooling
+never lists or creates buckets.
+
 Bootstrap intake repairs two slips before saving: a missing scheme becomes
 `https://`, and a path equal to the bucket name is removed (R2's dashboard shows
 the S3 URL that way). An explicit `http://` stays, and any other path is refused,
