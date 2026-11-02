@@ -38,7 +38,7 @@ set -eu; for task_generate_dir in $(GENERATION_DIRS); do \
 done
 endef
 
-.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check security-check security-tools-check verify publish-client-contracts
+.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check deploy-tools-check security-check security-tools-check verify publish-client-contracts
 
 toolchain-check:
 	$(GO) version
@@ -93,6 +93,9 @@ release-tools-check:
 	cd tools/release && $(GO) vet ./... && $(GO) test ./...
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p '*_test.py'
 
+deploy-tools-check:
+	cd tools/deploy/tests && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s . -p 'test_*.py'
+
 datatable-contracts:
 	cd tests/fixtures/consumer && $(GO) test -timeout=$(TEST_TIMEOUT) -v ./clientcontracts -run '^(TestDatatableContractBytes|TestReportingContractCoverage|TestCursorContractPublication|TestReleasedContractCohorts)$$'
 
@@ -123,7 +126,7 @@ TYPESCRIPT_BENCH_COUNT ?= 5
 benchmark-typescript:
 	$(GO) test -timeout=$(TEST_TIMEOUT) -run '^TestRenderPerformanceFixtures$$' -bench '^(BenchmarkRender|BenchmarkRenderModules|BenchmarkReceivedNaming|BenchmarkGenerateCheck)$$' -benchmem -benchtime=$(TYPESCRIPT_BENCH_TIME) -count=$(TYPESCRIPT_BENCH_COUNT) ./typescript
 
-verify: toolchain-check fmt-check vet test fixture-check generate-check docs-check release-tools-check
+verify: toolchain-check fmt-check vet test fixture-check generate-check docs-check release-tools-check deploy-tools-check
 
 # Scans reuse installed tools and warm caches; no cold package measurement.
 SECURITY_OUTPUT ?= .cache/security-check

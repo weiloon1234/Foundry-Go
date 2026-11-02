@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added: `make deploy-tools-check` runs the deployment tooling's unit tests and
+  is part of `make verify`, so CI covers them.
 - Fixed: Deployment operations queue up to 10 minutes on the host and instance
   locks instead of 30 seconds, so a scheduled backup, renewal or second deploy
   no longer fails while a multi-minute deploy runs on a small host.

@@ -573,6 +573,9 @@ operator procedures; the drill does not rebind host identity.
 
 ## Container acceptance
 
+`make deploy-tools-check` runs the tooling's service-free unit tests, and
+`make verify` includes it. Container acceptance exercises real services.
+
 The runner accepts an application release archive and the integrated framework
 root, with Ubuntu 24.04 or 26.04, arm64 or amd64, and `--foreign` or `--fresh`.
 For example, from the framework checkout:
@@ -581,6 +584,11 @@ For example, from the framework checkout:
 tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
   --archive /absolute/app.tar.gz --framework-root "$PWD" --foreign
 ```
+
+Run each platform on a native Docker host of that architecture. QEMU user
+emulation of amd64 on arm64 cannot complete it: Ubuntu 24.04's `rclone`
+crashes in the Go runtime, and Ubuntu 26.04's systemd cannot create unit mount
+namespaces.
 
 The archive must implement the console commands used by deployment, declare
 scheduler configuration and Redis inventories, and expose readiness. It needs
