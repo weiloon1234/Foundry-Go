@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.5.1 — 2026-11-02
 
 - Fixed: Certificate provisioning checks the `renew_hook` key Certbot actually
   writes. It looked for `deploy_hook`, which only the synthetic acceptance

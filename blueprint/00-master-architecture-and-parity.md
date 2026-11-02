@@ -8,6 +8,20 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Deployment tooling proven on real infrastructure — v0.5.1, 2026-11-02
+
+Status: **first real staging deployment passed; production bootstrap pending**.
+
+The first real host found what the container fixtures could not: Certbot's
+`renew_hook` key, storage validation before saving, rclone's post-upload request
+that R2 refuses, restore target formats, and two sources of delay. Fixed here.
+
+On Ubuntu 24.04 amd64 with Cloudflare and R2, the staging instance passed DNS-01
+issuance and renewal dry-run, deployment with pre-migration backup, the tool
+upgrade path, attachment upload, and point-in-time restores returning the expected
+row at two targets. Coexistence with foreign services on a real shared host is
+covered only by the container fixture until the production bootstrap.
+
 ## Framework-owned deployment tooling and R2 attachments — v0.5.0, 2026-11-02
 
 Status: **implemented; container acceptance passed; real provider gates pending**.
