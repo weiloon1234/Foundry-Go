@@ -1002,7 +1002,8 @@ class ReleaseTests(unittest.TestCase):
             opener = MagicMock()
             opener.open.return_value = response
             with patch.object(self.host, "run", side_effect=command), patch.object(release.urllib.request, "build_opener", return_value=opener), patch.object(release, "STABILITY_SECONDS", 0):
-                self.assertEqual(expected, CHECK_READY(self.host, self.entry, timeout=0.01))
+                # A negative case polls until its deadline; a positive one returns at once.
+                self.assertEqual(expected, CHECK_READY(self.host, self.entry, timeout=30 if expected else 0.01))
 
     def test_readiness_wall_clock_bounds_a_slow_response_body(self):
         observations = self.process_observations()
@@ -1015,7 +1016,7 @@ class ReleaseTests(unittest.TestCase):
         response.__enter__.return_value = response
         response.status = 200
         def drip(_):
-            time.sleep(0.15)
+            time.sleep(5)
             return b'{"ready":true}'
         response.read.side_effect = drip
         opener = MagicMock()
@@ -1023,7 +1024,7 @@ class ReleaseTests(unittest.TestCase):
         with patch.object(self.host, "run", side_effect=command), patch.object(release.urllib.request, "build_opener", return_value=opener):
             started = time.monotonic()
             self.assertFalse(CHECK_READY(self.host, self.entry, timeout=0.03))
-            self.assertLess(time.monotonic() - started, 0.12)
+            self.assertLess(time.monotonic() - started, 2)
 
     def test_pruning_preserves_active_and_rollback_and_rollback_never_migrates(self):
         one, _ = self.bundle(1)

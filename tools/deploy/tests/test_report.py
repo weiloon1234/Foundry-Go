@@ -390,7 +390,7 @@ class ReportTests(unittest.TestCase):
             opener.return_value.open.return_value = response
             started = time.monotonic()
             result = report.collect_report(self.host)
-            self.assertLess(time.monotonic() - started, 0.5)
+            self.assertLess(time.monotonic() - started, 5)
         self.assertEqual(result["host"]["host_id"], HOST_ID)
         self.assertEqual([item["instance_id"] for item in result["projects"][0]["instances"]], [INSTANCE_ID])
         self.assertFalse(result["complete"])

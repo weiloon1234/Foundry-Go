@@ -19,8 +19,8 @@ conditional delete, with a tombstone-only sweep and a configurable cleanup grace
 
 Container acceptance passed on Ubuntu 24.04 and 26.04, arm64 and amd64, each on
 a native host, with the foreign-project fixture preserved (`cf07bed3`; later
-commits do not change `tools/deploy`). Real Cloudflare DNS/ACME and R2 remain
-separate gates at the first server bootstrap. The Go deploy CLI and typed
+`tools/deploy` changes touch only unit-test timing bounds). Real Cloudflare
+DNS/ACME and R2 remain separate gates at the first server bootstrap. The Go deploy CLI and typed
 inspection commands, storage helper, compatibility adapters, capacity calculator,
 report baseline observations, mixed-version acceptance and compiler-level
 reproducibility are deferred to later tool upgrades.
