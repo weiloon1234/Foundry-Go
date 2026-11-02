@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.5.2 — 2026-11-02
 
 - Fixed: Bootstrap accepts corrected private inputs until their consuming step
   completes, while preserving encryption keys and shared working credentials.

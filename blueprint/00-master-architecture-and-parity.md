@@ -8,6 +8,17 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Deployment hardening and attachment transactions — v0.5.2, 2026-11-02
+
+Status: **implemented; container acceptance and CI gate this tag; the rotation commands await real-provider use on a host**.
+
+Deploys share one SSH connection and report a dropped connection as an unknown
+outcome. Confirmed commands replace backup keys, age recipients and the Cloudflare
+token, verifying before keeping the change. Bootstrap retries can correct a credential
+until its step completes. Wall-clock budgets can no longer end the process. Attachments
+gain `ClearIn`, `DetachIn`, `FirstIn` and `ListIn`, and a locale `Fallback` must match
+`Default`.
+
 ## Deployment tooling proven on real infrastructure — v0.5.1, 2026-11-02
 
 Status: **first real staging deployment passed; production bootstrap pending**.
