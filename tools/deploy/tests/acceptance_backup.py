@@ -142,9 +142,35 @@ def main():
             member = archive.getmember(name)
             assert member.isfile() and member.size == len(expected)
             assert archive.extractfile(member).read() == expected, "Recovered key/config bytes differ"
+    # Rotate recipients and then re-submit the same repository keys. Both must
+    # publish a fresh archive which the new offline fixture identity decrypts.
+    replacement_identity = work / "replacement-age-identity.txt"
+    run(["age-keygen", "-o", str(replacement_identity)])
+    replacement_identity.chmod(0o600)
+    recipient = run(["age-keygen", "-y", str(replacement_identity)]).stdout.strip()
+    rotated = action("backup-recipients-rotate", request(project, profile,
+                     secrets={"age_recipients": [recipient]}), timeout=600)
+    replacement = {"endpoint": settings["endpoint"], "region": "us-east-1", "bucket": settings["backup_bucket"],
+                   "access_key_id": settings["access_key"], "secret_access_key": settings["secret_key"]}
+    keys = action("backup-keys-rotate", request(project, profile, secrets={"backup_s3": replacement}), timeout=900)
+    receipts = [rotated["key_archive"], keys["key_archives"][profile["instance_id"]]]
+    object_keys = {backup["key_archive"]["object_key"], *[receipt["object_key"] for receipt in receipts]}
+    assert len(object_keys) == 3, "Rotation reused an old archive"
+    for index, receipt in enumerate(receipts):
+        encrypted_new, decrypted_new = work / f"rotated-{index}.age", work / f"rotated-{index}.tar"
+        rclone(settings, "copyto", f"acceptance:{settings['backup_bucket']}/{receipt['object_key']}", str(encrypted_new))
+        run(["age", "--decrypt", "-i", str(replacement_identity), "-o", str(decrypted_new), str(encrypted_new)])
+        with tarfile.open(decrypted_new) as archive:
+            for name, expected in originals.items():
+                assert archive.extractfile(name).read() == expected, "Rotated recovery bytes differ"
+            intake = json.load(archive.extractfile(f"instances/{entry['name']}/bootstrap-secrets.json"))
+            assert intake["age_recipients"] == [recipient]
+            repository = json.load(archive.extractfile("recovery/pgbackrest-repository.json"))
+            assert all(repository[key] == value for key, value in replacement.items())
+        decrypted_new.unlink()
     # No schema/database/bucket reset. Resources expire with this owned container.
     decrypted.unlink()
-    print("PASS pgBackRest full/WAL/PITR boundary; live cluster preserved; age key/config round trip")
+    print("PASS pgBackRest full/WAL/PITR boundary; live cluster preserved; age key/config and rotated archive round trips")
 
 
 if __name__ == "__main__":

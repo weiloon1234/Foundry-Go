@@ -1337,6 +1337,41 @@ class ReleaseTests(unittest.TestCase):
             initialize_bootstrap_secrets(self.host, self.entry, {"backup_s3": bad_backup})
         self.assertIn("Backup repository:", error.exception.detail)
 
+    def test_config_storage_and_values_survive_bootstrap_with_no_secrets(self):
+        from test_rotations import bootstrap_without_secrets
+        from runtime_config import POSTGRES_PORT
+        intake = {"app_storage": storage_fixture("original/"), "configuration": {"PROJECT__NAME": "Original"}}
+        credentials = initialize_bootstrap_secrets(self.host, self.entry, intake)
+        self.host.owned_write(self.env_file, dump_env(runtime_environment(self.entry, credentials)), 0o640)
+        self.registry["shared"]["postgresql"] = {"port": POSTGRES_PORT}
+        self.host.write_registry(self.registry)
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        changed = self.storage_changes("original/")
+        storage_credentials = json.loads(changed["APP__SERVICES__CREDENTIALS"])
+        for credential in storage_credentials.values():
+            credential["secret_key"] = "replacement-storage-canary"
+        changed["APP__SERVICES__CREDENTIALS"] = json.dumps(storage_credentials)
+        changed["PROJECT__NAME"] = "Replaced"
+        self.host.inspect_output = json.dumps([
+            {"Name": key.lower().replace("__", "."), "Source": "defaults", "Secret": True} for key in changed])
+        release.config_set(self.host, self.project, self.profile, changed)
+        registry = self.host.read_registry()
+        registry["instances"][self.profile["instance_id"]]["provisioning"]["completed_steps"].append("configuration")
+        self.host.write_registry(registry)
+        before = self.env_file.read_bytes()
+        result = bootstrap_without_secrets(self.host, self.project, self.profile)
+        self.assertTrue(result["ok"])
+        self.assertEqual(before, self.env_file.read_bytes())
+        values = parse_env(self.env_file.read_text())
+        self.assertEqual("Replaced", values["PROJECT__NAME"])
+        self.assertIn("replacement-storage-canary", values["APP__SERVICES__CREDENTIALS"])
+        # Intake is intentionally initial-only. It cannot recreate a lost app.env.
+        self.env_file.unlink()
+        with self.assertRaises(DeployError) as caught:
+            bootstrap_without_secrets(self.host, self.project, self.profile)
+        self.assertEqual("configuration_missing", caught.exception.code)
+
     def test_bootstrap_initializes_keyring_once_and_preserves_private_intake(self):
         intake = {"cloudflare_dns_token": "fixture-token", "age_recipients": ["age1fixture"],
                   "backup_s3": dict(endpoint="https://backup.invalid", region="auto", bucket="backup",
@@ -1360,7 +1395,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("APP__SERVICES__STORAGE__DISKS", values)
         with self.assertRaises(DeployError):
             initialize_bootstrap_secrets(self.host, self.entry, {"encryption": {"key_id": "partial"}})
-        with self.assertRaises(DeployError):
+        self.entry["provisioning"]["completed_steps"].append("certificate")
+        with self.assertRaisesRegex(DeployError, "ACTION=dns-token-rotate"):
             initialize_bootstrap_secrets(self.host, self.entry, {"cloudflare_dns_token": "replacement"})
         private.unlink()
         with self.assertRaises(DeployError) as missing:
@@ -1378,7 +1414,8 @@ class ReleaseTests(unittest.TestCase):
         credentials = initialize_bootstrap_secrets(self.host, self.entry, intake)
         self.assertEqual("seed-canary", runtime_environment(self.entry, credentials)["ADMINS__SEED__SUPERADMIN_PASSWORD"])
         self.assertEqual(credentials, initialize_bootstrap_secrets(self.host, self.entry))
-        with self.assertRaises(DeployError):
+        self.entry["provisioning"]["completed_steps"].append("configuration")
+        with self.assertRaisesRegex(DeployError, "ACTION=config"):
             initialize_bootstrap_secrets(self.host, self.entry, {"configuration": {"ADMINS__SEED__SUPERADMIN_PASSWORD": "other"}})
 
     def test_rotation_retains_all_prior_material_and_rejects_reuse_and_overflow(self):

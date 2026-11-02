@@ -30,6 +30,16 @@ import upgrades
 
 _marker = marker
 
+# Bootstrap intake remains correctable only until its consuming step succeeds.
+BOOTSTRAP_SECRET_STEPS = {
+    "app_storage": ("configuration", "ACTION=config"),
+    "configuration": ("configuration", "ACTION=config"),
+    "backup_s3": ("backup", "ACTION=backup-keys-rotate"),
+    "age_recipients": ("backup", "ACTION=backup-recipients-rotate"),
+    "cloudflare_dns_token": ("certificate", "ACTION=dns-token-rotate"),
+    "encryption": (None, 'ACTION="keys rotate"'),
+}
+
 
 def _journal(host, registry, entry=None):
     host.journal(registry, entry)
@@ -237,7 +247,7 @@ def _provision_environment(host, registry, entry, credentials):
             raise DeployError("configuration_mode", "Instance environment must not be world-readable.")
     elif "configuration" in entry["provisioning"]["completed_steps"]:
         raise DeployError("configuration_missing", "Server-owned runtime configuration is missing; restore it explicitly.")
-    else:
+    if "configuration" not in entry["provisioning"]["completed_steps"]:
         values = runtime_environment(entry, credentials, postgres_port=registry["shared"]["postgresql"]["port"])
         reserve_runtime_storage(registry, entry, values, lambda value: _read_value_file(host, entry, value))
         _journal(host, registry, entry)

@@ -193,14 +193,15 @@ match both content and metadata.
 
 ## Tool protocol and upgrades
 
-`tools/deploy/protocol.json` owns protocol 2.0 and generation 1. The stable
+`tools/deploy/protocol.json` owns protocol 2.0 and generation 2. The stable
 launcher dispatches to the active immutable bundle. `hello` reports host tool
 metadata without an application mutation. Requests include the client's protocol,
 framework version, generation, and bundle digest.
 
 A mutation from a newer client returns `host_upgrade_required`. A client below
-the supported floor receives `client_too_old`. Generation 1 is the only current
-generation. Compatibility adapters are deferred.
+the supported floor receives `client_too_old`. Generation 2 adds credential
+replacement actions and continues to support generation-1 clients. Upgrade the host tools before using the new actions.
+Compatibility adapters are deferred.
 
 Tool plans bind the candidate inventory digest to the current host state.
 Application uses the reviewed plan token and durable operation UUID. Upgrades
@@ -308,8 +309,21 @@ Values never belong in command arguments, tracked profiles, or release archives.
 The server records bootstrap intake as root-only mode 0600
 `/etc/foundry/instances/<name>/bootstrap-secrets.json`, bound to the instance UUID.
 App-readable runtime values are separate from root-only control credentials.
-Retries preserve acknowledged credentials; missing or conflicting credentials
-require recovery rather than regeneration.
+Rerun `make bootstrap` with corrected private inputs while their consuming step
+is unfinished: `app_storage` and `configuration` until `configuration`,
+`backup_s3` and `age_recipients` until `backup`, and `cloudflare_dns_token` until
+`certificate`. Only supplied inputs change. Encryption cannot be replaced through
+bootstrap. Once a step completes, use `ACTION=config` or the corresponding
+credential replacement command below; missing initialized secrets require recovery.
+
+A backup correction preserves the repository cipher passphrase and host/cluster
+identity. It is refused if any instance completed `backup`, local history records
+backup use or an unresolved attempt, or repository inspection cannot prove an empty
+repository. Corrected credentials are inspected through a private temporary
+pgBackRest configuration before replacing the selected settings. A destination
+change must also prove the old destination empty. DNS correction preserves the
+recorded zone and is refused if any instance in that zone completed `certificate`.
+These guards prevent a failed new instance from overwriting shared working secrets.
 
 Bootstrap also accepts initial application configuration that the first deploy
 needs before any release exists, such as default-admin seed credentials
@@ -322,6 +336,62 @@ When encryption input is absent, the server generates the key ID and 32-byte key
 together. Key material uses canonical unpadded base64url. The initial previous-key
 table is empty. Recovery identities for age remain in the operator's password
 manager or offline custody, never on the production host.
+
+## Credential replacement
+
+All replacement actions require confirmation (`CONFIRM=yes` for reviewed
+automation). Use the private input files above; never pass a credential value in
+an argument. The host lock and affected instance locks serialize replacements
+with deployments and bootstrap. Each affected root-only bootstrap record is
+atomically updated, so a later bootstrap with no secrets keeps the replacement.
+Do not leave old secret input files selected when rerunning bootstrap: explicit
+stale values for completed steps are still refused.
+
+| Action | Private input | Scope and verification |
+| --- | --- | --- |
+| `backup-keys-rotate` | `FOUNDRY_SECRET_BACKUP_S3_FILE` | Shared backup repository; `pgBackRest check` verifies the new keys |
+| `backup-recipients-rotate` | `FOUNDRY_SECRET_AGE_RECIPIENTS_FILE` | Selected instance; immediately uploads and download-checks a fresh encrypted key archive |
+| `dns-token-rotate` | `FOUNDRY_SECRET_CLOUDFLARE_DNS_TOKEN_FILE` | Every instance using the recorded Cloudflare zone; zone lookup and renewal dry-runs verify the token |
+
+For example, after preparing a private replacement backup JSON file:
+
+```sh
+FOUNDRY_SECRET_BACKUP_S3_FILE=/private/path/backup.json \
+  make deploy ENVIRONMENT=staging ACTION=backup-keys-rotate
+```
+
+Backup key replacement accepts only the existing endpoint, region and bucket.
+It preserves the repository cipher passphrase and host/cluster identity. A failed
+check restores the previous settings and pgBackRest configuration. Success writes
+a fresh recovery archive for every configured instance because those archives
+contain repository credentials. If archive refresh fails after replacement, the
+command reports that the keys were replaced and archives remain incomplete;
+inspect `ACTION=status` before explicitly retrying the same values.
+
+Recipient replacement keeps old archives untouched. Download a fresh archive and
+**prove decryption with the new identity before discarding the old identity**.
+Keep identities needed for retained old archives. An archive upload failure leaves
+the new recipients selected and reports incomplete archive refresh; inspect status
+before retrying. Decryption identities remain off the production host.
+
+DNS token replacement requires a token for the instance's recorded zone. The zone
+`.ini` is shared by its instances and is replaced atomically. Renewal dry-runs use
+`--no-random-sleep-on-renew`; failure restores the previous token.
+
+Replace application R2 keys with `ACTION=config`, using
+`FOUNDRY_SECRET_CONFIG_FILE` to supply `APP__SERVICES__CREDENTIALS` as a JSON string
+(or its supported `_FILE` alias). The initial `app_storage` and `configuration`
+bootstrap values can correct `app.env` until its `configuration` step completes.
+Later applies preserve the selected file; a missing file after `configuration`
+completes requires recovery instead of recreation from old bootstrap values.
+
+The CLI reuses one SSH master per invocation, with a 120-second persistence window
+and a private per-user control directory under `/tmp`. It closes the master when
+the invocation finishes. Connection establishment gets three attempts with a
+30-second timeout; keepalives tolerate eight missed replies. Commands are never
+automatically replayed. SSH exit 255 means the connection failed or dropped, and
+a mutating command's outcome is unknown. Run `ACTION=status` before retrying;
+follow the existing reconciliation procedure for an unresolved operation.
 
 ## PostgreSQL, Redis, and foreign services
 

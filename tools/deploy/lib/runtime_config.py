@@ -151,11 +151,31 @@ def _read_bootstrap_secrets(host, entry):
     return value
 
 
+def update_bootstrap_secrets(host, entries, changes):
+    """Replace intake records under the host and affected instance locks."""
+    records = []
+    for entry in entries:
+        prior = _read_bootstrap_secrets(host, entry)
+        require(prior is not None, "credentials_missing", "Restore the bootstrap secret record before rotation.")
+        path = host.paths.instance_config(entry["name"]) / "bootstrap-secrets.json"
+        records.append((path, path.read_text(), {**prior, **changes}))
+    written = []
+    try:
+        for path, original, updated in records:
+            written.append((path, original))
+            host.owned_write(path, _json(updated) + "\n", 0o600)
+    except (DeployError, OSError):
+        for path, original in reversed(written):
+            host.owned_write(path, original, 0o600)
+        raise
+
+
 def initialize_bootstrap_secrets(host, entry, private_secrets=None):
-    """Persist private stdin intake once; retries never rotate or replace secrets."""
+    """Correct unfinished bootstrap steps without replacing acknowledged secrets."""
+    from provision import BOOTSTRAP_SECRET_STEPS
     credentials = read_credentials(host, entry)
     supplied = {} if private_secrets is None else private_secrets
-    allowed = {"cloudflare_dns_token", "backup_s3", "age_recipients", "app_storage", "encryption", "configuration"}
+    allowed = set(BOOTSTRAP_SECRET_STEPS)
     require(isinstance(supplied, dict) and not set(supplied) - allowed,
             "invalid_secrets", "Bootstrap secret input contains unsupported fields.")
     supplied = dict(supplied)
@@ -172,8 +192,7 @@ def initialize_bootstrap_secrets(host, entry, private_secrets=None):
         require(isinstance(repository, dict) and set(repository) == required
                 and all(isinstance(value, str) and value and not any(c in value for c in "\x00\r\n") for value in repository.values()),
                 "invalid_secrets", "Backup credentials are incomplete or invalid.")
-        # Validate before the first persist: retries refuse changed secrets, so a
-        # stored bad value could not be corrected afterwards.
+        # Keep malformed values out of the durable intake, including on retries.
         supplied["backup_s3"] = normalize_backup_repository(repository)
     if "age_recipients" in supplied:
         recipients = supplied["age_recipients"]
@@ -203,8 +222,14 @@ def initialize_bootstrap_secrets(host, entry, private_secrets=None):
                 "owned_configuration", "Encryption and storage are supplied through their own bootstrap inputs.")
     prior = _read_bootstrap_secrets(host, entry)
     if prior is not None:
-        require(all(prior.get(key) == value for key, value in supplied.items()),
-                "provision_conflict", "Bootstrap secrets already exist; use an explicit configuration or credential rotation operation.")
+        changes = {key: value for key, value in supplied.items() if prior.get(key) != value}
+        for key in changes:
+            step, route = BOOTSTRAP_SECRET_STEPS[key]
+            require(step is not None and step not in entry["provisioning"]["completed_steps"],
+                    "provision_conflict", "Bootstrap cannot replace " + key + "; use " + route + ".")
+        if changes:
+            update_bootstrap_secrets(host, [entry], changes)
+            prior = {**prior, **changes}
     else:
         key_file = host.paths.instance_config(entry["name"]) / "bootstrap-encryption.key"
         require(not key_file.exists() and not key_file.is_symlink()

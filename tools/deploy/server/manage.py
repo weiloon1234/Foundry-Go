@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """SSH host entrypoint. JSON request on stdin; one safe JSON result on stdout."""
 import argparse
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
@@ -13,7 +14,7 @@ from topology import instance_units
 from host import Host
 
 ACTIONS = ("hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect", "bootstrap-plan", "bootstrap-apply", "activate", "status", "rollback", "restart", "stop",
-           "backup-configure", "backup-run", "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report")
+           "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate", "backup-configure", "backup-run", "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report")
 
 
 def execute(host, action, request):
@@ -29,7 +30,8 @@ def execute(host, action, request):
     arguments = {"bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
                  "activate": {"archive", "archive_sha256"}, "config-set": {"values", "secrets"},
                  "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current"},
-                 "backup-configure": {"secrets"}, "backup-run": {"kind"},
+                 "backup-keys-rotate": {"secrets"}, "backup-recipients-rotate": {"secrets"},
+                 "dns-token-rotate": {"secrets"}, "backup-configure": {"secrets"}, "backup-run": {"kind"},
                  "restore-drill": {"backup_id", "target_time", "target_inclusive", "retain"},
                  "tools-apply": {"plan_token"}, "upgrade-resume": {"plan_token"}}
     if action not in upgrades.READ_ACTIONS:
@@ -74,6 +76,29 @@ def execute(host, action, request):
         require(entry is not None and entry["project_id"] == project["id"], "identity_mismatch", "Unknown project/instance UUID.")
         return {"profile": entry["profile"], "topology": entry["topology"]}
     _, entry = host.require_identity(project, profile)
+    if action in ("backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate"):
+        import backup
+        import certificates
+        rotations = {"backup-keys-rotate": ("backup_s3", backup.rotate_keys),
+                     "backup-recipients-rotate": ("age_recipients", backup.rotate_recipients),
+                     "dns-token-rotate": ("cloudflare_dns_token", certificates.rotate_token)}
+        name, rotate = rotations[action]
+        require(request.get("confirm") is True, "confirmation_required", "Confirm credential replacement and its shared scope.")
+        private = request.get("secrets")
+        require(isinstance(private, dict) and set(private) == {name}, "invalid_secrets", "Supply exactly the selected rotation input.")
+        with host.lock("host"), ExitStack() as locks:
+            registry, entry = host.require_identity(project, profile)
+            affected = [entry]
+            if action == "backup-keys-rotate":
+                affected = list(registry["instances"].values())
+            elif action == "dns-token-rotate":
+                affected = [item for item in registry["instances"].values()
+                            if item["certificate"].get("zone_ref") == entry["certificate"].get("zone_ref")]
+            for item in sorted(affected, key=lambda item: item["profile"]["instance_id"]):
+                locks.enter_context(host.lock(item["profile"]["instance_id"]))
+            for item in affected:
+                release.require_idle(host.load_state(item))
+            return rotate(host, registry, entry, private[name])
     if action in ("backup-configure", "backup-run", "restore-drill"):
         import backup
         from contracts import valid_uuid

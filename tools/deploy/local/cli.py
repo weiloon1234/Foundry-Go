@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Local interactive entry point: public profiles, Docker builds and direct SSH."""
 import argparse
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 import difflib
 from datetime import datetime, timezone
 import fcntl
@@ -32,7 +32,7 @@ from contracts import (BACKUP_POLICY, DeployError, PREFIX, SCHEMA, PROFILE_SCHEM
                        validate_profile, validate_project)
 from release import MAX_CONFIGURATION_CHANGES, validate_manifest
 from topology import load_topology
-from upgrades import protocol_metadata, tool_bundle
+from upgrades import READ_ACTIONS, protocol_metadata, tool_bundle
 
 INSTALLED = f"/usr/local/sbin/{PREFIX}-host"
 COMMANDS = {
@@ -40,7 +40,7 @@ COMMANDS = {
     "deploy": "interactive deployment, status, rollback and configuration",
     "release": "build a local Docker release without contacting a server",
 }
-ACTIONS = ("deploy", "status", "rollback", "restart", "stop", "logs", "config", "keys rotate", "reconcile", "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run", "restore-drill")
+ACTIONS = ("deploy", "status", "rollback", "restart", "stop", "logs", "config", "keys rotate", "reconcile", "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run", "restore-drill", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate")
 
 
 class LocalError(Exception):
@@ -161,6 +161,25 @@ def operation_id(profile, action, arguments):
     return operation
 
 
+def check_ssh_exit(returncode, *, mutation=True):
+    if returncode == 255:
+        detail = " The outcome of the mutation is unknown." if mutation else ""
+        raise LocalError("SSH connection failed or dropped." + detail + " Run ACTION=status before retrying.")
+
+
+def control_directory():
+    # /tmp is deliberately short even on macOS; never inherit its long TMPDIR.
+    directory = Path("/tmp") / ("foundry-ssh-" + str(os.getuid()))
+    try:
+        directory.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    info = directory.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+        raise LocalError("SSH control directory must be owned by this user with mode 0700 and must not be a symlink")
+    return directory
+
+
 def execute(args, *, input=None, capture=True, timeout=None):
     try:
         result = subprocess.run(args, input=input, stdout=subprocess.PIPE if capture else sys.stderr,
@@ -169,6 +188,8 @@ def execute(args, *, input=None, capture=True, timeout=None):
         raise LocalError(f"Required tool is unavailable: {args[0]}") from error
     except subprocess.TimeoutExpired as error:
         raise LocalError(f"Command timed out: {args[0]}; inspect state before retrying") from error
+    if args[0] == "ssh":
+        check_ssh_exit(result.returncode)
     if result.returncode:
         # Never echo command arguments, stdin, or arbitrary stderr: config values
         # travel only through stdin and remote failures may contain private data.
@@ -293,9 +314,12 @@ class SSH:
         target = personal.get("target", "")
         if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.@:%+\[\]-]*", target):
             raise LocalError("invalid personal SSH target")
+        # One target per session; leave room for OpenSSH's temporary socket suffix.
+        control = control_directory() / uuid.uuid4().hex
         self.base = ["ssh", "-o", "StrictHostKeyChecking=yes", "-o", "BatchMode=yes",
-                     "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=15",
-                     "-o", "ServerAliveCountMax=3", "-p", str(host["port"])]
+                     "-o", "ConnectTimeout=30", "-o", "ConnectionAttempts=3", "-o", "ServerAliveInterval=15",
+                     "-o", "ServerAliveCountMax=8", "-o", "ControlMaster=auto",
+                     "-o", "ControlPersist=120", "-o", "ControlPath=" + str(control), "-p", str(host["port"])]
         key_path = personal.get("key_path", "")
         if key_path:
             self.base += ["-i", str(Path(key_path).expanduser())]
@@ -305,7 +329,13 @@ class SSH:
             raise LocalError("personal SSH alias resolves to a different hostname/port than the committed profile")
         self.base += [target]
 
-    def command(self, command, *, input=None, timeout=60):
+    def close(self):
+        try:
+            execute(self.base[:-1] + ["-O", "exit", self.base[-1]], timeout=10)
+        except (LocalError, OSError):
+            pass
+
+    def command(self, command, *, input=None, timeout=240):
         return execute(self.base + [command], input=input, timeout=timeout)
 
     def request(self, action, request, tools=None):
@@ -318,6 +348,7 @@ class SSH:
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=7200)
         except subprocess.TimeoutExpired as error:
             raise LocalError("remote operation timed out; use status and reconcile before retrying") from error
+        check_ssh_exit(result.returncode, mutation=action not in READ_ACTIONS)
         try:
             value = json.loads(result.stdout)
         except (ValueError, UnicodeDecodeError) as error:
@@ -334,9 +365,10 @@ class SSH:
     def report(self):
         try:
             result = subprocess.run(self.base + [f"{PREFIX}-host-report --pretty"],
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=240)
         except subprocess.TimeoutExpired as error:
             raise LocalError("host report exceeded its deadline") from error
+        check_ssh_exit(result.returncode, mutation=False)
         try:
             value = json.loads(result.stdout)
         except (ValueError, UnicodeDecodeError) as error:
@@ -379,6 +411,7 @@ class SSH:
                                         stderr=subprocess.PIPE, timeout=3600)
             except subprocess.TimeoutExpired as error:
                 raise LocalError("release upload timed out before activation") from error
+        check_ssh_exit(result.returncode)
         if result.returncode:
             raise LocalError("release upload failed before activation")
 
@@ -415,52 +448,52 @@ def bootstrap(project, profile, settings, fresh):
     if action not in {"prepare", "inspect"}:
         raise LocalError("bootstrap ACTION must be prepare or inspect")
     request = {"project": project, "profile": profile, "topology": load_topology(ROOT)}
-    ssh = SSH(profile, settings)
-    with ssh.staged_tools() as remote:
-        inspected = ssh.request("inspect", request, remote)
-        pending_path, pending_binding = pending_bootstrap(project, profile)
-        binding = profile["host"]["host_id"] or pending_binding
-        if binding and inspected.get("host_id") is not None and inspected["host_id"] != binding:
-            raise LocalError("server identity differs from the committed environment binding")
-        if binding and inspected.get("host_id") is None and not pending_binding:
-            raise LocalError("bound server has no registry and no matching pending bootstrap; refuse to duplicate its host identity")
-        # A pending marker is written before the first committed binding, so a
-        # crash between those writes can recover only on the same canonical host.
-        if pending_binding:
-            profile["host"]["host_id"] = pending_binding
-        architecture = inspected.get("architecture")
-        if fresh or profile["host"]["host_id"] is None:
-            if architecture not in {"amd64", "arm64"}:
-                raise LocalError("host inspection returned an unsupported architecture")
-            profile["architecture"] = architecture
+    with closing(SSH(profile, settings)) as ssh:
+        with ssh.staged_tools() as remote:
+            inspected = ssh.request("inspect", request, remote)
+            pending_path, pending_binding = pending_bootstrap(project, profile)
+            binding = profile["host"]["host_id"] or pending_binding
+            if binding and inspected.get("host_id") is not None and inspected["host_id"] != binding:
+                raise LocalError("server identity differs from the committed environment binding")
+            if binding and inspected.get("host_id") is None and not pending_binding:
+                raise LocalError("bound server has no registry and no matching pending bootstrap; refuse to duplicate its host identity")
+            # A pending marker is written before the first committed binding, so a
+            # crash between those writes can recover only on the same canonical host.
+            if pending_binding:
+                profile["host"]["host_id"] = pending_binding
+            architecture = inspected.get("architecture")
+            if fresh or profile["host"]["host_id"] is None:
+                if architecture not in {"amd64", "arm64"}:
+                    raise LocalError("host inspection returned an unsupported architecture")
+                profile["architecture"] = architecture
+                save_profile(profile)
+            elif architecture != profile["architecture"]:
+                raise LocalError("server architecture differs from the environment profile")
+            if action == "inspect":
+                display({"project": project, "profile": profile, "host": inspected})
+                return
+            plan = ssh.request("bootstrap-plan", request, remote)
+            for finding in plan.get("findings", []):
+                say(f"{finding['kind']}: {finding['code']}: {finding['detail']}")
+            if not plan.get("ok") or any(f.get("kind") == "stop" for f in plan.get("findings", [])):
+                raise LocalError("bootstrap is blocked by the findings above")
+            confirm(f"Prepare {instance_name(project, profile)} on {profile['host']['address']}")
+            binding = inspected.get("host_id") or plan.get("host_id")
+            if not binding:
+                raise LocalError("bootstrap plan did not provide a host identity")
+            if profile["host"]["host_id"] and profile["host"]["host_id"] != binding:
+                raise LocalError("bootstrap plan changed the committed host identity")
+            profile["host"]["host_id"] = binding
+            validate_profile(profile, project)
+            atomic_json(pending_path, bootstrap_marker(project, profile, binding), mode=0o600)
             save_profile(profile)
-        elif architecture != profile["architecture"]:
-            raise LocalError("server architecture differs from the environment profile")
-        if action == "inspect":
-            display({"project": project, "profile": profile, "host": inspected})
-            return
-        plan = ssh.request("bootstrap-plan", request, remote)
-        for finding in plan.get("findings", []):
-            say(f"{finding['kind']}: {finding['code']}: {finding['detail']}")
-        if not plan.get("ok") or any(f.get("kind") == "stop" for f in plan.get("findings", [])):
-            raise LocalError("bootstrap is blocked by the findings above")
-        confirm(f"Prepare {instance_name(project, profile)} on {profile['host']['address']}")
-        binding = inspected.get("host_id") or plan.get("host_id")
-        if not binding:
-            raise LocalError("bootstrap plan did not provide a host identity")
-        if profile["host"]["host_id"] and profile["host"]["host_id"] != binding:
-            raise LocalError("bootstrap plan changed the committed host identity")
-        profile["host"]["host_id"] = binding
-        validate_profile(profile, project)
-        atomic_json(pending_path, bootstrap_marker(project, profile, binding), mode=0o600)
-        save_profile(profile)
-        secrets = bootstrap_secrets(fresh or pending_binding is not None or binding != inspected.get("host_id"))
-        result = ssh.request("bootstrap-apply", {**request, "confirm": True, "plan_token": plan.get("plan_token"),
-                                                "secrets": secrets}, remote)
-        if result.get("host_id") != binding:
-            raise LocalError("bootstrap returned a different host identity; inspect the server")
-        pending_path.unlink()
-        display(result)
+            secrets = bootstrap_secrets(fresh or pending_binding is not None or binding != inspected.get("host_id"))
+            result = ssh.request("bootstrap-apply", {**request, "confirm": True, "plan_token": plan.get("plan_token"),
+                                                    "secrets": secrets}, remote)
+            if result.get("host_id") != binding:
+                raise LocalError("bootstrap returned a different host identity; inspect the server")
+            pending_path.unlink()
+            display(result)
 
 
 def build_request(project, profile):
@@ -837,142 +870,155 @@ def deploy(project, profile, settings):
         raise LocalError("unsupported deployment action")
     if not profile["host"]["host_id"]:
         raise LocalError("environment is not bound to a bootstrapped host; run make bootstrap")
-    ssh = SSH(profile, settings)
-    request = {"project": project, "profile": profile}
-    if action == "report":
-        # The installed report is intentionally available without sudo.
-        result, exit_code = ssh.report()
-        if result.get("host", {}).get("host_id") != profile["host"]["host_id"]:
-            if result.get("host", {}).get("host_id") is None:
-                display(result)
-            raise LocalError("host report cannot verify the committed environment binding")
-        display(result)
-        if exit_code:
-            raise LocalError("host report is incomplete; review its structured problems")
-        return
-    if action == "sync":
-        canonical = ssh.request("sync", request)
-        local = {"profile": profile, "topology": load_topology(ROOT)}
-        remote = {key: canonical[key] for key in local}
-        difference = "".join(difflib.unified_diff(
-            json.dumps(local, indent=2, sort_keys=True).splitlines(keepends=True),
-            json.dumps(remote, indent=2, sort_keys=True).splitlines(keepends=True),
-            fromfile="local", tofile="registered"))
-        print(difference or "Local profile and topology match the registered instance.")
-        return
-    if action in {"tools-plan", "tools-apply", "upgrade-resume"}:
-        with ssh.staged_tools() as remote:
-            if action == "tools-plan":
-                display(ssh.request(action, request, remote))
-                return
-            plan_token = os.environ.get("PLAN_TOKEN")
-            operation = os.environ.get("OPERATION")
-            if not plan_token or not operation:
-                raise LocalError("tool apply/resume requires reviewed PLAN_TOKEN and stable OPERATION UUID")
-            confirm("Apply the reviewed forward-only host tool upgrade")
-            display(ssh.request(action, {**request, "plan_token": plan_token,
-                                        "operation_id": operation}, remote))
-        return
-    if action in {"backup-configure", "backup-run", "restore-drill"}:
-        arguments = {}
-        if action == "backup-configure":
-            arguments["secrets"] = bootstrap_secrets(False, backup_only=True)
-        elif action == "backup-run":
-            arguments["kind"] = os.environ.get("BACKUP_KIND", "full")
-            if arguments["kind"] not in {"full", "diff"}:
-                raise LocalError("BACKUP_KIND must be full or diff")
-            arguments["operation_id"] = operation_id(profile, action, {"kind": arguments["kind"]})
-        else:
-            arguments["backup_id"] = operation_uuid(os.environ.get("BACKUP_ID") or ask("Completed backup UUID"))
-            if os.environ.get("TARGET_TIME"):
-                arguments["target_time"] = os.environ["TARGET_TIME"]
-        confirm(f"{action} for {instance_name(project, profile)}")
-        display(ssh.request(action, {**request, **arguments, "confirm": True}))
-        return
-    status = ssh.request("status", request)
-    remember_releases(profile, status)
-    if action == "status":
-        display(status)
-    elif action == "deploy":
-        say(f"Build and activate {instance_name(project, profile)} on {profile['host']['address']}; pending forward migrations and seeders run during activation.")
-        archive = select_archive(project, profile)
-        manifest = read_json(archive.parent / "manifest.json")
-        say(json.dumps({key: manifest[key] for key in ("version", "commit", "tree_state", "architecture", "instance")}, indent=2))
-        confirm("Activate this completed release, including its pending forward migrations")
-        with ssh.temporary() as remote:
-            destination = remote + "/app.tar.gz"
-            ssh.upload(archive, destination)
-            display(ssh.request("activate", {**request, "archive": destination, "archive_sha256": digest(archive)}))
-            remember_releases(profile, ssh.request("status", request))
-    elif action == "config":
-        say(json.dumps(ssh.request("config-keys", request), indent=2))
-        changes = secret_input("config", "Configuration values JSON", structured=True, required=False)
-        if changes is None:
-            changes = {}
-            key = ask("Configuration key")
-            while key:
-                if key in changes:
-                    raise LocalError("each configuration key can be named once per change")
-                changes[key] = ask("New value (hidden; stored only on the server)", secret=True)
-                if len(changes) == MAX_CONFIGURATION_CHANGES:
-                    break
-                key = ask("Another key to change in the same revision (empty to finish)", "")
-        if (not isinstance(changes, dict) or not 1 <= len(changes) <= MAX_CONFIGURATION_CHANGES
-                or not all(isinstance(key, str) and isinstance(value, str) for key, value in changes.items())):
-            raise LocalError("configuration requires 1–16 string keys and values")
-        confirm(f"Validate and set {', '.join(changes)} for {instance_name(project, profile)}")
-        display(ssh.request("config-set", {**request, "secrets": {"configuration": changes}, "confirm": True}))
-    elif action == "keys rotate":
-        encryption = secret_input("encryption", "Encryption JSON (key_id and key)", structured=True, required=False)
-        if encryption is None and sys.stdin.isatty():
-            supplied = ask("New encryption key JSON (key_id and key; blank generates both on the server)", secret=True)
-            if supplied:
-                try:
-                    encryption = parse_json(supplied)
-                except DeployError as error:
-                    raise LocalError("private encryption input must be valid JSON") from error
-        if encryption is not None and (not isinstance(encryption, dict) or set(encryption) != {"key_id", "key"}):
-            raise LocalError("provide the encryption key ID and material together")
-        confirm(f"Rotate the encryption key and retain old keys for {instance_name(project, profile)}")
-        operation = operation_id(profile, "keys-rotate", {})
-        display(ssh.request("keys-rotate", {**request, "secrets": {"encryption": encryption} if encryption else {},
-                                            "operation_id": operation, "confirm": True}))
-    elif action == "rollback":
-        previous_intent = {}
-        supplied_operation = os.environ.get("OPERATION")
-        if supplied_operation:
-            operation = operation_uuid(supplied_operation)
-            path = ROOT / ".deploy" / "operations" / (operation + ".json")
-            if path.exists():
-                previous_intent = read_json(path)
-        state = status["state"]
-        target = os.environ.get("TARGET") or previous_intent.get("target")
-        if not target:
-            say("Observed previous release: " + str((state.get("previous") or {}).get("version")))
-            target = ask("Exact rollback target release")
-        expected = os.environ.get("EXPECTED_CURRENT") or previous_intent.get("expected_current") or (state.get("current") or {}).get("version")
-        if not isinstance(target, str) or not VERSION_PATTERN.fullmatch(target) or not isinstance(expected, str) or not VERSION_PATTERN.fullmatch(expected):
-            raise LocalError("rollback requires exact TARGET and EXPECTED_CURRENT release versions")
-        arguments = {"target": target, "expected_current": expected}
-        say(json.dumps(arguments, indent=2))
-        confirm(f"Roll back {instance_name(project, profile)} to this target")
-        operation = operation_id(profile, "rollback", arguments)
-        display(ssh.request("rollback", {**request, **arguments, "operation_id": operation, "confirm": True}))
-        remember_releases(profile, ssh.request("status", request))
-    elif action == "logs":
-        role = os.environ.get("ROLE") or (ask("Role (http / scheduler / worker)", "http") if sys.stdin.isatty() else "http")
-        if role not in {item["name"] for item in load_topology(ROOT)["roles"]}:
-            raise LocalError("ROLE must name a role declared in deploy/topology.json")
-        result = ssh.request("logs", {**request, "role": role})
-        if sys.stdin.isatty():
-            print(result["logs"])
-        else:
+    with closing(SSH(profile, settings)) as ssh:
+        request = {"project": project, "profile": profile}
+        if action == "report":
+            # The installed report is intentionally available without sudo.
+            result, exit_code = ssh.report()
+            if result.get("host", {}).get("host_id") != profile["host"]["host_id"]:
+                if result.get("host", {}).get("host_id") is None:
+                    display(result)
+                raise LocalError("host report cannot verify the committed environment binding")
             display(result)
-    else:
-        say(json.dumps(status, indent=2))
-        confirm(f"{action.capitalize()} {instance_name(project, profile)}")
-        display(ssh.request(action, {**request, "confirm": True}))
-        remember_releases(profile, ssh.request("status", request))
+            if exit_code:
+                raise LocalError("host report is incomplete; review its structured problems")
+            return
+        if action == "sync":
+            canonical = ssh.request("sync", request)
+            local = {"profile": profile, "topology": load_topology(ROOT)}
+            remote = {key: canonical[key] for key in local}
+            difference = "".join(difflib.unified_diff(
+                json.dumps(local, indent=2, sort_keys=True).splitlines(keepends=True),
+                json.dumps(remote, indent=2, sort_keys=True).splitlines(keepends=True),
+                fromfile="local", tofile="registered"))
+            print(difference or "Local profile and topology match the registered instance.")
+            return
+        if action in {"tools-plan", "tools-apply", "upgrade-resume"}:
+            with ssh.staged_tools() as remote:
+                if action == "tools-plan":
+                    display(ssh.request(action, request, remote))
+                    return
+                plan_token = os.environ.get("PLAN_TOKEN")
+                operation = os.environ.get("OPERATION")
+                if not plan_token or not operation:
+                    raise LocalError("tool apply/resume requires reviewed PLAN_TOKEN and stable OPERATION UUID")
+                confirm("Apply the reviewed forward-only host tool upgrade")
+                display(ssh.request(action, {**request, "plan_token": plan_token,
+                                            "operation_id": operation}, remote))
+            return
+        rotations = {
+            "backup-keys-rotate": ("backup_s3", "Replacement backup R2 JSON", True),
+            "backup-recipients-rotate": ("age_recipients", "Replacement age recipients JSON array", True),
+            "dns-token-rotate": ("cloudflare_dns_token", "Replacement Cloudflare DNS token", False),
+        }
+        if action in rotations:
+            name, label, structured = rotations[action]
+            private = secret_input(name, label, structured=structured)
+            scope = "all instances sharing the backup repository" if action == "backup-keys-rotate" else (
+                "all instances sharing this Cloudflare zone" if action == "dns-token-rotate" else instance_name(project, profile))
+            confirm(f"{action} for {scope}")
+            display(ssh.request(action, {**request, "secrets": {name: private}, "confirm": True}))
+            return
+        if action in {"backup-configure", "backup-run", "restore-drill"}:
+            arguments = {}
+            if action == "backup-configure":
+                arguments["secrets"] = bootstrap_secrets(False, backup_only=True)
+            elif action == "backup-run":
+                arguments["kind"] = os.environ.get("BACKUP_KIND", "full")
+                if arguments["kind"] not in {"full", "diff"}:
+                    raise LocalError("BACKUP_KIND must be full or diff")
+                arguments["operation_id"] = operation_id(profile, action, {"kind": arguments["kind"]})
+            else:
+                arguments["backup_id"] = operation_uuid(os.environ.get("BACKUP_ID") or ask("Completed backup UUID"))
+                if os.environ.get("TARGET_TIME"):
+                    arguments["target_time"] = os.environ["TARGET_TIME"]
+            confirm(f"{action} for {instance_name(project, profile)}")
+            display(ssh.request(action, {**request, **arguments, "confirm": True}))
+            return
+        status = ssh.request("status", request)
+        remember_releases(profile, status)
+        if action == "status":
+            display(status)
+        elif action == "deploy":
+            say(f"Build and activate {instance_name(project, profile)} on {profile['host']['address']}; pending forward migrations and seeders run during activation.")
+            archive = select_archive(project, profile)
+            manifest = read_json(archive.parent / "manifest.json")
+            say(json.dumps({key: manifest[key] for key in ("version", "commit", "tree_state", "architecture", "instance")}, indent=2))
+            confirm("Activate this completed release, including its pending forward migrations")
+            with ssh.temporary() as remote:
+                destination = remote + "/app.tar.gz"
+                ssh.upload(archive, destination)
+                display(ssh.request("activate", {**request, "archive": destination, "archive_sha256": digest(archive)}))
+                remember_releases(profile, ssh.request("status", request))
+        elif action == "config":
+            say(json.dumps(ssh.request("config-keys", request), indent=2))
+            changes = secret_input("config", "Configuration values JSON", structured=True, required=False)
+            if changes is None:
+                changes = {}
+                key = ask("Configuration key")
+                while key:
+                    if key in changes:
+                        raise LocalError("each configuration key can be named once per change")
+                    changes[key] = ask("New value (hidden; stored only on the server)", secret=True)
+                    if len(changes) == MAX_CONFIGURATION_CHANGES:
+                        break
+                    key = ask("Another key to change in the same revision (empty to finish)", "")
+            if (not isinstance(changes, dict) or not 1 <= len(changes) <= MAX_CONFIGURATION_CHANGES
+                    or not all(isinstance(key, str) and isinstance(value, str) for key, value in changes.items())):
+                raise LocalError("configuration requires 1–16 string keys and values")
+            confirm(f"Validate and set {', '.join(changes)} for {instance_name(project, profile)}")
+            display(ssh.request("config-set", {**request, "secrets": {"configuration": changes}, "confirm": True}))
+        elif action == "keys rotate":
+            encryption = secret_input("encryption", "Encryption JSON (key_id and key)", structured=True, required=False)
+            if encryption is None and sys.stdin.isatty():
+                supplied = ask("New encryption key JSON (key_id and key; blank generates both on the server)", secret=True)
+                if supplied:
+                    try:
+                        encryption = parse_json(supplied)
+                    except DeployError as error:
+                        raise LocalError("private encryption input must be valid JSON") from error
+            if encryption is not None and (not isinstance(encryption, dict) or set(encryption) != {"key_id", "key"}):
+                raise LocalError("provide the encryption key ID and material together")
+            confirm(f"Rotate the encryption key and retain old keys for {instance_name(project, profile)}")
+            operation = operation_id(profile, "keys-rotate", {})
+            display(ssh.request("keys-rotate", {**request, "secrets": {"encryption": encryption} if encryption else {},
+                                                "operation_id": operation, "confirm": True}))
+        elif action == "rollback":
+            previous_intent = {}
+            supplied_operation = os.environ.get("OPERATION")
+            if supplied_operation:
+                operation = operation_uuid(supplied_operation)
+                path = ROOT / ".deploy" / "operations" / (operation + ".json")
+                if path.exists():
+                    previous_intent = read_json(path)
+            state = status["state"]
+            target = os.environ.get("TARGET") or previous_intent.get("target")
+            if not target:
+                say("Observed previous release: " + str((state.get("previous") or {}).get("version")))
+                target = ask("Exact rollback target release")
+            expected = os.environ.get("EXPECTED_CURRENT") or previous_intent.get("expected_current") or (state.get("current") or {}).get("version")
+            if not isinstance(target, str) or not VERSION_PATTERN.fullmatch(target) or not isinstance(expected, str) or not VERSION_PATTERN.fullmatch(expected):
+                raise LocalError("rollback requires exact TARGET and EXPECTED_CURRENT release versions")
+            arguments = {"target": target, "expected_current": expected}
+            say(json.dumps(arguments, indent=2))
+            confirm(f"Roll back {instance_name(project, profile)} to this target")
+            operation = operation_id(profile, "rollback", arguments)
+            display(ssh.request("rollback", {**request, **arguments, "operation_id": operation, "confirm": True}))
+            remember_releases(profile, ssh.request("status", request))
+        elif action == "logs":
+            role = os.environ.get("ROLE") or (ask("Role (http / scheduler / worker)", "http") if sys.stdin.isatty() else "http")
+            if role not in {item["name"] for item in load_topology(ROOT)["roles"]}:
+                raise LocalError("ROLE must name a role declared in deploy/topology.json")
+            result = ssh.request("logs", {**request, "role": role})
+            if sys.stdin.isatty():
+                print(result["logs"])
+            else:
+                display(result)
+        else:
+            say(json.dumps(status, indent=2))
+            confirm(f"{action.capitalize()} {instance_name(project, profile)}")
+            display(ssh.request(action, {**request, "confirm": True}))
+            remember_releases(profile, ssh.request("status", request))
 
 
 def resolve_app_root(argument: str | None) -> Path:
@@ -997,6 +1043,7 @@ def main():
     if arguments.command == "help":
         for command, description in COMMANDS.items():
             print(f"make {command:<10} {description}")
+        print("Actions: " + ", ".join(ACTIONS))
         print("Pass --app-root PATH or FOUNDRY_APP_ROOT; ENVIRONMENT and ACTION select the operation.")
         return
     for option in ("environment", "action", "role", "target", "expected_current", "operation"):

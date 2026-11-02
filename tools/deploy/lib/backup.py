@@ -31,7 +31,7 @@ if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from contracts import (BACKUP_POLICY, BACKUP_JITTER_SECONDS, DeployError, POSTGRES_PORT, check_path, instance_paths,
-                       now, parse_env, read_json, require, valid_uuid)
+                       normalize_backup_repository, now, parse_env, read_json, require, valid_uuid)
 from host import Host
 import packages
 import postgres
@@ -143,9 +143,9 @@ def _cluster(host, registry):
     return cluster
 
 
-def _backrest(host, arguments, *, timeout=1800):
+def _backrest(host, arguments, *, timeout=1800, config=None):
     return host.run(["runuser", "-u", postgres.cluster_owner(), "--", "pgbackrest",
-                     "--config=" + str(host.paths.p(CONFIG)), "--stanza=" + STANZA, *arguments],
+                     "--config=" + str(config if config is not None else host.paths.p(CONFIG)), "--stanza=" + STANZA, *arguments],
                     timeout=timeout)
 
 
@@ -195,16 +195,17 @@ def _attempt(host, entry):
         raise
 
 
-def _info(host):
+def _info(host, *, config=None, allow_missing=False):
     try:
-        result = json.loads(_backrest(host, ["--output=json", "info"], timeout=60).stdout)
+        result = json.loads(_backrest(host, ["--output=json", "info"], timeout=60, config=config).stdout)
         found = [item for item in result if item["name"] == STANZA]
-        require(len(found) == 1 and found[0]["status"]["code"] in (0, 2),
+        require(len(found) == 1 and type(found[0]["status"]["code"]) is int
+                and found[0]["status"]["code"] in ((0, 1, 2) if allow_missing else (0, 2)),
                 "backup_repository_unhealthy", "The Foundry backup repository is not healthy.")
-        backups = found[0].get("backup", [])
+        backups = found[0].get("backup")
         require(isinstance(backups, list), "backup_repository_unhealthy", "Invalid repository backup inventory.")
         return backups
-    except (ValueError, TypeError, KeyError):
+    except (ValueError, TypeError, KeyError, AttributeError):
         raise DeployError("backup_repository_unhealthy", "Cannot read the Foundry backup inventory.") from None
 
 
@@ -723,6 +724,46 @@ def _stop_drill(host, unit):
                         "backup_drill_cleanup_pending", "Drill cgroup still contains processes.")
 
 
+def _bootstrap_repository_unused(host, registry, cluster, existing, corrected):
+    """Require both untouched local history and an empty readable repository."""
+    for item in registry["instances"].values():
+        if "backup" in item["provisioning"]["completed_steps"]:
+            return False
+        for evidence in (item.get("backup", {}), host.load_state(item).get("backup", {})):
+            if not isinstance(evidence, dict) or any(evidence.get(key) for key in (
+                    "last_complete_id", "last_complete_at", "last_attempt_outcome", "database", "attempt", "keys", "restore_drill")):
+                return False
+        private = check_path(host.paths.p(instance_paths(item["name"])["private"]) / "backups", "directory")
+        if private.exists() and any(private.iterdir()):
+            return False  # Completed, unresolved and abandoned operations all retain evidence.
+    operations = check_path(host.paths.p("/etc/foundry/backup/operations"), "directory")
+    if operations.exists() and any(operations.iterdir()):
+        return False
+    # Use corrected credentials without selecting them for the live WAL archiver.
+    # If the destination changes, the old destination must also be provably empty.
+    repositories = [corrected]
+    if any(existing[key] != corrected[key] for key in ("endpoint", "region", "bucket")):
+        repositories.insert(0, existing)
+    directory = check_path(host.paths.p(CONFIG_DIR), "directory")
+    if not directory.exists():
+        return False  # No safe pgBackRest control directory: preserve ambiguous partial state.
+    candidate = directory / ("bootstrap-" + uuid.uuid4().hex + ".conf")
+    try:
+        _cluster_owned_directory(host, CONFIG_DIR)
+        _configuration_path(host)
+        for repository in repositories:
+            host.owned_write(candidate, _configuration(host, cluster, repository), mode=0o600,
+                             owner=postgres.cluster_owner(), group=postgres.cluster_owner())
+            if _info(host, config=candidate, allow_missing=True):
+                return False
+        return True
+    except (DeployError, OSError):
+        return False  # Authentication, missing metadata and inspection failures do not prove emptiness.
+    finally:
+        if candidate.exists():
+            candidate.unlink()
+
+
 def _stage_settings(host, registry, entry, cluster):
     intake = read_json(_private(host, host.paths.instance_config(entry["name"]) / "bootstrap-secrets.json"))
     require(intake.get("instance_id") == entry["profile"]["instance_id"], "backup_ownership", "Private backup intake belongs to another instance.")
@@ -731,22 +772,93 @@ def _stage_settings(host, registry, entry, cluster):
     recipients = _recipients(intake.get("age_recipients"))
     record = {"instance_id": entry["profile"]["instance_id"], "age_recipients": recipients}
     existing_instance = _instance_settings_path(host, entry)
-    if existing_instance.exists():
-        require(read_json(_private(host, existing_instance)) == record,
-                "backup_configuration_conflict", "Backup settings already exist; use an explicit reviewed credential or destination change.")
+    previous_instance = _settings(host, entry) if existing_instance.exists() else None
+    instance_changed = previous_instance is not None and previous_instance != record
     path = host.paths.p(REPOSITORY)
-    if path.exists():
-        existing = _repository_settings(host)
-        require(all(existing.get(key) == value for key, value in repository.items())
-                and existing.get("host_id") == registry["host_id"]
+    existing = _repository_settings(host) if path.exists() else None
+    if existing is not None:
+        require(existing.get("host_id") == registry["host_id"]
                 and existing.get("cluster_token") == cluster["ownership_token"],
                 "backup_repository_conflict", "All instances on the Foundry cluster must reuse its existing backup repository and encryption key.")
+        repository_changed = any(existing.get(key) != value for key, value in repository.items())
+        if repository_changed or instance_changed:
+            require(_bootstrap_repository_unused(host, registry, cluster, existing, {**existing, **repository}),
+                    "backup_configuration_conflict" if instance_changed else "backup_repository_conflict",
+                    "Backup settings have completed or uncertain use; use an explicit reviewed rotation or recovery operation.")
+        if repository_changed:
+            _write_private(host, path, {**existing, **repository})
     else:
+        require(not instance_changed, "backup_configuration_conflict", "Restore the repository before changing backup settings.")
         require(not host.paths.p(CONFIG).exists() and not registry.get("shared", {}).get("backup"),
                 "backup_repository_missing", "Restore the existing repository credentials and encryption key; never generate a replacement.")
         _write_private(host, path, {**repository, "cipher_pass": secrets.token_urlsafe(48),
                                     "host_id": registry["host_id"], "cluster_token": cluster["ownership_token"]})
     _write_private(host, existing_instance, record)
+
+
+def rotate_keys(host, registry, entry, repository):
+    """Replace only shared repository access keys; never move or rekey backups."""
+    from runtime_config import update_bootstrap_secrets
+    fields = {"endpoint", "region", "bucket", "access_key_id", "secret_access_key"}
+    require(isinstance(repository, dict) and set(repository) == fields,
+            "backup_configuration_invalid", "Supply the existing destination and both replacement backup keys.")
+    for value in repository.values():
+        _line(value)
+    repository = normalize_backup_repository(repository)
+    _repository(repository)
+    cluster = _cluster(host, registry)
+    _settings(host, entry)
+    with _repository_lock(host):
+        prior = _repository_settings(host)
+        normalized = normalize_backup_repository(prior)
+        require(all(repository[key] == normalized[key] for key in ("endpoint", "region", "bucket")),
+                "backup_destination_conflict", "Key rotation cannot change the backup endpoint, region or bucket.")
+        require(prior.get("host_id") == registry["host_id"] and prior.get("cluster_token") == cluster["ownership_token"],
+                "backup_ownership", "The backup repository belongs to another host or cluster.")
+        updated = {**prior, **{key: repository[key] for key in ("access_key_id", "secret_access_key")}}
+        configured = [item for item in registry["instances"].values() if _instance_settings_path(host, item).exists()]
+        affected = [item for item in registry["instances"].values()
+                    if item in configured or (host.paths.instance_config(item["name"]) / "bootstrap-secrets.json").exists()]
+        path = _configuration_path(host)
+        original = path.read_text()
+        try:
+            _install_configuration(host, cluster, updated)
+            _backrest(host, ["check"], timeout=300)
+            _write_private(host, host.paths.p(REPOSITORY), updated)
+            update_bootstrap_secrets(host, affected, {"backup_s3": repository})
+        except (DeployError, OSError):
+            _write_private(host, host.paths.p(REPOSITORY), prior)
+            host.owned_write(path, original, mode=0o600,
+                             owner=postgres.cluster_owner(), group=postgres.cluster_owner())
+            raise DeployError("backup_keys_rotation_failed", "Backup key verification or publication failed; previous settings were restored.") from None
+        archives = {}
+        try:
+            for item in configured:
+                archives[item["profile"]["instance_id"]] = archive_keys(host, item)
+        except (DeployError, OSError):
+            raise DeployError("backup_keys_archive_failed", "Backup keys were replaced; recovery archive refresh is incomplete. Inspect ACTION=status before retrying.") from None
+        host.journal(registry)
+        return {"ok": True, "key_archives": archives}
+
+
+def rotate_recipients(host, registry, entry, recipients):
+    from runtime_config import update_bootstrap_secrets
+    recipients = _recipients(recipients)
+    with _repository_lock(host):
+        prior = _settings(host, entry)
+        path = _instance_settings_path(host, entry)
+        try:
+            _write_private(host, path, {**prior, "age_recipients": recipients})
+            update_bootstrap_secrets(host, [entry], {"age_recipients": recipients})
+        except (DeployError, OSError):
+            _write_private(host, path, prior)
+            raise
+        try:
+            receipt = archive_keys(host, entry)
+        except (DeployError, OSError):
+            raise DeployError("backup_recipients_archive_failed", "Recipients were replaced; the fresh archive is incomplete. Inspect ACTION=status before retrying.") from None
+        host.journal(registry, entry)
+        return {"ok": True, "key_archive": receipt}
 
 
 def _configuration(host, cluster, repository):
@@ -828,14 +940,19 @@ def _cluster_owned_directory(host, path):
     if host.paths.root == Path("/"):
         shutil.chown(directory, user=postgres.cluster_owner(), group=postgres.cluster_owner())
 
-def _install_configuration(host, cluster):
+def _configuration_path(host):
     path = check_path(host.paths.p(CONFIG), "file")
     if path.exists():
         require(path.read_text().startswith("# Foundry owned pgBackRest") and not path.stat().st_mode & 0o022,
                 "backup_resource_conflict", "The repository config is not Foundry-owned.")
         require(host.paths.root != Path("/") or path.stat().st_uid in (0, pwd.getpwnam(postgres.cluster_owner()).pw_uid),
                 "backup_resource_conflict", "The repository config has an unexpected owner.")
-    host.owned_write(path, _configuration(host, cluster, _repository_settings(host)), mode=0o600,
+    return path
+
+
+def _install_configuration(host, cluster, repository=None):
+    path = _configuration_path(host)
+    host.owned_write(path, _configuration(host, cluster, repository if repository is not None else _repository_settings(host)), mode=0o600,
                      owner=postgres.cluster_owner(), group=postgres.cluster_owner())
 
 

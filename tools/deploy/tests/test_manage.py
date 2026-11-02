@@ -31,7 +31,7 @@ class ManagerTests(unittest.TestCase):
 
     def test_mutations_reject_newer_and_older_clients_before_commands(self):
         with patch.object(self.host, "run") as run:
-            for generation, code in ((0, "client_too_old"), (2, "host_upgrade_required")):
+            for generation, code in ((0, "client_too_old"), (upgrades.protocol()["generation"] + 1, "host_upgrade_required")):
                 request = copy.deepcopy(self.request)
                 request["client"]["generation"] = generation
                 with self.assertRaises(DeployError) as error:
@@ -78,7 +78,7 @@ class ManagerTests(unittest.TestCase):
         self.assertEqual(2, loaded["schema"])
         response = manager.execute(self.host, "hello", {})
         self.assertEqual({"major": 2, "minor": 0}, response["protocol"])
-        self.assertEqual({"minimum": 1, "maximum": 1}, response["client_generation"])
+        self.assertEqual({"minimum": 1, "maximum": upgrades.protocol()["generation"]}, response["client_generation"])
         self.assertEqual(loaded["tools"]["bundle_sha256"], response["tools"]["bundle_sha256"])
 
 

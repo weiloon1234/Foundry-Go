@@ -98,7 +98,7 @@ class FoundationProvisionTests(unittest.TestCase):
         self.assertEqual([], entry["redis_grants"]["keys"])
         self.register(plan)
         self.assertEqual(2, self.host.registry_value["schema"])
-        self.assertEqual(1, self.host.registry_value["tools"]["generation"])
+        self.assertEqual(provision.upgrades.protocol()["generation"], self.host.registry_value["tools"]["generation"])
 
     def test_plan_digest_changes_when_observed_ports_change(self):
         before = self.plan()
@@ -346,7 +346,7 @@ class FoundationProvisionTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CLEANUP_GRACE, parse_env(path.read_text())[CLEANUP_GRACE_KEY])
         self.assertNotIn("canary-secret", json.dumps(self.host.registry_value))
 
-    def test_bootstrap_retry_selects_published_storage_instead_of_new_intake(self):
+    def test_unfinished_configuration_retry_selects_corrected_intake(self):
         registry, entry, credentials, path = self.bootstrap_storage()
         original = provision._owned_write
         def interrupt(host, destination, *args, **kwargs):
@@ -360,13 +360,13 @@ class FoundationProvisionTests(unittest.TestCase):
         registry = self.host.read_registry()
         entry = registry["instances"][self.profile["instance_id"]]
         self.assertIn("pending_storage_bindings", entry)
-        credentials["app_storage"] = storage_fixture("unselected/")
+        credentials["app_storage"] = storage_fixture("corrected/")
         provision._provision_environment(self.host, registry, entry, credentials)
         selected = self.host.read_registry()["instances"][self.profile["instance_id"]]
         self.assertNotIn("pending_storage_bindings", selected)
         storage = runtime_storage(provision.validate_runtime_environment(self.host, selected),
                                   lambda value: provision._read_value_file(self.host, selected, value))
-        self.assertEqual(storage_fixture("initial/"), storage)
+        self.assertEqual(storage_fixture("corrected/"), storage)
         self.assertEqual(storage_bindings(storage), selected["storage_bindings"])
 
     def test_bootstrap_storage_collision_refuses_first_configuration(self):

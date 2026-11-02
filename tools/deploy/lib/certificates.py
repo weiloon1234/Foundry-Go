@@ -152,6 +152,42 @@ def _resolve_zone(token, domain):
         raise DeployError("certificate_zone_invalid", "Cloudflare zone lookup failed; verify token scope privately.") from None
 
 
+def _validate_token(token):
+    require(isinstance(token, str) and re.fullmatch(r"[A-Za-z0-9_-]{20,256}", token),
+            "certificate_credentials", "Supply the zone-scoped token through secrets.cloudflare_dns_token on SSH stdin.")
+
+
+def _renewal_dry_run(host, entry):
+    host.run(["certbot", "renew", "--cert-name", _lineage(entry), "--dry-run", "--run-deploy-hooks",
+              "--no-random-sleep-on-renew"] + _options(), timeout=900)
+
+
+def rotate_token(host, registry, entry, token):
+    from runtime_config import update_bootstrap_secrets
+    _validate_token(token)
+    zone = _zone(entry)
+    require(_resolve_zone(token, entry["profile"]["domain"]) == zone,
+            "certificate_zone_invalid", "The replacement token must resolve the recorded Cloudflare zone.")
+    affected = [item for item in registry["instances"].values() if item["certificate"].get("zone_ref") == zone]
+    path = _credentials(host, entry)
+    original = path.read_text()
+    for item in affected:
+        _identity_ready(host, item)
+        _renewal_ready(host, item)
+    try:
+        host.owned_write(path, "dns_cloudflare_api_token = " + token + "\n", mode=0o600)
+        for item in affected:
+            _renewal_dry_run(host, item)
+        update_bootstrap_secrets(host, affected, {"cloudflare_dns_token": token})
+    except (DeployError, OSError):
+        host.owned_write(path, original, mode=0o600)
+        raise DeployError("certificate_token_rotation_failed", "DNS token verification or publication failed; the previous token was restored.") from None
+    for item in affected:
+        item["certificate"]["last_renewal_check_at"] = now()
+    host.journal(registry)
+    return {"ok": True, "instances": [item["name"] for item in affected]}
+
+
 def _stage_credentials(host, registry, entry):
     """Consume root-only bootstrap stdin intake; never rotate a working token."""
     if _synthetic(host, entry):
@@ -168,8 +204,7 @@ def _stage_credentials(host, registry, entry):
     require(value.get("instance_id") == entry["profile"]["instance_id"],
             "certificate_ownership", "Private certificate intake belongs to another instance.")
     token = value.get("cloudflare_dns_token")
-    require(isinstance(token, str) and re.fullmatch(r"[A-Za-z0-9_-]{20,256}", token),
-            "certificate_credentials", "Supply the zone-scoped token through secrets.cloudflare_dns_token on SSH stdin.")
+    _validate_token(token)
     if entry["certificate"].get("zone_ref") is None:
         entry["certificate"]["zone_ref"] = _resolve_zone(token, entry["profile"]["domain"])
         host.journal(registry, entry)
@@ -180,8 +215,14 @@ def _stage_credentials(host, registry, entry):
     path = directory / (_zone(entry) + ".ini")
     content = "dns_cloudflare_api_token = " + token + "\n"
     if path.exists():
-        require(_private(host, path).read_text() == content, "certificate_credentials_conflict",
-                "The zone has working credentials; use an explicit zone credential rotation procedure.")
+        if _private(host, path).read_text() != content:
+            require(not any("certificate" in item["provisioning"]["completed_steps"]
+                            and item["certificate"].get("zone_ref") in (None, _zone(entry))
+                            for item in registry["instances"].values()),
+                    "certificate_credentials_conflict", "The zone has working credentials; use ACTION=dns-token-rotate.")
+            require(_resolve_zone(token, entry["profile"]["domain"]) == _zone(entry),
+                    "certificate_credentials_conflict", "The corrected token must resolve the recorded Cloudflare zone.")
+            host.owned_write(path, content, mode=0o600)
     else:
         host.owned_write(path, content, mode=0o600)
 
@@ -366,8 +407,7 @@ def provision(host: Host, registry: dict, entry: dict) -> None:
             _synthetic_issue(host, entry)
         else:
             # Certbot otherwise sleeps up to 8 minutes without a terminal, holding the host lock.
-            host.run(["certbot", "renew", "--cert-name", _lineage(entry), "--dry-run", "--run-deploy-hooks",
-                      "--no-random-sleep-on-renew"] + _options(), timeout=900)
+            _renewal_dry_run(host, entry)
     except DeployError:
         raise DeployError("certificate_renewal_failed", "DNS-01 renewal dry-run failed. " + REMEDIATION) from None
     entry["certificate"]["last_renewal_check_at"] = now()

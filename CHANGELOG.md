@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Fixed: Bootstrap accepts corrected private inputs until their consuming step
+  completes, while preserving encryption keys and shared working credentials.
+  Backup corrections require unused-repository evidence and retain the cipher
+  passphrase; completed steps direct operators to configuration or rotation commands.
+
+- Fixed: Deployment SSH reuses a private session master and tolerates lossy links.
+  Dropped connections report unknown mutation outcomes and direct operators to
+  status; remote mutations are never automatically retried.
+- Added: Confirmed backup R2 key, age recipient and Cloudflare DNS token replacement
+  commands, with verification, rollback on verification failure, bootstrap record
+  updates and fresh backup recovery archives. Deployment tool generation is now 2;
+  protocol 2.0 and generation-1 client support remain unchanged.
+
 - Fixed: Deployment wall-clock budgets can no longer end the process or leave a
   stale timeout behind when the alarm lands at the edge of the block. On macOS an
   alarm in flight could reach the restored default handler and kill the process;

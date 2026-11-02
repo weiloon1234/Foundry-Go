@@ -201,6 +201,7 @@ class CertificateTests(unittest.TestCase):
         self.assertEqual(stored.parent.stat().st_mode & 0o777, 0o700)
         self.assertNotIn(token, json.dumps(self.registry))
         self.assertNotIn(token, json.dumps(self.calls))
+        self.entry["provisioning"]["completed_steps"].append("certificate")
         stored.write_text("dns_cloudflare_api_token = existing-working-token-canary\n")
         with self.assertRaises(DeployError):
             certificates._stage_credentials(self.host, self.registry, self.entry)

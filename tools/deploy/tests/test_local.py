@@ -39,6 +39,9 @@ def fixture():
 
 
 class BootstrapRemote:
+    def close(self):
+        pass
+
     def __init__(self, host_id, registered=None, architecture="amd64", fail_apply=False):
         self.host_id, self.registered = host_id, registered
         self.architecture, self.fail_apply = architecture, fail_apply
@@ -62,6 +65,9 @@ class BootstrapRemote:
 
 
 class UploadRemote:
+    def close(self):
+        pass
+
     """Real upload/staging boundaries with only SSH execution substituted."""
     upload = cli.SSH.upload
     temporary = cli.SSH.temporary
@@ -95,6 +101,9 @@ class LocalDeploymentTests(unittest.TestCase):
             root = Path(temporary).resolve()
             calls = []
             class Remote:
+                def close(self):
+                    pass
+
                 def request(self, action, request):
                     calls.append((action, request))
                     return {"ok": True}
@@ -198,6 +207,80 @@ class LocalDeploymentTests(unittest.TestCase):
             with self.subTest(target=target), self.assertRaises(cli.LocalError):
                 cli.SSH(profile, settings)
 
+    def test_ssh_controls_are_private_short_and_session_owned(self):
+        _, profile = fixture()
+        settings = {"hosts": {"example.com:22": {"target": "work-host", "key_path": ""}}}
+        with patch.object(cli, "execute", return_value="hostname example.com\nport 22\n"):
+            first, second = cli.SSH(profile, settings), cli.SSH(profile, settings)
+        for value in ("ControlMaster=auto", "ControlPersist=120", "ConnectionAttempts=3",
+                      "ConnectTimeout=30", "ServerAliveCountMax=8"):
+            self.assertIn(value, first.base)
+        controls = [next(option.split("=", 1)[1] for option in ssh.base if option.startswith("ControlPath="))
+                    for ssh in (first, second)]
+        self.assertNotEqual(*controls)
+        self.assertLess(len(controls[0].encode()) + 18, 104)
+        directory = Path(controls[0]).parent
+        self.assertEqual(cli.os.getuid(), directory.stat().st_uid)
+        self.assertEqual(0o700, directory.stat().st_mode & 0o777)
+        with patch.object(cli, "execute", side_effect=cli.LocalError("already gone")) as close:
+            first.close()
+        self.assertEqual(["-O", "exit", "work-host"], close.call_args.args[0][-3:])
+
+    def test_ssh_refuses_unsafe_control_directory(self):
+        info = self.root.stat()
+        for mode, uid in ((0o40755, info.st_uid), (0o40700, info.st_uid + 1), (0o120700, info.st_uid)):
+            fake = type("Info", (), {"st_mode": mode, "st_uid": uid})()
+            with patch.object(cli.Path, "mkdir"), patch.object(cli.Path, "lstat", return_value=fake), \
+                    self.assertRaisesRegex(cli.LocalError, "0700"):
+                cli.control_directory()
+
+    def test_dropped_ssh_precedes_json_and_never_retries_mutations(self):
+        ssh = object.__new__(cli.SSH)
+        ssh.base = ["ssh", "fixture"]
+        archive = self.root / "release.tar"
+        archive.write_bytes(b"fixture")
+        result = type("Result", (), {"stdout": b'{"ok":true}', "stderr": b"secret-canary", "returncode": 255})()
+        operations = ((lambda: ssh.request("config-set", {}), True),
+                      (lambda: ssh.request("bootstrap-apply", {}, "/tmp/staged"), True),
+                      (lambda: ssh.report(), False), (lambda: ssh.upload(archive, "/tmp/release"), True),
+                      (lambda: ssh.command("tar -xf - -C /tmp/staged", input=b"private"), True))
+        for operation, mutates in operations:
+            with patch.object(cli.subprocess, "run", return_value=result) as run, self.assertRaises(cli.LocalError) as caught:
+                operation()
+            self.assertEqual(1, run.call_count)
+            self.assertIn("SSH connection failed or dropped", str(caught.exception))
+            self.assertIn("ACTION=status", str(caught.exception))
+            self.assertEqual(mutates, "unknown" in str(caught.exception))
+            self.assertNotIn("secret-canary", str(caught.exception))
+        result.returncode, result.stdout = 1, b"no JSON"
+        with patch.object(cli.subprocess, "run", return_value=result), self.assertRaisesRegex(cli.LocalError, "server returned no valid JSON"):
+            ssh.request("config-set", {})
+
+    def test_credential_actions_use_private_input_confirmation_and_close(self):
+        project, profile = fixture()
+        from unittest.mock import Mock
+        for action, name in (("backup-keys-rotate", "backup_s3"),
+                             ("backup-recipients-rotate", "age_recipients"), ("dns-token-rotate", "cloudflare_dns_token")):
+            remote = Mock()
+            remote.request.return_value = {"ok": True}
+            output = io.StringIO()
+            with patch.object(cli, "SSH", return_value=remote), patch.object(cli, "secret_input", return_value="private-canary") as secret, \
+                    patch.object(cli, "confirm") as confirm, patch.dict(os.environ, {"ACTION": action}, clear=True), \
+                    contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                cli.deploy(project, profile, {})
+            self.assertEqual(name, secret.call_args.args[0])
+            confirm.assert_called_once()
+            self.assertEqual((action, {"project": project, "profile": profile, "confirm": True,
+                                      "secrets": {name: "private-canary"}}), remote.request.call_args.args)
+            remote.close.assert_called_once()
+            self.assertNotIn("private-canary", output.getvalue())
+            remote.reset_mock()
+            remote.request.side_effect = cli.LocalError("dropped")
+            with patch.object(cli, "SSH", return_value=remote), patch.dict(os.environ, {"ACTION": "status"}), \
+                    self.assertRaises(cli.LocalError):
+                cli.deploy(project, profile, {})
+            remote.close.assert_called_once()
+
     def test_config_secret_travels_only_on_stdin(self):
         _, profile = fixture()
         settings = {"hosts": {"example.com:22": {"target": "example.com", "key_path": ""}}}
@@ -212,13 +295,16 @@ class LocalDeploymentTests(unittest.TestCase):
         self.assertIn("/usr/local/sbin/foundry-host config-set", run.call_args.args[0][-1])
         envelope = json.loads(run.call_args.kwargs["input"])
         self.assertIn("protocol", envelope)
-        self.assertEqual(envelope["client"]["generation"], 1)
+        self.assertEqual(envelope["client"]["generation"], cli.protocol_metadata()["client"]["generation"])
 
     def test_config_action_sends_related_keys_as_one_change(self):
         project, profile = fixture()
         requests = []
 
         class FakeSSH:
+            def close(self):
+                pass
+
             def __init__(self, *_):
                 pass
 
@@ -249,6 +335,9 @@ class LocalDeploymentTests(unittest.TestCase):
         requests = []
 
         class FakeSSH:
+            def close(self):
+                pass
+
             def __init__(self, *_):
                 pass
 
@@ -867,6 +956,9 @@ class LocalDeploymentTests(unittest.TestCase):
         requests = []
 
         class Remote:
+            def close(self):
+                pass
+
             def request(self, action, payload):
                 requests.append((action, payload))
                 return {"state": {"current": {"version": current}, "previous": {"version": target}}}
