@@ -7,11 +7,11 @@ toolchain go1.27.3
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/andybalholm/brotli v1.2.5
-	github.com/aws/aws-sdk-go-v2 v1.47.1
+	github.com/aws/aws-sdk-go-v2 v1.47.5
 	github.com/aws/aws-sdk-go-v2/config v1.33.6
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.6
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.4
-	github.com/aws/smithy-go v1.28.2
+	github.com/aws/smithy-go v1.28.7
 	github.com/coder/websocket v1.8.15
 	github.com/disintegration/gift v1.2.1
 	github.com/gen2brain/gav1d v0.2.5
