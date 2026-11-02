@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.5.0 — 2026-11-02
 
 - Added: `make deploy-tools-check` runs the deployment tooling's unit tests and
   is part of `make verify`, so CI covers them.

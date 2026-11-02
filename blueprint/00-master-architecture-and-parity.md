@@ -8,6 +8,23 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Framework-owned deployment tooling and R2 attachments — v0.5.0, 2026-11-02
+
+Status: **implemented; container acceptance passed; real provider gates pending**.
+
+`tools/deploy` owns bootstrap, deployment, backups, certificates and edge
+configuration for one or many instances per host, with Foundry-owned PostgreSQL
+and Redis, and no effect on foreign services. Attachments run on R2 without
+conditional delete, with a tombstone-only sweep and a configurable cleanup grace.
+
+Container acceptance passed on Ubuntu 24.04 and 26.04, arm64 and amd64, each on
+a native host, with the foreign-project fixture preserved (`cf07bed3`; later
+commits do not change `tools/deploy`). Real Cloudflare DNS/ACME and R2 remain
+separate gates at the first server bootstrap. The Go deploy CLI and typed
+inspection commands, storage helper, compatibility adapters, capacity calculator,
+report baseline observations, mixed-version acceptance and compiler-level
+reproducibility are deferred to later tool upgrades.
+
 ## Ticket-authenticated HTTP routes (B22) — v0.4.0 candidate, 2026-11-01
 
 Status: **implemented and passed the requested targeted gate**.
