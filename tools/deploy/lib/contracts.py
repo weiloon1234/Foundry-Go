@@ -214,6 +214,46 @@ def identity(project, profile):
                 "paths": instance_paths(name)}}
 
 
+def normalize_storage_endpoint(endpoint, bucket):
+    """Repair two unambiguous slips; validation still refuses anything else.
+
+    A missing scheme can only mean HTTPS here, and R2's dashboard shows the S3 URL
+    with the bucket appended. An explicit http:// or any other path stays as given.
+    """
+    if not isinstance(endpoint, str):
+        return endpoint
+    endpoint = endpoint.strip()
+    if endpoint and "://" not in endpoint:
+        endpoint = "https://" + endpoint
+    try:
+        url = urlsplit(endpoint)
+    except ValueError:
+        return endpoint
+    if isinstance(bucket, str) and url.path.strip("/") == bucket:
+        return url._replace(path="").geturl()
+    return endpoint[:-1] if url.path == "/" and endpoint.endswith("/") else endpoint
+
+
+def normalize_storage_disks(disks):
+    result = {}
+    for name, disk in disks.items():
+        cloud = disk.get("cloud") if isinstance(disk, dict) else None
+        if isinstance(cloud, dict) and "endpoint" in cloud:
+            endpoint = normalize_storage_endpoint(cloud["endpoint"], cloud.get("bucket"))
+            disk = {**disk, "cloud": {**cloud, "endpoint": endpoint}}
+        result[name] = disk
+    return result
+
+
+def normalize_backup_repository(repository):
+    repository = {**repository, "endpoint": normalize_storage_endpoint(repository["endpoint"], repository["bucket"])}
+    try:
+        _physical_storage_binding(repository)
+    except DeployError as error:
+        raise DeployError(error.code, "Backup repository: " + error.detail) from None
+    return repository
+
+
 def storage_bindings(storage):
     """Extract public physical ownership; compare aliases before dropping secrets."""
     require(isinstance(storage, dict), "storage_binding_invalid", "Storage must declare credentials and disks.")
@@ -229,7 +269,10 @@ def storage_bindings(storage):
                 "storage_binding_invalid", "Deployment storage bindings require explicit cloud disks.")
         cloud = disk.get("cloud", {})
         require(isinstance(cloud, dict), "storage_binding_invalid", "Invalid cloud binding.")
-        binding = _physical_storage_binding(cloud)
+        try:
+            binding = _physical_storage_binding(cloud)
+        except DeployError as error:
+            raise DeployError(error.code, f"Disk {name}: {error.detail}") from None
         credential_name = cloud.get("credentials")
         require(isinstance(credential_name, str), "storage_binding_invalid", "Invalid storage credential name.")
         credential = credentials.get(credential_name)

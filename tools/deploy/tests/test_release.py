@@ -1314,12 +1314,36 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual([], narrowed.args[3])
         self.assertEqual([], narrowed.kwargs["channels"])
 
+    def test_bootstrap_validates_storage_before_persisting_so_a_retry_can_correct_it(self):
+        disks = {"banner": {"driver": "r2", "cloud": {"bucket": "app-bucket", "credentials": "app",
+                                                      "endpoint": "https://account.invalid/other"}}}
+        intake = {"app_storage": {"credentials": {"app": {"secret_key": "app-secret"}}, "disks": disks}}
+        private = self.env_file.with_name("bootstrap-secrets.json")
+        with self.assertRaises(DeployError) as error:
+            initialize_bootstrap_secrets(self.host, self.entry, intake)
+        self.assertEqual("storage_binding_invalid", error.exception.code)
+        self.assertIn("Disk banner:", error.exception.detail)
+        self.assertNotIn("account.invalid", error.exception.detail)
+        self.assertFalse(private.exists())
+        # Both slips the first real bootstrap met are repaired, then stored canonically.
+        for endpoint in ("account.invalid", "https://account.invalid/app-bucket"):
+            disks["banner"]["cloud"]["endpoint"] = endpoint
+            initialize_bootstrap_secrets(self.host, self.entry, intake)
+            stored = json.loads(private.read_text())["app_storage"]["disks"]["banner"]["cloud"]["endpoint"]
+            self.assertEqual("https://account.invalid", stored)
+        bad_backup = dict(endpoint="https://backup.invalid/other", region="auto", bucket="backup",
+                          access_key_id="backup-id", secret_access_key="backup-secret")
+        with self.assertRaises(DeployError) as error:
+            initialize_bootstrap_secrets(self.host, self.entry, {"backup_s3": bad_backup})
+        self.assertIn("Backup repository:", error.exception.detail)
+
     def test_bootstrap_initializes_keyring_once_and_preserves_private_intake(self):
         intake = {"cloudflare_dns_token": "fixture-token", "age_recipients": ["age1fixture"],
                   "backup_s3": dict(endpoint="https://backup.invalid", region="auto", bucket="backup",
                                     access_key_id="backup-id", secret_access_key="backup-secret"),
                   "app_storage": {"credentials": '{"uploads":{"secret_key":"app-secret"}}',
-                                  "disks": '{"uploads":{"driver":"r2"}}'}}
+                                  "disks": json.dumps({"uploads": {"driver": "r2", "cloud": {
+                                      "bucket": "app-bucket", "endpoint": "https://app.invalid", "credentials": "uploads"}}})}}
         credentials = initialize_bootstrap_secrets(self.host, self.entry, intake)
         values = runtime_environment(self.entry, credentials)
         key_file = Path(values[ENCRYPTION_KEYS[1] + "_FILE"])

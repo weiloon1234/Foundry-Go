@@ -426,7 +426,16 @@ and its explicit HTTPS account endpoint. The buckets must already exist.
 The registry records each runtime disk's bucket and namespace prefix.
 Overlapping prefixes across instances are refused, even when endpoint spellings
 differ. Within an instance, overlapping aliases must have identical bindings.
-Use a distinct bucket for the backup repository.
+That check covers one host's registry, so give instances on different hosts
+separate buckets yourself. Use a distinct bucket for the backup repository, and
+one backup bucket per host: the repository path is fixed, so two hosts cannot
+share one.
+
+Bootstrap intake repairs two slips before saving: a missing scheme becomes
+`https://`, and a path equal to the bucket name is removed (R2's dashboard shows
+the S3 URL that way). An explicit `http://` stays, and any other path is refused,
+naming the disk or backup repository but never the value. Storage input is
+validated before it is saved, so a refused value can be corrected and retried.
 
 Storage namespaces must be empty or end in `/`. Storage collections must use
 complete JSON values or their `_FILE` aliases.

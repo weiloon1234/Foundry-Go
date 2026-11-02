@@ -16,7 +16,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
-from contracts import (DeployError, HOST_ROOTS, MAX_JSON, atomic_json, atomic_write, check_path,
+from contracts import (DeployError, HOST_ROOTS, MAX_JSON, atomic_json, atomic_write, check_path, normalize_storage_endpoint,
                        identity, parse_json, read_json, validate_profile, storage_bindings, bind_storage,
                        runtime_storage, reserve_runtime_storage, select_runtime_storage,
                        validate_project, validate_registry, valid_timestamp, instance_paths)
@@ -305,6 +305,14 @@ class DeploymentContractTests(unittest.TestCase):
             self.assertEqual(error.exception.code, "operation_locked")
         with self.host.lock(production, timeout=0.01):
             pass
+
+    def test_storage_endpoint_normalization_repairs_only_unambiguous_slips(self):
+        account = "https://account.r2.cloudflarestorage.com"
+        for supplied in ("account.r2.cloudflarestorage.com", account + "/", account + "/bucket",
+                         account + "/bucket/", " " + account + " "):
+            self.assertEqual(account, normalize_storage_endpoint(supplied, "bucket"))
+        for kept in ("http://minio.internal:9000", account + "/other", account + "/bucket/extra"):
+            self.assertEqual(kept, normalize_storage_endpoint(kept, "bucket"))
 
     def test_lock_queues_behind_a_holder_that_finishes(self):
         production, held = str(uuid.uuid4()), threading.Event()

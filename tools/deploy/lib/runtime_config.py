@@ -14,7 +14,8 @@ import stat
 import uuid
 
 from contracts import (CLEANUP_GRACE_KEY, DEFAULT_CLEANUP_GRACE, DeployError, POSTGRES_PORT, REDIS_PORT, check_path,
-                       dump_env, instance_paths, parse_env, read_json, require)
+                       dump_env, instance_paths, normalize_backup_repository, normalize_storage_disks, parse_env,
+                       read_json, require, storage_bindings)
 
 CREDENTIAL_KEYS = ("database_password", "redis_password")
 ENCRYPTION_KEYS = tuple("APP__ENCRYPTION__" + suffix for suffix in ("KEY_ID", "KEY", "PREVIOUS"))
@@ -171,6 +172,9 @@ def initialize_bootstrap_secrets(host, entry, private_secrets=None):
         require(isinstance(repository, dict) and set(repository) == required
                 and all(isinstance(value, str) and value and not any(c in value for c in "\x00\r\n") for value in repository.values()),
                 "invalid_secrets", "Backup credentials are incomplete or invalid.")
+        # Validate before the first persist: retries refuse changed secrets, so a
+        # stored bad value could not be corrected afterwards.
+        supplied["backup_s3"] = normalize_backup_repository(repository)
     if "age_recipients" in supplied:
         recipients = supplied["age_recipients"]
         require(isinstance(recipients, list) and 1 <= len(recipients) <= 32
@@ -188,6 +192,8 @@ def initialize_bootstrap_secrets(host, entry, private_secrets=None):
                 except ValueError:
                     raise DeployError("invalid_secrets", "App storage JSON is invalid.") from None
             require(isinstance(storage[key], dict) and storage[key], "invalid_secrets", "App storage JSON must be a nonempty object.")
+        storage["disks"] = normalize_storage_disks(storage["disks"])
+        storage_bindings(storage)
         supplied["app_storage"] = storage
     if "configuration" in supplied:
         configuration = supplied["configuration"]

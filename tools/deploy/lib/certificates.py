@@ -86,7 +86,7 @@ def _synthetic_issue(host, entry):
     renewal = "\n".join(f"{name} = {live / filename}" for name, filename in (
         ("cert", "cert.pem"), ("privkey", "privkey.pem"), ("chain", "chain.pem"), ("fullchain", "fullchain.pem")))
     host.owned_write(_renewal_path(host, entry), renewal + "\n[renewalparams]\nauthenticator = acceptance-synthetic\n"
-                     + "deploy_hook = " + RELOAD_HOOK + "\n", mode=0o600)
+                     + "renew_hook = " + RELOAD_HOOK + "\n", mode=0o600)
     _identity_ready(host, entry)
     _renewal_ready(host, entry)
     for command in RELOAD_COMMANDS:
@@ -262,7 +262,8 @@ def _renewal_ready(host, entry):
                           params.get("authenticator") == "dns-cloudflare"
                           and params.get("dns_cloudflare_credentials") == str(credentials)
                           and params.get("dns_cloudflare_propagation_seconds") == "60")
-        require(provider_ready and params.get("deploy_hook") == RELOAD_HOOK
+        # Certbot persists --deploy-hook under the name renew_hook.
+        require(provider_ready and params.get("renew_hook") == RELOAD_HOOK
                 and not params.get("pre_hook") and not params.get("post_hook"),
                 "certificate_renewal_invalid", REMEDIATION)
         live = host.paths.p(CONFIG_DIR + "/live/" + _lineage(entry))

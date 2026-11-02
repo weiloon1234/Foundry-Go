@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: Certificate provisioning checks the `renew_hook` key Certbot actually
+  writes. It looked for `deploy_hook`, which only the synthetic acceptance
+  certificate wrote, so bootstrap failed on every real host after issuance.
+- Fixed: Bootstrap validates storage and backup endpoints before saving them, so
+  a refused value can be corrected on retry instead of `provision_conflict`.
+- Changed: Bootstrap intake adds a missing `https://` and removes a path equal to
+  the bucket name; refusals name the disk or backup repository, never the value.
+
 ## v0.5.0 — 2026-11-02
 
 - Added: `make deploy-tools-check` runs the deployment tooling's unit tests and

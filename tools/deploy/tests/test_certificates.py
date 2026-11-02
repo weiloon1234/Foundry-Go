@@ -55,7 +55,7 @@ class CertificateTests(unittest.TestCase):
             ("cert", "cert.pem"), ("chain", "chain.pem"), ("privkey", "privkey.pem"), ("fullchain", "fullchain.pem")))
             + "\n[renewalparams]\nauthenticator = dns-cloudflare\n"
             + f"dns_cloudflare_credentials = {token}\ndns_cloudflare_propagation_seconds = 60\n"
-            + f"deploy_hook = {certificates.RELOAD_HOOK}\n")
+            + f"renew_hook = {certificates.RELOAD_HOOK}\n")
         for name, content in certificates._units(self.entry).items():
             self.host.owned_write(self.host.paths.p("/etc/systemd/system/" + name), content)
         self.host.write_registry(self.registry)
@@ -262,7 +262,11 @@ class CertificateTests(unittest.TestCase):
             certificates.provision(self.host, self.registry, self.entry)
             self.assertEqual(certificates.inspect(self.host, self.entry)["state"], "ready")
             renewal = certificates._renewal_path(self.host, self.entry)
-            renewal.write_text(renewal.read_text().replace(certificates.RELOAD_HOOK, "/bin/true"))
+            original = renewal.read_text()
+            # Real Certbot persists --deploy-hook as renew_hook; no other key counts.
+            renewal.write_text(original.replace("renew_hook =", "deploy_hook ="))
+            self.assertEqual(certificates.inspect(self.host, self.entry)["state"], "conflict")
+            renewal.write_text(original.replace(certificates.RELOAD_HOOK, "/bin/true"))
             self.assertEqual(certificates.inspect(self.host, self.entry)["state"], "conflict")
         resolve.assert_not_called()
         install.assert_not_called()
