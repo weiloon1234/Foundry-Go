@@ -22,6 +22,14 @@ RECIPIENT = "age1" + "a" * 58
 
 
 class BackupTests(unittest.TestCase):
+    def test_restore_target_is_canonical_for_postgresql(self):
+        for supplied in ("2026-11-02T07:55:00Z", "2026-11-02 07:55:00+00", "2026-11-02 15:55:00+08:00"):
+            self.assertEqual("2026-11-02 07:55:00+00:00", backup._restore_target(supplied))
+        self.assertEqual("2026-11-02 07:55:00.250000+00:00", backup._restore_target("2026-11-02 07:55:00.25+00"))
+        for refused in ("now; rm", "2026-11-02 07:55:00", "2026-13-02 07:55:00+00", None):
+            with self.assertRaises(DeployError):
+                backup._restore_target(refused)
+
     def test_rclone_config_works_with_object_scoped_credentials(self):
         config = backup._rclone_config(dict(region="auto", access_key_id="id", secret_access_key="secret",
                                             bucket="backups", endpoint="https://account.r2.cloudflarestorage.com"))
@@ -293,7 +301,7 @@ class BackupTests(unittest.TestCase):
                 patch.object(backup, "_restore_database", side_effect=restore), patch.object(backup, "_admin", side_effect=admin):
             result = backup.restore_drill(self.host, self.entry, operation, retain=True, target_time="2026-11-01 03:00:00+00")
         self.assertIn("--type=time", restored)
-        self.assertIn("--target=2026-11-01 03:00:00+00", restored)
+        self.assertIn("--target=2026-11-01 03:00:00+00:00", restored)
         self.assertNotEqual(result["data_path"], cluster["data_path"])
         self.assertNotEqual(result["unit"], cluster["unit"])
         self.assertEqual(result["status"], "complete")
@@ -304,6 +312,28 @@ class BackupTests(unittest.TestCase):
         self.assertNotIn("foreign", automatic)
         self.assertNotIn("private-secret", json.dumps(result))
         self.assertEqual(self.host.load_state(self.entry)["backup"]["restore_drill"]["status"], "complete")
+
+    def test_drill_reports_an_exited_postgresql_at_once(self):
+        cluster = self.cluster()
+        operation = str(uuid.uuid4())
+        backup._write_private(self.host, backup._receipt_path(self.host, self.entry, operation),
+                              {"instance_id": self.entry["profile"]["instance_id"], "status": "complete", "pgbackrest_label": LABEL})
+        restored = []
+        def restore(host, unit, path, args):
+            restored.extend(args)
+            directory = Path(next(arg.split("=", 1)[1] for arg in args if arg.startswith("--pg1-path=")))
+            directory.mkdir()
+            (directory / "postgresql.auto.conf").write_text("restore_command = 'pgbackrest archive-get %f %p'\n"
+                                                           "recovery_target_action = 'pause'\n"
+                                                           "primary_conninfo = 'foreign'\nshared_preload_libraries = 'foreign'\n")
+        def admin(host, allocation, sql, **kwargs):
+            raise DeployError("command_failed", "no socket")
+        with patch.object(backup, "_cluster", return_value=cluster), patch.object(backup, "_info", return_value=[{"label": LABEL, "info": {"size": 1}}]), \
+                patch.object(backup, "_recovery_limits", return_value="max_connections = 100\n"), \
+                patch.object(backup, "_restore_database", side_effect=restore), patch.object(backup, "_admin", side_effect=admin):
+            with self.assertRaises(DeployError) as error:
+                backup.restore_drill(self.host, self.entry, operation, retain=True, target_time="2026-11-01 03:00:00+00")
+        self.assertEqual("backup_drill_failed", error.exception.code)
 
     def test_failed_restore_retains_owned_data_without_claiming_verification(self):
         cluster = self.cluster()

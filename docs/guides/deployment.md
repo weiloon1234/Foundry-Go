@@ -559,8 +559,8 @@ pending so a retry can complete it.
 ### PITR and restore drills
 
 `ACTION=restore-drill BACKUP_ID=<completed UUID>` restores into a newly owned
-`/var/lib/postgresql/foundry-drills/<drill ID>/` cluster. Optional `TARGET_TIME`
-selects a timestamp with timezone for PITR. Without a timestamp, the drill uses
+`/var/lib/foundry/postgresql/drills/<drill ID>/` cluster. Optional `TARGET_TIME`
+selects a timestamp with timezone for PITR, such as `2026-11-02T07:55:00Z`. Without a timestamp, the drill uses
 the receipt's named pre-migration point or its first consistent recovery point.
 The drill pauses WAL replay at the selected target and checks the database
 catalog. Its PostgreSQL instance listens only on a private Unix socket and uses

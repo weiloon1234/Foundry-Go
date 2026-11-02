@@ -37,6 +37,8 @@ import packages
 import postgres
 
 STANZA = "foundry"
+# A week of WAL can replay for a long time on a small host.
+DRILL_REPLAY_SECONDS = 3600
 # Foundry-owned paths only: never the distro /etc/pgbackrest or /var/lib/pgbackrest,
 # which a foreign pgBackRest may use and foundry-postgres cannot traverse.
 CONFIG_DIR = "/etc/foundry/pgbackrest"
@@ -479,6 +481,17 @@ def _recovery_limits(host, cluster):
         raise DeployError("backup_drill_limits", "Cannot determine the cluster's recovery resource limits.") from None
 
 
+def _restore_target(value):
+    """Canonicalize: PostgreSQL refuses forms such as 2026-11-02T07:55:00Z at startup."""
+    require(isinstance(value, str) and re.fullmatch(
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}(?::?[0-9]{2})?)", value),
+        "backup_restore_target", "Use an explicit timestamp with timezone.")
+    try:
+        return datetime.fromisoformat(value).astimezone(timezone.utc).isoformat(sep=" ")
+    except ValueError:
+        raise DeployError("backup_restore_target", "Use an explicit timestamp with timezone.") from None
+
+
 def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str | None = None,
                   target_inclusive: bool = True, retain: bool = False) -> dict:
     """Replay into a new Unix-socket-only cluster; never expose live credentials.
@@ -496,9 +509,7 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
     require(type(target_inclusive) is bool and type(retain) is bool,
             "backup_restore_target", "Invalid restore target options.")
     if target_time is not None:
-        require(isinstance(target_time, str) and re.fullmatch(
-            r"[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}(?::?[0-9]{2})?)", target_time),
-            "backup_restore_target", "Use an explicit PostgreSQL timestamp with timezone.")
+        target_time = _restore_target(target_time)
     registry = host.read_registry()
     cluster = _cluster(host, registry)
     intent = {"backup_id": backup_id, "target_time": target_time, "target_inclusive": target_inclusive, "retain": retain}
@@ -625,7 +636,7 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
         # was lost, using the identity persisted before allocation.
         host.run(["systemctl", "start", unit])
         save_phase("started")
-        deadline = time.monotonic() + 180
+        deadline = time.monotonic() + DRILL_REPLAY_SECONDS
         while True:
             try:
                 probe = _admin(host, cluster, "SELECT pg_is_in_recovery() AND pg_is_wal_replay_paused();\n",
@@ -634,6 +645,9 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
                     break
             except DeployError:
                 pass
+            # PostgreSQL exits on a refused setting or unreachable target: not slow replay.
+            require(host.run(["systemctl", "is-failed", "--quiet", unit], check=False).returncode != 0,
+                    "backup_drill_failed", "The drill's PostgreSQL exited; inspect its service journal.")
             require(time.monotonic() < deadline, "backup_drill_target_unreached", "PITR did not reach and pause at the selected target within the drill deadline.")
             time.sleep(0.5)
         verify = _admin(host, cluster, "SELECT current_database();\nSELECT count(*) FROM pg_catalog.pg_class;\n",

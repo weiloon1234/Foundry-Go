@@ -16,6 +16,10 @@
 - Fixed: Bootstrap's renewal dry-run skips Certbot's random delay of up to 8 minutes,
   which it applied without a terminal while holding the host lock. The renewal timer
   keeps it.
+- Fixed: Restore drills accept `TARGET_TIME` with `T` and `Z`, which PostgreSQL refused
+  at startup, and report an exited drill at once instead of a slow replay after
+  3 minutes. Replay may now run for an hour.
+- Fixed: The local CLI explains an unsupported Python instead of raising `TypeError`.
 - Changed: Bootstrap intake adds a missing `https://` and removes a path equal to
   the bucket name; refusals name the disk or backup repository, never the value.
 

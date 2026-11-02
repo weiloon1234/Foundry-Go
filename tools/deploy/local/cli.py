@@ -20,6 +20,9 @@ import tarfile
 import tempfile
 import uuid
 
+if sys.version_info < (3, 11):
+    sys.exit("Foundry deploy tooling needs Python 3.11 or later; this python3 is " + sys.version.split()[0])
+
 TOOLS_ROOT = Path(__file__).resolve().parents[1]
 ROOT: Path | None = None
 sys.path.insert(0, str(TOOLS_ROOT / "lib"))
