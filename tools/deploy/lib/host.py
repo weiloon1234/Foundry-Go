@@ -23,30 +23,54 @@ class OperationTimeout(TimeoutError):
     """Interrupt blocking reads as well as checks between probes."""
 
 
-@contextmanager
-def wall_clock_budget(seconds):
-    # Linux deployment commands run bounded operations on their main thread. A socket timeout
-    # alone does not bound a peer that continuously drips response bytes.
-    previous_handler = signal.getsignal(signal.SIGALRM)
-    previous_timer = signal.getitimer(signal.ITIMER_REAL)
-    started = time.monotonic()
+def _late_alarm(signum, frame):
+    """An alarm still in flight from a finished budget must not end the process."""
 
-    def exhausted(signum, frame):
-        raise OperationTimeout("operation budget exhausted")
 
-    signal.signal(signal.SIGALRM, exhausted)
-    try:
-        signal.setitimer(signal.ITIMER_REAL, seconds)
-        yield
-    finally:
+class wall_clock_budget:
+    """Raise OperationTimeout in the block after `seconds` of wall-clock time.
+
+    Linux deployment commands run bounded operations on their main thread. A socket
+    timeout alone does not bound a peer that continuously drips response bytes.
+    """
+
+    def __init__(self, seconds):
+        self.seconds = seconds
+        self.closing = False
+
+    def _restore(self):
+        if self.closing:
+            return
+        self.closing = True
         signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous_handler)
+        # The default action would kill the process on an alarm generated before that call.
+        handler = self.previous_handler
+        signal.signal(signal.SIGALRM, handler if callable(handler) else _late_alarm)
         delay = 0
-        if previous_timer[0]:
+        if self.previous_timer[0]:
             # Preserve the caller's deadline and repeating interval. If its
             # deadline elapsed during collection, deliver it immediately after.
-            delay = max(0.000001, previous_timer[0] - (time.monotonic() - started))
-        signal.setitimer(signal.ITIMER_REAL, delay, previous_timer[1])
+            delay = max(0.000001, self.previous_timer[0] - (time.monotonic() - self.started))
+        signal.setitimer(signal.ITIMER_REAL, delay, self.previous_timer[1])
+
+    def _exhausted(self, signum, frame):
+        if self.closing:
+            return
+        # The alarm can land where Python would never call __exit__, so clean up first.
+        self._restore()
+        raise OperationTimeout("operation budget exhausted")
+
+    def __enter__(self):
+        self.previous_handler = signal.getsignal(signal.SIGALRM)
+        self.previous_timer = signal.getitimer(signal.ITIMER_REAL)
+        self.started = time.monotonic()
+        signal.signal(signal.SIGALRM, self._exhausted)
+        signal.setitimer(signal.ITIMER_REAL, self.seconds)
+        return self
+
+    def __exit__(self, *exception):
+        self._restore()
+        return False
 
 
 class Paths:

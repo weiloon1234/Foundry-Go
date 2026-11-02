@@ -3,6 +3,7 @@
 import copy
 import json
 import signal
+import subprocess
 import sys
 import tempfile
 import time
@@ -396,6 +397,35 @@ class ReportTests(unittest.TestCase):
         self.assertFalse(result["complete"])
         self.assertIn({"code": "report_budget_exhausted"}, result["problems"])
         self.assertNotIn(SECRET, json.dumps(result, allow_nan=False))
+
+    def test_wall_clock_budget_survives_an_alarm_at_its_own_edges(self):
+        # In a child: the fault this guards against kills the whole process.
+        script = """
+import random, signal, sys, time
+sys.path.insert(0, sys.argv[1])
+from host import OperationTimeout, wall_clock_budget
+def work(seconds):
+    start = time.perf_counter()
+    while time.perf_counter() - start < seconds:
+        pass
+signal.signal(signal.SIGALRM, signal.SIG_DFL)
+end = time.monotonic() + 2
+while time.monotonic() < end:
+    budget = random.uniform(0.00002, 0.0003)
+    try:
+        with wall_clock_budget(budget):
+            try:
+                with wall_clock_budget(budget * random.uniform(0.9, 1.0)):
+                    work(budget * random.uniform(0.8, 1.2))
+            except OperationTimeout:
+                pass
+    except OperationTimeout:
+        pass
+signal.raise_signal(signal.SIGALRM)
+"""
+        result = subprocess.run([sys.executable, "-I", "-B", "-c", script, str(Path(report.__file__).parent)],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, result.returncode, result.stderr[-400:])
 
     def test_wall_clock_budget_restores_previous_handler_and_timer(self):
         previous_handler = signal.getsignal(signal.SIGALRM)

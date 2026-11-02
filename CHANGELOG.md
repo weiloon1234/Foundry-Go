@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: Deployment wall-clock budgets can no longer end the process or leave a
+  stale timeout behind when the alarm lands at the edge of the block. On macOS an
+  alarm in flight could reach the restored default handler and kill the process;
+  the same stress ran without failure on Ubuntu 24.04 before the fix.
+
 ## v0.5.1 — 2026-11-02
 
 - Fixed: Certificate provisioning checks the `renew_hook` key Certbot actually
