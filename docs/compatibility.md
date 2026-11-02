@@ -8,8 +8,8 @@ this acceptance work.
 
 ## Attachment transactions and locale configuration — v0.5.2
 
-`Collection.ClearIn`, `DetachIn`, `FirstIn` and `ListIn`, and the retirement
-methods on attachment handles, are additive. Existing `Clear` and `Detach`
+`Collection.ClearIn`, `DetachIn`, `FirstIn` and `ListIn`, and `ClearIn` on
+attachment handles, are additive. Existing `Clear` and `Detach`
 retain their own-transaction behavior. Caller-transaction retirement is pending
 until the outer commit; cleanup runs only afterward. No database migration or
 generated contract update is required. See [attachment transactions](guides/attachments.md#deletion-and-inspection).

@@ -74,9 +74,6 @@ func wrapOneHandle[M any, K comparable](state oneSlot[M, K]) *attachmentHandleCo
 		clear: func(ctx context.Context, owner unsafe.Pointer) (ChangeResult, error) {
 			return state.clear(ctx, *(*M)(owner))
 		},
-		detachIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, id unsafe.Pointer) (ChangeResult, error) {
-			return state.detachIn(ctx, tx, *(*M)(owner), *(*ID[M])(id))
-		},
 		clearIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer) (ChangeResult, error) {
 			return state.clearIn(ctx, tx, *(*M)(owner))
 		},
@@ -227,15 +224,6 @@ func (s OneHandle[M, K]) Clear(ctx context.Context, owner M) (ChangeResult, erro
 		return *new(ChangeResult), invalid()
 	}
 	return s.core.clear(ctx, unsafe.Pointer(&owner))
-}
-
-// DetachIn retires one file in the caller transaction and cleans storage after commit.
-// Example: slot.DetachIn(ctx,tx,article,id).
-func (s OneHandle[M, K]) DetachIn(ctx context.Context, tx *database.Tx, owner M, id ID[M]) (ChangeResult, error) {
-	if s.core == nil {
-		return *new(ChangeResult), invalid()
-	}
-	return s.core.detachIn(ctx, tx, unsafe.Pointer(&owner), unsafe.Pointer(&id))
 }
 
 // ClearIn retires every file in the caller transaction and cleans storage after commit.

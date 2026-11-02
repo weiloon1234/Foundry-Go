@@ -388,8 +388,7 @@ predicate is a captured membership list, not a live subquery.
 `ClearIn(ctx, tx, manager, owner)` join a caller transaction through a savepoint.
 Both lock the owner until the caller transaction ends, retire membership and
 queue any reconciliation work inside it, and clean storage only after commit.
-`OneHandle` and `ManyHandle` expose `DetachIn(ctx, tx, owner, id)` and
-`ClearIn(ctx, tx, owner)`. A rollback restores membership and suppresses cleanup.
+`OneHandle` and `ManyHandle` expose `ClearIn(ctx, tx, owner)`. A rollback restores membership and suppresses cleanup.
 A successful call reports `Published` subject to the caller's commit;
 `PendingCleanup` lists the retired operations awaiting that commit. Cleanup
 failures surface as the transaction's after-commit error and leave durable

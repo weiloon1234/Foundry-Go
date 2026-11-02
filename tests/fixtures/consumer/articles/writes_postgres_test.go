@@ -366,7 +366,7 @@ func TestSlotAttachmentsPublishInsideTheCallersTransaction(t *testing.T) {
 				return errors.Join(errors.New("transactional gallery read failed"), err)
 			}
 			if commit {
-				if _, err := x.Logo.DetachIn(ctx, tx, article, file.ID()); err != nil {
+				if _, err := cover.DetachIn(ctx, tx, runtime.Attachments, owner, file.ID()); err != nil {
 					return err
 				}
 				if _, err := x.Galleries.ClearIn(ctx, tx, article); err != nil {
@@ -376,7 +376,7 @@ func TestSlotAttachmentsPublishInsideTheCallersTransaction(t *testing.T) {
 				if _, err := x.Logo.ClearIn(ctx, tx, article); err != nil {
 					return err
 				}
-				if _, err := x.Galleries.DetachIn(ctx, tx, article, files[0].ID()); err != nil {
+				if _, err := galleryCollection.DetachIn(ctx, tx, runtime.Attachments, owner, files[0].ID()); err != nil {
 					return err
 				}
 			}

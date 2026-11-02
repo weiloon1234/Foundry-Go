@@ -16,7 +16,7 @@
   protocol 2.0 and generation-1 client support remain unchanged.
 - Added: Attachment `ClearIn`/`DetachIn` retire membership in a caller transaction,
   hold its owner lock, and clean storage only after commit; both slot handles
-  expose them. `Collection.FirstIn`/`ListIn` read that transaction's own changes.
+  expose `ClearIn`. `Collection.FirstIn`/`ListIn` read that transaction's own changes.
 - Fixed: Enabled application locale settings reject a nonempty `Fallback` that
   differs from `Default`, keeping message and content fallback aligned. Empty
   fallback remains valid, and unconfigured fallbacks are still rejected.
