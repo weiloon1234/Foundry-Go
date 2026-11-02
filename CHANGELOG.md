@@ -13,6 +13,9 @@
   the uploaded bytes.
 - Fixed: Package installation waits up to 10 minutes for apt/dpkg locks, such as
   Ubuntu's daily unattended upgrades, before reporting `package_locked`.
+- Fixed: Bootstrap's renewal dry-run skips Certbot's random delay of up to 8 minutes,
+  which it applied without a terminal while holding the host lock. The renewal timer
+  keeps it.
 - Changed: Bootstrap intake adds a missing `https://` and removes a path equal to
   the bucket name; refusals name the disk or backup repository, never the value.
 

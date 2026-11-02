@@ -105,7 +105,7 @@ class CertificateTests(unittest.TestCase):
         commands = [command for command, _ in self.calls]
         dry_runs = [command for command in commands if command[0] == "certbot"]
         self.assertEqual(dry_runs, [["certbot", "renew", "--cert-name", self.entry["profile"]["domain"],
-                                    "--dry-run", "--run-deploy-hooks"] + certificates._options()])
+                                    "--dry-run", "--run-deploy-hooks", "--no-random-sleep-on-renew"] + certificates._options()])
         self.assertIsNotNone(self.entry["certificate"]["last_renewal_check_at"])
         self.assertNotIn("private-canary", json.dumps(self.registry))
         self.assertNotIn("private-canary", json.dumps(commands))

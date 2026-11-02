@@ -365,7 +365,9 @@ def provision(host: Host, registry: dict, entry: dict) -> None:
             # Exercise a second issuance and the real lineage/reload checks.
             _synthetic_issue(host, entry)
         else:
-            host.run(["certbot", "renew", "--cert-name", _lineage(entry), "--dry-run", "--run-deploy-hooks"] + _options(), timeout=900)
+            # Certbot otherwise sleeps up to 8 minutes without a terminal, holding the host lock.
+            host.run(["certbot", "renew", "--cert-name", _lineage(entry), "--dry-run", "--run-deploy-hooks",
+                      "--no-random-sleep-on-renew"] + _options(), timeout=900)
     except DeployError:
         raise DeployError("certificate_renewal_failed", "DNS-01 renewal dry-run failed. " + REMEDIATION) from None
     entry["certificate"]["last_renewal_check_at"] = now()
