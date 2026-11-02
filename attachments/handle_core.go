@@ -29,6 +29,8 @@ type attachmentHandleCore struct {
 	discard      func(ctx context.Context, prepared unsafe.Pointer) error
 	detach       func(ctx context.Context, owner unsafe.Pointer, id unsafe.Pointer) (ChangeResult, error)
 	clear        func(ctx context.Context, owner unsafe.Pointer) (ChangeResult, error)
+	detachIn     func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, id unsafe.Pointer) (ChangeResult, error)
+	clearIn      func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer) (ChangeResult, error)
 	accepts      func(ctx context.Context, file FileSource) (bool, error)
 	url          func(ctx context.Context, owner unsafe.Pointer, file unsafe.Pointer) (string, error)
 	temporaryURL func(ctx context.Context, owner unsafe.Pointer, file unsafe.Pointer, options storage.LinkOptions) (storage.TemporaryURL, error)

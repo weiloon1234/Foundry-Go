@@ -6,6 +6,21 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## Attachment transactions and locale configuration — v0.5.2
+
+`Collection.ClearIn`, `DetachIn`, `FirstIn` and `ListIn`, and the retirement
+methods on attachment handles, are additive. Existing `Clear` and `Detach`
+retain their own-transaction behavior. Caller-transaction retirement is pending
+until the outer commit; cleanup runs only afterward. No database migration or
+generated contract update is required. See [attachment transactions](guides/attachments.md#deletion-and-inspection).
+
+Enabled `application.LocaleSettings` now rejects a nonempty `Fallback` that
+differs from `Default`, even when both are supported. Before upgrading, clear
+`Fallback` to inherit `Default`, or make both equal to the intended common
+fallback. The existing rejection of an unconfigured fallback remains. This
+validation tightening changes startup behavior without changing persisted locale
+data or removing the field. See [localization](guides/localization.md).
+
 ## R2 attachments
 
 New variant generations use `foundry-attachments/<scope>/variants/<variant ID>`.

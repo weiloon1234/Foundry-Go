@@ -323,7 +323,16 @@ func (c Collection[M, K]) afterCommit(outer *database.Tx, m *Manager, id model.I
 	}
 	generate := len(c.definition.policy.Variants) > 0 && c.variantQueue == nil
 	result.PendingVariants = len(c.definition.policy.Variants) > 0
-	if len(old) == 0 && !generate {
+	if !generate {
+		id = model.ID[store.File]{}
+	}
+	return m.afterCommitWork(outer, old, id)
+}
+
+// afterCommitWork shares committed retirement cleanup and optional generation.
+// A zero generate ID schedules cleanup only.
+func (m *Manager) afterCommitWork(outer *database.Tx, old []model.ID[store.File], generate model.ID[store.File]) error {
+	if len(old) == 0 && generate.IsZero() {
 		return nil
 	}
 	return outer.AfterCommit(func(ctx context.Context) error {
@@ -333,8 +342,8 @@ func (c Collection[M, K]) afterCommit(outer *database.Tx, m *Manager, id model.I
 			cleanupCtx, cancel := m.cleanupContext(ctx)
 			defer cancel()
 			_, err := m.cleanupMany(cleanupCtx, old)
-			if generate {
-				err = joinFailures(err, m.generate(ctx, id, false))
+			if !generate.IsZero() {
+				err = joinFailures(err, m.generate(ctx, generate, false))
 			}
 			return err
 		})

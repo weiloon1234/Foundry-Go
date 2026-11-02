@@ -103,7 +103,7 @@ func (c Collection[M, K]) loadRows(ctx context.Context, m *Manager, owners []mod
 }
 
 // scanRows is shared by exact-locale and all-locale reads. Owner visibility and
-// attachment rows use the same repeatable-read transaction and bounded budget.
+// attachment rows use the same transaction and bounded budget.
 func (c Collection[M, K]) scanRows(ctx context.Context, tx *database.Tx, m *Manager, owners []model.Reference[M, K], locales []string, only value.Optional[ID[M]]) (Batch[M, K], error) {
 	if id, ok := only.Get(); ok && id.IsZero() {
 		return Batch[M, K]{}, invalid()
@@ -175,6 +175,48 @@ func (c Collection[M, K]) List(ctx context.Context, m *Manager, owner model.Refe
 		return nil, err
 	}
 	return batch.Get(owner)
+}
+
+// ListIn returns ready attachments for owner in collection order through tx,
+// a transaction of the extension store's pool, including its uncommitted changes.
+// Reads preserve tx's isolation level and do not lock the owner; lock it before
+// checking an invariant that a subsequent mutation must preserve.
+func (c Collection[M, K]) ListIn(ctx context.Context, tx *database.Tx, m *Manager, owner model.Reference[M, K]) ([]Attachment[M, K], error) {
+	if err := c.check(m); err != nil {
+		return nil, err
+	}
+	if err := m.joinable(tx); err != nil {
+		return nil, err
+	}
+	var batch Batch[M, K]
+	err := m.reads.Run(ctx, "attachment batch", func(ctx context.Context) error {
+		locale, err := c.localeName(ctx, m)
+		if err != nil {
+			return err
+		}
+		return m.store.Join(ctx, tx, func(ctx context.Context, tx *database.Tx) error {
+			var err error
+			batch, err = c.scanRows(ctx, tx, m, []model.Reference[M, K]{owner}, []string{locale}, value.Optional[ID[M]]{})
+			return err
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return batch.Get(owner)
+}
+
+// FirstIn returns the first ready attachment in collection order through tx,
+// or an unset value for an empty collection; see ListIn.
+func (c Collection[M, K]) FirstIn(ctx context.Context, tx *database.Tx, m *Manager, owner model.Reference[M, K]) (value.Optional[Attachment[M, K]], error) {
+	files, err := c.ListIn(ctx, tx, m, owner)
+	if err != nil {
+		return value.Optional[Attachment[M, K]]{}, err
+	}
+	if len(files) == 0 {
+		return value.Optional[Attachment[M, K]]{}, nil
+	}
+	return value.Set(files[0]), nil
 }
 
 // First returns the first ready attachment in collection order, or an unset value for

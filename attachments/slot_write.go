@@ -95,6 +95,24 @@ func (s slotDefinition[M, K, S]) clear(ctx context.Context, owner M) (ChangeResu
 	return s.collection.Clear(ctx, m, s.binding.Reference(owner))
 }
 
+// detachIn retires one file inside tx; see Collection.DetachIn.
+func (s slotDefinition[M, K, S]) detachIn(ctx context.Context, tx *database.Tx, owner M, id ID[M]) (ChangeResult, error) {
+	m, err := s.bound()
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	return s.collection.DetachIn(ctx, tx, m, s.binding.Reference(owner), id)
+}
+
+// clearIn retires every file inside tx; see Collection.ClearIn.
+func (s slotDefinition[M, K, S]) clearIn(ctx context.Context, tx *database.Tx, owner M) (ChangeResult, error) {
+	m, err := s.bound()
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	return s.collection.ClearIn(ctx, tx, m, s.binding.Reference(owner))
+}
+
 // accepts reports whether file satisfies this slot's policy, using the same
 // filename, size and byte-detected media checks as a write, including image
 // inspection under an image plan, without storage or database work. It

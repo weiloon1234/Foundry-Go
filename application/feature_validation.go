@@ -143,6 +143,9 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 		if f.Locales.Fallback != "" && !locales.Contains(f.Locales.Fallback) {
 			return f, safeerror.NewFault(fault.Missing, "locale fallback is not configured")
 		}
+		if f.Locales.Fallback != "" && f.Locales.Fallback != f.Locales.Default {
+			return f, safeerror.NewFault(fault.Invalid, "locale fallback must match the default locale")
+		}
 	}
 	if f.Attachments.Enabled {
 		if !f.Extensions.Enabled || len(s.Services.Storage.Disks) == 0 {

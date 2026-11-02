@@ -349,6 +349,58 @@ func TestSlotAttachmentsPublishInsideTheCallersTransaction(t *testing.T) {
 	if _, err := x.Logo.ReplaceIn(t.Context(), nil, article, visible); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nil transaction accepted", err)
 	}
+
+	// Reads and retirement use the same single connection and see pending changes.
+	owner := articles.ArticleIdentity.ReferenceOf(article)
+	cover := attachments.OneCollection(x.Logo)
+	galleryCollection := attachments.ManyCollection(x.Galleries)
+	for _, commit := range []bool{false, true} {
+		err := f.store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
+			first, err := cover.FirstIn(ctx, tx, runtime.Attachments, owner)
+			file, ok := first.Get()
+			if err != nil || !ok {
+				return errors.Join(errors.New("transactional cover read failed"), err)
+			}
+			files, err := galleryCollection.ListIn(ctx, tx, runtime.Attachments, owner)
+			if err != nil || len(files) != 1 {
+				return errors.Join(errors.New("transactional gallery read failed"), err)
+			}
+			if commit {
+				if _, err := x.Logo.DetachIn(ctx, tx, article, file.ID()); err != nil {
+					return err
+				}
+				if _, err := x.Galleries.ClearIn(ctx, tx, article); err != nil {
+					return err
+				}
+			} else {
+				if _, err := x.Logo.ClearIn(ctx, tx, article); err != nil {
+					return err
+				}
+				if _, err := x.Galleries.DetachIn(ctx, tx, article, files[0].ID()); err != nil {
+					return err
+				}
+			}
+			first, err = cover.FirstIn(ctx, tx, runtime.Attachments, owner)
+			if err != nil || first.IsSet() {
+				return errors.Join(errors.New("transactional cover retirement was not visible"), err)
+			}
+			files, err = galleryCollection.ListIn(ctx, tx, runtime.Attachments, owner)
+			if err != nil || len(files) != 0 {
+				return errors.Join(errors.New("transactional gallery retirement was not visible"), err)
+			}
+			if !commit {
+				return rollback
+			}
+			return nil
+		})
+		if !commit {
+			if !errors.Is(err, rollback) || state(visible.Operation()) != attachments.Ready || state(pictures.Operation()) != attachments.Ready {
+				t.Fatal("rolled-back retirement changed ready attachments", err)
+			}
+		} else if err != nil || state(visible.Operation()) != attachments.Cleaned || state(pictures.Operation()) != attachments.Cleaned {
+			t.Fatal("committed retirement was not cleaned", err)
+		}
+	}
 }
 
 // An upload prepared after a REPEATABLE READ transaction took its snapshot is

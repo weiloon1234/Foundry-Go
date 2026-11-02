@@ -74,6 +74,12 @@ func wrapManyHandle[M any, K comparable](state manySlot[M, K]) *attachmentHandle
 		clear: func(ctx context.Context, owner unsafe.Pointer) (ChangeResult, error) {
 			return state.clear(ctx, *(*M)(owner))
 		},
+		detachIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer, id unsafe.Pointer) (ChangeResult, error) {
+			return state.detachIn(ctx, tx, *(*M)(owner), *(*ID[M])(id))
+		},
+		clearIn: func(ctx context.Context, tx *database.Tx, owner unsafe.Pointer) (ChangeResult, error) {
+			return state.clearIn(ctx, tx, *(*M)(owner))
+		},
 		accepts: func(ctx context.Context, file FileSource) (bool, error) { return state.accepts(ctx, file) },
 		url: func(ctx context.Context, owner unsafe.Pointer, file unsafe.Pointer) (string, error) {
 			return state.url(ctx, *(*M)(owner), *(*File[M])(file))
@@ -241,6 +247,24 @@ func (s ManyHandle[M, K]) Clear(ctx context.Context, owner M) (ChangeResult, err
 		return *new(ChangeResult), invalid()
 	}
 	return s.core.clear(ctx, unsafe.Pointer(&owner))
+}
+
+// DetachIn retires one file in the caller transaction and cleans storage after commit.
+// Example: slot.DetachIn(ctx,tx,article,id).
+func (s ManyHandle[M, K]) DetachIn(ctx context.Context, tx *database.Tx, owner M, id ID[M]) (ChangeResult, error) {
+	if s.core == nil {
+		return *new(ChangeResult), invalid()
+	}
+	return s.core.detachIn(ctx, tx, unsafe.Pointer(&owner), unsafe.Pointer(&id))
+}
+
+// ClearIn retires every file in the caller transaction and cleans storage after commit.
+// Example: slot.ClearIn(ctx,tx,article).
+func (s ManyHandle[M, K]) ClearIn(ctx context.Context, tx *database.Tx, owner M) (ChangeResult, error) {
+	if s.core == nil {
+		return *new(ChangeResult), invalid()
+	}
+	return s.core.clearIn(ctx, tx, unsafe.Pointer(&owner))
 }
 
 // Accepts checks policy using the existing manager admission and media checks.

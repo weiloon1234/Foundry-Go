@@ -26,17 +26,44 @@ func (c Collection[M, K]) Detach(ctx context.Context, m *Manager, owner model.Re
 	if id.IsZero() {
 		return ChangeResult{}, invalid()
 	}
-	return c.detach(ctx, m, owner, value.Set(id))
+	return c.detach(ctx, nil, m, owner, value.Set(id))
 }
 
 // Clear retires all ready membership for the selected owner collection and attempts
 // bounded storage cleanup after commit.
 func (c Collection[M, K]) Clear(ctx context.Context, m *Manager, owner model.Reference[M, K]) (ChangeResult, error) {
-	return c.detach(ctx, m, owner, value.Optional[ID[M]]{})
+	return c.detach(ctx, nil, m, owner, value.Optional[ID[M]]{})
 }
-func (c Collection[M, K]) detach(ctx context.Context, m *Manager, owner model.Reference[M, K], only value.Optional[ID[M]]) (ChangeResult, error) {
+
+// DetachIn retires ready membership for id inside tx, a transaction of the
+// extension store's pool. It locks the owner until tx ends and joins a savepoint;
+// a rollback preserves membership and storage. Cleanup runs only after tx commits,
+// and its failure is the transaction's after-commit error. Published and
+// PendingCleanup describe the pending commit, as with ReplaceIn.
+func (c Collection[M, K]) DetachIn(ctx context.Context, tx *database.Tx, m *Manager, owner model.Reference[M, K], id ID[M]) (ChangeResult, error) {
+	if tx == nil || id.IsZero() {
+		return ChangeResult{}, invalid()
+	}
+	return c.detach(ctx, tx, m, owner, value.Set(id))
+}
+
+// ClearIn retires all ready membership for the selected owner collection
+// inside tx; see DetachIn.
+func (c Collection[M, K]) ClearIn(ctx context.Context, tx *database.Tx, m *Manager, owner model.Reference[M, K]) (ChangeResult, error) {
+	if tx == nil {
+		return ChangeResult{}, invalid()
+	}
+	return c.detach(ctx, tx, m, owner, value.Optional[ID[M]]{})
+}
+
+func (c Collection[M, K]) detach(ctx context.Context, outer *database.Tx, m *Manager, owner model.Reference[M, K], only value.Optional[ID[M]]) (ChangeResult, error) {
 	if err := c.check(m); err != nil {
 		return ChangeResult{}, err
+	}
+	if outer != nil {
+		if err := m.joinable(outer); err != nil {
+			return ChangeResult{}, err
+		}
 	}
 	var result ChangeResult
 	err := m.calls.Run(ctx, "attachment detach", func(ctx context.Context) error {
@@ -45,7 +72,7 @@ func (c Collection[M, K]) detach(ctx context.Context, m *Manager, owner model.Re
 			return err
 		}
 		var ids []model.ID[store.File]
-		err = m.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
+		retire := func(ctx context.Context, tx *database.Tx) error {
 			subject, err := c.definition.owner.Lock(ctx, tx, m.store.Registry(), owner)
 			if err != nil {
 				return err
@@ -78,8 +105,24 @@ func (c Collection[M, K]) detach(ctx context.Context, m *Manager, owner model.Re
 				}
 				ids = append(ids, row.ID)
 			}
+			if outer != nil {
+				return m.afterCommitWork(tx, ids, model.ID[store.File]{})
+			}
 			return nil
-		})
+		}
+		if outer != nil {
+			err = m.store.Join(ctx, outer, retire)
+			if err != nil {
+				return err
+			}
+			result.Publication = Published
+			result.Affected = len(ids)
+			for _, id := range ids {
+				result.PendingCleanup = append(result.PendingCleanup, operationID(id))
+			}
+			return nil
+		}
+		err = m.store.Write(ctx, retire)
 		outcome := transactionOutcome(err)
 		if err != nil && outcome != database.Committed {
 			if outcome == database.Unknown {

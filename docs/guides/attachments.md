@@ -331,6 +331,17 @@ no I/O and returns copied slices. The aggregate limit is 4096 files and 4 MiB of
 properties. A missing or soft-deleted owner differs from an active empty
 collection. Snapshot results do not replace fresh authorization checks.
 
+`FirstIn(ctx, tx, manager, owner)` and `ListIn(ctx, tx, manager, owner)` read
+through a transaction of the extension store's exact pool, including that
+transaction's uncommitted attachment changes. They keep the existing owner
+visibility, locale, ordering, variant and row/property bounds, and preserve the
+caller's isolation level. They do not acquire an owner lock. For a check followed
+by a business update, lock the owner in that transaction before checking its
+attachments, and keep the check and update in the same transaction. Every
+competing mutation must use the same owner lock before its own business checks.
+For slots, use `attachments.OneCollection(handle).FirstIn` or
+`attachments.ManyCollection(handle).ListIn`; loaded slot values remain snapshots.
+
 `ReadBytes` rechecks ready membership, conditionally reads pinned storage, and
 verifies the complete checksum and length (a disk-verified full read whose
 stored checksum equals the pin is not hashed again). `Image` applies an explicit
@@ -373,6 +384,18 @@ predicate is a captured membership list, not a live subquery.
 ## Deletion and inspection
 
 `Detach` and `Clear` retire ready ownership transactionally, then clean storage.
+`DetachIn(ctx, tx, manager, owner, id)` and
+`ClearIn(ctx, tx, manager, owner)` join a caller transaction through a savepoint.
+Both lock the owner until the caller transaction ends, retire membership and
+queue any reconciliation work inside it, and clean storage only after commit.
+`OneHandle` and `ManyHandle` expose `DetachIn(ctx, tx, owner, id)` and
+`ClearIn(ctx, tx, owner)`. A rollback restores membership and suppresses cleanup.
+A successful call reports `Published` subject to the caller's commit;
+`PendingCleanup` lists the retired operations awaiting that commit. Cleanup
+failures surface as the transaction's after-commit error and leave durable
+intents for `ReconcilePending`. The existing cleanup grace still applies. See the
+[single-connection consumer example](../../tests/fixtures/consumer/articles/writes_postgres_test.go).
+
 `DetachKeepFile` instead records durable `retained` state and returns explicit
 storage pins. Cleanup responsibility passes to the application. Owner deletion,
 orphan pruning and reconciliation preserve that object. `RetainedObject` recovers

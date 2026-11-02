@@ -15,6 +15,14 @@ translations and localized attachments. Translated model fields declared as
 injected with an ordinary foundation factory. Each operation receives an explicit
 locale; there is no process-wide current locale.
 
+With `application.LocaleSettings` enabled, `Default` drives both content
+resolution and message catalog fallback. Leave `Fallback` empty to use
+`Default`, or set it to the same locale. Startup rejects a configured `Fallback`
+that differs from `Default` with `fault.Invalid`, and still rejects an
+unconfigured fallback with `fault.Missing`. To change the common fallback, change
+`Default` and either clear `Fallback` or update it to match; the field remains
+supported.
+
 ## Declare typed messages
 
 The Go argument struct is the source of truth for parameter names and types:
