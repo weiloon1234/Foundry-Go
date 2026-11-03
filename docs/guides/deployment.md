@@ -653,6 +653,71 @@ its members, and replay a timestamp-bounded row change. Keep the release artifac
 recoverable. Actual disaster recovery and traffic cutover remain explicit
 operator procedures; the drill does not rebind host identity.
 
+### Recovering onto a replacement host
+
+No deployment action performs this yet, so these steps are manual. They were
+rehearsed once, on 2026-11-03, by restoring a staging instance onto an empty host
+(PostgreSQL 16.15, pgBackRest 2.50, 35 MB restored). The rehearsal stopped short of
+serving traffic; the limits are listed after the steps.
+
+You need the operator's age identity, access to the backup bucket, the release
+or the commit to rebuild it from, and a new host with the same PostgreSQL major
+version. Keep the age identity off every server.
+
+1. Download the newest archive under `keys/<instance ID>/` in the backup bucket and
+   decrypt it on the operator's machine. It holds
+   `recovery/pgbackrest-repository.json` and
+   `instances/<instance>/` with `app.env`, `secrets.json` and the encryption key.
+2. Install PostgreSQL, pgBackRest and Redis on the new host, then stop and disable
+   their default services. Create the `foundry-postgres` account and its private
+   directories.
+3. Render `/etc/foundry/pgbackrest/foundry.conf` from the repository file with
+   `_configuration` in `tools/deploy/lib/backup.py`, mode 0600, owned by
+   `foundry-postgres`. `pgbackrest info` must list the expected backups and
+   system ID.
+4. Restore into a new directory as `foundry-postgres` with `--archive-mode=off`. Add
+   `--type=time --target=<timestamp> --target-action=pause` to stop at a point in
+   time; omit them to replay all archived WAL.
+5. Write a fresh `postgresql.conf` and `pg_hba.conf` outside the data directory, as
+   `restore_drill` does, with `archive_mode = off`. Take the `max_*` limits from
+   `pg_controldata`, since the old host may be gone. Keep only recovery settings in
+   `postgresql.auto.conf`, then start PostgreSQL and wait for replay to finish.
+6. Create a new local CA and `localhost` certificate as `prepare_tls` does, and add
+   the CA to the system trust store. The archive does not carry them, and `app.env`
+   connects with `verify-full`. Enable TLS on PostgreSQL with the `_hba` rules. The
+   roles and their password hashes come back with the restored data.
+7. Start Redis with the same TLS settings. Build its ACL with `redis_rules`, using
+   `artisan redis:keys` from the release and the password in `secrets.json`. Redis
+   starts empty because it has no backup; `artisan redis:keys` shows what it holds.
+8. Install the release, `app.env` and the encryption key at their original paths,
+   then start `artisan serve`. Leave `schedule:work` and workers off until the old
+   host is confirmed dead, because they share its attachment bucket and can delete
+   objects. Set `APP__SCHEDULER__ENABLED=false` to remove those schedules.
+9. Check `/health/ready`, sign in, read an image and compare its hash with
+   `foundry_attachments.digest`, then write and read an encrypted row. Direct requests
+   must carry the headers from `tools/deploy/server/templates/nginx-proxy.conf`;
+   without them sign-in returns a 400.
+
+While the old host is alive, the restored cluster shares its system ID and
+repository. Run only `info`, `restore` and `archive-get` against the repository, and
+never `backup`, `expire`, `check`, `archive-push` or a `stanza-*` command.
+
+The rehearsal did not cover these, so treat them as unproven:
+
+- **Backups on the replacement.** Resuming WAL archiving was not tried, and a
+  recovered host has no backups until it is.
+- **Tool management.** The new host has no registry, so `make deploy` cannot manage
+  it. Bootstrap on a new host generates a new repository passphrase, so do not point
+  it at the existing bucket; that path was not tested.
+- **Traffic.** Nginx, certificates and the DNS cutover were not exercised.
+- **Rebuilt releases.** The rehearsal reused a stored release artifact; it did not
+  rebuild one from git.
+- **Existing ciphertext.** Staging had no encrypted rows. The recovered key was
+  compared by hash with the live key and tested with a new encrypted row, so no
+  ciphertext written by the old host was decrypted.
+- **Large databases.** The 35 MB restore took 2 to 3 minutes with pgBackRest's
+  default single process. Time a production-sized restore separately.
+
 ## Container acceptance
 
 `make deploy-tools-check` runs the tooling's service-free unit tests, and
