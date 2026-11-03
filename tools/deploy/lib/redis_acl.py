@@ -19,6 +19,7 @@ import socket
 import ssl
 import time
 import uuid
+import capacity
 from typing import TYPE_CHECKING
 
 from contracts import (DeployError, REDIS_PORT, REDIS_ACCOUNT, REDIS_ADMIN,
@@ -95,22 +96,27 @@ def _port_busy(host: Host) -> bool:
 def _owned_service(shared: dict | None, claim: dict) -> None:
     require(bool(shared) and shared.get("owner") == "foundry" and shared.get("unit") == REDIS_UNIT
             and shared.get("port") == REDIS_PORT and shared.get("aclfile") == REDIS_ACLFILE
-            and shared.get("ownership_token") == claim.get("ownership_token") and bool(claim),
+            and shared.get("ownership_token") == claim.get("ownership_token") and bool(claim)
+            and capacity.redis_valid(shared.get("capacity"))
+            and shared["capacity"] == claim.get("allocation", {}).get("capacity"),
             "redis_ownership", "The dedicated Redis allocation has no matching ownership journal.")
 
 
-def _claimed_files(host: Host, claim: dict, *, complete: bool = False) -> None:
+def _claimed_files(host: Host, claim: dict, *, complete: bool = False, capacity_target=None) -> None:
     for absolute, digest in claim.get("files", {}).items():
         require(absolute in {REDIS_CONFIG, REDIS_UNIT_PATH, REDIS_CERT, REDIS_KEY},
                 "redis_ownership", "Unexpected file in Redis preparation journal.")
         path = check_path(host.paths.p(absolute), "file")
         require(not complete or path.exists(), "redis_ownership", "An owned Redis service file is missing.")
         if path.exists():
-            require(hashlib.sha256(path.read_bytes()).hexdigest() == digest,
+            allowed = {digest}
+            if absolute == REDIS_CONFIG and capacity_target is not None:
+                allowed.add(hashlib.sha256(_redis_config(claim["ownership_token"], capacity_target).encode()).hexdigest())
+            require(hashlib.sha256(path.read_bytes()).hexdigest() in allowed,
                     "redis_ownership", "An owned Redis service file changed outside its recorded plan.")
 
 
-def inspect(host: Host, registry: dict) -> dict:
+def inspect(host: Host, registry: dict, *, capacity_target=None) -> dict:
     """Inspect dedicated metadata only; no requests ever reach foreign Redis."""
     shared, claim = _service_claim(host, registry)
     unit = _unit(host)
@@ -123,7 +129,7 @@ def inspect(host: Host, registry: dict) -> dict:
                 "owner": None, "unit": REDIS_UNIT, "port": REDIS_PORT, "aclfile": REDIS_ACLFILE}
     shared = shared or claim.get("allocation")
     _owned_service(shared, claim)
-    _claimed_files(host, claim, complete=shared.get("state") == "ready")
+    _claimed_files(host, claim, complete=shared.get("state") == "ready", capacity_target=capacity_target)
     active = unit.get("ActiveState") == "active"
     require(not unit.get("DropInPaths") and (unit.get("LoadState") == "not-found"
             or unit.get("FragmentPath") == REDIS_UNIT_PATH or (claim["phase"] != "ready" and _unused_template(unit))),
@@ -203,7 +209,7 @@ def _verify_connection(host: Host) -> None:
         raise DeployError("redis_tls", "Foundry Redis must verify its hostname and system trust before use.") from None
 
 
-def _redis_config(token: str) -> str:
+def _redis_config(token: str, limits: dict) -> str:
     return f"""# Foundry-owned Redis: {token}
 bind 127.0.0.1 ::1
 protected-mode yes
@@ -224,18 +230,18 @@ save 900 1
 save 300 10
 save 60 10000
 stop-writes-on-bgsave-error yes
-maxmemory 128mb
+maxmemory {limits["maxmemory_bytes"] // (1024 * 1024)}mb
 maxmemory-policy noeviction
-maxclients 256
+maxclients {limits["maxclients"]}
 """
 
 
-def _verify_runtime(host: Host) -> None:
+def _verify_runtime(host: Host, limits: dict) -> None:
     _verify_connection(host)
     _verify_admin(host)
     expected = {"port": "0", "tls-port": str(REDIS_PORT), "bind": "127.0.0.1 ::1", "appendonly": "yes",
                 "appendfsync": "everysec", "save": "900 1 300 10 60 10000", "maxmemory-policy": "noeviction",
-                "maxmemory": str(128 * 1024 * 1024), "maxclients": "256", "dir": REDIS_DATA,
+                "maxmemory": str(limits["maxmemory_bytes"]), "maxclients": str(limits["maxclients"]), "dir": REDIS_DATA,
                 "aclfile": REDIS_ACLFILE, "tls-auth-clients": "no", "stop-writes-on-bgsave-error": "yes"}
     value = _redis(host, "CONFIG", "GET", *expected)
     require(isinstance(value, dict) and all(value.get(key) == wanted for key, wanted in expected.items()),
@@ -259,12 +265,13 @@ def prepare(host: Host, registry: dict) -> None:
         shared = registry["shared"]["redis"] = claim["allocation"]
         host.journal(registry)
     if not shared:
+        sized = capacity.redis(capacity.allocation_memory(host, "host_capacity"))
         token = str(uuid.uuid4())
         shared = registry["shared"]["redis"] = {
             "owner": "foundry", "state": "installing", "ownership_token": token,
             "unit": REDIS_UNIT, "port": REDIS_PORT, "aclfile": REDIS_ACLFILE,
             "admin_user": REDIS_ADMIN, "config_path": REDIS_CONFIG, "data_path": REDIS_DATA,
-            "capacity": {"budget_bytes": 256 * 1024 * 1024, "maxmemory_bytes": 128 * 1024 * 1024, "maxclients": 256},
+            "capacity": sized,
         }
         claim = {"host_id": registry["host_id"], "ownership_token": token, "phase": "reserved", "files": {}, "allocation": dict(shared)}
         _save_claim(host, claim)
@@ -272,9 +279,6 @@ def prepare(host: Host, registry: dict) -> None:
     _owned_service(shared, claim)
     # A crash between private reservation and the public journal is recoverable
     # only by the matching reservation; unknown paths are never adopted.
-    memory = check_path(host.paths.p("/proc/meminfo"), "file").read_text()
-    match = re.search(r"^MemTotal:\s+(\d+) kB$", memory, re.MULTILINE)
-    require(match and int(match[1]) >= 1280 * 1024, "host_capacity", "Foundry requires at least 1 GiB PostgreSQL plus 256 MiB Redis memory.")
     needed = [package for binary, package in (("redis-server", "redis-server"), ("redis-cli", "redis-tools"))
               if not host.paths.p("/usr/bin/" + binary).is_file()]
     if needed:
@@ -299,7 +303,7 @@ def prepare(host: Host, registry: dict) -> None:
         host.run(["useradd", "--system", "--user-group", "--home-dir", REDIS_DATA, "--no-create-home",
                   "--shell", "/usr/sbin/nologin", "--comment", marker, REDIS_ACCOUNT])
     if observation["state"] == "ready":
-        _verify_runtime(host)
+        _verify_runtime(host, shared["capacity"])
         record_trust_probe(host, registry, "redis")
         return
     secret_path = check_path(host.paths.etc / "host-secrets.json", "file")
@@ -322,7 +326,7 @@ def prepare(host: Host, registry: dict) -> None:
         host.run(["install", "-d", "-m", "0750", "-o", owner, "-g", group, str(path)])
     template = Path(__file__).resolve().parents[1] / "server/templates/redis-server@foundry.service"
     unit_text = template.read_text().replace("@OWNERSHIP_TOKEN@", shared["ownership_token"])
-    files = {REDIS_CONFIG: _redis_config(shared["ownership_token"]), REDIS_UNIT_PATH: unit_text,
+    files = {REDIS_CONFIG: _redis_config(shared["ownership_token"], shared["capacity"]), REDIS_UNIT_PATH: unit_text,
              REDIS_CERT: Path(tls["cert"]).read_text(), REDIS_KEY: Path(tls["key"]).read_text()}
     _claimed_files(host, claim)
     for absolute, content in files.items():
@@ -354,7 +358,7 @@ def prepare(host: Host, registry: dict) -> None:
         require(not _port_busy(host), "redis_port_conflict", "The reserved Redis TLS port is occupied.")
         host.run(["systemctl", "daemon-reload"])
         host.run(["systemctl", "enable", "--now", REDIS_UNIT])
-    _verify_runtime(host)
+    _verify_runtime(host, shared["capacity"])
     record_trust_probe(host, registry, "redis")
     claim["phase"] = "ready"
     _save_claim(host, claim)

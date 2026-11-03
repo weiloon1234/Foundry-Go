@@ -254,7 +254,7 @@ def _verify_repository(host, journal, recovered):
     path.unlink(missing_ok=True)
     try:
         packages.install_missing(host, ["pgbackrest"])
-        cluster = postgres._allocation(major, recovered["postgres_port"], "preflight")
+        cluster = postgres._allocation(major, recovered["postgres_port"], "preflight", {})
         host.owned_write(path, backup._configuration(host, cluster, recovered["repository"], work=directory), mode=0o600)
         inventory = backup._info(host, config=path, inventory=True, user="root", allow_missing=True)
         backups = [item for item in inventory["backup"] if not item.get("error") and item.get("timestamp", {}).get("stop")]

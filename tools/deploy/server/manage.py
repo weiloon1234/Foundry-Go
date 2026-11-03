@@ -13,7 +13,7 @@ from contracts import DeployError, MAX_JSON, check_path, identity, parse_env, pa
 from topology import instance_units
 from host import Host
 
-ACTIONS = ("hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect", "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "activate", "status", "rollback", "restart", "stop",
+ACTIONS = ("capacity-plan", "capacity-apply", "hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect", "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "activate", "status", "rollback", "restart", "stop",
            "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate", "backup-configure", "backup-run", "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report")
 
 
@@ -35,7 +35,7 @@ def execute(host, action, request):
                  "backup-keys-rotate": {"secrets"}, "backup-recipients-rotate": {"secrets"},
                  "dns-token-rotate": {"secrets"}, "backup-configure": {"secrets"}, "backup-run": {"kind"},
                  "restore-drill": {"backup_id", "target_time", "target_inclusive", "retain"},
-                 "tools-apply": {"plan_token"}, "upgrade-resume": {"plan_token"}}
+                 "capacity-apply": {"plan_token"}, "tools-apply": {"plan_token"}, "upgrade-resume": {"plan_token"}}
     if action not in upgrades.READ_ACTIONS:
         require(set(request) <= common | arguments.get(action, set()), "invalid_request", "Unknown mutation request field.")
         require(os.geteuid() == 0 or host.paths.root != Path("/"), "root_required", "Host mutations require root.")
@@ -90,6 +90,12 @@ def execute(host, action, request):
         require(entry is not None and entry["project_id"] == project["id"], "identity_mismatch", "Unknown project/instance UUID.")
         return {"profile": entry["profile"], "topology": entry["topology"]}
     _, entry = host.require_identity(project, profile)
+    if action in ("capacity-plan", "capacity-apply"):
+        import capacity
+        if action == "capacity-plan":
+            return capacity.plan(host)
+        require(request.get("confirm") is True, "confirmation_required", "Review and confirm the capacity plan before restarting services.")
+        return capacity.apply(host, request.get("plan_token"))
     if action in ("backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate"):
         import backup
         import certificates

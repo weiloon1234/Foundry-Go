@@ -35,6 +35,7 @@ local state remains in the application directory.
 | `ACTION=config make deploy` | Submit up to 16 related configuration values together |
 | `ACTION=report make deploy` | Read the public host report without sudo |
 | `ACTION=sync make deploy` | Show the local profile and topology diff against the registry |
+| `ACTION=capacity make deploy` | Review and apply RAM-based PostgreSQL and Redis sizing |
 | `ACTION=tools-plan make deploy` | Stage the selected framework bundle and inspect an upgrade plan |
 | `ACTION=tools-apply make deploy` | Apply the reviewed tool plan with `PLAN_TOKEN` and `OPERATION` |
 | `ACTION=upgrade-resume make deploy` | Resume that same tool operation after interruption |
@@ -457,8 +458,55 @@ data remains intact. Shared nginx changes affect only the owned site and use
 configuration validation followed by a graceful reload. Foreign configuration,
 PostgreSQL and Redis process identities, data, and reachability must remain
 unchanged. Nginx retains its master PID while a reload may replace workers.
-Capacity uses fixed conservative allocations and a memory sanity check; a
-workload-based capacity calculator is deferred.
+## Service capacity
+
+New PostgreSQL and Redis allocations use the smaller of the server's `MemTotal`
+and its numeric cgroup v2 `memory.max` limit, in MiB (`M`). At least 1536 MiB is
+required. Recovery sizes for the replacement host. Allocations are recorded;
+resuming provisioning, deploying, or upgrading tools never resizes them.
+Existing v0.5.x allocations keep their recorded values, including the old
+PostgreSQL defaults, until an operator explicitly runs:
+
+```sh
+ENVIRONMENT=production ACTION=capacity make deploy
+```
+
+The command prints current and proposed values and the units that will restart,
+then asks for confirmation. PostgreSQL and Redis restart through their owned
+units, causing a brief application interruption. Apply verifies effective
+settings and readiness for instances recorded as `healthy` or `rolled_back` before
+acknowledging the new allocations. Never-deployed and stopped instances stay as they are.
+Shrinking is supported. When values already match, apply does nothing. Rehearsals,
+pending recovery and interrupted deployments cannot change capacity.
+
+Sizing uses these rules (memory amounts below are in MiB):
+
+- PostgreSQL `shared_buffers`: `M / 4`, rounded down to 64, capped at 8192.
+  `effective_cache_size`: `M / 2`, rounded down to 64.
+- `max_connections`: `floor(M / 40)`, clamped to 40–200.
+  `work_mem`: `floor(M / 8 / max_connections)`, clamped to 4–16.
+- `maintenance_work_mem`: `M / 16`, rounded down to 16, clamped to 64–1024.
+  Recorded PostgreSQL budget: shared buffers + maintenance memory + connections × work memory.
+- Redis `maxmemory`: `M / 8`, rounded down to 64, clamped to 128–4096.
+  Its recorded budget is twice `maxmemory`; `maxclients` remains 256.
+
+| RAM (MiB) | shared_buffers | effective_cache_size | Connections | work_mem | maintenance_work_mem | Redis (MiB) |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1536 | 384MB | 768MB | 40 | 4MB | 96MB | 192 |
+| 1950 | 448MB | 960MB | 48 | 5MB | 112MB | 192 |
+| 3900 | 960MB | 1920MB | 97 | 5MB | 240MB | 448 |
+| 7900 | 1920MB | 3904MB | 197 | 5MB | 480MB | 960 |
+| 32000 | 8000MB | 16000MB | 200 | 16MB | 1GB | 3968 |
+| 64000 | 8GB | 32000MB | 200 | 16MB | 1GB | 4096 |
+
+These are allocation defaults, not workload measurements or hard process memory
+limits. After an interruption, rerun `ACTION=capacity` to resume the approved
+sizes; changing RAM does not replace an unfinished plan. If a systemd job is still
+pending, wait and rerun the command. The tool retries a restart when needed and
+verifies the new invocation. If restarting keeps failing, recreate the server with
+`ACTION=recover`. A new resize refuses while a scheduled backup is running; wait
+for it to finish and rerun. Other mutations remain blocked while a capacity
+transition is pending.
 
 ## Cloudflare and certificates
 

@@ -18,7 +18,7 @@ import uuid
 from contracts import (HOST_PATHS, DeployError, atomic_json, atomic_write, check_path,
                        now, read_json, require, valid_uuid)
 
-READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan"})
+READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
 REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", "lib/upgrades.py",
                             "lib/provision.py", "lib/recover.py", "lib/release.py", "lib/runtime_config.py",
@@ -149,6 +149,9 @@ def check_client(host, request: dict, action: str) -> None:
     if action in READ_ACTIONS:
         return
     registry = host.read_registry(missing=True)
+    if registry and action != "capacity-apply":
+        import capacity
+        capacity.require_idle(host)
     if registry and action not in {"recover-plan", "recover-apply"}:
         for entry in registry["instances"].values():
             require(entry.get("recovered_from", {}).get("mode") != "rehearsal",

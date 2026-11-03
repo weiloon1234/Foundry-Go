@@ -14,13 +14,12 @@ from host import Host
 from contracts import (DeployError, HOST_PATHS, POSTGRES_PORT, check_path, instance_paths,
                        marker, read_json, require)
 import packages
+import capacity
 
 ROOTS = "/etc/ssl/certs/ca-certificates.crt"
 SOCKET = "/run/foundry/postgresql"
 CLUSTER_HOME = "/var/lib/foundry/postgresql"
 TEMPLATES = Path(__file__).resolve().parents[1] / "server/templates"
-CAPACITY = {"budget_mib": 1024, "max_connections": 40, "shared_buffers": "128MB",
-            "work_mem": "4MB", "maintenance_work_mem": "64MB"}
 
 
 def cluster_owner() -> str:
@@ -177,19 +176,19 @@ def _inventory(host):
     return rows
 
 
-def _allocation(major, port, token):
+def _allocation(major, port, token, limits):
     return {"owner": "foundry", "cluster": "foundry", "major": major, "version": major,
             "port": port, "socket_directory": SOCKET, "unit": f"postgresql@{major}-foundry.service",
             "config_path": f"/etc/postgresql/{major}/foundry", "data_path": f"{CLUSTER_HOME}/{major}/foundry",
             "cluster_owner": cluster_owner(),
-            "ownership_token": token, "capacity": dict(CAPACITY), "archive_command": ""}
+            "ownership_token": token, "capacity": dict(limits), "archive_command": ""}
 
 
 def _allocation_valid(value):
     if (not isinstance(value, dict) or value.get("major") not in (16, 18) or type(value.get("port")) is not int
-            or not POSTGRES_PORT <= value["port"] <= POSTGRES_PORT + 99 or not value.get("ownership_token")):
+            or not POSTGRES_PORT <= value["port"] <= POSTGRES_PORT + 99 or not value.get("ownership_token") or not capacity.postgres_valid(value.get("capacity"))):
         return False
-    expected = _allocation(value["major"], value["port"], value["ownership_token"])
+    expected = _allocation(value["major"], value["port"], value["ownership_token"], value["capacity"])
     return all(value.get(key) == expected[key] for key in ("owner", "cluster", "unit", "socket_directory", "config_path", "data_path", "capacity", "cluster_owner"))
 
 
@@ -217,7 +216,7 @@ def _initial_creation(journal):
             and journal.get("start_succeeded") is False and journal["allocation"].get("state") != "ready")
 
 
-def inspect(host: Host, registry: dict) -> dict:
+def inspect(host: Host, registry: dict, *, capacity_target=None) -> dict:
     """Read metadata first; only an explicitly owned cluster permits peer access."""
     major = _major(host)
     journal = _cluster_journal(host, registry)
@@ -278,11 +277,15 @@ def inspect(host: Host, registry: dict) -> dict:
     elif journal["phase"] not in {"reserved", "creating", "recreating"}:
         raise DeployError("postgres_ownership", "The claimed PostgreSQL cluster ownership marker is missing.")
     if owned.get("state") == "ready":
-        require(foundry and foundry[0]["status"] == "online" and owner_path.exists() and unit_path.exists(), "postgres_unavailable",
+        require(foundry and (foundry[0]["status"] == "online" or capacity_target is not None) and owner_path.exists() and unit_path.exists(), "postgres_unavailable",
                 "The ready Foundry cluster is unavailable; reconcile its recorded allocation.")
-        _verify_settings(host, registry)
+        if capacity_target is None:
+            _verify_settings(host, registry)
         configuration = host.paths.p(owned["config_path"]) / "conf.d/foundry.conf"
         allowed = [_configuration(owned)]
+        if capacity_target is not None:
+            require(capacity.postgres_valid(capacity_target), "postgres_ownership", "Invalid capacity transition.")
+            allowed.append(_configuration(dict(owned, capacity=capacity_target)))
         transition = journal.get("archive_transition", {})
         if transition.get("phase") == "publishing" and transition.get("old") == owned.get("archive_command", ""):
             allowed.append(_configuration(dict(owned, archive_command=transition["new"])))
@@ -367,6 +370,7 @@ def _publish_hba(host, registry, *, running):
 
 def _verify_settings(host, registry):
     cluster = _cluster(registry)
+    cache = ", 'effective_cache_size', current_setting('effective_cache_size')" if "effective_cache_size" in cluster["capacity"] else ""
     observed = json.loads(_psql(host, registry, "SELECT json_build_object("
         "'port', current_setting('port'), 'socket', current_setting('unix_socket_directories'),"
         "'ssl', current_setting('ssl'), 'checksums', current_setting('data_checksums'),"
@@ -378,7 +382,7 @@ def _verify_settings(host, registry):
         "'key', current_setting('ssl_key_file'), 'archive_mode', current_setting('archive_mode'),"
         "'archive_command', current_setting('archive_command'), 'wal_level', current_setting('wal_level'),"
         "'max_connections', current_setting('max_connections'), 'shared_buffers', current_setting('shared_buffers'),"
-        "'work_mem', current_setting('work_mem'), 'maintenance_work_mem', current_setting('maintenance_work_mem')); ").stdout)
+        "'work_mem', current_setting('work_mem'), 'maintenance_work_mem', current_setting('maintenance_work_mem')" + cache + "); ").stdout)
     expected = {"port": str(cluster["port"]), "socket": SOCKET, "ssl": "on", "checksums": "on", "encoding": "UTF8",
                 "password": "scram-sha-256", "fsync": "on", "full_page_writes": "on", "synchronous_commit": "on",
                 "listen": "127.0.0.1,::1", "data": cluster["data_path"], "config": cluster["config_path"] + "/postgresql.conf",
@@ -569,10 +573,8 @@ def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = No
     major = observed["major"]
     journal = _cluster_journal(host, registry)
     if journal is None:
-        memory = host.paths.p("/proc/meminfo")
-        found = re.search(r"^MemTotal:\s+(\d+) kB$", memory.read_text(), re.M)
-        require(found and int(found[1]) >= 1536 * 1024, "postgres_capacity", "At least 1536 MiB host memory is required by the fixed Foundry service allocation.")
-        allocation = _allocation(major, observed["port"], secrets.token_hex(32))
+        sized = capacity.postgres(capacity.allocation_memory(host, "postgres_capacity"))
+        allocation = _allocation(major, observed["port"], secrets.token_hex(32), sized)
         allocation["state"] = "preparing"
         if shared_service_plan is not None:
             allocation["archive_command"] = _archive_plan(allocation, shared_service_plan)
@@ -892,7 +894,8 @@ def recover_cluster(host, registry, entry, operation, repository, port):
     intent, source = operation["intent"], operation["source"]
     journal = _cluster_journal(host, registry)
     if journal is None:
-        allocation = _allocation(intent["major"], port, operation["cluster_token"])
+        allocation = _allocation(intent["major"], port, operation["cluster_token"],
+                                 capacity.postgres(capacity.allocation_memory(host, "postgres_capacity")))
         allocation.update(state="preparing", archive_mode="off" if intent["mode"] == "rehearsal" else "on",
                           archive_command="" if intent["mode"] == "rehearsal" else backup._archive_command())
         journal = {"host_id": registry["host_id"], "allocation": allocation, "phase": "reserved",

@@ -1,7 +1,7 @@
 # Copy these thin entry points into the application's Makefile.
 # ENVIRONMENT selects the profile. ACTION selects prepare/inspect/recover for bootstrap,
 # build for release, and deploy/status/rollback/restart/stop/logs/config/
-# "keys rotate"/reconcile/report/sync/tools-plan/tools-apply for deploy.
+# "keys rotate"/reconcile/report/sync/capacity/tools-plan/tools-apply for deploy.
 # Credential replacement: backup-keys-rotate / backup-recipients-rotate / dns-token-rotate.
 # Rollback: make deploy ACTION=rollback TARGET=<release> EXPECTED_CURRENT=<release>
 # Resume: add OPERATION=<UUID printed before the original request>.

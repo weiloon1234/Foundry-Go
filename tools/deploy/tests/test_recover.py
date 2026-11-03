@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import backup
 import certificates
 import postgres
+import capacity
 import recover
 import upgrades
 from contracts import DeployError, dump_env, read_json
@@ -354,6 +355,7 @@ class RecoveryTests(unittest.TestCase):
         for failed_phase in ("reserve", "restore", "restored", "replay", "promoted", "managed", "complete"):
             with self.subTest(phase=failed_phase), tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 host = Host(Paths(Path(temporary)))
+                host.owned_write(host.paths.p("/proc/meminfo"), "MemTotal: 4194304 kB\n")
                 entry = copy.deepcopy(self.entry)
                 entry["profile"] = copy.deepcopy(self.profile)
                 entry["host_id"] = self.profile["host"]["host_id"]
@@ -398,8 +400,10 @@ class RecoveryTests(unittest.TestCase):
                 stack.enter_context(patch.object(postgres, "_save_cluster", side_effect=crash))
                 with self.assertRaises(KeyboardInterrupt):
                     postgres.recover_cluster(host, registered, entry, operation, self.repository, 55432)
-                postgres.recover_cluster(host, registered, entry, operation, self.repository, 55432)
-                postgres.recover_cluster(host, registered, entry, operation, self.repository, 55432)
+                with patch.object(capacity, "memory_mib", side_effect=AssertionError("recovery resume recomputed RAM")):
+                    postgres.recover_cluster(host, registered, entry, operation, self.repository, 55432)
+                    postgres.recover_cluster(host, registered, entry, operation, self.repository, 55432)
+                self.assertEqual(registered["shared"]["postgresql"]["capacity"], capacity.postgres(4096))
                 self.assertEqual(restored.call_count, 1)
                 self.assertFalse(any("pg_createcluster" in args or "initdb" in args for args in commands))
                 self.assertFalse(any("archive-push" in " ".join(args) for args in commands))

@@ -37,10 +37,10 @@ from upgrades import READ_ACTIONS, protocol_metadata, tool_bundle
 INSTALLED = f"/usr/local/sbin/{PREFIX}-host"
 COMMANDS = {
     "bootstrap": "inspect and prepare a project/environment on a shared host",
-    "deploy": "interactive deployment, status, rollback and configuration",
+    "deploy": "interactive deployment, status, rollback, capacity and configuration",
     "release": "build a local Docker release without contacting a server",
 }
-ACTIONS = ("deploy", "status", "rollback", "restart", "stop", "logs", "config", "keys rotate", "reconcile", "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run", "restore-drill", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate")
+ACTIONS = ("capacity", "deploy", "status", "rollback", "restart", "stop", "logs", "config", "keys rotate", "reconcile", "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run", "restore-drill", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate")
 
 
 class LocalError(Exception):
@@ -982,6 +982,13 @@ def deploy(project, profile, settings):
                 json.dumps(remote, indent=2, sort_keys=True).splitlines(keepends=True),
                 fromfile="local", tofile="registered"))
             print(difference or "Local profile and topology match the registered instance.")
+            return
+        if action == "capacity":
+            plan = ssh.request("capacity-plan", request)
+            display(plan)
+            if not plan["noop"]:
+                confirm("Apply the capacity plan; the application sees a brief interruption")
+            display(ssh.request("capacity-apply", {**request, "plan_token": plan["plan_token"], "confirm": True}))
             return
         if action in {"tools-plan", "tools-apply", "upgrade-resume"}:
             with ssh.staged_tools() as remote:

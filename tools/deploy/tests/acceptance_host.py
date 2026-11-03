@@ -423,6 +423,10 @@ def main():
             disk["cloud"]["bucket"] = bucket
         prepare(host, fixture, instance_private)
         print("PASS bootstrap " + identity(*fixture)["name"], flush=True)
+    from acceptance_capacity import verify_settings
+    import capacity
+    verify_settings(host, capacity.memory_mib(host))
+    print("PASS bootstrap effective PostgreSQL and Redis values match available RAM", flush=True)
     certificate_renewal(host)
     before = snapshot(host)
     for fixture in fixtures():

@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import DeployError, REDIS_ACLFILE, REDIS_PORT, atomic_write, instance_paths
 from host import Host, Paths
 import redis_acl
+import capacity
 
 
 def entry_fixture():
@@ -380,6 +381,24 @@ class RedisServicePreparationTests(unittest.TestCase):
         self.assertFalse(any(call[:2] in (["systemctl", "enable"], ["systemctl", "restart"]) for call in self.host.calls))
         self.assertEqual(before, self.host.paths.p(REDIS_ACLFILE).read_bytes())
 
+    def test_legacy_service_keeps_recorded_capacity_when_ram_changes(self):
+        redis_acl.prepare(self.host, self.registry)
+        legacy = {"budget_bytes": 256 * 1024 * 1024, "maxmemory_bytes": 128 * 1024 * 1024, "maxclients": 256}
+        shared, claim = redis_acl._service_claim(self.host, self.registry)
+        shared["capacity"] = legacy
+        claim["allocation"]["capacity"] = legacy
+        text = redis_acl._redis_config(shared["ownership_token"], legacy)
+        self.host.owned_write(self.host.paths.p(redis_acl.REDIS_CONFIG), text, mode=0o640)
+        claim["files"][redis_acl.REDIS_CONFIG] = redis_acl.hashlib.sha256(text.encode()).hexdigest()
+        redis_acl._save_claim(self.host, claim)
+        self.host.journal(self.registry)
+        before = self.host.paths.p(redis_acl.REDIS_CONFIG).read_bytes()
+        with patch.object(capacity, "memory_mib", side_effect=AssertionError("existing service was resized")):
+            redis_acl.prepare(self.host, self.registry)
+        self.probe.assert_called_with(self.host, legacy)
+        self.assertEqual(self.registry["shared"]["redis"]["capacity"], legacy)
+        self.assertEqual(self.host.paths.p(redis_acl.REDIS_CONFIG).read_bytes(), before)
+
     def test_service_start_interruption_reuses_admin_and_reservation(self):
         self.host.fail_start = True
         with self.assertRaises(DeployError):
@@ -387,8 +406,10 @@ class RedisServicePreparationTests(unittest.TestCase):
         self.trust.assert_not_called()
         before = (self.host.paths.etc / "host-secrets.json").read_bytes()
         allocation = self.registry["shared"]["redis"]["ownership_token"]
+        self.assertEqual(self.registry["shared"]["redis"]["capacity"], capacity.redis(8192))
         self.host.fail_start = False
-        redis_acl.prepare(self.host, self.registry)
+        with patch.object(capacity, "memory_mib", side_effect=AssertionError("resume recomputed RAM")):
+            redis_acl.prepare(self.host, self.registry)
         self.assertEqual(allocation, self.registry["shared"]["redis"]["ownership_token"])
         self.assertEqual(before, (self.host.paths.etc / "host-secrets.json").read_bytes())
         self.assertEqual("ready", self.registry["shared"]["redis"]["state"])
@@ -427,9 +448,11 @@ class RedisServicePreparationTests(unittest.TestCase):
         with self.assertRaises(DeployError):
             redis_acl.prepare(self.host, self.registry)
         token = self.registry["shared"]["redis"]["ownership_token"]
+        self.assertEqual(self.registry["shared"]["redis"]["capacity"], capacity.redis(8192))
         self.registry["shared"].pop("redis")
         self.host.fail_start = False
-        redis_acl.prepare(self.host, self.registry)
+        with patch.object(capacity, "memory_mib", side_effect=AssertionError("resume recomputed RAM")):
+            redis_acl.prepare(self.host, self.registry)
         self.assertEqual(token, self.registry["shared"]["redis"]["ownership_token"])
 
 

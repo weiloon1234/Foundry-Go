@@ -175,7 +175,7 @@ class Host:
         self.write_registry(registry)
 
     @contextmanager
-    def lock(self, name, timeout=LOCK_WAIT_SECONDS):
+    def lock(self, name, timeout=LOCK_WAIT_SECONDS, *, capacity_transition=False):
         require(name == "host" or valid_uuid(name), "invalid_lock", "Invalid deployment lock name.")
         path = check_path(self.paths.p(HOST_PATHS["locks"]) / ("host.lock" if name == "host" else f"instances/{name}.lock"), "file")
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -190,6 +190,11 @@ class Host:
                     if time.monotonic() >= deadline:
                         raise DeployError("operation_locked", "Another operation holds this deployment lock; retry after it finishes.") from None
                     time.sleep(0.1)
+            if name == "host" and not capacity_transition:
+                # Recheck after acquiring the lock: a request may have passed
+                # client validation before another process began resizing.
+                from capacity import require_idle
+                require_idle(self)
             yield
         finally:
             os.close(fd)

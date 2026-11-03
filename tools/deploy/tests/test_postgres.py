@@ -15,6 +15,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import DeployError
 from host import Host, Paths
 import postgres
+import capacity
+
+LEGACY_CAPACITY = {"budget_mib": 1024, "max_connections": 40, "shared_buffers": "128MB",
+                   "work_mem": "4MB", "maintenance_work_mem": "64MB"}
 from test_contracts import fixture, registry
 
 
@@ -104,11 +108,25 @@ class PostgreSQLTests(unittest.TestCase):
         self.registry = registry(self.entry)
 
     def claimed(self, state="ready", port=55432, phase="ready"):
-        allocation = dict(postgres._allocation(16, port, "a" * 64), state=state)
+        allocation = dict(postgres._allocation(16, port, "a" * 64, LEGACY_CAPACITY), state=state)
         self.registry["shared"]["postgresql"] = allocation
         journal = {"host_id": self.registry["host_id"], "allocation": copy.deepcopy(allocation), "phase": phase}
         postgres._save_cluster(self.host, journal)
         return allocation
+
+    def test_ram_sizing_is_reserved_once_and_resume_does_not_recompute(self):
+        save = postgres._save_cluster
+        def crash(host, journal):
+            save(host, journal)
+            raise KeyboardInterrupt()
+        with patch.object(capacity, "memory_mib", return_value=1950), \
+                patch.object(postgres, "_save_cluster", side_effect=crash), self.assertRaises(KeyboardInterrupt):
+            postgres.prepare(self.host, self.registry)
+        self.assertEqual(postgres._cluster_journal(self.host, self.registry)["allocation"]["capacity"], capacity.postgres(1950))
+        with patch.object(capacity, "memory_mib", side_effect=AssertionError("resume recomputed RAM")), \
+                patch("packages.install_missing"), patch.object(postgres, "_prepare_account", side_effect=KeyboardInterrupt), self.assertRaises(KeyboardInterrupt):
+            postgres.prepare(self.host, self.registry)
+        self.assertEqual(self.registry["shared"]["postgresql"]["capacity"], capacity.postgres(1950))
 
     def test_mixed_host_inspection_only_reads_foreign_cluster_metadata(self):
         self.host.clusters = "16 main 5432 online postgres /var/lib/postgresql/16/main /var/log/postgresql/main.log\n"
@@ -453,7 +471,7 @@ class PostgreSQLTests(unittest.TestCase):
 
     def test_settings_bytes_survive_sorted_registry_round_trip(self):
         allocation = {"port": 55432, "config_path": "/etc/postgresql/16/foundry", "archive_command": "",
-                      "capacity": dict(postgres.CAPACITY)}
+                      "capacity": dict(LEGACY_CAPACITY)}
         persisted = json.loads(json.dumps(allocation, sort_keys=True))
         self.assertEqual(postgres._configuration(allocation), postgres._configuration(persisted))
 
@@ -486,6 +504,15 @@ class PostgreSQLTests(unittest.TestCase):
                 with self.assertRaises(DeployError) as raised:
                     postgres._verify_settings(self.host, self.registry)
                 self.assertEqual("postgres_configuration_drift", raised.exception.code)
+        allocation["capacity"] = capacity.postgres(4096)
+        sized = {**observed, **{key: str(value) for key, value in allocation["capacity"].items() if key != "budget_mib"}}
+        with patch.object(postgres, "_psql", return_value=subprocess.CompletedProcess([], 0, json.dumps(sized), "")) as query:
+            postgres._verify_settings(self.host, self.registry)
+        self.assertIn("current_setting('effective_cache_size')", query.call_args.args[2])
+        sized["effective_cache_size"] = "4GB"
+        with patch.object(postgres, "_psql", return_value=subprocess.CompletedProcess([], 0, json.dumps(sized), "")), self.assertRaises(DeployError):
+            postgres._verify_settings(self.host, self.registry)
+        allocation["capacity"] = dict(LEGACY_CAPACITY)
         # A rehearsal cluster runs with archiving off, where PostgreSQL hides the command.
         allocation["archive_mode"] = "off"
         off = dict(observed, archive_mode="off", archive_command="(disabled)")

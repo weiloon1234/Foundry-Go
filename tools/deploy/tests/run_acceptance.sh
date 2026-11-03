@@ -244,6 +244,7 @@ baseline_done=1
 phase host /verification/deploy/tests/acceptance_host.py \
   --archive /var/lib/foundry-acceptance-f4a/input.tar.gz --redis-source /verification/foundry-go
 phase roles /verification/deploy/tests/acceptance_roles.py --archive /var/lib/foundry-acceptance-f4a/input.tar.gz
+phase capacity /verification/deploy/tests/acceptance_capacity.py
 phase backup /verification/deploy/tests/acceptance_backup.py
 phase nginx /verification/deploy/tests/acceptance_nginx.py --rounds 1
 phase edge /verification/deploy/tests/acceptance_edge.py
