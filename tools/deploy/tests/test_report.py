@@ -2,6 +2,7 @@
 
 import copy
 import json
+import shutil
 import signal
 import subprocess
 import sys
@@ -84,6 +85,8 @@ class ReportTests(unittest.TestCase):
         self.service = patch.object(report, "service", return_value={"load": "loaded", "active": "inactive", "substate": "dead"}).start()
         self.ready = patch.object(report, "readiness", return_value={"ready": True, "http_status": 200}).start()
         self.cert = patch.object(report, "certificate", return_value={"status": "unconfigured", "expires_at": None}).start()
+        # The machine running these tests must not decide whether the fixture host looks low on disk.
+        patch.object(report.shutil, "disk_usage", return_value=shutil._ntuple_diskusage(100 * 1024 ** 3, 50 * 1024 ** 3, 50 * 1024 ** 3)).start()
         self.addCleanup(patch.stopall)
 
     def item(self, result):
