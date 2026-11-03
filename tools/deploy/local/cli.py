@@ -163,10 +163,14 @@ def operation_id(profile, action, arguments):
 
 def check_ssh_exit(returncode, stderr=None, *, mutation=True):
     if returncode == 255:
-        # Matches only OpenSSH's own refusal line; other stderr is never echoed.
+        # Matches only OpenSSH's own refusal lines; other stderr is never echoed.
         if stderr and re.search(rb"(?m)^\S+: Permission denied \(", stderr):
             raise LocalError("SSH login was refused. Check the private key saved for this server in "
                              ".deploy/settings.json, and that its public key is on the server.")
+        if stderr and re.search(rb"(?m)^Host key verification failed\.", stderr):
+            raise LocalError("The server's SSH host key is unknown or differs from the one recorded on this "
+                             "computer, so this connection was refused. If you rebuilt this server, remove the "
+                             "old key with ssh-keygen -R and its address. Otherwise, treat it as a possible attack.")
         detail = " The outcome of the mutation is unknown." if mutation else ""
         raise LocalError("SSH connection failed or dropped." + detail + " Run ACTION=status before retrying.")
 
@@ -305,7 +309,7 @@ def save_profile(profile):
 
 
 class SSH:
-    def __init__(self, profile, settings):
+    def __init__(self, profile, settings, *, first_contact=False):
         host = profile["host"]
         host_key = f"{host['address']}:{host['port']}"
         personal = settings["hosts"].get(host_key)
@@ -320,7 +324,10 @@ class SSH:
             raise LocalError("invalid personal SSH target")
         # One target per session; leave room for OpenSSH's temporary socket suffix.
         control = control_directory() / uuid.uuid4().hex
-        self.base = ["ssh", "-o", "StrictHostKeyChecking=yes", "-o", "BatchMode=yes",
+        # Only bootstrap of a profile with no bound server may record an unknown host key.
+        # A changed key is always refused, and every other operation needs the recorded one.
+        checking = "accept-new" if first_contact else "yes"
+        self.base = ["ssh", "-o", "StrictHostKeyChecking=" + checking, "-o", "BatchMode=yes",
                      "-o", "ConnectTimeout=30", "-o", "ConnectionAttempts=3", "-o", "ServerAliveInterval=15",
                      "-o", "ServerAliveCountMax=8", "-o", "ControlMaster=auto",
                      "-o", "ControlPersist=120", "-o", "ControlPath=" + str(control), "-p", str(host["port"])]
@@ -455,7 +462,7 @@ def bootstrap(project, profile, settings, fresh):
     if action not in {"prepare", "inspect"}:
         raise LocalError("bootstrap ACTION must be prepare or inspect")
     request = {"project": project, "profile": profile, "topology": load_topology(ROOT)}
-    with closing(SSH(profile, settings)) as ssh:
+    with closing(SSH(profile, settings, first_contact=profile["host"]["host_id"] is None)) as ssh:
         with ssh.staged_tools() as remote:
             inspected = ssh.request("inspect", request, remote)
             pending_path, pending_binding = pending_bootstrap(project, profile)

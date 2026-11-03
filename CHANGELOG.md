@@ -6,6 +6,9 @@
   config entry, agent or profile. It offers only that key and, on macOS, unlocks it
   from Keychain. A refused login is now reported as a refused login instead of a
   failed or dropped connection.
+- Changed: `make bootstrap` of a profile not yet bound to a server records an unknown
+  SSH host key on first contact, so a new server needs no manual connection. A changed
+  key is always refused, and every other operation still requires the recorded key.
 
 ## v0.5.2 — 2026-11-02
 

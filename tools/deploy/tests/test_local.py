@@ -9,7 +9,7 @@ from pathlib import Path
 import tempfile
 import tarfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import uuid
 
 DEPLOY = Path(__file__).resolve().parents[1]
@@ -214,6 +214,14 @@ class LocalDeploymentTests(unittest.TestCase):
         for option in ("IdentitiesOnly=yes", "UseKeychain=yes", "-i"):
             self.assertNotIn(option, ssh.base)
 
+    def test_ssh_first_contact_accepts_only_an_unknown_host_key(self):
+        _, profile = fixture()
+        settings = {"hosts": {"example.com:22": {"target": "root@example.com", "key_path": ""}}}
+        with patch.object(cli, "execute", return_value="hostname example.com\nport 22\n"):
+            ssh = cli.SSH(profile, settings, first_contact=True)
+        self.assertIn("StrictHostKeyChecking=accept-new", ssh.base)
+        self.assertNotIn("StrictHostKeyChecking=yes", ssh.base)
+
     def test_refused_ssh_login_is_named_without_echoing_stderr(self):
         with self.assertRaisesRegex(cli.LocalError, "login was refused") as caught:
             cli.check_ssh_exit(255, b"secret-canary\nroot@example.com: Permission denied (publickey).\n")
@@ -222,6 +230,13 @@ class LocalDeploymentTests(unittest.TestCase):
             with self.assertRaisesRegex(cli.LocalError, "connection failed or dropped"):
                 cli.check_ssh_exit(255, stderr)
         cli.check_ssh_exit(0, b"root@example.com: Permission denied (publickey).\n")
+
+    def test_refused_host_key_is_named_without_echoing_stderr(self):
+        with self.assertRaisesRegex(cli.LocalError, "host key is unknown or differs") as caught:
+            cli.check_ssh_exit(255, b"secret-canary\nHost key verification failed.\n")
+        self.assertNotIn("secret-canary", str(caught.exception))
+        with self.assertRaisesRegex(cli.LocalError, "connection failed or dropped"):
+            cli.check_ssh_exit(255, b"remote said Host key verification failed.\n")
 
     def test_ssh_rejects_options_and_shell_metacharacters(self):
         _, profile = fixture()
@@ -592,6 +607,28 @@ class LocalDeploymentTests(unittest.TestCase):
         stack.enter_context(patch.dict(os.environ, {"ACTION": "prepare"}))
         stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
         return stack
+
+    def test_bootstrap_allows_first_contact_only_before_binding(self):
+        project, profile = fixture()
+        host_id = str(uuid.uuid4())
+        profile["host"]["host_id"] = None
+        with self.bootstrap_context(BootstrapRemote(host_id)):
+            cli.bootstrap(project, profile, {}, True)
+            self.assertEqual(cli.SSH.call_args.kwargs, {"first_contact": True})
+        self.assertEqual(profile["host"]["host_id"], host_id)
+        with self.bootstrap_context(BootstrapRemote(host_id, registered=host_id)):
+            cli.bootstrap(project, profile, {}, False)
+            self.assertEqual(cli.SSH.call_args.kwargs, {"first_contact": False})
+
+    def test_deploy_never_allows_first_contact(self):
+        project, profile = fixture()
+        remote = MagicMock()
+        remote.report.return_value = {}
+        remote.request.return_value = {"ok": True}
+        with patch.object(cli, "SSH", return_value=remote) as ssh, patch.object(cli, "remember_releases"), \
+                patch.dict(os.environ, {"ACTION": "status"}), contextlib.redirect_stdout(io.StringIO()):
+            cli.deploy(project, profile, {})
+        self.assertNotIn("first_contact", ssh.call_args.kwargs)
 
     def test_bootstrap_binds_reviewed_host_and_passes_plan_token(self):
         project, profile = fixture()

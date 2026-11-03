@@ -55,7 +55,11 @@ present. Existing `client` and `web` packages use their declared build scripts.
 The module's build tools are mounted read-only separately from the app source.
 No compiler runs on the server.
 
-SSH requires an established host key and noninteractive authentication. The private
+SSH requires noninteractive authentication and an established host key. `make
+bootstrap` of a profile not yet bound to a server records an unknown host key on first
+contact (OpenSSH `accept-new`), which trusts whatever answers at that address. To verify
+it instead, add the key to `known_hosts` first. A changed key is always refused, and
+every other operation requires the recorded key. The private
 key path saved for a host in `.deploy/settings.json` is enough: the tool offers only
 that key and, on macOS, unlocks it from Keychain, so no SSH config entry is needed.
 A key whose passphrase isn't in Keychain must be loaded into an SSH agent. Personal
