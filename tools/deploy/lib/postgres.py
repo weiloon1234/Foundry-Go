@@ -389,6 +389,9 @@ def _verify_settings(host, registry):
     pending = _cluster_journal(host, registry).get("archive_transition", {})
     if pending.get("phase") == "publishing" and pending.get("old") == commands[0]:
         commands.append(pending["new"])
+    if expected["archive_mode"] == "off":
+        # PostgreSQL reports this placeholder in place of the command while archiving is off.
+        commands = ["(disabled)"]
     require(observed.pop("archive_command", None) in commands, "postgres_configuration_drift",
             "Foundry PostgreSQL archive command differs from its shared-service plan.")
     require(observed == expected, "postgres_configuration_drift", "Foundry PostgreSQL effective configuration differs from its ownership policy.")

@@ -253,6 +253,11 @@ def _service(host: Host, unit: str) -> dict:
     return value
 
 
+def _holds_state(path: Path) -> bool:
+    # postgresql-common, a pgBackRest dependency, creates both PostgreSQL roots empty.
+    return path.exists() and (not path.is_dir() or any(path.iterdir()))
+
+
 def _defaults(host: Host) -> dict:
     clusters = {}
     root = host.paths.p("/etc/postgresql")
@@ -264,10 +269,10 @@ def _defaults(host: Host) -> dict:
         name = path.parent.name + "/" + path.name
         clusters[name] = {"service": _service(host, f"postgresql@{path.parent.name}-{path.name}.service")}
     return {"clusters": clusters,
-            "postgres_config": host.paths.p("/etc/postgresql").exists(),
-            "postgres_data": host.paths.p("/var/lib/postgresql").exists(),
-            "redis_config": host.paths.p("/etc/redis").exists(),
-            "redis_data": host.paths.p("/var/lib/redis").exists(),
+            "postgres_config": _holds_state(host.paths.p("/etc/postgresql")),
+            "postgres_data": _holds_state(host.paths.p("/var/lib/postgresql")),
+            "redis_config": _holds_state(host.paths.p("/etc/redis")),
+            "redis_data": _holds_state(host.paths.p("/var/lib/redis")),
             "redis": _service(host, "redis-server.service")}
 
 

@@ -140,6 +140,8 @@ def second_archive(source, project, profile):
             for original in incoming:
                 item = copy.copy(original)
                 item.name = rename(item.name)
+                # A long name's stored pax path would otherwise outrank the new name.
+                item.pax_headers = {key: value for key, value in original.pax_headers.items() if key != "path"}
                 if original.name == "manifest.json":
                     data = json.dumps(manifest).encode()
                     item.size = len(data)

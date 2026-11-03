@@ -486,6 +486,15 @@ class PostgreSQLTests(unittest.TestCase):
                 with self.assertRaises(DeployError) as raised:
                     postgres._verify_settings(self.host, self.registry)
                 self.assertEqual("postgres_configuration_drift", raised.exception.code)
+        # A rehearsal cluster runs with archiving off, where PostgreSQL hides the command.
+        allocation["archive_mode"] = "off"
+        off = dict(observed, archive_mode="off", archive_command="(disabled)")
+        with patch.object(postgres, "_psql", return_value=subprocess.CompletedProcess([], 0, json.dumps(off), "")):
+            postgres._verify_settings(self.host, self.registry)
+        with patch.object(postgres, "_psql", return_value=subprocess.CompletedProcess([], 0, json.dumps(dict(off, archive_command="unauthorized command")), "")):
+            with self.assertRaises(DeployError) as raised:
+                postgres._verify_settings(self.host, self.registry)
+            self.assertEqual("postgres_configuration_drift", raised.exception.code)
 
     def test_verify_full_denials_require_authorization_errors_and_positive_controls(self):
         self.claimed(port=55439)

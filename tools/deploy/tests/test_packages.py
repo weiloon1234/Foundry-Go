@@ -228,6 +228,25 @@ class PackageTransactionTests(unittest.TestCase):
         self.assertIn("16/main", packages._load(self.host)["package_created_unused"])
         self.assertFalse(any("pg_dropcluster" in args or "restart" in args or "stop" in args for args, _ in self.host.commands))
 
+    def test_new_main_is_accepted_after_a_dependency_created_empty_roots(self):
+        # Recovery installs pgBackRest first, whose postgresql-common creates these.
+        self.host.paths.p("/etc/postgresql").mkdir(parents=True)
+        self.host.paths.p("/var/lib/postgresql").mkdir(parents=True)
+        self.host.candidates = {"postgresql-16": "16.4"}
+        self.host.new_main = True
+        packages.install_missing(self.host, ["postgresql-16"])
+        self.assertIn("16/main", packages._load(self.host)["package_created_unused"])
+
+    def test_new_main_is_refused_when_a_postgresql_root_holds_state(self):
+        leftover = self.host.paths.p("/var/lib/postgresql/16/main/PG_VERSION")
+        leftover.parent.mkdir(parents=True)
+        leftover.write_text("16\n")
+        self.host.candidates = {"postgresql-16": "16.4"}
+        self.host.new_main = True
+        with self.assertRaises(DeployError) as error:
+            packages.install_missing(self.host, ["postgresql-16"])
+        self.assertEqual("package_cluster_conflict", error.exception.code)
+
     def test_preexisting_main_bytes_and_service_are_untouched(self):
         config = self.host.paths.p("/etc/postgresql/16/main/start.conf")
         config.parent.mkdir(parents=True)

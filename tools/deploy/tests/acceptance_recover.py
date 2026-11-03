@@ -127,14 +127,18 @@ def target(mode):
             (directory / name).chmod(0o600)
         return install_site(host, registry, entry, tools_dir, **options)
     activate = release.activate_recovered
+    compared = []
     def compare_then_activate(host, registry, entry, *args, **options):
+        # Compare before the application starts: its HTTP role records its own telemetry rows.
         assert table_snapshot(postgres_settings(host, entry)) == source["snapshot"], "Restored per-table counts/hashes differ"
+        compared.append(True)
         return activate(host, registry, entry, *args, **options)
     with patch.object(recover.provision, "_install_site", side_effect=synthetic_site), \
             patch.object(release, "activate_recovered", side_effect=compare_then_activate):
         result = manage.execute(host, "recover-apply", {**payload, "archive": str(EXPORT / "release.tar.gz"),
                                 "plan_token": plan["plan_token"], "old_server_gone": mode == "takeover"})
     assert result["ok"] and result["host_id"] == profile["host"]["host_id"]
+    assert compared, "Recovery activated without comparing the restored tables"
     _, entry = host.require_identity(project, profile)
     pg = postgres_settings(host, entry)
     assert psql(pg, f"SELECT count(*) FROM {source['table']};").stdout.strip() == "25"
@@ -143,7 +147,6 @@ def target(mode):
     cluster = host.read_registry()["shared"]["postgresql"]
     assert cluster["ownership_token"] != json.loads(recover.read_archive(EXPORT / "recovery.tar")["recovery/pgbackrest-repository.json"])["cluster_token"]
     if mode == "rehearsal":
-        assert table_snapshot(pg) == source["snapshot"]
         assert psql(pg, "SHOW archive_mode;").stdout.strip() == "off"
         assert entry["provisioning"]["state"] == "rehearsal"
         for role, unit in instance_units(entry).items():
@@ -158,7 +161,7 @@ def target(mode):
                 assert getattr(error, "code", None) == "rehearsal_read_only"
             else:
                 raise AssertionError("Rehearsal accepted a mutation")
-        print("PASS B rehearsal: exact table counts/hashes, localhost HTTP, no certificate/background roles/timers, mutations refused")
+        print("PASS B rehearsal: exact table counts/hashes before start, localhost HTTP, no certificate/background roles/timers, mutations refused")
         return
     assert entry["provisioning"]["state"] == "ready"
     assert psql(pg, "SHOW archive_mode;").stdout.strip() == "on"
