@@ -125,7 +125,9 @@ def baseline(mode):
     if mode == "fresh":
         assert not Path("/etc/redis").exists()
         assert not list(Path("/etc/postgresql").glob("*/main"))
-        for unit in ("redis-server.service", "postgresql.service", "nginx.service"):
+        # postgresql.service is only postgresql-common's /bin/true placeholder, which the
+        # image's pgBackRest pulls in. Clusters run as postgresql@ units, so check those.
+        for unit in ("redis-server.service", "postgresql@*.service", "nginx.service"):
             assert run(["systemctl", "is-active", "--quiet", unit], check=False).returncode != 0
         private_json(BASELINE, {"mode": mode})
         print("PASS fresh baseline: no foreign services/configuration")

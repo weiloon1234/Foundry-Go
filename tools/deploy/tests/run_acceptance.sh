@@ -93,7 +93,7 @@ cleanup() {
   cleanup_failed=0
   # Debugging only: leave a failed environment running for phase reruns.
   if ((result != 0)) && [[ "${FOUNDRY_ACCEPTANCE_KEEP:-}" == 1 ]]; then
-    echo "Kept for debugging: host=$host s3=$s3 network=$network volume=$volume env_file=$env_file certs=$certs recovery_hosts=${recovery_hosts[*]}"
+    echo "Kept for debugging: host=$host s3=$s3 network=$network volume=$volume env_file=$env_file certs=$certs recovery_hosts=${recovery_hosts[*]-}"
     echo "Acceptance exit=$result; logs: $logs"
     exit "$result"
   fi
