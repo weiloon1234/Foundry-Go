@@ -511,3 +511,16 @@ class RecoveryTests(unittest.TestCase):
                 else:
                     self.assertEqual(profile, original)
                     save.assert_not_called()
+
+    def test_recovery_folder_skips_finder_files_and_refuses_age_identities(self):
+        folder = self.root / "decrypted"
+        (folder / "recovery").mkdir(parents=True)
+        (folder / "recovery" / "pgbackrest-repository.json").write_text("{}")
+        (folder / ".DS_Store").write_bytes(b"finder")
+        (folder / "recovery" / ".DS_Store").write_bytes(b"finder")
+        destination = self.root / "recovery.tar"
+        recover.folder_archive(folder, destination)
+        self.assertEqual(set(recover.read_archive(destination)), {"recovery/pgbackrest-repository.json"})
+        (folder / "identity.txt").write_text("AGE-SECRET-KEY-1FIXTURE")
+        with self.assertRaisesRegex(DeployError, "age private identity"):
+            recover.folder_archive(folder, destination)
