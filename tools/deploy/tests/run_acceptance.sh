@@ -97,7 +97,7 @@ cleanup() {
     echo "Acceptance exit=$result; logs: $logs"
     exit "$result"
   fi
-  for recovery_host in "${recovery_hosts[@]}"; do docker rm -f -v "$recovery_host" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; done
+  for recovery_host in ${recovery_hosts[@]+"${recovery_hosts[@]}"}; do docker rm -f -v "$recovery_host" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; done
   if ((host_created)); then docker rm -f -v "$host" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((s3_created)); then docker rm -f -v "$s3" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((volume_created)); then docker volume rm "$volume" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
