@@ -47,7 +47,7 @@ done
 framework=$(cd "$framework" && pwd -P)
 archive=$(cd "$(dirname "$archive")" && pwd -P)/$(basename "$archive")
 tests="$framework/tools/deploy/tests"
-for required in host.Dockerfile acceptance.Dockerfile acceptance_host.py acceptance_nginx.py acceptance_foreign.py acceptance_roles.py acceptance_backup.py acceptance_edge.py acceptance_support.py acceptance_http.py; do
+for required in host.Dockerfile acceptance.Dockerfile acceptance_host.py acceptance_nginx.py acceptance_foreign.py acceptance_roles.py acceptance_backup.py acceptance_recover.py acceptance_edge.py acceptance_support.py acceptance_http.py; do
   [[ -f "$tests/$required" ]] || { echo "Missing integrated fixture: $required" >&2; exit 2; }
 done
 if [[ -n "${ACCEPTANCE_LOG_DIR:-}" ]]; then
@@ -59,6 +59,8 @@ fi
 token=$(openssl rand -hex 8)
 network=foundry-acceptance-$token
 host=foundry-host-$token
+rehearsal=foundry-rehearsal-$token
+takeover=foundry-takeover-$token
 s3=foundry-s3-$token
 volume=foundry-s3-data-$token
 image=foundry-acceptance-host:$token
@@ -72,6 +74,7 @@ foreign_verified=0
 network_created=0
 volume_created=0
 host_created=0
+recovery_hosts=()
 s3_created=0
 image_created=0
 base_created=0
@@ -90,10 +93,11 @@ cleanup() {
   cleanup_failed=0
   # Debugging only: leave a failed environment running for phase reruns.
   if ((result != 0)) && [[ "${FOUNDRY_ACCEPTANCE_KEEP:-}" == 1 ]]; then
-    echo "Kept for debugging: host=$host s3=$s3 network=$network volume=$volume env_file=$env_file certs=$certs"
+    echo "Kept for debugging: host=$host s3=$s3 network=$network volume=$volume env_file=$env_file certs=$certs recovery_hosts=${recovery_hosts[*]}"
     echo "Acceptance exit=$result; logs: $logs"
     exit "$result"
   fi
+  for recovery_host in "${recovery_hosts[@]}"; do docker rm -f -v "$recovery_host" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; done
   if ((host_created)); then docker rm -f -v "$host" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((s3_created)); then docker rm -f -v "$s3" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((volume_created)); then docker volume rm "$volume" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
@@ -101,6 +105,7 @@ cleanup() {
   if ((image_created)); then docker image rm "$image" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   if ((base_created)); then docker image rm "$base_image" >>"$logs/cleanup.log" 2>&1 || cleanup_failed=1; fi
   rm -f "$env_file"
+  rm -rf "$logs/.private-recovery"
   rm -rf "$certs"  # Task-owned private CA and S3 stand-in key material only.
   ((cleanup_failed == 0)) || result=1
   echo "Acceptance exit=$result; logs: $logs"
@@ -246,4 +251,45 @@ phase edge /verification/deploy/tests/acceptance_edge.py
 # its Redis observation window.
 foreign_verified=1
 phase foreign-verify /verification/deploy/tests/acceptance_foreign.py verify
+# A is the already bootstrapped source. B and C use the base image: pgBackRest
+# must be installed by recover-apply, and neither has any Foundry resources.
+phase recover-source /verification/deploy/tests/acceptance_recover.py source
+mkdir -m 700 "$logs/.private-recovery"
+docker cp "$host:/var/lib/foundry-acceptance-f4a/recover-export/." "$logs/.private-recovery/" >"$logs/recover-export.log" 2>&1
+recovery_target() {
+  recovery_host=$1
+  recovery_mode=$2
+  docker create --platform "$platform" --name "$recovery_host" --network "$network" \
+    --privileged --cgroupns=private --memory=4g --cpus=2 \
+    --tmpfs /run --tmpfs /run/lock --tmpfs /tmp \
+    --mount "type=bind,source=$framework/tools/deploy,target=/verification/deploy,readonly" \
+    "$base_image" >"$logs/$recovery_mode-create.log" 2>&1
+  recovery_hosts+=("$recovery_host")
+  docker start "$recovery_host" >"$logs/$recovery_mode-start.log" 2>&1
+  for _ in $(seq 60); do
+    docker exec "$recovery_host" test -S /run/systemd/private 2>/dev/null && break
+    sleep 1
+  done
+  docker exec "$recovery_host" systemctl start multi-user.target >"$logs/$recovery_mode-systemd.log" 2>&1
+  # Same image-only policy handling as acceptance.Dockerfile, before the target
+  # is presented to production recovery. Production never replaces this file.
+  docker exec "$recovery_host" sh -c 'if [ -e /usr/sbin/policy-rc.d ]; then mv /usr/sbin/policy-rc.d /usr/sbin/policy-rc.d.acceptance-image; fi'
+  docker exec "$recovery_host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a/recover-export
+  docker cp "$logs/.private-recovery/." "$recovery_host:/var/lib/foundry-acceptance-f4a/recover-export/" >"$logs/$recovery_mode-copy.log" 2>&1
+  docker cp "$certs/ca.crt" "$recovery_host:/var/lib/foundry-acceptance-f4a/ca.crt" >>"$logs/$recovery_mode-copy.log" 2>&1
+  docker cp "$certs/ca.key" "$recovery_host:/var/lib/foundry-acceptance-f4a/ca.key" >>"$logs/$recovery_mode-copy.log" 2>&1
+  docker exec "$recovery_host" cp /var/lib/foundry-acceptance-f4a/ca.crt /usr/local/share/ca-certificates/acceptance-root.crt
+  docker exec "$recovery_host" chmod 644 /usr/local/share/ca-certificates/acceptance-root.crt
+  docker exec "$recovery_host" chmod 600 /var/lib/foundry-acceptance-f4a/ca.key
+  docker exec "$recovery_host" update-ca-certificates >"$logs/$recovery_mode-trust.log" 2>&1
+  docker exec "$recovery_host" apt-get update -qq >"$logs/$recovery_mode-packages.log" 2>&1
+  docker exec --env-file "$env_file" "$recovery_host" python3 -B /verification/deploy/tests/acceptance_recover.py "$recovery_mode" >"$logs/recover-$recovery_mode.log" 2>&1
+}
+recovery_target "$rehearsal" rehearsal
+phase recover-repository-unchanged /verification/deploy/tests/acceptance_recover.py unchanged
+docker stop --time 150 "$host" >"$logs/recover-stop-source.log" 2>&1
+[[ "$(docker inspect --format '{{.State.Running}}' "$host")" == false ]] || { echo 'Source A must be stopped before takeover' >&2; exit 1; }
+recovery_target "$takeover" takeover
+# These are decrypted task-owned artifacts; retain only safe acceptance evidence.
+rm -rf "$logs/.private-recovery"
 echo 'PASS all acceptance phases, including synthetic CA lineage/renewal/reload; real Cloudflare DNS/ACME and R2 remain separate gates.'

@@ -13,7 +13,7 @@ from contracts import DeployError, MAX_JSON, check_path, identity, parse_env, pa
 from topology import instance_units
 from host import Host
 
-ACTIONS = ("hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect", "bootstrap-plan", "bootstrap-apply", "activate", "status", "rollback", "restart", "stop",
+ACTIONS = ("hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect", "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "activate", "status", "rollback", "restart", "stop",
            "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate", "backup-configure", "backup-run", "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report")
 
 
@@ -27,7 +27,9 @@ def execute(host, action, request):
     if action == "hello":
         return upgrades.hello(host)
     common = {"protocol", "client", "project", "profile", "operation_id", "confirm"}
-    arguments = {"bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
+    recovery_fields = {"topology", "mode", "recovery_archive", "archive_sha256", "target_time"}
+    arguments = {"recover-plan": recovery_fields,
+                 "recover-apply": recovery_fields | {"archive", "plan_token", "old_server_gone"}, "bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
                  "activate": {"archive", "archive_sha256"}, "config-set": {"values", "secrets"},
                  "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current"},
                  "backup-keys-rotate": {"secrets"}, "backup-recipients-rotate": {"secrets"},
@@ -54,6 +56,18 @@ def execute(host, action, request):
         return inspect_host(host)
     project, profile = request.get("project"), request.get("profile")
     identity(project, profile)
+    if action in ("recover-plan", "recover-apply"):
+        import recover
+        arguments = {key: request.get(key) for key in ("topology", "mode", "operation_id", "archive_sha256", "target_time")}
+        require(isinstance(request.get("recovery_archive"), str), "recovery_members", "A staged private recovery archive is required.")
+        arguments["recovery_archive"] = request["recovery_archive"]
+        source = Path(__file__).resolve().parents[1]
+        if action == "recover-plan":
+            return recover.public_plan(recover.plan(host, project, profile, source, **arguments))
+        require(request.get("confirm") is True, "confirmation_required", "Review and confirm the recovery plan first.")
+        require(isinstance(request.get("archive"), str), "invalid_request", "A staged release archive is required.")
+        return recover.apply(host, project, profile, source, **arguments, archive=request["archive"],
+                             plan_token=request.get("plan_token"), old_server_gone=request.get("old_server_gone", False))
     if action == "bootstrap-plan":
         return bootstrap_plan(host, project, profile, topology=request.get("topology"))
     if action == "bootstrap-apply":

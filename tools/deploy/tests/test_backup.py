@@ -78,6 +78,16 @@ class BackupTests(unittest.TestCase):
         return subprocess.CompletedProcess(args, 0, output, "")
 
     def test_archive_is_encrypted_before_copy_and_contains_referenced_values(self):
+        state = self.host.load_state(self.entry)
+        version = "20261103T000000Z-abcdef01"
+        state["current"] = {"schema": 1, "layout_version": 2, "project_id": self.entry["project_id"],
+                            "instance_id": self.entry["profile"]["instance_id"], "instance": self.entry["name"],
+                            "environment": self.entry["environment"], "architecture": "arm64", "native_imaging": False,
+                            "version": version, "commit": "a" * 40, "tree_state": "clean", "built_at": now(),
+                            "source_kind": "git_archive", "source_sha256": "b" * 64,
+                            "files": {name: "c" * 64 for name in ("artisan", "config/deploy.toml", "public/index.html",
+                                      "private-source-maps/" + version + "/app.js.map")}}
+        self.host.save_state(self.entry, state)
         directory = self.host.paths.instance_config(self.entry["name"])
         secret = directory / "keyring.json"
         self.host.owned_write(secret, '{"old":"retained","active":"current"}', mode=0o600)
@@ -95,6 +105,11 @@ class BackupTests(unittest.TestCase):
         result = backup.archive_keys(self.host, self.entry)
         self.assertEqual(captured["files/" + canonical.lstrip("/") + "/keyring.json"], secret.read_bytes())
         self.assertIn("private-key-canary", captured[f"instances/{self.entry['name']}/secrets.json"].decode())
+        metadata = json.loads(captured["recovery/instance.json"])
+        self.assertEqual(metadata["release_commit"], "a" * 40)
+        self.assertEqual(metadata["profile"], self.entry["profile"])
+        self.assertEqual(metadata["topology"], self.entry["topology"])
+        self.assertFalse({"uid", "gid"} & metadata["allocations"].keys())
         self.assertTrue(result["object_key"].startswith("keys/" + self.entry["profile"]["instance_id"] + "/"))
         commands = [args for args, _ in self.commands]
         self.assertEqual(commands[0][0], "age")
@@ -308,6 +323,8 @@ class BackupTests(unittest.TestCase):
         self.assertGreaterEqual(result["elapsed_seconds"], 0)
         configuration = (Path(result["data_path"]).parent / "postgresql.conf").read_text()
         self.assertIn("listen_addresses = ''", configuration)
+        unit = Path(result["unit_path"]).read_text()
+        self.assertIn("KillSignal=SIGINT\nKillMode=mixed\n", unit)
         automatic = (Path(result["data_path"]) / "postgresql.auto.conf").read_text()
         self.assertNotIn("foreign", automatic)
         self.assertNotIn("private-secret", json.dumps(result))
@@ -524,6 +541,7 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(result["drill_id"], before["drill_id"])
         self.assertEqual(replay, result)
         self.assertFalse(Path(result["data_path"]).parent.exists())
+        self.assertIn((["systemctl", "reset-failed", result["unit"], result["restore_unit"]], {"check": False}), self.commands)
 
     def test_key_archival_does_not_refresh_an_old_database_point(self):
         operation = str(uuid.uuid4())

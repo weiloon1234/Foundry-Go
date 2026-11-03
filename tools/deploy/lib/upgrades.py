@@ -18,10 +18,10 @@ import uuid
 from contracts import (HOST_PATHS, DeployError, atomic_json, atomic_write, check_path,
                        now, read_json, require, valid_uuid)
 
-READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan"})
+READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
 REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", "lib/upgrades.py",
-                            "lib/provision.py", "lib/release.py", "lib/runtime_config.py",
+                            "lib/provision.py", "lib/recover.py", "lib/release.py", "lib/runtime_config.py",
                             "lib/topology.py", "lib/report.py", "server/manage.py",
                             "server/report.py", "server/launcher.py", "lib/packages.py",
                             "lib/postgres.py", "lib/redis_acl.py", "lib/edge.py",
@@ -71,7 +71,8 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
                 "tools_too_large", "The tool bundle exceeds its size limit.")
         inventory.append({"path": path.relative_to(source).as_posix(), "size": size, "mode": 0o644,
                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    require(REQUIRED_FILES <= {item["path"] for item in inventory}, "tools_incomplete", "The tool bundle is incomplete.")
+    required = REQUIRED_FILES if protocol(source)["generation"] >= 3 else REQUIRED_FILES - {"lib/recover.py"}
+    require(required <= {item["path"] for item in inventory}, "tools_incomplete", "The tool bundle is incomplete.")
     return source, files, inventory
 
 
@@ -148,7 +149,13 @@ def check_client(host, request: dict, action: str) -> None:
     if action in READ_ACTIONS:
         return
     registry = host.read_registry(missing=True)
-    if registry and registry["tools"]["upgrade_operation"] and action not in UPGRADE_ACTIONS:
+    if registry and action not in {"recover-plan", "recover-apply"}:
+        for entry in registry["instances"].values():
+            require(entry.get("recovered_from", {}).get("mode") != "rehearsal",
+                    "rehearsal_read_only", "Rehearsals cannot be mutated or promoted; recreate the server for takeover.")
+            require(not entry.get("recovered_from") or entry["provisioning"]["state"] == "ready",
+                    "recovery_pending", "Resume the recorded recovery before other mutations.")
+    if registry and registry["tools"]["upgrade_operation"] and action not in UPGRADE_ACTIONS | {"recover-apply"}:
         raise DeployError("tools_upgrade_pending", "Resume the approved tool upgrade before other mutations.")
     metadata = protocol()
     if registry and (_bundle_path(host, registry["tools"]["bundle_sha256"]) / "manifest.json").exists():

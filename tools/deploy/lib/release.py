@@ -375,9 +375,17 @@ def prepare_worker(host, entry):
 def restart(host, entry, state=None):
     """HTTP and all declared background roles share one readiness deadline."""
     ensure_key_archive(host, entry, state if state is not None else host.load_state(entry))
+    start_roles(host, entry)
+
+
+def start_roles(host, entry, *, http_only=False):
+    """Start HTTP before background roles; recovery archives only after readiness."""
     units = instance_units(entry)
-    prepare_worker(host, entry)
-    stop_background(host, entry)
+    if http_only:
+        units = {"http": units["http"]}
+    else:
+        prepare_worker(host, entry)
+        stop_background(host, entry)
     try:
         with wall_clock_budget(READINESS_SECONDS):
             deadline = time.monotonic() + READINESS_SECONDS
@@ -388,7 +396,7 @@ def restart(host, entry, state=None):
             for role in ("worker", "scheduler"):
                 if role in units:
                     host.run(["systemctl", "start", units[role]], timeout=_remaining(deadline, 60))
-            require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS)),
+            require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS), include_background=not http_only),
                     "readiness_failed", "Required roles did not become ready within the activation deadline.")
     except OperationTimeout:
         raise DeployError("readiness_failed", "Required roles exhausted the activation deadline.") from None
@@ -708,6 +716,55 @@ def prune(host, entry, state):
             shutil.rmtree(check_path(path, "directory"))
 
 
+def publish_release(host, entry, staging, manifest):
+    release = release_path(host, entry, manifest["version"])
+    if release.exists():
+        verified_release(host, entry, manifest)
+    else:
+        os.rename(staging, release)
+    return release
+
+
+def require_recovered_schema(host, entry, release):
+    """The release's own status detects pending and unknown applied definitions."""
+    try:
+        require(not migration_status(host, entry, release), "recovery_schema_mismatch", "Pending migrations.")
+    except DeployError:
+        commit = entry.get("recovered_from", {}).get("release_commit")
+        guidance = (f"Recover with the running release from commit {commit}." if commit else
+                    "The running release commit is unknown in this archive; select the release that was running at the recovery target.")
+        raise DeployError("recovery_schema_mismatch",
+                          "Cannot prove an exact migration match with the restored database: pending, unknown applied, "
+                          "changed or unreadable migration history is refused. Recovery runs no migrations or seeds. " + guidance) from None
+
+
+def activate_recovered(host, registry, entry, archive, checksum, *, http_only=False):
+    """Select recovered data's release without migrations, seeds or repository writes."""
+    validate_runtime_environment(host, entry)
+    staging = host.paths.opt(entry["name"]) / "releases" / (".stage-" + uuid.uuid4().hex)
+    try:
+        manifest = unpack_archive(Path(archive), staging, entry, checksum)
+        release = publish_release(host, entry, staging, manifest)
+        native_runtime(host, entry)
+        protect_maps(host, entry, release)
+        app(host, entry, release, "config:check")
+        require_recovered_schema(host, entry, release)
+        inventory = release_redis_inventory(host, entry, release)
+        widen_redis_grants(host, registry, entry, inventory)
+        switch_to(host, entry, manifest["version"])
+        if not ready(host, entry, timeout=10, include_background=not http_only):
+            start_roles(host, entry, http_only=http_only)
+        state = host.load_state(entry)
+        state.update(current=manifest, previous=None, status="healthy")
+        host.save_state(entry, state)
+        warnings = narrow_redis_grants(host, registry, entry, inventory)
+        require(not warnings, "recovery_redis_pending", "Redis grant reconciliation must complete before recovery finishes.")
+        return {"version": manifest["version"]}
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+
+
 def activate(host, project, profile, archive, checksum, operation_id=None):
     require(operation_id is None or valid_uuid(operation_id), "invalid_operation", "Deployment operation ID must be a UUIDv4.")
     _, entry = host.require_identity(project, profile)
@@ -731,11 +788,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                     verified_release(host, entry, state["current"])
                     require(ready(host, entry, timeout=10), "readiness_failed", "Current release is no longer ready; inspect it before retrying.")
                     return {"ok": True, "unchanged": True, "instance": entry["name"], "version": version}
-            release = release_path(host, entry, version)
-            if release.exists():
-                verified_release(host, entry, manifest)
-            else:
-                os.rename(staging, release)
+            release = publish_release(host, entry, staging, manifest)
             attempt = begin(host, entry, state, "deploy", version,
                             metadata={"recovery_operation_id": operation_id or str(uuid.uuid4())})
             prior_current, prior_previous = state["current"], state["previous"]

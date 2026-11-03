@@ -72,6 +72,26 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual("unchanged", self.install()["outcome"])
         self.assertEqual(before, self.host.read_registry())
 
+    def test_generation_two_without_recovery_upgrades_through_normal_plan_and_apply(self):
+        (self.source / "lib/recover.py").unlink()
+        self.metadata["generation"] = 2
+        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+        previous = upgrades.tool_bundle(self.source)[2]
+        self.host.registry["tools"] = upgrades._active_record(self.source, previous, None)
+        self.install()
+        self.metadata["generation"] = 3
+        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+        with self.assertRaises(DeployError) as error:
+            upgrades.plan_upgrade(self.host, self.source)
+        self.assertEqual(error.exception.code, "tools_incomplete")
+        (self.source / "lib/recover.py").write_text("# recovery implementation\n")
+        plan = upgrades.plan_upgrade(self.host, self.source)
+        self.assertIn("lib/recover.py", plan["upgrade"]["changed_paths"])
+        result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
+        self.assertEqual(result["outcome"], "succeeded")
+        self.assertEqual(self.host.read_registry()["tools"]["generation"], 3)
+        self.assertTrue((self.host.paths.tools / "tools" / previous).is_dir())
+
     def test_bundle_is_traversable_under_a_hardened_umask(self):
         previous = os.umask(0o077)
         try:

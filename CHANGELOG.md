@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Added: `ENVIRONMENT=<env> ACTION=recover make bootstrap` rebuilds an instance on
+  an empty Ubuntu server from a locally decrypted recovery archive. Explicit
+  rehearsal mode keeps archiving, repository writes and background roles off.
+  Takeover preserves instance and repository identities, creates new host ownership,
+  restores managed services, completes a full backup and key archive after readiness,
+  and enables backup timers. DNS cutover remains manual.
+- Changed: Deploy tool generation is now 3. New key archives include nonsecret
+  recovery metadata; existing archives use application topology and the archived
+  HTTP allocation. Recovery phases and package-first repository refusals are journaled.
+- Recovery runs no migrations or seeds. The release's own migration status must
+  exactly match restored history; refusals name the archived running commit when
+  available. Schema upgrades follow through normal deployment after takeover.
+- Added: Recovery refusal and interruption tests, three-host recovery acceptance,
+  and restore-drill assertions for mixed shutdown signaling, failed-unit cleanup,
+  and absence of abnormal PostgreSQL shutdowns.
+
 ## v0.5.3 — 2026-11-03
 
 - Fixed: Deployment SSH works from the private key path saved for a host, with no SSH

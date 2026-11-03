@@ -147,6 +147,49 @@ class ReleaseTests(unittest.TestCase):
     def deploy(self, archive):
         return release.activate(self.host, self.project, self.profile, archive, digest(archive))
 
+    def test_recovery_in_both_modes_checks_schema_without_migrations_seeds_or_backups(self):
+        for sequence, http_only in enumerate((True, False), start=1):
+            with self.subTest(http_only=http_only):
+                archive, manifest = self.bundle(sequence)
+                self.host.commands.clear()
+                with patch.object(release.backup, "recovery_point") as point, \
+                        patch.object(release.backup, "archive_keys") as keys:
+                    result = release.activate_recovered(self.host, self.registry, self.entry,
+                                                        archive, digest(archive), http_only=http_only)
+                point.assert_not_called()
+                keys.assert_not_called()
+                commands = [args for args, _ in self.host.commands]
+                self.assertEqual(sum("migrate:status" in args for args in commands), 1)
+                self.assertFalse(any("migrate" in args or "db:seed" in args for args in commands))
+                self.assertEqual(result["version"], manifest["version"])
+                self.assertEqual(self.state()["current"], manifest)
+
+    def test_recovery_refuses_pending_and_unknown_applied_migrations_with_commit_guidance(self):
+        archive, _ = self.bundle()
+        cases = [("pending", []), ("missing_definition", [{"code": "definition_missing"}]),
+                 ("missing_definition", []), ("changed", [{"code": "definition_changed"}]),
+                 ("incomplete", [{"code": "reconciliation_required"}])]
+        for http_only in (True, False):
+            for commit in (None, "a" * 40):
+                for state, problems in cases:
+                    with self.subTest(http_only=http_only, commit=commit, state=state):
+                        self.entry["recovered_from"] = {"release_commit": commit}
+                        def app(host, entry, directory, command, *args, **kwargs):
+                            self.assertIn(command, ("config:check", "migrate:status"))
+                            return subprocess.CompletedProcess([], 0, json.dumps({"targets": [{"schema": "public",
+                                "migrations": [{"state": state}], "problems": problems}]}), "")
+                        with patch.object(release, "app", side_effect=app), \
+                                patch.object(release, "switch_to") as switch, \
+                                patch.object(release, "start_roles") as start:
+                            with self.assertRaises(DeployError) as error:
+                                release.activate_recovered(self.host, self.registry, self.entry, archive,
+                                                           digest(archive), http_only=http_only)
+                        self.assertEqual(error.exception.code, "recovery_schema_mismatch")
+                        self.assertIn(commit or "commit is unknown", error.exception.detail)
+                        switch.assert_not_called()
+                        start.assert_not_called()
+                        self.assertIsNone(self.state()["current"])
+
     def state(self):
         return self.host.load_state(self.entry)
 

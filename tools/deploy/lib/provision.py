@@ -281,12 +281,14 @@ def _template(tools_dir, name, entry, *, postgres_unit=""):
     return content
 
 
-def _install_unit(host, registry, entry, tools_dir):
+def _install_unit(host, registry, entry, tools_dir, *, http_only=False):
     postgres_unit = registry["shared"]["postgresql"]["unit"]
     require(bool(re.fullmatch(r"postgresql@[0-9]+-foundry\.service", postgres_unit)), "postgres_identity", "Only the Foundry PostgreSQL cluster may be a dependency.")
     _unit_checks(host, entry)
     changed = False
     units = instance_units(entry)
+    if http_only:
+        units = {"http": units["http"]}
     for role, name in units.items():
         unit = host.paths.p(f"/etc/systemd/system/{name}")
         content = _template(tools_dir, f"foundry-{role}@.service", entry, postgres_unit=postgres_unit)

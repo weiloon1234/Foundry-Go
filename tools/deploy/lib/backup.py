@@ -11,6 +11,8 @@ import configparser
 import fcntl
 from datetime import datetime, timezone
 import json
+import io
+import copy
 import os
 from pathlib import Path
 import pwd
@@ -47,6 +49,13 @@ WORK = postgres.CLUSTER_HOME + "/pgbackrest"
 REPOSITORY = "/etc/foundry/backup/repository.json"
 BACKUP_LABEL = r"[0-9]{8}-[0-9]{6}F(?:_[0-9]{8}-[0-9]{6}[DI])?"
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
+
+
+def require_writable(host):
+    registry = host.read_registry(missing=True)
+    require(not registry or not any(entry.get("recovered_from", {}).get("mode") == "rehearsal"
+                                   for entry in registry["instances"].values()),
+            "rehearsal_read_only", "A rehearsal cannot mutate backup configuration or its source repository.")
 
 
 def _private(host, path, *, directory=False):
@@ -143,8 +152,16 @@ def _cluster(host, registry):
     return cluster
 
 
-def _backrest(host, arguments, *, timeout=1800, config=None):
-    return host.run(["runuser", "-u", postgres.cluster_owner(), "--", "pgbackrest",
+def _backrest(host, arguments, *, timeout=1800, config=None, user=None):
+    registry = host.read_registry(missing=True)
+    if registry and any(item.get("recovered_from", {}).get("mode") == "rehearsal"
+                        for item in registry["instances"].values()):
+        require(arguments[-1] in {"info", "restore", "archive-get"},
+                "rehearsal_read_only", "A rehearsal must never write to its source repository.")
+    if user == "root":
+        require(config is not None and arguments == ["--output=json", "info"],
+                "backup_preflight", "Root repository access is limited to private-config inventory.")
+    return host.run(["runuser", "-u", user or postgres.cluster_owner(), "--", "pgbackrest",
                      "--config=" + str(config if config is not None else host.paths.p(CONFIG)), "--stanza=" + STANZA, *arguments],
                     timeout=timeout)
 
@@ -195,16 +212,17 @@ def _attempt(host, entry):
         raise
 
 
-def _info(host, *, config=None, allow_missing=False):
+def _info(host, *, config=None, allow_missing=False, inventory=False, user=None):
     try:
-        result = json.loads(_backrest(host, ["--output=json", "info"], timeout=60, config=config).stdout)
+        options = {"user": user} if user is not None else {}
+        result = json.loads(_backrest(host, ["--output=json", "info"], timeout=60, config=config, **options).stdout)
         found = [item for item in result if item["name"] == STANZA]
         require(len(found) == 1 and type(found[0]["status"]["code"]) is int
                 and found[0]["status"]["code"] in ((0, 1, 2) if allow_missing else (0, 2)),
                 "backup_repository_unhealthy", "The Foundry backup repository is not healthy.")
         backups = found[0].get("backup")
         require(isinstance(backups, list), "backup_repository_unhealthy", "Invalid repository backup inventory.")
-        return backups
+        return found[0] if inventory else backups
     except (ValueError, TypeError, KeyError, AttributeError):
         raise DeployError("backup_repository_unhealthy", "Cannot read the Foundry backup inventory.") from None
 
@@ -278,9 +296,19 @@ def _archive_files(host, entry):
 
 def archive_keys(host: Host, entry: dict) -> dict:
     """Encrypt the keyring/config and referenced values before any upload."""
+    require(entry.get("recovered_from", {}).get("mode") != "rehearsal",
+            "rehearsal_read_only", "A rehearsal cannot upload a key archive.")
     settings = _settings(host, entry)
     repository = _repository_settings(host)
     files, size = _archive_files(host, entry)
+    metadata = copy.deepcopy(entry)
+    for name in ("uid", "gid"):
+        metadata["allocations"].pop(name, None)
+    metadata["release_commit"] = (host.load_state(entry).get("current") or {}).get("commit")
+    content = json.dumps(metadata, sort_keys=True).encode()
+    size += len(content)
+    require(len(content) <= 16 * 1024 * 1024 and size <= MAX_ARCHIVE_BYTES,
+            "backup_archive_size", "Key/config archive exceeds its bounded size.")
     root = _private_root(host, entry)
     require(shutil.disk_usage(root).free >= 2 * size + 64 * 1024 * 1024,
             "backup_space", "Insufficient private staging space for the encrypted key archive.")
@@ -290,6 +318,9 @@ def archive_keys(host: Host, entry: dict) -> dict:
         plain = Path(temporary) / "keys.tar"
         encrypted = Path(temporary) / (archive_id + ".tar.age")
         with tarfile.open(plain, "w", dereference=False) as archive:
+            member = tarfile.TarInfo("recovery/instance.json")
+            member.size, member.mode = len(content), 0o600
+            archive.addfile(member, io.BytesIO(content))
             for name, path in sorted(files.items()):
                 check_path(path, "file")
                 archive.add(path, arcname=name, recursive=False)
@@ -493,6 +524,30 @@ def _restore_target(value):
         raise DeployError("backup_restore_target", "Use an explicit timestamp with timezone.") from None
 
 
+def _restore_configuration(host, directory, data, socket, limits, port=55433):
+    configuration = (f"listen_addresses = ''\nport = {port}\nssl = off\n"
+                     "hot_standby = on\ndefault_transaction_read_only = on\n"
+                     "archive_mode = off\narchive_command = ''\nshared_preload_libraries = ''\n"
+                     "shared_buffers = '32MB'\n"
+                     f"unix_socket_directories = '{socket}'\nunix_socket_permissions = 0700\n")
+    configuration += limits
+    host.owned_write(directory / "postgresql.conf", configuration, mode=0o600, owner=postgres.cluster_owner(), group=postgres.cluster_owner())
+    host.owned_write(directory / "pg_hba.conf", f"local all {postgres.cluster_owner()} peer\nlocal all all reject\n",
+                     mode=0o600, owner=postgres.cluster_owner(), group=postgres.cluster_owner())
+    # auto.conf contains pgBackRest's recovery settings. Retain only recovery
+    # directives; application ALTER SYSTEM settings must not escape isolation.
+    auto = check_path(data / "postgresql.auto.conf", "file")
+    recovery = []
+    for line in auto.read_text().splitlines():
+        setting = line.split("=", 1)[0].strip()
+        if setting in {"restore_command", "recovery_target", "recovery_target_name", "recovery_target_time",
+                       "recovery_target_inclusive", "recovery_target_action", "recovery_target_timeline"}:
+            recovery.append(line)
+    require(any(line.strip().startswith("restore_command") for line in recovery),
+            "backup_drill_invalid", "Restored cluster has no WAL recovery command.")
+    host.owned_write(auto, "\n".join(recovery) + "\n", mode=0o600, owner=postgres.cluster_owner(), group=postgres.cluster_owner())
+
+
 def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str | None = None,
                   target_inclusive: bool = True, retain: bool = False) -> dict:
     """Replay into a new Unix-socket-only cluster; never expose live credentials.
@@ -606,27 +661,7 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
             _restore_database(host, restore_unit, restore_unit_path, options)
             # Use a fresh configuration, not the restored cluster's includes, HBA,
             # preload libraries, archive command, listener or replication slots.
-            configuration = ("listen_addresses = ''\nport = 55433\nssl = off\n"
-                             "hot_standby = on\ndefault_transaction_read_only = on\n"
-                             "archive_mode = off\narchive_command = ''\nshared_preload_libraries = ''\n"
-                             "shared_buffers = '32MB'\n"
-                             f"unix_socket_directories = '{socket}'\nunix_socket_permissions = 0700\n")
-            configuration += limits
-            host.owned_write(directory / "postgresql.conf", configuration, mode=0o600, owner=postgres.cluster_owner(), group=postgres.cluster_owner())
-            host.owned_write(directory / "pg_hba.conf", f"local all {postgres.cluster_owner()} peer\nlocal all all reject\n",
-                             mode=0o600, owner=postgres.cluster_owner(), group=postgres.cluster_owner())
-            # auto.conf contains pgBackRest's recovery settings. Retain only recovery
-            # directives; application ALTER SYSTEM settings must not escape isolation.
-            auto = check_path(data / "postgresql.auto.conf", "file")
-            recovery = []
-            for line in auto.read_text().splitlines():
-                setting = line.split("=", 1)[0].strip()
-                if setting in {"restore_command", "recovery_target", "recovery_target_name", "recovery_target_time",
-                               "recovery_target_inclusive", "recovery_target_action", "recovery_target_timeline"}:
-                    recovery.append(line)
-            require(any(line.strip().startswith("restore_command") for line in recovery),
-                    "backup_drill_invalid", "Restored cluster has no WAL recovery command.")
-            host.owned_write(auto, "\n".join(recovery) + "\n", mode=0o600, owner=postgres.cluster_owner(), group=postgres.cluster_owner())
+            _restore_configuration(host, directory, data, socket, limits)
             service = ("# Foundry isolated PITR drill\n[Unit]\nDescription=Foundry isolated PITR drill\n"
                        f"[Service]\nType=simple\nUser={postgres.cluster_owner()}\nGroup={postgres.cluster_owner()}\nUMask=0077\n"
                        f"ExecStart=/usr/lib/postgresql/{cluster['major']}/bin/postgres -D {data} "
@@ -685,7 +720,7 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
         _record(host, entry, "restore_drill", result)
 
 
-def _restore_database(host, unit, path, options):
+def _restore_database(host, unit, path, options, *, retain=False):
     arguments = ["/usr/bin/pgbackrest", "--config=" + str(host.paths.p(CONFIG)), "--stanza=" + STANZA, *options, "restore"]
     command = " ".join(json.dumps(value.replace("%", "%%").replace("$", "$$")) for value in arguments)
     service = ("# Foundry isolated PITR restore\n[Unit]\nDescription=Foundry isolated PITR restore\n"
@@ -694,7 +729,17 @@ def _restore_database(host, unit, path, options):
                "KillMode=control-group\nTimeoutStartSec=1800\nTimeoutStopSec=120\n")
     _owned_public(host, path, service, "# Foundry isolated PITR restore")
     host.run(["systemctl", "daemon-reload"])
-    host.run(["systemctl", "start", "--no-block", unit])
+    if retain:
+        observed = host.run(["systemctl", "show", unit, "--property=ActiveState,ExecMainStartTimestampMonotonic"])
+        fields = dict(line.split("=", 1) for line in observed.stdout.splitlines() if "=" in line)
+        data = Path(next(value.split("=", 1)[1] for value in options if value.startswith("--pg1-path=")))
+        if fields.get("ActiveState") not in ("active", "activating"):
+            require(fields.get("ActiveState") == "inactive"
+                    and fields.get("ExecMainStartTimestampMonotonic") == "0" and not data.exists(),
+                    "recovery_restore_unknown", "Restore outcome is unknown; inspect its journal and recreate the target rather than retrying restore.")
+            host.run(["systemctl", "start", "--no-block", unit])
+    else:
+        host.run(["systemctl", "start", "--no-block", unit])
     deadline = time.monotonic() + 1800
     while True:
         result = host.run(["systemctl", "show", unit, "--property=ActiveState,SubState,Result,ExecMainStatus"])
@@ -702,7 +747,8 @@ def _restore_database(host, unit, path, options):
         if fields.get("ActiveState") == "active" and fields.get("SubState") == "exited":
             require(fields.get("Result") == "success" and fields.get("ExecMainStatus") == "0",
                     "backup_drill_restore_failed", "The isolated restore command failed.")
-            _stop_drill(host, unit)
+            if not retain:
+                _stop_drill(host, unit)
             return
         require(fields.get("ActiveState") != "failed", "backup_drill_restore_failed", "The isolated restore command failed.")
         require(fields.get("ActiveState") in ("activating", "inactive") and time.monotonic() < deadline,
@@ -865,7 +911,7 @@ def rotate_recipients(host, registry, entry, recipients):
         return {"ok": True, "key_archive": receipt}
 
 
-def _configuration(host, cluster, repository):
+def _configuration(host, cluster, repository, *, work=None):
     endpoint = _repository(repository)
     require(endpoint.scheme == "https", "backup_repository_tls_required",
             "The WAL repository requires HTTPS; give the MinIO fixture a trusted TLS endpoint.")
@@ -883,8 +929,8 @@ def _configuration(host, cluster, repository):
             f"repo1-retention-full={BACKUP_POLICY['full_retention_days']}\n"
             "repo1-retention-archive-type=full\n"
             "log-level-console=error\nlog-level-file=off\nstart-fast=y\narchive-timeout=120\n"
-            f"lock-path={host.paths.p(WORK + '/lock')}\n"
-            f"spool-path={host.paths.p(WORK + '/spool')}\n"
+            f"lock-path={Path(work) / 'lock' if work is not None else host.paths.p(WORK + '/lock')}\n"
+            f"spool-path={Path(work) / 'spool' if work is not None else host.paths.p(WORK + '/spool')}\n"
             f"[{STANZA}]\npg1-path={cluster['data_path']}\npg1-port={cluster['port']}\n"
             f"pg1-socket-path={cluster['socket_directory']}\npg1-user={postgres.cluster_owner()}\n")
 
@@ -900,6 +946,7 @@ def _owned_public(host, path, content, marker, mode=0o644):
 
 
 def _install_timers(host, registry):
+    require_writable(host)
     script = registry["tools"]["active_path"] + "/lib/backup.py"
     template = Path(__file__).resolve().parents[1] / "server/templates"
     timers = []
@@ -976,6 +1023,7 @@ def _remove_wal_bridge(host):
 
 def rebind(host, registry):
     """Converge every privileged entrypoint before an upgrade can complete."""
+    require_writable(host)
     if not registry.get("shared", {}).get("backup"):
         return
     cluster = _cluster(host, registry)
@@ -998,6 +1046,7 @@ def rebind(host, registry):
 
 def configure(host: Host, registry: dict, entry: dict) -> None:
     """Install private repository config and directly owned WAL/schedule commands."""
+    require_writable(host)
     cluster = _cluster(host, registry)
     with _repository_lock(host):
         _remove_wal_bridge(host)
@@ -1082,6 +1131,7 @@ def _scheduled(host, task, identity):
 
 def _main(arguments):
     host = Host()
+    require_writable(host)
     if len(arguments) == 3 and arguments[0] == "scheduled":
         require(os.geteuid() == 0, "root_required", "Backup control operations require root.")
         _scheduled(host, arguments[1], arguments[2])

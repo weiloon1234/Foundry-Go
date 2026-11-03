@@ -226,8 +226,13 @@ def inspect(host: Host, registry: dict) -> dict:
         require(_allocation_valid(owned) and owned["major"] == major, "postgres_ownership",
                 "Foundry cluster allocation changed; an OS/major upgrade requires a migration plan.")
         require(journal and all(journal["allocation"].get(key) == owned.get(key)
-                               for key in ("ownership_token", "major", "port", "config_path", "data_path", "socket_directory", "capacity")),
+                               for key in ("ownership_token", "major", "port", "config_path", "data_path", "socket_directory", "capacity", "archive_mode")),
                 "postgres_ownership", "Foundry cluster has no matching private creation journal.")
+        rehearsal = bool(registry["instances"]) and all(entry.get("recovered_from", {}).get("mode") == "rehearsal"
+                                                         for entry in registry["instances"].values())
+        require(owned.get("archive_mode", "on") == ("off" if rehearsal else "on")
+                and (not rehearsal or not owned.get("archive_command")),
+                "postgres_ownership", "Only a rehearsal may disable archiving; a rehearsal cannot archive WAL.")
     elif journal:
         owned = journal["allocation"]
     # pg_lsclusters itself can fail on a half-written postgresql.conf. Only the
@@ -299,7 +304,7 @@ def cluster_settings(host: Host, registry: dict) -> dict:
     cluster = _cluster(registry)
     return dict(cluster, capacity=dict(cluster["capacity"]), ssl="on", password_encryption="scram-sha-256",
                 fsync="on", full_page_writes="on", synchronous_commit="on",
-                archive_mode="on", wal_level="replica")
+                archive_mode=cluster.get("archive_mode", "on"), wal_level="replica")
 
 
 def _configuration(allocation):
@@ -309,7 +314,7 @@ def _configuration(allocation):
               "ssl_cert_file": _sql(allocation["config_path"] + "/foundry.crt"),
               "ssl_key_file": _sql(allocation["config_path"] + "/foundry.key"),
               "fsync": "on", "full_page_writes": "on", "synchronous_commit": "on", "wal_level": "replica",
-              "archive_mode": "on", "archive_command": _sql(allocation.get("archive_command", "").replace("\\", "\\\\"))}
+              "archive_mode": allocation.get("archive_mode", "on"), "archive_command": _sql(allocation.get("archive_command", "").replace("\\", "\\\\"))}
     # Sorted: the registry persists sorted JSON, so in-memory order must not decide the bytes.
     for key, value in sorted(allocation["capacity"].items()):
         if key != "budget_mib":
@@ -378,7 +383,7 @@ def _verify_settings(host, registry):
                 "password": "scram-sha-256", "fsync": "on", "full_page_writes": "on", "synchronous_commit": "on",
                 "listen": "127.0.0.1,::1", "data": cluster["data_path"], "config": cluster["config_path"] + "/postgresql.conf",
                 "hba": cluster["config_path"] + "/pg_hba.conf", "cert": cluster["config_path"] + "/foundry.crt",
-                "key": cluster["config_path"] + "/foundry.key", "archive_mode": "on", "wal_level": "replica"}
+                "key": cluster["config_path"] + "/foundry.key", "archive_mode": cluster.get("archive_mode", "on"), "wal_level": "replica"}
     expected.update({key: str(value) for key, value in cluster["capacity"].items() if key != "budget_mib"})
     commands = [cluster.get("archive_command", "")]
     pending = _cluster_journal(host, registry).get("archive_transition", {})
@@ -509,6 +514,20 @@ def _discard_initialization(host, registry, journal):
     require(not config.exists() and not data.exists(), "postgres_partial_install", message)
 
 
+def _configure_cluster(host, registry, allocation, tls):
+    config = host.paths.p(allocation["config_path"])
+    data = host.paths.p(allocation["data_path"])
+    _directory(host, config, 0o750, cluster_owner(), cluster_owner())
+    _directory(host, data, 0o700, cluster_owner(), cluster_owner())
+    _directory(host, config / "conf.d", 0o755, cluster_owner(), cluster_owner())
+    host.owned_write(config / "foundry.crt", tls["cert"].read_bytes(), owner=cluster_owner(), group=cluster_owner())
+    host.owned_write(config / "foundry.key", tls["key"].read_bytes(), mode=0o600, owner=cluster_owner(), group=cluster_owner())
+    host.owned_write(config / "conf.d/foundry.conf", _configuration(allocation),
+                     owner=cluster_owner(), group=cluster_owner())
+    _publish_hba(host, registry, running=False)
+    host.owned_write(host.paths.p("/etc/systemd/system/" + allocation["unit"]), _unit(allocation))
+
+
 def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = None) -> None:
     observed = inspect(host, registry)
     if observed["state"] == "ready":
@@ -594,15 +613,7 @@ def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = No
         journal["phase"] = "configuring"
         _save_cluster(host, journal)
     if journal["phase"] == "configuring":
-        _directory(host, config, 0o750, cluster_owner(), cluster_owner())
-        _directory(host, data, 0o700, cluster_owner(), cluster_owner())
-        _directory(host, config / "conf.d", 0o755, cluster_owner(), cluster_owner())
-        host.owned_write(config / "foundry.crt", tls["cert"].read_bytes(), owner=cluster_owner(), group=cluster_owner())
-        host.owned_write(config / "foundry.key", tls["key"].read_bytes(), mode=0o600, owner=cluster_owner(), group=cluster_owner())
-        host.owned_write(config / "conf.d/foundry.conf", _configuration(allocation),
-                         owner=cluster_owner(), group=cluster_owner())
-        _publish_hba(host, registry, running=False)
-        host.owned_write(host.paths.p("/etc/systemd/system/" + allocation["unit"]), _unit(allocation))
+        _configure_cluster(host, registry, allocation, tls)
         host.run(["systemctl", "daemon-reload"])
         journal = _cluster_journal(host, registry)
         journal["phase"] = "starting"
@@ -829,3 +840,182 @@ SELECT format('COMMENT ON ROLE %I IS %L', {name}, {ownership}) \\gexec
     _record_creation(host, entry, False)
     _step(host, registry, entry)
 
+
+
+def _restored_limits(host, major, data):
+    output = host.run([f"/usr/lib/postgresql/{major}/bin/pg_controldata", str(data)]).stdout
+    fields = dict(line.split(":", 1) for line in output.splitlines() if ":" in line)
+    names = {"max_connections": "max_connections", "max_worker_processes": "max_worker_processes",
+             "max_wal_senders": "max_wal_senders", "max_prepared_transactions": "max_prepared_xacts",
+             "max_locks_per_transaction": "max_locks_per_xact"}
+    limits = {}
+    for name, control in names.items():
+        value = fields.get(control + " setting", "").strip()
+        require(value.isdigit() and int(value) <= 100000, "recovery_limits", "Restored pg_control has invalid recovery limits.")
+        limits[name] = int(value)
+    return "".join(f"{name} = {value}\n" for name, value in limits.items()), fields.get("Database system identifier", "").strip()
+
+
+def _rebind_recovered_database(host, registry, entry, credentials):
+    """Verify old ownership before changing only host identity comments; never passwords."""
+    import copy
+    previous = copy.deepcopy(entry)
+    previous["host_id"] = entry["recovered_from"]["host_id"]
+    resources = _pg_resources(host, registry, entry)
+    require(resources.get("role") and resources.get("database"), "recovery_database_missing", "The recovered instance database and role must already exist.")
+    for resource in resources.values():
+        if resource and resource.get("marker") == marker(entry):
+            resource["marker"] = marker(previous)
+    _validate_pg_resources(previous, resources)
+    require(_database_policy_ok(host, registry, entry, resources["database"]),
+            "recovery_database_policy", "Recovered database policy differs from the Foundry contract.")
+    name, ownership = _sql(entry["allocations"]["database"]), _sql(marker(entry))
+    _psql(host, registry, f"SELECT format('COMMENT ON ROLE %I IS %L', {name}, {ownership}) \\gexec\n"
+          f"SELECT format('COMMENT ON DATABASE %I IS %L', {name}, {ownership}) \\gexec\n", transaction=True)
+    _verify_pg_password(host, registry, entry, credentials)
+    _step(host, registry, entry)
+
+
+def recover_cluster(host, registry, entry, operation, repository, port):
+    """Restore into a reserved allocation and publish the normal managed owner records.
+
+    The restore oneshot keeps its successful result until the phase is durable.
+    Once replay begins, no path here deletes or restores the data again.
+    """
+    import backup
+    import time
+    from runtime_config import read_credentials
+
+    intent, source = operation["intent"], operation["source"]
+    journal = _cluster_journal(host, registry)
+    if journal is None:
+        allocation = _allocation(intent["major"], port, operation["cluster_token"])
+        allocation.update(state="preparing", archive_mode="off" if intent["mode"] == "rehearsal" else "on",
+                          archive_command="" if intent["mode"] == "rehearsal" else backup._archive_command())
+        journal = {"host_id": registry["host_id"], "allocation": allocation, "phase": "reserved",
+                   "recovery": {"operation_id": intent["operation_id"], "source": source, "phase": "reserve"}}
+        _save_cluster(host, journal)
+    recovery = journal.get("recovery", {})
+    require(recovery.get("operation_id") == intent["operation_id"] and recovery.get("source") == source,
+            "recovery_conflict", "PostgreSQL allocation belongs to another recovery.")
+    allocation = journal["allocation"]
+    registry["shared"]["postgresql"] = dict(allocation)
+    host.journal(registry)
+    def phase(value):
+        recovery["phase"] = value
+        journal["recovery"] = recovery
+        _save_cluster(host, journal)
+    data = host.paths.p(allocation["data_path"])
+    configuration = host.paths.p(allocation["config_path"])
+    isolated = host.paths.p(CLUSTER_HOME) / ("recovery-" + intent["operation_id"])
+    socket = isolated / "socket"
+    restore_unit = "foundry-recover-" + intent["operation_id"] + "-restore.service"
+    replay_unit = "foundry-recover-" + intent["operation_id"] + "-replay.service"
+    restore_path = host.paths.p("/etc/systemd/system/" + restore_unit)
+    replay_path = host.paths.p("/etc/systemd/system/" + replay_unit)
+    if recovery["phase"] == "reserve":
+        _prepare_account(host, registry, journal)
+        for directory in (data.parent, isolated, socket):
+            _directory(host, directory, 0o700, cluster_owner(), cluster_owner())
+        require(not data.exists(), "recovery_conflict", "Reserved recovery data path is not empty.")
+        backup._write_private(host, host.paths.p(backup.REPOSITORY),
+                              {**repository, "host_id": registry["host_id"], "cluster_token": allocation["ownership_token"]})
+        for directory in (backup.CONFIG_DIR, backup.WORK):
+            backup._cluster_owned_directory(host, directory)
+        backup._install_configuration(host, allocation)
+        phase("restore")
+    if recovery["phase"] == "restore":
+        size = source.get("size")
+        import shutil
+        require(type(size) is int and size > 0 and shutil.disk_usage(data.parent).free >= 2 * size + 256 * 1024 * 1024,
+                "recovery_space", "Insufficient space for restore and WAL replay.")
+        options = ["--pg1-path=" + str(data), "--set=" + source["label"], "--archive-mode=off",
+                   "--tablespace-map-all=" + str(isolated / "tablespaces")]
+        if intent["target_time"]:
+            options += ["--type=time", "--target=" + intent["target_time"], "--target-action=promote"]
+        backup._restore_database(host, restore_unit, restore_path, options, retain=True)
+        phase("restored")
+    if recovery["phase"] == "restored":
+        backup._stop_drill(host, restore_unit)
+        limits, system_id = _restored_limits(host, allocation["major"], data)
+        require(system_id == source["system_id"] and (data / "PG_VERSION").read_text().strip() == str(allocation["major"]),
+                "recovery_identity", "Restored data does not match the selected repository cluster.")
+        backup._restore_configuration(host, isolated, data, socket, limits)
+        # The same isolation settings as a drill, with target promotion selected by
+        # the restore command. No TCP, old HBA/includes or archiving during replay.
+        content = ("# Foundry owned recovery replay\n[Unit]\nDescription=Foundry recovery replay\n"
+                   f"[Service]\nType=simple\nUser={cluster_owner()}\nGroup={cluster_owner()}\nUMask=0077\n"
+                   f"ExecStart=/usr/lib/postgresql/{allocation['major']}/bin/postgres -D {data} "
+                   f"-c config_file={isolated}/postgresql.conf -c hba_file={isolated}/pg_hba.conf\n"
+                   "KillSignal=SIGINT\nKillMode=mixed\nTimeoutStopSec=120\nRestart=no\n")
+        backup._owned_public(host, replay_path, content, "# Foundry owned recovery replay")
+        phase("replay")
+    if recovery["phase"] == "replay":
+        host.run(["systemctl", "daemon-reload"])
+        # Starting an already active replay service reattaches to that process.
+        require(host.run(["systemctl", "is-failed", "--quiet", replay_unit], check=False).returncode != 0,
+                "recovery_replay_failed", "Recovery replay failed; inspect its journal before resuming.")
+        host.run(["systemctl", "start", replay_unit])
+        deadline = time.monotonic() + backup.DRILL_REPLAY_SECONDS
+        while True:
+            try:
+                result = backup._admin(host, allocation, "SELECT NOT pg_is_in_recovery();\n", socket=str(socket), port=55433)
+                if result.stdout.strip() == "t":
+                    break
+            except DeployError:
+                pass
+            require(host.run(["systemctl", "is-failed", "--quiet", replay_unit], check=False).returncode != 0,
+                    "recovery_replay_failed", "Recovery replay failed; inspect its service journal.")
+            require(time.monotonic() < deadline, "recovery_target_unreached", "Recovery has not promoted at its target; resume this operation after inspection.")
+            time.sleep(.5)
+        phase("promoted")
+    if recovery["phase"] == "promoted":
+        backup._stop_drill(host, replay_unit)
+        tls = prepare_tls(host, registry)
+        _directory(host, configuration, 0o750, cluster_owner(), cluster_owner())
+        _directory(host, host.paths.p(SOCKET), 0o755, cluster_owner(), cluster_owner())
+        host.owned_write(configuration / "postgresql.conf",
+                         "# Foundry recovered cluster\n" +
+                         f"data_directory = {_sql(allocation['data_path'])}\n"
+                         f"hba_file = {_sql(allocation['config_path'] + '/pg_hba.conf')}\n"
+                         "include_dir = 'conf.d'\n", owner=cluster_owner(), group=cluster_owner())
+        host.owned_write(configuration / "start.conf", "manual\n")
+        host.owned_write(configuration / "pg_ctl.conf", "pg_ctl_options = ''\n")
+        host.owned_write(_owner_path(host, allocation), json.dumps({"host_id": registry["host_id"], "ownership_token": allocation["ownership_token"]}) + "\n")
+        journal["phase"] = "configuring"
+        _save_cluster(host, journal)
+        _configure_cluster(host, registry, allocation, tls)
+        journal = _cluster_journal(host, registry)
+        recovery = journal["recovery"]
+        phase("managed")
+    if recovery["phase"] == "managed":
+        log = check_path(host.paths.p(f"/var/log/postgresql/postgresql-{allocation['major']}-foundry.log"), "file")
+        if not log.exists():
+            host.owned_write(log, "", mode=0o640, owner=cluster_owner(), group=cluster_owner())
+        if host.paths.root == Path("/"):
+            require(log.stat().st_uid == pwd.getpwnam(cluster_owner()).pw_uid,
+                    "postgres_ownership", "Recovered PostgreSQL log has an unexpected owner.")
+        host.run(["systemctl", "daemon-reload"])
+        journal.update(phase="starting", start_attempted=True)
+        _save_cluster(host, journal)
+        host.run(["systemctl", "enable", "--now", allocation["unit"]], timeout=120)
+        registry["shared"]["postgresql"]["state"] = "ready"
+        _verify_settings(host, registry)
+        _publish_hba(host, registry, running=True)
+        journal = _cluster_journal(host, registry)
+        recovery = journal["recovery"]
+        journal.update(phase="ready", start_succeeded=True)
+        journal["allocation"]["state"] = "ready"
+        _save_cluster(host, journal)
+        host.journal(registry)
+        _rebind_recovered_database(host, registry, entry, read_credentials(host, entry))
+        phase("complete")
+    # Completed recovery is checked through the normal owner, including restored
+    # passwords, TLS, resource policy and exact settings, before backup can start.
+    inspect(host, registry)
+    if intent["mode"] == "takeover":
+        registry["shared"]["backup"] = {"owner": "foundry", "stanza": backup.STANZA,
+                                          "pgbackrest_config": backup.CONFIG,
+                                          "retention_full_type": "time", "retention_full_days": backup.BACKUP_POLICY["full_retention_days"]}
+        entry["backup"].update(destination_ref=backup.CONFIG, policy=dict(backup.BACKUP_POLICY))
+    host.journal(registry, entry)

@@ -411,7 +411,7 @@ def validate_registry(value):
         validate_topology(entry.get("topology"), registered=True)
         require(type(entry.get("client_generation")) is int and entry["client_generation"] >= 1
                 and isinstance(entry.get("framework_version"), str), "invalid_registry", "Invalid client pin.")
-        require(isinstance(entry.get("provisioning"), dict) and entry["provisioning"].get("state") in ("preparing", "ready", "failed")
+        require(isinstance(entry.get("provisioning"), dict) and entry["provisioning"].get("state") in ("preparing", "ready", "failed", "rehearsal")
                 and isinstance(entry["provisioning"].get("completed_steps"), list), "invalid_registry", "Invalid provisioning state.")
         require(type(entry.get("configuration_revision")) is int and entry["configuration_revision"] >= 1, "invalid_registry", "Invalid configuration revision.")
         require(valid_timestamp(entry.get("created_at")) and valid_timestamp(entry.get("updated_at")), "invalid_registry", "Invalid instance timestamps.")

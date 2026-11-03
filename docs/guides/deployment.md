@@ -28,6 +28,7 @@ local state remains in the application directory.
 | --- | --- |
 | `make bootstrap` | Select or create an environment, then inspect or plan preparation |
 | `ACTION=inspect make bootstrap` | Inspect public identity and host state |
+| `ACTION=recover make bootstrap` | Recover an existing instance onto an empty replacement server |
 | `make release` | Build a local release archive |
 | `ENVIRONMENT=production ACTION=status make deploy` | Read the selected instance status |
 | `ACTION=deploy make deploy` | Select or build a release, then request activation |
@@ -56,8 +57,8 @@ The module's build tools are mounted read-only separately from the app source.
 No compiler runs on the server.
 
 SSH requires noninteractive authentication and an established host key. `make
-bootstrap` of a profile not yet bound to a server records an unknown host key on first
-contact (OpenSSH `accept-new`), which trusts whatever answers at that address. To verify
+bootstrap` of a profile not yet bound to a server, and recovery to a replacement
+address, record an unknown host key on first contact (OpenSSH `accept-new`), which trusts whatever answers at that address. To verify
 it instead, add the key to `known_hosts` first. A changed key is always refused, and
 every other operation requires the recorded key. The private
 key path saved for a host in `.deploy/settings.json` is enough: the tool offers only
@@ -77,6 +78,7 @@ travel through stdin, never command-line arguments.
 | `config/deploy.toml` | Tracked nonsecret application settings |
 | `.deploy/settings.json` | Ignored personal SSH settings |
 | `.deploy/bootstrap/<instance UUID>.json` | Ignored pending host binding, mode 0600 |
+| `.deploy/recovery/<instance UUID>.json` | Ignored recovery intent and replacement host binding, mode 0600 |
 | `.deploy/releases/<instance UUID>.json` | Ignored public release-version cache |
 | `dist/releases/<project UUID>/<instance UUID>/` | Completed local releases |
 
@@ -571,7 +573,11 @@ age-encrypted key/config archive succeed. The receipt contains `backup_id`,
 `pgbackrest_label`, `key_archive`, completion time, and configuration revision;
 a recovery bundle also records its named `restore_point`. The archive contains
 the instance configuration and referenced files, including active and retained
-keys and repository recovery material. Only public age recipients are stored
+keys and repository recovery material. New archives also contain
+`recovery/instance.json`: the nonsecret registry entry with topology, profile,
+allocations excluding UID and GID, and `release_commit` for the running release.
+Older archives remain recoverable using
+the application's `deploy/topology.json` and the HTTP port in `app.env`. Only public age recipients are stored
 on the host. `rclone` uploads and verifies only the encrypted key/config archive.
 `ACTION=backup-configure` accepts `backup_s3` and `age_recipients`; application
 storage credentials remain part of bootstrap runtime configuration.
@@ -657,73 +663,117 @@ Database drill success does not establish business invariants, age decryption,
 or an atomic snapshot across database and objects. Recovery acceptance must
 retrieve and decrypt the key archive with an operator-held age identity, verify
 its members, and replay a timestamp-bounded row change. Keep the release artifact and operator recovery identities independently
-recoverable. Actual disaster recovery and traffic cutover remain explicit
-operator procedures; the drill does not rebind host identity.
+recoverable. Use replacement-host recovery below to rebuild a managed server.
+The drill does not rebind host identity or change traffic routing.
 
 ### Recovering onto a replacement host
 
-No deployment action performs this yet, so these steps are manual. They were
-rehearsed once, on 2026-11-03, by restoring a staging instance onto an empty host
-(PostgreSQL 16.15, pgBackRest 2.50, 35 MB restored). The rehearsal stopped short of
-serving traffic; the limits are listed after the steps.
+Keep the existing project and environment profile. Download and decrypt the key
+archive on your Mac, then extract it into a private directory. Keep the age private
+identity outside that directory and off every server. Recovery reads the decrypted
+files and streams them over SSH stdin. It never requests the age private identity.
 
-You need the operator's age identity, access to the backup bucket, the release
-or the commit to rebuild it from, and a new host with the same PostgreSQL major
-version. Keep the age identity off every server.
+Choose a new, empty Ubuntu server with the backup's PostgreSQL major: Ubuntu 24.04
+provides PostgreSQL 16, and Ubuntu 26.04 provides PostgreSQL 18. The release must
+match the server architecture and the restored schema. `RELEASE` accepts the same
+retained version or `build` selection as deployment. In both modes, recovery runs
+the selected release's own `migrate:status` and refuses pending migrations,
+applied migrations unknown to the release, or changed/incomplete history. It
+never runs migrations or seeds. New key archives record the running release's
+commit in `recovery/instance.json`; a schema refusal names that commit. For old
+archives, the commit is reported as unknown. After takeover, upgrade through
+normal `make deploy`, which takes its own recovery point before migrations.
 
-1. Download the newest archive under `keys/<instance ID>/` in the backup bucket and
-   decrypt it on the operator's machine. It holds
-   `recovery/pgbackrest-repository.json` and
-   `instances/<instance>/` with `app.env`, `secrets.json` and the encryption key.
-2. Install PostgreSQL, pgBackRest and Redis on the new host, then stop and disable
-   their default services. Create the `foundry-postgres` account and its private
-   directories.
-3. Render `/etc/foundry/pgbackrest/foundry.conf` from the repository file with
-   `_configuration` in `tools/deploy/lib/backup.py`, mode 0600, owned by
-   `foundry-postgres`. `pgbackrest info` must list the expected backups and
-   system ID.
-4. Restore into a new directory as `foundry-postgres` with `--archive-mode=off`. Add
-   `--type=time --target=<timestamp> --target-action=pause` to stop at a point in
-   time; omit them to replay all archived WAL.
-5. Write a fresh `postgresql.conf` and `pg_hba.conf` outside the data directory, as
-   `restore_drill` does, with `archive_mode = off`. Take the `max_*` limits from
-   `pg_controldata`, since the old host may be gone. Keep only recovery settings in
-   `postgresql.auto.conf`, then start PostgreSQL and wait for replay to finish.
-6. Create a new local CA and `localhost` certificate as `prepare_tls` does, and add
-   the CA to the system trust store. The archive does not carry them, and `app.env`
-   connects with `verify-full`. Enable TLS on PostgreSQL with the `_hba` rules. The
-   roles and their password hashes come back with the restored data.
-7. Start Redis with the same TLS settings. Build its ACL with `redis_rules`, using
-   `artisan redis:keys` from the release and the password in `secrets.json`. Redis
-   starts empty because it has no backup; `artisan redis:keys` shows what it holds.
-8. Install the release, `app.env` and the encryption key at their original paths,
-   then start `artisan serve`. Leave `schedule:work` and workers off until the old
-   host is confirmed dead, because they share its attachment bucket and can delete
-   objects. Set `APP__SCHEDULER__ENABLED=false` to remove those schedules.
-9. Check `/health/ready`, sign in, read an image and compare its hash with
-   `foundry_attachments.digest`, then write and read an encrypted row. Direct requests
-   must carry the headers from `tools/deploy/server/templates/nginx-proxy.conf`;
-   without them sign-in returns a 400.
+To prove the backup while the old server remains alive, run:
 
-While the old host is alive, the restored cluster shares its system ID and
-repository. Run only `info`, `restore` and `archive-get` against the repository, and
-never `backup`, `expire`, `check`, `archive-push` or a `stanza-*` command.
+```sh
+ENVIRONMENT=production ACTION=recover \
+  RECOVER_HOST=replacement.example.com RECOVER_MODE=rehearsal \
+  FOUNDRY_RECOVERY_DIR=/absolute/private/decrypted-backup \
+  RELEASE=<retained-version> make bootstrap
+```
 
-The rehearsal did not cover these, so treat them as unproven:
+`RECOVER_MODE` is required and has no default. Personal SSH prompts work as in
+bootstrap. The replacement uses the profile's SSH port. Optional `TARGET_TIME`
+selects a timestamp with timezone, such as `2026-11-03T07:55:00Z`. Without a target,
+recovery selects the latest completed backup and replays available archived WAL.
+A time target selects the newest completed backup preceding that time and requires
+WAL through the target.
 
-- **Backups on the replacement.** Resuming WAL archiving was not tried, and a
-  recovered host has no backups until it is.
-- **Tool management.** The new host has no registry, so `make deploy` cannot manage
-  it. Bootstrap on a new host generates a new repository passphrase, so do not point
-  it at the existing bucket; that path was not tested.
-- **Traffic.** Nginx, certificates and the DNS cutover were not exercised.
-- **Rebuilt releases.** The rehearsal reused a stored release artifact; it did not
-  rebuild one from git.
-- **Existing ciphertext.** Staging had no encrypted rows. The recovered key was
-  compared by hash with the live key and tested with a new encrypted row, so no
-  ciphertext written by the old host was decrypted.
-- **Large databases.** The 35 MB restore took 2 to 3 minutes with pgBackRest's
-  default single process. Time a production-sized restore separately.
+`recover-plan` is read-only. It rejects existing Foundry registries, resources and
+accounts, unsupported operating systems, and missing or mismatched recovery
+members. The plan binds the source archive, release, profile, mode, target and
+framework bundle to a token. Apply first installs only the `pgbackrest` package
+and its required dependencies through the existing guarded package installer.
+It then uses `info` with a private temporary configuration to inspect the repository.
+
+If no completed backup exists, or its PostgreSQL major differs from the target,
+apply refuses before creating accounts, a registry, databases or other services.
+It deletes the temporary credentials and records the refusal in
+`/var/lib/foundry-recovery/operation.json`. The package transaction and journal
+remain. Recreate the server on the matching Ubuntu release before trying again.
+
+A **rehearsal** restores the database with archiving off, creates new local PKI and
+Redis, and starts only HTTP on localhost. It does not issue a public certificate,
+install backup timers, start workers or the scheduler, or write to the backup
+repository. Its registry state is `rehearsal`; deploy and other mutations refuse
+that state. The local profile keeps its original host. A rehearsal cannot be
+promoted to takeover. Recreate the server to take over.
+
+Before a **takeover**, stop the old server. Two servers archiving to the same
+repository can corrupt recovery. Then run:
+
+```sh
+ENVIRONMENT=production ACTION=recover \
+  RECOVER_HOST=replacement.example.com RECOVER_MODE=takeover \
+  CONFIRM_OLD_SERVER_GONE=yes \
+  FOUNDRY_RECOVERY_DIR=/absolute/private/decrypted-backup \
+  RELEASE=<retained-version> make bootstrap
+```
+
+Without `CONFIRM_OLD_SERVER_GONE=yes`, takeover requires the typed confirmation
+`OLD SERVER STOPPED`. `CONFIRM=yes` confirms the printed plan only; it does not
+replace the old-server confirmation.
+
+Takeover restores and promotes PostgreSQL, enables WAL archiving, and runs
+`pgbackrest check`. It rebuilds local PKI, Redis ACLs, role units and nginx, and
+issues a certificate using the recovered Cloudflare token. HTTP starts and passes
+readiness before workers and the scheduler start. After all roles are ready,
+the tool completes a full database backup and an encrypted key archive, then
+enables the normal backup timers.
+
+The instance UUID, database and role names, passwords, encryption keys, and
+repository cipher passphrase survive recovery. The replacement gets a new host
+UUID, cluster ownership token, CA and service certificates. Its registry records
+`recovered_from`. On takeover success, the tool updates `host.address` and
+`host.host_id` in the local environment profile. **Commit that profile change and
+point DNS at the new server.** DNS is the remaining manual traffic-cutover step.
+
+Repeat the same command with the same recovery folder and release to resume an
+interrupted operation. Keep `.deploy/recovery/<instance UUID>.json`; it retains
+the operation and replacement host UUIDs and the selected release archive. A
+retry reuses that archive, including when the original command used `RELEASE=build`.
+The marker is removed after confirmed success and the takeover profile update,
+so a completed rehearsal can be followed by takeover on a new empty server.
+Completed phases stay completed, and readiness is checked again before backup
+and completion. An
+active restore attaches to its existing systemd unit. A lost restore completion
+record or an uncertain backup outcome never triggers an automatic new restore or
+backup. Inspect the private recovery journal and the relevant service or backup
+journal. Backup uncertainty uses the reconciliation commands documented above.
+An unprovable restore requires recreating the target.
+
+Recovery restores PostgreSQL and configuration. Redis starts empty. Attachments
+remain in the existing application bucket; a database target older than attachment
+cleanup grace can reference removed objects. Readiness and table comparisons do
+not prove application-specific invariants, existing ciphertext decryption, or
+large-database restore times. Verify those against representative application data
+before routing production traffic.
+
+Deployment tool generation 3 includes recovery. Upgrade existing hosts through
+`ACTION=tools-plan` and `ACTION=tools-apply`; normal deployment does not replace
+installed host tools. An empty recovery target receives the selected generation
+during recovery.
 
 ## Container acceptance
 
@@ -766,6 +816,12 @@ cross-instance denial, so an unavailable database cannot satisfy isolation.
 Other phases cover scheduler occurrence, exact Redis grants, atomic key/config
 changes, rollback replay, interrupted-switch reconciliation, backup freshness,
 WAL replay, age recovery, attachment copies, nginx, and certificate renewal.
+`acceptance_recover.py` then uses the bootstrapped source as host A and creates
+empty hosts B and C. It compares per-table counts and hashes on rehearsal B and
+requires the repository object listing to remain unchanged while A is alive.
+After stopping A, it checks takeover C, a later deployment, a new backup, and a
+restore drill. Completed temporary drills must leave no failed `foundry-restore-*`
+unit or journal entry containing `abnormal database system shutdown`.
 
 Synthetic certificates require `FOUNDRY_ACCEPTANCE_SYNTHETIC_CERT=1`, the Docker
 marker, runtime environment `testing`, an `acceptance*` profile environment,

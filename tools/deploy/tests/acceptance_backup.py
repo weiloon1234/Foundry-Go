@@ -142,6 +142,15 @@ def main():
             member = archive.getmember(name)
             assert member.isfile() and member.size == len(expected)
             assert archive.extractfile(member).read() == expected, "Recovered key/config bytes differ"
+    temporary_drill = action("restore-drill", request(project, profile, backup_id=backup["backup_id"],
+                             target_time=target, retain=False), timeout=1800)
+    assert temporary_drill["status"] == "complete" and not temporary_drill["retained"]
+    failed = run(["systemctl", "list-units", "--state=failed", "--all", "--no-legend", "--plain",
+                  "foundry-restore-*"]).stdout
+    assert not failed.strip(), "Completed drill left a failed foundry-restore unit"
+    for unit in (temporary_drill["unit"], temporary_drill["restore_unit"]):
+        journal = run(["journalctl", "--unit", unit, "--no-pager", "--output=cat"]).stdout
+        assert "abnormal database system shutdown" not in journal, "Drill stopped PostgreSQL abnormally"
     # Rotate recipients and then re-submit the same repository keys. Both must
     # publish a fresh archive which the new offline fixture identity decrypts.
     replacement_identity = work / "replacement-age-identity.txt"
