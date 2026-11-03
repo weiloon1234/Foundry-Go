@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Changed: PostgreSQL archives WAL about once a minute while active. Tool upgrades
+  apply the timeout to existing clusters with a reload, without a restart.
+- Fixed: Healthy recovery rehearsals no longer report missing background roles or
+  certificates as instance problems. HTTP and other health checks remain active.
 - Added: Deployment and storage configuration edits probe write, read and delete
   access on every configured disk before publication. Applications with cloud disks
   must register `deploy:storage-probe`. Rollback and recovery do not run the probe.

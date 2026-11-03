@@ -202,6 +202,24 @@ class TransitionTests(unittest.TestCase):
         self.assertEqual(capacity.apply(self.host, plan['plan_token']), result)
         self.assertEqual(len(self.host.calls), count)
 
+    def test_resize_preserves_archive_timeout_presence(self):
+        for present in (True, False):
+            with self.subTest(present=present):
+                if not present:
+                    registry = self.host.read_registry()
+                    registry["shared"]["postgresql"].pop("archive_timeout")
+                    self.host.write_registry(registry)
+                    journal = postgres._cluster_journal(self.host, registry)
+                    journal["allocation"].pop("archive_timeout")
+                    postgres._save_cluster(self.host, journal)
+                    self.host.owned_write(self.host.paths.p(self.pg["config_path"] + "/conf.d/foundry.conf"),
+                                          postgres._configuration(registry["shared"]["postgresql"]))
+                with patch.object(capacity, "memory_mib", return_value=4096 if present else 2048):
+                    self.apply()
+                content = self.host.paths.p(self.pg["config_path"] + "/conf.d/foundry.conf").read_text()
+                self.assertEqual(present, "archive_timeout = '1min'\n" in content)
+                self.assertEqual(present, "archive_timeout" in self.host.read_registry()["shared"]["postgresql"])
+
     def test_noop_does_not_publish_or_restart(self):
         self.apply()
         before = self.host.paths.registry.read_bytes()

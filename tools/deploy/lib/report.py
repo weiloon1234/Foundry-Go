@@ -390,14 +390,17 @@ def instance_report(host, entry, deadline, problems):
     if recorded_status not in STATUSES:
         recorded_status = "unknown"
         problem(problems, "instance_status_unknown", instance_id)
+    rehearsal = provisioning.get("state") == "rehearsal"
     expected_unit = instance_units(entry)["http"]
     unit_status = checked(problems, "service_check_unavailable", instance_id, service, host, expected_unit, deadline)
     topology = {role: {"unit": unit, "state": checked(problems, "service_check_unavailable", instance_id, service, host, unit, deadline)}
-                for role, unit in instance_units(entry).items() if role != "http"}
+                for role, unit in instance_units(entry).items() if role != "http" and not rehearsal}
     topology["http"] = {"unit": expected_unit, "state": unit_status}
     ready = None if recorded_status == "never_deployed" and not state.get("current") else checked(problems, "readiness_check_unavailable", instance_id, readiness, entry["allocations"]["http_port"], deadline)
-    cert = checked(problems, "certificate_check_unavailable", instance_id, certificate, profile.get("domain"), deadline)
-    certificate_problems(problems, instance_id, cert)
+    cert = None
+    if not rehearsal:
+        cert = checked(problems, "certificate_check_unavailable", instance_id, certificate, profile.get("domain"), deadline)
+        certificate_problems(problems, instance_id, cert)
     current, previous = release(state.get("current")), release(state.get("previous"))
     consistent = True
     if recorded_status in {"healthy", "rolled_back"} and (not current or not ready or not ready["ready"] or not unit_status or unit_status["active"] != "active"):

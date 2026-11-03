@@ -32,7 +32,7 @@ from contracts import PROFILE_SCHEMA, atomic_json, atomic_write, digest, identit
 from host import Host
 from provision import bootstrap_plan
 from release import activate
-from acceptance_support import action, guard, private_json, postgres_denial, postgres_settings, request, run, wait_for
+from acceptance_support import action, guard, private_json, postgres_denial, postgres_settings, psql, request, run, wait_for
 
 TOOLS = Path(__file__).resolve().parents[1]
 HOST_ID = "10000000-0000-4000-8000-000000000001"
@@ -434,6 +434,8 @@ def main():
     from acceptance_capacity import verify_settings
     import capacity
     verify_settings(host, capacity.memory_mib(host))
+    for entry in host.read_registry()["instances"].values():
+        assert psql(postgres_settings(host, entry), "SHOW archive_timeout;").stdout.strip() == "1min"
     print("PASS bootstrap effective PostgreSQL and Redis values match available RAM", flush=True)
     certificate_renewal(host)
     before = snapshot(host)

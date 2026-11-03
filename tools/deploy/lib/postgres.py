@@ -16,6 +16,9 @@ from contracts import (DeployError, HOST_PATHS, POSTGRES_PORT, check_path, insta
 import packages
 import capacity
 
+# Bounds how much recent data a lost server can take with it. Spelled as PostgreSQL reports it.
+ARCHIVE_TIMEOUT = "1min"
+
 ROOTS = "/etc/ssl/certs/ca-certificates.crt"
 SOCKET = "/run/foundry/postgresql"
 CLUSTER_HOME = "/var/lib/foundry/postgresql"
@@ -181,12 +184,14 @@ def _allocation(major, port, token, limits):
             "port": port, "socket_directory": SOCKET, "unit": f"postgresql@{major}-foundry.service",
             "config_path": f"/etc/postgresql/{major}/foundry", "data_path": f"{CLUSTER_HOME}/{major}/foundry",
             "cluster_owner": cluster_owner(),
-            "ownership_token": token, "capacity": dict(limits), "archive_command": ""}
+            "ownership_token": token, "capacity": dict(limits), "archive_command": "", "archive_timeout": ARCHIVE_TIMEOUT}
 
 
 def _allocation_valid(value):
     if (not isinstance(value, dict) or value.get("major") not in (16, 18) or type(value.get("port")) is not int
             or not POSTGRES_PORT <= value["port"] <= POSTGRES_PORT + 99 or not value.get("ownership_token") or not capacity.postgres_valid(value.get("capacity"))):
+        return False
+    if "archive_timeout" in value and value["archive_timeout"] != ARCHIVE_TIMEOUT:
         return False
     expected = _allocation(value["major"], value["port"], value["ownership_token"], value["capacity"])
     return all(value.get(key) == expected[key] for key in ("owner", "cluster", "unit", "socket_directory", "config_path", "data_path", "capacity", "cluster_owner"))
@@ -289,6 +294,7 @@ def inspect(host: Host, registry: dict, *, capacity_target=None) -> dict:
         transition = journal.get("archive_transition", {})
         if transition.get("phase") == "publishing" and transition.get("old") == owned.get("archive_command", ""):
             allowed.append(_configuration(dict(owned, archive_command=transition["new"])))
+            allowed.append(_configuration(dict(owned, archive_command=transition["new"], archive_timeout=ARCHIVE_TIMEOUT)))
         require(check_path(configuration, "file").read_text() in allowed,
                 "postgres_configuration_drift", "Foundry cluster settings changed outside a shared-service plan.")
         hba = check_path(host.paths.p(owned["config_path"]) / "pg_hba.conf", "file")
@@ -318,6 +324,8 @@ def _configuration(allocation):
               "ssl_key_file": _sql(allocation["config_path"] + "/foundry.key"),
               "fsync": "on", "full_page_writes": "on", "synchronous_commit": "on", "wal_level": "replica",
               "archive_mode": allocation.get("archive_mode", "on"), "archive_command": _sql(allocation.get("archive_command", "").replace("\\", "\\\\"))}
+    if "archive_timeout" in allocation:
+        values["archive_timeout"] = _sql(allocation["archive_timeout"])
     # Sorted: the registry persists sorted JSON, so in-memory order must not decide the bytes.
     for key, value in sorted(allocation["capacity"].items()):
         if key != "budget_mib":
@@ -371,6 +379,7 @@ def _publish_hba(host, registry, *, running):
 def _verify_settings(host, registry):
     cluster = _cluster(registry)
     cache = ", 'effective_cache_size', current_setting('effective_cache_size')" if "effective_cache_size" in cluster["capacity"] else ""
+    timeout = ", 'archive_timeout', current_setting('archive_timeout')" if "archive_timeout" in cluster else ""
     observed = json.loads(_psql(host, registry, "SELECT json_build_object("
         "'port', current_setting('port'), 'socket', current_setting('unix_socket_directories'),"
         "'ssl', current_setting('ssl'), 'checksums', current_setting('data_checksums'),"
@@ -382,12 +391,14 @@ def _verify_settings(host, registry):
         "'key', current_setting('ssl_key_file'), 'archive_mode', current_setting('archive_mode'),"
         "'archive_command', current_setting('archive_command'), 'wal_level', current_setting('wal_level'),"
         "'max_connections', current_setting('max_connections'), 'shared_buffers', current_setting('shared_buffers'),"
-        "'work_mem', current_setting('work_mem'), 'maintenance_work_mem', current_setting('maintenance_work_mem')" + cache + "); ").stdout)
+        "'work_mem', current_setting('work_mem'), 'maintenance_work_mem', current_setting('maintenance_work_mem')" + cache + timeout + "); ").stdout)
     expected = {"port": str(cluster["port"]), "socket": SOCKET, "ssl": "on", "checksums": "on", "encoding": "UTF8",
                 "password": "scram-sha-256", "fsync": "on", "full_page_writes": "on", "synchronous_commit": "on",
                 "listen": "127.0.0.1,::1", "data": cluster["data_path"], "config": cluster["config_path"] + "/postgresql.conf",
                 "hba": cluster["config_path"] + "/pg_hba.conf", "cert": cluster["config_path"] + "/foundry.crt",
                 "key": cluster["config_path"] + "/foundry.key", "archive_mode": cluster.get("archive_mode", "on"), "wal_level": "replica"}
+    if "archive_timeout" in cluster:
+        expected["archive_timeout"] = ARCHIVE_TIMEOUT
     expected.update({key: str(value) for key, value in cluster["capacity"].items() if key != "budget_mib"})
     commands = [cluster.get("archive_command", "")]
     pending = _cluster_journal(host, registry).get("archive_transition", {})
@@ -548,24 +559,24 @@ def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = No
         if shared_service_plan is not None:
             cluster = registry["shared"]["postgresql"]
             command = _archive_plan(cluster, shared_service_plan)
-            if command != cluster.get("archive_command", ""):
+            if command != cluster.get("archive_command", "") or "archive_timeout" not in cluster:
                 journal = _cluster_journal(host, registry)
                 journal["archive_transition"] = {"old": cluster.get("archive_command", ""), "new": command, "phase": "publishing"}
                 _save_cluster(host, journal)
-                changed = dict(cluster, archive_command=command)
+                changed = dict(cluster, archive_command=command, archive_timeout=ARCHIVE_TIMEOUT)
                 host.owned_write(host.paths.p(cluster["config_path"]) / "conf.d/foundry.conf", _configuration(changed),
                                  owner=cluster_owner(), group=cluster_owner())
                 host.run(["pg_ctlcluster", str(cluster["major"]), "foundry", "reload"])
                 result = _psql(host, registry, "SHOW archive_command;")
                 require(_text(result) == command, "postgres_archive_pending", "Archive command publication awaits reconciliation.")
-                cluster["archive_command"] = command
-                journal["allocation"]["archive_command"] = command
+                cluster.update(archive_command=command, archive_timeout=ARCHIVE_TIMEOUT)
+                journal["allocation"].update(archive_command=command, archive_timeout=ARCHIVE_TIMEOUT)
                 host.journal(registry)
                 journal["archive_transition"]["phase"] = "complete"
                 _save_cluster(host, journal)
             elif pending.get("phase") == "publishing":
                 journal = _cluster_journal(host, registry)
-                journal["allocation"]["archive_command"] = command
+                journal["allocation"].update(archive_command=command, archive_timeout=ARCHIVE_TIMEOUT)
                 journal["archive_transition"]["phase"] = "complete"
                 _save_cluster(host, journal)
         _publish_hba(host, registry, running=True)

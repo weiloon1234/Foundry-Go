@@ -75,6 +75,8 @@ class BackupTests(unittest.TestCase):
             output = "LoadState=loaded\nActiveState=inactive\nMainPID=0\nControlGroup=\n"
         elif "SHOW archive_command" in kwargs.get("input", ""):
             output = backup._archive_command()
+        elif "SHOW archive_timeout" in kwargs.get("input", ""):
+            output = "1min"
         return subprocess.CompletedProcess(args, 0, output, "")
 
     def test_archive_is_encrypted_before_copy_and_contains_referenced_values(self):
@@ -577,6 +579,28 @@ class BackupTests(unittest.TestCase):
         self.assertFalse(bridge.exists())
         self.assertEqual(caught.exception.code, "backup_rebind_failed")
         backrest.assert_not_called()
+
+    def test_rebinding_requires_live_archive_timeout(self):
+        cluster = self.cluster()
+        self.registry["shared"]["backup"] = {"owner": "foundry"}
+        for timeout in ("0", "1min"):
+            with self.subTest(timeout=timeout), \
+                    patch.object(backup, "_cluster", return_value=cluster), \
+                    patch.object(backup.postgres, "cluster_settings", return_value=dict(cluster)), \
+                    patch.object(backup.postgres, "prepare"), \
+                    patch.object(backup, "_install_timers"), patch.object(backup, "_backrest") as backrest, \
+                    patch.object(backup, "_admin", side_effect=[
+                        subprocess.CompletedProcess([], 0, backup._archive_command(), ""),
+                        subprocess.CompletedProcess([], 0, timeout, "")]) as admin:
+                if timeout == "0":
+                    with self.assertRaises(DeployError) as caught:
+                        backup.rebind(self.host, self.registry)
+                    self.assertEqual("backup_rebind_failed", caught.exception.code)
+                    backrest.assert_not_called()
+                else:
+                    backup.rebind(self.host, self.registry)
+                    backrest.assert_called_once()
+                self.assertEqual("SHOW archive_timeout;\n", admin.call_args.args[2])
 
     def test_repository_config_is_written_only_for_dedicated_owner(self):
         cluster = self.cluster()

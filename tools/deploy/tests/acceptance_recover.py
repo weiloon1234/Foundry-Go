@@ -24,6 +24,7 @@ from host import Host
 import backup
 import recover
 import release
+import report
 from topology import instance_units
 
 EXPORT = WORK / "recover-export"
@@ -149,6 +150,9 @@ def target(mode):
     if mode == "rehearsal":
         assert psql(pg, "SHOW archive_mode;").stdout.strip() == "off"
         assert entry["provisioning"]["state"] == "rehearsal"
+        host_report = report.collect_report(host)
+        assert not [problem for problem in host_report["problems"]
+                    if problem.get("instance_id") == profile["instance_id"]], host_report["problems"]
         for role, unit in instance_units(entry).items():
             if role != "http":
                 assert not Path("/etc/systemd/system", unit).exists(), "Rehearsal installed a background role"
@@ -165,6 +169,7 @@ def target(mode):
         return
     assert entry["provisioning"]["state"] == "ready"
     assert psql(pg, "SHOW archive_mode;").stdout.strip() == "on"
+    assert psql(pg, "SHOW archive_timeout;").stdout.strip() == "1min"
     assert result["backup"]["status"] == "complete"
     assert result["remaining_manual_steps"] == ["Point DNS at the new server."]
     from acceptance_host import WORK as HOST_WORK

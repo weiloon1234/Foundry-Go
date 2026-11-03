@@ -222,6 +222,36 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(self.item(result)["recorded_status"], "healthy")
         self.assertIn({"code": "instance_state_inconsistent", "instance_id": INSTANCE_ID}, result["problems"])
 
+    def test_rehearsal_checks_http_only_and_normal_instances_keep_all_checks(self):
+        entry = self.host.registry["instances"][INSTANCE_ID]
+        release_dir = self.host.paths.opt("abc-production") / "releases" / "v1"
+        release_dir.mkdir(parents=True)
+        (self.host.paths.opt("abc-production") / "current").symlink_to(release_dir)
+        self.host.states[INSTANCE_ID].update(status="healthy", current={"version": "v1"})
+        healthy = {"load": "loaded", "active": "active", "substate": "running",
+                   "main_pid": 42, "exe": str(release_dir / "artisan")}
+        missing = {"load": "not-found", "active": "inactive", "substate": "dead"}
+        self.service.side_effect = lambda host, unit, deadline: healthy if unit == report.instance_units(entry)["http"] else missing
+        self.cert.side_effect = OSError("no certificate")
+        entry["provisioning"]["state"] = "rehearsal"
+        result = report.collect_report(self.host)
+        item = self.item(result)
+        self.assertEqual("healthy", item["status"])
+        self.assertTrue(item["metadata_consistent"])
+        self.assertEqual({"http"}, set(item["services"]))
+        self.assertFalse([p for p in result["problems"] if p.get("instance_id") == INSTANCE_ID])
+        self.cert.assert_not_called()
+        self.service.side_effect = None
+        self.service.return_value = missing
+        result = report.collect_report(self.host)
+        self.assertEqual("unknown", self.item(result)["status"])
+        self.assertIn({"code": "instance_state_inconsistent", "instance_id": INSTANCE_ID}, result["problems"])
+        entry["provisioning"]["state"] = "ready"
+        self.service.side_effect = lambda host, unit, deadline: healthy if unit == report.instance_units(entry)["http"] else missing
+        result = report.collect_report(self.host)
+        self.assertIn({"code": "instance_state_inconsistent", "instance_id": INSTANCE_ID}, result["problems"])
+        self.assertIn({"code": "certificate_check_unavailable", "instance_id": INSTANCE_ID}, result["problems"])
+
     def test_active_roles_must_match_selected_executable_and_have_a_live_pid(self):
         selected = self.host.paths.opt("abc-production") / "releases" / "v2"
         selected.mkdir(parents=True)

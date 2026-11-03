@@ -495,15 +495,21 @@ class PostgreSQLTests(unittest.TestCase):
                     "listen": "127.0.0.1,::1", "data": allocation["data_path"], "config": allocation["config_path"] + "/postgresql.conf",
                     "hba": allocation["config_path"] + "/pg_hba.conf", "cert": allocation["config_path"] + "/foundry.crt",
                     "key": allocation["config_path"] + "/foundry.key", "archive_mode": "on", "wal_level": "replica",
-                    "archive_command": "", "max_connections": "40", "shared_buffers": "128MB", "work_mem": "4MB",
+                    "archive_command": "", "archive_timeout": "1min", "max_connections": "40", "shared_buffers": "128MB", "work_mem": "4MB",
                     "maintenance_work_mem": "64MB"}
         with patch.object(postgres, "_psql", return_value=subprocess.CompletedProcess([], 0, json.dumps(observed), "")):
             postgres._verify_settings(self.host, self.registry)
-        for key, value in (("archive_command", "unauthorized command"), ("max_connections", "1000"), ("work_mem", "1GB")):
+        for key, value in (("archive_timeout", "0"), ("archive_command", "unauthorized command"), ("max_connections", "1000"), ("work_mem", "1GB")):
             with self.subTest(setting=key), patch.object(postgres, "_psql", return_value=subprocess.CompletedProcess([], 0, json.dumps(dict(observed, **{key: value})), "")):
                 with self.assertRaises(DeployError) as raised:
                     postgres._verify_settings(self.host, self.registry)
                 self.assertEqual("postgres_configuration_drift", raised.exception.code)
+        allocation.pop("archive_timeout")
+        legacy = {key: value for key, value in observed.items() if key != "archive_timeout"}
+        with patch.object(postgres, "_psql", return_value=subprocess.CompletedProcess([], 0, json.dumps(legacy), "")) as query:
+            postgres._verify_settings(self.host, self.registry)
+        self.assertNotIn("current_setting('archive_timeout')", query.call_args.args[2])
+        allocation["archive_timeout"] = postgres.ARCHIVE_TIMEOUT
         allocation["capacity"] = capacity.postgres(4096)
         sized = {**observed, **{key: str(value) for key, value in allocation["capacity"].items() if key != "budget_mib"}}
         with patch.object(postgres, "_psql", return_value=subprocess.CompletedProcess([], 0, json.dumps(sized), "")) as query:
@@ -522,6 +528,77 @@ class PostgreSQLTests(unittest.TestCase):
             with self.assertRaises(DeployError) as raised:
                 postgres._verify_settings(self.host, self.registry)
             self.assertEqual("postgres_configuration_drift", raised.exception.code)
+
+    def test_archive_timeout_allocation_and_legacy_bytes(self):
+        allocation = self.claimed()
+        self.assertEqual("1min", allocation["archive_timeout"])
+        self.assertIn("archive_timeout = '1min'\n", postgres._configuration(allocation))
+        allocation.pop("archive_timeout")
+        self.assertTrue(postgres._allocation_valid(allocation))
+        self.assertFalse(postgres._allocation_valid(dict(allocation, archive_timeout="0")))
+        expected = """# Foundry-owned cluster settings
+port = 55432
+listen_addresses = '127.0.0.1,::1'
+unix_socket_directories = '/run/foundry/postgresql'
+external_pid_file = '/run/foundry/postgresql/postmaster.pid'
+password_encryption = 'scram-sha-256'
+ssl = on
+ssl_cert_file = '/etc/postgresql/16/foundry/foundry.crt'
+ssl_key_file = '/etc/postgresql/16/foundry/foundry.key'
+fsync = on
+full_page_writes = on
+synchronous_commit = on
+wal_level = replica
+archive_mode = on
+archive_command = ''
+maintenance_work_mem = '64MB'
+max_connections = 40
+shared_buffers = '128MB'
+work_mem = '4MB'
+"""
+        self.assertEqual(expected.encode(), postgres._configuration(allocation).encode())
+
+    def test_old_cluster_upgrade_and_interrupted_publication_converge(self):
+        for unchanged in (False, True):
+            with self.subTest(unchanged=unchanged):
+                allocation = self.claimed()
+                allocation.pop("archive_timeout")
+                command = 'pgbackrest --stanza=foundry archive-push "%p"'
+                allocation["archive_command"] = command if unchanged else ""
+                journal = postgres._cluster_journal(self.host, self.registry)
+                journal["allocation"] = copy.deepcopy(allocation)
+                journal["hba"] = {"phase": "published", "new": postgres._hba(self.registry)}
+                postgres._save_cluster(self.host, journal)
+                config = self.host.paths.p(allocation["config_path"])
+                for path, content in ((config / "foundry-owner.json", json.dumps({
+                        "host_id": self.registry["host_id"], "ownership_token": allocation["ownership_token"]})),
+                        (config / "conf.d/foundry.conf", postgres._configuration(allocation)),
+                        (config / "pg_hba.conf", journal["hba"]["new"]),
+                        (self.host.paths.p("/etc/systemd/system/" + allocation["unit"]), postgres._unit(allocation))):
+                    self.host.owned_write(path, content)
+                self.host.clusters = f"16 foundry 55432 online foundry-postgres {allocation['data_path']} /log\n"
+                plan = dict(allocation, archive_command=command)
+                with patch.object(postgres, "_verify_settings"), patch.object(postgres, "_publish_hba"), \
+                        patch.object(postgres, "_psql", return_value=subprocess.CompletedProcess([], 0, command, "")):
+                    self.assertEqual("ready", postgres.inspect(self.host, self.registry)["state"])
+                    self.host.journal(self.registry)
+                    original_run = self.host.run
+                    def crash(args, **kwargs):
+                        if args[-1] == "reload":
+                            raise KeyboardInterrupt()
+                        return original_run(args, **kwargs)
+                    with patch.object(self.host, "run", side_effect=crash), self.assertRaises(KeyboardInterrupt):
+                        postgres.prepare(self.host, self.registry, shared_service_plan=plan)
+                    self.registry = self.host.read_registry()
+                    self.assertNotIn("archive_timeout", self.registry["shared"]["postgresql"])
+                    self.assertEqual("ready", postgres.inspect(self.host, self.registry)["state"])
+                    self.host.calls.clear()
+                    postgres.prepare(self.host, self.registry, shared_service_plan=plan)
+                self.assertEqual("1min", self.registry["shared"]["postgresql"]["archive_timeout"])
+                self.assertEqual("1min", postgres._cluster_journal(self.host, self.registry)["allocation"]["archive_timeout"])
+                self.assertEqual("complete", postgres._cluster_journal(self.host, self.registry)["archive_transition"]["phase"])
+                self.assertEqual([["pg_ctlcluster", "16", "foundry", "reload"]],
+                                 [args for args, _ in self.host.calls if args[0] != "pg_lsclusters"])
 
     def test_verify_full_denials_require_authorization_errors_and_positive_controls(self):
         self.claimed(port=55439)

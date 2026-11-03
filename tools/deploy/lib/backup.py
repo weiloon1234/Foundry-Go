@@ -1034,6 +1034,8 @@ def rebind(host, registry):
     postgres.prepare(host, registry, shared_service_plan=plan)
     observed = _admin(host, cluster, "SHOW archive_command;\n").stdout.strip()
     require(observed == plan["archive_command"], "backup_rebind_failed", "The live WAL command is not the Foundry pgBackRest command.")
+    observed = _admin(host, cluster, "SHOW archive_timeout;\n").stdout.strip()
+    require(observed == postgres.ARCHIVE_TIMEOUT, "backup_rebind_failed", "The live WAL archive timeout differs from its plan.")
     _install_timers(host, registry)
     _backrest(host, ["check"], timeout=300)
     registry["shared"]["backup"] = {"stanza": STANZA, "pgbackrest_config": CONFIG, "owner": "foundry",

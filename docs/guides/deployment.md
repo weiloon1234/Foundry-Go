@@ -653,6 +653,12 @@ recovery) and an age-encrypted key/config archive. Attachments remain in the
 application's object storage and are not copied.
 
 pgBackRest provides continuous WAL archiving for the dedicated Foundry cluster.
+WAL is uploaded about once a minute while there is activity, so losing a server
+loses about the last minute of commits when archiving is healthy. On an idle
+database nothing new is uploaded because nothing changed. A tool upgrade applies
+this timeout to existing servers with a reload, not a restart. Each upload adds
+one object to the backup bucket, retained for the point-in-time recovery window.
+
 Its S3 repository uses HTTPS with certificate verification, a distinct backup
 bucket, and a server-generated repository encryption passphrase. The private
 repository binding is `/etc/foundry/backup/repository.json`. pgBackRest reads its
