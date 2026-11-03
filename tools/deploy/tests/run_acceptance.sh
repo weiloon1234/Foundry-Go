@@ -284,7 +284,9 @@ recovery_target() {
   docker exec "$recovery_host" chmod 600 /var/lib/foundry-acceptance-f4a/ca.key
   docker exec "$recovery_host" update-ca-certificates >"$logs/$recovery_mode-trust.log" 2>&1
   docker exec "$recovery_host" apt-get update -qq >"$logs/$recovery_mode-packages.log" 2>&1
-  docker exec --env-file "$env_file" "$recovery_host" python3 -B /verification/deploy/tests/acceptance_recover.py "$recovery_mode" >"$logs/recover-$recovery_mode.log" 2>&1
+  # Real recovery runs from a root-only staged bundle that service accounts can't read.
+  docker exec "$recovery_host" sh -c 'umask 077; mkdir /var/lib/foundry-acceptance-f4a/staged-tools; cp -R /verification/deploy/. /var/lib/foundry-acceptance-f4a/staged-tools/'
+  docker exec --env-file "$env_file" "$recovery_host" python3 -B /var/lib/foundry-acceptance-f4a/staged-tools/tests/acceptance_recover.py "$recovery_mode" >"$logs/recover-$recovery_mode.log" 2>&1
 }
 recovery_target "$rehearsal" rehearsal
 phase recover-repository-unchanged /verification/deploy/tests/acceptance_recover.py unchanged

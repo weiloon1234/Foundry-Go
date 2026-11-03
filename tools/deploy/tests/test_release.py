@@ -1164,7 +1164,8 @@ class ReleaseTests(unittest.TestCase):
         release.unpack_archive(archive, destination, self.entry, digest(archive))
         release.protect_maps(self.host, self.entry, destination)
         copies = [args for args, _ in self.host.commands if "copy-runtime-maps" in args]
-        self.assertEqual(["runuser", "-u", self.entry["name"], "--", "python3"], copies[0][:5])
+        self.assertEqual(["runuser", "-u", self.entry["name"], "--", "python3", release.service_script(self.host)], copies[0][:6])
+        self.assertTrue(copies[0][5].endswith("/usr/local/lib/foundry/current/lib/release.py"))
         maps = self.root / "runtime-maps"
         release.copy_runtime_maps(destination / "private-source-maps", maps)
         self.assertTrue((maps / manifest["version"] / "admin.js.map").is_file())
@@ -1241,7 +1242,7 @@ class ReleaseTests(unittest.TestCase):
         self.deploy(three)
         self.assertEqual({second["version"], third["version"]}, {p.name for p in (self.opt / "releases").iterdir()})
         command = next(args for args, _ in reversed(self.host.commands) if "prune-runtime-maps" in args)
-        self.assertEqual(["runuser", "-u", self.entry["name"], "--", "python3"], command[:5])
+        self.assertEqual(["runuser", "-u", self.entry["name"], "--", "python3", release.service_script(self.host)], command[:6])
         self.assertEqual({second["version"], third["version"]}, set(command[8:]))
         self.host.commands.clear()
         release.rollback(self.host, self.project, self.profile,

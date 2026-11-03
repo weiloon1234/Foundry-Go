@@ -20,7 +20,7 @@ import tomllib
 import urllib.request
 import uuid
 
-from contracts import (DeployError, LAYOUT_VERSION, SCHEMA, VERSION_PATTERN,
+from contracts import (DeployError, HOST_PATHS, LAYOUT_VERSION, SCHEMA, VERSION_PATTERN,
                        check_path, digest, dump_env, now,
                        parse_env, parse_json, read_json, require, valid_timestamp, valid_uuid, instance_paths,
                        reserve_runtime_storage, select_runtime_storage)
@@ -705,6 +705,11 @@ def restore_code(host, entry, state, current, previous, recovered_status):
     state["status"] = recovered_status
 
 
+def service_script(host):
+    # Recovery runs from a root-only staged bundle. The service account reads the installed copy of the same bundle.
+    return str(host.paths.p(HOST_PATHS["current"]) / "lib/release.py")
+
+
 def protect_maps(host, entry, release):
     source = release / "private-source-maps"
     host.run(["chown", "-R", "root:" + entry["name"], str(source)])
@@ -712,7 +717,7 @@ def protect_maps(host, entry, release):
         path.chmod(0o750 if path.is_dir() else 0o640)
     # The application can mutate its data directory. Never copy/chown there as
     # root: a concurrent symlink swap must not cross the service UID boundary.
-    host.run(["runuser", "-u", entry["name"], "--", "python3", str(Path(__file__).resolve()),
+    host.run(["runuser", "-u", entry["name"], "--", "python3", service_script(host),
               "copy-runtime-maps", str(source), str(host.paths.data(entry["name"]) / "private-source-maps")])
 
 
@@ -751,7 +756,7 @@ def prune(host, entry, state):
         if path.name not in protected:
             validate_manifest(read_json(path / "manifest.json"), entry)
             shutil.rmtree(check_path(path, "directory"))
-    host.run(["runuser", "-u", entry["name"], "--", "python3", str(Path(__file__).resolve()),
+    host.run(["runuser", "-u", entry["name"], "--", "python3", service_script(host),
               "prune-runtime-maps", str(host.paths.data(entry["name"]) / "private-source-maps"),
               *sorted(version for version in protected if version is not None)])
     for path in releases.glob(".stage-*"):
