@@ -8,6 +8,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+import re
 import shutil
 import sys
 import tarfile
@@ -94,11 +95,16 @@ def source():
 
 
 def repository_unchanged():
-    expected = read_json(EXPORT / "source.json")["repository"]
-    assert listing() == expected, "Rehearsal changed the repository object listing, sizes, hashes or modification times"
+    expected = {row["Path"]: row for row in read_json(EXPORT / "source.json")["repository"]}
+    current = {row["Path"]: row for row in listing()}
+    assert all(current.get(path) == row for path, row in expected.items()), "Rehearsal changed or removed a repository object"
+    # The live source keeps archiving on its own timeline; a promoted rehearsal could only add a new one.
+    source_wal = re.compile(r"foundry/archive/foundry/\d+-1/00000001[0-9A-F]{8}/00000001[0-9A-F]{16}-[0-9a-f]{40}\.gz")
+    added = sorted(path for path in current if path not in expected)
+    assert all(source_wal.fullmatch(path) for path in added), "Rehearsal added a repository object: " + repr(added)
     host, _, _, _ = fixture()
     assert admin(host.read_registry()["shared"]["postgresql"], "SELECT NOT pg_is_in_recovery();") == "t"
-    print("PASS source A is still alive; repository object listing unchanged through rehearsal")
+    print(f"PASS source A is still alive; existing repository objects unchanged through rehearsal; {len(added)} new source WAL object(s)")
 
 
 def target(mode):

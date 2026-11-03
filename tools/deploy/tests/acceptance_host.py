@@ -350,8 +350,8 @@ def report(host):
         reported = {item["instance_id"]: item for item in entries}
         assert set(reported) == set(states)
         expected_problems = {("backup_stale", instance_id) for instance_id in missing_receipts}
-        # Docker cannot load kernel modules, so this one unit always fails in the fixture.
-        assert set(value["host"]["failed_units"]) <= {"systemd-modules-load.service"}
+        # A container can't load kernel modules and has no tty1, so these units can fail in the fixture.
+        assert set(value["host"]["failed_units"]) <= {"systemd-modules-load.service", "getty@tty1.service"}
         if value["host"]["failed_units"]:
             expected_problems.add(("units_failed", None))
         assert set(value["host"]["network"]["public_listeners"]) <= {22, 80, 443}
