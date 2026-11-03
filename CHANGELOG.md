@@ -17,6 +17,21 @@
 - Added: Recovery refusal and interruption tests, three-host recovery acceptance,
   and restore-drill assertions for mixed shutdown signaling, failed-unit cleanup,
   and absence of abnormal PostgreSQL shutdowns.
+- Fixed: Restore drills on PostgreSQL 18 shut down cleanly and leave no failed
+  systemd record.
+- Added: New PostgreSQL and Redis allocations and recoveries size from the server's
+  RAM instead of fixed values. Existing servers keep their recorded values until
+  `ACTION=capacity make deploy`, which shows the change, restarts both services
+  through a resumable journal, and verifies settings and healthy instances.
+- Added: The host report lists failed systemd units and off-loopback listeners, shows
+  SSH login settings and firewall state to root, and flags low memory or disk and
+  invalid or soon-expiring certificates. A server that reported no problems may now
+  report some.
+- Changed: The release builder pins Ubuntu, Go and Node images by digest in
+  `tools/deploy/docker/build-inputs.json` and refuses a version without a pin. Releases
+  record their build inputs, and packaging the same stage gives identical archive
+  bytes. Apt packages are recorded, not pinned, and byte-identical compiler output
+  is not claimed.
 
 ## v0.5.3 — 2026-11-03
 
