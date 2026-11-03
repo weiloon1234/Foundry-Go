@@ -158,12 +158,14 @@ and the [component scaffold tests](../../internal/generate/scaffold_components_t
 ## Doctor and declaration inspection
 
 ```sh
-foundry doctor --dir . --go go --gopls gopls --require-gopls
+foundry doctor --dir . --go go --gopls gopls --python python3 --require-gopls
 ```
 
-Doctor reads the selected Go/module metadata and optionally checks gopls. It
-compares actual module Go requirements, bounds each process and its output,
-disables downloads, and reports actionable required-check failures. Its
+Doctor reads the selected Go/module metadata and optionally checks gopls.
+The optional `deploy-tool` check runs the pinned deploy tool's `help` with the
+Python selected by `--python`. Doctor compares actual module Go requirements,
+bounds each process and its output, disables downloads, and reports actionable
+required-check failures. Its
 `tool-version` check compares the framework release the running `foundry` was
 built from with the version the module selects; a known mismatch fails, while
 development builds and local `replace` directories are reported as unverifiable.

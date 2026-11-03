@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shlex
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -36,7 +37,7 @@ from upgrades import READ_ACTIONS, protocol_metadata, tool_bundle
 
 INSTALLED = f"/usr/local/sbin/{PREFIX}-host"
 COMMANDS = {
-    "bootstrap": "inspect and prepare a project/environment on a shared host",
+    "bootstrap": "inspect and prepare a project/environment on a server",
     "deploy": "interactive deployment, status, rollback, capacity and configuration",
     "release": "build a local Docker release without contacting a server",
 }
@@ -1156,10 +1157,9 @@ def deploy(project, profile, settings):
 
 def resolve_app_root(argument: str | None) -> Path:
     """Resolve an explicit app root; framework location and cwd are never defaults."""
-    value = argument or os.environ.get("FOUNDRY_APP_ROOT")
-    if not value:
-        raise LocalError("supply --app-root or FOUNDRY_APP_ROOT")
-    root = Path(value).expanduser().resolve(strict=True)
+    if not argument:
+        raise LocalError("supply --app-root")
+    root = Path(argument).expanduser().resolve(strict=True)
     if not root.is_dir() or not (root / "go.mod").is_file():
         raise LocalError("app root must be a Go application directory containing go.mod")
     return root
@@ -1168,7 +1168,7 @@ def resolve_app_root(argument: str | None) -> Path:
 def main():
     global ROOT
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--app-root", help="application directory (or FOUNDRY_APP_ROOT)")
+    parser.add_argument("--app-root", help="application directory")
     for option in ("environment", "action", "role", "target", "expected-current", "operation"):
         parser.add_argument("--" + option)
     parser.add_argument("command", choices=[*COMMANDS, "help"], nargs="?", default="help")
@@ -1177,7 +1177,7 @@ def main():
         for command, description in COMMANDS.items():
             print(f"make {command:<10} {description}")
         print("Actions: " + ", ".join(ACTIONS))
-        print("Pass --app-root PATH or FOUNDRY_APP_ROOT; ENVIRONMENT and ACTION select the operation.")
+        print("ENVIRONMENT and ACTION select the operation.")
         return
     for option in ("environment", "action", "role", "target", "expected_current", "operation"):
         value = getattr(arguments, option)
@@ -1204,7 +1204,14 @@ def main():
             deploy(project, profile, settings)
 
 
+def interrupted(_signal, _frame):
+    # `go tool` forwards the terminal's SIGINT, so one Ctrl-C arrives twice. Cleanup must run once.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    raise KeyboardInterrupt
+
+
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, interrupted)
     try:
         main()
     except (LocalError, DeployError, ValueError, OSError, KeyError) as error:

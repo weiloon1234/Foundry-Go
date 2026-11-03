@@ -6,8 +6,14 @@ import io
 import json
 import os
 from pathlib import Path
+import pty
+import select
+import signal
+import subprocess
+import sys
 import tempfile
 import tarfile
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 import uuid
@@ -129,7 +135,7 @@ class LocalDeploymentTests(unittest.TestCase):
         for option in ("help",):
             output = io.StringIO()
             with self.subTest(option=option), patch.object(cli, "ROOT", self.root), \
-                    patch.object(cli.sys, "argv", ["deploy.sh", option]), \
+                    patch.object(cli.sys, "argv", ["cli.py", option]), \
                     patch.object(cli, "lock") as lock, patch.object(cli, "local_settings") as settings, \
                     patch.object(cli, "execute") as execute, patch.object(cli, "SSH") as ssh, \
                     contextlib.redirect_stdout(output):
@@ -142,18 +148,39 @@ class LocalDeploymentTests(unittest.TestCase):
             ssh.assert_not_called()
             self.assertEqual(list(self.root.iterdir()), [])
 
+    def test_repeated_interrupt_at_a_prompt_cleans_up_once(self):
+        (self.root / "go.mod").write_text("module example.com/app\ngo 1.26\n")
+        controller, terminal = pty.openpty()
+        self.addCleanup(os.close, controller)
+        self.addCleanup(os.close, terminal)
+        process = subprocess.Popen([sys.executable, "-B", str(DEPLOY / "local" / "cli.py"), "--app-root", str(self.root), "bootstrap"],
+                                   stdin=terminal, stderr=subprocess.PIPE, env={"PATH": os.environ["PATH"]})
+        self.addCleanup(process.stderr.close)
+        self.addCleanup(process.kill)
+        output, deadline = b"", time.monotonic() + 30
+        while b"Project slug" not in output and time.monotonic() < deadline:
+            if select.select([process.stderr], [], [], 1)[0]:
+                output += os.read(process.stderr.fileno(), 4096)
+        self.assertIn(b"Project slug", output)
+        process.send_signal(signal.SIGINT)
+        time.sleep(0.005)
+        process.send_signal(signal.SIGINT)
+        _, remainder = process.communicate(timeout=30)
+        self.assertEqual(process.returncode, 130)
+        self.assertIn(b"Interrupted.", remainder)
+        self.assertNotIn(b"Traceback", remainder)
+
+    def test_interrupt_handler_ignores_later_interrupts(self):
+        with patch.object(cli.signal, "signal") as set_handler, self.assertRaises(KeyboardInterrupt):
+            cli.interrupted(None, None)
+        set_handler.assert_called_once_with(cli.signal.SIGINT, cli.signal.SIG_IGN)
+
     def test_app_root_must_be_explicit_and_contain_go_module(self):
         (self.root / "go.mod").write_text("module example.com/app\ngo 1.26\n")
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(cli.LocalError, "--app-root"):
                 cli.resolve_app_root(None)
             self.assertEqual(cli.resolve_app_root(str(self.root)), self.root)
-        with patch.dict(os.environ, {"FOUNDRY_APP_ROOT": str(self.root)}):
-            self.assertEqual(cli.resolve_app_root(None), self.root)
-            other = self.root / "other"
-            other.mkdir()
-            (other / "go.mod").write_text("module example.com/other\n")
-            self.assertEqual(cli.resolve_app_root(str(other)), other)
 
     def test_standard_help_never_resolves_an_app_root(self):
         for option in ("--help", "-h"):

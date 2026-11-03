@@ -22,6 +22,7 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	flags.StringVar(&options.Dir, "dir", ".", "existing consumer module directory")
 	flags.StringVar(&options.Go, "go", "go", "installed Go executable")
 	flags.StringVar(&options.Gopls, "gopls", "gopls", "installed gopls executable")
+	flags.StringVar(&options.Python, "python", "python3", "installed Python executable for the deploy tool")
 	flags.BoolVar(&options.RequireGopls, "require-gopls", false, "fail when the language server is unavailable")
 	flags.DurationVar(&options.Timeout, "timeout", 10*time.Second, "maximum duration of each offline tool inspection")
 	format := flags.String("format", "text", "text or json")

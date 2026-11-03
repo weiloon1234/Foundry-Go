@@ -1,6 +1,7 @@
 package consumer_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -55,4 +56,7 @@ func TestModulePinnedFoundryTool(t *testing.T) {
 		}
 	}
 	run("generate", "--recursive", "--check", "--dir", "productionprofile")
+	if output := run("deploy", "help"); !bytes.Contains(output, []byte("make deploy")) {
+		t.Fatalf("deploy help omitted make deploy: %s", output)
+	}
 }

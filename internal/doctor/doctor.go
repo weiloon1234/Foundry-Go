@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"go/version"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,9 +18,9 @@ import (
 )
 
 type Options struct {
-	Dir, Go, Gopls string
-	RequireGopls   bool
-	Timeout        time.Duration
+	Dir, Go, Gopls, Python string
+	RequireGopls           bool
+	Timeout                time.Duration
 	// Framework is the running tool's framework build. A known release must
 	// equal the consumer's selected framework version.
 	Framework frameworkinfo.Build
@@ -48,10 +50,40 @@ func (r Report) Check() error {
 
 type probe func(context.Context, Options, string, ...string) ([]byte, error)
 type moduleInfo struct {
-	Path, Version, GoVersion string
-	Main                     bool
-	Replace                  *moduleInfo
-	Error                    *struct{ Err string }
+	Path, Version, GoVersion, Dir string
+	Main                          bool
+	Replace                       *moduleInfo
+	Error                         *struct{ Err string }
+}
+
+func (m moduleInfo) selection() frameworkinfo.Selection {
+	selection := frameworkinfo.Selection{Main: m.Main, Version: m.Version}
+	if m.Replace != nil {
+		selection.Version, selection.Local = m.Replace.Version, m.Replace.Version == ""
+	}
+	return selection
+}
+
+// Framework is the framework module a consumer selects, read without downloads or compilation.
+type Framework struct {
+	Dir       string
+	Selection frameworkinfo.Selection
+}
+
+func SelectedFramework(ctx context.Context, options Options) (Framework, error) {
+	return selectedFramework(ctx, options, run)
+}
+
+func selectedFramework(ctx context.Context, options Options, execute probe) (Framework, error) {
+	if options.Go == "" {
+		options.Go = "go"
+	}
+	data, err := execute(ctx, options, options.Go, "list", "-m", "-json", frameworkinfo.ModulePath)
+	var module moduleInfo
+	if err != nil || json.Unmarshal(data, &module) != nil || module.Error != nil || module.Path != frameworkinfo.ModulePath || module.Dir == "" {
+		return Framework{}, safeerror.New("The selected Foundry-Go module could not be read. Check --dir, run `go mod download " + frameworkinfo.ModulePath + "` in the application module, and see `go tool foundry doctor` if it still fails")
+	}
+	return Framework{Dir: module.Dir, Selection: module.selection()}, nil
 }
 
 func Inspect(ctx context.Context, options Options) (Report, error) { return inspect(ctx, options, run) }
@@ -71,6 +103,9 @@ func inspect(ctx context.Context, options Options, execute probe) (Report, error
 	}
 	if options.Gopls == "" {
 		options.Gopls = "gopls"
+	}
+	if options.Python == "" {
+		options.Python = "python3"
 	}
 	result.FrameworkAPI = manifest.FrameworkVersion
 	result.FrameworkModule = options.Framework.Version
@@ -112,10 +147,15 @@ func inspect(ctx context.Context, options Options, execute probe) (Report, error
 					detail += "; an explicit module replacement is active"
 				}
 				add("framework", true, true, detail)
-				selection := frameworkinfo.Selection{Main: framework.Main, Version: framework.Version}
-				if framework.Replace != nil {
-					selection.Version, selection.Local = framework.Replace.Version, framework.Replace.Version == ""
+				entry := filepath.Join(framework.Dir, frameworkinfo.DeployEntry)
+				if _, err := os.Stat(entry); framework.Dir == "" || err != nil {
+					add("deploy-tool", false, false, "The selected framework has no deploy tool")
+				} else if _, err := execute(ctx, options, options.Python, "-B", entry, "help"); err != nil {
+					add("deploy-tool", false, false, "Python could not run the pinned deploy tool; `go tool foundry deploy help` shows why, and --python selects another executable")
+				} else {
+					add("deploy-tool", false, true, "Python runs the pinned deploy tool")
 				}
+				selection := framework.selection()
 				if verified, err := options.Framework.Check(selection); err != nil {
 					add("tool-version", true, false, err.Error())
 				} else if !verified {

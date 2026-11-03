@@ -8,21 +8,20 @@ release requirement; unit tests do not establish live package or provider behavi
 
 ## Invocation
 
-The current entry point is `tools/deploy/local/cli.py` in the application's pinned
-Foundry-Go module. The Go `foundry deploy` command is deferred. An application
-Makefile can contain these thin targets:
+`go tool foundry deploy` runs the Python tool from the application's pinned
+Foundry-Go module and refuses a known tool/framework version mismatch. It passes
+`--dir`, which defaults to the current directory, to the Python tool as the
+application directory. An application Makefile can contain these thin targets:
 
 ```makefile
 .PHONY: bootstrap deploy release
 bootstrap deploy release:
-	python3 -B "$$(GOWORK=off go list -m -f '{{.Dir}}' github.com/weiloon1234/Foundry-Go)/tools/deploy/local/cli.py" --app-root "$(CURDIR)" $@
+	GOWORK=off go tool foundry deploy --dir "$(CURDIR)" "$@"
 ```
 
-`--app-root PATH` selects the application directory. `FOUNDRY_APP_ROOT` supplies
-the directory when the argument is absent. The directory must contain `go.mod`.
-The CLI never treats its installation directory or the working directory as an
-implicit application root. Framework tools remain in the selected module, and
-local state remains in the application directory.
+The operator's machine needs Python 3.11 or later. Deployment rules stay in the
+Python tool. The application directory must contain `go.mod`. Framework tools
+remain in the selected module, and local state remains in the application directory.
 
 | Command or action | Purpose |
 | --- | --- |

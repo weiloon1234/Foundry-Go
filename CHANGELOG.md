@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added: `go tool foundry deploy` runs the deploy tool from the application's pinned
+  framework and refuses a known version mismatch. Doctor's optional `deploy-tool`
+  check uses `--python` to check that Python can run the pinned tool.
 - Added: `ENVIRONMENT=<env> ACTION=recover make bootstrap` rebuilds an instance on
   an empty Ubuntu server from a locally decrypted recovery archive. Explicit
   rehearsal mode keeps archiving, repository writes and background roles off.

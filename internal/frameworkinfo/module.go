@@ -4,3 +4,4 @@ package frameworkinfo
 
 const ModulePath = "github.com/weiloon1234/Foundry-Go"
 const GenerationManifest = ".foundry-gen.json"
+const DeployEntry = "tools/deploy/local/cli.py"

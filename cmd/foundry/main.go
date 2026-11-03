@@ -43,6 +43,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		{"contracts", "Generate client contracts from an exported manifest", runContracts},
 		{"lint", "Check project raw SQL policy", runLint},
 		{"doctor", "Inspect local framework/tool prerequisites without starting services", runDoctor},
+		{"deploy", "Run the deploy tool from the application's pinned framework", runDeploy},
 	} {
 		command := cli.Define(entry.name, entry.summary, func(args []string, _ io.Writer) (arguments, error) { return arguments{values: args}, nil })
 		declaration, err := command.Declare(func(foundation.Resolver) (cli.Handler[arguments], error) {
