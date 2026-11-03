@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.5.3 — 2026-11-03
 
 - Fixed: Deployment SSH works from the private key path saved for a host, with no SSH
   config entry, agent or profile. It offers only that key and, on macOS, unlocks it

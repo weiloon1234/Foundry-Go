@@ -8,6 +8,18 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Deployment SSH without per-server setup — v0.5.3, 2026-11-03
+
+Status: **implemented; deploy unit tests, real SSH checks against two servers and CI gate this tag**.
+The server tools are unchanged from v0.5.2, so the acceptance matrix was not rerun.
+Deployment SSH works from the private key path saved for a host, with no SSH config
+entry, agent or profile, and unlocks that key from Keychain on macOS. Bootstrapping a
+profile with no bound server records an unknown host key; a changed key is always
+refused and every other operation stays strict. Refused logins and host keys are named.
+Bootstrap and first deploy also ran for real on Ubuntu 26.04 with PostgreSQL 18. Open:
+restore drills there end with an abnormal shutdown of the drill's temporary PostgreSQL,
+after verification, and leave a failed systemd record; the cause isn't confirmed.
+
 ## Deployment hardening and attachment transactions — v0.5.2, 2026-11-02
 
 Status: **implemented; container acceptance and CI gate this tag; the rotation commands await real-provider use on a host**.
