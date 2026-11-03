@@ -35,7 +35,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/disintegration/gift v1.2.1 // indirect
-	github.com/gen2brain/gav1d v0.2.6 // indirect
+	github.com/gen2brain/gav1d v0.2.5 // indirect
 	github.com/gen2brain/vpx v0.2.1 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
