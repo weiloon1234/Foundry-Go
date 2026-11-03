@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import ipaddress
 import os
 import re
 import shutil
@@ -21,6 +22,11 @@ REPORT_SCHEMA = 2
 CHECK_TIMEOUT = 1.0
 REPORT_BUDGET = 15.0
 MAX_INSTANCES = 256
+MAX_FAILED_UNITS = 32
+PUBLIC_PORTS = frozenset({22, 80, 443})
+RESOURCE_LOW_PERCENT = 10
+DISK_LOW_BYTES = 2 * 1024 ** 3
+CERTIFICATE_EXPIRING_SECONDS = 14 * 24 * 60 * 60
 STATUSES = {"never_deployed", "deploying", "healthy", "failed", "failed_applied", "rolled_back", "stopped", "unknown"}
 DOMAIN = re.compile(r"(?=.{1,253}\Z)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\Z")
 
@@ -71,6 +77,131 @@ def remaining(deadline):
     if budget <= 0:
         raise ReportBudgetExceeded("report budget exhausted")
     return min(CHECK_TIMEOUT, budget)
+
+
+def probe(host, arguments, deadline, problems, code, check=True):
+    """Run one read-only probe, keeping command failures out of the report."""
+    try:
+        return host.run(arguments, timeout=remaining(deadline), check=check)
+    except ReportBudgetExceeded:
+        raise
+    except Exception:
+        if code is not None:
+            problem(problems, code)
+        return None
+
+
+def failed_units(host, problems, deadline):
+    result = probe(host, ["systemctl", "list-units", "--state=failed", "--all", "--no-legend", "--plain"],
+                   deadline, problems, "failed_units_unavailable")
+    if result is None:
+        return None
+    units = []
+    for line in result.stdout.splitlines():
+        columns = line.split()
+        if not columns:
+            continue
+        name = string(columns[0])
+        if name is None:
+            continue
+        units.append(name)
+        if len(units) == MAX_FAILED_UNITS:
+            break
+    if units:
+        problem(problems, "units_failed")
+    return units
+
+
+def listener(value):
+    address, separator, port = value.rpartition(":")
+    if not separator or not port.isdigit():
+        return None
+    return address.strip("[]"), int(port)
+
+
+def loopback(address):
+    try:
+        # ss prints systemd-resolved's stub listener as 127.0.0.53%lo.
+        parsed = ipaddress.ip_address(address.split("%", 1)[0])
+    except ValueError:
+        return False
+    if isinstance(parsed, ipaddress.IPv6Address) and parsed.ipv4_mapped:
+        return parsed.ipv4_mapped.is_loopback
+    return parsed.is_loopback
+
+
+def network(host, problems, deadline):
+    response = probe(host, ["ss", "-H", "-ltn"], deadline, problems, "network_unavailable")
+    listeners = None
+    if response is not None:
+        ports = set()
+        for line in response.stdout.splitlines():
+            columns = line.split()
+            if len(columns) < 4:
+                continue
+            observed = listener(columns[3])
+            if observed is None:
+                continue
+            address, port = observed
+            if loopback(address):
+                continue
+            ports.add(port)
+        listeners = sorted(ports)
+        if any(port not in PUBLIC_PORTS for port in listeners):
+            problem(problems, "unexpected_public_listener")
+    firewall = None
+    if os.geteuid() == 0:
+        status = probe(host, ["ufw", "status"], deadline, problems, None, check=False)
+        if status is not None and status.returncode == 0:
+            lines = status.stdout.splitlines()
+            if lines and lines[0].strip() in {"Status: active", "Status: inactive"}:
+                firewall = lines[0].strip().split(":", 1)[1].strip()
+    return {"public_listeners": listeners, "firewall": firewall}
+
+
+def ssh(host, problems, deadline):
+    result = {"password_authentication": None, "root_login": None}
+    if os.geteuid() != 0:
+        return result
+    response = probe(host, ["sshd", "-T"], deadline, problems, None, check=False)
+    if response is None or response.returncode != 0:
+        return result
+    for line in response.stdout.splitlines():
+        fields = line.split(None, 1)
+        if len(fields) != 2:
+            continue
+        key, value = fields[0], fields[1].strip()
+        if key == "passwordauthentication":
+            if value == "yes":
+                result["password_authentication"] = True
+            elif value == "no":
+                result["password_authentication"] = False
+        elif key == "permitrootlogin":
+            result["root_login"] = string(value)
+    if result["password_authentication"] is True:
+        problem(problems, "ssh_password_login")
+    return result
+
+
+def certificate_problems(problems, instance_id, value):
+    if not isinstance(value, dict):
+        return
+    if value.get("status") == "invalid":
+        problem(problems, "certificate_invalid", instance_id)
+        return
+    if value.get("status") != "valid":
+        return
+    expires_at = value.get("expires_at")
+    if not isinstance(expires_at, str):
+        return
+    try:
+        expires = dt.datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    except ValueError:
+        return
+    if expires.tzinfo is None:
+        return
+    if expires - dt.datetime.now(dt.timezone.utc) < dt.timedelta(seconds=CERTIFICATE_EXPIRING_SECONDS):
+        problem(problems, "certificate_expiring", instance_id)
 
 
 def service(host, unit, deadline):
@@ -163,6 +294,15 @@ def resources(host, problems, result):
         raise
     except (OSError, ValueError, IndexError):
         problem(problems, "uptime_unavailable")
+    memory_total = result.get("memory_total_bytes")
+    memory_available = result.get("memory_available_bytes")
+    if memory_total and memory_available is not None and memory_available * 100 < memory_total * RESOURCE_LOW_PERCENT:
+        problem(problems, "memory_low")
+    disk_total = result.get("disk_total_bytes")
+    disk_available = result.get("disk_available_bytes")
+    if disk_total and disk_available is not None and (disk_available < DISK_LOW_BYTES
+                                                      or disk_available * 100 < disk_total * RESOURCE_LOW_PERCENT):
+        problem(problems, "disk_low")
     return result
 
 
@@ -257,6 +397,7 @@ def instance_report(host, entry, deadline, problems):
     topology["http"] = {"unit": expected_unit, "state": unit_status}
     ready = None if recorded_status == "never_deployed" and not state.get("current") else checked(problems, "readiness_check_unavailable", instance_id, readiness, entry["allocations"]["http_port"], deadline)
     cert = checked(problems, "certificate_check_unavailable", instance_id, certificate, profile.get("domain"), deadline)
+    certificate_problems(problems, instance_id, cert)
     current, previous = release(state.get("current")), release(state.get("previous"))
     consistent = True
     if recorded_status in {"healthy", "rolled_back"} and (not current or not ready or not ready["ready"] or not unit_status or unit_status["active"] != "active"):
@@ -335,7 +476,8 @@ def collect_report(host):
     problems = []
     result = {"schema": REPORT_SCHEMA, "generated_at": now(), "complete": True,
               "host": {"host_id": None, "hostname": None, "layout_version": None,
-                       "registry_updated_at": None, "resources": dict.fromkeys(("cpu_count", "load_average", "memory_total_bytes", "memory_available_bytes", "disk_total_bytes", "disk_available_bytes", "uptime_seconds"))},
+                       "registry_updated_at": None, "failed_units": None, "network": None, "ssh": None,
+                       "resources": dict.fromkeys(("cpu_count", "load_average", "memory_total_bytes", "memory_available_bytes", "disk_total_bytes", "disk_available_bytes", "uptime_seconds"))},
               "shared_services": dict.fromkeys(("postgresql", "redis", "nginx")), "projects": [], "problems": problems}
     try:
         with wall_clock_budget(REPORT_BUDGET):
@@ -356,6 +498,9 @@ def collect_inventory(host, result, deadline):
     problems = result["problems"]
     result["host"]["hostname"] = string(checked(problems, "hostname_unavailable", None, socket.gethostname))
     resources(host, problems, result["host"]["resources"])
+    result["host"]["failed_units"] = failed_units(host, problems, deadline)
+    result["host"]["network"] = network(host, problems, deadline)
+    result["host"]["ssh"] = ssh(host, problems, deadline)
     try:
         registry = host.read_registry(missing=False)
         if not isinstance(registry, dict) or registry.get("schema") != 2 or registry.get("layout_version") != 2 or not identifier(registry.get("host_id")) or not isinstance(registry.get("instances"), dict):

@@ -823,6 +823,24 @@ Deployment tool generation 3 includes recovery. Upgrade existing hosts through
 installed host tools. An empty recovery target receives the selected generation
 during recovery.
 
+## Host report
+
+`ACTION=report make deploy` runs `foundry-host-report`, which only reads. Every
+item in `problems` needs a look. `complete` is false when there are any. Unknown
+values are `null`, never zero or false.
+
+| Field | Source | Problem codes |
+| --- | --- | --- |
+| `host.failed_units` | systemd failed units, at most 32 | `units_failed`, `failed_units_unavailable` |
+| `host.network.public_listeners` | TCP ports listening off loopback | `unexpected_public_listener` for anything but 22, 80 and 443; `network_unavailable` |
+| `host.network.firewall` | `ufw status`, root only | None: a cloud firewall cannot be seen from the host |
+| `host.ssh` | `sshd -T`, root only: password login and root login settings | `ssh_password_login` |
+| `host.resources` | Memory and disk | `memory_low` under 10% available; `disk_low` under 10% or 2 GiB available |
+| instance `certificate` | TLS handshake on 443 | `certificate_expiring` under 14 days; `certificate_invalid` |
+| instance `backup` | Backup receipts | `backup_stale`, `backup_failed` |
+
+The root-only fields are `null` for a nonroot reader and add no problem.
+
 ## Container acceptance
 
 `make deploy-tools-check` runs the tooling's service-free unit tests, and

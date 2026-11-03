@@ -350,6 +350,14 @@ def report(host):
         reported = {item["instance_id"]: item for item in entries}
         assert set(reported) == set(states)
         expected_problems = {("backup_stale", instance_id) for instance_id in missing_receipts}
+        # Docker cannot load kernel modules, so this one unit always fails in the fixture.
+        assert set(value["host"]["failed_units"]) <= {"systemd-modules-load.service"}
+        if value["host"]["failed_units"]:
+            expected_problems.add(("units_failed", None))
+        assert set(value["host"]["network"]["public_listeners"]) <= {22, 80, 443}
+        if not privileged:
+            assert value["host"]["network"]["firewall"] is None
+            assert value["host"]["ssh"] == {"password_authentication": None, "root_login": None}
         serialized = json.dumps(value)
         for entry in registered:
             instance_id = entry["profile"]["instance_id"]

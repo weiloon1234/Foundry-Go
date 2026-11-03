@@ -55,6 +55,19 @@ class FixtureHost:
         proc.mkdir()
         (proc / "meminfo").write_text("MemTotal: 2048 kB\nMemAvailable: 1024 kB\n")
         (proc / "uptime").write_text("123.90 456.0\n")
+        self.commands = []
+        self.outputs = {}
+        self.failures = {}
+
+    def run(self, args, **kwargs):
+        command = [str(item) for item in args]
+        self.commands.append(command)
+        if command[0] in self.failures:
+            raise self.failures[command[0]]
+        defaults = {"systemctl": "", "ss": "", "ufw": "Status: inactive\n",
+                    "sshd": "passwordauthentication no\npermitrootlogin prohibit-password\n"}
+        output = self.outputs.get(command[0], defaults.get(command[0], ""))
+        return subprocess.CompletedProcess(command, 0, output, "")
 
     def read_registry(self, missing=False):
         return copy.deepcopy(self.registry)
@@ -325,6 +338,138 @@ class ReportTests(unittest.TestCase):
         self.host.registry["instances"][INSTANCE_ID]["name"] = "../../etc"
         self.assertEqual(report.collect_report(self.host)["projects"], [])
 
+    def test_failed_units_are_reported_and_bounded(self):
+        units = [f"broken-{number}.service" for number in range(40)]
+        self.host.outputs["systemctl"] = "".join(f"{unit} loaded failed failed\n" for unit in units)
+        result = report.collect_report(self.host)
+        self.assertEqual(units[:report.MAX_FAILED_UNITS], result["host"]["failed_units"])
+        self.assertIn({"code": "units_failed"}, result["problems"])
+
+    def test_failed_units_probe_failure_is_reported_without_exception(self):
+        self.host.failures["systemctl"] = OSError(SECRET)
+        result = report.collect_report(self.host)
+        self.assertIsNone(result["host"]["failed_units"])
+        self.assertIn({"code": "failed_units_unavailable"}, result["problems"])
+        self.assertNotIn(SECRET, json.dumps(result))
+
+    def test_public_listeners_exclude_loopback_and_flag_other_ports(self):
+        self.host.outputs["ss"] = "".join((
+            "LISTEN 0 4096 0.0.0.0:22 0.0.0.0:*\n",
+            "LISTEN 0 4096 [::]:443 [::]:*\n",
+            "LISTEN 0 4096 127.0.0.1:8100 0.0.0.0:*\n",
+            "LISTEN 0 4096 [::1]:9000 [::]:*\n",
+            "LISTEN 0 4096 0.0.0.0:8100 0.0.0.0:*\n",
+        ))
+        result = report.collect_report(self.host)
+        self.assertEqual([22, 443, 8100], result["host"]["network"]["public_listeners"])
+        self.assertIn({"code": "unexpected_public_listener"}, result["problems"])
+
+    def test_scoped_loopback_listener_is_ignored(self):
+        self.host.outputs["ss"] = "LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*\nLISTEN 0 4096 0.0.0.0:22 0.0.0.0:*\n"
+        result = report.collect_report(self.host)
+        self.assertEqual([22], result["host"]["network"]["public_listeners"])
+        self.assertNotIn({"code": "unexpected_public_listener"}, result["problems"])
+
+    def test_loopback_listeners_are_ignored(self):
+        self.host.outputs["ss"] = "".join((
+            "LISTEN 0 4096 127.0.0.1:8100 0.0.0.0:*\n",
+            "LISTEN 0 4096 127.1.2.3:9000 0.0.0.0:*\n",
+            "LISTEN 0 4096 [::1]:9001 [::]:*\n",
+        ))
+        result = report.collect_report(self.host)
+        self.assertEqual([], result["host"]["network"]["public_listeners"])
+        self.assertNotIn({"code": "unexpected_public_listener"}, result["problems"])
+
+    def test_network_probe_failure_is_reported_without_exception(self):
+        self.host.failures["ss"] = OSError(SECRET)
+        result = report.collect_report(self.host)
+        self.assertIsNone(result["host"]["network"]["public_listeners"])
+        self.assertIn({"code": "network_unavailable"}, result["problems"])
+        self.assertNotIn(SECRET, json.dumps(result))
+
+    def test_root_firewall_status_is_informational(self):
+        with patch.object(report.os, "geteuid", return_value=0):
+            for output, expected in (("Status: active\n", "active"), ("Status: inactive\n", "inactive")):
+                with self.subTest(status=expected):
+                    self.host.outputs["ufw"] = output
+                    result = report.collect_report(self.host)
+                    self.assertEqual(expected, result["host"]["network"]["firewall"])
+                    self.assertNotIn({"code": "network_unavailable"}, result["problems"])
+
+    def test_missing_firewall_and_sshd_are_unknown_without_problem(self):
+        self.host.failures.update({"ufw": OSError("missing"), "sshd": OSError("missing")})
+        with patch.object(report.os, "geteuid", return_value=0):
+            result = report.collect_report(self.host)
+        self.assertIsNone(result["host"]["network"]["firewall"])
+        self.assertEqual({"password_authentication": None, "root_login": None}, result["host"]["ssh"])
+        self.assertNotIn({"code": "network_unavailable"}, result["problems"])
+        self.assertNotIn({"code": "ssh_password_login"}, result["problems"])
+
+    def test_nonroot_does_not_probe_firewall_or_ssh(self):
+        with patch.object(report.os, "geteuid", return_value=1000):
+            result = report.collect_report(self.host)
+        self.assertIsNone(result["host"]["network"]["firewall"])
+        self.assertEqual({"password_authentication": None, "root_login": None}, result["host"]["ssh"])
+        self.assertFalse(any(command[0] in {"ufw", "sshd"} for command in self.host.commands))
+
+    def test_ssh_password_authentication_is_reported(self):
+        self.host.outputs["sshd"] = "passwordauthentication yes\npermitrootlogin yes\n"
+        with patch.object(report.os, "geteuid", return_value=0):
+            result = report.collect_report(self.host)
+        self.assertEqual({"password_authentication": True, "root_login": "yes"}, result["host"]["ssh"])
+        self.assertIn({"code": "ssh_password_login"}, result["problems"])
+
+    def test_disabled_ssh_password_authentication_is_not_a_problem(self):
+        self.host.outputs["sshd"] = "passwordauthentication no\npermitrootlogin prohibit-password\n"
+        with patch.object(report.os, "geteuid", return_value=0):
+            result = report.collect_report(self.host)
+        self.assertEqual({"password_authentication": False, "root_login": "prohibit-password"}, result["host"]["ssh"])
+        self.assertNotIn({"code": "ssh_password_login"}, result["problems"])
+
+    def test_low_memory_adds_problem(self):
+        self.host.paths.p("/proc/meminfo").write_text("MemTotal: 1000 kB\nMemAvailable: 99 kB\n")
+        problems = []
+        report.resources(self.host, problems, {})
+        self.assertIn({"code": "memory_low"}, problems)
+
+    def test_disk_low_uses_percentage_and_absolute_floor(self):
+        for total, free in ((100, 5), (10, 1.5)):
+            with self.subTest(total=total, free=free):
+                usage = type("Usage", (), {"total": int(total * 1024 ** 3), "used": 0,
+                                           "free": int(free * 1024 ** 3)})()
+                problems = []
+                with patch.object(report.shutil, "disk_usage", return_value=usage):
+                    report.resources(self.host, problems, {})
+                self.assertIn({"code": "disk_low"}, problems)
+
+    def test_healthy_resources_do_not_report_low(self):
+        usage = type("Usage", (), {"total": 100 * 1024 ** 3, "used": 50 * 1024 ** 3,
+                                   "free": 50 * 1024 ** 3})()
+        problems = []
+        with patch.object(report.shutil, "disk_usage", return_value=usage):
+            report.resources(self.host, problems, {})
+        self.assertNotIn({"code": "disk_low"}, problems)
+        self.assertNotIn({"code": "memory_low"}, problems)
+
+    def test_certificate_status_and_expiry_problems(self):
+        clock = report.dt.datetime.now(report.dt.timezone.utc)
+        cases = (
+            ({"status": "invalid", "expires_at": None}, "certificate_invalid"),
+            ({"status": "valid", "expires_at": (clock + report.dt.timedelta(days=13)).isoformat()}, "certificate_expiring"),
+            ({"status": "valid", "expires_at": (clock + report.dt.timedelta(days=15)).isoformat()}, None),
+            ({"status": "unconfigured", "expires_at": None}, None),
+        )
+        for certificate, code in cases:
+            with self.subTest(code=code):
+                self.cert.return_value = certificate
+                result = report.collect_report(self.host)
+                for candidate in ("certificate_invalid", "certificate_expiring"):
+                    item = {"code": candidate, "instance_id": INSTANCE_ID}
+                    if candidate == code:
+                        self.assertIn(item, result["problems"])
+                    else:
+                        self.assertNotIn(item, result["problems"])
+
     def test_probe_budget_and_invalid_port_do_not_open_connections(self):
         patch.stopall()
         with patch.object(report.urllib.request, "build_opener") as opener:
@@ -452,6 +597,7 @@ signal.raise_signal(signal.SIGALRM)
 
     def test_real_host_reads_public_registry_without_touching_private_configuration(self):
         host = Host(Paths(self.host.paths.root))
+        host.run = self.host.run
         atomic_json(host.paths.registry, self.host.registry)
         entry = self.host.registry["instances"][INSTANCE_ID]
         atomic_json(host.paths.instance_state(entry["name"]) / "state.json", self.host.states[INSTANCE_ID])
