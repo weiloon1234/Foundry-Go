@@ -200,6 +200,29 @@ class LocalDeploymentTests(unittest.TestCase):
             with self.assertRaisesRegex(cli.LocalError, "different hostname"):
                 cli.SSH(profile, settings)
 
+    def test_ssh_saved_key_needs_no_operator_ssh_config(self):
+        _, profile = fixture()
+        settings = {"hosts": {"example.com:22": {"target": "root@example.com", "key_path": "~/.ssh/fixture"}}}
+        with patch.object(cli, "execute", return_value="hostname example.com\nport 22\n"):
+            ssh = cli.SSH(profile, settings)
+        self.assertLess(ssh.base.index("IgnoreUnknown=UseKeychain"), ssh.base.index("UseKeychain=yes"))
+        self.assertIn("IdentitiesOnly=yes", ssh.base)
+        self.assertEqual(ssh.base[ssh.base.index("-i") + 1], str(Path("~/.ssh/fixture").expanduser()))
+        settings["hosts"]["example.com:22"]["key_path"] = ""
+        with patch.object(cli, "execute", return_value="hostname example.com\nport 22\n"):
+            ssh = cli.SSH(profile, settings)
+        for option in ("IdentitiesOnly=yes", "UseKeychain=yes", "-i"):
+            self.assertNotIn(option, ssh.base)
+
+    def test_refused_ssh_login_is_named_without_echoing_stderr(self):
+        with self.assertRaisesRegex(cli.LocalError, "login was refused") as caught:
+            cli.check_ssh_exit(255, b"secret-canary\nroot@example.com: Permission denied (publickey).\n")
+        self.assertNotIn("secret-canary", str(caught.exception))
+        for stderr in (None, b"", b"bash: /tmp/x: Permission denied\n"):
+            with self.assertRaisesRegex(cli.LocalError, "connection failed or dropped"):
+                cli.check_ssh_exit(255, stderr)
+        cli.check_ssh_exit(0, b"root@example.com: Permission denied (publickey).\n")
+
     def test_ssh_rejects_options_and_shell_metacharacters(self):
         _, profile = fixture()
         for target in ("-oProxyCommand=id", "host;echo-canary", "user@host$(id)", "host\nother"):
@@ -239,7 +262,7 @@ class LocalDeploymentTests(unittest.TestCase):
         ssh.base = ["ssh", "fixture"]
         archive = self.root / "release.tar"
         archive.write_bytes(b"fixture")
-        result = type("Result", (), {"stdout": b'{"ok":true}', "stderr": b"secret-canary", "returncode": 255})()
+        result = type("Result", (), {"stderr": b"", "stdout": b'{"ok":true}', "stderr": b"secret-canary", "returncode": 255})()
         operations = ((lambda: ssh.request("config-set", {}), True),
                       (lambda: ssh.request("bootstrap-apply", {}, "/tmp/staged"), True),
                       (lambda: ssh.report(), False), (lambda: ssh.upload(archive, "/tmp/release"), True),
@@ -286,7 +309,7 @@ class LocalDeploymentTests(unittest.TestCase):
         settings = {"hosts": {"example.com:22": {"target": "example.com", "key_path": ""}}}
         with patch.object(cli, "execute", return_value="hostname example.com\nport 22\n"):
             ssh = cli.SSH(profile, settings)
-        result = type("Result", (), {"stdout": b'{"ok":true}', "returncode": 0})()
+        result = type("Result", (), {"stderr": b"", "stdout": b'{"ok":true}', "returncode": 0})()
         with patch.object(cli.subprocess, "run", return_value=result) as run:
             ssh.request("config-set", {"secrets": {"configuration": {"APP__KEY": "runtime-secret-canary"}}})
         self.assertNotIn("runtime-secret-canary", " ".join(run.call_args.args[0]))

@@ -161,8 +161,12 @@ def operation_id(profile, action, arguments):
     return operation
 
 
-def check_ssh_exit(returncode, *, mutation=True):
+def check_ssh_exit(returncode, stderr=None, *, mutation=True):
     if returncode == 255:
+        # Matches only OpenSSH's own refusal line; other stderr is never echoed.
+        if stderr and re.search(rb"(?m)^\S+: Permission denied \(", stderr):
+            raise LocalError("SSH login was refused. Check the private key saved for this server in "
+                             ".deploy/settings.json, and that its public key is on the server.")
         detail = " The outcome of the mutation is unknown." if mutation else ""
         raise LocalError("SSH connection failed or dropped." + detail + " Run ACTION=status before retrying.")
 
@@ -189,7 +193,7 @@ def execute(args, *, input=None, capture=True, timeout=None):
     except subprocess.TimeoutExpired as error:
         raise LocalError(f"Command timed out: {args[0]}; inspect state before retrying") from error
     if args[0] == "ssh":
-        check_ssh_exit(result.returncode)
+        check_ssh_exit(result.returncode, result.stderr)
     if result.returncode:
         # Never echo command arguments, stdin, or arbitrary stderr: config values
         # travel only through stdin and remote failures may contain private data.
@@ -322,7 +326,10 @@ class SSH:
                      "-o", "ControlPersist=120", "-o", "ControlPath=" + str(control), "-p", str(host["port"])]
         key_path = personal.get("key_path", "")
         if key_path:
-            self.base += ["-i", str(Path(key_path).expanduser())]
+            # The saved key is enough: no operator SSH config, agent or profile is needed.
+            # UseKeychain exists only in Apple's OpenSSH, so IgnoreUnknown must precede it.
+            self.base += ["-o", "IdentitiesOnly=yes", "-o", "IgnoreUnknown=UseKeychain", "-o", "UseKeychain=yes",
+                          "-i", str(Path(key_path).expanduser())]
         effective = execute(self.base + ["-G", target], timeout=20)
         options = dict(line.split(" ", 1) for line in effective.splitlines() if " " in line)
         if options.get("hostname", "").lower().strip("[]") != host["address"].lower().strip("[]") or options.get("port") != str(host["port"]):
@@ -348,7 +355,7 @@ class SSH:
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=7200)
         except subprocess.TimeoutExpired as error:
             raise LocalError("remote operation timed out; use status and reconcile before retrying") from error
-        check_ssh_exit(result.returncode, mutation=action not in READ_ACTIONS)
+        check_ssh_exit(result.returncode, result.stderr, mutation=action not in READ_ACTIONS)
         try:
             value = json.loads(result.stdout)
         except (ValueError, UnicodeDecodeError) as error:
@@ -368,7 +375,7 @@ class SSH:
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=240)
         except subprocess.TimeoutExpired as error:
             raise LocalError("host report exceeded its deadline") from error
-        check_ssh_exit(result.returncode, mutation=False)
+        check_ssh_exit(result.returncode, result.stderr, mutation=False)
         try:
             value = json.loads(result.stdout)
         except (ValueError, UnicodeDecodeError) as error:
@@ -411,7 +418,7 @@ class SSH:
                                         stderr=subprocess.PIPE, timeout=3600)
             except subprocess.TimeoutExpired as error:
                 raise LocalError("release upload timed out before activation") from error
-        check_ssh_exit(result.returncode)
+        check_ssh_exit(result.returncode, result.stderr)
         if result.returncode:
             raise LocalError("release upload failed before activation")
 

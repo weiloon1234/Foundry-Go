@@ -55,7 +55,10 @@ present. Existing `client` and `web` packages use their declared build scripts.
 The module's build tools are mounted read-only separately from the app source.
 No compiler runs on the server.
 
-SSH requires an established host key and noninteractive authentication. Personal
+SSH requires an established host key and noninteractive authentication. The private
+key path saved for a host in `.deploy/settings.json` is enough: the tool offers only
+that key and, on macOS, unlocks it from Keychain, so no SSH config entry is needed.
+A key whose passphrase isn't in Keychain must be loaded into an SSH agent. Personal
 aliases must resolve to the hostname and port in the committed profile. Host
 mutations require root or passwordless `sudo -n`. Private configuration values
 travel through stdin, never command-line arguments.

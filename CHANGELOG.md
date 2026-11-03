@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: Deployment SSH works from the private key path saved for a host, with no SSH
+  config entry, agent or profile. It offers only that key and, on macOS, unlocks it
+  from Keychain. A refused login is now reported as a refused login instead of a
+  failed or dropped connection.
+
 ## v0.5.2 — 2026-11-02
 
 - Fixed: Bootstrap accepts corrected private inputs until their consuming step
