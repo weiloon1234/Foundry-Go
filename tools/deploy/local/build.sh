@@ -34,4 +34,4 @@ if [ -d "$work/public" ]; then cp -a "$work/public" "$stage/public"; fi
 if [ -d "$work/storage/private-source-maps/$VERSION" ]; then
 	cp -a "$work/storage/private-source-maps/$VERSION" "$stage/private-source-maps/"
 fi
-python3 /foundry-deploy/local/build_metadata.py package /request.json "$stage" /out
+CC="$CROSS_CC" python3 /foundry-deploy/local/build_metadata.py package /request.json "$stage" /out

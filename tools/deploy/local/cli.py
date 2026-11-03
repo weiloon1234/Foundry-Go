@@ -815,6 +815,42 @@ def prune_releases(directory, keep, current, entry, protected=()):
             shutil.rmtree(path)
 
 
+def builder_inputs(snapshot):
+    go = re.search(r"^go ([0-9.]+)$", (snapshot / "go.mod").read_text(), re.MULTILINE)
+    node = re.search(r"[0-9]+", read_json(snapshot / "web" / "package.json")["engines"]["node"])
+    if not go or not node:
+        raise LocalError("cannot resolve Go/Node versions from the immutable build declarations")
+    path = TOOLS_ROOT / "docker" / "build-inputs.json"
+    pins = read_json(path)
+    if pins.get("schema") != 1:
+        raise LocalError("unsupported tools/deploy/docker/build-inputs.json schema")
+    versions = {"ubuntu": "24.04", "go": go[1], "node": node[0]}
+    images = {}
+    for name, version in versions.items():
+        checksum = pins.get(name, {}).get(version)
+        if checksum is None:
+            raise LocalError(f"{name} {version} needs a reviewed pin in Foundry-Go: tools/deploy/docker/build-inputs.json")
+        if not isinstance(checksum, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", checksum):
+            raise LocalError(f"invalid {name} {version} digest in tools/deploy/docker/build-inputs.json")
+        images[name] = checksum
+    dockerfile = TOOLS_ROOT / "docker" / "builder.Dockerfile"
+    fingerprint = hashlib.sha256(dockerfile.read_bytes() + json.dumps(
+        {"versions": versions, "images": images}, sort_keys=True).encode()).hexdigest()[:12]
+    return versions, images, fingerprint
+
+
+def build_source_epoch(manifest, profile):
+    commit = manifest["commit"]
+    if commit is None:
+        if production_profile(profile):
+            raise LocalError("production builds require a source commit")
+        return 0
+    value = execute(["git", "-C", str(ROOT), "show", "-s", "--format=%ct", commit], timeout=30).strip()
+    if not re.fullmatch(r"[0-9]+", value):
+        raise LocalError("cannot resolve source commit time")
+    return int(value)
+
+
 def build(project, profile):
     limit = int(os.environ.get("DEPLOY_BUILDER_CACHE_MB", "12288"))
     if not 256 <= limit <= 1048576:
@@ -841,12 +877,10 @@ def build(project, profile):
                   "containers": [build_name, cleanup_name], "phase": "snapshot"}
         atomic_json(record_path, record, mode=0o600)
         snapshot = source_snapshot(project, profile, request, workspace)
-        go = re.search(r"^go ([0-9.]+)$", (snapshot / "go.mod").read_text(), re.MULTILINE)
-        node = re.search(r"[0-9]+", read_json(snapshot / "web" / "package.json")["engines"]["node"])
-        if not go or not node:
-            raise LocalError("cannot resolve Go/Node versions from the immutable build declarations")
+        versions, inputs, fingerprint = builder_inputs(snapshot)
+        request["images"] = inputs
+        request["source_date_epoch"] = build_source_epoch(request["manifest"], profile)
         dockerfile = TOOLS_ROOT / "docker" / "builder.Dockerfile"
-        fingerprint = hashlib.sha256(dockerfile.read_bytes() + go[1].encode() + node[0].encode()).hexdigest()[:12]
         image_name = f"{PREFIX}-builder-{project['id']}"
         image = f"{image_name}:{fingerprint}"
         label = f"{PREFIX}.project={project['id']}"
@@ -859,7 +893,9 @@ def build(project, profile):
             execute(["docker", "buildx", "create", "--name", builder, "--driver", "docker-container"])
             # An interrupted command deliberately retains its builder and journal.
             execute(["docker", "buildx", "build", "--builder", builder, "--load", "--label", label,
-                     "--build-arg", f"GO_VERSION={go[1]}", "--build-arg", f"NODE_MAJOR={node[0]}",
+                     "--build-arg", f"GO_VERSION={versions['go']}", "--build-arg", f"NODE_MAJOR={versions['node']}",
+                     "--build-arg", f"UBUNTU_DIGEST={inputs['ubuntu']}",
+                     "--build-arg", f"GO_DIGEST={inputs['go']}", "--build-arg", f"NODE_DIGEST={inputs['node']}",
                      "-f", str(dockerfile), "-t", image, str(TOOLS_ROOT / "docker")], capture=False)
             execute(["docker", "buildx", "rm", builder])
         request["manifest"]["builder_image_id"] = execute(

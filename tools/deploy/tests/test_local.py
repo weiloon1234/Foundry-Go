@@ -452,7 +452,9 @@ class LocalDeploymentTests(unittest.TestCase):
 
     def test_archive_contains_checksums_and_no_sources_or_runtime_configuration(self):
         stage = self.stage()
-        archive = metadata.package({"manifest": {"schema": 1, "version": "fixture"}}, stage, self.root / "release")
+        with patch.object(metadata, "collect_build_inputs", return_value={}):
+            archive = metadata.package({"manifest": {"schema": 1, "version": "fixture"}, "source_date_epoch": 0},
+                                       stage, self.root / "release")
         with metadata.tarfile.open(archive) as tar:
             names = set(tar.getnames())
             manifest = json.load(tar.extractfile("manifest.json"))
@@ -475,7 +477,8 @@ class LocalDeploymentTests(unittest.TestCase):
                     "instance": "abc-prod", "environment": "prod", "architecture": "amd64", "version": version,
                     "commit": "a" * 40, "tree_state": "clean", "built_at": "2026-10-13T12:00:00Z", "native_imaging": False,
                     "source_kind": "git_archive", "source_sha256": "e" * 64}
-        archive = metadata.package({"manifest": manifest}, stage, self.root / "release")
+        with patch.object(metadata, "collect_build_inputs", return_value={}):
+            archive = metadata.package({"manifest": manifest, "source_date_epoch": 0}, stage, self.root / "release")
         extracted = self.root / "extracted"
         result = release.unpack_archive(archive, extracted, entry, cli.digest(archive))
         self.assertEqual(result["version"], version)

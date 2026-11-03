@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "ubuntu": {
+    "24.04": "sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852"
+  },
+  "go": {
+    "1.27.1": "sha256:162be5298a40ed317005c8339c6de4d10d3eef336d66dc8e9259b03ab9d3a6d2",
+    "1.27.3": "sha256:2920bb124f1a2e12a1d39f0cab756ae0068441ee1da7655dec7f5e374944095b"
+  },
+  "node": {
+    "24": "sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c"
+  }
+}

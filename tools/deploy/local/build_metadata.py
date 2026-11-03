@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Public build input and release packaging, shared by both target architectures."""
+import gzip
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import tarfile
+import tempfile
 
 
 def public_env(request, destination):
@@ -30,6 +33,30 @@ def public_env(request, destination):
     Path(destination).write_text("".join(lines), encoding="utf-8")
 
 
+def public_command(args):
+    # Keep package inventory output off the heap until its size is checked.
+    with tempfile.TemporaryFile() as output:
+        subprocess.run(args, stdout=output, stderr=subprocess.DEVNULL, check=True, timeout=30)
+        if output.tell() > 4 * 1024 * 1024:
+            raise ValueError("build provenance command output exceeds 4 MiB")
+        output.seek(0)
+        value = output.read().decode("utf-8")
+    if not value.strip():
+        raise ValueError("build provenance command returned no output")
+    return value
+
+
+def collect_build_inputs(request):
+    packages = public_command(["dpkg-query", "-W", "-f", "${Package} ${Version} ${Architecture}\n"])
+    packages = "".join(line + "\n" for line in sorted(packages.splitlines()))
+    return {"images": request["images"],
+            "go": public_command(["go", "version"]).strip(),
+            "node": public_command(["node", "--version"]).strip(),
+            "npm": public_command(["npm", "--version"]).strip(),
+            "cc": public_command([os.environ["CC"], "--version"]).splitlines()[0],
+            "packages_sha256": hashlib.sha256(packages.encode("utf-8")).hexdigest()}
+
+
 def package(request, stage, output):
     stage, output = Path(stage), Path(output)
     manifest = dict(request["manifest"])
@@ -51,6 +78,10 @@ def package(request, stage, output):
     if not {"artisan", "config/deploy.toml"} <= files.keys():
         raise ValueError("release lacks its binary or deployment configuration")
     manifest["files"] = files
+    epoch = request["source_date_epoch"]
+    if type(epoch) is not int or epoch < 0:
+        raise ValueError("source_date_epoch must be a nonnegative integer")
+    manifest["build_inputs"] = collect_build_inputs(request)
     (stage / "manifest.json").write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     output.mkdir(parents=True, exist_ok=True)
     archive = output / "app.tar.gz"
@@ -58,12 +89,15 @@ def package(request, stage, output):
         raise ValueError("release output already exists")
     temporary = output / "app.tar.gz.partial"
     try:
-        with tarfile.open(temporary, "x:gz", format=tarfile.PAX_FORMAT) as tar:
+        with temporary.open("xb") as raw, gzip.GzipFile(filename="", mode="xb", fileobj=raw, mtime=0) as compressed, \
+                tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as tar:
             for path in sorted(stage.rglob("*")):
                 info = tar.gettarinfo(str(path), path.relative_to(stage).as_posix())
                 info.uid = info.gid = 0
                 info.uname = info.gname = "root"
                 info.mode = 0o755 if path.is_dir() or info.name == "artisan" else 0o644
+                info.mtime = epoch
+                info.pax_headers = {}
                 if info.isfile():
                     with path.open("rb") as content:
                         tar.addfile(info, content)

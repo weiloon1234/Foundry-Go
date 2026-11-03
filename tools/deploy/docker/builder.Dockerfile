@@ -5,12 +5,18 @@
 # (amd64 servers from an arm64 Mac and the reverse), without emulation.
 ARG GO_VERSION
 ARG NODE_MAJOR
-FROM golang:${GO_VERSION} AS go
-FROM node:${NODE_MAJOR}-bookworm-slim AS node
+ARG UBUNTU_DIGEST
+ARG GO_DIGEST
+ARG NODE_DIGEST
+FROM golang:${GO_VERSION}@${GO_DIGEST} AS go
+FROM node:${NODE_MAJOR}-bookworm-slim@${NODE_DIGEST} AS node
 
-FROM ubuntu:24.04
+FROM ubuntu:24.04@${UBUNTU_DIGEST}
 # The local CLI labels, locks and bounds builders per project identity.
 LABEL foundry.builder=1
+# Apt packages float within noble and are recorded in release provenance.
+# No apt snapshot: ports.ubuntu.com has no snapshot service, and arm64
+# silently ignores apt-get update --snapshot.
 RUN case "$(dpkg --print-architecture)" in \
 		arm64) cross="gcc-x86-64-linux-gnu libc6-dev-amd64-cross" ;; \
 		amd64) cross="gcc-aarch64-linux-gnu libc6-dev-arm64-cross" ;; \

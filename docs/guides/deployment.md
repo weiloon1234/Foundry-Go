@@ -57,6 +57,18 @@ present. Existing `client` and `web` packages use their declared build scripts.
 The module's build tools are mounted read-only separately from the app source.
 No compiler runs on the server.
 
+The release builder pins Ubuntu, Go, and Node images by multi-architecture index
+digest in `tools/deploy/docker/build-inputs.json`. To add a Go version or Node
+major, add its reviewed digest there before building. Apt packages float within
+noble: `ports.ubuntu.com` has no snapshot service, so arm64 silently ignores
+`apt-get update --snapshot`. The manifest's `build_inputs` records the image
+digests, Go, Node, npm, and C compiler versions, and a hash of the sorted package
+inventory. Archive headers use the source commit's committer time, or zero for a
+non-production build without a commit, and gzip headers omit the filename and
+use time zero. Packaging the same stage with the same inputs produces identical
+archive bytes. The release ID remains an input because the app embeds it.
+Byte-identical compiler output across machines is not claimed.
+
 SSH requires noninteractive authentication and an established host key. `make
 bootstrap` of a profile not yet bound to a server, and recovery to a replacement
 address, record an unknown host key on first contact (OpenSSH `accept-new`), which trusts whatever answers at that address. To verify
