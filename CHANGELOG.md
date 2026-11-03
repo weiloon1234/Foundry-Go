@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added: Deployment and storage configuration edits probe write, read and delete
+  access on every configured disk before publication. Applications with cloud disks
+  must register `deploy:storage-probe`. Rollback and recovery do not run the probe.
 - Added: `go tool foundry deploy` runs the deploy tool from the application's pinned
   framework and refuses a known version mismatch. Doctor's optional `deploy-tool`
   check uses `--python` to check that Python can run the pinned tool.

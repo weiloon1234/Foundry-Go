@@ -43,6 +43,8 @@ class ProcessHost(Host):
                                           {"Name": "developer.enabled", "Source": "defaults", "Secret": False}])
         self.commands_output = json.dumps([{"name": "about"}, {"name": "config.check"}])
         self.redis_keys_output = json.dumps([])
+        self.storage_probe_output = json.dumps({"schema": 1, "disks": []})
+        self.storage_probe_status = 0
         self.role_states = {}
 
     def run(self, args, **kwargs):
@@ -70,6 +72,8 @@ class ProcessHost(Host):
             output = self.commands_output
         if "redis:keys" in args:
             output = self.redis_keys_output
+        if "deploy:storage-probe" in args:
+            return subprocess.CompletedProcess(args, self.storage_probe_status, self.storage_probe_output, "private provider stderr")
         if args[0] == "pg_dump":
             Path(next(a[7:] for a in args if a.startswith("--file="))).write_bytes(b"fixture-backup")
         return subprocess.CompletedProcess(args, 0, output, "")
@@ -146,6 +150,165 @@ class ReleaseTests(unittest.TestCase):
 
     def deploy(self, archive):
         return release.activate(self.host, self.project, self.profile, archive, digest(archive))
+
+    def test_storage_probe_ok_and_app_arguments(self):
+        names = ["uploads", "0.assets_v2-archive", "a" * 128]
+        self.host.storage_probe_output = json.dumps({"schema": 1, "disks": [
+            {"disk": name, "outcome": "ok"} for name in names]})
+        candidate = self.env_file.with_name("app.env.next")
+        atomic_write(candidate, self.env_file.read_text(), 0o640)
+        release.probe_storage(self.host, self.entry, self.opt, candidate)
+        args, options = self.host.commands[-1]
+        self.assertIn("deploy:storage-probe", args)
+        self.assertEqual(str(candidate), args[args.index("--env-file") + 1])
+        self.assertFalse(options["check"])
+        self.assertEqual(300, options["timeout"])
+        release.app(self.host, self.entry, self.opt, "config:check")
+        self.assertTrue(self.host.commands[-1][1]["check"])
+
+    def test_storage_probe_failed_names_every_disk_stage_code_and_leftover(self):
+        leftover = "foundry-deploy-probe/" + "a" * 32
+        self.host.storage_probe_output = json.dumps({"schema": 1, "disks": [
+            {"disk": "uploads", "outcome": "failed", "stage": "write", "code": "storage_forbidden"},
+            {"disk": "assets", "outcome": "failed", "stage": "delete", "code": "storage_unavailable",
+             "leftover_key": leftover}]})
+        for status in (0, 1):
+            with self.subTest(status=status):
+                self.host.storage_probe_status = status
+                with self.assertRaises(DeployError) as caught:
+                    release.probe_storage(self.host, self.entry, self.opt)
+                self.assertEqual("storage_probe_failed", caught.exception.code)
+                for text in ("uploads", "write", "storage_forbidden", "assets", "delete", "storage_unavailable",
+                             "bucket and credentials", leftover):
+                    self.assertIn(text, caught.exception.detail)
+                self.assertNotIn("private provider stderr", caught.exception.detail)
+
+    def test_storage_probe_exit_two_requires_registration(self):
+        self.host.storage_probe_status = 2
+        self.host.storage_probe_output = "private invalid stdout"
+        with self.assertRaises(DeployError) as caught:
+            release.probe_storage(self.host, self.entry, self.opt)
+        self.assertEqual("storage_probe_unavailable", caught.exception.code)
+        for text in ("deploy:storage-probe", "deployment guide", "rebuild"):
+            self.assertIn(text, caught.exception.detail)
+        self.assertNotIn("private", caught.exception.detail)
+
+    def test_storage_probe_refuses_invalid_reports_without_exposing_output(self):
+        ok = {"disk": "uploads", "outcome": "ok"}
+        failed = {"disk": "uploads", "outcome": "failed", "stage": "write", "code": "storage_forbidden"}
+        reports = [None, [], {}, {"schema": True, "disks": []}, {"schema": 1.0, "disks": []},
+                   {"schema": 2, "disks": []}, {"schema": 1, "disks": {}},
+                   {"schema": 1, "disks": [], "private": "provider material"}]
+        disks = [[None], [ok, ok], [ok] * 65, [{**ok, "private": "provider material"}],
+                 [{**ok, "stage": "read"}], [{**failed, "code": "private provider material"}],
+                 [{**failed, "stage": "private provider material"}], [{"disk": "uploads", "outcome": "failed"}],
+                 [{**failed, "leftover_key": "private provider material"}],
+                 [{**failed, "leftover_key": "foundry-deploy-probe/" + "a" * 31}],
+                 [{**ok, "outcome": ["ok"]}]]
+        for name in ("../private", "private\nmaterial", "PRIVATE", "_private", "", "a" * 129, "é"):
+            disks.append([{**ok, "disk": name}])
+        reports.extend({"schema": 1, "disks": items} for items in disks)
+        outputs = ["private invalid JSON", "{\"schema\":1}", "{} {}",
+                   '{"schema":1,"schema":1,"disks":[]}', '{"schema":1,"disks":[],"private":NaN}',
+                   "[" * 1100 + "]" * 1100, *map(json.dumps, reports)]
+        for output in outputs:
+            with self.subTest(output=output):
+                self.host.storage_probe_output = output
+                with self.assertRaises(DeployError) as caught:
+                    release.probe_storage(self.host, self.entry, self.opt)
+                self.assertEqual("storage_probe_invalid", caught.exception.code)
+                self.assertNotIn("private", caught.exception.detail)
+        self.host.storage_probe_output = json.dumps({"schema": 1, "disks": [ok]})
+        self.host.storage_probe_status = 1
+        with self.assertRaises(DeployError) as caught:
+            release.probe_storage(self.host, self.entry, self.opt)
+        self.assertEqual("storage_probe_invalid", caught.exception.code)
+
+    def test_deploy_probes_after_config_check_before_redis_and_switch_only_with_bindings(self):
+        first, _ = self.bundle(1)
+        self.deploy(first)
+        self.assertFalse(any("deploy:storage-probe" in args for args, _ in self.host.commands))
+        release.config_set(self.host, self.project, self.profile, self.storage_changes("old/"))
+        self.host.commands.clear()
+        second, _ = self.bundle(2)
+        switch_to = release.switch_to
+        def switch(host, entry, version):
+            commands = [args for args, _ in host.commands]
+            config = next(i for i, args in enumerate(commands) if "config:check" in args)
+            probe = next(i for i, args in enumerate(commands) if "deploy:storage-probe" in args)
+            redis = next(i for i, args in enumerate(commands) if "redis:keys" in args)
+            self.assertLess(config, probe)
+            self.assertLess(probe, redis)
+            self.assertEqual(1, sum("deploy:storage-probe" in args for args in commands))
+            return switch_to(host, entry, version)
+        with patch.object(release, "switch_to", side_effect=switch) as switching:
+            self.deploy(second)
+        switching.assert_called_once()
+
+    def test_failed_deploy_storage_probe_does_not_switch_release(self):
+        first, manifest = self.bundle(1)
+        self.deploy(first)
+        release.config_set(self.host, self.project, self.profile, self.storage_changes("old/"))
+        second, _ = self.bundle(2)
+        self.host.storage_probe_output = json.dumps({"schema": 1, "disks": [
+            {"disk": "uploads", "outcome": "failed", "stage": "write", "code": "storage_forbidden"}]})
+        with patch.object(release, "switch_to") as switch:
+            with self.assertRaises(DeployError) as caught:
+                self.deploy(second)
+        self.assertEqual("storage_probe_failed", caught.exception.code)
+        switch.assert_not_called()
+        self.assertEqual(manifest, self.state()["current"])
+        self.assertEqual(manifest["version"], release.current_version(self.host, self.entry))
+        self.assertEqual("failed", self.state()["last_attempt"]["outcome"])
+
+    def test_configuration_storage_probe_uses_candidate_and_failure_preserves_publication(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        before = self.env_file.read_bytes(), self.host.paths.registry.read_bytes(), self.state()["configuration_revision"]
+        self.host.commands.clear()
+        self.host.storage_probe_output = json.dumps({"schema": 1, "disks": [
+            {"disk": "uploads", "outcome": "failed", "stage": "write", "code": "storage_forbidden"}]})
+        with self.assertRaises(DeployError) as caught:
+            release.config_set(self.host, self.project, self.profile, self.storage_changes("new/"))
+        self.assertEqual("storage_probe_failed", caught.exception.code)
+        self.assertEqual(before, (self.env_file.read_bytes(), self.host.paths.registry.read_bytes(), self.state()["configuration_revision"]))
+        commands = [args for args, _ in self.host.commands]
+        probe = next(i for i, args in enumerate(commands) if "deploy:storage-probe" in args)
+        inspect = next(i for i, args in enumerate(commands) if "config:inspect" in args)
+        self.assertLess(inspect, probe)
+        args = commands[probe]
+        self.assertEqual(str(self.env_file.with_name("app.env.next")), args[args.index("--env-file") + 1])
+        self.assertFalse(self.env_file.with_name("app.env.next").exists())
+        self.assertFalse(any(args[0] == "systemctl" for args in commands))
+
+    def test_configuration_only_changed_storage_keys_probe(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        changes = self.storage_changes("old/")
+        release.config_set(self.host, self.project, self.profile, changes)
+        self.host.inspect_output = json.dumps([
+            {"Name": key.lower().replace("__", "."), "Source": "defaults", "Secret": True}
+            for key in [*changes, "PROJECT__NAME"]])
+        with patch.object(release, "probe_storage", side_effect=DeployError("storage_probe_failed", "storage outage")) as probe:
+            self.assertTrue(release.config_set(self.host, self.project, self.profile, changes)["unchanged"])
+            release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Changed", **changes})
+            probe.assert_not_called()
+        credentials = json.loads(changes["APP__SERVICES__CREDENTIALS"])
+        credentials["app"]["secret_key"] = "replacement-secret"
+        with patch.object(release, "probe_storage", wraps=release.probe_storage) as probe:
+            release.config_set(self.host, self.project, self.profile,
+                               {"APP__SERVICES__CREDENTIALS": json.dumps(credentials)})
+        probe.assert_called_once()
+
+    def test_rollback_with_storage_bindings_never_probes(self):
+        first, one = self.bundle(1)
+        second, two = self.bundle(2)
+        self.deploy(first)
+        release.config_set(self.host, self.project, self.profile, self.storage_changes("old/"))
+        self.deploy(second)
+        with patch.object(release, "probe_storage", side_effect=AssertionError("rollback must not probe")) as probe:
+            release.rollback(self.host, self.project, self.profile, one["version"], two["version"], str(uuid.uuid4()))
+        probe.assert_not_called()
 
     def test_recovery_in_both_modes_checks_schema_without_migrations_seeds_or_backups(self):
         for sequence, http_only in enumerate((True, False), start=1):

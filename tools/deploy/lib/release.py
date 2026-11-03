@@ -181,13 +181,56 @@ def switch_to(host, entry, version):
             temporary.unlink()
 
 
-def app(host, entry, release, command, env_file=None, extra=(), timeout=90):
+def app(host, entry, release, command, env_file=None, extra=(), timeout=90, check=True):
     config = env_file or host.paths.instance_config(entry["name"]) / "app.env"
     check_path(config, "file")
     return host.run(["runuser", "-u", entry["name"], "--", str(release / "artisan"), command,
                      "--config", str(release / "config/deploy.toml"), "--env-file", str(config), *extra],
-                    env={"WEB__PUBLIC_DIR": str(release / "public")}, timeout=timeout,
+                    env={"WEB__PUBLIC_DIR": str(release / "public")}, timeout=timeout, check=check,
                     cwd=check_path(host.paths.data(entry["name"]), "directory"))
+
+
+STORAGE_CONFIGURATION = ("APP__SERVICES__STORAGE__", "APP__SERVICES__CREDENTIALS")
+
+
+def probe_storage(host, entry, release, env_file=None):
+    """Prove every configured disk accepts a write, read and delete before it goes live."""
+    result = app(host, entry, release, "deploy:storage-probe", env_file, timeout=300, check=False)
+    if result.returncode == 2:
+        raise DeployError("storage_probe_unavailable",
+                          "Register deploy:storage-probe as the deployment guide shows and rebuild the release.")
+    code, detail = "storage_probe_invalid", "Storage probe returned an invalid report; no settings or release were switched."
+    try:
+        report = parse_json(result.stdout)
+    except (DeployError, TypeError):
+        raise DeployError(code, detail) from None
+    require(isinstance(report, dict) and set(report) == {"schema", "disks"}
+            and type(report["schema"]) is int and report["schema"] == 1
+            and isinstance(report["disks"], list) and len(report["disks"]) <= 64, code, detail)
+    names, failures = set(), []
+    for disk in report["disks"]:
+        require(isinstance(disk, dict) and {"disk", "outcome"} <= set(disk)
+                and set(disk) <= {"disk", "outcome", "stage", "code", "leftover_key"}, code, detail)
+        name = disk["disk"]
+        require(isinstance(name, str) and re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,127}", name) is not None
+                and name not in names and disk["outcome"] in ("ok", "failed"), code, detail)
+        names.add(name)
+        if disk["outcome"] == "ok":
+            require(set(disk) == {"disk", "outcome"}, code, detail)
+            continue
+        require(isinstance(disk.get("stage"), str) and disk["stage"] in ("write", "read", "delete")
+                and isinstance(disk.get("code"), str)
+                and re.fullmatch(r"storage_[a-z][a-z0-9_]{0,63}", disk["code"]) is not None, code, detail)
+        leftover = disk.get("leftover_key")
+        require("leftover_key" not in disk or (isinstance(leftover, str)
+                and re.fullmatch(r"foundry-deploy-probe/[a-f0-9]{32}", leftover) is not None), code, detail)
+        failure = f"{name}: stage {disk['stage']}, code {disk['code']}; check that disk's bucket and credentials"
+        if leftover:
+            failure += f"; leftover_key {leftover}"
+        failures.append(failure)
+    if failures:
+        raise DeployError("storage_probe_failed", "Storage probe failed: " + "; ".join(failures) + ".")
+    require(result.returncode == 0, code, detail)
 
 
 def release_redis_inventory(host, entry, release, env_file=None):
@@ -797,6 +840,8 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                 native_runtime(host, entry)
                 protect_maps(host, entry, release)
                 app(host, entry, release, "config:check")
+                if entry.get("storage_bindings"):
+                    probe_storage(host, entry, release)
                 redis_patterns = release_redis_inventory(host, entry, release)
                 attempt["redis_inventory"] = redis_patterns
                 phase(host, entry, state, "redis")
@@ -1150,6 +1195,8 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
             state["status"] = prior_status
             finish(host, entry, state, "succeeded")
             return {"ok": True, "unchanged": True, "configuration_revision": entry["configuration_revision"]}
+        if any(key.startswith(STORAGE_CONFIGURATION) and updated.get(key) != values.get(key) for key in changes):
+            probe_storage(host, entry, live, candidate)
         reserve_runtime_storage(registry, entry, updated, lambda value: _read_value_file(host, entry, value))
         host.journal(registry, entry)
         attempt["redis_inventory"] = release_redis_inventory(host, entry, live, candidate)

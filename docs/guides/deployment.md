@@ -304,6 +304,55 @@ Copying preserves each link without copying its target. Absolute or escaping
 symlinks, cycles, entries beneath symlinked directories, hardlinks, and special
 files are refused.
 
+## Storage probe
+
+For an instance with cloud disks, deployment runs the release's
+`artisan deploy:storage-probe` after `config:check` and before switching releases.
+Storage or credential configuration edits run it against the candidate settings
+before publication. Unchanged settings and unrelated edits do not run it.
+Rollback, restart, recovery (rehearsal and takeover), and capacity changes do not
+run the probe.
+
+The command writes, reads, compares, and deletes a random 32-byte object on every
+configured disk, one disk at a time. Each bucket briefly contains an object named
+`foundry-deploy-probe/<32 random hex characters>` within the disk's namespace.
+Write, read, and delete share a 20-second budget per disk. Failed reads and writes
+with applied or unknown outcomes get a separate 10-second cleanup attempt.
+The probe boots only storage infrastructure, without opening database or Redis
+connections.
+
+A failed probe refuses the deployment or configuration edit. Its safe report names
+the disk, stage, and storage error code. Check that disk's bucket and credentials.
+If deletion fails, `leftover_key` identifies the probe object to remove. No list
+permission is needed to prove deletion. A release without this command is refused
+with `storage_probe_unavailable` when the instance has cloud disks. Register the
+command in the application's console catalog and rebuild the release:
+
+```go
+command("deploy.storage-probe", "Check storage write, read and delete access", []string{"deploy:storage-probe"}, settingsOnly, configurationFlags(), c.probeStorage),
+```
+
+Use the same settings loader and bootstrap composition as `redisKeys`. Delegate
+to the framework's `application.ProbeStorage` helper:
+
+```go
+func (c *Console) probeStorage(ctx context.Context, a configArgs, streams cli.Streams) error {
+	settings, _, err := c.load(a)
+	if err != nil {
+		return err
+	}
+	builder, err := bootstrap.Compose(withoutWeb(settings))
+	if err != nil {
+		return err
+	}
+	return application.ProbeStorage(ctx, builder, streams.Out)
+}
+```
+
+The helper writes one JSON object, including failures, and returns a non-usage
+error if any disk fails. Keep stdout for this report. Exit status 2 tells the
+deploy tool that the command is unavailable.
+
 ## Bootstrap prompts and secrets
 
 The CLI creates project and instance UUIDs when their files do not exist. Its

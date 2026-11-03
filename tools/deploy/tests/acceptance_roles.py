@@ -16,7 +16,7 @@ import tarfile
 import time
 import uuid
 
-from acceptance_support import (ROOTS, WORK, action, fixture, guard, postgres_denial,
+from acceptance_support import (LAUNCHER, ROOTS, WORK, action, fixture, guard, postgres_denial,
                                 postgres_settings, private_json, request, run, service, wait_for)
 
 
@@ -194,6 +194,17 @@ def config_edit(host, project, profile, entry):
         disk["cloud"]["credentials"] = alias
     changes = {credentials_key: json.dumps(credentials), disks_key: json.dumps(disks),
                "PROJECT__NAME": "Acceptance configured"}
+    wrong_credentials = copy.deepcopy(credentials)
+    wrong_credentials[alias]["secret_key"] = "acceptance-wrong-" + uuid.uuid4().hex
+    refused_changes = {**changes, credentials_key: json.dumps(wrong_credentials)}
+    published = path.read_bytes()
+    refused = run([LAUNCHER, "config-set"], check=False,
+                  input=json.dumps(request(project, profile, secrets={"configuration": refused_changes})), timeout=600)
+    assert refused.returncode != 0, "Wrong storage credentials were accepted"
+    assert json.loads(refused.stdout)["error"]["code"] == "storage_probe_failed"
+    _, unchanged = host.require_identity(project, profile)
+    assert unchanged["configuration_revision"] == revision + 1
+    assert path.read_bytes() == published, "Refused storage edit changed published configuration"
     action("config-set", request(project, profile, secrets={"configuration": changes}))
     _, updated = host.require_identity(project, profile)
     assert updated["configuration_revision"] == revision + 2
