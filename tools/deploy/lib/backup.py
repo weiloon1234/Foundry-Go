@@ -548,6 +548,8 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
             if path.exists():
                 path.unlink()
         host.run(["systemctl", "daemon-reload"])
+        # A deleted unit must not leave a failed record behind.
+        host.run(["systemctl", "reset-failed", unit, restore_unit], check=False)
         if directory.exists():
             shutil.rmtree(directory)
         result.update(status="complete", retained=False)
@@ -629,7 +631,9 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
                        f"[Service]\nType=simple\nUser={postgres.cluster_owner()}\nGroup={postgres.cluster_owner()}\nUMask=0077\n"
                        f"ExecStart=/usr/lib/postgresql/{cluster['major']}/bin/postgres -D {data} "
                        f"-c config_file={directory}/postgresql.conf -c hba_file={directory}/pg_hba.conf\n"
-                       "KillSignal=SIGINT\nTimeoutStopSec=120\nRestart=no\n")
+                       # Only the postmaster may receive this. PostgreSQL 18 paused in recovery shuts
+                       # down abnormally when SIGINT also reaches the checkpointer.
+                       "KillSignal=SIGINT\nKillMode=mixed\nTimeoutStopSec=120\nRestart=no\n")
             host.owned_write(unit_path, service)
             save_phase("start_pending")
         host.run(["systemctl", "daemon-reload"])
