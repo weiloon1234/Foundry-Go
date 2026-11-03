@@ -262,7 +262,7 @@ class LocalDeploymentTests(unittest.TestCase):
         ssh.base = ["ssh", "fixture"]
         archive = self.root / "release.tar"
         archive.write_bytes(b"fixture")
-        result = type("Result", (), {"stderr": b"", "stdout": b'{"ok":true}', "stderr": b"secret-canary", "returncode": 255})()
+        result = type("Result", (), {"stdout": b'{"ok":true}', "stderr": b"secret-canary", "returncode": 255})()
         operations = ((lambda: ssh.request("config-set", {}), True),
                       (lambda: ssh.request("bootstrap-apply", {}, "/tmp/staged"), True),
                       (lambda: ssh.report(), False), (lambda: ssh.upload(archive, "/tmp/release"), True),
