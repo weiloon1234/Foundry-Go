@@ -24,11 +24,7 @@ func ProbeStorage(ctx context.Context, builder *Builder, output io.Writer) (err 
 		builder.state.mu.Unlock()
 		return err
 	}
-	settings := infrastructure.DefaultSettings()
-	settings.Namespace = builder.state.settings.Services.Namespace
-	settings.Credentials = builder.state.settings.Services.Credentials
-	settings.Storage = builder.state.settings.Services.Storage
-	plan, err := infrastructure.Configure(settings, builder.state.options.infrastructure...)
+	plan, err := infrastructure.ConfigureStorage(builder.state.settings.Services, builder.state.options.infrastructure...)
 	builder.state.mu.Unlock()
 	if err != nil {
 		return safeerror.Wrap("storage probe configuration failed", err)

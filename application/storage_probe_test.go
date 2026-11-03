@@ -11,7 +11,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
+	"github.com/weiloon1234/Foundry-Go/ratelimit"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/storage/local"
 	"github.com/weiloon1234/Foundry-Go/storage/probe"
@@ -29,7 +32,9 @@ func TestProbeStorageLocalAndUnrelatedConnections(t *testing.T) {
 	redis := infrastructure.DefaultRedisConnectionSettings()
 	redis.Host, redis.Port = "127.0.0.1", 1
 	s.Services.Redis.Connections = infrastructure.RedisConnections{"default": redis}
-	builder := application.New(s, quiet())
+	// A real application's Redis-backed stores must not pull Redis into the probe.
+	limits := infrastructure.RedisRateLimitStore(foundation.NewKey[*ratelimit.Store]("probe.limits"), "", ratelimit.DefaultConfig(keyspace.Namespace{}))
+	builder := application.New(s, quiet(), application.WithRedisStores(limits))
 	var output bytes.Buffer
 	if err := application.ProbeStorage(t.Context(), builder, &output); err != nil {
 		t.Fatal(err)

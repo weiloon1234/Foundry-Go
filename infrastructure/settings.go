@@ -150,6 +150,19 @@ func Configure(settings Settings, optionsList ...Option) (*Plan, error) {
 	return p, nil
 }
 
+// ConfigureStorage plans only disks and the credentials they use, leaving out every
+// other service and the application's Redis-backed stores. Deployment checks use it
+// so a problem elsewhere can't fail a storage check.
+func ConfigureStorage(settings Settings, optionsList ...Option) (*Plan, error) {
+	selected := DefaultSettings()
+	selected.Namespace, selected.Credentials, selected.Storage = settings.Namespace, settings.Credentials, settings.Storage
+	withoutRedisStores := func(o *options) error {
+		o.redisStores = nil
+		return nil
+	}
+	return Configure(selected, append(slices.Clone(optionsList), withoutRedisStores)...)
+}
+
 // Providers returns a fresh declaration slice. Every registration constructs
 // independent services, so the same plan may be used by independent applications.
 func (p *Plan) Providers() []foundation.Provider {

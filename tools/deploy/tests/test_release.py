@@ -256,6 +256,7 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaises(DeployError) as caught:
                 self.deploy(second)
         self.assertEqual("storage_probe_failed", caught.exception.code)
+        self.assertIn("uploads: stage write, code storage_forbidden", caught.exception.detail)
         switch.assert_not_called()
         self.assertEqual(manifest, self.state()["current"])
         self.assertEqual(manifest["version"], release.current_version(self.host, self.entry))

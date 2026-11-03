@@ -199,7 +199,7 @@ def probe_storage(host, entry, release, env_file=None):
     if result.returncode == 2:
         raise DeployError("storage_probe_unavailable",
                           "Register deploy:storage-probe as the deployment guide shows and rebuild the release.")
-    code, detail = "storage_probe_invalid", "Storage probe returned an invalid report; no settings or release were switched."
+    code, detail = "storage_probe_invalid", "Storage probe returned no valid report; no settings or release were switched. Run artisan deploy:storage-probe on the host to see why."
     try:
         report = parse_json(result.stdout)
     except (DeployError, TypeError):
@@ -905,7 +905,9 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                     prune(host, entry, state)
                 except (DeployError, OSError):
                     pass  # retained diagnostics are safer than masking failure
-                raise DeployError(code, "Deployment failed; status records the phase and recovery outcome. Inspect the instance before retrying.") from None
+                # A probe report holds no secrets, and naming the bad disk is what the operator needs.
+                raise DeployError(code, error.detail if code.startswith("storage_probe_") else
+                                  "Deployment failed; status records the phase and recovery outcome. Inspect the instance before retrying.") from None
             result = {"ok": True, "instance": entry["name"], "version": version}
             warnings = narrow_redis_grants(host, registry, entry, redis_patterns, state)
             try:
