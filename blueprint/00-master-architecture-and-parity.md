@@ -8,6 +8,24 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Full deployment tooling — v0.6.0, 2026-11-04
+
+Status: **implemented; acceptance passed on Ubuntu 24.04 and 26.04 on arm64 and amd64, a real
+recovery rehearsal of a production backup passed on an empty amd64 server, and CI gates this tag**.
+`ACTION=recover` rebuilds an instance on an empty server from its off-host backups, as a
+rehearsal or a takeover. New servers size PostgreSQL and Redis from RAM, and `ACTION=capacity`
+resizes existing ones. PostgreSQL uploads WAL about once a minute while there's activity. The
+host report names failed units, unexpected listeners, SSH password login, low memory or disk,
+and expiring certificates. Release builder images are pinned and archives normalized.
+`go tool foundry deploy` runs the pinned Python tool. `deploy:storage-probe` proves write, read
+and delete on every disk before a deploy or storage edit goes live. Restore drills on
+PostgreSQL 18 stop cleanly. Open: takeover has run only in acceptance, never on a real server.
+The storage probe has run only against the acceptance S3 server, and capacity resizing and the
+WAL timing upgrade only in acceptance and unit tests, until the applications adopt this release.
+The real rehearsal used the tool one commit before the WAL timing and report changes. By owner
+decision, the tool stays Python, and the Go storage helper, compatibility adapters,
+`deploy:inspect` and `deploy:config-check` were dropped.
+
 ## Deployment SSH without per-server setup — v0.5.3, 2026-11-03
 
 Status: **implemented; deploy unit tests, real SSH checks against two servers and CI gate this tag**.

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.6.0 — 2026-11-04
 
 - Changed: PostgreSQL archives WAL about once a minute while active. Tool upgrades
   apply the timeout to existing clusters with a reload, without a restart.
