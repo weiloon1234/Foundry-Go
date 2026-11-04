@@ -216,3 +216,41 @@ func parseFootprintSymbols(t *testing.T, data []byte) (functions int, definedSym
 	}
 	return functions, definedSymbols
 }
+
+// Record the new declaration footprint without inventing an unmeasured ceiling.
+// Runtime error methods must remain shared across the two concrete payload types.
+func TestDetailedErrorFootprint(t *testing.T) {
+	testkit.TrackExternalInputs(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	run := func(args ...string) []byte {
+		t.Helper()
+		cmd := exec.CommandContext(ctx, "go", args...)
+		configureCompilerCommand(cmd)
+		cmd.Env = append(os.Environ(), "GOWORK=off", "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local")
+		stdout := &compilerOutput{limit: 64 << 20, cancel: cancel}
+		stderr := &compilerOutput{limit: 64 << 10, cancel: cancel}
+		cmd.Stdout, cmd.Stderr = stdout, stderr
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("footprint command: %v\n%s", err, stderr.String())
+		}
+		if stdout.exceeded || stderr.exceeded {
+			t.Fatal("footprint command output exceeded limit")
+		}
+		return stdout.Bytes()
+	}
+	archive := strings.TrimSpace(string(run("list", "-export", "-f", "{{.Export}}", "./testdata/footprint/error_details")))
+	info, err := os.Stat(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	symbols := run("tool", "nm", archive)
+	functions, count := parseFootprintSymbols(t, symbols)
+	t.Logf("error_details: %d functions, %d symbols, %d archive bytes", functions, count, info.Size())
+	if bytes.Contains(symbols, []byte("http.DetailedError[")) || bytes.Contains(symbols, []byte("http.(*DetailedError[")) {
+		t.Fatal("bound HTTP errors instantiated a generic runtime")
+	}
+	if !bytes.Contains(symbols, []byte("DetailedErrorDeclaration[")) {
+		t.Fatal("probe did not instantiate detailed declarations")
+	}
+}

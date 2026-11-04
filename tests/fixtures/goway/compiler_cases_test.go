@@ -10,7 +10,8 @@ func compilerCases() []compilerCase {
 		{"trigram_selected_phase", "cannot use"},
 		{"trigram_threshold_executor", "cannot use"},
 		{"trigram_nullable_result", "cannot use"},
-
+		{"http_error_details_missing", "missing method Error"},
+		{"http_error_details_wrong_payload", "as RegistryExistsDetails value"},
 		{"datatable_routes_authority", "cannot use"},
 		{"datatable_routes_access_actor", "cannot use"},
 		{"datatable_routes_ticket_actor", "cannot use"},

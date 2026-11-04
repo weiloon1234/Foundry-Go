@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
@@ -219,13 +220,15 @@ func MatchedRoute(ctx context.Context) (RouteInfo, bool) {
 // RouteRegistration is the heterogeneous assembly boundary. Construct it from a
 // Route descriptor; invalid declarations are rejected by NewRouter as a whole.
 type RouteRegistration struct {
-	contract    contributionContract
-	info        RouteInfo
-	middlewares []Middleware
-	pattern     string
-	handler     stdhttp.Handler
-	endpoint    func() EndpointInfo
-	errors      []ErrorDefinition
+	contract       contributionContract
+	info           RouteInfo
+	middlewares    []Middleware
+	pattern        string
+	handler        stdhttp.Handler
+	endpoint       func() EndpointInfo
+	errors         []ErrorDefinition
+	errorDetails   map[ErrorCode]*errorDetails
+	responseLimits contract.JSONLimits
 	// handoff runs before this route's context, budget and middleware; true
 	// means a more specific owner answered the request instead.
 	handoff func(stdhttp.ResponseWriter, *stdhttp.Request) bool

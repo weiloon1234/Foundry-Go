@@ -42,7 +42,7 @@ type endpointCore struct {
 	tableOperation    contract.TableOperationBinding
 	hasTableOperation bool
 	limits            EndpointLimits
-	errors            []ErrorDeclaration
+	errors            []errorDeclaration
 	idempotency       *IdempotencyInfo
 	examples          endpointExamples
 }
@@ -252,6 +252,13 @@ func endpointRegister[P, Q, B, R any](e Endpoint[P, Q, B, R], stage preparedStag
 	info := registration.info.clone()
 	registration.endpoint = func() EndpointInfo { return endpointSnapshot(e, info) }
 	registration.errors, _ = endpointErrorDefinitions(e)
+	registration.errorDetails = make(map[ErrorCode]*errorDetails)
+	for _, declaration := range e.errors {
+		if declaration.details != nil {
+			registration.errorDetails[declaration.definition.Code] = declaration.details
+		}
+	}
+	registration.responseLimits = e.limits.Response
 	if e.idempotency != nil {
 		registration.handler = idempotentHTTPHandler{registration.handler}
 	}

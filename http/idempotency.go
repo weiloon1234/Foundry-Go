@@ -193,8 +193,8 @@ var (
 	IdempotencyUnavailable = DefineError("idempotency_unavailable", 503, "The operation outcome is unavailable. Retry with the same key.")
 )
 
-func idempotencyErrors() []ErrorDeclaration {
-	return []ErrorDeclaration{IdempotencyBadKey, IdempotencyMismatch, IdempotencyInProgress, IdempotencyCapacity, IdempotencyUnavailable}
+func idempotencyErrors() []ErrorDeclarationOption {
+	return []ErrorDeclarationOption{IdempotencyBadKey, IdempotencyMismatch, IdempotencyInProgress, IdempotencyCapacity, IdempotencyUnavailable}
 }
 
 type idempotencyRetryError struct {

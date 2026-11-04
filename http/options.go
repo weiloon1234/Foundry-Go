@@ -45,7 +45,7 @@ type endpointOptionValue struct {
 	middleware       []Middleware
 	documentation    RouteDocumentation
 	limits           EndpointLimits
-	errors           []ErrorDeclaration
+	errors           []errorDeclaration
 }
 type routeOptionValue struct{ endpointOptionValue }
 
@@ -84,8 +84,15 @@ func Limits(limits EndpointLimits) EndpointOption {
 }
 
 // Errors snapshots application error declarations for addition to an endpoint.
-func Errors(declarations ...ErrorDeclaration) EndpointOption {
-	return endpointOptionValue{kind: optionErrors, errors: slices.Clone(declarations)}
+// Example: Errors(SeatUnavailable, RegistryExists).
+func Errors(declarations ...ErrorDeclarationOption) EndpointOption {
+	values := make([]errorDeclaration, len(declarations))
+	for i, declaration := range declarations {
+		if declaration != nil {
+			values[i] = declaration.errorDeclarationOption()
+		}
+	}
+	return endpointOptionValue{kind: optionErrors, errors: values}
 }
 
 func configureRouteOption[P any](route Route[P], option endpointOptionValue) Route[P] {

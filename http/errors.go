@@ -49,26 +49,29 @@ type ErrorDefinition struct {
 	Code    ErrorCode `json:"error_code"`
 	Status  int       `json:"status"`
 	Message string    `json:"message"`
+	// DetailsType is empty for errors without details.
+	// Example: definition.DetailsType == schema.Root.
+	DetailsType contract.TypeID `json:"details_type,omitempty"`
 }
 
 var errorDefinitions = [...]ErrorDefinition{
-	{BadRequest, stdhttp.StatusBadRequest, "Invalid request"},
-	{Unauthenticated, stdhttp.StatusUnauthorized, "Authentication required"},
-	{Forbidden, stdhttp.StatusForbidden, "Access denied"},
-	{MFARequired, stdhttp.StatusForbidden, "Additional authentication required"},
-	{NotFound, stdhttp.StatusNotFound, "Resource not found"},
-	{NotAcceptable, stdhttp.StatusNotAcceptable, "No acceptable response encoding"},
-	{MethodNotAllowed, stdhttp.StatusMethodNotAllowed, "Method not allowed"},
-	{Conflict, stdhttp.StatusConflict, "Request conflicts with current state"},
-	{PreconditionFailed, stdhttp.StatusPreconditionFailed, "Request precondition failed"},
-	{RangeNotSatisfiable, stdhttp.StatusRequestedRangeNotSatisfiable, "Requested range is not satisfiable"},
-	{ValidationFailed, stdhttp.StatusUnprocessableEntity, "Validation failed"},
-	{PayloadTooLarge, stdhttp.StatusRequestEntityTooLarge, "Payload too large"},
-	{UnsupportedMediaType, stdhttp.StatusUnsupportedMediaType, "Unsupported media type"},
-	{RequestTimeout, stdhttp.StatusRequestTimeout, "Request timed out"},
-	{RateLimited, stdhttp.StatusTooManyRequests, "Rate limit exceeded"},
-	{InternalError, stdhttp.StatusInternalServerError, "Internal server error"},
-	{Unavailable, stdhttp.StatusServiceUnavailable, "Service unavailable"},
+	{Code: BadRequest, Status: stdhttp.StatusBadRequest, Message: "Invalid request"},
+	{Code: Unauthenticated, Status: stdhttp.StatusUnauthorized, Message: "Authentication required"},
+	{Code: Forbidden, Status: stdhttp.StatusForbidden, Message: "Access denied"},
+	{Code: MFARequired, Status: stdhttp.StatusForbidden, Message: "Additional authentication required"},
+	{Code: NotFound, Status: stdhttp.StatusNotFound, Message: "Resource not found"},
+	{Code: NotAcceptable, Status: stdhttp.StatusNotAcceptable, Message: "No acceptable response encoding"},
+	{Code: MethodNotAllowed, Status: stdhttp.StatusMethodNotAllowed, Message: "Method not allowed"},
+	{Code: Conflict, Status: stdhttp.StatusConflict, Message: "Request conflicts with current state"},
+	{Code: PreconditionFailed, Status: stdhttp.StatusPreconditionFailed, Message: "Request precondition failed"},
+	{Code: RangeNotSatisfiable, Status: stdhttp.StatusRequestedRangeNotSatisfiable, Message: "Requested range is not satisfiable"},
+	{Code: ValidationFailed, Status: stdhttp.StatusUnprocessableEntity, Message: "Validation failed"},
+	{Code: PayloadTooLarge, Status: stdhttp.StatusRequestEntityTooLarge, Message: "Payload too large"},
+	{Code: UnsupportedMediaType, Status: stdhttp.StatusUnsupportedMediaType, Message: "Unsupported media type"},
+	{Code: RequestTimeout, Status: stdhttp.StatusRequestTimeout, Message: "Request timed out"},
+	{Code: RateLimited, Status: stdhttp.StatusTooManyRequests, Message: "Rate limit exceeded"},
+	{Code: InternalError, Status: stdhttp.StatusInternalServerError, Message: "Internal server error"},
+	{Code: Unavailable, Status: stdhttp.StatusServiceUnavailable, Message: "Service unavailable"},
 }
 
 // ErrorDefinitions returns the built-in catalog used by response encoding.
@@ -161,6 +164,15 @@ func errorResponse(ctx context.Context, err error) (ErrorResponse, error) {
 }
 
 func localizedErrorResponse(ctx context.Context, err error, presenter *errorPresenter) (ErrorResponse, error) {
+	payload, _, failure := classifyErrorResponse(ctx, err, presenter)
+	if presenter != nil {
+		presenter.present(ctx, &payload)
+	}
+	return payload, failure
+}
+
+func classifyErrorResponse(ctx context.Context, err error, presenter *errorPresenter) (ErrorResponse, *DetailedError, error) {
+	var details *DetailedError
 	code := InternalError
 	var custom *ErrorDefinition
 	var issues []contract.Issue
@@ -177,6 +189,7 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 		}
 		if found {
 			code = classified.httpErrorCode()
+			details, _ = classified.(*DetailedError)
 			if declared, ok := classified.(interface {
 				httpErrorDefinition() (ErrorDefinition, bool)
 			}); ok {
@@ -212,12 +225,16 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 	if classificationErr != nil {
 		code = InternalError
 		custom = nil
+		details = nil
 		issues = nil
 		truncated = false
 	}
+	if custom == nil {
+		details = nil
+	}
 	definition, valid := code.definition()
 	if custom != nil {
-		if allowsError(ctx, *custom) {
+		if allowsError(ctx, *custom) && (details == nil || allowsErrorDetails(ctx, details)) {
 			definition, valid = *custom, true
 		} else {
 			valid = false
@@ -226,17 +243,15 @@ func localizedErrorResponse(ctx context.Context, err error, presenter *errorPres
 	}
 	if !valid {
 		definition, _ = InternalError.definition()
+		details = nil
 		issues = nil
 		truncated = false
 	}
 	payload := ErrorResponse{Status: definition.Status, Code: definition.Code, Message: definition.Message, RequestID: RequestID(ctx), Issues: issues, IssuesTruncated: truncated}
-	if presenter != nil {
-		presenter.present(ctx, &payload)
-	}
 	if classificationErr == nil {
 		classificationErr = presentationErr
 	}
-	return payload, classificationErr
+	return payload, details, classificationErr
 }
 
 // WriteError sends the shared JSON error envelope to a fresh response. Call it
@@ -260,16 +275,23 @@ func WriteError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) error {
 	if presenterErr != nil {
 		logRouteFailure(r, "HTTP message presenter lookup failed", presenterErr)
 	}
-	payload, classificationErr := localizedErrorResponse(r.Context(), err, presenter)
+	payload, detailed, classificationErr := classifyErrorResponse(r.Context(), err, presenter)
+	body, payload, preparationErr := prepareErrorResponse(r.Context(), payload, detailed, presenter)
+	if preparationErr != nil {
+		err = preparationErr
+	}
 	if classificationErr != nil {
 		logRouteFailure(r, "HTTP error classification failed", classificationErr)
 	}
 	if payload.Status >= 500 {
 		reportServerFailure(r, payload, err)
 	}
-	body, encodeErr := json.Marshal(payload)
-	if encodeErr != nil {
-		return safeerror.WrapFault(fault.Internal, "HTTP error response could not be encoded", encodeErr)
+	if body == nil {
+		var encodeErr error
+		body, encodeErr = json.Marshal(payload)
+		if encodeErr != nil {
+			return safeerror.WrapFault(fault.Internal, "HTTP error response could not be encoded", encodeErr)
+		}
 	}
 	// Clear representation-specific headers a decoder or handler may have set
 	// before failing. Preserve correlation, cookies, CORS and other policy headers.

@@ -3,11 +3,13 @@ package http
 import (
 	"cmp"
 	"context"
+	"maps"
 	stdhttp "net/http"
 	"net/url"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
+	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
@@ -23,6 +25,7 @@ type Router struct {
 	routes         []RouteInfo
 	endpoints      map[RouteID]func() EndpointInfo
 	errors         []ErrorDefinition
+	errorDetails   map[ErrorCode]*errorDetails
 	ticketPatterns map[string]bool
 	// bodyCeiling is the largest declared route body limit; see WithBodyLimit.
 	bodyCeiling int64
@@ -31,10 +34,12 @@ type Router struct {
 // matchedRoute is the immutable per-route state published to a matched
 // request. It is built once at registration, so matching allocates no metadata.
 type matchedRoute struct {
-	info   RouteInfo
-	errors []ErrorDefinition
-	typed  bool
-	budget routeBudget
+	info           RouteInfo
+	errors         []ErrorDefinition
+	errorDetails   map[ErrorCode]*errorDetails
+	responseLimits contract.JSONLimits
+	typed          bool
+	budget         routeBudget
 }
 
 // matchedContext publishes a matched route to the request: its observation
@@ -57,7 +62,7 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 	if !nativeRoutingAvailable() {
 		return nil, safeerror.NewFault(fault.Invalid, "Foundry routing requires modern net/http ServeMux behavior")
 	}
-	router := &Router{mux: stdhttp.NewServeMux(), endpoints: make(map[RouteID]func() EndpointInfo), ticketPatterns: make(map[string]bool)}
+	router := &Router{errorDetails: make(map[ErrorCode]*errorDetails), mux: stdhttp.NewServeMux(), endpoints: make(map[RouteID]func() EndpointInfo), ticketPatterns: make(map[string]bool)}
 	ids := make(map[RouteID]bool, len(registrations))
 	errorCatalog := make(map[ErrorCode]ErrorDefinition)
 	for _, definition := range ErrorDefinitions() {
@@ -85,8 +90,14 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 				return nil, safeerror.NewFault(fault.Conflict, "HTTP error code has conflicting declarations")
 			}
 			errorCatalog[definition.Code] = definition
+			if details := registration.errorDetails[definition.Code]; details != nil {
+				if prior := router.errorDetails[definition.Code]; prior != nil && prior.fingerprint != details.fingerprint {
+					return nil, safeerror.NewFault(fault.Conflict, "HTTP error code has conflicting details schemas")
+				}
+				router.errorDetails[definition.Code] = details
+			}
 		}
-		state := &matchedRoute{info: info, errors: declaredErrors, typed: registration.endpoint != nil, budget: routeBudget{timeout: info.Timeout, bodyBytes: info.MaxBodyBytes}}
+		state := &matchedRoute{errorDetails: maps.Clone(registration.errorDetails), responseLimits: registration.responseLimits, info: info, errors: declaredErrors, typed: registration.endpoint != nil, budget: routeBudget{timeout: info.Timeout, bodyBytes: info.MaxBodyBytes}}
 		router.bodyCeiling = max(router.bodyCeiling, info.MaxBodyBytes)
 		handoff := registration.handoff
 		matched := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, request *stdhttp.Request) {

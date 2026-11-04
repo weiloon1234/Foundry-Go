@@ -110,6 +110,9 @@ func endpointErrorDefinitions[P, Q, B, R any](e Endpoint[P, Q, B, R]) ([]ErrorDe
 		if seen[definition.Code] {
 			return nil, safeerror.NewFault(fault.Duplicate, "endpoint error code is already declared")
 		}
+		if declaration.details != nil && e.route.spec.Method == HEAD {
+			return nil, safeerror.NewFault(fault.Invalid, "HEAD endpoints cannot declare HTTP error details")
+		}
 		seen[definition.Code] = true
 		definitions = append(definitions, definition)
 	}
@@ -119,7 +122,7 @@ func endpointErrorDefinitions[P, Q, B, R any](e Endpoint[P, Q, B, R]) ([]ErrorDe
 func allowsError(ctx context.Context, definition ErrorDefinition) bool {
 	state, matched := ctx.Value(matchedRouteKey{}).(*matchedRoute)
 	if !matched || state == nil || !state.typed {
-		return true
+		return definition.DetailsType == ""
 	} // Explicit raw transport has no typed endpoint contract.
 	return slices.Contains(state.errors, definition)
 }

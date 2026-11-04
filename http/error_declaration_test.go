@@ -104,7 +104,7 @@ func TestEndpointErrorsConstrainResponsesAndOwnMetadata(t *testing.T) {
 	t.Parallel()
 	expected := DefineError("seats.unavailable", 409, "The seat is unavailable.")
 	other := DefineError("seats.unavailable", 403, "different meaning")
-	input := []ErrorDeclaration{expected}
+	input := []ErrorDeclarationOption{expected}
 	base := errorEndpoint("seats.reserve", "/seats")
 	declared := ConfigureEndpoint(base, Errors(input...))
 	input[0] = other
@@ -164,7 +164,7 @@ func TestRouterErrorCatalogRejectsConflictsAndAllowsReuse(t *testing.T) {
 	t.Parallel()
 	unavailable := DefineError("seats.unavailable", 409, "Unavailable")
 	gone := DefineError("seats.gone", 410, "Gone")
-	register := func(id RouteID, path string, declarations ...ErrorDeclaration) RouteRegistration {
+	register := func(id RouteID, path string, declarations ...ErrorDeclarationOption) RouteRegistration {
 		return ConfigureEndpoint(errorEndpoint(id, path), Errors(declarations...)).Handle(returnHTTPError(nil))
 	}
 	if router, err := NewRouter(register("a", "/a", unavailable, unavailable)); !errors.Is(err, fault.Duplicate) || router != nil {
