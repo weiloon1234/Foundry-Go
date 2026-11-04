@@ -207,19 +207,25 @@ func (f *rotatingFile) cleanupLoop() {
 	for {
 		select {
 		case <-f.stop:
+			// Retention stays enforced at shutdown, for the same reason as below.
+			f.drainCleanup()
 			return
 		case done := <-f.barrier:
 			// Complete a request queued before the barrier; select alone
 			// does not order simultaneously ready cases.
-			select {
-			case now := <-f.cleanup:
-				f.pruneCompleted(now, f.prune(now))
-			default:
-			}
+			f.drainCleanup()
 			close(done)
 		case now := <-f.cleanup:
 			f.pruneCompleted(now, f.prune(now))
 		}
+	}
+}
+
+func (f *rotatingFile) drainCleanup() {
+	select {
+	case now := <-f.cleanup:
+		f.pruneCompleted(now, f.prune(now))
+	default:
 	}
 }
 

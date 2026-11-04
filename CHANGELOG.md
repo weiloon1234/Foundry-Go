@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: Closing a rotating log file completes a cleanup already queued, so a log
+  directory no longer stays over `max_files` until the next start.
 - Fixed: `PoolConfig.StartupTimeout` now bounds connection attempts. An attempt could
   run for its full `ConnectTimeout` past the deadline, so the default 15 seconds could
   reach about 20. Each attempt's context now ends at the deadline. A zero budget still

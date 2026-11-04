@@ -442,3 +442,26 @@ func TestRotationConfigDefaultsAndInvalidLimits(t *testing.T) {
 		}
 	}
 }
+
+// Stop and a queued cleanup are both ready here, and select picks between them at
+// random. Repeating leaves no room for chance to hide a dropped cleanup.
+func TestFileStoppingCompletesQueuedCleanup(t *testing.T) {
+	f, err := openRotatingFile(filepath.Join(t.TempDir(), "app.jsonl"), RotationConfig{}, rotationTime(), time.UTC, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	close(f.stop)
+	<-f.stopped
+	f.stop = nil
+	defer f.Close()
+	for range 64 {
+		f.stop, f.stopped = make(chan struct{}), make(chan struct{})
+		f.cleanup <- rotationTime()
+		close(f.stop)
+		f.cleanupLoop()
+		if len(f.cleanup) != 0 {
+			t.Fatal("stopping dropped a queued cleanup")
+		}
+	}
+	f.stop = nil
+}
