@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.1 — 2026-11-05
 
 - Fixed: PostgreSQL test helpers drop one generated schema at a time per database,
   so parallel cleanup of large schemas can't exhaust PostgreSQL's shared lock table

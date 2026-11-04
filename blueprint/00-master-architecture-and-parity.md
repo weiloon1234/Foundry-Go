@@ -8,6 +8,17 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Test schema cleanup under load — v0.7.1, 2026-11-05
+
+Status: **implemented; its PostgreSQL regression test, ooo's tests at full concurrency and CI gate this tag**.
+The server tools and client contracts are unchanged from v0.7.0, so the acceptance matrix was not rerun.
+Dropping a large generated schema holds a lock per object until commit, and parallel drops in v0.7.0 could
+exhaust PostgreSQL's shared lock table, which failed unrelated tests with `insufficient_resources`.
+`testkit/postgres` now takes a transaction-scoped advisory lock, so test processes drop one schema at a time
+per database. The ooo run used a scratch workspace: 54 packages passed with no new shared memory errors, and
+2 `internal/console` tests failed only because workspace mode refuses `-mod=mod`; both pass with `GOWORK=off`.
+Open: Starter, ooo and Boss Club haven't adopted this release yet.
+
 ## Typed API errors and search — v0.7.0, 2026-11-04
 
 Status: **implemented; deploy acceptance passed on Ubuntu 24.04 and 26.04 on arm64 and amd64, Starter,
