@@ -21,6 +21,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/database/prune"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/jobs/archive"
@@ -197,6 +198,166 @@ func TestMaintenanceScheduleIsOptInAndValidatedBeforeResources(t *testing.T) {
 	}
 	if _, err := application.New(s, quiet()).Features(duplicate).Build(t.Context()); err == nil {
 		t.Fatal("duplicate pruning task accepted")
+	}
+}
+
+type maintenancePruneStore struct {
+	mu      sync.Mutex
+	backlog int
+	limits  []int
+}
+
+func (s *maintenancePruneStore) prune(_ context.Context, limit int) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.limits = append(s.limits, limit)
+	removed := min(limit, s.backlog)
+	s.backlog -= removed
+	return int64(removed), nil
+}
+
+func TestPruneServiceResolvesAtBuildAndPrunesScheduledRuns(t *testing.T) {
+	s := housekeepingSettings()
+	s.Features.Maintenance.Custom.Batch = 2
+	s.Features.Maintenance.Custom.MaxBatches = 3
+	key := foundation.NewKey[*maintenancePruneStore]("fixture.pruning.store")
+	store := &maintenancePruneStore{backlog: 5}
+	var constructions atomic.Int32
+	module := foundation.Module{Name: "fixture.pruning", OnRegister: func(r *foundation.Registrar) error {
+		return foundation.Factory(r, key, func(foundation.Resolver) (*maintenancePruneStore, error) {
+			constructions.Add(1)
+			return store, nil
+		})
+	}}
+	var constructorServices application.Services
+	app, err := application.New(s, quiet()).Register(module).Features(func(services application.Services) (application.FeatureDeclarations, error) {
+		constructorServices = services
+		return application.FeatureDeclarations{Pruning: []application.Pruning{
+			application.PruneService("app.exports", 16, key, func(ctx context.Context, resolved *maintenancePruneStore, limit int) (int64, error) {
+				return resolved.prune(ctx, limit)
+			}),
+		}}, nil
+	}).Build(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stop(t, app) })
+	if constructions.Load() != 1 || store.backlog != 5 || len(store.limits) != 0 {
+		t.Fatal("Build must construct the service without pruning", constructions.Load(), store.backlog, store.limits)
+	}
+	if _, err := application.Resolve(constructorServices, key); !errors.Is(err, fault.Closed) {
+		t.Fatal("feature constructor resolver must be sealed before scheduled runs", err)
+	}
+	if err := app.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	scheduler, err := app.Resources().Scheduler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		record, err := scheduler.RunNow(t.Context(), "foundry.maintenance.app.exports")
+		if err != nil || record.State != schedule.Succeeded {
+			t.Fatal("service pruning failed", record, err)
+		}
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.backlog != 0 || !slices.Equal(store.limits, []int{2, 2, 2, 2}) || constructions.Load() != 1 {
+		t.Fatal("scheduled runs must prune the retained service in bounded batches", store.backlog, store.limits, constructions.Load())
+	}
+}
+
+func TestPruneServiceMissingKeyFailsBuild(t *testing.T) {
+	s := housekeepingSettings()
+	s.Features.Maintenance.Custom.Batch = 2
+	key := foundation.NewKey[*maintenancePruneStore]("fixture.missing.pruner")
+	app, err := application.New(s, quiet()).Features(func(application.Services) (application.FeatureDeclarations, error) {
+		return application.FeatureDeclarations{Pruning: []application.Pruning{
+			application.PruneService("app.exports", 16, key, func(context.Context, *maintenancePruneStore, int) (int64, error) {
+				t.Error("Build ran the pruning callback")
+				return 0, nil
+			}),
+		}}, nil
+	}).Build(t.Context())
+	if app != nil {
+		t.Cleanup(func() { stop(t, app) })
+	}
+	if !errors.Is(err, fault.Missing) {
+		t.Fatal("missing pruning service must fail Build", err)
+	}
+}
+
+func TestPruneServiceResolvesOnlyWhereItIsScheduled(t *testing.T) {
+	for name, change := range map[string]func(*application.Settings){
+		"maintenance disabled": func(s *application.Settings) { s.Features.Maintenance.Enabled = false },
+		"task disabled":        func(s *application.Settings) { s.Features.Maintenance.Custom.Disabled = true },
+		"no scheduler here": func(s *application.Settings) {
+			s.Scheduler.Enabled = false
+			s.Services.Coordination.Enabled = false
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := housekeepingSettings()
+			s.Features.Maintenance.Custom.Batch = 2
+			change(&s)
+			key := foundation.NewKey[*maintenancePruneStore]("fixture.missing.pruner")
+			builder := application.New(s, quiet()).Features(func(application.Services) (application.FeatureDeclarations, error) {
+				return application.FeatureDeclarations{Pruning: []application.Pruning{
+					application.PruneService("app.exports", 16, key, func(context.Context, *maintenancePruneStore, int) (int64, error) {
+						t.Error("Build ran the pruning callback")
+						return 0, nil
+					}),
+				}}, nil
+			})
+			if s.Scheduler.Enabled {
+				// A scheduler needs at least one declaration of its own.
+				builder.Schedules(func(application.Services) ([]schedule.Declaration, error) {
+					d, err := schedule.Every("app.report", time.Hour, func(context.Context, schedule.Invocation) error { return nil })
+					return []schedule.Declaration{d}, err
+				})
+			}
+			app, err := builder.Build(t.Context())
+			if err != nil {
+				t.Fatal("a process that doesn't schedule the task resolved its service", err)
+			}
+			t.Cleanup(func() { stop(t, app) })
+		})
+	}
+}
+
+func TestPruneServiceRejectsInvalidArgumentsAtBuild(t *testing.T) {
+	key := foundation.NewKey[*maintenancePruneStore]("fixture.pruning.store")
+	step := func(context.Context, *maintenancePruneStore, int) (int64, error) {
+		t.Error("Build ran the pruning callback")
+		return 0, nil
+	}
+	for name, declaration := range map[string]application.Pruning{
+		"nil step":       application.PruneService("app.exports", 16, key, nil),
+		"empty name":     application.PruneService("", 16, key, step),
+		"invalid name":   application.PruneService("Invalid Name", 16, key, step),
+		"zero max batch": application.PruneService("app.exports", 0, key, step),
+		"negative bound": application.PruneService("app.exports", -1, key, step),
+		"batch too big":  application.PruneService("app.exports", 1, key, step),
+		"zero key":       application.PruneService("app.exports", 16, foundation.Key[*maintenancePruneStore]{}, step),
+		"invalid key":    application.PruneService("app.exports", 16, foundation.NewKey[*maintenancePruneStore]("Invalid Key"), step),
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := housekeepingSettings()
+			s.Features.Maintenance.Custom.Batch = 2
+			module := foundation.Module{Name: "fixture.pruning", OnRegister: func(r *foundation.Registrar) error {
+				return foundation.Provide(r, key, &maintenancePruneStore{})
+			}}
+			app, err := application.New(s, quiet()).Register(module).Features(func(application.Services) (application.FeatureDeclarations, error) {
+				return application.FeatureDeclarations{Pruning: []application.Pruning{declaration}}, nil
+			}).Build(t.Context())
+			if app != nil {
+				t.Cleanup(func() { stop(t, app) })
+			}
+			if !errors.Is(err, fault.Invalid) {
+				t.Fatal("invalid service pruning declaration accepted", err)
+			}
+		})
 	}
 }
 

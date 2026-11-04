@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/prune"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -147,17 +148,18 @@ const (
 type pruneRun func(context.Context, MaintenanceTaskSettings) (removed int64, remaining bool, err error)
 
 // Pruning is one application-declared housekeeping task for the maintenance
-// schedule. Construct it with PruneSessions, PruneTokens, PruneModels or
-// PruneWith and return it in FeatureDeclarations.Pruning.
+// schedule. Construct it with PruneSessions, PruneTokens, PruneModels, PruneWith
+// or PruneService and return it in FeatureDeclarations.Pruning.
 type Pruning struct {
 	name  string
 	kind  pruningKind
 	limit int
 	run   pruneRun
+	bind  func(Services) (pruneRun, error)
 }
 
 func (p Pruning) validate() error {
-	if !identifier.Semantic(p.name) || p.run == nil || p.limit < 1 || p.kind < sessionPruning || p.kind > customPruning {
+	if !identifier.Semantic(p.name) || (p.run == nil) == (p.bind == nil) || p.limit < 1 || p.kind < sessionPruning || p.kind > customPruning {
 		return safeerror.NewFault(fault.Invalid, "invalid maintenance pruning declaration")
 	}
 	return nil
@@ -240,11 +242,35 @@ func PruneModels(s Services, connection database.ConnectionName, declare func(no
 // auth challenge flow, email verification, password reset or MFA factor store,
 // as task name. step removes at most limit rows and reports how many; limit
 // never exceeds maxBatch, the store's own bound, which the Custom batch must fit.
+// Use it for a store already in hand. The closure must not resolve dependencies
+// through constructor Services at run time: that resolver is sealed when
+// construction ends. Use PruneService for a module-owned service identified by a key.
 func PruneWith(name string, maxBatch int, step func(ctx context.Context, limit int) (int64, error)) Pruning {
 	if step == nil {
 		return Pruning{}
 	}
 	return Pruning{name: name, kind: customPruning, limit: maxBatch, run: batches(step)}
+}
+
+// PruneService schedules a module-owned service's bounded prune operation as
+// task name. It resolves key during schedule construction at Build and retains
+// the concrete service for each run. In a process that schedules this task, a
+// missing service or dependency cycle fails Build; other processes never resolve
+// it. step removes at most limit rows and reports how many; limit never exceeds
+// maxBatch, the service's own bound, which the Custom batch must fit.
+func PruneService[T any](name string, maxBatch int, key foundation.Key[T], step func(context.Context, T, int) (int64, error)) Pruning {
+	if step == nil {
+		return Pruning{}
+	}
+	return Pruning{name: name, kind: customPruning, limit: maxBatch, bind: func(s Services) (pruneRun, error) {
+		service, err := Resolve(s, key)
+		if err != nil {
+			return nil, err
+		}
+		return batches(func(ctx context.Context, limit int) (int64, error) {
+			return step(ctx, service, limit)
+		}), nil
+	}}
 }
 
 // batches repeats step until a short batch, MaxBatches or cancellation.
@@ -428,7 +454,14 @@ func maintenanceSchedules(s Settings, source clock.Clock) (Schedules, error) {
 			if err := task.settings.validate(p.limit, false); err != nil {
 				return nil, err
 			}
-			bound, runs = append(bound, task), append(runs, p.run)
+			run := p.run
+			if p.bind != nil {
+				run, err = p.bind(services)
+				if err != nil {
+					return nil, err
+				}
+			}
+			bound, runs = append(bound, task), append(runs, run)
 		}
 		if len(bound) > maxMaintenanceTasks {
 			return nil, safeerror.NewFault(fault.Invalid, "too many maintenance tasks")

@@ -28,6 +28,9 @@
 - Fixed: Tool upgrade plans disclose PostgreSQL reloads required to rebind backups,
   using the same archive-setting comparison as PostgreSQL preparation.
 
+- Added: `application.PruneService` joins module-owned services to housekeeping
+  through typed service keys resolved during schedule construction at Build.
+  `PruneWith` remains available for stores already in hand.
 - Fixed: `PoolConfig.StartupTimeout` now bounds connection attempts. An attempt could
   run for its full `ConnectTimeout` past the deadline, so the default 15 seconds could
   reach about 20. Each attempt's context now ends at the deadline. A zero budget still

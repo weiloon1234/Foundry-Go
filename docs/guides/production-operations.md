@@ -138,6 +138,7 @@ observed by the scheduler like any schedule.
 | `sessions.<guard>`, `tokens.<guard>` | Declared with `application.PruneSessions` / `PruneTokens` | Expired sessions / token families of that guard |
 | `models.<connection>` | Declared with `application.PruneModels` | [Prunable models](model-pruning.md#scheduled-pruning) of one connection, selected again each run |
 | declared name | Declared with `application.PruneWith` | Another store's bounded prune (challenge flows, verifications, resets, MFA factors, outbound webhook deliveries) |
+| declared name | Declared with `application.PruneService` | A module-owned service's bounded prune, resolved by its typed service key during schedule construction |
 
 Declared tasks are returned in `FeatureDeclarations.Pruning`; guards are
 constructed there with `NewBrowserGuard`/`NewTokenGuard` because a guard's
@@ -159,6 +160,34 @@ application.PruneWith("webhooks.deliveries", outbound.MaxPruneBatch, func(ctx co
     return int64(removed), err
 })
 ```
+
+Use `PruneWith` when you already have the store, including a database connection
+obtained in the `Features` callback. Its closure must not resolve dependencies
+through that callback's `Services` at run time. The constructor resolver is sealed
+when construction ends.
+
+For a module-owned service, use `PruneService` with the key that the module
+registers. For example, if `WebhooksKey` has type
+`foundation.Key[*outbound.Service]`, return this declaration in
+`FeatureDeclarations.Pruning`:
+
+```go
+application.PruneService("webhooks.deliveries", outbound.MaxPruneBatch, WebhooksKey,
+	func(ctx context.Context, webhooks *outbound.Service, limit int) (int64, error) {
+		removed, err := webhooks.PruneDeliveries(ctx, 30*24*time.Hour, limit)
+		return int64(removed), err
+	},
+)
+```
+
+For an enabled task, `PruneService` resolves the service during schedule
+construction at Build and retains it for scheduled runs. A missing service or
+dependency cycle fails Build before any pruning runs, but only in a process that
+schedules the task: an HTTP-only process, or one with the task or maintenance
+disabled, builds without resolving it, so check the scheduler role when deploying.
+Both constructors use the
+`features.maintenance.custom` settings and reject a configured batch above
+`maxBatch`.
 
 ```toml
 [features.maintenance]
