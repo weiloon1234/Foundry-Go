@@ -1057,6 +1057,22 @@ class ReleaseTests(unittest.TestCase):
         self.deploy(archive)
         self.assertEqual(set(units.values()), self.host.enabled_roles)
 
+    def test_reset_failed_on_a_never_loaded_unit_does_not_stop_the_start(self):
+        units = instance_units(self.entry)
+        run = self.host.run
+
+        def refuse(args, **kwargs):
+            if list(args)[:2] == ["systemctl", "reset-failed"] and kwargs.get("check", True):
+                raise DeployError("command_failed", "Unit not loaded")
+            return run(args, **kwargs)
+
+        with patch.object(self.host, "run", refuse), patch.object(release, "prepare_worker"):
+            release.start_roles(self.host, self.entry, roles=list(units), enable=False)
+            self.assertEqual(set(units.values()), set(self.host.role_states))
+            self.assertEqual(set(), self.host.enabled_roles)
+            release.restart(self.host, self.entry, role="worker")
+            self.assertEqual({units["worker"]}, self.host.enabled_roles)
+
     def test_named_roles_only_touch_selected_unit_and_wait_for_it(self):
         units = instance_units(self.entry)
         for role, unit in units.items():
