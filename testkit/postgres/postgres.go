@@ -27,6 +27,12 @@ const (
 
 const namespacePrefix = "foundry_test_"
 
+const dropQueueTimeout = 2 * time.Minute
+
+// dropLockKey serialises schema drops across test processes in each database
+// until commit frees their slots in PostgreSQL's server-wide shared lock table.
+const dropLockKey int64 = 0x466f756e64727944
+
 // KeepSchemas reports whether test-owned PostgreSQL artifacts must be retained.
 // Call it during cleanup so subtest and already-run cleanup failures are included.
 // A cleanup registered before the namespace runs after its drop and cannot retain it.
@@ -144,7 +150,7 @@ func dropNamespace(config postgres.Config, name string) error {
 	if !strings.HasPrefix(name, namespacePrefix) || len(name) <= len(namespacePrefix) || !sqlname.Valid(name) {
 		return errors.New("refusing to drop a non-generated PostgreSQL test namespace")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dropQueueTimeout+cleanupTimeout)
 	defer cancel()
 	// Use an independent pool: the test's own pool may already have closed,
 	// changed its search path, or retained a connection holding a table lock.
@@ -159,6 +165,24 @@ func dropNamespace(config postgres.Config, name string) error {
 	}
 	defer closePool(db)
 	return db.Transaction(ctx, func(tx *database.Tx) error {
+		wait, cancel := context.WithTimeout(ctx, dropQueueTimeout)
+		defer cancel()
+		for {
+			var acquired bool
+			if err := database.ScanOne(wait, tx, "SELECT pg_catalog.pg_try_advisory_xact_lock($1)", []any{dropLockKey}, &acquired); err != nil {
+				return err
+			}
+			if acquired {
+				break
+			}
+			timer := time.NewTimer(50 * time.Millisecond)
+			select {
+			case <-timer.C:
+			case <-wait.Done():
+				timer.Stop()
+				return wait.Err()
+			}
+		}
 		// Resolve schema-less parts (such as view rules) and TOAST through their
 		// automatic/internal owner. Unknown ownership conservatively keeps the schema.
 		var outside bool
