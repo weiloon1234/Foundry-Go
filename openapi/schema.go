@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 )
 
 func (r renderer) schema(typ contract.Type) object {
@@ -152,4 +153,20 @@ func (r renderer) taggedVariant(union contract.Type, variant contract.Variant) o
 		}
 	}
 	return object{"type": "object", "properties": properties, "required": required, "additionalProperties": false, "x-foundry-payload-type": string(payload.ID)}
+}
+
+func (r renderer) errorCodes(status int, codes []string) object {
+	return object{"allOf": []any{r.ref(r.document.ErrorType), object{"properties": object{"status": object{"const": status}, "error_code": object{"enum": codes}}}}}
+}
+
+func (r renderer) detailedError(definition foundryhttp.ErrorDefinition) object {
+	// The base envelope is closed, so an allOf extension would reject details.
+	// Render a fresh complete object from its manifest fields instead.
+	schema := r.schema(r.types[r.document.ErrorType])
+	properties := schema["properties"].(object)
+	properties["status"].(object)["const"] = definition.Status
+	properties["error_code"].(object)["const"] = string(definition.Code)
+	properties["details"] = r.ref(definition.DetailsType)
+	schema["required"] = append(schema["required"].([]string), "details")
+	return schema
 }

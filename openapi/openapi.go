@@ -489,16 +489,35 @@ func (r renderer) errors(allowed []foundryhttp.ErrorCode) object {
 	for _, code := range allowed {
 		set[code] = true
 	}
-	groups := make(map[int][]string)
+	groups := make(map[int][]foundryhttp.ErrorDefinition)
 	for _, definition := range r.document.Errors {
 		if set[definition.Code] {
-			groups[definition.Status] = append(groups[definition.Status], string(definition.Code))
+			groups[definition.Status] = append(groups[definition.Status], definition)
 		}
 	}
 	result := object{}
-	for status, codes := range groups {
-		sort.Strings(codes)
-		schema := object{"allOf": []any{r.ref(r.document.ErrorType), object{"properties": object{"status": object{"const": status}, "error_code": object{"enum": codes}}}}}
+	for status, definitions := range groups {
+		sort.Slice(definitions, func(i, j int) bool { return definitions[i].Code < definitions[j].Code })
+		codes, plain := make([]string, 0, len(definitions)), make([]string, 0, len(definitions))
+		for _, definition := range definitions {
+			codes = append(codes, string(definition.Code))
+			if definition.DetailsType == "" {
+				plain = append(plain, string(definition.Code))
+			}
+		}
+		schema := r.errorCodes(status, codes)
+		if len(plain) != len(codes) {
+			branches := make([]any, 0, len(definitions))
+			for _, definition := range definitions {
+				if definition.DetailsType != "" {
+					branches = append(branches, r.detailedError(definition))
+				} else if len(plain) != 0 {
+					branches = append(branches, r.errorCodes(status, plain))
+					plain = nil
+				}
+			}
+			schema = object{"oneOf": branches}
+		}
 		result[strconv.Itoa(status)] = object{"description": strings.Join(codes, ", "), "content": object{"application/json": object{"schema": schema}}}
 	}
 	return result
