@@ -159,6 +159,36 @@ func TestStartDoesNotRetryAuthenticationOrDisabledBudget(t *testing.T) {
 	}
 }
 
+func TestStartKeepsEveryAttemptInsideItsBudget(t *testing.T) {
+	transient := errors.New("database is starting")
+	for name, stallsOnAttempt := range map[string]int32{"first attempt": 1, "retry": 2} {
+		t.Run(name, func(t *testing.T) {
+			var attempts atomic.Int32
+			state := &driverState{connect: func(ctx context.Context) error {
+				if attempts.Add(1) == stallsOnAttempt {
+					<-ctx.Done()
+				}
+				return transient
+			}}
+			config := database.DefaultPoolConfig()
+			config.ConnectTimeout, config.StartupTimeout = 20*time.Second, 300*time.Millisecond
+			started := time.Now()
+			_, err := database.Open(t.Context(), database.Adapter{Connector: connector{state}, Classify: func(error) database.Detail {
+				return database.Detail{Code: database.Unavailable, SQLState: "57P03"}
+			}}, config)
+			if !errors.Is(err, database.Unavailable) {
+				t.Fatal("startup past its budget did not report the database as unavailable", err)
+			}
+			if elapsed := time.Since(started); elapsed >= 5*time.Second {
+				t.Fatal("a connection attempt outlived the startup budget", elapsed)
+			}
+			if attempts.Load() < stallsOnAttempt {
+				t.Fatal("startup gave up before reaching the stalled attempt", attempts.Load())
+			}
+		})
+	}
+}
+
 func TestReadinessProbeDoesNotQueueBehindSaturatedPool(t *testing.T) {
 	state := &driverState{}
 	db := open(t, state, func(c *database.PoolConfig) { c.MaxOpen, c.MaxIdle = 1, 1 })

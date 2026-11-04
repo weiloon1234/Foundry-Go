@@ -306,8 +306,9 @@ const (
 )
 
 // pingStartingPool retries transient connection failures within StartupTimeout
-// using jittered exponential backoff. Each attempt is bounded by ConnectTimeout
-// and the caller's context; authentication failures fail immediately.
+// using jittered exponential backoff. Each attempt is bounded by ConnectTimeout,
+// what remains of StartupTimeout and the caller's context; authentication
+// failures fail immediately.
 func pingStartingPool(ctx context.Context, role PoolRole, raw *sql.DB, config PoolConfig, classify classifier, logger *slog.Logger) error {
 	started := time.Now()
 	deadline := started.Add(config.StartupTimeout)
@@ -315,7 +316,7 @@ func pingStartingPool(ctx context.Context, role PoolRole, raw *sql.DB, config Po
 	delay := startRetryInitial
 	for attempt := 1; ; attempt++ {
 		startupLog(ctx, logger, slog.LevelDebug, "database startup attempt", role, attempt, started, 0, nil)
-		connect, cancel := context.WithTimeout(ctx, config.ConnectTimeout)
+		connect, cancel := context.WithTimeout(ctx, startAttemptTimeout(config, deadline))
 		err := classify.wrap("start "+string(role), raw.PingContext(connect))
 		cancel()
 		if err == nil {
@@ -343,6 +344,14 @@ func pingStartingPool(ctx context.Context, role PoolRole, raw *sql.DB, config Po
 		}
 		delay = min(delay*2, startRetryMaximum)
 	}
+}
+
+// A zero StartupTimeout makes one attempt, which keeps its full ConnectTimeout.
+func startAttemptTimeout(config PoolConfig, deadline time.Time) time.Duration {
+	if config.StartupTimeout == 0 {
+		return config.ConnectTimeout
+	}
+	return min(config.ConnectTimeout, time.Until(deadline))
 }
 
 // SQLSTATE class 28 is the standard invalid-authorization class.

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: `PoolConfig.StartupTimeout` now bounds connection attempts. An attempt could
+  run for its full `ConnectTimeout` past the deadline, so the default 15 seconds could
+  reach about 20. Each attempt's context now ends at the deadline. A zero budget still
+  makes one attempt with its full `ConnectTimeout`.
+
 ## v0.6.0 — 2026-11-04
 
 - Changed: PostgreSQL archives WAL about once a minute while active. Tool upgrades

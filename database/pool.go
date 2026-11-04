@@ -36,9 +36,11 @@ type Adapter struct {
 // CommitTimeout bounds COMMIT and ROLLBACK after a transaction callback returns.
 // Completion is detached from caller cancellation, so a client disconnect
 // cannot turn an in-flight COMMIT into an unknown outcome. StartupTimeout is the
-// total budget Start may spend retrying transient connection failures such as a
-// database that is still starting; zero makes one attempt. Authentication and
-// other non-transient failures are never retried.
+// total budget Start may spend on each endpoint, retrying transient connection
+// failures such as a database that is still starting; each attempt's context ends
+// at that deadline at the latest, so a driver that ignores cancellation can still
+// overrun it. Zero makes one attempt. Authentication and other non-transient
+// failures are never retried.
 type PoolConfig struct {
 	MaxOpen        int
 	MaxIdle        int
