@@ -469,7 +469,7 @@ func ForNoKeyUpdate[M any](q Query[M]) LockedQuery[M] {
 	return LockedQuery[M]{state: q.state}
 }
 
-// ForKeyShare protects selected keys against deletion and key changes.
+// ForKeyShare protects selected keys against physical deletion and key changes.
 func ForKeyShare[M any](q Query[M]) LockedQuery[M] {
 	q.state.lock = querycore.LockKeyShare
 	return LockedQuery[M]{state: q.state}

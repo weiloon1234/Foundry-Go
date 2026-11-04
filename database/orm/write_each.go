@@ -100,7 +100,7 @@ func planEach(q queryState, kind querycore.MutationKind, limit int) (writePlan, 
 	selected := p.query
 	selected.ast.Orders = []querycore.QueryOrder{{Field: querycore.FieldRef{Table: selected.ast.Table, Column: selected.table.model.Primary}}}
 	selected.ast.Limit = value.Set(limit + 1)
-	selected.lock = querycore.LockUpdate
+	selected.lock = modelWriteLock(p.kind)
 	statement, err := compileRead(selected, querycore.ReadModels)
 	return p, statement, err
 }

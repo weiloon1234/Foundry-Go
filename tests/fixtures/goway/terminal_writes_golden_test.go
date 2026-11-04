@@ -118,7 +118,12 @@ func TestTerminalWritesGolden(t *testing.T) {
 				}
 
 				fmt.Fprintln(&g.output, oracleSnapshot([]any{trace}))
-				transcripts = append(transcripts, g.output.String())
+				transcript := g.output.String()
+				if operation == "lookup_update" {
+					// Lookup candidate and update before-image only; preserve FirstOrCreate and prune.
+					transcript = legacyUpdateLocks(t, g, 0, 1)
+				}
+				transcripts = append(transcripts, transcript)
 			}
 			if !oracleEqual(t, "terminal_writes_golden/1", transcripts[0]) {
 				t.Fatal("frozen legacy comparison differs")

@@ -31,6 +31,19 @@
 - Added: `application.PruneService` joins module-owned services to housekeeping
   through typed service keys resolved during schedule construction at Build.
   `PruneWith` remains available for stores already in hand.
+- Added: `record.Ignore` omits a field and opts out of automatic audit rows for
+  updates touching only ignored fields and the managed `updated_at`. Creates,
+  deletes and restores still record; other hooks and observers still run.
+  `Exclude` retains change evidence as before, and `created_at` is not exempt.
+- Changed: SQL update reads use `FOR NO KEY UPDATE` for hooked or observed
+  before-images (including soft deletes and restores), batch candidates,
+  `UpdateOrCreate` and bound-rejected adjustments. Candidate and adjustment
+  reads follow this rule even without hooks or observers; physical and force
+  deletes retain `FOR UPDATE`. UNIQUE-column updates can upgrade and deadlock
+  with child inserters (`40P01`), including unhooked `UpdateEach` and
+  `UpdateOrCreate` writes; acquire explicit
+  `FOR UPDATE` first with `orm.Lock` in the same transaction for those writes.
+
 - Fixed: `PoolConfig.StartupTimeout` now bounds connection attempts. An attempt could
   run for its full `ConnectTimeout` past the deadline, so the default 15 seconds could
   reach about 20. Each attempt's context now ends at the deadline. A zero budget still

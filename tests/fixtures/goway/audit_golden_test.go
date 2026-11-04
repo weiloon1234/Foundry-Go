@@ -85,7 +85,8 @@ func TestAuditOldAndNewAgree(t *testing.T) {
 			t.Fatal("audit stage count", captured)
 		}
 		fmt.Fprintln(&capture.output, oracleSnapshot([]any{trace}))
-		transcripts = append(transcripts, capture.output.String())
+		// Update, soft delete and restore before-images; leave force delete unchanged.
+		transcripts = append(transcripts, legacyUpdateLocks(t, capture, 2, 5, 8))
 	}
 	if !oracleEqual(t, "audit_golden/1", transcripts[0]) {
 		t.Fatal("frozen legacy comparison differs")

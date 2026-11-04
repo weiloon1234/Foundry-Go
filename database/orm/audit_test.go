@@ -1,13 +1,12 @@
 package orm
 
-import "time"
-
 import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	auditrecord "github.com/weiloon1234/Foundry-Go/audit/record"
@@ -207,6 +206,7 @@ func TestAuditRejectsInvalidPolicyAndStandaloneChanges(t *testing.T) {
 	state := Changes[auditRow]{state: &changeState{table: table.core, after: unsafe.Pointer(&m), operation: value.Set(lifecycle.Create)}}
 	for _, p := range []AuditPolicy[auditRow]{
 		AuditPolicyOf(table.Table, AuditField(KeyExpr(table.Key()), auditrecord.Exclude)),
+		AuditPolicyOf(table.Table, AuditField(KeyExpr(table.Key()), auditrecord.Ignore)),
 		AuditPolicyOf(table.Table, AuditField(KeyExpr(table.Key()), auditrecord.Redact)),
 		AuditPolicyOf(table.Table, AuditField(TextExpr(table.Name), auditrecord.Disclosure(99))),
 		AuditPolicyOf(table.Table, AuditField(TextExpr(other.Name), auditrecord.Automatic)),
@@ -295,7 +295,8 @@ func TestAuditNullableEncryptionDoesNotBindUnsealedValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, policy := range []AuditPolicy[secureRecord]{AuditPolicy[secureRecord]{}, AuditPolicyOf(table.Table, AuditEncryptedField(table.Secret, auditrecord.Exclude), AuditNullableEncryptedField(table.Backup, auditrecord.Exclude))} {
+	for _, disclosure := range []auditrecord.Disclosure{auditrecord.Automatic, auditrecord.Exclude, auditrecord.Ignore} {
+		policy := AuditPolicyOf(table.Table, AuditEncryptedField(table.Secret, disclosure), AuditNullableEncryptedField(table.Backup, disclosure))
 		history, err := Audit(table.Table, Changes[secureRecord]{state: state}, policy)
 		if err != nil {
 			t.Fatal(err)
@@ -303,6 +304,10 @@ func TestAuditNullableEncryptionDoesNotBindUnsealedValues(t *testing.T) {
 		field, err := AuditReadNullableEncrypted(history, table.Backup)
 		if err != nil {
 			t.Fatal(err)
+		}
+		required, err := AuditReadEncrypted(history, table.Secret)
+		if err != nil || (disclosure != auditrecord.Automatic && (required.IsSet() || field.IsSet())) {
+			t.Fatal("excluded/ignored encrypted field remained visible", err)
 		}
 		if change, present := field.Get(); present {
 			if change.After().State() != auditrecord.Redacted {
@@ -312,5 +317,64 @@ func TestAuditNullableEncryptionDoesNotBindUnsealedValues(t *testing.T) {
 				t.Fatal("redaction fabricated nullable field")
 			}
 		}
+	}
+}
+
+func TestAuditIgnoreUsesAssignedAndChangedFlags(t *testing.T) {
+	table := hookedFields(nil)
+	policy := AuditPolicyOf(table.Table,
+		AuditField(NullableInputTextExpr(table.Note), auditrecord.Ignore),
+		AuditField(InputTextExpr(table.Name), auditrecord.Exclude),
+		AuditField(TimeExpr(table.Updated), auditrecord.Ignore))
+	before := hookedRow{
+		ID: 1, Name: "same", Note: value.Of(hookedStored("same")), Body: []byte{},
+		CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+	for _, test := range []struct {
+		name     string
+		change   func(*hookedRow)
+		assigned []Assignment[hookedRow]
+		keep     bool
+	}{
+		{"changed ignored", func(m *hookedRow) { m.Note = value.Of(hookedStored("changed")) }, nil, false},
+		{"assigned unchanged ignored", nil, []Assignment[hookedRow]{NullableInputTextSet(table.Note, hookedInput{"same"})}, false},
+		{"ignored and assigned unchanged excluded", nil, []Assignment[hookedRow]{NullableInputTextSet(table.Note, hookedInput{"same"}), InputTextSet(table.Name, "same")}, true},
+		{"only updated_at even if ignored", func(m *hookedRow) { m.UpdatedAt = m.UpdatedAt.Add(time.Hour) }, nil, true},
+		{"ignored and created_at", func(m *hookedRow) {
+			m.CreatedAt = m.CreatedAt.Add(-time.Hour)
+			m.Note = value.Of(hookedStored("changed"))
+		}, nil, true},
+		{"untouched Ignore field", nil, nil, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			after := before
+			if test.change != nil {
+				test.change(&after)
+			}
+			var assignments []querycore.MutationAssignment
+			for _, assignment := range test.assigned {
+				assignments = append(assignments, assignment.core)
+			}
+			state, err := captureChanges(table.core, unsafe.Pointer(&before), unsafe.Pointer(&after), assignments, value.Set(lifecycle.Update))
+			if err != nil {
+				t.Fatalf("capture changes: %v", err)
+			}
+			// Change comparison uses stored codecs; audit capture must not bind omitted values.
+			for field := range policy.rules {
+				original := field.get
+				field.get = func(unsafe.Pointer) (driver.Value, error) {
+					t.Errorf("audit bound omitted field %s", field.metadata.Name)
+					return nil, errors.New("omitted audit field was bound")
+				}
+				defer func() { field.get = original }()
+			}
+			if _, err := Audit(table.Table, Changes[hookedRow]{state: state}, policy); err != nil {
+				t.Fatalf("capture audit: %v", err)
+			}
+			if got := shouldRecordAudit(state, policy.rules); got != test.keep {
+				t.Fatalf("record = %t, want %t", got, test.keep)
+			}
+		})
 	}
 }

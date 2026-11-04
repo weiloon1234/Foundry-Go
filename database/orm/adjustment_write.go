@@ -26,7 +26,7 @@ func (p writePlan) returningAdjustment(ctx context.Context, tx *database.Tx, row
 	q.Predicates = slices.Delete(slices.Clone(q.Predicates), p.boundIndex, p.boundIndex+1)
 	q.Limit = value.Set(1)
 	node := q.ModelSelect([]querycore.SelectItem{{Expression: querycore.FieldRef{Table: q.Table, Column: q.Model.Primary}}})
-	node.Locks = []querycore.LockSpec{{Strength: querycore.LockUpdate, Behavior: p.query.behavior}}
+	node.Locks = []querycore.LockSpec{{Strength: modelWriteLock(p.kind), Behavior: p.query.behavior}}
 	statement, err := querycore.CompileRead(node, ctx, true, nil, true)
 	if err != nil {
 		return err

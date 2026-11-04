@@ -36,6 +36,28 @@ Writes reject read ordering, limits, offsets and eager-load options rather than 
 
 [Source writes](model-source-writes.md), [insert-select](model-insert-from-query.md), [upserts](model-upserts.md) and [batch writes](model-batch-writes.md) have explicit result bounds and lifecycle contracts.
 
+## Row locks and unique columns
+
+For all hooked or observed models, the before-image read uses `FOR NO KEY UPDATE` for SQL updates, including soft deletes and restores. Physical and force deletes use `FOR UPDATE`. Batch candidate reads, `UpdateOrCreate` lookups and bound-rejected adjustment reads follow the same rule, including on models without hooks or observers. Primary-key assignments are rejected. `NO KEY UPDATE` serializes writers while allowing a concurrent foreign-key check to hold `KEY SHARE`.
+
+The ORM cannot infer which other columns are unique. When an update changes a UNIQUE column after reading the row with `NO KEY UPDATE`, PostgreSQL may upgrade its row lock during the UPDATE. This applies to hooked or observed updates and to `UpdateEach` and `UpdateOrCreate` on models without hooks or observers. If another transaction inserted a child referencing that parent and then tries to update it, the two can deadlock: PostgreSQL aborts one with SQLSTATE `40P01`. No retry is automatic.
+
+When changing such a column, acquire `FOR UPDATE` first, in the same transaction, before the operation reads candidates or the before-image. The model API uses `orm.Lock` for `FOR UPDATE`:
+
+```go
+err := db.Transaction(ctx, func(tx *database.Tx) error {
+    selected := Users.Query().Where(orm.KeyEq(Users.Key(), id))
+    if _, err := orm.RequireLocked(ctx, tx, orm.Lock(selected)); err != nil {
+        return err
+    }
+    _, err := orm.Update(ctx, tx, selected, Users.Key(), id,
+        orm.TextSet(Users.Email, newEmail))
+    return err
+})
+```
+
+Take the stronger lock before acquiring weaker locks on that parent, including locks from child inserts in the same transaction. It may wait for a concurrent child inserter to finish; it avoids holding `NO KEY UPDATE` while waiting to upgrade. For multi-row operations, lock the affected parents in a consistent order. This addresses the row-lock upgrade cycle, not every possible application deadlock.
+
 ## Transaction ownership and failures
 
 Writers implement `database.Transactor`. A normal write owns a transaction, or a savepoint inside the caller's `*database.Tx`. Savepoint success remains contingent on the outer commit. Failure rolls back the write and related transactional hook effects without discarding earlier parent work.

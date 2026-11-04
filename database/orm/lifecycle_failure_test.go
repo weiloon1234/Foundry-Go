@@ -182,7 +182,7 @@ func TestHookModifiedPrimaryKeyRejectedBeforeMutatorsAndMutationSQL(t *testing.T
 		t.Fatal("invalid draft reached a mutator")
 	}
 	// Updating hooks receive a locked original. No mutation SQL may follow it.
-	if len(statements) != 1 || !strings.HasPrefix(statements[0], "SELECT ") || !strings.Contains(statements[0], "FOR UPDATE") {
+	if len(statements) != 1 || !strings.HasPrefix(statements[0], "SELECT ") || !strings.Contains(statements[0], "FOR NO KEY UPDATE") {
 		t.Fatal("invalid draft sent mutation SQL", statements)
 	}
 }

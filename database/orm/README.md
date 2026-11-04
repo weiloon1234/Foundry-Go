@@ -660,10 +660,10 @@ Declare model-owned policy with `orm.AuditPolicyOf(Orders.Table,
  orm.AuditField(orm.NullableTextExpr(Orders.Note), record.Exclude))`. Unspecified fields use
 `record.Automatic`; `record.Redact` retains change flags and hides values.
 A zero `orm.AuditPolicy[Order]` applies Automatic everywhere. Policies cannot
-exclude or redact the primary key while retaining it as the subject identity.
+exclude, ignore or redact the primary key while retaining it as the subject identity.
 Foreign columns, duplicate rules and invalid disclosures fail registration or
 capture. Encrypted fields use `AuditEncryptedField` or
-`AuditNullableEncryptedField` for explicit exclusion; Automatic redacts them.
+`AuditNullableEncryptedField` for explicit Exclude, Ignore or Redact; Automatic redacts them.
 
 Register `orm.Auditing(Orders.Table, policy)` through
 `audit.Register(r, pool, recorderKey, config, declaration)` in an application
@@ -674,6 +674,23 @@ later write failure rolls back both business and audit rows. Set writes still
 require explicit `WithoutModelHooks` acknowledgement and produce no automatic
 audit entries. Install audit storage through the existing audit migrations.
 
+`record.Exclude` omits values but preserves the update row as evidence of who
+changed the model and when. `record.Ignore` opts out of that evidence: only an
+update touching at least one ignored field and no other fields except ignored
+fields and the managed `updated_at` skips its audit row. An update touching only
+`updated_at` still records. `created_at` has no special exemption. An assigned
+but unchanged non-ignored field keeps the row. Creates, deletes and restores
+always record, omitting ignored fields; other hooks and observers still run.
+Use Exclude or Redact for changes that need evidence, such as secret rotation.
+See [audit policy](../../docs/guides/audit.md#transaction-and-lifecycle-behavior).
+
+All hooked or observed models read update before-images with `FOR NO KEY UPDATE`,
+including soft deletes and restores; physical deletes use `FOR UPDATE`.
+The ORM cannot infer UNIQUE columns: changing one can upgrade the lock and
+cause a `40P01` deadlock with a child inserter that then updates the parent.
+Take explicit `FOR UPDATE` first using `orm.Lock` in the same transaction;
+see [row locks and unique columns](../../docs/guides/model-writes.md#row-locks-and-unique-columns).
+
 `orm.Audit(Orders.Table, changes, policy)` also captures a lifecycle callback's
 stored changes without SQL. Standalone `Compare` results cannot be audited.
 Updates, soft deletes and restores retain assigned or changed fields plus the
@@ -681,8 +698,9 @@ key; creates and physical deletes retain complete snapshots subject to policy.
 Values come from locked originals and RETURNING, after mutators and database
 changes; accessors never replace them. Sensitive codecs, encrypted fields and
 sensitive names are redacted before their capture binder runs. Nested JSON keys
-are redacted by the shared record owner before binding the audit row. Unchanged
-and excluded fields do not invoke their capture codec.
+are redacted by the shared record owner before binding the audit row. Fields
+that are neither assigned nor changed, excluded fields and ignored fields do not
+invoke their capture codec.
 
 History remains `record.Model[M,K]`; use `orm.AuditRead(history, orm.NumberExpr(Orders.Total))`
 or `orm.AuditReadNullable(history, orm.NullableTextExpr(Orders.Note))` with stored column types.
@@ -917,7 +935,10 @@ preserving the query’s active/trashed visibility. Both require the declaration
 All four operations lock the complete candidate set in primary-key order, require a positive
 limit no greater than `MaxPerModelWriteRows`, and reject overflow and duplicate
 identities before any draft or lifecycle callback. Incoming lock policies are
-rejected; candidate selection always uses a waiting `FOR UPDATE`. Ordering, pagination,
+rejected; candidate selection waits with `FOR NO KEY UPDATE` for SQL updates
+(including soft deletes and restores) and `FOR UPDATE` for physical and force
+deletes. The [UNIQUE-column caveat](../../docs/guides/model-writes.md#row-locks-and-unique-columns)
+also applies to batches. Ordering, pagination,
 eager-loading options and `WithoutModelHooks` are rejected.
 
 Each row uses the normal hooks, observers, mutators, encryption, timestamps and

@@ -139,8 +139,11 @@ func TestAdjustmentEmptySelectionLifecycle(t *testing.T) {
 					if !tenantBound {
 						t.Errorf("lost tenant context: %v", args)
 					}
-					if strings.HasPrefix(sql, "SELECT ") && !strings.Contains(sql, "FOR UPDATE") {
-						t.Errorf("lost lock: %s", sql)
+					if strings.HasPrefix(sql, "SELECT ") {
+						lock := "FOR NO KEY UPDATE"
+						if !strings.Contains(sql, lock) {
+							t.Errorf("lost lock: %s", sql)
+						}
 					}
 					if strings.HasPrefix(sql, `SELECT "adjustments"."id" FROM `) {
 						if closed != 1 || len(statements) != 2 || strings.Contains(sql, " >= ") {

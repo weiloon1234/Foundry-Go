@@ -45,7 +45,7 @@ If the competitor is not visible under the original query, the unique violation 
 Conflict recovery requires the server-reported schema, table and constraint to match a unique index of the destination. Unqualified destinations resolve through the transaction's `search_path`. Missing or mismatched identity, including a same-named index in another schema or a partition or inheritance child violation, preserves the original error. Deferred constraint failures at commit do not trigger a competitor lookup or retry.
 
 
-`UpdateOrCreate` prepares only the chosen branch. The existing model is locked and rows close before its callback. The callback receives the actual transaction and returns assignments. Creation-only keys stay out of the update. The subsequent ordinary update preserves original predicates and the selected key; changed values may leave the old filter, as with any update.
+`UpdateOrCreate` prepares only the chosen branch. The existing model is locked with `FOR NO KEY UPDATE` and rows close before its callback. `FirstOrCreate` keeps `FOR UPDATE` for its existing-match lookup. When an update changes a UNIQUE column, take explicit `FOR UPDATE` first in the same transaction; see [the lock-upgrade caveat](model-writes.md#row-locks-and-unique-columns). The callback receives the actual transaction and returns assignments. Creation-only keys stay out of the update. The subsequent ordinary update preserves original predicates and the selected key; changed values may leave the old filter, as with any update.
 
 ## Ownership and concurrency
 

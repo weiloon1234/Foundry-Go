@@ -39,5 +39,5 @@ func FoundryCapture[M, K any](builder *Builder[M, K], field FoundryStoredField, 
 	if err != nil {
 		return builder.fail(err)
 	}
-	return builder.Add(Field[M]{field: captured, before: field.Before, after: field.After, excluded: disclosure == Exclude})
+	return builder.Add(Field[M]{field: captured, before: field.Before, after: field.After, excluded: disclosure.omits()})
 }

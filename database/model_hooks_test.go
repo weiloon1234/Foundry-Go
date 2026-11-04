@@ -72,7 +72,7 @@ func TestModelHooksCloseRowsAndPreserveCommitCandidates(t *testing.T) {
 			queries, afterCommits := 0, 0
 			state.query = func(ctx context.Context, statement string, args []driver.NamedValue) (driver.Rows, error) {
 				queries++
-				if queries == 1 && (!strings.Contains(statement, "FOR UPDATE") || !strings.Contains(statement, "LIMIT")) {
+				if queries == 1 && (!strings.Contains(statement, "FOR NO KEY UPDATE") || !strings.Contains(statement, "LIMIT")) {
 					t.Error("before snapshot was not bounded and locked")
 				}
 				return &resultRows{state: state, columns: []string{"id", "name"}, values: [][]driver.Value{{int64(42), "private record name"}}}, nil

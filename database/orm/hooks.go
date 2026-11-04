@@ -241,7 +241,7 @@ func modelCallbacks(table *tableCore, candidate unsafe.Pointer) *writeCallbacks 
 			if p.kind != querycore.InsertModel {
 				q := p.query
 				q.ast.ScopeContext = work
-				q.lock = querycore.LockUpdate
+				q.lock = modelWriteLock(p.kind)
 				q.ast.Limit = value.Set(2)
 				statement, err := compileRead(q, querycore.ReadModels)
 				if err != nil {

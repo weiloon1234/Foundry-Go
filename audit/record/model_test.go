@@ -27,7 +27,7 @@ func TestAuditRejectsIdentityLeaksMismatchesAndPartialCapture(t *testing.T) {
 		name       string
 		disclosure record.Disclosure
 	}{
-		{"access_token", record.Automatic}, {"id", record.Exclude}, {"id", record.Redact},
+		{"access_token", record.Automatic}, {"id", record.Exclude}, {"id", record.Redact}, {"id", record.Ignore},
 	} {
 		if _, err := record.NewBuilder(ref, lifecycle.Create, test.name, test.disclosure); !errors.Is(err, fault.Invalid) {
 			t.Fatal("unsafe subject policy was accepted", err)

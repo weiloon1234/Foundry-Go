@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -136,6 +137,16 @@ func TestScopedKeyedWriteParity(t *testing.T) {
 					}
 					if statements != want {
 						t.Fatalf("statements %d want %d", statements, want)
+					}
+					// Hooked or observed updates deliberately read their before-image FOR NO KEY UPDATE
+					// since this oracle froze. Require that, then compare the rest with the record.
+					if hooks && operation == "update" {
+						if !slices.ContainsFunc(got.SQL, func(sql string) bool { return strings.HasSuffix(sql, " FOR NO KEY UPDATE") }) {
+							t.Fatalf("update before-image lost its lock: %q", got.SQL)
+						}
+						for i, sql := range got.SQL {
+							got.SQL[i] = strings.Replace(sql, " FOR NO KEY UPDATE", " FOR UPDATE", 1)
+						}
 					}
 					frozenMatch(t, "keyed", got)
 				}

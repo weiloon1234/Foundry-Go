@@ -200,7 +200,7 @@ func TestHooksStageOrderLockedSnapshotsAndReturning(t *testing.T) {
 	if !reflect.DeepEqual(trace, want) {
 		t.Fatal(trace)
 	}
-	if len(statements) != 2 || !strings.Contains(statements[0], "LIMIT $2 FOR UPDATE") {
+	if len(statements) != 2 || !strings.Contains(statements[0], "LIMIT $2 FOR NO KEY UPDATE") {
 		t.Fatal(statements)
 	}
 	b, _ := saved.Before().Get()
@@ -306,6 +306,15 @@ func TestSpecialHookStagesAndForceDeleteVisibility(t *testing.T) {
 			}
 			if err != nil || !reflect.DeepEqual(trace, want) {
 				t.Fatal(err, trace)
+			}
+			if op != lifecycle.Create {
+				lock := " FOR UPDATE"
+				if op == lifecycle.SoftDelete || op == lifecycle.Restore {
+					lock = " FOR NO KEY UPDATE"
+				}
+				if len(statements) != 2 || !strings.HasSuffix(statements[0], lock) {
+					t.Fatal("before-image lock", statements)
+				}
 			}
 		})
 	}

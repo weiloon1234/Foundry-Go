@@ -14,6 +14,8 @@ import (
 // Automatic includes ordinary fields and redacts sensitive codecs or conventional
 // sensitive names.
 // Exclude omits the entire field; Redact retains change flags without its value.
+// Ignore omits the field and opts out of automatic update records when only
+// ignored fields and the managed updated_at are touched. Exclude keeps that evidence.
 // There is deliberately no option to override sensitive-value/name protection.
 type Disclosure uint8
 
@@ -21,15 +23,18 @@ const (
 	Automatic Disclosure = iota
 	Exclude
 	Redact
+	Ignore
 )
 
 // Validate reports fault.Invalid for an unknown disclosure mode.
 func (d Disclosure) Validate() error {
-	if d > Redact {
+	if d > Ignore {
 		return safeerror.NewFault(fault.Invalid, "invalid audit field disclosure")
 	}
 	return nil
 }
+
+func (d Disclosure) omits() bool { return d == Exclude || d == Ignore }
 
 // Redaction identifies the sensitive-name policy that captured a stored audit
 // row. Every row retains the policy that wrote it, so extending the recognized

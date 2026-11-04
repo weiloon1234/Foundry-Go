@@ -20,7 +20,7 @@ err := db.Transaction(ctx, func(tx *database.Tx) error {
 - `orm.Lock(query)` requests an exclusive row lock.
 - `orm.ForNoKeyUpdate(query)` allows concurrent `FOR KEY SHARE` reads.
 - `orm.ForShare(query)` allows compatible shared locks while preventing row updates/deletion.
-- `orm.ForKeyShare(query)` prevents deletion and updates that change the relevant key.
+- `orm.ForKeyShare(query)` prevents physical deletion and updates that change the relevant key.
 
 Waiting is the default. `NoWait()` returns the PostgreSQL lock error when a row cannot be locked immediately. `SkipLocked()` omits conflicting rows, which is useful for competing queue consumers. `Wait()` restores normal waiting; the last waiting modifier wins. These policies affect row locks, not every table lock required by PostgreSQL. Use a bounded context for the entire transaction and shorter operation contexts where appropriate.
 

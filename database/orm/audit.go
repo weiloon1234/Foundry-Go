@@ -9,6 +9,7 @@ import (
 	auditrecord "github.com/weiloon1234/Foundry-Go/audit/record"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/encrypted"
+	"github.com/weiloon1234/Foundry-Go/database/lifecycle"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
@@ -37,7 +38,7 @@ func AuditField[M, V any](field interface{ ormColumn(*M) columnData[V] }, disclo
 	return AuditRule[M]{field: field.ormColumn(nil).core, disclosure: disclosure}
 }
 
-// AuditEncryptedField selects exclusion or redaction for an encrypted field; Automatic always redacts.
+// AuditEncryptedField selects Exclude, Ignore or Redact for an encrypted field; Automatic always redacts.
 // Example: AuditEncryptedField(Vaults.Secret, record.Exclude).
 func AuditEncryptedField[M any, V encrypted.Value[V]](field Encrypted[M, V], disclosure auditrecord.Disclosure) AuditRule[M] {
 	return AuditRule[M]{field: field.encrypted.core, disclosure: disclosure}
@@ -173,12 +174,36 @@ func Auditing[M any, K comparable](table Table[M, K], policy AuditPolicy[M]) aud
 					if err != nil {
 						return err
 					}
+					if !shouldRecordAudit(changes.state, policy.rules) {
+						return nil
+					}
 					return writer.RecordModel(ctx, tx, captured.Entry())
 				}
 				return Hooks[M]{Created: write, Updated: write, Deleted: write, Restored: write}
 			}, nil
 		})
 	})
+}
+
+func shouldRecordAudit(state *changeState, rules map[*columnCore]auditrecord.Disclosure) bool {
+	if operation, _ := state.operation.Get(); operation != lifecycle.Update {
+		return true
+	}
+	ignored := false
+	for field, flags := range state.fields {
+		if !flags.assigned && !flags.changed {
+			continue
+		}
+		if timestamps := state.table.model.Timestamps; timestamps != nil && field.metadata.Name == timestamps.Updated {
+			continue
+		}
+		if rules[field] == auditrecord.Ignore {
+			ignored = true
+			continue
+		}
+		return true
+	}
+	return !ignored
 }
 
 // Identity uses the declaration's existing codec functions without rebuilding a representation adapter.

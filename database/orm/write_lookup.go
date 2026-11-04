@@ -97,6 +97,9 @@ func lookupWrite[M any](ctx context.Context, writer database.Transactor, q query
 	selected.ast.Orders = []querycore.QueryOrder{{Field: querycore.FieldRef{Table: q.ast.Table, Column: q.table.model.Primary}}}
 	selected.ast.Limit = value.Set(1)
 	selected.lock = querycore.LockUpdate
+	if update != nil {
+		selected.lock = modelWriteLock(querycore.UpdateModel)
+	}
 	statement, err := compileRead(selected, querycore.ReadModels)
 	if err != nil {
 		return *new(M), err

@@ -67,6 +67,14 @@ type writePlan struct {
 	conflict         *querycore.Conflict
 }
 
+func modelWriteLock(kind querycore.MutationKind) querycore.LockStrength {
+	// Primary keys cannot be assigned here; NO KEY UPDATE still blocks concurrent writers.
+	if kind.SqlKind() == querycore.UpdateModel {
+		return querycore.LockNoKeyUpdate
+	}
+	return querycore.LockUpdate
+}
+
 func planWrite[M any](q queryState, kind querycore.MutationKind, as []Assignment[M], many bool, deferIdentity ...bool) (writePlan, error) {
 	if err := validateQuery(q); err != nil {
 		return writePlan{}, err

@@ -87,7 +87,7 @@ func CaptureField[M, V any](name string, c codec.Codec[V], change lifecycle.Fiel
 	if err != nil {
 		return Field[M]{}, err
 	}
-	return Field[M]{field: captured, before: field.Before, after: field.After, excluded: disclosure == Exclude}, err
+	return Field[M]{field: captured, before: field.Before, after: field.After, excluded: disclosure.omits()}, err
 }
 
 func captureStoredField(field FoundryStoredField, disclosure Disclosure) (capturedField, error) {
@@ -101,7 +101,7 @@ func captureStoredField(field FoundryStoredField, disclosure Disclosure) (captur
 		return capturedField{}, safeerror.NewFault(fault.Invalid, "audit field requires a stored change")
 	}
 	result := capturedField{name: field.Name, typ: field.Type, assigned: field.Assigned, changed: field.Changed}
-	if disclosure == Exclude {
+	if disclosure.omits() {
 		return result, nil
 	}
 	if disclosure == Redact || field.Sensitive || SensitiveName(field.Name) {

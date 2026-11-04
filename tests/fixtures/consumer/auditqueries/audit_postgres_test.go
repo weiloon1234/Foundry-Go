@@ -33,9 +33,14 @@ type consumer struct {
 	within   func(context.Context, func(*database.Tx) error) error
 }
 
-func prepare(t *testing.T, withStorage bool) consumer {
+func prepare(t *testing.T, withStorage bool, modules ...foundation.Provider) consumer {
 	t.Helper()
-	app := testkit.Start(t, foundry.New().Register(auditqueries.ORMDomain(), postgres.Module("database", auditqueries.Pool, pgtest.Config(t))))
+	return prepareAuditDomain(t, withStorage, auditqueries.ORMDomain(), modules...)
+}
+
+func prepareAuditDomain(t *testing.T, withStorage bool, domain foundation.Module, modules ...foundation.Provider) consumer {
+	t.Helper()
+	app := testkit.Start(t, foundry.New().Register(domain, postgres.Module("database", auditqueries.Pool, pgtest.Config(t))).Register(modules...))
 	db, err := foundation.Resolve(app.Services(), auditqueries.Pool)
 	if err != nil {
 		t.Fatal(err)

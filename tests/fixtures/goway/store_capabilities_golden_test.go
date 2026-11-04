@@ -87,7 +87,8 @@ func TestStoreEachLifecycleGolden(t *testing.T) {
 			if g.statements != 5 {
 				t.Fatal(g.statements)
 			}
-			transcripts = append(transcripts, g.output.String())
+			// Both operations run SQL updates: candidate read, then two before-images.
+			transcripts = append(transcripts, legacyUpdateLocks(t, g, 0, 1, 3))
 		}
 		if !oracleEqual(t, "store_capabilities_golden/2", transcripts[0]) {
 			t.Fatal("frozen legacy comparison differs")

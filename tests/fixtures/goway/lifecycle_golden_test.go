@@ -62,7 +62,8 @@ func TestLifecycleOldAndNewAgree(t *testing.T) {
 		capture.show(must(orm.ForceDelete(ctx, db, q.Table.Query(), q.Soft, q.Table.Key(), 1)))
 
 		fmt.Fprintln(&capture.output, oracleSnapshot([]any{trace}))
-		transcripts = append(transcripts, capture.output.String())
+		// Update, soft delete and restore before-images; leave force delete unchanged.
+		transcripts = append(transcripts, legacyUpdateLocks(t, capture, 1, 3, 5))
 	}
 	if !oracleEqual(t, "lifecycle_golden/1", transcripts[0]) {
 		t.Fatal("frozen legacy comparison differs")

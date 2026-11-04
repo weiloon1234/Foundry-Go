@@ -150,6 +150,9 @@ func TestAuditRedactsAndExcludesBeforeInvokingFieldCodecs(t *testing.T) {
 	if err := b.Add(capture(t, "private_notes", forbidden, change, record.Exclude)); err != nil {
 		t.Fatal(err)
 	}
+	if err := b.Add(capture(t, "ignored_notes", forbidden, change, record.Ignore)); err != nil {
+		t.Fatal(err)
+	}
 	item := built(t, b)
 	if called != 0 {
 		t.Fatal("sensitive/excluded audit value invoked its codec")
@@ -158,7 +161,7 @@ func TestAuditRedactsAndExcludesBeforeInvokingFieldCodecs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(payload, "private-value") || strings.Contains(payload, "private_notes") {
+	if strings.Contains(payload, "private-value") || strings.Contains(payload, "private_notes") || strings.Contains(payload, "ignored_notes") {
 		t.Fatal("excluded or sensitive data reached storage")
 	}
 	view := inspect(t, item)
@@ -176,6 +179,10 @@ func TestAuditRedactsAndExcludesBeforeInvokingFieldCodecs(t *testing.T) {
 	excluded, err := record.ReadField(view, "private_notes", plain)
 	if err != nil || excluded.IsSet() {
 		t.Fatal("excluded field remained visible", err)
+	}
+	ignored, err := record.ReadField(view, "ignored_notes", plain)
+	if err != nil || ignored.IsSet() {
+		t.Fatal("ignored field remained visible", err)
 	}
 	for _, object := range []any{b, item, item.Entry(), view, field, field.After(), field.After().Snapshot()} {
 		if output := fmt.Sprintf("%+v %#v", object, object); strings.Contains(output, "private-value") {
