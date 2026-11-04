@@ -7,7 +7,7 @@
     "contracts_openapi_foundry.gen.json": "ca1cd747d4c47c4f8bed24bf444fb0671260e5d314c864d5eeef104e8a6eb714",
     "contracts_react_foundry.gen.ts": "5381e2b076a7f4fdd980708b2e512c3a55198a51bcac5db341667185811c6b23",
     "contracts_reports_foundry.gen.ts": "cc9d9ba7ae183c2bdcb8696403f6d483a7dc605c9ddebe178613e91383297803",
-    "contracts_runtime_foundry.gen.ts": "9df1f578d5c7ab0fa9fd7de70445a0d3316c4122672f897a2a06de85ba89af38",
+    "contracts_runtime_foundry.gen.ts": "fbbf57d05526df97dba12f421ef044729aedacedaa757baa74cea2d11e7e4b52",
     "contracts_runtime_realtime_foundry.gen.ts": "9ae67cab99361d96ffbcd10a597406c1ecb98ae548a10477c2d38ed8b8a21834",
     "contracts_vue_foundry.gen.ts": "90772adf054a6c6ebd6c8e681f5e07139ed457cbcf1b1dd62d918693f7adce40"
   }

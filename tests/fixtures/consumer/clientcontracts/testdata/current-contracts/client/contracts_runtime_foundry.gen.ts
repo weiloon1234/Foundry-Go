@@ -197,9 +197,10 @@ class WireCodec {
           if (typeof tag !== "string") reject(tagPath, "type");
           const target = this.variants.get(id)?.get(tag);
           if (target === undefined) reject(tagPath, "value");
+          // Charge the discriminator here; the variant checks payload keys once.
+          if (++steps > limits.Steps) reject(path, "limit");
           const payload: Record<string, unknown> = Object.create(null);
           for (const key of Object.keys(record)) {
-            if (++steps > limits.Steps) reject(path, "limit");
             if (key !== discriminator) payload[key] = record[key];
           }
           const result = visit(target, payload, path, depth) as Record<string, unknown>;
