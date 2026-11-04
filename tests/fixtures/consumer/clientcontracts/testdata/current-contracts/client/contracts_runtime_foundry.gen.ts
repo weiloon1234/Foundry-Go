@@ -232,7 +232,8 @@ class WireCodec {
             if (++steps > limits.Steps) reject(path, "limit");
             // A tolerant client omits entries keyed by enum cases it does not know.
             const known = key === undefined || this.mapKey(key, name, path, tolerant);
-            const value = visit(type.element!, record[name], pointer(path, name), depth + 1);
+            let value: unknown;
+            if (known || received) value = visit(type.element!, record[name], pointer(path, name), depth + 1);
             if (known) result[name] = value;
           }
           return result;
@@ -809,7 +810,9 @@ function errorStatus(value: unknown, status: number, received: boolean): boolean
 function decodeErrorResponse(document: RuntimeDocument, codec: WireCodec, operation: Operation, status: number, input: string | Uint8Array | Record<string, unknown>, tolerant: boolean): Record<string, unknown> {
   // Parse and transform the whole envelope once, including details, under one budget.
   const received = typeof input !== "string" && !(input instanceof Uint8Array);
-  const record = object(received ? input : parseWire(input, operation.limits.Response));
+  const parsed = received ? input : parseWire(input, operation.limits.Response);
+  if (parsed === null) reject("", "null");
+  const record = object(parsed);
   const definition = document.errors.find(error => errorStatus(record.status, error.status, received) && error.error_code === record.error_code && operation.errors.includes(error.error_code));
   const properties = definition?.details_type ? [{ name: "details", type: definition.details_type, required: true }] : [];
   const decoded = object(codec.transform(document.error_type, record, operation.limits.Response, false, false, tolerant, properties, received));

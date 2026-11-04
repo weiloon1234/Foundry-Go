@@ -654,7 +654,7 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
               if (!decoded) {
                 const base = object(caught.response);
                 if (Object.hasOwn(base, "details")) reject("/details", "unknown");
-                decoded = object(contracts().transform(runtimeDocument().error_type, base, registered.limits.Response, false, false, true, [], true));
+                decoded = object(contracts().transform(runtimeDocument().error_type, base, registered.limits.Response, false, false, false, [], true));
               }
               const envelope = decoded as { issues?: readonly Issue[] };
               issues = formCopy(envelope.issues?.length ? envelope.issues : [{ path: "", code: caught.code }], limits);
