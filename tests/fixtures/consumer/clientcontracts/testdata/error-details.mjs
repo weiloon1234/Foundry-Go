@@ -49,7 +49,8 @@ const plainResponse=await fetch(baseURL+"/members",{method:"POST",headers:{"cont
 assert.equal(plainResponse.status,409);
 const plainWire=await plainResponse.json(); assert.equal(plainWire.error_code,"registration_closed"); assert(!Object.hasOwn(plainWire,"details"));
 let rejected=0, delivered=0;
-for(let steps=15;steps<=40;steps++) {
+const privateBoundaries=new Map(["budgetUnion","budgetCollections","budgetOptional"].map(name=>[name,{rejected:0,delivered:0,first:undefined}]));
+for(let steps=15;steps<=48;steps++) {
   const sdk=await import(new URL("./steps-"+steps+".js",pathToFileURL(process.argv[2])).href);
   let last;
   const api=sdk.createClient(async request=>{
@@ -71,7 +72,34 @@ for(let steps=15;steps<=40;steps++) {
     return true;
   });
   assert.equal((await api.membersCreate({body:{name:"healthy"}})).id,expectedID);
+  for(const [name,boundary] of privateBoundaries) {
+    await assert.rejects(api[name]({}),error=>{
+      const raw=JSON.parse(last.body);
+      assert(error instanceof sdk.APIError,`${name} Steps ${steps}: ${error.name}`);
+      assert(sdk.isOperationError(name,error));
+      assert(!Object.hasOwn(raw,"request_id")); assert(!Object.hasOwn(raw,"issues"));
+      if(last.status===409) {
+        boundary.delivered++; boundary.first??=steps;
+        assert.deepEqual({...error.response.details.choice},{kind:"existing",label:"x"});
+        if(name!=="budgetUnion") {
+          assert.deepEqual(error.response.details.array.map(item=>({...item})),[{kind:"existing",label:"a"}]);
+          assert.deepEqual({...error.response.details.map.first},{kind:"existing",label:"m"});
+          assert.equal(Object.hasOwn(error.response.details,"note"),name==="budgetOptional");
+          if(name==="budgetOptional") assert.equal(error.response.details.note,"note");
+        }
+      } else {
+        boundary.rejected++; assert.equal(last.status,500); assert.equal(raw.error_code,"internal_error");
+        assert(!Object.hasOwn(raw,"details")); assert(!last.body.includes('"existing"'));
+      }
+      return true;
+    });
+  }
 }
 assert(rejected>0); assert(delivered>0);
+for(const [name,boundary] of privateBoundaries) {
+  assert(boundary.rejected>0,name); assert(boundary.delivered>0,name);
+  console.log(`${name}: first server 409 at Steps ${boundary.first}; all 409s decoded`);
+}
+assert.equal(privateBoundaries.get("budgetUnion").first,24);
 assert.equal(await guide.createMember(fullClient,"existing"),expectedID);
 console.log("PASS real detailed errors, shared/portal narrowing, form failures, newer-server enum and compiled guide");

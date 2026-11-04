@@ -344,8 +344,8 @@ const body=JSON.stringify(envelope).replaceAll("9007199254740991","9007199254740
 const nodes=value=>1+(Array.isArray(value)?value.reduce((total,item)=>total+nodes(item),0):value!==null&&typeof value==="object"?Object.entries(value).reduce((total,[key,item])=>total+1+nodes(item),0):0);
 let status=409,closed=0;
 const transport=async()=>({status,headers:{"content-type":"application/json"},body:status===409?body:"",close(){closed++;}});
-// Envelope: 15 visits/property checks; details and their children: 56.
-const exact={Bytes:new TextEncoder().encode(body).length,Depth:3,Nodes:nodes(JSON.parse(body)),Steps:71};
+// Envelope: 15 visits/property checks; details: 55 (Go also charges enum key validation).
+const exact={Bytes:new TextEncoder().encode(body).length,Depth:3,Nodes:nodes(JSON.parse(body)),Steps:70};
 const client=sdk.boundedClient(transport,exact);
 await assert.rejects(client.registryCreate(),error=>sdk.isOperationError("registryCreate",error)&&error.response.details.revision==="9007199254740993");
 for (const limit of [{Bytes:exact.Bytes-1},{Depth:2},{Nodes:exact.Nodes-1},{Steps:exact.Steps-1}]) {
@@ -355,6 +355,181 @@ for (const limit of [{Bytes:exact.Bytes-1},{Depth:2},{Nodes:exact.Nodes-1},{Step
 }
 assert.equal(closed,9);
 `)
+}
+
+type UnionStepDetails struct {
+	Choice RegistryErrorChoice `json:"choice"`
+}
+
+type StepAlias string
+type StepDetails struct {
+	Choice   RegistryErrorChoice                        `json:"choice"`
+	Array    []RegistryErrorChoice                      `json:"array,omitzero"`
+	Map      map[string]RegistryErrorChoice             `json:"map,omitzero"`
+	Keyed    map[int32]RegistryErrorChoice              `json:"keyed,omitzero"`
+	EnumMap  map[RegistryErrorState]RegistryErrorChoice `json:"enum_map,omitzero"`
+	Nullable value.Optional[value.Nullable[string]]     `json:"nullable,omitzero"`
+	Quoted   int32                                      `json:"quoted,string,omitzero"`
+	Alias    StepAlias                                  `json:"alias,omitzero"`
+	Dynamic  any                                        `json:"dynamic,omitzero"`
+}
+
+func stepDetailTypes() []contract.Type {
+	return []contract.Type{
+		{ID: "steps.Choice", Kind: contract.UnionKind, Discriminator: "kind", Variants: []contract.Variant{{Tag: "existing", Type: "steps.Payload"}}},
+		{ID: "steps.Payload", Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "label", Type: "string", Required: true}}},
+		{ID: "steps.Array", Kind: contract.ArrayKind, Element: "steps.Choice"},
+		{ID: "steps.Map", Kind: contract.MapKind, Element: "steps.Choice"},
+		contract.JSONMapType[map[int32]RegistryErrorChoice]("steps.Keyed", "steps.Choice", "int32", contract.IntegerJSONKey[int32]()),
+		contract.JSONMapType[map[RegistryErrorState]RegistryErrorChoice]("steps.EnumMap", "steps.Choice", "steps.State", contract.EnumJSONKey(enum.Describe("steps", "State", enum.Case[RegistryErrorState]{Name: "Active", Value: "active"}))),
+		{ID: "steps.State", Kind: contract.StringKind, Cases: []json.RawMessage{json.RawMessage(`"active"`)}},
+		{ID: "steps.Nullable", Kind: contract.AliasKind, Element: "string", Nullable: true},
+		{ID: "steps.Quoted", Kind: contract.QuotedKind, Element: "int32"},
+		{ID: "steps.Alias", Kind: contract.AliasKind, Element: "steps.AliasTarget"},
+		{ID: "steps.AliasTarget", Kind: contract.AliasKind, Element: "string"},
+		{ID: "steps.Dynamic", Kind: contract.DynamicKind, Nullable: true},
+		{ID: "string", Kind: contract.StringKind},
+		{ID: "int32", Kind: contract.IntegerKind, Bits: 32, Signed: true},
+	}
+}
+
+func TestDetailedUnionErrorStepBudget(t *testing.T) {
+	const root = "github.com/weiloon1234/Foundry-Go/typescript.UnionStepDetails"
+	descriptor := contract.DefineJSON[UnionStepDetails](contract.Schema{Root: root, Types: append(stepDetailTypes(), contract.Type{ID: root, Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "choice", Type: "steps.Choice", Required: true}}})})
+	limits := foundryhttp.DefaultEndpointLimits()
+	details := []byte(`{"choice":{"kind":"existing","label":"x"}}`)
+	detailSteps, err := descriptor.ValidationSteps(t.Context(), details, limits.Response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelopeSteps, err := foundryhttp.ErrorResponseJSON().ValidationSteps(t.Context(), []byte(`{"status":409,"error_code":"union_conflict","message":"Conflict"}`), limits.Response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	steps := envelopeSteps + 2 + detailSteps
+	if steps != 24 {
+		t.Fatalf("Go envelope + extension + details steps = %d + 2 + %d = %d; want 24", envelopeSteps, detailSteps, steps)
+	}
+	t.Logf("Go steps: envelope %d + extension 2 + details %d = %d", envelopeSteps, detailSteps, steps)
+	declaration := foundryhttp.DefineErrorDetails("union_conflict", 409, "Conflict", descriptor)
+	endpoint := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "union.conflict", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/union")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204), foundryhttp.Errors(declaration))
+	limits.Response.Steps = steps
+	router, err := foundryhttp.NewRouter(foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Limits(limits)).Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
+		return foundryhttp.NoContent{}, declaration.New(UnionStepDetails{Choice: RegistryErrorChoice{Kind: "existing", Label: "x"}})
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := manifest.Build(t.Context(), manifest.Sources{HTTP: router})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := Render(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output = append(output, []byte(`
+export function unionStepClient(transport: HTTPTransport, steps: number) {
+ const document=loadRuntimeDocument();
+ return createHTTPInvoker({...document,http:document.http.map(operation=>({...operation,limits:{...operation.limits,Response:{...operation.limits.Response,Steps:steps}}}))},transport,{});
+}
+`)...)
+	runReleaseTypeScript(t, output, `
+const body='{"status":409,"error_code":"union_conflict","message":"Conflict","details":{"choice":{"kind":"existing","label":"x"}}}';
+const transport=async()=>({status:409,headers:{"content-type":"application/json"},body,close(){}});
+let minimum;
+for(let steps=1;steps<=30;steps++) {
+ try { await sdk.unionStepClient(transport,steps).invoke("unionConflict",{}); assert.fail("expected error"); }
+ catch(error) {
+  if(error instanceof sdk.APIError) { minimum=steps; break; }
+  assert(error instanceof sdk.ResponseContractError);
+ }
+}
+assert.equal(minimum,24,"TypeScript minimum Steps");
+for (const strictResponses of [false,true]) {
+ const client=sdk.createClient(transport,{strictResponses});
+ await assert.rejects(client.unionConflict({}),error=>{
+  assert(error instanceof sdk.APIError, error.name);
+  assert(sdk.isOperationError("unionConflict",error));
+  assert.equal(error.response.details.choice.label,"x"); return true;
+ });
+}
+`)
+}
+
+func TestWireShapeStepParity(t *testing.T) {
+	const root = "github.com/weiloon1234/Foundry-Go/typescript.StepDetails"
+	properties := []contract.Property{{Name: "choice", Type: "steps.Choice", Required: true}}
+	for _, field := range []struct{ name, typ string }{{"array", "Array"}, {"map", "Map"}, {"keyed", "Keyed"}, {"enum_map", "EnumMap"}, {"nullable", "Nullable"}, {"quoted", "Quoted"}, {"alias", "Alias"}, {"dynamic", "Dynamic"}} {
+		properties = append(properties, contract.Property{Name: field.name, Type: contract.TypeID("steps." + field.typ)})
+	}
+	descriptor := contract.DefineJSON[StepDetails](contract.Schema{Root: root, Types: append(stepDetailTypes(), contract.Type{ID: root, Kind: contract.ObjectKind, Properties: properties})})
+	schema, err := descriptor.Description()
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits := foundryhttp.DefaultEndpointLimits().Response
+	type stepCase struct {
+		Body  string `json:"body"`
+		Steps int    `json:"steps"`
+	}
+	var cases []stepCase
+	for _, extra := range []string{
+		``, `,"array":[]`, `,"array":[{"kind":"existing","label":"a"},{"kind":"existing","label":"b"}]`,
+		`,"map":{}`, `,"map":{"a":{"kind":"existing","label":"a"},"b":{"kind":"existing","label":"b"}}`,
+		`,"keyed":{}`, `,"enum_map":{}`,
+		`,"keyed":{"1":{"kind":"existing","label":"a"},"2":{"kind":"existing","label":"b"}}`,
+		`,"enum_map":{"active":{"kind":"existing","label":"a"}}`,
+		`,"nullable":null`, `,"nullable":"x"`, `,"quoted":"0"`, `,"alias":"x"`,
+		`,"dynamic":null`, `,"dynamic":{"unknown":[0,false,{"kind":"unregistered","extra":"x"}]}`,
+	} {
+		body := `{"choice":{"kind":"existing","label":"x"}` + extra + `}`
+		steps, err := descriptor.ValidationSteps(t.Context(), []byte(body), limits)
+		if err != nil {
+			t.Fatal(body, err)
+		}
+		cases = append(cases, stepCase{body, steps})
+		t.Logf("Go steps %d: %s", steps, body)
+	}
+	encodedSchema, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encodedCases, err := json.Marshal(cases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encodedLimits, err := json.Marshal(limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := Render(detailedClientManifest(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output = append(output, []byte(`
+export function stepDecode(schema: {root: string; types: readonly WireType[]}, body: string, limits: JSONLimits, steps: number, tolerant: boolean, received: boolean) {
+ const codec=new WireCodec(schema.types);
+ const input=received?codec.decode(schema.root,body,limits,tolerant):parseWire(body,limits);
+ return codec.transform(schema.root,input,{...limits,Steps:steps},false,false,tolerant,[],received);
+}
+`)...)
+	runReleaseTypeScript(t, output, fmt.Sprintf(`
+const schema=%s, cases=%s, limits=%s;
+for (const test of cases) for (const tolerant of [false,true]) for (const received of [false,true]) {
+ let minimum;
+ for (let steps=1;steps<=test.steps;steps++) {
+  try { sdk.stepDecode(schema,test.body,limits,steps,tolerant,received); minimum=steps; break; }
+  catch(error) { assert(error instanceof sdk.ContractError); assert.equal(error.issues[0].code,"limit"); }
+ }
+ assert(minimum!==undefined,JSON.stringify({test,tolerant,received}));
+ // Older clients omit a property the server knows, including nested union payload keys.
+ if(tolerant) {
+  const older={...schema,types:schema.types.map(type=>type.kind==="object"?{...type,properties:type.properties.filter(property=>property.name!=="dynamic"&&property.name!=="label")}:type)};
+  sdk.stepDecode(older,test.body,limits,test.steps,true,received);
+ }
+}
+`, encodedSchema, encodedCases, encodedLimits))
 }
 
 func TestDetailFreeOperationShape(t *testing.T) {

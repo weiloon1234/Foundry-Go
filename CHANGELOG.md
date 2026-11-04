@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: TypeScript clients count union payload keys once, matching Go response work budgets.
+
 - Fixed: Wrapped-client forms copy decoded issues and drop unknown fields on
   declared operation errors. Non-member errors retain strict envelope validation.
 
