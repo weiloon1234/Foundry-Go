@@ -14,7 +14,7 @@ import (
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-// Run provides three users and three orders in a unique retained schema.
+// Run provides three users and three orders in a unique test-owned schema.
 func Run(t *testing.T, check func(*database.Tx, []models.User) error) {
 	t.Helper()
 	runDefault(t, false, check)

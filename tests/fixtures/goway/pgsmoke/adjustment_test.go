@@ -26,7 +26,7 @@ type adjustmentAccounts struct {
 }
 type adjustmentTenant struct{}
 
-// Compiled by lane B; the lead runs against PostgreSQL in a retained namespace.
+// Compiled by lane B; the lead runs against PostgreSQL in a test-owned namespace.
 func TestAdjustmentVisibilityAndLifecycle(t *testing.T) {
 	for _, mode := range []string{"plain", "hooks"} {
 		t.Run(mode, func(t *testing.T) {

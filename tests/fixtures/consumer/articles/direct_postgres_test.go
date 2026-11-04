@@ -22,7 +22,7 @@ import (
 )
 
 // openDirect assembles the store, translations and metadata managers directly
-// on one pool in a retained namespace, the advanced composition path. An
+// on one pool in a test-owned namespace, the advanced composition path. An
 // optional observer sees every statement of that pool.
 func openDirect(tb testing.TB, observer database.QueryObserver) (*extensions.Store, slots.Runtime) {
 	tb.Helper()

@@ -48,7 +48,8 @@ func TestWorkflowProcessChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Parent already ran explicit migrations in retained namespaces.
+	// Parent already ran explicit migrations in its own namespaces.
+	// Application shutdown preserves them; the parent test owns schema cleanup.
 	if err := app.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}

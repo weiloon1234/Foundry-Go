@@ -60,7 +60,7 @@ func prepareDurableConsumer(t *testing.T, migrateOutbox bool) durableConsumer {
 			return err
 		}
 		if migrateOutbox {
-			// Apply the unchanged framework definitions in this retained test schema.
+			// Apply the unchanged framework definitions in this test-owned schema.
 			for _, definition := range outbox.Migrations() {
 				for _, statement := range definition.SQL {
 					if _, err := tx.Exec(t.Context(), statement); err != nil {

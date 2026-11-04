@@ -20,8 +20,8 @@ import (
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-// The parent terminates only the test binary it owns. The PostgreSQL server and
-// retained schemas are never stopped, reset or cleaned up.
+// The parent terminates only the test binary it owns and leaves PostgreSQL running.
+// Application shutdown preserves schemas; the parent test owns schema cleanup.
 func TestIdempotencyProcessChild(t *testing.T) {
 	mode := os.Getenv("FOUNDRY_IDEMPOTENCY_CHILD")
 	if mode == "" {

@@ -28,7 +28,8 @@ const (
 const namespacePrefix = "foundry_test_"
 
 // KeepSchemas reports whether test-owned PostgreSQL artifacts must be retained.
-// Call it during cleanup so subtest and earlier cleanup failures are included.
+// Call it during cleanup so subtest and already-run cleanup failures are included.
+// A cleanup registered before the namespace runs after its drop and cannot retain it.
 func KeepSchemas(t testing.TB) bool {
 	t.Helper()
 	if t.Failed() || os.Getenv(KeepSchemasVariable) == "1" {
@@ -100,18 +101,12 @@ func Open(t testing.TB, adjust ...func(*postgres.Config)) *database.DB {
 // Namespace creates a unique schema in the caller's isolated test database.
 // The returned identifier contains only safe ASCII letters, digits and underscores.
 // Cleanup removes only this schema when the test passes and KeepSchemas is false.
-// Namespace closes db during cleanup before removing the schema, even when Open
-// registered its cleanup first. Register any other pool/application cleanup later
-// so LIFO cleanup closes those connections first too.
+// The caller owns db and its closure. Register application cleanup later so
+// LIFO cleanup shuts it down before schema cleanup.
 func Namespace(t testing.TB, db *database.DB) string {
 	t.Helper()
 	name, create := PrepareNamespace(t)
 	create(db)
-	t.Cleanup(func() {
-		if err := closePool(db); err != nil {
-			t.Errorf("close namespace creation pool: %v", err)
-		}
-	})
 	return name
 }
 
@@ -155,6 +150,7 @@ func dropNamespace(config postgres.Config, name string) error {
 	// changed its search path, or retained a connection holding a table lock.
 	config.Schema = ""
 	config.Pool.MaxOpen, config.Pool.MaxIdle = 1, 1
+	config.Pool.CommitTimeout = cleanupTimeout
 	config.StatementTimeout = cleanupTimeout
 	config.LockTimeout = 100 * time.Millisecond
 	db, err := postgres.Open(ctx, config)
@@ -162,6 +158,29 @@ func dropNamespace(config postgres.Config, name string) error {
 		return err
 	}
 	defer closePool(db)
-	_, err = db.Exec(ctx, `DROP SCHEMA "`+name+`" CASCADE`)
-	return err
+	return db.Transaction(ctx, func(tx *database.Tx) error {
+		// Resolve schema-less parts (such as view rules) and TOAST through their
+		// automatic/internal owner. Unknown ownership conservatively keeps the schema.
+		var outside bool
+		if err := database.ScanOne(ctx, tx, `SELECT EXISTS (
+			SELECT 1 FROM pg_catalog.pg_depend d
+			CROSS JOIN LATERAL pg_catalog.pg_identify_object(d.refclassid, d.refobjid, d.refobjsubid) referenced
+			CROSS JOIN LATERAL pg_catalog.pg_identify_object(d.classid, d.objid, d.objsubid) dependent
+			LEFT JOIN pg_catalog.pg_depend ownership ON ownership.classid=d.classid AND ownership.objid=d.objid
+				AND ownership.deptype IN ('a', 'i') AND (dependent.schema IS NULL OR dependent.schema='pg_toast')
+			LEFT JOIN LATERAL pg_catalog.pg_identify_object(ownership.refclassid, ownership.refobjid, ownership.refobjsubid) owner ON true
+			WHERE (referenced.schema=$1 OR (d.refclassid='pg_catalog.pg_namespace'::regclass
+				AND d.refobjid=(SELECT oid FROM pg_catalog.pg_namespace WHERE nspname=$1)))
+			AND COALESCE(NULLIF(dependent.schema, 'pg_toast'), owner.schema) IS DISTINCT FROM $1
+		)`, []any{name}, &outside); err != nil {
+			return err
+		}
+		if outside {
+			return errors.New("outside dependency prevents PostgreSQL test namespace cleanup")
+		}
+		// Random schema names make concurrent dependency changes vanishingly unlikely
+		// in tests; protecting against them is out of scope.
+		_, err := tx.Exec(ctx, `DROP SCHEMA "`+name+`" CASCADE`)
+		return err
+	})
 }

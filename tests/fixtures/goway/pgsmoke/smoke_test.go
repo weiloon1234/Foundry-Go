@@ -14,8 +14,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-// TestPersistence retains its isolated namespace for inspection. It never drops,
-// truncates or resets data. The lead runs it against an explicitly selected URL.
+// TestPersistence owns an isolated namespace, cleaned up on success and retained
+// on failure or explicit opt-in. The lead supplies the PostgreSQL URL.
 func TestPersistence(t *testing.T) {
 	// postgres.Isolate owns skipping: it skips without a configured URL and fails
 	// when FOUNDRY_TEST_POSTGRES_REQUIRED=1, as every other PostgreSQL fixture does.

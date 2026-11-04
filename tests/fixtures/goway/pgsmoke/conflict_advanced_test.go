@@ -29,7 +29,7 @@ type advancedCounters struct {
 type advancedTenantKey struct{}
 type advancedLookup struct{}
 
-// Lane B compiles/vets; the lead executes in a retained isolated namespace.
+// Lane B compiles/vets; the lead executes in a test-owned isolated namespace.
 func TestAdvancedConflictIndexDefaultsCorrelationAndTenancy(t *testing.T) {
 	db := postgres.Isolate(t).Open(t)
 	ctx := context.WithValue(t.Context(), advancedTenantKey{}, int64(1))

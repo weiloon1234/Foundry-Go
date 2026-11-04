@@ -12,7 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-// Lane B compiles/vets this source; the lead runs the retained isolated namespace.
+// Lane B compiles/vets this source; the lead runs a test-owned isolated namespace.
 func TestConflictPersistsDefaultsAndRollsBackAtomicFailures(t *testing.T) {
 	db := postgres.Isolate(t).Open(t)
 	ctx := t.Context()

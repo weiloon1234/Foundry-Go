@@ -20,7 +20,7 @@ import (
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
-// pool opens the retained test schema, optionally with a field key ring.
+// pool opens the test-owned schema, optionally with a field key ring.
 func pool(t *testing.T, schema string, options ...database.Option) *database.DB {
 	t.Helper()
 	config := pgtest.Config(t)

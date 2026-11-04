@@ -1,4 +1,4 @@
-// Package isolatedhttp exercises production assembly in retained test schemas.
+// Package isolatedhttp exercises production assembly in test-owned schemas.
 package isolatedhttp
 
 import "github.com/weiloon1234/Foundry-Go/model"
