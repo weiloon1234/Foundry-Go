@@ -15,6 +15,96 @@ import (
 	"time"
 )
 
+// lateCopySource returns its body, then reports no progress until the peer has
+// closed, so the copy loop observes the disconnect after the complete body.
+type lateCopySource struct {
+	body  []byte
+	wait  func()
+	reads int
+}
+
+func (s *lateCopySource) Read(data []byte) (int, error) {
+	s.reads++
+	switch s.reads {
+	case 1:
+		return copy(data, s.body), nil
+	case 2:
+		s.wait()
+		return 0, nil
+	default:
+		return 0, io.EOF
+	}
+}
+
+func TestDeclaredBodyCopyFinishesAfterClientLeaves(t *testing.T) {
+	cases := map[string][]Middleware{
+		"compression": {Compression(DefaultCompressionConfig())},
+		"etag":        {CacheControl(CachePolicy{Visibility: CachePublic}), ETags(DefaultETagConfig())},
+	}
+	for name, middleware := range cases {
+		t.Run(name, func(t *testing.T) {
+			payload := []byte(strings.Repeat("page", 4000))
+			var logs bytes.Buffer
+			result := make(chan any, 1)
+			handler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+				w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+				w.Header().Set("Content-Type", "text/html")
+				if _, canCopy := w.(io.ReaderFrom); !canCopy {
+					t.Error("response does not expose its copy path")
+				}
+				source := &lateCopySource{body: payload, wait: func() {
+					_ = stdhttp.NewResponseController(w).Flush()
+					select {
+					case <-r.Context().Done():
+					case <-time.After(10 * time.Second):
+						t.Error("peer close did not cancel request")
+					}
+				}}
+				if _, err := io.Copy(w, source); err != nil {
+					t.Error(err)
+				}
+			})
+			wrapped, err := ApplyMiddleware(handler, middleware...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+				defer func() { result <- recover() }()
+				wrapped.ServeHTTP(w, withRequestLogger(r, slog.New(slog.NewTextHandler(&logs, nil))))
+			}))
+			defer server.Close()
+			conn, err := net.DialTimeout("tcp", server.Listener.Addr().String(), 10*time.Second)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			if err := conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := io.WriteString(conn, "GET / HTTP/1.1\r\nHost: example.test\r\nConnection: close\r\n\r\n"); err != nil {
+				t.Fatal(err)
+			}
+			response, err := stdhttp.ReadResponse(bufio.NewReader(conn), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := make([]byte, len(payload))
+			if _, err := io.ReadFull(response.Body, body); err != nil || !bytes.Equal(body, payload) {
+				t.Fatal("response changed", err)
+			}
+			conn.Close()
+			select {
+			case recovered := <-result:
+				if recovered != nil || logs.Len() != 0 {
+					t.Fatalf("complete copy reported failure: panic=%v logs=%s", recovered, &logs)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("middleware did not finish")
+			}
+		})
+	}
+}
+
 func TestCompressionClientClosesAfterDeclaredBody(t *testing.T) {
 	for _, shape := range []string{"single", "no-store", "404", "two-writes", "over-limit", "truncated"} {
 		t.Run(shape, func(t *testing.T) {

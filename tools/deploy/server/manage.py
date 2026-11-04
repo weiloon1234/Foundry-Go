@@ -178,7 +178,9 @@ def execute(host, action, request):
         with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
             registry, entry = host.require_identity(project, profile)
             role = request.get("role", "all")
-            selected_units(entry, role)
+            # Naming a topology's only role selects the whole instance.
+            if set(selected_units(entry, role)) == set(instance_units(entry)):
+                role = "all"
             release.validate_runtime_environment(host, entry)
             state = host.load_state(entry)
             require(role == "all" or not (state.get("last_attempt") or {}).get("role_recovery_pending"),

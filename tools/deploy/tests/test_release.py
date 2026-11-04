@@ -975,6 +975,22 @@ class ReleaseTests(unittest.TestCase):
         manager.execute(self.host, "restart", request)
         self.assertEqual("healthy", self.state()["status"])
 
+    def test_naming_the_only_declared_role_selects_the_whole_instance(self):
+        from test_manage import manager
+        from topology import validate_topology
+        import upgrades
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        registry = self.host.read_registry()
+        registry["instances"][self.entry["profile"]["instance_id"]]["topology"] = validate_topology({"schema": 1, "roles": [{"name": "http"}]})
+        self.host.write_registry(registry)
+        request = {**upgrades.protocol_metadata(), "project": self.project, "profile": self.profile}
+        manager.execute(self.host, "restart", {**request, "role": "http"})
+        self.assertEqual("healthy", self.state()["status"])
+        self.assertEqual("all", self.state()["last_attempt"]["role"])
+        manager.execute(self.host, "stop", {**request, "role": "http"})
+        self.assertEqual("stopped", self.state()["status"])
+
     def test_reconcile_preserves_named_role_and_defaults_legacy_attempts_to_all(self):
         from test_manage import manager
         import upgrades

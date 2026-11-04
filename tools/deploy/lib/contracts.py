@@ -20,6 +20,10 @@ import uuid
 
 PREFIX = "foundry"
 SCHEMA = 1
+SERVICE_ROLES = ("http", "scheduler", "worker")
+INSTANCE_STATUSES = frozenset({"never_deployed", "deploying", "healthy", "failed", "failed_applied", "rolled_back", "stopped", "degraded", "unknown"})
+RENEWAL_WARNING = ("WARNING: Certificate renewal verification is deferred; "
+                   "ACTION=report shows the reason and the next ACTION=deploy retries it.")
 LAYOUT_VERSION = 2
 REGISTRY_SCHEMA = 2
 PROFILE_SCHEMA = 2
@@ -70,7 +74,7 @@ HOST_ROOTS = (
 def unit_name(name: str, role: str) -> str:
     """Canonical layout-v2 unit spelling; topology owns role selection."""
     instance_paths(name)
-    require(role in {"http", "scheduler", "worker"}, "invalid_topology", "Unknown service role.")
+    require(role in SERVICE_ROLES, "invalid_topology", "Unknown service role.")
     return f"{PREFIX}-{role}@{name}.service"
 
 
@@ -119,11 +123,11 @@ def validate_attempt(value):
             and (value["error"] is None or isinstance(value["error"], str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", value["error"]) is not None), code, detail)
     require(value["finished_at"] is None if value["outcome"] == "running" else valid_timestamp(value["finished_at"]), code, detail)
     require("role" not in value or value["action"] in ("restart", "stop")
-            and value["role"] in ("all", "http", "worker", "scheduler"), code, detail)
+            and value["role"] in ("all", *SERVICE_ROLES), code, detail)
     if "roles" in value:
         roles = value["roles"]
         require(value["action"] in ("config", "rollback", "deploy") and isinstance(roles, list)
-                and all(isinstance(role, str) and role in ("http", "worker", "scheduler") for role in roles)
+                and all(isinstance(role, str) and role in SERVICE_ROLES for role in roles)
                 and len(roles) == len(set(roles)), code, detail)
     configuration = {"configuration_revision", "configuration_sha256", "previous_configuration_sha256"}
     if value["action"] == "config":

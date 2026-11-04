@@ -53,7 +53,7 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 			if definition.DetailsType == d.ErrorType {
 				return invalid("HTTP error details cannot use the error envelope")
 			}
-			if err := contract.RequireObjectRoot(contract.Schema{Root: definition.DetailsType, Types: d.Types}); err != nil {
+			if err := contract.RequireObjectRoot(contract.Schema{Root: definition.DetailsType, Types: []contract.Type{types[definition.DetailsType]}}); err != nil {
 				return err
 			}
 			if definition.Status == 401 {

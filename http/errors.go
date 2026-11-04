@@ -160,14 +160,7 @@ type ErrorResponse struct {
 }
 
 func errorResponse(ctx context.Context, err error) (ErrorResponse, error) {
-	return localizedErrorResponse(ctx, err, nil)
-}
-
-func localizedErrorResponse(ctx context.Context, err error, presenter *errorPresenter) (ErrorResponse, error) {
-	payload, _, failure := classifyErrorResponse(ctx, err, presenter)
-	if presenter != nil {
-		presenter.present(ctx, &payload)
-	}
+	payload, _, failure := classifyErrorResponse(ctx, err, nil)
 	return payload, failure
 }
 

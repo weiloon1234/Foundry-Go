@@ -23,12 +23,10 @@ from urllib.request import ProxyHandler, Request, build_opener, urlopen
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from contracts import DeployError, HOST_PATHS, check_path, now, read_json, require, valid_uuid
+from contracts import DeployError, HOST_PATHS, RENEWAL_WARNING, check_path, now, read_json, require, valid_uuid
 from host import Host, wall_clock_budget
 import packages
 
-RENEWAL_WARNING = ("WARNING: Certificate renewal verification is deferred; "
-                   "ACTION=report shows the reason and the next ACTION=deploy retries it.")
 STAGING_DIRECTORY = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
 CONFIG_DIR = "/etc/foundry/letsencrypt"
@@ -483,7 +481,7 @@ def _main(arguments):
         _identity_ready(host, entry)
         _renewal_ready(host, entry)
         _synthetic_issue(host, entry)
-        entry["certificate"]["last_renewal_check_at"] = now()
+        _renewal_verified(entry)
         host.journal(registry, entry)
 
 

@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+// declaredBodyDelivered reports a complete body with nothing pending, which a
+// peer may close after without any loss.
+func (w *etagResponse) declaredBodyDelivered() bool {
+	return w.finalized || w.committed && declaredResponseComplete(w.request.Method, w.final, w.header, w.declared, w.written)
+}
+
 func (w *etagResponse) finish() error {
 	if w.hijacked {
 		return nil
@@ -14,7 +20,7 @@ func (w *etagResponse) finish() error {
 	if w.err != nil {
 		return w.err
 	}
-	if w.finalized || w.committed && declaredResponseComplete(w.request.Method, w.final, w.header, w.declared, w.written) {
+	if w.declaredBodyDelivered() {
 		return nil
 	}
 	if err := transportErr(w.request); err != nil {

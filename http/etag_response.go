@@ -84,7 +84,9 @@ func (w *etagResponse) Write(data []byte) (int, error) {
 		return 0, w.err
 	}
 	if err := transportErr(w.request); err != nil {
-		w.err = err
+		if !w.declaredBodyDelivered() {
+			w.err = err
+		}
 		return 0, err
 	}
 	if w.status == 0 {
@@ -274,6 +276,9 @@ func (w *etagResponse) ReadFrom(reader io.Reader) (int64, error) {
 	empty := 0
 	for {
 		if err := transportErr(w.request); err != nil {
+			if w.declaredBodyDelivered() {
+				return total, nil
+			}
 			w.err = err
 			return total, err
 		}

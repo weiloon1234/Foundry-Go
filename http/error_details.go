@@ -258,7 +258,6 @@ func prepareErrorResponse(ctx context.Context, payload ErrorResponse, detailed *
 		limits = state.responseLimits
 		// Input inspection can invoke omitzero IsZero before jsoncodec owns methods.
 		preparationErr = callback.Isolated("HTTP error details encoding", func() error {
-			var err error
 			remaining := limits
 			overhead, err := errorEnvelopeSteps(encoding, payload, limits)
 			if err != nil {

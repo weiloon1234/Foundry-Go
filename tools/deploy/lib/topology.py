@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from contracts import fields, read_json, require, unit_name
+from contracts import SERVICE_ROLES, fields, read_json, require, unit_name
 
 
 def validate_topology(value: dict, *, registered: bool = False) -> dict:
@@ -16,7 +16,7 @@ def validate_topology(value: dict, *, registered: bool = False) -> dict:
     names = []
     for role in value["roles"]:
         fields(role, "name", "topology role")
-        require(role["name"] in ("http", "scheduler", "worker") and role["name"] not in names,
+        require(role["name"] in SERVICE_ROLES and role["name"] not in names,
                 "invalid_topology", "Declare each supported role at most once.")
         names.append(role["name"])
     require("http" in names, "invalid_topology", "The HTTP role is required.")

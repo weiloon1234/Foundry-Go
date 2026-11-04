@@ -202,7 +202,7 @@ func TestDetailedErrorFailuresAndProbe(t *testing.T) {
 				if probe {
 					endpoint = ConfigureEndpoint(endpoint, Use(DefineMiddleware("probe", func(next stdhttp.Handler) (stdhttp.Handler, error) {
 						return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-							_, _ = localizedErrorResponse(r.Context(), returned, nil)
+							_, _ = errorResponse(r.Context(), returned)
 							if calls.Load() != 0 {
 								t.Error("probe encoded payload")
 							}

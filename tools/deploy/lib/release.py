@@ -444,6 +444,13 @@ def restart(host, entry, state=None, *, role="all", roles=None):
     start_roles(host, entry, role=role, roles=roles, enable=roles is None)
 
 
+def _prepare_units(host, units, deadline, enable):
+    if enable:
+        host.run(["systemctl", "enable", *units.values()], timeout=_remaining(deadline, 10))
+    # systemd exits 1 for a unit it hasn't loaded, as on a first deploy.
+    host.run(["systemctl", "reset-failed", *units.values()], timeout=_remaining(deadline, 10), check=False)
+
+
 def start_roles(host, entry, *, http_only=False, role="all", roles=None, enable=True):
     """Start selected roles under one deadline, with HTTP ready before backgrounds."""
     units = selected_units(entry, role, roles=roles)
@@ -457,10 +464,7 @@ def start_roles(host, entry, *, http_only=False, role="all", roles=None, enable=
         try:
             with wall_clock_budget(READINESS_SECONDS):
                 deadline = time.monotonic() + READINESS_SECONDS
-                if enable:
-                    host.run(["systemctl", "enable", *units.values()], timeout=_remaining(deadline, 10))
-                # systemd exits 1 for a unit it hasn't loaded, as on a first deploy.
-                host.run(["systemctl", "reset-failed", *units.values()], timeout=_remaining(deadline, 10), check=False)
+                _prepare_units(host, units, deadline, enable)
                 host.run(["systemctl", "restart", *units.values()], timeout=_remaining(deadline, 60))
                 require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS), role=role),
                         "readiness_failed", "Selected role did not become ready within the activation deadline.")
@@ -471,10 +475,7 @@ def start_roles(host, entry, *, http_only=False, role="all", roles=None, enable=
     try:
         with wall_clock_budget(READINESS_SECONDS):
             deadline = time.monotonic() + READINESS_SECONDS
-            if enable:
-                host.run(["systemctl", "enable", *units.values()], timeout=_remaining(deadline, 10))
-            # systemd exits 1 for a unit it hasn't loaded, as on a first deploy.
-            host.run(["systemctl", "reset-failed", *units.values()], timeout=_remaining(deadline, 10), check=False)
+            _prepare_units(host, units, deadline, enable)
             if "http" in units:
                 host.run(["systemctl", "restart", units["http"]], timeout=_remaining(deadline, 60))
                 require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS), include_background=False),

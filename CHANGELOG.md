@@ -24,8 +24,8 @@
 
 - Fixed: Compression and automatic ETag middleware no longer log a transfer
   failure or abort when a client closes after the complete declared-length
-  response has been written and no encoding or trailers remain. Incomplete
-  transfers still abort.
+  response has been written and no encoding or trailers remain, including during
+  a copied file's final read. Incomplete transfers still abort.
 - Fixed: Successful single-kernel completion logs shutdown reason `completed`
   instead of `failure`. Pending kernels retain the conservative `failure` reason;
   exit results and immediate shutdown are unchanged.
@@ -35,7 +35,9 @@
   directory no longer stays over `max_files` until the next start.
 - Added: Deploy tool generation 4 takes `ROLE=http|worker|scheduler` on `ACTION=restart`
   and `ACTION=stop`, acting on that role alone. An instance with only some roles running
-  reports `degraded`. Upgrade hosts with `ACTION=tools-plan` and `ACTION=tools-apply`.
+  reports `degraded`; naming a topology's only role acts as the plain action, and a
+  deliberately stopped instance raises no `role_inactive`. Upgrade hosts with
+  `ACTION=tools-plan` and `ACTION=tools-apply`.
 - Changed: A stop now disables the unit, so it survives a reboot, and enablement decides
   which roles run. Configuration, key rotation, rollback and reconciliation restart only
   enabled roles, and start nothing on a stopped instance. Plain `ACTION=restart` and a

@@ -56,8 +56,9 @@ other roles unchanged. Pending background recovery must first complete through
 a plain restart. Restart waits for the selected role within the existing
 90-second readiness budget; background roles do not require HTTP readiness.
 Named actions record `degraded`, since they do not establish whole-instance
-health. Reports show inactive roles and raise `role_inactive` and
-`instance_degraded` as applicable. A plain restart or deploy starts and verifies
+health; naming the only role a topology declares acts as the plain action. Reports
+show inactive roles and raise `role_inactive` and `instance_degraded` as applicable;
+a deliberately `stopped` instance raises neither. A plain restart or deploy starts and verifies
 every declared role, including when deploying the same release again.
 
 Unit enablement is the single source of truth for which roles should run.

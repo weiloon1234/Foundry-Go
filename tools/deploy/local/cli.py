@@ -27,10 +27,9 @@ if sys.version_info < (3, 11):
 TOOLS_ROOT = Path(__file__).resolve().parents[1]
 ROOT: Path | None = None
 sys.path.insert(0, str(TOOLS_ROOT / "lib"))
-from certificates import RENEWAL_WARNING
 from edge import edge_findings
 
-from contracts import (BACKUP_POLICY, DeployError, PREFIX, SCHEMA, PROFILE_SCHEMA, LAYOUT_VERSION, VERSION_PATTERN, atomic_json, check_path, digest, identity, instance_name, now, parse_json, read_json, slug,
+from contracts import (BACKUP_POLICY, DeployError, PREFIX, RENEWAL_WARNING, SCHEMA, PROFILE_SCHEMA, LAYOUT_VERSION, VERSION_PATTERN, atomic_json, check_path, digest, identity, instance_name, now, parse_json, read_json, slug,
                        validate_profile, validate_project)
 from release import MAX_CONFIGURATION_CHANGES, validate_manifest
 from topology import load_topology

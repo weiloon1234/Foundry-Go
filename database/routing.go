@@ -342,6 +342,12 @@ func pingStartingPool(ctx context.Context, role PoolRole, raw *sql.DB, config Po
 			startupLog(ctx, logger, slog.LevelError, "database startup canceled", role, attempt, started, 0, canceled)
 			return safeerror.Join("operation failed", err, canceled)
 		}
+		// A late timer must not start an attempt whose expired context would
+		// replace this failure with its own deadline.
+		if !time.Now().Before(deadline) {
+			startupLog(ctx, logger, slog.LevelError, "database startup failed", role, attempt, started, 0, err)
+			return err
+		}
 		delay = min(delay*2, startRetryMaximum)
 	}
 }

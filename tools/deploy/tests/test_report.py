@@ -137,6 +137,11 @@ class ReportTests(unittest.TestCase):
         self.assertIn("role_inactive", codes)
         self.assertNotIn("instance_status_unknown", codes)
 
+    def test_deliberately_stopped_instance_has_no_inactive_role_problem(self):
+        self.host.states[INSTANCE_ID].update(status="stopped", current={"version": "test"})
+        result = report.collect_report(self.host)
+        self.assertNotIn("role_inactive", [p["code"] for p in result["problems"]])
+
     def test_before_first_deploy_has_stable_identity_and_no_secrets(self):
         before = copy.deepcopy((self.host.registry, self.host.states))
         files = {str(p): p.read_bytes() for p in self.host.paths.root.rglob("*") if p.is_file()}

@@ -85,7 +85,9 @@ func (w *compressionResponse) Write(data []byte) (int, error) {
 		return 0, w.err
 	}
 	if err := transportErr(w.request); err != nil {
-		w.err = err
+		if !w.declaredBodyDelivered() {
+			w.err = err
+		}
 		return 0, err
 	}
 	if w.status == 0 {
@@ -262,12 +264,16 @@ func (w *compressionResponse) reject(err error) {
 	copyResponseHeaders(w.underlying.Header(), w.final)
 	writeRoutingError(w.underlying, w.request, err)
 }
+
+// declaredBodyDelivered reports a complete identity body with no encoding or
+// buffered bytes pending, which a peer may close after without any loss.
+func (w *compressionResponse) declaredBodyDelivered() bool {
+	return w.err == nil && w.mode == compressionIdentity && w.stream == nil && len(w.buffer) == 0 &&
+		declaredResponseComplete(w.request.Method, w.final, w.header, w.declaredLength, w.written)
+}
+
 func (w *compressionResponse) finish() error {
-	if w.hijacked {
-		return nil
-	}
-	if w.err == nil && w.mode == compressionIdentity && w.stream == nil && len(w.buffer) == 0 &&
-		declaredResponseComplete(w.request.Method, w.final, w.header, w.declaredLength, w.written) {
+	if w.hijacked || w.declaredBodyDelivered() {
 		return nil
 	}
 	if err := transportErr(w.request); err != nil {
@@ -394,6 +400,9 @@ func (w *compressionResponse) ReadFrom(reader io.Reader) (int64, error) {
 	emptyReads := 0
 	for {
 		if err := transportErr(w.request); err != nil {
+			if w.declaredBodyDelivered() {
+				return total, nil
+			}
 			w.err = err
 			return total, err
 		}

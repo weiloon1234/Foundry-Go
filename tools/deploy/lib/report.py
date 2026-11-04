@@ -13,7 +13,7 @@ import time
 import urllib.error
 import urllib.request
 
-from contracts import BACKUP_FRESH_SECONDS, BACKUP_POLICY, DeployError, PREFIX, SCHEMA, SLUG_PATTERN, check_path, instance_paths, now, parse_json, valid_uuid
+from contracts import BACKUP_FRESH_SECONDS, BACKUP_POLICY, DeployError, INSTANCE_STATUSES, PREFIX, SCHEMA, SLUG_PATTERN, check_path, instance_paths, now, parse_json, valid_uuid
 from topology import instance_units
 from release import enabled_roles, service as role_service
 from host import OperationTimeout as ReportBudgetExceeded, wall_clock_budget
@@ -27,7 +27,6 @@ PUBLIC_PORTS = frozenset({22, 80, 443})
 RESOURCE_LOW_PERCENT = 10
 DISK_LOW_BYTES = 2 * 1024 ** 3
 CERTIFICATE_EXPIRING_SECONDS = 14 * 24 * 60 * 60
-STATUSES = {"never_deployed", "deploying", "healthy", "failed", "failed_applied", "rolled_back", "stopped", "degraded", "unknown"}
 DOMAIN = re.compile(r"(?=.{1,253}\Z)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\Z")
 
 
@@ -389,7 +388,7 @@ def instance_report(host, entry, deadline, problems):
         problem(problems, "instance_state_unavailable", instance_id)
         state = {}
     recorded_status = state.get("status")
-    if recorded_status not in STATUSES:
+    if recorded_status not in INSTANCE_STATUSES:
         recorded_status = "unknown"
         problem(problems, "instance_status_unknown", instance_id)
     rehearsal = provisioning.get("state") == "rehearsal"
@@ -421,7 +420,7 @@ def instance_report(host, entry, deadline, problems):
                             detail=f"{role} ({item['unit']}) is inactive but enabled and will start on reboot. Run {action} again to keep it stopped.")
     if recorded_status == "degraded":
         problem(problems, "instance_degraded", instance_id)
-    if state.get("current") and not rehearsal:
+    if state.get("current") and not rehearsal and recorded_status != "stopped":
         for item in topology.values():
             if item["state"] and item["state"]["active"] == "inactive":
                 problem(problems, "role_inactive", instance_id)
