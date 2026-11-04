@@ -267,3 +267,74 @@ func TestLifecycleEventsAreLoggedWithoutErrorText(t *testing.T) {
 		t.Fatal("lifecycle logs formatted an arbitrary error")
 	}
 }
+
+func TestKernelCompletionShutdownReason(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		name := "completed"
+		if failed {
+			name = "failure"
+		}
+		t.Run(name, func(t *testing.T) {
+			var output lockedBuffer
+			cause := errors.New("command failed")
+			app, err := foundation.NewBuilder(
+				foundation.WithLogger(slog.New(slog.NewJSONHandler(&output, nil))),
+				foundation.WithStopDelay(time.Second),
+				foundation.WithShutdownTimeout(2*time.Second),
+			).Register(kernelModule(foundation.CLI, func(context.Context) error {
+				if failed {
+					return cause
+				}
+				return nil
+			})).Build(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = app.Run(t.Context(), foundation.CLI)
+			if failed && !errors.Is(err, cause) || !failed && err != nil {
+				t.Fatalf("command result changed: %v", err)
+			}
+			if app.State() != foundation.Stopped {
+				t.Fatal("shutdown did not finish")
+			}
+			for _, line := range strings.Split(output.String(), "\n") {
+				if strings.Contains(line, `"msg":"application shutdown started"`) {
+					if !strings.Contains(line, `"reason":"`+name+`"`) || !strings.Contains(line, `"stop_delay":0`) {
+						t.Fatalf("incorrect shutdown label or delay: %s", line)
+					}
+					return
+				}
+			}
+			t.Fatal("missing shutdown log")
+		})
+	}
+}
+
+func TestSuccessfulKernelDoesNotHideAnotherKernelFailure(t *testing.T) {
+	var output lockedBuffer
+	cause := errors.New("HTTP kernel failed")
+	entered := make(chan struct{})
+	app, err := foundation.NewBuilder(foundation.WithLogger(slog.New(slog.NewJSONHandler(&output, nil)))).Register(
+		kernelModule(foundation.Worker, func(context.Context) error { <-entered; return nil }),
+		kernelModule(foundation.HTTP, func(ctx context.Context) error {
+			close(entered)
+			<-ctx.Done()
+			return cause
+		}),
+	).Build(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.RunKernels(t.Context(), foundation.Worker, foundation.HTTP); !errors.Is(err, cause) {
+		t.Fatalf("lost kernel failure: %v", err)
+	}
+	for _, line := range strings.Split(output.String(), "\n") {
+		if strings.Contains(line, `"msg":"application shutdown started"`) {
+			if !strings.Contains(line, `"reason":"failure"`) {
+				t.Fatalf("successful first kernel hid failure: %s", line)
+			}
+			return
+		}
+	}
+	t.Fatal("missing shutdown log")
+}

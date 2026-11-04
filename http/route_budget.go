@@ -72,10 +72,13 @@ type requestBudget struct {
 	routeResult error
 }
 
-// contextErr reports the error of the context the handler actually used.
+// contextErr retains the route deadline result and subsequent transport cancellation.
 func (b *requestBudget) contextErr(kernel context.Context) error {
 	if b != nil && b.routed {
-		return b.routeResult
+		if b.routeResult != nil {
+			return b.routeResult
+		}
+		return b.parent.Err()
 	}
 	return kernel.Err()
 }

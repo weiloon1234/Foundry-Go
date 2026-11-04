@@ -22,6 +22,7 @@ type etagResponse struct {
 	header, final                 stdhttp.Header
 	status                        int
 	declared                      int64
+	written                       int64
 	buffer                        responseBuffer
 	slots                         *admission.Semaphore
 	wait                          time.Duration
@@ -56,10 +57,6 @@ func (w *etagResponse) WriteHeader(status int) {
 	}
 	w.status = status
 	w.final = w.header.Clone()
-	if w.passthrough || !automaticETagAllowed(status, w.final) {
-		_ = w.commit()
-		return
-	}
 	if values := w.final.Values("Content-Length"); len(values) != 0 {
 		if len(values) != 1 {
 			_ = w.commit()
@@ -71,9 +68,9 @@ func (w *etagResponse) WriteHeader(status int) {
 			return
 		}
 		w.declared = length
-		if length > w.buffer.limit {
-			_ = w.commit()
-		}
+	}
+	if w.passthrough || !automaticETagAllowed(status, w.final) || w.declared > w.buffer.limit {
+		_ = w.commit()
 	}
 }
 
@@ -202,6 +199,7 @@ func (w *etagResponse) writeThrough(data []byte) (int, error) {
 			return total, w.err
 		}
 		total += n
+		w.written += int64(n)
 		if err == nil && n != len(chunk) {
 			err = io.ErrShortWrite
 		}

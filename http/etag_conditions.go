@@ -14,7 +14,7 @@ func (w *etagResponse) finish() error {
 	if w.err != nil {
 		return w.err
 	}
-	if w.finalized {
+	if w.finalized || w.committed && declaredResponseComplete(w.request.Method, w.final, w.header, w.declared, w.written) {
 		return nil
 	}
 	if err := transportErr(w.request); err != nil {

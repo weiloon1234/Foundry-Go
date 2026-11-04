@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Fixed: Compression and automatic ETag middleware no longer log a transfer
+  failure or abort when a client closes after the complete declared-length
+  response has been written and no encoding or trailers remain. Incomplete
+  transfers still abort.
+- Fixed: Successful single-kernel completion logs shutdown reason `completed`
+  instead of `failure`. Pending kernels retain the conservative `failure` reason;
+  exit results and immediate shutdown are unchanged.
+- Fixed: Request observations retain transport cancellation after a route with a
+  declared timeout exits, instead of recording a stale successful route result.
 - Fixed: Closing a rotating log file completes a cleanup already queued, so a log
   directory no longer stays over `max_files` until the next start.
 - Deploy reconciliation preserves the prior enabled roles unless the target release

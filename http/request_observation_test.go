@@ -247,3 +247,27 @@ func TestMaintenanceReadExceptionsAreExactAndOwned(t *testing.T) {
 		}
 	}
 }
+
+func TestRouteExitDoesNotHideLaterTransportCancellation(t *testing.T) {
+	for _, timeout := range []time.Duration{time.Second, time.Hour} {
+		t.Run(timeout.String(), func(t *testing.T) {
+			recorder := observationRecorder(t)
+			parent, disconnect := context.WithCancel(t.Context())
+			defer disconnect()
+			handler := observationBoundary(t, DefaultServerConfig(), recorder, func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+				scope := requestScopeFrom(r.Context())
+				_, exit := (routeBudget{timeout: timeout}).context(r.Context(), w, scope.budget)
+				exit()
+				// Outer middleware is still transferring the response after the route exits.
+				w.Header().Set("Content-Length", "10")
+				_, _ = w.Write([]byte("prefix"))
+				disconnect()
+			})
+			handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil).WithContext(parent))
+			snapshot := recorder.Snapshot()
+			if len(snapshot.Recent) != 1 || snapshot.Recent[0].Result.Outcome != observability.Cancelled {
+				t.Fatalf("late disconnect recorded as success: %+v", snapshot.Recent)
+			}
+		})
+	}
+}

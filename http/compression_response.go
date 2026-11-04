@@ -266,6 +266,10 @@ func (w *compressionResponse) finish() error {
 	if w.hijacked {
 		return nil
 	}
+	if w.err == nil && w.mode == compressionIdentity && w.stream == nil && len(w.buffer) == 0 &&
+		declaredResponseComplete(w.request.Method, w.final, w.header, w.declaredLength, w.written) {
+		return nil
+	}
 	if err := transportErr(w.request); err != nil {
 		return err
 	}

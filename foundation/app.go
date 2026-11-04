@@ -35,6 +35,7 @@ type stopReason string
 const (
 	stopRequested stopReason = "requested"
 	stopFailed    stopReason = "failure"
+	stopCompleted stopReason = "completed"
 )
 
 // App owns provider startup, a selected kernel and reverse-order shutdown.
@@ -303,7 +304,7 @@ func (a *App) RunKernels(ctx context.Context, kinds ...KernelKind) error {
 		}
 		launched++
 	}
-	cancelled := false
+	reason := stopFailed
 	var failures []error
 	if launchErr != nil {
 		failures = append(failures, launchErr)
@@ -313,15 +314,13 @@ func (a *App) RunKernels(ctx context.Context, kinds ...KernelKind) error {
 			launched--
 			if err != nil {
 				failures = append(failures, err)
+			} else if launched == 0 {
+				reason = stopCompleted
 			}
 		case <-ctx.Done():
-			cancelled = true
+			reason = stopRequested
 		case <-runtime.ctx.Done():
 		}
-	}
-	reason := stopFailed
-	if cancelled {
-		reason = stopRequested
 	}
 	stopErr := a.awaitStop(reason)
 	// Kernels still running when shutdown began have exited if it completed.

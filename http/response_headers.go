@@ -69,3 +69,11 @@ func responseHasCacheDirective(header stdhttp.Header, directives ...string) bool
 	}
 	return false
 }
+
+// A peer may close after reading Content-Length bytes, before the handler
+// returns. Only a committed body with no pending encoding or buffered bytes may
+// use this check; HEAD counts representation bytes rather than transferred bytes.
+func declaredResponseComplete(method string, final, current stdhttp.Header, declared, written int64) bool {
+	return method != stdhttp.MethodHead && declared >= 0 && written == declared &&
+		len(final.Values("Transfer-Encoding")) == 0 && !hasResponseTrailers(final) && !hasResponseTrailers(current)
+}
