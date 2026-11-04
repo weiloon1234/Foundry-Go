@@ -217,7 +217,8 @@ class WireCodec {
             if (++steps > limits.Steps) reject(path, "limit");
             // A tolerant client omits entries keyed by enum cases it does not know.
             const known = key === undefined || this.mapKey(key, name, path, tolerant);
-            const value = visit(type.element!, record[name], pointer(path, name), depth + 1);
+            let value: unknown;
+            if (known || received) value = visit(type.element!, record[name], pointer(path, name), depth + 1);
             if (known) result[name] = value;
           }
           return result;

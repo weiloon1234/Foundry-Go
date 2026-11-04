@@ -103,7 +103,7 @@ func endpointErrorDefinitions[P, Q, B, R any](e Endpoint[P, Q, B, R]) ([]ErrorDe
 	definitions := make([]ErrorDefinition, 0, len(e.errors))
 	seen := make(map[ErrorCode]bool, len(e.errors))
 	for _, declaration := range e.errors {
-		definition, err := declaration.Description()
+		definition, err := declaration.description()
 		if err != nil {
 			return nil, err
 		}
@@ -112,6 +112,11 @@ func endpointErrorDefinitions[P, Q, B, R any](e Endpoint[P, Q, B, R]) ([]ErrorDe
 		}
 		if declaration.details != nil && e.route.spec.Method == HEAD {
 			return nil, safeerror.NewFault(fault.Invalid, "HEAD endpoints cannot declare HTTP error details")
+		}
+		if declaration.details != nil {
+			if err := validateErrorDetailsLimits(declaration, e.limits.Response); err != nil {
+				return nil, err
+			}
 		}
 		seen[definition.Code] = true
 		definitions = append(definitions, definition)

@@ -507,6 +507,7 @@ func compilerCases() []compilerCase {
 		{"http_error_code", "cannot use"},
 		{"http_error_declaration", "cannot use"},
 		{"http_error_details_payload", "cannot use"},
+		{"http_error_details_declaration", "does not implement error"},
 		{"http_url_source_owner", "cannot use"},
 		{"http_json_key_owner", "cannot use"},
 		{"http_json_map_owner", "does not satisfy ~map[K]V"},

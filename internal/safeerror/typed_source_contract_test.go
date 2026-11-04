@@ -67,6 +67,11 @@ var typedDiagnosticOwners = map[string]int{
 	"fault/error.go#Wrap#Error": 1,
 	// Public constructor: untrusted until a framework owner captures it.
 	"http/error_declaration.go#DefineError#ErrorDeclaration": 1,
+	// Private validation views of an already declared public definition.
+	"http/error_details.go#MessageDefinition#ErrorDeclaration": 1,
+	"http/error_details.go#description#ErrorDeclaration":       1,
+	// Public constructor: its payload stays behind a private encoder.
+	"http/error_details.go#New#DetailedError": 1,
 	// Concrete diagnostic captured by Owned/Retain at this owner.
 	"http/errors.go#responseFailure#responseError": 1,
 	// Concrete diagnostic captured by Owned/Retain at this owner.

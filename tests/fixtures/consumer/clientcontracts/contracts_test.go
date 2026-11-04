@@ -153,6 +153,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
+	budgetHandler := memberErrorBudgetClients(t, dir)
 	options := typescript.Options{Dir: dir, OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"}, Surfaces: surfaces}
 	if _, err := clientcontracts.Export(t.Context(), source, options); err != nil {
 		t.Fatal(err)
@@ -278,6 +279,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	mux.Handle("/", routes)
+	mux.Handle("/details-budget/", http.StripPrefix("/details-budget", budgetHandler))
 	mux.Handle("/ws", hub)
 	// Native Node WebSocket has no browser cookie jar. This loopback-only test
 	// endpoint supplies a fixed fixture credential before the real auth adapter.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed: Wrapped-client forms copy decoded issues and drop unknown fields on
+  declared operation errors. Non-member errors retain strict envelope validation.
+
 - Added: Typed PostgreSQL trigram matching and similarity expressions in
   `orm/expr`, including nullable scores, joined projections and a transaction-only
   threshold helper. The match predicate uses the schema-qualified `public.%`

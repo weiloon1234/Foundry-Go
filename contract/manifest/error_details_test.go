@@ -377,9 +377,13 @@ func TestManifestDetailsRootShapes(t *testing.T) {
 		{Kind: contract.MapKind, Element: "shape.string"},
 		{Kind: contract.DynamicKind, Nullable: true},
 		{Kind: contract.ObjectKind, Nullable: true},
+		{Kind: contract.ObjectKind},
 	} {
 		for _, alias := range []bool{false, true} {
-			name := string(root.Kind)
+			if root.Kind == contract.ObjectKind && !root.Nullable && !alias {
+				continue
+			}
+			name := string(root.Kind) + "/nullable=" + strconv.FormatBool(root.Nullable)
 			if alias {
 				name = "alias/" + name
 			}
@@ -415,26 +419,35 @@ func TestManifestDetailsRootShapes(t *testing.T) {
 			})
 		}
 	}
-	t.Run("error envelope", func(t *testing.T) {
-		declaration := foundryhttp.DefineErrorDetails("bad_details", 409, "Bad details.", foundryhttp.ErrorResponseJSON())
-		router, err := foundryhttp.NewRouter(errorDetailsRoute(t, "invalid", foundryhttp.POST, declaration))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := Build(t.Context(), Sources{HTTP: router}); err == nil {
-			t.Fatal("error envelope became details")
-		}
-		doc, _ := source.Snapshot()
-		for i := range doc.Errors {
-			if doc.Errors[i].Code == "registry_exists" {
-				doc.Errors[i].DetailsType = doc.ErrorType
+	for _, alias := range []bool{false, true} {
+		t.Run("error envelope/alias="+strconv.FormatBool(alias), func(t *testing.T) {
+			schema, err := foundryhttp.ErrorResponseJSON().Description()
+			if err != nil {
+				t.Fatal(err)
 			}
-		}
-		raw, _ := json.Marshal(doc)
-		if _, err := Decode(raw); err == nil {
-			t.Fatal("forged error envelope details accepted")
-		}
-	})
+			doc, _ := source.Snapshot()
+			if alias {
+				typ := contract.Type{ID: "envelope.alias", Kind: contract.AliasKind, Element: schema.Root}
+				schema.Root = typ.ID
+				schema.Types = append(schema.Types, typ)
+				doc.Types = append(doc.Types, typ)
+			}
+			declaration := foundryhttp.DefineErrorDetails("bad_details", 409, "Bad details.", contract.DefineJSONField[foundryhttp.ErrorResponse](schema))
+			if _, err := foundryhttp.NewRouter(errorDetailsRoute(t, "invalid", foundryhttp.POST, declaration)); err == nil {
+				t.Fatal("error envelope assembled as details")
+			}
+			for i := range doc.Errors {
+				if doc.Errors[i].Code == "registry_exists" {
+					doc.Errors[i].DetailsType = schema.Root
+				}
+			}
+			raw, _ := json.Marshal(doc)
+			if _, err := Decode(raw); err == nil {
+				t.Fatal("forged error envelope details accepted")
+			}
+		})
+	}
+
 }
 
 func TestManifestSharedDetailsReachability(t *testing.T) {

@@ -32,8 +32,12 @@ type MemberConflictState struct {
 	State localization.Status `json:"state"`
 }
 
-var MemberExists = foundryhttp.DefineErrorDetails("member_exists", 409, "The member already exists.", MemberExistsDetailsJSON())
-var RegistrationClosed = foundryhttp.DefineError("registration_closed", 409, "Registration is closed.")
+var MemberExists = foundryhttp.DefineErrorDetails(
+	"member_exists", 409, "The member already exists.", MemberExistsDetailsJSON(),
+)
+var RegistrationClosed = foundryhttp.DefineError(
+	"registration_closed", 409, "Registration is closed.",
+)
 
 var MemberCreate = foundryhttp.DefineEndpoint(
 	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members")),

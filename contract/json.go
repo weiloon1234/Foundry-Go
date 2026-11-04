@@ -183,37 +183,53 @@ func (d JSON[T]) Decode(ctx context.Context, data []byte, limits JSONLimits) (T,
 	return result, nil
 }
 
+// ValidationSteps validates encoded bytes without constructing T and reports
+// schema work consumed. Adapters can reserve this work when
+// composing independently encoded payloads under one Steps budget.
+// Example: steps, err := descriptor.ValidationSteps(ctx, data, limits).
+func (d JSON[T]) ValidationSteps(ctx context.Context, data []byte, limits JSONLimits) (int, error) {
+	if err := d.Validate(); err != nil {
+		return 0, err
+	}
+	return d.schema.validationSteps(ctx, data, limits)
+}
+
 func (s *compiledSchema) checkInput(ctx context.Context, data []byte, limits JSONLimits) error {
+	_, err := s.validationSteps(ctx, data, limits)
+	return err
+}
+
+func (s *compiledSchema) validationSteps(ctx context.Context, data []byte, limits JSONLimits) (int, error) {
 	if err := limits.Validate(); err != nil {
-		return err
+		return 0, err
 	}
 	if ctx == nil {
-		return safeerror.NewFault(fault.Invalid, "JSON decode requires a context")
+		return 0, safeerror.NewFault(fault.Invalid, "JSON decode requires a context")
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return 0, err
 	}
 	node, err := jsonwire.Decode(data, jsonwire.Limits{Bytes: limits.Bytes, Depth: limits.Depth, Nodes: limits.Nodes})
 	if canceled := ctx.Err(); canceled != nil {
-		return canceled
+		return 0, canceled
 	}
 	if err != nil {
-		return decodeFailure(nil, err)
+		return 0, decodeFailure(nil, err)
 	}
-	issues, err := s.check(ctx, node, shapeLimits{steps: limits.Steps, issues: limits.Issues})
+	issues, steps, err := s.checkSteps(ctx, node, shapeLimits{steps: limits.Steps, issues: limits.Issues})
 	if err != nil {
 		if failure := jsonKeyInternalFailure(err); failure != nil {
-			return failure
+			return 0, failure
 		}
 		if canceled := ctx.Err(); canceled != nil {
-			return canceled
+			return 0, canceled
 		}
-		return decodeFailure(issues, err)
+		return 0, decodeFailure(issues, err)
 	}
 	if len(issues) != 0 {
-		return decodeFailure(issues, nil)
+		return 0, decodeFailure(issues, nil)
 	}
-	return nil
+	return steps, nil
 }
 
 func decodeJSONOutcome(ctx context.Context, err error) error {

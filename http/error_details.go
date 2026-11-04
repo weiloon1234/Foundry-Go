@@ -29,6 +29,7 @@ type errorDeclaration struct {
 type errorDetails struct {
 	schema      func() (contract.Schema, error)
 	fingerprint [sha256.Size]byte
+	depth       int
 	err         error
 }
 
@@ -36,9 +37,7 @@ func (d ErrorDeclaration) errorDeclarationOption() errorDeclaration {
 	return errorDeclaration{definition: d.definition}
 }
 
-// Description returns an owned value snapshot of the declaration.
-// Example: definition, err := RegistryExists.Description().
-func (d errorDeclaration) Description() (ErrorDefinition, error) {
+func (d errorDeclaration) description() (ErrorDefinition, error) {
 	if err := (ErrorDeclaration{definition: d.definition}).Validate(); err != nil {
 		return ErrorDefinition{}, err
 	}
@@ -65,10 +64,24 @@ type DetailedErrorDeclaration[D any] struct {
 // Details are published only by endpoints that declare this exact definition.
 // Example: DefineErrorDetails("registry_exists", 409, "Registry already exists.", RegistryExistsDetailsJSON()).
 func DefineErrorDetails[D any](code ErrorCode, status int, message string, descriptor contract.JSON[D]) DetailedErrorDeclaration[D] {
-	details := &errorDetails{schema: descriptor.Description}
-	schema, err := descriptor.Description()
+	return DetailedErrorDeclaration[D]{
+		errorDeclaration: defineErrorDetails(code, status, message, descriptor.Description),
+		descriptor:       descriptor,
+	}
+}
+
+func defineErrorDetails(code ErrorCode, status int, message string, describe func() (contract.Schema, error)) errorDeclaration {
+	details := &errorDetails{schema: describe}
+	schema, err := describe()
 	if err == nil {
 		err = contract.RequireObjectRoot(schema)
+	}
+	if err == nil {
+		envelope, envelopeErr := ErrorResponseJSON().Description()
+		err = envelopeErr
+		if err == nil && schema.Root == envelope.Root {
+			err = safeerror.NewFault(fault.Invalid, "HTTP error details cannot use the error envelope")
+		}
 	}
 	if err == nil {
 		err = contract.RejectPasswordOutput(schema, "HTTP error details")
@@ -80,26 +93,35 @@ func DefineErrorDetails[D any](code ErrorCode, status int, message string, descr
 			details.fingerprint = sha256.Sum256(data)
 		}
 	}
+	if err == nil {
+		details.depth = requiredDetailsDepth(schema)
+	}
 	details.err = err
-	return DetailedErrorDeclaration[D]{errorDeclaration: errorDeclaration{
+	return errorDeclaration{
 		definition: ErrorDefinition{Code: code, Status: status, Message: message, DetailsType: schema.Root},
 		details:    details,
-	}, descriptor: descriptor}
+	}
 }
 
 func (d errorDeclaration) errorDeclarationOption() errorDeclaration { return d }
 
+// Description returns an owned value snapshot of the declaration.
+// Example: definition, err := RegistryExists.Description().
+func (d DetailedErrorDeclaration[D]) Description() (ErrorDefinition, error) {
+	return d.description()
+}
+
 // Validate checks the public definition and the details output schema.
 // Example: err := RegistryExists.Validate().
-func (d errorDeclaration) Validate() error {
-	_, err := d.Description()
+func (d DetailedErrorDeclaration[D]) Validate() error {
+	_, err := d.description()
 	return err
 }
 
 // MessageDefinition returns the parameter-free http.error.<code> catalog signature.
 // Example: message, err := RegistryExists.MessageDefinition().
-func (d errorDeclaration) MessageDefinition() (i18n.MessageDefinition, error) {
-	definition, err := d.Description()
+func (d DetailedErrorDeclaration[D]) MessageDefinition() (i18n.MessageDefinition, error) {
+	definition, err := d.description()
 	if err != nil {
 		return i18n.MessageDefinition{}, err
 	}
@@ -119,7 +141,7 @@ func (d DetailedErrorDeclaration[D]) New(payload D) *DetailedError {
 // Inspection is bounded; invalid declarations and failed inspection never match.
 // Example: if RegistryExists.Matches(err) { /* handle the declared failure */ }.
 func (d DetailedErrorDeclaration[D]) Matches(err error) bool {
-	definition, invalid := d.Description()
+	definition, invalid := d.description()
 	if invalid != nil || d.details == nil || err == nil {
 		return false
 	}
@@ -195,7 +217,7 @@ func (e *DetailedError) httpErrorDefinition() (ErrorDefinition, bool) {
 	if e == nil || e.encode == nil || e.declaration.details == nil {
 		return ErrorDefinition{}, false
 	}
-	definition, err := e.declaration.Description()
+	definition, err := e.declaration.description()
 	return definition, err == nil
 }
 
@@ -237,7 +259,13 @@ func prepareErrorResponse(ctx context.Context, payload ErrorResponse, detailed *
 		// Input inspection can invoke omitzero IsZero before jsoncodec owns methods.
 		preparationErr = callback.Isolated("HTTP error details encoding", func() error {
 			var err error
-			details, err = detailed.encode(encoding, limits)
+			remaining := limits
+			overhead, err := errorEnvelopeSteps(encoding, payload, limits)
+			if err != nil {
+				return err
+			}
+			remaining.Steps -= overhead
+			details, err = detailed.encode(encoding, remaining)
 			return err
 		})
 	}
@@ -245,9 +273,7 @@ func prepareErrorResponse(ctx context.Context, payload ErrorResponse, detailed *
 		presenter.present(ctx, &payload)
 	}
 	if detailed != nil && preparationErr == nil {
-		body, err := value.EncodeJSON(encoding, detailedErrorResponse{ErrorResponse: payload, Details: details}, value.JSONEncodingLimits{
-			Bytes: limits.Bytes - 1, Depth: limits.Depth, Nodes: limits.Nodes, Steps: limits.Steps,
-		})
+		body, err := encodeDetailedResponse(encoding, payload, details, limits)
 		if err == nil {
 			return body, payload, nil
 		}
@@ -262,4 +288,91 @@ func prepareErrorResponse(ctx context.Context, payload ErrorResponse, detailed *
 		preparationErr = safeerror.WrapFailure(fault.Internal, "typed HTTP error details failed their contract or EndpointLimits.Response bounds", preparationErr)
 	}
 	return nil, payload, preparationErr
+}
+
+func encodeDetailedResponse(ctx context.Context, payload ErrorResponse, details json.RawMessage, limits contract.JSONLimits) ([]byte, error) {
+	return value.EncodeJSON(ctx, detailedErrorResponse{ErrorResponse: payload, Details: details}, value.JSONEncodingLimits{
+		Bytes: limits.Bytes - 1, Depth: limits.Depth, Nodes: limits.Nodes, Steps: limits.Steps,
+	})
+}
+
+func errorEnvelopeSteps(ctx context.Context, payload ErrorResponse, limits contract.JSONLimits) (int, error) {
+	descriptor := ErrorResponseJSON()
+	data, err := descriptor.Encode(ctx, payload, limits)
+	if err != nil {
+		return 0, err
+	}
+	steps, err := descriptor.ValidationSteps(ctx, data, limits)
+	// The extension adds one object key and one declared property. The details
+	// descriptor owns its root visit and all work below it.
+	return steps + 2, err
+}
+
+func validateErrorDetailsLimits(declaration errorDeclaration, limits contract.JSONLimits) error {
+	definition := declaration.definition
+	payload := ErrorResponse{Status: definition.Status, Code: definition.Code, Message: definition.Message}
+	floor := limits
+	floor.Steps = DefaultEndpointLimits().Response.Steps
+	_, err := encodeDetailedResponse(context.Background(), payload, json.RawMessage(`{}`), floor)
+	if err != nil || limits.Depth < 1+declaration.details.depth {
+		return safeerror.NewFault(fault.Invalid, "EndpointLimits.Response cannot fit the declared HTTP error details floor")
+	}
+	return nil
+}
+
+// Find the shallowest value admitted by required paths. Nullable fields, empty
+// variable collections and optional properties need no deeper children. Start
+// unresolved cycles above the supported bound; finite union branches can lower it.
+func requiredDetailsDepth(schema contract.Schema) int {
+	const unreachable = contract.MaxJSONDepth + 1
+	types := make(map[contract.TypeID]contract.Type, len(schema.Types))
+	depths := make(map[contract.TypeID]int, len(schema.Types))
+	parents := make(map[contract.TypeID][]contract.TypeID)
+	queue := make([]contract.TypeID, 0, len(schema.Types))
+	for _, typ := range schema.Types {
+		types[typ.ID], depths[typ.ID] = typ, unreachable
+		queue = append(queue, typ.ID)
+		for _, property := range typ.Properties {
+			if property.Required {
+				parents[property.Type] = append(parents[property.Type], typ.ID)
+			}
+		}
+		for _, variant := range typ.Variants {
+			parents[variant.Type] = append(parents[variant.Type], typ.ID)
+		}
+		if typ.Element != "" {
+			parents[typ.Element] = append(parents[typ.Element], typ.ID)
+		}
+	}
+	for len(queue) > 0 {
+		id := queue[len(queue)-1]
+		queue = queue[:len(queue)-1]
+		typ, depth := types[id], 0
+		if !typ.Nullable {
+			switch typ.Kind {
+			case contract.ObjectKind:
+				for _, property := range typ.Properties {
+					if property.Required {
+						depth = max(depth, 1+depths[property.Type])
+					}
+				}
+			case contract.AliasKind:
+				depth = depths[typ.Element]
+			case contract.ArrayKind:
+				if length, fixed := typ.Length.Get(); fixed && length > 0 {
+					depth = 1 + depths[typ.Element]
+				}
+			case contract.UnionKind:
+				depth = unreachable
+				for _, variant := range typ.Variants {
+					depth = min(depth, max(1, depths[variant.Type]))
+				}
+			}
+		}
+		if depth < depths[id] {
+			depths[id] = depth
+			queue = append(queue, parents[id]...)
+		}
+	}
+	return depths[schema.Root]
 }

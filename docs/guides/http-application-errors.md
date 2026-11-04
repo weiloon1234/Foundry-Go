@@ -69,8 +69,8 @@ It waits for the custom method to finish and never formats an application cause.
 
 ## Typed details
 
-Use a concrete DTO for a failure that needs public structured data. Its root,
-including aliases, must be a non-nullable object. Scalar, array, map, dynamic
+Use a concrete DTO for a failure that needs public structured data. Its root
+must be directly a non-nullable object. Alias, scalar, array, map, dynamic
 and nullable roots are refused. A details type cannot be the error envelope
 itself. Nested fields retain the normal DTO rules.
 
@@ -78,21 +78,21 @@ itself. Nested fields retain the normal DTO rules.
 ```go
 //foundry:dto
 type MemberExistsDetails struct {
-    ExistingMemberID model.ID[models.User] `json:"existing_member_id"`
-    Existing         MemberConflictState   `json:"existing"`
+	ExistingMemberID model.ID[models.User] `json:"existing_member_id"`
+	Existing         MemberConflictState   `json:"existing"`
 }
 
 //foundry:dto
 type MemberConflictState struct {
-    Name  string              `json:"name"`
-    State localization.Status `json:"state"`
+	Name  string              `json:"name"`
+	State localization.Status `json:"state"`
 }
 
 var MemberExists = foundryhttp.DefineErrorDetails(
-    "member_exists", 409, "The member already exists.", MemberExistsDetailsJSON(),
+	"member_exists", 409, "The member already exists.", MemberExistsDetailsJSON(),
 )
 var RegistrationClosed = foundryhttp.DefineError(
-    "registration_closed", 409, "Registration is closed.",
+	"registration_closed", 409, "Registration is closed.",
 )
 ```
 
@@ -129,6 +129,10 @@ Outer classification still wins: `http.Conflict.WithCause(detailed)` returns
 Router assembly refuses details on status 401, details on HEAD endpoints,
 password output in details, and conflicting definitions or schemas for one code.
 A plain declaration and a detailed declaration for the same code conflict.
+Assembly also refuses response byte, node or depth limits below the declared
+error's static floor: its envelope with empty details and the depth required by
+the details schema. Larger payloads and localized messages can still exceed the
+limits at runtime. The encoder reserves envelope work from the shared Steps budget.
 Manifest readers repeat the relevant checks, including for hand-made documents.
 Status 401 cannot carry details because auth transports may discard its body and
 retry. Keep authentication failures separate from business conflicts.

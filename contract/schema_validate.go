@@ -29,18 +29,23 @@ type shapeCheck struct {
 // validation must precede it. Each graph visit consumes work, including aliases
 // and absent declared fields; no recursive alias expansion uses the Go stack.
 func (s *compiledSchema) check(ctx context.Context, node any, limits shapeLimits) ([]Issue, error) {
+	issues, _, err := s.checkSteps(ctx, node, limits)
+	return issues, err
+}
+
+func (s *compiledSchema) checkSteps(ctx context.Context, node any, limits shapeLimits) ([]Issue, int, error) {
 	if ctx == nil || limits.steps <= 0 || limits.issues <= 0 {
-		return nil, safeerror.NewFault(fault.Invalid, "invalid JSON contract validation bounds")
+		return nil, 0, safeerror.NewFault(fault.Invalid, "invalid JSON contract validation bounds")
 	}
 	check := shapeCheck{ctx: ctx, schema: s, limits: limits}
 	check.visit(s.description.Root, node, "", 0)
 	if check.err != nil {
-		return check.issues, check.err
+		return check.issues, check.steps, check.err
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, check.steps, err
 	}
-	return check.issues, nil
+	return check.issues, check.steps, nil
 }
 
 func (c *shapeCheck) take() bool {

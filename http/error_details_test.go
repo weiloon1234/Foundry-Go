@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/attribution"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -38,6 +39,8 @@ func (d RegistryErrorDetails) MarshalJSON() ([]byte, error) {
 		runtime.Goexit()
 	case "failure":
 		return nil, errors.New("private-payload-marker")
+	case "depth":
+		return []byte(`{"existing_registry_id":"private-payload-marker","optional":{"label":"private-payload-marker"}}`), nil
 	case "schema":
 		return []byte(`{"existing_registry_id":42}`), nil
 	}
@@ -132,6 +135,14 @@ func TestDetailedErrorWireAndLocalization(t *testing.T) {
 
 func TestDetailedErrorFailuresAndProbe(t *testing.T) {
 	declared := registryError()
+	depthSchema, _ := registryDetailsJSON().Description()
+	for i := range depthSchema.Types {
+		if depthSchema.Types[i].ID == depthSchema.Root {
+			depthSchema.Types[i].Properties = append(depthSchema.Types[i].Properties, contract.Property{Name: "optional", Type: "nested"})
+		}
+	}
+	depthSchema.Types = append(depthSchema.Types, contract.Type{ID: "nested", Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "label", Type: "string", Required: true}}})
+	deep := DefineErrorDetails("registry_exists", 409, "Registry already exists.", contract.DefineJSON[RegistryErrorDetails](depthSchema))
 	changedSchema, _ := registryDetailsJSON().Description()
 	for i := range changedSchema.Types {
 		if changedSchema.Types[i].Kind == contract.StringKind {
@@ -158,14 +169,18 @@ func TestDetailedErrorFailuresAndProbe(t *testing.T) {
 		{name: "encode goexit", declaration: declared, mode: "goexit", status: 500, calls: 1},
 		{name: "schema failure", declaration: declared, mode: "schema", status: 500, calls: 1},
 		{name: "envelope bytes", declaration: declared, limit: "bytes", status: 500, calls: 1},
-		{name: "envelope depth", declaration: declared, limit: "depth", status: 500, calls: 1},
+		{name: "envelope depth", declaration: deep, mode: "depth", limit: "depth", status: 500, calls: 1},
 		{name: "envelope nodes", declaration: declared, limit: "nodes", status: 500, calls: 1},
 		{name: "outer conflict", declaration: declared, returned: func(e *DetailedError) error { return Conflict.WithCause(e) }, status: 409},
 	} {
 		for _, probe := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/probe=%v", tc.name, probe), func(t *testing.T) {
 				var calls atomic.Int32
-				failure := declared.New(RegistryErrorDetails{ExistingRegistryID: "private-payload-marker", Calls: &calls, Mode: tc.mode}).WithCause(privateCause{})
+				bound := declared
+				if tc.limit == "depth" {
+					bound = deep
+				}
+				failure := bound.New(RegistryErrorDetails{ExistingRegistryID: "private-payload-marker", Calls: &calls, Mode: tc.mode}).WithCause(privateCause{})
 				var returned error = failure
 				if tc.returned != nil {
 					returned = tc.returned(failure)
@@ -179,9 +194,9 @@ func TestDetailedErrorFailuresAndProbe(t *testing.T) {
 				case "bytes":
 					limits.Response.Bytes = 100
 				case "depth":
-					limits.Response.Depth = 1
+					limits.Response.Depth = 2
 				case "nodes":
-					limits.Response.Nodes = 5
+					limits.Response.Nodes = 9
 				}
 				endpoint = ConfigureEndpoint(endpoint, Limits(limits))
 				if probe {
@@ -703,5 +718,83 @@ func TestDetailedErrorRejectsNullableAndDynamicRoots(t *testing.T) {
 	}
 	if err := DefineErrorDetails("dynamic_details", 409, "Dynamic details.", dynamic).Validate(); err == nil {
 		t.Fatal("unconstrained details accepted")
+	}
+}
+
+func TestDetailedErrorLimitsRefusedAtAssembly(t *testing.T) {
+	for _, change := range []func(*contract.JSONLimits){
+		func(l *contract.JSONLimits) { l.Bytes = 32 },
+		func(l *contract.JSONLimits) { l.Nodes = 6 },
+		func(l *contract.JSONLimits) { l.Depth = 1 },
+	} {
+		limits := DefaultEndpointLimits()
+		change(&limits.Response)
+		endpoint := ConfigureEndpoint(errorEndpoint("registry.create", "/registry"), Errors(registryError()), Limits(limits))
+		if err := ValidateEndpoint(endpoint); !errors.Is(err, fault.Invalid) {
+			t.Fatal("unusable details budget accepted", err)
+		}
+		if _, err := NewRouter(endpoint.Handle(returnHTTPError(nil))); !errors.Is(err, fault.Invalid) {
+			t.Fatal("unusable budget assembled", err)
+		}
+		plain := ConfigureEndpoint(errorEndpoint("registry.plain", "/plain"), Errors(DefineError("other", 409, "Other")), Limits(limits))
+		if err := ValidateEndpoint(plain); err != nil {
+			t.Fatal("plain declaration changed", err)
+		}
+	}
+}
+
+type detailedIssues struct{ *DetailedError }
+
+func (d detailedIssues) httpErrorIssues() []contract.Issue {
+	return []contract.Issue{{Path: "/body/name", Code: "name_taken"}}
+}
+
+func TestDetailedErrorIssuesAndRequestID(t *testing.T) {
+	declaration := registryError()
+	router, err := NewRouter(ConfigureEndpoint(errorEndpoint("registry.create", "/registry"), Errors(declaration)).Handle(returnHTTPError(detailedIssues{declaration.New(RegistryErrorDetails{ExistingRegistryID: "registry-123"})})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	origin, err := (attribution.Origin{}).WithRequest(attribution.Request{ID: "request-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := attribution.WithContext(t.Context(), origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequestWithContext(ctx, "GET", "/registry", nil))
+	want := `{"status":409,"error_code":"registry_exists","message":"Registry already exists.","request_id":"request-1","issues":[{"path":"/body/name","code":"name_taken"}],"details":{"existing_registry_id":"registry-123"}}` + "\n"
+	if response.Code != 409 || response.Body.String() != want {
+		t.Fatal(response.Code, response.Body.String())
+	}
+}
+
+func TestDetailedErrorRequiredDepthFloor(t *testing.T) {
+	for _, tc := range []struct {
+		name                      string
+		required, nullable, cycle bool
+		want                      int
+	}{
+		{"required nested", true, false, false, 2},
+		{"optional nested", false, false, false, 0},
+		{"nullable nested", true, true, false, 1},
+		{"required cycle", true, false, true, contract.MaxJSONDepth + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			child := contract.TypeID("string")
+			if tc.cycle {
+				child = "root"
+			}
+			schema := contract.Schema{Root: "root", Types: []contract.Type{
+				{ID: "root", Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "nested", Type: "nested", Required: tc.required}}},
+				{ID: "nested", Kind: contract.ObjectKind, Nullable: tc.nullable, Properties: []contract.Property{{Name: "value", Type: child, Required: true}}},
+				{ID: "string", Kind: contract.StringKind},
+			}}
+			if depth := requiredDetailsDepth(schema); depth != tc.want {
+				t.Fatal(depth, tc.want)
+			}
+		})
 	}
 }

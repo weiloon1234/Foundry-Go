@@ -188,6 +188,10 @@ for (const malformed of [{},{status:{}},{status:"409"},{status:null},{status:tru
  assert.equal(failed.issues[0].code,!Object.hasOwn(malformed,"status")?"required":malformed.status===null?"null":"value");
  await healthy();
 }
+wire="null"; const nullEnvelope=await caught(); assert(nullEnvelope instanceof sdk.ResponseContractError); assert.deepEqual(nullEnvelope.issues,[{path:"",code:"null"}]); await healthy();
+wire=JSON.stringify({...envelope,request_id:"request-1",issues:[{path:"/body/name",code:"name_taken"}]});
+const combined=await caught(sdk.createClient(transport,{strictResponses:true})); assert(sdk.isOperationError("registryCreate",combined));
+assert.equal(combined.response.request_id,"request-1"); assert.equal(combined.response.issues[0].code,"name_taken"); assert.equal(combined.response.details.count,3); await healthy();
 wire=JSON.stringify({...envelope,status:410}); assert(await caught() instanceof sdk.ResponseContractError); await healthy();
 wire=JSON.stringify({status:409,error_code:"seat_unavailable",message:"No seat",details:{seat:"A"}});
 assert(await caught() instanceof sdk.ResponseContractError);
@@ -204,7 +208,12 @@ assert(!sdk.isOperationError("registryHead",new sdk.APIError(409,"conflict",{sta
 wire=JSON.stringify({...envelope,details:{...details,nested:{label:"existing",details:{secret:"hidden"}}}});
 const nested=await caught(sdk.createClient(transport,{strictResponses:true}));
 assert(nested instanceof sdk.ResponseContractError); assert.equal(nested.issues[0].path,"/details/nested/details"); assert.equal(nested.issues[0].code,"unknown");
-wire=JSON.stringify({...envelope,details:{...details,em:{future:{evil:true}}}}); assert(await caught() instanceof sdk.ResponseContractError); await healthy();
+for (const future of [{evil:true},null,{kind:"newer",label:"future"}]) {
+ wire=JSON.stringify({...envelope,details:{...details,em:{future}}});
+ const omitted=await caught(); assert(omitted instanceof sdk.APIError); assert(sdk.isOperationError("registryCreate",omitted)); assert.deepEqual(Object.keys(omitted.response.details.em),[]);
+ assert(!sdk.isOperationError("registryCreate",new sdk.APIError(409,"registry_exists",{...received,details:{...received.details,em:{future}}})));
+ await healthy();
+}
 wire=JSON.stringify({...envelope,error_code:"registry_closed"});
 error=await caught(); assert(sdk.isOperationError("registryCreate",error)); assert(!Object.hasOwn(error.response,"details"));
 assert(await caught(sdk.createClient(transport,{strictResponses:true})) instanceof sdk.ResponseContractError); await healthy();
@@ -220,14 +229,18 @@ const wrappedResult=await form.submit(wrapped);
 assert.equal(wrappedResult.error,publicError); assert.equal(form.getSnapshot().issues[0].code,"registry_exists");
 for (const candidate of [
  new sdk.APIError(409,"registry_exists",{...received,issues:[{path:"/body/name",code:"name_taken",secret:"zz"}]}),
- new sdk.APIError(409,"name_taken",{status:"409",error_code:"name_taken",message:"Taken",issues:[{path:"/body/name",code:"name_taken",secret:"zz"}]}),
- new sdk.APIError(409,"seat_unavailable",{status:"409",error_code:"seat_unavailable",message:"Taken",issues:[{path:"/body/name",code:"name_taken",secret:"zz"}]})
+ new sdk.APIError(409,"name_taken",{status:"409",error_code:"name_taken",message:"Taken",issues:[{path:"/body/name",code:"name_taken"}]}),
+ new sdk.APIError(409,"seat_unavailable",{status:"409",error_code:"seat_unavailable",message:"Taken",issues:[{path:"/body/name",code:"name_taken"}]})
 ]) {
  await form.submit({registryCreate:async()=>{throw candidate;}});
  assert.deepEqual(form.getSnapshot().issues.map(issue=>({...issue})),[{path:"/body/name",code:"name_taken"}]);
  assert(!JSON.stringify(form.getSnapshot().issues).includes("zz"));
 }
-for (const candidate of [other,new sdk.APIError(409,"name_taken",{...received,error_code:"name_taken"}),new sdk.APIError(409,"registry_exists",{...received,details:{}}),new sdk.APIError(409,"garbage",{status:{},issues:[{path:1,code:false}]})]) {
+for (const candidate of [
+ new sdk.APIError(409,"name_taken",{status:"409",error_code:"name_taken",message:"Taken",secret:"zz"}),
+ new sdk.APIError(409,"name_taken",{status:"409",error_code:"name_taken",message:"Taken",issues:[{path:"/body/name",code:"name_taken",secret:"zz"}]}),
+ new sdk.APIError(409,"name_taken",{status:"409",error_code:"name_taken",message:new sdk.UnknownEnumValue("string","future")}),
+ other,new sdk.APIError(409,"name_taken",{...received,error_code:"name_taken"}),new sdk.APIError(409,"registry_exists",{...received,details:{}}),new sdk.APIError(409,"garbage",{status:{},issues:[{path:1,code:false}]})]) {
  await form.submit({registryCreate:async()=>{throw candidate;}});
  assert.deepEqual(form.getSnapshot().issues.map(issue=>({...issue})),[{path:"",code:"form_request"}]);
 }
