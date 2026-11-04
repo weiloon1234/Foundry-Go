@@ -111,10 +111,18 @@ func TestJobAdmissionUsesSharedTypedQuota(t *testing.T) {
 type lostLeaseBackend struct {
 	jobs.Backend
 	finishes atomic.Int32
+	running  <-chan struct{}
 }
 
+// JobRenew reports the loss only once the handler runs. A loss any earlier would
+// correctly keep the handler from starting; see TestLeaseLostBeforeStartDoesNotRunHandler.
 func (b *lostLeaseBackend) JobRenew(context.Context, jobs.Key, jobs.Ownership, time.Duration) (jobs.LeaseStatus, error) {
-	return jobs.LeaseStatus{}, nil
+	select {
+	case <-b.running:
+		return jobs.LeaseStatus{}, nil
+	default:
+		return jobs.LeaseStatus{Owned: true}, nil
+	}
 }
 func (b *lostLeaseBackend) JobFinish(ctx context.Context, key jobs.Key, owner jobs.Ownership, result jobs.Result) (bool, error) {
 	b.finishes.Add(1)
@@ -124,11 +132,13 @@ func (b *lostLeaseBackend) JobFinish(ctx context.Context, key jobs.Key, owner jo
 // Lease loss cancels the handler and keeps its slot until actual exit; the
 // worker itself keeps running and never acknowledges the lost reservation.
 func TestLeaseLossCancelsAndRetainsLiveHandler(t *testing.T) {
+	running := make(chan struct{})
 	cancelled := make(chan struct{})
 	release := make(chan struct{})
 	defer close(release)
 	f := newWorkerFixture(t, jobs.DefaultPolicy("default"), nil)
 	d, err := f.definition.Declare(func(ctx context.Context, _ payload) error {
+		close(running)
 		<-ctx.Done()
 		close(cancelled)
 		<-release
@@ -141,7 +151,7 @@ func TestLeaseLossCancelsAndRetainsLiveHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	backend := &lostLeaseBackend{Backend: f.backend}
+	backend := &lostLeaseBackend{Backend: f.backend, running: running}
 	config := jobs.DefaultWorkerConfig(keyspace.Namespace{Application: "jobs", Environment: "test"}, "default")
 	config.Concurrency = 1
 	config.HeartbeatInterval = time.Millisecond
