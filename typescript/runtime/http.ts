@@ -27,7 +27,7 @@ interface RuntimeDocument {
     readonly messages: readonly { readonly key: string; readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }[];
     readonly frontend_messages?: readonly { readonly key: string; readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }[];
   };
-  readonly errors: readonly { readonly error_code: string; readonly status: number; readonly message: string }[]; readonly realtime?: RealtimeDescription;
+  readonly errors: readonly { readonly error_code: string; readonly status: number; readonly message: string; readonly details_type?: string }[]; readonly realtime?: RealtimeDescription;
 }
 declare const idempotencyKeyBrand: unique symbol;
 export type IdempotencyKey = string & { readonly [idempotencyKeyBrand]: true };
@@ -77,6 +77,36 @@ export interface ServerEvent<T> { readonly id?: string; readonly name: string; r
 export interface EventStreamResult<T> extends AsyncIterable<ServerEvent<T>> { readonly status: number; readonly headers: Readonly<Record<string, string>>; close(): Promise<void> }
 export class APIError<T = unknown> extends Error {
   constructor(readonly status: number, readonly code: string, readonly response: T | undefined, readonly retryAfterSeconds?: number) { super("API request failed"); this.name = "APIError"; }
+}
+// Only the shared decoder can brand an error. Entries still check their own
+// operation's status/code membership before trusting it.
+const decodedErrors = /* @__PURE__ */ new WeakSet<APIError>();
+function errorDefinition(document: RuntimeDocument, operation: Operation, status: number, code: unknown) {
+  const definition = document.errors.find(error => error.status === status && error.error_code === code && operation.errors.includes(error.error_code));
+  if (!definition) reject("", "error_envelope");
+  return definition;
+}
+function decodeErrorResponse(document: RuntimeDocument, codec: WireCodec, operation: Operation, status: number, input: string | Uint8Array | Record<string, unknown>, tolerant: boolean): Record<string, unknown> {
+  // Parse the entire envelope once, including details, under one response budget.
+  const received = typeof input !== "string" && !(input instanceof Uint8Array);
+  const record = object(received ? input : parseWire(input, operation.limits.Response));
+  const definition = errorDefinition(document, operation, status, record.error_code);
+  if (String(record.status instanceof JSONNumber ? record.status.text : record.status) !== String(status)) reject("", "error_envelope");
+  const properties = definition.details_type ? [{ name: "details", type: definition.details_type, required: true }] : [];
+  return object(codec.transform(document.error_type, record, operation.limits.Response, false, false, tolerant, properties, received));
+}
+function matchesOperationError(document: RuntimeDocument, codec: WireCodec, name: string, error: unknown): error is APIError<Record<string, unknown>> {
+  if (!(error instanceof APIError)) return false;
+  const operation = document.http.find(operation => operation.name === name);
+  if (!operation || operation.route.method === "HEAD") return false;
+  try {
+    errorDefinition(document, operation, error.status, error.code);
+    if (!decodedErrors.has(error)) {
+      const response = decodeErrorResponse(document, codec, operation, error.status, object(error.response), true);
+      if (response.error_code !== error.code) return false;
+    }
+    return true;
+  } catch { return false; }
 }
 /**
  * The server answered, but its response broke this operation's contract: its
@@ -365,10 +395,10 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
         if (!allowed.length) reject("", "status");
         if (operation.route.method === "HEAD") { await collectBody(response.body, 0, call.signal); throw new APIError(response.status, "http_error", undefined); }
         requireJSON(headers); const bytes = await collectBody(response.body, operation.limits.Response.Bytes, call.signal);
-        const decoded = codec.decode(document.error_type, bytes, operation.limits.Response, tolerant), record = object(decoded);
-        if (String(record.status) !== String(response.status) || typeof record.error_code !== "string" || !allowed.some(error => error.error_code === record.error_code)) reject("", "error_envelope");
+        const decoded = decodeErrorResponse(document, codec, operation, response.status, bytes, tolerant);
         const retryText = headers["retry-after"], retry = retryText && /^[0-9]{1,3}$/.test(retryText) ? Number(retryText) : undefined;
-        throw new APIError(response.status, record.error_code, decoded, retry !== undefined && retry >= 1 && retry <= 300 ? retry : undefined);
+        const error = new APIError(response.status, String(decoded.error_code), immutable(decoded), retry !== undefined && retry >= 1 && retry <= 300 ? retry : undefined);
+        decodedErrors.add(error); throw Object.freeze(error);
       }
       const file = operation.response?.file;
       if (file) {
@@ -433,5 +463,5 @@ function signedTarget(input: unknown, expected: string, policy: SignedURLPolicy,
   if (canonical(actual.searchParams) !== canonical(target.searchParams)) reject("", "signed_url");
   return relative && base ? base + input : input;
 }
-export { checkAbort, createHTTPInvoker, ownInput, unsentFailures, urlValue };
+export { checkAbort, createHTTPInvoker, matchesOperationError, ownInput, unsentFailures, urlValue };
 export type { MultipartPart, Operation, Payload, RealtimeChannel, RealtimeEvent, RuntimeDocument, URLParameter };

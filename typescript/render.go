@@ -596,6 +596,11 @@ func receivedNames(document manifest.Document, names map[contract.TypeID]string,
 	if document.ErrorType != "" {
 		queue = append(queue, document.ErrorType)
 	}
+	for _, definition := range document.Errors {
+		if definition.DetailsType != "" {
+			queue = append(queue, definition.DetailsType)
+		}
+	}
 	for _, op := range document.HTTP {
 		if op.Response != nil && op.Response.Type != "" {
 			queue = append(queue, op.Response.Type)
@@ -892,7 +897,7 @@ func (r *renderer) renderEnumConst(typeName string, typ contract.Type, def enum.
 var topLevelValueNames = map[string]bool{
 	"manifestVersion": true, "runtimePolicy": true, "defaultJSONLimits": true,
 	"manifestJSON": true, "catalogLocales": true, "createClient": true,
-	"validateRequest": true, "operation": true, "schema": true,
+	"validateRequest": true, "isOperationError": true, "operation": true, "schema": true,
 	"decodeContract": true, "decodeReceived": true, "encodeContract": true,
 	"contractValue": true, "formatMessage": true, "formatFrontendMessage": true, "createRealtime": true,
 	"realtimeProtocols": true, "realtimeSubprotocol": true,
@@ -1051,6 +1056,7 @@ func (r *renderer) http() error {
 	for _, name := range []string{"HTTPTransport", "ClientOptions", "CallOptions", "createHTTPInvoker", "ValidationReport"} {
 		r.ref(name)
 	}
+	detailed := slices.ContainsFunc(r.document.Errors, func(def foundryhttp.ErrorDefinition) bool { return def.DetailsType != "" })
 	seen := make(map[string]string, len(r.document.Errors))
 	type errEntry struct {
 		key  string
@@ -1080,9 +1086,32 @@ func (r *renderer) http() error {
 		for i, code := range op.Errors {
 			codes[i] = quote(string(code))
 		}
-		fmt.Fprintf(&r.out, "  readonly %s: { readonly request: %s; readonly response: %s; readonly errorCode: %s };\n", quote(op.Name), r.request(op), r.response(op), strings.Join(codes, " | "))
+		errorType := ""
+		if detailed {
+			variants := make([]string, 0, len(op.Errors))
+			for _, def := range r.document.Errors {
+				if !slices.Contains(op.Errors, def.Code) {
+					continue
+				}
+				details := ""
+				if def.DetailsType != "" {
+					details = "; readonly details: " + r.receivedName(def.DetailsType)
+				}
+				variants = append(variants, fmt.Sprintf("(%s & { readonly status: %d; readonly code: %s; readonly response: ErrorResponse & { readonly error_code: %s%s } })", r.ref("APIError"), def.Status, quote(string(def.Code)), quote(string(def.Code)), details))
+			}
+			errorType = "; readonly error: " + strings.Join(variants, " | ")
+		}
+		fmt.Fprintf(&r.out, "  readonly %s: { readonly request: %s; readonly response: %s; readonly errorCode: %s%s };\n", quote(op.Name), r.request(op), r.response(op), strings.Join(codes, " | "), errorType)
 	}
-	r.out.WriteString("}\nexport interface API {\n")
+	r.out.WriteString("}\n")
+	if detailed {
+		fmt.Fprintf(&r.out, `/** Narrow a caught API error to this entry's declared operation variants. */
+export function isOperationError<K extends keyof Operations>(operation: K, error: unknown): error is Operations[K]["error"] {
+  return %s(runtimeDocument(), contracts(), operation, error);
+}
+`, r.ref("matchesOperationError"))
+	}
+	r.out.WriteString("export interface API {\n")
 	for _, op := range r.document.HTTP {
 		r.out.WriteString(documentationComment(op.Route.Documentation))
 		fmt.Fprintf(&r.out, "  %s(request: Operations[%s][\"request\"], options?: CallOptions): Promise<Operations[%s][\"response\"]>;\n", quote(op.Name), quote(op.Name), quote(op.Name))

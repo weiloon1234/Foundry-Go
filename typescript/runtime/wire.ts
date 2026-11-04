@@ -155,7 +155,7 @@ class WireCodec {
   decode(id: string, input: string | Uint8Array, limits: JSONLimits, tolerant = false): unknown { return this.transform(id, parseWire(input, limits), limits, false, false, tolerant); }
   encode(id: string, input: unknown, limits: JSONLimits): string { return writeWire(this.transform(id, input, limits, true), limits); }
   semantic(id: string, input: unknown, limits: JSONLimits): unknown { return this.transform(id, input, limits, true, true); }
-  transform(id: string, input: unknown, limits: JSONLimits, encode: boolean, semantic = false, tolerant = false): unknown {
+  transform(id: string, input: unknown, limits: JSONLimits, encode: boolean, semantic = false, tolerant = false, extensions: readonly Property[] = [], received = false): unknown {
     tolerant = tolerant && !encode;
     limitsValid(limits); let steps = 0;
     const visit = (id: string, value: unknown, path: string, depth: number): unknown => {
@@ -169,6 +169,7 @@ class WireCodec {
       switch (type.kind) {
         case "dynamic": return parseWire(writeWire(value, limits), limits);
         case "quoted": {
+          if (received) return visit(type.element!, value, path, depth);
           if (encode) { const inner = visit(type.element!, value, path, depth); if (inner === null) reject(path, "null"); return semantic ? inner : writeWire(inner, limits); }
           if (typeof value !== "string") reject(path, "type");
           const inner = parseWire(value, { ...limits, Depth: 0, Nodes: 1 }); if (inner === null) reject(path, "null");
@@ -191,9 +192,9 @@ class WireCodec {
           return result;
         }
         case "object": {
-          const record = object(value, path), properties = type.properties ?? [], known = this.properties.get(id)!;
+          const record = object(value, path), properties = path === "" && extensions.length ? [...(type.properties ?? []), ...extensions] : type.properties ?? [], known = this.properties.get(id)!;
           const result: Record<string, unknown> = Object.create(null);
-          for (const key of Object.keys(record)) { if (++steps > limits.Steps) reject(path, "limit"); if (!known.has(key) && !tolerant) reject(pointer(path, key), "unknown"); }
+          for (const key of Object.keys(record)) { if (++steps > limits.Steps) reject(path, "limit"); if (!known.has(key) && !(path === "" && extensions.some(property => property.name === key)) && !tolerant) reject(pointer(path, key), "unknown"); }
           for (const property of properties) {
             if (++steps > limits.Steps) reject(path, "limit");
             const child = pointer(path, property.name);
@@ -218,7 +219,23 @@ class WireCodec {
           }
           return result;
         }
-        default: return this.scalar(type, value, encode, path, tolerant);
+        default: {
+          if (received) {
+            if (value instanceof UnknownEnumValue) {
+              if (!tolerant || value.type !== type.id || !type.cases?.length) reject(path, "value");
+              this.scalar(type, type.kind === "integer" ? new JSONNumber(value.value) : value.value, false, path, true);
+              return value;
+            }
+            if (type.kind === "integer" || type.kind === "number") {
+              const text = type.kind === "integer" ? type.bits! > 32 : !type.bits;
+              if (text ? typeof value !== "string" : typeof value !== "number") reject(path, "type");
+              value = new JSONNumber(String(value));
+            }
+          }
+          const result = this.scalar(type, value, encode, path, tolerant);
+          if (received && result instanceof UnknownEnumValue) reject(path, "value");
+          return result;
+        }
       }
     };
     return visit(id, input, "", 0);

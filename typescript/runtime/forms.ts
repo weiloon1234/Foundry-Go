@@ -1,4 +1,4 @@
-import { APIError, ContractError, JSONNumber, ResponseContractError, checkAbort, defaultJSONLimits, limitsValid, numberPattern, object, reject, textBytes, unsentFailures, validUnicode } from "./runtime.js";
+import { APIError, ContractError, JSONNumber, ResponseContractError, checkAbort, defaultJSONLimits, limitsValid, matchesOperationError, numberPattern, object, reject, textBytes, unsentFailures, validUnicode } from "./runtime.js";
 import type { CallOptions, ClientOptions, Issue, JSONLimits, Upload, ValidationReport, WireType } from "./runtime.js";
 /** Editable request state. Missing values are allowed here, never asserted valid. */
 export type FormDraft<T> = T extends Blob | JSONNumber | Upload ? T : T extends readonly (infer V)[] ? readonly FormDraft<V>[] : T extends object ? { readonly [K in keyof T]?: FormDraft<T[K]> } : T;
@@ -361,10 +361,10 @@ export function createForm<K extends keyof Operations>(operation: OperationDescr
           if (caught instanceof ResponseContractError) issues = Object.freeze([{ path: "", code: "form_response" }]);
           else if (caught instanceof ContractError) issues = formCopy(caught.issues, limits);
           else if (caught instanceof APIError && caught.response !== undefined) {
-            // The SDK already decoded the shared error envelope. Validate wrapped
-            // clients too before accepting its field pointers into form state.
+            // Use the same operation-aware decoder for wrapped clients and guards.
             try {
-              const envelope = contracts().decode(runtimeDocument().error_type, contracts().encode(runtimeDocument().error_type, caught.response, limits), limits) as { issues?: readonly Issue[] };
+              if (!matchesOperationError(runtimeDocument(), contracts(), operation.name, caught)) reject("", "error_envelope");
+              const envelope = caught.response as { issues?: readonly Issue[] };
               issues = formCopy(envelope.issues?.length ? envelope.issues : [{ path: "", code: caught.code }], limits);
             } catch { issues = Object.freeze([{ path: "", code: "form_request" }]); }
           } else issues = Object.freeze([{ path: "", code: "form_request" }]);

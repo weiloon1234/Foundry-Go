@@ -283,10 +283,17 @@ func runReleaseTypeScript(t *testing.T, source []byte, assertions string) {
 	if node == "" || compiler == "" {
 		t.Skip("set FOUNDRY_TEST_NODE and FOUNDRY_TEST_TYPESCRIPT")
 	}
+	runReleaseTypeScriptFiles(t, node, compiler, map[string][]byte{"input.ts": source}, assertions)
+}
+
+func runReleaseTypeScriptFiles(t *testing.T, node, compiler string, sources map[string][]byte, assertions string) {
+	t.Helper()
 	dir := t.TempDir()
 	input := filepath.Join(dir, "input.ts")
-	if err := os.WriteFile(input, source, 0600); err != nil {
-		t.Fatal(err)
+	for name, source := range sources {
+		if err := os.WriteFile(filepath.Join(dir, name), source, 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"type":"module"}`), 0600); err != nil {
