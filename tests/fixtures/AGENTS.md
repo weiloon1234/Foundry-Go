@@ -43,8 +43,12 @@ See the [consumer guide](consumer/README.md) for existing scenario families.
 - Extend [real editor probes](../../internal/agent) for changed public completion
   contracts. Client changes use the actual strict TypeScript/runtime transport gate.
 - Use existing isolated PostgreSQL schema/application helpers and scoped Redis data.
-  Retain test schemas/data as their contract requires; never reset/drop databases,
-  flush shared stores or start duplicate services to get a clean test.
+  A test may remove only what it created. Use `testkit/postgres` to remove its own
+  generated schema after it passes. Retain it on failure or panic, or with
+  `FOUNDRY_TEST_KEEP_SCHEMAS=1`. Clean up any exact test-created object outside that
+  schema in the test itself, using the same retention rule. Never reset/drop
+  databases, remove unrelated schemas or data, flush shared stores or start
+  duplicate services to get a clean test.
 - Register cleanup before fallible startup; close clients before their providers.
   After cancellation/failure, verify cleanup and reusable capacity where ownership
   changed, not only the returned error.

@@ -13,12 +13,13 @@ import (
 const scopePoolSize = 2
 const cleanupTimeout = 5 * time.Second
 
-// Scope is one retained namespace in the explicitly opted-in test database.
+// Scope is one owned namespace in the explicitly opted-in test database.
 // Configuration is immutable; each opened pool is independent and bounded.
 type Scope struct{ config postgres.Config }
 
-// Isolate allocates only a fresh schema. No database/server is created, and no
-// teardown deletes data. The administration pool closes before this returns.
+// Isolate allocates only a fresh schema and removes it after a passing test,
+// unless KeepSchemas is true. The administration pool closes before this returns.
+// Later pool/application cleanups run first in testing's LIFO cleanup order.
 func Isolate(t testing.TB) *Scope {
 	t.Helper()
 	c := Config(t)
@@ -33,7 +34,6 @@ func Isolate(t testing.TB) *Scope {
 		}
 	}()
 	c.Schema = Namespace(t, db)
-	t.Logf("Retained PostgreSQL namespace: %s", c.Schema)
 	return &Scope{config: c}
 }
 
@@ -70,7 +70,7 @@ func (s *Scope) Open(t testing.TB, options ...database.Option) *database.DB {
 	return db
 }
 
-// Config returns a caller-owned typed configuration for this retained scope.
+// Config returns a caller-owned typed configuration for this owned scope.
 // Scope creation uses the explicit URL, so no mutable TLS pointer is shared.
 func (s *Scope) Config() postgres.Config {
 	if s == nil {

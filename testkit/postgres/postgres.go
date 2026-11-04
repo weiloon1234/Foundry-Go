@@ -1,24 +1,58 @@
-// Package postgres provides opt-in, non-destructive PostgreSQL acceptance helpers.
-// Callers supply only their isolated test database. No helper resets or drops data.
+// Package postgres provides opt-in PostgreSQL acceptance helpers. Callers supply
+// only their isolated test database. Passing tests remove only their own schemas;
+// failed tests retain them for inspection. No helper resets or drops a database.
 package postgres
 
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
 const (
-	URLVariable      = "FOUNDRY_TEST_POSTGRES_URL"
-	RequiredVariable = "FOUNDRY_TEST_POSTGRES_REQUIRED"
+	URLVariable         = "FOUNDRY_TEST_POSTGRES_URL"
+	RequiredVariable    = "FOUNDRY_TEST_POSTGRES_REQUIRED"
+	KeepSchemasVariable = "FOUNDRY_TEST_KEEP_SCHEMAS"
 )
+
+const namespacePrefix = "foundry_test_"
+
+// KeepSchemas reports whether test-owned PostgreSQL artifacts must be retained.
+// Call it during cleanup so subtest and earlier cleanup failures are included.
+func KeepSchemas(t testing.TB) bool {
+	t.Helper()
+	if t.Failed() || os.Getenv(KeepSchemasVariable) == "1" {
+		return true
+	}
+	// testing runs cleanups while unwinding a panic, before marking the test
+	// failed. Inspect function names only; never recover or format its payload.
+	// An incomplete stack cannot establish success, so retain conservatively.
+	var pcs [128]uintptr
+	n := runtime.Callers(2, pcs[:])
+	if n == len(pcs) {
+		return true
+	}
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if frame.Function == "runtime.gopanic" || frame.Function == "runtime.Goexit" {
+			return true
+		}
+		if !more {
+			return false
+		}
+	}
+}
 
 // Config reads the explicitly opted-in URL. Ordinary test runs skip without it;
 // the required acceptance command fails if it is missing. Errors omit credentials.
@@ -65,12 +99,69 @@ func Open(t testing.TB, adjust ...func(*postgres.Config)) *database.DB {
 
 // Namespace creates a unique schema in the caller's isolated test database.
 // The returned identifier contains only safe ASCII letters, digits and underscores.
-// Schemas are retained for inspection; no cleanup runs DROP/TRUNCATE or resets data.
+// Cleanup removes only this schema when the test passes and KeepSchemas is false.
+// Namespace closes db during cleanup before removing the schema, even when Open
+// registered its cleanup first. Register any other pool/application cleanup later
+// so LIFO cleanup closes those connections first too.
 func Namespace(t testing.TB, db *database.DB) string {
 	t.Helper()
-	name := "foundry_test_" + strings.ToLower(rand.Text())
-	if _, err := db.Exec(t.Context(), `CREATE SCHEMA "`+name+`"`); err != nil {
-		t.Fatalf("create PostgreSQL test namespace: %v", err)
-	}
+	name, create := PrepareNamespace(t)
+	create(db)
+	t.Cleanup(func() {
+		if err := closePool(db); err != nil {
+			t.Errorf("close namespace creation pool: %v", err)
+		}
+	})
 	return name
+}
+
+// PrepareNamespace reserves a generated name and registers cleanup before any
+// application or pool cleanup. Call create once, with a pool in the configured
+// test database, when setup is ready to create the schema. Until then cleanup
+// owns nothing. This permits assertions that startup does not create schemas.
+func PrepareNamespace(t testing.TB) (name string, create func(*database.DB)) {
+	t.Helper()
+	config := Config(t)
+	name = namespacePrefix + strings.ToLower(rand.Text())
+	created := false
+	t.Cleanup(func() {
+		if !created || KeepSchemas(t) {
+			return
+		}
+		if err := dropNamespace(config, name); err != nil {
+			t.Logf("could not drop PostgreSQL test namespace %s; retained for inspection: %v", name, err)
+		}
+	})
+	return name, func(db *database.DB) {
+		t.Helper()
+		if created {
+			t.Fatal("PostgreSQL test namespace already created")
+		}
+		if _, err := db.Exec(t.Context(), `CREATE SCHEMA "`+name+`"`); err != nil {
+			t.Fatalf("create PostgreSQL test namespace: %v", err)
+		}
+		created = true
+		t.Logf("Retained PostgreSQL namespace: %s", name)
+	}
+}
+
+func dropNamespace(config postgres.Config, name string) error {
+	if !strings.HasPrefix(name, namespacePrefix) || len(name) <= len(namespacePrefix) || !sqlname.Valid(name) {
+		return errors.New("refusing to drop a non-generated PostgreSQL test namespace")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
+	defer cancel()
+	// Use an independent pool: the test's own pool may already have closed,
+	// changed its search path, or retained a connection holding a table lock.
+	config.Schema = ""
+	config.Pool.MaxOpen, config.Pool.MaxIdle = 1, 1
+	config.StatementTimeout = cleanupTimeout
+	config.LockTimeout = 100 * time.Millisecond
+	db, err := postgres.Open(ctx, config)
+	if err != nil {
+		return err
+	}
+	defer closePool(db)
+	_, err = db.Exec(ctx, `DROP SCHEMA "`+name+`" CASCADE`)
+	return err
 }

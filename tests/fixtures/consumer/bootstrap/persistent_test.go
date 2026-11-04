@@ -4,7 +4,6 @@ import orm "github.com/weiloon1234/Foundry-Go/database/orm"
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"io"
 	"log/slog"
@@ -38,7 +37,7 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	s := application.DefaultSettings()
 	s.HTTP.Enabled = false
 	s.Image.Enabled = true
-	schema := "configured_" + strings.ToLower(rand.Text())
+	schema, create := pgtest.PrepareNamespace(t)
 	connection := infrastructure.DefaultConnectionSettings()
 	connection.Primary = infrastructure.PostgreSQLSettingsFromConfig(pgtest.Config(t))
 	s.Services.Database.Connections = infrastructure.DatabaseConnections{"default": connection, "other": connection}
@@ -108,9 +107,7 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	if err := database.ScanOne(t.Context(), db, "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname=$1)", []any{schema}, &exists); err != nil || exists {
 		t.Fatal("startup applied migrations", err)
 	}
-	if _, err := db.Exec(t.Context(), `CREATE SCHEMA "`+schema+`"`); err != nil {
-		t.Fatal(err)
-	}
+	create(db)
 	if err := withinSchema(t.Context(), db, schema, func(tx *database.Tx) error {
 		for _, target := range app.Migrations() {
 			for _, d := range target.Definitions {

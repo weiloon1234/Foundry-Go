@@ -78,8 +78,9 @@ kernel and verifies the database afterward. It also checks wrong-parent rejectio
 current resource authorization, envelopes, pagination, all input sources and replay.
 The Go tests additionally cover concurrent independent applications, isolated named
 pools, real receiving transactions, ordinary shutdown retaining data, and replay
-from an owned native subprocess. Test schemas are retained; no database resets or
-pruning are part of acceptance.
+from an owned native subprocess. Test schemas use
+[passing-test cleanup](contributing.md#postgresql-acceptance); no database resets or
+production pruning are part of acceptance.
 
 ## Verification and audit status
 

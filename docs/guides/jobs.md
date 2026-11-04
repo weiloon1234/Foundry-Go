@@ -359,8 +359,9 @@ for stable inline idempotency. Earlier listeners can run again after a later fai
 
 The milestone gate includes native `make verify`, required local PostgreSQL and
 Redis, job/event/consumer races, compiler rejection, actual gopls probes and current
-generation. Tests use isolated keys and retained database schemas; no reset or
-provider provisioning is needed. The roadmap records results only after execution.
+generation. Tests use isolated keys and test-owned database schemas, with
+[passing-test cleanup](contributing.md#postgresql-acceptance). No reset or provider
+provisioning is needed. The roadmap records results only after execution.
 
 
 ## Terminal attempt failures

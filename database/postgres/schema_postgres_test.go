@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 	"testing"
+	"time"
 )
 
 func TestPostgresSchemaEveryConnectionResetAndReconnect(t *testing.T) {
@@ -105,9 +106,19 @@ func TestPostgresSchemaEveryConnectionResetAndReconnect(t *testing.T) {
 func TestPostgresSchemaMissingFailsAndPublicDoesNotFallback(t *testing.T) {
 	scope := pgtest.Isolate(t)
 	db := scope.Open(t)
-	admin := pgtest.Open(t)
+	admin := pgtest.Open(t, func(c *postgres.Config) { c.LockTimeout = 100 * time.Millisecond })
 	table := scope.Schema() + "_public"
 	execute(t, admin, `CREATE TABLE public."`+table+`"(id bigint)`)
+	t.Cleanup(func() {
+		if pgtest.KeepSchemas(t) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := admin.Exec(ctx, `DROP TABLE public."`+table+`"`); err != nil {
+			t.Logf("could not drop test-created PostgreSQL public table %s; retained for inspection: %v", table, err)
+		}
+	})
 	execute(t, admin, `INSERT INTO public."`+table+`" VALUES(1)`)
 	var count int64
 	if err := database.ScanOne(t.Context(), db, `SELECT count(*) FROM "`+table+`"`, nil, &count); err == nil {

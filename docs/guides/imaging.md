@@ -533,4 +533,5 @@ worker, while codec-internal threading follows the installed codec.
 `make test-imaging-portable` checks no-cgo builds and explicit unavailable-backend
 errors. `make test-imaging-native` requires the native codecs and runs the native
 engine and configured consumer checks. PostgreSQL native attachment tests use the
-same private test configuration and isolated retained schemas as ordinary tests.
+same private test configuration and isolated schemas with
+[passing-test cleanup](contributing.md#postgresql-acceptance) as ordinary tests.

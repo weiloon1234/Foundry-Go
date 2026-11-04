@@ -50,7 +50,7 @@ func durableCleanup(connection infrastructure.RedisConnectionSettings) func(*app
 // A connection to another database could not deliver the cleanup rows it
 // writes, so startup refuses it before any deletion runs.
 func TestDurableCleanupRefusesAConnectionToAnotherDatabase(t *testing.T) {
-	s, _ := articleSettings(t, durableCleanup(infrastructure.RedisSettingsFromConfig(redistest.Config(t))), func(s *application.Settings) {
+	s, _, _ := articleSettings(t, durableCleanup(infrastructure.RedisSettingsFromConfig(redistest.Config(t))), func(s *application.Settings) {
 		elsewhere := s.Services.Database.Connections["default"]
 		if elsewhere.Primary.Database == "postgres" {
 			elsewhere.Primary.Database = "template1"

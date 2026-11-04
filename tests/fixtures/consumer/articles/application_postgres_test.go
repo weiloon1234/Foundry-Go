@@ -5,12 +5,10 @@ import orm "github.com/weiloon1234/Foundry-Go/database/orm"
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"image"
 	"image/png"
 	"io"
 	"log/slog"
-	"strings"
 	"testing"
 	"time"
 
@@ -24,7 +22,7 @@ import (
 )
 
 // fixture is one started application with the article schema migrated into
-// its own retained PostgreSQL namespace.
+// its own PostgreSQL namespace, retained on failure or explicit debugging opt-in.
 type fixture struct {
 	app      *application.App
 	services application.Services
@@ -33,13 +31,13 @@ type fixture struct {
 }
 
 // articleSettings configures the consumer's features over the test database
-// and a new retained schema name, then applies configure.
-func articleSettings(t *testing.T, configure ...func(*application.Settings)) (application.Settings, string) {
+// and a prepared schema name, then applies configure.
+func articleSettings(t *testing.T, configure ...func(*application.Settings)) (application.Settings, string, func(*database.DB)) {
 	t.Helper()
 	s := application.DefaultSettings()
 	s.HTTP.Enabled = false
 	s.Image.Enabled = true
-	schema := "articles_" + strings.ToLower(rand.Text())
+	schema, create := pgtest.PrepareNamespace(t)
 	connection := infrastructure.DefaultConnectionSettings()
 	connection.Primary = infrastructure.PostgreSQLSettingsFromConfig(pgtest.Config(t))
 	s.Services.Database.Connections = infrastructure.DatabaseConnections{"default": connection}
@@ -55,7 +53,7 @@ func articleSettings(t *testing.T, configure ...func(*application.Settings)) (ap
 	for _, change := range configure {
 		change(&s)
 	}
-	return s, schema
+	return s, schema, create
 }
 
 // startApplication assembles the consumer the way an application does: typed
@@ -63,7 +61,7 @@ func articleSettings(t *testing.T, configure ...func(*application.Settings)) (ap
 // explicitly; startup never creates schemas or tables.
 func startApplication(t *testing.T, configure ...func(*application.Settings)) fixture {
 	t.Helper()
-	s, schema := articleSettings(t, configure...)
+	s, schema, create := articleSettings(t, configure...)
 	app, err := application.New(s, application.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))).
 		Models(articles.ORMExtensionDeclaration()).
 		Build(t.Context())
@@ -85,9 +83,7 @@ func startApplication(t *testing.T, configure ...func(*application.Settings)) fi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(t.Context(), `CREATE SCHEMA "`+schema+`"`); err != nil {
-		t.Fatal(err)
-	}
+	create(db)
 	store, err := services.ExtensionStore()
 	if err != nil {
 		t.Fatal(err)

@@ -1,33 +1,23 @@
-package postgres
+package postgres_test
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	pgx "github.com/jackc/pgx/v5"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/weiloon1234/Foundry-Go/secret"
+	"github.com/weiloon1234/Foundry-Go/database/postgres"
+	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
 )
 
 func TestTypeRegistryLoadTypeWithShadowedStartupSearchPath(t *testing.T) {
-	// This same-package fixture needs native startup parameters that Config.Schema
+	// This fixture needs native startup parameters that Config.Schema
 	// deliberately does not expose. Do not change shared role or database settings.
-	url := os.Getenv("FOUNDRY_TEST_POSTGRES_URL")
-	if url == "" {
-		if os.Getenv("FOUNDRY_TEST_POSTGRES_REQUIRED") == "1" {
-			t.Fatal("required PostgreSQL acceptance URL is missing")
-		}
-		t.Skip("PostgreSQL acceptance is opt-in; run make test-postgres")
-	}
-	config, err := ParseURL(secret.New(url))
-	if err != nil {
-		t.Fatal("parse PostgreSQL test configuration failed")
-	}
-	nativeConfig, err := connectionConfig(config)
+	schema, create := pgtest.PrepareNamespace(t)
+	config := pgtest.Config(t)
+	create(pgtest.Open(t))
+	nativeConfig, err := postgres.TestConnectionConfig(config)
 	if err != nil {
 		t.Fatal("construct PostgreSQL test configuration failed")
 	}
@@ -47,15 +37,13 @@ func TestTypeRegistryLoadTypeWithShadowedStartupSearchPath(t *testing.T) {
 		return conn
 	}
 	setup := connect(t, nativeConfig)
-	schema := "foundry_test_" + strings.ToLower(rand.Text())
 	for _, statement := range []string{
-		`CREATE SCHEMA "` + schema + `"`,
 		`CREATE DOMAIN "` + schema + `".text AS pg_catalog.text CHECK (VALUE = 'shadow-domain-value')`,
 		`CREATE TABLE "` + schema + `".pg_type (shadow pg_catalog.bool)`,
 		`CREATE TYPE "` + schema + `".loaded_enum AS ENUM ('value')`,
 	} {
 		if _, err := setup.Exec(t.Context(), statement); err != nil {
-			t.Fatal("create retained PostgreSQL registry fixture failed")
+			t.Fatal("create PostgreSQL registry fixture failed")
 		}
 	}
 	originalPath := `"` + schema + `", pg_catalog`
@@ -63,7 +51,7 @@ func TestTypeRegistryLoadTypeWithShadowedStartupSearchPath(t *testing.T) {
 	for _, failure := range []bool{false, true} {
 		t.Run(map[bool]string{false: "loaded", true: "failed_load_restores_path"}[failure], func(t *testing.T) {
 			conn := connect(t, nativeConfig)
-			err := initializeTypeRegistry(t.Context(), conn, func(ctx context.Context, registry *TypeRegistry) error {
+			err := postgres.TestInitializeTypeRegistry(t.Context(), conn, func(ctx context.Context, registry *postgres.TypeRegistry) error {
 				if failure {
 					// The enum array cannot load before its element is registered. Swallowing
 					// this native discovery failure must still prevent connection admission.

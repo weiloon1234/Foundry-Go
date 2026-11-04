@@ -119,7 +119,8 @@ return rows.ReadScalar(rows.SelectScalar(rows.From(query), expr.AsSelected(expr.
 ```
 
 The [PostgreSQL acceptance source](../../tests/fixtures/consumer/trigramqueries/search_postgres_test.go)
-uses `FOUNDRY_TEST_POSTGRES_URL` and a retained isolated schema. It covers both
+uses `FOUNDRY_TEST_POSTGRES_URL` and an isolated schema with
+[passing-test cleanup](contributing.md#postgresql-acceptance). It covers both
 searches, ordering, NULLs, locks, threshold range validation, savepoint release
 and rollback, threshold restoration on the same backend and a GIN plan with `enable_seqscan=off`.
 

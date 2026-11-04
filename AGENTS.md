@@ -127,8 +127,12 @@ blocked checks honestly; historical acceptance does not verify a new revision.
 ## Data and version control
 
 - Inspect existing private test configuration without printing it. Use existing
-  project services and isolated, non-destructive test data. Never wipe/reset/drop
-  databases or test schemas, flush shared stores, or start duplicate database servers.
+  project services and isolated test data. A test may remove only what it created.
+  Use `testkit/postgres` to remove a test's own generated schema after it passes;
+  retain it on failure or panic, or with `FOUNDRY_TEST_KEEP_SCHEMAS=1`. A test that
+  creates an object outside its schema must clean up only that exact object on
+  success, using the same retention rule. Never wipe/reset/drop databases, remove
+  unrelated schemas or data, flush shared stores, or start duplicate database servers.
 - Never overwrite working credentials or put them in source, logs, fixtures or chat.
 - Never run `git commit`, `git push` or `git merge`. Leave version control to the user.
   Publishing, tagging, deployment and externally delivered messages need authorization.

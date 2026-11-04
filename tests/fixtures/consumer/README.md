@@ -225,7 +225,9 @@ inputs; session/token persistence belongs to later milestone 10 slices.
 The [session consumer](authenticating/sessions.go) borrows an existing PostgreSQL
 pool and typed model provider. It demonstrates verified issuance, model-owned
 metadata, listing and targeted revocation without application SQL. Its integration
-test uses an isolated retained schema. Five additional compiler cases reject wrong
+test uses an isolated schema with
+[passing-test cleanup](../../../docs/guides/contributing.md#postgresql-acceptance).
+Five additional compiler cases reject wrong
 models, references, session IDs, metadata and secret types; three gopls probes
 inspect session methods in this consumer workspace. Browser login and CSRF are
 not implemented by this fixture.

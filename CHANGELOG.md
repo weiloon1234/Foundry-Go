@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed: PostgreSQL test helpers remove only their own generated schemas after
+  passing tests. Failed or panicking tests retain schemas for inspection, as does
+  `FOUNDRY_TEST_KEEP_SCHEMAS=1`. Cleanup has bounded lock waits and logs failures
+  without failing tests. Standalone consumer fixtures share this ownership path;
+  the public-fallback fixture cleans up only its own public table.
+
 - Fixed: TypeScript clients count union payload keys once, matching Go response work budgets.
 
 - Fixed: Wrapped-client forms copy decoded issues and drop unknown fields on

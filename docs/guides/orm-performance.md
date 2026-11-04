@@ -8,7 +8,8 @@ same pgx connector configuration and equivalent concrete codecs. The agreement
 test compares complete decoded models, including NULLs, enums, UUIDs and dates.
 
 These are warm, sequential reads over an indexed 1000-row table in a unique
-retained schema. Both pools have one connection; driver statement caches and
+isolated schema with [passing-test cleanup](contributing.md#postgresql-acceptance).
+Both pools have one connection; driver statement caches and
 PostgreSQL buffers are warmed before timing. The typed variant constructs and
 compiles its query on each read; SQL variants reuse the compiled statement.
 The model has eight persisted columns and many unloaded relation slots, so

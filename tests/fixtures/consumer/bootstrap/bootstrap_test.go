@@ -5,7 +5,6 @@ import orm "github.com/weiloon1234/Foundry-Go/database/orm"
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -15,7 +14,6 @@ import (
 	"mime/multipart"
 	stdhttp "net/http"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -35,7 +33,8 @@ import (
 
 func TestIndependentBootstrapHTTPActorsAndUpload(t *testing.T) {
 	settings := Defaults()
-	settings.Schema = "bootstrap_" + strings.ToLower(rand.Text())
+	schema, create := pgtest.PrepareNamespace(t)
+	settings.Schema = schema
 	settings.App.HTTP.Server.Address = "127.0.0.1:0"
 	connection := infrastructure.DefaultConnectionSettings()
 	connection.Primary = infrastructure.PostgreSQLSettingsFromConfig(pgtest.Config(t))
@@ -77,9 +76,7 @@ func TestIndependentBootstrapHTTPActorsAndUpload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(t.Context(), `CREATE SCHEMA "`+settings.Schema+`"`); err != nil {
-		t.Fatal(err)
-	}
+	create(db)
 	if err := withinSchema(t.Context(), db, settings.Schema, func(tx *database.Tx) error {
 		for _, ddl := range []string{"CREATE TABLE bootstrap_members(id uuid PRIMARY KEY,name text NOT NULL)", "CREATE TABLE bootstrap_operators(id uuid PRIMARY KEY,department text NOT NULL)"} {
 			if _, err := tx.Exec(t.Context(), ddl); err != nil {

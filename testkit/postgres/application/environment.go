@@ -1,4 +1,4 @@
-// Package application binds retained PostgreSQL scopes to production application
+// Package application binds test-owned PostgreSQL scopes to production application
 // settings. It stays separate from the lightweight testkit/postgres helpers so
 // low-level packages can use schema isolation without an infrastructure cycle.
 package application
@@ -22,7 +22,7 @@ type Selection struct {
 	reads  bool
 }
 
-// On explicitly maps named application connections to a retained scope.
+// On explicitly maps named application connections to a test-owned scope.
 func On(scope *pgtest.Scope, names ...database.ConnectionName) Selection {
 	return Selection{config: scope.Config(), names: slices.Clone(names)}
 }

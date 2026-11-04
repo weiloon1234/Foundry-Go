@@ -100,7 +100,8 @@ transaction or a shared database snapshot.
 
 The [independent PostgreSQL consumer](../../tests/fixtures/consumer/model_validation_named_postgres_test.go)
 exercises built-in, batched and custom rules against distinct named pools with
-different retained schemas. It checks concurrent query ownership, cancellation,
+different isolated schemas with [passing-test cleanup](contributing.md#postgresql-acceptance).
+It checks concurrent query ownership, cancellation,
 pool reuse and isolation after a selected connection closes.
 
 ## Batched model lists

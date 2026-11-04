@@ -62,4 +62,5 @@ Use real PostgreSQL coverage for changed SQL, constraints, locking, commit outco
 and scope restoration. Assert persisted state as well as errors. For type changes,
 exercise independent consumer compilation and wrong-owner/type rejection. Query
 performance work should check statement counts or representative plans/costs.
-Use existing retained isolated test namespaces; the root data rules apply.
+Use existing isolated test namespaces with passing-test cleanup; the root data
+rules apply.

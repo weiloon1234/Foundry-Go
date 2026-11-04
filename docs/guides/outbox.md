@@ -94,7 +94,8 @@ migrations.
 
 The table follows the connection's selected database schema, like ordinary model
 tables. Migration execution and producers must target the same intended schema.
-The fixture tests apply these unchanged definitions in unique retained schemas;
+The fixture tests apply these unchanged definitions in unique isolated schemas
+with [passing-test cleanup](contributing.md#postgresql-acceptance);
 the separate migration-runner tests cover locking and history behavior.
 
 The additive publication migration preserves the original persistence schema
