@@ -68,6 +68,9 @@ func DefineErrorDetails[D any](code ErrorCode, status int, message string, descr
 	details := &errorDetails{schema: descriptor.Description}
 	schema, err := descriptor.Description()
 	if err == nil {
+		err = contract.RequireObjectRoot(schema)
+	}
+	if err == nil {
 		err = contract.RejectPasswordOutput(schema, "HTTP error details")
 	}
 	if err == nil {

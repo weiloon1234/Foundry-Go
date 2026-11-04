@@ -2,7 +2,7 @@
 // Shared runtime of the generated client entries in this directory. Import an
 // entry module; this module's exports are not a stable API.
 
-export const manifestVersion = 8 as const;
+export const manifestVersion = 9 as const;
 const runtimePolicy: RuntimePolicy = { maxDepth: 64, decimalDigits: 4096, metadataBytes: 16777216, messageBytes: 65536, maxMessages: 10000, semanticBytes: 128 };
 const semanticPattern = /* @__PURE__ */ new RegExp("^[a-z0-9][a-z0-9_.-]*$");
 const idempotencyKeyPattern = "^[A-Za-z0-9._:-]{16,256}$";
@@ -170,7 +170,7 @@ class WireCodec {
   decode(id: string, input: string | Uint8Array, limits: JSONLimits, tolerant = false): unknown { return this.transform(id, parseWire(input, limits), limits, false, false, tolerant); }
   encode(id: string, input: unknown, limits: JSONLimits): string { return writeWire(this.transform(id, input, limits, true), limits); }
   semantic(id: string, input: unknown, limits: JSONLimits): unknown { return this.transform(id, input, limits, true, true); }
-  transform(id: string, input: unknown, limits: JSONLimits, encode: boolean, semantic = false, tolerant = false): unknown {
+  transform(id: string, input: unknown, limits: JSONLimits, encode: boolean, semantic = false, tolerant = false, extensions: readonly Property[] = [], received = false): unknown {
     tolerant = tolerant && !encode;
     limitsValid(limits); let steps = 0;
     const visit = (id: string, value: unknown, path: string, depth: number): unknown => {
@@ -184,6 +184,7 @@ class WireCodec {
       switch (type.kind) {
         case "dynamic": return parseWire(writeWire(value, limits), limits);
         case "quoted": {
+          if (received) return visit(type.element!, value, path, depth);
           if (encode) { const inner = visit(type.element!, value, path, depth); if (inner === null) reject(path, "null"); return semantic ? inner : writeWire(inner, limits); }
           if (typeof value !== "string") reject(path, "type");
           const inner = parseWire(value, { ...limits, Depth: 0, Nodes: 1 }); if (inner === null) reject(path, "null");
@@ -206,9 +207,9 @@ class WireCodec {
           return result;
         }
         case "object": {
-          const record = object(value, path), properties = type.properties ?? [], known = this.properties.get(id)!;
+          const record = object(value, path), properties = path === "" && extensions.length ? [...(type.properties ?? []), ...extensions] : type.properties ?? [], known = this.properties.get(id)!;
           const result: Record<string, unknown> = Object.create(null);
-          for (const key of Object.keys(record)) { if (++steps > limits.Steps) reject(path, "limit"); if (!known.has(key) && !tolerant) reject(pointer(path, key), "unknown"); }
+          for (const key of Object.keys(record)) { if (++steps > limits.Steps) reject(path, "limit"); if (!known.has(key) && !(path === "" && extensions.some(property => property.name === key)) && !tolerant) reject(pointer(path, key), "unknown"); }
           for (const property of properties) {
             if (++steps > limits.Steps) reject(path, "limit");
             const child = pointer(path, property.name);
@@ -221,19 +222,38 @@ class WireCodec {
           if (!Array.isArray(value)) reject(path, "type");
           if (type.length !== undefined && value.length !== type.length) reject(path, "length");
           if (value.length > limits.Nodes || value.length > limits.Steps - steps) reject(path, "limit");
-          return value.map((child, i) => visit(type.element!, child, pointer(path, String(i)), depth + 1));
+          const result: unknown[] = [];
+          for (let i = 0; i < value.length; i++) result.push(visit(type.element!, value[i], pointer(path, String(i)), depth + 1));
+          return result;
         }
         case "map": {
           const record = object(value, path), result: Record<string, unknown> = Object.create(null), key = type.key;
           for (const name of Object.keys(record).sort()) {
             if (++steps > limits.Steps) reject(path, "limit");
             // A tolerant client omits entries keyed by enum cases it does not know.
-            if (key !== undefined && !this.mapKey(key, name, path, tolerant)) continue;
-            result[name] = visit(type.element!, record[name], pointer(path, name), depth + 1);
+            const known = key === undefined || this.mapKey(key, name, path, tolerant);
+            const value = visit(type.element!, record[name], pointer(path, name), depth + 1);
+            if (known) result[name] = value;
           }
           return result;
         }
-        default: return this.scalar(type, value, encode, path, tolerant);
+        default: {
+          if (received) {
+            if (value instanceof UnknownEnumValue) {
+              if (!tolerant || value.type !== type.id || !type.cases?.length) reject(path, "value");
+              this.scalar(type, type.kind === "integer" ? new JSONNumber(value.value) : value.value, false, path, true);
+              return value;
+            }
+            if (type.kind === "integer" || type.kind === "number") {
+              const text = type.kind === "integer" ? type.bits! > 32 : !type.bits;
+              if (text ? typeof value !== "string" : typeof value !== "number") reject(path, "type");
+              value = new JSONNumber(String(value));
+            }
+          }
+          const result = this.scalar(type, value, encode, path, tolerant);
+          if (received && result instanceof UnknownEnumValue) reject(path, "value");
+          return result;
+        }
       }
     };
     return visit(id, input, "", 0);
@@ -732,7 +752,7 @@ interface RuntimeDocument {
     readonly messages: readonly { readonly key: string; readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }[];
     readonly frontend_messages?: readonly { readonly key: string; readonly plural?: string; readonly plural_kind?: "cardinal" | "ordinal" }[];
   };
-  readonly errors: readonly { readonly error_code: string; readonly status: number; readonly message: string }[]; readonly realtime?: RealtimeDescription;
+  readonly errors: readonly { readonly error_code: string; readonly status: number; readonly message: string; readonly details_type?: string }[]; readonly realtime?: RealtimeDescription;
 }
 declare const idempotencyKeyBrand: unique symbol;
 export type IdempotencyKey = string & { readonly [idempotencyKeyBrand]: true };
@@ -782,6 +802,31 @@ export interface ServerEvent<T> { readonly id?: string; readonly name: string; r
 export interface EventStreamResult<T> extends AsyncIterable<ServerEvent<T>> { readonly status: number; readonly headers: Readonly<Record<string, string>>; close(): Promise<void> }
 export class APIError<T = unknown> extends Error {
   constructor(readonly status: number, readonly code: string, readonly response: T | undefined, readonly retryAfterSeconds?: number) { super("API request failed"); this.name = "APIError"; }
+}
+function errorStatus(value: unknown, status: number, received: boolean): boolean {
+  return value instanceof JSONNumber ? value.text === `${status}` : typeof value === "number" ? value === status : received && value === `${status}`;
+}
+function decodeErrorResponse(document: RuntimeDocument, codec: WireCodec, operation: Operation, status: number, input: string | Uint8Array | Record<string, unknown>, tolerant: boolean): Record<string, unknown> {
+  // Parse and transform the whole envelope once, including details, under one budget.
+  const received = typeof input !== "string" && !(input instanceof Uint8Array);
+  const record = object(received ? input : parseWire(input, operation.limits.Response));
+  const definition = document.errors.find(error => errorStatus(record.status, error.status, received) && error.error_code === record.error_code && operation.errors.includes(error.error_code));
+  const properties = definition?.details_type ? [{ name: "details", type: definition.details_type, required: true }] : [];
+  const decoded = object(codec.transform(document.error_type, record, operation.limits.Response, false, false, tolerant, properties, received));
+  if (!errorStatus(record.status, status, received) || !definition) reject("", "error_envelope");
+  return decoded;
+}
+function operationErrorResponse(document: RuntimeDocument, codec: WireCodec, name: string, error: unknown): Record<string, unknown> | undefined {
+  if (!(error instanceof APIError)) return undefined;
+  const operation = document.http.find(operation => operation.name === name);
+  if (!operation || operation.route.method === "HEAD") return undefined;
+  try {
+    const response = decodeErrorResponse(document, codec, operation, error.status, object(error.response), true);
+    return response.error_code === error.code ? response : undefined;
+  } catch { return undefined; }
+}
+function matchesOperationError(document: RuntimeDocument, codec: WireCodec, name: string, error: unknown): error is APIError<Record<string, unknown>> {
+  return operationErrorResponse(document, codec, name, error) !== undefined;
 }
 /**
  * The server answered, but its response broke this operation's contract: its
@@ -1070,10 +1115,9 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
         if (!allowed.length) reject("", "status");
         if (operation.route.method === "HEAD") { await collectBody(response.body, 0, call.signal); throw new APIError(response.status, "http_error", undefined); }
         requireJSON(headers); const bytes = await collectBody(response.body, operation.limits.Response.Bytes, call.signal);
-        const decoded = codec.decode(document.error_type, bytes, operation.limits.Response, tolerant), record = object(decoded);
-        if (String(record.status) !== String(response.status) || typeof record.error_code !== "string" || !allowed.some(error => error.error_code === record.error_code)) reject("", "error_envelope");
+        const decoded = decodeErrorResponse(document, codec, operation, response.status, bytes, tolerant);
         const retryText = headers["retry-after"], retry = retryText && /^[0-9]{1,3}$/.test(retryText) ? Number(retryText) : undefined;
-        throw new APIError(response.status, record.error_code, decoded, retry !== undefined && retry >= 1 && retry <= 300 ? retry : undefined);
+        throw new APIError(response.status, String(decoded.error_code), decoded, retry !== undefined && retry >= 1 && retry <= 300 ? retry : undefined);
       }
       const file = operation.response?.file;
       if (file) {
@@ -1138,6 +1182,6 @@ function signedTarget(input: unknown, expected: string, policy: SignedURLPolicy,
   if (canonical(actual.searchParams) !== canonical(target.searchParams)) reject("", "signed_url");
   return relative && base ? base + input : input;
 }
-export { checkAbort, createHTTPInvoker, ownInput, unsentFailures, urlValue };
+export { checkAbort, createHTTPInvoker, matchesOperationError, operationErrorResponse, ownInput, unsentFailures, urlValue };
 export type { MultipartPart, Operation, Payload, RealtimeChannel, RealtimeEvent, RuntimeDocument, URLParameter };
 

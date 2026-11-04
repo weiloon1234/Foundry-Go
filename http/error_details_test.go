@@ -56,6 +56,22 @@ func registryDetailsJSON() contract.JSON[RegistryErrorDetails] {
 	})
 }
 
+type OtherRegistryErrorDetails struct {
+	ExistingRegistryID string `json:"existing_registry_id"`
+}
+
+func otherRegistryDetailsJSON() contract.JSON[OtherRegistryErrorDetails] {
+	schema, _ := registryDetailsJSON().Description()
+	root := contract.TypeID("github.com/weiloon1234/Foundry-Go/http.OtherRegistryErrorDetails")
+	for i := range schema.Types {
+		if schema.Types[i].ID == schema.Root {
+			schema.Types[i].ID = root
+		}
+	}
+	schema.Root = root
+	return contract.DefineJSON[OtherRegistryErrorDetails](schema)
+}
+
 func registryError() DetailedErrorDeclaration[RegistryErrorDetails] {
 	return DefineErrorDetails("registry_exists", 409, "Registry already exists.", registryDetailsJSON())
 }
@@ -123,7 +139,7 @@ func TestDetailedErrorFailuresAndProbe(t *testing.T) {
 		}
 	}
 	conflicting := DefineErrorDetails("registry_exists", 409, "Registry already exists.", contract.DefineJSON[RegistryErrorDetails](changedSchema))
-	different := DefineErrorDetails("registry_exists", 409, "Registry already exists.", contract.StringJSON[string]())
+	different := DefineErrorDetails("registry_exists", 409, "Registry already exists.", otherRegistryDetailsJSON())
 	for _, tc := range []struct {
 		name        string
 		declaration ErrorDeclarationOption
@@ -365,7 +381,7 @@ func TestDetailedErrorAssemblyAndRouterIsolation(t *testing.T) {
 	register := func(id RouteID, path string, d ErrorDeclarationOption, returned error) RouteRegistration {
 		return ConfigureEndpoint(errorEndpoint(id, path), Errors(d)).Handle(returnHTTPError(returned))
 	}
-	for _, other := range []ErrorDeclarationOption{changed, DefineError("registry_exists", 409, "Registry already exists."), DefineErrorDetails("registry_exists", 409, "Registry already exists.", contract.StringJSON[string]())} {
+	for _, other := range []ErrorDeclarationOption{changed, DefineError("registry_exists", 409, "Registry already exists."), DefineErrorDetails("registry_exists", 409, "Registry already exists.", otherRegistryDetailsJSON())} {
 		if router, err := NewRouter(register("a", "/a", declaration, nil), register("b", "/b", other, nil)); !errors.Is(err, fault.Conflict) || router != nil {
 			t.Fatal("conflicting details assembled", err)
 		}
@@ -663,5 +679,29 @@ func TestDetailedErrorContainsInputInspectionGoexit(t *testing.T) {
 	<-done
 	if response.Code != 500 || response.Body.String() != `{"status":500,"error_code":"internal_error","message":"Internal server error"}`+"\n" {
 		t.Fatal("input inspection Goexit escaped", response.Code, response.Body)
+	}
+}
+
+func TestDetailedErrorRejectsNullableAndDynamicRoots(t *testing.T) {
+	schema, _ := registryDetailsJSON().Description()
+	for i := range schema.Types {
+		if schema.Types[i].ID == schema.Root {
+			schema.Types[i].Nullable = true
+		}
+	}
+	nullable := contract.DefineJSONField[*RegistryErrorDetails](schema)
+	if err := nullable.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	declaration := DefineErrorDetails("nullable_details", 409, "Nullable details.", nullable)
+	if _, err := NewRouter(ConfigureEndpoint(errorEndpoint("nullable", "/nullable"), Errors(declaration)).Handle(returnHTTPError(declaration.New(nil)))); err == nil {
+		t.Fatal("nullable details assembled")
+	}
+	dynamic := contract.DefineJSONField[any](contract.Schema{Root: "dynamic", Types: []contract.Type{{ID: "dynamic", Kind: contract.DynamicKind, Nullable: true}}})
+	if err := dynamic.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := DefineErrorDetails("dynamic_details", 409, "Dynamic details.", dynamic).Validate(); err == nil {
+		t.Fatal("unconstrained details accepted")
 	}
 }

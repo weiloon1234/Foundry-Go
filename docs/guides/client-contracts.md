@@ -125,8 +125,9 @@ The embedded manifest is a projection (`manifest.Manifest.Project`) containing:
 - the tables explicitly named by selected operations' `TableOperation` bindings,
   together with those tables' schema dependencies;
 - notifications' inbox deliveries, and realtime deliveries on selected channels;
-- the application-wide error definitions, locales, enums, permissions and
-  explicit schemas.
+- built-in errors plus the application definitions referenced by selected
+  operations, and their reachable details schemas;
+- the application-wide locales, enums, permissions and explicit schemas.
 
 Metadata-only tables remain available in the full manifest; a selected surface
 retains a table only through an explicit operation binding.
@@ -352,7 +353,14 @@ const existingId = newIdentity(schemas.OrderID, "0190a8f0-0000-7000-8000-0000000
 
 ### Application error codes
 
-Each client exports the application-wide `ErrorCode` constant and type:
+Each client exports an `ErrorCode` constant and type for its projected catalog.
+Full clients include all registered definitions. Portal entries retain built-ins
+and application errors referenced by their selected operations, even when the
+application has no detailed errors. Regeneration can remove previously exported
+members: remove the unused import/access, or declare the error on an operation
+the portal really uses. See the [manifest 9 migration](../compatibility.md#typed-error-details-manifest-9--unreleased).
+
+For example, a client can use a built-in code:
 
 ```typescript
 import { ErrorCode } from "./generated/contracts_foundry.gen.js";
@@ -363,6 +371,11 @@ if (error.code === ErrorCode.ValidationFailed) {
 ```
 
 Error codes defined in the manifest are transformed to PascalCase keys (e.g. `validation_failed` → `ValidationFailed`). If two error codes in the manifest collide on the same PascalCase key, code generation fails with a conflict error.
+
+Typed details use per-operation error unions and `isOperationError`; see the
+[compiled narrowing example](http-application-errors.md#client-narrowing). A portal
+with no detailed errors generates no guard; shared code cannot assume the export
+exists in every entry.
 
 ### Typed datatable descriptors
 

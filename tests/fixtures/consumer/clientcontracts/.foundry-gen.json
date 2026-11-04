@@ -2,8 +2,12 @@
   "version": 1,
   "files": {
     "browser_login_foundry.gen.go": "3652ae188aebf1c21f49b3a3cea0bf4088b61a428fdd9df262250b650b9436f8",
+    "create_member_foundry.gen.go": "b2c92f80ee687f0bd0dcb34b3996742d1e5d81da44ab6e05aec83d7a1793310c",
     "filters_foundry.gen.go": "6262f30dd3c2a1a9fbd833259d505213239cf3c1c9ecea838e196459173e7fe9",
     "item_path_foundry.gen.go": "fd67081cee6f9537e1918259354a0184bfea4d1111e54084588608d18b6bef29",
+    "member_conflict_state_foundry.gen.go": "b5934c0c232c54df1b3882091f4ab844c49d9136af9b631c601cd25006dff816",
+    "member_created_foundry.gen.go": "56680f52a07f592cb1ceda61f2f2f640cc797478750bc566a1edd4373c3d4693",
+    "member_exists_details_foundry.gen.go": "8eabfa6e02c04e3130c902104537abde257a0b4178958820e0bd2faf1d13c257",
     "member_foundry.gen.go": "826b93e1fcdc0262d0c6caab44835255f9ace420bdc4b9887e272de757d3c568",
     "owner_index_foundry.gen.go": "25c0f9615087956a51270410cc4f20030f529461feb4108f139837072d7ceab3",
     "payload_foundry.gen.go": "8c2fe044a97949b6590d97547cc7f67a7b5906a44d570379c711b38324fcaec0",

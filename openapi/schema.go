@@ -163,6 +163,8 @@ func (r renderer) detailedError(definition foundryhttp.ErrorDefinition) object {
 	// The base envelope is closed, so an allOf extension would reject details.
 	// Render a fresh complete object from its manifest fields instead.
 	schema := r.schema(r.types[r.document.ErrorType])
+	delete(schema, "title")
+	delete(schema, "x-foundry-type-id")
 	properties := schema["properties"].(object)
 	properties["status"].(object)["const"] = definition.Status
 	properties["error_code"].(object)["const"] = string(definition.Code)

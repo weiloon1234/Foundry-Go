@@ -1080,7 +1080,19 @@ func (r *renderer) http() error {
 		fmt.Fprintf(&r.out, "  %s: %s,\n", entry.key, quote(entry.code))
 	}
 	r.out.WriteString("} as const);\nexport type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];\n")
-	fmt.Fprintf(&r.out, "\nexport type ErrorResponse = %s;\nexport interface Operations {\n", r.receivedName(r.document.ErrorType))
+	fmt.Fprintf(&r.out, "\nexport type ErrorResponse = %s;\n", r.receivedName(r.document.ErrorType))
+	if detailed {
+		r.out.WriteString("export interface OperationErrorVariants {\n")
+		for _, def := range r.document.Errors {
+			details := ""
+			if def.DetailsType != "" {
+				details = "; readonly details: " + r.receivedName(def.DetailsType)
+			}
+			fmt.Fprintf(&r.out, "  readonly %s: %s & { readonly status: %d; readonly code: %s; readonly response: ErrorResponse & { readonly error_code: %s%s } };\n", quote(string(def.Code)), r.ref("APIError"), def.Status, quote(string(def.Code)), quote(string(def.Code)), details)
+		}
+		r.out.WriteString("}\n")
+	}
+	r.out.WriteString("export interface Operations {\n")
 	for _, op := range r.document.HTTP {
 		codes := make([]string, len(op.Errors))
 		for i, code := range op.Errors {
@@ -1088,18 +1100,7 @@ func (r *renderer) http() error {
 		}
 		errorType := ""
 		if detailed {
-			variants := make([]string, 0, len(op.Errors))
-			for _, def := range r.document.Errors {
-				if !slices.Contains(op.Errors, def.Code) {
-					continue
-				}
-				details := ""
-				if def.DetailsType != "" {
-					details = "; readonly details: " + r.receivedName(def.DetailsType)
-				}
-				variants = append(variants, fmt.Sprintf("(%s & { readonly status: %d; readonly code: %s; readonly response: ErrorResponse & { readonly error_code: %s%s } })", r.ref("APIError"), def.Status, quote(string(def.Code)), quote(string(def.Code)), details))
-			}
-			errorType = "; readonly error: " + strings.Join(variants, " | ")
+			errorType = "; readonly error: OperationErrorVariants[" + strings.Join(codes, " | ") + "]"
 		}
 		fmt.Fprintf(&r.out, "  readonly %s: { readonly request: %s; readonly response: %s; readonly errorCode: %s%s };\n", quote(op.Name), r.request(op), r.response(op), strings.Join(codes, " | "), errorType)
 	}

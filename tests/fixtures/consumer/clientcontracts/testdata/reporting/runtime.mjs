@@ -61,7 +61,7 @@ await assert.rejects(sdk.tableDownloads["reports.numeric_levels"](api, {query: {
 assert.equal(sdk.tableExportKinds["reports.numeric_levels"], "ticket");
 
 const ticketDownload = metadata.http.find(operation => operation.route.id === "reports.tables.reports.numeric_levels.download");
-assert.equal(metadata.version.text, "8");
+assert.equal(metadata.version.text, String(sdk.manifestVersion));
 assert.equal(ticketDownload.route.access, "guarded");
 assert.deepEqual({...ticketDownload.route.authentication.credential}, {source: "report.contract", kind: "ticket", name: "ticket"});
 assert.equal(ticketDownload.query.some(parameter => parameter.name === "ticket"), false);

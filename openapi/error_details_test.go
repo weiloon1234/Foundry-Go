@@ -156,6 +156,11 @@ func TestOpenAPIErrorDetailsComposeCompleteBranches(t *testing.T) {
 		t.Fatal("detail-free codes changed their legacy shape", plainBranch)
 	}
 	branch := errorObject(t, branches[1])
+	for _, key := range []string{"title", "x-foundry-type-id"} {
+		if _, exists := branch[key]; exists {
+			t.Fatal("detailed branch inherited base envelope identity", key)
+		}
+	}
 	properties := errorObject(t, branch, "properties")
 	baseProperties := errorObject(t, base, "properties")
 	if branch["type"] != "object" || branch["additionalProperties"] != false || branch["allOf"] != nil || len(properties) != len(baseProperties)+1 {
@@ -204,9 +209,11 @@ func TestOpenAPIErrorDetailsComposeCompleteBranches(t *testing.T) {
 			t.Fatalf("real envelope lacks required property %s", name)
 		}
 	}
-	delete(envelope, "details")
-	if !slices.Contains(branch["required"].([]any), "details") {
-		t.Fatal("schema accepts envelope without details", envelope)
+	// Literal code sets must be disjoint: no wire code can select two branches.
+	plainCodes := errorObject(t, plainBranch["allOf"].([]any)[1], "properties", "error_code")["enum"].([]any)
+	detailedCode := errorObject(t, properties, "error_code")["const"]
+	if slices.Contains(plainCodes, detailedCode) || detailedCode != envelope["error_code"] {
+		t.Fatal("oneOf branches overlap or reject the actual error code")
 	}
 
 	// A different, detail-free status keeps the legacy schema, including validation.
@@ -231,6 +238,10 @@ func TestOpenAPIErrorDetailsVariantsAndDeterminism(t *testing.T) {
 	if len(branches) != 3 {
 		t.Fatal("expected builtin conflict and two detailed variants", branches)
 	}
+	seenCodes := make(map[any]bool)
+	for _, code := range errorObject(t, errorObject(t, branches[0])["allOf"].([]any)[1], "properties", "error_code")["enum"].([]any) {
+		seenCodes[code] = true
+	}
 	for i, tc := range []struct {
 		code         string
 		root, nested contract.TypeID
@@ -239,7 +250,13 @@ func TestOpenAPIErrorDetailsVariantsAndDeterminism(t *testing.T) {
 		{"registry_exists", registryDetailsType, "registry.reference", "existing"},
 		{"seat_unavailable", seatDetailsType, "seat.reference", "seat"},
 	} {
-		properties := errorObject(t, branches[i+1], "properties")
+		branch := errorObject(t, branches[i+1])
+		properties := errorObject(t, branch, "properties")
+		code := errorObject(t, properties, "error_code")["const"]
+		if seenCodes[code] || !slices.Contains(branch["required"].([]any), "details") {
+			t.Fatal("detailed alternatives overlap or allow missing details")
+		}
+		seenCodes[code] = true
 		if errorObject(t, properties, "error_code")["const"] != tc.code || errorObject(t, properties, "status")["const"] != float64(409) || !reflect.DeepEqual(properties["details"], errorTypeRef(t, document, tc.root)) {
 			t.Fatalf("wrong correlated branch for %s: %v", tc.code, properties)
 		}

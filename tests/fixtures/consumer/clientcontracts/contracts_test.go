@@ -60,7 +60,7 @@ func TestConsumerClientManifestKeepsRealFeatureBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if document.Version != manifest.Version || len(document.HTTP) != 27 || document.Realtime == nil || len(document.Realtime.Channels) != 2 || document.Locales == nil || len(document.Enums) != 1 || len(document.Permissions) != 1 {
+	if document.Version != manifest.Version || len(document.HTTP) != 28 || document.Realtime == nil || len(document.Realtime.Channels) != 2 || document.Locales == nil || len(document.Enums) != 1 || len(document.Permissions) != 1 {
 		t.Fatal("registered metadata missing")
 	}
 	if len(document.Tables) != 2 || document.Tables[0].ID != "reports.members" || !document.Tables[0].Exports || document.Tables[1].ID != "reports.numeric_levels" || !document.Tables[1].Exports || len(document.Notifications) != 1 || len(document.Notifications[0].Channels) != 1 || document.Notifications[0].Channels[0].Payload != "foundry.test/consumer/clientcontracts.Member" {
@@ -202,6 +202,9 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "legacy.ts"), legacy, 0600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, "older-errors.ts"), olderErrorClient(t, source), 0600); err != nil {
+		t.Fatal(err)
+	}
 	// The runtime must also compile for applications without streaming routes;
 	// their generated response union has no FileResult/EventStreamResult member.
 	kept = previous.HTTP[:0]
@@ -226,7 +229,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "non_streaming.ts"), nonStreaming, 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs", "messages.ts", "messages.mjs", "auth.ts", "portal-session.mjs", "token-session.mjs", "browser-storage.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs"} {
+	for _, name := range []string{"error-details.ts", "error-details.mjs", "types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs", "messages.ts", "messages.mjs", "auth.ts", "portal-session.mjs", "token-session.mjs", "browser-storage.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs"} {
 		data, err := os.ReadFile(filepath.Join("testdata", name))
 		if err != nil {
 			t.Fatal(err)
@@ -306,6 +309,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	}
 	run("surface clients against real HTTP/WebSocket", append(append([]string{filepath.Join(dir, "surfaces.mjs")}, entries...), server.URL)...)
 	run("catalog translations and message formatting", filepath.Join(dir, "messages.mjs"), entries[0], entries[1])
+	run("typed error details against real HTTP", filepath.Join(dir, "error-details.mjs"), entries[0], entries[1], filepath.Join(dir, "dist", "older-errors.js"), filepath.Join(dir, "dist", "error-details.js"), server.URL)
 	bundles(t, node, compiler, dir)
 }
 

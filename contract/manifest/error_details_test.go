@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
 type RegistryErrorDetails struct {
@@ -80,7 +83,7 @@ func TestManifestDetailedErrorsBuildAndRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if Version != 9 || !bytes.Contains(raw, []byte(`"details_type":`)) {
+	if !bytes.Contains(raw, []byte(`"version": `+strconv.Itoa(Version))) || !bytes.Contains(raw, []byte(`"details_type":`)) {
 		t.Fatal("missing v9 details")
 	}
 	decoded, err := Decode(raw)
@@ -162,7 +165,7 @@ func TestManifestDetailedErrorsRefuseInvalidAssembly(t *testing.T) {
 		{"HEAD", foundryhttp.HEAD, []foundryhttp.ErrorDeclarationOption{detailed}},
 		{"nested password", foundryhttp.POST, []foundryhttp.ErrorDeclarationOption{foundryhttp.DefineErrorDetails("registry_exists", 409, "Registry already exists.", contract.DefineJSON[RegistryErrorDetails](password))}},
 		{"same type different schema", foundryhttp.POST, []foundryhttp.ErrorDeclarationOption{detailed, foundryhttp.DefineErrorDetails("registry_exists", 409, "Registry already exists.", contract.DefineJSON[RegistryErrorDetails](conflict))}},
-		{"different type", foundryhttp.POST, []foundryhttp.ErrorDeclarationOption{detailed, foundryhttp.DefineErrorDetails("registry_exists", 409, "Registry already exists.", contract.StringJSON[string]())}},
+		{"different type", foundryhttp.POST, []foundryhttp.ErrorDeclarationOption{detailed, foundryhttp.DefineErrorDetails("registry_exists", 409, "Registry already exists.", contract.DefineJSON[RegistryReference](contract.Schema{Root: "github.com/weiloon1234/Foundry-Go/contract/manifest.RegistryReference", Types: []contract.Type{{ID: "github.com/weiloon1234/Foundry-Go/contract/manifest.RegistryReference", Kind: contract.ObjectKind, Properties: []contract.Property{{Name: "id", Type: "string", Required: true}}}, {ID: "string", Kind: contract.StringKind}}}))}},
 		{"plain and detailed", foundryhttp.POST, []foundryhttp.ErrorDeclarationOption{detailed, foundryhttp.DefineError("registry_exists", 409, "Registry already exists.")}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -353,7 +356,7 @@ func TestManifestDetailFreeBytesOnlyChangeVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	current, _ := source.JSON()
-	expected := bytes.Replace(old, []byte(`"version": 8`), []byte(`"version": 9`), 1)
+	expected := bytes.Replace(old, []byte(`"version": 8`), []byte(`"version": `+strconv.Itoa(Version)), 1)
 	if !bytes.Equal(current, expected) {
 		t.Fatal("detail-free manifest changed beyond its version")
 	}
@@ -362,5 +365,159 @@ func TestManifestDetailFreeBytesOnlyChangeVersion(t *testing.T) {
 	}
 	if bytes.Contains(current, []byte("details_type")) {
 		t.Fatal("empty details metadata serialized")
+	}
+}
+
+func TestManifestDetailsRootShapes(t *testing.T) {
+	source := errorDetailsManifest(t, errorDetailsRoute(t, "registry.create", foundryhttp.POST, registryErrorDeclaration()))
+	for _, root := range []contract.Type{
+		{Kind: contract.StringKind},
+		{Kind: contract.IntegerKind, Bits: 32, Signed: true},
+		{Kind: contract.ArrayKind, Element: "shape.string"},
+		{Kind: contract.MapKind, Element: "shape.string"},
+		{Kind: contract.DynamicKind, Nullable: true},
+		{Kind: contract.ObjectKind, Nullable: true},
+	} {
+		for _, alias := range []bool{false, true} {
+			name := string(root.Kind)
+			if alias {
+				name = "alias/" + name
+			}
+			t.Run(name, func(t *testing.T) {
+				root.ID = "shape.root"
+				schema := contract.Schema{Root: root.ID, Types: []contract.Type{root, {ID: "shape.string", Kind: contract.StringKind}}}
+				if alias {
+					schema.Root = "shape.alias"
+					schema.Types = append(schema.Types, contract.Type{ID: schema.Root, Kind: contract.AliasKind, Element: root.ID})
+				}
+				descriptor := contract.DefineJSONField[any](schema)
+				if err := descriptor.Validate(); err != nil {
+					t.Fatal("invalid test schema", err)
+				}
+				declaration := foundryhttp.DefineErrorDetails("bad_details", 409, "Bad details.", descriptor)
+				if _, err := foundryhttp.NewRouter(errorDetailsRoute(t, "invalid", foundryhttp.POST, declaration)); err == nil {
+					t.Fatal("non-object details assembled")
+				}
+				doc, _ := source.Snapshot()
+				doc.Types = append(doc.Types, schema.Types...)
+				for i := range doc.Errors {
+					if doc.Errors[i].Code == "registry_exists" {
+						doc.Errors[i].DetailsType = schema.Root
+					}
+				}
+				raw, err := json.Marshal(doc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := Decode(raw); err == nil || !strings.Contains(err.Error(), "non-nullable object") {
+					t.Fatal("forged details root accepted", err)
+				}
+			})
+		}
+	}
+	t.Run("error envelope", func(t *testing.T) {
+		declaration := foundryhttp.DefineErrorDetails("bad_details", 409, "Bad details.", foundryhttp.ErrorResponseJSON())
+		router, err := foundryhttp.NewRouter(errorDetailsRoute(t, "invalid", foundryhttp.POST, declaration))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Build(t.Context(), Sources{HTTP: router}); err == nil {
+			t.Fatal("error envelope became details")
+		}
+		doc, _ := source.Snapshot()
+		for i := range doc.Errors {
+			if doc.Errors[i].Code == "registry_exists" {
+				doc.Errors[i].DetailsType = doc.ErrorType
+			}
+		}
+		raw, _ := json.Marshal(doc)
+		if _, err := Decode(raw); err == nil {
+			t.Fatal("forged error envelope details accepted")
+		}
+	})
+}
+
+func TestManifestSharedDetailsReachability(t *testing.T) {
+	descriptor := contract.DefineJSON[RegistryErrorDetails](registryErrorSchema())
+	other := foundryhttp.DefineErrorDetails("registry_locked", 409, "Registry locked.", descriptor)
+	response := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "registry.show", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/registry")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, descriptor)).Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (RegistryErrorDetails, error) {
+		return RegistryErrorDetails{}, nil
+	})
+	router, err := foundryhttp.NewRouter(response, errorDetailsRoute(t, "registry.create", foundryhttp.POST, registryErrorDeclaration()), errorDetailsRoute(t, "registry.lock", foundryhttp.POST, other), errorDetailsRoute(t, "seat.reserve", foundryhttp.POST, seatErrorDeclaration()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	channel := websocket.Public[struct{}]("registry", websocket.DefineRooms(foundryhttp.StringPath[string]()))
+	registry, err := websocket.NewRegistry(websocket.Register(channel, websocket.DefineOutgoing(channel, "updated", descriptor).Registration()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	realtime, err := websocket.DescribeClient(registry, websocket.DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := Build(t.Context(), Sources{HTTP: router, Realtime: &realtime})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, _ := source.Snapshot()
+	// A hand-made private channel document also exercises reader normalization.
+	doc.Realtime.Channels[0].Private = true
+	doc.Realtime.Channels[0].Guard = "registry.api"
+	doc.Realtime.Channels[0].Provider = "registries"
+	source, err = freeze(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name      string
+		selection Selection
+		code      foundryhttp.ErrorCode
+	}{
+		{"response", Selection{Routes: []foundryhttp.RouteID{"registry.show"}}, ""},
+		{"other code", Selection{Routes: []foundryhttp.RouteID{"registry.lock"}}, "registry_locked"},
+		{"path", Selection{Paths: []string{"/registry.create"}}, "registry_exists"},
+		{"channel", Selection{Channels: []websocket.ChannelID{"registry"}}, ""},
+		{"guard", Selection{Guards: []auth.GuardName{"registry.api"}}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			projected, err := source.Project(tc.selection)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, _ := projected.JSON()
+			projected, err = Decode(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			view, _ := projected.Snapshot()
+			if len(view.Roots) != 0 {
+				t.Fatal("details became public roots")
+			}
+			for _, id := range []contract.TypeID{registryErrorSchema().Root, "registry.reference", "registry.id"} {
+				count := 0
+				for _, typ := range view.Types {
+					if typ.ID == id {
+						count++
+					}
+				}
+				if count != 1 {
+					t.Fatal("shared schema missing or duplicated", id, count)
+				}
+			}
+			if bytes.Contains(data, []byte("seat.reference")) {
+				t.Fatal("unselected details leaked")
+			}
+			for _, definition := range view.Errors {
+				if definition.DetailsType != "" && definition.Code != tc.code {
+					t.Fatal("unselected error retained", definition.Code)
+				}
+			}
+			if tc.code != "" && !slices.ContainsFunc(view.Errors, func(def foundryhttp.ErrorDefinition) bool {
+				return def.Code == tc.code && def.DetailsType == registryErrorSchema().Root
+			}) {
+				t.Fatal("selected declaration missing")
+			}
+		})
 	}
 }

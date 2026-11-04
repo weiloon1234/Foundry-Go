@@ -7,6 +7,17 @@
   threshold helper. The match predicate uses the schema-qualified `public.%`
   operator for GIN trigram index support. Applications install `pg_trgm` in
   `public`; see [trigram search](docs/guides/trigram-search.md).
+- Added: Typed application error details declared once in Go, with generated DTO
+  descriptors, fail-closed HTTP responses, manifest v9, OpenAPI alternatives and
+  correlated TypeScript operation guards, including portal clients and forms.
+- Changed: `http.Errors` accepts mixed `ErrorDeclarationOption` values. Manifest
+  projections retain only referenced application errors, so portal `ErrorCode`
+  sets can shrink even without details. Operation error variants share one keyed
+  interface; guards validate received payloads without freezing API errors.
+  Regenerate all contracts together; see [compatibility](docs/compatibility.md).
+- Fixed: Details declarations and manifest readers require a non-nullable object
+  root; detailed OpenAPI alternatives do not inherit the base envelope identity.
+  Idempotent rejections roll back claims and writes and are not stored for replay.
 
 - Fixed: Compression and automatic ETag middleware no longer log a transfer
   failure or abort when a client closes after the complete declared-length

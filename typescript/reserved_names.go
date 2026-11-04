@@ -10,7 +10,7 @@ var renderedNames = []string{
 	"API", "CatalogMessageArguments", "CatalogMessageKey", "Client", "ContractTypes",
 	"EnumLabel", "ErrorCode", "ErrorResponse", "FrontendMessageArguments", "FrontendMessageKey",
 	"Identity", "Locale", "LocaleMap", "isOperationError",
-	"NewIdentity", "OperationInputs", "OperationJSONBodies", "Operations",
+	"NewIdentity", "OperationErrorVariants", "OperationInputs", "OperationJSONBodies", "Operations",
 	"PasswordCredentials", "PresentationKind", "PublicEnv", "PublicEnvEntry", "PublicEnvKey",
 	"Realtime", "ReceivedContractTypes", "Schemas",
 	"TableColumn", "TableColumnKind", "TableMetadata", "TableRows", "TableReceivedRows", "TablePageReceived", "Tables",

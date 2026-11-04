@@ -108,7 +108,7 @@ func TestPublishClientContracts(t *testing.T) {
 		Sources:   map[string]string{},
 		Artifacts: artifacts,
 	}
-	for _, path := range []string{"client_publication_test.go", "contracts.go", "reporting_contracts_test.go"} {
+	for _, path := range []string{"client_publication_test.go", "contracts.go", "member_create.go", "reporting_contracts_test.go"} {
 		evidence.Sources[path] = artifactHash(readArtifact(t, path))
 	}
 	data, err := json.MarshalIndent(evidence, "", "  ")

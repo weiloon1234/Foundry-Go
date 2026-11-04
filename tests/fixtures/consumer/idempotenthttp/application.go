@@ -50,7 +50,7 @@ func Migrations() []migrate.Definition {
 	}}}
 }
 func Endpoint() http.Endpoint[Path, http.NoQuery, Submission, Receipt] {
-	return http.ValidateBody(http.PrepareEndpoint(http.ConfigureEndpoint(http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "orders.create", Method: http.POST, Access: http.Guarded}, PathDescriptor()), http.EmptyQuery(), http.JSONBody(SubmissionJSON()), http.JSONResponse(201, ReceiptJSON())), http.Errors(Rejected)), func(_ context.Context, in Request) (http.NoQuery, Submission, error) {
+	return http.ValidateBody(http.PrepareEndpoint(http.ConfigureEndpoint(http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "orders.create", Method: http.POST, Access: http.Guarded}, PathDescriptor()), http.EmptyQuery(), http.JSONBody(SubmissionJSON()), http.JSONResponse(201, ReceiptJSON())), http.Errors(Rejected, OrderExists)), func(_ context.Context, in Request) (http.NoQuery, Submission, error) {
 		in.Body.Name = strings.TrimSpace(in.Body.Name)
 		return in.Query, in.Body, nil
 	}), validation.Rules(validation.DefineField("name", func(in Submission) string { return in.Name }), validation.NonBlank[string]()))

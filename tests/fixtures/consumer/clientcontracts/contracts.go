@@ -137,6 +137,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 		return result, err
 	}
 	router, err := foundryhttp.NewRouter(append(append(append(pluralRoutes, transportRoutes(signer)...), browserAuthRoutes(transport, browserGuard)...),
+		MemberCreate.Handle(HandleMemberCreate),
 		requestflow.Submit.Handle(requestflow.Handle),
 		unions.Echo.Handle(unions.Handle),
 		unions.Method.Handle(unions.HandleMethod),

@@ -1,9 +1,6 @@
 # Application HTTP errors
 
-**Status: focused runtime, consumer, compiler and editor acceptance passed.**
-
-Declare a public error once and reuse the value in the endpoint and domain
-operation. The declaration owns a semantic `ErrorCode`, a status from 400 through
+Declare a public error once and reuse the value in the endpoint and handler. The declaration owns a semantic `ErrorCode`, a status from 400 through
 599, and static public text. This is the same metadata the router exports.
 
 ```go
@@ -23,7 +20,7 @@ var Reserve = foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(
 ```
 
 The [consumer example](../../tests/fixtures/consumer/httpendpoints/errors.go)
-registers a thin handler calling its domain service. Return `SeatUnavailable`
+registers a thin handler calling a service. At the HTTP boundary, return `SeatUnavailable`
 directly, or `SeatUnavailable.WithCause(err)` to retain an internal cause.
 `errors.Is(err, SeatUnavailable)` checks the declaration and ordinary
 `errors.As`/`errors.Is` can inspect wrapped causes. A cause's text never supplies
@@ -60,7 +57,7 @@ is appropriate to expose, including for explicitly declared 5xx failures.
 Arbitrary internal Go errors still use the generic internal-error response.
 [Localized error messages](localization.md) resolve declared message keys through the request locale and shared catalog.
 
-Raw handlers may call `WriteError` explicitly with a valid declaration. Global
+Raw handlers may call `WriteError` explicitly with a valid **plain** declaration. Global
 wrappers outside `Router` and raw handlers have no typed endpoint contract;
 their responses do not acquire inferred endpoint error metadata. Model and
 private-cause values never become fields in the public failure envelope.
@@ -70,4 +67,106 @@ headers, safe cache defaults, and ownership of custom error methods. Error
 classification contains panic and `runtime.Goexit` before committing a response.
 It waits for the custom method to finish and never formats an application cause.
 
-Combined transport full regression passed.
+## Typed details
+
+Use a concrete DTO for a failure that needs public structured data. Its root,
+including aliases, must be a non-nullable object. Scalar, array, map, dynamic
+and nullable roots are refused. A details type cannot be the error envelope
+itself. Nested fields retain the normal DTO rules.
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/member_create.go -->
+```go
+//foundry:dto
+type MemberExistsDetails struct {
+    ExistingMemberID model.ID[models.User] `json:"existing_member_id"`
+    Existing         MemberConflictState   `json:"existing"`
+}
+
+//foundry:dto
+type MemberConflictState struct {
+    Name  string              `json:"name"`
+    State localization.Status `json:"state"`
+}
+
+var MemberExists = foundryhttp.DefineErrorDetails(
+    "member_exists", 409, "The member already exists.", MemberExistsDetailsJSON(),
+)
+var RegistrationClosed = foundryhttp.DefineError(
+    "registration_closed", 409, "Registration is closed.",
+)
+```
+
+Run the normal [generator](typed-api-workflow.md) to produce the descriptor.
+Declare both variants with `http.Errors(MemberExists, RegistrationClosed)`.
+The [complete create endpoint](../../tests/fixtures/consumer/clientcontracts/member_create.go)
+returns `MemberCreated` with status 201, or calls
+`MemberExists.New(MemberExistsDetails{...}).WithCause(err)` for the detailed 409.
+`MemberExists.New` requires the declared payload type; the declaration itself is not an error.
+Do not mutate a bound payload before the response is written.
+
+`MemberExists.Matches(err)` identifies this exact declaration and schema through
+wrappers. It does not extract the payload. `errors.Is` and `errors.As` still find
+the cause. Formatting and server diagnostics never expose payload or cause text;
+the response contains only declared public text and successfully encoded details.
+`Validate`, `Description` and `MessageDefinition` work as for plain declarations.
+
+Services should return domain errors. Map them to these declarations at the HTTP
+boundary, as `HandleMemberCreate` does with `errors.As`. This keeps a service usable
+from commands, jobs or MCP without depending on HTTP status codes or requiring a
+transport payload extraction API. A model-owned identifier prevents mixing Go
+owners; it does **not** authorize disclosure. Check current resource and tenant
+authorization before exposing the existing record's identifier or state.
+
+Details reach the wire only when the matched typed endpoint declares that exact
+code, status, message, details type and schema. An undeclared or mismatched error,
+an unmatched request, or a raw route fails closed to `internal_error` without
+details. Encoding failures, panics, and whole-envelope size or depth overruns do
+the same and are reported as server failures. Encoding runs once and is independent
+of request cancellation, so a canceled context does not turn a valid 409 into 500.
+Outer classification still wins: `http.Conflict.WithCause(detailed)` returns
+409 `conflict` without details.
+
+Router assembly refuses details on status 401, details on HEAD endpoints,
+password output in details, and conflicting definitions or schemas for one code.
+A plain declaration and a detailed declaration for the same code conflict.
+Manifest readers repeat the relevant checks, including for hand-made documents.
+Status 401 cannot carry details because auth transports may discard its body and
+retry. Keep authentication failures separate from business conflicts.
+
+## Client narrowing
+
+A client whose manifest includes detailed errors exports correlated unions at
+`Operations["membersCreate"]["error"]`. The operation guard checks operation
+membership, status and code; narrowing the code then selects the payload.
+Plain variants have no `details` property. Full and portal entries use the same
+`APIError` class and their own projected operations and codes. A portal with no
+detailed errors generates no `isOperationError`, so code shared across portals
+cannot assume that export exists.
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/error-details.ts -->
+```typescript
+export async function createMember(api: sdk.API, name: string) {
+  try {
+    return (await api.membersCreate({ body: { name } })).id;
+  } catch (error) {
+    if (sdk.isOperationError("membersCreate", error) && error.code === sdk.ErrorCode.MemberExists) {
+      return error.response.details.existing_member_id;
+    }
+    throw error;
+  }
+}
+```
+
+The [compiled client example](../../tests/fixtures/consumer/clientcontracts/testdata/error-details.ts)
+imports `sdk` from the generated entry. Forms return the same narrowable error in
+failed submissions. Missing or malformed required details produce
+`ResponseContractError`; tolerant enum decoding preserves newer server cases as
+`UnknownEnumValue`. The guard validates the current received envelope each time.
+`APIError` remains extensible for application metadata, causes and stack traces.
+
+Idempotent rejection replay is deferred. A detailed 409 from inside the
+[idempotent runner](idempotent-operations.md) rolls back the business write, outbox entry
+and claim. It consumes no retained-outcome quota. A same-key retry executes
+against current state and can return different current details. Only a successful
+committed result is stored for replay; do not treat a rejection as a durable
+cached answer.

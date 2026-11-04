@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "types": [
     {
       "id": "[]contract.Issue",
@@ -52,6 +52,18 @@
       ]
     },
     {
+      "id": "foundry.test/consumer/clientcontracts.CreateMember",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
       "id": "foundry.test/consumer/clientcontracts.ExplicitLabels",
       "kind": "map",
       "nullable": true,
@@ -65,6 +77,52 @@
         {
           "name": "display",
           "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "foundry.test/consumer/clientcontracts.MemberConflictState",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "state",
+          "type": "foundry.test/consumer/localization.Status",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "foundry.test/consumer/clientcontracts.MemberCreated",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "id",
+          "type": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "foundry.test/consumer/clientcontracts.MemberExistsDetails",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "existing",
+          "type": "foundry.test/consumer/clientcontracts.MemberConflictState",
+          "required": true
+        },
+        {
+          "name": "existing_member_id",
+          "type": "github.com/weiloon1234/Foundry-Go/model.ID[foundry.test/consumer/models.User]",
           "required": true
         }
       ]
@@ -3050,6 +3108,100 @@
     },
     {
       "route": {
+        "id": "members.create",
+        "method": "POST",
+        "path": "/members",
+        "parameters": [],
+        "access": "public",
+        "raw": false
+      },
+      "name": "membersCreate",
+      "path": [],
+      "query": [],
+      "body": {
+        "media_type": "application/json",
+        "type": "foundry.test/consumer/clientcontracts.CreateMember"
+      },
+      "response": {
+        "media_type": "application/json",
+        "type": "foundry.test/consumer/clientcontracts.MemberCreated"
+      },
+      "status": 201,
+      "limits": {
+        "Multipart": {
+          "Bytes": 2097152,
+          "FileBytes": 2097152,
+          "Parts": 128,
+          "Files": 16,
+          "Readers": 16,
+          "HeaderBytes": 32768,
+          "FieldBytes": 65536,
+          "FieldsBytes": 262144,
+          "Issues": 16
+        },
+        "Files": {
+          "Bytes": 1073741824,
+          "Ranges": 16,
+          "RangeBytes": 4096
+        },
+        "Query": {
+          "Bytes": 16384,
+          "Pairs": 128,
+          "Issues": 16
+        },
+        "Form": {
+          "Bytes": 2097152,
+          "Pairs": 1024,
+          "Issues": 16
+        },
+        "Body": {
+          "Bytes": 2097152,
+          "Depth": 32,
+          "Nodes": 65536,
+          "Steps": 262144,
+          "Issues": 16
+        },
+        "Response": {
+          "Bytes": 33554432,
+          "Depth": 32,
+          "Nodes": 1048576,
+          "Steps": 4194304,
+          "Issues": 16
+        },
+        "Validation": {
+          "Checks": 65536,
+          "Issues": 32,
+          "Depth": 32,
+          "ValueBytes": 1048576
+        },
+        "Raw": {
+          "Bytes": 2097152
+        }
+      },
+      "errors": [
+        "bad_request",
+        "conflict",
+        "forbidden",
+        "internal_error",
+        "member_exists",
+        "method_not_allowed",
+        "mfa_required",
+        "not_acceptable",
+        "not_found",
+        "payload_too_large",
+        "precondition_failed",
+        "range_not_satisfiable",
+        "rate_limited",
+        "registration_closed",
+        "request_timeout",
+        "unauthenticated",
+        "unavailable",
+        "unsupported_media_type",
+        "validation_failed"
+      ]
+    },
+    {
+      "route": {
         "id": "members.events",
         "method": "GET",
         "path": "/members/events",
@@ -5575,6 +5727,12 @@
       "message": "Internal server error"
     },
     {
+      "error_code": "member_exists",
+      "status": 409,
+      "message": "The member already exists.",
+      "details_type": "foundry.test/consumer/clientcontracts.MemberExistsDetails"
+    },
+    {
       "error_code": "method_not_allowed",
       "status": 405,
       "message": "Method not allowed"
@@ -5613,6 +5771,11 @@
       "error_code": "rate_limited",
       "status": 429,
       "message": "Rate limit exceeded"
+    },
+    {
+      "error_code": "registration_closed",
+      "status": 409,
+      "message": "Registration is closed."
     },
     {
       "error_code": "request_timeout",

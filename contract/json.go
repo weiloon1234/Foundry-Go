@@ -40,8 +40,8 @@ func DefineJSON[T any](description Schema) JSON[T] {
 		return JSON[T]{err: invalidSchema()}
 	}
 	schema, err := compileSchema(description)
-	if err == nil && (schema.types[description.Root].Kind != ObjectKind || schema.types[description.Root].Nullable) {
-		schema, err = nil, invalidSchema()
+	if err == nil {
+		err = requireObjectRoot(description.Root, schema.types)
 	}
 	return JSON[T]{schema: schema, err: err, sourceName: gotype.Source(string(description.Root))}
 }

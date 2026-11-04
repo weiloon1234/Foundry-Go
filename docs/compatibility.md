@@ -6,6 +6,43 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## Typed error details: manifest 9 — Unreleased
+
+Regenerate Go descriptors, manifest, OpenAPI and TypeScript together. Manifest 9
+adds optional `details_type` to error definitions; v8 documents are rejected.
+Use the application's normal generation and contract publication commands.
+Declare details with a generated non-nullable object DTO and register the same
+`DefineErrorDetails` declaration on the endpoint; see
+[application HTTP errors](guides/http-application-errors.md).
+
+`http.Errors` now takes the sealed `ErrorDeclarationOption` interface so one call
+can mix plain and detailed declarations. Direct calls remain valid. A
+`[]http.ErrorDeclaration` cannot be spread into it: change a declaration collection
+to `[]http.ErrorDeclarationOption`, then call `http.Errors(declarations...)`.
+A detailed declaration requires `.New(payload)` before it can be returned as an error.
+
+Projection now keeps built-in errors plus the application errors referenced by
+selected operations. This affects **detail-free applications too**. Regenerating
+can remove `ErrorCode` members from a portal: for example, `ConsumerChanged` is
+absent from the members, browser and live consumer surfaces. Code importing or
+accessing such a member no longer compiles. Remove the import/use, or declare the
+error on an operation that the portal really uses. Do not retain unrelated errors
+just to recreate the former application-wide catalog.
+
+`APIError` remains extensible: application code can attach metadata, assign a
+cause or capture a stack trace. When details are present, `isOperationError` and
+the code select the received payload type; the guard validates the current
+response each time. Plain variants have no details. A portal with no detailed
+errors generates no `isOperationError`; code shared across portals cannot assume
+that export exists. For error codes they already recognize, existing strict clients
+reject an unexpected `details` property as a response-contract failure, while
+tolerant clients ignore it. Deploy clients that need the payload with the
+regenerated contract before relying on it.
+
+Detailed rejections are not stored by idempotency. Their transaction and claim
+roll back, so retrying the same key re-executes against current state; durable
+rejection replay remains deferred.
+
 ## Attachment transactions and locale configuration — v0.5.2
 
 `Collection.ClearIn`, `DetachIn`, `FirstIn` and `ListIn`, and `ClearIn` on

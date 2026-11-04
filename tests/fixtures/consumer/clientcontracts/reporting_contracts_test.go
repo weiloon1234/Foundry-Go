@@ -255,7 +255,7 @@ func TestTicketDownloadContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if document.Version != 8 {
+	if document.Version != manifest.Version {
 		t.Fatal("ticket credential requires manifest 8")
 	}
 	found := false

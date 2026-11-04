@@ -78,35 +78,30 @@ export interface EventStreamResult<T> extends AsyncIterable<ServerEvent<T>> { re
 export class APIError<T = unknown> extends Error {
   constructor(readonly status: number, readonly code: string, readonly response: T | undefined, readonly retryAfterSeconds?: number) { super("API request failed"); this.name = "APIError"; }
 }
-// Only the shared decoder can brand an error. Entries still check their own
-// operation's status/code membership before trusting it.
-const decodedErrors = /* @__PURE__ */ new WeakSet<APIError>();
-function errorDefinition(document: RuntimeDocument, operation: Operation, status: number, code: unknown) {
-  const definition = document.errors.find(error => error.status === status && error.error_code === code && operation.errors.includes(error.error_code));
-  if (!definition) reject("", "error_envelope");
-  return definition;
+function errorStatus(value: unknown, status: number, received: boolean): boolean {
+  return value instanceof JSONNumber ? value.text === `${status}` : typeof value === "number" ? value === status : received && value === `${status}`;
 }
 function decodeErrorResponse(document: RuntimeDocument, codec: WireCodec, operation: Operation, status: number, input: string | Uint8Array | Record<string, unknown>, tolerant: boolean): Record<string, unknown> {
-  // Parse the entire envelope once, including details, under one response budget.
+  // Parse and transform the whole envelope once, including details, under one budget.
   const received = typeof input !== "string" && !(input instanceof Uint8Array);
   const record = object(received ? input : parseWire(input, operation.limits.Response));
-  const definition = errorDefinition(document, operation, status, record.error_code);
-  if (String(record.status instanceof JSONNumber ? record.status.text : record.status) !== String(status)) reject("", "error_envelope");
-  const properties = definition.details_type ? [{ name: "details", type: definition.details_type, required: true }] : [];
-  return object(codec.transform(document.error_type, record, operation.limits.Response, false, false, tolerant, properties, received));
+  const definition = document.errors.find(error => errorStatus(record.status, error.status, received) && error.error_code === record.error_code && operation.errors.includes(error.error_code));
+  const properties = definition?.details_type ? [{ name: "details", type: definition.details_type, required: true }] : [];
+  const decoded = object(codec.transform(document.error_type, record, operation.limits.Response, false, false, tolerant, properties, received));
+  if (!errorStatus(record.status, status, received) || !definition) reject("", "error_envelope");
+  return decoded;
+}
+function operationErrorResponse(document: RuntimeDocument, codec: WireCodec, name: string, error: unknown): Record<string, unknown> | undefined {
+  if (!(error instanceof APIError)) return undefined;
+  const operation = document.http.find(operation => operation.name === name);
+  if (!operation || operation.route.method === "HEAD") return undefined;
+  try {
+    const response = decodeErrorResponse(document, codec, operation, error.status, object(error.response), true);
+    return response.error_code === error.code ? response : undefined;
+  } catch { return undefined; }
 }
 function matchesOperationError(document: RuntimeDocument, codec: WireCodec, name: string, error: unknown): error is APIError<Record<string, unknown>> {
-  if (!(error instanceof APIError)) return false;
-  const operation = document.http.find(operation => operation.name === name);
-  if (!operation || operation.route.method === "HEAD") return false;
-  try {
-    errorDefinition(document, operation, error.status, error.code);
-    if (!decodedErrors.has(error)) {
-      const response = decodeErrorResponse(document, codec, operation, error.status, object(error.response), true);
-      if (response.error_code !== error.code) return false;
-    }
-    return true;
-  } catch { return false; }
+  return operationErrorResponse(document, codec, name, error) !== undefined;
 }
 /**
  * The server answered, but its response broke this operation's contract: its
@@ -397,8 +392,7 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
         requireJSON(headers); const bytes = await collectBody(response.body, operation.limits.Response.Bytes, call.signal);
         const decoded = decodeErrorResponse(document, codec, operation, response.status, bytes, tolerant);
         const retryText = headers["retry-after"], retry = retryText && /^[0-9]{1,3}$/.test(retryText) ? Number(retryText) : undefined;
-        const error = new APIError(response.status, String(decoded.error_code), immutable(decoded), retry !== undefined && retry >= 1 && retry <= 300 ? retry : undefined);
-        decodedErrors.add(error); throw Object.freeze(error);
+        throw new APIError(response.status, String(decoded.error_code), decoded, retry !== undefined && retry >= 1 && retry <= 300 ? retry : undefined);
       }
       const file = operation.response?.file;
       if (file) {
@@ -463,5 +457,5 @@ function signedTarget(input: unknown, expected: string, policy: SignedURLPolicy,
   if (canonical(actual.searchParams) !== canonical(target.searchParams)) reject("", "signed_url");
   return relative && base ? base + input : input;
 }
-export { checkAbort, createHTTPInvoker, matchesOperationError, ownInput, unsentFailures, urlValue };
+export { checkAbort, createHTTPInvoker, matchesOperationError, operationErrorResponse, ownInput, unsentFailures, urlValue };
 export type { MultipartPart, Operation, Payload, RealtimeChannel, RealtimeEvent, RuntimeDocument, URLParameter };

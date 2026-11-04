@@ -22,3 +22,11 @@ remains locked to its original bytes. Run `make datatable-contracts` to check by
 agreement, reporting coverage, and historical publication. The native TypeScript
 gate retains strict negative contracts, HTTP/WebSocket behavior, React/Vue form
 adapters and bundle assertions.
+
+
+`members.create` returns a typed 201 or one of two declared 409s: `member_exists`
+has generated nested details with a model-owned user ID, while
+`registration_closed` is plain. The native client gate executes the compiled
+guide example, full and members-portal narrowing, form submissions, and a
+client predating the server's `ready` enum case. The Go boundary test captures
+server logs and proves an undeclared detailed error stays redacted.

@@ -207,15 +207,18 @@ class WireCodec {
           if (!Array.isArray(value)) reject(path, "type");
           if (type.length !== undefined && value.length !== type.length) reject(path, "length");
           if (value.length > limits.Nodes || value.length > limits.Steps - steps) reject(path, "limit");
-          return value.map((child, i) => visit(type.element!, child, pointer(path, String(i)), depth + 1));
+          const result: unknown[] = [];
+          for (let i = 0; i < value.length; i++) result.push(visit(type.element!, value[i], pointer(path, String(i)), depth + 1));
+          return result;
         }
         case "map": {
           const record = object(value, path), result: Record<string, unknown> = Object.create(null), key = type.key;
           for (const name of Object.keys(record).sort()) {
             if (++steps > limits.Steps) reject(path, "limit");
             // A tolerant client omits entries keyed by enum cases it does not know.
-            if (key !== undefined && !this.mapKey(key, name, path, tolerant)) continue;
-            result[name] = visit(type.element!, record[name], pointer(path, name), depth + 1);
+            const known = key === undefined || this.mapKey(key, name, path, tolerant);
+            const value = visit(type.element!, record[name], pointer(path, name), depth + 1);
+            if (known) result[name] = value;
           }
           return result;
         }
