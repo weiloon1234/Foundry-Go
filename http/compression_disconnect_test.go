@@ -48,7 +48,8 @@ func TestCompressionClientClosesAfterDeclaredBody(t *testing.T) {
 					}
 				}
 				if shape != "no-store" {
-					if err := stdhttp.NewResponseController(w).Flush(); err != nil {
+					// The client may read the whole declared body and leave first.
+					if err := stdhttp.NewResponseController(w).Flush(); err != nil && r.Context().Err() == nil {
 						t.Error(err)
 						return
 					}
