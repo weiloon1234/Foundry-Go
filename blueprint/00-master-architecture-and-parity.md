@@ -8,6 +8,22 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Typed API errors and search — v0.7.0, 2026-11-04
+
+Status: **implemented; deploy acceptance passed on Ubuntu 24.04 and 26.04 on arm64 and amd64, Starter,
+ooo and Boss Club passed their full gates against pre-release commit `1494529d`, and CI gates this tag**.
+`http.DefineErrorDetails` declares a public error with a concrete details DTO. The details reach the
+wire only when the matched typed endpoint declares that exact definition, and every other path falls
+back to a safe `internal_error`. Manifest v9, OpenAPI and generated clients carry the same declaration,
+and `isOperationError` narrows a caught `APIError` with no casts. `expr.TrigramMatch` and
+`expr.TrigramSimilarity` are typed `pg_trgm` search. Update before-images read `FOR NO KEY UPDATE`, and
+`record.Ignore` excludes declared columns from audit decisions. Deploy tool generation 4 adds
+`ROLE=` to restart and stop, keeps deliberately stopped roles off, and stops a staging certificate
+outage blocking bootstrap. A passing test removes its own PostgreSQL schema through `testkit/postgres`.
+Open: ooo hasn't adopted typed search or the typed 409. Rejected requests aren't stored for idempotent
+replay, and application 401s can't carry details, both by decision. Generation 4 runs only in
+acceptance until the applications adopt this release. Takeover recovery has still run only in acceptance.
+
 ## Full deployment tooling — v0.6.0, 2026-11-04
 
 Status: **implemented; acceptance passed on Ubuntu 24.04 and 26.04 on arm64 and amd64, a real

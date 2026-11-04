@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 — 2026-11-04
 
 - Fixed: PostgreSQL test helpers remove only their own generated schemas after
   passing tests. Failed or panicking tests retain schemas for inspection, as does
