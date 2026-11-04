@@ -127,6 +127,15 @@ func Build(ctx context.Context, sources Sources) (*Manifest, error) {
 	}
 	if sources.HTTP != nil {
 		document.Errors = sources.HTTP.ErrorDefinitions()
+		for _, definition := range document.Errors {
+			if definition.DetailsType != "" {
+				schema, err := sources.HTTP.ErrorDetailsSchema(definition.Code)
+				if err != nil {
+					return nil, err
+				}
+				g.add(schema)
+			}
+		}
 		endpoints, routes := sources.HTTP.Endpoints(), sources.HTTP.Routes()
 		if len(routes) > MaxOperations || len(endpoints) > MaxOperations {
 			return nil, invalid("too many HTTP routes")

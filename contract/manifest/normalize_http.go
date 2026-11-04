@@ -33,12 +33,12 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 	for _, definition := range foundryhttp.ErrorDefinitions() {
 		builtins[definition.Code] = definition
 	}
-	errors := make(map[foundryhttp.ErrorCode]bool)
+	errors := make(map[foundryhttp.ErrorCode]foundryhttp.ErrorDefinition)
 	for _, definition := range d.Errors {
-		if errors[definition.Code] {
+		if _, exists := errors[definition.Code]; exists {
 			return invalid("duplicate error code")
 		}
-		errors[definition.Code] = true
+		errors[definition.Code] = definition
 		if builtin, found := builtins[definition.Code]; found {
 			if builtin != definition {
 				return invalid("builtin error definition changed")
@@ -46,9 +46,17 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 		} else if err := foundryhttp.DefineError(definition.Code, definition.Status, definition.Message).Validate(); err != nil {
 			return err
 		}
+		if definition.DetailsType != "" {
+			if !types.has(definition.DetailsType) {
+				return invalid("missing error details type")
+			}
+			if definition.Status == 401 {
+				return invalid("HTTP error details cannot use status 401")
+			}
+		}
 	}
 	for code := range builtins {
-		if !errors[code] {
+		if _, exists := errors[code]; !exists {
 			return invalid("builtin error definition is missing")
 		}
 	}
@@ -187,8 +195,12 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 		}
 		codes := make(map[foundryhttp.ErrorCode]bool)
 		for _, code := range op.Errors {
-			if !errors[code] || codes[code] {
+			definition, exists := errors[code]
+			if !exists || codes[code] {
 				return invalid("invalid endpoint error reference")
+			}
+			if definition.DetailsType != "" && op.Route.Method == foundryhttp.HEAD {
+				return invalid("HEAD operations cannot declare HTTP error details")
 			}
 			codes[code] = true
 		}

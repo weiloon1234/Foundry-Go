@@ -1,0 +1,207 @@
+{
+  "version": 8,
+  "types": [
+    {
+      "id": "[]contract.Issue",
+      "kind": "array",
+      "nullable": true,
+      "element": "github.com/weiloon1234/Foundry-Go/contract.Issue"
+    },
+    {
+      "id": "bool",
+      "kind": "boolean",
+      "nullable": false
+    },
+    {
+      "id": "github.com/weiloon1234/Foundry-Go/attribution.RequestID",
+      "kind": "string",
+      "nullable": false
+    },
+    {
+      "id": "github.com/weiloon1234/Foundry-Go/contract.Issue",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "code",
+          "type": "github.com/weiloon1234/Foundry-Go/contract.IssueCode",
+          "required": true
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "label_key",
+          "type": "github.com/weiloon1234/Foundry-Go/i18n.MessageKey",
+          "required": false
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "path",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "github.com/weiloon1234/Foundry-Go/contract.IssueCode",
+      "kind": "string",
+      "nullable": false
+    },
+    {
+      "id": "github.com/weiloon1234/Foundry-Go/http.ErrorCode",
+      "kind": "string",
+      "nullable": false
+    },
+    {
+      "id": "github.com/weiloon1234/Foundry-Go/http.ErrorResponse",
+      "kind": "object",
+      "nullable": false,
+      "properties": [
+        {
+          "name": "error_code",
+          "type": "github.com/weiloon1234/Foundry-Go/http.ErrorCode",
+          "required": true
+        },
+        {
+          "name": "issues",
+          "type": "[]contract.Issue",
+          "required": false
+        },
+        {
+          "name": "issues_truncated",
+          "type": "bool",
+          "required": false
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "request_id",
+          "type": "github.com/weiloon1234/Foundry-Go/attribution.RequestID",
+          "required": false
+        },
+        {
+          "name": "status",
+          "type": "int",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "github.com/weiloon1234/Foundry-Go/i18n.MessageKey",
+      "kind": "string",
+      "nullable": false
+    },
+    {
+      "id": "int",
+      "kind": "integer",
+      "nullable": false,
+      "bits": 64,
+      "signed": true
+    },
+    {
+      "id": "string",
+      "kind": "string",
+      "nullable": false
+    }
+  ],
+  "roots": null,
+  "http": [],
+  "error_type": "github.com/weiloon1234/Foundry-Go/http.ErrorResponse",
+  "errors": [
+    {
+      "error_code": "bad_request",
+      "status": 400,
+      "message": "Invalid request"
+    },
+    {
+      "error_code": "conflict",
+      "status": 409,
+      "message": "Request conflicts with current state"
+    },
+    {
+      "error_code": "forbidden",
+      "status": 403,
+      "message": "Access denied"
+    },
+    {
+      "error_code": "internal_error",
+      "status": 500,
+      "message": "Internal server error"
+    },
+    {
+      "error_code": "method_not_allowed",
+      "status": 405,
+      "message": "Method not allowed"
+    },
+    {
+      "error_code": "mfa_required",
+      "status": 403,
+      "message": "Additional authentication required"
+    },
+    {
+      "error_code": "not_acceptable",
+      "status": 406,
+      "message": "No acceptable response encoding"
+    },
+    {
+      "error_code": "not_found",
+      "status": 404,
+      "message": "Resource not found"
+    },
+    {
+      "error_code": "payload_too_large",
+      "status": 413,
+      "message": "Payload too large"
+    },
+    {
+      "error_code": "precondition_failed",
+      "status": 412,
+      "message": "Request precondition failed"
+    },
+    {
+      "error_code": "range_not_satisfiable",
+      "status": 416,
+      "message": "Requested range is not satisfiable"
+    },
+    {
+      "error_code": "rate_limited",
+      "status": 429,
+      "message": "Rate limit exceeded"
+    },
+    {
+      "error_code": "request_timeout",
+      "status": 408,
+      "message": "Request timed out"
+    },
+    {
+      "error_code": "unauthenticated",
+      "status": 401,
+      "message": "Authentication required"
+    },
+    {
+      "error_code": "unavailable",
+      "status": 503,
+      "message": "Service unavailable"
+    },
+    {
+      "error_code": "unsupported_media_type",
+      "status": 415,
+      "message": "Unsupported media type"
+    },
+    {
+      "error_code": "validation_failed",
+      "status": 422,
+      "message": "Validation failed"
+    }
+  ]
+}

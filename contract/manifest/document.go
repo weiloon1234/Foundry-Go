@@ -19,9 +19,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
-// Version 8 adds ticket-authenticated HTTP credential metadata. Earlier
+// Version 9 adds typed application error details. Earlier
 // formats must be regenerated; older readers reject unsupported versions.
-const Version = 8
+const Version = 9
 const MaxBytes = 16 << 20
 const MaxOperations = 4096
 

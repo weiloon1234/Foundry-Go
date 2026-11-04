@@ -38,6 +38,11 @@ func (types typeIndex) urlParameter(p Parameter) error {
 
 func (types typeIndex) outputPresentation(d *Document) error {
 	passwords := types.passwordTypes()
+	for _, definition := range d.Errors {
+		if passwords[definition.DetailsType] {
+			return invalid("password presentation cannot be HTTP error details output")
+		}
+	}
 	for _, table := range d.Tables {
 		if passwords[table.Row] {
 			return invalid("password presentation cannot be a table output")

@@ -32,9 +32,10 @@ type Selection struct {
 
 // Project returns the manifest restricted to selection: the selected operations,
 // raw routes and channels, the types they reach, the tables and notifications
-// that belong to them, and the application-wide error definitions, locales,
-// enums and permissions. Every entry must select something. The projection is
-// validated like any decoded manifest.
+// that belong to them, and application-wide locales, enums and permissions.
+// Errors retain built-ins plus the application definitions referenced by selected
+// operations, so a projected client's ErrorCode set can shrink. Every entry must
+// select something. The projection is validated like any decoded manifest.
 func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 	document, err := m.Snapshot()
 	if err != nil {
@@ -80,10 +81,22 @@ func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 		byID, byPath := routes.selects(string(route.ID)), paths.selects(route.Path)
 		return byID || byPath
 	}
-	result := Document{Version: document.Version, Roots: document.Roots, ErrorType: document.ErrorType, Errors: document.Errors, Locales: document.Locales, Enums: document.Enums, Permissions: document.Permissions}
+	result := Document{Version: document.Version, Roots: document.Roots, ErrorType: document.ErrorType, Locales: document.Locales, Enums: document.Enums, Permissions: document.Permissions}
+	selectedErrors := make(map[foundryhttp.ErrorCode]bool)
+	for _, definition := range foundryhttp.ErrorDefinitions() {
+		selectedErrors[definition.Code] = true
+	}
 	for _, op := range document.HTTP {
 		if selectsRoute(op.Route) {
 			result.HTTP = append(result.HTTP, op)
+			for _, code := range op.Errors {
+				selectedErrors[code] = true
+			}
+		}
+	}
+	for _, definition := range document.Errors {
+		if selectedErrors[definition.Code] {
+			result.Errors = append(result.Errors, definition)
 		}
 	}
 	for _, route := range document.RawRoutes {
@@ -144,6 +157,9 @@ func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 	}
 	reach(document.ErrorType)
 	reach(document.Roots...)
+	for _, definition := range result.Errors {
+		reach(definition.DetailsType)
+	}
 	for _, op := range result.HTTP {
 		for _, parameter := range append(append([]Parameter(nil), op.Path...), op.Query...) {
 			reach(parameter.Type)
