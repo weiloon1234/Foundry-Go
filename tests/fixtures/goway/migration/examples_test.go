@@ -75,6 +75,20 @@ func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) 
 
 // migration:end
 
+// guide:unique-column-lock
+func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
+	return db.Transaction(ctx, func(tx *database.Tx) error {
+		selected := hooks.Members.Table.Query().Where(orm.KeyEq(hooks.Members.Table.Key(), id))
+		if _, err := orm.RequireLocked(ctx, tx, orm.Lock(selected)); err != nil {
+			return err
+		}
+		_, err := orm.Update(ctx, tx, selected, hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "guest"))
+		return err
+	})
+}
+
+// guide:end
+
 // migration:writes-after
 func write(ctx context.Context, tx *database.Tx, id int64) error {
 	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "Ada"), orm.NullableInputTextSetNull(hooks.Members.Note))

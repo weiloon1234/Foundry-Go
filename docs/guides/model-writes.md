@@ -44,16 +44,18 @@ The ORM cannot infer which other columns are unique. When an update changes a UN
 
 When changing such a column, acquire `FOR UPDATE` first, in the same transaction, before the operation reads candidates or the before-image. The model API uses `orm.Lock` for `FOR UPDATE`:
 
+<!-- orm-example: unique-column-lock -->
 ```go
-err := db.Transaction(ctx, func(tx *database.Tx) error {
-    selected := Users.Query().Where(orm.KeyEq(Users.Key(), id))
-    if _, err := orm.RequireLocked(ctx, tx, orm.Lock(selected)); err != nil {
-        return err
-    }
-    _, err := orm.Update(ctx, tx, selected, Users.Key(), id,
-        orm.TextSet(Users.Email, newEmail))
-    return err
-})
+func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
+	return db.Transaction(ctx, func(tx *database.Tx) error {
+		selected := hooks.Members.Table.Query().Where(orm.KeyEq(hooks.Members.Table.Key(), id))
+		if _, err := orm.RequireLocked(ctx, tx, orm.Lock(selected)); err != nil {
+			return err
+		}
+		_, err := orm.Update(ctx, tx, selected, hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "guest"))
+		return err
+	})
+}
 ```
 
 Take the stronger lock before acquiring weaker locks on that parent, including locks from child inserts in the same transaction. It may wait for a concurrent child inserter to finish; it avoids holding `NO KEY UPDATE` while waiting to upgrade. For multi-row operations, lock the affected parents in a consistent order. This addresses the row-lock upgrade cycle, not every possible application deadlock.

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
@@ -334,6 +335,20 @@ func TestStage7Slice3bStoreParity(t *testing.T) {
 			err = db.Transaction(t.Context(), func(tx *database.Tx) error { var e error; c.Result, e = tc.run(t.Context(), tx); return e })
 			if err != nil {
 				t.Fatal(err)
+			}
+			// Bounded update loops deliberately read FOR NO KEY UPDATE since these transcripts
+			// were captured. Require that, then compare the rest with the transcript.
+			if strings.HasSuffix(tc.name, "_update_each") {
+				locked := false
+				for i, recorded := range c.Statements {
+					if strings.HasSuffix(recorded.SQL, " FOR NO KEY UPDATE") {
+						locked = true
+						c.Statements[i].SQL = strings.TrimSuffix(recorded.SQL, " FOR NO KEY UPDATE") + " FOR UPDATE"
+					}
+				}
+				if !locked {
+					t.Fatal("update loop lost its before-image lock")
+				}
 			}
 			data, e := json.MarshalIndent(c, "", "  ")
 			if e != nil {
