@@ -203,11 +203,19 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
     old = ({item["path"]: item for item in _inventory(installed)[2]}
            if installed.exists() and not current["upgrade_operation"] else {})
     new = {item["path"]: item for item in _inventory(source)[2]}
+    effects = []
+    if registry.get("shared", {}).get("backup"):
+        import backup
+        import postgres
+        cluster = registry["shared"]["postgresql"]
+        if (postgres.archive_reload_required(cluster, backup._archive_command())
+                or postgres.hba_reload_required(host, registry)):
+            effects.append({"service": "postgresql", "unit": cluster["unit"], "action": "reload"})
     return {"from_digest": current["bundle_sha256"] if not fresh else None, "bundle_sha256": digest,
             "generation": target["generation"], "changed_paths": sorted(k for k in new if new[k] != old.get(k)),
             "removed_paths": sorted(old.keys() - new.keys()), "instances": sorted(registry["instances"]),
             "retained_releases": retained_releases,
-            "migration_steps": [], "service_effects": [], "helper_architecture": None}
+            "migration_steps": [], "service_effects": effects, "helper_architecture": None}
 
 
 def verify_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = False) -> tuple[Path, list[Path], str]:

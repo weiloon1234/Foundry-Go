@@ -36,3 +36,14 @@ def instance_units(entry: dict) -> dict[str, str]:
     """Map every declared role to its canonical concrete systemd unit."""
     topology = validate_topology(entry["topology"], registered=True)
     return {role["name"]: unit_name(entry["name"], role["name"]) for role in topology["roles"]}
+
+
+def selected_units(entry: dict, role="all", *, roles=None) -> dict[str, str]:
+    units = instance_units(entry)
+    if roles is not None:
+        require(isinstance(roles, list) and all(isinstance(item, str) and item in units for item in roles)
+                and len(roles) == len(set(roles)), "invalid_role", "Select declared topology roles.")
+        return {name: unit for name, unit in units.items() if name in roles}
+    require(isinstance(role, str) and (role == "all" or role in units),
+            "invalid_role", "Select a declared topology role.")
+    return units if role == "all" else {role: units[role]}

@@ -6,16 +6,19 @@ rotation needs an explicit operator procedure, never a speculative overwrite.
 from __future__ import annotations
 
 import configparser
+import errno
 import json
+from http.client import HTTPException
 import os
 from pathlib import Path
 import re
+import socket
 import stat
 import sys
 import tempfile
 import uuid
-from urllib.error import URLError
-from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+from urllib.request import ProxyHandler, Request, build_opener, urlopen
 
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -23,6 +26,10 @@ if __name__ == "__main__":
 from contracts import DeployError, HOST_PATHS, check_path, now, read_json, require, valid_uuid
 from host import Host, wall_clock_budget
 import packages
+
+RENEWAL_WARNING = ("WARNING: Certificate renewal verification is deferred; "
+                   "ACTION=report shows the reason and the next ACTION=deploy retries it.")
+STAGING_DIRECTORY = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
 CONFIG_DIR = "/etc/foundry/letsencrypt"
 WORK_DIR = "/var/lib/foundry/letsencrypt"
@@ -162,6 +169,50 @@ def _renewal_dry_run(host, entry):
               "--no-random-sleep-on-renew"] + _options(), timeout=900)
 
 
+def _staging_unreachable():
+    try:
+        with wall_clock_budget(30):
+            with build_opener(ProxyHandler({})).open(STAGING_DIRECTORY, timeout=20) as response:
+                return 500 <= response.status <= 599
+    except HTTPError as error:
+        error.close()
+        return 500 <= error.code <= 599
+    except URLError as error:
+        reason = error.reason
+        return (isinstance(reason, (ConnectionError, TimeoutError, socket.gaierror))
+                or isinstance(reason, OSError) and reason.errno in {errno.ENETUNREACH, errno.EHOSTUNREACH})
+    except (ConnectionError, TimeoutError, socket.gaierror):
+        return True
+    except (OSError, ValueError, HTTPException):
+        return False
+
+
+def _renewal_verified(entry):
+    entry["certificate"]["last_renewal_check_at"] = now()
+    entry["certificate"].pop("renewal_deferred", None)
+
+
+def _defer_renewal(entry, *, unreachable):
+    detail = ("Let's Encrypt staging is unreachable; renewal dry-run deferred." if unreachable else
+              "Renewal dry-run failed while staging was reachable or its outage could not be established. " + REMEDIATION)
+    entry["certificate"]["renewal_deferred"] = {"checked_at": now(), "detail": detail}
+    print(RENEWAL_WARNING, file=sys.stderr)
+
+
+def retry_deferred(host, registry, entry):
+    if not entry["certificate"].get("renewal_deferred"):
+        return
+    try:
+        _identity_ready(host, entry)
+        _renewal_ready(host, entry)
+        _renewal_dry_run(host, entry)
+    except (DeployError, OSError, ValueError, HTTPException):
+        _defer_renewal(entry, unreachable=_staging_unreachable())
+    else:
+        _renewal_verified(entry)
+    host.journal(registry, entry)
+
+
 def rotate_token(host, registry, entry, token):
     from runtime_config import update_bootstrap_secrets
     _validate_token(token)
@@ -183,7 +234,7 @@ def rotate_token(host, registry, entry, token):
         host.owned_write(path, original, mode=0o600)
         raise DeployError("certificate_token_rotation_failed", "DNS token verification or publication failed; the previous token was restored.") from None
     for item in affected:
-        item["certificate"]["last_renewal_check_at"] = now()
+        _renewal_verified(item)
     host.journal(registry)
     return {"ok": True, "instances": [item["name"] for item in affected]}
 
@@ -408,9 +459,12 @@ def provision(host: Host, registry: dict, entry: dict) -> None:
         else:
             # Certbot otherwise sleeps up to 8 minutes without a terminal, holding the host lock.
             _renewal_dry_run(host, entry)
-    except DeployError:
-        raise DeployError("certificate_renewal_failed", "DNS-01 renewal dry-run failed. " + REMEDIATION) from None
-    entry["certificate"]["last_renewal_check_at"] = now()
+    except (DeployError, OSError):
+        if synthetic or not _staging_unreachable():
+            raise DeployError("certificate_renewal_failed", "DNS-01 renewal dry-run failed. " + REMEDIATION) from None
+        _defer_renewal(entry, unreachable=True)
+    else:
+        _renewal_verified(entry)
     if "certificate" not in entry["provisioning"]["completed_steps"]:
         entry["provisioning"]["completed_steps"].append("certificate")
     host.journal(registry, entry)

@@ -48,6 +48,53 @@ showing their plan. `CONFIRM=yes` supplies that confirmation in automation.
 Upgrade application additionally requires the digest-bound `PLAN_TOKEN` and a
 stable UUID in `OPERATION`.
 
+`ACTION=restart` and `ACTION=stop` accept `ROLE=http`, `ROLE=worker`, or
+`ROLE=scheduler` when that role is declared in the instance topology. Without
+`ROLE`, both actions operate on all declared roles. An explicitly empty `ROLE=`
+is an error. Confirmation names the selected role. A named action leaves the
+other roles unchanged. Pending background recovery must first complete through
+a plain restart. Restart waits for the selected role within the existing
+90-second readiness budget; background roles do not require HTTP readiness.
+Named actions record `degraded`, since they do not establish whole-instance
+health. Reports show inactive roles and raise `role_inactive` and
+`instance_degraded` as applicable. A plain restart or deploy starts and verifies
+every declared role, including when deploying the same release again.
+
+Unit enablement is the single source of truth for which roles should run.
+A named `ACTION=stop` disables and stops its unit. Plain `ACTION=stop` disables
+and stops every declared role. Stops therefore survive a reboot, and bootstrap
+reruns preserve enablement. After upgrading the tools on a stopped instance,
+run `ACTION=stop` again. The report raises `stopped_role_enabled` when an inactive
+role on a stopped or degraded instance is still enabled and would start on reboot.
+On a degraded instance, use `ACTION=stop ROLE=<role>` for that inactive role
+to preserve the roles that are running.
+
+Config changes, encryption key rotation, and rollback preserve enablement. They
+apply their change and restart only enabled roles, including during failure
+recovery. With no enabled roles, they start nothing and retain `stopped`. With
+only some roles enabled, they check those roles and retain `degraded`. They only
+record full health after every declared role is enabled and ready. Their internal
+stops never disable units, so interruption cannot silently change reboot behavior.
+A web-only instance does not prepare or validate a disabled worker's connection.
+
+A named restart enables and verifies only its selected role. Plain restart and
+deploy are the deliberate ways to start everything. Plain restart enables every
+role; deploy enables every role after readiness succeeds. Failed deploy recovery
+starts only the roles enabled before deployment, preserving disabled backgrounds
+for later configuration changes or rollback. If final enablement or completion
+fails after a deploy starts enabling previously disabled roles, the deploy stays
+pending for reconciliation. It does not disable units or automatically restore
+the old release.
+
+Attempts record their selected role or enabled role set. Reconcile and failure
+recovery honor that selection. Deploy reconciliation starts and enables all roles
+only when the attempt reached the switch or health phase and its target release
+is active. Otherwise it restores the recorded role set without enabling units.
+A failed restart reconciliation records a terminal failure, allowing another
+restart, stop, or deploy. Older attempts without the new fields retain their
+previous behavior. Replaying a completed rollback or key rotation with the same
+operation ID returns its recorded result without starting disabled roles.
+
 The local tooling uses Python 3.11 or later, Git, Bash, OpenSSH, and Docker with
 Buildx for release builds. The inherited builder resolves Go from the app's
 `go.mod` and Node from `web/package.json`. It builds `cmd/artisan`, packages
@@ -214,7 +261,7 @@ match both content and metadata.
 
 ## Tool protocol and upgrades
 
-`tools/deploy/protocol.json` owns protocol 2.0 and generation 2. The stable
+`tools/deploy/protocol.json` owns protocol 2.0 and generation 4. The stable
 launcher dispatches to the active immutable bundle. `hello` reports host tool
 metadata without an application mutation. Requests include the client's protocol,
 framework version, generation, and bundle digest.
@@ -594,7 +641,18 @@ Certbot options; owned renewal files may not contain pre/post hooks. The deploy
 hook runs `nginx -t` before gracefully reloading nginx. Foundry never reads or
 changes `/etc/letsencrypt` or manages the distro `certbot.timer`. A03 readiness
 checks apply only inside Foundry's certificate namespace. Provisioning requires
-a renewal dry-run with deploy hooks; a certificate alone does not satisfy readiness.
+a renewal dry-run with deploy hooks. After valid production issuance, a failed
+dry-run is deferred only when a separate probe of the Let's Encrypt staging
+directory fails to connect, times out, or returns HTTP 5xx. Other dry-run failures
+remain fatal. A deferred check prints a warning and journals `renewal_deferred`
+on the instance certificate entry. The renewal timer continues unchanged.
+
+While deferred, the host report raises `certificate_renewal_unverified` and sets
+`complete` to false. The certificate output includes the last check time and safe
+failure detail. The next deploy retries, including an unchanged-release deploy.
+A successful retry clears the marker. A failed retry preserves the problem and
+updates its detail without failing deployment. `dns-token-rotate` still requires
+successful dry-runs for every affected instance.
 
 Container acceptance uses a guarded synthetic CA path described below. It does
 not call Cloudflare or Let's Encrypt and cannot establish real DNS-01 provider
@@ -749,7 +807,11 @@ configuration files. The encrypted off-host key archive includes the repository
 recovery material.
 
 A tool upgrade rebinds the owned backup services and timers and the live
-`archive_command`. It verifies systemd's loaded commands and PostgreSQL's live
+`archive_command`. When backups are configured, its plan lists a PostgreSQL reload
+if the archive command changes, the cluster lacks `archive_timeout`, the HBA
+policy changes, or its publication is unfinished. The plan and PostgreSQL
+preparation share these comparisons; the plan token binds this
+effect. It verifies systemd's loaded commands and PostgreSQL's live
 setting before clearing the upgrade operation. A failed rebind leaves the upgrade
 pending so a retry can complete it.
 
@@ -884,7 +946,8 @@ not prove application-specific invariants, existing ciphertext decryption, or
 large-database restore times. Verify those against representative application data
 before routing production traffic.
 
-Deployment tool generation 3 includes recovery. Upgrade existing hosts through
+Deployment tool generation 4 adds per-role restart and stop requests; generation 3
+introduced recovery. The wire protocol remains 2.0. Upgrade existing hosts through
 `ACTION=tools-plan` and `ACTION=tools-apply`; normal deployment does not replace
 installed host tools. An empty recovery target receives the selected generation
 during recovery.
@@ -902,7 +965,7 @@ values are `null`, never zero or false.
 | `host.network.firewall` | `ufw status`, root only | None: a cloud firewall cannot be seen from the host |
 | `host.ssh` | `sshd -T`, root only: password login and root login settings | `ssh_password_login` |
 | `host.resources` | Memory and disk | `memory_low` under 10% available; `disk_low` under 10% or 2 GiB available |
-| instance `certificate` | TLS handshake on 443 | `certificate_expiring` under 14 days; `certificate_invalid` |
+| instance `certificate` | TLS handshake on 443 | `certificate_expiring` under 14 days; `certificate_invalid`, `certificate_renewal_unverified` |
 | instance `backup` | Backup receipts | `backup_stale`, `backup_failed` |
 
 The root-only fields are `null` for a nonroot reader and add no problem.

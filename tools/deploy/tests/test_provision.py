@@ -151,7 +151,7 @@ class FoundationProvisionTests(unittest.TestCase):
             self.assertNotIn("postgresql.service", content)
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(["systemctl", "daemon-reload"], commands[0])
-        self.assertEqual(["systemctl", "enable", *instance_units(entry).values()], commands[1])
+        self.assertEqual([["systemctl", "daemon-reload"]], commands)
 
     def test_declared_worker_has_no_product_specific_connection(self):
         topology = {"schema": 1, "roles": [{"name": "http"}, {"name": "worker"}]}

@@ -232,6 +232,24 @@ class PostgreSQLTests(unittest.TestCase):
                 postgres._publish_hba(self.host, self.registry, running=True)
         self.assertFalse(any(args[0] == "pg_ctlcluster" for args, _ in self.host.calls))
 
+    def test_hba_reload_prediction_matches_publication_and_unfinished_reload(self):
+        allocation = self.claimed()
+        path = self.host.paths.p(allocation["config_path"]) / "pg_hba.conf"
+        content = postgres._hba(self.registry)
+        for phase, current, expected in (("published", content, False), ("published", "old policy", True),
+                                         ("publishing", content, True)):
+            self.host.owned_write(path, current)
+            journal = postgres._cluster_journal(self.host, self.registry)
+            journal["hba"] = {"phase": phase, "new": current, "old": current}
+            postgres._save_cluster(self.host, journal)
+            self.host.calls.clear()
+            self.assertEqual(expected, postgres.hba_reload_required(self.host, self.registry))
+            with patch.object(postgres, "_psql", return_value=subprocess.CompletedProcess([], 0, "0\n", "")):
+                postgres._publish_hba(self.host, self.registry, running=True)
+            reloads = [args for args, _ in self.host.calls if args == ["pg_ctlcluster", "16", "foundry", "reload"]]
+            self.assertEqual(expected, bool(reloads))
+            self.assertFalse(postgres.hba_reload_required(self.host, self.registry))
+
     def test_unchanged_published_hba_is_not_reloaded_or_rejournaled(self):
         allocation = self.claimed()
         content = postgres._hba(self.registry)

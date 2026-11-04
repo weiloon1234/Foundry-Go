@@ -118,6 +118,13 @@ def validate_attempt(value):
             and value["phase"] in ("validation", "redis", "backup", "migration", "seed", "switch", "health", "configuration")
             and (value["error"] is None or isinstance(value["error"], str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", value["error"]) is not None), code, detail)
     require(value["finished_at"] is None if value["outcome"] == "running" else valid_timestamp(value["finished_at"]), code, detail)
+    require("role" not in value or value["action"] in ("restart", "stop")
+            and value["role"] in ("all", "http", "worker", "scheduler"), code, detail)
+    if "roles" in value:
+        roles = value["roles"]
+        require(value["action"] in ("config", "rollback", "deploy") and isinstance(roles, list)
+                and all(isinstance(role, str) and role in ("http", "worker", "scheduler") for role in roles)
+                and len(roles) == len(set(roles)), code, detail)
     configuration = {"configuration_revision", "configuration_sha256", "previous_configuration_sha256"}
     if value["action"] == "config":
         require(type(value.get("configuration_revision")) is int and value["configuration_revision"] >= 2, code, detail)

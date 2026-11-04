@@ -15,7 +15,7 @@ import urllib.request
 
 from contracts import BACKUP_FRESH_SECONDS, BACKUP_POLICY, DeployError, PREFIX, SCHEMA, SLUG_PATTERN, check_path, instance_paths, now, parse_json, valid_uuid
 from topology import instance_units
-from release import service as role_service
+from release import enabled_roles, service as role_service
 from host import OperationTimeout as ReportBudgetExceeded, wall_clock_budget
 
 REPORT_SCHEMA = 2
@@ -27,15 +27,17 @@ PUBLIC_PORTS = frozenset({22, 80, 443})
 RESOURCE_LOW_PERCENT = 10
 DISK_LOW_BYTES = 2 * 1024 ** 3
 CERTIFICATE_EXPIRING_SECONDS = 14 * 24 * 60 * 60
-STATUSES = {"never_deployed", "deploying", "healthy", "failed", "failed_applied", "rolled_back", "stopped", "unknown"}
+STATUSES = {"never_deployed", "deploying", "healthy", "failed", "failed_applied", "rolled_back", "stopped", "degraded", "unknown"}
 DOMAIN = re.compile(r"(?=.{1,253}\Z)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\Z")
 
 
 
-def problem(problems, code, instance=None):
+def problem(problems, code, instance=None, *, detail=None):
     item = {"code": code}
     if instance:
         item["instance_id"] = instance
+    if detail:
+        item["detail"] = detail
     if item not in problems:
         problems.append(item)
 
@@ -401,6 +403,28 @@ def instance_report(host, entry, deadline, problems):
     if not rehearsal:
         cert = checked(problems, "certificate_check_unavailable", instance_id, certificate, profile.get("domain"), deadline)
         certificate_problems(problems, instance_id, cert)
+        deferred = entry.get("certificate", {}).get("renewal_deferred")
+        if deferred:
+            problem(problems, "certificate_renewal_unverified", instance_id, detail=string(deferred.get("detail"), 1024))
+            if cert is not None:
+                cert["renewal_deferred"] = {"checked_at": string(deferred.get("checked_at")),
+                                            "detail": string(deferred.get("detail"), 1024)}
+    if recorded_status in {"stopped", "degraded"}:
+        enabled = checked(problems, "service_enablement_unavailable", instance_id,
+                          enabled_roles, host, entry, remaining(deadline))
+        if enabled is not None:
+            for role, item in topology.items():
+                item["enabled"] = role in enabled
+                if role in enabled and item["state"] and item["state"]["active"] == "inactive":
+                    action = f"ACTION=stop ROLE={role}" if recorded_status == "degraded" else "ACTION=stop"
+                    problem(problems, "stopped_role_enabled", instance_id,
+                            detail=f"{role} ({item['unit']}) is inactive but enabled and will start on reboot. Run {action} again to keep it stopped.")
+    if recorded_status == "degraded":
+        problem(problems, "instance_degraded", instance_id)
+    if state.get("current") and not rehearsal:
+        for item in topology.values():
+            if item["state"] and item["state"]["active"] == "inactive":
+                problem(problems, "role_inactive", instance_id)
     current, previous = release(state.get("current")), release(state.get("previous"))
     consistent = True
     if recorded_status in {"healthy", "rolled_back"} and (not current or not ready or not ready["ready"] or not unit_status or unit_status["active"] != "active"):

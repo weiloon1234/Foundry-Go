@@ -46,6 +46,7 @@ class ProcessHost(Host):
         self.storage_probe_output = json.dumps({"schema": 1, "disks": []})
         self.storage_probe_status = 0
         self.role_states = {}
+        self.enabled_roles = set()
 
     def run(self, args, **kwargs):
         args = list(map(str, args))
@@ -55,9 +56,16 @@ class ProcessHost(Host):
         if self.fail and self.fail in args:
             raise DeployError("injected_failure", "Synthetic failure")
         output = ""
+        if args[:2] == ["systemctl", "is-enabled"]:
+            enabled = args[2] in self.enabled_roles
+            return subprocess.CompletedProcess(args, 0 if enabled else 1, "enabled\n" if enabled else "disabled\n", "")
         if args[:2] == ["systemctl", "show"]:
             output = "ActiveState=" + self.role_states.get(args[2], "inactive") + "\n"
-        if args[:2] == ["systemctl", "start"]:
+        if args[:2] == ["systemctl", "enable"]:
+            self.enabled_roles.update(args[2:])
+        if args[:2] == ["systemctl", "disable"]:
+            self.enabled_roles.difference_update(args[2:])
+        if args[:2] in (["systemctl", "start"], ["systemctl", "restart"]):
             for unit in args[2:]:
                 self.role_states[unit] = "active"
         if args[:2] == ["systemctl", "stop"]:
@@ -280,7 +288,7 @@ class ReleaseTests(unittest.TestCase):
         args = commands[probe]
         self.assertEqual(str(self.env_file.with_name("app.env.next")), args[args.index("--env-file") + 1])
         self.assertFalse(self.env_file.with_name("app.env.next").exists())
-        self.assertFalse(any(args[0] == "systemctl" for args in commands))
+        self.assertFalse(any(args[0] == "systemctl" and args[1] != "is-enabled" for args in commands))
 
     def test_configuration_only_changed_storage_keys_probe(self):
         archive, _ = self.bundle()
@@ -620,7 +628,7 @@ class ReleaseTests(unittest.TestCase):
         commands = len(self.host.commands)
         state_bytes = (self.host.paths.instance_state(self.entry["name"]) / "state.json").read_bytes()
         self.assertTrue(self.deploy(archive)["unchanged"])
-        self.assertEqual(commands, len(self.host.commands))
+        self.assertTrue(all(args[:2] == ["systemctl", "is-enabled"] for args, _ in self.host.commands[commands:]))
         self.assertEqual(state_bytes, (self.host.paths.instance_state(self.entry["name"]) / "state.json").read_bytes())
         self.assertEqual(manifest, self.state()["current"])
         self.assertEqual("healthy", self.state()["status"])
@@ -650,6 +658,474 @@ class ReleaseTests(unittest.TestCase):
         release.stop(self.host, self.entry)
         self.assertEqual(self.host.commands[-2][0], ["systemctl", "stop", units["scheduler"], units["worker"]])
         self.assertEqual(self.host.commands[-1][0], ["systemctl", "stop", units["http"]])
+
+    def select_running_roles(self, roles):
+        from test_manage import manager
+        import upgrades
+        request = {**upgrades.protocol_metadata(), "project": self.project, "profile": self.profile}
+        manager.execute(self.host, "stop", request)
+        for role in roles:
+            manager.execute(self.host, "restart", {**request, "role": role})
+        self.host.commands.clear()
+        self.health.reset_mock()
+
+    def assert_preserved_roles(self, roles):
+        units = instance_units(self.entry)
+        self.assertEqual({units[role] for role in roles}, self.host.enabled_roles)
+        mutations = [args for args, _ in self.host.commands
+                     if args[:1] == ["systemctl"] and args[1] in {"start", "restart", "stop", "enable", "disable", "reset-failed"}]
+        touched = {arg for args in mutations for arg in args[2:] if arg in units.values()}
+        self.assertLessEqual(touched, {units[role] for role in roles})
+        self.assertFalse(any(args[1] in {"enable", "disable"} for args in mutations))
+        self.assertEqual("degraded" if roles else "stopped", self.state()["status"])
+        self.assertEqual(roles, self.state()["last_attempt"]["roles"])
+        if not roles:
+            self.health.assert_not_called()
+        for call in self.health.call_args_list:
+            self.assertTrue(call.kwargs.get("include_background") is False or call.kwargs.get("roles") == roles)
+
+    def test_config_rotation_and_rollback_preserve_enablement_and_replay(self):
+        self.encryption_configuration()
+        one, first = self.bundle(1)
+        two, second = self.bundle(2)
+        self.deploy(one)
+        for roles in ([], ["http"]):
+            for action in ("config", "rotation", "rollback"):
+                with self.subTest(roles=roles, action=action):
+                    self.deploy(two)
+                    self.select_running_roles(roles)
+                    operation = str(uuid.uuid4())
+                    if action == "config":
+                        invoke = lambda: release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": operation})
+                    elif action == "rotation":
+                        invoke = lambda: release.keys_rotate(self.host, self.project, self.profile, operation)
+                    else:
+                        invoke = lambda: release.rollback(self.host, self.project, self.profile,
+                                                          first["version"], second["version"], operation)
+                    with patch.object(release, "prepare_worker", side_effect=AssertionError("disabled worker prepared")):
+                        result = invoke()
+                    self.assertTrue(result["ok"])
+                    self.assert_preserved_roles(roles)
+                    if action == "rollback":
+                        self.assertEqual(first, self.state()["current"])
+                    elif action == "config":
+                        self.assertEqual(operation, parse_env(self.env_file.read_text())["PROJECT__NAME"])
+                    if action in ("rotation", "rollback"):
+                        self.host.commands.clear()
+                        self.assertTrue(invoke()["ok"])
+                        self.assert_preserved_roles(roles)
+
+    def test_partial_role_failure_paths_do_not_enable_or_start_backgrounds(self):
+        self.encryption_configuration()
+        one, first = self.bundle(1)
+        two, second = self.bundle(2)
+        self.deploy(one)
+        for roles in ([], ["http"]):
+            for action in ("config", "rotation", "rollback"):
+                with self.subTest(roles=roles, action=action):
+                    self.deploy(two)
+                    self.select_running_roles(roles)
+                    operation = str(uuid.uuid4())
+                    original_replace, original_switch = release.os.replace, release.switch_to
+                    def replace(source, target):
+                        if Path(target) == self.env_file:
+                            raise OSError("fixture publication failure")
+                        return original_replace(source, target)
+                    def switch(host, entry, version):
+                        original_switch(host, entry, version)
+                        if version == first["version"]:
+                            raise DeployError("fixture_switch_failure", "after switch")
+                    with patch.object(release.os, "replace", side_effect=replace), \
+                            patch.object(release, "switch_to", side_effect=switch), \
+                            patch.object(release, "prepare_worker", side_effect=AssertionError("disabled worker prepared")):
+                        with self.assertRaises((DeployError, OSError)):
+                            if action == "config":
+                                release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": operation})
+                            elif action == "rotation":
+                                release.keys_rotate(self.host, self.project, self.profile, operation)
+                            else:
+                                release.rollback(self.host, self.project, self.profile, first["version"], second["version"], operation)
+                    self.assert_preserved_roles(roles)
+
+    def test_interrupted_changes_reconcile_only_the_recorded_enabled_roles(self):
+        self.encryption_configuration()
+        one, first = self.bundle(1)
+        two, second = self.bundle(2)
+        self.deploy(one)
+        for roles in ([], ["http"]):
+            for action in ("config", "rotation", "rollback"):
+                with self.subTest(roles=roles, action=action):
+                    self.deploy(two)
+                    self.select_running_roles(roles)
+                    original = release.phase
+                    def phase(host, entry, state, name):
+                        original(host, entry, state, name)
+                        if name == "health":
+                            raise KeyboardInterrupt()
+                    with patch.object(release, "phase", side_effect=phase), self.assertRaises(KeyboardInterrupt):
+                        if action == "config":
+                            release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": str(uuid.uuid4())})
+                        elif action == "rotation":
+                            release.keys_rotate(self.host, self.project, self.profile, str(uuid.uuid4()))
+                        else:
+                            release.rollback(self.host, self.project, self.profile, first["version"], second["version"], str(uuid.uuid4()))
+                    self.assertEqual(roles, self.state()["last_attempt"]["roles"])
+                    self.assertEqual({instance_units(self.entry)[role] for role in roles}, self.host.enabled_roles)
+                    with patch.object(release, "prepare_worker", side_effect=AssertionError("disabled worker prepared")):
+                        release.reconcile(self.host, self.project, self.profile)
+                    self.assert_preserved_roles(roles)
+
+    def test_legacy_config_attempt_without_roles_keeps_all_role_recovery(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        self.select_running_roles(["http"])
+        original = release.phase
+        def phase(host, entry, state, name):
+            original(host, entry, state, name)
+            if name == "health":
+                raise KeyboardInterrupt()
+        with patch.object(release, "phase", side_effect=phase), self.assertRaises(KeyboardInterrupt):
+            release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Legacy attempt"})
+        state = self.state()
+        state["last_attempt"].pop("roles")
+        self.host.save_state(self.entry, state)
+        release.reconcile(self.host, self.project, self.profile)
+        self.assertEqual(set(instance_units(self.entry).values()), self.host.enabled_roles)
+        self.assertEqual("healthy", self.state()["status"])
+
+    def test_enabled_roles_come_from_units_even_when_status_is_stale(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        self.select_running_roles(["http"])
+        state = self.state()
+        state["status"] = "failed"
+        self.host.save_state(self.entry, state)
+        self.assertEqual(["http"], release.enabled_roles(self.host, self.entry))
+        release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Repaired"})
+        self.assert_preserved_roles(["http"])
+        for output, code in (("unknown", 1), ("masked", 1), ("static", 0), ("", 1), ("enabled", 1)):
+            with self.subTest(output=output, code=code):
+                with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], code, output, "")):
+                    with self.assertRaises(DeployError) as caught:
+                        release.enabled_roles(self.host, self.entry)
+                self.assertEqual("service_enablement", caught.exception.code)
+        with patch.object(self.host, "run", side_effect=TimeoutError("is-enabled timed out")):
+            with self.assertRaises(TimeoutError):
+                release.enabled_roles(self.host, self.entry)
+
+    def test_configuration_crash_and_worker_prepare_failure_leave_enablement_intact(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        units = set(instance_units(self.entry).values())
+        original = release.phase
+        def phase(host, entry, state, name):
+            original(host, entry, state, name)
+            if name == "configuration":
+                raise KeyboardInterrupt()
+        with patch.object(release, "phase", side_effect=phase), self.assertRaises(KeyboardInterrupt):
+            release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Crash"})
+        self.assertEqual(units, self.host.enabled_roles)
+        release.reconcile(self.host, self.project, self.profile)
+        with patch.object(release, "prepare_worker", side_effect=DeployError("worker_configuration", "fixture")), \
+                self.assertRaises(DeployError):
+            release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Prepare failure"})
+        self.assertEqual(units, self.host.enabled_roles)
+
+    def test_deploy_enablement_failure_stays_pending_instead_of_unsafe_restore(self):
+        one, _ = self.bundle(1)
+        two, second = self.bundle(2)
+        self.deploy(one)
+        self.select_running_roles(["http"])
+        original = self.host.run
+        def run(args, **kwargs):
+            result = original(args, **kwargs)
+            if args[:2] == ["systemctl", "enable"]:
+                raise DeployError("command_failed", "enable completion uncertain")
+            return result
+        with patch.object(self.host, "run", side_effect=run), self.assertRaises(DeployError) as caught:
+            self.deploy(two)
+        self.assertEqual("role_enablement_pending", caught.exception.code)
+        self.assertEqual(second, self.state()["current"])
+        self.assertEqual("needs_reconciliation", self.state()["last_attempt"]["outcome"])
+        self.assertFalse(any(args[:2] == ["systemctl", "disable"] for args, _ in self.host.commands))
+        with self.assertRaises(DeployError) as caught:
+            release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Wait for reconcile"})
+        self.assertEqual("reconciliation_required", caught.exception.code)
+        release.reconcile(self.host, self.project, self.profile)
+        self.assertEqual("healthy", self.state()["status"])
+
+    def test_failed_deploy_preserves_web_only_roles_before_later_config(self):
+        one, first = self.bundle(1)
+        two, _ = self.bundle(2)
+        self.deploy(one)
+        for failure in ("config:check", "health"):
+            with self.subTest(failure=failure):
+                self.select_running_roles(["http"])
+                if failure == "config:check":
+                    self.host.fail = failure
+                else:
+                    self.health.side_effect = [False, True, True]
+                with self.assertRaises(DeployError):
+                    self.deploy(two)
+                self.host.fail = None
+                self.health.side_effect = None
+                self.assertEqual({instance_units(self.entry)["http"]}, self.host.enabled_roles)
+                self.assertEqual("degraded", self.state()["status"])
+                self.assertEqual(first, self.state()["current"])
+                self.host.commands.clear()
+                self.health.reset_mock()
+                with patch.object(release, "prepare_worker", side_effect=AssertionError("disabled worker prepared")):
+                    release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": failure})
+                self.assert_preserved_roles(["http"])
+
+    def test_deploy_reconcile_starts_all_only_after_reaching_target(self):
+        one, first = self.bundle(1)
+        two, target = self.bundle(2)
+        self.deploy(one)
+        for failure in ("db:seed", "migrate", "before_switch", "after_switch", "health"):
+            with self.subTest(failure=failure):
+                self.select_running_roles(["http"])
+                original = release.switch_to
+                def switch(host, entry, version):
+                    if failure == "after_switch":
+                        original(host, entry, version)
+                    raise KeyboardInterrupt()
+                if failure in ("db:seed", "migrate"):
+                    self.host.pending = failure == "migrate"
+                    self.host.fail = failure
+                    with self.assertRaises(DeployError):
+                        self.deploy(two)
+                elif failure == "health":
+                    self.host.interrupt = "restart"
+                    with self.assertRaises(KeyboardInterrupt):
+                        self.deploy(two)
+                else:
+                    with patch.object(release, "switch_to", side_effect=switch), self.assertRaises(KeyboardInterrupt):
+                        self.deploy(two)
+                self.host.fail = self.host.interrupt = None
+                self.host.pending = False
+                self.host.commands.clear()
+                reached = failure in ("after_switch", "health")
+                release.reconcile(self.host, self.project, self.profile)
+                units = instance_units(self.entry)
+                self.assertEqual(set(units.values()) if reached else {units["http"]}, self.host.enabled_roles)
+                self.assertEqual("healthy" if reached else "degraded", self.state()["status"])
+                self.assertEqual(target if reached else first, self.state()["current"])
+                if not reached:
+                    mutations = [args for args, _ in self.host.commands
+                                 if args[:2] in (["systemctl", "start"], ["systemctl", "restart"], ["systemctl", "enable"])]
+                    self.assertFalse(any(unit in args for args in mutations for unit in (units["worker"], units["scheduler"])))
+                    self.assertFalse(any(args[:2] == ["systemctl", "enable"] for args in mutations))
+                else:
+                    self.deploy(one)
+
+    def test_failed_first_deploy_records_failed_without_current(self):
+        archive, _ = self.bundle()
+        for failure in ("config:check", "db:seed", "migrate"):
+            with self.subTest(failure=failure):
+                self.host.fail = failure
+                self.host.pending = failure == "migrate"
+                with self.assertRaises(DeployError):
+                    self.deploy(archive)
+                self.assertIsNone(self.state()["current"])
+                self.assertEqual("failed", self.state()["status"])
+                self.host.fail = None
+                self.host.pending = False
+                release.reconcile(self.host, self.project, self.profile)
+                self.assertEqual("failed", self.state()["status"])
+        self.host.interrupt = "config:check"
+        with self.assertRaises(KeyboardInterrupt):
+            self.deploy(archive)
+        self.host.interrupt = None
+        release.reconcile(self.host, self.project, self.profile)
+        self.assertIsNone(self.state()["current"])
+        self.assertEqual("failed", self.state()["status"])
+
+    def test_healthy_deploy_restore_does_not_stop_http(self):
+        one, first = self.bundle(1)
+        two, _ = self.bundle(2)
+        self.deploy(one)
+        self.host.commands.clear()
+        self.health.side_effect = [False, True, True]
+        with self.assertRaises(DeployError):
+            self.deploy(two)
+        self.assertEqual(first, self.state()["current"])
+        self.assertEqual("rolled_back", self.state()["status"])
+        self.assertEqual(set(instance_units(self.entry).values()), self.host.enabled_roles)
+        self.assertFalse(any(args[:2] == ["systemctl", "stop"] and instance_units(self.entry)["http"] in args
+                             for args, _ in self.host.commands))
+
+    def test_failed_all_role_restart_reconcile_allows_operator_recovery(self):
+        from test_manage import manager
+        import upgrades
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        request = {**upgrades.protocol_metadata(), "project": self.project, "profile": self.profile}
+        self.host.interrupt = "restart"
+        with self.assertRaises(KeyboardInterrupt):
+            manager.execute(self.host, "restart", request)
+        self.host.interrupt = None
+        self.health.return_value = False
+        with self.assertRaises(DeployError):
+            release.reconcile(self.host, self.project, self.profile)
+        self.assertEqual("failed", self.state()["last_attempt"]["outcome"])
+        manager.execute(self.host, "stop", request)
+        self.assertEqual("stopped", self.state()["status"])
+        self.health.return_value = True
+        manager.execute(self.host, "restart", request)
+        self.assertEqual("healthy", self.state()["status"])
+
+    def test_reconcile_preserves_named_role_and_defaults_legacy_attempts_to_all(self):
+        from test_manage import manager
+        import upgrades
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        units = instance_units(self.entry)
+        request = {**upgrades.protocol_metadata(), "project": self.project, "profile": self.profile}
+        for action, role in (("restart", "http"), ("stop", "worker"), ("restart", "all"), ("stop", "all")):
+            self.host.interrupt = action
+            with self.assertRaises(KeyboardInterrupt):
+                manager.execute(self.host, action, {**request, "role": role})
+            self.host.interrupt = None
+            self.assertEqual(role, self.state()["last_attempt"]["role"])
+            if role == "all":
+                state = self.state()
+                state["last_attempt"].pop("role")
+                self.host.save_state(self.entry, state)
+            self.host.commands.clear()
+            result = release.reconcile(self.host, self.project, self.profile)
+            self.assertEqual("degraded" if role != "all" else "healthy" if action == "restart" else "stopped", result["status"])
+            touched = {arg for args, _ in self.host.commands for arg in args if arg in units.values()}
+            self.assertEqual({units[role]} if role != "all" else set(units.values()), touched)
+            self.assertEqual("reconciled", self.state()["last_attempt"]["outcome"])
+
+    def test_failed_named_restart_keeps_stopped_roles_protected(self):
+        from test_manage import manager
+        import upgrades
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        request = {**upgrades.protocol_metadata(), "project": self.project, "profile": self.profile}
+        manager.execute(self.host, "stop", {**request, "role": "worker"})
+        self.health.return_value = False
+        with self.assertRaises(DeployError):
+            manager.execute(self.host, "restart", {**request, "role": "http"})
+        self.assertEqual("degraded", self.state()["status"])
+        self.health.return_value = True
+        release.config_set(self.host, self.project, self.profile, {"DEVELOPER__ENABLED": "true"})
+        self.assertNotIn(instance_units(self.entry)["worker"], self.host.enabled_roles)
+        self.health.return_value = False
+        self.host.interrupt = "restart"
+        with self.assertRaises(KeyboardInterrupt):
+            manager.execute(self.host, "restart", {**request, "role": "http"})
+        self.host.interrupt = None
+        with self.assertRaises(DeployError):
+            release.reconcile(self.host, self.project, self.profile)
+        self.assertEqual("degraded", self.state()["status"])
+        self.assertEqual("failed", self.state()["last_attempt"]["outcome"])
+        self.health.return_value = True
+        self.host.commands.clear()
+        manager.execute(self.host, "restart", {**request, "role": "http"})
+        self.assertNotIn(instance_units(self.entry)["worker"], self.host.enabled_roles)
+        self.assertFalse(any(instance_units(self.entry)["worker"] in args for args, _ in self.host.commands))
+
+    def test_stop_survives_reboot_bootstrap_and_selected_restart(self):
+        from test_manage import manager
+        import upgrades
+        import provision
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        units = instance_units(self.entry)
+        request = {**upgrades.protocol_metadata(), "project": self.project, "profile": self.profile}
+        manager.execute(self.host, "stop", {**request, "role": "worker"})
+        self.assertEqual(set(units.values()) - {units["worker"]}, self.host.enabled_roles)
+        with patch.object(provision, "_unit_checks"):
+            provision._install_unit(self.host, {"shared": {"postgresql": {"unit": "postgresql@16-foundry.service"}}},
+                                    self.entry, Path(__file__).resolve().parents[1])
+        self.assertNotIn(units["worker"], self.host.enabled_roles)
+        self.host.role_states = {unit: "active" for unit in self.host.enabled_roles}
+        self.assertNotIn(units["worker"], self.host.role_states)
+        manager.execute(self.host, "restart", {**request, "role": "http"})
+        self.assertNotIn(units["worker"], self.host.enabled_roles)
+        manager.execute(self.host, "restart", request)
+        self.assertEqual(set(units.values()), self.host.enabled_roles)
+        manager.execute(self.host, "stop", request)
+        self.assertEqual(set(), self.host.enabled_roles)
+        self.host.role_states = {unit: "active" for unit in self.host.enabled_roles}
+        self.assertEqual({}, self.host.role_states)
+        manager.execute(self.host, "restart", {**request, "role": "worker"})
+        self.assertEqual({units["worker"]}, self.host.enabled_roles)
+        self.deploy(archive)
+        self.assertEqual(set(units.values()), self.host.enabled_roles)
+
+    def test_named_roles_only_touch_selected_unit_and_wait_for_it(self):
+        units = instance_units(self.entry)
+        for role, unit in units.items():
+            self.host.commands.clear()
+            with patch.object(release, "prepare_worker") as worker:
+                release.restart(self.host, self.entry, role=role)
+                self.assertEqual(role == "worker", worker.called)
+            self.assertEqual([["systemctl", "enable", unit], ["systemctl", "reset-failed", unit], ["systemctl", "restart", unit]],
+                             [args for args, _ in self.host.commands])
+            self.assertEqual(role, self.health.call_args.kwargs["role"])
+            self.assertLessEqual(self.health.call_args.kwargs["timeout"], release.READINESS_SECONDS)
+            release.stop(self.host, self.entry, role=role)
+            self.assertEqual(["systemctl", "stop", unit], self.host.commands[-1][0])
+        self.health.return_value = False
+        with self.assertRaises(DeployError):
+            release.restart(self.host, self.entry, role="http")
+
+    def test_named_background_readiness_does_not_require_http(self):
+        observations = self.process_observations()
+        units = instance_units(self.entry)
+        def command(args, **kwargs):
+            self.assertEqual(["systemctl", "show", units["worker"]], args[:3])
+            return subprocess.CompletedProcess(args, 0, observations[args[2]], "")
+        with patch.object(self.host, "run", side_effect=command), \
+                patch.object(release.urllib.request, "build_opener") as opener, \
+                patch.object(release, "STABILITY_SECONDS", 0):
+            self.assertTrue(CHECK_READY(self.host, self.entry, role="worker"))
+            opener.return_value.open.assert_not_called()
+
+    def test_named_stop_is_public_and_plain_restart_or_deploy_recovers(self):
+        from test_manage import manager
+        import upgrades
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        request = {**upgrades.protocol_metadata(), "project": self.project, "profile": self.profile}
+        for recovery in ("restart", "deploy"):
+            manager.execute(self.host, "stop", {**request, "role": "worker"})
+            self.assertEqual("degraded", release.public_state(self.state())["status"])
+            manager.execute(self.host, "restart", {**request, "role": "http"})
+            self.assertEqual("degraded", self.state()["status"])
+            if recovery == "restart":
+                manager.execute(self.host, "restart", request)
+            else:
+                self.deploy(archive)
+            self.assertEqual("healthy", self.state()["status"])
+
+    def test_named_operation_does_not_resume_other_roles(self):
+        from test_manage import manager
+        import upgrades
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        state = self.state()
+        state["last_attempt"].update(role_recovery_pending=True, prior_background={"worker": "active"})
+        self.host.save_state(self.entry, state)
+        request = {**upgrades.protocol_metadata(), "project": self.project, "profile": self.profile, "role": "http"}
+        for action in ("restart", "stop"):
+            self.host.commands.clear()
+            with self.assertRaises(DeployError) as caught:
+                manager.execute(self.host, action, request)
+            self.assertEqual("role_recovery", caught.exception.code)
+            self.assertEqual([], self.host.commands)
+
+    def test_deploy_retries_deferred_certificate_even_on_unchanged_release(self):
+        import certificates
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        with patch.object(certificates, "retry_deferred") as retry:
+            self.deploy(archive)
+            retry.assert_called_once()
 
     def test_checksum_and_identity_refusal_precedes_activation(self):
         archive, _ = self.bundle(mutate=lambda m: m.update(instance_id=str(uuid.uuid4())))
@@ -829,7 +1305,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(2, result["configuration_revision"])
         self.assertIsNone(self.state()["current"])
         self.assertEqual("never_deployed", self.state()["status"])
-        self.assertFalse(any(args[0] == "systemctl" for args, _ in self.host.commands))
+        self.assertFalse(any(args[0] == "systemctl" and args[1] != "is-enabled" for args, _ in self.host.commands))
         self.deploy(archive)
         self.assertEqual(manifest, self.state()["current"])
 
@@ -926,7 +1402,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual("failed", self.state()["last_attempt"]["outcome"])
         self.assertNotIn(self.secret, str(result.exception) + json.dumps(self.state()))
         self.assertFalse(self.env_file.with_name("app.env.next").exists())
-        self.assertFalse(any(args[0] == "systemctl" for args, _ in self.host.commands))
+        self.assertFalse(any(args[0] == "systemctl" and args[1] != "is-enabled" for args, _ in self.host.commands))
         inspected = next(args for args, _ in self.host.commands if "config:inspect" in args)
         self.assertEqual(str(self.env_file.with_name("app.env.next")), inspected[inspected.index("--env-file") + 1])
 
@@ -946,7 +1422,7 @@ class ReleaseTests(unittest.TestCase):
                 self.assertIn(result.exception.code, {"invalid_json", "configuration_metadata"})
                 self.assertEqual(before, (self.env_file.read_bytes(), self.host.paths.registry.read_bytes()))
                 self.assertNotIn(self.secret, str(result.exception) + json.dumps(self.state()))
-                self.assertFalse(any(args[0] == "systemctl" for args, _ in self.host.commands))
+                self.assertFalse(any(args[0] == "systemctl" and args[1] != "is-enabled" for args, _ in self.host.commands))
                 self.assertFalse(self.env_file.with_name("app.env.next").exists())
 
     def test_configuration_failed_health_is_recorded_and_needs_explicit_correction(self):

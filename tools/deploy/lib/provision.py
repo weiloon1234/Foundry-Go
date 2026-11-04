@@ -295,8 +295,7 @@ def _install_unit(host, registry, entry, tools_dir, *, http_only=False):
         changed = _owned_write(host, unit, content) or changed
     if changed:
         host.run(["systemctl", "daemon-reload"])
-    # Enable without starting: the first release is activated by make deploy.
-    host.run(["systemctl", "enable", *units.values()])
+    # Lifecycle startup owns enabling; reinstalling units must preserve deliberate stops.
 
 
 def inspect_host(host):

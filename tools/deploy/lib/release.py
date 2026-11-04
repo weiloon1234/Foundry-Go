@@ -26,7 +26,7 @@ from contracts import (DeployError, HOST_PATHS, LAYOUT_VERSION, SCHEMA, VERSION_
                        reserve_runtime_storage, select_runtime_storage)
 from runtime_config import (ENCRYPTION_KEYS, MAX_CONFIGURATION_CHANGES, PIPELINE_KEYS, validate_runtime_environment,
                             candidate_values, rotation_changes, validate_configuration_changes, _read_value_file)
-from topology import instance_units
+from topology import instance_units, selected_units
 from host import OperationTimeout, wall_clock_budget
 from redis_acl import (granted_redis_patterns, granted_redis_channels, reconcile_redis_grants,
                        redis_grant_patterns, redis_channel_patterns)
@@ -316,7 +316,10 @@ def ensure_key_archive(host, entry, state):
 
 def record_background_recovery(host, entry, state):
     prior = {}
-    for role, unit in instance_units(entry).items():
+    selected = state["last_attempt"].get("roles")
+    if selected is None:
+        selected = enabled_roles(host, entry)
+    for role, unit in selected_units(entry, roles=selected).items():
         if role == "http":
             continue
         observed = service(host, unit)["ActiveState"]
@@ -377,8 +380,8 @@ READINESS_SECONDS = 90
 STABILITY_SECONDS = 5
 
 
-def stop_background(host, entry, timeout=100):
-    units = instance_units(entry)
+def stop_background(host, entry, timeout=100, *, roles=None):
+    units = selected_units(entry, roles=roles)
     background = [units[role] for role in ("scheduler", "worker") if role in units]
     if background:
         host.run(["systemctl", "stop", *background], timeout=timeout)
@@ -415,39 +418,87 @@ def prepare_worker(host, entry):
                      mode=0o640, group=entry["name"])
 
 
-def restart(host, entry, state=None):
-    """HTTP and all declared background roles share one readiness deadline."""
+def enabled_roles(host, entry, timeout=5):
+    """Read the systemd enablement that owns which declared roles should run."""
+    result = []
+    for role, unit in instance_units(entry).items():
+        observed = host.run(["systemctl", "is-enabled", unit], check=False, timeout=timeout)
+        status = observed.stdout.strip()
+        require(status in {"enabled", "enabled-runtime", "disabled"},
+                "service_enablement", "Cannot establish declared role enablement.")
+        if status in {"enabled", "enabled-runtime"}:
+            require(observed.returncode == 0, "service_enablement", "Cannot establish declared role enablement.")
+            result.append(role)
+    return result
+
+
+def role_status(entry, roles, complete="healthy"):
+    if not roles:
+        return "stopped"
+    return complete if set(roles) == set(instance_units(entry)) else "degraded"
+
+
+def restart(host, entry, state=None, *, role="all", roles=None):
+    """Explicit operator restarts enable; recorded role sets preserve enablement."""
     ensure_key_archive(host, entry, state if state is not None else host.load_state(entry))
-    start_roles(host, entry)
+    start_roles(host, entry, role=role, roles=roles, enable=roles is None)
 
 
-def start_roles(host, entry, *, http_only=False):
-    """Start HTTP before background roles; recovery archives only after readiness."""
-    units = instance_units(entry)
+def start_roles(host, entry, *, http_only=False, role="all", roles=None, enable=True):
+    """Start selected roles under one deadline, with HTTP ready before backgrounds."""
+    units = selected_units(entry, role, roles=roles)
     if http_only:
         units = {"http": units["http"]}
-    else:
+    if not units:
+        return
+    if "worker" in units:
         prepare_worker(host, entry)
-        stop_background(host, entry)
+    if role != "all":
+        try:
+            with wall_clock_budget(READINESS_SECONDS):
+                deadline = time.monotonic() + READINESS_SECONDS
+                if enable:
+                    host.run(["systemctl", "enable", *units.values()], timeout=_remaining(deadline, 10))
+                host.run(["systemctl", "reset-failed", *units.values()], timeout=_remaining(deadline, 10))
+                host.run(["systemctl", "restart", *units.values()], timeout=_remaining(deadline, 60))
+                require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS), role=role),
+                        "readiness_failed", "Selected role did not become ready within the activation deadline.")
+        except OperationTimeout:
+            raise DeployError("readiness_failed", "Selected role exhausted the activation deadline.") from None
+        return
+    stop_background(host, entry, roles=list(units))
     try:
         with wall_clock_budget(READINESS_SECONDS):
             deadline = time.monotonic() + READINESS_SECONDS
+            if enable:
+                host.run(["systemctl", "enable", *units.values()], timeout=_remaining(deadline, 10))
             host.run(["systemctl", "reset-failed", *units.values()], timeout=_remaining(deadline, 10))
-            host.run(["systemctl", "restart", units["http"]], timeout=_remaining(deadline, 60))
-            require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS), include_background=False),
-                    "readiness_failed", "HTTP did not become ready; background roles remain stopped.")
-            for role in ("worker", "scheduler"):
-                if role in units:
-                    host.run(["systemctl", "start", units[role]], timeout=_remaining(deadline, 60))
-            require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS), include_background=not http_only),
+            if "http" in units:
+                host.run(["systemctl", "restart", units["http"]], timeout=_remaining(deadline, 60))
+                require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS), include_background=False),
+                        "readiness_failed", "HTTP did not become ready; selected background roles remain stopped.")
+            for name in ("worker", "scheduler"):
+                if name in units:
+                    host.run(["systemctl", "start", units[name]], timeout=_remaining(deadline, 60))
+            require(ready(host, entry, timeout=_remaining(deadline, READINESS_SECONDS),
+                          include_background=not http_only, roles=list(units)),
                     "readiness_failed", "Required roles did not become ready within the activation deadline.")
     except OperationTimeout:
         raise DeployError("readiness_failed", "Required roles exhausted the activation deadline.") from None
 
 
-def stop(host, entry):
-    stop_background(host, entry)
-    host.run(["systemctl", "stop", instance_units(entry)["http"]], timeout=60)
+def stop(host, entry, *, role="all", roles=None, disable=False):
+    units = selected_units(entry, role, roles=roles)
+    if not units:
+        return
+    if disable:
+        host.run(["systemctl", "disable", *units.values()], timeout=60)
+    if role != "all":
+        host.run(["systemctl", "stop", *units.values()], timeout=100)
+        return
+    stop_background(host, entry, roles=list(units))
+    if "http" in units:
+        host.run(["systemctl", "stop", units["http"]], timeout=60)
 
 
 def _process(host, pid):
@@ -512,21 +563,23 @@ def services(host, entry):
     return result
 
 
-def ready(host, entry, timeout=90, include_background=True):
+def ready(host, entry, timeout=90, include_background=True, *, role="all", roles=None):
     try:
         with wall_clock_budget(timeout):
-            return _ready(host, entry, time.monotonic() + timeout, include_background)
+            return _ready(host, entry, time.monotonic() + timeout, include_background, role, roles)
     except (OperationTimeout, DeployError, OSError, ValueError):
         return False
 
 
-def _ready(host, entry, deadline, include_background=True):
+def _ready(host, entry, deadline, include_background=True, role="all", roles=None):
     version = current_version(host, entry)
     if version is None:
         return False
     path = release_path(host, entry, version)
     verified_release(host, entry, read_json(path / "manifest.json"))
-    units = instance_units(entry)
+    units = selected_units(entry, role, roles=roles)
+    if not units:
+        return True
     if not include_background:
         units = {"http": units["http"]}
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
@@ -536,7 +589,7 @@ def _ready(host, entry, deadline, include_background=True):
         if any(item["ActiveState"] == "failed" or item["NRestarts"] != "0" for item in live.values()):
             return False
         healthy = all(_matches_executable(item, path / "artisan") for item in live.values())
-        if healthy:
+        if healthy and "http" in units:
             try:
                 with opener.open(f"http://127.0.0.1:{entry['allocations']['http_port']}/health/ready", timeout=_remaining(deadline, 3)) as response:
                     payload = response.read(4097)
@@ -695,14 +748,16 @@ def check_live_state(host, entry, state):
     require(current == (state.get("current") or {}).get("version"), "state_drift", "Recorded state differs from the live release; reconcile before mutation.")
 
 
-def restore_code(host, entry, state, current, previous, recovered_status):
+def restore_code(host, entry, state, current, previous, recovered_status, *, roles=None):
     """Restore verified code only; never reverse database work."""
     verified_release(host, entry, current)
+    if roles is not None and state["last_attempt"]["action"] == "deploy":
+        stop(host, entry, roles=[name for name in instance_units(entry) if name not in roles])
     if current_version(host, entry) != current["version"]:
         switch_to(host, entry, current["version"])
     state["current"], state["previous"] = current, previous
-    restart(host, entry, state)
-    state["status"] = recovered_status
+    restart(host, entry, state, roles=roles)
+    state["status"] = role_status(entry, roles, recovered_status) if roles is not None else recovered_status
 
 
 def service_script(host):
@@ -826,21 +881,25 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
         require_idle(state)
         check_live_state(host, entry, state)
         resume_terminal_obligations(host, registry, entry, state)
+        import certificates
+        certificates.retry_deferred(host, registry, entry)
         staging = host.paths.opt(entry["name"]) / "releases" / (".stage-" + uuid.uuid4().hex)
         try:
             manifest = unpack_archive(Path(archive), staging, entry, checksum)
             version = manifest["version"]
+            prior_roles = enabled_roles(host, entry)
             if state["current"] and state["current"]["version"] == version:
                 require(state["current"] == manifest, "release_conflict", "An existing release ID has different content.")
-                if state["status"] in ("healthy", "rolled_back"):
+                if state["status"] in ("healthy", "rolled_back") and set(prior_roles) == set(instance_units(entry)):
                     verified_release(host, entry, state["current"])
                     require(ready(host, entry, timeout=10), "readiness_failed", "Current release is no longer ready; inspect it before retrying.")
                     return {"ok": True, "unchanged": True, "instance": entry["name"], "version": version}
             release = publish_release(host, entry, staging, manifest)
             attempt = begin(host, entry, state, "deploy", version,
-                            metadata={"recovery_operation_id": operation_id or str(uuid.uuid4())})
+                            metadata={"recovery_operation_id": operation_id or str(uuid.uuid4()), "roles": prior_roles})
             prior_current, prior_previous = state["current"], state["previous"]
             switched = False
+            enabling_roles = False
             try:
                 native_runtime(host, entry)
                 protect_maps(host, entry, release)
@@ -869,8 +928,9 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                 switch_to(host, entry, version)
                 switched = True
                 phase(host, entry, state, "health")
+                restart(host, entry, state, roles=list(instance_units(entry)))
+                enabling_roles = True
                 host.run(["systemctl", "enable", *instance_units(entry).values()])
-                restart(host, entry, state)
                 if (state["current"] or {}).get("version") != version:
                     state["previous"] = state["current"]
                 state["current"] = manifest
@@ -882,15 +942,24 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                 # requires a fresh status inspection, never an automatic retry.
                 failure_phase = state["last_attempt"]["phase"]
                 code = error.code if isinstance(error, DeployError) else "filesystem_failed"
-                state["status"] = "failed"
+                if enabling_roles and set(prior_roles) != set(instance_units(entry)):
+                    # Enable may have partially succeeded. Internal recovery cannot disable units.
+                    if (state["current"] or {}).get("version") != version:
+                        state["previous"] = state["current"]
+                    state["current"] = manifest
+                    state["status"] = "unknown"
+                    finish(host, entry, state, "needs_reconciliation", "role_enablement_pending")
+                    raise DeployError("role_enablement_pending", "The release passed readiness but role enablement or completion is uncertain; reconcile this deploy before another change.") from None
+                state["status"] = role_status(entry, prior_roles, "failed") if prior_current else "failed"
                 try:
                     if failure_phase in ("switch", "health"):
                         # Rename may succeed before fsync or recording its
                         # return fails. Inspect the actual link before recovery.
                         switched = current_version(host, entry) == version
                     if switched and prior_current:
-                        restore_code(host, entry, state, prior_current, prior_previous, "rolled_back")
+                        restore_code(host, entry, state, prior_current, prior_previous, "rolled_back", roles=prior_roles)
                     elif switched:
+                        stop(host, entry, roles=[name for name in instance_units(entry) if name not in prior_roles])
                         state["current"] = manifest  # first release has no previous code
                 except (DeployError, OSError):
                     state["status"] = "unknown"
@@ -952,35 +1021,36 @@ def rollback(host, project, profile, target, expected_current, operation_id):
         require(current_version(host, entry) == expected_current, "stale_current", "Current release differs from the expected release; refresh status.")
         manifest = read_json(release_path(host, entry, target) / "manifest.json")
         release = verified_release(host, entry, manifest)
+        roles = enabled_roles(host, entry)
         if target == expected_current:
-            require(ready(host, entry), "rollback_readiness", "Selected target is not ready.")
+            require(ready(host, entry, roles=roles), "rollback_readiness", "Selected target is not ready.")
         original_current, original_previous = state["current"], state["previous"]
         resume_terminal_obligations(host, registry, entry, state)
         app(host, entry, release, "config:check")
         attempt = begin(host, entry, state, "rollback", target,
-                        metadata={"operation_id": operation_id, "expected_current": expected_current})
+                        metadata={"operation_id": operation_id, "expected_current": expected_current, "roles": roles})
         _save_operation(host, entry, attempt)
         if target == expected_current:
-            state["status"] = "healthy"
+            state["status"] = role_status(entry, roles)
             finish(host, entry, state, "succeeded")
             return {"ok": True, "unchanged": True, "version": target, "operation_id": operation_id}
         try:
             attempt["redis_inventory"] = release_redis_inventory(host, entry, release)
             phase(host, entry, state, "redis")
             widen_redis_grants(host, registry, entry, attempt["redis_inventory"], state)
-            stop_background(host, entry)
+            stop_background(host, entry, roles=roles)
             phase(host, entry, state, "switch")
             switch_to(host, entry, target)
             phase(host, entry, state, "health")
-            restart(host, entry, state)
+            restart(host, entry, state, roles=roles)
             state["current"], state["previous"] = manifest, original_current
-            state["status"] = "rolled_back"
+            state["status"] = role_status(entry, roles, "rolled_back")
             queue_redis_narrowing(state, attempt["redis_inventory"])
             finish(host, entry, state, "succeeded")
         except (DeployError, OSError) as error:
             code = error.code if isinstance(error, DeployError) else "filesystem_failed"
             try:
-                restore_code(host, entry, state, original_current, original_previous, "healthy")
+                restore_code(host, entry, state, original_current, original_previous, "healthy", roles=roles)
             except (DeployError, OSError):
                 state["status"] = "unknown"
                 finish(host, entry, state, "needs_reconciliation", "code_recovery_failed")
@@ -1019,15 +1089,27 @@ def reconcile(host, project, profile):
         if candidate and attempt["action"] == "deploy" and attempt["phase"] in ("migration", "seed", "switch", "health"):
             require(not migration_status(host, entry, candidate), "migration_reconciliation",
                     "Pending migrations remain; reconcile their outcome before starting roles.")
-        if attempt["action"] == "stop":
-            stop(host, entry)
-            state["status"] = "stopped"
+        if attempt["action"] == "stop" or (attempt["action"] == "restart" and attempt.get("role", "all") != "all"):
+            role = attempt.get("role", "all")
+            selected_units(entry, role)
+            try:
+                if attempt["action"] == "stop":
+                    stop(host, entry, role=role, disable=True)
+                    state["status"] = "stopped" if role == "all" else "degraded"
+                else:
+                    restart(host, entry, state, role=role)
+                    state["status"] = "degraded"
+            except (DeployError, OSError) as error:
+                state["status"] = "degraded"
+                finish(host, entry, state, "failed" if attempt["action"] == "restart" else "needs_reconciliation",
+                       error.code if isinstance(error, DeployError) else "filesystem_failed")
+                raise DeployError("reconciliation_health", "Selected role operation failed; inspect the recorded outcome before retrying.") from None
             finish(host, entry, state, "reconciled")
-            return {"ok": True, "status": "stopped", "version": active}
+            return {"ok": True, "status": state["status"], "version": active}
         if attempt["action"] == "deploy" and attempt["phase"] in ("validation", "redis", "backup"):
             resume_background_recovery(host, entry, state)
             resume_redis_transition(host, registry, entry, state)
-            state["status"] = "failed"
+            state["status"] = role_status(entry, attempt["roles"], "failed") if active and "roles" in attempt else "failed"
             finish(host, entry, state, "failed", "deployment_not_applied")
             return {"ok": True, "status": state["status"], "version": active, "outcome": "failed"}
         applied = False
@@ -1056,15 +1138,26 @@ def reconcile(host, project, profile):
             if active:
                 # Always restart interrupted transitions: neither a matching link
                 # nor a healthy listener proves the executable/config was selected.
-                restart(host, entry, state)
+                deploy_reached_target = (attempt["action"] == "deploy"
+                                         and attempt["phase"] in ("switch", "health")
+                                         and active == attempt["release"])
+                roles = attempt.get("roles") if attempt["action"] in ("config", "rollback") else None
+                if attempt["action"] == "deploy":
+                    roles = (list(instance_units(entry)) if deploy_reached_target else
+                             attempt.get("roles", list(instance_units(entry))))
+                restart(host, entry, state, roles=roles)
+                if deploy_reached_target:
+                    host.run(["systemctl", "enable", *instance_units(entry).values()])
                 if (state.get("current") or {}).get("version") != active:
                     state["previous"], state["current"] = state["current"], manifest
-                state["status"] = "healthy"
+                state["status"] = role_status(entry, roles) if roles is not None else "healthy"
             else:
-                state["status"] = "never_deployed"
+                state["status"] = "failed" if attempt["action"] == "deploy" else "never_deployed"
         except (DeployError, OSError) as error:
-            state["status"] = "failed"
-            outcome = "failed_applied" if attempt["action"] == "config" and applied else "needs_reconciliation"
+            retained = attempt.get("roles") if attempt["action"] in ("config", "rollback") else None
+            state["status"] = role_status(entry, retained, "failed") if retained is not None else "failed"
+            outcome = ("failed_applied" if attempt["action"] == "config" and applied else
+                       "failed" if attempt["action"] == "restart" else "needs_reconciliation")
             finish(host, entry, state, outcome, error.code if isinstance(error, DeployError) else "filesystem_failed")
             raise DeployError("reconciliation_health", "Recovery could not establish healthy roles; inspect the recorded outcome.") from None
         rollback_applied = attempt["action"] != "rollback" or active == attempt["release"]
@@ -1136,8 +1229,8 @@ def keys_rotate(host, project, profile, operation_id, encryption=None):
     _, entry = host.require_identity(project, profile)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
-        path = _operation_path(host, entry, operation_id)
         state = host.load_state(entry)
+        path = _operation_path(host, entry, operation_id)
         if path.exists():
             receipt = read_json(path)
             require(receipt.get("action") == "keys-rotate" and
@@ -1170,8 +1263,8 @@ def keys_rotate(host, project, profile, operation_id, encryption=None):
 
 
 def _config_set(host, registry, entry, changes, rotation_operation_id=None):
-    values = validate_runtime_environment(host, entry)
     state = host.load_state(entry)
+    values = validate_runtime_environment(host, entry)
     require_idle(state)
     check_live_state(host, entry, state)
     resume_terminal_obligations(host, registry, entry, state)
@@ -1187,13 +1280,14 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
     candidate = check_path(path.with_name("app.env.next"), "file")
     require(not candidate.exists(), "configuration_reconciliation", "A previous configuration candidate remains; reconcile it before retrying.")
     payload = dump_env(updated)
-    prior_status = state["status"]
+    roles = enabled_roles(host, entry)
+    prior_status = role_status(entry, roles, state["status"]) if state.get("current") else state["status"]
     roles_stopped = False
     attempt = begin(host, entry, state, "config", manifest["version"], metadata={
         "configuration_revision": entry["configuration_revision"] + 1,
         "configuration_sha256": hashlib.sha256(payload.encode()).hexdigest(),
         "previous_configuration_sha256": digest(path),
-        "rotation_operation_id": rotation_operation_id})
+        "rotation_operation_id": rotation_operation_id, "roles": roles})
     try:
         host.owned_write(candidate, payload, 0o640, group=entry["name"])
         app(host, entry, live, "config:check", candidate)
@@ -1211,7 +1305,7 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
         widen_redis_grants(host, registry, entry, attempt["redis_inventory"], state)
         if state.get("current"):
             roles_stopped = True
-            stop(host, entry)
+            stop(host, entry, roles=roles)
         if any(key.startswith("APP__ENCRYPTION__") for key in changes):
             state["key_archive"] = {"configuration_revision": attempt["configuration_revision"],
                                     "attempt_id": attempt["id"], "pending": True}
@@ -1234,8 +1328,8 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
         phase(host, entry, state, "health")
         ensure_key_archive(host, entry, state)
         if state.get("current"):
-            restart(host, entry, state)
-            state["status"] = "healthy"
+            restart(host, entry, state, roles=roles)
+            state["status"] = role_status(entry, roles)
         else:
             state["status"] = "never_deployed"
         queue_redis_narrowing(state, attempt["redis_inventory"])
@@ -1252,7 +1346,7 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
             unchanged = selected == attempt["previous_configuration_sha256"]
             applied = selected == attempt["configuration_sha256"]
             attempt["configuration_applied"] = applied
-            state["status"] = prior_status if unchanged else "failed"
+            state["status"] = prior_status if unchanged else role_status(entry, roles, "failed")
             # Repair the receipt only for an exact known selection. A failed
             # registry write stays unresolved; an unhealthy applied revision does not.
             if applied or (unchanged and "pending_storage_bindings" in entry):
@@ -1265,10 +1359,10 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
             outcome = "failed_applied" if applied else "failed" if unchanged else "needs_reconciliation"
             if unchanged and roles_stopped:
                 try:
-                    restart(host, entry, state)
-                    state["status"] = "healthy"
+                    restart(host, entry, state, roles=roles)
+                    state["status"] = role_status(entry, roles)
                 except (DeployError, OSError):
-                    state["status"] = "failed"
+                    state["status"] = role_status(entry, roles, "failed")
                     outcome = "needs_reconciliation"
             finish(host, entry, state, outcome, "configuration_readiness" if applied else code)
             if applied:

@@ -4,6 +4,30 @@
 
 - Fixed: Closing a rotating log file completes a cleanup already queued, so a log
   directory no longer stays over `max_files` until the next start.
+- Deploy reconciliation preserves the prior enabled roles unless the target release
+  reached switch or health. First-deploy failures report failed, healthy restores
+  avoid stopping HTTP, and failed restart reconciliation allows operator recovery.
+  Reports give role-specific stop guidance on degraded instances; unsupported
+  systemd enablement states refuse mutation.
+
+- Fixed: Deliberately stopped deploy roles stay disabled across reboots and bootstrap
+  reruns. Configuration, key rotation and rollback preserve the enabled role set
+  through success, failure and reconciliation, including on stopped instances.
+  Failed deploy recovery preserves the prior enabled roles. Reports flag inactive
+  roles that remain enabled for reboot. Explicit restart and deploy are the ways
+  to start all roles. Empty `ROLE=` is rejected.
+- Fixed: Upgrade plans include PostgreSQL reloads for changed or unfinished HBA
+  publication. Deferred certificate checks ignore proxy variables and tolerate
+  decoding and HTTP retry errors without failing deployment.
+
+- Fixed: Deploy tool generation 4 supports `ROLE=http|worker|scheduler` for restart
+  and stop, preserves other roles, and reports partial operation as degraded.
+- Fixed: Certificate provisioning defers renewal verification when a separate probe
+  confirms a staging connection failure, timeout, or HTTP 5xx. Reports flag the
+  deferred check; deployment retries it without failing on renewal-check errors.
+- Fixed: Tool upgrade plans disclose PostgreSQL reloads required to rebind backups,
+  using the same archive-setting comparison as PostgreSQL preparation.
+
 - Fixed: `PoolConfig.StartupTimeout` now bounds connection attempts. An attempt could
   run for its full `ConnectTimeout` past the deadline, so the default 15 seconds could
   reach about 20. Each attempt's context now ends at the deadline. A zero budget still

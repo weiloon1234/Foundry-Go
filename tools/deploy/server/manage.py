@@ -10,7 +10,7 @@ import sys
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import DeployError, MAX_JSON, check_path, identity, parse_env, parse_json, require
-from topology import instance_units
+from topology import instance_units, selected_units
 from host import Host
 
 ACTIONS = ("capacity-plan", "capacity-apply", "hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect", "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "activate", "status", "rollback", "restart", "stop",
@@ -30,6 +30,7 @@ def execute(host, action, request):
     recovery_fields = {"topology", "mode", "recovery_archive", "archive_sha256", "target_time"}
     arguments = {"recover-plan": recovery_fields,
                  "recover-apply": recovery_fields | {"archive", "plan_token", "old_server_gone"}, "bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
+                 "restart": {"role"}, "stop": {"role"},
                  "activate": {"archive", "archive_sha256"}, "config-set": {"values", "secrets"},
                  "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current"},
                  "backup-keys-rotate": {"secrets"}, "backup-recipients-rotate": {"secrets"},
@@ -168,10 +169,7 @@ def execute(host, action, request):
         return {"keys": sorted(values), "locked_keys": sorted(release.PIPELINE_KEYS), "configuration_revision": entry["configuration_revision"]}
     if action == "logs":
         # Explicit operator action. Logs are never included in the host report.
-        units = instance_units(entry)
-        role = request.get("role", "all")
-        require(role == "all" or role in units, "invalid_role", "Select a declared topology role.")
-        selected = units.values() if role == "all" else [units[role]]
+        selected = selected_units(entry, request.get("role", "all")).values()
         result = host.run(["journalctl", *[arg for unit in selected for arg in ("--unit", unit)], "--lines=100", "--no-pager", "--output=short-iso"], timeout=15)
         return {"instance": entry["name"], "logs": result.stdout}
     if action == "status":
@@ -179,8 +177,12 @@ def execute(host, action, request):
     if action in ("restart", "stop"):
         with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
             registry, entry = host.require_identity(project, profile)
+            role = request.get("role", "all")
+            selected_units(entry, role)
             release.validate_runtime_environment(host, entry)
             state = host.load_state(entry)
+            require(role == "all" or not (state.get("last_attempt") or {}).get("role_recovery_pending"),
+                    "role_recovery", "Complete pending background recovery with a plain restart before selecting a role.")
             if action == "restart":
                 release.resume_terminal_obligations(host, registry, entry, state)
             else:
@@ -192,18 +194,18 @@ def execute(host, action, request):
             release.check_live_state(host, entry, state)
             require(state["current"] is not None, "no_release", "No release has been deployed.")
             release.verified_release(host, entry, state["current"])
-            release.begin(host, entry, state, action, state["current"]["version"])
+            release.begin(host, entry, state, action, state["current"]["version"], metadata={"role": role})
             release.phase(host, entry, state, "health")
             try:
                 if action == "stop":
-                    release.stop(host, entry)
-                    state["status"] = "stopped"
+                    release.stop(host, entry, role=role, disable=True)
+                    state["status"] = "stopped" if role == "all" else "degraded"
                 else:
-                    release.restart(host, entry, state)
-                    state["status"] = "healthy"
+                    release.restart(host, entry, state, role=role)
+                    state["status"] = "healthy" if role == "all" else "degraded"
                 release.finish(host, entry, state, "succeeded")
             except (DeployError, OSError) as error:
-                state["status"] = "failed"
+                state["status"] = "degraded" if role != "all" or action == "stop" else "failed"
                 release.finish(host, entry, state, "failed", error.code if isinstance(error, DeployError) else "filesystem_failed")
                 raise
             return {"ok": True, "instance": entry["name"]}

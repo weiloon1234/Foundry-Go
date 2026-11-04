@@ -166,7 +166,8 @@ class CertificateTests(unittest.TestCase):
                 raise DeployError("command_failed", "private provider diagnostics")
             return self.run_command(args, **kwargs)
         self.host.run = run
-        with patch.object(certificates.packages, "install_missing"), self.assertRaises(DeployError) as error:
+        with patch.object(certificates.packages, "install_missing"), \
+                patch.object(certificates, "_staging_unreachable", return_value=False), self.assertRaises(DeployError) as error:
             certificates.provision(self.host, self.registry, self.entry)
         self.assertIsNone(self.entry["certificate"]["last_renewal_check_at"])
         self.assertNotIn("private provider", str(error.exception))
@@ -291,3 +292,78 @@ class CertificateTests(unittest.TestCase):
         self.assertEqual(staged, installed)
         service = staged[certificates._timer(self.entry) + ".service"]
         self.assertIn("/usr/local/lib/foundry/current/lib/certificates.py synthetic-renew ", service)
+
+
+    def test_staging_probe_only_tolerates_connection_timeout_and_5xx(self):
+        from urllib.error import HTTPError, URLError
+        import ssl
+        from unittest.mock import MagicMock
+        for failure, expected in ((URLError(ConnectionRefusedError()), True),
+                                  (TimeoutError(), True),
+                                  (HTTPError("url", 503, "maintenance", {}, None), True),
+                                  (HTTPError("url", 429, "limited", {}, None), False),
+                                  (HTTPError("url", 403, "forbidden", {}, None), False),
+                                  (URLError(ssl.SSLError()), False)):
+            with self.subTest(failure=failure), patch.object(certificates, "build_opener") as builder:
+                builder.return_value.open.side_effect = failure
+                self.assertEqual(expected, certificates._staging_unreachable())
+        response = MagicMock()
+        response.__enter__.return_value.status = 200
+        with patch.object(certificates, "build_opener") as builder:
+            probe = builder.return_value.open
+            probe.return_value = response
+            self.assertFalse(certificates._staging_unreachable())
+            probe.assert_called_once_with(certificates.STAGING_DIRECTORY, timeout=20)
+
+    def test_outage_defers_persistently_and_retry_keeps_detail_then_clears(self):
+        self.existing()
+        failure = DeployError("command_failed", "private provider diagnostics")
+        with patch.object(certificates.packages, "install_missing"), \
+                patch.object(certificates, "_renewal_dry_run", side_effect=failure), \
+                patch.object(certificates, "_staging_unreachable", return_value=True), \
+                patch.object(certificates.sys, "stderr") as warning:
+            certificates.provision(self.host, self.registry, self.entry)
+            self.assertTrue(warning.write.called)
+        persisted = self.host.read_registry()["instances"][self.entry["profile"]["instance_id"]]
+        self.assertIn("certificate", persisted["provisioning"]["completed_steps"])
+        self.assertIn("renewal_deferred", persisted["certificate"])
+        self.assertIsNone(persisted["certificate"]["last_renewal_check_at"])
+        with patch.object(certificates, "_renewal_dry_run", side_effect=failure), \
+                patch.object(certificates, "_staging_unreachable", return_value=False):
+            certificates.retry_deferred(self.host, self.registry, self.entry)
+        detail = self.entry["certificate"]["renewal_deferred"]["detail"]
+        self.assertIn("staging was reachable", detail)
+        self.assertNotIn("private provider", detail)
+        certificates.retry_deferred(self.host, self.registry, self.entry)
+        persisted = self.host.read_registry()["instances"][self.entry["profile"]["instance_id"]]
+        self.assertNotIn("renewal_deferred", persisted["certificate"])
+        self.assertIsNotNone(persisted["certificate"]["last_renewal_check_at"])
+
+
+    def test_staging_probe_disables_environment_proxies(self):
+        from unittest.mock import MagicMock
+        response = MagicMock()
+        response.__enter__.return_value.status = 200
+        with patch.dict(certificates.os.environ, {"https_proxy": "http://dead.invalid:9"}), \
+                patch.object(certificates, "build_opener") as builder:
+            builder.return_value.open.return_value = response
+            self.assertFalse(certificates._staging_unreachable())
+            self.assertEqual({}, builder.call_args.args[0].proxies)
+
+    def test_deferred_retry_handles_decode_and_http_failures_but_not_interrupts(self):
+        from http.client import HTTPException
+        self.existing()
+        for failure in (UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid"), HTTPException("private failure")):
+            for owner in ("_renewal_ready", "_renewal_dry_run"):
+                self.entry["certificate"]["renewal_deferred"] = {"detail": "prior outage"}
+                with patch.object(certificates, owner, side_effect=failure), \
+                        patch.object(certificates, "build_opener") as builder:
+                    builder.return_value.open.side_effect = HTTPException("probe failure")
+                    certificates.retry_deferred(self.host, self.registry, self.entry)
+                persisted = self.host.read_registry()["instances"][self.entry["profile"]["instance_id"]]
+                self.assertIn("renewal_deferred", persisted["certificate"])
+                self.assertNotIn("private failure", persisted["certificate"]["renewal_deferred"]["detail"])
+        for failure in (KeyboardInterrupt(), SystemExit()):
+            with patch.object(certificates, "_renewal_dry_run", side_effect=failure):
+                with self.assertRaises(type(failure)):
+                    certificates.retry_deferred(self.host, self.registry, self.entry)

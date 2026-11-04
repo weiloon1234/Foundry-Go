@@ -346,6 +346,18 @@ def _hba(registry):
     return "\n".join(lines) + "\n"
 
 
+def _hba_needs_publication(previous, content, current):
+    return previous.get("phase") != "published" or content != current
+
+
+def hba_reload_required(host, registry):
+    cluster = registry["shared"]["postgresql"]
+    journal = _cluster_journal(host, registry)
+    path = check_path(host.paths.p(cluster["config_path"]) / "pg_hba.conf", "file")
+    current = path.read_text() if path.exists() else None
+    return _hba_needs_publication((journal or {}).get("hba", {}), _hba(registry), current)
+
+
 def _publish_hba(host, registry, *, running):
     cluster = registry["shared"]["postgresql"]
     journal = _cluster_journal(host, registry)
@@ -360,7 +372,7 @@ def _publish_hba(host, registry, *, running):
         require(current in allowed, "postgres_hba_conflict", "Foundry HBA differs from its recorded publication.")
     elif running:
         raise DeployError("postgres_hba_conflict", "Running Foundry HBA has no publication journal.")
-    if previous.get("phase") == "published" and content == current:
+    if not _hba_needs_publication(previous, content, current):
         if running:
             errors = _psql(host, registry, "SELECT count(*) FROM pg_hba_file_rules WHERE error IS NOT NULL;")
             require(_text(errors) == "0", "postgres_hba_invalid", "Foundry HBA syntax validation failed.")
@@ -546,6 +558,10 @@ def _configure_cluster(host, registry, allocation, tls):
     host.owned_write(host.paths.p("/etc/systemd/system/" + allocation["unit"]), _unit(allocation))
 
 
+def archive_reload_required(cluster, command):
+    return command != cluster.get("archive_command", "") or "archive_timeout" not in cluster
+
+
 def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = None) -> None:
     observed = inspect(host, registry)
     if observed["state"] == "ready":
@@ -559,7 +575,7 @@ def prepare(host: Host, registry: dict, *, shared_service_plan: dict | None = No
         if shared_service_plan is not None:
             cluster = registry["shared"]["postgresql"]
             command = _archive_plan(cluster, shared_service_plan)
-            if command != cluster.get("archive_command", "") or "archive_timeout" not in cluster:
+            if archive_reload_required(cluster, command):
                 journal = _cluster_journal(host, registry)
                 journal["archive_transition"] = {"old": cluster.get("archive_command", ""), "new": command, "phase": "publishing"}
                 _save_cluster(host, journal)

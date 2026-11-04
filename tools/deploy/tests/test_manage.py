@@ -94,3 +94,13 @@ class ManagerTests(unittest.TestCase):
             manager.execute(self.host, "restore-drill", {**self.request, "confirm": True, "backup_id": operation})
         self.assertEqual(operation, restore.call_args.args[-1])
         self.assertEqual({"target_time": None, "target_inclusive": True, "retain": False}, restore.call_args.kwargs)
+
+
+    def test_role_is_validated_for_logs_restart_and_stop_before_commands(self):
+        with patch.object(self.host, "run") as run:
+            for action in ("logs", "restart", "stop"):
+                for role in ("undeclared", [], None):
+                    with self.assertRaises(DeployError) as error:
+                        manager.execute(self.host, action, {**self.request, "role": role})
+                    self.assertEqual("invalid_role", error.exception.code)
+            run.assert_not_called()

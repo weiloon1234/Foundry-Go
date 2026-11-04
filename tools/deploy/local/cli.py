@@ -27,6 +27,7 @@ if sys.version_info < (3, 11):
 TOOLS_ROOT = Path(__file__).resolve().parents[1]
 ROOT: Path | None = None
 sys.path.insert(0, str(TOOLS_ROOT / "lib"))
+from certificates import RENEWAL_WARNING
 from edge import edge_findings
 
 from contracts import (BACKUP_POLICY, DeployError, PREFIX, SCHEMA, PROFILE_SCHEMA, LAYOUT_VERSION, VERSION_PATTERN, atomic_json, check_path, digest, identity, instance_name, now, parse_json, read_json, slug,
@@ -363,6 +364,8 @@ class SSH:
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=7200)
         except subprocess.TimeoutExpired as error:
             raise LocalError("remote operation timed out; use status and reconcile before retrying") from error
+        if RENEWAL_WARNING.encode() in (result.stderr or b"").splitlines():
+            say(RENEWAL_WARNING)
         check_ssh_exit(result.returncode, result.stderr, mutation=action not in READ_ACTIONS)
         try:
             value = json.loads(result.stdout)
@@ -990,6 +993,12 @@ def select_archive(project, profile):
     return archive
 
 
+def declared_role(role):
+    if role not in {item["name"] for item in load_topology(ROOT)["roles"]}:
+        raise LocalError("ROLE must name a role declared in deploy/topology.json")
+    return role
+
+
 def deploy(project, profile, settings):
     action = os.environ.get("ACTION") or ask("Action (" + " / ".join(ACTIONS) + ")", "deploy")
     action = {"keys-rotate": "keys rotate", "keys": "keys rotate"}.get(action, action)
@@ -1140,17 +1149,19 @@ def deploy(project, profile, settings):
             display(ssh.request("rollback", {**request, **arguments, "operation_id": operation, "confirm": True}))
             remember_releases(profile, ssh.request("status", request))
         elif action == "logs":
-            role = os.environ.get("ROLE") or (ask("Role (http / scheduler / worker)", "http") if sys.stdin.isatty() else "http")
-            if role not in {item["name"] for item in load_topology(ROOT)["roles"]}:
-                raise LocalError("ROLE must name a role declared in deploy/topology.json")
+            role = os.environ["ROLE"] if "ROLE" in os.environ else (ask("Role (http / scheduler / worker)", "http") if sys.stdin.isatty() else "http")
+            role = declared_role(role)
             result = ssh.request("logs", {**request, "role": role})
             if sys.stdin.isatty():
                 print(result["logs"])
             else:
                 display(result)
         else:
+            if action in ("restart", "stop") and "ROLE" in os.environ:
+                request["role"] = declared_role(os.environ["ROLE"])
             say(json.dumps(status, indent=2))
-            confirm(f"{action.capitalize()} {instance_name(project, profile)}")
+            scope = request.get("role", "all roles")
+            confirm(f"{action.capitalize()} {scope} for {instance_name(project, profile)}")
             display(ssh.request(action, {**request, "confirm": True}))
             remember_releases(profile, ssh.request("status", request))
 

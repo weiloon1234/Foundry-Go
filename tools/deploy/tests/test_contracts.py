@@ -203,7 +203,8 @@ class DeploymentContractTests(unittest.TestCase):
         path = self.host.paths.instance_state(self.entry["name"]) / "state.json"
         before = path.read_bytes()
         for key, value in (("configuration_revision", True), ("configuration_revision", 1), ("configuration_sha256", []),
-                           ("previous_configuration_sha256", "PRIVATE_CANARY"), ("configuration_applied", "true")):
+                           ("previous_configuration_sha256", "PRIVATE_CANARY"), ("configuration_applied", "true"),
+                           ("roles", "http"), ("roles", ["http", "http"]), ("roles", ["unknown"]), ("roles", [None])):
             changed = {**state, "last_attempt": {**attempt, key: value}}
             with self.subTest(key=key, value=value), self.assertRaises(DeployError):
                 self.host.save_state(self.entry, changed)

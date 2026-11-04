@@ -67,6 +67,8 @@ class FixtureHost:
             raise self.failures[command[0]]
         defaults = {"systemctl": "", "ss": "", "ufw": "Status: inactive\n",
                     "sshd": "passwordauthentication no\npermitrootlogin prohibit-password\n"}
+        if command[:2] == ["systemctl", "is-enabled"]:
+            return subprocess.CompletedProcess(command, 1, "disabled\n", "")
         output = self.outputs.get(command[0], defaults.get(command[0], ""))
         return subprocess.CompletedProcess(command, 0, output, "")
 
@@ -91,6 +93,49 @@ class ReportTests(unittest.TestCase):
 
     def item(self, result):
         return result["projects"][0]["instances"][0]
+
+    def test_deferred_renewal_is_a_problem_with_detail(self):
+        entry = self.host.registry["instances"][INSTANCE_ID]
+        entry["certificate"]["renewal_deferred"] = {"checked_at": "2026-11-04T00:00:00Z", "detail": "Staging unreachable"}
+        result = report.collect_report(self.host)
+        self.assertFalse(result["complete"])
+        self.assertIn("certificate_renewal_unverified", [p["code"] for p in result["problems"]])
+        self.assertEqual("Staging unreachable", self.item(result)["certificate"]["renewal_deferred"]["detail"])
+        self.cert.side_effect = OSError("unavailable")
+        result = report.collect_report(self.host)
+        problem = next(p for p in result["problems"] if p["code"] == "certificate_renewal_unverified")
+        self.assertEqual("Staging unreachable", problem["detail"])
+
+    def test_inactive_enabled_roles_warn_that_they_will_start_on_reboot(self):
+        from topology import instance_units
+        entry = self.host.registry["instances"][INSTANCE_ID]
+        unit = instance_units(entry)["http"]
+        original = self.host.run
+        def run(args, **kwargs):
+            if args == ["systemctl", "is-enabled", unit]:
+                return subprocess.CompletedProcess(args, 0, "enabled\n", "")
+            return original(args, **kwargs)
+        for status in ("stopped", "degraded"):
+            self.host.states[INSTANCE_ID]["status"] = status
+            with patch.object(self.host, "run", side_effect=run):
+                result = report.collect_report(self.host)
+            problem = next(item for item in result["problems"] if item["code"] == "stopped_role_enabled")
+            self.assertIn("http", problem["detail"])
+            self.assertIn("start on reboot", problem["detail"])
+            self.assertIn("Run ACTION=stop ROLE=http again" if status == "degraded" else "Run ACTION=stop again", problem["detail"])
+            self.assertFalse(result["complete"])
+            self.assertTrue(self.item(result)["services"]["http"]["enabled"])
+            result = report.collect_report(self.host)
+            self.assertNotIn("stopped_role_enabled", [item["code"] for item in result["problems"]])
+
+    def test_degraded_instance_reports_deliberately_inactive_roles(self):
+        self.host.states[INSTANCE_ID].update(status="degraded", current={"version": "test"})
+        result = report.collect_report(self.host)
+        self.assertFalse(result["complete"])
+        codes = [p["code"] for p in result["problems"]]
+        self.assertIn("instance_degraded", codes)
+        self.assertIn("role_inactive", codes)
+        self.assertNotIn("instance_status_unknown", codes)
 
     def test_before_first_deploy_has_stable_identity_and_no_secrets(self):
         before = copy.deepcopy((self.host.registry, self.host.states))

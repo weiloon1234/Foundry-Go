@@ -234,7 +234,7 @@ class Host:
         required = {"schema", "instance_id", "current", "previous", "status", "last_attempt", "history", "configuration_revision"}
         require(isinstance(state, dict) and required.issubset(state)
                 and type(state["schema"]) is int and state["schema"] == SCHEMA and state["instance_id"] == entry["profile"]["instance_id"]
-                and state["status"] in ("never_deployed", "deploying", "healthy", "failed", "failed_applied", "rolled_back", "stopped", "unknown")
+                and state["status"] in ("never_deployed", "deploying", "healthy", "failed", "failed_applied", "rolled_back", "stopped", "degraded", "unknown")
                 and type(state["configuration_revision"]) is int and state["configuration_revision"] >= 1
                 and isinstance(state["history"], list) and len(state["history"]) <= 50
                 and ("updated_at" not in state or valid_timestamp(state["updated_at"])), code, detail)

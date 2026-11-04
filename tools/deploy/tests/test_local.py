@@ -99,6 +99,45 @@ class UploadRemote:
 
 
 class LocalDeploymentTests(unittest.TestCase):
+    def test_restart_and_stop_forward_only_explicit_declared_role(self):
+        project, profile = fixture()
+        for action in ("restart", "stop"):
+            for role in ("http", "worker", "scheduler", None, "missing", ""):
+                remote = MagicMock()
+                remote.request.return_value = {"state": {}}
+                environment = {"ACTION": action}
+                if role is not None:
+                    environment["ROLE"] = role
+                with patch.dict(os.environ, environment, clear=True), \
+                        patch.object(cli, "SSH", return_value=remote), \
+                        patch.object(cli, "load_topology", return_value={"roles": [{"name": r} for r in ("http", "worker", "scheduler")]}), \
+                        patch.object(cli, "confirm") as confirm, patch.object(cli, "display"), \
+                        patch.object(cli, "say"), patch.object(cli, "remember_releases"):
+                    if role in ("missing", ""):
+                        with self.assertRaises(cli.LocalError):
+                            cli.deploy(project, profile, {})
+                        self.assertFalse(any(call.args[0] == action for call in remote.request.call_args_list))
+                        continue
+                    cli.deploy(project, profile, {})
+                    self.assertEqual(f"{action.capitalize()} {role or 'all roles'} for {cli.instance_name(project, profile)}",
+                                     confirm.call_args.args[0])
+                sent = next(call.args[1] for call in remote.request.call_args_list if call.args[0] == action)
+                self.assertEqual(role, sent.get("role"))
+                self.assertEqual(role is not None, "role" in sent)
+
+
+
+    def test_logs_rejects_explicit_empty_role(self):
+        project, profile = fixture()
+        remote = MagicMock()
+        remote.request.return_value = {"state": {}}
+        with patch.dict(os.environ, {"ACTION": "logs", "ROLE": ""}, clear=True), \
+                patch.object(cli, "SSH", return_value=remote), \
+                patch.object(cli, "load_topology", return_value={"roles": [{"name": "http"}]}), \
+                patch.object(cli, "remember_releases"):
+            with self.assertRaises(cli.LocalError):
+                cli.deploy(project, profile, {})
+        self.assertFalse(any(call.args[0] == "logs" for call in remote.request.call_args_list))
 
     def test_rotation_reuses_operation_without_recording_private_material_locally(self):
         project, profile = fixture()
@@ -361,6 +400,17 @@ class LocalDeploymentTests(unittest.TestCase):
         envelope = json.loads(run.call_args.kwargs["input"])
         self.assertIn("protocol", envelope)
         self.assertEqual(envelope["client"]["generation"], cli.protocol_metadata()["client"]["generation"])
+
+    def test_ssh_prints_only_the_known_deferred_renewal_warning(self):
+        _, profile = fixture()
+        settings = {"hosts": {"example.com:22": {"target": "example.com", "key_path": ""}}}
+        with patch.object(cli, "execute", return_value="hostname example.com\nport 22\n"):
+            ssh = cli.SSH(profile, settings)
+        result = type("Result", (), {"stderr": b"private diagnostic\n" + cli.RENEWAL_WARNING.encode() + b"\n",
+                                      "stdout": b'{"ok":true}', "returncode": 0})()
+        with patch.object(cli.subprocess, "run", return_value=result), patch.object(cli, "say") as say:
+            ssh.request("bootstrap-apply", {})
+        say.assert_called_once_with(cli.RENEWAL_WARNING)
 
     def test_config_action_sends_related_keys_as_one_change(self):
         project, profile = fixture()

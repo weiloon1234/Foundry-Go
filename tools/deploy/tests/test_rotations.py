@@ -217,6 +217,7 @@ class RotationTests(unittest.TestCase):
                 patch.object(certificates.packages, "install_missing"), \
                 patch.object(certificates, "_identity_ready"), patch.object(certificates, "_renewal_ready"), \
                 patch.object(certificates, "_renewal_dry_run", side_effect=dry_run), \
+                patch.object(certificates, "_staging_unreachable", return_value=False), \
                 patch.object(certificates, "_resolve_zone", return_value="a" * 32):
             with self.assertRaises(DeployError):
                 certificates.provision(self.host, self.registry, self.entry)
@@ -387,9 +388,10 @@ class RotationTests(unittest.TestCase):
                 self.assertRaises(DeployError):
             self.request("dns-token-rotate", "cloudflare_dns_token", "new-token-canary-" * 3)
         self.assertEqual([], self.commands)
-        with self.dns_context(), patch.object(certificates, "_renewal_dry_run",
-                side_effect=DeployError("failed", "provider-secret-canary")), self.assertRaises(DeployError) as caught:
+        with self.dns_context(), patch.object(certificates, "_staging_unreachable", return_value=True) as probe, \
+                patch.object(certificates, "_renewal_dry_run", side_effect=DeployError("failed", "provider-secret-canary")), self.assertRaises(DeployError) as caught:
             self.request("dns-token-rotate", "cloudflare_dns_token", "new-token-canary-" * 3)
+        probe.assert_not_called()
         self.assertEqual(before, (path.read_bytes(), self.intake(self.entry), self.intake(self.other)))
         self.assertNotIn("canary", str(caught.exception))
 

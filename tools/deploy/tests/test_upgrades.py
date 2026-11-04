@@ -199,6 +199,66 @@ class UpgradeTests(unittest.TestCase):
             self.install()
         self.assertEqual("tools_version_conflict", caught.exception.code)
 
+    def test_archive_reload_effect_and_token_bind_the_shared_comparison(self):
+        import backup
+        import postgres
+        self.install()
+        (self.source / "lib/new_module.py").write_text("# change\n")
+        cluster = {"unit": "foundry-postgresql.service", "archive_command": backup._archive_command(),
+                   "archive_timeout": postgres.ARCHIVE_TIMEOUT, "config_path": "/etc/postgresql/16/foundry"}
+        hba = self.host.paths.p(cluster["config_path"]) / "pg_hba.conf"
+        hba.parent.mkdir(parents=True)
+        hba.write_text(postgres._hba(self.host.registry))
+        journal = {"hba": {"phase": "published"}}
+        journal_patch = patch.object(postgres, "_cluster_journal", return_value=journal)
+        journal_patch.start()
+        self.addCleanup(journal_patch.stop)
+        self.host.registry["shared"] = {"postgresql": cluster}
+        self.assertEqual([], upgrades.plan_upgrade(self.host, self.source)["upgrade"]["service_effects"])
+        self.host.registry["shared"]["backup"] = {"configured": True}
+        self.assertEqual([], upgrades.plan_upgrade(self.host, self.source)["upgrade"]["service_effects"])
+        for changed in (dict(cluster, archive_command="old"), {k: v for k, v in cluster.items() if k != "archive_timeout"}):
+            self.host.registry["shared"]["postgresql"] = changed
+            plan = upgrades.plan_upgrade(self.host, self.source)
+            self.assertEqual([{"service": "postgresql", "unit": cluster["unit"], "action": "reload"}],
+                             plan["upgrade"]["service_effects"])
+            with patch.object(upgrades, "install_tools", return_value={"outcome": "succeeded"}) as install:
+                upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
+                install.assert_called_once()
+            self.host.registry["shared"]["postgresql"] = cluster
+            with self.assertRaises(DeployError) as caught:
+                upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
+            self.assertEqual("plan_changed", caught.exception.code)
+
+    def test_hba_reload_effect_is_bound_to_plan_token(self):
+        import backup
+        import postgres
+        self.install()
+        (self.source / "lib/new_module.py").write_text("# change\n")
+        cluster = {"unit": "postgresql@16-foundry.service", "config_path": "/etc/postgresql/16/foundry",
+                   "archive_command": backup._archive_command(), "archive_timeout": postgres.ARCHIVE_TIMEOUT}
+        self.host.registry["shared"] = {"postgresql": cluster, "backup": {"configured": True}}
+        path = self.host.paths.p(cluster["config_path"]) / "pg_hba.conf"
+        path.parent.mkdir(parents=True)
+        content = postgres._hba(self.host.registry)
+        journal = {"hba": {"phase": "published"}}
+        with patch.object(postgres, "_cluster_journal", return_value=journal):
+            for phase, current in (("published", "old hba"), ("publishing", content)):
+                journal["hba"]["phase"] = phase
+                path.write_text(current)
+                plan = upgrades.plan_upgrade(self.host, self.source)
+                self.assertEqual([{"service": "postgresql", "unit": cluster["unit"], "action": "reload"}],
+                                 plan["upgrade"]["service_effects"])
+                with patch.object(upgrades, "install_tools", return_value={"outcome": "succeeded"}) as install:
+                    upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
+                    install.assert_called_once()
+                path.write_text(content)
+                journal["hba"]["phase"] = "published"
+                self.assertEqual([], upgrades.plan_upgrade(self.host, self.source)["upgrade"]["service_effects"])
+                with self.assertRaises(DeployError) as caught:
+                    upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
+                self.assertEqual("plan_changed", caught.exception.code)
+
     def test_plan_revision_drift_is_rejected(self):
         self.install()
         (self.source / "lib/new_module.py").write_text("# change\n")
@@ -230,7 +290,8 @@ class UpgradeTests(unittest.TestCase):
 
     def test_upgrade_stays_pending_until_new_bundle_rebinds_backup_commands(self):
         self.install()
-        self.host.registry["shared"] = {"backup": {"owner": "foundry"}}
+        self.host.registry["shared"] = {"backup": {"owner": "foundry"},
+                                         "postgresql": {"unit": "foundry-postgresql.service"}}
         (self.source / "lib/new_module.py").write_text("# updated bundle\n")
         operation = str(uuid.uuid4())
         calls = []
