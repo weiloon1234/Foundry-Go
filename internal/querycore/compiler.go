@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
@@ -190,6 +191,9 @@ func (c *Compiler) ConditionClauseAt(sql *strings.Builder, clause string, predic
 }
 
 func (c *Compiler) Comparison(e Comparison, grouped map[FieldRef]bool, grouping bool) (string, error) {
+	if e.Operator == TrigramMatch && (!e.Text || e.Kind != codec.TypeText) {
+		return "", safeerror.NewFault(fault.Invalid, "trigram match requires a text representation")
+	}
 	if (e.Operator == Like || e.Operator == InsensitiveLike || EscapedPattern(e.Operator)) && !e.Text {
 		return "", safeerror.NewFault(fault.Invalid, "text pattern operations require a text capability")
 	}
@@ -306,6 +310,8 @@ func (c *Compiler) RowComparison(e RowComparison, grouped map[FieldRef]bool, gro
 
 func ComparisonOperator(op Operator) (string, bool) {
 	switch op {
+	case TrigramMatch:
+		return "OPERATOR(public.%)", true
 	case Equal:
 		return "=", true
 	case NotEqual:

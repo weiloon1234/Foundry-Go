@@ -41,7 +41,7 @@ zero for empty input. `Exists[S]()` returns required `bool`, false for empty inp
 and exposes no range comparisons. Both use the existing aggregate compiler and
 preserve the source query's scopes, executor and transaction.
 
-Text, temporal, interval, geographic and JSON functions share these row/selected
+Text, temporal, interval, geographic, trigram and JSON functions share these row/selected
 phases. See the [expression guides](../../../docs/guides/scalar-calculations.md).
 
 Row and selected phases have different private marker fields, so explicit Go
@@ -277,7 +277,7 @@ supplied executor/transaction remain those of the surrounding read. Window
 results enter wire contracts only through explicitly declared row/DTO fields;
 this adds no manifest, OpenAPI or TypeScript schema source.
 
-## Text, temporal, interval and geographic calculations
+## Text, temporal, interval, geographic and trigram calculations
 
 Scalar functions use the same SQL compiler and codecs as the shared `internal/querycore` compiler.
 Pass `expr.Value(orm.TextExpr(column))` (or `expr.At(scope, orm.TextExpr(column))`) to row functions; promote
@@ -285,6 +285,13 @@ with `expr.AsSelected` for `rows.MapSelected`. The `Value` suffixed variants acc
 selected values, including aggregates and windows. They never become WHERE
 predicates. Use `expr.TextValue` or `expr.TextNullableValue` for selected text
 conditions in `rows.Having`.
+
+`TrigramMatch` supplies the indexable `public.%` predicate for typed non-nullable
+text. `TrigramSimilarity` supplies a selectable, comparable `float64` score;
+its nullable and selected variants preserve NULLs and expression phase.
+`SetTrigramThreshold` takes an active `*database.Tx` and sets the threshold for
+that transaction. See [trigram search](../../../docs/guides/trigram-search.md)
+for extension installation, GIN indexes, supported thresholds and nullable inputs.
 
 ```go
 name := expr.Lower(expr.Trim(expr.Value(orm.TextExpr(Users.Email))))

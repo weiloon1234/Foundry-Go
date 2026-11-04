@@ -61,6 +61,11 @@ func (e Comparison) bindInto(bound []driver.Value, bind func(any) (driver.Value,
 		if v == nil {
 			return safeerror.NewFault(fault.Invalid, "NULL comparison requires IsNull or IsNotNull")
 		}
+		if e.Operator == TrigramMatch {
+			if _, ok := v.(string); !ok {
+				return safeerror.NewFault(fault.Invalid, "trigram match requires a text database representation")
+			}
+		}
 		if EscapedPattern(e.Operator) {
 			text, ok := v.(string)
 			if !ok {

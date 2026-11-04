@@ -88,6 +88,7 @@ const (
 	JsonUnquoteOperation
 	JsonArrayLengthOperation
 	SphericalDistanceOperation
+	TrigramSimilarityOperation
 )
 
 // Operation names and arities are private, closed compiler metadata. Public
@@ -100,6 +101,8 @@ type OperationSpec struct {
 
 func (op ScalarOperation) Spec() (OperationSpec, bool) {
 	switch op {
+	case TrigramSimilarityOperation:
+		return OperationSpec{"public.similarity", 2, 2, false}, true
 	case SphericalDistanceOperation:
 		return OperationSpec{"", 4, 4, false}, true
 	case AddOperation:
@@ -184,6 +187,22 @@ func (n OperationNode) Validate() error {
 		if _, err := ParameterSQLType(a.Kind); err != nil {
 			return err
 		}
+	}
+	if n.Kind == TrigramSimilarityOperation {
+		if n.Result != codec.TypeFloat || n.Arguments[0].Kind != codec.TypeText || n.Arguments[1].Kind != codec.TypeText {
+			return safeerror.NewFault(fault.Invalid, "trigram similarity requires text operands and a floating result")
+		}
+		search, ok := n.Arguments[1].Value.(ParameterNode)
+		if !ok || search.Kind != codec.TypeText || search.Literal {
+			return safeerror.NewFault(fault.Invalid, "trigram similarity requires a bound text search value")
+		}
+		if err := search.Validate(); err != nil {
+			return err
+		}
+		if _, ok := LiteralValue(search.Value).(string); !ok {
+			return safeerror.NewFault(fault.Invalid, "trigram similarity requires a text search value")
+		}
+		return nil
 	}
 	if n.Kind == SphericalDistanceOperation {
 		if n.Result != codec.TypeFloat {
@@ -297,6 +316,18 @@ func (c *Compiler) OperationSQL(n OperationNode, grouped map[FieldRef]bool, grou
 		return sql, err
 	}
 	spec, _ := n.Kind.Spec()
+	if n.Kind == TrigramSimilarityOperation {
+		column, err := c.SelectedExpression(n.Arguments[0].Value, grouped, grouping)
+		if err != nil {
+			return "", err
+		}
+		search := n.Arguments[1].Value.(ParameterNode) // Validate fixes the search operand shape.
+		if err := c.ValidateSelectedExpression(search, grouped, grouping); err != nil {
+			return "", err
+		}
+		parameter, err := c.Parameter(LiteralValue(search.Value))
+		return spec.Name + "(" + column + ", " + parameter + ")", err
+	}
 	args, err := c.OperationArguments(n, grouped, grouping)
 	if err != nil {
 		return "", err

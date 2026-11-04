@@ -23,4 +23,6 @@ and antipodal points. Compilation uses ordinary PostgreSQL math functions, witho
 PostGIS or application SQL fragments. Expression ownership and compiler budgets
 still apply.
 
+For indexed text similarity, see [trigram search](trigram-search.md).
+
 For declaration and API migration, see the [ORM migration guide](orm-migration.md).

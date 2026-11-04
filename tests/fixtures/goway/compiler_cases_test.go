@@ -2,6 +2,15 @@ package goway_test
 
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"trigram_numeric_input", "does not satisfy"},
+		{"trigram_search_value", "does not match"},
+		{"trigram_untyped_input", "cannot use"},
+		{"trigram_owner", "does not match"},
+		{"trigram_nullable_input", "cannot use"},
+		{"trigram_selected_phase", "cannot use"},
+		{"trigram_threshold_executor", "cannot use"},
+		{"trigram_nullable_result", "cannot use"},
+
 		{"datatable_routes_authority", "cannot use"},
 		{"datatable_routes_access_actor", "cannot use"},
 		{"datatable_routes_ticket_actor", "cannot use"},

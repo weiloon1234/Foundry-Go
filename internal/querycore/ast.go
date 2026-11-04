@@ -44,6 +44,7 @@ const (
 	InsensitiveStartsWith
 	InsensitiveEndsWith
 	InsensitiveLike
+	TrigramMatch
 )
 
 // escapedPattern reports operators whose literal text the compiler escapes.
@@ -160,7 +161,7 @@ func ValidateExpressionValues(e Expression, operand func(ValueExpression) error,
 			if len(ComparisonValues(e.Values)) <= MaxMembershipValues && e.hasBinding() {
 				return nil
 			}
-		case Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual, Like, Contains, InsensitiveContains, StartsWith, EndsWith, InsensitiveStartsWith, InsensitiveEndsWith, InsensitiveLike:
+		case Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual, Like, Contains, InsensitiveContains, StartsWith, EndsWith, InsensitiveStartsWith, InsensitiveEndsWith, InsensitiveLike, TrigramMatch:
 			if len(ComparisonValues(e.Values)) == 1 && e.hasBinding() {
 				return nil
 			}

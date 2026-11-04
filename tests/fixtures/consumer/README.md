@@ -1,5 +1,9 @@
 # Independent consumer fixture
 
+The [trigram search consumer](trigramqueries/search.go) declares typed name, entity,
+address and review searches. Its PostgreSQL acceptance covers transaction-local
+thresholds, NULL scores, joins and GIN plans; see [trigram search](../../../docs/guides/trigram-search.md).
+
 The module pins the development CLI with a Go `tool` directive; `go tool foundry`
 uses the same framework version as application imports. The
 [pinned-tool check](pinned_tool_test.go) exercises doctor and generation.

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added: Typed PostgreSQL trigram matching and similarity expressions in
+  `orm/expr`, including nullable scores, joined projections and a transaction-only
+  threshold helper. The match predicate uses the schema-qualified `public.%`
+  operator for GIN trigram index support. Applications install `pg_trgm` in
+  `public`; see [trigram search](docs/guides/trigram-search.md).
+
 - Fixed: Compression and automatic ETag middleware no longer log a transfer
   failure or abort when a client closes after the complete declared-length
   response has been written and no encoding or trailers remain. Incomplete
