@@ -13,29 +13,20 @@
   declared timeout exits, instead of recording a stale successful route result.
 - Fixed: Closing a rotating log file completes a cleanup already queued, so a log
   directory no longer stays over `max_files` until the next start.
-- Deploy reconciliation preserves the prior enabled roles unless the target release
-  reached switch or health. First-deploy failures report failed, healthy restores
-  avoid stopping HTTP, and failed restart reconciliation allows operator recovery.
-  Reports give role-specific stop guidance on degraded instances; unsupported
-  systemd enablement states refuse mutation.
-
-- Fixed: Deliberately stopped deploy roles stay disabled across reboots and bootstrap
-  reruns. Configuration, key rotation and rollback preserve the enabled role set
-  through success, failure and reconciliation, including on stopped instances.
-  Failed deploy recovery preserves the prior enabled roles. Reports flag inactive
-  roles that remain enabled for reboot. Explicit restart and deploy are the ways
-  to start all roles. Empty `ROLE=` is rejected.
-- Fixed: Upgrade plans include PostgreSQL reloads for changed or unfinished HBA
-  publication. Deferred certificate checks ignore proxy variables and tolerate
-  decoding and HTTP retry errors without failing deployment.
-
-- Fixed: Deploy tool generation 4 supports `ROLE=http|worker|scheduler` for restart
-  and stop, preserves other roles, and reports partial operation as degraded.
-- Fixed: Certificate provisioning defers renewal verification when a separate probe
-  confirms a staging connection failure, timeout, or HTTP 5xx. Reports flag the
-  deferred check; deployment retries it without failing on renewal-check errors.
-- Fixed: Tool upgrade plans disclose PostgreSQL reloads required to rebind backups,
-  using the same archive-setting comparison as PostgreSQL preparation.
+- Added: Deploy tool generation 4 takes `ROLE=http|worker|scheduler` on `ACTION=restart`
+  and `ACTION=stop`, acting on that role alone. An instance with only some roles running
+  reports `degraded`. Upgrade hosts with `ACTION=tools-plan` and `ACTION=tools-apply`.
+- Changed: A stop now disables the unit, so it survives a reboot, and enablement decides
+  which roles run. Configuration, key rotation, rollback and reconciliation restart only
+  enabled roles, and start nothing on a stopped instance. Plain `ACTION=restart` and a
+  deploy that reaches its target are the ways to start every role. A failed deploy keeps
+  the prior role set. Reports flag a stopped role that would start on reboot, and an
+  unexpected systemd enablement state refuses the change.
+- Changed: A Let's Encrypt staging outage no longer fails a bootstrap. When a separate
+  probe finds staging unreachable, the renewal check is deferred and reported as a
+  problem until a later deploy's retry succeeds. Every other dry-run failure stays fatal.
+- Fixed: Upgrade plans list a PostgreSQL reload when the archive settings or `pg_hba.conf`
+  require one, instead of always showing no service effects.
 
 - Added: `application.PruneService` joins module-owned services to housekeeping
   through typed service keys resolved during schedule construction at Build.
