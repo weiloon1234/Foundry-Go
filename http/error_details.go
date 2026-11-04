@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -111,6 +112,37 @@ func (d DetailedErrorDeclaration[D]) New(payload D) *DetailedError {
 	}}
 }
 
+// Matches reports whether err contains this exact definition and details schema.
+// Inspection is bounded; invalid declarations and failed inspection never match.
+// Example: if RegistryExists.Matches(err) { /* handle the declared failure */ }.
+func (d DetailedErrorDeclaration[D]) Matches(err error) bool {
+	definition, invalid := d.Description()
+	if invalid != nil || d.details == nil || err == nil {
+		return false
+	}
+	matched := false
+	failure := callback.Isolated("HTTP detailed error identification", func() error {
+		complete := errorgraph.Walk(err, func(current error) bool {
+			bound, found := errorgraph.AsShallow[interface {
+				error
+				detailedError() *DetailedError
+			}](current)
+			if found {
+				candidate := bound.detailedError()
+				if info, valid := candidate.httpErrorDefinition(); valid {
+					matched = info == definition && candidate.declaration.details.fingerprint == d.details.fingerprint
+				}
+			}
+			return !matched
+		})
+		if !complete {
+			matched = false
+		}
+		return nil
+	})
+	return failure == nil && matched
+}
+
 // DetailedError is a bound, non-generic application error. Its payload is held
 // only by a private encoder; formatting exposes the public code alone.
 // Example: failure := RegistryExists.New(details).WithCause(cause).
@@ -131,6 +163,9 @@ func (e DetailedError) Format(state fmt.State, verb rune) { _, _ = io.WriteStrin
 // WithCause returns a copy retaining the cause for errors.Is and errors.As.
 // Example: failure := RegistryExists.New(details).WithCause(cause).
 func (e *DetailedError) WithCause(cause error) *DetailedError {
+	if e == nil {
+		return nil
+	}
 	copy := *e
 	copy.cause = cause
 	return &copy
@@ -138,7 +173,14 @@ func (e *DetailedError) WithCause(cause error) *DetailedError {
 
 // Unwrap returns the private cause without formatting it.
 // Example: cause := errors.Unwrap(failure).
-func (e *DetailedError) Unwrap() error { return e.cause }
+func (e *DetailedError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.cause
+}
+
+func (e *DetailedError) detailedError() *DetailedError { return e }
 
 func (e *DetailedError) httpErrorCode() ErrorCode {
 	if definition, valid := e.httpErrorDefinition(); valid {
@@ -168,7 +210,7 @@ func (r *Router) ErrorDetailsSchema(code ErrorCode) (contract.Schema, error) {
 
 func allowsErrorDetails(ctx context.Context, failure *DetailedError) bool {
 	state, _ := ctx.Value(matchedRouteKey{}).(*matchedRoute)
-	if state == nil || !state.typed {
+	if state == nil {
 		return false
 	}
 	details := state.errorDetails[failure.declaration.definition.Code]
@@ -189,6 +231,7 @@ func prepareErrorResponse(ctx context.Context, payload ErrorResponse, detailed *
 	if detailed != nil {
 		state, _ := ctx.Value(matchedRouteKey{}).(*matchedRoute)
 		limits = state.responseLimits
+		// Input inspection can invoke omitzero IsZero before jsoncodec owns methods.
 		preparationErr = callback.Isolated("HTTP error details encoding", func() error {
 			var err error
 			details, err = detailed.encode(encoding, limits)

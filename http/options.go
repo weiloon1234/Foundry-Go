@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
+	"reflect"
 	"slices"
 	"time"
 
@@ -88,9 +89,13 @@ func Limits(limits EndpointLimits) EndpointOption {
 func Errors(declarations ...ErrorDeclarationOption) EndpointOption {
 	values := make([]errorDeclaration, len(declarations))
 	for i, declaration := range declarations {
-		if declaration != nil {
-			values[i] = declaration.errorDeclarationOption()
+		if declaration == nil {
+			continue
 		}
+		if value := reflect.ValueOf(declaration); value.Kind() == reflect.Pointer && value.IsNil() {
+			continue
+		}
+		values[i] = declaration.errorDeclarationOption()
 	}
 	return endpointOptionValue{kind: optionErrors, errors: values}
 }

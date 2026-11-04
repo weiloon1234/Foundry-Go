@@ -226,3 +226,20 @@ func TestDeclaredErrorsApplyBeforeRouteMiddleware(t *testing.T) {
 		}
 	}
 }
+
+func TestAllowsErrorWithoutTypedRoute(t *testing.T) {
+	plain := DefineError("registry_exists", 409, "Registry already exists.")
+	detailed, err := registryError().Description()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []*matchedRoute{nil, {typed: false}} {
+		ctx := context.WithValue(t.Context(), matchedRouteKey{}, state)
+		if !allowsError(ctx, plain.definition) || allowsError(ctx, detailed) {
+			t.Fatal("raw route declaration policy changed")
+		}
+	}
+	if allowsError(t.Context(), detailed) || !allowsError(t.Context(), plain.definition) {
+		t.Fatal("unmatched declaration policy changed")
+	}
+}

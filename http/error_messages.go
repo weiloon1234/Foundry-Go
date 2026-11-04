@@ -66,6 +66,8 @@ func (p *errorPresenter) text(ctx context.Context, key i18n.MessageKey, fallback
 	return result.Text
 }
 func (p *errorPresenter) present(ctx context.Context, payload *ErrorResponse) {
+	// A delivered response retains request language values after its deadline.
+	ctx = context.WithoutCancel(ctx)
 	// A declared application error is localized only when the catalog defines
 	// its parameter-free key (see ErrorDeclaration.MessageDefinition); its
 	// declared message remains the fallback. The code and status never change.

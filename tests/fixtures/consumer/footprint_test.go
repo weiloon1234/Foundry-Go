@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +38,8 @@ const footprintFailureAdvice = "a method or field on a model or endpoint type pr
 // endpoint_ordinary        —                            695 fn,  5,321 syms, 3.11 MB      800 fn,  6,120 syms, 3,755,093 B (~3.58 MB)
 // endpoint_authenticated   —                            982 fn,  7,198 syms, 4.36 MB    1,130 fn,  8,278 syms, 5,254,902 B (~5.01 MB)
 // dto_validated            —                            376 fn,  2,744 syms, 1.80 MB      433 fn,  3,156 syms, 2,172,424 B (~2.07 MB)
+// error_details (2026-11-04, two distinct struct shapes, Go 1.27.1 darwin/arm64):
+// measured 241 fn, 1,621 syms, 985,098 B; ceilings are ceil(measured * 1.15).
 var footprintBudgets = map[string]footprintBudget{
 	"model_type": {
 		pkg:          "./testdata/footprint/model_type",
@@ -80,12 +83,19 @@ var footprintBudgets = map[string]footprintBudget{
 		maxSymbols:   3156,
 		maxBytes:     2172424,
 	},
+	"error_details": {
+		pkg:          "./testdata/footprint/error_details",
+		maxFunctions: 278,
+		maxSymbols:   1865,
+		maxBytes:     1132863,
+	},
 }
 
 func TestFootprintBudgets(t *testing.T) {
 	testkit.TrackExternalInputs(t)
+	t.Logf("toolchain: %s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
-	probeOrder := []string{"model_type", "model_isolated", "model_assignments", "endpoint_plain", "endpoint_ordinary", "endpoint_authenticated", "dto_validated"}
+	probeOrder := []string{"model_type", "model_isolated", "model_assignments", "endpoint_plain", "endpoint_ordinary", "endpoint_authenticated", "dto_validated", "error_details"}
 	pkgArgs := make([]string, 0, len(probeOrder))
 	for _, name := range probeOrder {
 		pkgArgs = append(pkgArgs, footprintBudgets[name].pkg)
@@ -166,6 +176,13 @@ func TestFootprintBudgets(t *testing.T) {
 		}
 
 		measuredFunctions, measuredSymbols := parseFootprintSymbols(t, nmStdout.Bytes())
+		if name == "error_details" {
+			for _, shape := range []string{"ExistingRegistryID string", "SeatID string"} {
+				if !bytes.Contains(nmStdout.Bytes(), []byte("DetailedErrorDeclaration[go.shape.struct { "+shape)) {
+					t.Fatalf("probe did not instantiate distinct details shape %s", shape)
+				}
+			}
+		}
 		t.Logf("probe %s: %d functions (max %d), %d symbols (max %d), %d bytes (max %d)",
 			name, measuredFunctions, budget.maxFunctions, measuredSymbols, budget.maxSymbols, measuredBytes, budget.maxBytes)
 
@@ -215,42 +232,4 @@ func parseFootprintSymbols(t *testing.T, data []byte) (functions int, definedSym
 		t.Fatalf("scanning nm output: %v", err)
 	}
 	return functions, definedSymbols
-}
-
-// Record the new declaration footprint without inventing an unmeasured ceiling.
-// Runtime error methods must remain shared across the two concrete payload types.
-func TestDetailedErrorFootprint(t *testing.T) {
-	testkit.TrackExternalInputs(t)
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
-	defer cancel()
-	run := func(args ...string) []byte {
-		t.Helper()
-		cmd := exec.CommandContext(ctx, "go", args...)
-		configureCompilerCommand(cmd)
-		cmd.Env = append(os.Environ(), "GOWORK=off", "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local")
-		stdout := &compilerOutput{limit: 64 << 20, cancel: cancel}
-		stderr := &compilerOutput{limit: 64 << 10, cancel: cancel}
-		cmd.Stdout, cmd.Stderr = stdout, stderr
-		if err := cmd.Run(); err != nil {
-			t.Fatalf("footprint command: %v\n%s", err, stderr.String())
-		}
-		if stdout.exceeded || stderr.exceeded {
-			t.Fatal("footprint command output exceeded limit")
-		}
-		return stdout.Bytes()
-	}
-	archive := strings.TrimSpace(string(run("list", "-export", "-f", "{{.Export}}", "./testdata/footprint/error_details")))
-	info, err := os.Stat(archive)
-	if err != nil {
-		t.Fatal(err)
-	}
-	symbols := run("tool", "nm", archive)
-	functions, count := parseFootprintSymbols(t, symbols)
-	t.Logf("error_details: %d functions, %d symbols, %d archive bytes", functions, count, info.Size())
-	if bytes.Contains(symbols, []byte("http.DetailedError[")) || bytes.Contains(symbols, []byte("http.(*DetailedError[")) {
-		t.Fatal("bound HTTP errors instantiated a generic runtime")
-	}
-	if !bytes.Contains(symbols, []byte("DetailedErrorDeclaration[")) {
-		t.Fatal("probe did not instantiate detailed declarations")
-	}
 }

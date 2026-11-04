@@ -189,7 +189,9 @@ func classifyErrorResponse(ctx context.Context, err error, presenter *errorPrese
 		}
 		if found {
 			code = classified.httpErrorCode()
-			details, _ = classified.(*DetailedError)
+			if bound, ok := classified.(interface{ detailedError() *DetailedError }); ok {
+				details = bound.detailedError()
+			}
 			if declared, ok := classified.(interface {
 				httpErrorDefinition() (ErrorDefinition, bool)
 			}); ok {
@@ -234,7 +236,7 @@ func classifyErrorResponse(ctx context.Context, err error, presenter *errorPrese
 	}
 	definition, valid := code.definition()
 	if custom != nil {
-		if allowsError(ctx, *custom) && (details == nil || allowsErrorDetails(ctx, details)) {
+		if allowsError(ctx, *custom) && (custom.DetailsType == "" || details != nil && details.encode != nil && allowsErrorDetails(ctx, details)) {
 			definition, valid = *custom, true
 		} else {
 			valid = false
