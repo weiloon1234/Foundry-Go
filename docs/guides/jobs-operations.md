@@ -71,6 +71,12 @@ safe reason, requested state, retry delay and whether finalization was acknowled
 can take precedence at the backend. `finalized=false` means no confirmed completion;
 inspect the queue before making recovery decisions.
 
+A repeating `Redis job state or operation is invalid` means a stored queue record
+or index failed validation. The queue fails closed: the operation writes nothing,
+and the error repeats until the state is corrected. There is no automatic repair.
+Queue records are not meant to reach this state through ordinary use. Treat this
+as outside interference and inspect the state before changing anything.
+
 The logger never receives the payload, raw error, panic value, reservation owner
 or retry token. Context-aware handlers retain framework correlation. Existing log
 channels own file rotation and retention. Logs are emitted after finalization;

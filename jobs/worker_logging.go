@@ -74,3 +74,23 @@ func (w *Worker) logBackendFailure(ctx context.Context, operation string, key Ke
 		return nil
 	})
 }
+
+func (w *Worker) logReservationsHeld(ctx context.Context) {
+	if w.logger == nil {
+		return
+	}
+	_ = callback.Isolated("log job reservations held", func() error {
+		w.logger.LogAttrs(ctx, slog.LevelWarn, "job reservations held by maintenance", slog.Int("queues", len(w.queues)))
+		return nil
+	})
+}
+
+func (w *Worker) logReservationsResumed(ctx context.Context) {
+	if w.logger == nil {
+		return
+	}
+	_ = callback.Isolated("log job reservations resumed", func() error {
+		w.logger.LogAttrs(ctx, slog.LevelInfo, "job reservations resumed after maintenance", slog.Int("queues", len(w.queues)))
+		return nil
+	})
+}

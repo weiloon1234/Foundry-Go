@@ -255,6 +255,13 @@ func (g *Gate) Admit() error {
 // on resume, terminal drain or caller cancellation. HTTP admission should use
 // Admit and respond promptly instead of holding a request until maintenance ends.
 func (g *Gate) Wait(ctx context.Context) error {
+	return g.WaitHeld(ctx, nil)
+}
+
+// WaitHeld waits like Wait and calls held at most once, the first time it finds
+// admission paused, before blocking. The callback runs outside the gate's mutex.
+// Serving, draining and nil gates do not call held.
+func (g *Gate) WaitHeld(ctx context.Context, held func()) error {
 	if ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "maintenance wait requires a context")
 	}
@@ -280,6 +287,10 @@ func (g *Gate) Wait(ctx context.Context) error {
 		}
 		changed := g.changed
 		g.mu.Unlock()
+		if held != nil {
+			held()
+			held = nil
+		}
 		select {
 		case <-changed:
 		case <-ctx.Done():

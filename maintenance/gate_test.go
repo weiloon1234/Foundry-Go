@@ -68,3 +68,69 @@ func TestMaintenanceWaitHonorsCancellationAndOptionalGate(t *testing.T) {
 		t.Fatal("optional gate changed serving behavior")
 	}
 }
+
+func TestMaintenanceWaitHeldOnlyCallsWhilePaused(t *testing.T) {
+	var serving, draining maintenance.Gate
+	draining.Drain()
+	for _, test := range []struct {
+		name string
+		gate *maintenance.Gate
+		want error
+	}{
+		{"serving", &serving, nil},
+		{"draining", &draining, maintenance.ErrDraining},
+		{"optional", nil, nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			calls := 0
+			err := test.gate.WaitHeld(t.Context(), func() { calls++ })
+			if !errors.Is(err, test.want) || calls != 0 {
+				t.Fatalf("WaitHeld = %v, calls = %d", err, calls)
+			}
+		})
+	}
+}
+
+func TestMaintenanceWaitHeldResumesOutsideMutex(t *testing.T) {
+	var gate maintenance.Gate
+	if err := gate.Set(true); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	err := gate.WaitHeld(t.Context(), func() {
+		calls++
+		// Resume inside the callback proves it runs outside the mutex and
+		// that a resume before the select cannot leave the waiter blocked.
+		if err := gate.Set(false); err != nil {
+			t.Error(err)
+		}
+	})
+	if err != nil || calls != 1 {
+		t.Fatalf("WaitHeld = %v, calls = %d", err, calls)
+	}
+}
+
+func TestMaintenanceWaitHeldBlocksUntilResume(t *testing.T) {
+	var gate maintenance.Gate
+	if err := gate.Set(true); err != nil {
+		t.Fatal(err)
+	}
+	held := make(chan struct{})
+	result := make(chan error, 1)
+	var calls int
+	go func() {
+		result <- gate.WaitHeld(t.Context(), func() { calls++; close(held) })
+	}()
+	<-held
+	select {
+	case err := <-result:
+		t.Fatal("paused waiter returned", err)
+	default:
+	}
+	if err := gate.Set(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; err != nil || calls != 1 {
+		t.Fatalf("WaitHeld = %v, calls = %d", err, calls)
+	}
+}

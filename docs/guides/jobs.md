@@ -191,6 +191,19 @@ Backend failures (reserve, renew, start, finish, including `fault.Overloaded`
 from the Redis client) are logged as `job backend operation failed` with a
 redacted diagnostic; the loop backs off with jitter up to `FailureBackoff`
 (default 30s) and keeps running.
+Failure pauses deliberately ignore enqueue wakeups. After backend recovery, a loop
+can take up to `FailureBackoff` to retry; delays are randomised over their upper
+half. With several subscribed queues, a cycle stops at the first failing queue and
+backs off, so a healthy queue's new job can also wait up to `FailureBackoff`.
+
+While maintenance is paused, reservations are held. A worker with a logger emits
+one WARN `job reservations held by maintenance` and, on resume, one INFO
+`job reservations resumed after maintenance`, with the subscribed queue count in
+`queues`. These messages are independent of `FailureLog`. Drain or cancellation
+during the hold emits no resume message.
+
+See [worker operations](jobs-operations.md#failure-logging-and-hooks) for Redis
+state validation failures and recovery precautions.
 
 ## Middleware, rate limits and uniqueness
 

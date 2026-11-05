@@ -27,23 +27,24 @@ import (
 // when every owned handler has actually returned, including context-ignoring
 // ones. Close borrowed infrastructure only after Done. A Worker must not be copied.
 type Worker struct {
-	backend       Backend
-	registry      *Registry
-	config        WorkerConfig
-	logger        *slog.Logger
-	schedule      []Key
-	queues        []Key
-	cursor        atomic.Uint64
-	active        atomic.Int64
-	mu            sync.Mutex
-	running       bool
-	draining      bool
-	stopped       bool
-	cancel        context.CancelFunc
-	stopReserving context.CancelFunc
-	drainTimer    *time.Timer
-	done          chan struct{}
-	sinks         []FailureSink
+	backend          Backend
+	registry         *Registry
+	config           WorkerConfig
+	logger           *slog.Logger
+	schedule         []Key
+	queues           []Key
+	cursor           atomic.Uint64
+	active           atomic.Int64
+	reservationsHeld atomic.Bool
+	mu               sync.Mutex
+	running          bool
+	draining         bool
+	stopped          bool
+	cancel           context.CancelFunc
+	stopReserving    context.CancelFunc
+	drainTimer       *time.Timer
+	done             chan struct{}
+	sinks            []FailureSink
 }
 
 // workerRun separates the two shutdown phases. Reservations use reserve, which
@@ -184,8 +185,17 @@ func (w *Worker) reserveNext(run workerRun) (Key, Reservation, time.Time, bool, 
 		}
 	}
 	for _, key := range order {
-		if err := maintenance.FromContext(run.reserve).Wait(run.reserve); err != nil {
+		held := false
+		if err := maintenance.FromContext(run.reserve).WaitHeld(run.reserve, func() {
+			held = true
+			if w.reservationsHeld.CompareAndSwap(false, true) {
+				w.logReservationsHeld(run.work)
+			}
+		}); err != nil {
 			return key, Reservation{}, time.Time{}, false, err
+		}
+		if held && w.reservationsHeld.CompareAndSwap(true, false) {
+			w.logReservationsResumed(run.work)
 		}
 		if err := run.reserve.Err(); err != nil {
 			return key, Reservation{}, time.Time{}, false, err

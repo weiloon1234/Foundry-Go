@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added: Job workers log once when maintenance holds reservations and once when
+  reservations resume, independently of failure logging.
+- Documented: Worker failure backoff, delays across subscribed queues and Redis
+  queue state validation failures.
+
 ## v0.7.1 — 2026-11-05
 
 - Fixed: PostgreSQL test helpers drop one generated schema at a time per database,
