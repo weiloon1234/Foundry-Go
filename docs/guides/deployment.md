@@ -971,6 +971,9 @@ values are `null`, never zero or false.
 
 The root-only fields are `null` for a nonroot reader and add no problem.
 
+The report runs only when someone asks for it, and nothing alerts on a failed or missing
+backup or certificate renewal. Alerts are [deferred](../../blueprint/25-deferred-extensions.md#backup-and-certificate-failure-alerts).
+
 ## Container acceptance
 
 `make deploy-tools-check` runs the tooling's service-free unit tests, and
