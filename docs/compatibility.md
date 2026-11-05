@@ -6,7 +6,7 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
-## Typed error details: manifest 9 — Unreleased
+## Typed error details: manifest 9, v0.7.0
 
 Regenerate Go descriptors, manifest, OpenAPI and TypeScript together. Manifest 9
 adds optional `details_type` to error definitions; v8 documents are rejected.

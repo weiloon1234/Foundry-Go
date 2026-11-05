@@ -109,7 +109,7 @@ are acceptance examples, not starter applications.
    required consumer/compiler/generation/editor/client checks. Re-audit the completed
    implementation, fix findings and verify the final source before closing the milestone.
    Review its consumer experience before starting the next milestone.
-   Use the [Foundry acceptance skill](.agents/skills/foundry-acceptance/SKILL.md) for
+   Use the [Foundry acceptance skill](.claude/skills/foundry-acceptance/SKILL.md) for
    this workflow or a requested implementation audit, not after every edit.
 4. Documentation/instruction-only edits require factual and local-link checks
    (`make docs-check`); do not rebuild the framework or create cold caches for them.

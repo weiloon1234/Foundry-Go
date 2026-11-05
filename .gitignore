@@ -17,3 +17,7 @@ go.work.sum
 .foundry-generate.guard-directory/
 .foundry-generate.finished-*/
 __pycache__/
+
+# Coding agents: shared skills and AGENTS.md are tracked; personal settings are not.
+/.claude/settings.local.json
+CLAUDE.local.md
