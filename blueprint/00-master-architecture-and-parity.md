@@ -8,6 +8,28 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Capabilities the applications used to copy — v0.8.0, 2026-11-06
+
+Status: **implemented; `make verify` passed in segments with PostgreSQL and Redis, the real TypeScript
+client gate and race tests on every changed package passed, an independent review's three findings were
+fixed, and CI gates this tag**. A review of Starter, ooo and Boss Club found the same code copied into all
+three, and this release moves it into the framework. The deploy tools are unchanged, so the acceptance
+matrix was not rerun.
+- `fetchTransport` is a standard streaming Fetch transport in every generated client. It forwards each
+  request's declared redirect mode.
+- `config.Inputs.EnvFile` loads a bounded literal dotenv file with value-free provenance.
+- `validation.FileKinds` and the image kinds match an upload's extension to its detected content, with
+  one bounded inspection for both image format and dimensions.
+- `phone.Parse` and `validation/phone` normalise and validate numbers as E.164 for a typed country, using
+  the new `nyaruka/phonenumbers/v2` dependency.
+- `storage/http.ResponseError` is exported, and `testkit/attachments.RemoveBackingObject` deletes only a
+  file's stored object.
+- `testkit/redis` reads test credentials, and `decimal.Decimal.Int64` converts exactly.
+- The TypeScript generator's reserved names are pinned by `typescript/testdata/reserved-names.txt`, so a
+  runtime edit can't silently rename consumer types.
+Open: Starter, ooo and Boss Club haven't adopted this release or deleted their copies yet. Two new standard
+validation messages make every locale-enabled application regenerate its catalog on upgrade.
+
 ## Test schema cleanup under load — v0.7.1, 2026-11-05
 
 Status: **implemented; its PostgreSQL regression test, ooo's tests at full concurrency and CI gate this tag**.

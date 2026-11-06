@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 — 2026-11-06
 
 - Added: Generated TypeScript clients export `fetchTransport`, a standard streaming
   Fetch transport. It forwards abort signals, credentials and each request's declared
