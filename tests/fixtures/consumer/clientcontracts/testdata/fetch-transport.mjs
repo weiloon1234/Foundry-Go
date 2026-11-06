@@ -15,7 +15,7 @@ const request = {
   maxBodyBytes: 1024,
 };
 
-for (const [name, { fetchTransport }] of [["generated", generated], ["standalone", standalone]]) {
+for (const [name, { fetchTransport, createClient, ContractError }] of [["generated", generated], ["standalone", standalone]]) {
   describe(`${name} fetchTransport`, () => {
     it("forwards signal, credentials, method, headers and body", async t => {
       const signal = new AbortController().signal;
@@ -54,6 +54,17 @@ for (const [name, { fetchTransport }] of [["generated", generated], ["standalone
       assert.deepEqual(calls.map(init => init.redirect), ["error", "follow", "manual"]);
       assert.equal(Object.hasOwn(calls[0], "signal"), false);
       assert.equal(Object.hasOwn(calls[0], "body"), false);
+    });
+
+    it("rejects a browser opaque redirect with opaque_redirect", async t => {
+      const fetchCall = t.mock.method(globalThis, "fetch", async (_url, init) => {
+        assert.equal(init.redirect, "manual");
+        return { status: 0, type: "opaqueredirect", headers: new Headers(), body: null };
+      });
+      const api = createClient(fetchTransport, { baseURL: "https://api.example.test" });
+      await assert.rejects(api.sessionContinue({}), error =>
+        error instanceof ContractError && error.issues.some(issue => issue.code === "opaque_redirect"));
+      assert.equal(fetchCall.mock.callCount(), 1);
     });
 
     it("sets duplex:half only for stream bodies, even without a duplex hint", async t => {
