@@ -12,8 +12,9 @@
   (`Reader.Overview`, `Traffic`, `Issue`, `Issues`, `Events`, `Alerts`),
   `Engine.RecordBrowser`, `Engine.RunID`, and configured assembly through
   `application.FeatureSettings.Telemetry`. The optional `telemetry/sourcemap` package reads
-  and prunes private release source maps. Nothing changes when the feature is off. See the
-  [persisted telemetry guide](docs/guides/persisted-telemetry.md).
+  and prunes private release source maps. `testkit/telemetry.Flush` captures and persists
+  telemetry synchronously in tests without starting a kernel loop. Nothing changes when
+  the feature is off. See the [persisted telemetry guide](docs/guides/persisted-telemetry.md).
 
 ## v0.9.0 — 2026-11-06
 

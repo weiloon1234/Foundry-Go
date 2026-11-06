@@ -7,8 +7,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-// operationOwner includes reads, pruning and caller-transaction acknowledgements
-// in the engine's dependency barrier. The zero value admits work.
+// operationOwner includes reads, pruning, test flushes and caller-transaction
+// acknowledgements in the engine's dependency barrier. The zero value admits work.
 type operationOwner struct {
 	mu     sync.Mutex
 	active int

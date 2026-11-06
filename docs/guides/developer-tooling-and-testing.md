@@ -302,6 +302,7 @@ uses explicit helpers with production contracts:
 | Helper | Behavior |
 | --- | --- |
 | `testkit.NewClock` | Independent controllable application time; context deadlines still use real time. |
+| `testkit/telemetry.Flush` | Captures and persists pending telemetry synchronously without starting a kernel loop. Uses normal receipts, limits and incident evaluation; see [persisted telemetry testing](persisted-telemetry.md#testing). |
 | `testkit/storage.Local` | Real local disk in a test-owned temporary directory, closed by cleanup. |
 | `testkit/email.New` | Bounded memory driver used by the normal mailer; `AssertSent`, `AssertNotSent` and `AssertSentCount` take typed message predicates; assertions omit private message content. |
 | `testkit/jobs.New` | Independent memory backend and namespace, real declarations, typed capture/dispatch and deduplication. Workers run only when explicitly started. `AssertPushed`, `AssertNotPushed` and `AssertPushedCount` decode retained payloads of a typed definition and apply a typed predicate without printing payloads. |

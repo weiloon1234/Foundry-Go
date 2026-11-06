@@ -22,7 +22,7 @@ func TestTelemetryConsumerAPIInventory(t *testing.T) {
 		"Config": false, "Config.Validate": false,
 		"Migrations": false, "PruneResult": false,
 		"Dependencies": false, "Engine": false, "New": false, "KernelModule": false,
-		"Engine.Run": false, "Engine.Close": false, "Engine.Done": false,
+		"Engine.Run": false, "Engine.Close": false, "Engine.Done": false, "Engine.Flush": false,
 		"Engine.RecordBrowser": false, "Engine.Reader": false, "Engine.RunID": false, "Engine.Prune": false, "Engine.AcknowledgeIn": false,
 		"Reader": false, "Reader.Overview": false, "Reader.Traffic": false,
 		"Reader.Issue": false, "Reader.Issues": false, "Reader.Events": false, "Reader.Alerts": false,
@@ -66,5 +66,21 @@ func TestTelemetryConsumerAPIInventory(t *testing.T) {
 		if !found {
 			t.Errorf("telemetry API missing from source inventory: %s", name)
 		}
+	}
+}
+
+func TestTelemetryTestkitConsumerAPIInventory(t *testing.T) {
+	found := false
+	for _, declaration := range consumerAPIDeclarations(t) {
+		if declaration.Package != "testkit/telemetry" {
+			continue
+		}
+		if declaration.Name != "Flush" || declaration.Kind != "func" || !declaration.Documented {
+			t.Errorf("unexpected or undocumented telemetry testkit API: %+v", declaration)
+		}
+		found = true
+	}
+	if !found {
+		t.Fatal("telemetry testkit Flush missing from source inventory")
 	}
 }

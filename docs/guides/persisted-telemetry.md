@@ -389,6 +389,49 @@ Pruning can return partial progress with an error. Publishers must coordinate
 with pruning; metadata checks cannot make deletion atomic with outside writers.
 The application owns scheduling and recovery after a failed deletion.
 
+## Testing
+
+`App.Start` without a selected kernel starts no telemetry loop. After applying
+the migrations to an isolated test schema and starting the app, use
+`testkit/telemetry.Flush` to persist observations before asserting reads:
+
+```go
+import (
+    "github.com/weiloon1234/Foundry-Go/database/orm"
+    "github.com/weiloon1234/Foundry-Go/telemetry"
+    telemetrytest "github.com/weiloon1234/Foundry-Go/testkit/telemetry"
+)
+
+engine, err := app.Resources().Telemetry()
+if err != nil {
+    t.Fatal(err)
+}
+// Exercise browser admission and wait for any asynchronous error reporters.
+telemetrytest.Flush(t, engine)
+issues, err := engine.Reader().Issues(t.Context(), telemetry.IssueQuery{
+    Source: telemetry.SourceBrowser,
+    Page:   orm.Page(1, 10),
+})
+if err != nil {
+    t.Fatal(err)
+}
+if issues.Total != 1 {
+    t.Fatalf("browser issues = %d, want 1", issues.Total)
+}
+```
+
+The helper captures once and drains pending batches in FIFO order using the
+normal storage lock, receipts, limits and incident rules. It also works alongside
+a running loop and starts no loop of its own. Repeated flushes do not duplicate
+observation counts; each new capture still advances incident sustain/recovery
+evaluation. The helper does not wait for the recorder's asynchronous reporters.
+
+`Flush` fails the test on error or after `Close` begins. It uses the test context
+and the engine's `DrainTimeout`, with `FlushTimeout` still bounding each write.
+Callbacks retain ownership until they exit, even if they ignore the deadline;
+shutdown waits for admitted flushes before final capture and dependency cleanup.
+Applications use the testkit helper; the engine seam requires an internal token.
+
 ## Loop and shutdown ownership
 
 Empty `TelemetrySettings.Kernels` starts the periodic loop under HTTP, worker,
