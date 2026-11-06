@@ -22,7 +22,7 @@ import (
 // are shared by every entry in a directory; the entry sources depend on an
 // entry's own operations and embedded manifest, so each entry inlines them.
 var (
-	coreSources  = []string{"wire", "formats", "validation_messages", "validation", "http"}
+	coreSources  = []string{"wire", "formats", "validation_messages", "validation", "http", "fetch"}
 	entrySources = []string{"metadata", "descriptors", "forms"}
 )
 

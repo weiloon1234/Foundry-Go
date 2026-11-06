@@ -131,8 +131,8 @@ const transport = async request => {
   assert.ok(request.body === undefined || typeof request.body === "string" || request.body instanceof Blob || request.body instanceof ReadableStream);
   if (request.body instanceof Blob) assert.ok(request.body.size <= request.maxBodyBytes);
   assert.ok(request.redirect === "follow" || request.redirect === "manual");
-  const result = await fetch(request.url, { method: request.method, headers: request.headers, body: request.body, signal: request.signal, credentials: request.credentials, redirect: request.redirect, ...(request.duplex ? { duplex: request.duplex } : {}) });
-  return { status: result.status, headers: Object.fromEntries(result.headers), body: result.body ?? new Uint8Array(), close: async () => { closes++; if (result.body && !result.body.locked) await result.body.cancel(); } };
+  const result = await sdk.fetchTransport(request);
+  return { ...result, close: async () => { closes++; await result.close(); } };
 };
 const api = sdk.createClient(transport, { baseURL });
 const formRequest = { query: { name: "query" }, body: { name: "  Jane  ", "tags[]": ["first", "second"] } };

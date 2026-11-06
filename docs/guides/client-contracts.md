@@ -508,46 +508,54 @@ Applications upgrading from v0.2 to v0.3 should update TypeScript imports and ty
 
 `createClient(transport, options)` owns endpoint paths, query defaults/cardinality,
 JSON, URL-encoded form and multipart encoding, declared status checks, payload limits and errors.
-The transport owns network I/O, credentials and cancellation. Supply raw response
-bytes or text and a `close()` method. For example, a browser adapter can stream
-without predecoding JSON:
+The transport owns network I/O, credentials and cancellation. Use the optional
+`fetchTransport` exported by every generated client entry when Fetch and Web
+Streams are available:
 
 ```typescript
-import { createClient, type HTTPTransport } from "./generated/contracts_foundry.gen.js";
+import { createClient, fetchTransport } from "./generated/contracts_foundry.gen.js";
 
-const transport: HTTPTransport = async request => {
-  const response = await fetch(request.url, {
-    method: request.method, headers: request.headers,
-    ...(request.body === undefined ? {} : { body: request.body }),
-    ...(request.signal ? { signal: request.signal } : {}),
-    ...(request.duplex ? { duplex: request.duplex } : {}),
-    credentials: request.credentials, redirect: request.redirect,
-  } as RequestInit);
-  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-  async function* chunks() {
-    reader = response.body?.getReader();
-    if (!reader) return;
-    try {
-      for (;;) {
-        const next = await reader.read();
-        if (next.done) return;
-        yield next.value;
-      }
-    } finally {
-      try { await reader.cancel(); } finally { reader.releaseLock(); reader = undefined; }
+const api = createClient(fetchTransport, { baseURL: "https://api.example.com" });
+```
+
+`fetchTransport: HTTPTransport` forwards the method, headers, body, abort signal
+and credentials. It sets `duplex: "half"` only for a `ReadableStream` request
+body. Responses stream without buffering or decoding. Iteration cancels the
+reader and releases its lock on exit. `close()` cancels an active reader, or an
+unlocked response body before iteration; the iterator releases an active reader's
+lock when it exits. A response without a body yields no chunks.
+
+The adapter forwards `HTTPRequest.redirect` and falls back to `"error"` when it
+is absent. Generated clients currently declare `"follow"` for ordinary operations
+and `"manual"` for redirect operations, so those values override the fallback.
+When replacing an app adapter that always used `redirect: "error"`, account for
+this change. Retain a custom `HTTPTransport` if every request must reject
+redirects.
+
+Custom transport injection is unchanged: pass any `HTTPTransport` to
+`createClient` or `createPortalSession`. It supplies raw response bytes or text
+and a `close()` method under the same contract.
+
+The framework embeds `typescript/runtime/fetch.ts` with its other runtime sources.
+`typescript.Generate` and `contracts.export` publish it inside
+`<prefix>_runtime_foundry.gen.ts`; the full entry and surface entries re-export
+`fetchTransport`. `typescript.Render` includes it in its self-contained output.
+No additional generated file is required. Keep the entry and its runtime siblings
+together during publication.
+
+Application package exports remain application-owned. To replace a local
+`client/src/fetch-transport.ts` while preserving a package's `./fetch` import,
+delete the local adapter and point that package export at the compiled entry:
+
+```json
+{
+  "exports": {
+    "./fetch": {
+      "types": "./dist/generated/contracts_foundry.gen.d.ts",
+      "import": "./dist/generated/contracts_foundry.gen.js"
     }
   }
-  return {
-    status: response.status,
-    headers: Object.fromEntries(response.headers),
-    body: chunks(),
-    close: async () => {
-      if (reader) await reader.cancel();
-      else if (response.body && !response.body.locked) await response.body.cancel();
-    },
-  };
-};
-const api = createClient(transport, { baseURL: "https://api.example.com" });
+}
 ```
 
 Call options accept an `AbortSignal` and headers. Shared headers and credential

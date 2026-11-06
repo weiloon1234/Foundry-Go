@@ -6,6 +6,22 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## Standard Fetch transport
+
+Regenerate TypeScript clients to expose the additive `fetchTransport: HTTPTransport`
+export from the full entry and every surface entry. It ships in the existing core
+runtime module; generated filenames, publication ownership format and manifest
+version are unchanged. `typescript.Render` includes the same transport. Custom
+transport injection remains unchanged.
+
+Packages with an application-owned `./fetch` export can point it at the compiled
+generated entry and delete their local adapter. See
+[injected HTTP transport](guides/client-contracts.md#injected-http-transport).
+The shipped transport forwards a declared `HTTPRequest.redirect`, with `"error"`
+as the fallback when absent. Generated requests supply `"follow"` or `"manual"`;
+switching from a local adapter that hard-coded `"error"` therefore changes redirect
+handling. Stream bodies receive `duplex: "half"`; other bodies do not.
+
 ## Typed error details: manifest 9, v0.7.0
 
 Regenerate Go descriptors, manifest, OpenAPI and TypeScript together. Manifest 9

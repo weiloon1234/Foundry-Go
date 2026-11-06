@@ -53,7 +53,7 @@ func TestRenderOwnsStableTypedClientAndExactManifest(t *testing.T) {
 	if err != nil || !bytes.Equal(first, second) {
 		t.Fatal("unstable SDK", err)
 	}
-	for _, expected := range []string{`readonly "required_nullable":`, `readonly "optional"?:`, `"healthRead"`, `new JSONNumber`, `Promise<Operations["healthRead"]["response"]>`, `"consumer.Payload"`, `export function contractMetadata`, `export class ContractError`} {
+	for _, expected := range []string{`readonly "required_nullable":`, `readonly "optional"?:`, `"healthRead"`, `new JSONNumber`, `Promise<Operations["healthRead"]["response"]>`, `"consumer.Payload"`, `export function contractMetadata`, `export class ContractError`, `export const fetchTransport: HTTPTransport`} {
 		if !strings.Contains(string(first), expected) {
 			t.Fatal("missing generated contract", expected)
 		}

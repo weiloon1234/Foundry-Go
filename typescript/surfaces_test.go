@@ -99,6 +99,9 @@ func TestSurfacesPublishPortalEntriesBesideSharedRuntimeModules(t *testing.T) {
 		if !strings.Contains(entry, "\nimport { ") || !strings.Contains(entry, " createHTTPInvoker, ") || !strings.Contains(entry, core) || !strings.Contains(entry, `export const manifestJSON = "{\"version\":`) {
 			t.Fatal(name, "entry does not import the core module or embed compact JSON")
 		}
+		if !strings.Contains(entry, ", fetchTransport, ") {
+			t.Fatal(name, "entry does not export the Fetch transport")
+		}
 	}
 	// The admin portal has no channels, so it never loads the realtime module.
 	if !strings.Contains(admin, `"adminOrders"`) || strings.Contains(admin, `"webProfile"`) || strings.Contains(admin, realtime) || strings.Contains(admin, "createRealtime") {
@@ -132,6 +135,9 @@ func TestSurfacesPublishPortalEntriesBesideSharedRuntimeModules(t *testing.T) {
 		}
 	}
 	runtimeModule := read("api_runtime_foundry.gen.ts")
+	if !strings.Contains(runtimeModule, "export const fetchTransport: HTTPTransport") {
+		t.Fatal("runtime missing fetchTransport")
+	}
 	if !strings.Contains(runtimeModule, "export function newIdentity") || !strings.Contains(runtimeModule, "export function enumLabel") {
 		t.Fatal("runtime missing newIdentity or enumLabel")
 	}

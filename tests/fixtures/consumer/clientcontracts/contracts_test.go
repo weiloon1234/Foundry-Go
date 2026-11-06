@@ -230,7 +230,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "non_streaming.ts"), nonStreaming, 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"error-details.ts", "error-details.mjs", "types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs", "messages.ts", "messages.mjs", "auth.ts", "portal-session.mjs", "token-session.mjs", "browser-storage.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs"} {
+	for _, name := range []string{"error-details.ts", "error-details.mjs", "types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs", "messages.ts", "messages.mjs", "auth.ts", "portal-session.mjs", "token-session.mjs", "browser-storage.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs", "fetch-transport.ts", "fetch-transport.mjs"} {
 		data, err := os.ReadFile(filepath.Join("testdata", name))
 		if err != nil {
 			t.Fatal(err)
@@ -263,6 +263,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 		t.Logf("%s: %s", name, strings.TrimSpace(string(output)))
 	}
 	run("strict TypeScript and negative contracts", compiler, "--project", filepath.Join(dir, "tsconfig.json"))
+	run("Fetch transport runtime behavior", filepath.Join(dir, "fetch-transport.mjs"), filepath.Join(dir, "dist", "contracts_foundry.gen.js"), filepath.Join(dir, "dist", "legacy.js"), filepath.Join(dir, "dist", "contracts_browser_foundry.gen.js"))
 	for _, name := range []string{"token-session", "cookie-refresh", "authenticated-transport", "portal-session"} {
 		run(name+" runtime behavior", filepath.Join(dir, name+".mjs"), filepath.Join(dir, "dist", "contracts_runtime_auth_foundry.gen.js"), filepath.Join(dir, "dist", "contracts_foundry.gen.js"), filepath.Join(dir, "dist", "contracts_browser_foundry.gen.js"))
 	}
