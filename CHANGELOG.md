@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- Added: Generated TypeScript clients export `fetchTransport`, a standard streaming
+  Fetch transport. It forwards abort signals, credentials and each request's declared
+  redirect mode, sets `duplex: "half"` only for streamed bodies, and releases streamed
+  responses on close or cancel. Apps that copied an adapter forcing `redirect: "error"`
+  should switch: redirect operations then return their `Location` as documented.
+- Added: `config.Inputs.EnvFile` loads one bounded dotenv file (regular file, at most
+  1 MiB, UTF-8 without NUL, literal quoting, no interpolation or `export`, duplicate keys
+  rejected). The process environment wins per variable, `NAME`/`NAME_FILE` conflicts are
+  checked across both layers, and provenance names the file and line, never the value.
+- Added: `validation.FileKinds` checks that an upload's extension and detected content
+  match one allowed typed kind (PDF, text, CSV, ZIP container; ZIP detection is not
+  Office validation). `imagingvalidation.Kinds` and `KindsWithEngine` check image format
+  and dimensions from one bounded inspection, keeping translated messages and browser
+  extension metadata.
+- Added: `phone.Parse` normalises a number for a typed country code to canonical E.164
+  with a 100-byte input limit and an explicit extension policy; `validation/phone`
+  provides translated rules on the same parser. New dependency
+  `github.com/nyaruka/phonenumbers/v2`, compiled only by importers of `phone`.
+- Added: `storage/http.ResponseError` maps storage read failures for applications that
+  read bytes themselves inside a deferred `http.StreamFrom` or `http.DownloadFrom` source.
+- Added: `testkit/attachments.RemoveBackingObject` deletes only a file's stored original
+  object, so tests can cover a missing object without raw SQL or exposing storage pins.
+- Added: `testkit/redis.Config` reads the optional `FOUNDRY_TEST_REDIS_USER` and
+  `FOUNDRY_TEST_REDIS_PASSWORD`, each independently, into the Redis configuration.
+- Added: `decimal.Decimal.Int64` returns the exact int64 value and fails for a non-zero
+  fraction or an out-of-range value.
+- Fixed: PostgreSQL test helpers no longer log "Retained PostgreSQL namespace" when they
+  create a schema that cleanup drops after a passing test.
 - Added: Job workers log once when maintenance holds reservations and once when
   reservations resume, independently of failure logging.
 - Documented: Worker failure backoff, delays across subscribed queues and Redis
