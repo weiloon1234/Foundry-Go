@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.9.0 — 2026-11-06
 
 - Added: `http.DefineSPARuntime` injects typed, contract-encoded runtime data into SPA
   documents, for built documents and, through `SPARuntime.WrapProxy`, an application's

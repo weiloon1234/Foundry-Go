@@ -8,6 +8,19 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## SPA runtime data — v0.9.0, 2026-11-06
+
+Status: **implemented; `make verify` and race tests on `http` passed, an independent review's three
+development-proxy findings were fixed, and CI gates this tag**. Starter, ooo and Boss Club each rewrote SPA
+HTML responses in their own middleware to inject public runtime data; the framework now owns that.
+- `http.DefineSPARuntime` takes a contract codec and a loader, and `SPAConfig.Runtime` injects the encoded
+  value into built SPA documents with HTML-safe escaping, HEAD, conditional and range handling,
+  request-specific `no-store`, HTML and JSON bounds, safe loader failures and the CSP nonce.
+- `SPARuntime.WrapProxy` applies the same injection to an application's existing development reverse
+  proxy, with a bounded buffer, concurrency limit, body cleanup and rejection of late trailers.
+- `SPARuntimeConfig.StyleNonceCarrier` optionally adds a nonce-carrying style element.
+Open: Starter, ooo and Boss Club haven't adopted this release or deleted their middleware yet.
+
 ## Capabilities the applications used to copy — v0.8.0, 2026-11-06
 
 Status: **implemented; `make verify` passed in segments with PostgreSQL and Redis, the real TypeScript
