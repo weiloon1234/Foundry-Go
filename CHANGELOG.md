@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Added: `http.DefineSPARuntime` injects typed, contract-encoded runtime data into SPA
+  documents, for built documents and, through `SPARuntime.WrapProxy`, an application's
+  existing development reverse proxy. The framework owns HTML-safe escaping, HEAD,
+  conditional and range handling, request-specific `no-store`, HTML and JSON bounds,
+  safe loader failures and the CSP nonce, with an optional nonce-carrying style element.
+  Applications can delete their response-rewriting middleware.
+
 ## v0.8.0 — 2026-11-06
 
 - Added: Generated TypeScript clients export `fetchTransport`, a standard streaming
