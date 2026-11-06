@@ -1190,13 +1190,13 @@ export { checkAbort, createHTTPInvoker, matchesOperationError, operationErrorRes
 export type { MultipartPart, Operation, Payload, RealtimeChannel, RealtimeEvent, RuntimeDocument, URLParameter };
 
 /**
- * Streaming Fetch transport for createClient and createPortalSession.
- * The client owns decoding and byte limits; Fetch owns networking and cancellation.
- * Declared redirects are forwarded, with "error" as the fallback. Requires Fetch
- * and Web Streams support; no network resources are acquired until called.
+ * fetchTransport streams responses for createClient and createPortalSession.
+ * the client owns decoding and byte limits; fetch owns networking and cancellation.
+ * declared redirects are forwarded, with "error" as the fallback. requires fetch
+ * and web streams support; no network resources are acquired until called.
  */
 export const fetchTransport: HTTPTransport = async request => {
-  const init: RequestInit & { duplex?: "half" } = {
+  const response = await fetch(request.url, {
     method: request.method,
     headers: request.headers,
     ...(request.body === undefined ? {} : { body: request.body }),
@@ -1204,9 +1204,8 @@ export const fetchTransport: HTTPTransport = async request => {
     ...(request.body instanceof ReadableStream ? { duplex: "half" } : {}),
     credentials: request.credentials,
     redirect: request.redirect ?? "error",
-  };
-  const response = await fetch(request.url, init);
-  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  });
+  let reader: (NonNullable<typeof response.body>["getReader"] extends () => infer T ? T : never) | undefined;
   async function* chunks(): AsyncIterable<Uint8Array> {
     reader = response.body?.getReader();
     if (!reader) return;
