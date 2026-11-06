@@ -142,7 +142,7 @@ func PrepareNamespace(t testing.TB) (name string, create func(*database.DB)) {
 			t.Fatalf("create PostgreSQL test namespace: %v", err)
 		}
 		created = true
-		t.Logf("Retained PostgreSQL namespace: %s", name)
+		t.Logf("PostgreSQL test namespace: %s (dropped after a passing test; kept on failure or with %s=1)", name, KeepSchemasVariable)
 	}
 }
 

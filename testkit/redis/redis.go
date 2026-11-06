@@ -10,15 +10,21 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/redis"
+	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
 const (
 	AddressVariable  = "FOUNDRY_TEST_REDIS_ADDR"
 	RequiredVariable = "FOUNDRY_TEST_REDIS_REQUIRED"
+	UserVariable     = "FOUNDRY_TEST_REDIS_USER"
+	PasswordVariable = "FOUNDRY_TEST_REDIS_PASSWORD"
 )
 
 // Config reads the explicitly opted-in plaintext endpoint (host:port) over the
-// default client limits. Ordinary test runs skip without it; the required
+// default client limits, plus the optional UserVariable and PasswordVariable
+// credentials. Each is read independently: a password alone authenticates
+// Redis's default user. The password is kept in a secret-bearing field and is
+// never logged. Ordinary test runs skip without the address; the required
 // acceptance command fails if it is missing.
 func Config(t testing.TB) redis.Config {
 	t.Helper()
@@ -39,5 +45,6 @@ func Config(t testing.TB) redis.Config {
 	}
 	c := redis.DefaultConfig()
 	c.Host, c.Port, c.TLS = host, uint16(number), redis.DisableTLS
+	c.User, c.Password = os.Getenv(UserVariable), secret.New(os.Getenv(PasswordVariable))
 	return c
 }

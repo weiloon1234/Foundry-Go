@@ -64,12 +64,33 @@ func invalid() error {
 	return safeerror.NewFault(fault.Invalid, "invalid decimal syntax or digit bound")
 }
 
-// FromInt64 converts an integer exactly, without a parse failure path.
+func notInt64() error {
+	return safeerror.NewFault(fault.Invalid, "decimal is not an exact int64 value")
+}
+
+// FromInt64 converts an integer exactly, without a parse failure path. Int64
+// is its inverse.
 func FromInt64(value int64) Decimal {
 	if value == 0 {
 		return Decimal{}
 	}
 	return Decimal{text: strconv.FormatInt(value, 10)}
+}
+
+// Int64 returns the decimal's exact int64 value, or a fault for a non-zero
+// fractional part or a value outside the int64 range. Trailing fractional
+// zeros are never part of a canonical value, so an integer written with scale
+// (for example 12.00, which canonically equals 12) is exactly an integer and
+// is accepted.
+func (d Decimal) Int64() (int64, error) {
+	if d.IsZero() {
+		return 0, nil
+	}
+	value, err := strconv.ParseInt(d.text, 10, 64)
+	if err != nil {
+		return 0, notInt64()
+	}
+	return value, nil
 }
 
 // Scaled returns coefficient × 10^-scale exactly, for example Scaled(1234, 2)

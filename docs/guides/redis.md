@@ -309,10 +309,12 @@ FOUNDRY_TEST_REDIS_ADDR=127.0.0.1:6379 make test-redis
 ```
 
 Optional `FOUNDRY_TEST_REDIS_USER` and `FOUNDRY_TEST_REDIS_PASSWORD` configure the test
-connection. Do not put credentials in tracked files. Without an address, ordinary
-test runs skip the external-service cases; the required flag makes that an error.
-Tests use unique Foundry-Go namespaces and delete only their exact owned keys.
-Application and consumer tests read the same endpoint with
+connection; each is read on its own, so a password alone authenticates the default
+user. Do not put credentials in
+tracked files. Without an address, ordinary test runs skip the external-service cases;
+the required flag makes that an error. Tests use unique Foundry-Go namespaces and
+delete only their exact owned keys. Application and consumer tests read the same
+endpoint and credentials with
 `testkit/redis.Config(t)`, a plaintext `redis.Config` that skips or fails under
 the same variables; `infrastructure.RedisSettingsFromConfig` turns it into
 connection settings.

@@ -70,7 +70,7 @@ func TestNamespaceCleanup(t *testing.T) {
 				t.Fatal(err)
 			}
 			schema := string(data)
-			if !strings.Contains(string(output), "Retained PostgreSQL namespace: "+schema) {
+			if !strings.Contains(string(output), "PostgreSQL test namespace: "+schema+" (dropped after a passing test") {
 				t.Fatalf("namespace inspection log missing:\n%s", output)
 			}
 			if (mode == "locked" || strings.HasPrefix(mode, "outside_")) && !strings.Contains(string(output), "could not drop PostgreSQL test namespace") {
@@ -127,7 +127,7 @@ func TestNamespaceCleanupChild(t *testing.T) {
 		if mode == "prepared" {
 			create(pgtest.Open(t))
 		}
-		t.Logf("Retained PostgreSQL namespace: %s", schema)
+		t.Logf("PostgreSQL test namespace: %s (dropped after a passing test; kept on failure or with %s=1)", schema, pgtest.KeepSchemasVariable)
 	} else {
 		scope := pgtest.Isolate(t)
 		schema = scope.Schema()

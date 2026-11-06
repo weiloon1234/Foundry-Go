@@ -3,6 +3,7 @@ package decimal_test
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"math/big"
 	"strings"
 	"testing"
@@ -112,4 +113,36 @@ func FuzzExactArithmetic(f *testing.F) {
 			}
 		}
 	})
+}
+
+func TestInt64ExactConversion(t *testing.T) {
+	for _, test := range []struct {
+		input string
+		want  int64
+	}{
+		{input: "0"},
+		{input: "0.000"},
+		{input: "-0"},
+		{input: "12.00", want: 12},
+		{input: "-42", want: -42},
+		{input: "-42.000", want: -42},
+		{input: "9223372036854775807", want: math.MaxInt64},
+		{input: "-9223372036854775808", want: math.MinInt64},
+	} {
+		value := parse(t, test.input)
+		got, err := value.Int64()
+		if err != nil || got != test.want {
+			t.Fatalf("Int64(%s) returned (%d, %v), want (%d, nil)", value.String(), got, err, test.want)
+		}
+	}
+	for _, input := range []string{
+		"12.5", "0.001", "-0.5",
+		"9223372036854775808", "-9223372036854775809",
+		strings.Repeat("9", decimal.MaxDigits),
+	} {
+		value := parse(t, input)
+		if _, err := value.Int64(); !errors.Is(err, fault.Invalid) {
+			t.Fatalf("Int64(%s) accepted a non-integer or out-of-range value", value.String())
+		}
+	}
 }
