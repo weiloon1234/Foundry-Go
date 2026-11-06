@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Added: opt-in persisted operations telemetry. The `telemetry` package collects bounded
+  HTTP, security, backend-failure, runtime and browser observations into immutable batches
+  and stores them in framework-owned `foundry_telemetry_*` PostgreSQL tables
+  (`telemetry.Migrations()`, origin `foundry.telemetry`). Flush receipts make retries after
+  an unknown commit safe without making collection durable; loss stays visible as counters.
+  It adds six typed incident rules with episodes, `Engine.AcknowledgeIn` for an
+  application-owned attribution in the caller's transaction, bounded retention-aware reads
+  (`Reader.Overview`, `Traffic`, `Issue`, `Issues`, `Events`, `Alerts`),
+  `Engine.RecordBrowser`, and configured assembly through
+  `application.FeatureSettings.Telemetry`. The optional `telemetry/sourcemap` package reads
+  and prunes private release source maps. Nothing changes when the feature is off. See the
+  [persisted telemetry guide](docs/guides/persisted-telemetry.md).
+
 ## v0.9.0 — 2026-11-06
 
 - Added: `http.DefineSPARuntime` injects typed, contract-encoded runtime data into SPA
