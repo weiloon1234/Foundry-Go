@@ -9,6 +9,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/clock"
 	"github.com/weiloon1234/Foundry-Go/config"
+	"github.com/weiloon1234/Foundry-Go/diagnostics"
 	"github.com/weiloon1234/Foundry-Go/extensions/slots"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
@@ -17,6 +18,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/schedule"
+	"github.com/weiloon1234/Foundry-Go/telemetry"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
@@ -27,24 +29,25 @@ type Routes func(Services) ([]http.RouteRegistration, error)
 // Builder collects configuration and declarations for a single application build.
 type Builder struct{ state *builderState }
 type builderState struct {
-	mu         sync.Mutex
-	settings   Settings
-	options    options
-	routes     []Routes
-	spas       []spaDeclaration
-	middleware []http.Middleware
-	observers  []http.RequestObserver
-	providers  []foundation.Provider
-	plugins    []foundation.Plugin
-	jobs       []JobDeclaration
-	events     []EventDeclaration
-	schedules  []Schedules
-	realtime   Realtime
-	features   []Features
-	models     []slots.Declaration
-	migrations []infrastructure.MigrationTarget
-	err        error
-	built      bool
+	mu                 sync.Mutex
+	settings           Settings
+	options            options
+	routes             []Routes
+	spas               []spaDeclaration
+	middleware         []http.Middleware
+	observers          []http.RequestObserver
+	providers          []foundation.Provider
+	plugins            []foundation.Plugin
+	jobs               []JobDeclaration
+	events             []EventDeclaration
+	schedules          []Schedules
+	realtime           Realtime
+	features           []Features
+	models             []slots.Declaration
+	migrations         []infrastructure.MigrationTarget
+	telemetryReadiness foundation.Key[*diagnostics.Runtime]
+	err                error
+	built              bool
 }
 
 // New snapshots configuration. Build returns any invalid settings/option error.
@@ -168,6 +171,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	settings, configured, routes, spas, middleware, observers, providers, plugins, buildErr := b.state.settings, b.state.options, slices.Clone(b.state.routes), slices.Clone(b.state.spas), slices.Clone(b.state.middleware), slices.Clone(b.state.observers), slices.Clone(b.state.providers), slices.Clone(b.state.plugins), b.state.err
 	jobDeclarations, eventDeclarations, schedules, realtime, features, models := slices.Clone(b.state.jobs), slices.Clone(b.state.events), slices.Clone(b.state.schedules), b.state.realtime, slices.Clone(b.state.features), slices.Clone(b.state.models)
 	domainMigrations := cloneMigrations(b.state.migrations)
+	readiness := b.state.telemetryReadiness
 	b.state.mu.Unlock()
 	if buildErr != nil {
 		return nil, buildErr
@@ -246,6 +250,17 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 		return nil, err
 	}
 	options = append(options, foundation.WithMaintenance(gate))
+	var collector *telemetry.Collector
+	if s.Features.Telemetry.Enabled {
+		collector, err = telemetry.NewCollector(s.Features.Telemetry.Collector, configured.clock)
+		if err != nil {
+			return nil, err
+		}
+		configured.reporters = append(slices.Clone(configured.reporters), collector.Report)
+		if s.HTTP.Enabled {
+			observers = append(observers, collector)
+		}
+	}
 	recorder, err := prepareObservation(s.Features.Observability, configured, logger, gate)
 	if err != nil {
 		return nil, err
@@ -283,8 +298,11 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if mount := realtimeRoutes(s); mount != nil {
 		routes = append(routes, mount)
 	}
-	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, stickyReadsConfigured(s.Services.Database), routes, spas, middleware, observers)
+	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, stickyReadsConfigured(s.Services.Database), routes, spas, middleware, observers, collector)
 	registerMetricsCollectors(builder, recorder, channels, s.Realtime.Enabled)
+	if err := registerTelemetry(ctx, builder, s.Features.Telemetry, collector, readiness); err != nil {
+		return nil, err
+	}
 	app, err := builder.Build(ctx)
 	if err != nil {
 		return nil, err

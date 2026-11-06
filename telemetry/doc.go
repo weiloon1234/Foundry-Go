@@ -4,6 +4,11 @@
 // the collector itself as an HTTP request observer. SetRoutes may be called once,
 // before observation begins, with the assembled router's declared metadata.
 //
+// New adds an optional Engine for receipt-backed persistence, bounded reads and
+// incident episodes. Apply Migrations explicitly in its selected schema, stop
+// producers before Close, and retain borrowed dependencies until Done closes.
+// Configured application assembly registers the reporter and owns this ordering.
+//
 // Collection performs no persistence. Browser reports are untrusted; applications
 // still own authentication, authorization, CSRF, body limits and rate limiting.
 // Loss counters are operational estimates, not an audit of unique lost requests:

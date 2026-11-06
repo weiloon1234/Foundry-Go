@@ -81,7 +81,7 @@ func (s *storage) prune(ctx context.Context) (PruneResult, error) {
 		}
 		return s.pruneRuns(attempt, tx, now, &result)
 	})
-	if err != nil {
+	if err != nil && !storageInterrupted(ctx, err) {
 		s.collector.mu.Lock()
 		s.collector.failures = saturatingAdd(s.collector.failures, 1)
 		s.collector.mu.Unlock()

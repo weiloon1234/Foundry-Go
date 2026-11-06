@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/notifications"
 	"github.com/weiloon1234/Foundry-Go/outbox"
 	"github.com/weiloon1234/Foundry-Go/outbox/publisher"
+	"github.com/weiloon1234/Foundry-Go/telemetry"
 	"time"
 )
 
@@ -58,6 +59,20 @@ type AuditSettings struct {
 	Database database.ConnectionName
 	Schema   string
 	Config   audit.Config
+}
+
+// TelemetrySettings selects persisted process telemetry. Disabled telemetry
+// creates no collector, reporter, observer, polling task or migration target.
+// Empty Database selects the default connection; empty Schema selects its
+// primary schema, or public for an unscoped connection. Empty Kernels selects
+// HTTP, worker and scheduler. Alert thresholds remain explicit in Config.
+type TelemetrySettings struct {
+	Enabled   bool
+	Database  database.ConnectionName
+	Schema    string
+	Kernels   []foundation.KernelKind `config:",json"`
+	Collector telemetry.CollectorConfig
+	Config    telemetry.Config
 }
 
 // AttachmentSettings configures the attachment feature.
@@ -147,6 +162,7 @@ type FeatureSettings struct {
 	Reports          ReportSettings
 	Health           HealthSettings
 	Observability    ObservabilitySettings
+	Telemetry        TelemetrySettings
 	// Maintenance schedules framework housekeeping (features.maintenance).
 	Maintenance MaintenanceScheduleSettings
 }

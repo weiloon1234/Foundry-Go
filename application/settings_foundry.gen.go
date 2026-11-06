@@ -21,12 +21,14 @@ import (
 	jobs "github.com/weiloon1234/Foundry-Go/jobs"
 	logging "github.com/weiloon1234/Foundry-Go/logging"
 	maintenance "github.com/weiloon1234/Foundry-Go/maintenance"
+	observability "github.com/weiloon1234/Foundry-Go/observability"
 	outbox "github.com/weiloon1234/Foundry-Go/outbox"
 	pubsub "github.com/weiloon1234/Foundry-Go/pubsub"
 	redis "github.com/weiloon1234/Foundry-Go/redis"
 	schedule "github.com/weiloon1234/Foundry-Go/schedule"
 	secret "github.com/weiloon1234/Foundry-Go/secret"
 	storage "github.com/weiloon1234/Foundry-Go/storage"
+	telemetry "github.com/weiloon1234/Foundry-Go/telemetry"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	websocket "github.com/weiloon1234/Foundry-Go/websocket"
 	netip "net/netip"
@@ -654,6 +656,7 @@ type SettingsFeaturesConfigKeySet struct {
 	Reports          SettingsFeaturesReportsConfigKeySet
 	Health           SettingsFeaturesHealthConfigKeySet
 	Observability    SettingsFeaturesObservabilityConfigKeySet
+	Telemetry        SettingsFeaturesTelemetryConfigKeySet
 	//
 	// Maintenance schedules framework housekeeping (features.maintenance).
 	//
@@ -1188,6 +1191,142 @@ type SettingsFeaturesObservabilityErrorLogConfigKeySet struct {
 	DontReportFaults config.Key[Settings, []foundryfault.Code]
 	// DontReportStatuses selects features.observability.error_log.dont_report_statuses. Set accepts []int.
 	DontReportStatuses config.Key[Settings, []int]
+}
+
+// SettingsFeaturesTelemetryConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsFeaturesTelemetryConfigKeySet struct {
+	// Enabled selects features.telemetry.enabled. Set accepts bool.
+	Enabled config.Key[Settings, bool]
+	// Database selects features.telemetry.database. Set accepts database.ConnectionName.
+	Database config.Key[Settings, database.ConnectionName]
+	// Schema selects features.telemetry.schema. Set accepts string.
+	Schema config.Key[Settings, string]
+	// Kernels selects features.telemetry.kernels. Set accepts []foundation.KernelKind.
+	Kernels   config.Key[Settings, []foundation.KernelKind]
+	Collector SettingsFeaturesTelemetryCollectorConfigKeySet
+	Config    SettingsFeaturesTelemetryConfigConfigKeySet
+}
+
+// SettingsFeaturesTelemetryCollectorConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsFeaturesTelemetryCollectorConfigKeySet struct {
+	// Instance selects features.telemetry.collector.instance. Set accepts telemetry.Instance.
+	Instance config.Key[Settings, telemetry.Instance]
+	// Release selects features.telemetry.collector.release. Set accepts telemetry.Release.
+	Release config.Key[Settings, telemetry.Release]
+	// MaxSeries selects features.telemetry.collector.max_series. Set accepts int.
+	MaxSeries config.Key[Settings, int]
+	// MaxEvents selects features.telemetry.collector.max_events. Set accepts int.
+	MaxEvents config.Key[Settings, int]
+	// MaxPendingBatches selects features.telemetry.collector.max_pending_batches. Set accepts int.
+	MaxPendingBatches config.Key[Settings, int]
+	// PendingRetention selects features.telemetry.collector.pending_retention. Set accepts time.Duration.
+	PendingRetention config.Key[Settings, time.Duration]
+	Routes           SettingsFeaturesTelemetryCollectorRoutesConfigKeySet
+	Browser          SettingsFeaturesTelemetryCollectorBrowserConfigKeySet
+}
+
+// SettingsFeaturesTelemetryCollectorRoutesConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsFeaturesTelemetryCollectorRoutesConfigKeySet struct {
+	// ExcludedRoutes selects features.telemetry.collector.routes.excluded_routes. Set accepts []http.RouteID.
+	ExcludedRoutes config.Key[Settings, []http.RouteID]
+	// ExcludedPrefixes selects features.telemetry.collector.routes.excluded_prefixes. Set accepts []string.
+	ExcludedPrefixes config.Key[Settings, []string]
+	// ExcludedOperations selects features.telemetry.collector.routes.excluded_operations. Set accepts []observability.Name.
+	ExcludedOperations config.Key[Settings, []observability.Name]
+	// ExcludedOperationPrefixes selects features.telemetry.collector.routes.excluded_operation_prefixes. Set accepts []string.
+	ExcludedOperationPrefixes config.Key[Settings, []string]
+}
+
+// SettingsFeaturesTelemetryCollectorBrowserConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsFeaturesTelemetryCollectorBrowserConfigKeySet struct {
+	// Enabled selects features.telemetry.collector.browser.enabled. Set accepts bool.
+	Enabled config.Key[Settings, bool]
+	// Portals selects features.telemetry.collector.browser.portals. Set accepts []telemetry.Portal.
+	Portals config.Key[Settings, []telemetry.Portal]
+}
+
+// SettingsFeaturesTelemetryConfigConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsFeaturesTelemetryConfigConfigKeySet struct {
+	// FlushInterval selects features.telemetry.config.flush_interval. Set accepts time.Duration.
+	FlushInterval config.Key[Settings, time.Duration]
+	// FlushTimeout selects features.telemetry.config.flush_timeout. Set accepts time.Duration.
+	FlushTimeout config.Key[Settings, time.Duration]
+	// DrainTimeout selects features.telemetry.config.drain_timeout. Set accepts time.Duration.
+	DrainTimeout config.Key[Settings, time.Duration]
+	Retention    SettingsFeaturesTelemetryConfigRetentionConfigKeySet
+	Alerts       SettingsFeaturesTelemetryConfigAlertsConfigKeySet
+	Reads        SettingsFeaturesTelemetryConfigReadsConfigKeySet
+}
+
+// SettingsFeaturesTelemetryConfigRetentionConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsFeaturesTelemetryConfigRetentionConfigKeySet struct {
+	// Minute selects features.telemetry.config.retention.minute. Set accepts time.Duration.
+	Minute config.Key[Settings, time.Duration]
+	// Hour selects features.telemetry.config.retention.hour. Set accepts time.Duration.
+	Hour config.Key[Settings, time.Duration]
+	// Issue selects features.telemetry.config.retention.issue. Set accepts time.Duration.
+	Issue config.Key[Settings, time.Duration]
+	// Security selects features.telemetry.config.retention.security. Set accepts time.Duration.
+	Security config.Key[Settings, time.Duration]
+	// MaxRuns selects features.telemetry.config.retention.max_runs. Set accepts int.
+	MaxRuns config.Key[Settings, int]
+	// MaxReceiptRows selects features.telemetry.config.retention.max_receipt_rows. Set accepts int.
+	MaxReceiptRows config.Key[Settings, int]
+	// MaxMetricRows selects features.telemetry.config.retention.max_metric_rows. Set accepts int.
+	MaxMetricRows config.Key[Settings, int]
+	// MaxIssueRows selects features.telemetry.config.retention.max_issue_rows. Set accepts int.
+	MaxIssueRows config.Key[Settings, int]
+	// MaxEventRows selects features.telemetry.config.retention.max_event_rows. Set accepts int.
+	MaxEventRows config.Key[Settings, int]
+	// PruneInterval selects features.telemetry.config.retention.prune_interval. Set accepts time.Duration.
+	PruneInterval config.Key[Settings, time.Duration]
+}
+
+// SettingsFeaturesTelemetryConfigAlertsConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsFeaturesTelemetryConfigAlertsConfigKeySet struct {
+	// Enabled selects features.telemetry.config.alerts.enabled. Set accepts bool.
+	Enabled config.Key[Settings, bool]
+	// Rules selects features.telemetry.config.alerts.rules. Set accepts []telemetry.Rule.
+	Rules      config.Key[Settings, []telemetry.Rule]
+	Thresholds SettingsFeaturesTelemetryConfigAlertsThresholdsConfigKeySet
+	// SustainCaptures selects features.telemetry.config.alerts.sustain_captures. Set accepts int.
+	SustainCaptures config.Key[Settings, int]
+	// RecoverCaptures selects features.telemetry.config.alerts.recover_captures. Set accepts int.
+	RecoverCaptures config.Key[Settings, int]
+}
+
+// SettingsFeaturesTelemetryConfigAlertsThresholdsConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsFeaturesTelemetryConfigAlertsThresholdsConfigKeySet struct {
+	// Latency selects features.telemetry.config.alerts.thresholds.latency. Set accepts time.Duration.
+	Latency config.Key[Settings, time.Duration]
+	// ErrorRatio selects features.telemetry.config.alerts.thresholds.error_ratio. Set accepts float64.
+	ErrorRatio config.Key[Settings, float64]
+	// PoolUsageRatio selects features.telemetry.config.alerts.thresholds.pool_usage_ratio. Set accepts float64.
+	PoolUsageRatio config.Key[Settings, float64]
+	// MinimumRequests selects features.telemetry.config.alerts.thresholds.minimum_requests. Set accepts int.
+	MinimumRequests config.Key[Settings, int]
+	// AuthFailures selects features.telemetry.config.alerts.thresholds.auth_failures. Set accepts int.
+	AuthFailures config.Key[Settings, int]
+}
+
+// SettingsFeaturesTelemetryConfigReadsConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsFeaturesTelemetryConfigReadsConfigKeySet struct {
+	// MaxConcurrent selects features.telemetry.config.reads.max_concurrent. Set accepts int.
+	MaxConcurrent config.Key[Settings, int]
+	// MaxOverviewRuns selects features.telemetry.config.reads.max_overview_runs. Set accepts int.
+	MaxOverviewRuns config.Key[Settings, int]
+	// MaxOverviewAlerts selects features.telemetry.config.reads.max_overview_alerts. Set accepts int.
+	MaxOverviewAlerts config.Key[Settings, int]
+	// MaxTrafficRows selects features.telemetry.config.reads.max_traffic_rows. Set accepts int.
+	MaxTrafficRows config.Key[Settings, int]
+	// MaxTrafficGroups selects features.telemetry.config.reads.max_traffic_groups. Set accepts int.
+	MaxTrafficGroups config.Key[Settings, int]
+	// MaxPage selects features.telemetry.config.reads.max_page. Set accepts int.
+	MaxPage config.Key[Settings, int]
+	// MaxPageSize selects features.telemetry.config.reads.max_page_size. Set accepts int.
+	MaxPageSize config.Key[Settings, int]
+	// Timeout selects features.telemetry.config.reads.timeout. Set accepts time.Duration.
+	Timeout config.Key[Settings, time.Duration]
 }
 
 // SettingsFeaturesMaintenanceConfigKeySet exposes compiler-checked configuration overrides.
@@ -2114,6 +2253,94 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 					DontReportStatuses: config.JSON[Settings, []int]("features.observability.error_log.dont_report_statuses", func(settings *Settings) *[]int { return &settings.Features.Observability.ErrorLog.DontReportStatuses }),
 				},
 			},
+			Telemetry: SettingsFeaturesTelemetryConfigKeySet{
+				Enabled:  config.Scalar[Settings, bool]("features.telemetry.enabled", func(settings *Settings) *bool { return &settings.Features.Telemetry.Enabled }),
+				Database: config.Scalar[Settings, database.ConnectionName]("features.telemetry.database", func(settings *Settings) *database.ConnectionName { return &settings.Features.Telemetry.Database }),
+				Schema:   config.Scalar[Settings, string]("features.telemetry.schema", func(settings *Settings) *string { return &settings.Features.Telemetry.Schema }),
+				Kernels:  config.JSON[Settings, []foundation.KernelKind]("features.telemetry.kernels", func(settings *Settings) *[]foundation.KernelKind { return &settings.Features.Telemetry.Kernels }),
+				Collector: SettingsFeaturesTelemetryCollectorConfigKeySet{
+					Instance:          config.Scalar[Settings, telemetry.Instance]("features.telemetry.collector.instance", func(settings *Settings) *telemetry.Instance { return &settings.Features.Telemetry.Collector.Instance }),
+					Release:           config.Scalar[Settings, telemetry.Release]("features.telemetry.collector.release", func(settings *Settings) *telemetry.Release { return &settings.Features.Telemetry.Collector.Release }),
+					MaxSeries:         config.Scalar[Settings, int]("features.telemetry.collector.max_series", func(settings *Settings) *int { return &settings.Features.Telemetry.Collector.MaxSeries }),
+					MaxEvents:         config.Scalar[Settings, int]("features.telemetry.collector.max_events", func(settings *Settings) *int { return &settings.Features.Telemetry.Collector.MaxEvents }),
+					MaxPendingBatches: config.Scalar[Settings, int]("features.telemetry.collector.max_pending_batches", func(settings *Settings) *int { return &settings.Features.Telemetry.Collector.MaxPendingBatches }),
+					PendingRetention: config.Duration[Settings]("features.telemetry.collector.pending_retention", func(settings *Settings) *time.Duration {
+						return &settings.Features.Telemetry.Collector.PendingRetention
+					}),
+					Routes: SettingsFeaturesTelemetryCollectorRoutesConfigKeySet{
+						ExcludedRoutes: config.JSON[Settings, []http.RouteID]("features.telemetry.collector.routes.excluded_routes", func(settings *Settings) *[]http.RouteID {
+							return &settings.Features.Telemetry.Collector.Routes.ExcludedRoutes
+						}),
+						ExcludedPrefixes: config.JSON[Settings, []string]("features.telemetry.collector.routes.excluded_prefixes", func(settings *Settings) *[]string {
+							return &settings.Features.Telemetry.Collector.Routes.ExcludedPrefixes
+						}),
+						ExcludedOperations: config.JSON[Settings, []observability.Name]("features.telemetry.collector.routes.excluded_operations", func(settings *Settings) *[]observability.Name {
+							return &settings.Features.Telemetry.Collector.Routes.ExcludedOperations
+						}),
+						ExcludedOperationPrefixes: config.JSON[Settings, []string]("features.telemetry.collector.routes.excluded_operation_prefixes", func(settings *Settings) *[]string {
+							return &settings.Features.Telemetry.Collector.Routes.ExcludedOperationPrefixes
+						}),
+					},
+					Browser: SettingsFeaturesTelemetryCollectorBrowserConfigKeySet{
+						Enabled: config.Scalar[Settings, bool]("features.telemetry.collector.browser.enabled", func(settings *Settings) *bool { return &settings.Features.Telemetry.Collector.Browser.Enabled }),
+						Portals: config.JSON[Settings, []telemetry.Portal]("features.telemetry.collector.browser.portals", func(settings *Settings) *[]telemetry.Portal {
+							return &settings.Features.Telemetry.Collector.Browser.Portals
+						}),
+					},
+				},
+				Config: SettingsFeaturesTelemetryConfigConfigKeySet{
+					FlushInterval: config.Duration[Settings]("features.telemetry.config.flush_interval", func(settings *Settings) *time.Duration { return &settings.Features.Telemetry.Config.FlushInterval }),
+					FlushTimeout:  config.Duration[Settings]("features.telemetry.config.flush_timeout", func(settings *Settings) *time.Duration { return &settings.Features.Telemetry.Config.FlushTimeout }),
+					DrainTimeout:  config.Duration[Settings]("features.telemetry.config.drain_timeout", func(settings *Settings) *time.Duration { return &settings.Features.Telemetry.Config.DrainTimeout }),
+					Retention: SettingsFeaturesTelemetryConfigRetentionConfigKeySet{
+						Minute:         config.Duration[Settings]("features.telemetry.config.retention.minute", func(settings *Settings) *time.Duration { return &settings.Features.Telemetry.Config.Retention.Minute }),
+						Hour:           config.Duration[Settings]("features.telemetry.config.retention.hour", func(settings *Settings) *time.Duration { return &settings.Features.Telemetry.Config.Retention.Hour }),
+						Issue:          config.Duration[Settings]("features.telemetry.config.retention.issue", func(settings *Settings) *time.Duration { return &settings.Features.Telemetry.Config.Retention.Issue }),
+						Security:       config.Duration[Settings]("features.telemetry.config.retention.security", func(settings *Settings) *time.Duration { return &settings.Features.Telemetry.Config.Retention.Security }),
+						MaxRuns:        config.Scalar[Settings, int]("features.telemetry.config.retention.max_runs", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Retention.MaxRuns }),
+						MaxReceiptRows: config.Scalar[Settings, int]("features.telemetry.config.retention.max_receipt_rows", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Retention.MaxReceiptRows }),
+						MaxMetricRows:  config.Scalar[Settings, int]("features.telemetry.config.retention.max_metric_rows", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Retention.MaxMetricRows }),
+						MaxIssueRows:   config.Scalar[Settings, int]("features.telemetry.config.retention.max_issue_rows", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Retention.MaxIssueRows }),
+						MaxEventRows:   config.Scalar[Settings, int]("features.telemetry.config.retention.max_event_rows", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Retention.MaxEventRows }),
+						PruneInterval: config.Duration[Settings]("features.telemetry.config.retention.prune_interval", func(settings *Settings) *time.Duration {
+							return &settings.Features.Telemetry.Config.Retention.PruneInterval
+						}),
+					},
+					Alerts: SettingsFeaturesTelemetryConfigAlertsConfigKeySet{
+						Enabled: config.Scalar[Settings, bool]("features.telemetry.config.alerts.enabled", func(settings *Settings) *bool { return &settings.Features.Telemetry.Config.Alerts.Enabled }),
+						Rules:   config.JSON[Settings, []telemetry.Rule]("features.telemetry.config.alerts.rules", func(settings *Settings) *[]telemetry.Rule { return &settings.Features.Telemetry.Config.Alerts.Rules }),
+						Thresholds: SettingsFeaturesTelemetryConfigAlertsThresholdsConfigKeySet{
+							Latency: config.Duration[Settings]("features.telemetry.config.alerts.thresholds.latency", func(settings *Settings) *time.Duration {
+								return &settings.Features.Telemetry.Config.Alerts.Thresholds.Latency
+							}),
+							ErrorRatio: config.Scalar[Settings, float64]("features.telemetry.config.alerts.thresholds.error_ratio", func(settings *Settings) *float64 {
+								return &settings.Features.Telemetry.Config.Alerts.Thresholds.ErrorRatio
+							}),
+							PoolUsageRatio: config.Scalar[Settings, float64]("features.telemetry.config.alerts.thresholds.pool_usage_ratio", func(settings *Settings) *float64 {
+								return &settings.Features.Telemetry.Config.Alerts.Thresholds.PoolUsageRatio
+							}),
+							MinimumRequests: config.Scalar[Settings, int]("features.telemetry.config.alerts.thresholds.minimum_requests", func(settings *Settings) *int {
+								return &settings.Features.Telemetry.Config.Alerts.Thresholds.MinimumRequests
+							}),
+							AuthFailures: config.Scalar[Settings, int]("features.telemetry.config.alerts.thresholds.auth_failures", func(settings *Settings) *int {
+								return &settings.Features.Telemetry.Config.Alerts.Thresholds.AuthFailures
+							}),
+						},
+						SustainCaptures: config.Scalar[Settings, int]("features.telemetry.config.alerts.sustain_captures", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Alerts.SustainCaptures }),
+						RecoverCaptures: config.Scalar[Settings, int]("features.telemetry.config.alerts.recover_captures", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Alerts.RecoverCaptures }),
+					},
+					Reads: SettingsFeaturesTelemetryConfigReadsConfigKeySet{
+						MaxConcurrent:     config.Scalar[Settings, int]("features.telemetry.config.reads.max_concurrent", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Reads.MaxConcurrent }),
+						MaxOverviewRuns:   config.Scalar[Settings, int]("features.telemetry.config.reads.max_overview_runs", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Reads.MaxOverviewRuns }),
+						MaxOverviewAlerts: config.Scalar[Settings, int]("features.telemetry.config.reads.max_overview_alerts", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Reads.MaxOverviewAlerts }),
+						MaxTrafficRows:    config.Scalar[Settings, int]("features.telemetry.config.reads.max_traffic_rows", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Reads.MaxTrafficRows }),
+						MaxTrafficGroups:  config.Scalar[Settings, int]("features.telemetry.config.reads.max_traffic_groups", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Reads.MaxTrafficGroups }),
+						MaxPage:           config.Scalar[Settings, int]("features.telemetry.config.reads.max_page", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Reads.MaxPage }),
+						MaxPageSize:       config.Scalar[Settings, int]("features.telemetry.config.reads.max_page_size", func(settings *Settings) *int { return &settings.Features.Telemetry.Config.Reads.MaxPageSize }),
+						Timeout:           config.Duration[Settings]("features.telemetry.config.reads.timeout", func(settings *Settings) *time.Duration { return &settings.Features.Telemetry.Config.Reads.Timeout }),
+					},
+				},
+			},
 			Maintenance: SettingsFeaturesMaintenanceConfigKeySet{
 				Enabled: config.Scalar[Settings, bool]("features.maintenance.enabled", func(settings *Settings) *bool { return &settings.Features.Maintenance.Enabled }),
 				Defaults: SettingsFeaturesMaintenanceDefaultsConfigKeySet{
@@ -2545,6 +2772,52 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Features.Observability.ErrorLog.MaxFingerprints,
 		keys.Features.Observability.ErrorLog.DontReportFaults,
 		keys.Features.Observability.ErrorLog.DontReportStatuses,
+		keys.Features.Telemetry.Enabled,
+		keys.Features.Telemetry.Database,
+		keys.Features.Telemetry.Schema,
+		keys.Features.Telemetry.Kernels,
+		keys.Features.Telemetry.Collector.Instance,
+		keys.Features.Telemetry.Collector.Release,
+		keys.Features.Telemetry.Collector.MaxSeries,
+		keys.Features.Telemetry.Collector.MaxEvents,
+		keys.Features.Telemetry.Collector.MaxPendingBatches,
+		keys.Features.Telemetry.Collector.PendingRetention,
+		keys.Features.Telemetry.Collector.Routes.ExcludedRoutes,
+		keys.Features.Telemetry.Collector.Routes.ExcludedPrefixes,
+		keys.Features.Telemetry.Collector.Routes.ExcludedOperations,
+		keys.Features.Telemetry.Collector.Routes.ExcludedOperationPrefixes,
+		keys.Features.Telemetry.Collector.Browser.Enabled,
+		keys.Features.Telemetry.Collector.Browser.Portals,
+		keys.Features.Telemetry.Config.FlushInterval,
+		keys.Features.Telemetry.Config.FlushTimeout,
+		keys.Features.Telemetry.Config.DrainTimeout,
+		keys.Features.Telemetry.Config.Retention.Minute,
+		keys.Features.Telemetry.Config.Retention.Hour,
+		keys.Features.Telemetry.Config.Retention.Issue,
+		keys.Features.Telemetry.Config.Retention.Security,
+		keys.Features.Telemetry.Config.Retention.MaxRuns,
+		keys.Features.Telemetry.Config.Retention.MaxReceiptRows,
+		keys.Features.Telemetry.Config.Retention.MaxMetricRows,
+		keys.Features.Telemetry.Config.Retention.MaxIssueRows,
+		keys.Features.Telemetry.Config.Retention.MaxEventRows,
+		keys.Features.Telemetry.Config.Retention.PruneInterval,
+		keys.Features.Telemetry.Config.Alerts.Enabled,
+		keys.Features.Telemetry.Config.Alerts.Rules,
+		keys.Features.Telemetry.Config.Alerts.Thresholds.Latency,
+		keys.Features.Telemetry.Config.Alerts.Thresholds.ErrorRatio,
+		keys.Features.Telemetry.Config.Alerts.Thresholds.PoolUsageRatio,
+		keys.Features.Telemetry.Config.Alerts.Thresholds.MinimumRequests,
+		keys.Features.Telemetry.Config.Alerts.Thresholds.AuthFailures,
+		keys.Features.Telemetry.Config.Alerts.SustainCaptures,
+		keys.Features.Telemetry.Config.Alerts.RecoverCaptures,
+		keys.Features.Telemetry.Config.Reads.MaxConcurrent,
+		keys.Features.Telemetry.Config.Reads.MaxOverviewRuns,
+		keys.Features.Telemetry.Config.Reads.MaxOverviewAlerts,
+		keys.Features.Telemetry.Config.Reads.MaxTrafficRows,
+		keys.Features.Telemetry.Config.Reads.MaxTrafficGroups,
+		keys.Features.Telemetry.Config.Reads.MaxPage,
+		keys.Features.Telemetry.Config.Reads.MaxPageSize,
+		keys.Features.Telemetry.Config.Reads.Timeout,
 		keys.Features.Maintenance.Enabled,
 		keys.Features.Maintenance.Defaults.Disabled,
 		keys.Features.Maintenance.Defaults.Interval,

@@ -309,8 +309,10 @@ panics and `runtime.Goexit` remain isolated and classified as callback failures.
 
 `http.NewRequestMetrics(512)` constructs a bounded `RequestObserver`; register
 it with `Builder.ObserveHTTP`. `Snapshot` returns owned cumulative histograms;
-`Drain` atomically returns and resets an interval. Applications may persist
-intervals in their own typed models off the request path. Do not drain an owner
+`Drain` atomically returns and resets an interval. The opt-in
+[persisted telemetry feature](persisted-telemetry.md) owns bounded collection,
+PostgreSQL history, incidents, and reads. Applications can also persist intervals
+in their own typed models off the request path. Do not drain an owner
 also used for cumulative Prometheus scraping: use independent observers for the
 two retention contracts. `WritePrometheus` exports declared route/method/status
 labels; unmatched routes share one category and unknown methods use OTHER.

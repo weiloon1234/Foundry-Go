@@ -16,6 +16,20 @@ import (
 
 func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, error) {
 	f := s.Features
+	if f.Telemetry.Enabled {
+		if f.Telemetry.Database == "" {
+			f.Telemetry.Database = s.Services.Database.Default
+		}
+		if f.Telemetry.Schema == "" {
+			f.Telemetry.Schema = s.Services.Database.Connections[f.Telemetry.Database].Primary.Schema
+			if f.Telemetry.Schema == "" {
+				f.Telemetry.Schema = "public"
+			}
+		}
+		if err := validateTelemetrySettings(f.Telemetry, f.Observability); err != nil {
+			return f, err
+		}
+	}
 	for _, target := range persistenceTargets(&f) {
 		if *target.connection == "" {
 			*target.connection = s.Services.Database.Default

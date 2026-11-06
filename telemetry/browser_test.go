@@ -1,7 +1,10 @@
 package telemetry
 
 import (
+	"errors"
 	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 func TestBrowserValidationIsAtomic(t *testing.T) {
@@ -66,5 +69,13 @@ func TestBrowserAllowedClassesAndFrameBounds(t *testing.T) {
 				t.Fatal("browser detail contract changed")
 			}
 		})
+	}
+}
+
+func TestEngineRecordBrowserRejectsUninitializedEngine(t *testing.T) {
+	for _, engine := range []*Engine{nil, {}} {
+		if err := engine.RecordBrowser(t.Context(), browserReport()); !errors.Is(err, fault.Invalid) {
+			t.Fatalf("uninitialized browser admission: %v", err)
+		}
 	}
 }

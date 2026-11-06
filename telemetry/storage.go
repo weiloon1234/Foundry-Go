@@ -74,11 +74,15 @@ type persistResult struct {
 	uncertain, absent  bool
 }
 
-// flush consumes only the FIFO head. The future incident evaluator supplies its
-// next bounded rule state; receipt replay always uses the committed state instead.
+// flush consumes only the FIFO head. Enabled incidents derive their next bounded
+// progress inside persistence; disabled policies accept explicitly staged state.
+// Receipt replay always uses the committed state instead.
 // Empty queues are a no-op. A committed-but-failed completion advances the queue
 // and returns its error; an unknown completion retains the same batch identity.
 func (s *storage) flush(ctx context.Context, next []ruleProgress) error {
+	if s.config.Alerts.Enabled && next != nil {
+		return invalid("enabled telemetry incidents own their receipt progress")
+	}
 	if err := s.enter(ctx); err != nil {
 		return err
 	}
@@ -100,6 +104,7 @@ func (s *storage) flush(ctx context.Context, next []ruleProgress) error {
 	attempt, cancel := context.WithTimeout(ctx, s.config.FlushTimeout)
 	defer cancel()
 	result, err := s.persist(attempt, b, staged)
+	interrupted := storageInterrupted(ctx, err)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if result.absent || result.committed {
@@ -121,7 +126,7 @@ func (s *storage) flush(ctx context.Context, next []ruleProgress) error {
 		c.pending[0] = batch{}
 		c.pending = c.pending[1:]
 	}
-	if err != nil {
+	if err != nil && !interrupted {
 		c.failures = saturatingAdd(c.failures, 1)
 	}
 	return err
@@ -214,6 +219,12 @@ func (s *storage) persist(ctx context.Context, b batch, staged receiptState) (pe
 		}
 		if err = s.writeRun(ctx, tx, b, now); err != nil {
 			return err
+		}
+		if s.config.Alerts.Enabled {
+			staged.Rules, err = s.writeIncidents(ctx, tx, b)
+			if err != nil {
+				return err
+			}
 		}
 		metricLoss, err := s.writeMetrics(ctx, tx, b)
 		if err != nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/notifications"
 	"github.com/weiloon1234/Foundry-Go/outbox"
 	"github.com/weiloon1234/Foundry-Go/settings"
+	"github.com/weiloon1234/Foundry-Go/telemetry"
 	"github.com/weiloon1234/Foundry-Go/translations"
 )
 
@@ -35,6 +36,7 @@ func persistenceTargets(s *FeatureSettings) []persistenceTarget {
 	add(s.Idempotency.Enabled, &s.Idempotency.Database, &s.Idempotency.Config.Schema, idempotency.Migrations)
 	add(s.Outbox.Enabled, &s.Outbox.Database, &s.Outbox.Schema, outbox.Migrations)
 	add(s.Audit.Enabled, &s.Audit.Database, &s.Audit.Schema, audit.Migrations)
+	add(s.Telemetry.Enabled, &s.Telemetry.Database, &s.Telemetry.Schema, telemetry.Migrations)
 	add(s.Notifications.Enabled, &s.Notifications.Database, &s.Notifications.Schema, notifications.Migrations)
 	if s.Extensions.Enabled {
 		add(true, &s.Extensions.Database, &s.Extensions.Schema, func() []migrate.Definition {

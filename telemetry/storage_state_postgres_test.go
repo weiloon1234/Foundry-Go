@@ -2,7 +2,6 @@ package telemetry
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -135,11 +134,14 @@ func TestStorageCancellationWhileWaitingForLockDoesNotWrite(t *testing.T) {
 	if err := <-holder; err != nil {
 		t.Fatal(err)
 	}
-	if err := <-done; !errors.Is(err, context.Canceled) {
+	if err := <-done; !storageInterrupted(ctx, err) {
 		t.Fatalf("flush cancellation: %v", err)
 	}
 	if len(s.collector.pending) != 1 || s.collector.pending[0].id != b.id {
 		t.Fatal("cancellation discarded pending identity")
+	}
+	if s.collector.failures != 0 {
+		t.Fatalf("cancellation counted as storage failure: %d", s.collector.failures)
 	}
 	storageTransaction(t, db, schema, func(tx *database.Tx) error {
 		count, err := orm.Count(t.Context(), tx, events.Query())

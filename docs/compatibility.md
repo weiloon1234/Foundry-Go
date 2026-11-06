@@ -6,6 +6,22 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## Persisted telemetry
+
+`telemetry`, `telemetry/sourcemap`, and `application.TelemetrySettings` are
+additive opt-ins. When telemetry is disabled, existing Prometheus, OTLP,
+diagnostics, and log reporting are unchanged, and no telemetry collector,
+reporter, loop, or migration target is created.
+
+Enabling the feature requires explicit bounds, configured observability, and
+PostgreSQL migrations applied before the new reader or writer starts. The
+`foundry.telemetry` definitions create new `foundry_telemetry_*` tables with
+version 1 payloads. There is no legacy-table migration or legacy-format reader;
+existing application telemetry archives and historical migrations remain intact.
+Applications retain authorization, acknowledgement actor tables, public DTO
+mapping, and browser transport controls. See [persisted telemetry](guides/persisted-telemetry.md)
+for assembly, receipt outcomes, retention, and rollback ownership.
+
 ## SPA runtime data
 
 `SPAConfig.Runtime`, `DefineSPARuntime` and `SPARuntime.WrapProxy` are additive

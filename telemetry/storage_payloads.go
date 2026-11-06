@@ -11,8 +11,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// Incident evaluation belongs to the engine milestone. Storage accepts its
-// concrete next progress, never an arbitrary policy callback inside a transaction.
+// Rule progress is committed with the receipt and published only after confirmed
+// commit or reconciliation. Its shape remains the original receipt format 1.
 type ruleProgress struct {
 	Rule         Rule `json:"rule"`
 	Bad, Healthy int

@@ -16,6 +16,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/schedule"
+	"github.com/weiloon1234/Foundry-Go/telemetry"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
@@ -58,7 +59,7 @@ func stickyReadsConfigured(s infrastructure.DatabaseSettings) bool {
 	return false
 }
 
-func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEnabled, stickyReads bool, routes []Routes, spas []spaDeclaration, middleware []http.Middleware, observers []http.RequestObserver) {
+func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEnabled, stickyReads bool, routes []Routes, spas []spaDeclaration, middleware []http.Middleware, observers []http.RequestObserver, collector *telemetry.Collector) {
 	if settings.Enabled {
 		builder.Register(foundation.Module{Name: RouterProvider, Requires: []foundation.ProviderID{Provider}, OnRegister: func(r *foundation.Registrar) error {
 			for _, spa := range spas {
@@ -111,6 +112,11 @@ func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEna
 			}
 			if err := validateBrowserPolicies(router, global); err != nil {
 				return nil, err
+			}
+			if collector != nil {
+				if err := collector.SetRoutes(router.Routes()); err != nil {
+					return nil, err
+				}
 			}
 			if localesEnabled {
 				catalog, err := foundation.Resolve(r, LocaleKey)

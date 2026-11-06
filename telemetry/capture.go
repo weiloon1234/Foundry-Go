@@ -28,10 +28,11 @@ type batch struct {
 	id model.ID[batch]
 	at temporal.DateTime
 	// admitted retains time.Now's monotonic reading; it is never persisted.
-	admitted time.Time
-	buckets  []bucket
-	issues   []observedIssue
-	runtime  Runtime
+	admitted  time.Time
+	buckets   []bucket
+	issues    []observedIssue
+	runtime   Runtime
+	poolUsage float64
 }
 
 func (b batch) bucketSnapshot() []bucket {
@@ -62,6 +63,10 @@ func (b batch) runtimeSnapshot() Runtime {
 // Repeated captures without observations reproduce cumulative bucket counts,
 // never add them back. Full queues reject the newest capture, not the head.
 func (c *Collector) capture(recorder *observability.Recorder) error {
+	return c.captureRuntime(recorder, Health{}, 0)
+}
+
+func (c *Collector) captureRuntime(recorder *observability.Recorder, health Health, poolUsage float64) error {
 	c.captureMu.Lock()
 	defer c.captureMu.Unlock()
 	c.mu.Lock()
@@ -103,7 +108,8 @@ func (c *Collector) capture(recorder *observability.Recorder) error {
 		clear(c.issueCounts)
 		return nil
 	}
-	b := batch{id: id, at: now, admitted: elapsed, issues: c.issues, runtime: Runtime{Samples: samples, Dropped: c.dropped, StorageFailures: c.failures, Pending: len(c.pending)}}
+	health.Dependencies = slices.Clone(health.Dependencies)
+	b := batch{id: id, at: now, admitted: elapsed, issues: c.issues, poolUsage: poolUsage, runtime: Runtime{Health: health, Samples: samples, Dropped: c.dropped, StorageFailures: c.failures, Pending: len(c.pending)}}
 	c.issues = nil
 	clear(c.issueCounts)
 	for _, entry := range c.buckets {
