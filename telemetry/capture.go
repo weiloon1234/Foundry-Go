@@ -163,13 +163,8 @@ func (c *Collector) expireLocked(now time.Time) {
 	// Expiry uses monotonic elapsed time, never observation/database timestamps.
 	retained := c.pending[:0]
 	for _, b := range c.pending {
-		if now.Sub(b.admitted) >= c.config.PendingRetention {
-			c.dropLocked(uint64(len(b.issues)))
-			for _, entry := range b.buckets {
-				if entry.Interval == time.Minute {
-					c.dropLocked(entry.Metric.Count)
-				}
-			}
+		if b.id != c.activeBatch && b.id != c.uncertainBatch && now.Sub(b.admitted) >= c.config.PendingRetention {
+			c.dropBatchLocked(b)
 			continue
 		}
 		retained = append(retained, b)

@@ -52,6 +52,9 @@ type Collector struct {
 	buckets                     map[string]bucket
 	pending                     []batch
 	dropped, failures           uint64
+	storageOwned                bool
+	activeBatch                 model.ID[batch]
+	uncertainBatch              model.ID[batch]
 }
 
 var _ http.SecurityRequestObserver = (*Collector)(nil)

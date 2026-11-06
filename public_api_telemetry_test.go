@@ -20,6 +20,7 @@ func TestTelemetryConsumerAPIInventory(t *testing.T) {
 		"RetentionPolicy": false, "RetentionPolicy.Validate": false,
 		"ReadLimits": false, "ReadLimits.Validate": false,
 		"Config": false, "Config.Validate": false,
+		"Migrations": false, "PruneResult": false,
 		"Collector": false, "NewCollector": false,
 		"Collector.RunID": false, "Collector.SetRoutes": false,
 		"Collector.ObserveRequest": false, "Collector.ObserveSecurityRequest": false,
