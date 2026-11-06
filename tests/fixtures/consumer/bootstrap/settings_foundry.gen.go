@@ -23,12 +23,14 @@ import (
 	logging "github.com/weiloon1234/Foundry-Go/logging"
 	maintenance "github.com/weiloon1234/Foundry-Go/maintenance"
 	model "github.com/weiloon1234/Foundry-Go/model"
+	observability "github.com/weiloon1234/Foundry-Go/observability"
 	outbox "github.com/weiloon1234/Foundry-Go/outbox"
 	pubsub "github.com/weiloon1234/Foundry-Go/pubsub"
 	redis "github.com/weiloon1234/Foundry-Go/redis"
 	schedule "github.com/weiloon1234/Foundry-Go/schedule"
 	secret "github.com/weiloon1234/Foundry-Go/secret"
 	storage "github.com/weiloon1234/Foundry-Go/storage"
+	telemetry "github.com/weiloon1234/Foundry-Go/telemetry"
 	temporal "github.com/weiloon1234/Foundry-Go/temporal"
 	websocket "github.com/weiloon1234/Foundry-Go/websocket"
 	netip "net/netip"
@@ -673,6 +675,7 @@ type SettingsAppFeaturesConfigKeySet struct {
 	Reports          SettingsAppFeaturesReportsConfigKeySet
 	Health           SettingsAppFeaturesHealthConfigKeySet
 	Observability    SettingsAppFeaturesObservabilityConfigKeySet
+	Telemetry        SettingsAppFeaturesTelemetryConfigKeySet
 	//
 	// Maintenance schedules framework housekeeping (features.maintenance).
 	//
@@ -1207,6 +1210,142 @@ type SettingsAppFeaturesObservabilityErrorLogConfigKeySet struct {
 	DontReportFaults config.Key[Settings, []foundryfault.Code]
 	// DontReportStatuses selects app.features.observability.error_log.dont_report_statuses. Set accepts []int.
 	DontReportStatuses config.Key[Settings, []int]
+}
+
+// SettingsAppFeaturesTelemetryConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesTelemetryConfigKeySet struct {
+	// Enabled selects app.features.telemetry.enabled. Set accepts bool.
+	Enabled config.Key[Settings, bool]
+	// Database selects app.features.telemetry.database. Set accepts database.ConnectionName.
+	Database config.Key[Settings, database.ConnectionName]
+	// Schema selects app.features.telemetry.schema. Set accepts string.
+	Schema config.Key[Settings, string]
+	// Kernels selects app.features.telemetry.kernels. Set accepts []foundation.KernelKind.
+	Kernels   config.Key[Settings, []foundation.KernelKind]
+	Collector SettingsAppFeaturesTelemetryCollectorConfigKeySet
+	Config    SettingsAppFeaturesTelemetryConfigConfigKeySet
+}
+
+// SettingsAppFeaturesTelemetryCollectorConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesTelemetryCollectorConfigKeySet struct {
+	// Instance selects app.features.telemetry.collector.instance. Set accepts telemetry.Instance.
+	Instance config.Key[Settings, telemetry.Instance]
+	// Release selects app.features.telemetry.collector.release. Set accepts telemetry.Release.
+	Release config.Key[Settings, telemetry.Release]
+	// MaxSeries selects app.features.telemetry.collector.max_series. Set accepts int.
+	MaxSeries config.Key[Settings, int]
+	// MaxEvents selects app.features.telemetry.collector.max_events. Set accepts int.
+	MaxEvents config.Key[Settings, int]
+	// MaxPendingBatches selects app.features.telemetry.collector.max_pending_batches. Set accepts int.
+	MaxPendingBatches config.Key[Settings, int]
+	// PendingRetention selects app.features.telemetry.collector.pending_retention. Set accepts time.Duration.
+	PendingRetention config.Key[Settings, time.Duration]
+	Routes           SettingsAppFeaturesTelemetryCollectorRoutesConfigKeySet
+	Browser          SettingsAppFeaturesTelemetryCollectorBrowserConfigKeySet
+}
+
+// SettingsAppFeaturesTelemetryCollectorRoutesConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesTelemetryCollectorRoutesConfigKeySet struct {
+	// ExcludedRoutes selects app.features.telemetry.collector.routes.excluded_routes. Set accepts []http.RouteID.
+	ExcludedRoutes config.Key[Settings, []http.RouteID]
+	// ExcludedPrefixes selects app.features.telemetry.collector.routes.excluded_prefixes. Set accepts []string.
+	ExcludedPrefixes config.Key[Settings, []string]
+	// ExcludedOperations selects app.features.telemetry.collector.routes.excluded_operations. Set accepts []observability.Name.
+	ExcludedOperations config.Key[Settings, []observability.Name]
+	// ExcludedOperationPrefixes selects app.features.telemetry.collector.routes.excluded_operation_prefixes. Set accepts []string.
+	ExcludedOperationPrefixes config.Key[Settings, []string]
+}
+
+// SettingsAppFeaturesTelemetryCollectorBrowserConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesTelemetryCollectorBrowserConfigKeySet struct {
+	// Enabled selects app.features.telemetry.collector.browser.enabled. Set accepts bool.
+	Enabled config.Key[Settings, bool]
+	// Portals selects app.features.telemetry.collector.browser.portals. Set accepts []telemetry.Portal.
+	Portals config.Key[Settings, []telemetry.Portal]
+}
+
+// SettingsAppFeaturesTelemetryConfigConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesTelemetryConfigConfigKeySet struct {
+	// FlushInterval selects app.features.telemetry.config.flush_interval. Set accepts time.Duration.
+	FlushInterval config.Key[Settings, time.Duration]
+	// FlushTimeout selects app.features.telemetry.config.flush_timeout. Set accepts time.Duration.
+	FlushTimeout config.Key[Settings, time.Duration]
+	// DrainTimeout selects app.features.telemetry.config.drain_timeout. Set accepts time.Duration.
+	DrainTimeout config.Key[Settings, time.Duration]
+	Retention    SettingsAppFeaturesTelemetryConfigRetentionConfigKeySet
+	Alerts       SettingsAppFeaturesTelemetryConfigAlertsConfigKeySet
+	Reads        SettingsAppFeaturesTelemetryConfigReadsConfigKeySet
+}
+
+// SettingsAppFeaturesTelemetryConfigRetentionConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesTelemetryConfigRetentionConfigKeySet struct {
+	// Minute selects app.features.telemetry.config.retention.minute. Set accepts time.Duration.
+	Minute config.Key[Settings, time.Duration]
+	// Hour selects app.features.telemetry.config.retention.hour. Set accepts time.Duration.
+	Hour config.Key[Settings, time.Duration]
+	// Issue selects app.features.telemetry.config.retention.issue. Set accepts time.Duration.
+	Issue config.Key[Settings, time.Duration]
+	// Security selects app.features.telemetry.config.retention.security. Set accepts time.Duration.
+	Security config.Key[Settings, time.Duration]
+	// MaxRuns selects app.features.telemetry.config.retention.max_runs. Set accepts int.
+	MaxRuns config.Key[Settings, int]
+	// MaxReceiptRows selects app.features.telemetry.config.retention.max_receipt_rows. Set accepts int.
+	MaxReceiptRows config.Key[Settings, int]
+	// MaxMetricRows selects app.features.telemetry.config.retention.max_metric_rows. Set accepts int.
+	MaxMetricRows config.Key[Settings, int]
+	// MaxIssueRows selects app.features.telemetry.config.retention.max_issue_rows. Set accepts int.
+	MaxIssueRows config.Key[Settings, int]
+	// MaxEventRows selects app.features.telemetry.config.retention.max_event_rows. Set accepts int.
+	MaxEventRows config.Key[Settings, int]
+	// PruneInterval selects app.features.telemetry.config.retention.prune_interval. Set accepts time.Duration.
+	PruneInterval config.Key[Settings, time.Duration]
+}
+
+// SettingsAppFeaturesTelemetryConfigAlertsConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesTelemetryConfigAlertsConfigKeySet struct {
+	// Enabled selects app.features.telemetry.config.alerts.enabled. Set accepts bool.
+	Enabled config.Key[Settings, bool]
+	// Rules selects app.features.telemetry.config.alerts.rules. Set accepts []telemetry.Rule.
+	Rules      config.Key[Settings, []telemetry.Rule]
+	Thresholds SettingsAppFeaturesTelemetryConfigAlertsThresholdsConfigKeySet
+	// SustainCaptures selects app.features.telemetry.config.alerts.sustain_captures. Set accepts int.
+	SustainCaptures config.Key[Settings, int]
+	// RecoverCaptures selects app.features.telemetry.config.alerts.recover_captures. Set accepts int.
+	RecoverCaptures config.Key[Settings, int]
+}
+
+// SettingsAppFeaturesTelemetryConfigAlertsThresholdsConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesTelemetryConfigAlertsThresholdsConfigKeySet struct {
+	// Latency selects app.features.telemetry.config.alerts.thresholds.latency. Set accepts time.Duration.
+	Latency config.Key[Settings, time.Duration]
+	// ErrorRatio selects app.features.telemetry.config.alerts.thresholds.error_ratio. Set accepts float64.
+	ErrorRatio config.Key[Settings, float64]
+	// PoolUsageRatio selects app.features.telemetry.config.alerts.thresholds.pool_usage_ratio. Set accepts float64.
+	PoolUsageRatio config.Key[Settings, float64]
+	// MinimumRequests selects app.features.telemetry.config.alerts.thresholds.minimum_requests. Set accepts int.
+	MinimumRequests config.Key[Settings, int]
+	// AuthFailures selects app.features.telemetry.config.alerts.thresholds.auth_failures. Set accepts int.
+	AuthFailures config.Key[Settings, int]
+}
+
+// SettingsAppFeaturesTelemetryConfigReadsConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesTelemetryConfigReadsConfigKeySet struct {
+	// MaxConcurrent selects app.features.telemetry.config.reads.max_concurrent. Set accepts int.
+	MaxConcurrent config.Key[Settings, int]
+	// MaxOverviewRuns selects app.features.telemetry.config.reads.max_overview_runs. Set accepts int.
+	MaxOverviewRuns config.Key[Settings, int]
+	// MaxOverviewAlerts selects app.features.telemetry.config.reads.max_overview_alerts. Set accepts int.
+	MaxOverviewAlerts config.Key[Settings, int]
+	// MaxTrafficRows selects app.features.telemetry.config.reads.max_traffic_rows. Set accepts int.
+	MaxTrafficRows config.Key[Settings, int]
+	// MaxTrafficGroups selects app.features.telemetry.config.reads.max_traffic_groups. Set accepts int.
+	MaxTrafficGroups config.Key[Settings, int]
+	// MaxPage selects app.features.telemetry.config.reads.max_page. Set accepts int.
+	MaxPage config.Key[Settings, int]
+	// MaxPageSize selects app.features.telemetry.config.reads.max_page_size. Set accepts int.
+	MaxPageSize config.Key[Settings, int]
+	// Timeout selects app.features.telemetry.config.reads.timeout. Set accepts time.Duration.
+	Timeout config.Key[Settings, time.Duration]
 }
 
 // SettingsAppFeaturesMaintenanceConfigKeySet exposes compiler-checked configuration overrides.
@@ -2180,6 +2319,104 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 						}),
 					},
 				},
+				Telemetry: SettingsAppFeaturesTelemetryConfigKeySet{
+					Enabled:  config.Scalar[Settings, bool]("app.features.telemetry.enabled", func(settings *Settings) *bool { return &settings.App.Features.Telemetry.Enabled }),
+					Database: config.Scalar[Settings, database.ConnectionName]("app.features.telemetry.database", func(settings *Settings) *database.ConnectionName { return &settings.App.Features.Telemetry.Database }),
+					Schema:   config.Scalar[Settings, string]("app.features.telemetry.schema", func(settings *Settings) *string { return &settings.App.Features.Telemetry.Schema }),
+					Kernels:  config.JSON[Settings, []foundation.KernelKind]("app.features.telemetry.kernels", func(settings *Settings) *[]foundation.KernelKind { return &settings.App.Features.Telemetry.Kernels }),
+					Collector: SettingsAppFeaturesTelemetryCollectorConfigKeySet{
+						Instance: config.Scalar[Settings, telemetry.Instance]("app.features.telemetry.collector.instance", func(settings *Settings) *telemetry.Instance {
+							return &settings.App.Features.Telemetry.Collector.Instance
+						}),
+						Release:           config.Scalar[Settings, telemetry.Release]("app.features.telemetry.collector.release", func(settings *Settings) *telemetry.Release { return &settings.App.Features.Telemetry.Collector.Release }),
+						MaxSeries:         config.Scalar[Settings, int]("app.features.telemetry.collector.max_series", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Collector.MaxSeries }),
+						MaxEvents:         config.Scalar[Settings, int]("app.features.telemetry.collector.max_events", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Collector.MaxEvents }),
+						MaxPendingBatches: config.Scalar[Settings, int]("app.features.telemetry.collector.max_pending_batches", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Collector.MaxPendingBatches }),
+						PendingRetention: config.Duration[Settings]("app.features.telemetry.collector.pending_retention", func(settings *Settings) *time.Duration {
+							return &settings.App.Features.Telemetry.Collector.PendingRetention
+						}),
+						Routes: SettingsAppFeaturesTelemetryCollectorRoutesConfigKeySet{
+							ExcludedRoutes: config.JSON[Settings, []http.RouteID]("app.features.telemetry.collector.routes.excluded_routes", func(settings *Settings) *[]http.RouteID {
+								return &settings.App.Features.Telemetry.Collector.Routes.ExcludedRoutes
+							}),
+							ExcludedPrefixes: config.JSON[Settings, []string]("app.features.telemetry.collector.routes.excluded_prefixes", func(settings *Settings) *[]string {
+								return &settings.App.Features.Telemetry.Collector.Routes.ExcludedPrefixes
+							}),
+							ExcludedOperations: config.JSON[Settings, []observability.Name]("app.features.telemetry.collector.routes.excluded_operations", func(settings *Settings) *[]observability.Name {
+								return &settings.App.Features.Telemetry.Collector.Routes.ExcludedOperations
+							}),
+							ExcludedOperationPrefixes: config.JSON[Settings, []string]("app.features.telemetry.collector.routes.excluded_operation_prefixes", func(settings *Settings) *[]string {
+								return &settings.App.Features.Telemetry.Collector.Routes.ExcludedOperationPrefixes
+							}),
+						},
+						Browser: SettingsAppFeaturesTelemetryCollectorBrowserConfigKeySet{
+							Enabled: config.Scalar[Settings, bool]("app.features.telemetry.collector.browser.enabled", func(settings *Settings) *bool { return &settings.App.Features.Telemetry.Collector.Browser.Enabled }),
+							Portals: config.JSON[Settings, []telemetry.Portal]("app.features.telemetry.collector.browser.portals", func(settings *Settings) *[]telemetry.Portal {
+								return &settings.App.Features.Telemetry.Collector.Browser.Portals
+							}),
+						},
+					},
+					Config: SettingsAppFeaturesTelemetryConfigConfigKeySet{
+						FlushInterval: config.Duration[Settings]("app.features.telemetry.config.flush_interval", func(settings *Settings) *time.Duration { return &settings.App.Features.Telemetry.Config.FlushInterval }),
+						FlushTimeout:  config.Duration[Settings]("app.features.telemetry.config.flush_timeout", func(settings *Settings) *time.Duration { return &settings.App.Features.Telemetry.Config.FlushTimeout }),
+						DrainTimeout:  config.Duration[Settings]("app.features.telemetry.config.drain_timeout", func(settings *Settings) *time.Duration { return &settings.App.Features.Telemetry.Config.DrainTimeout }),
+						Retention: SettingsAppFeaturesTelemetryConfigRetentionConfigKeySet{
+							Minute: config.Duration[Settings]("app.features.telemetry.config.retention.minute", func(settings *Settings) *time.Duration {
+								return &settings.App.Features.Telemetry.Config.Retention.Minute
+							}),
+							Hour: config.Duration[Settings]("app.features.telemetry.config.retention.hour", func(settings *Settings) *time.Duration { return &settings.App.Features.Telemetry.Config.Retention.Hour }),
+							Issue: config.Duration[Settings]("app.features.telemetry.config.retention.issue", func(settings *Settings) *time.Duration {
+								return &settings.App.Features.Telemetry.Config.Retention.Issue
+							}),
+							Security: config.Duration[Settings]("app.features.telemetry.config.retention.security", func(settings *Settings) *time.Duration {
+								return &settings.App.Features.Telemetry.Config.Retention.Security
+							}),
+							MaxRuns:        config.Scalar[Settings, int]("app.features.telemetry.config.retention.max_runs", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Retention.MaxRuns }),
+							MaxReceiptRows: config.Scalar[Settings, int]("app.features.telemetry.config.retention.max_receipt_rows", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Retention.MaxReceiptRows }),
+							MaxMetricRows:  config.Scalar[Settings, int]("app.features.telemetry.config.retention.max_metric_rows", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Retention.MaxMetricRows }),
+							MaxIssueRows:   config.Scalar[Settings, int]("app.features.telemetry.config.retention.max_issue_rows", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Retention.MaxIssueRows }),
+							MaxEventRows:   config.Scalar[Settings, int]("app.features.telemetry.config.retention.max_event_rows", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Retention.MaxEventRows }),
+							PruneInterval: config.Duration[Settings]("app.features.telemetry.config.retention.prune_interval", func(settings *Settings) *time.Duration {
+								return &settings.App.Features.Telemetry.Config.Retention.PruneInterval
+							}),
+						},
+						Alerts: SettingsAppFeaturesTelemetryConfigAlertsConfigKeySet{
+							Enabled: config.Scalar[Settings, bool]("app.features.telemetry.config.alerts.enabled", func(settings *Settings) *bool { return &settings.App.Features.Telemetry.Config.Alerts.Enabled }),
+							Rules: config.JSON[Settings, []telemetry.Rule]("app.features.telemetry.config.alerts.rules", func(settings *Settings) *[]telemetry.Rule {
+								return &settings.App.Features.Telemetry.Config.Alerts.Rules
+							}),
+							Thresholds: SettingsAppFeaturesTelemetryConfigAlertsThresholdsConfigKeySet{
+								Latency: config.Duration[Settings]("app.features.telemetry.config.alerts.thresholds.latency", func(settings *Settings) *time.Duration {
+									return &settings.App.Features.Telemetry.Config.Alerts.Thresholds.Latency
+								}),
+								ErrorRatio: config.Scalar[Settings, float64]("app.features.telemetry.config.alerts.thresholds.error_ratio", func(settings *Settings) *float64 {
+									return &settings.App.Features.Telemetry.Config.Alerts.Thresholds.ErrorRatio
+								}),
+								PoolUsageRatio: config.Scalar[Settings, float64]("app.features.telemetry.config.alerts.thresholds.pool_usage_ratio", func(settings *Settings) *float64 {
+									return &settings.App.Features.Telemetry.Config.Alerts.Thresholds.PoolUsageRatio
+								}),
+								MinimumRequests: config.Scalar[Settings, int]("app.features.telemetry.config.alerts.thresholds.minimum_requests", func(settings *Settings) *int {
+									return &settings.App.Features.Telemetry.Config.Alerts.Thresholds.MinimumRequests
+								}),
+								AuthFailures: config.Scalar[Settings, int]("app.features.telemetry.config.alerts.thresholds.auth_failures", func(settings *Settings) *int {
+									return &settings.App.Features.Telemetry.Config.Alerts.Thresholds.AuthFailures
+								}),
+							},
+							SustainCaptures: config.Scalar[Settings, int]("app.features.telemetry.config.alerts.sustain_captures", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Alerts.SustainCaptures }),
+							RecoverCaptures: config.Scalar[Settings, int]("app.features.telemetry.config.alerts.recover_captures", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Alerts.RecoverCaptures }),
+						},
+						Reads: SettingsAppFeaturesTelemetryConfigReadsConfigKeySet{
+							MaxConcurrent:     config.Scalar[Settings, int]("app.features.telemetry.config.reads.max_concurrent", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Reads.MaxConcurrent }),
+							MaxOverviewRuns:   config.Scalar[Settings, int]("app.features.telemetry.config.reads.max_overview_runs", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Reads.MaxOverviewRuns }),
+							MaxOverviewAlerts: config.Scalar[Settings, int]("app.features.telemetry.config.reads.max_overview_alerts", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Reads.MaxOverviewAlerts }),
+							MaxTrafficRows:    config.Scalar[Settings, int]("app.features.telemetry.config.reads.max_traffic_rows", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Reads.MaxTrafficRows }),
+							MaxTrafficGroups:  config.Scalar[Settings, int]("app.features.telemetry.config.reads.max_traffic_groups", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Reads.MaxTrafficGroups }),
+							MaxPage:           config.Scalar[Settings, int]("app.features.telemetry.config.reads.max_page", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Reads.MaxPage }),
+							MaxPageSize:       config.Scalar[Settings, int]("app.features.telemetry.config.reads.max_page_size", func(settings *Settings) *int { return &settings.App.Features.Telemetry.Config.Reads.MaxPageSize }),
+							Timeout:           config.Duration[Settings]("app.features.telemetry.config.reads.timeout", func(settings *Settings) *time.Duration { return &settings.App.Features.Telemetry.Config.Reads.Timeout }),
+						},
+					},
+				},
 				Maintenance: SettingsAppFeaturesMaintenanceConfigKeySet{
 					Enabled: config.Scalar[Settings, bool]("app.features.maintenance.enabled", func(settings *Settings) *bool { return &settings.App.Features.Maintenance.Enabled }),
 					Defaults: SettingsAppFeaturesMaintenanceDefaultsConfigKeySet{
@@ -2630,6 +2867,52 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.Features.Observability.ErrorLog.MaxFingerprints,
 		keys.App.Features.Observability.ErrorLog.DontReportFaults,
 		keys.App.Features.Observability.ErrorLog.DontReportStatuses,
+		keys.App.Features.Telemetry.Enabled,
+		keys.App.Features.Telemetry.Database,
+		keys.App.Features.Telemetry.Schema,
+		keys.App.Features.Telemetry.Kernels,
+		keys.App.Features.Telemetry.Collector.Instance,
+		keys.App.Features.Telemetry.Collector.Release,
+		keys.App.Features.Telemetry.Collector.MaxSeries,
+		keys.App.Features.Telemetry.Collector.MaxEvents,
+		keys.App.Features.Telemetry.Collector.MaxPendingBatches,
+		keys.App.Features.Telemetry.Collector.PendingRetention,
+		keys.App.Features.Telemetry.Collector.Routes.ExcludedRoutes,
+		keys.App.Features.Telemetry.Collector.Routes.ExcludedPrefixes,
+		keys.App.Features.Telemetry.Collector.Routes.ExcludedOperations,
+		keys.App.Features.Telemetry.Collector.Routes.ExcludedOperationPrefixes,
+		keys.App.Features.Telemetry.Collector.Browser.Enabled,
+		keys.App.Features.Telemetry.Collector.Browser.Portals,
+		keys.App.Features.Telemetry.Config.FlushInterval,
+		keys.App.Features.Telemetry.Config.FlushTimeout,
+		keys.App.Features.Telemetry.Config.DrainTimeout,
+		keys.App.Features.Telemetry.Config.Retention.Minute,
+		keys.App.Features.Telemetry.Config.Retention.Hour,
+		keys.App.Features.Telemetry.Config.Retention.Issue,
+		keys.App.Features.Telemetry.Config.Retention.Security,
+		keys.App.Features.Telemetry.Config.Retention.MaxRuns,
+		keys.App.Features.Telemetry.Config.Retention.MaxReceiptRows,
+		keys.App.Features.Telemetry.Config.Retention.MaxMetricRows,
+		keys.App.Features.Telemetry.Config.Retention.MaxIssueRows,
+		keys.App.Features.Telemetry.Config.Retention.MaxEventRows,
+		keys.App.Features.Telemetry.Config.Retention.PruneInterval,
+		keys.App.Features.Telemetry.Config.Alerts.Enabled,
+		keys.App.Features.Telemetry.Config.Alerts.Rules,
+		keys.App.Features.Telemetry.Config.Alerts.Thresholds.Latency,
+		keys.App.Features.Telemetry.Config.Alerts.Thresholds.ErrorRatio,
+		keys.App.Features.Telemetry.Config.Alerts.Thresholds.PoolUsageRatio,
+		keys.App.Features.Telemetry.Config.Alerts.Thresholds.MinimumRequests,
+		keys.App.Features.Telemetry.Config.Alerts.Thresholds.AuthFailures,
+		keys.App.Features.Telemetry.Config.Alerts.SustainCaptures,
+		keys.App.Features.Telemetry.Config.Alerts.RecoverCaptures,
+		keys.App.Features.Telemetry.Config.Reads.MaxConcurrent,
+		keys.App.Features.Telemetry.Config.Reads.MaxOverviewRuns,
+		keys.App.Features.Telemetry.Config.Reads.MaxOverviewAlerts,
+		keys.App.Features.Telemetry.Config.Reads.MaxTrafficRows,
+		keys.App.Features.Telemetry.Config.Reads.MaxTrafficGroups,
+		keys.App.Features.Telemetry.Config.Reads.MaxPage,
+		keys.App.Features.Telemetry.Config.Reads.MaxPageSize,
+		keys.App.Features.Telemetry.Config.Reads.Timeout,
 		keys.App.Features.Maintenance.Enabled,
 		keys.App.Features.Maintenance.Defaults.Disabled,
 		keys.App.Features.Maintenance.Defaults.Interval,
