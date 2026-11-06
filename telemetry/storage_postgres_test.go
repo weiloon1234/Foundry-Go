@@ -400,3 +400,93 @@ func TestPostgresTelemetryReceiptAndWritesRollbackAtomically(t *testing.T) {
 		t.Fatalf("retry after rollback = %+v", got)
 	}
 }
+
+func TestPostgresCaptureClockRollbackNeverDecreasesStoredHistograms(t *testing.T) {
+	for _, step := range []time.Duration{time.Minute, time.Hour} {
+		t.Run(step.String(), func(t *testing.T) {
+			config := engineConfig()
+			config.Alerts = alertPolicy()
+			config.Alerts.Rules = []Rule{RuleLatency}
+			config.Alerts.Thresholds.MinimumRequests = 5
+			config.Alerts.Thresholds.Latency = time.Millisecond
+			s, db, schema, source := postgresStorage(t, collectorConfig(), config)
+			c := s.collector
+			start := source.Now()
+			for range 10 {
+				c.ObserveRequest(t.Context(), request())
+			}
+			first := capture(t, c)
+			if err := s.flush(t.Context(), nil); err != nil {
+				t.Fatal(err)
+			}
+			source.advance(step)
+			for range 2 {
+				c.ObserveRequest(t.Context(), request())
+			}
+			capture(t, c)
+			for _, entry := range c.buckets {
+				if entry.Interval == time.Minute && entry.At.Equal(start.Truncate(time.Minute)) {
+					t.Fatal("test did not evict the original minute")
+				}
+			}
+			if err := s.flush(t.Context(), nil); err != nil {
+				t.Fatal(err)
+			}
+			source.set(start)
+			c.ObserveRequest(t.Context(), request())
+			rollback := capture(t, c)
+			if !rollback.at.UTC().Equal(start.Add(step)) {
+				t.Fatal("batch timestamp moved backwards")
+			}
+			minutes := 0
+			for _, entry := range rollback.buckets {
+				if entry.Interval == time.Minute {
+					minutes++
+					if !entry.At.Equal(start.Add(step).Truncate(time.Minute)) || entry.Metric.Count != 3 {
+						t.Fatal("incident input included a recreated or non-current minute")
+					}
+				}
+			}
+			if minutes != 1 {
+				t.Fatalf("current minute series = %d", minutes)
+			}
+			if err := s.flush(t.Context(), nil); err != nil {
+				t.Fatal(err)
+			}
+			if len(s.progress.Rules) != 1 || s.progress.Rules[0].Bad != 0 || s.progress.Rules[0].Healthy != 0 {
+				t.Fatal("old traffic bypassed the incident minimum request threshold")
+			}
+			storageTransaction(t, db, schema, func(tx *database.Tx) error {
+				found, err := orm.All(t.Context(), tx, metrics.Query())
+				if err != nil {
+					return err
+				}
+				for _, original := range first.buckets {
+					matched := false
+					for _, row := range found {
+						if string(row.Key) != original.Key {
+							continue
+						}
+						matched = true
+						hist, err := decodePayload(row.Histogram, maxHistogramPayloadBytes)
+						if err != nil {
+							return err
+						}
+						if hist.Count < original.Metric.Count || hist.Seconds < original.Metric.Seconds {
+							return fmt.Errorf("persisted cumulative histogram decreased")
+						}
+						for i, count := range original.Metric.Buckets {
+							if hist.Buckets[i] < count {
+								return fmt.Errorf("persisted cumulative histogram bucket decreased")
+							}
+						}
+					}
+					if !matched {
+						return fmt.Errorf("original persisted bucket disappeared")
+					}
+				}
+				return nil
+			})
+		})
+	}
+}

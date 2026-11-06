@@ -43,6 +43,9 @@ func TestReaderValidatesInputsBeforeDatabaseAdmission(t *testing.T) {
 	if _, err := r.Issues(t.Context(), IssueQuery{Source: Source("unknown"), Page: orm.Page(1, 1)}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("unvalidated source reached storage")
 	}
+	if _, err := r.Issue(t.Context(), "arbitrary"); !errors.Is(err, fault.Invalid) {
+		t.Fatal("unvalidated single issue fingerprint reached storage")
+	}
 	if _, err := r.Events(t.Context(), EventQuery{Fingerprint: "arbitrary", Page: orm.Page(1, 1)}); !errors.Is(err, fault.Invalid) {
 		t.Fatal("unvalidated fingerprint reached storage")
 	}

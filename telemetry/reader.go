@@ -161,25 +161,21 @@ func (r *Reader) Issues(ctx context.Context, q IssueQuery) (orm.PageResult[Issue
 	}
 	var out orm.PageResult[Issue]
 	err := r.read(ctx, func(ctx context.Context, tx *database.Tx, now temporal.DateTime) error {
-		retention := r.config.Retention.Issue
-		if q.Source == SourceSecurity {
-			retention = r.config.Retention.Security
-		}
-		cutoff, err := now.Add(-retention)
+		query, err := r.retainedIssues(now)
 		if err != nil {
 			return err
 		}
-		page, err := orm.Paginate(ctx, tx, issues.Query().Where(orm.EnumEq(issues.Source, q.Source), orm.TimeGte(issues.LastAt, cutoff)).OrderBy(orm.TimeDesc(issues.LastAt), orm.KeyAsc(issues.Key())), q.Page)
+		page, err := orm.Paginate(ctx, tx, query.Where(orm.EnumEq(issues.Source, q.Source)).OrderBy(orm.TimeDesc(issues.LastAt), orm.KeyAsc(issues.Key())), q.Page)
 		if err != nil {
 			return err
 		}
 		out = pageMetadata[Issue](page)
 		for _, row := range page.Items {
-			detail, err := decodePayload(row.Detail, maxDetailPayloadBytes)
+			item, err := readIssue(row)
 			if err != nil {
 				return err
 			}
-			out.Items = append(out.Items, Issue{Fingerprint: row.Fingerprint, Source: row.Source, Code: row.Code, Route: row.Route, Release: row.Release, Count: row.Count, FirstAt: row.FirstAt, LastAt: row.LastAt, Detail: detail})
+			out.Items = append(out.Items, item)
 		}
 		return nil
 	})
@@ -187,6 +183,64 @@ func (r *Reader) Issues(ctx context.Context, q IssueQuery) (orm.PageResult[Issue
 		return orm.PageResult[Issue]{}, err
 	}
 	return out, nil
+}
+
+// Issue returns one retained issue by fingerprint, or database.NotFound when
+// it is unknown or expired. It shares the primary read, timeout, concurrency and
+// shutdown admission rules of Issues and returns an owned detail snapshot.
+func (r *Reader) Issue(ctx context.Context, fingerprint Fingerprint) (Issue, error) {
+	if _, err := ParseFingerprint(string(fingerprint)); err != nil {
+		return Issue{}, err
+	}
+	var out Issue
+	var found bool
+	err := r.read(ctx, func(ctx context.Context, tx *database.Tx, now temporal.DateTime) error {
+		query, err := r.retainedIssues(now)
+		if err != nil {
+			return err
+		}
+		selected, err := orm.First(ctx, tx, query.Where(orm.KeyEq(issues.Key(), fingerprint)))
+		if err != nil {
+			return err
+		}
+		row, ok := selected.Get()
+		found = ok
+		if !ok {
+			return nil
+		}
+		out, err = readIssue(row)
+		return err
+	})
+	if err != nil {
+		return Issue{}, err
+	}
+	if !found {
+		return Issue{}, database.NewError("telemetry issue", database.NotFound)
+	}
+	return out, nil
+}
+
+func (r *Reader) retainedIssues(now temporal.DateTime) (orm.Query[issueRow], error) {
+	cutoff, err := now.Add(-r.config.Retention.Issue)
+	if err != nil {
+		return orm.Query[issueRow]{}, err
+	}
+	security, err := now.Add(-r.config.Retention.Security)
+	if err != nil {
+		return orm.Query[issueRow]{}, err
+	}
+	return issues.Query().Where(orm.Or(
+		orm.And(orm.EnumEq(issues.Source, SourceSecurity), orm.TimeGte(issues.LastAt, security)),
+		orm.And(orm.EnumNe(issues.Source, SourceSecurity), orm.TimeGte(issues.LastAt, cutoff)),
+	)), nil
+}
+
+func readIssue(row issueRow) (Issue, error) {
+	detail, err := decodePayload(row.Detail, maxDetailPayloadBytes)
+	if err != nil {
+		return Issue{}, err
+	}
+	return Issue{Fingerprint: row.Fingerprint, Source: row.Source, Code: row.Code, Route: row.Route, Release: row.Release, Count: row.Count, FirstAt: row.FirstAt, LastAt: row.LastAt, Detail: detail}, nil
 }
 
 // Events returns retained samples for a fingerprint. Each sample's own source

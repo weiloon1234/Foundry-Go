@@ -170,7 +170,10 @@ func TestRecorderSamplesAndCallbackIsolation(t *testing.T) {
 }
 
 func TestCaptureDoesNotHoldAdmissionLockDuringRecorderCallbacks(t *testing.T) {
-	c, _ := newCollector(t, collectorConfig())
+	c, source := newCollector(t, collectorConfig())
+	start := source.Now().Add(55 * time.Second)
+	source.set(start)
+	c.ObserveRequest(t.Context(), request())
 	r, err := observability.New(observability.DefaultConfig())
 	if err != nil {
 		t.Fatal(err)
@@ -182,6 +185,7 @@ func TestCaptureDoesNotHoldAdmissionLockDuringRecorderCallbacks(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- c.capture(r) }()
 	<-entered
+	source.advance(10 * time.Second) // Cross the minute while the callback owns capture.
 	observed := make(chan struct{})
 	go func() { c.ObserveRequest(t.Context(), request()); close(observed) }()
 	// Only this deadlock guard uses real time; all capture semantics use testClock.
@@ -202,8 +206,27 @@ func TestCaptureDoesNotHoldAdmissionLockDuringRecorderCallbacks(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	if c.pending[0].bucketSnapshot()[0].Metric.Count != 1 {
-		t.Fatal("concurrent admission lost")
+	first := c.pending[0]
+	if len(first.buckets) != 2 {
+		t.Fatal("first capture lost the pre-callback request")
+	}
+	for _, entry := range first.bucketSnapshot() {
+		if !entry.At.Equal(start.Truncate(entry.Interval)) || entry.Metric.Count != 1 {
+			t.Fatal("request during callback entered the earlier capture")
+		}
+	}
+	second := capture(t, c)
+	if len(second.buckets) != 2 {
+		t.Fatal("next capture lost the request admitted during the callback")
+	}
+	for _, entry := range second.bucketSnapshot() {
+		want := uint64(1)
+		if entry.Interval == time.Hour {
+			want = 2
+		}
+		if !entry.At.Equal(source.Now().Truncate(entry.Interval)) || entry.Metric.Count != want {
+			t.Fatal("request during callback did not belong to the next minute")
+		}
 	}
 }
 
@@ -312,5 +335,34 @@ func TestSealedAdmissionCountsLateReportsWithoutReopening(t *testing.T) {
 	}
 	if c.dropped != 4 || len(c.issues) != 0 || len(c.pending) != 1 || len(b.issueSnapshot()) != 1 || b.runtimeSnapshot().Dropped != 0 {
 		t.Fatal("late admission reopened or mutated final capture")
+	}
+}
+
+func TestRejectedCaptureStillAdvancesEffectiveTime(t *testing.T) {
+	config := collectorConfig()
+	config.MaxPendingBatches = 1
+	c, source := newCollector(t, config)
+	start := source.Now()
+	c.ObserveRequest(t.Context(), request())
+	first := capture(t, c)
+	source.advance(time.Minute)
+	c.ObserveRequest(t.Context(), request())
+	if err := c.capture(nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(c.pending) != 1 || c.pending[0].id != first.id {
+		t.Fatal("full queue replaced the head")
+	}
+	source.set(start)
+	c.pending = nil // Model the owner removing the head, after the rejected capture.
+	c.ObserveRequest(t.Context(), request())
+	next := capture(t, c)
+	if !next.at.UTC().Equal(start.Add(time.Minute)) {
+		t.Fatal("queue rejection rolled back the capture watermark")
+	}
+	for _, entry := range next.buckets {
+		if entry.Interval == time.Minute && !entry.At.Equal(start.Add(time.Minute).Truncate(time.Minute)) {
+			t.Fatal("recreated an evicted minute after queue rejection")
+		}
 	}
 }

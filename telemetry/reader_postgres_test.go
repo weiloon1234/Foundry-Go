@@ -394,6 +394,10 @@ func TestPostgresReaderOwnsAdmittedWorkUntilDatabaseExit(t *testing.T) {
 		unblock()
 		t.Fatalf("full read capacity: %v", err)
 	}
+	if _, err := r.Issue(t.Context(), Fingerprint(digest("missing"))); !errors.Is(err, fault.Overloaded) {
+		unblock()
+		t.Fatalf("single issue bypassed read capacity: %v", err)
+	}
 	done := r.owner.seal()
 	select {
 	case <-done:
@@ -404,6 +408,10 @@ func TestPostgresReaderOwnsAdmittedWorkUntilDatabaseExit(t *testing.T) {
 	if _, err := r.Overview(t.Context(), OverviewQuery{Window: Window{Minutes: 15}}); !errors.Is(err, fault.Closed) {
 		unblock()
 		t.Fatalf("sealed read admission: %v", err)
+	}
+	if _, err := r.Issue(t.Context(), Fingerprint(digest("missing"))); !errors.Is(err, fault.Closed) {
+		unblock()
+		t.Fatalf("single issue bypassed sealed admission: %v", err)
 	}
 	unblock()
 	if err := <-result; err != nil {
@@ -434,7 +442,7 @@ func TestPostgresReaderTimeoutCancelsBlockedReadAndReleasesCapacity(t *testing.T
 			}
 			// ORM row locks do not block MVCC SELECT. This test-only table
 			// lock stays held until the read has returned its deadline fault.
-			if _, err := tx.Exec(t.Context(), `LOCK TABLE foundry_telemetry_runs IN ACCESS EXCLUSIVE MODE`); err != nil {
+			if _, err := tx.Exec(t.Context(), `LOCK TABLE foundry_telemetry_runs, foundry_telemetry_issues IN ACCESS EXCLUSIVE MODE`); err != nil {
 				return err
 			}
 			close(locked)
@@ -453,12 +461,16 @@ func TestPostgresReaderTimeoutCancelsBlockedReadAndReleasesCapacity(t *testing.T
 		t.Fatal("table lock was not acquired")
 	}
 	out, readErr := r.Overview(t.Context(), OverviewQuery{Window: Window{Minutes: 15}})
+	issue, issueErr := r.Issue(t.Context(), Fingerprint(digest("missing")))
 	unlock()
 	if err := <-holder; err != nil {
 		t.Fatal(err)
 	}
 	if !errors.Is(readErr, fault.Timeout) || !errors.Is(readErr, context.DeadlineExceeded) || errors.Is(readErr, fault.Panicked) {
 		t.Fatalf("blocked read did not return its timeout: %v", readErr)
+	}
+	if !errors.Is(issueErr, fault.Timeout) || !errors.Is(issueErr, context.DeadlineExceeded) || issue.Fingerprint != "" {
+		t.Fatalf("single issue did not retain timeout and empty result: %v", issueErr)
 	}
 	if len(out.Runs) != 0 || len(out.Alerts) != 0 {
 		t.Fatal("timed-out read returned partial results")
@@ -467,6 +479,9 @@ func TestPostgresReaderTimeoutCancelsBlockedReadAndReleasesCapacity(t *testing.T
 	r.config.Reads.Timeout = 10 * time.Second
 	if _, err := r.Overview(t.Context(), OverviewQuery{Window: Window{Minutes: 15}}); err != nil {
 		t.Fatalf("timed-out read retained capacity: %v", err)
+	}
+	if _, err := r.Issue(t.Context(), Fingerprint(digest("missing"))); !errors.Is(err, database.NotFound) {
+		t.Fatalf("single issue did not release timed-out capacity: %v", err)
 	}
 }
 
@@ -579,5 +594,57 @@ func TestPostgresReaderRuntimeAndEventSnapshotsAreOwned(t *testing.T) {
 	repeat, err := r.Events(t.Context(), query)
 	if err != nil || repeat.Items[0].ID != want || reflect.DeepEqual(page.Items, repeat.Items) {
 		t.Fatal("event result reused mutable row storage")
+	}
+}
+
+func TestPostgresReaderIssueUsesSourceRetentionAndOwnedDetails(t *testing.T) {
+	r, db, schema, now := postgresReader(t, retentionConfig(), RoutePolicy{})
+	for _, source := range []Source{SourceBackend, SourceBrowser, SourceSecurity} {
+		for _, age := range []struct {
+			name  string
+			delta time.Duration
+		}{{"recent", -time.Minute}, {"old", -2 * time.Hour}, {"expired", -4 * time.Hour}} {
+			name := string(source) + "-" + age.name
+			at := retentionAt(t, now, age.delta)
+			storageTransaction(t, db, schema, func(tx *database.Tx) error {
+				return seedRetentionIssues(t.Context(), tx, name, source, at, 1)
+			})
+			key := Fingerprint(digest(name + "-0"))
+			item, err := r.Issue(t.Context(), key)
+			retained := age.name == "recent" || age.name == "old" && source != SourceSecurity
+			if !retained {
+				if !errors.Is(err, database.NotFound) || item.Fingerprint != "" {
+					t.Fatalf("expired %s: %+v %v", name, item, err)
+				}
+				continue
+			}
+			if err != nil || item.Fingerprint != key || item.Source != source || item.Count != 1 || item.LastAt != at {
+				t.Fatalf("retained %s: %+v %v", name, item, err)
+			}
+		}
+	}
+	if item, err := r.Issue(t.Context(), Fingerprint(digest("unknown"))); !errors.Is(err, database.NotFound) || item.Fingerprint != "" {
+		t.Fatalf("unknown issue: %+v %v", item, err)
+	}
+	key := Fingerprint(digest("backend-recent-0"))
+	storageTransaction(t, db, schema, func(tx *database.Tx) error {
+		payload, err := encodePayload(Detail{Frames: []Frame{{File: "original.go", Line: 1}}}, maxDetailPayloadBytes)
+		if err != nil {
+			return err
+		}
+		_, err = orm.UpdateAll(t.Context(), tx, issues.Query().Where(orm.KeyEq(issues.Key(), key)), orm.JSONSet(issues.Detail, payload))
+		return err
+	})
+	item, err := r.Issue(t.Context(), key)
+	if err != nil || len(item.Detail.Frames) != 1 {
+		t.Fatalf("single issue detail: %+v %v", item, err)
+	}
+	item.Detail.Frames[0].File = "mutated"
+	again, err := r.Issue(t.Context(), key)
+	if err != nil || len(again.Detail.Frames) != 1 || again.Detail.Frames[0].File != "original.go" {
+		t.Fatal("single issue detail was not an owned snapshot", err)
+	}
+	if got := countTelemetry(t, db, schema); got.issues != 9 || got.events != 9 {
+		t.Fatal("single issue lookup changed retained storage")
 	}
 }

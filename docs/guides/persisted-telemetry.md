@@ -150,6 +150,16 @@ not a persistence receipt. Overload, expired pending batches, and an incomplete
 shutdown drain count as loss. Late reports after sealing also count as loss,
 although those final counters may never be persisted.
 
+Capture timestamps never move backwards within a collector. A backwards wall-clock
+step is clamped to the previous effective capture time, so evicted minute or hour
+buckets cannot be recreated with smaller cumulative histograms. Pending retry
+expiry continues to use elapsed time. The timestamp watermark advances even when
+a full pending queue rejects a capture.
+
+HTTP metrics drain at that capture boundary before runtime metric callbacks run.
+Requests admitted during a slow callback remain for the next capture and its
+minute. Runtime callbacks run outside the admission lock.
+
 The writer processes immutable batches FIFO. Cumulative bucket snapshots from
 the same run replace stored values; retries never add the same snapshot twice.
 Issue groups coalesce before upsert, add counts once, preserve earliest and
@@ -197,6 +207,7 @@ It never removes application acknowledgements, audit records, or log operations.
 | --- | --- |
 | `Overview` | `OverviewQuery`; retained runs, incidents, and oldest retained bucket |
 | `Traffic` | `TrafficQuery`; grouped traffic and a combined summary |
+| `Issue` | A validated `Fingerprint`; one retained `Issue`, or `database.NotFound` when unknown or expired |
 | `Issues` | `IssueQuery` with a required `Source` and `orm.PageRequest`; `orm.PageResult[Issue]` |
 | `Events` | `EventQuery` with a `Fingerprint` and page; `orm.PageResult[Event]` |
 | `Alerts` | `AlertQuery` with an optional state and page; `orm.PageResult[Alert]` |
@@ -226,6 +237,10 @@ traffic, err := engine.Reader().Traffic(ctx, telemetry.TrafficQuery{
 ```
 
 Applications authorize these reads and map snapshots to their public DTOs.
+An events endpoint that requires an existing issue can call `Reader.Issue` before
+`Reader.Events` and map `database.NotFound` to its not-found response. `Events`
+still reads retained samples independently of issue existence; unknown valid
+fingerprints return an empty page.
 `ParseFingerprint` and `ParseAlertKey` validate external identity strings.
 
 ## Incidents and application attribution

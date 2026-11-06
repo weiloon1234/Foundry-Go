@@ -33,6 +33,7 @@ type telemetryLifecycle interface {
 type telemetryConsoleReads interface {
 	Overview(context.Context, telemetry.OverviewQuery) (telemetry.Overview, error)
 	Traffic(context.Context, telemetry.TrafficQuery) (telemetry.Traffic, error)
+	Issue(context.Context, telemetry.Fingerprint) (telemetry.Issue, error)
 	Issues(context.Context, telemetry.IssueQuery) (orm.PageResult[telemetry.Issue], error)
 	Events(context.Context, telemetry.EventQuery) (orm.PageResult[telemetry.Event], error)
 	Alerts(context.Context, telemetry.AlertQuery) (orm.PageResult[telemetry.Alert], error)

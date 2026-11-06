@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	stdhttp "net/http"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -262,10 +264,54 @@ func TestPostgresConfiguredTelemetryAdmitsBrowserReports(t *testing.T) {
 	if err := engine.RecordBrowser(t.Context(), report); err != nil {
 		t.Fatal(err)
 	}
+	report.Frames[0].File = "mutated-after-admission"
 	if err := engine.Close(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	db, err := app.Resources().Database()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The feature's declarations are private to telemetry. Inspect its persisted
+	// contract directly here, after Reader admission closes, without copying ORM
+	// declarations into application tests. The schema is testkit-generated.
+	schema := s.Services.Database.Connections["default"].Primary.Schema
+	issueTable := `"` + schema + `".foundry_telemetry_issues`
+	eventTable := `"` + schema + `".foundry_telemetry_events`
+	assertStored := func() {
+		t.Helper()
+		var issueCount, eventCount int64
+		if err := database.ScanOne(t.Context(), db.Primary(), `SELECT (SELECT count(*) FROM `+issueTable+`), (SELECT count(*) FROM `+eventTable+`)`, nil, &issueCount, &eventCount); err != nil {
+			t.Fatal(err)
+		}
+		if issueCount != 1 || eventCount != 1 {
+			t.Fatalf("configured browser rows: issues=%d events=%d", issueCount, eventCount)
+		}
+		var source, code, route, release, eventSource string
+		var count int64
+		var issueJSON, eventJSON []byte
+		if err := database.ScanOne(t.Context(), db.Primary(), `SELECT i.source, i.code, i.route, i.release, i.count, i.detail, e.source, e.detail FROM `+issueTable+` AS i JOIN `+eventTable+` AS e ON e.fingerprint = i.fingerprint`, nil, &source, &code, &route, &release, &count, &issueJSON, &eventSource, &eventJSON); err != nil {
+			t.Fatal(err)
+		}
+		if source != string(telemetry.SourceBrowser) || eventSource != source || code != string(telemetry.BrowserCodeTypeError) || route != "browser.admin" || release != string(s.Features.Telemetry.Collector.Release) || count != 1 {
+			t.Fatal("configured browser issue/event identity changed")
+		}
+		for _, payload := range [][]byte{issueJSON, eventJSON} {
+			var envelope struct {
+				Version int              `json:"version"`
+				Data    telemetry.Detail `json:"data"`
+			}
+			if err := json.Unmarshal(payload, &envelope); err != nil {
+				t.Fatal(err)
+			}
+			if envelope.Version != 1 || !envelope.Data.Untrusted || len(envelope.Data.Frames) != 1 || envelope.Data.Frames[0] != (telemetry.Frame{File: "admin/_assets/app.js", Line: 1}) {
+				t.Fatal("configured browser issue/event lost its owned detail")
+			}
+		}
+	}
+	assertStored()
 	if err := engine.RecordBrowser(t.Context(), report); err != nil {
 		t.Fatalf("configured browser admission after Close: %v", err)
 	}
+	assertStored()
 }

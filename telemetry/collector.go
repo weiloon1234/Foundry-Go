@@ -43,6 +43,7 @@ type Collector struct {
 	runID   model.ID[Run]
 	started temporal.DateTime
 	// Capture owns callbacks until exit, without holding the admission mutex.
+	captureAt                   temporal.DateTime // Nondecreasing watermark, owned by captureMu.
 	captureMu                   sync.Mutex
 	mu                          sync.Mutex
 	routesSet, admitted, sealed bool

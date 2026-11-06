@@ -25,7 +25,7 @@ func TestTelemetryConsumerAPIInventory(t *testing.T) {
 		"Engine.Run": false, "Engine.Close": false, "Engine.Done": false,
 		"Engine.RecordBrowser": false, "Engine.Reader": false, "Engine.Prune": false, "Engine.AcknowledgeIn": false,
 		"Reader": false, "Reader.Overview": false, "Reader.Traffic": false,
-		"Reader.Issues": false, "Reader.Events": false, "Reader.Alerts": false,
+		"Reader.Issue": false, "Reader.Issues": false, "Reader.Events": false, "Reader.Alerts": false,
 		"Window": false, "Window.Validate": false,
 		"OverviewQuery": false, "TrafficQuery": false, "IssueQuery": false,
 		"EventQuery": false, "AlertQuery": false, "Acknowledgement": false,

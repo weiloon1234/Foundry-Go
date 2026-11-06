@@ -80,12 +80,22 @@ func (c *Collector) captureRuntime(recorder *observability.Recorder, health Heal
 	if err != nil {
 		return err
 	}
+	if now.UTC().Before(c.captureAt.UTC()) {
+		now = c.captureAt
+	}
+	// Commit the effective timestamp even when pending capacity later rejects
+	// this capture. Evicted wall-clock buckets must never be recreated.
+	c.captureAt = now
+	// Drain at the capture boundary, before runtime callbacks can block. Later
+	// requests remain in the metrics owner for the next capture's timestamp.
+	c.mu.Lock()
+	snapshot := c.metrics.Drain()
+	c.mu.Unlock()
 	// Recorder owns callback isolation, finite sample validation and label escaping.
 	samples, dropped := captureSamples(recorder.CollectSamples())
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	elapsed := c.elapsed()
-	snapshot := c.metrics.Drain()
 	c.dropLocked(snapshot.Dropped)
 	c.dropLocked(dropped)
 	c.expireLocked(elapsed)
