@@ -273,9 +273,10 @@ keep upload-picker metadata. These hints do not authorize a browser to skip
 server content checks. Regenerate the application's manifest and client outputs
 after replacing its rule declarations.
 
-Compose the new rules with `Optional` for omitted uploads, `Required` for required
-parts, and `Each` for collections. A present zero-byte upload remains distinct
-from an omitted value. Use `FileMinSize(1)` when empty uploads must reject.
+Compose the new rules with `validation.Optional` for omitted uploads,
+`validation.Required` for required parts, and `validation.Each` for collections. A
+present zero-byte upload remains distinct from an omitted value. Use
+`validation.FileMinSize(1)` when empty uploads must reject.
 
 The `foundry-files` skill should point to this guide's
 [correlated file validation](#match-extension-and-content-together) and
