@@ -51,6 +51,12 @@ func (d SPARuntime) WrapProxy(proxy *httputil.ReverseProxy, navigation func(*std
 			w = spaRuntimeHeadWriter{w}
 		}
 		var failure error
+		var transformed *spaRuntimeProxyBody
+		defer func() {
+			if transformed != nil {
+				_ = transformed.Close()
+			}
+		}()
 		wrapped := originalProxy
 		wrapped.ModifyResponse = func(response *stdhttp.Response) error {
 			if originalProxy.ModifyResponse != nil {
@@ -59,6 +65,9 @@ func (d SPARuntime) WrapProxy(proxy *httputil.ReverseProxy, navigation func(*std
 				}
 			}
 			failure = safeerror.Prefix("SPA runtime proxy document failed", d.state.proxyDocument(response, r))
+			if failure == nil {
+				transformed, _ = response.Body.(*spaRuntimeProxyBody)
+			}
 			return failure
 		}
 		wrapped.ErrorHandler = func(w stdhttp.ResponseWriter, _ *stdhttp.Request, err error) {
@@ -86,7 +95,24 @@ func (d SPARuntime) WrapProxy(proxy *httputil.ReverseProxy, navigation func(*std
 	}), nil
 }
 
-func (s *spaRuntimeState) proxyDocument(response *stdhttp.Response, original *stdhttp.Request) error {
+func (s *spaRuntimeState) proxyDocument(response *stdhttp.Response, original *stdhttp.Request) (err error) {
+	admitted, transferred, sourceClosed := false, false, false
+	closeSource := func() error {
+		body := response.Body
+		response.Body = stdhttp.NoBody
+		sourceClosed = true
+		return closeAssetFile(body)
+	}
+	defer func() {
+		// Cleanup finishes under admission, including contained read/loader
+		// panic or Goexit. ReverseProxy sees NoBody on every runtime rejection.
+		if !sourceClosed && (admitted || err != nil) {
+			err = safeerror.Join("SPA upstream body cleanup failed", err, closeSource())
+		}
+		if admitted && !transferred {
+			s.active.Release()
+		}
+	}()
 	// Even an upstream ignoring stripped request headers must not publish a stale
 	// document validator or partial representation as a runtime document.
 	isHTML := spaHTML(response.Header.Get("Content-Type"))
@@ -94,24 +120,23 @@ func (s *spaRuntimeState) proxyDocument(response *stdhttp.Response, original *st
 		return safeerror.NewFault(fault.Invalid, "SPA upstream returned a conditional or partial document")
 	}
 	if response.StatusCode == stdhttp.StatusOK && isHTML {
-		if response.Header.Get("Content-Encoding") != "" || hasResponseTrailers(response.Header) || len(response.Trailer) != 0 {
+		if response.Header.Get("Content-Encoding") != "" {
 			return safeerror.NewFault(fault.Invalid, "SPA upstream HTML requires an unencoded document without trailers")
+		}
+		if err := spaRuntimeProxyTrailers(response); err != nil {
+			return err
 		}
 		if err := s.active.Acquire(original.Context(), 0, nil); err != nil {
 			return err
 		}
-		transferred := false
-		defer func() {
-			if !transferred {
-				s.active.Release()
-			}
-		}()
+		admitted = true
 		var body []byte
 		err := callback.Isolated("HTTP SPA proxy body", func() (err error) {
-			// ReverseProxy closes response.Body on failure. On success replace it
-			// only after the upstream body is closed, preserving ownership.
 			body, err = s.read(response.Body)
 			if err != nil {
+				return err
+			}
+			if err := spaRuntimeProxyTrailers(response); err != nil {
 				return err
 			}
 			body, err = s.document(original, body)
@@ -120,8 +145,10 @@ func (s *spaRuntimeState) proxyDocument(response *stdhttp.Response, original *st
 		if err != nil {
 			return err
 		}
-		if err := closeAssetFile(response.Body); err != nil {
-			response.Body = stdhttp.NoBody
+		if err := closeSource(); err != nil {
+			return err
+		}
+		if err := spaRuntimeProxyTrailers(response); err != nil {
 			return err
 		}
 		response.Body = &spaRuntimeProxyBody{Reader: bytes.NewReader(body), release: s.active.Release}
@@ -130,9 +157,14 @@ func (s *spaRuntimeState) proxyDocument(response *stdhttp.Response, original *st
 		spaRuntimeHeaders(response.Header, len(body))
 	}
 	if original.Method == stdhttp.MethodHead {
-		body := response.Body
-		response.Body = stdhttp.NoBody
-		return closeAssetFile(body)
+		return closeSource()
+	}
+	return nil
+}
+
+func spaRuntimeProxyTrailers(response *stdhttp.Response) error {
+	if hasResponseTrailers(response.Header) || len(response.Trailer) != 0 {
+		return safeerror.NewFault(fault.Invalid, "SPA upstream HTML must not carry trailers")
 	}
 	return nil
 }

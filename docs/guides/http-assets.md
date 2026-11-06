@@ -205,7 +205,10 @@ exceeded bound takes the framework's safe 503 error path with `no-store`. Error
 bodies and diagnostics do not expose arbitrary loader error text. No partially
 transformed HTML is sent. A canceled wait never releases a still-running loader's
 capacity; the hook waits for actual callback exit. Built responses retain capacity
-through writing, and proxy responses retain it until their body closes.
+through writing, and proxy responses retain it until their body closes. The proxy
+adapter also closes the transformed body when downstream writing or a buffer-pool
+callback panics or calls Goexit; downstream panics still propagate. On rejection,
+upstream Close runs in callback isolation and finishes before admission is released.
 
 ### Wrap an existing development proxy
 
@@ -236,7 +239,9 @@ This avoids a general-purpose response buffer and preserves non-HTML streaming.
 Selected non-HTML responses still reflect the normalized upstream request; use
 an accurate predicate to preserve asset revalidation and ranges. An upstream HTML or untyped 304
 or 206 for a selected navigation fails safely rather than serving stale document
-bytes. Responses explicitly typed as non-HTML retain their status. Encoded HTML and HTML with trailers also fail safely. Other statuses pass
+bytes. Responses explicitly typed as non-HTML retain their status. Encoded HTML and HTML with trailers also fail safely. Trailer checks run before
+reading, at EOF, and after upstream Close, including trailers omitted from the
+upstream declaration. Other statuses pass
 through. Existing proxy error handlers retain upstream error behavior; injection
 failures bypass them and use the framework's safe error response.
 
