@@ -482,6 +482,17 @@ func extractFileConstraints(val *validation.Description, fieldName string, multi
 						}
 					}
 				}
+			case "foundry.file_kinds", "foundry.image_kinds":
+				for _, p := range node.Spec.Parameters {
+					if p.Name == "kinds" {
+						var kinds []validation.FileKind
+						if err := json.Unmarshal(p.Value, &kinds); err == nil {
+							for _, kind := range kinds {
+								exts = append(exts, kind.Extension)
+							}
+						}
+					}
+				}
 			case "foundry.file_extensions":
 				for _, p := range node.Spec.Parameters {
 					if p.Name == "values" {

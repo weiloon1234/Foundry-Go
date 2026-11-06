@@ -1,6 +1,7 @@
 // Package imaging validates uploaded image files with the framework's bounded
 // container inspection. Import it as imagingvalidation alongside the imaging
-// package. Pixels are never decoded and filenames/client MIME are not consulted.
+// package. Pixels are never decoded. Kind rules correlate captured metadata
+// with the inspected format.
 package imaging
 
 import (
@@ -53,27 +54,34 @@ func (m Measurer[F]) Validate() error {
 // Measure reads and inspects bounded file content, correcting dimensions for orientation. Absent,
 // unsupported, or invalid images return false without an error.
 func (m Measurer[F]) Measure(ctx context.Context, file F) (validation.ImageSize, bool, error) {
+	info, ok, err := m.Inspect(ctx, file)
+	return info.Size, ok, err
+}
+
+// Inspect reads once and returns the container format and displayed dimensions.
+// It retains Measure's bounds and rejection/execution-error distinction.
+func (m Measurer[F]) Inspect(ctx context.Context, file F) (validation.ImageInspection[imaging.Format], bool, error) {
 	if err := m.Validate(); err != nil {
-		return validation.ImageSize{}, false, err
+		return validation.ImageInspection[imaging.Format]{}, false, err
 	}
 	if isNil(file) || file.IsZero() {
-		return validation.ImageSize{}, false, nil
+		return validation.ImageInspection[imaging.Format]{}, false, nil
 	}
 	size := file.Size()
 	if size <= 0 || size > m.limits.InputBytes {
-		return validation.ImageSize{}, false, nil
+		return validation.ImageInspection[imaging.Format]{}, false, nil
 	}
 	reader, err := file.Open(ctx)
 	if err != nil {
-		return validation.ImageSize{}, false, err
+		return validation.ImageInspection[imaging.Format]{}, false, err
 	}
 	defer reader.Close()
 	data := make([]byte, size)
 	if _, err := io.ReadFull(reader, data); err != nil {
-		return validation.ImageSize{}, false, err
+		return validation.ImageInspection[imaging.Format]{}, false, err
 	}
 	if err := ctx.Err(); err != nil {
-		return validation.ImageSize{}, false, err
+		return validation.ImageInspection[imaging.Format]{}, false, err
 	}
 	var info imaging.Info
 	if m.engine != nil {
@@ -85,14 +93,14 @@ func (m Measurer[F]) Measure(ctx context.Context, file F) (validation.ImageSize,
 		// Inspection classifies unsupported and oversized content as invalid
 		// input; any other failure (such as a contained panic) is internal.
 		if errors.Is(err, fault.Invalid) {
-			return validation.ImageSize{}, false, nil
+			return validation.ImageInspection[imaging.Format]{}, false, nil
 		}
-		return validation.ImageSize{}, false, err
+		return validation.ImageInspection[imaging.Format]{}, false, err
 	}
 	if info.Orientation >= 5 && info.Orientation <= 8 {
 		info.Width, info.Height = info.Height, info.Width
 	}
-	return validation.ImageSize{Width: info.Width, Height: info.Height}, true, nil
+	return validation.ImageInspection[imaging.Format]{Size: validation.ImageSize{Width: info.Width, Height: info.Height}, Format: info.Format}, true, nil
 }
 
 // Dimensions checks an uploaded image's displayed pixel size. Put FileMaxSize

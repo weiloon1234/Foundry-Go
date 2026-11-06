@@ -388,6 +388,9 @@ canonical, so `1.50` has one place. `DecimalMultipleOf(step)` requires an exact
 integer quotient for a positive step such as `0.25`. None of these convert
 through floating point.
 
+For extension/content correlation and a single image inspection shared by format
+and dimensions, see [upload kind validation](http-uploads.md#match-extension-and-content-together).
+
 ## Image dimensions
 
 Import `validation/imaging` as `imagingvalidation`:

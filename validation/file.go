@@ -85,7 +85,7 @@ func FileContentTypes[F FileValue](allowed ...string) Rule[F] {
 
 // FileExtensions compares the normalized final filename extension without a
 // leading dot. An allowed extension never proves the file's actual content;
-// combine it with a detected content-type rule when that behavior is required.
+// use FileKinds when each extension must match its own detected content type.
 func FileExtensions[F FileValue](allowed ...string) Rule[F] {
 	members, err := fileMembership(allowed, fileExtension)
 	if err != nil {
