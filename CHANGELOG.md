@@ -10,7 +10,7 @@
   It adds six typed incident rules with episodes, `Engine.AcknowledgeIn` for an
   application-owned attribution in the caller's transaction, bounded retention-aware reads
   (`Reader.Overview`, `Traffic`, `Issue`, `Issues`, `Events`, `Alerts`),
-  `Engine.RecordBrowser`, and configured assembly through
+  `Engine.RecordBrowser`, `Engine.RunID`, and configured assembly through
   `application.FeatureSettings.Telemetry`. The optional `telemetry/sourcemap` package reads
   and prunes private release source maps. Nothing changes when the feature is off. See the
   [persisted telemetry guide](docs/guides/persisted-telemetry.md).
