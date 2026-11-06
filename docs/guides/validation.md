@@ -241,6 +241,10 @@ these distinctions and the exact numeric metadata.
 
 ## Text formats and temporal comparisons
 
+Use the optional [phone validation adapter](phone.md) for selected-region phone
+checks and E.164 normalization. It shares `phone.Parse` with service code and
+keeps phone numbering metadata out of the base validation package.
+
 `StartsWith` and `EndsWith` preserve exact case and the input's named string type.
 `Alpha` follows Unicode Alphabetic characters; `AlphaNumeric` also accepts
 Unicode Number characters. `Digits` accepts ASCII digits and preserves leading
