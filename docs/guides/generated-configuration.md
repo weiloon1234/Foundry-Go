@@ -56,7 +56,8 @@ settings, report, err := toml.LoadFile(
 
 `Defaults` and `Validate` are ordinary application Go functions. There is no
 second handwritten schema or string-encoded business validation. Precedence is
-defaults, file layers, environment, typed overrides. `APP__HTTP__TIMEOUT` targets
+defaults, file layers, optional [env file](#explicit-dotenv-input), environment,
+typed overrides. `APP__HTTP__TIMEOUT` targets
 `http.timeout`. `APP__HTTP__TIMEOUT_FILE` instead names a regular file (such as a
 mounted secret) whose content is the value: at most 1 MiB, with one trailing
 newline removed. Setting both names is an error, and declarations whose
@@ -93,6 +94,90 @@ not be logged. See the [configuration consumer](../../tests/fixtures/consumer/st
 and its [source precedence tests](../../tests/fixtures/consumer/startupconfig/settings_test.go).
 
 Named infrastructure tables reuse these generated schemas; see [named services](named-services.md).
+
+## Explicit dotenv input
+
+Set `config.Inputs[Settings].EnvFile` to load one explicitly selected dotenv
+document through either `schema.Load` or `toml.LoadFile`:
+
+```go
+inputs := config.Inputs[Settings]{
+    EnvFile: config.EnvFile{Path: envPath, Name: "local.env"},
+    Environment: os.LookupEnv,
+    Overrides: overrides,
+}
+settings, report, err := schema.Load(Defaults(), inputs)
+// With TOML, pass the same inputs to toml.LoadFile instead.
+```
+
+An empty `Path` disables the input. The loader does not search for `.env`, mutate
+the process environment, or implicitly use `os.LookupEnv`. A nil `Environment`
+uses only the env file for environment bindings; inject an empty lookup for the
+same behavior in application loaders that default to `os.LookupEnv`.
+
+The precedence is **defaults < TOML/file layers < env file < process environment
+< typed overrides**. Presence is tested per variable, so a process variable set
+to an empty string wins over the same env-file variable. The selected text goes
+through the generated schema's existing decoders and validation. As with process
+environment input, unrelated keys are ignored. The complete dotenv document is
+still checked for syntax and duplicate keys, including unused or overridden keys.
+`Prefix` applies normally. Dotenv supplies whole-setting environment bindings;
+per-entry named-collection overrides still require the separate `Environ` input.
+
+The adapter requires a regular file, checks the opened descriptor, reads at most
+1 MiB plus one byte to detect overflow, and closes the file before decoding
+settings. Files larger than 1 MiB, invalid UTF-8, NUL bytes and duplicate keys fail.
+The grammar is deliberately literal:
+
+- Each nonblank, noncomment line is `KEY=VALUE`. Keys match
+  `[A-Za-z_][A-Za-z0-9_]*`; spaces and tabs around the key and value are allowed.
+  LF and CRLF line endings are accepted.
+- A line starting with `#` after whitespace is a comment. In an unquoted value,
+  `#` starts a comment only at the start or after a space or tab; `a#b` is literal.
+- Single quotes preserve their contents literally. Double quotes recognize only
+  `\"` and `\\` escapes. Quoted values may contain leading/trailing spaces and `#`.
+  After a closing quote, only whitespace and an optional comment are allowed;
+  a comment must be separated from the quote by whitespace.
+- Empty values are set values. Multiline quotes, bare carriage returns in values,
+  `export KEY=...` and other escapes such as `\n` are rejected. `$NAME`, `${NAME}`,
+  command substitutions and backticks remain literal text; nothing is expanded
+  or executed.
+
+`NAME_FILE` retains the existing bounded single-value-file behavior. If `NAME`
+and `NAME_FILE` are both present after per-variable precedence, loading fails,
+including when one comes from the process and the other from the env file.
+An empty value still counts as present. A process `NAME_FILE` replaces the
+env-file `NAME_FILE`; it does not suppress an env-file `NAME` conflict. These
+conflicts remain errors even when a typed override targets the setting.
+
+`Name` is a trusted, credential-free display name identifying the env file;
+empty defaults to `.env`. It is separate from the filesystem path, following
+TOML's source-label convention. A field loaded from line 3 records, for example,
+`env-file:local.env:3:APP__HTTP__TIMEOUT`. A dotenv `NAME_FILE` binding records the
+dotenv line and the `_FILE` key, never the mounted file's path or contents.
+Process bindings retain `environment:NAME` / `environment-file:NAME`, and typed
+overrides retain `override`. Secret markers come from the schema.
+
+Parser and field-decoding errors include the source name and line when one is
+available. Formatted errors and provenance omit values and filesystem paths;
+retained I/O or decoder causes must not be logged. Invalid loads return no
+partial settings or provenance. File paths are operator controlled; as with
+TOML loading, this API does not promise cancellation of arbitrary filesystem I/O.
+
+When adopting this option, delete application dotenv parsers, the merged lookup
+closure and the provenance rewrite. Keep application defaults, declarations and
+validation. Existing loaders can pass their selected process lookup unchanged:
+
+```go
+inputs := foundryconfig.Inputs[Settings]{
+    EnvFile: foundryconfig.EnvFile{Path: options.EnvFile, Name: ".env"},
+    Environment: environment,
+    Overrides: options.Overrides,
+}
+// Keep the existing schema.Load / toml.LoadFile branch and Validate(settings).
+// After successful validation:
+return settings, report.Entries(), nil
+```
 
 ## Public browser configuration
 

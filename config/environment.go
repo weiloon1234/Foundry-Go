@@ -16,19 +16,36 @@ const fileSuffix = "_FILE"
 
 // environmentValue reads NAME or NAME_FILE. Errors name the variable, never
 // its value or the file contents.
-func environmentValue(lookup Lookup, env string) (string, string, bool, error) {
-	raw, direct := lookup(env)
-	path, indirect := lookup(env + fileSuffix)
+func environmentValue(lookup Lookup, env string, file envDocument) (string, string, bool, error) {
+	raw, directSource, direct := file.lookup(lookup, env)
+	path, indirectSource, indirect := file.lookup(lookup, env+fileSuffix)
 	switch {
 	case direct && indirect:
-		return "", "", false, safeerror.NewFault(fault.Invalid, "both "+env+" and "+env+fileSuffix+" are set")
+		message := "both " + env + " and " + env + fileSuffix + " are set"
+		if directSource != "" {
+			message += " from " + directSource
+		}
+		if indirectSource != "" {
+			message += " from " + indirectSource
+		}
+		return "", "", false, safeerror.NewFault(fault.Invalid, message)
 	case indirect:
 		value, err := readValueFile(path)
 		if err != nil {
-			return "", "", false, safeerror.WrapFault(fault.Invalid, "cannot read "+env+fileSuffix, err)
+			message := "cannot read " + env + fileSuffix
+			if indirectSource != "" {
+				message += " from " + indirectSource
+			}
+			return "", "", false, safeerror.WrapFault(fault.Invalid, message, err)
+		}
+		if indirectSource != "" {
+			return value, indirectSource, true, nil
 		}
 		return value, "environment-file:" + env, true, nil
 	default:
+		if directSource != "" {
+			return raw, directSource, direct, nil
+		}
 		return raw, "environment:" + env, direct, nil
 	}
 }

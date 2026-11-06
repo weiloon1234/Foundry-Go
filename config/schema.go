@@ -150,7 +150,8 @@ type Values struct {
 // Lookup matches os.LookupEnv and is injectable for deterministic tests.
 type Lookup func(string) (string, bool)
 
-// Inputs always applies files in order, then environment, then typed overrides.
+// Inputs always applies files in order, then EnvFile with Environment taking
+// precedence for each variable, then typed overrides.
 // Environment names use PREFIX__SECTION__FIELD for a section.field declaration.
 // NAME_FILE instead reads the value from the named regular file (at most
 // MaxTableBytes, one trailing newline removed); setting both is an error.
@@ -168,6 +169,8 @@ type Inputs[T any] struct {
 	Prefix      string
 	Overrides   []Override[T]
 	Validate    func(T) error
+	// EnvFile selects an optional bounded dotenv document. A zero Path disables it.
+	EnvFile EnvFile
 }
 
 // Entry records provenance without storing or formatting a setting's value.
@@ -255,6 +258,10 @@ func (s *Schema[T]) Load(defaults T, inputs Inputs[T]) (result T, report Report,
 			err = safeerror.NewFault(fault.Panicked, "configuration decoder or accessor panicked")
 		}
 	}()
+	envFile, err := readEnvFile(inputs.EnvFile)
+	if err != nil {
+		return result, report, err
+	}
 	value, err := copyConfiguration(defaults)
 	if err != nil {
 		return result, report, err
@@ -295,10 +302,10 @@ func (s *Schema[T]) Load(defaults T, inputs Inputs[T]) (result T, report Report,
 			}
 		}
 	}
-	if inputs.Environment != nil {
+	if inputs.Environment != nil || inputs.EnvFile.Path != "" {
 		for _, field := range s.fields {
 			env := environmentName(inputs.Prefix, field.name())
-			raw, source, exists, err := environmentValue(inputs.Environment, env)
+			raw, source, exists, err := environmentValue(inputs.Environment, env, envFile)
 			if err != nil {
 				return result, report, err
 			}
