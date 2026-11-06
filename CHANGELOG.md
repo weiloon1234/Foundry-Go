@@ -5,8 +5,13 @@
 - Added: Generated TypeScript clients export `fetchTransport`, a standard streaming
   Fetch transport. It forwards abort signals, credentials and each request's declared
   redirect mode, sets `duplex: "half"` only for streamed bodies, and releases streamed
-  responses on close or cancel. Apps that copied an adapter forcing `redirect: "error"`
-  should switch: redirect operations then return their `Location` as documented.
+  responses on close or cancel. Replacing a copied adapter that forced
+  `redirect: "error"` changes redirect handling: ordinary operations follow redirects,
+  and browser manual redirects stay opaque (`opaque_redirect`). Keep a custom transport
+  if every API redirect must be rejected.
+- Changed: the standard validation catalog gains `validation.file_kinds` and
+  `validation.image_kinds`, so locale-enabled applications regenerate their catalog
+  types on upgrade even without using the new rules.
 - Added: `config.Inputs.EnvFile` loads one bounded dotenv file (regular file, at most
   1 MiB, UTF-8 without NUL, literal quoting, no interpolation or `export`, duplicate keys
   rejected). The process environment wins per variable, `NAME`/`NAME_FILE` conflicts are

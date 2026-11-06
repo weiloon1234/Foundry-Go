@@ -20,7 +20,21 @@ generated entry and delete their local adapter. See
 The shipped transport forwards a declared `HTTPRequest.redirect`, with `"error"`
 as the fallback when absent. Generated requests supply `"follow"` or `"manual"`;
 switching from a local adapter that hard-coded `"error"` therefore changes redirect
-handling. Stream bodies receive `duplex: "half"`; other bodies do not.
+handling: ordinary operations follow redirects, and redirect operations use
+`"manual"`. In browsers a manual redirect stays opaque, so the generated client
+rejects it with `opaque_redirect`; a server-side transport can return its
+`Location`. Keep a custom transport if every API redirect must be rejected. Stream
+bodies receive `duplex: "half"`; other bodies do not.
+
+## Upload kind messages in the standard catalog
+
+The standard validation catalog gains `validation.file_kinds` and
+`validation.image_kinds`. Every application with locale-enabled manifests therefore
+exports two more message definitions, and its generated `CatalogMessageKey` and
+`CatalogMessageArguments` change, even if it never uses `FileKinds` or image kinds.
+Regenerate contracts and clients with the matching framework pin, as for any
+upgrade. Already-deployed clients are not wire-incompatible because of the extra
+definitions. Manifest version 9 and the ownership format are unchanged.
 
 ## Typed error details: manifest 9, v0.7.0
 

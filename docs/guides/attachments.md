@@ -457,15 +457,8 @@ an `attachments.Attachment` returned by a collection, or a file loaded into a
 model slot. The helper resolves the recorded storage identity through the
 manager's typed internal store. It preserves attachment metadata and variants,
 and deletes only the pinned original version or ETag. Unsupported conditional
-deletion and changed validators fail explicitly.
-
-```go
-attachmentstest.RemoveBackingObject(t, manager, stored.File)
-_, err := collection.ReadBytes(t.Context(), manager, owner, stored.ID(), maximum)
-if !errors.Is(err, storage.NotFound) {
-	t.Fatal("expected missing backing object")
-}
-```
+deletion and changed validators fail explicitly. A later `ReadBytes` or open of
+that file then returns an error matching `storage.NotFound`.
 
 Here `attachmentstest` imports
 `github.com/weiloon1234/Foundry-Go/testkit/attachments`. Use isolated test-owned
