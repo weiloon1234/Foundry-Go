@@ -347,6 +347,29 @@ negotiation. Presentation names and declared response media types remain explici
 Capacity exhaustion (`fault.Overloaded`, `LimitExceeded`), disk shutdown and
 server-side deadlines map to a retryable 503 `unavailable` response, not 500.
 
+When an application service reads storage or attachments itself, use
+`storage/http.ResponseError(err)` inside the deferred `http.StreamFrom` or
+`http.DownloadFrom` source after a failed read. Handle domain and authorization
+errors with the application's own mapper first. Call `ResponseError` only for a
+non-nil read error. It preserves the original cause and the same mapping used by
+`Download` and `Stream`: typed storage not-found becomes 404, forbidden 403,
+precondition failure 412, and an unsatisfiable range 416. Capacity, shutdown and
+cancellation failures use 503. Unclassified failures use 500.
+
+```go
+return http.StreamFrom(func(ctx context.Context) (http.StreamContent, error) {
+	body, info, err := disk.Open(ctx, key, storage.ReadOptions{})
+	if err != nil {
+		return http.StreamContent{}, storagehttp.ResponseError(err)
+	}
+	return http.StreamContent{Body: body, MediaType: http.MediaType(info.Object.ContentType), Length: value.Set(info.Length)}, nil
+}), nil
+```
+
+Here `storagehttp` imports `github.com/weiloon1234/Foundry-Go/storage/http`.
+For a missing attachment object's test setup, see
+[testing missing backing objects](attachments.md#test-missing-backing-objects).
+
 Private disks are the default. `disk.PublicURL` requires `Visibility: storage.Public`
 and an explicitly configured public base; neither setting changes provider access
 policy. An S3 public base is the bucket/CDN root; Namespace is appended from the

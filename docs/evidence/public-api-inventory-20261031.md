@@ -9,6 +9,21 @@ Total: **10,002 declarations in 160 packages**; **483 exported methods on
 private receivers**; **3,866 declarations without documentation**;
 **518 DSL functions/types without `Example:`**.
 
+## Additions on 2026-11-06
+
+The source-driven inventory in `TestConsumerAPIInventory` discovers these
+documented additions automatically. They require no private-receiver exceptions.
+The baseline counts above remain historical.
+
+| Package | Added declaration |
+| --- | --- |
+| `storage/http` | `func ResponseError(err error) error` |
+| `testkit/attachments` | `func RemoveBackingObject[M any](t testing.TB, manager *attachments.Manager, file attachments.File[M])` |
+| `attachments` | `func (*Manager) RemoveBackingObject(ctx context.Context, token attachmenttest.Token, id OperationID) error` |
+
+The manager seam requires a valid token from `internal/attachmenttest`, which
+applications cannot import. It returns no storage pins.
+
 ## Exported methods on private receivers
 
 | Package | Methods | Receivers and methods |

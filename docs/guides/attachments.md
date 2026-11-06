@@ -449,6 +449,35 @@ original is retained and only variants are transformed. HEIC/HEIF media aliases
 share acceptance rules. Backend availability and plan compatibility are checked
 when constructing the attachment manager; no codec import is needed in consumers.
 
+## Test missing backing objects
+
+Use `testkit/attachments.RemoveBackingObject(t, manager, file)` to simulate a
+ready attachment whose original object has disappeared. Pass `stored.File` for
+an `attachments.Attachment` returned by a collection, or a file loaded into a
+model slot. The helper resolves the recorded storage identity through the
+manager's typed internal store. It preserves attachment metadata and variants,
+and deletes only the pinned original version or ETag. Unsupported conditional
+deletion and changed validators fail explicitly.
+
+```go
+attachmentstest.RemoveBackingObject(t, manager, stored.File)
+_, err := collection.ReadBytes(t.Context(), manager, owner, stored.ID(), maximum)
+if !errors.Is(err, storage.NotFound) {
+	t.Fatal("expected missing backing object")
+}
+```
+
+Here `attachmentstest` imports
+`github.com/weiloon1234/Foundry-Go/testkit/attachments`. Use isolated test-owned
+files and storage. The helper mutates real storage and leaves the attachment
+record ready so the application can exercise its missing-object response.
+Storage pins remain private, and helper failure output omits underlying causes.
+The manager's test seam requires a module-internal token, following the event
+test helper pattern. It does not add a production storage-pin accessor.
+
+For application reads inside deferred HTTP sources, use the
+[storage HTTP error mapper](storage.md#http-and-links) after handling domain errors.
+
 For the old-to-new API mapping, see [ORM migration](orm-migration.md).
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

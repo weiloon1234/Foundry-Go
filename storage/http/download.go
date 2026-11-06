@@ -20,7 +20,7 @@ func Download(disk *storage.Disk, key storage.ObjectKey, options storage.ReadOpt
 	return foundryhttp.DownloadFrom(func(ctx context.Context) (foundryhttp.DownloadContent, error) {
 		body, info, err := disk.OpenSeek(ctx, key, options)
 		if err != nil {
-			return foundryhttp.DownloadContent{}, responseError(err)
+			return foundryhttp.DownloadContent{}, ResponseError(err)
 		}
 		return foundryhttp.DownloadContent{Body: body, MediaType: foundryhttp.MediaType(info.ContentType), Modified: info.Modified.UTC(), EntityTag: foundryhttp.EntityTag(info.ETag)}, nil
 	})
@@ -33,16 +33,23 @@ func Stream(disk *storage.Disk, key storage.ObjectKey, options storage.ReadOptio
 	return foundryhttp.StreamFrom(func(ctx context.Context) (foundryhttp.StreamContent, error) {
 		body, info, err := disk.Open(ctx, key, options)
 		if err != nil {
-			return foundryhttp.StreamContent{}, responseError(err)
+			return foundryhttp.StreamContent{}, ResponseError(err)
 		}
 		return foundryhttp.StreamContent{Body: body, MediaType: foundryhttp.MediaType(info.Object.ContentType), Length: value.Set(info.Length)}, nil
 	})
 }
 
-// responseError maps storage failures to the shared HTTP envelope. Capacity
+// ResponseError maps storage failures to the shared HTTP envelope. Capacity
 // exhaustion (fault.Overloaded, LimitExceeded), disk shutdown and deadlines are
 // retryable 503 responses, not 500s; unclassified adapter failures remain 500.
-func responseError(err error) error {
+// Use it after an application-level storage or attachment read, inside a deferred
+// http.StreamFrom or http.DownloadFrom source. Handle application/domain errors
+// separately first. A nil error returns nil; unclassified errors map to
+// InternalError. The original cause is retained.
+func ResponseError(err error) error {
+	if err == nil {
+		return nil
+	}
 	var failure *storage.Error
 	if callback.ErrorAs(err, &failure) {
 		switch failure.Code() {
