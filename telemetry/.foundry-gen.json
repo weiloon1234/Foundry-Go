@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "files": {
+    "alert_state_foundry.gen.go": "e3a8bf966b81ec0959886c0a79818246f88f3f6fce27a1d7453c638441570494",
+    "browser_code_foundry.gen.go": "e81b87d2a45081275c139ef3defa23ecfdc39f2a77158d60222845a7e23b906a",
+    "rule_foundry.gen.go": "cb4e0f93194c4bef98064818144bf291c570e8195d2828c5990473e5006a5f71",
+    "source_foundry.gen.go": "e9b4c400fd3a3eff313265207c543ce227d7b36daefb18f4e7f633434a4cd47b"
+  }
+}
