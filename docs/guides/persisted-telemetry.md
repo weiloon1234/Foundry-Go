@@ -395,7 +395,9 @@ Empty `TelemetrySettings.Kernels` starts the periodic loop under HTTP, worker,
 and scheduler kernels. CLI-only execution and `Start` without a selected kernel
 still register cleanup but do not start a periodic loop. Explicit kernel lists
 can select other known kernels. Each process captures its own memory; there is
-no cluster-leader election for collection.
+no cluster-leader election for collection. `Engine.RunID` returns this process's
+run identity, the ID its persisted run and buckets carry, so an application can
+bind process-local operations, such as log-file maintenance, to the current owner.
 
 `Engine.Run` is single-use. Cancellation stops its loop and leaves finalization
 to `Close`. Cleanup seals intake and read admission, waits for active work,

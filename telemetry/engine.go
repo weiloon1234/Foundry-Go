@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/credential"
 	"github.com/weiloon1234/Foundry-Go/internal/errordiag"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/observability"
 )
 
@@ -209,6 +210,17 @@ func (e *Engine) Done() <-chan struct{} { return e.done }
 // Reader returns the engine's bounded read service. It shares Engine lifetime
 // admission; requests after Close begins fail without touching the database.
 func (e *Engine) Reader() *Reader { return e.reader }
+
+// RunID returns this process's telemetry run identity, the same ID that its
+// persisted run, buckets and receipts carry. Applications use it to bind
+// process-local operations, such as log maintenance, to the current owner. An
+// uninitialized engine returns the zero ID, which matches no run.
+func (e *Engine) RunID() model.ID[Run] {
+	if e == nil || e.collector == nil {
+		return model.ID[Run]{}
+	}
+	return e.collector.RunID()
+}
 
 // RecordBrowser admits an untrusted browser report through the engine-owned
 // collector. It preserves the collector's validation and bounded loss accounting;

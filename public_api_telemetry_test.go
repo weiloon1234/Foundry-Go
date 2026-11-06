@@ -23,7 +23,7 @@ func TestTelemetryConsumerAPIInventory(t *testing.T) {
 		"Migrations": false, "PruneResult": false,
 		"Dependencies": false, "Engine": false, "New": false, "KernelModule": false,
 		"Engine.Run": false, "Engine.Close": false, "Engine.Done": false,
-		"Engine.RecordBrowser": false, "Engine.Reader": false, "Engine.Prune": false, "Engine.AcknowledgeIn": false,
+		"Engine.RecordBrowser": false, "Engine.Reader": false, "Engine.RunID": false, "Engine.Prune": false, "Engine.AcknowledgeIn": false,
 		"Reader": false, "Reader.Overview": false, "Reader.Traffic": false,
 		"Reader.Issue": false, "Reader.Issues": false, "Reader.Events": false, "Reader.Alerts": false,
 		"Window": false, "Window.Validate": false,

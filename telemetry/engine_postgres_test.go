@@ -12,6 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 )
@@ -40,6 +41,19 @@ func postgresEngine(t *testing.T) (*Engine, *database.DB, string, *testClock) {
 		<-recorder.Done()
 	})
 	return e, db, schema, source
+}
+
+func TestEngineRunIDIsTheOwnedCollectorRun(t *testing.T) {
+	e, _, _, _ := postgresEngine(t)
+	var zero model.ID[Run]
+	if e.RunID() != e.collector.RunID() || e.RunID() == zero {
+		t.Fatal("engine run identity differs from its collector run")
+	}
+	for _, engine := range []*Engine{nil, {}} {
+		if engine.RunID() != zero {
+			t.Fatal("uninitialized engine returned a run identity")
+		}
+	}
 }
 
 func TestEngineRunCancellationLeavesFinalCaptureToClose(t *testing.T) {
