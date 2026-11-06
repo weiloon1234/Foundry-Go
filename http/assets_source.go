@@ -172,6 +172,10 @@ func (a *Assets) Download(name AssetPath) Download {
 	return DownloadFrom(func(ctx context.Context) (DownloadContent, error) { return a.open(ctx, string(name)) }).WithDisposition(DispositionInline).WithMediaType(a.config.media(string(name)))
 }
 func (a *Assets) open(ctx context.Context, name string) (content DownloadContent, err error) {
+	return a.openFile(ctx, name, true)
+}
+
+func (a *Assets) openFile(ctx context.Context, name string, validators bool) (content DownloadContent, err error) {
 	if !a.config.allowed(name) {
 		return content, NotFound.WithCause(nil)
 	}
@@ -196,7 +200,7 @@ func (a *Assets) open(ctx context.Context, name string) (content DownloadContent
 	} else {
 		content, err = openFilesystemAsset(a.config.Source.filesystem, name)
 		body = content.Body
-		if err == nil && content.Modified.IsZero() {
+		if err == nil && validators && content.Modified.IsZero() {
 			content.EntityTag, err = a.contentTag(name, body)
 		}
 	}

@@ -74,6 +74,9 @@ var consumerAPIPrivateMethodExceptions = map[string]string{
 	"foundation.pluginProvider": "Boot Dependencies ID Register",
 	"foundation.taskName":       "String",
 	// Existing HTTP, codec, body, diagnostic, and response-controller adapters; lead review deferred.
+	// Runtime proxy adapters implement io.Closer and native response control.
+	"http.spaRuntimeProxyBody":     "Close",
+	"http.spaRuntimeHeadWriter":    "Unwrap Write",
 	"http.assetBody":               "Close",
 	"http.base64CookieCodec":       "Format Parse",
 	"http.boolPathCodec":           "Format FoundryAdapter Parse",

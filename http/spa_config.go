@@ -14,12 +14,15 @@ import (
 // SPAConfig declares an unmatched-route fallback. Prefix and Exclude are
 // absolute URL prefixes. Index is relative to Assets. Only explicit text/html
 // navigation to extensionless missing paths falls back to Index. Existing files
-// still serve normally. Declared API routes and native method errors take precedence.
+// still use asset selection; Runtime can transform selected HTML documents.
+// Declared API routes and native method errors take precedence.
 type SPAConfig struct {
 	Prefix       string
 	Index        AssetPath
 	Exclude      []string
 	CacheControl HeaderValue
+	// Runtime injects public data into successful HTML documents. Zero disables it.
+	Runtime SPARuntime
 }
 
 // DefaultSPAConfig returns a root mount with index.html and no-cache headers.
@@ -28,8 +31,13 @@ func DefaultSPAConfig() SPAConfig {
 }
 
 // Validate checks the mount prefix, index, cache header and bounded unique exclusion
-// prefixes.
+// prefixes, plus an enabled runtime descriptor.
 func (c SPAConfig) Validate() error {
+	if c.Runtime.state != nil {
+		if err := c.Runtime.Validate(); err != nil {
+			return err
+		}
+	}
 	if _, err := assetPrefix(c.Prefix); err != nil {
 		return err
 	}

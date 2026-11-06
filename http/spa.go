@@ -81,9 +81,11 @@ func (s *spaFallback) serve(w stdhttp.ResponseWriter, r *stdhttp.Request) bool {
 		scope.observation.route.Store(s.state)
 	}
 	matched := r.WithContext(context.WithValue(r.Context(), matchedRouteKey{}, s.state))
-	if err := s.assets.config.Limits.checkRange(r.Header.Values("Range")); err != nil {
-		writeRoutingError(w, matched, err)
-		return true
+	if s.config.Runtime.state == nil {
+		if err := s.assets.config.Limits.checkRange(r.Header.Values("Range")); err != nil {
+			writeRoutingError(w, matched, err)
+			return true
+		}
 	}
 	name := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, s.prefix), "/")
 	var selection assetSelection
@@ -106,6 +108,16 @@ func (s *spaFallback) serve(w stdhttp.ResponseWriter, r *stdhttp.Request) bool {
 	if err != nil {
 		writeRoutingError(w, matched, err)
 		return true
+	}
+	if s.config.Runtime.state != nil && selection.redirect == 0 && spaHTML(string(s.assets.config.media(selection.name))) {
+		s.serveRuntime(w, matched, selection)
+		return true
+	}
+	if s.config.Runtime.state != nil {
+		if err := s.assets.config.Limits.checkRange(r.Header.Values("Range")); err != nil {
+			writeRoutingError(w, matched, err)
+			return true
+		}
 	}
 	s.assets.serveSelection(w, matched, selection, s.config.CacheControl)
 	return true

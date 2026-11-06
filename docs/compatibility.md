@@ -6,6 +6,24 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## SPA runtime data
+
+`SPAConfig.Runtime`, `DefineSPARuntime` and `SPARuntime.WrapProxy` are additive
+opt-ins. A zero runtime descriptor preserves existing static serving. Enabled HTML
+documents use `no-store`, omit validators and range support, and return the full
+representation for conditional requests. HEAD emits headers without a body.
+The default script ID remains `foundry-portal-runtime`, with
+`type="application/json"`.
+
+Remove application response-rewriting middleware when enabling the hook. Documents
+without an explicit head element, with an existing runtime element, or beyond the
+configured bounds now fail with a safe 503 instead of silently omitting runtime
+data. JSON limits also apply after HTML escaping. Enable `StyleNonceCarrier` to
+preserve applications that supply an empty nonce-bearing style element for client
+libraries. Proxy navigation predicates must exclude APIs and assets that require
+native conditional and range behavior. See [runtime data and adoption](guides/http-assets.md#inject-public-runtime-data).
+No generated contract or persisted format changes are required by this hook.
+
 ## Standard Fetch transport
 
 Regenerate TypeScript clients to expose the additive `fetchTransport: HTTPTransport`
