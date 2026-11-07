@@ -31,25 +31,24 @@ type Updates = ReturnType<sdk.Realtime["channels"]["updates"]>;
 type UpdateListener = Parameters<Updates["on"]["updated"]>[0];
 
 export async function withUpdatesRoom(
-  realtime: sdk.Realtime,
+  connectionOwner: sdk.Realtime,
   roomID: sdk.Int64,
   render: UpdateListener,
   use: (room: Updates) => Promise<void>,
 ): Promise<void> {
-  const room = realtime.channels.updates(roomID);
+  const room = connectionOwner.channels.updates(roomID);
   const off = room.on.updated(render);
-  let subscribed = false;
   try {
     await room.subscribe({ replay: 4 });
-    subscribed = true;
     await use(room);
+    await room.unsubscribe();
+    room.dispose();
+  } catch (error) {
+    // The caller authorizes closing every room if work or cleanup fails.
+    connectionOwner.close();
+    throw error;
   } finally {
-    try {
-      if (subscribed) await room.unsubscribe();
-    } finally {
-      off();
-      room.dispose();
-    }
+    off();
   }
 }
 

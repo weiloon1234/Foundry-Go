@@ -881,12 +881,22 @@ export async function publishUpdate(
 Pass a callback to `withRealtimeConnection` that calls `withUpdatesRoom` and
 awaits the application's room work. `publishUpdate` shows the typed client event;
 its accepted callback reports admission, while the returned promise waits for
-the final acknowledgement. End the room work normally to unsubscribe it. The
-nested cleanup still removes listeners and disposes the room if unsubscribe fails.
-The connection helper closes its owned connection when application work exits.
-A component borrowing a shared connection uses only the room helper. Do not
-abort a protocol operation to remove one room from a shared connection: an
-in-flight abort closes that connection. Unsubscribe the room normally.
+the final acknowledgement. The room helper owns the selected room and requires
+authority to close the entire connection on failure. After normal work it awaits
+successful unsubscribe before disposing the idle room. If subscribing, application
+work or cleanup fails, it deliberately closes the connection and rethrows that
+error. It does not attempt disposal after failed unsubscribe: the room may still
+be subscribed, or connection closure may already have disposed it. Closing an
+already-closed connection is safe. The listener is detached in either case.
+The connection helper also closes its owned connection when application work exits.
+
+A component borrowing a shared connection must delegate cleanup to the retained
+connection owner. This helper is suitable there only when that owner authorizes
+closing every room on failure. Otherwise the owner must retain the failed room
+handle and its error for reconciliation and a later unsubscribe attempt, or decide
+to close the connection; local disposal cannot release an active subscription.
+Do not abort a protocol operation just to remove one room: an in-flight abort
+closes the shared connection.
 
 The browser transport used above forwards text and binary frames without JSON
 parsing. It bounds the opening handshake to ten seconds and removes temporary

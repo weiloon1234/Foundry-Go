@@ -407,6 +407,57 @@ function fakeSocket() {
     disconnect: () => closed(),
   };
 }
+
+// Exercise the rendered recipe through the generated SDK's actual room states.
+// Transport responses and assertion bookkeeping stay outside the recipe region.
+const { withUpdatesRoom } = await import(new URL("./realtime-lifecycle.js", pathToFileURL(process.argv[2])));
+for (const outcome of ["success", "unsubscribe-error", "disconnected", "subscribe-error", "work-error"]) {
+  const wire = fakeSocket(), workError = new Error("room work failed");
+  let staleDeliveries = 0;
+  const owner = sdk.createRealtime({
+    ...wire.transport,
+    send(text) {
+      wire.transport.send(text);
+      const request = wire.sent.at(-1);
+      if (request.action === "unsubscribe" && outcome === "disconnected") {
+        wire.disconnect();
+        return;
+      }
+      const rejected = request.action === "unsubscribe" && outcome === "unsubscribe-error"
+        || request.action === "subscribe" && outcome === "subscribe-error";
+      wire.receive({
+        v: 1, id: request.id, channel: request.channel, room: request.room,
+        type: rejected ? "error" : request.action === "subscribe" ? "subscribed" : "unsubscribed",
+        ...(rejected ? { code: "rate_limited" } : {}),
+      });
+    },
+  });
+  try {
+    const completed = withUpdatesRoom(owner, "7", () => { staleDeliveries++; }, async () => {
+      if (outcome === "work-error") throw workError;
+    });
+    if (outcome === "success") {
+      await completed;
+      assert.equal(wire.didClose, 0);
+      const replacement = owner.channels.updates("7");
+      await replacement.subscribe();
+      const event = { v: 1, type: "event", channel: "updates", room: "7", event: "updated", message_id: order };
+      wire.receive(JSON.stringify(event).replace(/}$/, ',"payload":' + encoded + "}"));
+      assert.equal(staleDeliveries, 0);
+      await replacement.unsubscribe();
+      replacement.dispose();
+    } else {
+      await assert.rejects(completed, error => outcome === "work-error"
+        ? error === workError
+        : error instanceof sdk.RealtimeError && error.code === (outcome === "disconnected" ? "closed" : "rate_limited"));
+      assert.equal(wire.didClose, 1, "the connection owner must release all rooms after failure");
+      assert.throws(() => owner.channels.updates("7"), error => error instanceof sdk.RealtimeError && error.code === "closed");
+    }
+  } finally {
+    owner.close();
+  }
+}
+
 const fake = fakeSocket(), client = sdk.createRealtime(fake.transport), selected = client.channels.updates("7");
 const joining = selected.subscribe(); const join = fake.sent.at(-1);
 fake.receive({ v: 1, type: "subscribed", id: join.id, channel: join.channel, room: join.room }); await joining;
