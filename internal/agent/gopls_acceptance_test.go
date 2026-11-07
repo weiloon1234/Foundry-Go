@@ -411,7 +411,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"notification-transaction-enqueue", "notifying/orders.go", "pending.", "Enqueue", []string{"Enqueue", "Send", "ID"}, []string{"Tx", "DeliveryJob", "Outbox", "error"}, "/notifications/jobs.go"},
 		{"notification-owned-inbox", "notifying/orders.go", "inbox.", "List", []string{"List", "MarkRead", "MarkUnread", "UnreadCount"}, []string{"PageRequest", "Record", "error"}, "/notifications/inbox.go"},
 
-		{"email-upload-attachment", "mailing/uploads_test.go", "s.message.", "AttachUpload", []string{"AttachUpload", "AttachStored", "Attach", "AttachData"}, []string{"Context", "UploadSource", "Message", "error"}, "/email/attachment_sources.go"},
+		{"email-upload-attachment", "mailing/uploads_test.go", "s.base.", "AttachUpload", []string{"AttachUpload", "AttachStored", "Attach", "AttachData"}, []string{"Context", "UploadSource", "Message", "error"}, "/email/attachment_sources.go"},
 		{"email-stored-attachment", "articles/email_postgres_test.go", "message.", "AttachStored", []string{"AttachStored", "AttachUpload"}, []string{"StoredAttachment", "Message", "error"}, "/email/attachment_sources.go"},
 		{"email-cloudflare-driver", "mailing/configured_test.go", "infrastructure.", "CloudflareMail", []string{"CloudflareMail", "SMTPMail", "SESMail", "ResendMail", "PostmarkMail", "MailgunMail"}, []string{"MailDriver"}, "/infrastructure/mail_settings.go"},
 		{"email-cloudflare-config", "mailing/configured_test.go", "keys.API.", "AccountID", []string{"AccountID", "Token", "Endpoint"}, []string{"Key[", "MailerSettings", "string"}, "/infrastructure/mailer_settings_foundry.gen.go"},
