@@ -37,7 +37,7 @@ func documentationFixture(t *testing.T, mode string) (app, framework, goBinary s
 	metadata := struct {
 		Path, Version, Dir string
 		Main               bool
-		Replace            *struct{ Version string } `json:",omitempty"`
+		Replace            *struct{ Path, Version string } `json:",omitempty"`
 	}{Path: frameworkinfo.ModulePath, Version: "v0.11.0", Dir: framework}
 	build = frameworkinfo.Build{Version: "v0.11.0"}
 	switch mode {
@@ -50,10 +50,18 @@ func documentationFixture(t *testing.T, mode string) (app, framework, goBinary s
 	case "main":
 		metadata.Main = true
 	case "local":
-		metadata.Replace = &struct{ Version string }{}
+		metadata.Replace = &struct{ Path, Version string }{}
 	case "versioned-replacement":
 		metadata.Version = "v0.10.0"
-		metadata.Replace = &struct{ Version string }{Version: "v0.11.0"}
+		metadata.Replace = &struct{ Path, Version string }{Path: frameworkinfo.ModulePath, Version: "v0.11.0"}
+	case "cross-module", "different-replacements", "matching-replacement":
+		metadata.Replace = &struct{ Path, Version string }{Path: "example.test/fork", Version: "v0.11.0"}
+		if mode == "different-replacements" {
+			build.Path = "example.test/other-fork"
+		}
+		if mode == "matching-replacement" {
+			build.Path = "example.test/fork"
+		}
 	case "missing-cache":
 		metadata.Dir = ""
 	}
@@ -115,14 +123,14 @@ func documentationSnapshot(t *testing.T, root string) map[string]string {
 }
 
 func TestDocsSelectedVersionAndOfflinePolicy(t *testing.T) {
-	for _, mode := range []string{"match", "versioned-replacement", "mismatch", "unversioned-tool", "unversioned-selection", "main", "local", "missing-cache"} {
+	for _, mode := range []string{"match", "versioned-replacement", "cross-module", "different-replacements", "matching-replacement", "mismatch", "unversioned-tool", "unversioned-selection", "main", "local", "missing-cache"} {
 		t.Run(mode, func(t *testing.T) {
 			app, framework, goBinary, build := documentationFixture(t, mode)
 			beforeApp, beforeFramework := documentationSnapshot(t, app), documentationSnapshot(t, framework)
 			err := checkDocs(t.Context(), app, goBinary, build)
 			want := ""
 			switch mode {
-			case "mismatch":
+			case "mismatch", "cross-module", "different-replacements":
 				want = "module-pinned"
 			case "unversioned-tool", "unversioned-selection", "main", "local":
 				want = "unverifiable"
@@ -201,6 +209,57 @@ func TestDocsSkillsMirrorIsNotFollowed(t *testing.T) {
 	}
 	if err := checkDocs(t.Context(), app, goBinary, build); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDocsSymlinkedApplicationRoot(t *testing.T) {
+	app, _, goBinary, build := documentationFixture(t, "match")
+	link := filepath.Join(t.TempDir(), "app-link")
+	if err := os.Symlink(app, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkDocs(t.Context(), link, goBinary, build); err != nil {
+		t.Fatal(err)
+	}
+	putDocumentation(t, app, "AGENTS.md", "Foundry guides: `missing`\n")
+	if err := checkDocs(t.Context(), link, goBinary, build); err == nil || !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("symlinked root bypassed instructions: %v", err)
+	}
+}
+
+func TestDocsPaginationRetirement(t *testing.T) {
+	for _, owner := range []string{"AuthenticatedNumberedEndpoint[P,F,A,T]", "AuthenticatedSimpleEndpoint[P,F,A,T]", "AuthenticatedCursorEndpoint[P,F,M,A,T]"} {
+		app, _, goBinary, build := documentationFixture(t, "match")
+		text := "```go\npackage example\nimport p \"github.com/weiloon1234/Foundry-Go/http/pagination\"\nfunc use(e p." + owner + ") { e.WithScopes(scopes) }\n```\n"
+		putDocumentation(t, app, ".claude/skills/endpoint/SKILL.md", text)
+		if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "retired API pagination.") {
+			t.Fatal(err)
+		}
+		putDocumentation(t, app, ".claude/skills/endpoint/SKILL.md", "```go\npagination.Authenticated(page, binding, http.Scopes(scopes))\n```\n")
+		if err := checkDocs(t.Context(), app, goBinary, build); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestDocsRejectsActiveDirectorySymlinks(t *testing.T) {
+	for _, name := range []string{".claude", ".claude/skills", ".claude/skills/workflow", ".claude/skills/workflow/references"} {
+		t.Run(name, func(t *testing.T) {
+			app, _, goBinary, build := documentationFixture(t, "match")
+			target := t.TempDir()
+			putDocumentation(t, target, "SKILL.md", "Foundry guides: `missing`\n")
+			putDocumentation(t, target, "skills/workflow/SKILL.md", "Foundry guides: `missing`\n")
+			link := filepath.Join(app, name)
+			if err := os.MkdirAll(filepath.Dir(link), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, link); err != nil {
+				t.Fatal(err)
+			}
+			if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "must not be symlinks") {
+				t.Fatalf("active symlink bypassed instructions: %v", err)
+			}
+		})
 	}
 }
 

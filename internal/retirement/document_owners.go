@@ -90,7 +90,7 @@ func (r documentRules) checkCode(name, code string, line int) []error {
 		if strings.HasPrefix(imported, framework) {
 			owner := strings.TrimPrefix(imported, framework)
 			switch owner {
-			case "http", "http/modelbinding", "database/orm", "database/orm/rows", "validation", "translations", "password":
+			case "http", "http/modelbinding", "http/pagination", "database/orm", "database/orm/rows", "validation", "translations", "password":
 				aliases[alias] = path.Base(owner)
 			default:
 				aliases[alias] = "framework:" + owner
@@ -243,7 +243,7 @@ func (r documentRules) owner(expr ast.Expr, bindings, aliases map[string]string)
 			return alias
 		}
 		switch id.Name {
-		case "http", "modelbinding", "validation", "orm", "rows", "translations":
+		case "http", "modelbinding", "pagination", "validation", "orm", "rows", "translations":
 			return id.Name
 		}
 	}

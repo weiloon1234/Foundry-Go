@@ -10,9 +10,14 @@
   against the cached framework pin without changing files. References accept bare
   guide names and explicit anchors; malformed declarations and missing or duplicate
   anchors fail with file/line diagnostics. The command requires a verified tool
-  version match and applies owner-aware HTTP, validation, translation, and data-layer
+  module path and version match and applies owner-aware HTTP, validation, translation, and data-layer
   retirement rules, including app-owned skill regions. See
   [pinned documentation checks](docs/guides/developer-tooling-and-testing.md#pinned-documentation-checks).
+- Fixed: documentation checks now inspect symlinked application roots, reject active
+  skill-directory symlinks, displaced recipe anchors and source markers inside literals
+  or block comments, and validate framework guide declarations and reference-style links.
+  Retirement rules cover authenticated pagination while preserving transaction-row locks;
+  documentation failures retain captured diagnostics and typed source locations.
 
 - Fixed: when the migration lock deadline expires during the advisory lock query, `migrate.Postgres`
   reports the lock timeout instead of the driver's closed-connection error.

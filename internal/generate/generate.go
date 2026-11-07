@@ -134,8 +134,9 @@ func (g *packageGraph) checkFramework(build frameworkinfo.Build) error {
 	if g.framework == nil {
 		return nil
 	}
-	selection := frameworkinfo.Selection{Main: g.framework.Main, Version: g.framework.Version}
+	selection := frameworkinfo.Selection{Path: g.framework.Path, Main: g.framework.Main, Version: g.framework.Version}
 	if replace := g.framework.Replace; replace != nil {
+		selection.Path = replace.Path
 		selection.Version, selection.Local = replace.Version, replace.Version == ""
 	}
 	_, err := build.Check(selection)

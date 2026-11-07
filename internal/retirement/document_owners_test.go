@@ -1,9 +1,64 @@
 package retirement
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
+
+func TestPaginationDocumentationOwners(t *testing.T) {
+	for _, owner := range []string{"AuthenticatedNumberedEndpoint[P,F,A,T]", "AuthenticatedSimpleEndpoint[P,F,A,T]", "AuthenticatedCursorEndpoint[P,F,M,A,T]"} {
+		for _, method := range []string{"WithScopes", "WithPermissions", "WithAuthorization"} {
+			for _, imported := range []string{"github.com/weiloon1234/Foundry-Go/http/pagination", "example.test/pagination"} {
+				code := fmt.Sprintf("package example\nimport pages %q\nfunc use(e pages.%s) { e.%s(option) }", imported, owner, method)
+				err := CheckDocument("AGENTS.md", []byte("```go\n"+code+"\n```\n"))
+				if strings.HasPrefix(imported, "example.test/") {
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else if err == nil || !strings.Contains(err.Error(), "retired API pagination.") || strings.Contains(err.Error(), "ambiguous") {
+					t.Fatalf("%s: %v", code, err)
+				}
+			}
+		}
+	}
+	for _, code := range []string{
+		"e := pagination.Authenticated(page, binding)\ne.WithScopes(scopes)",
+		"package example\nimport p \"github.com/weiloon1234/Foundry-Go/http/pagination\"\nfunc use() { e := p.Authenticated(page, binding); e.WithAuthorization(policy) }",
+	} {
+		if err := CheckDocument("AGENTS.md", []byte("```go\n"+code+"\n```")); err == nil || !strings.Contains(err.Error(), "retired API pagination.") {
+			t.Fatalf("%s: %v", code, err)
+		}
+	}
+	if err := CheckDocument("AGENTS.md", []byte("```go\npagination.Authenticated(page, binding, http.Scopes(scopes))\npagination.AuthorizeActor(page, policy)\n```")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTransactionRowLockOwners(t *testing.T) {
+	for _, pair := range [][2]string{
+		{"TransactionScalarOf", "TransactionScalar[S,V]"},
+		{"SelectTransactionCorrelatedScalar", "TransactionCorrelatedScalar[O,I,V]"},
+		{"SelectTransactionCorrelatedRecord", "TransactionCorrelatedRecord[O,I,R]"},
+		{"ProjectTransactionCorrelated", "TransactionCorrelatedRecord[O,I,R]"},
+	} {
+		for _, method := range []string{"ForUpdate", "ForNoKeyUpdate", "ForShare", "ForKeyShare"} {
+			for _, code := range []string{
+				fmt.Sprintf("rows.%s.%s()", pair[1], method),
+				fmt.Sprintf("rows.%s(selected).%s()", pair[0], method),
+				fmt.Sprintf("q := rows.%s(selected)\nq.%s()", pair[0], method),
+				fmt.Sprintf("var q rows.%s\nq.%s()", pair[1], method),
+			} {
+				if err := CheckDocument("AGENTS.md", []byte("```go\n"+code+"\n```")); err != nil {
+					t.Fatalf("%s: %v", code, err)
+				}
+			}
+		}
+	}
+	if err := CheckDocument("AGENTS.md", []byte("```go\norm.Query[User].ForUpdate()\n```")); err == nil || !strings.Contains(err.Error(), "retired API orm.Query.ForUpdate") {
+		t.Fatal(err)
+	}
+}
 
 func TestDocumentOwnerRetirements(t *testing.T) {
 	for _, code := range []string{

@@ -1,11 +1,30 @@
 package docrefs
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
+
+func TestReferenceDiagnosticsRetainTypedLocations(t *testing.T) {
+	_, err := Parse("AGENTS.md", []byte("Foundry guides: bad\nFoundry guides: also-bad\n"))
+	message, owned := safeerror.OwnedMessage(err)
+	if !owned || !strings.Contains(message, "AGENTS.md:1:") || !strings.Contains(message, "AGENTS.md:2:") {
+		t.Fatalf("lost captured diagnostics: %q", message)
+	}
+	var location Problem
+	if !errors.As(err, &location) || location.File != "AGENTS.md" || location.Line != 1 {
+		t.Fatalf("lost typed location: %+v, %v", location, err)
+	}
+	one := problem("AGENTS.md", 3, "invalid reference")
+	if safeerror.Join("documentation failed", nil, one) != one {
+		t.Fatal("singleton diagnostic identity lost")
+	}
+}
 
 func TestReferenceGrammar(t *testing.T) {
 	for _, tc := range []struct {

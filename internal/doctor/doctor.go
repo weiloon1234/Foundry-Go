@@ -57,8 +57,9 @@ type moduleInfo struct {
 }
 
 func (m moduleInfo) selection() frameworkinfo.Selection {
-	selection := frameworkinfo.Selection{Main: m.Main, Version: m.Version}
+	selection := frameworkinfo.Selection{Path: m.Path, Main: m.Main, Version: m.Version}
 	if m.Replace != nil {
+		selection.Path = m.Replace.Path
 		selection.Version, selection.Local = m.Replace.Version, m.Replace.Version == ""
 	}
 	return selection

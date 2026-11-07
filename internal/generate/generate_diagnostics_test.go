@@ -215,7 +215,8 @@ func TestFrameworkVersionMismatchFailsBeforeWriting(t *testing.T) {
 		{"mismatch", frameworkinfo.Build{Version: "v0.3.0"}, selected, true},
 		{"development tool", frameworkinfo.Build{}, selected, false},
 		{"local replacement", frameworkinfo.Build{Version: "v0.3.0"}, &listedModule{Path: framework, Version: "v0.2.0", Replace: &listedModule{Path: "../framework"}}, false},
-		{"versioned replacement", frameworkinfo.Build{Version: "v0.3.0"}, &listedModule{Path: framework, Version: "v0.2.0", Replace: &listedModule{Path: "fork.example/framework", Version: "v0.3.0"}}, false},
+		{"cross-module replacement", frameworkinfo.Build{Version: "v0.3.0"}, &listedModule{Path: framework, Version: "v0.2.0", Replace: &listedModule{Path: "fork.example/framework", Version: "v0.3.0"}}, true},
+		{"matching replacement", frameworkinfo.Build{Path: "fork.example/framework", Version: "v0.3.0"}, &listedModule{Path: framework, Version: "v0.2.0", Replace: &listedModule{Path: "fork.example/framework", Version: "v0.3.0"}}, false},
 		{"framework module", frameworkinfo.Build{Version: "v0.3.0"}, &listedModule{Path: framework, Main: true}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {

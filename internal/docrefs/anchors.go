@@ -1,12 +1,13 @@
 package docrefs
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 var anchorLine = regexp.MustCompile(`^<a id="([^"]*)"></a>$`)
@@ -27,27 +28,27 @@ func IndexAnchors(name string, data []byte) (Anchors, error) {
 		}
 		match := anchorLine.FindStringSubmatch(text)
 		if match == nil || !identifier.MatchString(match[1]) {
-			failures = append(failures, Problem{name, line, `invalid explicit anchor; use <a id="lowercase-id"></a> alone on a line`})
+			failures = append(failures, problem(name, line, `invalid explicit anchor; use <a id="lowercase-id"></a> alone on a line`))
 			return
 		}
 		id := match[1]
 		if previous, exists := index.lines[id]; exists {
-			failures = append(failures, Problem{name, line, fmt.Sprintf("duplicate explicit anchor %q (first declared on line %d)", id, previous)})
+			failures = append(failures, problem(name, line, fmt.Sprintf("duplicate explicit anchor %q (first declared on line %d)", id, previous)))
 			return
 		}
 		index.lines[id] = line
 	})
-	return index, errors.Join(failures...)
+	return index, safeerror.Join("documentation references failed", failures...)
 }
 
 // CheckFragment validates a raw fragment without its leading #. Framework
 // checkdocs can use this for guide navigation links as well as app references.
 func (a Anchors) CheckFragment(file string, line int, fragment string) error {
 	if !identifier.MatchString(fragment) {
-		return Problem{file, line, "invalid explicit anchor fragment " + fmt.Sprintf("%q", fragment)}
+		return problem(file, line, "invalid explicit anchor fragment "+fmt.Sprintf("%q", fragment))
 	}
 	if _, exists := a.lines[fragment]; !exists {
-		return Problem{file, line, fmt.Sprintf("explicit anchor %q is absent", fragment)}
+		return problem(file, line, fmt.Sprintf("explicit anchor %q is absent", fragment))
 	}
 	return nil
 }
@@ -63,7 +64,7 @@ func CheckReferences(guidesDir string, refs []Reference) error {
 	var failures []error
 	for _, ref := range refs {
 		if !identifier.MatchString(ref.Guide) {
-			failures = append(failures, Problem{ref.File, ref.Line, "invalid guide name"})
+			failures = append(failures, problem(ref.File, ref.Line, "invalid guide name"))
 			continue
 		}
 		p, loaded := pages[ref.Guide]
@@ -71,11 +72,11 @@ func CheckReferences(guidesDir string, refs []Reference) error {
 			name := filepath.Join(guidesDir, ref.Guide+".md")
 			info, err := os.Lstat(name)
 			if err != nil || !info.Mode().IsRegular() {
-				p.err = fmt.Errorf("selected framework guide %s is missing or is not a regular file", ref.Guide)
+				p.err = safeerror.New(fmt.Sprintf("selected framework guide %s is missing or is not a regular file", ref.Guide))
 			} else {
 				data, err := os.ReadFile(name)
 				if err != nil {
-					p.err = err
+					p.err = safeerror.Wrap("cannot read selected framework guide "+ref.Guide, err)
 				} else {
 					p.anchors, p.err = IndexAnchors(name, data)
 				}
@@ -83,12 +84,12 @@ func CheckReferences(guidesDir string, refs []Reference) error {
 			pages[ref.Guide] = p
 		}
 		if p.err != nil {
-			failures = append(failures, Problem{ref.File, ref.Line, p.err.Error()})
+			failures = append(failures, safeerror.Prefix(fmt.Sprintf("%s:%d", ref.File, ref.Line), p.err))
 		} else if ref.Anchor != "" {
 			if err := p.anchors.CheckFragment(ref.File, ref.Line, ref.Anchor); err != nil {
-				failures = append(failures, fmt.Errorf("%w (guide %s)", err, ref.Guide))
+				failures = append(failures, safeerror.Prefix("guide "+ref.Guide, err))
 			}
 		}
 	}
-	return errors.Join(failures...)
+	return safeerror.Join("documentation references failed", failures...)
 }

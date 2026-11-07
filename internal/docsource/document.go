@@ -2,12 +2,13 @@ package docsource
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 var directive = regexp.MustCompile(`^<!-- compiled-source: ([^\s#]+)(?:#([a-z0-9]+(?:-[a-z0-9]+)*))? -->$`)
@@ -92,17 +93,17 @@ func Check(documents []Document) error {
 			if len(doc.StaleLines) > 0 {
 				location = fmt.Sprintf("%s:%d", doc.Path, doc.StaleLines[0])
 			}
-			failures = append(failures, fmt.Errorf("%s: compiled-source fence differs; run make generate", location))
+			failures = append(failures, safeerror.New(fmt.Sprintf("%s: compiled-source fence differs; run make generate", location)))
 		}
 	}
-	return errors.Join(failures...)
+	return safeerror.Join("documentation check failed", failures...)
 }
 
 func uniqueOwners(inclusions []Inclusion) error {
 	for i, current := range inclusions {
 		for _, prior := range inclusions[:i] {
 			if prior.Source == current.Source && (prior.Region == current.Region || prior.Region == "" || current.Region == "" || prior.First <= current.Last && current.First <= prior.Last) {
-				return fmt.Errorf("%s:%d: duplicate or overlapping inclusion of %s#%s; owner is %s:%d", current.Document, current.Line, current.Source, current.Region, prior.Document, prior.Line)
+				return safeerror.New(fmt.Sprintf("%s:%d: duplicate or overlapping inclusion of %s#%s; owner is %s:%d", current.Document, current.Line, current.Source, current.Region, prior.Document, prior.Line))
 			}
 		}
 	}
@@ -120,11 +121,18 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 	var out strings.Builder
 	var sections []section
 	pendingAnchor := ""
+	anchorLine := 0
 	for i := 0; i < len(lines); i++ {
 		trimmed := strings.TrimSpace(lines[i])
-		fail := func(message string) (Document, error) { return Document{}, fmt.Errorf("%s:%d: %s", name, i+1, message) }
+		fail := func(message string) (Document, error) {
+			return Document{}, safeerror.New(fmt.Sprintf("%s:%d: %s", name, i+1, message))
+		}
 		if match := sectionAnchor.FindStringSubmatch(trimmed); match != nil {
+			if pendingAnchor != "" {
+				return fail(fmt.Sprintf("anchor %s on line %d must be followed by one ATX heading", pendingAnchor, anchorLine))
+			}
 			pendingAnchor = match[1]
+			anchorLine = i + 1
 			out.WriteString(lines[i])
 			continue
 		}
@@ -142,8 +150,8 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 			out.WriteString(lines[i])
 			continue
 		}
-		if trimmed != "" {
-			pendingAnchor = ""
+		if trimmed != "" && pendingAnchor != "" {
+			return fail(fmt.Sprintf("anchor %s on line %d must be followed by one ATX heading; intervening content and setext headings are not supported", pendingAnchor, anchorLine))
 		}
 		recipe, agent := false, false
 		for _, s := range sections {
@@ -163,7 +171,7 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 			}
 			source, err := read(match[1])
 			if err != nil {
-				return fail(err.Error())
+				return Document{}, safeerror.Prefix(fmt.Sprintf("%s:%d", name, i+1), err)
 			}
 			selected := source.whole
 			if match[2] != "" {
@@ -220,6 +228,9 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 			continue
 		}
 		out.WriteString(lines[i])
+	}
+	if pendingAnchor != "" {
+		return Document{}, safeerror.New(fmt.Sprintf("%s:%d: anchor %s must be followed by one ATX heading before EOF", name, anchorLine, pendingAnchor))
 	}
 	result.Rendered = []byte(out.String())
 	return result, nil

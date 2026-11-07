@@ -13,6 +13,8 @@ import (
 // These are explicit construction owners, not an exemption for their packages.
 // Counts pin the reviewed sites: a new literal needs a new disposition.
 var typedDiagnosticOwners = map[string]int{
+	// Documentation location diagnostics are captured before their typed cause escapes.
+	"internal/docrefs/references.go#problem#Problem": 1,
 	// Native lifecycle owner captures fixed text before retaining application causes.
 	"internal/lifecore/failure.go#Failure#failure": 1,
 	// Concrete diagnostic captured by Owned/Retain at this owner.

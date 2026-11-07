@@ -14,7 +14,11 @@
     "modelbinding.AuthenticatedIdempotentEndpoint",
     "validation.Field",
     "validation.Rule",
-    "orm.Query"
+    "orm.Query",
+    "pagination.AuthenticatedNumberedEndpoint",
+    "pagination.AuthenticatedSimpleEndpoint",
+    "pagination.AuthenticatedCursorEndpoint",
+    "pagination.authenticatedPageEndpoint"
   ],
   "constructors": {
     "http.DefineEndpoint": "http.Endpoint",
@@ -76,7 +80,12 @@
     "modelbinding.Bind": "modelbinding.Endpoint",
     "modelbinding.BindAuthenticated": "modelbinding.AuthenticatedEndpoint",
     "modelbinding.BindIdempotent": "modelbinding.IdempotentEndpoint",
-    "modelbinding.BindAuthenticatedIdempotent": "modelbinding.AuthenticatedIdempotentEndpoint"
+    "modelbinding.BindAuthenticatedIdempotent": "modelbinding.AuthenticatedIdempotentEndpoint",
+    "pagination.Authenticated": "pagination.authenticatedPageEndpoint",
+    "rows.TransactionScalarOf": "rows.TransactionScalar",
+    "rows.SelectTransactionCorrelatedRecord": "rows.TransactionCorrelatedRecord",
+    "rows.SelectTransactionCorrelatedScalar": "rows.TransactionCorrelatedScalar",
+    "rows.ProjectTransactionCorrelated": "rows.TransactionCorrelatedRecord"
   },
   "retainedOwners": [
     "Scope",
@@ -87,7 +96,10 @@
     "rows.LockedResult",
     "translations.Values",
     "password.Hasher",
-    "orm.Table"
+    "orm.Table",
+    "rows.TransactionScalar",
+    "rows.TransactionCorrelatedRecord",
+    "rows.TransactionCorrelatedScalar"
   ],
   "chains": [
     {

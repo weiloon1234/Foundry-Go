@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -56,6 +57,7 @@ func run(root, inputs string) error {
 
 func checkRepository(root string) error {
 	var failures []error
+	var references []docrefs.Reference
 	agentLines := make(map[string]map[int]bool)
 	documents, sourceErr := docsource.Load(root)
 	if sourceErr != nil {
@@ -102,13 +104,19 @@ func checkRepository(root string) error {
 			}
 			relative = filepath.ToSlash(relative)
 			active := currentGuide(root, path) || entry.Name() == "AGENTS.md" || entry.Name() == "README.md" && !strings.HasPrefix(relative, "blueprint/") && !strings.HasPrefix(relative, "docs/evidence/") && !strings.Contains(relative, "/testdata/")
-			if active {
+			skill := strings.HasPrefix(relative, ".claude/skills/") && !datedGuide.MatchString(relative)
+			if active || skill {
 				data, err := os.ReadFile(path)
 				if err != nil {
 					return err
 				}
-				if err := retirement.CheckDocument(relative, data); err != nil {
-					failures = append(failures, err)
+				parsed, err := docrefs.Parse(relative, data)
+				references = append(references, parsed...)
+				failures = append(failures, err)
+				if active {
+					if err := retirement.CheckDocument(relative, data); err != nil {
+						failures = append(failures, err)
+					}
 				}
 			}
 			if err := checkDocument(root, path, currentGuide(root, path), completed, agentLines[path]); err != nil {
@@ -128,6 +136,7 @@ func checkRepository(root string) error {
 	if err != nil {
 		failures = append(failures, err)
 	}
+	failures = append(failures, docrefs.CheckReferences(filepath.Join(root, "docs", "guides"), references))
 	return errors.Join(failures...)
 }
 
@@ -172,13 +181,13 @@ func goRequirement(path string) (string, error) {
 }
 
 func checkDocument(root, path string, current bool, completed map[string]bool, agentLines map[int]bool) error {
-	file, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	definitions := linkDefinitions(data)
 	var failures []error
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
 	fence := ""
 	lineNumber := 0
@@ -225,8 +234,8 @@ func checkDocument(root, path string, current bool, completed map[string]bool, a
 			}
 			paragraph = append(paragraph, strings.Join(strings.Fields(masked), " "))
 		}
-		for _, match := range inlineLink.FindAllStringSubmatch(masked, -1) {
-			target := strings.Trim(strings.TrimSpace(match[1]), "<>")
+		for _, destination := range linkDestinations(masked, definitions) {
+			target := strings.Trim(strings.TrimSpace(destination), "<>")
 			link, err := url.Parse(target)
 			if err != nil {
 				failures = append(failures, fmt.Errorf("%s:%d: invalid link %q: %w", path, lineNumber, target, err))

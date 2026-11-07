@@ -15,13 +15,20 @@ outside Agent entry. Entries contain no code or API summaries.
 
 An anchor is a literal `<a id="anchor-id"></a>` on its own line, immediately
 before its heading. IDs must be unique within the guide; heading text does not
-create an explicit ID. `make docs-check` validates local links with `agent-entry`
+create an explicit ID. An `agent-entry` or `recipe-*` anchor must bind to one ATX
+heading (`#` through `######`); only blank lines may intervene. Displaced anchors,
+consecutive anchors and setext headings at this boundary fail the check.
+`make docs-check` validates local links with `agent-entry`
 or `recipe-*` fragments through the shared `internal/docrefs` index. Other
 fragments retain path-only checking; the checker does not emulate GitHub slugs.
+Used Markdown reference-link destinations receive the same checks as inline links.
 
 A source region starts with `// doc-example:begin <region>` and ends with
 `// doc-example:end <region>`. Names use lowercase letters, digits and internal
 hyphens and are unique within their file. Regions cannot nest or overlap. A boundary
+must be an actual line comment in its source language. Marker-looking text inside
+quoted or template literal text, Go raw strings, or block comments is rejected,
+even when the enclosing file is a compiler input. A boundary
 marker may follow its first or last code line as a trailing comment; its separating spaces
 or tabs belong to the marker. This keeps Go declaration directives and top-level end markers gofmt-clean
 without introducing a blank line into the excerpt.
@@ -119,6 +126,8 @@ fences can contain examples without declaring references.
 
 `go tool foundry docs check` resolves each guide in the selected release and
 validates every supplied fragment against its explicit IDs.
+The framework's `make docs-check` uses the same parser and resolver for active
+guides, instructions and `.claude/skills` Markdown, against its own guide tree.
 
 ## Read pinned guides offline
 
@@ -151,11 +160,15 @@ caches, test data, and records whose names contain a `YYYYMMDD` or `YYYY-MM-DD`
 date. It does not need Git metadata. From a repository containing a nested app
 module, use `GOWORK=off go -C system tool foundry docs check --dir .`.
 `--dir` alone cannot select the module before `go tool` starts.
+Application roots are resolved through symlinks before discovery and scanning.
+Symlinks at `.claude`, `.claude/skills`, or within the active skills tree are
+rejected; the `.agents/skills` mirror remains excluded.
 
 The module and toolchain must already be cached. The checker disables downloads,
 workspace selection, and module-file updates, and reports missing setup rather
 than falling back to another release. It requires a verified match between the
-running tool and selected framework version. A global binary from a different
+running tool and selected framework module path and version, including versioned
+replacements. Equal versions from different module paths fail. A global binary from a different
 release, an unversioned build, or a local replacement fails. There is no version
 bypass or mutation mode. The checker reads instructions and shipped guides; it
 does not compile the application, render guide sources, run Node, or start

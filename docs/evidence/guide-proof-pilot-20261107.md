@@ -2,9 +2,9 @@
 
 Milestones 1 and 2 integration handoff, 2026-11-07, on `lane/s6-guides`.
 The lead replayed milestone 2 (`6a0162de`) onto milestone 1 (`228d5403`).
-This integration changes documentation checks and handwritten prose only; fixture
-sources, generated fences, CLI version selection, packaging and Makefile ownership
-remain as delivered by those milestones.
+The initial integration preserved fixture sources, generated fences, CLI selection,
+packaging and Makefile ownership. Fix round 1 below tightens CLI module identity
+and documentation checks; fixture sources and rendered fences remain unchanged.
 
 The lead reports these prior results:
 
@@ -21,6 +21,38 @@ No tests, builds, renderer runs or verification commands ran during integration.
 Touched Go files were formatted. Earlier results do not verify this revision;
 the lead owns the commands below. This is implementation evidence, not milestone
 acceptance or a release claim.
+
+## Fix round 1 after a1f7b751
+
+The lead's `make verify` stopped in `make test` at
+`TestRuntimeErrorConstructionUsesDiagnosticOwners`. Fixture-check, generate-check,
+docs-check and the TypeScript proof had not run on that revision. No tests,
+builds, generators or verification commands ran during this fix round. Source
+review and Go formatting are the only local implementation checks.
+
+| Item | Change and regression sources |
+| --- | --- |
+| Diagnostic ownership | `docsource`, `docrefs` and the docs CLI now use safeerror construction owners and joins. One typed `docrefs.Problem` constructor captures its immutable message; its disposition is registered in the existing source contract. Tests retain typed locations, aggregate messages and singleton identity. No presentation exemption was added. |
+| S6-R01 | Canonicalize the app root before module discovery. Reject active skill-directory symlinks before filename filtering. CLI tests cover clean/stale symlinked roots, each active parent and the excluded mirror. |
+| S6-R02 | Require each entry/recipe anchor to bind to one ATX heading. Tests reject intervening comments/prose, consecutive anchors, setext headings and EOF, including linked recipes with unbound Go fences. |
+| S6-R03 | Go scanner tokens and TypeScript comment scanning establish actual line-comment positions. Tests reject markers in raw/template strings and block comments despite compiler-input membership; valid standalone/trailing comments retain coverage. |
+| S6-R04 | Normalize imported pagination owners and add all three authenticated aliases and their common constructor owner to the retirement ledger. Tests cover removed scopes, permissions and authorization, plus retained package functions and external owners. |
+| S6-R05 | Register transaction-scalar and transaction-correlated row constructors/types, including projection construction. Tests preserve locking through direct constructors, bindings and qualified types while still rejecting ORM query method locking. |
+| S6-R06 | Carry effective replacement path/version through frameworkinfo, doctor and generator selection. CLI and frameworkinfo tests reject equal-version cross-module replacements and accept matching identities; generator expectations cover both outcomes. |
+| S6-R07 | Framework docs-check parses active instruction/guide/skill declarations with docrefs and resolves against its guide tree. Tests cover missing pages/fragments, malformed trailing text and ignored fenced declarations. |
+| S6-R08 | Resolve used full, collapsed and shortcut Markdown references through the existing local-path/fragment checks. Tests cover missing files/anchors, valid targets, unused definitions and fenced/code examples. |
+
+Focused reruns for the lead, from this worktree with the native toolchain selected:
+
+```sh
+go test -count=1 ./internal/safeerror -run '^TestRuntimeErrorConstructionUsesDiagnosticOwners$'
+go test -count=1 ./internal/docsource ./internal/docrefs ./internal/cmd/checkdocs ./internal/retirement ./internal/frameworkinfo ./internal/doctor ./cmd/foundry
+go test -count=1 ./internal/generate -run '^TestFrameworkVersionMismatchFailsBeforeWriting$'
+```
+
+Then resume the combined gate below or `make verify`. Its later prerequisites
+remain pending; prior results do not verify the fix round. No review finding was
+disputed, and no design question is open.
 
 ## Acceptance mapping
 
@@ -130,6 +162,37 @@ command against this development checkout is not a substitute: the CLI deliberat
 rejects local replacements and unverifiable tool versions. Master milestone status
 is unchanged pending the lead's combined acceptance. There are no open design
 questions in this handoff.
+
+## Fix round 1 files
+
+- [CHANGELOG.md](../../CHANGELOG.md)
+- [cmd/foundry/docs.go](../../cmd/foundry/docs.go)
+- [cmd/foundry/docs_test.go](../../cmd/foundry/docs_test.go)
+- [docs/compatibility.md](../../docs/compatibility.md)
+- [docs/evidence/guide-proof-pilot-20261107.md](../../docs/evidence/guide-proof-pilot-20261107.md)
+- [docs/guides/developer-tooling-and-testing.md](../../docs/guides/developer-tooling-and-testing.md)
+- [internal/cmd/checkdocs/links.go](../../internal/cmd/checkdocs/links.go)
+- [internal/cmd/checkdocs/main.go](../../internal/cmd/checkdocs/main.go)
+- [internal/cmd/checkdocs/navigation_test.go](../../internal/cmd/checkdocs/navigation_test.go)
+- [internal/docrefs/anchors.go](../../internal/docrefs/anchors.go)
+- [internal/docrefs/references.go](../../internal/docrefs/references.go)
+- [internal/docrefs/references_test.go](../../internal/docrefs/references_test.go)
+- [internal/docsource/comments.go](../../internal/docsource/comments.go)
+- [internal/docsource/document.go](../../internal/docsource/document.go)
+- [internal/docsource/inputs.go](../../internal/docsource/inputs.go)
+- [internal/docsource/source.go](../../internal/docsource/source.go)
+- [internal/docsource/source_test.go](../../internal/docsource/source_test.go)
+- [internal/doctor/doctor.go](../../internal/doctor/doctor.go)
+- [internal/doctor/doctor_test.go](../../internal/doctor/doctor_test.go)
+- [internal/frameworkinfo/build.go](../../internal/frameworkinfo/build.go)
+- [internal/frameworkinfo/build_test.go](../../internal/frameworkinfo/build_test.go)
+- [internal/generate/generate.go](../../internal/generate/generate.go)
+- [internal/generate/generate_diagnostics_test.go](../../internal/generate/generate_diagnostics_test.go)
+- [internal/retirement/denied.json](../../internal/retirement/denied.json)
+- [internal/retirement/document_owners.go](../../internal/retirement/document_owners.go)
+- [internal/retirement/document_owners_test.go](../../internal/retirement/document_owners_test.go)
+- [internal/retirement/document_rules.json](../../internal/retirement/document_rules.json)
+- [internal/safeerror/typed_source_contract_test.go](../../internal/safeerror/typed_source_contract_test.go)
 
 ## Integration files
 

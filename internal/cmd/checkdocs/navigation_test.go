@@ -77,3 +77,57 @@ func TestRecipeFragmentFromOutsideGuides(t *testing.T) {
 		t.Fatalf("missing guide anchor was not checked: %v", err)
 	}
 }
+
+func TestDisplacedRecipeAnchor(t *testing.T) {
+	root := testRepository(t)
+	writeTestFile(t, root, "docs/guides/example.md", "<a id=\"agent-entry\"></a>\n## Agent entry\n- Read: [Read](#recipe-read)\n\n<a id=\"recipe-read\"></a>\n<!-- displaced -->\n## Read\n```go\nnotCompiled()\n```\n")
+	if err := checkRepository(root); err == nil || !strings.Contains(err.Error(), "must be followed by one ATX heading") {
+		t.Fatalf("displaced recipe escaped coverage: %v", err)
+	}
+}
+
+func TestReferenceStyleNavigation(t *testing.T) {
+	for _, test := range []struct{ name, text, want string }{
+		{"missing target", "[Read][recipe]\n\n[recipe]: missing.md#recipe-read\n", "local link"},
+		{"missing anchor", "[Read][recipe]\n\n[recipe]: other.md#recipe-missing\n", `explicit anchor "recipe-missing" is absent`},
+		{"full", "[Read][RECIPE]\n\n[recipe]: other.md#recipe-read\n", ""},
+		{"collapsed", "[Read][]\n\n[read]: other.md#recipe-read\n", ""},
+		{"shortcut", "[Read]\n\n[read]: <other.md#recipe-read>\n", ""},
+		{"same page", "[Read][recipe]\n\n[recipe]: #recipe-read\n<a id=\"recipe-read\"></a>\n## Read\n", ""},
+		{"unused definition", "[recipe]: other.md#recipe-missing\n", ""},
+		{"fenced use", "```md\n[Read][recipe]\n```\n[recipe]: other.md#recipe-missing\n", ""},
+		{"inline code", "`[Read][recipe]`\n[recipe]: other.md#recipe-missing\n", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := testRepository(t)
+			writeTestFile(t, root, "docs/guides/example.md", test.text)
+			writeTestFile(t, root, "docs/guides/other.md", "<a id=\"recipe-read\"></a>\n## Read\n")
+			err := checkRepository(root)
+			if test.want == "" && err != nil || test.want != "" && (err == nil || !strings.Contains(err.Error(), test.want)) {
+				t.Fatalf("want %q, got %v", test.want, err)
+			}
+		})
+	}
+}
+
+func TestFrameworkGuideDeclarations(t *testing.T) {
+	for _, name := range []string{"AGENTS.md", "docs/guides/example.md", ".claude/skills/workflow/references/api.md"} {
+		for _, test := range []struct{ text, want string }{
+			{"Foundry guides: `missing#anchor`\n", "selected framework guide missing"},
+			{"Foundry guides: `other#missing`\n", `explicit anchor "missing" is absent`},
+			{"Foundry guides: `other` trailing\n", "invalid Foundry guides:"},
+			{"Foundry guides: `other#recipe-read`\n", ""},
+			{"```markdown\nFoundry guides: `missing` trailing\n```\n", ""},
+		} {
+			t.Run(name+test.text, func(t *testing.T) {
+				root := testRepository(t)
+				writeTestFile(t, root, name, test.text)
+				writeTestFile(t, root, "docs/guides/other.md", "<a id=\"recipe-read\"></a>\n## Read\n")
+				err := checkRepository(root)
+				if test.want == "" && err != nil || test.want != "" && (err == nil || !strings.Contains(err.Error(), test.want)) {
+					t.Fatalf("want %q, got %v", test.want, err)
+				}
+			})
+		}
+	}
+}

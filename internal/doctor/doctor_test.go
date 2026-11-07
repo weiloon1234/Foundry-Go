@@ -206,9 +206,9 @@ func TestSelectedFramework(t *testing.T) {
 				return json.Marshal(module)
 			})
 			if mode == "success" || mode == "replacement" {
-				want := frameworkinfo.Selection{Version: "v0.5.3"}
+				want := frameworkinfo.Selection{Path: frameworkinfo.ModulePath, Version: "v0.5.3"}
 				if mode == "replacement" {
-					want = frameworkinfo.Selection{Local: true}
+					want = frameworkinfo.Selection{Path: "local-framework", Local: true}
 				}
 				if err != nil || framework.Dir != dir || framework.Selection != want {
 					t.Fatalf("selected framework = %+v, %v", framework, err)

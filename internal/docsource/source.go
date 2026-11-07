@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 var trailingMarker = regexp.MustCompile(`^(.*\S)[ \t]+(// doc-example:(?:begin|end) [a-z0-9]+(?:-[a-z0-9]+)*)$`)
@@ -27,7 +29,7 @@ type source struct {
 
 func readSource(root, name string) (source, error) {
 	if name == "" || path.Clean(name) != name || strings.ContainsAny(name, `\:#`) || strings.HasPrefix(name, "/") {
-		return source{}, fmt.Errorf("invalid repository-relative source path %q", name)
+		return source{}, safeerror.New(fmt.Sprintf("invalid repository-relative source path %q", name))
 	}
 	ext := path.Ext(name)
 	approved := (strings.HasPrefix(name, "tests/fixtures/consumer/") || strings.HasPrefix(name, "tests/fixtures/goway/")) && ext == ".go"
@@ -35,7 +37,7 @@ func readSource(root, name string) (source, error) {
 		approved = (path.Dir(name) == "tests/fixtures/consumer/clientcontracts/testdata" || path.Dir(name) == "tests/fixtures/consumer/clientcontracts/testdata/table-bindings") && !strings.HasSuffix(name, ".d.ts")
 	}
 	if !approved || strings.Contains(name, "_foundry.gen.") {
-		return source{}, fmt.Errorf("source %q is outside approved handwritten fixture inputs", name)
+		return source{}, safeerror.New(fmt.Sprintf("source %q is outside approved handwritten fixture inputs", name))
 	}
 	// Reject aliases as well as escapes, so one file cannot acquire two owners.
 	current := root
@@ -46,25 +48,35 @@ func readSource(root, name string) (source, error) {
 			return source{}, err
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return source{}, fmt.Errorf("source %q contains a symlink", name)
+			return source{}, safeerror.New(fmt.Sprintf("source %q contains a symlink", name))
 		}
 	}
 	data, err := os.ReadFile(current)
 	if err != nil {
 		return source{}, err
 	}
-	result, err := parseSource(string(data))
+	language := "typescript"
 	if ext == ".go" {
-		result.language = "go"
-	} else {
-		result.language = "typescript"
+		language = "go"
 	}
-	return result, err
+	return parseSource(string(data), language)
 }
 
-func parseSource(data string) (source, error) {
+func parseSource(data, language string) (source, error) {
+	comments := lineComments(data, language)
+	for offset := 0; offset < len(data); {
+		n := strings.Index(data[offset:], "// doc-example:")
+		if n < 0 {
+			break
+		}
+		offset += n
+		if !comments[offset] {
+			return source{}, safeerror.New(fmt.Sprintf("line %d: region marker must be an actual line comment, outside literals and block comments", strings.Count(data[:offset], "\n")+1))
+		}
+		offset += len("// doc-example:")
+	}
 	lines := strings.SplitAfter(data, "\n")
-	result := source{regions: make(map[string]excerpt)}
+	result := source{language: language, regions: make(map[string]excerpt)}
 	var whole strings.Builder
 	active := ""
 	start := 0
@@ -83,7 +95,7 @@ func parseSource(data string) (source, error) {
 		}
 		if marker == nil {
 			if strings.HasPrefix(trimmed, "// doc-example:") {
-				return source{}, fmt.Errorf("line %d: malformed region marker", i+1)
+				return source{}, safeerror.New(fmt.Sprintf("line %d: malformed region marker", i+1))
 			}
 			whole.WriteString(line)
 			continue
@@ -91,10 +103,10 @@ func parseSource(data string) (source, error) {
 		name := marker[2]
 		if marker[1] == "begin" {
 			if active != "" {
-				return source{}, fmt.Errorf("line %d: overlapping regions %s and %s", i+1, active, name)
+				return source{}, safeerror.New(fmt.Sprintf("line %d: overlapping regions %s and %s", i+1, active, name))
 			}
 			if _, exists := result.regions[name]; exists {
-				return source{}, fmt.Errorf("line %d: duplicate region %s", i+1, name)
+				return source{}, safeerror.New(fmt.Sprintf("line %d: duplicate region %s", i+1, name))
 			}
 			active, start = name, i+1
 			if trailing != "" {
@@ -104,7 +116,7 @@ func parseSource(data string) (source, error) {
 			}
 		} else {
 			if active != name {
-				return source{}, fmt.Errorf("line %d: unmatched region end %s", i+1, name)
+				return source{}, safeerror.New(fmt.Sprintf("line %d: unmatched region end %s", i+1, name))
 			}
 			text := strings.Join(lines[start:i], "")
 			last := i
@@ -118,7 +130,7 @@ func parseSource(data string) (source, error) {
 		}
 	}
 	if active != "" {
-		return source{}, fmt.Errorf("unclosed region %s", active)
+		return source{}, safeerror.New(fmt.Sprintf("unclosed region %s", active))
 	}
 	result.whole = excerpt{text: dedent(whole.String()), first: 1, last: len(lines)}
 	return result, nil

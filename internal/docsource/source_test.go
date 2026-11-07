@@ -22,6 +22,75 @@ func TestAgentNavigationLines(t *testing.T) {
 	}
 }
 
+func TestRecipeAnchorRequiresHeading(t *testing.T) {
+	for _, tail := range []string{"<!-- explanation -->\n## Read", "Some prose\n## Read", "<a id=\"recipe-other\"></a>\n## Read", "<a id=\"other\"></a>\n## Read", "Read\n----", ""} {
+		_, err := parseDocument("guide.md", []byte("<a id=\"recipe-read\"></a>\n"+tail), nil)
+		if err == nil || !strings.Contains(err.Error(), "must be followed by one ATX heading") {
+			t.Fatalf("displaced anchor %q: %v", tail, err)
+		}
+	}
+	if _, err := parseDocument("guide.md", []byte("<a id=\"recipe-read\"></a>\n\n## Read\n"), nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLiteralMarkersCannotClaimCompilerProof(t *testing.T) {
+	const region = "// doc-example:begin hidden\nthis is invalid executable source\n// doc-example:end hidden\n"
+	for _, test := range []struct{ name, file, source string }{
+		{"Go raw string", "tests/fixtures/consumer/example/example.go", "package example\nconst text = `\n" + region + "`\n"},
+		{"Go block comment", "tests/fixtures/consumer/example/example.go", "package example\n/*\n" + region + "*/\n"},
+		{"TS template", "tests/fixtures/consumer/clientcontracts/testdata/example.ts", "const text = `\n" + region + "`;\n"},
+		{"TS block comment", "tests/fixtures/consumer/clientcontracts/testdata/example.ts", "/*\n" + region + "*/\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			put := func(name, text string) {
+				t.Helper()
+				if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(root, name), []byte(text), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			put(test.file, test.source)
+			put("docs/guides/example.md", "<!-- compiled-source: "+test.file+"#hidden -->\n```go\nthis is invalid executable source\n```\n")
+			docs := []Document{{Inclusions: []Inclusion{{Source: test.file, Region: "hidden"}}}}
+			if strings.HasSuffix(test.file, ".go") {
+				input, _ := json.Marshal(map[string]any{"Dir": filepath.Join(root, filepath.Dir(test.file)), "GoFiles": []string{"example.go"}})
+				if err := CheckGoInputs(root, docs, strings.NewReader(string(input))); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				put(TypeScriptInputs, `["example.ts"]`)
+				if err := CheckTypeScriptInputs(root, docs); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := Load(root); err == nil || !strings.Contains(err.Error(), "actual line comment") {
+				t.Fatalf("literal marker accepted as compiler proof: %v", err)
+			}
+		})
+	}
+}
+
+func TestSourceCommentContexts(t *testing.T) {
+	for _, language := range []string{"go", "typescript"} {
+		text := "const value = \"/* not a comment */\"\n// doc-example:begin value\nvar result = value // doc-example:end value\n"
+		if _, err := parseSource(text, language); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, prefix := range []string{"const text = `escaped \\` still text\n", "const text = `outer ${`nested\n"} {
+		if _, err := parseSource(prefix+"// doc-example:begin hidden\ninvalid code\n// doc-example:end hidden\n`}`;", "typescript"); err == nil {
+			t.Fatal("template marker accepted")
+		}
+	}
+	if _, err := parseSource("const pattern = /[\"'`]/;\n// doc-example:begin value\nconst value = 1;\n// doc-example:end value\n", "typescript"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRegions(t *testing.T) {
 	tests := []struct {
 		name, text, want string
@@ -39,7 +108,7 @@ func TestRegions(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			source, err := parseSource(test.text)
+			source, err := parseSource(test.text, "go")
 			if test.bad {
 				if err == nil {
 					t.Fatal("accepted invalid region")
@@ -58,17 +127,16 @@ func TestRegions(t *testing.T) {
 
 func TestRenderPreservesProseAndIsIdempotent(t *testing.T) {
 	original := "# Guide\r\n\r\nAuthored prose.\r\n<!-- compiled-source: example.ts#example -->\r\n\r\n~~~go\nstale\n~~~\n\nAfter.\n"
-	src, err := parseSource("const before = 0;\n// doc-example:begin example\n  const fence = ` ``` `;\n  const value = 1;\n// doc-example:end example\n")
+	src, err := parseSource("const before = 0;\n// doc-example:begin example\n  const fence = \" ``` \";\n  const value = 1;\n// doc-example:end example\n", "typescript")
 	if err != nil {
 		t.Fatal(err)
 	}
-	src.language = "typescript"
 	read := func(string) (source, error) { return src, nil }
 	first, err := parseDocument("guide.md", []byte(original), read)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := strings.Replace(original, "~~~go\nstale\n~~~", "````typescript\nconst fence = ` ``` `;\nconst value = 1;\n````", 1)
+	want := strings.Replace(original, "~~~go\nstale\n~~~", "````typescript\nconst fence = \" ``` \";\nconst value = 1;\n````", 1)
 	if string(first.Rendered) != want {
 		t.Fatalf("got %q, want %q", first.Rendered, want)
 	}
@@ -93,7 +161,7 @@ func TestRenderPreservesProseAndIsIdempotent(t *testing.T) {
 }
 
 func TestDocumentBoundaries(t *testing.T) {
-	src, _ := parseSource("// doc-example:begin example\nx\n// doc-example:end example\n")
+	src, _ := parseSource("// doc-example:begin example\nx\n// doc-example:end example\n", "go")
 	src.language = "go"
 	read := func(string) (source, error) { return src, nil }
 	for _, test := range []struct {
@@ -213,7 +281,7 @@ func TestCompleteGuidesRetainUnlinkedFenceRejection(t *testing.T) {
 }
 
 func TestTrailingEndMarkerPreservesSourceLine(t *testing.T) {
-	source, err := parseSource("package example\n// doc-example:begin value\nvar Value = 1 // doc-example:end value\n\nvar Other = 2\n")
+	source, err := parseSource("package example\n// doc-example:begin value\nvar Value = 1 // doc-example:end value\n\nvar Other = 2\n", "go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +294,7 @@ func TestTrailingEndMarkerPreservesSourceLine(t *testing.T) {
 }
 
 func TestTrailingBeginLeavesGoDeclarationDirectiveOutsideExcerpt(t *testing.T) {
-	source, err := parseSource("//foundry:config\ntype Settings struct { // doc-example:begin settings\n Name string\n} // doc-example:end settings\n")
+	source, err := parseSource("//foundry:config\ntype Settings struct { // doc-example:begin settings\n Name string\n} // doc-example:end settings\n", "go")
 	if err != nil {
 		t.Fatal(err)
 	}

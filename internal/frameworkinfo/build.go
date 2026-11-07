@@ -3,17 +3,24 @@ package frameworkinfo
 import (
 	"fmt"
 	"runtime/debug"
+
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // Build is the framework module version linked into the running tool. Version
 // is empty for development builds and local directory replacements, whose
 // source cannot be identified by a module version.
 type Build struct {
+	// Path is the effective module identity, including versioned replacements.
+	// Empty denotes ModulePath for callers specifying an official release.
+	Path    string
 	Version string
 }
 
 // Selection is the framework module selected by a consumer's build list.
 type Selection struct {
+	// Path is the effective module identity; empty denotes ModulePath.
+	Path string
 	// Main reports that the consumer is the framework module itself.
 	Main bool
 	// Version is the selected module version, or its versioned replacement.
@@ -43,13 +50,17 @@ func CurrentBuild() Build {
 	if module == nil {
 		return Build{}
 	}
+	return moduleBuild(*module)
+}
+
+func moduleBuild(module debug.Module) Build {
 	if module.Replace != nil {
-		return Build{Version: module.Replace.Version}
+		module = *module.Replace
 	}
 	if module.Version == "(devel)" {
 		return Build{}
 	}
-	return Build{Version: module.Version}
+	return Build{Path: module.Path, Version: module.Version}
 }
 
 // Check compares this build with a consumer's selected framework. It reports
@@ -60,8 +71,15 @@ func (b Build) Check(selected Selection) (bool, error) {
 	if selected.Main || selected.Local || b.Version == "" || selected.Version == "" {
 		return false, nil
 	}
-	if b.Version != selected.Version {
-		return true, fmt.Errorf("the foundry tool is built from %s %s, but this module selects %s; run the module-pinned `go tool foundry` or install the matching version", ModulePath, b.Version, selected.Version)
+	buildPath, selectedPath := b.Path, selected.Path
+	if buildPath == "" {
+		buildPath = ModulePath
+	}
+	if selectedPath == "" {
+		selectedPath = ModulePath
+	}
+	if buildPath != selectedPath || b.Version != selected.Version {
+		return true, safeerror.New(fmt.Sprintf("the foundry tool is built from %s %s, but this module selects %s %s; run the module-pinned `go tool foundry` or install the matching version", buildPath, b.Version, selectedPath, selected.Version))
 	}
 	return true, nil
 }

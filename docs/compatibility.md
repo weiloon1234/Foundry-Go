@@ -27,6 +27,8 @@ heading fragments retain path-only checking. Application `Foundry guides:`
 references validate every supplied fragment against explicit IDs in the selected
 release, without inferring heading slugs. Rendered recipes ship in that release
 and remain readable without fixture sources or TypeScript tools.
+The pinned tool must match both the effective module path and version, including
+versioned replacements; an equal version on a different module is not a match.
 
 Former API teaching belongs in labeled blocks in the designated ORM and v0.2
 migration guides. The existing `orm-example: name-before` mechanism covers one

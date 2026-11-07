@@ -205,5 +205,19 @@
   "validation": [
     "Field.Rules",
     "Rule.Check"
+  ],
+  "http/pagination": [
+    "AuthenticatedNumberedEndpoint.WithScopes",
+    "AuthenticatedNumberedEndpoint.WithPermissions",
+    "AuthenticatedNumberedEndpoint.WithAuthorization",
+    "AuthenticatedSimpleEndpoint.WithScopes",
+    "AuthenticatedSimpleEndpoint.WithPermissions",
+    "AuthenticatedSimpleEndpoint.WithAuthorization",
+    "AuthenticatedCursorEndpoint.WithScopes",
+    "AuthenticatedCursorEndpoint.WithPermissions",
+    "AuthenticatedCursorEndpoint.WithAuthorization",
+    "authenticatedPageEndpoint.WithScopes",
+    "authenticatedPageEndpoint.WithPermissions",
+    "authenticatedPageEndpoint.WithAuthorization"
   ]
 }

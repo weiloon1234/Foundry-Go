@@ -19,6 +19,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/doctor"
 	"github.com/weiloon1234/Foundry-Go/internal/frameworkinfo"
 	"github.com/weiloon1234/Foundry-Go/internal/retirement"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 const docsUsage = "usage: foundry docs check [--dir .]\nCheck active AGENTS.md and .claude/skills Markdown against the cached, pinned framework. No files are changed."
@@ -60,7 +61,7 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 		return err
 	}
 	if !verified {
-		return fmt.Errorf("docs check requires a verified tool/framework version match; development builds and local replacements are unverifiable; run the module-pinned `go tool foundry docs check --dir .` with a released framework")
+		return safeerror.New(fmt.Sprintf("docs check requires a verified tool/framework version match; development builds and local replacements are unverifiable; run the module-pinned `go tool foundry docs check --dir .` with a released framework"))
 	}
 	var refs []docrefs.Reference
 	var failures []error
@@ -76,6 +77,9 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 			return err
 		}
 		rel = filepath.ToSlash(rel)
+		if entry.Type()&os.ModeSymlink != 0 && (rel == ".claude" || rel == ".claude/skills" || strings.HasPrefix(rel, ".claude/skills/")) {
+			return safeerror.New(fmt.Sprintf("%s: active documentation directories and files must not be symlinks", rel))
+		}
 		if entry.IsDir() {
 			if rel != "." {
 				if rel == ".agents/skills" || skipDocumentationDirectory(entry.Name()) {
@@ -94,7 +98,7 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 			return nil
 		}
 		if !entry.Type().IsRegular() {
-			return fmt.Errorf("%s: active documentation must be a regular file", rel)
+			return safeerror.New(fmt.Sprintf("%s: active documentation must be a regular file", rel))
 		}
 		data, err := os.ReadFile(name)
 		if err != nil {
@@ -106,7 +110,7 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 		return nil
 	})
 	failures = append(failures, err, docrefs.CheckReferences(filepath.Join(selected.Dir, "docs", "guides"), refs))
-	return errors.Join(failures...)
+	return safeerror.Join("documentation check failed", failures...)
 }
 
 // Match dated records, not ordinary skill names containing a milestone number.
@@ -125,9 +129,13 @@ func documentationModule(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", safeerror.Wrap("docs check --dir must name an existing application directory", err)
+	}
 	info, err := os.Stat(root)
 	if err != nil || !info.IsDir() {
-		return "", fmt.Errorf("docs check --dir must name an existing application directory")
+		return "", safeerror.New(fmt.Sprintf("docs check --dir must name an existing application directory"))
 	}
 	for {
 		if info, err := os.Stat(filepath.Join(root, "go.mod")); err == nil && info.Mode().IsRegular() {
@@ -137,7 +145,7 @@ func documentationModule(dir string) (string, error) {
 		}
 		parent := filepath.Dir(root)
 		if parent == root {
-			return "", fmt.Errorf("docs check requires an application Go module; select it with --dir")
+			return "", safeerror.New(fmt.Sprintf("docs check requires an application Go module; select it with --dir"))
 		}
 		root = parent
 	}
