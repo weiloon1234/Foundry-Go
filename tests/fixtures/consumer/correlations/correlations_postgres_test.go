@@ -24,12 +24,13 @@ func TestPostgresTypedCorrelations(t *testing.T) {
 
 func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) error {
 	u := models.Users
+	// doc-example:begin model-correlations
 	link := rowset.Correlate(rowset.From(models.Users.Query()), rowset.From(models.Orders.Query()))
 	buyer := rowset.OuterScope(link, rowset.ModelScope(models.Users.Query()))
 	order := rowset.InnerScope(link, rowset.ModelScope(models.Orders.Query()))
 	matched := link.Where(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(buyer, orm.KeyExpr(models.Users.ID))))
 	counts := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.CountFieldAt(order, orm.KeyExpr(models.Orders.ID))))
-	totals := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.SumAt(order, orm.NumberExpr(models.Orders.TotalCents))))
+	totals := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.SumAt(order, orm.NumberExpr(models.Orders.TotalCents)))) // doc-example:end model-correlations
 	r := reports.UserOrderStatsRows
 	report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), r.Row,
 		rowset.Map(r.ID, expr.Value(orm.KeyExpr(u.ID))), rowset.Map(r.Email, expr.Value(orm.TextExpr(u.Email))),

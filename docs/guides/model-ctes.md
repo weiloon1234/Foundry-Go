@@ -1,14 +1,12 @@
 # Typed common table expressions
 
-<!-- compiled-examples -->
-
 `rows.CTE(name, recordSource)` defines a reusable typed SELECT. Use
 `rows.ModelRecord(query)` for a complete model, or `rows.RecordOf(projection)` for
 a handwritten rows projection. Alias the definition with `rows.AsRecord[Tag]`.
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/ctes/ctes_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/ctes/ctes_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/ctes/ctes_postgres_test.go#model-ctes -->
 ```go
 u := models.Users
 eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.NumberGte(u.Age, 21)))).Materialized()

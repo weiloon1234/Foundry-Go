@@ -25,6 +25,7 @@ type SampleColumns struct {
 	Date        orm.Time[Sample, temporal.Date]
 }
 
+// doc-example:begin interval-queries
 var Samples = orm.Define("interval_samples", func(b orm.Builder[Sample], s *Sample) SampleColumns {
 	table := orm.TableOf(b, &s.ID)
 	return SampleColumns{
@@ -32,7 +33,7 @@ var Samples = orm.Define("interval_samples", func(b orm.Builder[Sample], s *Samp
 		Start: orm.TimeOf(b, &s.Start), End: orm.TimeOf(b, &s.End), LocalStart: orm.TimeOf(b, &s.LocalStart), LocalEnd: orm.TimeOf(b, &s.LocalEnd),
 		ClockStart: orm.TimeOf(b, &s.ClockStart), ClockEnd: orm.TimeOf(b, &s.ClockEnd), Date: orm.TimeOf(b, &s.Date),
 	}
-})
+}) // doc-example:end interval-queries
 
 type PlanColumns struct {
 	orm.Table[Plan, int]

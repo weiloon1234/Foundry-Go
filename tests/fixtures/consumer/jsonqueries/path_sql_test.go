@@ -17,9 +17,10 @@ func TestDeclaredJSONPathSQLParity(t *testing.T) {
 	if err := orm.Check(f, jsonqueries.Policies); err != nil {
 		t.Fatal(err)
 	}
+	// doc-example:begin json-models-2
 	profile := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(orm.JSONExpr(f.Settings))), jsonqueries.ProfileField))
 	age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, jsonqueries.AgeField), codec.Signed[int64]()))
-	selected := rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(f.Query(), expr.NullableEq(age, 42))), expr.AsSelected(age)))
+	selected := rows.ReadScalar(rows.SelectScalar(rows.From(expr.Where(f.Query(), expr.NullableEq(age, 42))), expr.AsSelected(age))) // doc-example:end json-models-2
 	if err := rows.PreflightRead(t.Context(), selected); err != nil {
 		t.Fatal(err)
 	}

@@ -1,7 +1,5 @@
 # Computed query keys
 
-<!-- compiled-examples -->
-
 `expr.Group(rowValue)` constructs a row grouping key. A selected expression's
 `expr.Key(selected)` constructs an `expr.ProjectionKey[S]` for selected DISTINCT ON and window
 partitioning. Neither operation erases scope or makes an aggregate a row operand.
@@ -10,7 +8,7 @@ partitioning. Neither operation erases scope or makes an aggregate a row operand
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/keyqueries/keys_test.go):
 
-<!-- go-source: tests/fixtures/consumer/keyqueries/keys_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/keyqueries/keys_test.go#computed-query-keys -->
 ```go
 func buckets() rowset.Query[models.User, keyqueries.BucketCount] {
 	u := models.Users

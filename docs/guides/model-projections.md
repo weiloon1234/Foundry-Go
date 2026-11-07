@@ -10,8 +10,6 @@
 
 Further reading: [Execution](#execution-and-failures).
 
-<!-- compiled-examples -->
-
 A projection returns a complete ordinary Go record with a handwritten
 `database/orm/rows` schema. It has no table or write lifecycle. Its fields keep
 concrete model IDs, enum types and `value.Nullable` wrappers.
@@ -92,7 +90,7 @@ func SummaryPage(ctx context.Context, db database.Executor, page orm.PageRequest
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go#model-projections -->
 ```go
 o := models.Orders
 totals := rowset.GroupBy(rowset.Select(rowset.From(models.Orders.Query()), reports.BuyerTotalRows.Row,

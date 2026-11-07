@@ -35,10 +35,11 @@ func TestIntervalDeclarationSQLParity(t *testing.T) {
 	compare(got, err)
 	got, err = orm.Compile(Links.Query())
 	compare(got, err)
+	// doc-example:begin interval-queries-3
 	projection := rows.Select(rows.From(Samples.Query()), Summaries,
 		rows.MapSelected(Summaries.Total, expr.AsSelected(expr.SumInterval(orm.IntervalExpr(Samples.Period)))),
 		rows.MapSelected(Summaries.Average, expr.AsSelected(expr.AvgInterval(orm.IntervalExpr(Samples.Period)))),
-		rows.MapSelected(Summaries.Count, expr.AsSelected(expr.Count[Sample]())))
+		rows.MapSelected(Summaries.Count, expr.AsSelected(expr.Count[Sample]()))) // doc-example:end interval-queries-3
 	got, err = rows.CompileRead(rows.Read(projection))
 
 	compare(got, err)

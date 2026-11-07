@@ -1,14 +1,12 @@
 # Typed aggregate filters
 
-<!-- compiled-examples -->
-
 `expr.Filter(aggregate, predicates...)` restricts one aggregate's contributing rows. Source WHERE filters
 all calculations; `rows.Having` filters completed groups. Adapt model predicates
 with `expr.ModelPredicate`; aliased operands already produce expression predicates.
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go):
 
-<!-- go-source: tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go#model-aggregate-filters -->
 ```go
 predicate := expr.ModelPredicate(orm.NumberGt(models.Orders.TotalCents, 0))
 total := expr.Filter(expr.Sum(orm.NumberExpr(models.Orders.TotalCents)), predicate)

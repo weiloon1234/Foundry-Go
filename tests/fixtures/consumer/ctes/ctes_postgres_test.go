@@ -35,13 +35,14 @@ func TestPostgresTypedCTEs(t *testing.T) {
 }
 
 func checkSharedCTEs(t *testing.T, tx *database.Tx, users []models.User) error {
+	// doc-example:begin model-ctes
 	u := models.Users
 	eligible := rowset.CTE("eligible_users", rowset.ModelRecord(models.Users.Query().Where(orm.NumberGte(u.Age, 21)))).Materialized()
 	first, second := rowset.AsRecord[eligibleAlias](eligible, "first_user"), rowset.AsRecord[otherAlias](eligible, "second_user")
 	a, b := rowset.Scope(first), rowset.Scope(second)
 	joined := rowset.InnerJoin(first, second, rowset.On(expr.At(a, orm.KeyExpr(models.Users.ID)), expr.At(b, orm.KeyExpr(models.Users.ID))))
 	fields := rowset.LeftScope(joined, rowset.Scope(first))
-	names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, orm.TextExpr(models.Users.Email))))), expr.Asc(expr.At(fields, orm.TextExpr(models.Users.Email))))
+	names := rowset.OrderScalar(rowset.SelectScalar(joined, expr.AsSelected(expr.Row(expr.At(fields, orm.TextExpr(models.Users.Email))))), expr.Asc(expr.At(fields, orm.TextExpr(models.Users.Email)))) // doc-example:end model-ctes
 	s, err := rowset.CompileRead(rowset.ReadScalar(names))
 	if err != nil {
 		return err

@@ -1,7 +1,5 @@
 # Typed datatables and exports
 
-<!-- compiled-examples -->
-
 Datatables bind handwritten ORM sources to explicit DTO contracts. Members,
 Orders and Totals in the [reporting consumer](../../tests/fixtures/consumer/reporting/)
 cover model, joined and grouped sources.
@@ -12,7 +10,7 @@ Declare an explicit response DTO:
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/models.go):
 
-<!-- go-source: tests/fixtures/consumer/reporting/models.go -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/models.go#datatable -->
 ```go
 //foundry:dto
 type MemberRow struct {
@@ -232,7 +230,7 @@ in configured assembly or UTC for a direct manager. Explicit per-export
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/reporting_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/reporting/reporting_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/reporting_postgres_test.go#datatable-2 -->
 ```go
 artifact, err := reporting.Totals.Export(scope.Context(), f.manager, authority, datatable.Request{Filters: []datatable.Filter{{Op: datatable.Greater, Column: "total", Values: []string{"10"}}}}, datatable.ExportOptions{Format: datatable.CSV})
 if err != nil {
@@ -313,7 +311,7 @@ Use `contract.TableID` for table identities. There is no `datatable.TableID` ali
 Declare each association at its endpoint. A query endpoint (`h` is the
 Foundry-Go `http` package):
 
-<!-- go-source: tests/fixtures/consumer/clientcontracts/table_bindings.go -->
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/table_bindings.go#datatable-3 -->
 ```go
 func tableQuery[S, R, A any](table datatable.Table[S, R, A], id h.RouteID, path string) h.RouteRegistration {
 	endpoint := datatable.QueryEndpoint(table, h.DefineRoute(h.RouteSpec{ID: id, Method: h.POST, Access: h.Public}, h.StaticPath(path)), h.EmptyQuery())
@@ -325,7 +323,7 @@ func tableQuery[S, R, A any](table datatable.Table[S, R, A], id h.RouteID, path 
 
 Ticket export, download and direct file export bindings:
 
-<!-- go-source: tests/fixtures/consumer/clientcontracts/table_bindings.go -->
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/table_bindings.go#datatable-4 -->
 ```go
 ticket := datatable.BindTicketExport(reporting.Members, h.DefineEndpoint(h.DefineRoute(h.RouteSpec{ID: "issue.report", Method: h.POST, Access: h.Public}, h.StaticPath("/issue")), h.EmptyQuery(), h.JSONBody(TableExportRequestJSON()), h.JSONResponse(201, TableExportResourceJSON())), TableExportRequestValidationFields().Request)
 download := datatable.DownloadEndpoint(reporting.Members, h.DefineRoute(h.RouteSpec{ID: "files.open", Method: h.GET, Access: h.Public}, h.StaticPath("/file")), TableDownloadQueryDescriptor(), h.DownloadResponse("text/csv"))
@@ -416,7 +414,7 @@ declares:
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/member_import.go):
 
-<!-- go-source: tests/fixtures/consumer/reporting/member_import.go -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/member_import.go#datatable-5 -->
 ```go
 func memberImports() importer.Definition[MemberImport] {
 	text := foundryhttp.StringQuery[string]()
@@ -438,7 +436,7 @@ process each bounded chunk in the handler without collecting the whole import:
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reporting/member_import_test.go):
 
-<!-- go-source: tests/fixtures/consumer/reporting/member_import_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/member_import_test.go#datatable-6 -->
 ```go
 var imported []importer.Row[reporting.MemberImport]
 report, err := reporting.MemberImports.Run(t.Context(), importer.CSVSource(strings.NewReader(upload)), func(_ context.Context, rows []importer.Row[reporting.MemberImport]) error {
@@ -520,11 +518,11 @@ routes in one call. The parent scope stays application-owned. The helper uses
 explicit Part A bindings, so generated clients derive their table operations
 from the registered endpoints.
 
-<!-- go-source: tests/fixtures/consumer/reporting/table_routes.go -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/table_routes.go#datatable-7 -->
 ```go
 return datatable.Routes(group, NumericLevels, config,
-    datatable.ReadAccess(read...),
-    datatable.ExportAccess(export...),
+	datatable.ReadAccess(read...),
+	datatable.ExportAccess(export...),
 )
 ```
 
@@ -539,10 +537,7 @@ Exportable tables also require `Clock`, `Quota` and `Tickets[M]`. Construct tick
 from the same model's token binding. Registration rejects disabled tickets or a
 redeemer whose source differs from the route guard.
 
-<!-- go-source: tests/fixtures/consumer/reporting/table_routes.go -->
-```go
-return datatable.TokenTickets(tokens)
-```
+See the [compiled token-ticket adapter](tokens.md#websocket-handshake-tickets).
 
 Query-only tables need no ticket, clock or quota configuration. The framework owns
 redemption and the fresh authentication scope, including deferred row loading.

@@ -21,6 +21,7 @@ type MemberImport struct {
 // completely parsed row before the handler receives it.
 var MemberImports = memberImports()
 
+// doc-example:begin datatable-5
 func memberImports() importer.Definition[MemberImport] {
 	text := foundryhttp.StringQuery[string]()
 	name := validation.DefineField("name", func(row MemberImport) string { return row.Name })
@@ -33,4 +34,4 @@ func memberImports() importer.Definition[MemberImport] {
 		},
 		Rules: []validation.Rule[MemberImport]{validation.Rules(name, validation.NonBlank[string](), validation.MaxLength[string](80))},
 	})
-}
+} // doc-example:end datatable-5

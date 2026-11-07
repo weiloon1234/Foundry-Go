@@ -29,9 +29,10 @@ hyphens and are unique within their file. Regions cannot nest or overlap. A boun
 must be an actual line comment in its source language. Marker-looking text inside
 quoted or template literal text, Go raw strings, or block comments is rejected,
 even when the enclosing file is a compiler input. A boundary
-marker may follow its first or last code line as a trailing comment; its separating spaces
-or tabs belong to the marker. This keeps Go declaration directives and top-level end markers gofmt-clean
-without introducing a blank line into the excerpt.
+marker may follow its first or last code line as a trailing comment; its separating
+spaces or tabs belong to the marker. Put a blank line between a standalone marker
+and a Go declaration directive such as `//foundry:dto` so gofmt keeps their comment
+groups separate. Add the same separation before an end marker when needed.
 
 The guide names that region immediately before its fence:
 
@@ -51,19 +52,25 @@ Generated sources and symlink aliases are rejected. A directive without a fragme
 means the entire source file, never a guessed excerpt.
 
 The renderer changes only the next fence, with optional blank lines between the
-directive and fence. It removes markers and the longest byte-identical space/tab
-prefix shared by nonblank lines. Blank lines lose at most that prefix. All other
-source lines and whitespace remain intact. It derives `go` or `typescript` from
+directive and fence. It removes markers, trims a named region's leading and trailing
+blank lines, then removes the longest byte-identical space/tab prefix shared by
+nonblank lines. Interior blank lines remain and lose at most that prefix. Whole-file
+inclusions retain their boundary blank lines. All other source lines and whitespace
+remain intact. Render and read-only `--check` use these same rules.
+It derives `go` or `typescript` from
 the extension and uses a backtick delimiter longer than any run in the excerpt.
 It adds the newline needed to close a fence when a whole source file lacks one.
-It never renames symbols, repairs calls, inserts ellipses or trims blank lines.
+It never renames symbols, repairs calls or inserts ellipses.
 
 Each region has one owning inclusion. Link to that owner from other sections.
 Every Go or TypeScript fence inside a `recipe-*` section, including subsections,
 requires a directive until the next heading of the same or higher level. The
 previously complete guides also retain their whole-guide source-binding rule.
-The coverage list lives in `internal/docsource`, replacing the old fixture
-substring checker. Shell and JSON examples do not claim compiler proof.
+The coverage list lives in `internal/docsource`, replacing both old fixture
+substring checkers. The former `go-source` and `compiled-examples` markers are
+rejected. Those query guides still require a link to `orm-migration.md` and reject
+generated model/query teaching through `checkdocs` and the retirement owner.
+Shell and JSON examples do not claim compiler proof.
 
 Run `make generate` to render after declaration generation. For a guide-only edit,
 `go run ./internal/cmd/renderdocs --guide model-queries.md` renders just that guide;

@@ -24,6 +24,7 @@ type resultAlias struct{}
 
 func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 	queryfixture.Run(t, func(tx *database.Tx, users []models.User) error {
+		// doc-example:begin model-distinct
 		people := rows.As[personAlias](models.Users.Query(), "person")
 		orders := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
 		p, o := rows.Scope(people), rows.Scope(orders)
@@ -32,7 +33,7 @@ func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 		fields := scope
 		base := rows.SelectRecord(joined, scope).OrderBy(expr.Asc(expr.At(fields, orm.TextExpr(models.Users.Email))))
 		unique := rows.DistinctRecord(base)
-		items, err := rows.ReadRecord(unique).All(t.Context(), tx)
+		items, err := rows.ReadRecord(unique).All(t.Context(), tx) // doc-example:end model-distinct
 		if err != nil {
 			return err
 		}

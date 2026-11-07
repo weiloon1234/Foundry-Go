@@ -19,8 +19,9 @@ func TestTemporalDeclarationSQLParity(t *testing.T) {
 	if !oracleEqual(t, "consumer/temporalqueries/orm_test/1", oracle.Snapshot([]any{got.SQL(), got.Arguments()})) {
 		t.Fatal("temporal row predicate SQL changed")
 	}
+	// doc-example:begin temporal-calculations
 	year := expr.Year(expr.Value(orm.TimeExpr(Samples.Date)))
-	report := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, expr.AsSelected(year)), rows.MapSelected(CalendarSummaries.Rows, expr.AsSelected(expr.Count[Sample]())), rows.MapSelected(CalendarSummaries.Latest, expr.AsSelected(expr.Max(orm.TimeExpr(Samples.Date))))), expr.Group(year)), expr.Asc(year))
+	report := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, expr.AsSelected(year)), rows.MapSelected(CalendarSummaries.Rows, expr.AsSelected(expr.Count[Sample]())), rows.MapSelected(CalendarSummaries.Latest, expr.AsSelected(expr.Max(orm.TimeExpr(Samples.Date))))), expr.Group(year)), expr.Asc(year)) // doc-example:end temporal-calculations
 	got, err = rows.CompileRead(rows.Read(report))
 	if err != nil {
 		t.Fatal(err)

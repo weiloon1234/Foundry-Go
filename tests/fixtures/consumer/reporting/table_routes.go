@@ -10,10 +10,11 @@ import (
 // NumericLevelRoutes uses framework-owned query, ticket and download contracts.
 // The caller supplies current authority and token-owned tickets.
 func NumericLevelRoutes(group http.Scope, config datatable.RoutesConfig[Operator, Authority], read, export []http.GuardOption[Operator]) ([]http.RouteRegistration, error) {
+	// doc-example:begin datatable-7
 	return datatable.Routes(group, NumericLevels, config,
 		datatable.ReadAccess(read...),
 		datatable.ExportAccess(export...),
-	)
+	) // doc-example:end datatable-7
 }
 
 // NumericLevelTokenTickets retains the same operator type as NumericLevelRoutes.

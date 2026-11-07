@@ -1,7 +1,5 @@
 # Typed temporal queries
 
-<!-- compiled-examples -->
-
 Temporal calculations share the query AST, parameters, scope checking and result codecs used by [scalar calculations](scalar-calculations.md). The [consumer fixture](../../tests/fixtures/consumer/temporalqueries/) declares ordinary model fields for `time.Time`, `temporal.DateTime`, `temporal.Date`, `temporal.LocalDateTime`, `temporal.Time` and their nullable forms.
 
 PostgreSQL 18 is the tested backend for these operations, including its explicit-timezone `date_add` and `date_subtract` functions.
@@ -12,7 +10,7 @@ Calendar extraction accepts dates or local date-times. Clock extraction accepts 
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/temporalqueries/orm_test.go):
 
-<!-- go-source: tests/fixtures/consumer/temporalqueries/orm_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/temporalqueries/orm_test.go#temporal-calculations -->
 ```go
 year := expr.Year(expr.Value(orm.TimeExpr(Samples.Date)))
 report := rows.OrderBy(rows.GroupBy(rows.Select(rows.From(Samples.Query()), CalendarSummaries, rows.MapSelected(CalendarSummaries.Year, expr.AsSelected(year)), rows.MapSelected(CalendarSummaries.Rows, expr.AsSelected(expr.Count[Sample]())), rows.MapSelected(CalendarSummaries.Latest, expr.AsSelected(expr.Max(orm.TimeExpr(Samples.Date))))), expr.Group(year)), expr.Asc(year))
@@ -49,24 +47,7 @@ Date and timestamp truncation units have distinct Go types. Invalid zero units o
 
 `AddDateInterval`/`SubtractDateInterval` return local date-times because intervals can include clock components. `AddLocalInterval`/`SubtractLocalInterval` preserve local date-times. `AddInstantInterval`/`SubtractInstantInterval` preserve the instant's Go type and require an explicit timezone:
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go):
-
-<!-- go-source: tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go -->
-```go
-ny, err := expr.LoadTimeZone("America/New_York")
-if err != nil {
-	return err
-}
-for _, test := range []struct {
-	period temporal.Interval
-	hours  time.Duration
-}{{temporal.Days(1), 23}, {interval(t, 0, 0, 24*time.Hour), 24}} {
-	got := intervalOne(t, tx, expr.AsSelected(expr.ShiftInstant(expr.Value(orm.TimeExpr(f.Start)), expr.Param(orm.IntervalExpr(f.Period), test.period), ny)))
-	if got.Sub(samples[0].Start) != test.hours*time.Hour {
-		t.Fatal(got, test.hours)
-	}
-}
-```
+See the [compiled calendar-day and elapsed-hour comparison](interval-queries.md#calculations).
 
 The excerpt uses dynamic interval operands to contrast a calendar day with 24 elapsed
 hours; the literal `Add*Interval` forms retain the same arithmetic semantics.

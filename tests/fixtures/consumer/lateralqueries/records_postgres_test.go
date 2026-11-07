@@ -20,13 +20,14 @@ type ordersAlias struct{}
 type latestAlias struct{}
 type statsAlias struct{}
 
+// doc-example:begin lateral-joins
 func userOrders[L any](outer rows.ScopeSource[L], scope expr.Scope[L, models.User]) (rows.CorrelatedSource[L, rows.Alias[ordersAlias, models.Order]], expr.Scope[rows.Correlation[L, rows.Alias[ordersAlias, models.Order]], models.Order]) {
 	orders := rows.As[ordersAlias](models.Orders.Query(), "orders_for_user")
 	c := rows.Correlate(outer, orders)
 	inner := rows.InnerScope(c, rows.Scope(orders))
 	u, o := rows.OuterScope(c, scope), inner
 	return c.Where(expr.Equal(expr.At(o, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(u, orm.KeyExpr(models.Users.ID)))), inner
-}
+} // doc-example:end lateral-joins
 
 func TestPostgresLateralPerParentRecords(t *testing.T) {
 	queryfixture.RunJoins(t, func(tx *database.Tx, users []models.User) error {

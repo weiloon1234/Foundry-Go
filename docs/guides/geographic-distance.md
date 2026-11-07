@@ -1,7 +1,5 @@
 # Geographic distance
 
-<!-- compiled-examples -->
-
 `expr.NewGeographicPoint(latitude, longitude)` validates finite degree coordinates
 (latitude −90…90, longitude −180…180). Zero is valid. `expr.SphericalDistance`
 accepts typed numeric row operands, such as `expr.Value(column)`, and a validated

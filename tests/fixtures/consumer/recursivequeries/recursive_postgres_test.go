@@ -24,13 +24,14 @@ type parentAlias struct{}
 type childAlias struct{}
 type resultAlias struct{}
 
+// doc-example:begin model-recursive-ctes
 func descendants(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
 	parent := rowset.AsRecord[parentAlias](self, "parent")
 	child := rowset.As[childAlias](models.Users.Query(), "child")
 	p, c := rowset.Scope(parent), rowset.Scope(child)
 	joined := rowset.InnerJoin(child, parent, rowset.OnEqual(expr.At(c, orm.NullableColumnExpr(models.Users.IntroducerID)), expr.NullableRow(expr.At(p, orm.KeyExpr(models.Users.ID)))))
 	return rowset.SelectRecord(joined, rowset.LeftScope(joined, rowset.Scope(child)))
-}
+} // doc-example:end model-recursive-ctes
 
 func readUsers(t *testing.T, tx database.Executor, definition rowset.CommonTable[models.User]) []models.User {
 	t.Helper()

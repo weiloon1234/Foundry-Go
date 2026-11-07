@@ -1,7 +1,5 @@
 # Transaction-required correlation and lateral joins
 
-<!-- compiled-examples -->
-
 Use these APIs when an inner query depends on a parent row and must retain locks.
 Both outer ownership and the transaction requirement survive composition. The
 only executable result belongs to the enclosing transaction query.
@@ -10,7 +8,7 @@ only executable result belongs to the enclosing transaction query.
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go#transaction-correlations -->
 ```go
 parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyIn(Records.ID, 1, 3)))), "parent")
 child := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "child")

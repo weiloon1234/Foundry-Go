@@ -1,7 +1,5 @@
 # Typed window functions
 
-<!-- compiled-examples -->
-
 Window functions in `database/orm/expr` return selected expressions. Map them with
 `rows.MapSelected`, or use `rows.SelectScalar`. They cannot serve as row or HAVING
 predicates. Filter a declared derived result to select rows by their computed rank.
@@ -10,7 +8,7 @@ predicates. Filter a declared derived result to select rows by their computed ra
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/windowqueries/windows_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/windowqueries/windows_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/windowqueries/windows_postgres_test.go#model-windows -->
 ```go
 base := models.Orders.Query()
 o := models.Orders

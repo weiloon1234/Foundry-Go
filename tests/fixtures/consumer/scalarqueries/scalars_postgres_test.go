@@ -69,11 +69,12 @@ func scalarValues[V any](t *testing.T, tx *database.Tx, e expr.Selected[scalarqu
 func TestPostgresNumericCalculations(t *testing.T) {
 	runCalculations(t, func(tx *database.Tx) error {
 		f := scalarqueries.Samples
+		// doc-example:begin scalar-calculations
 		quantity := expr.Value(orm.NumberExpr(f.Quantity))
 		incremented := expr.Add(quantity, expr.Param(orm.NumberExpr(f.Quantity), 1))
 		if rows, err := orm.All(t.Context(), tx, expr.Where(scalarqueries.Samples.Query(), expr.Gte(incremented, 3))); err != nil || len(rows) != 2 {
 			t.Fatal("typed arithmetic predicate", rows, err)
-		}
+		} // doc-example:end scalar-calculations
 		scalarValues(t, tx, expr.AsSelected(expr.Add(quantity, expr.Param(orm.NumberExpr(f.Quantity), 2))), []int16{4, 5, -1})
 		scalarValues(t, tx, expr.AsSelected(expr.Subtract(quantity, expr.Param(orm.NumberExpr(f.Quantity), 1))), []int16{1, 2, -4})
 		scalarValues(t, tx, expr.AsSelected(expr.Multiply(quantity, quantity)), []int16{4, 9, 9})

@@ -1,7 +1,5 @@
 # Typed relation aggregates
 
-<!-- compiled-examples -->
-
 Aggregate descriptors from `database/orm/expr` work both in rows projections and
 in per-parent relation slots. Related models need not be hydrated to compute a
 summary. [Handwritten declarations](../../tests/fixtures/consumer/models/orm_relations.go)

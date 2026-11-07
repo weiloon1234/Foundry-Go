@@ -1,14 +1,12 @@
 # Typed RANGE frames and named windows
 
-<!-- compiled-examples -->
-
 These APIs extend the [window-function contracts](model-windows.md), using the same query AST, result codecs, scope validation and execution runtime. The [independent consumer](../../tests/fixtures/consumer/framequeries/) contains numeric, temporal, named-window and composition examples.
 
 ## Numeric distances
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/framequeries/ranges_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/framequeries/ranges_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/framequeries/ranges_postgres_test.go#window-ranges-and-names -->
 ```go
 q := framequeries.Samples.Query()
 f := framequeries.Samples
@@ -28,7 +26,7 @@ Distances are encoded once, bound as parameters and explicitly cast using the co
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/framequeries/ranges_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/framequeries/ranges_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/framequeries/ranges_postgres_test.go#window-ranges-and-names-2 -->
 ```go
 r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(f.At)))))
 day, _ := temporal.Elapsed(24 * time.Hour)
@@ -50,7 +48,7 @@ For time-of-day ordering, calendar months/days are rejected because PostgreSQL o
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/framequeries/named_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/framequeries/named_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/framequeries/named_postgres_test.go#window-ranges-and-names-3 -->
 ```go
 base := expr.WindowFor(rowset.ModelScope(q)).PartitionBy(expr.Group(expr.Param(orm.NumberKeyExpr(f.ID), 1))).Named("all_samples")
 ordered := base.OrderBy(expr.Asc(expr.Value(orm.NumberKeyExpr(f.ID)))).Named("ordered")

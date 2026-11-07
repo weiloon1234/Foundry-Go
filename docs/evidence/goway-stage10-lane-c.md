@@ -21,8 +21,9 @@ Read guidance distinguishes model, projection, scalar, record, set and cursor
 terminals, including compilation/preflight without I/O.
 
 The guides reuse 33 excerpts from handwritten, compiled consumer sources.
-[The excerpt guard](../../tests/fixtures/goway/guideexamples/guides_test.go) requires
-a source for each Go fence and checks its contents, allowing indentation changes.
+The excerpt guard (`tests/fixtures/goway/guideexamples/guides_test.go`, since
+replaced by [the shared source checker](../../internal/docsource)) required
+a source for each Go fence and checked its contents, allowing indentation changes.
 The shared external-input fingerprint hook tracks changes outside the fixture
 module under make; direct invocations use `-count=1`.
 It rejects stale generated-query guidance while permitting ordinary DTO/enum

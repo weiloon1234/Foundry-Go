@@ -1,7 +1,5 @@
 # Transaction-required query composition
 
-<!-- compiled-examples -->
-
 Use `database/orm/rows` transaction sources when a derived SELECT or CTE must
 retain row locks. Its executable result requires `*database.Tx`; ordinary source
 adapters cannot erase that requirement. Handwritten model and rows declarations
@@ -11,7 +9,7 @@ are shared with ordinary reads.
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/transactionqueries/models.go):
 
-<!-- go-source: tests/fixtures/consumer/transactionqueries/models.go -->
+<!-- compiled-source: tests/fixtures/consumer/transactionqueries/models.go#transaction-query-composition -->
 ```go
 func Claimed(ctx context.Context, tx *database.Tx) ([]Summary, error) {
 	definition := rows.TransactionCTE("claimed", rows.LockedRecord(orm.Lock(Records.Query().OrderBy(orm.KeyAsc(Records.ID)).Limit(1)).SkipLocked()))

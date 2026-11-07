@@ -1,7 +1,5 @@
 # Typed recursive common table expressions
 
-<!-- compiled-examples -->
-
 `rows.RecursiveCTE` and `rows.RecursiveAllCTE` combine an anchor record source with
 a step callback. The callback receives `rows.RecursiveSelf[R]` and must return the
 same complete record type. The ordinary struct and rows/model declaration own
@@ -11,7 +9,7 @@ A step can join children to the current self input:
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/recursivequeries/recursive_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/recursivequeries/recursive_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/recursivequeries/recursive_postgres_test.go#model-recursive-ctes -->
 ```go
 func descendants(self rowset.RecursiveSelf[models.User]) rowset.RecordSource[models.User] {
 	parent := rowset.AsRecord[parentAlias](self, "parent")

@@ -1,7 +1,5 @@
 # Typed field computations
 
-<!-- compiled-examples -->
-
 Declare columns once with `orm.Define` and the appropriate typed constructors.
 Use package functions from `database/orm/expr` to construct optional computations;
 columns do not need a separate summary-method family for each owner/value pair.
@@ -20,14 +18,7 @@ the methodless column handle itself. Choose the adapter for the declared kind.
 | Floating summaries | `expr.SumFloat(column)` / `expr.AvgFloat(column)` |
 | Interval summaries | `expr.SumInterval(column)` / `expr.AvgInterval(column)` |
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/expressionqueries/expressions_test.go):
-
-<!-- go-source: tests/fixtures/consumer/expressionqueries/expressions_test.go -->
-```go
-orders := models.Orders.Query()
-total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents))
-computed := expr.CoalesceValue(expr.AsSelected(total), expr.AsSelected(expr.ParamOf(total, decimal.FromInt64(0))))
-```
+See the [compiled selected-aggregate example](conditional-expressions.md#selected-aggregates-and-windows).
 
 `expr.Count[S]()` counts rows. Alias operands use `expr.At(scope, column)`;
 handwritten result fields use `rows.At(scope, field)`. Aggregate `*At` constructors

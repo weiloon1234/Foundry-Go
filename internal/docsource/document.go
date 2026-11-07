@@ -17,14 +17,55 @@ var containerPrefix = regexp.MustCompile(`^(?:[ \t]*(?:>[ \t]*|[-+*] |[0-9]+[.)]
 
 var taskLink = regexp.MustCompile(`^(?:- )?(?:[^\[\]<>\x60.!?]+: )?\[[^\]]+\]\([^\s)]+\)(?:, \[[^\]]+\]\([^\s)]+\))*$`)
 
+type guidePolicy uint8
+
+const (
+	sourceBoundGuide guidePolicy = iota + 1
+	migratedQueryGuide
+)
+
 // These guides already required every Go fence to name compiled source before
 // the region renderer. Keep that coverage while other guides migrate by recipe.
-var completeGuides = map[string]bool{
-	"model-references.md": true, "model-extensions.md": true,
-	"model-extension-slots.md": true, "attachments.md": true,
-	"http-model-binding.md": true, "scoped-model-binding.md": true,
-	"model-pagination.md": true, "http-pagination.md": true,
-	"http-cursor-pagination.md": true, "model-scaffolding.md": true,
+var completeGuides = map[string]guidePolicy{
+	"model-references.md": sourceBoundGuide, "model-extensions.md": sourceBoundGuide,
+	"model-extension-slots.md": sourceBoundGuide, "attachments.md": sourceBoundGuide,
+	"http-model-binding.md": sourceBoundGuide, "scoped-model-binding.md": sourceBoundGuide,
+	"model-pagination.md": sourceBoundGuide, "http-pagination.md": sourceBoundGuide,
+	"http-cursor-pagination.md": sourceBoundGuide, "model-scaffolding.md": sourceBoundGuide,
+	"computed-query-keys.md":           migratedQueryGuide,
+	"conditional-expressions.md":       migratedQueryGuide,
+	"datatable.md":                     migratedQueryGuide,
+	"geographic-distance.md":           migratedQueryGuide,
+	"interval-queries.md":              migratedQueryGuide,
+	"json-models.md":                   migratedQueryGuide,
+	"lateral-joins.md":                 migratedQueryGuide,
+	"model-aggregate-filters.md":       migratedQueryGuide,
+	"model-aggregates.md":              migratedQueryGuide,
+	"model-chunks.md":                  migratedQueryGuide,
+	"model-correlations.md":            migratedQueryGuide,
+	"model-ctes.md":                    migratedQueryGuide,
+	"model-distinct.md":                migratedQueryGuide,
+	"model-joins.md":                   migratedQueryGuide,
+	"model-projections.md":             migratedQueryGuide,
+	"model-queries.md":                 migratedQueryGuide,
+	"model-recursive-ctes.md":          migratedQueryGuide,
+	"model-set-operations.md":          migratedQueryGuide,
+	"model-subqueries.md":              migratedQueryGuide,
+	"model-windows.md":                 migratedQueryGuide,
+	"scalar-calculations.md":           migratedQueryGuide,
+	"temporal-calculations.md":         migratedQueryGuide,
+	"transaction-correlations.md":      migratedQueryGuide,
+	"transaction-query-composition.md": migratedQueryGuide,
+	"trigram-search.md":                migratedQueryGuide,
+	"typed-field-computations.md":      migratedQueryGuide,
+	"value-comparisons-and-joins.md":   migratedQueryGuide,
+	"window-ranges-and-names.md":       migratedQueryGuide,
+}
+
+// RequiresORMMigration identifies guides whose complete coverage and migration
+// policy came from the former compiled-examples convention.
+func RequiresORMMigration(name string) bool {
+	return completeGuides[filepath.Base(name)] == migratedQueryGuide
 }
 
 type Inclusion struct {
@@ -127,6 +168,9 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 		fail := func(message string) (Document, error) {
 			return Document{}, safeerror.New(fmt.Sprintf("%s:%d: %s", name, i+1, message))
 		}
+		if strings.HasPrefix(trimmed, "<!-- go-source:") || trimmed == "<!-- compiled-examples -->" {
+			return fail("obsolete guide snippet marker; use an explicit compiled-source region")
+		}
 		if match := sectionAnchor.FindStringSubmatch(trimmed); match != nil {
 			if pendingAnchor != "" {
 				return fail(fmt.Sprintf("anchor %s on line %d must be followed by one ATX heading", pendingAnchor, anchorLine))
@@ -207,7 +251,7 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 			i = end
 			continue
 		}
-		if recipe || completeGuides[filepath.Base(name)] {
+		if recipe || completeGuides[filepath.Base(name)] != 0 {
 			nested := containerPrefix.ReplaceAllString(lines[i], "")
 			if nested != lines[i] {
 				if marker, language := FenceStart(nested); marker != "" && executable(language) {
@@ -216,7 +260,7 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 			}
 		}
 		if marker, language := FenceStart(lines[i]); marker != "" {
-			if (recipe || completeGuides[filepath.Base(name)]) && executable(language) {
+			if (recipe || completeGuides[filepath.Base(name)] != 0) && executable(language) {
 				return fail("executable recipe fence requires compiled-source")
 			}
 			end := fenceEnd(lines, i+1, marker)

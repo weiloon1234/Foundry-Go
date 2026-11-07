@@ -1,7 +1,5 @@
 # Typed interval models and calculations
 
-<!-- compiled-examples -->
-
 `temporal.Interval` is supported by handwritten ORM columns and rows fields. It retains signed calendar months, calendar days and elapsed time separately. The [consumer fixture](../../tests/fixtures/consumer/intervalqueries/) exercises queries, writes, relations, summaries and cursor pages through public APIs.
 
 ## Models and values
@@ -10,7 +8,7 @@ Declare an ordinary Go field such as `Period temporal.Interval`, or `MaybePeriod
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/intervalqueries/orm.go):
 
-<!-- go-source: tests/fixtures/consumer/intervalqueries/orm.go -->
+<!-- compiled-source: tests/fixtures/consumer/intervalqueries/orm.go#interval-queries -->
 ```go
 var Samples = orm.Define("interval_samples", func(b orm.Builder[Sample], s *Sample) SampleColumns {
 	table := orm.TableOf(b, &s.ID)
@@ -56,7 +54,7 @@ All operands retain the owning model or query scope. These functions use the sha
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go#interval-queries-2 -->
 ```go
 ny, err := expr.LoadTimeZone("America/New_York")
 if err != nil {
@@ -83,7 +81,7 @@ Use `expr.SumInterval`, `expr.AvgInterval`, `expr.Min`, `expr.Max`, counts and t
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/intervalqueries/orm_test.go):
 
-<!-- go-source: tests/fixtures/consumer/intervalqueries/orm_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/intervalqueries/orm_test.go#interval-queries-3 -->
 ```go
 projection := rows.Select(rows.From(Samples.Query()), Summaries,
 	rows.MapSelected(Summaries.Total, expr.AsSelected(expr.SumInterval(orm.IntervalExpr(Samples.Period)))),

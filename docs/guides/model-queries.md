@@ -15,8 +15,6 @@
 
 Further reading: [Transaction composition](transaction-query-composition.md).
 
-<!-- compiled-examples -->
-
 Declare a model's table and columns once with `orm.Define`; `Table.Query()` returns
 an immutable `orm.Query[M]`. Models and returned collections remain ordinary Go
 structs and slices. The [handwritten declarations](../../tests/fixtures/consumer/models/orm.go)

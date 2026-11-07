@@ -96,7 +96,9 @@ func TestRegions(t *testing.T) {
 		name, text, want string
 		bad              bool
 	}{
-		{"exact", "outside\n// doc-example:begin example\n\talpha\n\t\tbeta\n\t\n// doc-example:end example\nafter\n", "alpha\n\tbeta\n\n", false},
+		{"exact", "outside\n// doc-example:begin example\n\talpha\n\t\tbeta\n\t\n// doc-example:end example\nafter\n", "alpha\n\tbeta\n", false},
+		{"boundary padding", "// doc-example:begin example\n\n \t\n\talpha\n\t\n\t\tbeta  \n\t\n\n// doc-example:end example\n", "alpha\n\n\tbeta  \n", false},
+		{"blank only", "// doc-example:begin example\n\n \t\n// doc-example:end example\n", "", false},
 		{"mixed indent", "// doc-example:begin example\n \talpha\n  beta\n// doc-example:end example\n", "\talpha\n beta\n", false},
 		{"empty", "// doc-example:begin example\n// doc-example:end example\n", "", false},
 		{"duplicate", "// doc-example:begin example\n// doc-example:end example\n// doc-example:begin example\n// doc-example:end example\n", "", true},
@@ -122,6 +124,25 @@ func TestRegions(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestWholeFileRetainsBoundaryBlankLines(t *testing.T) {
+	text := "\n\npackage example\n\n"
+	source, err := parseSource(text, "go")
+	if err != nil || source.whole.text != text {
+		t.Fatalf("whole-file whitespace changed: %q, %v", source.whole.text, err)
+	}
+}
+
+func TestObsoleteSnippetConventionsRejected(t *testing.T) {
+	for _, marker := range []string{"<!-- go-source: example.go -->", "<!-- compiled-examples -->"} {
+		if _, err := parseDocument("guide.md", []byte(marker+"\n"), nil); err == nil || !strings.Contains(err.Error(), "obsolete guide snippet marker") {
+			t.Fatalf("accepted obsolete marker %q: %v", marker, err)
+		}
+		if _, err := parseDocument("guide.md", []byte("```markdown\n"+marker+"\n```\n"), nil); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

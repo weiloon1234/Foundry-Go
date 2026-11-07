@@ -1,7 +1,5 @@
 # Bounded model iteration
 
-<!-- compiled-examples -->
-
 Use `All` for a bounded collection, `orm.Each` for iteration or explicit model chunks
 when callbacks must run after the current row stream closes. The
 [consumer examples](../../tests/fixtures/consumer/chunkqueries/chunks_postgres_test.go)

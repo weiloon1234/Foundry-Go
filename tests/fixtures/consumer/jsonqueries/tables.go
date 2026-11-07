@@ -50,11 +50,12 @@ var LabelsField = expr.JSONFieldOf(func(p *Preferences) *value.Optional[map[stri
 
 var QuotaField = expr.JSONFieldOf(func(p *Preferences) *value.Optional[decimal.Decimal] { return &p.Quota })
 
+// doc-example:begin json-models
 var ProfileField = expr.JSONFieldOf(func(p *Preferences) *value.Optional[Profile] { return &p.Profile })
 
 var NameField = expr.JSONFieldOf(func(p *Profile) *string { return &p.Name })
 
-var AgeField = expr.JSONFieldOf(func(p *Profile) *int64 { return &p.Age })
+var AgeField = expr.JSONFieldOf(func(p *Profile) *int64 { return &p.Age }) // doc-example:end json-models
 
 var NicknameField = expr.JSONFieldOf(func(p *Profile) **string { return &p.Nickname })
 

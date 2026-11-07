@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
+// doc-example:begin computed-query-keys
 func buckets() rowset.Query[models.User, keyqueries.BucketCount] {
 	u := models.Users
 	bucket := expr.When(expr.ModelPredicate(orm.NumberGt(u.Age, 20)), expr.Param(orm.NumberExpr(u.Age), 1)).Else(expr.Param(orm.NumberExpr(u.Age), 0))
@@ -21,7 +22,7 @@ func buckets() rowset.Query[models.User, keyqueries.BucketCount] {
 		rowset.MapSelected(keyqueries.BucketCounts.Bucket, expr.AsSelected(bucket)),
 		rowset.MapSelected(keyqueries.BucketCounts.Count, expr.AsSelected(expr.Count[models.User]())),
 	), expr.Group(bucket)), expr.Asc(bucket))
-}
+} // doc-example:end computed-query-keys
 
 func TestComputedKeyContracts(t *testing.T) {
 	u := models.Users

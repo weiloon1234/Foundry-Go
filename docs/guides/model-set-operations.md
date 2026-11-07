@@ -1,7 +1,5 @@
 # Typed set operations
 
-<!-- compiled-examples -->
-
 `database/orm/rows` combines complete record sources with `Union`, `UnionAll`,
 `Intersect`, `IntersectAll`, `Except` and `ExceptAll`. Use `rows.ModelRecord` for a
 model or `rows.RecordOf` for a projection. Inputs can have different query scopes,
@@ -9,7 +7,7 @@ but must return the same record type and compatible column/codec declarations.
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/setqueries/editor_examples_test.go):
 
-<!-- go-source: tests/fixtures/consumer/setqueries/editor_examples_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/setqueries/editor_examples_test.go#model-set-operations -->
 ```go
 func derivedReports() rows.SetQuery[reports.BuyerTotals] {
 	u, o, r := models.Users, models.Orders, reports.BuyerTotalRows

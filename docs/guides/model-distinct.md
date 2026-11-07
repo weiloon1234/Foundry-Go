@@ -1,7 +1,5 @@
 # Typed distinct reads
 
-<!-- compiled-examples -->
-
 DISTINCT removes duplicate selected rows; DISTINCT ON chooses one ordered row per
 key combination. These are read-only selections that preserve the concrete result
 type, source boundary and codecs.
@@ -14,7 +12,7 @@ record selected from a join:
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/distinctqueries/distinct_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/distinctqueries/distinct_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/distinctqueries/distinct_postgres_test.go#model-distinct -->
 ```go
 people := rows.As[personAlias](models.Users.Query(), "person")
 orders := rows.As[purchaseAlias](models.Orders.Query(), "purchase")

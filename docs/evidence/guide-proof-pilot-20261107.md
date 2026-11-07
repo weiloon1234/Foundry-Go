@@ -4,7 +4,8 @@ Milestones 1 and 2 integration handoff, 2026-11-07, on `lane/s6-guides`.
 The lead replayed milestone 2 (`6a0162de`) onto milestone 1 (`228d5403`).
 The initial integration preserved fixture sources, generated fences, CLI selection,
 packaging and Makefile ownership. Fix round 1 below tightens CLI module identity
-and documentation checks; fixture sources and rendered fences remain unchanged.
+and documentation checks; fixture sources and rendered fences remained unchanged
+through that round. Fix round 2 below migrates the remaining query excerpts.
 
 The lead reports these prior results:
 
@@ -21,6 +22,173 @@ No tests, builds, renderer runs or verification commands ran during integration.
 Touched Go files were formatted. Earlier results do not verify this revision;
 the lead owns the commands below. This is implementation evidence, not milestone
 acceptance or a release claim.
+
+## Fix round 2 after 29340bbf
+
+The lead reports that the round 1 targeted tests (safeerror, docsource, docrefs,
+checkdocs, renderdocs, testinputs, retirement, frameworkinfo, doctor, cmd/foundry
+and generate), `make generate-check` and `make docs-check` passed. `make verify`
+then passed `make test` and stopped at the legacy `TestGuideExcerpts` fence census
+in fixture-check. These results predate this round; fixture completion and the
+TypeScript proof remain pending.
+
+This round converts all 36 `go-source` directives: 33 become named
+`compiled-source` regions and three duplicates become links. All 28
+`compiled-examples` markers are removed. The shared docsource inventory retains
+whole-guide coverage for all 28 guides, alongside its original ten complete guides.
+Active legacy markers now fail parsing, preventing the old convention from returning.
+No new fixture functions or executable statements were needed.
+
+The deleted `tests/fixtures/goway/guideexamples/guides_test.go` has no remaining
+fence-matching responsibility. `internal/docsource` owns equality and coverage;
+fixture-check owns actual compiler-input membership. Its required
+`(orm-migration.md)` link and generated model-name patterns now live in
+`internal/cmd/checkdocs/migration_guides.go`, using the same guide inventory.
+The old `query.X` regex is already covered by `internal/retirement/docs.go` and
+is not duplicated. Regression sources cover missing links, each remaining generated
+form, current typed query teaching and the repository-level retirement check.
+
+The owner links replacing duplicate fences are:
+
+| Removed copy | Owning example |
+| --- | --- |
+| typed-field-computations selected aggregate | [Conditional expressions](../guides/conditional-expressions.md#selected-aggregates-and-windows) |
+| temporal-calculations calendar/elapsed comparison | [Interval calculations](../guides/interval-queries.md#calculations) |
+| datatable token-ticket adapter | [Token tickets](../guides/tokens.md#websocket-handshake-tickets) |
+
+The DTO region separates its begin marker from `//foundry:dto` with a blank line.
+Named-region rendering now drops leading/trailing blank lines before removing common
+indentation. Interior blank lines and whole-file boundary blank lines remain.
+Tests cover empty/padded regions, preserved interior whitespace, whole-file behavior,
+read-only comparison, and rendering with the same padding rule. No empty `//` line
+was added to the guide.
+
+Retained fence bodies have not been hand-edited. The datatable standard-routes fence
+uses spaces where its source uses tabs; the lead's `make generate` must apply the
+common-indent rendering normalization. All other retained legacy fence bodies matched
+the source after common-indent removal when the migration was prepared. No excerpt
+needed splitting or a teaching change.
+
+### Snippet-convention audit
+
+Repository searches covered `-source:` directives, snippet-test names, Markdown
+reads in tests, and `strings.Contains` comparisons against guide/README text.
+
+- `internal/docsource/repository_test.go` owns compiled-source equality and TS input
+  membership; renderdocs tests cover rendering and read-only comparison. These use
+  the shared mechanism, not another snippet convention.
+- `tests/fixtures/goway/migration/guide_test.go` deliberately remains a **second
+  mechanism**: `orm-example` labels and `migration`/`guide` source regions. Its
+  `TestGuideSnippets` checks ORM migration examples; `TestLifecycleGuideSnippets`
+  checks the lifecycle guide census. Removed `*-before` APIs cannot compile and
+  remain labeled migration teaching under the retirement exception. The existing
+  checker delegates compiled-source equality to docsource. Its before/after markers,
+  fences and census are unchanged in this round.
+- `tools/release/documentation_test.go` checks packaged guide bytes and anchors,
+  not source excerpts. `tools/release/release_test.go` mentions the old checker
+  filenames only as synthetic packaging-exclusion fixtures.
+- `tools/goway_catalogue_test.py` reads a blueprint README for catalogue metadata.
+  Generator documentation/scaffold tests and agent completion tests compare generated
+  Go or IDE documentation, not guide/README snippets. Devserver, i18n and deployment
+  README tests concern file handling, not excerpt equality.
+
+No third guide/README snippet convention was found. The migration labels are
+intentional; they are not candidates for compiling removed APIs.
+
+### Round 2 handoff commands
+
+No tests, builds, renderer runs or verification commands were run for this round.
+Touched Go files were formatted. From this worktree, with the existing native
+TypeScript environment configured:
+
+```sh
+export GOWORK=off
+export GOTOOLCHAIN="$(awk '$1 == "toolchain" { print $2 }' go.mod)"
+make generate
+make generate-check
+make docs-check
+go test -count=1 ./internal/docsource ./internal/cmd/renderdocs ./internal/cmd/checkdocs ./internal/retirement
+(cd tests/fixtures/goway && go test -count=1 ./migration -run '^(TestGuideSnippets|TestLifecycleGuideSnippets)$')
+make fixture-check
+make typescript-check
+```
+
+Alternatively, after generation and the focused tests, `make verify` supplies the
+combined gate, including fixture and required TypeScript proof; do not duplicate
+those expensive runs in the same checkpoint. There are no open design questions.
+
+### Round 2 files
+
+- [docs/evidence/goway-stage10-lane-c.md](goway-stage10-lane-c.md): replace the deleted checker's historical link with its current owner.
+- [CHANGELOG.md](../../CHANGELOG.md)
+- [docs/evidence/guide-proof-pilot-20261107.md](../../docs/evidence/guide-proof-pilot-20261107.md)
+- [docs/guides/computed-query-keys.md](../../docs/guides/computed-query-keys.md)
+- [docs/guides/conditional-expressions.md](../../docs/guides/conditional-expressions.md)
+- [docs/guides/datatable.md](../../docs/guides/datatable.md)
+- [docs/guides/developer-tooling-and-testing.md](../../docs/guides/developer-tooling-and-testing.md)
+- [docs/guides/geographic-distance.md](../../docs/guides/geographic-distance.md)
+- [docs/guides/interval-queries.md](../../docs/guides/interval-queries.md)
+- [docs/guides/json-models.md](../../docs/guides/json-models.md)
+- [docs/guides/lateral-joins.md](../../docs/guides/lateral-joins.md)
+- [docs/guides/model-aggregate-filters.md](../../docs/guides/model-aggregate-filters.md)
+- [docs/guides/model-aggregates.md](../../docs/guides/model-aggregates.md)
+- [docs/guides/model-chunks.md](../../docs/guides/model-chunks.md)
+- [docs/guides/model-correlations.md](../../docs/guides/model-correlations.md)
+- [docs/guides/model-ctes.md](../../docs/guides/model-ctes.md)
+- [docs/guides/model-distinct.md](../../docs/guides/model-distinct.md)
+- [docs/guides/model-joins.md](../../docs/guides/model-joins.md)
+- [docs/guides/model-projections.md](../../docs/guides/model-projections.md)
+- [docs/guides/model-queries.md](../../docs/guides/model-queries.md)
+- [docs/guides/model-recursive-ctes.md](../../docs/guides/model-recursive-ctes.md)
+- [docs/guides/model-set-operations.md](../../docs/guides/model-set-operations.md)
+- [docs/guides/model-subqueries.md](../../docs/guides/model-subqueries.md)
+- [docs/guides/model-windows.md](../../docs/guides/model-windows.md)
+- [docs/guides/scalar-calculations.md](../../docs/guides/scalar-calculations.md)
+- [docs/guides/temporal-calculations.md](../../docs/guides/temporal-calculations.md)
+- [docs/guides/transaction-correlations.md](../../docs/guides/transaction-correlations.md)
+- [docs/guides/transaction-query-composition.md](../../docs/guides/transaction-query-composition.md)
+- [docs/guides/trigram-search.md](../../docs/guides/trigram-search.md)
+- [docs/guides/typed-field-computations.md](../../docs/guides/typed-field-computations.md)
+- [docs/guides/value-comparisons-and-joins.md](../../docs/guides/value-comparisons-and-joins.md)
+- [docs/guides/window-ranges-and-names.md](../../docs/guides/window-ranges-and-names.md)
+- [internal/cmd/checkdocs/main.go](../../internal/cmd/checkdocs/main.go)
+- [internal/cmd/checkdocs/migration_guides.go](../../internal/cmd/checkdocs/migration_guides.go)
+- [internal/cmd/checkdocs/migration_guides_test.go](../../internal/cmd/checkdocs/migration_guides_test.go)
+- [internal/cmd/renderdocs/main_test.go](../../internal/cmd/renderdocs/main_test.go)
+- [internal/docsource/document.go](../../internal/docsource/document.go)
+- [internal/docsource/source.go](../../internal/docsource/source.go)
+- [internal/docsource/source_test.go](../../internal/docsource/source_test.go)
+- [tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go](../../tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go)
+- [tests/fixtures/consumer/clientcontracts/table_bindings.go](../../tests/fixtures/consumer/clientcontracts/table_bindings.go)
+- [tests/fixtures/consumer/comparisonqueries/joins_postgres_test.go](../../tests/fixtures/consumer/comparisonqueries/joins_postgres_test.go)
+- [tests/fixtures/consumer/correlations/correlations_postgres_test.go](../../tests/fixtures/consumer/correlations/correlations_postgres_test.go)
+- [tests/fixtures/consumer/ctes/ctes_postgres_test.go](../../tests/fixtures/consumer/ctes/ctes_postgres_test.go)
+- [tests/fixtures/consumer/distinctqueries/distinct_postgres_test.go](../../tests/fixtures/consumer/distinctqueries/distinct_postgres_test.go)
+- [tests/fixtures/consumer/expressionqueries/expressions_test.go](../../tests/fixtures/consumer/expressionqueries/expressions_test.go)
+- [tests/fixtures/consumer/framequeries/named_postgres_test.go](../../tests/fixtures/consumer/framequeries/named_postgres_test.go)
+- [tests/fixtures/consumer/framequeries/ranges_postgres_test.go](../../tests/fixtures/consumer/framequeries/ranges_postgres_test.go)
+- [tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go](../../tests/fixtures/consumer/intervalqueries/calculation_postgres_test.go)
+- [tests/fixtures/consumer/intervalqueries/orm.go](../../tests/fixtures/consumer/intervalqueries/orm.go)
+- [tests/fixtures/consumer/intervalqueries/orm_test.go](../../tests/fixtures/consumer/intervalqueries/orm_test.go)
+- [tests/fixtures/consumer/joinqueries/outer/outer_postgres_test.go](../../tests/fixtures/consumer/joinqueries/outer/outer_postgres_test.go)
+- [tests/fixtures/consumer/jsonqueries/path_sql_test.go](../../tests/fixtures/consumer/jsonqueries/path_sql_test.go)
+- [tests/fixtures/consumer/jsonqueries/tables.go](../../tests/fixtures/consumer/jsonqueries/tables.go)
+- [tests/fixtures/consumer/keyqueries/keys_test.go](../../tests/fixtures/consumer/keyqueries/keys_test.go)
+- [tests/fixtures/consumer/lateralqueries/records_postgres_test.go](../../tests/fixtures/consumer/lateralqueries/records_postgres_test.go)
+- [tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go](../../tests/fixtures/consumer/projectionqueries/aggregate_contracts_test.go)
+- [tests/fixtures/consumer/recursivequeries/recursive_postgres_test.go](../../tests/fixtures/consumer/recursivequeries/recursive_postgres_test.go)
+- [tests/fixtures/consumer/reporting/member_import.go](../../tests/fixtures/consumer/reporting/member_import.go)
+- [tests/fixtures/consumer/reporting/member_import_test.go](../../tests/fixtures/consumer/reporting/member_import_test.go)
+- [tests/fixtures/consumer/reporting/models.go](../../tests/fixtures/consumer/reporting/models.go)
+- [tests/fixtures/consumer/reporting/reporting_postgres_test.go](../../tests/fixtures/consumer/reporting/reporting_postgres_test.go)
+- [tests/fixtures/consumer/reporting/table_routes.go](../../tests/fixtures/consumer/reporting/table_routes.go)
+- [tests/fixtures/consumer/scalarqueries/scalars_postgres_test.go](../../tests/fixtures/consumer/scalarqueries/scalars_postgres_test.go)
+- [tests/fixtures/consumer/setqueries/editor_examples_test.go](../../tests/fixtures/consumer/setqueries/editor_examples_test.go)
+- [tests/fixtures/consumer/temporalqueries/orm_test.go](../../tests/fixtures/consumer/temporalqueries/orm_test.go)
+- [tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go](../../tests/fixtures/consumer/transactionqueries/correlations_postgres_test.go)
+- [tests/fixtures/consumer/transactionqueries/models.go](../../tests/fixtures/consumer/transactionqueries/models.go)
+- [tests/fixtures/consumer/windowqueries/windows_postgres_test.go](../../tests/fixtures/consumer/windowqueries/windows_postgres_test.go)
+- Deleted `tests/fixtures/goway/guideexamples/guides_test.go`.
 
 ## Fix round 1 after a1f7b751
 
@@ -58,7 +226,7 @@ disputed, and no design question is open.
 
 | Brief item | Implementation |
 | --- | --- |
-| Region parser and exact rendering | [internal/docsource](../../internal/docsource) parses standalone or trailing boundary comments, validates unique region names, rejects overlap, removes only markers and common indentation, selects a safe delimiter and derives the language. Fragmentless directives select the whole file. |
+| Region parser and exact rendering | [internal/docsource](../../internal/docsource) parses standalone or trailing boundary comments, validates unique region names, rejects overlap, removes markers, named-region boundary blank lines and common indentation, selects a safe delimiter and derives the language. Fragmentless directives select the whole file. |
 | Generation ownership | [renderdocs](../../internal/cmd/renderdocs) renders or compares; [Makefile](../../Makefile) calls it after declaration generation in `generate` and read-only `generate-check`. |
 | Documentation checks | [checkdocs](../../internal/cmd/checkdocs) delegates equality, unique owning inclusion, approved source roots, complete-guide coverage, recipe fence binding and navigation-only entries to docsource. Explicit anchor indexing and `agent-entry`/`recipe-*` link checks now delegate to docrefs; Agent entry line locations come from the same docsource section parser. |
 | Existing error examples | Both Go declarations and TypeScript narrowing now name explicit regions. The TypeScript create-member behavior is unchanged. |
@@ -66,7 +234,7 @@ disputed, and no design question is open.
 | Compilation proof | `fixture-check` collects actual Go files selected by `go list -json ./...` in its fixture loop. Docsource compares the directive inventory against those inputs, including test files and excluding ignored files. TS examples share the actual strict compiler lists with the current-client exporters. |
 | Required TypeScript | `verify` requires the selected tool paths and exports `FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1` to its fixture run. The existing CI environment remains unchanged. No second TypeScript acceptance run is added to verify. |
 | Tests and authoring | Renderer, read-only comparison, malformed markers, ownership, paths, section coverage and input-list tests are written. Four receiver-family compiler negatives and a conditional error-export negative were added. The [authoring workflow](../guides/developer-tooling-and-testing.md#author-compiled-guide-examples) and [Unreleased changelog](../../CHANGELOG.md) describe the change. |
-| Legacy migration | Every existing compiled-source directive names an explicit region. The old guideadapters substring test is removed; its complete-guide policy and repository test now live in docsource. The separate historical ORM migration census still checks its legacy examples, handing source-bound fence equality to docsource. |
+| Legacy migration | Every existing compiled-source directive names an explicit region. Both guideadapters and guideexamples substring tests are removed; their complete-guide policies and repository equality test now live in docsource. Query migration links and generated-API rejection remain in checkdocs and retirement. The separate historical ORM migration census still checks its legacy examples, handing source-bound fence equality to docsource. |
 | Pinned references and offline checking | [docrefs](../../internal/docrefs) owns reference grammar and explicit anchor indexing. [The CLI](../../cmd/foundry/docs.go) resolves the selected release offline, scans active module instructions and applies its retirement rules. [The packaged consumer test](../../tools/release/documentation_test.go) retains source-free, offline acceptance coverage. |
 | Narrow migration exception | [Retirement documentation checks](../../internal/retirement/docs.go) extend the existing `orm-example: name-before` label to one adjacent fence, table or paragraph in only the ORM and v0.2 migration guides. Active guides and app instructions cannot claim it. Validation's former-method mapping has one owner in the v0.2 guide. |
 | Integration regression sources | Tests cover label boundaries and denied active/app exceptions; missing, duplicate, malformed and fenced anchors; same-page/cross-guide fragments; Agent entry targets and section boundaries; read-only checking; unchanged handling of other fragments. These tests have not run on the integrated revision. |

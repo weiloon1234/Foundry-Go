@@ -1,12 +1,10 @@
 # Typed arithmetic and text calculations
 
-<!-- compiled-examples -->
-
 Row calculations preserve their model or alias scope and compose with handwritten column declarations, [conditional values](conditional-expressions.md), predicates and ordering. Values and patterns are bound through their codecs; callers never supply SQL function or operator names.
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/scalarqueries/scalars_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/scalarqueries/scalars_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/scalarqueries/scalars_postgres_test.go#scalar-calculations -->
 ```go
 quantity := expr.Value(orm.NumberExpr(f.Quantity))
 incremented := expr.Add(quantity, expr.Param(orm.NumberExpr(f.Quantity), 1))

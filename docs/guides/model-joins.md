@@ -1,7 +1,5 @@
 # Typed joins and scoped fields
 
-<!-- compiled-examples -->
-
 Use distinct ordinary Go alias tags with `rows.As[Tag](modelQuery, sqlName)`.
 The alias preserves its input SELECT, including filters, ordering and windows.
 `rows.Scope(alias)` and `expr.At(scope, column)` expose model columns without
@@ -12,7 +10,7 @@ constructing a second field set. For projected records use `rows.AsRecord` and
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/joinqueries/outer/outer_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/joinqueries/outer/outer_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/joinqueries/outer/outer_postgres_test.go#model-joins -->
 ```go
 referrals := rows.As[referralAlias](models.Users.Query(), "referral")
 sponsors := rows.As[sponsorAlias](models.Users.Query(), "sponsor")

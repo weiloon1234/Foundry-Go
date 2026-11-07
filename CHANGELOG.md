@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed: query-guide excerpts now use explicit compiled-source regions under the
+  shared documentation checker, retaining complete-guide coverage, migration links
+  and generated-API rejection. Duplicate excerpts link to one owner. Rendering and
+  read-only comparison trim only named regions' boundary blank lines before common
+  indentation removal, keeping Go declaration comments separate without changing
+  interior blank lines.
 - Added: source-bound guide recipes for models, typed endpoints and generated clients.
   `make generate` renders marked consumer regions; `generate-check` and `docs-check`
   reject stale or duplicate examples and unbound recipe fences. The fixture gate checks

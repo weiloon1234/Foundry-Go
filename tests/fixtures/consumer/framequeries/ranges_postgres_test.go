@@ -80,10 +80,11 @@ func frameCounts(t *testing.T, tx *database.Tx, w expr.Window[framequeries.Sampl
 
 func TestPostgresTypedNumericRanges(t *testing.T) {
 	runSamples(t, nil, func(tx *database.Tx) error {
+		// doc-example:begin window-ranges-and-names
 		q := framequeries.Samples.Query()
 		f := framequeries.Samples
 		r := expr.NumericRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.NumberKeyExpr(f.ID)))))
-		frameCounts(t, tx, r.Between(r.Preceding(1), r.CurrentRow()), []int64{1, 2, 2, 2})
+		frameCounts(t, tx, r.Between(r.Preceding(1), r.CurrentRow()), []int64{1, 2, 2, 2}) // doc-example:end window-ranges-and-names
 		frameCounts(t, tx, r.Desc().Between(r.Preceding(1), r.CurrentRow()), []int64{2, 2, 2, 1})
 		frameCounts(t, tx, r.Between(r.Preceding(7), r.Preceding(8)), []int64{0, 0, 0, 0})
 		frameCounts(t, tx, r.Between(r.CurrentRow(), r.Following(1)).ExcludeCurrentRow(), []int64{1, 1, 1, 0})
@@ -119,10 +120,11 @@ func TestPostgresTypedTemporalRanges(t *testing.T) {
 	runSamples(t, nil, func(tx *database.Tx) error {
 		q := framequeries.Samples.Query()
 		f := framequeries.Samples
+		// doc-example:begin window-ranges-and-names-2
 		r := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(f.At)))))
 		day, _ := temporal.Elapsed(24 * time.Hour)
 		frameCounts(t, tx, r.Between(r.Preceding(temporal.Days(1)), r.CurrentRow()), []int64{1, 1, 2, 2})
-		frameCounts(t, tx, r.Between(r.Preceding(day), r.CurrentRow()), []int64{1, 2, 2, 2})
+		frameCounts(t, tx, r.Between(r.Preceding(day), r.CurrentRow()), []int64{1, 2, 2, 2}) // doc-example:end window-ranges-and-names-2
 		local := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(f.Local)))))
 		frameCounts(t, tx, local.Between(local.Preceding(temporal.Days(1)), local.CurrentRow()), []int64{1, 1, 2, 2})
 		date := expr.TemporalRange(expr.WindowFor(rowset.ModelScope(q)), expr.AsSelected(expr.Row(expr.Value(orm.TimeExpr(f.Date)))))

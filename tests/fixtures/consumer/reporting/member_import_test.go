@@ -18,11 +18,12 @@ func TestMemberImportMapsTypedRowsAndReportsFailures(t *testing.T) {
 		"x,Grace,retired,Amazing,second\n" +
 		"9007199254740993.125,Linus,disabled,Tux,third\n" +
 		"0,   ,active,,fourth\n"
+	// doc-example:begin datatable-6
 	var imported []importer.Row[reporting.MemberImport]
 	report, err := reporting.MemberImports.Run(t.Context(), importer.CSVSource(strings.NewReader(upload)), func(_ context.Context, rows []importer.Row[reporting.MemberImport]) error {
 		imported = append(imported, rows...)
 		return nil
-	})
+	}) // doc-example:end datatable-6
 	if err != nil {
 		t.Fatal(err)
 	}

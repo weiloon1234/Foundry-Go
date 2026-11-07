@@ -1,7 +1,5 @@
 # Typed conditional expressions
 
-<!-- compiled-examples -->
-
 `database/orm/expr` preserves the input scope, value type and evaluation phase.
 Use `expr.Value(orm.TextExpr(column))` for a text row operand, `expr.AsSelected(expr.Row(row))` or a computed
 `expr.AsSelected(expression)` for selection, and `rows.MapSelected` for a selected result.
@@ -11,7 +9,7 @@ Aggregates and windows cannot become WHERE predicates.
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/expressionqueries/expressions_test.go):
 
-<!-- go-source: tests/fixtures/consumer/expressionqueries/expressions_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/expressionqueries/expressions_test.go#conditional-expressions -->
 ```go
 u := models.Users
 display := expr.Coalesce(expr.Value(orm.NullableTextExpr(u.Nickname)), expr.Value(orm.TextExpr(u.Email)))
@@ -49,7 +47,7 @@ be hidden inside a conditional to make it legal in HAVING.
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/expressionqueries/expressions_test.go):
 
-<!-- go-source: tests/fixtures/consumer/expressionqueries/expressions_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/expressionqueries/expressions_test.go#conditional-expressions-2 -->
 ```go
 orders := models.Orders.Query()
 total := expr.Sum(orm.NumberExpr(models.Orders.TotalCents))

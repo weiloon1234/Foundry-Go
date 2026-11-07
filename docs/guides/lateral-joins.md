@@ -1,7 +1,5 @@
 # Typed lateral joins
 
-<!-- compiled-examples -->
-
 A lateral source returns complete records for each preceding outer row. Build an
 explicit correlation, then select a complete inner record or a handwritten rows
 projection. `rows.AsLateral[Tag]` retains the required outer owner; lateral join
@@ -11,7 +9,7 @@ helpers require that owner as their left input.
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/lateralqueries/records_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/lateralqueries/records_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/lateralqueries/records_postgres_test.go#lateral-joins -->
 ```go
 func userOrders[L any](outer rows.ScopeSource[L], scope expr.Scope[L, models.User]) (rows.CorrelatedSource[L, rows.Alias[ordersAlias, models.Order]], expr.Scope[rows.Correlation[L, rows.Alias[ordersAlias, models.Order]], models.Order]) {
 	orders := rows.As[ordersAlias](models.Orders.Query(), "orders_for_user")

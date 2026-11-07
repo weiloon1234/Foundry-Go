@@ -17,11 +17,12 @@ type correlatedGrandchildAlias struct{}
 
 func TestPostgresTransactionLateralRowsAndLocks(t *testing.T) {
 	ctx, db, path := transactionFixture(t)
+	// doc-example:begin transaction-correlations
 	parent := rows.AsTransaction[claimedAlias](rows.TransactionOf(rows.ModelRecord(Records.Query().Where(orm.KeyIn(Records.ID, 1, 3)))), "parent")
 	child := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "child")
 	c := rows.TransactionCorrelate(parent, child)
 	p, f := recordAt(rows.TransactionOuterScope(c, rows.TransactionScope(parent))), recordAt(rows.TransactionInnerScope(c, rows.TransactionScope(child)))
-	c = c.Where(expr.Greater(f.ID, p.ID))
+	c = c.Where(expr.Greater(f.ID, p.ID)) // doc-example:end transaction-correlations
 	report := rows.ProjectTransactionCorrelated(c, Summaries, rows.MapSelected(Summaries.ID, expr.AsSelected(expr.Row(f.ID))), rows.MapSelected(Summaries.Name, expr.AsSelected(expr.Row(p.Name)))).OrderBy(expr.Asc(f.ID)).Limit(1).ForNoKeyUpdate().Of(rows.Target(rows.TransactionInnerScope(c, rows.TransactionScope(child))))
 	lateral := rows.AsTransactionLateral[correlatedLateralAlias](report, "chosen")
 	left := rows.TransactionLeftJoinLateral(parent, lateral)

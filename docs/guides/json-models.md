@@ -1,7 +1,5 @@
 # Typed JSON models and queries
 
-<!-- compiled-examples -->
-
 Store an ordinary payload as `value.JSON[Payload]`, with `orm.JSONOf` or
 `orm.NullableJSONOf` in the table declaration. A handwritten `expr.JSONFieldOf`
 binds a payload field pointer to its JSON tag; paths need no generated accessors.
@@ -25,7 +23,7 @@ Declare reusable field bindings beside the columns:
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/jsonqueries/tables.go):
 
-<!-- go-source: tests/fixtures/consumer/jsonqueries/tables.go -->
+<!-- compiled-source: tests/fixtures/consumer/jsonqueries/tables.go#json-models -->
 ```go
 var ProfileField = expr.JSONFieldOf(func(p *Preferences) *value.Optional[Profile] { return &p.Profile })
 
@@ -42,7 +40,7 @@ on another payload. Optional, nullable, pointer and nested document layers use
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/jsonqueries/path_sql_test.go):
 
-<!-- go-source: tests/fixtures/consumer/jsonqueries/path_sql_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/jsonqueries/path_sql_test.go#json-models-2 -->
 ```go
 profile := expr.JSONOptional(expr.JSONProperty(expr.JSONRoot(expr.Value(orm.JSONExpr(f.Settings))), jsonqueries.ProfileField))
 age := expr.OrderNullableRow(expr.JSONScalar(expr.JSONProperty(profile, jsonqueries.AgeField), codec.Signed[int64]()))

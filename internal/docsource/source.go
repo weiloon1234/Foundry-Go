@@ -125,7 +125,7 @@ func parseSource(data, language string) (source, error) {
 				whole.WriteString(trailing)
 				last = i + 1
 			}
-			result.regions[name] = excerpt{text: dedent(text), first: start + 1, last: last}
+			result.regions[name] = excerpt{text: dedent(trimRegionBlankLines(text)), first: start + 1, last: last}
 			active = ""
 		}
 	}
@@ -134,6 +134,20 @@ func parseSource(data, language string) (source, error) {
 	}
 	result.whole = excerpt{text: dedent(whole.String()), first: 1, last: len(lines)}
 	return result, nil
+}
+
+// Region boundary padding separates marker and declaration comment groups.
+// Whole-file inclusions and interior blank lines retain their existing layout.
+func trimRegionBlankLines(data string) string {
+	lines := strings.SplitAfter(data, "\n")
+	first, end := 0, len(lines)
+	for first < end && strings.TrimSpace(lines[first]) == "" {
+		first++
+	}
+	for end > first && strings.TrimSpace(lines[end-1]) == "" {
+		end--
+	}
+	return strings.Join(lines[first:end], "")
 }
 
 // Remove the longest byte-identical space/tab prefix of all nonblank lines.

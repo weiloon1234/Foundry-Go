@@ -18,11 +18,12 @@ func TestPostgresNamedWindowReuseAndFrames(t *testing.T) {
 	runSamples(t, nil, func(tx *database.Tx) error {
 		q := framequeries.Samples.Query()
 		f := framequeries.Samples
+		// doc-example:begin window-ranges-and-names-3
 		base := expr.WindowFor(rowset.ModelScope(q)).PartitionBy(expr.Group(expr.Param(orm.NumberKeyExpr(f.ID), 1))).Named("all_samples")
 		ordered := base.OrderBy(expr.Asc(expr.Value(orm.NumberKeyExpr(f.ID)))).Named("ordered")
 		framed := ordered.RowsBetween(expr.Preceding(1), expr.CurrentRow()).Named("framed")
 		count := expr.Over(expr.Count[framequeries.Sample](), framed)
-		result := rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), count), expr.AscValue(expr.RowNumber(framed)))
+		result := rowset.OrderScalar(rowset.SelectScalar(rowset.From(q), count), expr.AscValue(expr.RowNumber(framed))) // doc-example:end window-ranges-and-names-3
 		if got, err := rowset.ReadScalar(result).All(t.Context(), tx); err != nil || !reflect.DeepEqual(got, []int64{1, 2, 2, 2}) {
 			t.Fatal("named frame reuse", got, err)
 		}

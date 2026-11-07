@@ -47,7 +47,9 @@ type Order struct {
 }
 
 // Ordinary DTO declarations own JSON and validation; rows.go owns SQL mappings.
-//
+
+// doc-example:begin datatable
+
 //foundry:dto
 type MemberRow struct {
 	ID       model.ID[Member]       `json:"id"`
@@ -55,7 +57,7 @@ type MemberRow struct {
 	Nickname value.Nullable[string] `json:"nickname"`
 	State    State                  `json:"state"`
 	Balance  decimal.Decimal        `json:"balance"`
-}
+} // doc-example:end datatable
 
 //foundry:dto
 type OrderRow struct {

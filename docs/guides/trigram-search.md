@@ -7,8 +7,6 @@
 
 ## Overview
 
-<!-- compiled-examples -->
-
 `expr.TrigramMatch(text, search)` compiles to `text OPERATOR(public.%) $n`.
 It accepts typed text row operands, including `expr.Value(orm.TextExpr(column))`
 and joined `expr.At(scope, orm.TextExpr(column))` operands. The search keeps the

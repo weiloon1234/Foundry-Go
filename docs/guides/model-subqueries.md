@@ -1,7 +1,5 @@
 # Typed subqueries and derived records
 
-<!-- compiled-examples -->
-
 `database/orm/rows` composes complete models, handwritten projections and scalar
 selections. Each SELECT owns its scope; parameters use statement-wide numbering.
 IDs, enum codecs and nullable value types survive each boundary.

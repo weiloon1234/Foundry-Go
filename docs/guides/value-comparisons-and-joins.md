@@ -1,7 +1,5 @@
 # Typed value comparisons and join conditions
 
-<!-- compiled-examples -->
-
 Column predicates such as `orm.NumberGte(Users.Age, 18)` compare a typed literal. For two SQL
 operands use `expr.Equal`, `NotEqual`, `Less`, `LessOrEqual`, `Greater` or
 `GreaterOrEqual`. Both operands must retain the same scope and exact value type.
@@ -27,7 +25,7 @@ These are predicates, separate from result DISTINCT clauses.
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/comparisonqueries/joins_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/comparisonqueries/joins_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/comparisonqueries/joins_postgres_test.go#value-comparisons-and-joins -->
 ```go
 q := models.Users.Query()
 younger, older := rowset.As[youngerAlias](q, "younger"), rowset.As[olderAlias](q, "older")

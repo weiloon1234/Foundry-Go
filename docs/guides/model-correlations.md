@@ -1,7 +1,5 @@
 # Typed correlated subqueries
 
-<!-- compiled-examples -->
-
 `rows.Correlate(outer, inner)` explicitly permits an inner SELECT to reference
 its outer row. Lift each side through `rows.OuterScope` and `rows.InnerScope`;
 `expr.At` then constructs operands in the combined correlation scope.
@@ -10,7 +8,7 @@ its outer row. Lift each side through `rows.OuterScope` and `rows.InnerScope`;
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/correlations/correlations_postgres_test.go):
 
-<!-- go-source: tests/fixtures/consumer/correlations/correlations_postgres_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/correlations/correlations_postgres_test.go#model-correlations -->
 ```go
 link := rowset.Correlate(rowset.From(models.Users.Query()), rowset.From(models.Orders.Query()))
 buyer := rowset.OuterScope(link, rowset.ModelScope(models.Users.Query()))
