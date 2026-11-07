@@ -4,6 +4,9 @@
 ## Agent entry
 
 - Edit: [Exact form values](#recipe-form-values)
+- Preserve presence: [Omitted, null and empty](#recipe-form-presence)
+- Address issues: [Nested pointers](client-descriptors.md#recipe-issue-addresses)
+- Submit: [Validation and uncertain outcomes](#recipe-form-outcomes)
 
 ## Overview
 
@@ -57,6 +60,35 @@ not changed. Set replaces that field and clears its pending descendant text.
 Changes invalidate previous validation/server issues and async results (a task
 can [declare](#async-options-and-checks) which fields it reads).
 
+<a id="recipe-form-presence"></a>
+## Preserve omitted, null and empty values
+
+A PATCH caller sends only changed fields; `null` clears a nullable field. An empty
+string is a supplied value. The controller submits its draft; the caller constructs
+the changed-field request. The controller exposes each distinction explicitly:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#form-presence -->
+```typescript
+export function formPresence(form: sdk.FormController<"itemsEcho">) {
+  const field = form.field(form.operation.field("body", "optional"));
+  field.unset();
+  const omitted = field.getSnapshot();
+  field.set(null);
+  const cleared = field.getSnapshot();
+  field.set("");
+  const empty = field.getSnapshot();
+  return { omitted, cleared, empty };
+}
+```
+
+This example records three separate states, ending with an empty string. Select
+the operation matching the user's edit instead of normalizing all three states
+to one value. [Wire values](client-contracts.md#recipe-wire-values) own exact
+decimal, wide integer and temporal formats. Calendar dates and local date-times
+do not acquire a timezone; format instants for display without changing their
+wire meaning. Contact inputs use the backend [phone parser and validation](phone.md)
+with one extension policy; do not replace them with a browser regex.
+
 ## Parsing and nested fields
 
 Parsing is explicit. Until `parse()` succeeds, text does not replace the last
@@ -88,6 +120,7 @@ rejected or hit the existing depth bound. Defaults use the SDK's JSON limits;
 `limits` can explicitly select a larger bounded draft budget, including blob sizes.
 It never raises the operation's actual wire limits.
 
+<a id="recipe-form-outcomes"></a>
 ## Validation, errors and submission
 
 `validate()` calls the existing operation validator and returns its full
@@ -97,8 +130,9 @@ mean server approval. Incompleteness alone does not prevent a server request.
 Pass `validation` options for the same translated messages/custom URL codecs
 used by the client; no second rule interpreter is introduced.
 
-The controller maps the SDK's decoded server error envelope using its JSON
-Pointers. Field snapshots include matching descendant issues; the full snapshot
+The controller maps the SDK's decoded server error envelope using its
+[descriptor JSON Pointers](client-descriptors.md#recipe-issue-addresses).
+Field snapshots include matching descendant issues; the full snapshot
 retains all issues, including form-level failures and currently unmounted fields.
 `error` retains the actual failure for application handling; do not render its
 arbitrary internal fields or send them to logs automatically.
@@ -124,6 +158,38 @@ response that fails its own contract after the server processed the request is a
 `ResponseContractError` (a `ContractError` with the response `status`). The form
 reports it as `failed` with `outcome: "unknown"` and one `form_response` issue,
 not as request-field issues; it is not evidence of a rollback.
+
+Branch on the returned status and outcome while retaining the complete result.
+The caller owns disposal and presentation. Inspect `changed` before applying a
+late result to the current UI; the controller preserves the newer draft. No branch here retries a mutation:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#form-outcomes -->
+```typescript
+export async function submitForm(form: sdk.FormController<"itemsEcho">, api: sdk.API) {
+  const result = await form.submit(api);
+  switch (result.status) {
+    case "succeeded":
+      return { result, issues: form.getSnapshot().issues };
+    case "invalid":
+      return { result, issues: result.report.issues };
+    case "failed":
+      if (result.error instanceof sdk.ResponseContractError) {
+        return { result, reconcile: true };
+      }
+      return {
+        result,
+        reconcile: result.outcome === "unknown",
+        issues: form.getSnapshot().issues,
+      };
+    case "canceled":
+      return { result, reconcile: result.outcome === "unknown" };
+    default: {
+      const exhaustive: never = result;
+      return exhaustive;
+    }
+  }
+}
+```
 
 ## Async options and checks
 

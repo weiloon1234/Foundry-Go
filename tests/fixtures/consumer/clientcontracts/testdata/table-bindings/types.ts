@@ -85,3 +85,25 @@ void sdk.tableDownloads["reports.numeric_levels"];
 // @ts-expect-error The checked optional view rejects an incompatible ticket protocol.
 const incompatibleExport: { readonly [Id in sdk.QueryTableId]?: (client: sdk.API, input: { readonly body: TableExportRequest }) => Promise<sdk.FileResult> } = sdk.tableExports;
 void [pageToOperation, operationToPage, closedState, incompatibleExport];
+
+// doc-example:begin table-enum-metadata
+export function tableEnumChoices() {
+  const choices: { value: string | number; label: string }[] = [];
+  for (const column of sdk.tables["reports.numeric_levels"].columns) {
+    if (column.kind !== "enum") continue;
+    switch (column.name) {
+      case "level":
+        for (const value of column.enum.cases) {
+          choices.push({ value, label: sdk.enumLabel(column.enum.labels, value, key => key) });
+        }
+        break;
+      case "wideLevel":
+        for (const value of column.enum.cases) {
+          choices.push({ value, label: sdk.enumLabel(column.enum.labels, value, key => key) });
+        }
+        break;
+    }
+  }
+  return choices;
+}
+// doc-example:end table-enum-metadata

@@ -16,25 +16,27 @@ import (
 
 //foundry:dto
 type Payload struct {
-	ID       model.ID[models.Order]                 `json:"id"`
-	BuyerID  model.ID[models.User]                  `json:"buyer_id"`
-	Natural  models.CountryCode                     `json:"natural"`
-	Large    int64                                  `json:"large"`
-	Counter  uint64                                 `json:"counter"`
+	ID      model.ID[models.Order] `json:"id"`
+	BuyerID model.ID[models.User]  `json:"buyer_id"`
+	Natural models.CountryCode     `json:"natural"`
+	Large   int64                  `json:"large"`
+	Counter uint64                 `json:"counter"`
+	// doc-example:begin field-presentation
 	Amount   decimal.Decimal                        `json:"amount" client:"kind=money,label=fields.amount,help=help.amount"`
 	State    localization.Status                    `json:"state"`
 	Optional value.Optional[value.Nullable[string]] `json:"optional,omitzero" client:"kind=multiline"`
-	Nullable value.Nullable[string]                 `json:"nullable"`
-	Quoted   int64                                  `json:"quoted,string"`
-	Exact    json.Number                            `json:"exact"`
-	When     temporal.DateTime                      `json:"when"`
-	Day      temporal.Date                          `json:"day"`
-	Clock    temporal.Time                          `json:"clock"`
-	Local    temporal.LocalDateTime                 `json:"local"`
-	Duration temporal.Interval                      `json:"duration"`
-	Bytes    []byte                                 `json:"bytes"`
-	Keys     map[int64]string                       `json:"keys"`
-	Tags     []string                               `json:"tags"`
+	// doc-example:end field-presentation
+	Nullable value.Nullable[string] `json:"nullable"`
+	Quoted   int64                  `json:"quoted,string"`
+	Exact    json.Number            `json:"exact"`
+	When     temporal.DateTime      `json:"when"`
+	Day      temporal.Date          `json:"day"`
+	Clock    temporal.Time          `json:"clock"`
+	Local    temporal.LocalDateTime `json:"local"`
+	Duration temporal.Interval      `json:"duration"`
+	Bytes    []byte                 `json:"bytes"`
+	Keys     map[int64]string       `json:"keys"`
+	Tags     []string               `json:"tags"`
 	// Titles is keyed by the catalog's supported locales in client requests.
 	Titles value.Optional[map[i18n.LocaleID]string] `json:"titles,omitzero"`
 }

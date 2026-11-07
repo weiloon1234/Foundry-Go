@@ -24,6 +24,7 @@ const (
 	OrderLabel      i18n.MessageKey = "reports.order.label"
 )
 
+// doc-example:begin member-table
 var Members = datatable.Define(memberSpec())
 
 func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
@@ -64,3 +65,5 @@ func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
 		},
 	}
 }
+
+// doc-example:end member-table

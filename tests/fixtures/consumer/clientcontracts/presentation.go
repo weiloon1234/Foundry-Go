@@ -7,7 +7,10 @@ import (
 
 // SearchPresentation demonstrates a typed, manually composed binding using the
 // same metadata owner as generated client tags. It performs no request I/O.
+// doc-example:begin parameter-presentation
 func SearchPresentation() foundryhttp.QueryParameter[Member] {
 	parameter := foundryhttp.QueryParam("display", foundryhttp.StringQuery[string](), func(member *Member) *string { return &member.Display })
 	return parameter.WithPresentation(contract.Presentation{Kind: contract.TextPresentation, LabelKey: "fields.display"})
 }
+
+// doc-example:end parameter-presentation

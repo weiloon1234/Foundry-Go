@@ -11,9 +11,12 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin register-tables
 func New(dependencies datatable.Dependencies, config datatable.Config) (*datatable.Manager, error) {
 	return datatable.New(dependencies, config, Members.Registration(), NumericLevels.Registration(), Orders.Registration(), Totals.Registration())
 }
+
+// doc-example:end register-tables
 
 func ListMembers(ctx context.Context, manager *datatable.Manager, guard auth.Guard[Operator], request datatable.Request) (orm.PageResult[MemberRow], error) {
 	return Members.Query(ctx, manager, FromGuard(guard), request)

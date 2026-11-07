@@ -3,10 +3,18 @@
 <a id="agent-entry"></a>
 ## Agent entry
 
+- Export: [Registered contracts](#recipe-export-contracts)
+- Select: [Portal surfaces](#recipe-select-surfaces)
+- Decode: [Received values](#recipe-received-values), [Schema handles](#recipe-schema-handles)
+- Label: [Enum metadata](#recipe-enum-labels)
+- Localize: [Client options and catalog locales](#recipe-localized-client)
+- Configure: [Public browser environment](#recipe-public-environment)
+- Coordinate credentials: [Session locks and failures](#recipe-session-coordination)
+- Inspect fields: [Descriptors](client-descriptors.md#recipe-field-descriptors)
 - Consume: [Portal entries](#recipe-portal-entries)
 - Encode: [Precision, presence and locales](#recipe-wire-values)
 - Connect: [Fetch transport](#recipe-fetch-transport)
-- Sign in: [Portal sessions](#recipe-portal-session)
+- Sign in: [Auth declarations](#recipe-declare-portal-session), [Portal sessions](#recipe-portal-session)
 - Query tables: [Generated bindings](#recipe-table-bindings)
 - Handle errors: [Operation narrowing](http-application-errors.md#recipe-client-narrowing)
 - Edit forms: [Exact input values](client-forms.md#recipe-form-values)
@@ -25,6 +33,7 @@ and permissions. DTO descriptors own public fields. Database models and private
 notification inputs do not automatically become public schemas. OpenAPI 3.1.1
 and TypeScript are adapters over this one manifest.
 
+<a id="recipe-export-contracts"></a>
 ## Export from the application
 
 Assemble the same registries the application uses, then call
@@ -47,17 +56,41 @@ and explicit semantic hints through the same contract.
 
 Generate into an existing, dedicated client directory:
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/guide_export.go#export-contracts -->
 ```go
-source, err := manifest.Build(ctx, sources)
-if err != nil {
-    return err
+func ExportClient(ctx context.Context, fixture Fixture, dir string) (typescript.Report, error) {
+	source, err := fixture.Manifest(ctx)
+	if err != nil {
+		return typescript.Report{}, err
+	}
+	return typescript.Generate(ctx, source, typescript.Options{
+		Dir:     dir,
+		OpenAPI: openapi.Options{Title: "Consumer", APIVersion: "1"},
+	})
 }
-_, err = typescript.Generate(ctx, source, typescript.Options{
-    Dir: "frontend/src/generated",
-    OpenAPI: openapi.Options{Title: "Shop API", APIVersion: "1"},
-})
-return err
 ```
+
+The fixture assembles all of its registered contract inputs in one source owner:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/contracts.go#manifest-sources -->
+```go
+return manifest.Build(ctx, manifest.Sources{
+	HTTP:          f.Router,
+	Realtime:      &realtime,
+	Notifications: f.Notifications,
+	Tables:        f.Tables,
+	Catalog:       catalog,
+	Frontend:      frontend,
+	PublicConfig:  configured.SettingsPublicConfig(),
+	Enums:         []enum.Definition{enumeration},
+	Permissions:   []auth.PermissionDescription{permission},
+	Schemas:       []contract.Schema{dynamic, labelSchema, ownerIndex},
+})
+```
+
+Export and freshness checks must use the same source selection and generation
+options. A partial registry produces a partial client; use a separate output
+directory when that is intentional.
 
 Imports are `github.com/weiloon1234/Foundry-Go/contract/manifest`, `/typescript`
 and `/openapi`. `typescript.Render(source)` and `openapi.Render(source, options)`
@@ -74,18 +107,17 @@ foundry contracts --manifest public-contract.json --dir frontend/src/generated \
 Instead of hand-writing that export command, mount the built-in one. It resolves
 the sources from the application when it runs:
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/guide_export.go#export-command -->
 ```go
-export, err := typescript.ExportCommand("contracts.export",
-    openapi.Options{Title: "Shop API", APIVersion: "1",
-        Servers: []openapi.Server{{URL: "https://api.example.com"}}},
-    func(ctx context.Context, services foundation.Resolver) (manifest.Sources, error) {
-        router, err := foundation.Resolve(services, routerKey)
-        return manifest.Sources{HTTP: router}, err
-    })
+func ClientExportCommand(sources typescript.Sources) (cli.Declaration, error) {
+	return typescript.ExportCommand("contracts.export",
+		openapi.Options{Title: "Consumer", APIVersion: "1"}, sources)
+}
 ```
 
-`routerKey` is the application's `foundation.Key[*http.Router]`; resolve the
-realtime description and other sources the same way. Register the declaration
+`typescript.Sources` is a callback receiving `context.Context` and
+`foundation.Resolver`. Resolve the router, realtime description and other
+registered sources from the application in that callback. Register the declaration
 with the application's CLI commands, then run
 `app contracts.export --dir frontend/src/generated [--prefix contracts] [--check]`.
 
@@ -105,15 +137,19 @@ Client JSON limits count containers, values and object names, matching Go. For
 example, `{"key":"value"}` uses three nodes; a two-node budget rejects it on
 both encode and decode. Byte, depth and schema-work limits remain independent.
 
+<a id="recipe-select-surfaces"></a>
 ## Portal surfaces
 
 An application with several portals declares one surface per portal, so each
 bundle carries only its own operations, channels and schemas:
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/contracts_test.go#portal-surfaces -->
 ```go
-export, err := typescript.ExportCommand("contracts.export", api, sources,
-    typescript.Surface{Name: "admin", Paths: []string{"/api/admin"}, Guards: []auth.GuardName{"admin.api"}},
-    typescript.Surface{Name: "web", Routes: []http.RouteID{"web", "health.live"}})
+var surfaces = []typescript.Surface{
+	{Name: "browser", Routes: []foundryhttp.RouteID{"browser"}, Auth: &typescript.SurfaceAuth{Guard: "browser_accounts", Login: "browser.login", Refresh: "browser.refresh", Logout: "browser.logout", Profile: "browser.profile", Identifier: "login_id"}},
+	{Name: "members", Paths: []string{"/members"}},
+	{Name: "live", Routes: []foundryhttp.RouteID{"account.show"}, Channels: []websocket.ChannelID{"updates"}, Guards: []auth.GuardName{"client_accounts"}},
+}
 ```
 
 `typescript.Options.Surfaces` takes the same declarations. Each surface publishes
@@ -347,6 +383,7 @@ export function localeFields() {
 }
 ```
 
+<a id="recipe-received-values"></a>
 ## Tolerant server output
 
 Deployed clients, especially mobile applications, often outlive the server
@@ -365,10 +402,15 @@ sent back. Each schema reachable from server output that can contain enum values
 has a generated `...Received` type, used by `Operations[...]["response"]`,
 `ErrorResponse` and event handlers. Narrow it before reuse:
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#received-values -->
 ```typescript
-const item = await api.itemsEcho(request);
-if (item.state instanceof UnknownEnumValue) showUnsupported(item.state.value);
-else render(item.state);
+export function receivedValues(item: sdk.Operations["itemsEcho"]["response"]) {
+  const state = item.state instanceof sdk.UnknownEnumValue
+    ? item.state.value
+    : item.state;
+  const newerLocale: string | undefined = item.titles?.["fr"];
+  return { state, newerLocale };
+}
 ```
 
 Set `strictResponses: true` in `ClientOptions` (or `strictEvents: true` in
@@ -379,44 +421,47 @@ use rather than at import.
 
 ## Enums, schemas and error codes
 
+<a id="recipe-enum-labels"></a>
 ### Enum declaration merging and label helpers
 
-Each declared enum emits a TypeScript union type and a companion constant value sharing the same name:
+Each declared enum emits a union type and a same-named constant with `cases`
+and, when labels are declared, `labels`. Label keys come from Go enum metadata.
+Partial labels retain their partial mapping; wide integer cases stay strings.
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#enum-labels -->
 ```typescript
-export type AdminType = "superadmin" | "developer" | "admin";
-export const AdminType = /* @__PURE__ */ Object.freeze({
-  cases: ["superadmin", "developer", "admin"] as const,
-  labels: /* @__PURE__ */ Object.freeze({
-    superadmin: "admins.type.superadmin",
-    developer: "admins.type.developer",
-    admin: "admins.type.admin",
-  }) satisfies Record<AdminType, CatalogMessageKey>,
-});
+export function enumLabels(state: sdk.Status | sdk.UnknownEnumValue, messages: sdk.ValidationMessages) {
+  const choices = sdk.Status.cases;
+  const label = sdk.enumLabel(sdk.Status.labels, state, key => sdk.formatMessage(messages, key));
+  return { choices, label };
+}
 ```
 
-When an enum defines labels for a subset of cases, `labels` satisfies `Partial<Record<AdminType, CatalogMessageKey>>`. If no cases declare a label, the `labels` property is omitted. Wide integers (64-bit) preserve string representations in both `cases` and `labels`.
+`enumLabel` accepts string or numeric enum values, including integer filter values
+encoded as strings. It looks up the supplied mapping without limiting it to the
+closed `cases` list. An empty label key is present and goes to the translator.
+Unmapped cases use their raw string representation; `UnknownEnumValue` retains
+its lossless raw text. Do not replace generated metadata with a frontend label map.
 
-The shared runtime provides a generic helper `enumLabel` to resolve an enum's display label:
-
-```typescript
-import { AdminType, enumLabel, formatMessage } from "./generated/contracts_foundry.gen.js";
-
-const label = enumLabel(AdminType.labels, user.type, key => formatMessage(messages, key));
-```
-
-`enumLabel` returns the raw value when given an `UnknownEnumValue` or an unmapped case, and never accepts arbitrary strings.
-
+<a id="recipe-schema-handles"></a>
 ### Named schema constants and brand identities
+
+Use the permitted portal entry's schema handles for runtime snapshots, standalone
+codecs and value validation. Keep missing and invalid bootstrap snapshots distinct
+in application state. Decode only an explicit public DTO; never serialize server
+configuration or duplicate its defaults.
 
 Each entry module exports `schemas`, a frozen map of declared schema names to their Go type-path strings, filtered to types reachable by that surface:
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#schema-handles -->
 ```typescript
-import { decodeContract, newIdentity, schemas } from "./generated/contracts_foundry.gen.js";
-
-const payload = decodeContract(schemas.Payload, networkData);
-const orderId = newIdentity(schemas.OrderID); // generates a fresh UUID v4
-const existingId = newIdentity(schemas.OrderID, "0190a8f0-0000-7000-8000-000000000001");
+export function schemaHandles(input: string) {
+  const decoded = sdk.decodeContract(sdk.schemas.Clientcontracts_Payload, input);
+  const checked = sdk.contractValue(sdk.schemas.Clientcontracts_Payload, decoded);
+  const encoded = sdk.encodeContract(sdk.schemas.Clientcontracts_Payload, checked);
+  const descriptor = sdk.schema(sdk.schemas.Clientcontracts_Payload);
+  return { decoded, encoded, descriptor };
+}
 ```
 
 `newIdentity<Owner>(owner, id?)` brands a UUID string as `Identity<Owner>`. When `id` is omitted, it generates a fresh UUID v4 via `crypto.randomUUID()`. It validates UUID v4 syntax and rejects nil UUIDs.
@@ -473,6 +518,31 @@ Each descriptor in `tables` carries:
 - `columns`: readonly array of `TableColumn<Row>` with `name` typed strictly as `keyof Row & string`, `kind` derived from Go `datatable.ColumnKind`, `nullable`, `sortable`, `searchable`, `exportable`, and declared filter `operators`. Enum columns carry `kind: "enum"` and reference the S1 enum value object through `enum`. Read allowed values from `column.enum.cases` and optional label keys from `column.enum.labels`. Integer enums use numbers up to 32 bits and decimal strings for wider integers. Without registered enum metadata, the value object carries schema-owned cases without labels.
 - `defaultSort`: readonly array of `TableSort<keyof Row & string>`.
 - `exports`: boolean flag indicating whether the table supports export operations.
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts#table-enum-metadata -->
+```typescript
+export function tableEnumChoices() {
+  const choices: { value: string | number; label: string }[] = [];
+  for (const column of sdk.tables["reports.numeric_levels"].columns) {
+    if (column.kind !== "enum") continue;
+    switch (column.name) {
+      case "level":
+        for (const value of column.enum.cases) {
+          choices.push({ value, label: sdk.enumLabel(column.enum.labels, value, key => key) });
+        }
+        break;
+      case "wideLevel":
+        for (const value of column.enum.cases) {
+          choices.push({ value, label: sdk.enumLabel(column.enum.labels, value, key => key) });
+        }
+        break;
+    }
+  }
+  return choices;
+}
+```
+
+Enum label resolution follows the [enum label owner](#recipe-enum-labels).
 
 Declare associations in Go with `datatable.QueryEndpoint`, `BindTicketExport`,
 `BindFileExport`, and `DownloadEndpoint`. These helpers attach
@@ -777,25 +847,14 @@ subscription. `close()` rejects pending operations and releases timers,
 listeners and handles. Dispose unused room handles to release their capacity.
 For a new connection, create a new client and deliberately request replay.
 
+<a id="recipe-declare-portal-session"></a>
 ## Portal sign-in sessions
 
 Declare `Surface.Auth` alongside the portal's route selection. The referenced
 login, refresh, logout, and profile routes must all belong to the surface:
 
-```go
-typescript.Surface{
-	Name: "browser",
-	Routes: []http.RouteID{"browser"},
-	Auth: &typescript.SurfaceAuth{
-		Guard: "browser_accounts",
-		Login: "browser.login",
-		Refresh: "browser.refresh",
-		Logout: "browser.logout",
-		Profile: "browser.profile",
-		Identifier: "login_id",
-	},
-}
-```
+See the [compiled surface declaration](#recipe-select-surfaces), whose browser
+surface supplies these route identities and the `login_id` identifier.
 
 `Identifier` is the case-sensitive JSON property name in the login body. It must
 exactly match a non-secret manifest property; generation performs no case folding
@@ -839,7 +898,54 @@ export async function portalLifecycle(transport: HTTPTransport, baseURL: string,
 }
 ```
 
+<a id="recipe-session-coordination"></a>
 ### Session lifetime and failures
+
+For custom cookie-changing work, hold the same credential lock as renewal.
+Ordinary callers can use the [portal helpers](#recipe-portal-session), which
+already hold that lock; do not wrap those helpers in another credential lock.
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/auth.ts#credential-lock -->
+```typescript
+export async function lockedSignOut(portal: ReturnType<typeof createPortalSession>) {
+  await portal.session.runCredentials(async () => {
+    await portal.credentials.browserLogout({});
+    portal.session.signOut();
+  });
+}
+```
+
+Capture the session version before asynchronous auth UI work and discard a
+result belonging to an earlier identity:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/auth.ts#session-version -->
+```typescript
+export async function currentProfile(portal: ReturnType<typeof createPortalSession>) {
+  const version = portal.session.version();
+  const profile = await portal.api.browserProfile({});
+  if (portal.session.version() !== version) return undefined;
+  return profile;
+}
+```
+
+Handle coordination failure as a distinct application state:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/auth.ts#coordination-failure -->
+```typescript
+export async function restoreProfile(portal: ReturnType<typeof createPortalSession>) {
+  try {
+    return { kind: "restored", profile: await portal.restoreSession() } as const;
+  } catch (error) {
+    if (error instanceof SessionCoordinationError) return { kind: "coordination-failed" } as const;
+    throw error;
+  }
+}
+```
+
+The example imports `SessionCoordinationError` from the generated auth module.
+A packaged client can expose that symbol through its own `./auth` entry; the
+package name and subpath are application choices. Show localized failure copy
+without exposing storage details.
 
 Use the login DTO's JSON keys for credentials. This example follows the
 [client-contract consumer](../../tests/fixtures/consumer/clientcontracts/browser_auth.go),
@@ -892,21 +998,15 @@ use the same redacted `SessionCoordinationError` and clear local credentials. Di
 other tabs from retrying a possibly changed cookie, including tabs without
 messages. Outside a browser, default coordination is session-owned memory.
 
+<a id="recipe-public-environment"></a>
 ## Public browser configuration
 
 Mark browser-visible scalar or enum fields in a `//foundry:config` declaration
 with `config:",public"` and a full environment key. Existing configuration paths
 can precede `,public`:
 
-```go
-//foundry:config
-type Settings struct {
-	AppName       string `config:"app_name,public" client:"env=VITE_APP_NAME,fallback=ConsumerApp,max=80"`
-	DefaultLocale string `config:"default_locale,public" client:"env=VITE_DEFAULT_LOCALE,fallback=en,kind=locale"`
-	FormatLocale  string `config:"format_locale,public" client:"env=VITE_FORMAT_LOCALE,kind=format_locale,optional"`
-	TimeZone      string `config:"time_zone,public" client:"env=VITE_TIME_ZONE,kind=time_zone,optional"`
-}
-```
+See the [public configuration declaration](generated-configuration.md#public-browser-configuration)
+for the compiled Go tags and generated metadata owner.
 
 Pass the generated `SettingsPublicConfig()` to `manifest.Sources.PublicConfig`.
 This exports declaration metadata and public fallbacks, without reading runtime
@@ -936,14 +1036,17 @@ to `undefined`. A supplied value keeps the kind's validation. An optional settin
 cannot declare a non-empty `fallback`; generation and manifest validation reject
 that combination.
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#public-environment -->
 ```typescript
-import { decodePublicEnv, findPublicEnvProblems } from "./generated/contracts_foundry.gen.js";
-
-const problems = findPublicEnvProblems(rawEnvironment, "VITE_");
-if (problems.length > 0) throw new Error(problems.join("\n"));
-const settings = decodePublicEnv(rawEnvironment);
-console.log(settings.appName, settings.defaultLocale);
-const dates = new Intl.DateTimeFormat(settings.formatLocale ?? settings.defaultLocale, { timeZone: settings.timeZone });
+export function publicEnvironment(rawEnvironment: Record<string, string | undefined>) {
+  const problems = sdk.findPublicEnvProblems(rawEnvironment, "VITE_");
+  if (problems.length > 0) throw new Error(problems.join("\n"));
+  const settings = sdk.decodePublicEnv(rawEnvironment);
+  const dates = new Intl.DateTimeFormat(settings.formatLocale ?? settings.defaultLocale, {
+    timeZone: settings.timeZone,
+  });
+  return { settings, dates };
+}
 ```
 
 Supply the build tool's public environment object as `rawEnvironment`.
@@ -1005,6 +1108,32 @@ const farewell = formatFrontendMessage(messages, "ui.farewell");
 Unknown keys and missing arguments fail TypeScript compilation. Missing or
 unrenderable translation text returns the key at runtime. Applications own
 catalog text and error presentation.
+
+<a id="recipe-localized-client"></a>
+## Configure locale and validation messages
+
+`catalogLocales` describes the Go-configured locale set, not the catalog folders
+present in the frontend. Use the chosen translation catalog's locale for
+`Accept-Language` and pass that catalog as `validationMessages`:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#localized-client -->
+```typescript
+export function localizedClient(transport: sdk.HTTPTransport, messages: sdk.ValidationMessages) {
+  const locale: sdk.Locale | undefined = sdk.catalogLocales?.default;
+  const supported: readonly sdk.Locale[] = sdk.catalogLocales?.supported ?? [];
+  const api = sdk.createClient(transport, {
+    headers: { "Accept-Language": messages.locale },
+    validationMessages: messages,
+  });
+  return { api, locale, supported };
+}
+```
+
+Application helpers such as `clientOptions(translations)` may wrap these options;
+they are not generated SDK functions. Formatting locale is independent of the
+translation language; [public environment decoding](#recipe-public-environment)
+retains that distinction. [Browser catalogs](localization.md#browser-catalogs)
+own catalog loading and translation formatting.
 
 ## Validation and UI metadata
 

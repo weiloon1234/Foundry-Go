@@ -31,9 +31,12 @@ type Authority struct {
 	resolved bool
 }
 
+// doc-example:begin current-table-authority
 func FromGuard(guard auth.Guard[Operator]) Authority {
 	return Authority{guard: value.Set(guard)}
 }
+
+// doc-example:end current-table-authority
 
 func (a Authority) subject(ctx context.Context) (Operator, error) {
 	if guard, present := a.guard.Get(); present {

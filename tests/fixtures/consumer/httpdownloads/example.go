@@ -9,6 +9,7 @@ import (
 
 // ReportRoute is the complete minimal example used by the download guide. The
 // application owns root; the framework opens and closes each response file.
+// doc-example:begin local-download
 func ReportRoute(root *os.Root) (*foundryhttp.Router, error) {
 	endpoint := foundryhttp.DefineEndpoint(
 		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.download", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/report")),
@@ -18,3 +19,5 @@ func ReportRoute(root *os.Root) (*foundryhttp.Router, error) {
 		return foundryhttp.LocalDownload(root, "reports/monthly.pdf").WithName("report.pdf").WithMediaType("application/pdf"), nil
 	}))
 }
+
+// doc-example:end local-download

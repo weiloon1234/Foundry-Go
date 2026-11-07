@@ -1,22 +1,44 @@
 # Typed client descriptors and presentation
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Inspect: [Operation fields](#recipe-field-descriptors)
+- Address issues: [Nested and escaped paths](#recipe-issue-addresses)
+- Present: [Go field metadata](#recipe-field-presentation)
+- Bind locale maps: [Wire values](client-contracts.md#recipe-wire-values)
+- Decode schemas: [Schema handles](client-contracts.md#recipe-schema-handles)
+- Submit: [Form outcomes](client-forms.md#recipe-form-outcomes)
+
+<a id="recipe-field-descriptors"></a>
+## Inspect operation fields
+
 The generated SDK exposes `operation(name)` and `schema(typeID)` alongside the
 existing typed client. They inspect the same normalized manifest; neither sends
 requests nor creates form state. React, Vue, Angular and plain JavaScript can
 consume them without runtime package dependencies.
 
-```ts
-const create = operation("projectsCreate");
-const budget = create.field("body", "budget");
-const kind = budget.presentation.kind;
-const required = budget.required;
-const nullable = budget.nullable;
-const report = create.validate(request);
-const response = await create.call(client, request);
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#field-descriptors -->
+```typescript
+export async function fieldDescriptors(api: sdk.API, request: sdk.Operations["itemsEcho"]["request"]) {
+  const operation = sdk.operation("itemsEcho");
+  const amount = operation.field("body", "amount");
+  const value: sdk.FieldValue<typeof amount> = request.body.amount;
+  const report = operation.validate(request);
+  const response = await operation.call(api, request);
+  return {
+    value,
+    kind: amount.presentation.kind,
+    required: amount.required,
+    nullable: amount.nullable,
+    report,
+    response,
+  };
+}
 ```
 
 The operation name, location and field must exist in the generated contract.
-`FieldValue<typeof budget>` retains its exact value type, including omission and
+`FieldValue<typeof amount>` retains its exact value type, including omission and
 null. Descriptor identity also retains its operation/location/field owner, so
 unrelated fields cannot be substituted merely because their values are strings.
 Nested objects use `.field(name)`; arrays and open maps use `.element()`, and
@@ -49,6 +71,35 @@ integers as strings; each type's choices are decoded once and shared. Metadata
 and descriptors are immutable snapshots checked against the manifest version. Unknown
 JavaScript operations, fields, locations and variants throw `ContractError`.
 
+<a id="recipe-issue-addresses"></a>
+## Address nested and escaped issues
+
+Use each descriptor's `path` with the SDK's decoded issues. Operation paths include
+the request location, such as `/body/tags/0`; reusable schema paths are relative
+to that schema root. JSON Pointers escape `/` as `~1` and `~` as `~0`. Preserve
+those paths instead of dot-joining names or reducing them to the first field.
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#issue-addresses -->
+```typescript
+export function issueAddresses(issues: readonly sdk.Issue[]) {
+  const tag = sdk.operation("itemsEcho").field("body", "tags").at(0);
+  const label = sdk.operation("unionsEcho").field("body", "method")
+    .variant("kind", "card").field("labels").at(0);
+  const escaped = sdk.schema(sdk.schemas.ExplicitLabels).at("a/b~c");
+  return {
+    tag: issues.filter(issue => issue.path === tag.path),
+    label: issues.filter(issue => issue.path === label.path),
+    escapedPath: escaped.path,
+    all: issues,
+  };
+}
+```
+
+Keep parent summaries and unmatched or form-level issues visible. A literal field
+name can itself look like a pointer; any app adapter for top-level summaries must
+keep those names separate from exact-path keys. Retain localized server messages
+and use the SDK decoder instead of parsing the error envelope again.
+
 ## Portal authentication descriptors
 
 A surface with `Surface.Auth` exports `authDescriptor` with its guard, typed
@@ -60,14 +111,14 @@ transport and the shared optional auth runtime. See
 [portal sign-in sessions](client-contracts.md#portal-sign-in-sessions) for route
 declarations, cookie requirements, and session ownership.
 
+<a id="recipe-field-presentation"></a>
 ## Declare presentation once
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/dto.go#field-presentation -->
 ```go
-//foundry:dto
-type CreateProject struct {
-    Budget decimal.Decimal `json:"budget" client:"kind=money,label=fields.budget,help=help.budget"`
-    Notes value.Optional[value.Nullable[string]] `json:"notes,omitzero" client:"kind=multiline"`
-}
+Amount   decimal.Decimal                        `json:"amount" client:"kind=money,label=fields.amount,help=help.amount"`
+State    localization.Status                    `json:"state"`
+Optional value.Optional[value.Nullable[string]] `json:"optional,omitzero" client:"kind=multiline"`
 ```
 
 The optional `client` tag applies to the already declared public field in DTOs,
@@ -75,6 +126,17 @@ paths, queries, URL-encoded forms and multipart inputs. It does not opt private
 fields into transport. Generated validation selectors inherit the label key,
 so the same declaration can supply form labels and validation labels. Label/help
 keys use `i18n.MessageKey`; applications supply their locale messages.
+
+The excerpt is part of the fixture's public `Payload` DTO. Typed parameter
+bindings use the same presentation metadata:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/presentation.go#parameter-presentation -->
+```go
+func SearchPresentation() foundryhttp.QueryParameter[Member] {
+	parameter := foundryhttp.QueryParam("display", foundryhttp.StringQuery[string](), func(member *Member) *string { return &member.Display })
+	return parameter.WithPresentation(contract.Presentation{Kind: contract.TextPresentation, LabelKey: "fields.display"})
+}
+```
 
 Manual JSON schemas use `contract.Property.Presentation`. Typed HTTP parameters
 and parts use `.WithPresentation(contract.Presentation{...})`. Kinds are the

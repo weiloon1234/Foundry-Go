@@ -1,9 +1,25 @@
 # Typed datatables and exports
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Declare: [Public rows and columns](#recipe-declare-table)
+- Select: [Joined and grouped tables](#recipe-join-group-tables)
+- Filter: [Typed adapters](#recipe-table-filter-adapters), [Outer-joined text](#recipe-filter-outer-joined-text)
+- Authorize: [Current server authority](#recipe-authorize-table)
+- Register: [Standard routes and tickets](#recipe-table-routes)
+- Bind custom endpoints: [HTTP operation bindings](#recipe-table-operation-bindings)
+- Export: [Bounded artifacts](#recipe-export-table)
+- Consume: [Generated table bindings](client-contracts.md#recipe-table-bindings)
+- Declare SQL rows: [Typed row schemas](model-projections.md#recipe-declare-rows)
+
+## Overview
+
 Datatables bind handwritten ORM sources to explicit DTO contracts. Members,
 Orders and Totals in the [reporting consumer](../../tests/fixtures/consumer/reporting/)
 cover model, joined and grouped sources.
 
+<a id="recipe-declare-table"></a>
 ## Declare one row and its columns
 
 Declare an explicit response DTO:
@@ -46,13 +62,64 @@ Arrays, objects and dynamic fields cannot be scalar table columns.
 Labels use `i18n.MessageKey`, independent of the locale. Keys use the shared
 semantic identifier grammar; constructing a key does not prove catalog
 membership. The manager borrows a locale catalog and heading resolver for exports.
-The [localization guide](localization.md) covers UI catalogs and locale resolution.
+The [localization guide](localization.md) covers UI catalogs, enum label
+declarations (`//foundry:enum labels=…`) and locale resolution. Clients consume
+the [generated enum metadata](client-contracts.md#recipe-table-bindings); keep
+unknown received values distinct from the declared choices.
 
-The [consumer member table](../../tests/fixtures/consumer/reporting/members.go)
-combines a computed name, enum/nullable/exact-decimal columns and a declared
-relation filter. [Joined and grouped tables](../../tests/fixtures/consumer/reporting/orders.go)
-reuse the same column API.
+The [row-schema recipe](model-projections.md#recipe-declare-rows) owns handwritten
+SQL destinations. This table combines computed text, enum, nullable and exact
+decimal columns, a relation filter, stable ordering and tenant-scoped reads:
 
+<!-- compiled-source: tests/fixtures/consumer/reporting/members.go#member-table -->
+```go
+var Members = datatable.Define(memberSpec())
+
+func memberSpec() datatable.Spec[Member, MemberRow, Authority] {
+	fields, wire := MemberModels, MemberRowValidationFields()
+	text := foundryhttp.StringQuery[string]()
+	state := foundryhttp.EnumQuery[State, *State](Active.EnumDescriptor())
+	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
+	name := expr.Trim(expr.Value(orm.TextExpr(fields.Name)))
+	id := expr.Row(expr.Value(orm.KeyExpr(fields.ID)))
+	nickname := expr.TextNullableRow(orm.NullableTextExpr(fields.Nickname))
+	stateExpr := expr.CompareRow(expr.Value(orm.EnumExpr(fields.State)))
+	balance := expr.OrderRow(expr.Value(orm.NumberExpr(fields.Balance)))
+	return datatable.Spec[Member, MemberRow, Authority]{
+		ID: "reports.members", Row: MemberRowJSON(), Exports: true,
+		Columns: []datatable.ColumnRegistration[Member, MemberRow]{
+			datatable.DefineColumn[Member](wire.ID, MemberIDLabel, datatable.SortBy(expr.AsSelected(id)), datatable.ExportAs(expr.AsSelected(id), datatable.ScalarCell(foundryhttp.ModelIDQuery[Member]()))),
+			datatable.DefineColumn[Member](wire.Name, MemberNameLabel, datatable.SortBy(expr.AsSelected(name)), datatable.FilterBy(datatable.Where(text, expr.TextFilter(name))), datatable.Searchable(name), datatable.ExportAs(expr.AsSelected(name), datatable.ScalarCell(text))),
+			datatable.DefineColumn[Member](wire.Nickname, NicknameLabel, datatable.SortBy(expr.AsSelected(nickname)), datatable.FilterBy(datatable.NullableWhere(text, expr.NullableTextFilter(nickname))), datatable.ExportAs(expr.AsSelected(nickname), datatable.NullableCell(text))),
+			datatable.DefineColumn[Member](wire.State, StateLabel, datatable.FilterBy(datatable.Where(state, expr.CompareFilter(stateExpr))), datatable.ExportAs(expr.AsSelected(stateExpr), datatable.ScalarCell(state))),
+			datatable.DefineColumn[Member](wire.Balance, BalanceLabel, datatable.SortBy(expr.AsSelected(balance)), datatable.FilterBy(datatable.Where(amount, expr.OrderFilter(balance))), datatable.ExportAs(expr.AsSelected(balance), datatable.ScalarCell(amount))),
+		},
+		Filters: []datatable.FilterRegistration[Member]{
+			datatable.DefineFilter("orderLabel", OrderLabel, datatable.Related(datatable.Where(text, expr.TextFilter(expr.TextRow(orm.TextExpr(OrderModels.Label)))), func(predicate expr.Predicate[Order]) expr.Predicate[Member] {
+				return expr.Has(MemberModelRelations.Orders, predicate)
+			})),
+		},
+		DefaultSort: []datatable.Sort{{Column: validation.FieldName(wire.Name), Direction: datatable.Ascending}},
+		Stable:      []expr.ProjectionOrder[Member]{expr.Asc(expr.Value(orm.KeyExpr(fields.ID)))},
+		Authorize:   authorize,
+		Source: func(ctx context.Context, authority Authority) (rows.Query[Member, MemberRow], error) {
+			actor, err := authority.subject(ctx)
+			if err != nil {
+				return rows.Query[Member, MemberRow]{}, err
+			}
+			return rows.Select(rows.From(MemberModels.Query().Where(orm.NumberEq(fields.TenantID, actor.TenantID))), MemberRows,
+				rows.Map(MemberRows.ID, expr.Value(orm.KeyExpr(fields.ID))), rows.MapSelected(MemberRows.Name, expr.AsSelected(name)),
+				rows.Map(MemberRows.Nickname, expr.Value(orm.NullableTextExpr(fields.Nickname))), rows.Map(MemberRows.State, expr.Value(orm.EnumExpr(fields.State))), rows.Map(MemberRows.Balance, expr.Value(orm.NumberExpr(fields.Balance)))), nil
+		},
+	}
+}
+```
+
+Regenerate public DTO descriptors after a DTO change. SQL row-schema changes
+alone need no generation. Re-export client contracts after public table metadata
+or route changes; see [export ownership](client-contracts.md#recipe-export-contracts).
+
+<a id="recipe-table-filter-adapters"></a>
 ## Migrate report sources to ORM declarations
 
 `Spec.Source` returns `rows.Query[S, R]`. Keep the DTO type, package, JSON
@@ -86,6 +153,17 @@ Filters wrap row expressions in typed filter adapters:
 | Equality-only aggregate | `expr.ValueFilter(expr.Exists[User]())` |
 | Selected text | `expr.TextValueFilter(expr.TextValue(selectedName))` |
 
+A nullable ordered field retains its nullable value type while the codec parses
+only present scalar values:
+
+<!-- compiled-source: tests/fixtures/consumer/reports/datatable_filters.go#nullable-ordered-filter -->
+```go
+func MeasurementScoreFilter() datatable.FilterSource[models.Measurement, value.Nullable[float64]] {
+	score := expr.OrderNullableRow(expr.Value(orm.NullableNumberExpr(models.Measurements.Score)))
+	return datatable.NullableWhere(http.FloatQuery[float64](), expr.NullableOrderFilter(score))
+}
+```
+
 `CompareFilter` accepts any `expr.RowValue[S, V]`, including columns and computed
 values. Use it with `datatable.Where(codec, expr.CompareFilter(row))` for equality
 and membership without ordering or text operators. `NullableCompareFilter` accepts
@@ -107,6 +185,110 @@ SQL NULL. Pagination and export retain their limits and read-only repeatable-rea
 transactions. Exports call `rows.EachRead` with the bounded lookahead limit and never
 collect all rows in memory.
 
+<a id="recipe-join-group-tables"></a>
+## Join and group table sources
+
+Joined tables retain both typed scopes. Their stable key identifies a result row:
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/orders.go#joined-table -->
+```go
+func orderSpec() datatable.Spec[OrderScope, OrderRow, Authority] {
+	members := rows.As[memberSide](MemberModels.Query(), "members")
+	orders := rows.As[orderSide](OrderModels.Query(), "orders")
+	m, o := rows.Scope(members), rows.Scope(orders)
+	joined := rows.InnerJoin(members, orders, rows.On(expr.At(m, orm.KeyExpr(MemberModels.ID)), expr.At(o, orm.ColumnExpr(OrderModels.MemberID))))
+	member := rows.LeftScope(joined, m)
+	order := rows.RightScope(joined, o)
+	wire := OrderRowValidationFields()
+	text := foundryhttp.StringQuery[string]()
+	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
+	memberName := expr.TextRowAt(member, orm.TextExpr(MemberModels.Name))
+	orderLabel := expr.TextRowAt(order, orm.TextExpr(OrderModels.Label))
+	id := expr.Row(expr.At(order, orm.KeyExpr(OrderModels.ID)))
+	orderAmount := expr.OrderRow(expr.At(order, orm.NumberExpr(OrderModels.Amount)))
+	base := rows.Select(joined, OrderRows,
+		rows.Map(OrderRows.ID, expr.At(order, orm.KeyExpr(OrderModels.ID))), rows.Map(OrderRows.MemberName, expr.At(member, orm.TextExpr(MemberModels.Name))),
+		rows.Map(OrderRows.Label, expr.At(order, orm.TextExpr(OrderModels.Label))), rows.Map(OrderRows.Amount, expr.At(order, orm.NumberExpr(OrderModels.Amount))))
+	return datatable.Spec[OrderScope, OrderRow, Authority]{
+		ID: "reports.orders", Row: OrderRowJSON(), Exports: true,
+		Columns: []datatable.ColumnRegistration[OrderScope, OrderRow]{
+			datatable.DefineColumn[OrderScope](wire.ID, OrderIDLabel, datatable.ExportAs(expr.AsSelected(id), datatable.ScalarCell(foundryhttp.ModelIDQuery[Order]()))),
+			datatable.DefineColumn[OrderScope](wire.MemberName, MemberNameLabel, datatable.SortBy(expr.AsSelected(expr.Row(memberName))), datatable.FilterBy(datatable.Where(text, expr.TextFilter(memberName))), datatable.Searchable(memberName), datatable.ExportAs(expr.AsSelected(memberName), datatable.ScalarCell(text))),
+			datatable.DefineColumn[OrderScope](wire.Label, OrderLabel, datatable.FilterBy(datatable.Where(text, expr.TextFilter(orderLabel))), datatable.Searchable(orderLabel), datatable.ExportAs(expr.AsSelected(orderLabel), datatable.ScalarCell(text))),
+			datatable.DefineColumn[OrderScope](wire.Amount, AmountLabel, datatable.SortBy(expr.AsSelected(orderAmount)), datatable.FilterBy(datatable.Where(amount, expr.OrderFilter(orderAmount))), datatable.ExportAs(expr.AsSelected(orderAmount), datatable.ScalarCell(amount))),
+		},
+		DefaultSort: []datatable.Sort{{Column: validation.FieldName(wire.MemberName), Direction: datatable.Ascending}},
+		Stable:      []expr.ProjectionOrder[OrderScope]{expr.Asc(expr.At(order, orm.KeyExpr(OrderModels.ID)))}, Authorize: authorize,
+		Source: func(ctx context.Context, authority Authority) (rows.Query[OrderScope, OrderRow], error) {
+			actor, err := authority.subject(ctx)
+			if err != nil {
+				return rows.Query[OrderScope, OrderRow]{}, err
+			}
+			return base.Where(expr.Eq(expr.At(member, orm.NumberExpr(MemberModels.TenantID)), actor.TenantID), expr.Eq(expr.At(order, orm.NumberExpr(OrderModels.TenantID)), actor.TenantID)), nil
+		},
+	}
+}
+```
+
+Grouped tables map aggregates with `rows.MapSelected`, filter them with `Having`
+or `NullableHaving`, and use a group key for stable ordering:
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/orders.go#grouped-table -->
+```go
+func totalSpec() datatable.Spec[Order, MemberTotal, Authority] {
+	fields, wire := OrderModels, MemberTotalValidationFields()
+	count, total := expr.Count[Order](), expr.Sum(orm.NumberExpr(fields.Amount))
+	amount := foundryhttp.TextQuery[decimal.Decimal, *decimal.Decimal]()
+	memberID := foundryhttp.ModelIDQuery[Member]()
+	member := expr.CompareRow(expr.Value(orm.ColumnExpr(fields.MemberID)))
+	return datatable.Spec[Order, MemberTotal, Authority]{
+		ID: "reports.totals", Row: MemberTotalJSON(), Exports: true,
+		Columns: []datatable.ColumnRegistration[Order, MemberTotal]{
+			datatable.DefineColumn[Order](wire.MemberID, MemberIDLabel, datatable.FilterBy(datatable.Where(memberID, expr.CompareFilter(member))), datatable.ExportAs(expr.AsSelected(member), datatable.ScalarCell(memberID))),
+			datatable.DefineColumn[Order](wire.Count, CountLabel, datatable.SortBy(expr.AsSelected(count)), datatable.FilterBy(datatable.Having(foundryhttp.IntegerQuery[int64](), expr.OrderValueFilter(count))), datatable.ExportAs(expr.AsSelected(count), datatable.ScalarCell(foundryhttp.IntegerQuery[int64]()))),
+			datatable.DefineColumn[Order](wire.Total, TotalLabel, datatable.SortBy(expr.AsSelected(total)), datatable.FilterBy(datatable.NullableHaving(amount, expr.NullableOrderValueFilter(total))), datatable.ExportAs(expr.AsSelected(total), datatable.NullableCell(amount))),
+		},
+		DefaultSort: []datatable.Sort{{Column: validation.FieldName(wire.Total), Direction: datatable.Descending}},
+		Stable:      []expr.ProjectionOrder[Order]{expr.Asc(expr.Value(orm.ColumnExpr(fields.MemberID)))}, Authorize: authorize,
+		Source: func(ctx context.Context, authority Authority) (rows.Query[Order, MemberTotal], error) {
+			actor, err := authority.subject(ctx)
+			if err != nil {
+				return rows.Query[Order, MemberTotal]{}, err
+			}
+			source := OrderModels.Query().Where(orm.NumberEq(fields.TenantID, actor.TenantID), orm.Has(OrderModelRelations.Member, orm.NumberEq(MemberModels.TenantID, actor.TenantID)))
+			return rows.GroupBy(rows.Select(rows.From(source), MemberTotals,
+				rows.Map(MemberTotals.MemberID, expr.Value(orm.ColumnExpr(fields.MemberID))), rows.MapSelected(MemberTotals.Count, expr.AsSelected(count)), rows.MapSelected(MemberTotals.Total, expr.AsSelected(total))), expr.Group(expr.Value(orm.ColumnExpr(fields.MemberID)))), nil
+		},
+	}
+}
+```
+
+<a id="recipe-filter-outer-joined-text"></a>
+## Filter outer-joined text
+
+Use `AtNullable` for a required column made nullable by an outer join, and
+`AtNullableValue` for an already-nullable column. `TextNullableRowValue` preserves
+text operations and NULL semantics in both cases:
+
+<!-- compiled-source: tests/fixtures/consumer/reports/datatable_filters.go#outer-joined-text -->
+```go
+func ReferralTextFilters() (datatable.FilterSource[ReferralScope, value.Nullable[string]], datatable.FilterSource[ReferralScope, value.Nullable[string]]) {
+	referrals := rows.As[referralAlias](models.Users.Query(), "referral")
+	sponsors := rows.As[sponsorAlias](models.Users.Query(), "sponsor")
+	joined := rows.LeftJoin(referrals, sponsors, rows.On(
+		expr.At(rows.Scope(referrals), orm.NullableColumnExpr(models.Users.IntroducerID)),
+		expr.At(rows.Scope(sponsors), orm.KeyExpr(models.Users.ID)),
+	))
+	sponsor := rows.NullableRightScope(joined, rows.Scope(sponsors))
+	text := http.StringQuery[string]()
+	email := expr.TextNullableRowValue(expr.AtNullable(sponsor, orm.TextExpr(models.Users.Email)))
+	nickname := expr.TextNullableRowValue(expr.AtNullableValue(sponsor, orm.NullableTextExpr(models.Users.Nickname)))
+	return datatable.NullableWhere(text, expr.NullableTextFilter(email)),
+		datatable.NullableWhere(text, expr.NullableTextFilter(nickname))
+}
+```
+
+<a id="recipe-authorize-table"></a>
 ## Authorization and server scope
 
 `datatable.Spec[S, R, A]` fixes the SQL scope, response type and trusted server
@@ -126,6 +308,31 @@ policy in its authorization callback. The consumer's private
 [Authority](../../tests/fixtures/consumer/reporting/authority.go) supports both
 authenticated requests and freshly resolved job actors. It shares the domain
 permission decision and never accepts roles or authority in request JSON.
+
+Retain the current request guard in authority, including after ticket redemption.
+Do not snapshot the redeemed actor for deferred row loading:
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/authority.go#current-table-authority -->
+```go
+func FromGuard(guard auth.Guard[Operator]) Authority {
+	return Authority{guard: value.Set(guard)}
+}
+```
+
+Declare route access requirements as data and pass them to `ReadAccess` and
+`ExportAccess`. Do not invoke authorization with a synthetic actor to discover
+capabilities. An omitted access option adds no permission requirement; table
+authorization still runs. The app owns any wrapper that shares these declarations
+with its domain policy.
+
+Register each declaration once in the manager used by the routes:
+
+<!-- compiled-source: tests/fixtures/consumer/reporting/http.go#register-tables -->
+```go
+func New(dependencies datatable.Dependencies, config datatable.Config) (*datatable.Manager, error) {
+	return datatable.New(dependencies, config, Members.Registration(), NumericLevels.Registration(), Orders.Registration(), Totals.Registration())
+}
+```
 
 Managers require the exact registered table declaration. A second declaration
 with the same ID cannot substitute a different authorization callback. Registry
@@ -217,6 +424,7 @@ scans; use filters or an export beyond it. Failed queries return no partial
 page. Direct Go callers retain ownership of request slices until the operation
 returns.
 
+<a id="recipe-export-table"></a>
 ## Complete, bounded export artifacts
 
 Enable exports in the spec and mark exportable columns with `ScalarCell(codec)`
@@ -305,6 +513,7 @@ limit, 128 filter nodes, bounded nesting, 100 values per filter, 4096 bytes per
 scalar/search and 8 requested sort fields. `DefaultConfig` is the runtime source
 of these defaults; `Validate` checks custom limits before any I/O.
 
+<a id="recipe-table-operation-bindings"></a>
 ## Declare HTTP operation bindings
 
 Use `contract.TableID` for table identities. There is no `datatable.TableID` alias.
@@ -511,6 +720,7 @@ as described in the [tooling guide](developer-tooling-and-testing.md).
 
 For declaration and API migration, see the [ORM migration guide](orm-migration.md).
 
+<a id="recipe-table-routes"></a>
 ## Register the standard table routes
 
 Use `datatable.Routes` to register a table's query, ticket-export and download
@@ -525,6 +735,27 @@ return datatable.Routes(group, NumericLevels, config,
 	datatable.ExportAccess(export...),
 )
 ```
+
+Build one configuration per route group and reuse it for the group's tables:
+
+<!-- compiled-source: tests/fixtures/consumer/reports/datatable_routes.go#table-routes-config -->
+```go
+func TableRoutesConfig(manager *datatable.Manager, guard http.GuardBinding[reporting.Operator], tokens *token.Tokens[reporting.Operator, model.ID[reporting.Operator]], clock clock.Clock, quota http.Middleware) datatable.RoutesConfig[reporting.Operator, reporting.Authority] {
+	return datatable.RoutesConfig[reporting.Operator, reporting.Authority]{
+		Manager: manager,
+		Guard:   guard,
+		Authority: func(context.Context, reporting.Operator) (reporting.Authority, error) {
+			return reporting.FromGuard(guard.Guard()), nil
+		},
+		Tickets: datatable.TokenTickets(tokens),
+		Clock:   clock,
+		Quota:   quota,
+	}
+}
+```
+
+The authority callback retains the route binding's guard. The guard resolves
+the actor through the current request scope when authorization or loading runs.
 
 Supply `RoutesConfig[M, A]` with the manager, concrete `GuardBinding[M]` and an
 `Authority(context.Context, M) (A, error)` callback. Route guards use `M`; queries
@@ -571,6 +802,10 @@ The framework generates `ExportRequestJSON`, `ExportRequestValidationFields`,
 `DownloadQueryDescriptor` and `ExportTicketJSON` from its transport declarations.
 The format field carries no application translation key; keep visual labels in
 your UI. For other wire shapes, use the [endpoint constructors and binders](#declare-http-operation-bindings).
+
+Open the issued URL directly. Never append a bearer token or copy the ticket
+into an application query DTO. The single-use ticket is bound to the sign-in and
+uses the token service's ticket lifetime.
 
 `DownloadQuery` contains format, request and optional locale. The ticket is a
 server-issued credential consumed before typed decoding. Follow the

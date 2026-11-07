@@ -28,6 +28,7 @@ const (
 var Orders = datatable.Define(orderSpec())
 var Totals = datatable.Define(totalSpec())
 
+// doc-example:begin joined-table
 func orderSpec() datatable.Spec[OrderScope, OrderRow, Authority] {
 	members := rows.As[memberSide](MemberModels.Query(), "members")
 	orders := rows.As[orderSide](OrderModels.Query(), "orders")
@@ -65,6 +66,9 @@ func orderSpec() datatable.Spec[OrderScope, OrderRow, Authority] {
 	}
 }
 
+// doc-example:end joined-table
+
+// doc-example:begin grouped-table
 func totalSpec() datatable.Spec[Order, MemberTotal, Authority] {
 	fields, wire := OrderModels, MemberTotalValidationFields()
 	count, total := expr.Count[Order](), expr.Sum(orm.NumberExpr(fields.Amount))
@@ -91,3 +95,5 @@ func totalSpec() datatable.Spec[Order, MemberTotal, Authority] {
 		},
 	}
 }
+
+// doc-example:end grouped-table

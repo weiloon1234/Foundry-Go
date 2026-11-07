@@ -208,6 +208,9 @@ imports `sdk` from the generated entry. Forms return the same narrowable error i
 failed submissions. Missing or malformed required details produce
 `ResponseContractError`; tolerant enum decoding preserves newer server cases as
 `UnknownEnumValue`. The guard validates the current received envelope each time.
+Status alone cannot identify a business outcome; keep other failures explicit and never cast an
+unknown response into a declared error. See [form outcomes](client-forms.md#recipe-form-outcomes)
+for response-contract failures and uncertain mutation results.
 `APIError` remains extensible for application metadata, causes and stack traces.
 
 Idempotent rejection replay is deferred. A detailed 409 from inside the

@@ -111,6 +111,9 @@ var foundryPayloadJSON = sync.OnceValue(func() foundrycontract.JSON[Payload] {
 // Example: PayloadValidationFields()
 type PayloadValidationFieldSet struct {
 	// Amount validates the declared JSON property "amount".
+	//
+	// doc-example:begin field-presentation
+	//
 	Amount foundryvalidation.Field[Payload, decimal.Decimal]
 	// BuyerID validates the declared JSON property "buyer_id".
 	BuyerID foundryvalidation.Field[Payload, model.ID[models.User]]
@@ -137,6 +140,9 @@ type PayloadValidationFieldSet struct {
 	// Natural validates the declared JSON property "natural".
 	Natural foundryvalidation.Field[Payload, models.CountryCode]
 	// Nullable validates the declared JSON property "nullable".
+	//
+	// doc-example:end field-presentation
+	//
 	Nullable foundryvalidation.Field[Payload, foundryvalue.Nullable[string]]
 	// Optional validates the declared JSON property "optional".
 	Optional foundryvalidation.Field[Payload, foundryvalue.Optional[foundryvalue.Nullable[string]]]

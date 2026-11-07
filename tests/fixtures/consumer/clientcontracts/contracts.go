@@ -217,6 +217,7 @@ func (f Fixture) Manifest(ctx context.Context) (*manifest.Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	// doc-example:begin manifest-sources
 	return manifest.Build(ctx, manifest.Sources{
 		HTTP:          f.Router,
 		Realtime:      &realtime,
@@ -229,6 +230,7 @@ func (f Fixture) Manifest(ctx context.Context) (*manifest.Manifest, error) {
 		Permissions:   []auth.PermissionDescription{permission},
 		Schemas:       []contract.Schema{dynamic, labelSchema, ownerIndex},
 	})
+	// doc-example:end manifest-sources
 }
 
 func Export(ctx context.Context, source *manifest.Manifest, options typescript.Options) (typescript.Report, error) {

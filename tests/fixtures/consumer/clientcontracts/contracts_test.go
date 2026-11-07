@@ -330,11 +330,14 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 }
 
 // surfaces select member pages, private realtime channels, and browser auth routes.
+// doc-example:begin portal-surfaces
 var surfaces = []typescript.Surface{
 	{Name: "browser", Routes: []foundryhttp.RouteID{"browser"}, Auth: &typescript.SurfaceAuth{Guard: "browser_accounts", Login: "browser.login", Refresh: "browser.refresh", Logout: "browser.logout", Profile: "browser.profile", Identifier: "login_id"}},
 	{Name: "members", Paths: []string{"/members"}},
 	{Name: "live", Routes: []foundryhttp.RouteID{"account.show"}, Channels: []websocket.ChannelID{"updates"}, Guards: []auth.GuardName{"client_accounts"}},
 }
+
+// doc-example:end portal-surfaces
 
 // bundles minifies application entry points with the development esbuild
 // beside the TypeScript compiler. Runtime features an application does not

@@ -1,17 +1,33 @@
 # Typed file downloads
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Serve a file: [Local downloads](#recipe-local-download)
+- Redeem a link: [Single-use downloads](#recipe-ticket-download)
+- Export tables: [Standard table routes](datatable.md#recipe-table-routes)
+
+<a id="recipe-local-download"></a>
+## Serve local files
+
 A download endpoint returns `http.Download`. Its handler does not receive a
 response writer. Foundry opens the representation after successful input and
 handler execution, validates its declared media, handles conditions/ranges and
 closes every transferred reader after the response finishes.
 
-The [minimal consumer example](../../tests/fixtures/consumer/httpdownloads/example.go)
-registers a PDF response with `DownloadResponse("application/pdf")` and returns:
+The minimal consumer registers a PDF response and returns a deferred local file:
 
+<!-- compiled-source: tests/fixtures/consumer/httpdownloads/example.go#local-download -->
 ```go
-return foundryhttp.LocalDownload(root, "reports/monthly.pdf").
-    WithName("report.pdf").
-    WithMediaType("application/pdf"), nil
+func ReportRoute(root *os.Root) (*foundryhttp.Router, error) {
+	endpoint := foundryhttp.DefineEndpoint(
+		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "reports.download", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/report")),
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.DownloadResponse("application/pdf"),
+	)
+	return foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.Download, error) {
+		return foundryhttp.LocalDownload(root, "reports/monthly.pdf").WithName("report.pdf").WithMediaType("application/pdf"), nil
+	}))
+}
 ```
 
 The application owns `*os.Root` and closes it during application shutdown. Foundry
@@ -105,6 +121,7 @@ regression with unseekable streams also passed. [Storage-backed downloads](stora
 unseekable streams are documented in [stream responses](http-streams.md). The documented example is compiled from the independent
 consumer module as part of acceptance.
 
+<a id="recipe-ticket-download"></a>
 ## Single-use ticket downloads
 
 Use [ticket-authenticated routes](authentication.md#ticket-authenticated-routes)
@@ -115,3 +132,7 @@ ticket. A consumed ticket cannot resume a transfer with Range or If-Range; obtai
 a fresh ticket for each retry or range request.
 
 See the [compiled example at its owner](authentication.md#ticket-authenticated-routes).
+For table links, [standard table routes](datatable.md#recipe-table-routes) own
+issuance, token binding, current authorization and deferred export loading. Open
+the issued URL directly; a ticket is a credential, never an ordinary query field
+or a reason to put a bearer token in a URL.
