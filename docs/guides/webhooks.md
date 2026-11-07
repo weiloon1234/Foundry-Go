@@ -20,6 +20,9 @@ the provider's actual protocol rather than guessing from its key prefix.
 
 <!-- compiled-source: tests/fixtures/consumer/security/contracts.go#webhook-verifier -->
 ```go
+func BillingWebhook(account BillingAccountID, key secret.String, source clock.Clock) (*webhook.Verifier[BillingAccountID], error) {
+	return webhook.New(webhook.DefaultConfig("billing", webhook.Standard), account, []secret.String{key}, source)
+}
 ```
 
 Account IDs retain their concrete Go type. The configured account/provider are
@@ -97,6 +100,23 @@ is not current resource authorization; apply ordinary account/resource policy.
 
 <!-- compiled-source: tests/fixtures/consumer/idempotenthttp/publication_test.go#verified-webhook-route -->
 ```go
+endpoint := http.Idempotent(http.ConfigureEndpoint(http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "provider.webhook", Method: http.POST, Access: http.Public}, http.StaticPath("/webhook")), http.EmptyQuery(), http.JSONBody(SubmissionJSON()), http.EmptyResponse(204)), http.Use(http.VerifyWebhook(verifier))), store, idempotency.Definition{ID: "provider.delivery", Version: 1})
+type input = http.Input[http.NoPath, http.NoQuery, Submission]
+router, err := http.NewRouter(endpoint.Handle(func(ctx context.Context, _ input) (idempotency.Scope, error) {
+	delivery, ok := verifier.FromContext(ctx)
+	if !ok {
+		return idempotency.Scope{}, fmt.Errorf("verified delivery missing")
+	}
+	var account providerAccount = delivery.Account()
+	return idempotency.NewScope(string(delivery.Provider()), strconv.FormatInt(int64(account), 10))
+}, func(ctx context.Context, tx *database.Tx, in input) (http.NoContent, error) {
+	calls.Add(1)
+	_, err := orm.Insert(ctx, tx, Orders.Table, orm.NumberSet(Orders.WorkspaceID, 1), orm.NumberSet(Orders.Caller, 99), orm.TextSet(Orders.Name, in.Body.Name))
+	return http.NoContent{}, err
+}))
+if err != nil {
+	t.Fatal(err)
+}
 ```
 
 The region uses the enclosing test's typed verifier and configured idempotency

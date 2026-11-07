@@ -44,6 +44,11 @@ the database requires the same protection as application messages.
 
 <!-- compiled-source: tests/fixtures/consumer/notifying/orders.go#notification-recipient -->
 ```go
+func Users(provider auth.Provider[models.User, model.ID[models.User]], guard auth.Guard[models.User]) UserRecipient {
+	return notifications.DefineRecipient("users", provider, guard, func(context.Context, models.User, notifications.Name, notifications.ChannelID) (bool, error) {
+		return true, nil
+	})
+}
 ```
 
 Capture a typed reference and input once when caller retries must preserve an ID:
@@ -77,6 +82,14 @@ returned. A delivered channel is never run again by notification retries.
 
 <!-- compiled-source: tests/fixtures/consumer/notifying/orders.go#notification-channels -->
 ```go
+func NewOrders(recipient UserRecipient, mailer *email.Mailer, from email.Address, realtime PrivateNotifications, publisher websocket.PublisherSource) OrdersBinding {
+	mail := notifications.Email("email", mailer, func(_ context.Context, user models.User, _ notifications.DeliveryContext, input OrderPlaced) (email.Message, error) {
+		to, err := email.ParseAddress(user.Email)
+		return email.NewMessage(from, "Order placed", to).Text(input.Summary), err
+	})
+	real := notifications.RealtimeChannel("realtime", realtime, publisher, card)
+	return notifications.Bind(Placed, recipient, Database.Channel(), mail, real)
+}
 ```
 
 For localized email output, use the [captured-locale message recipe](email.md#recipe-localized-mail-job)
@@ -197,6 +210,9 @@ then enqueue it inside the business transaction:
 
 <!-- compiled-source: tests/fixtures/consumer/notifying/orders.go#enqueue-notification -->
 ```go
+func Enqueue(ctx context.Context, tx *database.Tx, manager *notifications.Manager, producer *jobs.Outbox, pending notifications.PendingNotification[models.User, OrderPlaced]) (outbox.ID[notifications.DeliveryRequest], error) {
+	return pending.Enqueue(ctx, tx, manager, Delivery, producer)
+}
 ```
 
 Notification rows and the ordinary outbox message share a savepoint in that exact

@@ -24,6 +24,23 @@ Construct one named client per upstream and inject it into domain services:
 
 <!-- compiled-source: tests/fixtures/consumer/background/account_client.go#named-client-deadline -->
 ```go
+const AccountsClient httpclient.Name = "accounts.api"
+
+type AccountService struct{ accounts *outgoing.Accounts }
+
+func NewAccountService(services application.Services) (*AccountService, error) {
+	client, err := services.HTTPClients.Client(AccountsClient)
+	if err != nil {
+		return nil, err
+	}
+	return &AccountService{accounts: outgoing.NewAccounts(client)}, nil
+}
+
+func (s *AccountService) Create(ctx context.Context, name string, token secret.String) (outgoing.AccountReceipt, error) {
+	bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return s.accounts.Create(bounded, name, token)
+}
 ```
 
 Configure `accounts.api` under `services.http_clients.clients`; the explicit name never
@@ -50,6 +67,20 @@ called again. A callback cannot wait for its own client shutdown.
 
 <!-- compiled-source: tests/fixtures/consumer/outgoing/client.go#typed-http-request -->
 ```go
+func (s *Accounts) Create(ctx context.Context, name string, token secret.String) (AccountReceipt, error) {
+	request, err := httpclient.JSON(ctx, s.client.Post("accounts").Bearer(token), CreateAccountJSON(), CreateAccount{Name: name})
+	if err != nil {
+		return AccountReceipt{}, err
+	}
+	response, err := s.client.Do(ctx, request)
+	if err != nil {
+		return AccountReceipt{}, err
+	}
+	if err := response.EnsureSuccess(); err != nil {
+		return AccountReceipt{}, err
+	}
+	return httpclient.DecodeJSON(ctx, response, AccountReceiptJSON())
+}
 ```
 
 Generated `contract.JSON[T]` descriptors own both request encoding and response

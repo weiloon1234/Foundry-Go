@@ -16,6 +16,11 @@ Declare `ID model.ID[User]` on a `User` model. `model.NewIDAt[User](clock.Now())
 
 <!-- compiled-source: tests/fixtures/consumer/values_test.go#allocate-model-id -->
 ```go
+id, err := model.NewIDAt[User](time.Now())
+if err != nil {
+	t.Fatal(err)
+}
+user := User{ID: id}
 ```
 
 New identities use UUIDv7: millisecond timestamp plus cryptographic random bits. Ordering within a millisecond, after clock rollback, and between hosts is not promised. The representation follows [RFC 9562 section 5.7](https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7); randomness comes from [Go crypto/rand](https://pkg.go.dev/crypto/rand#Read).

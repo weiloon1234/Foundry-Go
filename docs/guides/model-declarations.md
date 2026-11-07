@@ -121,6 +121,9 @@ For an explicit declaration check before assembly, use the same list:
 
 <!-- compiled-source: tests/fixtures/consumer/productionprofile/queries.go#check-table-registry -->
 ```go
+if err := orm.Check(Tables()...); err != nil {
+	return err
+}
 ```
 
 `application.WithTables` checks its supplied declarations during construction.

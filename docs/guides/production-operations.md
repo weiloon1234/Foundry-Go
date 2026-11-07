@@ -169,6 +169,12 @@ assembly, so declare their delivery retention yourself:
 
 <!-- compiled-source: tests/fixtures/consumer/background/pruning.go#prune-retained-service -->
 ```go
+func RetainedWebhookPruning(service *outbound.Service) application.Pruning {
+	return application.PruneWith("webhooks.deliveries", outbound.MaxPruneBatch, func(ctx context.Context, limit int) (int64, error) {
+		removed, err := service.PruneDeliveries(ctx, 30*24*time.Hour, limit)
+		return int64(removed), err
+	})
+}
 ```
 
 Use `PruneWith` when you already have the store, including a database connection
@@ -183,6 +189,22 @@ registers. For example, if `WebhooksKey` has type
 
 <!-- compiled-source: tests/fixtures/consumer/background/pruning.go#prune-owned-service -->
 ```go
+var WebhooksKey = foundation.NewKey[*outbound.Service]("background.webhooks")
+
+func WebhookPruning(application.Services) (application.FeatureDeclarations, error) {
+	return application.FeatureDeclarations{Pruning: []application.Pruning{
+		application.PruneService("webhooks.deliveries", outbound.MaxPruneBatch, WebhooksKey,
+			func(ctx context.Context, service *outbound.Service, limit int) (int64, error) {
+				removed, err := service.PruneDeliveries(ctx, 30*24*time.Hour, limit)
+				return int64(removed), err
+			}),
+	}}, nil
+}
+
+func ConfigureWebhookPruning(builder *application.Builder, requires []foundation.ProviderID, construct func(foundation.Resolver) (*outbound.Service, error)) *application.Builder {
+	module := outbound.Module("background.webhooks", WebhooksKey, requires, construct)
+	return builder.Register(module).Features(WebhookPruning)
+}
 ```
 
 For an enabled task, `PruneService` resolves the service during schedule

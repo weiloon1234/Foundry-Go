@@ -62,13 +62,23 @@ together with any error to the application decision boundary:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#publish-file-sources -->
 ```go
-if logo, ok := in.Body.Logo.Get(); ok {
-	if _, err := s.x.Logo.ReplaceFile(ctx, article, logo); err != nil {
-		return ArticleView{}, err
-	}
+type MediaPublication struct {
+	Logo    value.Optional[attachments.Result[Article, model.ID[Article]]]
+	Gallery []attachments.Result[Article, model.ID[Article]]
 }
-if _, err := attachments.AddFilesTo(ctx, s.x.Galleries, article, in.Body.Galleries); err != nil {
-	return ArticleView{}, err
+
+func (s *Service) PublishMedia(ctx context.Context, article Article, input ArticleMedia) (MediaPublication, error) {
+	var publication MediaPublication
+	if logo, supplied := input.Logo.Get(); supplied {
+		result, err := s.x.Logo.ReplaceFile(ctx, article, logo)
+		publication.Logo = value.Set(result)
+		if err != nil {
+			return publication, err
+		}
+	}
+	results, err := attachments.AddFilesTo(ctx, s.x.Galleries, article, input.Galleries)
+	publication.Gallery = results
+	return publication, err
 }
 ```
 

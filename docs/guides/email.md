@@ -63,6 +63,11 @@ transport only; messages, templates and attachment APIs stay the same.
 
 <!-- compiled-source: tests/fixtures/consumer/mailing/configured_test.go#configured-mailer -->
 ```go
+services := app.Resources()
+mailer, err := services.Mailers.Mailer(transactional)
+if err != nil {
+	t.Fatal(err)
+}
 ```
 
 Resolve the mailer once in a domain constructor and retain that concrete handle.
@@ -76,14 +81,38 @@ See the [consumer mailing package](../../tests/fixtures/consumer/mailing/welcome
 
 <!-- compiled-source: tests/fixtures/consumer/mailing/welcome.go#mail-template -->
 ```go
+func NewSender(mailer *email.Mailer, from email.Address) (*Sender, error) {
+	if from.Validate() != nil {
+		return nil, email.Construction
+	}
+	template, err := email.NewTemplate[Welcome](email.TemplateSource{Subject: "Welcome {{.Name}}", Text: "Hello {{.Name}}", HTML: "<p>Hello {{.Name}}</p>", MaxBytes: 16 << 10})
+	if err != nil {
+		return nil, err
+	}
+	return &Sender{mailer: mailer, from: from, template: template}, nil
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/mailing/welcome.go#send-templated-mail -->
 ```go
+func (s *Sender) Build(ctx context.Context, input Welcome) (email.Message, error) {
+	body, err := s.template.Render(ctx, input)
+	if err != nil {
+		return email.Message{}, err
+	}
+	return body.Message(s.from, input.Recipient).Attach(input.Documents...), nil
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/mailing/welcome.go#send-mail -->
 ```go
+func (s *Sender) Send(ctx context.Context, input Welcome) (email.Result, error) {
+	message, err := s.Build(ctx, input)
+	if err != nil {
+		return email.Result{}, err
+	}
+	return s.mailer.Send(ctx, message, email.SendOptions{})
+}
 ```
 
 `TemplateSource.Layout` (`email.Layout{Text, HTML}`) wraps the message bodies with a shared trusted layout: the layout renders the body where it calls `{{template "content" .}}`, receives the same typed data, and applies only to parts the message defines; the subject is never wrapped. `email.NewLocalizedTemplate[T](localeSet, map[i18n.LocaleID]TemplateSource)` holds one template per locale (the set's default is required) and `Render(ctx, locale, data)` selects along the set's fallback chain (`pt-BR`, then `pt`, then the default). The returned `Body.Locale` records the locale used, and `Body.Message` carries it to `Message.Locale`. MIME transports send a message's locale as `Content-Language`; it is kept in rendered snapshots.
@@ -106,14 +135,49 @@ blobs. These helpers feed the same attachment preparation used by every adapter:
 
 <!-- compiled-source: tests/fixtures/consumer/mailing/uploads_test.go#attach-request-upload -->
 ```go
+func (s *uploadMailService) Save(ctx context.Context, input httpuploads.ProfileInput) (httpuploads.UploadReply, error) {
+	s.file = input.Attachment
+	var err error
+	s.message, err = s.message.AttachUpload(ctx, input.Attachment)
+	return httpuploads.UploadReply{Name: input.Attachment.Name(), Bytes: input.Attachment.Size(), DetectedType: input.Attachment.ContentType()}, err
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/articles/email_postgres_test.go#attach-stored-files -->
 ```go
+message, err := email.NewMessage(from, "Article images", to).Text("Attached").AttachStored(row.Logo)
+if err != nil {
+	t.Fatal(err)
+}
+for _, file := range row.Galleries.All() {
+	message, err = message.AttachStored(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/articles/email_references.go#durable-email-references -->
 ```go
+func EmailReferences(article Article) ([]email.Attachment, error) {
+	logo, err := article.Logo.EmailAttachment()
+	if err != nil {
+		return nil, err
+	}
+	gallery, loaded := article.Galleries.Get()
+	if !loaded {
+		return nil, errors.New("article gallery was not loaded")
+	}
+	files := []email.Attachment{logo}
+	for _, file := range gallery {
+		reference, err := file.EmailAttachment()
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, reference)
+	}
+	return files, nil
+}
 ```
 
 `AttachUpload` opens, reads up to `MaxDataAttachmentBytes` (10 MiB), and closes
@@ -211,6 +275,38 @@ delivery:
 
 <!-- compiled-source: tests/fixtures/consumer/background/localized_mail.go#localized-mail-job -->
 ```go
+type LocalizedWelcome struct {
+	Recipient email.Address      `json:"recipient"`
+	Name      string             `json:"name"`
+	Locale    i18n.LocaleID      `json:"locale"`
+	Documents []email.Attachment `json:"documents,omitempty"`
+}
+
+var LocalizedWelcomeJob = jobs.Define[LocalizedWelcome]("mail.localized-welcome", 1, jobs.DefaultPolicy("communications"))
+
+func LocalizedWelcomeDeclaration(mailerName email.MailerName) application.JobDeclaration {
+	return application.Job(LocalizedWelcomeJob, func(services application.Services) (jobs.Handler[LocalizedWelcome], error) {
+		mailer, err := services.Mailers.Mailer(mailerName)
+		if err != nil {
+			return nil, err
+		}
+		catalog, err := services.Locales()
+		if err != nil {
+			return nil, err
+		}
+		return email.JobHandler(mailer, func(ctx context.Context, input LocalizedWelcome) (email.Message, error) {
+			ctx, err := i18n.WithLocale(ctx, catalog, input.Locale)
+			if err != nil {
+				return email.Message{}, err
+			}
+			welcome, err := localization.WelcomeArgsMessage().Format(ctx, catalog, input.Locale, localization.WelcomeArgs{Name: input.Name})
+			if err != nil {
+				return email.Message{}, err
+			}
+			return mailer.Message(welcome.Text, input.Recipient).Text(welcome.Text).Locale(welcome.Locale).Attach(input.Documents...), nil
+		}), nil
+	})
+}
 ```
 
 Register `LocalizedWelcomeDeclaration` through `Builder.Jobs`. Register the

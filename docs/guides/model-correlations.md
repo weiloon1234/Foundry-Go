@@ -44,6 +44,15 @@ Multiple rows cause a database cardinality error; no implicit limit is added.
 
 <!-- compiled-source: tests/fixtures/consumer/correlations/correlations_postgres_test.go#embed-correlated-scalar -->
 ```go
+r := reports.UserOrderStatsRows
+report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), r.Row,
+	rowset.Map(r.ID, expr.Value(orm.KeyExpr(u.ID))), rowset.Map(r.Email, expr.Value(orm.TextExpr(u.Email))),
+	rowset.MapSelected(r.Orders, expr.AsSelected(rowset.CorrelatedScalarRowQuery(counts))),
+	rowset.MapSelected(r.Total, expr.AsSelected(rowset.CorrelatedScalarNullableRowQuery(totals)))), expr.Asc(expr.Value(orm.TextExpr(u.Email))))
+rows, err := rowset.Read(report).All(t.Context(), tx)
+if err != nil {
+	return err
+}
 ```
 
 `InCorrelatedQuery` and `InNullableCorrelatedQuery` retain exact value types and
