@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: when the migration lock deadline expires during the advisory lock query, `migrate.Postgres`
+  reports the lock timeout instead of the driver's closed-connection error.
+
 ## v0.10.0 — 2026-11-07
 
 - Added: opt-in persisted operations telemetry. The `telemetry` package collects bounded

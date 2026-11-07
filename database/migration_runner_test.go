@@ -40,6 +40,9 @@ type migrationServer struct {
 	contended             chan struct{}
 	startOnce             sync.Once
 	contentionOnce        sync.Once
+	// lockQueryOutlivesDeadline names a session whose advisory lock query is
+	// interrupted by its deadline and fails as a closed connection.
+	lockQueryOutlivesDeadline int
 	// limits records per-session migration limit statements and their values.
 	limits [][]any
 }
@@ -138,6 +141,10 @@ func (s *migrationServer) state(owner int) *driverState {
 		return driver.RowsAffected(1), nil
 	}
 	state.query = func(ctx context.Context, statement string, args []driver.NamedValue) (driver.Rows, error) {
+		if owner == s.lockQueryOutlivesDeadline && strings.Contains(statement, "pg_try_advisory_lock") {
+			<-ctx.Done()
+			return nil, errors.New("closed")
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if err := ctx.Err(); err != nil {
@@ -420,6 +427,16 @@ func TestMigrationConcurrentRunnersSerializeAndReloadHistory(t *testing.T) {
 	a, b := <-one, <-two
 	if a.err != nil || b.err != nil || len(a.result.Applied) != 2 || len(b.result.Applied) != 0 || len(server.history) != 2 || len(server.committedSQL) != 2 || len(server.locks) != 0 {
 		t.Fatalf("concurrent runs: %+v %+v", a, b)
+	}
+}
+
+func TestMigrationLockDeadlineDuringLockQueryIsTimeout(t *testing.T) {
+	server := newMigrationServer()
+	server.lockQueryOutlivesDeadline = 1
+	runner, _ := migrationRunner(t, server, 1, migrationDefinitions(), func(c *migrate.PostgresConfig) { c.LockTimeout = 5 * time.Millisecond })
+	result, err := runner.Up(t.Context())
+	if !errors.Is(err, context.DeadlineExceeded) || len(result.Applied) != 0 || len(server.ddl) != 0 {
+		t.Fatalf("lock query deadline: %+v %v ddl=%v", result, err, server.ddl)
 	}
 }
 

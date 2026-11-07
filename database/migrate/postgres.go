@@ -275,6 +275,11 @@ func (p *Postgres) acquireLock(ctx context.Context, session *database.Session) e
 	for {
 		var acquired bool
 		if err := database.ScanOne(wait, session, "SELECT pg_catalog.pg_try_advisory_lock($1)", []any{p.lockKey}, &acquired); err != nil {
+			// The driver may report a query interrupted by the lock deadline as a
+			// closed connection; the deadline is still the cause.
+			if ctx.Err() == nil && wait.Err() == context.DeadlineExceeded {
+				return safeerror.WrapFault(fault.Timeout, "migration lock acquisition timed out", wait.Err())
+			}
 			return err
 		}
 		if acquired {
