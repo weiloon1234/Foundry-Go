@@ -5,11 +5,15 @@ import (
 	"github.com/weiloon1234/Foundry-Go/lease"
 )
 
+// doc-example:begin coordinated-cache
 // DistributedStore borrows the application's lease manager and its Redis authority.
 // RememberProfile, model IDs, getter selection and tag declarations stay unchanged.
 func DistributedStore(manager *lease.Manager) (*cache.Store, error) {
 	return cache.NewCoordinatedStore(manager, cache.DefaultConfig(manager.Namespace()), cache.DefaultCoordinationConfig())
 }
+
+// doc-example:end coordinated-cache
+
 func BindDistributed(manager *lease.Manager) (Profiles, error) {
 	store, err := DistributedStore(manager)
 	if err != nil {

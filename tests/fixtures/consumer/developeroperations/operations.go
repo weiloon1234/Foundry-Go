@@ -2,11 +2,13 @@ package developeroperations
 
 import (
 	"context"
+
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/logging"
 )
 
+// doc-example:begin inspect-log-files
 func Inspect(ctx context.Context, services application.Services, channel logging.ChannelName) ([]logging.FileInfo, error) {
 	owner, err := services.LogFiles.FileSink(channel)
 	if err != nil {
@@ -14,4 +16,7 @@ func Inspect(ctx context.Context, services application.Services, channel logging
 	}
 	return owner.Files(ctx)
 }
+
+// doc-example:end inspect-log-files
+
 func Observer() (http.RequestObserver, error) { return http.NewRequestMetrics(512) }

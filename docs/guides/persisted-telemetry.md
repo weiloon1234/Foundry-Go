@@ -10,6 +10,15 @@ browser transport controls, source-map publication, and log-file operations.
 The framework tables contain no application actor column. Existing Prometheus,
 OTLP, diagnostics, and log reporting work as before when telemetry is disabled.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Configure telemetry collection](#recipe-configure-telemetry)
+- [Borrow telemetry and read snapshots](#recipe-read-telemetry)
+- [Read and prune private source maps](#recipe-private-source-maps)
+- [Maintain process-owned logs](logging.md#recipe-log-file-controls)
+
+<a id="recipe-configure-telemetry"></a>
 ## Configured application ownership
 
 `application.New` accepts `Settings.Features.Telemetry`. Enabling telemetry also
@@ -22,18 +31,9 @@ This example accepts settings whose database and HTTP configuration already
 belong to the application. The numbers are explicit application choices, not
 framework defaults. Alerts and browser admission remain disabled here.
 
+<!-- compiled-source: tests/fixtures/consumer/developeroperations/telemetry_settings.go#configure-telemetry -->
 ```go
-package bootstrap
-
-import (
-	"context"
-	"time"
-
-	"github.com/weiloon1234/Foundry-Go/application"
-	"github.com/weiloon1234/Foundry-Go/telemetry"
-)
-
-func Build(ctx context.Context, settings application.Settings) (*application.App, error) {
+func BuildTelemetry(ctx context.Context, settings application.Settings) (*application.App, error) {
 	settings.Features.Observability.Enabled = true
 	settings.Features.Telemetry = application.TelemetrySettings{
 		Enabled: true, Schema: "operations",
@@ -44,8 +44,8 @@ func Build(ctx context.Context, settings application.Settings) (*application.App
 		},
 		Config: telemetry.Config{
 			FlushInterval: 10 * time.Second,
-			FlushTimeout: 5 * time.Second,
-			DrainTimeout: 3 * time.Second,
+			FlushTimeout:  5 * time.Second,
+			DrainTimeout:  3 * time.Second,
 			Retention: telemetry.RetentionPolicy{
 				Minute: 24 * time.Hour, Hour: 7 * 24 * time.Hour,
 				Issue: 7 * 24 * time.Hour, Security: 24 * time.Hour,
@@ -192,6 +192,7 @@ context error. This accounting does not resolve an unknown transaction outcome.
 Canceled flushes preserve pending work and receipt reconciliation for retry or
 final drain.
 
+<a id="recipe-read-telemetry"></a>
 ## Retention and reads
 
 Pruning runs serially in the engine loop and uses PostgreSQL time. Each pass
@@ -228,12 +229,33 @@ within retention. Histograms are summed before quantiles are estimated.
 `QuantileEstimate` preserves unavailable and overflow states. `Truncated`
 signals overview or traffic limits; it must not be presented as a complete total.
 
-A console factory can obtain a reader from `services.Telemetry()`, then call:
+A console factory resolves the engine once and borrows it for bounded reads,
+run attribution and explicit maintenance. The application owns authorization
+for every invocation; this adapter does not create a route or close the engine:
 
+<!-- compiled-source: tests/fixtures/consumer/developeroperations/telemetry.go#borrow-telemetry -->
 ```go
-traffic, err := engine.Reader().Traffic(ctx, telemetry.TrafficQuery{
-	Window: telemetry.Window{Minutes: 15},
-})
+type TelemetryConsole struct {
+	engine *telemetry.Engine
+}
+
+func NewTelemetryConsole(services application.Services) (*TelemetryConsole, error) {
+	engine, err := services.Telemetry()
+	if err != nil {
+		return nil, err
+	}
+	return &TelemetryConsole{engine: engine}, nil
+}
+
+func (c *TelemetryConsole) RunID() model.ID[telemetry.Run] { return c.engine.RunID() }
+
+func (c *TelemetryConsole) Traffic(ctx context.Context) (telemetry.Traffic, error) {
+	return c.engine.Reader().Traffic(ctx, telemetry.TrafficQuery{Window: telemetry.Window{Minutes: 15}})
+}
+
+func (c *TelemetryConsole) Prune(ctx context.Context) (telemetry.PruneResult, error) {
+	return c.engine.Prune(ctx)
+}
 ```
 
 Applications authorize these reads and map snapshots to their public DTOs.
@@ -331,12 +353,40 @@ nil and count as shutdown loss without reopening intake or accessing storage.
 Direct assembly can still call `Collector.RecordBrowser` on its retained
 collector; both entry points have the same admission semantics.
 
+<a id="recipe-private-source-maps"></a>
 ## Private source maps
 
 `telemetry/sourcemap` is an independent optional package. `sourcemap.New` validates
 `sourcemap.Config` without filesystem I/O. It adds no uploader, route, worker, or
 automatic symbolication. `Store.Read` returns owned opaque map bytes; the
 application authorizes access and keeps `Directory` outside its public tree.
+
+<!-- compiled-source: tests/fixtures/consumer/developeroperations/source_maps.go#private-source-maps -->
+```go
+func SourceMaps(privateDirectory string, activeRelease telemetry.Release, source clock.Clock) (*sourcemap.Store, error) {
+	return sourcemap.New(sourcemap.Config{
+		Directory: privateDirectory, Release: activeRelease,
+		Portals: []telemetry.Portal{"admin"}, Clock: source,
+		MaxBytes: 10 << 20, Retention: 30 * 24 * time.Hour, StorageBytes: 1 << 30,
+	})
+}
+
+func ReadSourceMap(ctx context.Context, store *sourcemap.Store, release telemetry.Release, path string) (sourcemap.Map, error) {
+	asset, err := sourcemap.ParseAsset(path)
+	if err != nil {
+		return sourcemap.Map{}, err
+	}
+	return store.Read(ctx, release, asset)
+}
+
+func PruneSourceMaps(ctx context.Context, store *sourcemap.Store) (sourcemap.PruneResult, error) {
+	return store.Prune(ctx)
+}
+```
+
+These helpers preserve typed results, including partial pruning progress on error.
+Authorize each read and prune before calling them. Keep the directory private and
+coordinate publication with pruning through the application's existing owner.
 
 The build publisher writes this immutable layout:
 

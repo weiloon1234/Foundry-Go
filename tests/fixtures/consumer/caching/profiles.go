@@ -10,6 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// doc-example:begin typed-cache
 // Profile is an internal cache snapshot, not an automatically exported HTTP DTO.
 type Profile struct {
 	Email  mutatorqueries.DisplayEmail
@@ -22,6 +23,9 @@ var ProfileEntries = cache.Define("member-profiles-v1", cache.TextKeys[model.ID[
 
 func Bind(store *cache.Store) (Profiles, error) { return ProfileEntries.Bind(store) }
 
+// doc-example:end typed-cache
+
+// doc-example:begin cache-snapshot
 // SaveProfile explicitly selects the model's read accessor. The stored model and
 // its ID remain untouched; consumers choose the representation to cache.
 func SaveProfile(ctx context.Context, profiles Profiles, member mutatorqueries.Member) error {
@@ -38,6 +42,8 @@ func profileSnapshot(member mutatorqueries.Member) (Profile, error) {
 	}
 	return Profile{Email: email, Labels: []string{"active"}}, nil
 }
+
+// doc-example:end cache-snapshot
 
 // RememberProfile keeps application code focused on loading a concrete model and
 // selecting its presentation fields. Foundry owns caching and local coalescing.
@@ -64,6 +70,9 @@ func FlexibleProfile(ctx context.Context, profiles Profiles, id model.ID[mutator
 	})
 }
 
+// doc-example:begin read-cache
 func ReadProfile(ctx context.Context, profiles Profiles, id model.ID[mutatorqueries.Member]) (Profile, bool, error) {
 	return profiles.Get(ctx, id)
 }
+
+// doc-example:end read-cache

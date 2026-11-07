@@ -57,21 +57,27 @@ focused typed helper recipes for applications with those resources.
 | `foundry-operations:39–45` | [Rolling termination](../guides/production-operations.md#recipe-rolling-termination), [recovery evidence](../guides/production-operations.md#recipe-recover-operations) | `tooling/readiness.go#pause-admission` is included once by [maintenance admission](../guides/readiness-and-maintenance.md#recipe-maintenance-admission); deployment keeps detailed host/backup/reconciliation ownership |
 | Deployment's existing application storage-probe adapter | [Probe release storage](../guides/deployment.md#recipe-storage-probe) | `tooling/readiness.go#storage-probe`; replaced app-specific `Console`, catalog and loader examples with the public helper boundary |
 
-The following recipes already have other guide owners. Production operations
-links to them instead of duplicating their API teaching. Their current proof is
-outside this lane; this handoff makes no new compiler or runtime claim for them.
+M3-003 extends this lane to the following existing package guides. Each selected
+recipe now has an explicit owner and rendered consumer source. Production
+operations links to these owners; it does not repeat their fenced examples.
+Compiler and runtime execution remain pending the lead checkpoint.
 
-| Starter skill lines | Linked owner | Scope |
+| Starter skill lines | Recipe owner | Consumer source region |
 | --- | --- | --- |
-| `foundry-operations:16–19` | [Logging](../guides/logging.md), [observability](../guides/observability.md) | Injected logger, correlation, safe fields and bounded labels |
-| `foundry-operations:23–25` | [Production diagnostics](../guides/production-diagnostics.md) | Authorized rotating-file maintenance, opaque IDs, audit and ambiguous outcomes |
-| `foundry-operations:27–30` | [Caching](../guides/caching.md), [distributed cache](../guides/distributed-cache.md), [leases](../guides/leases.md) | Typed views, invalidation, named stores and retained work ownership |
-| `foundry-operations:31–33` | [Encryption](../guides/encryption.md), [audit](../guides/audit.md) | Purpose-bound stored secrets and typed field audit |
-| `foundry-operations:66–71` | [Persisted telemetry](../guides/persisted-telemetry.md) | Configured telemetry, borrowed `Services.Telemetry()` and source-map owner; app console/actor policy and historical tables remain local |
+| `foundry-operations:16–19` | [Logging](../guides/logging.md), [observability](../guides/observability.md) | Existing injected logger/correlation owners; unchanged by this fix |
+| `foundry-operations:23–25` | [Log-file controls](../guides/logging.md#recipe-log-file-controls) | `developeroperations/operations.go#inspect-log-files`; `developeroperations/log_files.go#log-file-controls` |
+| `foundry-operations:27–30` | [Typed cache snapshots and named stores](../guides/caching.md#recipe-typed-cache) | `caching/profiles.go#typed-cache`, `#cache-snapshot`, `#read-cache`; `developeroperations/cache.go#named-cache` |
+| `foundry-operations:27–30` | [Tag invalidation](../guides/caching.md#recipe-invalidate-tags), [namespace invalidation](../guides/caching.md#recipe-invalidate-cache) | `caching/tags.go#invalidate-tag`; `caching/invalidate.go#invalidate-namespace` |
+| `foundry-operations:27–30` | [Coordinated fills](../guides/distributed-cache.md#recipe-coordinate-cache), [typed lease work](../guides/leases.md#recipe-lease-work) | `caching/distributed.go#coordinated-cache`; `coordination/members.go#lease-work` |
+| `foundry-operations:31–33` | [Purpose-bound record encryption](../guides/encryption.md#recipe-encrypt-record), [configured keyring](../guides/encryption.md#recipe-configured-keyring) | `developeroperations/encryption.go#load-record-keys`, `#encrypt-record`, `#configured-encryption`; typed field audit remains at [audit](../guides/audit.md) |
+| `foundry-operations:66–71` | [Telemetry configuration](../guides/persisted-telemetry.md#recipe-configure-telemetry), [borrowed engine and bounded reads](../guides/persisted-telemetry.md#recipe-read-telemetry) | `developeroperations/telemetry_settings.go#configure-telemetry`; `developeroperations/telemetry.go#borrow-telemetry` |
+| `foundry-operations:66–71` | [Private source maps](../guides/persisted-telemetry.md#recipe-private-source-maps) | `developeroperations/source_maps.go#private-source-maps` |
 
-No unresolved operations recipe remains within the lane-owned guides. Linked
-owners must retain their own proof and extraction coverage. App developer access
-policy, concrete disk choices, grants and deployment authorization remain local.
+The previous page-only delegation and completion claim are superseded by this
+mapping. No assigned operations owner remains unresolved in source. App developer
+access and confirmation policy, console routes/actors, historical tables, concrete
+disk choices, grants and deployment authorization remain local. Keep app teaching
+until the lead establishes the replacement proof.
 
 ## Portals
 
@@ -86,15 +92,16 @@ SSR ownership, strict-decoder reader implementation, Vite processes and builds
 remain application-owned. The guide retains runtime HTML `no-store`, immutable
 hashed-bundle policy, direct-navigation exclusions, CSP and callback ownership.
 App-by-app migration instructions were replaced with neutral integration guidance.
-There is no unresolved portals API extraction in this lane. No new TypeScript
-example was added, so no TypeScript input list changed.
+There is no unresolved portals API extraction in this lane. The original portals
+slice added no TypeScript input; the M3-006 follow-up below adds one client input.
 
 ## Files and proof boundaries
 
 All nine lane-owned guides now have navigation-only Agent entries and explicit
 recipe anchors. Rendered Go fences in their recipe sections come from consumer
 regions. Existing scaffold examples keep their single Go-way source owner.
-No markers were added outside the lane's owned fixture packages.
+The original slice added no markers outside the lane's owned fixture packages.
+M3-003's authorized marker-only exceptions are listed in the fix-round record below.
 
 Changed guides:
 
@@ -156,8 +163,8 @@ A focused HTTP recipe rerun, if needed after a checkpoint failure:
 ```
 
 Use the shared milestone gate once after lane integration. Existing fixture-check
-covers the compiled helper inputs and consumer modules, including the unchanged
-TypeScript proof. Deployment host/container acceptance remains its existing
+covers the compiled helper inputs and consumer modules, including the registered
+TypeScript inputs. Deployment host/container acceptance remains its existing
 owner's separate gate; no host behavior changed here. Do not retire application
 teaching until the lead establishes the replacement proof on the combined source.
 
@@ -208,3 +215,83 @@ Go files were formatted and the source diff was reviewed. No tests, renderer,
 generation, build or verification commands ran during this follow-up. The lead
 can run `go test ./internal/retirement` and `make docs-check` at its checkpoint.
 The earlier generation pass does not verify this retirement-rule change.
+
+
+## Fix round: M3-003 and M3-006
+
+Base: combined milestone head `1fabf821`. This follow-up changes only the two
+assigned findings and their evidence. It does not claim a passing checkpoint.
+
+Additional guide sections owned for this fix:
+
+- `caching.md`: typed snapshots/named binding, tag invalidation and namespace invalidation.
+- `distributed-cache.md`: coordinated fill construction.
+- `leases.md`: typed declaration, binding and callback lifetime.
+- `encryption.md`: purpose-bound record encryption/rotation and configured keyring borrowing.
+- `logging.md`: authorized process-owned log-file controls.
+- `persisted-telemetry.md`: configured collection, borrowed engine/reads/pruning and private source maps.
+- `client-contracts.md`: browser realtime connection, room lifetime and transport teardown.
+
+`production-operations.md` now links to these precise operations owners. The log
+maintenance destination is `logging#recipe-log-file-controls`, not diagnostics.
+
+| Skill lines | Final recipe owner | Strict TypeScript regions |
+| --- | --- | --- |
+| `web-data:66–67`; `foundry-realtime:20–21,29–31` | [Browser realtime lifecycle](../guides/client-contracts.md#recipe-realtime-lifecycle) | `clientcontracts/testdata/realtime-lifecycle.ts#realtime-connection`, `#realtime-room`, `#browser-realtime-transport` |
+
+The new input is listed in `clientcontracts/typescript-inputs.json`; its imports
+resolve against the clients exported by the existing strict TypeScript fixture.
+Room and event types are derived from that generated SDK. Ticket acquisition is
+an application callback that invokes its actual guarded operation; the framework
+example calls the generated `realtimeProtocols(ticket)` for each new connection.
+There is no invented ticket endpoint or handwritten SDK payload shape.
+
+The connection helper closes its owned transport if SDK creation fails and closes
+the client when application work exits. Room cleanup detaches listeners and disposes
+the handle even when unsubscribe fails. The browser adapter bounds opening, removes
+opening listeners on all completion paths, and returns its protocol listener detach
+function. A borrowed shared connection uses the room helper only. Existing runtime
+client tests remain unchanged; this source addition claims no new runtime execution.
+
+`guide-recipes-client-web-20261107.md` now maps web-data to the same owner.
+Application skills were not edited; their adoption reference is
+`client-contracts#recipe-realtime-lifecycle`, pending lead proof.
+
+New fixture files under the original owned `developeroperations` package:
+`cache.go`, `encryption.go`, `log_files.go`, `telemetry.go`,
+`telemetry_settings.go`, and `source_maps.go`. The existing `operations.go` gained
+its log inventory region. The only new client source is
+`clientcontracts/testdata/realtime-lifecycle.ts` with its input-list registration.
+
+Marker-only exceptions outside the original fixture ownership:
+
+- `caching/profiles.go`
+- `caching/tags.go`
+- `caching/invalidate.go`
+- `caching/distributed.go`
+- `coordination/members.go`
+
+These existing packages already own the concrete cache and lease declarations and
+call sequences. Reusing their regions avoids duplicating those declarations in
+`developeroperations`; only the missing configured/operations adapters were added
+there. No fixture behavior changed in these five files.
+
+Formatted the changed Go files and rendered the eight affected guides in write
+mode using the native cache:
+
+```sh
+go run ./internal/cmd/renderdocs --guide caching.md --guide distributed-cache.md --guide leases.md --guide encryption.md --guide logging.md --guide persisted-telemetry.md --guide production-operations.md --guide client-contracts.md
+```
+
+No tests, builds or verification commands ran. There were no public declarations
+requiring new generated codecs or contract snapshots. Lead checkpoint commands:
+
+```sh
+make generate-check
+make docs-check
+make fixture-check
+```
+
+`fixture-check` owns both the Go consumer compilation and the registered strict
+TypeScript input. The assigned extraction changes are complete in source; compiler,
+render-freshness and runtime acceptance remain pending the lead.

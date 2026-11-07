@@ -4,6 +4,11 @@ Application logging uses structured JSON through Go's `slog`. The default is
 stderr at INFO level. Select a file destination to get automatic rotation and
 retention; selecting a file no longer requires a separate rotation service.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Inspect and maintain owned log files](#recipe-log-file-controls)
+
 ## File defaults
 
 | Policy | Default |
@@ -238,13 +243,46 @@ explicit propagation form: `tracing.Context` marshals as `traceparent` JSON and
 `tracing.WithContext` restores it. Only put correlation identifiers and safe
 scalar labels in these fields, never credentials or personal data.
 
+<a id="recipe-log-file-controls"></a>
 ## Authorized log file controls
 
 Resolve `Services.LogFiles` at composition, then borrow an existing owner with
 `FileSink(channel)`. Only rotating file leaves support this capability; stacks,
 streams, custom/borrowed loggers and nonrotating files are unavailable. The
 framework grants no HTTP authority: applications must authorize every read and
-maintenance action, confirm destructive intent and keep a separate audit trail.
+maintenance action, apply their confirmation policy before destructive actions,
+and persist separate audit intent and outcome records. Retain the process run ID
+with each operation so requests cannot target another owner after a restart.
+
+<!-- compiled-source: tests/fixtures/consumer/developeroperations/operations.go#inspect-log-files -->
+```go
+func Inspect(ctx context.Context, services application.Services, channel logging.ChannelName) ([]logging.FileInfo, error) {
+	owner, err := services.LogFiles.FileSink(channel)
+	if err != nil {
+		return nil, err
+	}
+	return owner.Files(ctx)
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/developeroperations/log_files.go#log-file-controls -->
+```go
+func TailLog(ctx context.Context, owner *logging.Sink, id logging.FileID) (logging.FileChunk, error) {
+	return owner.ReadFile(ctx, logging.FileRead{ID: id, Offset: -1, Limit: 65536})
+}
+
+func RotateLog(ctx context.Context, owner *logging.Sink, id logging.FileID) error {
+	return owner.RotateFile(ctx, id)
+}
+
+func ClearLog(ctx context.Context, owner *logging.Sink, id logging.FileID) error {
+	return owner.ClearFile(ctx, id)
+}
+
+func DeleteLogArchive(ctx context.Context, owner *logging.Sink, id logging.FileID) error {
+	return owner.DeleteArchive(ctx, id)
+}
+```
 
 `Files(ctx)` returns basenames and opaque generation IDs. `ReadFile(ctx,
 logging.FileRead{ID: id, Offset: -1, Limit: 65536})` tails at most the requested

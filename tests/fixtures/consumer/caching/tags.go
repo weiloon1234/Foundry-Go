@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// doc-example:begin invalidate-tag
 // MemberChanges links member-derived cache snapshots to a typed invalidation key.
 var MemberChanges = cache.DefineTag("member-changes-v1", cache.TextKeys[model.ID[mutatorqueries.Member]]())
 
@@ -20,3 +21,5 @@ func ForMember(profiles Profiles, tags MemberTags, id model.ID[mutatorqueries.Me
 func InvalidateMember(ctx context.Context, tags MemberTags, id model.ID[mutatorqueries.Member]) error {
 	return tags.Invalidate(ctx, id)
 }
+
+// doc-example:end invalidate-tag

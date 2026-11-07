@@ -13,7 +13,7 @@
 - Inspect fields: [Descriptors](client-descriptors.md#recipe-field-descriptors)
 - Consume: [Portal entries](#recipe-portal-entries)
 - Encode: [Precision, presence and locales](#recipe-wire-values)
-- Connect: [Fetch transport](#recipe-fetch-transport)
+- Connect: [Fetch transport](#recipe-fetch-transport), [Realtime lifetime](#recipe-realtime-lifecycle)
 - Sign in: [Auth declarations](#recipe-declare-portal-session), [Portal sessions](#recipe-portal-session)
 - Query tables: [Generated bindings](#recipe-table-bindings)
 - Handle errors: [Operation narrowing](http-application-errors.md#recipe-client-narrowing)
@@ -782,6 +782,7 @@ links come from the registered [HTTP pagination](http-pagination.md) endpoint.
 The client does not infer public page items from persistence fields or invent
 another page model.
 
+<a id="recipe-realtime-lifecycle"></a>
 ## Realtime lifecycle
 
 `createRealtime(transport, options)` accepts an already-open connection whose
@@ -796,15 +797,40 @@ WebSocket. Fetch a single-use ticket from the application's guarded ticket
 endpoint (a generated operation like any other) for every connect and
 reconnect, and offer it with the generated `realtimeProtocols(ticket)`:
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/realtime-lifecycle.ts#realtime-connection -->
 ```typescript
-const { ticket } = await api.realtimeTicket();
-const native = new WebSocket(realtimeURL, realtimeProtocols(ticket));
+export async function withRealtimeConnection(
+  url: string,
+  issueTicket: (signal: AbortSignal) => Promise<string>,
+  signal: AbortSignal,
+  use: (realtime: sdk.Realtime) => Promise<void>,
+  onError: (error: Error) => void,
+): Promise<void> {
+  signal.throwIfAborted();
+  const ticket = await issueTicket(signal);
+  const transport = await openBrowserSocket(url, ticket, signal);
+  let realtime: sdk.Realtime;
+  try {
+    realtime = sdk.createRealtime(transport, { onError });
+  } catch (error) {
+    transport.close();
+    throw error;
+  }
+  try {
+    await use(realtime);
+  } finally {
+    realtime.close();
+  }
+}
 ```
 
 `realtimeProtocols()` without a ticket returns only `realtimeSubprotocol`; an
 empty or non-token ticket throws `RealtimeError("ticket")`. The ticket travels in
 `Sec-WebSocket-Protocol`, never the URL, and the server negotiates only
-`realtimeSubprotocol`. The endpoint name above is the application's own.
+`realtimeSubprotocol`. `issueTicket` calls the application's guarded generated
+ticket operation with the supplied signal and returns its ticket string. Endpoint names and response
+DTOs remain application-owned. Each invocation obtains a fresh ticket; no ticket
+is retained for reconnect.
 
 Operations that read, set or clear a browser
 [refresh cookie](tokens.md#browser-refresh-cookies) carry `refresh_cookie` in
@@ -815,17 +841,122 @@ browser sends and stores that cookie; `"omit"` breaks the refresh flow.
 
 Generated room handles expose only declared event directions:
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/realtime-lifecycle.ts#realtime-room -->
 ```typescript
-const room = realtime.channels.updates("7");
-const off = room.on.updated((payload, info) => {
-  render(payload, info.replayed);
-});
-await room.subscribe({ replay: 4 });
-await room.publish.relay(payload, { onAccepted: showAccepted });
-// At the end of this room's lifetime:
-await room.unsubscribe();
-off();
-room.dispose();
+type Updates = ReturnType<sdk.Realtime["channels"]["updates"]>;
+type UpdateListener = Parameters<Updates["on"]["updated"]>[0];
+
+export async function withUpdatesRoom(
+  realtime: sdk.Realtime,
+  roomID: sdk.Int64,
+  render: UpdateListener,
+  use: (room: Updates) => Promise<void>,
+): Promise<void> {
+  const room = realtime.channels.updates(roomID);
+  const off = room.on.updated(render);
+  let subscribed = false;
+  try {
+    await room.subscribe({ replay: 4 });
+    subscribed = true;
+    await use(room);
+  } finally {
+    try {
+      if (subscribed) await room.unsubscribe();
+    } finally {
+      off();
+      room.dispose();
+    }
+  }
+}
+
+export async function publishUpdate(
+  room: Updates,
+  payload: Parameters<Updates["publish"]["relay"]>[0],
+  onAccepted: () => void,
+): Promise<void> {
+  await room.publish.relay(payload, { onAccepted });
+}
+```
+
+Pass a callback to `withRealtimeConnection` that calls `withUpdatesRoom` and
+awaits the application's room work. `publishUpdate` shows the typed client event;
+its accepted callback reports admission, while the returned promise waits for
+the final acknowledgement. End the room work normally to unsubscribe it. The
+nested cleanup still removes listeners and disposes the room if unsubscribe fails.
+The connection helper closes its owned connection when application work exits.
+A component borrowing a shared connection uses only the room helper. Do not
+abort a protocol operation to remove one room from a shared connection: an
+in-flight abort closes that connection. Unsubscribe the room normally.
+
+The browser transport used above forwards text and binary frames without JSON
+parsing. It bounds the opening handshake to ten seconds and removes temporary
+listeners on success, error, timeout or cancellation. The supplied signal covers
+ticket acquisition and opening; the application callback owns the connected lifetime.
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/realtime-lifecycle.ts#browser-realtime-transport -->
+```typescript
+async function openBrowserSocket(
+  url: string,
+  ticket: string,
+  signal: AbortSignal,
+): Promise<sdk.RealtimeTransport> {
+  signal.throwIfAborted();
+  const native = new WebSocket(url, sdk.realtimeProtocols(ticket));
+  native.binaryType = "arraybuffer";
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      native.removeEventListener("open", opened);
+      native.removeEventListener("error", failed);
+      native.removeEventListener("close", failed);
+      signal.removeEventListener("abort", aborted);
+    };
+    const opened = () => {
+      cleanup();
+      resolve();
+    };
+    const failed = () => {
+      cleanup();
+      native.close();
+      reject(new Error("Realtime connection did not open"));
+    };
+    const aborted = () => {
+      cleanup();
+      native.close();
+      reject(signal.reason);
+    };
+    const timer = setTimeout(failed, 10_000);
+    native.addEventListener("open", opened);
+    native.addEventListener("error", failed);
+    native.addEventListener("close", failed);
+    signal.addEventListener("abort", aborted, { once: true });
+    if (signal.aborted) aborted();
+  });
+  return {
+    protocol: native.protocol,
+    send: (text) => native.send(text),
+    close: () => native.close(),
+    listen(receive, closed) {
+      if (native.readyState !== WebSocket.OPEN) {
+        closed();
+        return () => {};
+      }
+      const message = (event: MessageEvent<unknown>) => {
+        if (typeof event.data === "string") receive(event.data);
+        else if (event.data instanceof ArrayBuffer) receive(new Uint8Array(event.data));
+        else closed();
+      };
+      native.addEventListener("message", message);
+      native.addEventListener("close", closed);
+      native.addEventListener("error", closed);
+      return () => {
+        native.removeEventListener("message", message);
+        native.removeEventListener("close", closed);
+        native.removeEventListener("error", closed);
+      };
+    },
+  };
+}
 ```
 
 The example names come from the independent consumer fixture; your registrations
@@ -1216,10 +1347,8 @@ onUnmounted(() => controller.abort());
 ```
 
 These are integration patterns, not framework-owned React/Vue dependencies.
-Ignore intentional aborts in `showError`. For realtime, a component must release
-its listeners and room handle; close a connection only when that component owns
-it. Do not use an operation-level abort to remove one room from a shared
-connection—unsubscribe normally instead.
+Ignore intentional aborts in `showError`. For realtime handle and connection
+cleanup, use the [realtime lifecycle recipe](#recipe-realtime-lifecycle).
 
 ## Versioning and acceptance
 

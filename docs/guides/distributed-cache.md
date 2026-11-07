@@ -1,16 +1,25 @@
 # Distributed cache Remember
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Configure shared fill ownership](#recipe-coordinate-cache)
+- [Bind typed cache views](caching.md#recipe-typed-cache)
+- [Invalidate cache namespaces](caching.md#recipe-invalidate-cache)
+
+<a id="recipe-coordinate-cache"></a>
+## Configure shared fill ownership
+
 Configure coordination in application assembly; domain code keeps its typed
 `Remember` call. The [independent consumer](../../tests/fixtures/consumer/caching/distributed.go)
 borrows the application's lease manager:
 
+<!-- compiled-source: tests/fixtures/consumer/caching/distributed.go#coordinated-cache -->
 ```go
+// DistributedStore borrows the application's lease manager and its Redis authority.
+// RememberProfile, model IDs, getter selection and tag declarations stay unchanged.
 func DistributedStore(manager *lease.Manager) (*cache.Store, error) {
-    return cache.NewCoordinatedStore(
-        manager,
-        cache.DefaultConfig(manager.Namespace()),
-        cache.DefaultCoordinationConfig(),
-    )
+	return cache.NewCoordinatedStore(manager, cache.DefaultConfig(manager.Namespace()), cache.DefaultCoordinationConfig())
 }
 ```
 

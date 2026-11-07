@@ -1,23 +1,30 @@
 # Typed leases
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Run work under a typed lease](#recipe-lease-work)
+
+<a id="recipe-lease-work"></a>
+## Run work under a typed lease
+
 Declare a resource family once, then bind it to the application's lease manager.
 The [independent consumer](../../tests/fixtures/consumer/coordination/members.go)
 uses model-owned IDs and supplies only domain work:
 
+<!-- compiled-source: tests/fixtures/consumer/coordination/members.go#lease-work -->
 ```go
-var MemberRefresh = lease.Define(
-    "member-refresh",
-    keyspace.TextKeys[model.ID[mutatorqueries.Member]](),
-)
-locks, err := MemberRefresh.Bind(manager)
-if err != nil {
-    return err
+// MemberRefresh is one reusable declaration; distinct model IDs cannot be mixed.
+var MemberRefresh = lease.Define("member-refresh", keyspace.TextKeys[model.ID[mutatorqueries.Member]]())
+
+type MemberLeases = lease.Leases[model.ID[mutatorqueries.Member]]
+
+func Bind(manager *lease.Manager) (MemberLeases, error) { return MemberRefresh.Bind(manager) }
+
+// RefreshMember supplies domain work. Foundry owns waiting, heartbeat and cleanup.
+func RefreshMember(ctx context.Context, locks MemberLeases, id model.ID[mutatorqueries.Member], refresh func(context.Context, model.ID[mutatorqueries.Member]) error) (bool, error) {
+	return locks.With(ctx, id, 30*time.Second, 2*time.Second, func(ctx context.Context) error { return refresh(ctx, id) })
 }
-ran, err := locks.With(ctx, memberID, 30*time.Second, 2*time.Second,
-    func(ctx context.Context) error {
-        return refreshMember(ctx, memberID)
-    },
-)
 ```
 
 `With` waits only on confirmed contention, renews while the callback runs, and

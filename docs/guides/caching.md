@@ -8,30 +8,60 @@ Redis also implements typed tags and [leases](leases.md) with full native accept
 [pub/sub](pubsub.md) also passed full native acceptance. Namespace invalidation also passed full native acceptance. For general Redis values and commands, see the delivered
 [typed data](redis-data.md) and [raw command](redis-commands.md) guides.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Bind typed snapshots](#recipe-typed-cache)
+- [Invalidate after a domain change](#recipe-invalidate-tags)
+- [Invalidate the application cache namespace](#recipe-invalidate-cache)
+- [Coordinate cache fills](distributed-cache.md#recipe-coordinate-cache)
+
+<a id="recipe-typed-cache"></a>
 ## Declare once, bind once
 
 A declaration owns its name, key codec and payload codec. Binding it to an application
 store preserves both Go types through every operation. The [independent consumer](../../tests/fixtures/consumer/caching/profiles.go)
 uses a model-owned ID and explicitly selects a getter when creating a cache snapshot:
 
+<!-- compiled-source: tests/fixtures/consumer/caching/profiles.go#typed-cache -->
 ```go
-var ProfileEntries = cache.Define(
-    "member-profiles-v1",
-    cache.TextKeys[model.ID[mutatorqueries.Member]](),
-    cache.JSON[Profile](),
-)
-
-profiles, err := ProfileEntries.Bind(store)
-if err != nil {
-    return err
+// Profile is an internal cache snapshot, not an automatically exported HTTP DTO.
+type Profile struct {
+	Email  mutatorqueries.DisplayEmail
+	Labels []string
 }
+type Profiles = cache.Cache[model.ID[mutatorqueries.Member], Profile]
 
-profile, found, err := profiles.Get(ctx, member.ID)
-if err != nil {
-    return err
+// ProfileEntries is declared once; repeated bindings reuse its identity.
+var ProfileEntries = cache.Define("member-profiles-v1", cache.TextKeys[model.ID[mutatorqueries.Member]](), cache.JSON[Profile]())
+
+func Bind(store *cache.Store) (Profiles, error) { return ProfileEntries.Bind(store) }
+```
+
+<!-- compiled-source: tests/fixtures/consumer/caching/profiles.go#cache-snapshot -->
+```go
+// SaveProfile explicitly selects the model's read accessor. The stored model and
+// its ID remain untouched; consumers choose the representation to cache.
+func SaveProfile(ctx context.Context, profiles Profiles, member mutatorqueries.Member) error {
+	value, err := profileSnapshot(member)
+	if err != nil {
+		return err
+	}
+	return profiles.Put(ctx, member.ID, value, cache.For(5*time.Minute))
 }
-if !found {
-    // Load the domain value and explicitly choose its presentation/accessor fields.
+func profileSnapshot(member mutatorqueries.Member) (Profile, error) {
+	email, err := member.AccessEmail()
+	if err != nil {
+		return Profile{}, err
+	}
+	return Profile{Email: email, Labels: []string{"active"}}, nil
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/caching/profiles.go#read-cache -->
+```go
+func ReadProfile(ctx context.Context, profiles Profiles, id model.ID[mutatorqueries.Member]) (Profile, bool, error) {
+	return profiles.Get(ctx, id)
 }
 ```
 
@@ -51,28 +81,44 @@ with the same name fails with `fault.Duplicate`, even when its Go types match.
 Use a versioned family name when an incompatible cache representation changes.
 Binding validates declarations without invoking codecs or performing I/O.
 
+Use a configured named store when selecting a separate cache authority. Resolve
+it once during service construction and retain the typed view for requests:
+
+<!-- compiled-source: tests/fixtures/consumer/developeroperations/cache.go#named-cache -->
+```go
+func NamedProfiles(services application.Services, name cache.StoreName) (caching.Profiles, error) {
+	store, err := services.Caches.Store(name)
+	if err != nil {
+		return caching.Profiles{}, err
+	}
+	return caching.Bind(store)
+}
+```
+
+[Named service configuration](named-services.md#recipe-named-services) owns default
+aliases and explicit-name validation. Domain keys must come from trusted identity;
+a cache hit does not replace current resource authorization. Cache explicit
+snapshots rather than credentials or live persistence models.
+
+<a id="recipe-invalidate-tags"></a>
 ## Typed tags and invalidation
 
 A tag family has its own typed key. Bind it to the same store as the cache view:
 
+<!-- compiled-source: tests/fixtures/consumer/caching/tags.go#invalidate-tag -->
 ```go
-var MemberChanges = cache.DefineTag(
-    "member-changes-v1",
-    cache.TextKeys[model.ID[mutatorqueries.Member]](),
-)
+// MemberChanges links member-derived cache snapshots to a typed invalidation key.
+var MemberChanges = cache.DefineTag("member-changes-v1", cache.TextKeys[model.ID[mutatorqueries.Member]]())
 
-tags, err := MemberChanges.Bind(store)
-if err != nil {
-    return err
+type MemberTags = cache.Tags[model.ID[mutatorqueries.Member]]
+
+func BindMemberTags(store *cache.Store) (MemberTags, error) { return MemberChanges.Bind(store) }
+func ForMember(profiles Profiles, tags MemberTags, id model.ID[mutatorqueries.Member]) (Profiles, error) {
+	return profiles.WithTags(tags.For(id))
 }
-view, err := profiles.WithTags(tags.For(memberID))
-if err != nil {
-    return err
+func InvalidateMember(ctx context.Context, tags MemberTags, id model.ID[mutatorqueries.Member]) error {
+	return tags.Invalidate(ctx, id)
 }
-// view retains the same model-owned key and Profile value type.
-profile, err := view.Remember(ctx, memberID, cache.Forever(), loadProfile)
-// After the domain change commits:
-err = tags.Invalidate(ctx, memberID)
 ```
 
 The [compiling consumer](../../tests/fixtures/consumer/caching/tags.go) and its test
@@ -134,6 +180,7 @@ TaggedBackend and TaggedCounterBackend are explicit adapter contracts. Memory an
 API works across them. Redis tags passed shared contract races, cross-client
 invalidation and full native verification. Redis tag scripts require Redis 7 or newer.
 
+<a id="recipe-invalidate-cache"></a>
 ## Invalidate a complete cache namespace
 
 Call `store.Invalidate(ctx)` to invalidate every typed value, tagged view and counter
@@ -141,11 +188,13 @@ in that store's application/environment namespace, including other stores and
 processes using the same authority. The [consumer example](../../tests/fixtures/consumer/caching/invalidate.go)
 keeps existing handles and model/getter DTO types:
 
+<!-- compiled-source: tests/fixtures/consumer/caching/invalidate.go#invalidate-namespace -->
 ```go
-if err := store.Invalidate(ctx); err != nil {
-    return err
+// InvalidateSnapshots clears this application's cache namespace across instances.
+// Handles remain bound; later reads/loaders preserve their concrete model/DTO types.
+func InvalidateSnapshots(ctx context.Context, store *cache.Store) error {
+	return store.Invalidate(ctx)
 }
-profile, err := profiles.Remember(ctx, memberID, cache.For(5*time.Minute), loadProfile)
 ```
 
 Native memory and Redis stores automatically include one reserved namespace stamp

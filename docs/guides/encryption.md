@@ -4,6 +4,13 @@ The `encryption` package is the shared authenticated-encryption boundary for Fou
 
 Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Encrypt and rotate record secrets](#recipe-encrypt-record)
+- [Borrow the application keyring](#recipe-configured-keyring)
+
+<a id="recipe-encrypt-record"></a>
 ## Keys and record ownership
 
 Load an explicitly configured key using `encryption.ParseKey(id, secretValue)`,
@@ -19,16 +26,34 @@ including an enrollment generation when replacing a factor. Read it from the
 owning record's identity, not a submitted ciphertext or untrusted owner field.
 The binding is authenticated but is not embedded in the envelope.
 
+<!-- compiled-source: tests/fixtures/consumer/developeroperations/encryption.go#load-record-keys -->
 ```go
-owner, err := encryption.NewContext("auth.mfa.totp.v1", recordBinding)
-if err != nil {
-    return err
+func LoadRecordKeys(id encryption.KeyID, material secret.String, previous ...encryption.Key) (*encryption.Keyring, error) {
+	active, err := encryption.ParseKey(id, material)
+	if err != nil {
+		return nil, err
+	}
+	return encryption.NewKeyring(id, append([]encryption.Key{active}, previous...)...)
 }
-encrypted, err := keys.Encrypt(ctx, owner, factor.Secret())
-if err != nil {
-    return err
+```
+
+<!-- compiled-source: tests/fixtures/consumer/developeroperations/encryption.go#encrypt-record -->
+```go
+func RecordContext(trustedRecordBinding secret.String) (encryption.Context, error) {
+	return encryption.NewContext("consumer.records.secret.v1", trustedRecordBinding)
 }
-// Persist encrypted.Encoded() at the explicit storage boundary.
+
+func EncryptRecord(ctx context.Context, keys *encryption.Keyring, owner encryption.Context, plaintext secret.String) (encryption.Ciphertext, error) {
+	return keys.Encrypt(ctx, owner, plaintext)
+}
+
+func DecryptRecord(ctx context.Context, keys *encryption.Keyring, owner encryption.Context, ciphertext encryption.Ciphertext) (secret.String, error) {
+	return keys.Decrypt(ctx, owner, ciphertext)
+}
+
+func ReencryptRecord(ctx context.Context, keys *encryption.Keyring, owner encryption.Context, ciphertext encryption.Ciphertext) (encryption.Ciphertext, error) {
+	return keys.Reencrypt(ctx, owner, ciphertext)
+}
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/multifactor/primitives.go)
@@ -36,6 +61,7 @@ provides complete typed functions for encryption, decryption and rotation. This
 fixture demonstrates primitives; it does not implement factor enrollment or grant
 authentication authority.
 
+<a id="recipe-configured-keyring"></a>
 ## Application key ring
 
 Configured applications load one key ring from settings instead of building it
@@ -57,6 +83,15 @@ ring. `Services.Encryption()` returns it (`fault.Missing` when not configured),
 and `Services.CookieEncrypter()` returns an `http.CookieEncrypter` using it and
 the application clock for `Cookie.Encrypted`. The configured MFA store
 (`Features.Auth.MFA`) requires it; see [MFA](mfa.md#key-rotation).
+
+Resolve and retain the configured keyring during construction:
+
+<!-- compiled-source: tests/fixtures/consumer/developeroperations/encryption.go#configured-encryption -->
+```go
+func ConfiguredKeys(services application.Services) (*encryption.Keyring, error) {
+	return services.Encryption()
+}
+```
 
 ## Envelope and limits
 

@@ -81,7 +81,7 @@ selection; no application profile or script was copied upstream.
 | 41–44: identity version before asynchronous auth effects | [Session coordination](../guides/client-contracts.md#recipe-session-coordination) | `clientcontracts/testdata/auth.ts#session-version` |
 | 51–56: portal operations, shared helpers and strict schema-handle decoding | [Portal entries](../guides/client-contracts.md#recipe-portal-entries), [schema handles](../guides/client-contracts.md#recipe-schema-handles) | Pilot `surfaces.ts#portal-entries`; new `guide-recipes.ts#schema-handles` in clientcontracts testdata |
 | 57–65: operation/status/code/envelope narrowing, no status-only business success | [Client narrowing](../guides/http-application-errors.md#recipe-client-narrowing) | Pilot `clientcontracts/testdata/error-details.ts#http-application-errors-example-2`; owner prose now links uncertain form outcomes |
-| 66–67: release realtime handles | [Existing realtime lifecycle owner](../guides/client-contracts.md#realtime-lifecycle) | Existing `clientcontracts/testdata/runtime.mjs` and `surfaces.mjs`; this lane does not claim new realtime recipe extraction |
+| 66–67: release realtime handles | [Browser realtime lifecycle](../guides/client-contracts.md#recipe-realtime-lifecycle) | M3-006: `clientcontracts/testdata/realtime-lifecycle.ts#realtime-connection`, `#realtime-room`, `#browser-realtime-transport`; registered in the strict TypeScript inputs; lead execution pending |
 | 71–77: exact numeric values, local versus instant time, independent format locale and optional timezone | [Wire values](../guides/client-contracts.md#recipe-wire-values), [public environment](../guides/client-contracts.md#recipe-public-environment) | Pilot `guide-recipes.ts#wire-values`; new `guide-recipes.ts#public-environment` in clientcontracts testdata |
 | 78–86: generated enum labels, numeric values, lossless unknown fallback | [Enum labels](../guides/client-contracts.md#recipe-enum-labels), [table enum metadata](../guides/client-contracts.md#recipe-table-bindings) | `clientcontracts/testdata/guide-recipes.ts#enum-labels`; `clientcontracts/testdata/table-bindings/types.ts#table-enum-metadata` |
 | 88–93: configured catalog locale set, Accept-Language and translated client validation | [Localized client](../guides/client-contracts.md#recipe-localized-client) | `clientcontracts/testdata/guide-recipes.ts#localized-client`; translation loading remains with [browser catalogs](../guides/localization.md#browser-catalogs) |
@@ -113,12 +113,13 @@ recipe explains its controller without authorizing an application migration.
   added sources and equality of the rendered views remain pending the lead.
 - Rendering is deferred after the sandbox cache denial. Empty source-bound
   fences are intentional pending generated output, not completed rendered proof.
-- Phone parsing, Go enum-label declarations, translation catalog loading and
-  realtime cleanup remain at their existing guide owners. Their extraction and
+- Phone parsing, Go enum-label declarations and translation catalog loading
+  remain at their existing guide owners. Their extraction and
   any new `recipe-*` anchors belong to the corresponding milestone lanes; this
   record does not claim new coverage for those sections.
+- M3-006 now gives web-data and foundry-realtime one [browser lifecycle owner](../guides/client-contracts.md#recipe-realtime-lifecycle). The tooling-ops fix adds `realtime-lifecycle.ts` to the strict TypeScript inputs; application skill adoption still waits for the lead checkpoint.
 - Existing pilot regions were reused by links or retained in place. They were
-  not copied into another guide. No TypeScript input registration was needed:
+  not copied into another guide. The original client-web slice needed no TypeScript input registration:
   `guide-recipes.ts` and `auth.ts` already occur in `typescript-inputs.json`, and
   `table-bindings/types.ts` already occurs in that fixture's input list.
 

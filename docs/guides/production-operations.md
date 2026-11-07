@@ -17,10 +17,10 @@ and permission system as ordinary application routes.
 <a id="recipe-startup-readiness"></a>
 ## Startup and readiness
 
-Related owners: [logging](logging.md), [protected log maintenance](production-diagnostics.md),
-[typed caches](caching.md), [distributed caches](distributed-cache.md),
-[leases](leases.md), [purpose-bound encryption](encryption.md),
-[audit](audit.md) and [persisted telemetry](persisted-telemetry.md).
+Related owners: [logging](logging.md), [protected log maintenance](logging.md#recipe-log-file-controls),
+[typed caches](caching.md#recipe-typed-cache), [distributed caches](distributed-cache.md#recipe-coordinate-cache),
+[leases](leases.md#recipe-lease-work), [purpose-bound encryption](encryption.md#recipe-encrypt-record),
+[audit](audit.md) and [persisted telemetry](persisted-telemetry.md#recipe-configure-telemetry).
 
 Declare probes through [readiness features](readiness-and-maintenance.md#recipe-declare-readiness).
 
