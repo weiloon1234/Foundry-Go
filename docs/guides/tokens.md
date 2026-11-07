@@ -4,6 +4,19 @@ PostgreSQL-backed hashed personal and renewable tokens retain model-owned IDs, b
 
 Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Configure a token store](#recipe-token-store)
+- [Issue from verified proof](#recipe-issue-token)
+- [Deliver native tokens](#recipe-token-delivery)
+- [Deliver browser refresh cookies](#recipe-browser-refresh)
+- [Refresh and detect reuse](#recipe-refresh-token)
+- [Set guard lifetimes](#recipe-token-lifetimes)
+- [Issue WebSocket tickets](#recipe-token-tickets)
+- [Bind an HTTP guard](authentication.md#recipe-bind-guard)
+
+<a id="recipe-token-store"></a>
 ## Framework-owned persistence
 
 `auth/token` binds one stored model/provider/guard and its declared scope ceiling.
@@ -13,13 +26,8 @@ or migrate. Register the binding's `Guard()` once alongside other auth declarati
 The [consumer example](../../tests/fixtures/consumer/authenticating/tokens.go)
 shows independent use verified by the milestone gate.
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#token-store -->
 ```go
-backend, err := tokenpg.New(db, tokenpg.DefaultConfig())
-// Check err.
-store, err := token.NewStore(backend, token.DefaultConfig(namespace))
-// Check err.
-api, err := token.New(store, "users.api", users, "users.bearer", declaredScopes)
-// Check err and register api.Guard().Registration().
 ```
 
 Handwritten ORM declarations own subject locks, token families and retained token
@@ -34,12 +42,11 @@ adds nullable device columns with `NOT VALID` checks (metadata-only, no scan und
 an exclusive lock) and the consumed-refresh table; `000003_validate_token_state`
 validates the checks in its own transaction without blocking reads or writes.
 
+<a id="recipe-issue-token"></a>
 ## Issue only after trusted verification
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#issue-token -->
 ```go
-issued, err := api.Issue(ctx, verifiedProof, token.IssueOptions[User]{
-    Name: "My phone", Scopes: grantedScopes, Refresh: true,
-})
 ```
 
 Proofs retain both model and stored key types. `NewProof` is a trusted adapter
@@ -86,21 +93,11 @@ and JSON never disclose either raw secret. Do not put credentials in URLs. HTTP
 delivery uses the framework descriptor below; applications should not mass-serialize
 stored models or credential records into response DTOs.
 
+<a id="recipe-token-delivery"></a>
 ## Typed HTTP delivery
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/token_routes.go#native-token-delivery -->
 ```go
-response := foundryhttp.TokenResponse[User, model.ID[User]](200, clock.System{})
-refresh := foundryhttp.DefineEndpoint(
-    foundryhttp.DefineRoute(foundryhttp.RouteSpec{
-        ID: "auth.refresh", Method: foundryhttp.POST, Access: foundryhttp.Public,
-    }, foundryhttp.StaticPath("/auth/refresh")),
-    foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenBody(), response,
-)
-registration := refresh.Handle(func(ctx context.Context,
-    input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.RefreshTokenRequest],
-) (token.Issued[User, model.ID[User]], error) {
-    return api.Refresh(ctx, input.Body.RefreshToken.Secret())
-})
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/authenticating/token_routes.go)
@@ -145,19 +142,18 @@ missing, null or malformed values. Its typed value redacts formatting and JSON;
 `Authorization` only and never falls back to a URL token. This is native token
 transport; browser sessions use their separate cookie/CSRF adapter.
 
+<a id="recipe-browser-refresh"></a>
 ### Browser refresh cookies
 
 A browser SPA keeps the access token in memory and must never let JavaScript read
 the refresh token. The same guard serves it with a cookie transport:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#refresh-cookie -->
 ```go
-cookie := foundryhttp.DefineRefreshCookie("__Host-refresh-user", foundryhttp.CSRFConfig{})
-response := foundryhttp.TokenCookieResponse[User, model.ID[User]](cookie, 200, clock.System{})
-// Login: EmptyBody (or the login DTO) with response.
-// Refresh: foundryhttp.RefreshTokenCookie(cookie) with response; the handler is
-// unchanged: api.Refresh(ctx, input.Body.RefreshToken.Secret()).
-// Logout: foundryhttp.RefreshTokenCookieLogout(cookie) with
-// foundryhttp.ClearRefreshCookie(cookie, foundryhttp.EmptyResponse(204)).
+```
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/browser_tokens.go#browser-token-delivery -->
+```go
 ```
 
 `TokenCookieResponse` writes `{"tokens": {"access_token", "expires_in",
@@ -177,13 +173,8 @@ authenticates it, so the route needs no bearer guard and an expired access token
 does not prevent it. A missing, repeated or malformed cookie arrives as an absent
 `RefreshToken`, and the handler revokes only a present one:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/browser_tokens.go#browser-token-logout -->
 ```go
-if refresh, ok := input.Body.RefreshToken.Get(); ok {
-	if _, err := api.LogoutRefresh(ctx, refresh.Secret()); err != nil {
-		return foundryhttp.NoContent{}, err
-	}
-}
-return foundryhttp.NoContent{}, nil
 ```
 
 `LogoutRefresh` revokes the family of a current, previous or consumed refresh
@@ -226,10 +217,11 @@ Generated internal DTO declarations are the runtime and manifest source of truth
 Response metadata describes the wire payload, not the private fields of Issued.
 The request type aliases expose the same descriptor without a copied schema.
 
+<a id="recipe-refresh-token"></a>
 ## Refresh and reuse
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#refresh-token -->
 ```go
-next, err := api.Refresh(ctx, refreshSecret)
 ```
 
 Each successful refresh retains the family's ID, original absolute deadline and
@@ -262,6 +254,7 @@ Expiry and revocation remove all retained generations and consumed digests. The 
 follows the principle in [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14.2);
 these personal tokens are not a complete OAuth authorization server.
 
+<a id="recipe-token-lifetimes"></a>
 ## Lifetimes and maintenance
 
 Defaults: personal tokens 30 days; renewable access 15 minutes, refresh idle seven
@@ -275,11 +268,8 @@ making them unusable. The stored grant is never widened.
 The store's lifetimes are a ceiling shared by every guard bound to it. One guard
 can shorten its own, for example admins on the same store as users:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#token-lifetime -->
 ```go
-admin, err := token.New(store, "users.admin", users, "admin.bearer", adminScopes,
-    token.WithLifetimes(token.Lifetimes{Renewable: token.Lifetime{
-        Access: 5 * time.Minute, RefreshIdle: 12 * time.Hour, Absolute: 24 * time.Hour,
-    }}))
 ```
 
 `application.NewTokenGuard` accepts the same options for the configured store. A
@@ -322,21 +312,15 @@ grants, so a token minted from it can only narrow them, unlike `auth.NewProof`.
 returned, in process, and cannot undo the change; see
 [authentication events](authentication.md#lifecycle-events).
 
+<a id="recipe-token-tickets"></a>
 ## WebSocket handshake tickets
 
 A browser that holds a bearer token cannot send it on a WebSocket. On a request
 already authenticated by this binding's guard, `api.IssueTicket(ctx)` mints a
 single-use ticket for the token family that authenticated it:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#token-ticket -->
 ```go
-ticket := foundryhttp.DefineEndpoint(
-    foundryhttp.DefineRoute(foundryhttp.RouteSpec{
-        ID: "realtime.ticket", Method: foundryhttp.POST, Access: foundryhttp.Guarded,
-    }, foundryhttp.StaticPath("/realtime/ticket")),
-    foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(),
-    foundryhttp.TicketResponse[User, model.ID[User]](200, clock.System{}),
-)
-// Guard the route with this binding and return api.IssueTicket(ctx) from its handler.
 ```
 
 `TicketResponse` uses the same credential boundary as `TokenResponse` (POST, TLS

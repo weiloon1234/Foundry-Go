@@ -29,6 +29,7 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLogin) (*
 	if err != nil {
 		return nil, err
 	}
+	// doc-example:begin native-token-delivery
 	route := func(id foundryhttp.RouteID, method foundryhttp.Method, path string, access foundryhttp.Access) foundryhttp.Route[foundryhttp.NoPath] {
 		return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path))
 	}
@@ -45,6 +46,7 @@ func TokenRoutes(tokens *UserTokens, clock clock.Clock, verify VerifiedLogin) (*
 		foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenBody(), response).Handle(func(ctx context.Context, input RefreshInput) (IssuedUserToken, error) {
 		return RefreshFromBody(ctx, tokens, input.Body)
 	})
+	// doc-example:end native-token-delivery
 	profile := foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(foundryhttp.DefineEndpoint(
 		route("api.profile", foundryhttp.GET, "/profile", foundryhttp.Guarded),
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204)), transport, guard), foundryhttp.Scopes(scopes)).Handle(func(ctx context.Context, user models.User, _ ProfileInput) (foundryhttp.NoContent, error) {

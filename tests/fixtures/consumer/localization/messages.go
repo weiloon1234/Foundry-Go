@@ -17,11 +17,15 @@ type WelcomeArgs struct {
 	Name string `json:"name"`
 }
 
+// doc-example:begin typed-plural-message
+
 //foundry:message key=cart.items plural=count
 type CartArgs struct {
 	Name  string          `json:"name"`
 	Count decimal.Decimal `json:"count"`
 }
+
+// doc-example:end typed-plural-message
 
 //foundry:message key=position plural=position kind=ordinal
 type PositionArgs struct {
@@ -40,6 +44,8 @@ type NameLabel struct{}
 //foundry:message key=permissions.manage
 type ManageLabel struct{}
 
+// doc-example:begin enum-labels
+
 //foundry:enum labels=enum.localization.status
 type Status string
 
@@ -47,6 +53,8 @@ const (
 	Draft Status = "draft"
 	Ready Status = "ready"
 )
+
+// doc-example:end enum-labels
 
 //go:embed locales
 var catalogs embed.FS
@@ -84,6 +92,8 @@ func Welcome(ctx context.Context, catalog *i18n.Catalog, locale i18n.LocaleID, n
 	return WelcomeArgsMessage().Format(ctx, catalog, locale, WelcomeArgs{Name: name})
 }
 
+// doc-example:begin rule-message-arguments
+
 // RuleArgs is approved declaration data, never submitted field contents.
 //
 //foundry:message key=profile.validation.name
@@ -91,6 +101,8 @@ type RuleArgs struct {
 	Attribute string `json:"attribute"`
 	Team      string `json:"team"`
 }
+
+// doc-example:end rule-message-arguments
 
 // PreparedWelcome captures public arguments once for later CLI or job output.
 func PreparedWelcome(ctx context.Context, name string) (i18n.PreparedMessage, error) {

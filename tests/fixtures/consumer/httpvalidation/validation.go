@@ -8,10 +8,13 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
+// doc-example:begin validate-http-body
 var Update = foundryhttp.ValidateBody(httpendpoints.Update,
 	validation.Rules(validation.WithLabel(httpdto.UpdateUserValidationFields().Email, "Email address"), validation.Optional(validation.NonBlank[string]())),
 	validation.Rules(validation.WithLabel(httpdto.UpdateUserValidationFields().Nickname, "Display name"), validation.Optional(validation.Nullable(validation.MinLength[string](2)))),
 )
+
+// doc-example:end validate-http-body
 
 func Router(service httpendpoints.Service) (*foundryhttp.Router, error) {
 	return foundryhttp.NewRouter(Update.Handle(service.Update))

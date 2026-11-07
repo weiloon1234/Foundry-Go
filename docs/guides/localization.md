@@ -23,16 +23,23 @@ unconfigured fallback with `fault.Missing`. To change the common fallback, chang
 `Default` and either clear `Fallback` or update it to match; the field remains
 supported.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare typed messages](#recipe-declare-messages)
+- [Load JSON catalogs](#recipe-load-catalogs)
+- [Format browser messages](#recipe-browser-messages)
+- [Read the selected request locale](#recipe-request-locale)
+- [Declare enum and field labels](#recipe-feature-labels)
+- [Configure automatic HTTP selection](validation-messages.md#recipe-configure-messages)
+
+<a id="recipe-declare-messages"></a>
 ## Declare typed messages
 
 The Go argument struct is the source of truth for parameter names and types:
 
+<!-- compiled-source: tests/fixtures/consumer/localization/messages.go#typed-plural-message -->
 ```go
-//foundry:message key=cart.items plural=count
-type CartArgs struct {
-    Name  string          `json:"name"`
-    Count decimal.Decimal `json:"count"`
-}
 ```
 
 `foundry generate` emits `CartArgsMessage()`, `CartArgsJSON()` and
@@ -44,10 +51,8 @@ floats, nested objects and custom JSON-contract parameters are rejected by
 generation. Enum parameters retain their existing wire contract. `json:",string"`
 is supported through the existing DTO codec rules.
 
+<!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#format-cart-message -->
 ```go
-result, err := CartArgsMessage().Format(ctx, catalog, locale, CartArgs{
-    Name: "Ada", Count: decimal.FromInt64(2),
-})
 ```
 
 `Message.Key()` supplies the shared typed `i18n.MessageKey`. `Definition()` and
@@ -63,6 +68,7 @@ quoting. For repeated rendering of the same arguments, `Bind` once and call
 renders already validated arguments. Plural rules use language tags parsed once
 per catalog locale.
 
+<a id="recipe-load-catalogs"></a>
 ## Load catalogs
 
 Pass `os.DirFS` or a scoped `embed.FS` containing locale directories such as
@@ -83,10 +89,8 @@ existing BCP 47 locale parser and must belong to the configured supported set.
 }
 ```
 
+<!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#load-message-catalog -->
 ```go
-catalog, err := message.Load(ctx, files, locales, i18n.CatalogOptions{},
-    CartArgsMessage().Registration(),
-)
 ```
 
 Nested objects flatten with dots. Plain leaves are strings; plural leaves contain
@@ -144,23 +148,22 @@ Compilation still rejects a placeholder the declaration lacks and plural forms o
 a key declared without a plural parameter, naming the locale and key. Templates
 from `ReadTemplates` carry no file names into those later errors.
 
-### Browser catalogs
+<a id="recipe-browser-messages"></a>
+## Browser catalogs
 
+Import the following functions and the `ValidationMessages` type from the
+generated client entry. Supply the selected locale and `catalogTranslations` of
+its JSON catalog files as `messages`, with an explicit fallback catalog.
 Generated clients format the same JSON with the runtime renderer that localizes
 validation messages, so a browser applies Go's placeholder, plural and fallback
 rules without a second implementation:
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-typed-messages -->
 ```typescript
-import { catalogTranslations, formatMessage, formatText } from "./generated/contracts_foundry.gen.js";
-import enAuth from "../lang/shared/en/auth.json";
-import msAuth from "../lang/shared/ms/auth.json";
+```
 
-const messages = {
-  locale: "ms", translations: catalogTranslations([msAuth]),
-  fallback: { locale: "en", translations: catalogTranslations([enAuth]) },
-};
-formatMessage(messages, "cart.items", { name: "Ada", count: 2 });
-formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-text-message -->
+```typescript
 ```
 
 - `catalogTranslations(files)` flattens one locale's catalog files under the Go
@@ -175,8 +178,18 @@ formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
 - `formatText(messages, key, args, { plural, pluralKind })` formats a key only a
   frontend catalog defines, naming its plural argument explicitly.
 
-Both use the fallback catalog and return the key when no text renders. Number
-arguments may be numbers or exact decimal strings.
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-frontend-messages -->
+```typescript
+```
+
+Frontend-only plural declarations require exactly one numeric placeholder across
+all forms and locales. A plural with additional arguments belongs in a shared
+catalog with an explicit Go message declaration. Every enabled locale must cover
+each key in its tree, including the `other` plural form.
+
+`formatFrontendMessage` checks keys and arguments exported from frontend-only
+catalogs. The message formatters use the fallback catalog and return the key when
+no text renders. Number arguments may be numbers or exact decimal strings.
 
 `catalogLocales` holds the server's configured default and supported locales as
 a frozen `{ default, supported }` typed by `Locale`, or `undefined` when no
@@ -191,7 +204,15 @@ every operation and schema into the bundle. `catalogTranslations` and
 `formatText` come from the shared runtime, so any entry's export is the same
 function.
 
+<a id="recipe-request-locale"></a>
 ## Resolution and fallback
+
+<!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#request-message -->
+```go
+```
+
+Use the request selection already installed by the HTTP locale middleware.
+Background work passes an explicit locale to the [typed message formatter](#recipe-declare-messages).
 
 `Catalog.Resolve(preferred, acceptLanguage)` first considers an explicit locale,
 then quality-sorted language candidates, then the configured default. Supported
@@ -279,7 +300,16 @@ Dynamic applications explicitly supply `i18n.MessageDefinition` and call
 `Catalog.FormatDynamic` with typed `Text`, `Number` and `Boolean` arguments. They
 receive runtime signature checks rather than generated Go argument typing.
 
+<a id="recipe-feature-labels"></a>
 ## Feature labels
+
+<!-- compiled-source: tests/fixtures/consumer/localization/messages.go#enum-labels -->
+```go
+```
+
+Field labels belong on [DTO declarations](validation.md#recipe-field-labels).
+Keep their default-language source in the shared JSON catalog. Reuse semantic
+keys; catalog placement and which locales an application enables remain app policy.
 
 - `//foundry:enum labels=enum.account.status` emits a label key for each actual
   constant, using its snake-case Go name. Unannotated enum output remains unchanged.

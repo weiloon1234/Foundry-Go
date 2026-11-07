@@ -7,12 +7,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin patch-presence
+
 //foundry:dto
 type UpdateUser struct {
 	Email    value.Optional[string]                 `json:"email,omitzero"`
 	Nickname value.Optional[value.Nullable[string]] `json:"nickname,omitzero"`
 	State    value.Optional[models.Status]          `json:"state,omitzero"`
 }
+
+// doc-example:end patch-presence
 
 //foundry:dto
 type UserResponse struct {

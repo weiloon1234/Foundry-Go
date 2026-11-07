@@ -10,11 +10,14 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// doc-example:begin declare-scopes
 var OrderReadScope = auth.DefineAccessScope[models.User]("orders.read")
 
 func OrderReadScopes() (auth.AccessScopes[models.User], error) {
 	return auth.NewAccessScopes(OrderReadScope)
 }
+
+// doc-example:end declare-scopes
 
 // VerifiedScopedUser is a strategy boundary. A token adapter must verify the
 // persisted credential before supplying this proof; a submitted ID is not proof.
@@ -35,9 +38,12 @@ func ReadScopedOrder(ctx context.Context, guard auth.Guard[models.User], require
 	return user, nil
 }
 
+// doc-example:begin configure-scopes
 func ScopedProfile(endpoint ProfileEndpoint, required auth.AccessScopes[models.User]) ProfileEndpoint {
 	return http.ConfigureAuthenticated(endpoint, http.Scopes(required))
 }
+
+// doc-example:end configure-scopes
 
 func GrantedScopeNames(grants auth.AccessScopes[models.User]) []auth.AccessScopeName {
 	return grants.Names()

@@ -1,26 +1,29 @@
 # HTTP middleware
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare and attach middleware](#recipe-attach-middleware)
+- [Attach a credential quota](#recipe-credential-quota)
+- [Protect credential stores](authentication.md#recipe-credential-protection)
+- [Make an operation replayable](idempotent-operations.md#recipe-idempotent-endpoint)
+- [Configure request locales](validation-messages.md#recipe-configure-messages)
+
+<a id="recipe-attach-middleware"></a>
+## Declare and attach middleware
+
 Foundry composes native `net/http` wrappers with typed middleware identities.
 Declare dependencies in a constructor, then attach the result to a route or
 scope. This example is exercised in the independent `httpmiddleware` consumer:
 
+<!-- compiled-source: tests/fixtures/consumer/httpmiddleware/router.go#middleware-scope -->
 ```go
-const RouteTrace foundryhttp.MiddlewareID = "app.route-trace"
+```
 
-trace := foundryhttp.DefineMiddleware(RouteTrace,
-    func(next http.Handler) (http.Handler, error) {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            if route, ok := foundryhttp.MatchedRoute(r.Context()); ok {
-                w.Header().Set("X-Matched-Route", string(route.ID))
-            }
-            next.ServeHTTP(w, r)
-        }), nil
-    },
-)
+For one route, configure its policy before declaring its endpoint:
 
-api := foundryhttp.DefineScope("/api", "api").WithMiddleware(trace)
-update := foundryhttp.ConfigureEndpoint(Update, foundryhttp.Within(api))
-router, err := foundryhttp.NewRouter(update.Handle(service.Update))
+<!-- compiled-source: tests/fixtures/consumer/httpmiddleware/router.go#middleware-route -->
+```go
 ```
 
 The returned endpoint retains the same concrete path/query/body/response types.
@@ -40,6 +43,12 @@ decoding. `MatchedRoute` is available even when middleware short-circuits. It
 contains owned route metadata and middleware IDs. A matched route is a routing
 fact, not authentication or authorization. A wrapper cannot change the endpoint's
 declared access contract merely by adding a header or context value.
+
+For configured global policy, use the application builder:
+
+<!-- compiled-source: tests/fixtures/consumer/httpmiddleware/router.go#middleware-global -->
+```go
+```
 
 Use `ApplyMiddleware(router, ...)` for global transport policy that must also
 cover redirects, missing routes and method errors. Global wrappers run before
@@ -67,7 +76,16 @@ outside application middleware, and middleware does not open implicit database
 transactions. Built-in [CORS](http-cors.md), [trusted proxies](http-trusted-proxy.md)
 and [security headers](http-security-headers.md) use this same assembly API.
 
+Configured locale selection belongs to [validation messages](validation-messages.md#recipe-configure-messages).
+Cookie-authenticated unsafe requests also need [origin and CSRF protection](browser-sessions.md); CORS does not provide that protection.
+Use the [typed idempotency adapter](idempotent-operations.md#recipe-idempotent-endpoint) for supported replayable operations. Middleware must not decode the request body or implement a second replay store.
+
+<a id="recipe-credential-quota"></a>
 ## Typed rate limiting
+
+<!-- compiled-source: tests/fixtures/consumer/httpmiddleware/router.go#middleware-credential-group -->
+```go
+```
 
 Use [RateLimit or RateLimitByIP](rate-limiting.md) with a bound typed quota. The
 framework reuses trusted attribution, emits shared 429/503 error contracts, and

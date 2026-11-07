@@ -3,6 +3,7 @@
 <a id="agent-entry"></a>
 ## Agent entry
 
+- [Declare PATCH and query inputs](#recipe-patch-query)
 - Declare: [Omission, null and supplied values](#recipe-presence)
 - Compose: [Endpoint preparation](http-endpoints.md#recipe-compose-endpoint)
 
@@ -85,3 +86,24 @@ the endpoint's validation adapter; errors use paths such as `/body/label`,
 This guide covers JSON and query transport. [Multipart presence and upload
 cleanup](http-uploads.md) are also delivered. The [HTTP blueprint](../../blueprint/08-http-validation-and-responses.md)
 records complete milestone acceptance; the later framework audit remains required.
+
+<a id="recipe-patch-query"></a>
+## Declare PATCH and query inputs
+
+A PATCH DTO keeps omission separate from an explicit null or supplied value.
+Omitted fields leave stored values unchanged; map supplied values into the
+[typed write API](model-writes.md#recipe-write-models).
+
+<!-- compiled-source: tests/fixtures/consumer/httpdto/dto.go#patch-presence -->
+```go
+```
+
+Query descriptors retain the same omission type but use query-string values:
+
+<!-- compiled-source: tests/fixtures/consumer/httpquery/query.go#query-presence -->
+```go
+```
+
+Pointers and collection encoding follow [DTO JSON contracts](http-dtos.md).
+Choose their tags for the intended wire contract; an empty collection is not
+an omitted field merely because both have zero elements.

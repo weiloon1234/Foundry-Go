@@ -20,6 +20,7 @@ type Settings struct { // doc-example:begin generated-configuration-settings
 	TimeZone      string `config:"time_zone,public" client:"env=VITE_TIME_ZONE,kind=time_zone,optional"`
 } // doc-example:end generated-configuration-settings
 
+// doc-example:begin named-services
 func Defaults() Settings {
 	s := infrastructure.DefaultSettings()
 	s.Cache.Stores = infrastructure.CacheStores{"default": infrastructure.DefaultCacheSettings(), Reports: infrastructure.DefaultCacheSettings()}
@@ -33,6 +34,8 @@ func Build(ctx context.Context, settings Settings) (*foundation.App, error) {
 	return plan.Register(foundation.NewBuilder()).Build(ctx)
 }
 
+// doc-example:end named-services
+
 var Greeting = cache.Define("greetings", cache.StringKeys[string](), cache.JSON[string]())
 
 // Greetings is ordinary constructor injection. Request handlers receive this
@@ -44,6 +47,10 @@ func Greetings(configured *infrastructure.Services) (cache.Cache[string, string]
 	}
 	return Greeting.Bind(store)
 }
+
+// doc-example:begin select-named-cache
 func ReportsCache(configured *infrastructure.Services) (*cache.Store, error) {
 	return configured.Caches.Store(Reports)
 }
+
+// doc-example:end select-named-cache

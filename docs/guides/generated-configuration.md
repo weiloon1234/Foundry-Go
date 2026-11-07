@@ -6,19 +6,24 @@ descriptors to the existing Go generator. Verification status is owned by the
 [master](../../blueprint/00-master-architecture-and-parity.md#consumer-startup-delivery).
 This feature derives the configuration schema consumed by [configured application assembly](application-bootstrap.md). The application registers domain declarations and constructors; the builder assembles the selected services.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare fields, defaults and validation](#recipe-declare-configuration)
+- [Load an explicit env file](#recipe-load-dotenv)
+- [Export browser configuration](#recipe-public-configuration)
+- [Configure named services](named-services.md#recipe-named-services)
+- [Store editable application data](settings.md#recipe-declare-settings)
+
+<a id="recipe-declare-configuration"></a>
+## Declare configuration
+
 Declare an exported Go settings struct with `//foundry:config`. Concrete nested
 structs form groups. `config:"name"` selects the external name; absent/empty names
 use snake case. Field names remain ordinary autocompletable Go fields.
 
+<!-- compiled-source: tests/fixtures/consumer/startupconfig/settings.go#deployment-settings -->
 ```go
-//foundry:config
-type Settings struct {
-    HTTP struct {
-        Listen string
-        Timeout time.Duration
-    } `config:"http"`
-    SigningKey secret.String `config:"signing_key"`
-}
 ```
 
 Original leading and trailing field comments also appear on generated key
@@ -35,23 +40,16 @@ It emits `SettingsConfigSchema()` and `SettingsConfigKeys()`. The latter include
 `keys.HTTP.Timeout`, whose `Set` accepts `time.Duration` and returns an override
 owned by `Settings`. The generated schema uses the existing loader:
 
+<!-- compiled-source: tests/fixtures/consumer/startupconfig/load.go#load-configuration -->
 ```go
-schema, err := SettingsConfigSchema()
-// Return err before loading if schema construction failed.
-keys := SettingsConfigKeys()
-settings, report, err := toml.LoadFile(
-    "config/app.toml", schema, Defaults(),
-    config.Inputs[Settings]{
-        Environment: os.LookupEnv,
-        Environ: os.Environ, // optional: per-entry named-collection overrides
-        Prefix: "APP",
-        Overrides: []config.Override[Settings]{
-            keys.HTTP.Timeout.Set(5 * time.Second),
-        },
-        Validate: Validate,
-    },
-    toml.Options{},
-)
+```
+
+<!-- compiled-source: tests/fixtures/consumer/startupconfig/settings.go#configuration-defaults -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/startupconfig/settings.go#configuration-validation -->
+```go
 ```
 
 `Defaults` and `Validate` are ordinary application Go functions. There is no
@@ -95,19 +93,14 @@ and its [source precedence tests](../../tests/fixtures/consumer/startupconfig/se
 
 Named infrastructure tables reuse these generated schemas; see [named services](named-services.md).
 
+<a id="recipe-load-dotenv"></a>
 ## Explicit dotenv input
 
 Set `config.Inputs[Settings].EnvFile` to load one explicitly selected dotenv
 document through either `schema.Load` or `toml.LoadFile`:
 
+<!-- compiled-source: tests/fixtures/consumer/startupconfig/load.go#load-dotenv -->
 ```go
-inputs := config.Inputs[Settings]{
-    EnvFile: config.EnvFile{Path: envPath, Name: "local.env"},
-    Environment: os.LookupEnv,
-    Overrides: overrides,
-}
-settings, report, err := schema.Load(Defaults(), inputs)
-// With TOML, pass the same inputs to toml.LoadFile instead.
 ```
 
 An empty `Path` disables the input. The loader does not search for `.env`, mutate
@@ -168,17 +161,10 @@ When adopting this option, delete application dotenv parsers, the merged lookup
 closure and the provenance rewrite. Keep application defaults, declarations and
 validation. Existing loaders can pass their selected process lookup unchanged:
 
-```go
-inputs := foundryconfig.Inputs[Settings]{
-    EnvFile: foundryconfig.EnvFile{Path: options.EnvFile, Name: ".env"},
-    Environment: environment,
-    Overrides: options.Overrides,
-}
-// Keep the existing schema.Load / toml.LoadFile branch and Validate(settings).
-// After successful validation:
-return settings, report.Entries(), nil
-```
+Pass those inputs through the same loader and inspect `report.Entries()` only
+after a successful load. Entries contain provenance, not loaded values.
 
+<a id="recipe-public-configuration"></a>
 ## Public browser configuration
 
 Mark browser-visible scalar or declared enum fields with `config:"name,public"`

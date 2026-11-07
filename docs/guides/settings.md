@@ -4,16 +4,21 @@ Milestone 18 passed native verification and consumer review. The
 [master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-18-verification-and-consumer-review)
 records the checks and operational limits.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare and register settings](#recipe-declare-settings)
+- [Seed, read and write settings](#recipe-write-settings)
+- [Upgrade stored versions](#recipe-upgrade-settings)
+
+<a id="recipe-declare-settings"></a>
+## Declare and register settings
+
 These settings are application data, with explicit typed declarations
 and migrations. They are separate from deployment configuration and secrets.
 
+<!-- compiled-source: tests/fixtures/consumer/configured/runtime_settings.go#declare-runtime-setting -->
 ```go
-var SiteName = settings.Define("site.name", 1, contract.StringJSON[string](),
-    settings.Presentation{Label: "Site name", Group: "site", Public: true})
-
-manager, err := settings.New(store, SiteName.Registration())
-err = SiteName.Ensure(ctx, manager, "My site")
-name, err := SiteName.GetOr(ctx, manager, "Unnamed site")
 ```
 
 Use the same declared key in registration and calls. Its name, version and JSON
@@ -23,10 +28,17 @@ generated DTO's JSON contract; primitive helpers live in `contract`.
 snapshotted canonically and decoded afresh, preserving integer precision and
 avoiding shared mutable maps/slices. A value is limited to 256 KiB.
 
-Apply `settings.Migrations()` through the ordinary migration runner in the
+Configured assembly registers the keys in `FeatureDeclarations.Settings` and
+borrows the configured extension store. Its migration set already includes
+`settings.Migrations()`; do not register it twice. Resolve the manager with
+`services.Settings()`. For advanced standalone assembly, apply
+`settings.Migrations()` through the ordinary migration runner in the
 [extension store](model-extensions.md#shared-owners)'s schema. The manager borrows
 that store and its bounded operation/shutdown lifetime. It creates no background
 goroutines or database resources of its own.
+
+<a id="recipe-write-settings"></a>
+## Seed, read and write settings
 
 `Create` fails if the key exists. `Ensure` creates it if absent and preserves an
 existing value and version. `Set` updates an existing value, returning
@@ -36,8 +48,8 @@ value and version, preserving existing presentation. `EnsureIn`, `SetIn` and
 includes settings. Transactional seeders use `EnsureIn` with their supplied `tx`
 to initialize defaults without replacing existing admin values:
 
+<!-- compiled-source: tests/fixtures/consumer/configured/runtime_settings.go#seed-runtime-setting -->
 ```go
-err = SiteName.EnsureIn(ctx, tx, manager, "My site")
 ```
 
 The joined methods reject a nil transaction or one from another database pool.
@@ -69,20 +81,14 @@ drops entries explicitly, for example after a SQL migration. Keys without
 `Cache` read the database each time. The cache is bounded by the registered keys
 and holds no process-global state. The cache uses the extension store's clock.
 
+<a id="recipe-upgrade-settings"></a>
 ## Versions and upgrades
 
 Increment a key's version when its stored JSON changes shape, and declare how
 older values convert:
 
+<!-- compiled-source: tests/fixtures/consumer/configured/runtime_settings.go#upgrade-runtime-setting -->
 ```go
-var MailPort = settings.Define("mail.port", 2, contract.IntegerJSON[int64](),
-    settings.Presentation{Kind: settings.Number, Group: "mail"})
-
-registration := MailPort.RegistrationWith(settings.Options[int64]{Upgrades: []settings.Upgrade[int64]{
-    settings.UpgradeFrom(1, contract.StringJSON[string](), func(_ context.Context, old string) (int64, error) {
-        return strconv.ParseInt(old, 10, 64)
-    }),
-}})
 ```
 
 The previous codec decodes the stored value; the result is re-encoded and

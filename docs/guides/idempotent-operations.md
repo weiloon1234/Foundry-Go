@@ -3,6 +3,16 @@
 T06 native acceptance passed. The [evidence](../evidence/typed-api-t06.json) records
 commands, source hashes, process/crash coverage, fuzzing and repeated measurements.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Adapt an authenticated operation](#recipe-idempotent-endpoint)
+- [Declare endpoint validation](http-endpoints.md#recipe-compose-endpoint)
+- [Bind and authorize a resource](http-model-binding.md#recipe-scoped-resource-policy)
+
+<a id="recipe-idempotent-endpoint"></a>
+## Adapt an authenticated operation
+
 Enable `settings.Features.Idempotency.Enabled`. The feature uses the configured
 application/environment namespace and its named database, or the database default
 when its name is omitted. `services.Idempotency()` resolves the owned store.
@@ -28,27 +38,11 @@ pruner (see [Atomicity and bounds](#atomicity-and-bounds)); a standalone
 Adapt an existing typed endpoint after declaring its decoding, normalization,
 validation and authorization:
 
+<!-- compiled-source: tests/fixtures/consumer/idempotenthttp/application.go#authenticated-idempotency -->
 ```go
-operation := http.Idempotent(endpoint, store, idempotency.Definition{
-    ID: "orders.create", Version: 1,
-})
-route := operation.Handle(
-    func(ctx context.Context, in OrderRequest) (idempotency.Scope, error) {
-        actor, err := guard.Require(ctx)
-        if err != nil { return idempotency.Scope{}, err }
-        return idempotency.NewScope(actor.Tenant, actor.ID.String())
-    },
-    func(ctx context.Context, tx *database.Tx, in OrderRequest) (OrderReceipt, error) {
-        order, err := orm.Insert(ctx, tx, Orders.Table, orm.TextSet(Orders.Name, in.Body.Name))
-        if err != nil { return OrderReceipt{}, err }
-        receipt := OrderReceipt{ID: order.ID}
-        _, err = OrderCreated.Enqueue(ctx, tx, outbox, receipt)
-        return receipt, err
-    },
-)
 ```
 
-Names in this short example are application declarations. The complete
+The excerpt uses the declarations and dependencies in the complete
 [independent consumer](../../tests/fixtures/consumer/idempotenthttp/application.go)
 uses required authentication, a bound workspace, its current resource policy,
 typed ORM assignments, typed DTOs and the existing outbox. The authenticated adapter

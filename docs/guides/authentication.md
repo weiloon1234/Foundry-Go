@@ -4,6 +4,21 @@ Typed providers, guards, permissions and policies resolve concrete models once p
 
 Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare a model provider](#recipe-declare-provider)
+- [Register actor guards](#recipe-register-guards)
+- [Declare token scopes](#recipe-access-scopes)
+- [Declare permissions](#recipe-declare-permission)
+- [Declare resource policies](#recipe-resource-policy)
+- [Bind a guard to HTTP](#recipe-bind-guard)
+- [Construct password login](#recipe-password-login)
+- [Share credential protection](#recipe-credential-protection)
+- [Scope resource access](http-model-binding.md#recipe-scoped-resource-policy)
+- [Deliver tokens](tokens.md#recipe-token-delivery)
+
+<a id="recipe-declare-provider"></a>
 ## One provider, multiple guards
 
 Declare the table once, then implement `FoundryIdentity` for the model-first
@@ -55,6 +70,17 @@ credential identity; an Actor or a second model hydration is unnecessary.
 Reuse a provider declaration across guards. Registering different declarations
 with the same provider name fails. Repeated guard/policy names fail too. A new
 guard with the same name cannot impersonate a registered declaration.
+
+<a id="recipe-register-guards"></a>
+## Register actor guards
+
+Reuse the provider and register the exact guards, permissions and resource policies
+that their routes use. Access scopes are declared on the token binding, not as
+permission callbacks in the registry. Keep names stable across deployments.
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#register-guards -->
+```go
+```
 
 ## Strategies and credentials
 
@@ -144,14 +170,15 @@ Callbacks must return owned models and be safe for concurrent requests. Foundry
 does not invent a reflection-based deep copy or turn presentation getters into
 stored values. Do not call `Close` from a callback belonging to that scope.
 
+<a id="recipe-resource-policy"></a>
 ## Concrete policies and handlers
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#resource-policy -->
 ```go
-readOrder := auth.DefinePolicy("orders.read",
-    func(ctx context.Context, user User, order Order) (bool, error) {
-        return order.BuyerID == user.ID, nil
-    })
-err := readOrder.Authorize(ctx, api, order)
+```
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#check-resource-policy -->
+```go
 ```
 
 The policy model must match the guard, and its resource type must match the
@@ -164,6 +191,8 @@ message))` with a stable application code and a message safe for the caller.
 `Inspect` returns an `auth.Decision` whose `Denial()` exposes it; `Authorize`
 returns the `*auth.Denial`, which still matches `errors.Is(err, auth.Forbidden)`
 and maps to HTTP 403. To publish the code, wrap it in a declared endpoint error.
+
+## Authorization hooks
 
 Hooks run around every policy and permission for their model type in a registry
 that contains them:
@@ -198,21 +227,11 @@ receives an omitted model instead of `auth.Unauthenticated`, while invalid,
 revoked or pending credentials still fail. Hooks apply only when a model is
 present.
 
+<a id="recipe-bind-guard"></a>
+## Bind a guard to HTTP
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#bind-token-guard -->
 ```go
-transport, err := http.NewAuthentication(registry, http.BearerCredential("api.bearer"))
-// Check err before use; the source must match api.Source().
-profile := http.DefineEndpoint(
-    http.DefineRoute(http.RouteSpec{
-        ID: "profile", Method: http.GET, Access: http.Guarded,
-    }, http.StaticPath("/profile")),
-    http.EmptyQuery(), http.EmptyBody(), http.EmptyResponse(204),
-)
-route := http.RequireAuthentication(profile, transport, api).Handle(
-    func(ctx context.Context, user User, input ProfileInput) (http.NoContent, error) {
-        // user is already resolved; policies/services can reuse api.Require(ctx).
-        return http.NoContent{}, nil
-    },
-)
 ```
 
 `ProfileInput` is an alias for the matching `http.Input` type, as in the consumer
@@ -252,6 +271,7 @@ never become response text. Ordinary domain HTTP errors are preserved. Typed ord
 verified through independent consumer and transport tests.
 
 
+<a id="recipe-declare-permission"></a>
 ## Typed permissions
 
 `auth.Permission[M]` is a model-owned capability without a resource argument.
@@ -259,15 +279,8 @@ It reuses `Policy` registration, callback limits, error handling and per-check
 evaluation. A `PermissionName` is distinct from an `AccessScopeName`: a token's
 scope limits the credential, while a permission evaluates current domain state.
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/permissions.go#declare-permission -->
 ```go
-var ViewAccount = auth.DefinePermission("accounts.view",
-    func(ctx context.Context, user User) (bool, error) {
-        return user.Status == Active, nil
-    },
-)
-// Include ViewAccount.Registration() in the same auth.NewRegistry call.
-err := ViewAccount.Authorize(ctx, api)
-// Or inspect (allowed, err) from ViewAccount.Allows(ctx, api).
 ```
 
 A callback can read typed role/permission relations when the domain requires
@@ -282,9 +295,8 @@ fail, and a second declaration with the same name cannot impersonate the origina
 running a callback. Ordinary `Authorize` still verifies the selected guard, and
 an error from the authority never becomes an allow decision.
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/permissions.go#configure-permission -->
 ```go
-endpoint = foundryhttp.ConfigureAuthenticated(endpoint, http.Permissions(ViewAccount))
-// Compose Scopes(...) as well when this route requires token scopes.
 ```
 
 The HTTP adapter accepts a nonempty list once, takes an owned copy, validates all
@@ -295,6 +307,56 @@ explicit in the handler or service. Route metadata includes typed
 `RequiredPermissions` alongside `RequiredScopes`; inspection returns owned copies.
 The [consumer](../../tests/fixtures/consumer/authenticating/permissions.go) uses
 these actual declarations in its ordinary profile route.
+
+<a id="recipe-access-scopes"></a>
+## Declare required access scopes
+
+Scopes limit the credential; permissions and resource policies evaluate current
+authority. Include the granted scopes when [issuing tokens](tokens.md#recipe-issue-token).
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#declare-scopes -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#configure-scopes -->
+```go
+```
+
+For a new endpoint, use [the bound guard](#recipe-bind-guard). For a resource,
+[scope its lookup and authorize it](http-model-binding.md#recipe-scoped-resource-policy).
+
+<a id="recipe-password-login"></a>
+## Construct password login
+
+Share the stored-model provider with token and session authentication. The
+[password fixture](../../tests/fixtures/consumer/passwords/login.go) supplies typed lookup,
+locked verification and compare-and-swap rehashing. Hash provisioning passwords
+before opening persistence transactions; see [password hashing](password-hashing.md).
+
+<!-- compiled-source: tests/fixtures/consumer/passwords/login.go#password-login -->
+```go
+```
+
+<a id="recipe-credential-protection"></a>
+## Share credential protection stores
+
+Pass the store option to `application.New(settings, CredentialStores(connection))`
+only when its consuming feature and Redis connection are enabled. Reuse the same
+typed keys across actors; configured assembly owns store construction and cleanup.
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#credential-stores -->
+```go
+```
+
+Resolve the protection key during composition and bind the login declaration:
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#password-lockout -->
+```go
+```
+
+Use the same canonical sign-in key for lookup, provisioning and lockout. Resolve
+`CredentialLimitsKey` the same way for the actor's [credential quota](rate-limiting.md).
+See [login lockout](login-lockout.md) for client-aware limits and indistinguishable failures.
 
 ## Automatic authenticated attribution
 

@@ -59,8 +59,12 @@ type Member struct {
 //foundry:path pattern=/items/{key}
 type ItemPath struct{ Key int64 }
 
+// doc-example:begin client-field-label
+
 //foundry:query
 type Filters struct {
 	Search value.Optional[string] `query:"q" client:"kind=text,label=fields.search"`
 	Tags   []string               `query:"tag"`
 }
+
+// doc-example:end client-field-label

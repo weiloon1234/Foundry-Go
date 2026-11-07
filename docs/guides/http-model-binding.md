@@ -3,6 +3,8 @@
 <a id="agent-entry"></a>
 ## Agent entry
 
+- [Scope and authorize resources](#recipe-scoped-resource-policy)
+
 - Resolve: [Typed resource lookup](#recipe-bind-resource)
 - Authenticate: [Resource authorization](#recipe-authenticated-binding)
 
@@ -195,3 +197,18 @@ func BoundOrder(endpoint OrderTransport, resolver modelbinding.Resolver[OrderPat
 	})
 }
 ```
+
+<a id="recipe-scoped-resource-policy"></a>
+## Scope and authorize resources
+
+Resolve the resource inside the authenticated actor's ownership scope. A missing
+or differently owned record is 404. The resource policy runs before the handler;
+a policy or lookup error denies access. Keep counts and validation lookups under
+the same actor or tenant constraint.
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#scoped-resource-policy -->
+```go
+```
+
+For nested resources, use the typed relation helpers in
+[scoped model binding](scoped-model-binding.md).

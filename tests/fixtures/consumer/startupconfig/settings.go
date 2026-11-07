@@ -19,6 +19,8 @@ const (
 	Production  Environment = "production"
 )
 
+// doc-example:begin deployment-settings
+
 type HTTPSettings struct {
 	Listen  string        `config:"listen"`
 	Port    Port          `config:"port"` // Port is the public listener port.
@@ -35,13 +37,21 @@ type Settings struct {
 	Features    map[string]bool `config:"features"`
 }
 
+// doc-example:end deployment-settings
+
+// doc-example:begin configuration-defaults
 func Defaults() Settings {
 	return Settings{HTTP: HTTPSettings{Listen: "127.0.0.1", Port: 8080, Timeout: 5 * time.Second}, Environment: Development}
 }
 
+// doc-example:end configuration-defaults
+
+// doc-example:begin configuration-validation
 func Validate(settings Settings) error {
 	if settings.HTTP.Port == 0 || settings.HTTP.Timeout <= 0 {
 		return fault.New(fault.Invalid, "HTTP port and timeout must be positive")
 	}
 	return nil
 }
+
+// doc-example:end configuration-validation

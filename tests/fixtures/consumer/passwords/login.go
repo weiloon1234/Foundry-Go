@@ -29,6 +29,7 @@ func Accounts(db database.Executor) AccountProvider {
 
 // NewLogin shares the provider used by session and token guards. MFA policy is
 // supplied by the domain; the multifactor fixture demonstrates stored factors.
+// doc-example:begin password-login
 func NewLogin(db AccountStore, provider AccountProvider, hasher *password.Hasher, requiresMFA func(context.Context, Account) (bool, error)) (*Login, error) {
 	return auth.NewPasswordLogin(provider, hasher, auth.PasswordModel[Account, string]{
 		Lock: func(ctx context.Context, tx *database.Tx, account Account) (value.Optional[Account], error) {
@@ -51,6 +52,8 @@ func NewLogin(db AccountStore, provider AccountProvider, hasher *password.Hasher
 		RequiresMFA: requiresMFA,
 	}, auth.DefaultConfig())
 }
+
+// doc-example:end password-login
 
 func Authenticate(ctx context.Context, login *Login, request LoginRequest) (auth.PasswordResult[Account, model.ID[Account]], error) {
 	return login.Authenticate(ctx, request.Email, request.Password)

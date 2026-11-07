@@ -6,6 +6,15 @@ text; status, issue code, JSON Pointer, order and truncation remain stable. Deco
 still returns 400 and rule rejection returns 422. Infrastructure failures retain
 safe 500 responses.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Configure request-aware messages](#recipe-configure-messages)
+- [Translate rules and non-HTTP errors](#recipe-translate-rule)
+- [Declare and load catalogs](localization.md#recipe-load-catalogs)
+- [Register phone messages](phone.md#recipe-phone-messages)
+
+<a id="recipe-configure-messages"></a>
 ## Configured applications
 
 Enable `settings.Features.Locales.Enabled` and configure its `Default`, `Locales`
@@ -13,20 +22,13 @@ and optional `Fallback`. The HTTP kernel automatically applies `http.Locale` and
 registers `application.MessageDefinitions()`: the validation, HTTP and pagination
 messages. An application that builds its own catalog declares the same set by
 calling it, so a message the framework adds later is not missed.
-Supply translations through `application.FeatureDeclarations.Catalog`; only your
-own additional message signatures go in `Messages`.
+Keep authored text in JSON catalogs. Load it with `i18n.ReadTemplates` and supply
+`application.FeatureDeclarations.Catalog`; only your own additional message
+signatures go in `Messages`. Pass deployment settings with locales enabled and
+use their selected default and supported set:
 
+<!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#configured-catalog -->
 ```go
-Catalog: map[i18n.LocaleID]map[i18n.MessageKey]i18n.Template{
-    "ms": {
-        "validation.min_length": {
-            Forms: map[i18n.PluralForm]string{
-                i18n.Other: "{{attribute}} mesti mempunyai sekurang-kurangnya {{min}} aksara.",
-            },
-        },
-        "http.error.validation_failed": {Text: "Pengesahan gagal"},
-    },
-},
 ```
 
 Built-in validation keys replace the `foundry.` rule prefix with `validation.`.
@@ -62,7 +64,16 @@ rule's English text, even when English is not enabled. Error responses include
 `Cache-Control: no-store`. Individual missing messages can still contain English.
 Successful responses retain their own language/cache policy.
 
+<a id="recipe-translate-rule"></a>
 ## Typed overrides and non-HTTP use
+
+<!-- compiled-source: tests/fixtures/consumer/localization/messages.go#rule-message-arguments -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/localization/validation.go#translated-field-rule -->
+```go
+```
 
 `WithMessage` is literal and wins over translations, including `{{braces}}`.
 `validation.WithTranslation(rule, GeneratedMessage(), Args{...})` attaches the
@@ -78,6 +89,15 @@ See the executable [typed override](../../tests/fixtures/consumer/localization/v
 and [configured HTTP acceptance](../../tests/fixtures/consumer/configuredprofile/localization_test.go).
 Apply an override to `validation.Rules(field, ...)` for field-specific wording.
 Custom rules use exactly the same `WithTranslation` function.
+
+Register the generated message with the catalog owner and supply its placeholders
+in every enabled locale. Do not use literal overrides for public localized errors.
+The [catalog loading recipe](localization.md#recipe-load-catalogs) owns message
+registration and JSON loading.
+
+<!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#localize-validation -->
+```go
+```
 
 Direct `validation.Check` returns English diagnostics. CLI/worker callers can explicitly
 use `rejected.Localize(ctx, catalog, locale)` to obtain an owned translated copy;

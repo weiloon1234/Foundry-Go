@@ -93,6 +93,7 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 		if err != nil {
 			return nil, err
 		}
+		// doc-example:begin authenticated-idempotency
 		required := http.AuthorizeActor(http.RequireAuthentication(Endpoint(), transport, guard), func(_ context.Context, _ Actor, in Request) error {
 			if in.Body.Name == "request-denied" {
 				return http.Forbidden
@@ -143,5 +144,6 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 			}
 			return receipt, nil
 		})}, nil
+		// doc-example:end authenticated-idempotency
 	}).Build(ctx)
 }

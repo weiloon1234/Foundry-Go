@@ -13,9 +13,11 @@ import {
 
 declare const messages: ValidationMessages;
 export function messageConsumer(): void {
+  // doc-example:begin browser-typed-messages
   void formatMessage(messages, "cart.items", { count: 2, name: "Ada" });
   void formatMessage(messages, "cart.items", { count: "2.5", name: "Ada" });
   void formatMessage(messages, "fields.name");
+  // doc-example:end browser-typed-messages
   // @ts-expect-error A declared message requires every typed argument.
   void formatMessage(messages, "cart.items", { count: 2 });
   // @ts-expect-error A misspelled key is not a declared message.
@@ -23,7 +25,9 @@ export function messageConsumer(): void {
   // @ts-expect-error A boolean parameter is not text.
   void formatMessage(messages, "wire.literals", { enabled: "yes", text: "x" });
   // Frontend-only keys name their plural argument explicitly.
+  // doc-example:begin browser-text-message
   void formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
+  // doc-example:end browser-text-message
   const key: CatalogMessageKey = "welcome";
   void key;
   // The server's configured locales, typed as the catalog's Locale union.
@@ -32,9 +36,11 @@ export function messageConsumer(): void {
   void fallback; void supported;
 
   // S9: frontend message formatting and key checking
+  // doc-example:begin browser-frontend-messages
   void formatFrontendMessage(messages, "ui.welcome", { name: "Ada" });
   void formatFrontendMessage(messages, "ui.farewell");
   void formatFrontendMessage(messages, "auth.notice", { attempts: 3 });
+  // doc-example:end browser-frontend-messages
   const feKey: FrontendMessageKey = "ui.welcome";
   void feKey;
   // @ts-expect-error A misspelled frontend key is not a declared message.

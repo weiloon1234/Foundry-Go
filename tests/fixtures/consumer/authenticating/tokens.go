@@ -19,6 +19,7 @@ type IssuedUserToken = token.Issued[models.User, model.ID[models.User]]
 
 // APITokens borrows the consumer's existing pool and stored-model provider.
 // Apply tokenpg.Migrations explicitly before running token operations.
+// doc-example:begin token-store
 func APITokens(db *database.DB, provider UserProvider, persistence tokenpg.Config, config token.Config) (*UserTokens, error) {
 	backend, err := tokenpg.New(db, persistence)
 	if err != nil {
@@ -35,8 +36,11 @@ func APITokens(db *database.DB, provider UserProvider, persistence tokenpg.Confi
 	return token.New(store, "users.tokens", provider, "users.bearer", declared)
 }
 
+// doc-example:end token-store
+
 // StartVerifiedToken receives a proof from the trusted login flow. It never
 // constructs proof from a submitted ID or accepts raw permission strings.
+// doc-example:begin issue-token
 func StartVerifiedToken(ctx context.Context, tokens *UserTokens, proof auth.Proof[models.User, model.ID[models.User]], name string, renewable bool) (IssuedUserToken, error) {
 	granted, err := OrderReadScopes()
 	if err != nil {
@@ -44,9 +48,14 @@ func StartVerifiedToken(ctx context.Context, tokens *UserTokens, proof auth.Proo
 	}
 	return tokens.Issue(ctx, proof, token.IssueOptions[models.User]{Name: name, Scopes: granted, Refresh: renewable})
 }
+
+// doc-example:end issue-token
+// doc-example:begin refresh-token
 func RefreshVerifiedToken(ctx context.Context, tokens *UserTokens, raw secret.String) (IssuedUserToken, error) {
 	return tokens.Refresh(ctx, raw)
 }
+
+// doc-example:end refresh-token
 func UserTokenSubject(info UserTokenInfo) model.Reference[models.User, model.ID[models.User]] {
 	return info.Subject()
 }

@@ -8,12 +8,16 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin query-presence
+
 //foundry:query
 type SearchInput struct {
 	User     model.ID[models.User]
 	Search   value.Optional[string] `query:"q"`
 	Statuses []models.Status        `query:"status"`
 }
+
+// doc-example:end query-presence
 
 type OtherInput struct{ Search string }
 

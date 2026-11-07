@@ -29,13 +29,17 @@ func Users(executor database.Executor) UserProvider {
 	})
 }
 
+// doc-example:begin resource-policy
 var ReadOrder = auth.DefinePolicy("orders.read", func(_ context.Context, user models.User, order models.Order) (bool, error) {
 	return order.BuyerID == user.ID, nil
 })
 
+// doc-example:end resource-policy
+
 // AccountGuards shows two independently verified strategies sharing one model
 // provider. Built-in session persistence is demonstrated in sessions.go; these
 // arguments are verified strategy adapters, not a request-level credential bypass.
+// doc-example:begin register-guards
 func AccountGuards(provider UserProvider, token UserStrategy, session UserStrategy) (*auth.Registry, auth.Guard[models.User], auth.Guard[models.User], error) {
 	api := auth.DefineGuard("users.api", provider, token)
 	web := auth.DefineGuard("users.web", provider, session)
@@ -43,12 +47,18 @@ func AccountGuards(provider UserProvider, token UserStrategy, session UserStrate
 	return registry, api, web, err
 }
 
+// doc-example:end register-guards
+
 func CurrentUser(ctx context.Context, guard auth.Guard[models.User]) (models.User, error) {
 	return guard.Require(ctx)
 }
+
+// doc-example:begin check-resource-policy
 func CheckOrder(ctx context.Context, guard auth.Guard[models.User], order models.Order) error {
 	return ReadOrder.Authorize(ctx, guard, order)
 }
+
+// doc-example:end check-resource-policy
 func RestoreIdentity(provider UserProvider, identity model.Identity) (model.Reference[models.User, model.ID[models.User]], error) {
 	return provider.Parse(identity)
 }

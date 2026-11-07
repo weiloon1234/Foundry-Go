@@ -6,6 +6,21 @@ rendering, built-in translations, typed overrides and generated client presentat
 See [expanded rules and concurrent validation](validation-expanded.md) for the
 full rule catalog, typed model lists and bounded concurrent database/API checks.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Compose field rules](#recipe-compose-rules)
+- [Check values outside HTTP](#recipe-check-values)
+- [Write a custom rule](#recipe-custom-rule)
+- [Label generated fields](#recipe-field-labels)
+- [Validate exact decimals](#recipe-decimal-precision)
+- [Use advisory database checks](#recipe-database-rules)
+- [Handle omitted and null fields](http-presence.md#recipe-presence)
+- [Normalize phone numbers](phone.md#recipe-normalize-phone)
+
+<a id="recipe-compose-rules"></a>
+## Compose typed field rules
+
 Foundry generates validation fields from `//foundry:dto` structs using the same
 JSON names, promotion rules and field types as the DTO's transport descriptor.
 Applications compose ordinary Go rule values and inject dependencies explicitly.
@@ -14,15 +29,8 @@ Validation leaves input values unchanged.
 The [consumer HTTP validation fixture](../../tests/fixtures/consumer/httpvalidation/validation.go)
 adds rules to an existing typed endpoint:
 
+<!-- compiled-source: tests/fixtures/consumer/httpvalidation/validation.go#validate-http-body -->
 ```go
-var Update = http.ValidateBody(httpendpoints.Update,
-    validation.Rules(httpdto.UpdateUserValidationFields().Email,
-        validation.Optional(validation.NonBlank[string]()),
-    ),
-    validation.Rules(httpdto.UpdateUserValidationFields().Nickname,
-        validation.Optional(validation.Nullable(validation.MinLength[string](2))),
-    ),
-)
 ```
 
 `Email` remains `value.Optional[string]`; `Nickname` remains
@@ -77,7 +85,16 @@ check := func(ctx context.Context, input Request, limits validation.Limits) erro
 Interfaces that required these methods need an explicit application adapter.
 Generated field sets and the public `contract.JSON[T]` API are unchanged.
 
+<a id="recipe-check-values"></a>
 ## Using rules outside HTTP
+
+<!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#patch-rules -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#check-update -->
+```go
+```
 
 `validation.Check(rule, ctx, input, limits)` is usable from services, commands and jobs.
 It returns nil only after every applicable check passes. Inspect
@@ -126,7 +143,17 @@ share a Go name, generated `Field_…` aliases retain their distinct Go paths;
 inspect their generated comments and concrete types through gopls. Properties
 must have an accessible Go selector and a type the generating package can name.
 
+<a id="recipe-custom-rule"></a>
 ## Custom rules and metadata
+
+<!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#custom-translated-rule -->
+```go
+```
+
+Declare and register the typed arguments through
+[translated rule messages](validation-messages.md#recipe-translate-rule). Reuse the
+same domain rule across HTTP, console input and provisioning. Sign-in validation
+checks format; account existence belongs to the credential verifier.
 
 `Custom[T]` takes a `Spec` and `func(context.Context, T) (bool, error)`. Return
 `(false, nil)` to reject input and an error when execution fails. Callbacks must
@@ -342,20 +369,19 @@ Plain `omitempty` fields still cannot prove wire presence from their Go zero
 value. Use explicit wrappers; additional ordinary-field presence metadata remains
 milestone work.
 
+<a id="recipe-field-labels"></a>
 ## Field display names
 
-Use a generated typed field's `WithLabel` method when a public display name
-differs from its JSON name:
+Declare the shared label key and presentation kind on the DTO field. Generated
+validation selectors and client descriptors inherit this metadata:
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/dto.go#client-field-label -->
 ```go
-fields := httpdto.UpdateUserValidationFields()
-rule := validation.Rules(validation.WithLabel(fields.Email, "Email address"),
-    validation.Optional(validation.NonBlank[string]()),
-)
 ```
 
-An HTTP rejection keeps its exact `/body/email` path and adds
-`"label": "Email address"` beside its existing code and message. Labels are
+An HTTP rejection keeps its JSON Pointer and adds the selected label beside its
+code and message. For a direct static label, call `validation.WithLabel(field, label)`.
+For translated field overrides, use [typed validation messages](validation-messages.md#recipe-translate-rule). Labels are
 static declaration text, never submitted input. They do not replace wire names
 or interpolate values into messages. The same label is included in validation
 metadata, including both field labels for a comparison. `WithLabelKey` and `Errors.LocalizeLabels` integrate with the delivered
@@ -367,7 +393,12 @@ their own labels; an unlabeled nested field does not inherit its parent's name.
 Invalid or oversized labels fail declaration validation, and labels count toward
 the existing aggregate metadata limit. Wire decoding errors omit the label.
 
+<a id="recipe-decimal-precision"></a>
 ## Numbers and decimals
+
+<!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#decimal-precision -->
+```go
+```
 
 `DecimalMin`, `DecimalMax` and `DecimalBetween` bound exact decimals.
 `DecimalGreaterThan`, `DecimalGreaterOrEqual`, `DecimalLessThan` and
@@ -376,6 +407,12 @@ the existing aggregate metadata limit. Wire decoding errors omit the label.
 canonical, so `1.50` has one place. `DecimalMultipleOf(step)` requires an exact
 integer quotient for a positive step such as `0.25`. None of these convert
 through floating point.
+
+When replacing a custom precision rule, retire its declaration and registration.
+The native rule ID is `foundry.decimal_places`, with plural message
+`validation.decimal_places` and numeric `places`. Translate it in every enabled
+locale, regenerate catalogs and client metadata, and retain caller/message coverage.
+`Decimal.Int64` rejects fractions and overflow instead of rounding.
 
 For extension/content correlation and a single image inspection shared by format
 and dimensions, see [upload kind validation](http-uploads.md#match-extension-and-content-together).
@@ -410,6 +447,7 @@ This uses the engine's inspection, limits and lifecycle, including HEIF, JPEG XL
 and other available native formats. The rule does not close the engine.
 `NewEngineMeasurer` exposes the same adapter for `validation.Dimensions`.
 
+<a id="recipe-database-rules"></a>
 ## Advisory database rules
 
 Import `validation/database` as `databasevalidation`. The adapter composes the
@@ -426,6 +464,14 @@ func activeUsers(db database.Executor) validation.Rule[[]model.ID[models.User]] 
 		models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.StatusActive)),
 		orm.KeyExpr(models.Users.Key()))
 }
+```
+
+Custom uniqueness rules can borrow the same typed lookup. Supply the actor or
+tenant constraint in `scopedUsers`; the adapter does not invent that scope.
+Run cheap checks before this I/O and keep the database constraint authoritative.
+
+<!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#typed-validation-lookup -->
+```go
 ```
 
 Each result is an ordinary `validation.Rule` with the field's concrete value

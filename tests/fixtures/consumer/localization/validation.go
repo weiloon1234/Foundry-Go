@@ -8,12 +8,15 @@ import (
 
 // NameRule attaches a generated message to a concrete field-owned rule. The
 // generated argument owner is checked by Go; field labels supply attribute.
+// doc-example:begin translated-field-rule
 func NameRule() validation.Rule[WelcomeArgs] {
 	return validation.Rules(validation.WithLabelKey(validation.WithLabel(WelcomeArgsValidationFields().Name, "Name"), "fields.name"), validation.WithTranslation(
 		validation.WithMessage(validation.NonBlank[string](), "Enter your name."),
 		RuleArgsMessage(), RuleArgs{Team: "Foundry team"},
 	))
 }
+
+// doc-example:end translated-field-rule
 func ValidationCatalog(ctx context.Context) (*i18n.Catalog, error) {
 	definition, err := RuleArgsMessage().Definition()
 	if err != nil {

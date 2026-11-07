@@ -1,13 +1,19 @@
 # Normalize and validate phone numbers
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Normalize accepted input](#recipe-normalize-phone)
+- [Validate typed phone fields](#recipe-validate-phone)
+- [Register phone messages](#recipe-phone-messages)
+
+<a id="recipe-normalize-phone"></a>
+## Normalize accepted input
+
 Use `phone.Parse` with the selected `countries.Code` before storing a contact number:
 
+<!-- compiled-source: tests/fixtures/consumer/codecs/phone.go#normalize-phone -->
 ```go
-number, err := phone.Parse(countries.Code("MY"), "012-345 6789", phone.Options{})
-if err != nil {
-	return err
-}
-canonical := number.String() // +60123456789
 ```
 
 Import `github.com/weiloon1234/Foundry-Go/phone` and
@@ -29,6 +35,7 @@ Keep the approved `github.com/nyaruka/phonenumbers/v2 v2.0.15` metadata version
 aligned across both operations; metadata upgrades can change accepted numbers.
 Only `phone` and its importers compile this dependency's metadata.
 
+<a id="recipe-validate-phone"></a>
 ## Declare validation rules
 
 Import `github.com/weiloon1234/Foundry-Go/validation/phone` as `phonevalidation`.
@@ -37,19 +44,8 @@ to an ordinary typed validation field. Named string types are also supported.
 
 For a contact with its own selected country, use typed fields:
 
+<!-- compiled-source: tests/fixtures/consumer/codecs/phone.go#validate-phone -->
 ```go
-type Contact struct {
-	Country countries.Code `json:"country"`
-	Number  string         `json:"number"`
-}
-
-country := validation.DefineField("country", func(in Contact) countries.Code {
-	return in.Country
-})
-number := validation.DefineField("number", func(in Contact) string {
-	return in.Number
-})
-rule := phonevalidation.For(country, number, phone.Options{})
 ```
 
 Use generated validation fields when your DTO has them. `For` reports failures
@@ -66,7 +62,12 @@ For an optional number with a fixed region, wrap `Number` in the same way.
 Applications that permit empty text must declare that condition explicitly;
 empty text does not imply omission or null.
 
+<a id="recipe-phone-messages"></a>
 ## Translate phone messages
+
+<!-- compiled-source: tests/fixtures/consumer/codecs/phone.go#phone-messages -->
+```go
+```
 
 Register `phonevalidation.MessageDefinitions()` alongside your ordinary
 `validation.MessageDefinitions()` when adding phone translations to your catalog.

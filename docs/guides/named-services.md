@@ -1,22 +1,27 @@
 # Named services and defaults
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Configure and resolve services](#recipe-named-services)
+- [Load typed service tables](#recipe-named-tables)
+- [Declare deployment inputs](generated-configuration.md#recipe-declare-configuration)
+
+<a id="recipe-named-services"></a>
+## Configure and resolve services
+
 `infrastructure.Configure` assembles PostgreSQL, Redis, disks and caches from
 concrete settings. It reuses the existing providers and lifecycle. The
 [application builder](application-bootstrap.md) uses this same assembly layer and
 passes its typed services into ordinary domain constructors. The following API
 is also available directly for advanced composition.
 
+<!-- compiled-source: tests/fixtures/consumer/configured/settings.go#named-services -->
 ```go
-settings := infrastructure.DefaultSettings()
-settings.Cache.Stores = infrastructure.CacheStores{
-    "default": infrastructure.DefaultCacheSettings(),
-    "reports": infrastructure.DefaultCacheSettings(),
-}
-plan, err := infrastructure.Configure(settings)
-if err != nil { return err }
-app, err := plan.Register(foundry.New()).Build(ctx)
-if err != nil { return err }
-return app.Start(ctx)
+```
+
+<!-- compiled-source: tests/fixtures/consumer/configured/settings.go#select-named-cache -->
+```go
 ```
 
 `services, err := foundation.Resolve(app.Services(), infrastructure.ServicesKey)`
@@ -41,6 +46,7 @@ Default-selection errors identify the generated setting path, such as
 unconfigured default and `fault.Invalid` for an invalid name. The path is relative
 to `infrastructure.Settings`; configured values are not included in these errors.
 
+<a id="recipe-named-tables"></a>
 ## Typed configuration tables
 
 Application `//foundry:config` settings may contain `infrastructure.Settings` as a
