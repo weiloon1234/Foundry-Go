@@ -46,6 +46,8 @@ var typedDiagnosticOwners = map[string]int{
 	// Typed execution/reconciliation result captured by its presentation owner.
 	"database/errors.go#scope#Error": 1,
 	// Typed execution/reconciliation result captured by its presentation owner.
+	"database/errors.go#withCallerDeadline#Error": 1,
+	// Typed execution/reconciliation result captured by its presentation owner.
 	"database/errors.go#wrap#Error": 1,
 	// Typed execution/reconciliation result captured by its presentation owner.
 	"database/migrate/progress.go#applyNonTransactional#InterruptedMigration": 5,
