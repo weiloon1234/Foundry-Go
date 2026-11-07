@@ -18,6 +18,7 @@ type documentRules struct {
 	Owners         []string          `json:"owners"`
 	Constructors   map[string]string `json:"constructors"`
 	RetainedOwners []string          `json:"retainedOwners"`
+	CallArguments  map[string]int    `json:"callArguments"`
 	Chains         []struct {
 		Owner       string   `json:"owner"`
 		Methods     []string `json:"methods"`
@@ -77,6 +78,15 @@ func (r documentRules) checkCode(name, code string, line int) []error {
 	if file == nil {
 		return nil
 	}
+	calls := make(map[*ast.SelectorExpr]*ast.CallExpr)
+	ast.Inspect(file, func(node ast.Node) bool {
+		if call, ok := node.(*ast.CallExpr); ok {
+			if selected, ok := stripTypeArguments(call.Fun).(*ast.SelectorExpr); ok {
+				calls[selected] = call
+			}
+		}
+		return true
+	})
 	aliases := map[string]string{"foundryhttp": "http"}
 	for _, spec := range file.Imports {
 		imported, err := strconv.Unquote(spec.Path.Value)
@@ -133,7 +143,7 @@ func (r documentRules) checkCode(name, code string, line int) []error {
 			case *ast.Ident:
 				method = inner.Name
 			}
-			if method == chain.Methods[0] {
+			if method == chain.Methods[0] && r.matchesCallArguments(method, call) {
 				chainOwner, replacement = chain.Owner, chain.Replacement
 				receiver = base
 			}
@@ -149,12 +159,19 @@ func (r documentRules) checkCode(name, code string, line int) []error {
 				message += "; " + replacement
 			}
 			report(selected.Sel.Pos(), message)
-		} else if owner == "" {
+		} else if owner == "" && r.matchesCallArguments(selected.Sel.Name, calls[selected]) {
 			report(selected.Sel.Pos(), "ambiguous API teaching for ."+selected.Sel.Name+"; qualify the receiver's owner or replace the example with a Foundry guides: reference")
 		}
 		return true
 	})
 	return failures
+}
+
+// Fixed-arity calls can rule out a retired method on an unknown receiver.
+// Method references and variadic methods still need owner evidence.
+func (r documentRules) matchesCallArguments(method string, call *ast.CallExpr) bool {
+	count, fixed := r.CallArguments[method]
+	return !fixed || call == nil || len(call.Args) == count && !call.Ellipsis.IsValid()
 }
 
 func stripTypeArguments(expr ast.Expr) ast.Expr {

@@ -5,7 +5,23 @@ Configure one application lifecycle owner, explicit providers and typed
 registries. Bind operational routes through the same HTTP server, authentication
 and permission system as ordinary application routes.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Diagnose readiness](#recipe-startup-readiness)
+- [Roll or stop an instance](#recipe-rolling-termination)
+- [Record recovery evidence](#recipe-recover-operations)
+- [Deploy a pinned release](deployment.md#recipe-deploy)
+
+<a id="recipe-startup-readiness"></a>
 ## Startup and readiness
+
+Related owners: [logging](logging.md), [protected log maintenance](production-diagnostics.md),
+[typed caches](caching.md), [distributed caches](distributed-cache.md),
+[leases](leases.md), [purpose-bound encryption](encryption.md),
+[audit](audit.md) and [persisted telemetry](persisted-telemetry.md).
+
+Declare probes through [readiness features](readiness-and-maintenance.md#recipe-declare-readiness).
 
 Constructors and provider factories validate declarations without performing
 application I/O. Boot dependencies in their declared graph order. Do not report
@@ -26,17 +42,12 @@ normal operational process. Avoid a restart loop for a healthy process whose
 database is temporarily unavailable. Probe reports omit arbitrary error payloads;
 do not put credentials, SQL, request bodies or user data in probe IDs.
 
+<a id="recipe-rolling-termination"></a>
 ## Maintenance and rolling termination
 
-Every application owns one maintenance gate, with or without observability:
-`services.Maintenance()` (or `App.Maintenance()`) returns it. `Set(true)` pauses
-new work and publishes non-ready status. Existing HTTP handlers, jobs, heartbeats
-and owner cleanup continue. Workers pause before reservation; schedules retain
-pending occurrence times and use their bounded catch-up policy after resume.
-WebSockets reject new upgrades/messages/subscriptions while allowing unsubscribe
-cleanup. CLI admission fails before constructing the command handler. `Set(false)`
-resumes a paused gate. `Drain()` is terminal and cannot be resumed.
-`features.observability.maintenance = true` starts an instance paused.
+Use the application's [maintenance admission owner](readiness-and-maintenance.md#recipe-maintenance-admission)
+to pause and resume work. `features.observability.maintenance = true` starts an
+instance paused.
 
 For a fleet, name a configured cache store (Redis, or PostgreSQL with its explicit
 cache migration) in `maintenance.store`. Each instance applies the shared record at
@@ -250,6 +261,7 @@ log redaction for custom sinks and `logging.Correlate` for context-aware custom
 handlers; `logging.JSON` already applies correlation. Scope log access and
 retention like other operational data.
 
+<a id="recipe-recover-operations"></a>
 ## Recovery evidence
 
 After a fault, record the failed operation, lifecycle/admission state, queue or

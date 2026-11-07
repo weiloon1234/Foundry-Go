@@ -38,9 +38,13 @@ func Load(path string) (application.Settings, error) {
 	value, _, err := schema.Load(Defaults(), inputs)
 	return value, err
 }
+
+// doc-example:begin register-tables
 func Build(ctx context.Context, settings application.Settings, options ...application.Option) (*application.App, error) {
 	if err := productionprofile.Check(); err != nil {
 		return nil, err
 	}
 	return application.New(settings, append([]application.Option{application.WithTables(productionprofile.Tables()...)}, options...)...).HTTP(Routes).Build(ctx)
 }
+
+// doc-example:end register-tables

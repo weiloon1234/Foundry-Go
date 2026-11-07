@@ -87,6 +87,14 @@
     "rows.SelectTransactionCorrelatedScalar": "rows.TransactionCorrelatedScalar",
     "rows.ProjectTransactionCorrelated": "rows.TransactionCorrelatedRecord"
   },
+  "callArguments": {
+    "Check": 3,
+    "ForUpdate": 0,
+    "WithScopes": 1,
+    "WithAuthorization": 1,
+    "Values": 0,
+    "Entries": 0
+  },
   "retainedOwners": [
     "Scope",
     "http.Scope",

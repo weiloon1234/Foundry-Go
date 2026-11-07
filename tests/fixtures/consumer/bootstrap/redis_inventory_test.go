@@ -33,6 +33,7 @@ func TestRedisInventoryBeforeApplicationBuild(t *testing.T) {
 		),
 		application.WithCredentials("default", credentials.ProviderFunc(func(context.Context) (credentials.Value, error) { panic("inspection retrieved credentials") })),
 	).Register(foundation.Module{Name: "must-not-run", OnRegister: func(*foundation.Registrar) error { panic("inspection ran an application provider") }})
+	// doc-example:begin redis-inventory
 	inventory, err := builder.RedisKeys()
 	if err != nil {
 		t.Fatal(err)
@@ -40,6 +41,8 @@ func TestRedisInventoryBeforeApplicationBuild(t *testing.T) {
 	if len(inventory) != 1 || len(inventory[0].Keys) != 2 {
 		t.Fatal(inventory)
 	}
+	// doc-example:end redis-inventory
+
 	command, err := application.RedisKeysCommand("redis.keys", builder)
 	if err != nil {
 		t.Fatal(err)

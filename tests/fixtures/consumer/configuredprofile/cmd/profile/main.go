@@ -23,6 +23,7 @@ func run() error {
 	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	// doc-example:begin run-configured-http
 	settings, err := configuredprofile.Load(*path)
 	if err != nil {
 		return err
@@ -36,5 +37,7 @@ func run() error {
 		// and returns nil, or the task/cleanup failures it observed.
 		return app.Run(ctx, foundation.HTTP)
 	}
+	// doc-example:end run-configured-http
+
 	return configuredprofile.Smoke(ctx, app)
 }

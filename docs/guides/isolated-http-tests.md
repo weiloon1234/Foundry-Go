@@ -5,30 +5,51 @@ owns acceptance status. The [independent consumer](../../tests/fixtures/consumer
 uses ordinary application assembly, handwritten ORM declarations, typed HTTP DTOs and a real
 PostgreSQL transaction per write. Handlers contain no test schema argument.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Isolate PostgreSQL applications](#recipe-isolate-application)
+- [Run HTTP or worker kernels](#recipe-run-kernels)
+- [Retain failed test schemas](#recipe-schema-cleanup)
+- [Configure Redis tests](#recipe-redis-test-config)
+- [Remove one attachment original](#recipe-missing-attachment)
+
+<a id="recipe-isolate-application"></a>
+## Isolate an application
+
 The low-level alias `pgtest` imports `testkit/postgres`; `pgapp` imports
 `testkit/postgres/application` for application settings/migrations.
 
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_recipes_test.go#isolated-application -->
 ```go
-scope := pgtest.Isolate(t)
-archive := pgtest.Isolate(t)
-settings := Defaults() // your concrete production settings
-env, err := pgapp.Bind(settings.Services.Database,
-    pgapp.On(scope, "main", "reporting").WithReads(),
-    pgapp.On(archive, "archive"),
-)
-if err != nil { t.Fatal(err) }
-settings, err = settings.WithDatabaseScopes(env.Settings())
-if err != nil { t.Fatal(err) }
-app, err := Build(t.Context(), settings, onCommit)
-if err != nil { t.Fatal(err) }
-err = env.Start(t, app,
-    infrastructure.MigrationTarget{Definitions: Migrations()},
-    infrastructure.MigrationTarget{Connection: "archive", Definitions: Migrations()},
-)
-if err != nil { t.Fatal(err) }
-db, err := app.Resources().Database()
-if err != nil { t.Fatal(err) }
-// ORM queries/factories now use db normally, including real commits.
+func isolatedApplication(t testing.TB) *application.App {
+	t.Helper()
+	scope, archive := pgtest.Isolate(t), pgtest.Isolate(t)
+	settings := isolatedhttp.Defaults()
+	env, err := pgapp.Bind(settings.Services.Database,
+		pgapp.On(scope, "main", "reporting").WithReads(),
+		pgapp.On(archive, "archive"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings, err = settings.WithDatabaseScopes(env.Settings())
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Services.Namespace.Environment = scope.Schema()
+	app, err := isolatedhttp.Build(t.Context(), settings, func(context.Context, isolatedhttp.Receipt) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := env.Start(t, app,
+		infrastructure.MigrationTarget{Definitions: isolatedhttp.Migrations()},
+		infrastructure.MigrationTarget{Connection: "archive", Definitions: isolatedhttp.Migrations()},
+	); err != nil {
+		t.Fatal(err)
+	}
+	return app
+}
 ```
 
 Use `FOUNDRY_TEST_POSTGRES_URL` only for the explicitly opted-in test database.
@@ -57,6 +78,36 @@ starting providers. Identical contributions from intentionally shared connection
 deduplicate; conflicting migration definitions fail. Domain SQL must use ordinary
 unqualified application tables or explicitly select the owned schema. No helper
 rewrites SQL, creates a database/server, or wraps the whole test in rollback.
+
+<a id="recipe-run-kernels"></a>
+## Run test-owned kernels
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_recipes_test.go#run-http-test -->
+```go
+func TestConfiguredHTTPKernel(t *testing.T) {
+	app, err := configuredprofile.Build(t.Context(), configuredprofile.Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseURL := appstest.RunHTTP(t, app)
+	client := httptest.Connect(t, baseURL)
+	response, err := client.Do(t.Context(), client.Get("/profile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	httptest.AssertStatus(t, response, 200)
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_recipes_test.go#run-worker-test -->
+```go
+func runWorker(t testing.TB, app *application.App) {
+	t.Helper()
+	stop := appstest.RunKernel(t, app, foundation.Worker)
+	// Exercise this application's registered jobs before stopping it.
+	stop()
+}
+```
 
 For the production HTTP kernel, run `app.Run(ctx, foundation.HTTP)`, obtain its
 address with `app.HTTPReady(ctx)`, and use `testkit/http.Connect(t, "http://"+address)`.
@@ -107,6 +158,7 @@ If a test genuinely requires process-wide environment variable mutations or unsh
 
 Go executes all serial tests sequentially first, before executing parallel tests. Serial tests still acquire a concurrency slot through `Environment.Start`, ensuring safe connection bounds while running in complete isolation from parallel suites.
 
+<a id="recipe-schema-cleanup"></a>
 ## Pool scope and retained data
 
 The typed adapter `postgres.Config.Schema` selects one validated existing schema.
@@ -130,10 +182,12 @@ Use `database.Session.Discard` for custom session state such as advisory locks;
 do not mutate the pool's schema from domain code. Transactions/session scopes
 retain their selected connection until their callback exits.
 
-Schemas, committed rows and migration history are **retained**. Teardown closes
-resources only: no DROP, TRUNCATE, database reset, or persistent-data deletion.
-The helper logs namespace identifiers without credentials. Retained schemas
-accumulate; manage their long-term retention explicitly outside test teardown.
+After a passing test, `testkit/postgres` removes only that test's generated schema,
+including its committed rows and migration history. Failure, panic or
+`FOUNDRY_TEST_KEEP_SCHEMAS=1` retains it for diagnosis. A test that creates an object
+outside its schema must clean up only that exact object on success, with the same
+retention rule. Do not add a second cleanup script or remove retained schemas as
+routine maintenance. The helper logs namespace identifiers without credentials.
 Temporary PostgreSQL session objects naturally expire when their session closes.
 
 Cache/Redis/queue namespaces, local storage directories and external services
@@ -142,6 +196,38 @@ does not automatically isolate those resources. Set a distinct application
 namespace and use test-owned directories/backends. Tests requiring database-wide
 extensions or settings remain separate, explicitly configured integration tests.
 
+<a id="recipe-redis-test-config"></a>
+## Configure Redis test connections
+
+Use the testkit parser once, including its optional username and password, then
+convert the result to application settings. Give each test a unique application
+namespace. Do not read credentials again or flush a shared store.
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_recipes_test.go#redis-test-settings -->
+```go
+func redisSettings(t testing.TB) infrastructure.RedisSettings {
+	t.Helper()
+	connection := infrastructure.RedisSettingsFromConfig(redistest.Config(t))
+	settings := infrastructure.DefaultRedisSettings()
+	settings.Connections = infrastructure.RedisConnections{"default": connection}
+	return settings
+}
+```
+
+<a id="recipe-missing-attachment"></a>
+## Simulate a missing attachment object
+
+Pass the selected file from a collection result or a loaded model slot. The helper
+removes that original object and retains its metadata and other files. Use only
+test-owned storage. See [attachments](attachments.md) for creating and loading files.
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_recipes_test.go#missing-attachment-object -->
+```go
+func removeOriginal(t testing.TB, manager *attachments.Manager, file attachments.File[models.User]) {
+	t.Helper()
+	attachmentstest.RemoveBackingObject(t, manager, file)
+}
+```
 
 ## Acceptance evidence
 

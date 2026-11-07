@@ -1,5 +1,50 @@
 # Static assets and SPA routing
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Serve assets and client navigation](#recipe-serve-assets)
+- [Declare a configured SPA](#recipe-declare-spa)
+- [Inject public runtime data](#recipe-spa-runtime)
+- [Wrap a development proxy](#recipe-runtime-proxy)
+
+<a id="recipe-serve-assets"></a>
+## Serve static assets and SPA navigation
+
+<!-- compiled-source: tests/fixtures/consumer/httpassets/assets.go#asset-lifecycle -->
+```go
+func Build(ctx context.Context, source foundryhttp.AssetSource) (*foundation.App, error) {
+	config := foundryhttp.DefaultServerConfig()
+	config.Address = "127.0.0.1:0"
+	return foundry.New(foundation.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))).Register(
+		foundryhttp.AssetsModule("assets", AssetsKey, foundryhttp.DefaultAssetsConfig(source)),
+		foundryhttp.Module("http", ServerKey, config, func(resolver foundation.Resolver) (stdhttp.Handler, error) {
+			assets, err := foundation.Resolve(resolver, AssetsKey)
+			if err != nil {
+				return nil, err
+			}
+			mount := assets.Mount("web.assets", "/assets").WithNavigationFallback(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(stdhttp.StatusNotFound)
+				if r.Method != stdhttp.MethodHead {
+					_, _ = io.WriteString(w, "<main>Page not found</main>")
+				}
+			}))
+			health := foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "api.health", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/api/health")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+			router, err := foundryhttp.NewRouter(mount.Register(), health.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
+				return foundryhttp.NoContent{}, nil
+			}))
+			if err != nil {
+				return nil, err
+			}
+			spa := foundryhttp.DefaultSPAConfig()
+			spa.Exclude = []string{"/api", "/assets"}
+			return router.WithSPA("web.spa", assets, spa)
+		}),
+	).Build(ctx)
+}
+```
+
 Foundry owns static-directory startup and shutdown through `AssetsModule`.
 Declare `DirectoryAssets(path)` or `FilesystemAssets(fsys)` in
 `DefaultAssetsConfig`, resolve the typed `*Assets` service while constructing
@@ -100,19 +145,21 @@ Runtime, lifecycle, independent-consumer, compiler and actual-gopls checks passe
 The [master acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-08-static-assets-and-spa-focused-acceptance)
 tracks verification and the remaining milestone scope.
 
+<a id="recipe-declare-spa"></a>
 ## SPA fallbacks with application.New
 
 `application.New` builds the router itself, so declare SPAs on the builder with
 the same `SPAConfig`, naming the `*Assets` key an `AssetsModule` provides:
 
+<!-- compiled-source: tests/fixtures/consumer/httpassets/runtime.go#configured-spa -->
 ```go
-admin := foundryhttp.DefaultSPAConfig()
-admin.Prefix, admin.Exclude = "/admin", []string{"/admin/api"}
-app, err := application.New(settings).
-    Register(foundryhttp.AssetsModule("web.admin", AdminAssets, adminConfig)).
-    HTTP(routes). // root public mount, /admin/assets bundles, API endpoints
-    SPA("portal.admin", AdminAssets, admin).
-    Build(ctx)
+func DeclareSPA(builder *application.Builder, source foundryhttp.AssetSource, runtimeData foundryhttp.SPARuntime) *application.Builder {
+	spa := foundryhttp.DefaultSPAConfig()
+	spa.Prefix, spa.Exclude = "/admin", []string{"/admin/api"}
+	spa.Runtime = runtimeData
+	return builder.Register(foundryhttp.AssetsModule("web.admin", AssetsKey, foundryhttp.DefaultAssetsConfig(source))).
+		SPA("portal.admin", AssetsKey, spa)
+}
 ```
 
 Build checks each declaration before any asset directory opens: an unknown
@@ -125,6 +172,7 @@ config)`, which `Builder.SPA` uses too. The
 [portal consumer](../../tests/fixtures/consumer/spaportals/portals.go) exercises
 two portals, a root portal, hashed bundles and API routes with `application.New`.
 
+<a id="recipe-spa-runtime"></a>
 ## Inject public runtime data
 
 Use one `SPARuntime` descriptor for built documents and development proxies.
@@ -132,25 +180,29 @@ The application supplies its public DTO, generated `contract.JSON[T]` codec and
 loader. The framework owns document reads, encoding, escaping and response headers.
 Keep secrets and server configuration out of this DTO.
 
+<!-- compiled-source: tests/fixtures/consumer/httpassets/runtime.go#portal-runtime-dto -->
 ```go
-runtimeConfig := foundryhttp.DefaultSPARuntimeConfig()
-runtimeData := foundryhttp.DefineSPARuntime(
-	resources.PortalRuntimeResourceJSON(),
-	func(ctx context.Context, request *http.Request) (resources.PortalRuntimeResource, error) {
-		rows, err := countriesService.Enabled(ctx)
-		if err != nil {
-			return resources.PortalRuntimeResource{}, err
-		}
-		return resources.NewPortalRuntimeResource(rows, preferredCountry), nil
-	},
-	runtimeConfig,
-)
-spa := foundryhttp.DefaultSPAConfig()
-spa.Runtime = runtimeData
-builder.SPA("portal", PortalAssets, spa)
+//foundry:dto
+type PortalRuntime struct {
+	SiteName string `json:"site_name"`
+}
 ```
 
-Here `http.Request` is the standard library request. Bind service dependencies
+<!-- compiled-source: tests/fixtures/consumer/httpassets/runtime.go#portal-runtime -->
+```go
+func Runtime(siteName string) foundryhttp.SPARuntime {
+	config := foundryhttp.DefaultSPARuntimeConfig()
+	return foundryhttp.DefineSPARuntime(PortalRuntimeJSON(),
+		func(ctx context.Context, request *stdhttp.Request) (PortalRuntime, error) {
+			if err := ctx.Err(); err != nil {
+				return PortalRuntime{}, err
+			}
+			return PortalRuntime{SiteName: siteName}, nil
+		}, config)
+}
+```
+
+Here `stdhttp.Request` is the standard library request. Bind service dependencies
 before serving requests. The loader receives the original method, headers and
 request context, including an existing CSP nonce. It must be concurrency-safe,
 honor cancellation, and neither mutate nor retain the borrowed request. Register
@@ -210,18 +262,17 @@ adapter also closes the transformed body when downstream writing or a buffer-poo
 callback panics or calls Goexit; downstream panics still propagate. On rejection,
 upstream Close runs in callback isolation and finishes before admission is released.
 
-### Wrap an existing development proxy
+<a id="recipe-runtime-proxy"></a>
+## Wrap an existing development proxy
 
 Keep the application's `httputil.ReverseProxy`, upstream URL and route exclusions.
 Wrap the proxy once during route construction and propagate construction errors:
 
+<!-- compiled-source: tests/fixtures/consumer/httpassets/runtime.go#runtime-proxy -->
 ```go
-handler, err := runtimeData.WrapProxy(proxy, IsPortalNavigation)
-if err != nil {
-	return foundryhttp.RouteRegistration{}, err
+func DevelopmentProxy(proxy *httputil.ReverseProxy, runtimeData foundryhttp.SPARuntime, navigation func(*stdhttp.Request) bool) (stdhttp.Handler, error) {
+	return runtimeData.WrapProxy(proxy, navigation)
 }
-// Inside the existing HandleRaw callback, after its reserved-path checks:
-handler.ServeHTTP(w, request)
 ```
 
 The predicate selects possible documents, including direct HTML paths if the
@@ -249,7 +300,7 @@ The adapter copies proxy configuration and borrows the transport. Do not mutate
 the proxy's shared dependencies after wrapping it. It neither starts nor closes
 the upstream server or transport.
 
-### Preserve CSP and middleware behavior
+## Preserve CSP and middleware behavior
 
 Place CSP middleware outside the router or proxy adapter so the loader and renderer
 see the request nonce. The hook uses `CSPNonceFromContext`; it validates the nonce
@@ -270,53 +321,10 @@ middleware declaration or changes idempotency metadata. Existing custom
 middleware annotated with `PreservesIdempotentResponses()` retains that contract;
 removing the old global portal-runtime wrapper needs no replacement attestation.
 
-### Adopt in Starter, ooo and Boss Club
+## Application integration
 
-For each application, delete `internal/middleware/portal_runtime.go` and its
-transport-only `internal/middleware/portal_runtime_test.go`. Keep the DTO,
-generated codec and `internal/bootstrap/contracts.go` registration. In
-`internal/bootstrap/web.go`, replace `builder.Use(middleware.PortalRuntime(...))`
-with one `DefineSPARuntime` declaration. Change the loader result from `[]byte`
-to `resources.PortalRuntimeResource`, return the DTO directly, and remove its
-manual `Encode` call and unused `contract` import. Keep the existing service
-resolution callback before routes are assembled.
-
-After `id, spa := web.PortalSPA(portal)`, set `spa.Runtime = runtimeData` before
-`builder.SPA`. Pass the same descriptor into development route construction:
-
-```go
-func DevProxyRoute(p portals.Portal, port uint16, runtimeData http.SPARuntime) (http.RouteRegistration, error)
-```
-
-In `internal/web/web_routes.go`, wrap the existing proxy with
-`runtimeData.WrapProxy(proxy, IsPortalNavigation)`, propagate errors, and replace
-only `proxy.ServeHTTP(w, r)` with the returned handler's `ServeHTTP(w, r)`. Keep
-reserved-path checks, route IDs, typed paths and upstream error handlers. Update
-bootstrap's route loop to collect the returned registration and propagate errors.
-Update `PortalSPA` godoc to describe the descriptor instead of global middleware.
-
-Application-specific details:
-
-- **Starter:** retain `portals.All()` and the country/default-country loader.
-  Keep `StyleNonceCarrier` false.
-- **ooo:** retain `portals.Browsers()`, SSR routing, and the loader's `SiteName`,
-  `BillingEnabled` and `ReviewsEnabled` assignments. Keep the current navigation
-  predicate's SSR and machine-request exclusions. Remove only the portal wrapper's
-  idempotency attestation; other middleware attestations stay in place.
-- **Boss Club:** paths are relative to `system/`. Set `StyleNonceCarrier = true`.
-  Retain `ContentSecurityPolicy()` outside the router and the DTO constructor's
-  currency and country-choice fields. Keep and adapt
-  `internal/middleware/content_security_policy_test.go` to serve a runtime-enabled
-  SPA under CSP and assert the same script and style nonces.
-
-In all three apps, adapt `internal/web/web_test.go` and
-`internal/bootstrap/portal_runtime_test.go` to exercise the new wiring. Replace
-references to the deleted middleware's `PortalRuntimeElementID` with
-`http.DefaultSPARuntimeConfig().ElementID`. In ooo also update those references in
-`internal/bootstrap/site_test.go` and `internal/bootstrap/web_test.go`; keep its
-SSR, machine-request and idempotent API assertions. Keep any additional integration
-coverage rather than deleting it with the transport wrapper.
-
-Leave `web/shared/config/portal-runtime.ts` unchanged. Its default ID and JSON
-script contract remain compatible. Migrating its parsing to generated contract
-decoding is the separate ST-003 task.
+Keep portal inventories, browser bases, build commands, SSR ownership, public-file
+policy and runtime allowlists in the application. Share the runtime descriptor
+between its built SPA declaration and development proxy. Register the public DTO
+in the application's contract export and supply its generated strict decoder to
+the browser reader. This hook does not register a client contract automatically.

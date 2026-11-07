@@ -4,6 +4,20 @@ Milestone 23 passed native verification, independent consumer review, relevant
 races and bounded fuzzing. This guide explains the public APIs and their
 executable consumer recipes.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Author compiled guide examples](#recipe-author-examples)
+- [Reference pinned guides](#recipe-reference-guides)
+- [Read pinned guides offline](#recipe-read-pinned-guides)
+- [Commands and bootstrap](#recipe-declare-command)
+- [Individual artifact scaffolds](#recipe-scaffold-artifacts)
+- [Doctor and declaration inspection](#recipe-inspect-declarations)
+- [Test-owned application and transports](#recipe-test-transports)
+- [Register model tables](model-scaffolding.md#recipe-register-tables)
+- [Isolate service tests](isolated-http-tests.md#agent-entry)
+
+<a id="recipe-author-examples"></a>
 ## Author compiled guide examples
 
 Author executable recipes in the independent consumer fixtures, then include the
@@ -114,6 +128,7 @@ Active guides and application instructions cannot use this exception. Link to
 the migration owner instead of repeating former methods in current API teaching.
 The [validation mapping](v0.2-migration.md#validation-migration) is one such owner.
 
+<a id="recipe-reference-guides"></a>
 ## Reference pinned guides
 
 Declare references on complete lines outside Markdown fences:
@@ -136,6 +151,7 @@ validates every supplied fragment against its explicit IDs.
 The framework's `make docs-check` uses the same parser and resolver for active
 guides, instructions and `.claude/skills` Markdown, against its own guide tree.
 
+<a id="recipe-read-pinned-guides"></a>
 ## Read pinned guides offline
 
 Resolve the application's selected framework for offline reading:
@@ -189,6 +205,7 @@ with a guide reference. App-owned regions cannot exempt stale teaching by labeli
 it an example. See the [compatibility policy](../compatibility.md#pinned-documentation)
 for upgrades and rollback.
 
+<a id="recipe-declare-command"></a>
 ## Commands and bootstrap
 
 Declare an argument struct, bind it with `cli.Flags`, and pass the decoder to
@@ -197,6 +214,86 @@ the compiler retains the same argument type through decoding and execution.
 `cli.New` freezes explicit declarations and rejects duplicate names. `Parse`
 validates arguments and prints help before application startup. The selected
 handler is constructed only when its invocation runs.
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/commands.go#typed-command -->
+```go
+type Greeting struct {
+	Name  string
+	Count int
+}
+type Greeter struct{ Prefix string }
+
+var GreeterKey = foundation.NewKey[*Greeter]("tooling.greeter")
+var CommandsKey = foundation.NewKey[*cli.Registry]("tooling.commands")
+
+var Greet = cli.Define("greet", "Write a typed greeting", cli.Flags(func(flags *flag.FlagSet, args *Greeting) {
+	flags.StringVar(&args.Name, "name", "", "recipient name")
+	flags.IntVar(&args.Count, "count", 1, "number of greetings")
+}, func(args Greeting) error {
+	if args.Name == "" || args.Count < 1 || args.Count > 10 {
+		return cli.Usage("--name and a count from 1 to 10 are required")
+	}
+	return nil
+}))
+
+func GreetingDeclaration() (cli.Declaration, error) {
+	return Greet.Declare(func(resolver foundation.Resolver) (cli.Handler[Greeting], error) {
+		service, err := foundation.Resolve(resolver, GreeterKey)
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx context.Context, args Greeting, streams cli.Streams) error {
+			for range args.Count {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				if _, err := fmt.Fprintf(streams.Out, "%s %s\n", service.Prefix, args.Name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}, nil
+	})
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/commands.go#parse-before-bootstrap -->
+```go
+func Run(ctx context.Context, args []string, streams cli.Streams) error {
+	greeting, err := GreetingDeclaration()
+	if err != nil {
+		return err
+	}
+	var registry *cli.Registry
+	var builder *foundation.Builder
+	inspect, err := inspection.Command(InspectName, func(ctx context.Context) (inspection.Report, error) {
+		return inspection.Collect(ctx, inspection.Sources{Builder: builder, Commands: registry})
+	})
+	if err != nil {
+		return err
+	}
+	registry, err = cli.New(greeting, inspect)
+	if err != nil {
+		return err
+	}
+	invocation, err := registry.Parse(args, streams.Out)
+	if err != nil {
+		return err
+	}
+	service := foundation.Module{Name: "greeter", OnRegister: func(r *foundation.Registrar) error {
+		return foundation.Provide(r, GreeterKey, &Greeter{Prefix: "Hello"})
+	}}
+	builder = foundry.New().Register(service, cli.Module("cli", CommandsKey, registry, invocation, streams, service.Name))
+	if invocation.Name() == InspectName {
+		return invocation.Run(ctx, nil, streams)
+	}
+	app, err := builder.Build(ctx)
+	if err != nil {
+		return err
+	}
+	return app.Run(ctx, foundation.CLI)
+}
+```
 
 The [command consumer](../../tests/fixtures/consumer/tooling/commands.go) is the
 complete recipe: typed flags, validation, injected services, explicit streams,
@@ -279,7 +376,17 @@ terminal disconnect (`SIGHUP`) and context cancellation terminate all child grou
 isolated callback containment (`internal/callback`) so application panics or `runtime.Goexit`
 do not crash the supervisor unhandled.
 
+<a id="recipe-scaffold-artifacts"></a>
 ## Individual artifact scaffolds
+
+If the application console cannot compile because generated types are missing,
+run `GOWORK=off go tool foundry generate --recursive --dir .` directly.
+Generated files and their ownership manifests remain generator-owned.
+
+
+For public signatures, run `GOWORK=off go doc <package>` or
+`GOWORK=off go doc <package>.<Symbol>` in the application module. For semantic
+lookup in a consumer file, use [agent inspection](agent-language-tooling.md#recipe-inspect-source).
 
 Prefer the [project-pinned CLI](team-adoption.md) through `go tool foundry`, which
 shares the application's framework requirement. An installed `foundry` must match
@@ -291,12 +398,12 @@ package, first add a `doc.go` containing its package declaration, as shown in
 Then create individual declarations:
 
 ```sh
-foundry make model Widget --table widgets --dir ./models
-foundry make dto WidgetResponse --dir ./transport
-foundry make job DeliverWidget --id widget.deliver --queue deliveries --dir ./jobs
-foundry make command InspectWidgets --id widgets.inspect --dir ./commands
-foundry generate --recursive --dir .
-foundry generate --recursive --check --dir .
+GOWORK=off go tool foundry make model Widget --table widgets --dir ./models
+GOWORK=off go tool foundry make dto WidgetResponse --dir ./transport
+GOWORK=off go tool foundry make job DeliverWidget --id widget.deliver --queue deliveries --dir ./jobs
+GOWORK=off go tool foundry make command InspectWidgets --id widgets.inspect --dir ./commands
+GOWORK=off go tool foundry generate --recursive --dir .
+GOWORK=off go tool foundry generate --recursive --check --dir .
 ```
 
 The other kinds follow the same pattern:
@@ -340,10 +447,26 @@ Fresh-package generation, installed dependency compatibility and collisions are
 covered by the [scaffold tests](../../internal/generate/scaffold_developer_test.go)
 and the [component scaffold tests](../../internal/generate/scaffold_components_test.go).
 
+<a id="recipe-inspect-declarations"></a>
 ## Doctor and declaration inspection
 
+Inspect declared Redis key prefixes after composition, before Build or service
+startup. Serialize the returned inventory rather than reconstructing prefixes.
+`application.RedisKeysCommand` adds table and JSON output to the same CLI registry.
+
+<!-- compiled-source: tests/fixtures/consumer/bootstrap/redis_inventory_test.go#redis-inventory -->
+```go
+inventory, err := builder.RedisKeys()
+if err != nil {
+	t.Fatal(err)
+}
+if len(inventory) != 1 || len(inventory[0].Keys) != 2 {
+	t.Fatal(inventory)
+}
+```
+
 ```sh
-foundry doctor --dir . --go go --gopls gopls --python python3 --require-gopls
+GOWORK=off go tool foundry doctor --dir . --go go --gopls gopls --python python3 --require-gopls
 ```
 
 Doctor reads the selected Go/module metadata and optionally checks gopls.
@@ -373,6 +496,7 @@ or `all`) and compact JSON or readable indented text. The development binary
 cannot import an arbitrary application's bootstrap: register this command in the
 application that owns those declarations.
 
+<a id="recipe-test-transports"></a>
 ## Test-owned application and transports
 
 `testkit.Start` uses the actual builder and lifecycle and registers cleanup before
@@ -389,7 +513,8 @@ header replaces the inherited value rather than adding a second one. `client.Wit
 an independent client for the same server. `JSON`, `DecodeJSON` and
 `AssertStatus` keep generated request/response contracts explicit. Requests
 traverse the handler's real middleware and auth.
-See the [HTTP recipe](../../tests/fixtures/consumer/tooling/tooling_test.go).
+See the [HTTP recipe](../../tests/fixtures/consumer/tooling/tooling_test.go) and
+[test-owned kernels](isolated-http-tests.md#recipe-run-kernels).
 
 Response assertions report failures through the test without printing secrets:
 

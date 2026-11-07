@@ -13,14 +13,21 @@ The client passes protocol fixture tests and real-gopls completion, hover, and d
 
 Run `make gopls-install` with the native Go toolchain to install the pinned development tool into ignored `bin/`. The real acceptance gate is `FOUNDRY_TEST_GOPLS="$PWD/bin/gopls" make agent-smoke`. It checks completion, typed hover information, definition lookup, original field help and getter/mutator notices in the independent consumer. Stored-field probes also reject removed computation methods while keeping ordinary comparisons and mutation methods visible. It also checks that source is unchanged. Ordinary tests skip that gate when no executable is selected; the smoke target fails if the selection is missing. A skipped test does not satisfy the real-language-server requirement.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Inspect a consumer symbol](#recipe-inspect-source)
+- [Read pinned guides](developer-tooling-and-testing.md#recipe-read-pinned-guides)
+
+<a id="recipe-inspect-source"></a>
 ## Inspect an existing consumer file
 
-Run in the consumer workspace with a native gopls executable. With gopls available, an installed Foundry CLI accepts:
+Run in the consumer workspace with a native gopls executable. With gopls available, the project-pinned Foundry CLI accepts:
 
 ```sh
-foundry agent hover --workspace /path/to/consumer --file models/user.go --line 12 --column 7
-foundry agent definition --workspace /path/to/consumer --file models/user.go --line 12 --column 7
-foundry agent complete --workspace /path/to/consumer --file handlers/users.go --line 24 --column 5 --insert 'fields.' --format text
+GOWORK=off go tool foundry agent hover --workspace /path/to/consumer --file models/user.go --line 12 --column 7
+GOWORK=off go tool foundry agent definition --workspace /path/to/consumer --file models/user.go --line 12 --column 7
+GOWORK=off go tool foundry agent complete --workspace /path/to/consumer --file handlers/users.go --line 24 --column 5 --insert 'fields.' --format text
 ```
 
 These positions are illustrative; select a real position in your consumer file. In this framework checkout, `go run ./cmd/foundry agent ...` runs the same commands. `--gopls /absolute/path/to/gopls` selects an existing executable. The default executable is `gopls` on the host PATH.

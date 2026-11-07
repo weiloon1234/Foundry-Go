@@ -14,6 +14,7 @@ import (
 
 const InspectName cli.Name = "inspect"
 
+// doc-example:begin typed-command
 type Greeting struct {
 	Name  string
 	Count int
@@ -53,8 +54,11 @@ func GreetingDeclaration() (cli.Declaration, error) {
 	})
 }
 
+// doc-example:end typed-command
+
 // Run parses before bootstrap. Metadata inspection deliberately runs its pure
 // collector before Build; domain commands use the normal shared CLI kernel.
+// doc-example:begin parse-before-bootstrap
 func Run(ctx context.Context, args []string, streams cli.Streams) error {
 	greeting, err := GreetingDeclaration()
 	if err != nil {
@@ -89,3 +93,5 @@ func Run(ctx context.Context, args []string, streams cli.Streams) error {
 	}
 	return app.Run(ctx, foundation.CLI)
 }
+
+// doc-example:end parse-before-bootstrap

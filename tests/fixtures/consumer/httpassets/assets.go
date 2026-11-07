@@ -31,6 +31,7 @@ func EmbeddedSource() (foundryhttp.AssetSource, error) {
 // Build declares source, routes and services; Foundry opens the directory at
 // boot, serves and drains HTTP, then closes asset resources. No os.Root is
 // opened or closed by this consumer. The same source can be embedded or local.
+// doc-example:begin asset-lifecycle
 func Build(ctx context.Context, source foundryhttp.AssetSource) (*foundation.App, error) {
 	config := foundryhttp.DefaultServerConfig()
 	config.Address = "127.0.0.1:0"
@@ -61,3 +62,5 @@ func Build(ctx context.Context, source foundryhttp.AssetSource) (*foundation.App
 		}),
 	).Build(ctx)
 }
+
+// doc-example:end asset-lifecycle

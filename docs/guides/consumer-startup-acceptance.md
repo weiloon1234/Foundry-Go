@@ -8,6 +8,14 @@ owns milestone status. [Final evidence](../evidence/consumer-startup-c05.json),
 [native results](../evidence/consumer-startup-c05-native.json) and the
 [complete change audit](consumer-startup-audit.md) retain the proof and limitations.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Run a configured consumer](#recipe-run-consumer)
+- [Register native tables](model-scaffolding.md#recipe-register-tables)
+- [Run test-owned kernels](isolated-http-tests.md#recipe-run-kernels)
+
+<a id="recipe-run-consumer"></a>
 ## Runnable compact consumer
 
 The [profile executable](../../tests/fixtures/consumer/configuredprofile/cmd/profile/main.go)
@@ -26,12 +34,21 @@ application product or a production authentication template.
 
 The entry point is ordinary Go:
 
+<!-- compiled-source: tests/fixtures/consumer/configuredprofile/cmd/profile/main.go#run-configured-http -->
 ```go
-settings, err := configuredprofile.Load(configPath)
-if err != nil { return err }
+settings, err := configuredprofile.Load(*path)
+if err != nil {
+	return err
+}
 app, err := configuredprofile.Build(ctx, settings)
-if err != nil { return err }
-return app.Run(ctx, foundation.HTTP)
+if err != nil {
+	return err
+}
+if *serve {
+	// A signal is a graceful stop: Run drains within the shutdown budget
+	// and returns nil, or the task/cleanup failures it observed.
+	return app.Run(ctx, foundation.HTTP)
+}
 ```
 
 `Build` registers typed domain routes through `application.New(settings).HTTP(...)`.

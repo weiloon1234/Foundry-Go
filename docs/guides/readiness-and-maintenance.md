@@ -4,6 +4,34 @@ Readiness checks and maintenance admission share the application lifecycle.
 The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) records
 acceptance and verification evidence.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare dependency readiness](#recipe-declare-readiness)
+- [Pause or resume admission](#recipe-maintenance-admission)
+- [Operate a fleet](production-operations.md#recipe-rolling-termination)
+
+<a id="recipe-declare-readiness"></a>
+## Declare dependency readiness
+
+Use the feature callback to return concrete dependency probes. Resolve dependencies
+at construction and retain them in the probes. Configured health must be enabled
+for these probes to run. Public probes expose status only; dependency identities
+and typed states belong behind diagnostic authorization.
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/readiness.go#feature-readiness -->
+```go
+func WithDatabaseReadiness(builder *application.Builder) *application.Builder {
+	return builder.Features(func(services application.Services) (application.FeatureDeclarations, error) {
+		db, err := services.Database()
+		if err != nil {
+			return application.FeatureDeclarations{}, err
+		}
+		return application.FeatureDeclarations{Readiness: db.ReadinessProbes("database.primary", "database.read")}, nil
+	})
+}
+```
+
 `health.Registry` owns typed dependency probes. `NewRegistry` validates IDs,
 duplicates and resource bounds without running checks. `Check(ctx)` returns a
 report in declaration order, with `Up`, `Down`, `TimedOut`, `Cancelled`,
@@ -44,6 +72,16 @@ with `features.health.configured_connections`; `configured_storage` and
 Readiness reports describe dependency availability. Process liveness and the
 application's startup/draining state are separate inputs to the final transport
 response; a dependency outage alone must not trigger a process restart loop.
+
+<a id="recipe-maintenance-admission"></a>
+## Control maintenance admission
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/readiness.go#pause-admission -->
+```go
+func Pause(app *application.App, paused bool) {
+	app.Maintenance().Set(paused)
+}
+```
 
 `maintenance.Gate` controls new work admission. Its zero value serves normally.
 `Set(true)` pauses, `Set(false)` resumes, and `Drain()` permanently closes

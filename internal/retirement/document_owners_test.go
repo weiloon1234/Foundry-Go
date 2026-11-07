@@ -128,6 +128,60 @@ func TestDocumentAmbiguousTeaching(t *testing.T) {
 	}
 }
 
+func TestDocumentAmbiguousCallShapes(t *testing.T) {
+	for _, tc := range []struct {
+		code string
+		want string
+	}{
+		{"productionprofile.Check()", ""},
+		{"X.Check()", ""},
+		{"rule.Check(ctx)", ""},
+		{"rule.Check(ctx, input)", ""},
+		{"rule.Check(ctx, input, limits)", "ambiguous API teaching"},
+		{"(rule.Check)(ctx, input, limits)", "ambiguous API teaching"},
+		{"rule.Check(ctx, input, limits, extra)", ""},
+		{"rule.Check(args...)", ""},
+		{"validation.Check(rule, ctx, input, limits)", ""},
+		{"var rule validation.Rule[string]\nrule.Check()", "retired API validation.Rule.Check"},
+		{"rule.Check", "ambiguous API teaching"},
+		{"field.Rules()", "ambiguous API teaching"},
+		{"field.Rules(rules...)", "ambiguous API teaching"},
+		{"validation.Rules(field, rules...)", ""},
+		{"settings.Validate()", ""},
+		{"settings.Validate(ctx)", ""},
+		{"q.ForUpdate()", "ambiguous API teaching"},
+		{"q.ForUpdate(tx)", ""},
+		{"q.ForUpdate(args...)", ""},
+		{"rows.ForUpdate(rows.Read(q))", ""},
+		{"endpoint.WithScopes(scopes)", "ambiguous API teaching"},
+		{"endpoint.WithScopes()", ""},
+		{"endpoint.WithScopes(first, second)", ""},
+		{"endpoint.WithScopes(scopes...)", ""},
+		{"endpoint.WithAuthorization(policy)", "ambiguous API teaching"},
+		{"endpoint.WithAuthorization()", ""},
+		{"endpoint.WithAuthorization(first, second)", ""},
+		{"endpoint.WithPermissions()", "ambiguous API teaching"},
+		{"endpoint.WithPermissions(permissions...)", "ambiguous API teaching"},
+		{"endpoint.WithBodyValidation(rules...)", "ambiguous API teaching"},
+		{"endpoint.WithMiddleware(middleware...)", "ambiguous API teaching"},
+		{"text.Values().Entries()", "ambiguous API teaching"},
+		{"text.Values(input).Entries()", ""},
+		{"text.Values().Entries(input)", ""},
+		{"text.Values().Entries", "ambiguous API teaching"},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			err := CheckDocument("AGENTS.md", []byte("```go\n"+tc.code+"\n```"))
+			if tc.want == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected %q, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
 func TestDocumentRegionsAndHistory(t *testing.T) {
 	text := "<!-- app-owned:begin domain -->\nUse `http.Endpoint.WithBodyValidation`.\n<!-- app-owned:end domain -->"
 	if err := CheckDocument(".claude/skills/domain/references.md", []byte(text)); err == nil || !strings.Contains(err.Error(), "references.md:2:") {

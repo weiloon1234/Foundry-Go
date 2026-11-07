@@ -6,6 +6,14 @@ The bundle implements layout v2, dedicated shared services, role lifecycle,
 Cloudflare certificates, and off-host recovery. Container acceptance remains a
 release requirement; unit tests do not establish live package or provider behavior.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Invoke pinned deployment tools](#recipe-deploy)
+- [Probe release storage](#recipe-storage-probe)
+- [Prepare readiness](production-operations.md#recipe-startup-readiness)
+
+<a id="recipe-deploy"></a>
 ## Invocation
 
 `go tool foundry deploy` runs the Python tool from the application's pinned
@@ -352,6 +360,7 @@ Copying preserves each link without copying its target. Absolute or escaping
 symlinks, cycles, entries beneath symlinked directories, hardlinks, and special
 files are refused.
 
+<a id="recipe-storage-probe"></a>
 ## Storage probe
 
 For an instance with cloud disks, deployment runs the release's
@@ -376,24 +385,13 @@ permission is needed to prove deletion. A release without this command is refuse
 with `storage_probe_unavailable` when the instance has cloud disks. Register the
 command in the application's console catalog and rebuild the release:
 
-```go
-command("deploy.storage-probe", "Check storage write, read and delete access", []string{"deploy:storage-probe"}, settingsOnly, configurationFlags(), c.probeStorage),
-```
+The command catalog and settings loader remain application-owned. Compose the
+builder with web serving disabled, then call the public helper:
 
-Use the same settings loader and bootstrap composition as `redisKeys`. Delegate
-to the framework's `application.ProbeStorage` helper:
-
+<!-- compiled-source: tests/fixtures/consumer/tooling/readiness.go#storage-probe -->
 ```go
-func (c *Console) probeStorage(ctx context.Context, a configArgs, streams cli.Streams) error {
-	settings, _, err := c.load(a)
-	if err != nil {
-		return err
-	}
-	builder, err := bootstrap.Compose(withoutWeb(settings))
-	if err != nil {
-		return err
-	}
-	return application.ProbeStorage(ctx, builder, streams.Out)
+func ProbeStorage(ctx context.Context, builder *application.Builder, output io.Writer) error {
+	return application.ProbeStorage(ctx, builder, output)
 }
 ```
 

@@ -18,7 +18,7 @@ func TestMigrationBeforeBlocks(t *testing.T) {
 			if err := CheckDocument(name, []byte(block)); err == nil {
 				t.Errorf("%s: accepted unlabeled block %q", name, block)
 			}
-			for _, next := range []string{"\nUse `r.Check`.\n", "## Current API\nUse `r.Check`.\n", "<!-- current example -->\nUse `r.Check`.\n", "- Use `r.Check`.\n", "---\nUse `r.Check`.\n", "```go\nr.Check(ctx)\n```\n"} {
+			for _, next := range []string{"\nUse `r.Check`.\n", "## Current API\nUse `r.Check`.\n", "<!-- current example -->\nUse `r.Check`.\n", "- Use `r.Check`.\n", "---\nUse `r.Check`.\n", "```go\nr.Check(ctx, input, limits)\n```\n"} {
 				if err := CheckDocument(name, []byte(label+block+next)); err == nil {
 					t.Errorf("%s: label leaked into %q after %q", name, next, block)
 				}
