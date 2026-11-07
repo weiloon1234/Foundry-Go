@@ -141,11 +141,16 @@ request cleanup.
 
 <!-- compiled-source: tests/fixtures/consumer/mailing/uploads_test.go#attach-request-upload -->
 ```go
-func (s *uploadMailService) Save(ctx context.Context, input httpuploads.ProfileInput) (httpuploads.UploadReply, error) {
-	s.file = input.Attachment
-	var err error
-	s.message, err = s.message.AttachUpload(ctx, input.Attachment)
-	return httpuploads.UploadReply{Name: input.Attachment.Name(), Bytes: input.Attachment.Size(), DetectedType: input.Attachment.ContentType()}, err
+type uploadMailService struct {
+	base email.Message
+}
+
+func (s *uploadMailService) Build(ctx context.Context, input httpuploads.ProfileInput) (email.Message, error) {
+	message, err := s.base.AttachUpload(ctx, input.Attachment)
+	if err != nil {
+		return email.Message{}, err
+	}
+	return message, nil
 }
 ```
 
