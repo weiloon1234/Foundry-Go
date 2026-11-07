@@ -327,7 +327,7 @@ func consumerEditorProbes() []consumerEditorProbe {
 		{"workflow-transaction-service", "teamworkflow/routes.go", "s.", "Submit", []string{"Patch", "Submit", "Routes"}, []string{"Tx", "Actor", "SubmissionRequest", "ActionEnvelope"}, "/teamworkflow/service.go"},
 		{"workflow-tagged-result", "teamworkflow/service.go", "", "ActionFromQueued", []string{"ActionFromQueued", "ActionFromUpdated"}, []string{"SubmissionView", "Action", "error"}, "/teamworkflow/action_foundry.gen.go"},
 		{"idempotency-core-run", "idempotenthttp/operation.go", "op.", "Run", []string{"Run", "Validate", "Definition"}, []string{"Scope", "Key", "Submission", "Receipt"}, "/idempotency/operation.go"},
-		{"idempotency-bound-handler", "idempotenthttp/application.go", "operation.", "Handle", []string{"Handle"}, []string{"Tx", "Actor", "Workspace", "Receipt"}, "/http/modelbinding/idempotency.go"},
+		{"idempotency-bound-handler", "idempotenthttp/order_route.go", "operation.", "Handle", []string{"Handle"}, []string{"Tx", "Actor", "Workspace", "Receipt"}, "/http/modelbinding/idempotency.go"},
 		{"idempotency-configured-store", "idempotenthttp/application.go", "services.", "Idempotency", []string{"Idempotency", "Database", "Events"}, []string{"Store", "error"}, "/application/idempotency.go"},
 		{"scoped-pool-settings", "isolatedhttp/isolation_test.go", "environment.", "Settings", []string{"Settings", "Start", "Migrate"}, []string{"DatabaseSettings"}, "/testkit/postgres/application/environment.go"},
 		{"scoped-named-connection", "isolatedhttp/isolation_test.go", "pgapp.", "On", []string{"On", "Bind"}, []string{"ConnectionName", "Selection"}, "/testkit/postgres/application/environment.go"},
