@@ -2,6 +2,44 @@ package retirement
 
 import "testing"
 
+func TestMigrationBeforeBlocks(t *testing.T) {
+	const label = "<!-- orm-example: validation-before -->\n"
+	blocks := []string{
+		"```go\nfield.Rules(rules...)\n```\n",
+		"| Former method | Function |\n| --- | --- |\n| `field.Rules(rules...)` | `validation.Rules(field, rules...)` |\n",
+		"Former method values such as `r.Check`\nrequire a closure during migration.\n",
+		"- Capture former method values such as `r.Check`\n  in a closure during migration.\n",
+	}
+	for _, block := range blocks {
+		for _, name := range []string{"docs/guides/orm-migration.md", "docs/guides/v0.2-migration.md"} {
+			if err := CheckDocument(name, []byte(label+block)); err != nil {
+				t.Errorf("%s: labeled block rejected: %v", name, err)
+			}
+			if err := CheckDocument(name, []byte(block)); err == nil {
+				t.Errorf("%s: accepted unlabeled block %q", name, block)
+			}
+			for _, next := range []string{"\nUse `r.Check`.\n", "## Current API\nUse `r.Check`.\n", "<!-- current example -->\nUse `r.Check`.\n", "- Use `r.Check`.\n", "---\nUse `r.Check`.\n", "```go\nr.Check(ctx)\n```\n"} {
+				if err := CheckDocument(name, []byte(label+block+next)); err == nil {
+					t.Errorf("%s: label leaked into %q after %q", name, next, block)
+				}
+			}
+		}
+		for _, name := range []string{"docs/guides/validation.md", "AGENTS.md", ".claude/skills/model/SKILL.md"} {
+			if err := CheckDocument(name, []byte(label+block)); err == nil {
+				t.Errorf("%s: accepted migration exception", name)
+			}
+		}
+	}
+	for _, text := range []string{label + "\nUse `r.Check`.\n", label + "## Current API\nUse `r.Check`.\n", label + "---\nUse `r.Check`.\n"} {
+		if err := CheckDocument("docs/guides/v0.2-migration.md", []byte(text)); err == nil {
+			t.Errorf("accepted nonadjacent label: %q", text)
+		}
+	}
+	if err := CheckDocument("AGENTS.md", []byte(label+"Use current APIs.\n")); err == nil {
+		t.Fatal("accepted a migration label in app instructions")
+	}
+}
+
 func TestRetiredDocumentationBoundaries(t *testing.T) {
 	before := "<!-- orm-example: query-before -->\n```go\nquery.ModelQueryOf[User]()\n```\n"
 	if err := CheckDocument("docs/guides/orm-migration.md", []byte(before)); err != nil {

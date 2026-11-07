@@ -59,21 +59,10 @@ values become public messages.
 ## Descriptor functions
 
 `Field[T, V]` and `Rule[T]` are immutable, methodless handles. Pass the
-handle first to validation functions:
+handle first to validation functions.
 
-| Former method | Function |
-| --- | --- |
-| `field.Rules(rules...)` | `validation.Rules(field, rules...)` |
-| `field.Validate()` | `validation.ValidateField(field)` |
-| `field.Name()` | `validation.FieldName(field)` |
-| `field.Select(input)` | `validation.Select(field, input)` |
-| `field.WithLabel(label)` | `validation.WithLabel(field, label)` |
-| `field.WithLabelKey(key)` | `validation.WithLabelKey(field, key)` |
-| `rule.Validate()` | `validation.ValidateRule(rule)` |
-| `rule.Description()` | `validation.DescribeRule(rule)` |
-| `rule.Check(ctx, input, limits)` | `validation.Check(rule, ctx, input, limits)` |
-| `rule.CheckProhibitions(ctx, input, limits)` | `validation.CheckProhibitions(rule, ctx, input, limits)` |
-| `rule.WithMessage(message)` | `validation.WithMessage(rule, message)` |
+For former method names and their replacements, see the
+[validation migration table](v0.2-migration.md#validation-migration).
 
 Use `validation.Rules[Request, string]` or `validation.Check[Request]` as
 function values. To replace a bound method value, capture the descriptor once:

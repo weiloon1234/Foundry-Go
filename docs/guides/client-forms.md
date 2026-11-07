@@ -4,10 +4,10 @@
 ## Agent entry
 
 - Edit: [Exact form values](#recipe-form-values)
-- Further reference: [UI subscriptions](#ownership-and-examples)
-- Further reference: [Async options](#async-options-and-checks)
 
 ## Overview
+
+Further reading: [UI subscriptions](#ownership-and-examples), [Async options](#async-options-and-checks).
 
 The generated SDK provides `createForm`; its
 [acceptance evidence](../evidence/forms-startup-20260930.json) records the verified

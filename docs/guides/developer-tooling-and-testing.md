@@ -4,22 +4,103 @@ Milestone 23 passed native verification, independent consumer review, relevant
 races and bounded fuzzing. This guide explains the public APIs and their
 executable consumer recipes.
 
-<a id="pinned-documentation-checks"></a>
-## Check documentation against the framework pin
+## Author compiled guide examples
 
-From the application module, run:
+Author executable recipes in the independent consumer fixtures, then include the
+source in the guide that owns the explanation. Add a literal anchor immediately
+before the recipe heading and a navigation-only Agent entry near the guide's top.
+Agent entries contain only task labels and local guide links to explicit
+`agent-entry` or `recipe-*` anchors. Put background links in the owning section
+outside Agent entry. Entries contain no code or API summaries.
 
-```sh
-GOWORK=off go tool foundry docs check --dir .
+An anchor is a literal `<a id="anchor-id"></a>` on its own line, immediately
+before its heading. IDs must be unique within the guide; heading text does not
+create an explicit ID. `make docs-check` validates local links with `agent-entry`
+or `recipe-*` fragments through the shared `internal/docrefs` index. Other
+fragments retain path-only checking; the checker does not emulate GitHub slugs.
+
+A source region starts with `// doc-example:begin <region>` and ends with
+`// doc-example:end <region>`. Names use lowercase letters, digits and internal
+hyphens and are unique within their file. Regions cannot nest or overlap. A boundary
+marker may follow its first or last code line as a trailing comment; its separating spaces
+or tabs belong to the marker. This keeps Go declaration directives and top-level end markers gofmt-clean
+without introducing a blank line into the excerpt.
+
+The guide names that region immediately before its fence:
+
+````markdown
+<a id="recipe-read-models"></a>
+## Read models
+
+<!-- compiled-source: tests/fixtures/consumer/example/query.go#read-models -->
+```go
 ```
+````
 
-The command checks module-local `AGENTS.md` files and every Markdown file under
-`.claude/skills`, including reference files and app-owned regions. It skips the
-`.agents/skills` mirror, nested Go modules, dependency and build directories,
-caches, test data, and records whose names contain a `YYYYMMDD` or `YYYY-MM-DD`
-date. It does not need Git metadata. From a repository containing a nested app
-module, use `GOWORK=off go -C system tool foundry docs check --dir .`.
-`--dir` alone cannot select the module before `go tool` starts.
+This syntax illustration names a hypothetical authoring path. Real directives
+must name existing handwritten `.go` files under `tests/fixtures/consumer` or
+`tests/fixtures/goway`, or registered TypeScript inputs in clientcontracts testdata.
+Generated sources and symlink aliases are rejected. A directive without a fragment
+means the entire source file, never a guessed excerpt.
+
+The renderer changes only the next fence, with optional blank lines between the
+directive and fence. It removes markers and the longest byte-identical space/tab
+prefix shared by nonblank lines. Blank lines lose at most that prefix. All other
+source lines and whitespace remain intact. It derives `go` or `typescript` from
+the extension and uses a backtick delimiter longer than any run in the excerpt.
+It adds the newline needed to close a fence when a whole source file lacks one.
+It never renames symbols, repairs calls, inserts ellipses or trims blank lines.
+
+Each region has one owning inclusion. Link to that owner from other sections.
+Every Go or TypeScript fence inside a `recipe-*` section, including subsections,
+requires a directive until the next heading of the same or higher level. The
+previously complete guides also retain their whole-guide source-binding rule.
+The coverage list lives in `internal/docsource`, replacing the old fixture
+substring checker. Shell and JSON examples do not claim compiler proof.
+
+Run `make generate` to render after declaration generation. For a guide-only edit,
+`go run ./internal/cmd/renderdocs --guide model-queries.md` renders just that guide;
+repeat `--guide` for another file. `make generate-check` compares without writing.
+`make docs-check` checks equality, ownership, coverage, source paths, local links
+and the explicit navigation anchors described above. Edit the fixture when a
+rendered fence is wrong.
+
+`make fixture-check` collects the actual `go list -json ./...` inputs from its
+fixture modules using the same build environment as compilation. Ignored Go files,
+unselected build variants and ignored testdata do not count. Test Go files count
+because the gate compiles tests. Do not put a guide's only proof in a compiler-fail
+fixture or an otherwise ignored package.
+
+The main strict TypeScript fixture reads `clientcontracts/typescript-inputs.json`.
+The table-bindings fixture reads its own `testdata/table-bindings/typescript-inputs.json`.
+Those lists are actual compiler inputs, shared with documentation coverage, rather
+than a separate snippet inventory. Add a new example to its matching list. Both
+fixtures export current clients into temporary directories before strict compilation;
+frozen clients remain compatibility evidence. Existing external-input fingerprints
+include guides, fixture sources, input lists and selected native tools.
+
+`make typescript-check` requires existing native tools in `FOUNDRY_TEST_NODE` and
+`FOUNDRY_TEST_TYPESCRIPT`. `make verify` checks those selections and sets the existing required TypeScript mode
+for its fixture run; it does not run the same client test a second time.
+
+Rendered guides ship as readable Markdown. Source links name files in the matching
+GitHub source tree; nested fixture modules need not exist in the installed module
+cache. Reading a released recipe needs no compiler or renderer.
+
+### Former API teaching in migration guides
+
+Only `orm-migration.md` and `v0.2-migration.md` may teach removed APIs. Use the
+existing `<!-- orm-example: name-before -->` label immediately before one fence,
+pipe-delimited mapping table, or paragraph (including one list item). A fence
+ends at its closing delimiter; a table ends at its last row. A paragraph ends at
+a blank line or a new block, including the next list item. A label does not
+cover headings or whole sections. Label each former-API block separately.
+
+Active guides and application instructions cannot use this exception. Link to
+the migration owner instead of repeating former methods in current API teaching.
+The [validation mapping](v0.2-migration.md#validation-migration) is one such owner.
+
+## Reference pinned guides
 
 Declare references on complete lines outside Markdown fences:
 
@@ -36,11 +117,10 @@ trailing commas, and trailing prose are invalid. Repeat the declaration for long
 lists instead of wrapping a list onto an undeclared line. Backtick and tilde
 fences can contain examples without declaring references.
 
-An anchor is a literal `<a id="anchor-id"></a>` on its own line, immediately
-before its heading. IDs must be unique within the guide. Heading text does not
-create an explicit ID. Guide navigation links can use `#anchor-id`; the shared
-`internal/docrefs` index lets framework documentation checks validate those
-fragments without reproducing GitHub's heading-slug rules.
+`go tool foundry docs check` resolves each guide in the selected release and
+validates every supplied fragment against its explicit IDs.
+
+## Read pinned guides offline
 
 Resolve the application's selected framework for offline reading:
 
@@ -54,6 +134,23 @@ when the reference includes a fragment. Read prerequisites when the task needs
 them. For GitHub, append `<guide-name>.md#<anchor-id>` to the application's pinned
 `tree/<version>/docs/guides` base, using its commit for a pseudo-version. Do not
 store module-cache paths in instructions or use sibling checkouts as authority.
+
+<a id="pinned-documentation-checks"></a>
+## Check documentation against the framework pin
+
+From the application module, run:
+
+```sh
+GOWORK=off go tool foundry docs check --dir .
+```
+
+The command checks module-local `AGENTS.md` files and every Markdown file under
+`.claude/skills`, including reference files and app-owned regions. It skips the
+`.agents/skills` mirror, nested Go modules, dependency and build directories,
+caches, test data, and records whose names contain a `YYYYMMDD` or `YYYY-MM-DD`
+date. It does not need Git metadata. From a repository containing a nested app
+module, use `GOWORK=off go -C system tool foundry docs check --dir .`.
+`--dir` alone cannot select the module before `go tool` starts.
 
 The module and toolchain must already be cached. The checker disables downloads,
 workspace selection, and module-file updates, and reports missing setup rather
@@ -454,79 +551,3 @@ External-input fingerprints include the selected compiler's dedicated
 For the old-to-new API mapping, see [ORM migration](orm-migration.md).
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.
-
-## Author compiled guide examples
-
-Author executable recipes in the independent consumer fixtures, then include the
-source in the guide that owns the explanation. Add a literal anchor immediately
-before the recipe heading and a navigation-only Agent entry near the guide's top.
-Agent entries contain task labels and links. Label background links as further
-reference. They contain no code or API summaries.
-
-A source region starts with `// doc-example:begin <region>` and ends with
-`// doc-example:end <region>`. Names use lowercase letters, digits and internal
-hyphens and are unique within their file. Regions cannot nest or overlap. A boundary
-marker may follow its first or last code line as a trailing comment; its separating spaces
-or tabs belong to the marker. This keeps Go declaration directives and top-level end markers gofmt-clean
-without introducing a blank line into the excerpt.
-
-The guide names that region immediately before its fence:
-
-````markdown
-<a id="recipe-read-models"></a>
-## Read models
-
-<!-- compiled-source: tests/fixtures/consumer/example/query.go#read-models -->
-```go
-```
-````
-
-This syntax illustration names a hypothetical authoring path. Real directives
-must name existing handwritten `.go` files under `tests/fixtures/consumer` or
-`tests/fixtures/goway`, or registered TypeScript inputs in clientcontracts testdata.
-Generated sources and symlink aliases are rejected. A directive without a fragment
-means the entire source file, never a guessed excerpt.
-
-The renderer changes only the next fence, with optional blank lines between the
-directive and fence. It removes markers and the longest byte-identical space/tab
-prefix shared by nonblank lines. Blank lines lose at most that prefix. All other
-source lines and whitespace remain intact. It derives `go` or `typescript` from
-the extension and uses a backtick delimiter longer than any run in the excerpt.
-It adds the newline needed to close a fence when a whole source file lacks one.
-It never renames symbols, repairs calls, inserts ellipses or trims blank lines.
-
-Each region has one owning inclusion. Link to that owner from other sections.
-Every Go or TypeScript fence inside a `recipe-*` section, including subsections,
-requires a directive until the next heading of the same or higher level. The
-previously complete guides also retain their whole-guide source-binding rule.
-The coverage list lives in `internal/docsource`, replacing the old fixture
-substring checker. Shell and JSON examples do not claim compiler proof.
-
-Run `make generate` to render after declaration generation. For a guide-only edit,
-`go run ./internal/cmd/renderdocs --guide model-queries.md` renders just that guide;
-repeat `--guide` for another file. `make generate-check` compares without writing.
-`make docs-check` checks equality, ownership, coverage, source paths and existing
-local-link rules. Edit the fixture when a rendered fence is wrong.
-
-`make fixture-check` collects the actual `go list -json ./...` inputs from its
-fixture modules using the same build environment as compilation. Ignored Go files,
-unselected build variants and ignored testdata do not count. Test Go files count
-because the gate compiles tests. Do not put a guide's only proof in a compiler-fail
-fixture or an otherwise ignored package.
-
-The main strict TypeScript fixture reads `clientcontracts/typescript-inputs.json`.
-The table-bindings fixture reads its own `testdata/table-bindings/typescript-inputs.json`.
-Those lists are actual compiler inputs, shared with documentation coverage, rather
-than a separate snippet inventory. Add a new example to its matching list. Both
-fixtures export current clients into temporary directories before strict compilation;
-frozen clients remain compatibility evidence. Existing external-input fingerprints
-include guides, fixture sources, input lists and selected native tools.
-
-`make typescript-check` requires existing native tools in `FOUNDRY_TEST_NODE` and
-`FOUNDRY_TEST_TYPESCRIPT`. `make verify` checks those selections and sets the existing required TypeScript mode
-for its fixture run; it does not run the same client test a second time.
-The lead owns these commands during a no-verification implementation task.
-
-Rendered guides ship as readable Markdown. Source links name files in the matching
-GitHub source tree; nested fixture modules need not exist in the installed module
-cache. Reading a released recipe needs no compiler or renderer.

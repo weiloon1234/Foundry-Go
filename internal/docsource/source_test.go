@@ -8,6 +8,20 @@ import (
 	"testing"
 )
 
+func TestAgentNavigationLines(t *testing.T) {
+	for _, heading := range []string{"## Agent entry", "<a id=\"agent-entry\"></a>\n## Tasks"} {
+		text := heading + "\n\n- Read: [Read](#recipe-read)\n\n## Background\n\n[Other](#other)\n"
+		document, err := parseDocument("guide.md", []byte(text), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := strings.Count(heading, "\n") + 3
+		if len(document.AgentLines) != 1 || document.AgentLines[0] != want {
+			t.Fatalf("navigation lines = %v; want [%d]", document.AgentLines, want)
+		}
+	}
+}
+
 func TestRegions(t *testing.T) {
 	tests := []struct {
 		name, text, want string

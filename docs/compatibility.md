@@ -21,6 +21,18 @@ documented transition, with a redirect link at the old owner when practical.
 Corrections ship in a new normal or patch release, never by changing a published
 tag or overwriting module-cache documentation.
 
+Framework documentation checks require explicit targets for local `agent-entry`
+and `recipe-*` fragments. Agent entry navigation uses only those anchors; other
+heading fragments retain path-only checking. Application `Foundry guides:`
+references validate every supplied fragment against explicit IDs in the selected
+release, without inferring heading slugs. Rendered recipes ship in that release
+and remain readable without fixture sources or TypeScript tools.
+
+Former API teaching belongs in labeled blocks in the designated ORM and v0.2
+migration guides. The existing `orm-example: name-before` mechanism covers one
+fence, mapping table, or paragraph. Active guides and application instructions
+have no retirement exception, including app-owned skill regions.
+
 Review reference diagnostics alongside runtime and generator changes during an
 upgrade. A rollback must restore compatible application references and workflow
 instructions if the earlier pin lacks the checker or newer anchors. No separate

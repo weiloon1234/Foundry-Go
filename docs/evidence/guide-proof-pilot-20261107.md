@@ -1,11 +1,26 @@
-# Guide/proof pilot implementation handoff
+# Guide/proof pilot and pinned documentation integration
 
-Milestone 1 source handoff, 2026-11-07. No tests, fixture compilation, framework builds,
-docs-check, generate-check, TypeScript checks or full verification were run.
-Only Go formatting and the authorized guide renderer ran. The renderer used the
-existing Go cache after sandbox cache access was denied. It rendered all guides
-except `model-extension-slots.md`, whose preserved exception is described below.
-This is implementation evidence, not milestone acceptance or a release claim.
+Milestones 1 and 2 integration handoff, 2026-11-07, on `lane/s6-guides`.
+The lead replayed milestone 2 (`6a0162de`) onto milestone 1 (`228d5403`).
+This integration changes documentation checks and handwritten prose only; fixture
+sources, generated fences, CLI version selection, packaging and Makefile ownership
+remain as delivered by those milestones.
+
+The lead reports these prior results:
+
+- Milestone 1: `make generate`, `make generate-check`, pre-replay `make docs-check`,
+  and tests for `internal/docsource`, `internal/cmd/renderdocs`,
+  `internal/cmd/checkdocs` and `internal/testinputs` passed.
+- Milestone 2: tests for `internal/docrefs`, `internal/retirement` and
+  `cmd/foundry` passed. Its standalone docs check found former-API teaching in
+  the v0.2 migration and active validation guides; this integration addresses it.
+- Fixture compilation and TypeScript proof are still pending. The packaged
+  offline test is retained; no result for it was supplied in this handoff.
+
+No tests, builds, renderer runs or verification commands ran during integration.
+Touched Go files were formatted. Earlier results do not verify this revision;
+the lead owns the commands below. This is implementation evidence, not milestone
+acceptance or a release claim.
 
 ## Acceptance mapping
 
@@ -13,13 +28,16 @@ This is implementation evidence, not milestone acceptance or a release claim.
 | --- | --- |
 | Region parser and exact rendering | [internal/docsource](../../internal/docsource) parses standalone or trailing boundary comments, validates unique region names, rejects overlap, removes only markers and common indentation, selects a safe delimiter and derives the language. Fragmentless directives select the whole file. |
 | Generation ownership | [renderdocs](../../internal/cmd/renderdocs) renders or compares; [Makefile](../../Makefile) calls it after declaration generation in `generate` and read-only `generate-check`. |
-| Documentation checks | [checkdocs](../../internal/cmd/checkdocs) delegates equality, unique owning inclusion, approved source roots, complete-guide coverage, recipe fence binding and navigation-only entries to docsource. No fragment or anchor validation was added. |
+| Documentation checks | [checkdocs](../../internal/cmd/checkdocs) delegates equality, unique owning inclusion, approved source roots, complete-guide coverage, recipe fence binding and navigation-only entries to docsource. Explicit anchor indexing and `agent-entry`/`recipe-*` link checks now delegate to docrefs; Agent entry line locations come from the same docsource section parser. |
 | Existing error examples | Both Go declarations and TypeScript narrowing now name explicit regions. The TypeScript create-member behavior is unchanged. |
 | Pilot guides | Existing owners have task navigation and explicit `agent-entry` and `recipe-*` anchors. The table below records the teaching reconciliation. |
 | Compilation proof | `fixture-check` collects actual Go files selected by `go list -json ./...` in its fixture loop. Docsource compares the directive inventory against those inputs, including test files and excluding ignored files. TS examples share the actual strict compiler lists with the current-client exporters. |
 | Required TypeScript | `verify` requires the selected tool paths and exports `FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1` to its fixture run. The existing CI environment remains unchanged. No second TypeScript acceptance run is added to verify. |
 | Tests and authoring | Renderer, read-only comparison, malformed markers, ownership, paths, section coverage and input-list tests are written. Four receiver-family compiler negatives and a conditional error-export negative were added. The [authoring workflow](../guides/developer-tooling-and-testing.md#author-compiled-guide-examples) and [Unreleased changelog](../../CHANGELOG.md) describe the change. |
 | Legacy migration | Every existing compiled-source directive names an explicit region. The old guideadapters substring test is removed; its complete-guide policy and repository test now live in docsource. The separate historical ORM migration census still checks its legacy examples, handing source-bound fence equality to docsource. |
+| Pinned references and offline checking | [docrefs](../../internal/docrefs) owns reference grammar and explicit anchor indexing. [The CLI](../../cmd/foundry/docs.go) resolves the selected release offline, scans active module instructions and applies its retirement rules. [The packaged consumer test](../../tools/release/documentation_test.go) retains source-free, offline acceptance coverage. |
+| Narrow migration exception | [Retirement documentation checks](../../internal/retirement/docs.go) extend the existing `orm-example: name-before` label to one adjacent fence, table or paragraph in only the ORM and v0.2 migration guides. Active guides and app instructions cannot claim it. Validation's former-method mapping has one owner in the v0.2 guide. |
+| Integration regression sources | Tests cover label boundaries and denied active/app exceptions; missing, duplicate, malformed and fenced anchors; same-page/cross-guide fragments; Agent entry targets and section boundaries; read-only checking; unchanged handling of other fragments. These tests have not run on the integrated revision. |
 
 Standalone end comments after top-level declarations acquire blank lines under
 gofmt. Trailing end markers avoid changing the excerpt's bytes. A trailing begin
@@ -64,19 +82,12 @@ in their existing reference explanations. Scaffolding, advanced query families,
 transport-specific DTO details and app export workflows remain linked reference
 reading rather than a second recipe catalog.
 
-## Preserved exception and duplicate owners
+## Approved normalization and single owners
 
-`model-extension-slots.md`, in **Request input and validation**, has a fence whose
-first line has no indentation but whose later lines retain one extra tab.
-`articles/http.go#article-input-rules` is contiguous, but common-indent removal
-cannot produce those inconsistent bytes. The directive and markers are migrated;
-the existing fence is deliberately preserved. `docs-check`, `generate-check` and
-`TestRepositoryGuideSources` should report this mismatch until the lead decides.
-
-Recommended decision: allow the renderer to normalize only that fence's common
-indentation. Then run `go run ./internal/cmd/renderdocs --guide model-extension-slots.md`.
-No symbols, calls, rules or behavior need to change. This exception is not exempted
-from any check.
+The lead approved and rendered the common-indent normalization in
+`model-extension-slots.md:203` from `articles/http.go#article-input-rules`.
+The former preserved mismatch is resolved; no symbol, call, rule or behavior
+changed, and no checker exemption remains.
 
 Two legacy excerpts were repeated teaching. `validation.md` owns the database-rule
 example; `validation-expanded.md` links to it. `authentication.md` owns the ticket
@@ -85,7 +96,8 @@ adapter; `http-downloads.md` links to it. There is one source region per recipe.
 ## Lead commands
 
 Use existing native tools and service configuration; install nothing as an
-implicit side effect. Resolve the preserved fence decision before acceptance.
+implicit side effect. The generation commands are listed for the combined gate;
+this integration did not change fixture declarations or rendered fence contents.
 
 ```sh
 export GOWORK=off
@@ -96,7 +108,8 @@ make docs-check
 make fixture-check
 make typescript-check
 
-go test -count=1 ./internal/docsource ./internal/cmd/renderdocs ./internal/cmd/checkdocs ./internal/testinputs
+go test -count=1 ./internal/docsource ./internal/cmd/renderdocs ./internal/cmd/checkdocs ./internal/testinputs ./internal/docrefs ./internal/retirement ./cmd/foundry
+(cd tools/release && go test -count=1 -run '^TestDocumentationPackagedOfflineConsumer$' .)
 
 (cd tests/fixtures/consumer && go test -count=1 -run '^TestInvalidPublicContractsFailCompilation/guide_' .)
 (cd tests/fixtures/goway && go test -count=1 ./migration -run '^(TestGuideSnippets|TestLifecycleGuideSnippets)$')
@@ -111,10 +124,42 @@ and existing runtime acceptance, including its table-bindings subtest. A checkpo
 running `make verify` already runs that proof through fixture-check; omit a separate
 TypeScript run in that checkpoint to avoid duplicating the expensive client test.
 
-The parallel docrefs lane still owns fragment/anchor validation and the app-facing
-CLI. Master milestone status is unchanged because acceptance has not run.
+The packaged test runs the app-facing `go tool foundry docs check --dir .`
+against a selected candidate release with network access disabled. Running that
+command against this development checkout is not a substitute: the CLI deliberately
+rejects local replacements and unverifiable tool versions. Master milestone status
+is unchanged pending the lead's combined acceptance. There are no open design
+questions in this handoff.
 
-## Changed files
+## Integration files
+
+- [docs/compatibility.md](../../docs/compatibility.md)
+- [docs/evidence/guide-proof-pilot-20261107.md](../../docs/evidence/guide-proof-pilot-20261107.md)
+- [docs/guides/audit.md](../../docs/guides/audit.md)
+- [docs/guides/client-contracts.md](../../docs/guides/client-contracts.md)
+- [docs/guides/client-forms.md](../../docs/guides/client-forms.md)
+- [docs/guides/developer-tooling-and-testing.md](../../docs/guides/developer-tooling-and-testing.md)
+- [docs/guides/http-application-errors.md](../../docs/guides/http-application-errors.md)
+- [docs/guides/http-endpoints.md](../../docs/guides/http-endpoints.md)
+- [docs/guides/http-model-binding.md](../../docs/guides/http-model-binding.md)
+- [docs/guides/http-pagination.md](../../docs/guides/http-pagination.md)
+- [docs/guides/model-declarations.md](../../docs/guides/model-declarations.md)
+- [docs/guides/model-hooks.md](../../docs/guides/model-hooks.md)
+- [docs/guides/model-mutators.md](../../docs/guides/model-mutators.md)
+- [docs/guides/model-projections.md](../../docs/guides/model-projections.md)
+- [docs/guides/model-queries.md](../../docs/guides/model-queries.md)
+- [docs/guides/model-relations.md](../../docs/guides/model-relations.md)
+- [docs/guides/model-writes.md](../../docs/guides/model-writes.md)
+- [docs/guides/v0.2-migration.md](../../docs/guides/v0.2-migration.md)
+- [docs/guides/validation.md](../../docs/guides/validation.md)
+- [internal/cmd/checkdocs/main.go](../../internal/cmd/checkdocs/main.go)
+- [internal/cmd/checkdocs/navigation_test.go](../../internal/cmd/checkdocs/navigation_test.go)
+- [internal/docsource/document.go](../../internal/docsource/document.go)
+- [internal/docsource/source_test.go](../../internal/docsource/source_test.go)
+- [internal/retirement/docs.go](../../internal/retirement/docs.go)
+- [internal/retirement/docs_test.go](../../internal/retirement/docs_test.go)
+
+## Milestone 1 file inventory
 
 - [CHANGELOG.md](../../CHANGELOG.md)
 - [Makefile](../../Makefile)

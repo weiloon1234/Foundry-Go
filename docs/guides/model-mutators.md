@@ -4,10 +4,11 @@
 ## Agent entry
 
 - Transform: [Mutation inputs](#recipe-mutate-field)
-- Further reference: [Bulk writes](#set-based-and-conflict-writes)
 
 <a id="recipe-mutate-field"></a>
 ## Assign mutation inputs
+
+Further reading: [Bulk writes](#set-based-and-conflict-writes).
 
 A mutation input column separates the value accepted by writes from the value stored in the model. An input assignment retains input until persistence; reads and predicates use the stored type. Declare the appropriate `Input*` carrier even when input and stored types are identical.
 

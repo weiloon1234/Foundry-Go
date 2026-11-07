@@ -10,9 +10,10 @@
 - Load: [Relations](model-relations.md#recipe-load-relations)
 - Project: [Typed row declarations](model-projections.md#recipe-declare-rows)
 - Search: [Trigram queries](trigram-search.md#recipe-trigram-search)
-- Further reference: [Transaction composition](transaction-query-composition.md)
 
 ## Overview
+
+Further reading: [Transaction composition](transaction-query-composition.md).
 
 <!-- compiled-examples -->
 

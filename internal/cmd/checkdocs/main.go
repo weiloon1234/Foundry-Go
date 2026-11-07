@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/docrefs"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource"
 	"github.com/weiloon1234/Foundry-Go/internal/retirement"
 )
@@ -55,11 +56,22 @@ func run(root, inputs string) error {
 
 func checkRepository(root string) error {
 	var failures []error
+	agentLines := make(map[string]map[int]bool)
 	documents, sourceErr := docsource.Load(root)
 	if sourceErr != nil {
 		failures = append(failures, sourceErr)
 	} else {
 		failures = append(failures, docsource.Check(documents), docsource.CheckTypeScriptInputs(root, documents))
+		for _, document := range documents {
+			path := filepath.Join(root, filepath.FromSlash(document.Path))
+			_, err := docrefs.IndexAnchors(path, document.Original)
+			failures = append(failures, err)
+			lines := make(map[int]bool, len(document.AgentLines))
+			for _, line := range document.AgentLines {
+				lines[line] = true
+			}
+			agentLines[path] = lines
+		}
 	}
 	completed, err := completedMilestones(root)
 	if err != nil {
@@ -99,7 +111,7 @@ func checkRepository(root string) error {
 					failures = append(failures, err)
 				}
 			}
-			if err := checkDocument(root, path, currentGuide(root, path), completed); err != nil {
+			if err := checkDocument(root, path, currentGuide(root, path), completed, agentLines[path]); err != nil {
 				failures = append(failures, err)
 			}
 		}
@@ -159,7 +171,7 @@ func goRequirement(path string) (string, error) {
 	return "", fmt.Errorf("%s: missing Go requirement", path)
 }
 
-func checkDocument(root, path string, current bool, completed map[string]bool) error {
+func checkDocument(root, path string, current bool, completed map[string]bool, agentLines map[int]bool) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -220,10 +232,18 @@ func checkDocument(root, path string, current bool, completed map[string]bool) e
 				failures = append(failures, fmt.Errorf("%s:%d: invalid link %q: %w", path, lineNumber, target, err))
 				continue
 			}
-			if link.IsAbs() || link.Host != "" || link.Path == "" {
+			explicit := link.Fragment == "agent-entry" || strings.HasPrefix(link.Fragment, "recipe-")
+			if agentLines[lineNumber] && (!explicit || link.IsAbs() || link.Host != "") {
+				failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide's explicit agent-entry or recipe-* anchor", path, lineNumber, target))
+				continue
+			}
+			if link.IsAbs() || link.Host != "" || link.Path == "" && !explicit {
 				continue
 			}
 			local := filepath.Join(filepath.Dir(path), filepath.FromSlash(link.Path))
+			if link.Path == "" {
+				local = path
+			}
 			relative, err := filepath.Rel(root, local)
 			if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 				failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root", path, lineNumber, target))
@@ -242,6 +262,16 @@ func checkDocument(root, path string, current bool, completed map[string]bool) e
 			relative, err = filepath.Rel(resolvedRoot, resolvedLocal)
 			if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 				failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root", path, lineNumber, target))
+				continue
+			}
+			if agentLines[lineNumber] && (filepath.Dir(local) != filepath.Join(root, "docs", "guides") || filepath.Ext(local) != ".md") {
+				failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide", path, lineNumber, target))
+				continue
+			}
+			if explicit {
+				if err := checkExplicitFragment(path, lineNumber, local, link.Fragment); err != nil {
+					failures = append(failures, err)
+				}
 			}
 		}
 	}
@@ -250,6 +280,21 @@ func checkDocument(root, path string, current bool, completed map[string]bool) e
 		failures = append(failures, fmt.Errorf("%s: %w", path, err))
 	}
 	return errors.Join(failures...)
+}
+
+func checkExplicitFragment(source string, line int, target, fragment string) error {
+	data, err := os.ReadFile(target)
+	if err != nil {
+		return fmt.Errorf("%s:%d: fragment target %s: %w", source, line, target, err)
+	}
+	anchors, err := docrefs.IndexAnchors(target, data)
+	if err != nil {
+		return err
+	}
+	if err := anchors.CheckFragment(source, line, fragment); err != nil {
+		return fmt.Errorf("%w (target %s)", err, target)
+	}
+	return nil
 }
 
 // Inline Go generics (for example `New[T](arg)`) resemble Markdown links.

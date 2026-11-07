@@ -4,9 +4,10 @@
 ## Agent entry
 
 - Load: [Existing parents](#recipe-load-relations)
-- Further reference: [Relation declarations](#declaring-keys-in-go)
 
 ## Overview
+
+Further reading: [Relation declarations](#declaring-keys-in-go).
 
 Relations retain source model, target model and key types. The [handwritten model fields](../../tests/fixtures/consumer/models/models.go) declare `relation.One[User]`, `relation.Many[Order]` or `relation.Through[Group, Membership]`. These fields are relation state, not persisted columns: bind them with typed slot declarations rather than persisted columns. [Model extension slots](model-extension-slots.md) for translated text, attachments and metadata load through the same `With` and `LoadFrom` paths.
 

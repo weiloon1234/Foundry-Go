@@ -10,10 +10,10 @@
 - Query tables: [Generated bindings](#recipe-table-bindings)
 - Handle errors: [Operation narrowing](http-application-errors.md#recipe-client-narrowing)
 - Edit forms: [Exact input values](client-forms.md#recipe-form-values)
-- Further reference: [Export ownership](#export-from-the-application)
-- Further reference: [Validation metadata](#validation-and-ui-metadata)
 
 ## Overview
+
+Further reading: [Export ownership](#export-from-the-application), [Validation metadata](#validation-and-ui-metadata).
 
 Milestone 21 passed native framework/consumer verification, strict TypeScript,
 real HTTP/WebSocket interoperability, compiler/editor, generation/recovery, race

@@ -4,10 +4,11 @@
 ## Agent entry
 
 - Declare: [Write hooks](#recipe-write-hooks)
-- Further reference: [Callback contracts](#callback-contracts)
 
 <a id="recipe-write-hooks"></a>
 ## Attach write hooks
+
+Further reading: [Callback contracts](#callback-contracts).
 
 Declare a per-write factory returning `orm.Hooks[M]` and attach it with `orm.WithHooks` in the options passed to `orm.Define`.
 

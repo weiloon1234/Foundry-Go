@@ -4,9 +4,10 @@
 ## Agent entry
 
 - Register: [Typed audit policy](#recipe-register-audit)
-- Further reference: [Ignore and exclude](#transaction-and-lifecycle-behavior)
 
 ## Overview
+
+Further reading: [Ignore and exclude](#transaction-and-lifecycle-behavior).
 
 Audit is opt-in. Foundry records stored model changes through the actual write transaction, using `orm.Auditing` observers and the same field codecs as persistence. Application code selects model policies and maps history into its own response DTOs.
 

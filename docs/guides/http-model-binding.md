@@ -5,10 +5,11 @@
 
 - Resolve: [Typed resource lookup](#recipe-bind-resource)
 - Authenticate: [Resource authorization](#recipe-authenticated-binding)
-- Scope parents: [Nested resources](scoped-model-binding.md)
 
 <a id="recipe-bind-resource"></a>
 ## Resolve a typed resource
+
+Further reading: [Nested resources](scoped-model-binding.md).
 
 Model binding resolves decoded path keys into concrete models before a domain
 handler runs. The original endpoint still owns parsing, validation, middleware,

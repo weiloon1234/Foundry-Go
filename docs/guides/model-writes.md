@@ -5,9 +5,10 @@
 
 - Write: [Create and update](#recipe-write-models)
 - Lock: [Unique columns](#recipe-lock-write)
-- Further reference: [Transaction outcomes](#transaction-ownership-and-failures)
 
 ## Overview
+
+Further reading: [Transaction outcomes](#transaction-ownership-and-failures).
 
 `orm.Table[M, K]` creates, updates and deletes complete models with concrete key and assignment types. Per-kind functions such as `orm.TextSet` construct `orm.Assignment[M]` values. Writes use the shared mutation compiler, codecs and complete `RETURNING` hydration.
 

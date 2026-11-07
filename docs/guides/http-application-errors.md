@@ -5,9 +5,10 @@
 
 - Declare: [Public structured failures](#recipe-error-details)
 - Handle: [Client error narrowing](#recipe-client-narrowing)
-- Further reference: [Localized messages](validation-messages.md)
 
 ## Overview
+
+Further reading: [Localized messages](validation-messages.md).
 
 Declare a public error once and reuse the value in the endpoint and handler. The declaration owns a semantic `ErrorCode`, a status from 400 through
 599, and static public text. This is the same metadata the router exports.

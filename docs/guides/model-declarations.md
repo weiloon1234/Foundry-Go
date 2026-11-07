@@ -10,11 +10,11 @@
 - When adding lifecycle rules: [Hooks](model-hooks.md#recipe-write-hooks)
 - Audit: [Typed policy](audit.md#recipe-register-audit)
 - Map responses: [Explicit accessors](model-accessors.md#recipe-access-field)
-- Further reference: [Scaffolding](model-scaffolding.md)
-- Further reference: [Typed values](typed-values.md)
 
 <a id="recipe-declare-table"></a>
 ## Declare a typed table
+
+Further reading: [Scaffolding](model-scaffolding.md), [Typed values](typed-values.md).
 
 Models are ordinary Go structs. An `orm.Define` declaration binds their persisted fields, typed primary key and optional lifecycle configuration. Register tables with `application.WithTables` so declaration validation happens before resources start. `orm.Check` validates declarations directly; query execution also rejects invalid declarations.
 

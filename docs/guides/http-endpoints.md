@@ -9,11 +9,11 @@
 - Authenticate: [Resource binding](http-model-binding.md#recipe-authenticated-binding)
 - List: [Numbered pages](http-pagination.md#recipe-numbered-page)
 - Map failures: [Public details](http-application-errors.md#recipe-error-details)
-- Further reference: [Guards](authentication.md)
-- Further reference: [Middleware](http-middleware.md)
 
 <a id="recipe-compose-endpoint"></a>
 ## Compose a typed endpoint
+
+Further reading: [Guards](authentication.md), [Middleware](http-middleware.md).
 
 **Typed endpoint and request-deadline APIs are available.** Focused runtime,
 generation, consumer race tests, six new compiler-rejection cases and vet passed.

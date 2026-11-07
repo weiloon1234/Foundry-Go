@@ -5,10 +5,11 @@
 
 - List: [Numbered pages](#recipe-numbered-page)
 - Authenticate: [Page reads](#recipe-authenticated-pages)
-- Further reference: [Cursor pagination](http-cursor-pagination.md)
 
 <a id="recipe-numbered-page"></a>
 ## Declare a numbered page
+
+Further reading: [Cursor pagination](http-cursor-pagination.md).
 
 Handwritten ORM consumers use `orm.PageResult[T]`, `orm.SimplePage[T]` and
 `orm.PageRequest`. These aliases retain the existing transport identities and

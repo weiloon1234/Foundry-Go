@@ -5,9 +5,10 @@
 
 - Declare: [Typed result rows](#recipe-declare-rows)
 - Select: [Typed values and pages](#recipe-select-rows)
-- Further reference: [Execution](#execution-and-failures)
 
 ## Overview
+
+Further reading: [Execution](#execution-and-failures).
 
 <!-- compiled-examples -->
 

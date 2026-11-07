@@ -14,9 +14,13 @@ var codeSpan = regexp.MustCompile("`+([^`]+)`+")
 var proseSelector = regexp.MustCompile(`[A-Za-z_][A-Za-z_0-9]*(\(\))?(\.[A-Za-z_][A-Za-z_0-9]*(\(\))?)+`)
 
 var beforeMarker = regexp.MustCompile(`^<!-- orm-example: [a-z0-9-]+-before -->$`)
+var textBlockBoundary = regexp.MustCompile(`^(#{1,6}([ \t]|$)|>|<|[-=_*]{3,}[ \t]*$)`)
+var listItemStart = regexp.MustCompile(`^([-+*][ \t]|[0-9]+[.)][ \t])`)
 
-// CheckDocument rejects retired spellings in active documentation. Only labelled,
-// fenced before examples in the migration guide describe the removed API.
+// CheckDocument rejects retired spellings in active documentation. Only labelled
+// before blocks in the designated migration guides describe the removed API.
+// A label covers the immediately following fence, table, or paragraph (including
+// one list item), never a heading or an entire section.
 // Unqualified top-level names in code must use a retained, qualified spelling.
 // Unqualified member spellings also require their retained owner where a type
 // name is shared (for example orm.Query.OrderBy).
@@ -44,6 +48,7 @@ func CheckDocument(name string, data []byte) error {
 	}
 	var failures []error
 	pending, before := false, false
+	textBefore, tableBefore := false, false
 	fence, language := "", ""
 	var code []string
 	codeLine := 0
@@ -59,7 +64,11 @@ func CheckDocument(name string, data []byte) error {
 	for i, line := range strings.Split(string(data), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if fence == "" && beforeMarker.MatchString(trimmed) {
-			pending = name == "docs/guides/orm-migration.md"
+			pending = name == "docs/guides/orm-migration.md" || name == "docs/guides/v0.2-migration.md"
+			textBefore = false
+			if !pending {
+				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: migration before labels are allowed only in designated migration guides", name, i+1)))
+			}
 			continue
 		}
 		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
@@ -75,6 +84,7 @@ func CheckDocument(name string, data []byte) error {
 				language = strings.TrimSpace(strings.TrimLeft(trimmed, string(marker[0])))
 				before = pending
 				pending = false
+				textBefore = false
 				continue
 			} else if fence != "" && fence[0] == marker[0] && len(marker) >= len(fence) && strings.TrimSpace(trimmed[n:]) == "" {
 				checkCode()
@@ -86,7 +96,18 @@ func CheckDocument(name string, data []byte) error {
 		if before {
 			continue
 		}
+		if fence == "" {
+			if pending {
+				textBefore = trimmed != "" && !textBlockBoundary.MatchString(trimmed)
+				tableBefore = strings.HasPrefix(trimmed, "|")
+			} else if textBefore {
+				textBefore = trimmed != "" && !textBlockBoundary.MatchString(trimmed) && !listItemStart.MatchString(trimmed) && tableBefore == strings.HasPrefix(trimmed, "|")
+			}
+		}
 		pending = false
+		if fence == "" && textBefore {
+			continue
+		}
 		bad := false
 		if fence != "" {
 			code = append(code, line)

@@ -38,6 +38,9 @@ type Document struct {
 	Original, Rendered []byte
 	Inclusions         []Inclusion
 	StaleLines         []int
+	// AgentLines identifies navigation lines using the same section boundaries
+	// as recipe coverage. Link targets are checked by checkdocs through docrefs.
+	AgentLines []int
 }
 
 // Load reads all guide directives. It validates ownership and section coverage,
@@ -149,6 +152,9 @@ func parseDocument(name string, data []byte, read func(string) (source, error)) 
 		}
 		if agent && trimmed != "" && !taskLink.MatchString(trimmed) {
 			return fail("Agent entry permits task labels and links only, no fences or prose")
+		}
+		if agent && trimmed != "" {
+			result.AgentLines = append(result.AgentLines, i+1)
 		}
 		if strings.HasPrefix(trimmed, "<!-- compiled-source") {
 			match := directive.FindStringSubmatch(trimmed)
