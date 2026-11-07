@@ -186,7 +186,7 @@ and a `client:"env=..."` tag containing the complete frontend environment key.
 The [compiled configuration declaration](../../tests/fixtures/consumer/configured/settings.go)
 uses the same settings type for server configuration and public metadata:
 
-<!-- compiled-source: tests/fixtures/consumer/configured/settings.go -->
+<!-- compiled-source: tests/fixtures/consumer/configured/settings.go#generated-configuration-settings -->
 ```go
 type Settings struct {
 	Services      infrastructure.Settings

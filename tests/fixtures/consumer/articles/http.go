@@ -104,6 +104,7 @@ func NewService(store *extensions.Store, runtime slots.Runtime) *Service {
 // Routes declares the article endpoints. Translated and file rules come from
 // the model's slot policy, so validation and writes share one source.
 func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
+	// doc-example:begin article-input-rules
 	input := ArticleInputValidationFields()
 	textRules := validation.All(
 		validation.Rules(input.Slug, validation.NonBlank[string]()),
@@ -111,6 +112,7 @@ func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
 		validation.Rules(input.Title, s.x.Title.Rule()),
 		validation.Rules(input.Summary, s.x.Summary.Rule()),
 	)
+	// doc-example:end article-input-rules
 	media := ArticleMediaValidationFields()
 	logo := validation.Custom(validation.Spec{ID: "articles.logo", Message: "The logo is not an accepted image."}, func(ctx context.Context, file foundryhttp.UploadedFile) (bool, error) {
 		return s.x.Logo.Accepts(ctx, file)

@@ -20,9 +20,10 @@ import (
 )
 
 // guide:write-options
+// doc-example:begin write-options
 func writeOptions() []orm.Option {
 	return []orm.Option{orm.WithHooks(memberHooks)}
-}
+} // doc-example:end write-options
 
 // guide:end
 
@@ -210,12 +211,13 @@ func analyzeOrders(ctx context.Context, tx *database.Tx) (orm.Plan, error) {
 // guide:end
 
 // guide:audit-registration
+// doc-example:begin audit-registration
 func registerAudit(r *foundation.Registrar, pool foundation.Key[*database.DB], history foundation.Key[*audit.Recorder]) error {
 	f := hooks.Members
 	policy := orm.AuditPolicyOf(f.Table, orm.AuditField(orm.NullableInputTextExpr(f.Note), record.Exclude))
 	return audit.Register(r, pool, history,
 		audit.Config{Area: "accounts", RetentionDays: 90}, orm.Auditing(f.Table, policy))
-}
+} // doc-example:end audit-registration
 
 // guide:end
 
@@ -269,10 +271,11 @@ func approve(ctx context.Context, tx *database.Tx, recorder *audit.Recorder, mem
 // guide:end
 
 // guide:insert-member
+// doc-example:begin insert-member
 func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
 	f := hooks.Members
 	return orm.Insert(ctx, tx, f.Table, orm.KeySet(f.Key(), id), orm.InputTextSet(f.Name, "Ada"), orm.ColumnSet(f.Body, []byte{}))
-}
+} // doc-example:end insert-member
 
 // guide:end
 

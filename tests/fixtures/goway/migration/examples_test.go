@@ -25,6 +25,7 @@ import (
 )
 
 // migration:roles-after
+// doc-example:begin roles-after
 type EmailInput string
 type User struct {
 	ID        int64
@@ -55,11 +56,12 @@ var Users = orm.Define("users", func(b orm.Builder[User], u *User) UserTable {
 		orm.InputTextOf[User, EmailInput](b, &u.Email, nil),
 		orm.CreatedAtOf(b, &u.CreatedAt), orm.UpdatedAtOf(b, &u.UpdatedAt),
 		deleted, orm.SoftDeletes(deleted)}
-})
+}) // doc-example:end roles-after
 
 // migration:end
 
 // migration:reads-after
+// doc-example:begin reads-after
 func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) error {
 	_, err := orm.All(ctx, db, models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100)))
 	if err != nil {
@@ -71,11 +73,12 @@ func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) 
 	}
 	_, err = orm.Require(ctx, db, models.Orders.Query().Where(orm.KeyEq(models.Orders.ID, id)))
 	return err
-}
+} // doc-example:end reads-after
 
 // migration:end
 
 // guide:unique-column-lock
+// doc-example:begin unique-column-lock
 func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
 	return db.Transaction(ctx, func(tx *database.Tx) error {
 		selected := hooks.Members.Table.Query().Where(orm.KeyEq(hooks.Members.Table.Key(), id))
@@ -85,15 +88,16 @@ func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
 		_, err := orm.Update(ctx, tx, selected, hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "guest"))
 		return err
 	})
-}
+} // doc-example:end unique-column-lock
 
 // guide:end
 
 // migration:writes-after
+// doc-example:begin writes-after
 func write(ctx context.Context, tx *database.Tx, id int64) error {
 	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "Ada"), orm.NullableInputTextSetNull(hooks.Members.Note))
 	return err
-}
+} // doc-example:end writes-after
 
 // migration:end
 
@@ -106,14 +110,16 @@ func insert(ctx context.Context, tx *database.Tx) error {
 // migration:end
 
 // migration:force-after
+// doc-example:begin force-after
 func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
 	_, err := orm.ForceDelete(ctx, tx, Users.Query().WithTrashed(), Users.Soft, Users.Key(), id)
 	return err
-}
+} // doc-example:end force-after
 
 // migration:end
 
 // migration:relations-after
+// doc-example:begin relations-after
 var OrderBuyer = orm.BelongsToOf(models.Orders.Buyer, orm.ColumnExpr(models.Orders.BuyerID), orm.KeyExpr(models.Users.ID))
 
 func relations(ctx context.Context, db database.Executor, existing []models.Order) error {
@@ -123,11 +129,12 @@ func relations(ctx context.Context, db database.Executor, existing []models.Orde
 	}
 	_, err = orm.LoadFrom(ctx, db, models.Orders.Query().With(OrderBuyer), existing)
 	return err
-}
+} // doc-example:end relations-after
 
 // migration:end
 
 // migration:hooks-after
+// doc-example:begin hooks-after
 func memberHooks() orm.Hooks[hooks.Member] {
 	return orm.Hooks[hooks.Member]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[hooks.Member]) error {
 		if !orm.WriteIsSet(draft, func() func(arg0 string) orm.Assignment[hooks.Member] {
@@ -138,7 +145,7 @@ func memberHooks() orm.Hooks[hooks.Member] {
 		}
 		return nil
 	}}
-}
+} // doc-example:end hooks-after
 
 // migration:end
 
@@ -232,13 +239,14 @@ func page(ctx context.Context, db database.Executor) error {
 // migration:end
 
 // migration:application-after
+// doc-example:begin application-after
 func configuredApplication(settings application.Settings, pool foundation.Key[*database.DB]) *application.Builder {
 	observers := foundation.Module{Name: "member.observers", OnRegister: func(r *foundation.Registrar) error {
 		return orm.RegisterObserver(r, pool, orm.NewObserver[hooks.Member]("members"),
 			func(foundation.Resolver) (func() orm.Hooks[hooks.Member], error) { return memberHooks, nil })
 	}}
 	return application.New(settings, application.WithTables(Users.Table, hooks.Members.Table)).Register(observers)
-}
+} // doc-example:end application-after
 
 // migration:end
 
@@ -253,9 +261,10 @@ func seeder() seed.Definition {
 // migration:end
 
 // migration:identity-after
+// doc-example:begin identity-after
 func identity(user models.User) (model.Identity, error) {
 	return orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user).Identity()
-}
+} // doc-example:end identity-after
 
 // migration:end
 
@@ -268,16 +277,18 @@ func scalar(ctx context.Context, db database.Executor) error {
 // migration:end
 
 // migration:inputs-after
+// doc-example:begin inputs-after
 func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
 	return orm.InputTextSet(mutators.Members.Email, input)
-}
+} // doc-example:end inputs-after
 
 // migration:end
 
 // migration:accessors-after
+// doc-example:begin accessors-after
 func accessor(member mutators.Member) (coremodels.EmailLink, error) {
 	return member.AccessEmail()
-}
+} // doc-example:end accessors-after
 
 // migration:end
 

@@ -132,3 +132,21 @@ func TestFingerprintTracksModuleRuntimeContentWithoutTimestampChanges(t *testing
 		t.Fatal("runtime timestamp invalidated unchanged content")
 	}
 }
+
+func TestFingerprintTracksGuideProofInputs(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{
+		"docs/guides/example.md",
+		"tests/fixtures/consumer/example/example.go",
+		"tests/fixtures/consumer/clientcontracts/testdata/example.ts",
+		"tests/fixtures/consumer/clientcontracts/typescript-inputs.json",
+		"tests/fixtures/consumer/clientcontracts/testdata/table-bindings/typescript-inputs.json",
+	} {
+		put(t, root, name, "before")
+		before := fingerprintOf(t, root)
+		put(t, root, name, "after")
+		if fingerprintOf(t, root) == before {
+			t.Fatalf("guide proof input was omitted: %s", name)
+		}
+	}
+}

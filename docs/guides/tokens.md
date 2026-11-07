@@ -362,7 +362,7 @@ For ordinary GET downloads, use [ticket-authenticated routes](authentication.md#
 Deliver only the single-use ticket through `TicketEndpoint.URL`, never an access
 or refresh token. The response must be no-store and the URL must stay out of logs.
 
-<!-- compiled-source: tests/fixtures/consumer/reporting/table_routes.go -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/table_routes.go#tokens-example-1 -->
 ```go
 return datatable.TokenTickets(tokens)
 ```

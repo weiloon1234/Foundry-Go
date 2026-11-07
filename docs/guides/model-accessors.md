@@ -1,8 +1,16 @@
 # Explicit model accessors
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Map: [Explicit accessors](#recipe-access-field)
+
+<a id="recipe-access-field"></a>
+## Map stored values explicitly
+
 Call `Access<Field>` methods explicitly when mapping stored values into response DTOs. Model hydration, queries and JSON serialization do not call them automatically or replace stored fields with their results.
 
-<!-- orm-example: accessors-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#accessors-after -->
 ```go
 func accessor(member mutators.Member) (coremodels.EmailLink, error) {
 	return member.AccessEmail()

@@ -20,6 +20,8 @@ type MemberCreated struct {
 	ID model.ID[models.User] `json:"id"`
 }
 
+// doc-example:begin http-application-errors-member-exists-details
+//
 //foundry:dto
 type MemberExistsDetails struct {
 	ExistingMemberID model.ID[models.User] `json:"existing_member_id"`
@@ -37,13 +39,14 @@ var MemberExists = foundryhttp.DefineErrorDetails(
 )
 var RegistrationClosed = foundryhttp.DefineError(
 	"registration_closed", 409, "Registration is closed.",
-)
+) // doc-example:end http-application-errors-member-exists-details
 
+// doc-example:begin declare-error-endpoint
 var MemberCreate = foundryhttp.DefineEndpoint(
 	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members")),
 	foundryhttp.EmptyQuery(), foundryhttp.JSONBody(CreateMemberJSON()), foundryhttp.JSONResponse(201, MemberCreatedJSON()),
 	foundryhttp.Errors(MemberExists, RegistrationClosed),
-)
+) // doc-example:end declare-error-endpoint
 
 type existingMember struct {
 	ID    model.ID[models.User]
@@ -74,6 +77,7 @@ func createMember(name string) (model.ID[models.User], error) {
 
 // HandleMemberCreate maps domain failures at the transport boundary.
 // Example: MemberCreate.Handle(HandleMemberCreate).
+// doc-example:begin map-domain-errors
 func HandleMemberCreate(_ context.Context, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, CreateMember]) (MemberCreated, error) {
 	id, err := createMember(in.Body.Name)
 	var existing *existingMember
@@ -86,4 +90,4 @@ func HandleMemberCreate(_ context.Context, in foundryhttp.Input[foundryhttp.NoPa
 		return MemberCreated{}, RegistrationClosed.WithCause(err)
 	}
 	return MemberCreated{ID: id}, err
-}
+} // doc-example:end map-domain-errors

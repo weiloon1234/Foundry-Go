@@ -1,12 +1,21 @@
 # Typed model history and domain auditing
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Register: [Typed audit policy](#recipe-register-audit)
+- Further reference: [Ignore and exclude](#transaction-and-lifecycle-behavior)
+
+## Overview
+
 Audit is opt-in. Foundry records stored model changes through the actual write transaction, using `orm.Auditing` observers and the same field codecs as persistence. Application code selects model policies and maps history into its own response DTOs.
 
+<a id="recipe-register-audit"></a>
 ## Register models and storage
 
 The independent [audit consumer](../../tests/fixtures/consumer/auditqueries/domain.go) registers its recorder alongside its database provider:
 
-<!-- orm-example: audit-registration -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#audit-registration -->
 ```go
 func registerAudit(r *foundation.Registrar, pool foundation.Key[*database.DB], history foundation.Key[*audit.Recorder]) error {
 	f := hooks.Members

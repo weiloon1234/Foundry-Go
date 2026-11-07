@@ -1,8 +1,24 @@
 # Typed model declarations and write roles
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Declare: [Table and write roles](#recipe-declare-table)
+- Delete: [Soft-delete capability](#recipe-soft-delete)
+- Register: [Tables and identity](#recipe-register-tables)
+- When transforming fields: [Input assignments](model-mutators.md#recipe-mutate-field)
+- When adding lifecycle rules: [Hooks](model-hooks.md#recipe-write-hooks)
+- Audit: [Typed policy](audit.md#recipe-register-audit)
+- Map responses: [Explicit accessors](model-accessors.md#recipe-access-field)
+- Further reference: [Scaffolding](model-scaffolding.md)
+- Further reference: [Typed values](typed-values.md)
+
+<a id="recipe-declare-table"></a>
+## Declare a typed table
+
 Models are ordinary Go structs. An `orm.Define` declaration binds their persisted fields, typed primary key and optional lifecycle configuration. Register tables with `application.WithTables` so declaration validation happens before resources start. `orm.Check` validates declarations directly; query execution also rejects invalid declarations.
 
-<!-- orm-example: roles-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#roles-after -->
 ```go
 type EmailInput string
 type User struct {
@@ -58,11 +74,12 @@ Managed time carriers support ordinary time predicates, ordering and expressions
 
 Every Go-mutated field requires an `Input*` carrier, including same-type transformations. Its family preserves stored capabilities: an input enum cannot become an ordered numeric column through conversion. Startup rejects orphan/invalid `Mutate<Field>` and `Access<Field>` methods, missing transformations and conflicting explicit/discovered transformations. See [mutators](model-mutators.md).
 
+<a id="recipe-soft-delete"></a>
 ## Soft-delete capability
 
 Expose `orm.SoftDeletes(deletedColumn)` as an ordinary table field such as `Users.Soft`. Force deletion and bounded restoration require that exact declaration's token. Missing or wrong-model tokens fail compilation; zero or foreign-declaration tokens fail validation before SQL. The token does not change query visibility or authorize tenant access.
 
-<!-- orm-example: force-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#force-after -->
 ```go
 func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
 	_, err := orm.ForceDelete(ctx, tx, Users.Query().WithTrashed(), Users.Soft, Users.Key(), id)
@@ -82,3 +99,28 @@ For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).
 named Boolean types retain their exact type. Optional codec settings follow
 `ColumnOf`. Mutated fields still require Input carriers. See the compiled
 [Boolean row and expression examples](orm-migration.md#pilot-expressions-and-row-declarations).
+
+<a id="recipe-register-tables"></a>
+## Register tables and identity
+
+Register the complete table list before resources start. The registry validates supplied declarations; it cannot discover an omitted model.
+
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#application-after -->
+```go
+func configuredApplication(settings application.Settings, pool foundation.Key[*database.DB]) *application.Builder {
+	observers := foundation.Module{Name: "member.observers", OnRegister: func(r *foundation.Registrar) error {
+		return orm.RegisterObserver(r, pool, orm.NewObserver[hooks.Member]("members"),
+			func(foundation.Resolver) (func() orm.Hooks[hooks.Member], error) { return memberHooks, nil })
+	}}
+	return application.New(settings, application.WithTables(Users.Table, hooks.Members.Table)).Register(observers)
+}
+```
+
+Keep references backed by the same stored key.
+
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#identity-after -->
+```go
+func identity(user models.User) (model.Identity, error) {
+	return orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user).Identity()
+}
+```

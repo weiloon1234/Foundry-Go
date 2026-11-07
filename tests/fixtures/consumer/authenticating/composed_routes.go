@@ -39,6 +39,7 @@ func OrderResource(db database.Executor) modelbinding.Resolver[OrderPath, models
 // BoundOrder composes subject admission and one typed resource lookup, then the
 // existing resource policy before domain behavior. A signature does not authorize
 // another member's order. The same binding accepts an ordinary or signed endpoint.
+// doc-example:begin authenticated-resource
 func BoundOrder(endpoint OrderTransport, resolver modelbinding.Resolver[OrderPath, models.Order], guard auth.Guard[models.User], read func(context.Context, models.User, models.Order) error) foundryhttp.RouteRegistration {
 	if read == nil {
 		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "order route requires domain behavior"))
@@ -49,7 +50,7 @@ func BoundOrder(endpoint OrderTransport, resolver modelbinding.Resolver[OrderPat
 		}
 		return foundryhttp.NoContent{}, read(ctx, subject, input.Model)
 	})
-}
+} // doc-example:end authenticated-resource
 
 var nativeProfile = foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "profile.native", Method: foundryhttp.GET, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/profile/native"))
 

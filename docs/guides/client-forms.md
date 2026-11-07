@@ -1,29 +1,38 @@
 # Framework-neutral forms and optional frontend adapters
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Edit: [Exact form values](#recipe-form-values)
+- Further reference: [UI subscriptions](#ownership-and-examples)
+- Further reference: [Async options](#async-options-and-checks)
+
+## Overview
+
 The generated SDK provides `createForm`; its
 [acceptance evidence](../evidence/forms-startup-20260930.json) records the verified
 source and consumer paths. The core remains plain ES2022 TypeScript/JavaScript with
 no React, Vue or state-library imports. [Typed descriptors](client-descriptors.md)
 and the existing codec/validation/call pipeline remain the contract owners.
 
+<a id="recipe-form-values"></a>
 ## Ownership and examples
 
-```ts
-import { createForm, operation } from "./generated/contracts_foundry.gen.js";
+[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts).
 
-const endpoint = operation("formsSubmit");
-const form = createForm(endpoint, { body: { name: "", "tags[]": [] } });
-const name = form.field(endpoint.field("body", "name"));
-const stop = form.subscribe(() => render(form.getSnapshot()));
-
-name.setText("  Ada  "); // Keeps input text separately from the request value.
-name.touch();
-if (name.parse()) {
-  const result = await form.submit(client);
-  if (result.status === "succeeded") showResult(result.value);
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#form-values -->
+```typescript
+export function formValues() {
+  const operation = sdk.operation("itemsEcho");
+  const form = sdk.createForm(operation, { body: {}, path: { key: "1" } });
+  const amount = form.field(operation.field("body", "amount"));
+  amount.set("123456789012345678901234567890.123");
+  amount.setText("999.99");
+  amount.parse();
+  const report = form.validate();
+  form.dispose();
+  return report;
 }
-stop();
-form.dispose();
 ```
 
 The executable [consumer](../../tests/fixtures/consumer/clientcontracts/testdata/forms.mjs)

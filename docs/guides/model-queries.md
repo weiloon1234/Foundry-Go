@@ -1,5 +1,19 @@
 # Typed model queries
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Read: [Bounded typed queries](#recipe-read-models)
+- Filter: [Typed expressions](#recipe-filter-expressions)
+- Write: [Create and update](model-writes.md#recipe-write-models)
+- Lock: [Change unique columns](model-writes.md#recipe-lock-write)
+- Load: [Relations](model-relations.md#recipe-load-relations)
+- Project: [Typed row declarations](model-projections.md#recipe-declare-rows)
+- Search: [Trigram queries](trigram-search.md#recipe-trigram-search)
+- Further reference: [Transaction composition](transaction-query-composition.md)
+
+## Overview
+
 <!-- compiled-examples -->
 
 Declare a model's table and columns once with `orm.Define`; `Table.Query()` returns
@@ -8,6 +22,7 @@ structs and slices. The [handwritten declarations](../../tests/fixtures/consumer
 and [migration examples](../../tests/fixtures/goway/migration/examples_test.go)
 show reads using public APIs.
 
+<a id="recipe-read-models"></a>
 ## Query construction and execution
 
 `Where`, `OrderBy`, `Limit` and `Offset` derive queries without I/O. Conditions
@@ -33,6 +48,22 @@ Those read handles call their required-first terminal `RequireFirst`.
 for large results. Ordinary in-memory Go slice operations issue no SQL; sorting a
 page after reading it does not order the full matching dataset.
 
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#reads-after -->
+```go
+func read(ctx context.Context, db database.Executor, id model.ID[models.Order]) error {
+	_, err := orm.All(ctx, db, models.Orders.Query().Where(orm.NumberGt(models.Orders.TotalCents, 100)))
+	if err != nil {
+		return err
+	}
+	_, err = orm.Find(ctx, db, models.Orders.Table, id)
+	if err != nil {
+		return err
+	}
+	_, err = orm.Require(ctx, db, models.Orders.Query().Where(orm.KeyEq(models.Orders.ID, id)))
+	return err
+}
+```
+
 ## First rows and typed identities
 
 Filter with the declared primary-key column to retrieve a typed identity.
@@ -41,6 +72,7 @@ Filter with the declared primary-key column to retrieve a typed identity.
 ordering when row choice matters. Missing and database failure remain different
 outcomes through the framework's typed errors.
 
+<a id="recipe-filter-expressions"></a>
 ## Typed predicates and expression ordering
 
 Methodless column handles use per-kind functions, such as `orm.TextEq(column, value)`
@@ -66,7 +98,7 @@ the exact string type, scope, codec and SQL NULL semantics without applying
 `lower()`. Stored column metadata must grant text capability; string enums are
 rejected. Use `TextRow` or `TextNullableRow` for stored text columns.
 
-<!-- go-source: tests/fixtures/consumer/scalarqueries/text_row_test.go -->
+<!-- compiled-source: tests/fixtures/consumer/scalarqueries/text_row_test.go#computed-text -->
 ```go
 type noteSide struct{}
 

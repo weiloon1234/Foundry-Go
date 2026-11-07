@@ -13,12 +13,12 @@ attachments and metadata as typed fields on the model itself.
 
 Declare an identity from the ORM table and its primary handle once. The compiled [profiles example](../../tests/fixtures/consumer/profiles/profile.go) binds that identity with `extensions.DefineORMOwner` and pins `StorageModel`.
 
-<!-- compiled-source: tests/fixtures/consumer/profiles/tables.go -->
+<!-- compiled-source: tests/fixtures/consumer/profiles/tables.go#model-extensions-profile-identity -->
 ```go
 var ProfileIdentity = orm.IdentityOf(Profiles.Table, Profiles.Key())
 ```
 
-<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go -->
+<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go#model-extensions-owners -->
 ```go
 var Owners = extensions.DefineORMOwner("profiles", ProfileIdentity, extensions.OwnerOptions{StorageModel: "profiles"})
 ```
@@ -64,7 +64,7 @@ The storage model defaults to the declared table name, so renaming an owner
 table silently moves the owner to a new, empty scope unless its persisted
 identity is declared. For example, a renamed account table can keep its original storage model:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extensions-account-owner -->
 ```go
 var AccountOwner = extensions.DefineORMOwner("accounts", AccountIdentity,
 	extensions.OwnerOptions{StorageModel: "original_accounts"})
@@ -79,7 +79,7 @@ for the lifetime of the stored data.
 If a table was already renamed without a declaration, rows written under the old
 scope are hidden but intact. Declare the old table name as a previous model:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extensions-recover-account-owner -->
 ```go
 var RecoverAccountOwner = extensions.DefineORMOwner("accounts", AccountIdentity,
 	extensions.OwnerOptions{PreviousModels: []string{"original_accounts"}})
@@ -113,7 +113,7 @@ the keys are reused. Soft deletion deliberately retains data for restoration.
 
 ## Typed metadata
 
-<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go -->
+<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go#model-extensions-example-5 -->
 ```go
 func (s Services) SavePreferences(ctx context.Context, profile Profile, input Preferences) error {
 	return PreferencesKey.Set(ctx, s.Metadata, ProfileIdentity.ReferenceOf(profile), input)
@@ -205,7 +205,7 @@ or automatically inferred owner table is created.
 
 ## Translated model fields
 
-<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go -->
+<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go#model-extensions-example-6 -->
 ```go
 func (s Services) SaveLabel(ctx context.Context, profile Profile, locale i18n.LocaleID, text string) error {
 	return Label.Set(ctx, s.Translations, ProfileIdentity.ReferenceOf(profile), locale, text)

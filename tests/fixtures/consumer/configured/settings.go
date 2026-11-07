@@ -12,13 +12,13 @@ import (
 const Reports cache.StoreName = "reports"
 
 //foundry:config
-type Settings struct {
+type Settings struct { // doc-example:begin generated-configuration-settings
 	Services      infrastructure.Settings
 	AppName       string `config:"app_name,public" client:"env=VITE_APP_NAME,fallback=ConsumerApp"`
 	DefaultLocale string `config:"default_locale,public" client:"env=VITE_DEFAULT_LOCALE,fallback=en,kind=locale"`
 	FormatLocale  string `config:"format_locale,public" client:"env=VITE_FORMAT_LOCALE,kind=format_locale,optional"`
 	TimeZone      string `config:"time_zone,public" client:"env=VITE_TIME_ZONE,kind=time_zone,optional"`
-}
+} // doc-example:end generated-configuration-settings
 
 func Defaults() Settings {
 	s := infrastructure.DefaultSettings()

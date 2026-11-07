@@ -87,7 +87,7 @@ Like Laravel's `encrypted` and `encrypted:array/json` casts, a model field of ty
 `encrypted.Text` or `encrypted.JSON[T]` (package `database/encrypted`, optionally
 inside `value.Nullable`) is stored as an envelope and used as plaintext:
 
-<!-- compiled-source: tests/fixtures/consumer/vault/entry.go -->
+<!-- compiled-source: tests/fixtures/consumer/vault/entry.go#encryption-entry -->
 ```go
 type Entry struct {
 	ID       model.ID[Entry]

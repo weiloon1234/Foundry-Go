@@ -10,6 +10,7 @@ import (
 )
 
 // guide:computed-text-row
+// doc-example:begin computed-text
 type noteSide struct{}
 
 func noteSearch(term scalarqueries.Label) orm.Query[scalarqueries.Sample] {
@@ -23,7 +24,7 @@ func noteSearch(term scalarqueries.Label) orm.Query[scalarqueries.Sample] {
 		Where(expr.Equal(expr.At(inner, orm.NumberKeyExpr(scalarqueries.Samples.ID)), expr.At(outer, orm.NumberKeyExpr(scalarqueries.Samples.ID)))).Limit(1)
 	text := expr.TextNullableRowValue(rows.CorrelatedScalarNullableRowQuery(scalar))
 	return expr.Where(scalarqueries.Samples.Query(), expr.NullableTextIContains(text, term))
-}
+} // doc-example:end computed-text
 
 // guide:end
 

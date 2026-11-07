@@ -43,7 +43,7 @@ Password strength does not verify an existing credential or contact a breach API
 
 ## Concurrent I/O
 
-<!-- compiled-source: tests/fixtures/consumer/httpvalidation/async.go -->
+<!-- compiled-source: tests/fixtures/consumer/httpvalidation/async.go#validation-expanded-async-router -->
 ```go
 func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]) (*foundryhttp.Router, error) {
 	fields := httpdto.UpdateUserValidationFields()
@@ -106,18 +106,7 @@ pool reuse and isolation after a selected connection closes.
 
 ## Batched model lists
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
-```go
-func availableEmail(db database.Executor) validation.Rule[string] {
-	return databasevalidation.Unique(db, models.Users.Query(), orm.TextExpr(models.Users.Email))
-}
-
-func activeUsers(db database.Executor) validation.Rule[[]model.ID[models.User]] {
-	return databasevalidation.ExistsAll(db,
-		models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.StatusActive)),
-		orm.KeyExpr(models.Users.Key()))
-}
-```
+See the [compiled example at its owner](validation.md#advisory-database-rules).
 
 `orm.ValueLookup.AllExist` owns execution. It combines up to 64 parameterized
 existence predicates per statement using the shared AST/compiler. This retains
@@ -138,7 +127,7 @@ value from one outside the caller's scope.
 
 For lists of objects, select one field per element:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#validation-expanded-assignment -->
 ```go
 type Assignment struct{ Assignee model.ID[models.User] }
 

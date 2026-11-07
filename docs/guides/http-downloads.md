@@ -114,7 +114,4 @@ outlive a download writer's cache policy. HEAD returns 405 without consuming the
 ticket. A consumed ticket cannot resume a transfer with Range or If-Range; obtain
 a fresh ticket for each retry or range request.
 
-<!-- compiled-source: tests/fixtures/consumer/reporting/ticket_route.go -->
-```go
-return http.TicketAuthenticated(endpoint, binding, tokens)
-```
+See the [compiled example at its owner](authentication.md#ticket-authenticated-routes).

@@ -110,7 +110,7 @@ stored activity backward; clock synchronization remains an operational concern.
 
 ## List and revoke
 
-<!-- compiled-source: tests/fixtures/consumer/authenticating/sessions.go -->
+<!-- compiled-source: tests/fixtures/consumer/authenticating/sessions.go#sessions-listed-sessions -->
 ```go
 func ListedSessions(ctx context.Context, sessions *UserSessions, user models.User) ([]UserSession, error) {
 	return sessions.List(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user))
@@ -172,7 +172,7 @@ future logins. Disable the account or change its credential policy separately.
 of one session binding act as a model of another, or the same, binding (for
 example support staff acting as a customer). `maximum` is at most 24 hours.
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go#sessions-impersonate -->
 ```go
 func impersonate(ctx context.Context, web *session.Sessions[Account, int64], customer Account) (session.Issued[Account, int64], error) {
 	support, err := session.NewImpersonation(web, web, time.Hour)

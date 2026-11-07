@@ -1,5 +1,14 @@
 # Application HTTP errors
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Declare: [Public structured failures](#recipe-error-details)
+- Handle: [Client error narrowing](#recipe-client-narrowing)
+- Further reference: [Localized messages](validation-messages.md)
+
+## Overview
+
 Declare a public error once and reuse the value in the endpoint and handler. The declaration owns a semantic `ErrorCode`, a status from 400 through
 599, and static public text. This is the same metadata the router exports.
 
@@ -67,6 +76,7 @@ headers, safe cache defaults, and ownership of custom error methods. Error
 classification contains panic and `runtime.Goexit` before committing a response.
 It waits for the custom method to finish and never formats an application cause.
 
+<a id="recipe-error-details"></a>
 ## Typed details
 
 Use a concrete DTO for a failure that needs public structured data. Its root
@@ -74,8 +84,11 @@ must be directly a non-nullable object. Alias, scalar, array, map, dynamic
 and nullable roots are refused. A details type cannot be the error envelope
 itself. Nested fields retain the normal DTO rules.
 
-<!-- compiled-source: tests/fixtures/consumer/clientcontracts/member_create.go -->
+[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/member_create.go).
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/member_create.go#http-application-errors-member-exists-details -->
 ```go
+//
 //foundry:dto
 type MemberExistsDetails struct {
 	ExistingMemberID model.ID[models.User] `json:"existing_member_id"`
@@ -97,10 +110,37 @@ var RegistrationClosed = foundryhttp.DefineError(
 ```
 
 Run the normal [generator](typed-api-workflow.md) to produce the descriptor.
-Declare both variants with `http.Errors(MemberExists, RegistrationClosed)`.
-The [complete create endpoint](../../tests/fixtures/consumer/clientcontracts/member_create.go)
-returns `MemberCreated` with status 201, or calls
-`MemberExists.New(MemberExistsDetails{...}).WithCause(err)` for the detailed 409.
+The exact declarations belong to the endpoint's error contract:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/member_create.go#declare-error-endpoint -->
+```go
+var MemberCreate = foundryhttp.DefineEndpoint(
+	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members")),
+	foundryhttp.EmptyQuery(), foundryhttp.JSONBody(CreateMemberJSON()), foundryhttp.JSONResponse(201, MemberCreatedJSON()),
+	foundryhttp.Errors(MemberExists, RegistrationClosed),
+)
+```
+
+Map service errors at the HTTP boundary. The fixture entries are public;
+applications check current resource authorization before disclosing details.
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/member_create.go#map-domain-errors -->
+```go
+func HandleMemberCreate(_ context.Context, in foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, CreateMember]) (MemberCreated, error) {
+	id, err := createMember(in.Body.Name)
+	var existing *existingMember
+	if errors.As(err, &existing) {
+		// These fixture entries are public. Real handlers check current resource
+		// authorization before exposing an existing member's identity or state.
+		return MemberCreated{}, MemberExists.New(MemberExistsDetails{ExistingMemberID: existing.ID, Existing: MemberConflictState{Name: existing.Name, State: existing.State}}).WithCause(err)
+	}
+	if errors.Is(err, registrationClosed) {
+		return MemberCreated{}, RegistrationClosed.WithCause(err)
+	}
+	return MemberCreated{ID: id}, err
+}
+```
+
 `MemberExists.New` requires the declared payload type; the declaration itself is not an error.
 Do not mutate a bound payload before the response is written.
 
@@ -137,6 +177,7 @@ Manifest readers repeat the relevant checks, including for hand-made documents.
 Status 401 cannot carry details because auth transports may discard its body and
 retry. Keep authentication failures separate from business conflicts.
 
+<a id="recipe-client-narrowing"></a>
 ## Client narrowing
 
 A client whose manifest includes detailed errors exports correlated unions at
@@ -147,7 +188,7 @@ Plain variants have no `details` property. Full and portal entries use the same
 detailed errors generates no `isOperationError`, so code shared across portals
 cannot assume that export exists.
 
-<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/error-details.ts -->
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/error-details.ts#http-application-errors-example-2 -->
 ```typescript
 export async function createMember(api: sdk.API, name: string) {
   try {

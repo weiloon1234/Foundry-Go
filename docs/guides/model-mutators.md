@@ -1,10 +1,19 @@
 # Typed model field mutators
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Transform: [Mutation inputs](#recipe-mutate-field)
+- Further reference: [Bulk writes](#set-based-and-conflict-writes)
+
+<a id="recipe-mutate-field"></a>
+## Assign mutation inputs
+
 A mutation input column separates the value accepted by writes from the value stored in the model. An input assignment retains input until persistence; reads and predicates use the stored type. Declare the appropriate `Input*` carrier even when input and stored types are identical.
 
 The [complete declaration](model-declarations.md) uses `InputText[User, EmailInput, string]` with a named `MutateEmail` method. This fixture uses distinct input and stored types:
 
-<!-- orm-example: inputs-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#inputs-after -->
 ```go
 func input(input coremodels.EmailInput) orm.Assignment[mutators.Member] {
 	return orm.InputTextSet(mutators.Members.Email, input)

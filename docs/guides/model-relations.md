@@ -1,5 +1,13 @@
 # Typed model relations
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Load: [Existing parents](#recipe-load-relations)
+- Further reference: [Relation declarations](#declaring-keys-in-go)
+
+## Overview
+
 Relations retain source model, target model and key types. The [handwritten model fields](../../tests/fixtures/consumer/models/models.go) declare `relation.One[User]`, `relation.Many[Order]` or `relation.Through[Group, Membership]`. These fields are relation state, not persisted columns: bind them with typed slot declarations rather than persisted columns. [Model extension slots](model-extension-slots.md) for translated text, attachments and metadata load through the same `With` and `LoadFrom` paths.
 
 ## Declaring keys in Go
@@ -148,3 +156,22 @@ Milestone 06 implements belongs-to, has-one, has-many and many-to-many with type
 The [PostgreSQL acceptance fixture](../../tests/fixtures/consumer/model_relations_postgres_test.go) verifies query counts, key batching, cardinality errors, nullable inverses, empty collections, nested loading, explicit scopes, natural keys, loaded-state preservation and resource bounds. Negative compiler fixtures reject incompatible keys, owners, targets and scope predicates. Native declaration tests reject invalid slots, keys and ownership before SQL.
 
 The [many-to-many PostgreSQL fixture](../../tests/fixtures/consumer/model_through_postgres_test.go) covers typed nullable/natural pivots, duplicate edges, self-relations, target and pivot scopes, SQL ordering, nested loading on both models, skipped missing targets, ambiguous joins, failed pivot hydration and separate fetch/attachment budgets. Compile-failure fixtures reject mismatched keys, mixed pivot owners, wrong pivot filters/orderings and incompatible link payloads.
+
+<a id="recipe-load-relations"></a>
+## Load existing parents
+
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#relations-after -->
+```go
+var OrderBuyer = orm.BelongsToOf(models.Orders.Buyer, orm.ColumnExpr(models.Orders.BuyerID), orm.KeyExpr(models.Users.ID))
+
+func relations(ctx context.Context, db database.Executor, existing []models.Order) error {
+	_, err := orm.All(ctx, db, models.Orders.Query().With(OrderBuyer))
+	if err != nil {
+		return err
+	}
+	_, err = orm.LoadFrom(ctx, db, models.Orders.Query().With(OrderBuyer), existing)
+	return err
+}
+```
+
+Source and imports: [consumer migration fixture](../../tests/fixtures/goway/migration/examples_test.go). Query-based loading retains the same budgets for existing parents.

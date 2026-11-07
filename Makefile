@@ -38,7 +38,7 @@ set -eu; for task_generate_dir in $(GENERATION_DIRS); do \
 done
 endef
 
-.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check deploy-tools-check security-check security-tools-check verify publish-client-contracts
+.PHONY: toolchain-check fmt fmt-check vet test race fixture-check generate generate-check gopls-install agent-smoke typescript-tools-check typescript-check datatable-contracts test-postgres test-redis benchmark-orm benchmark-typescript docs-check release-tools-check deploy-tools-check security-check security-tools-check verify publish-client-contracts
 
 toolchain-check:
 	$(GO) version
@@ -65,15 +65,20 @@ race:
 
 fixture-check:
 	$(call prepare_test_inputs)
-	@set -eu; for task_fixture_dir in $(FIXTURE_DIRS); do \
+	@set -eu; task_doc_inputs=$$(mktemp); trap 'rm -f "$$task_doc_inputs"' EXIT HUP INT TERM; \
+	for task_fixture_dir in $(FIXTURE_DIRS); do \
+		(cd "$$task_fixture_dir"; $(GO) list -json ./...) >> "$$task_doc_inputs"; \
 		(cd "$$task_fixture_dir"; $(GO) vet ./...; $(call test_packages,)); \
-	done
+	done; \
+	$(GO) run ./internal/cmd/checkdocs --go-inputs "$$task_doc_inputs"
 
 generate:
 	@$(call generate_packages,)
+	$(GO) run ./internal/cmd/renderdocs
 
 generate-check:
 	@$(call generate_packages,--check)
+	$(GO) run ./internal/cmd/renderdocs --check
 
 gopls-install:
 	@mkdir -p bin
@@ -107,8 +112,10 @@ publish-cursor-contracts:
 publish-client-contracts:
 	cd tests/fixtures/consumer && FOUNDRY_PUBLISH_CLIENT_CONTRACTS=1 $(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./clientcontracts -run '^TestPublishClientContracts$$'
 
-typescript-check:
+typescript-tools-check:
 	@test -n "$$FOUNDRY_TEST_NODE" -a -n "$$FOUNDRY_TEST_TYPESCRIPT" || { printf 'Set FOUNDRY_TEST_NODE and FOUNDRY_TEST_TYPESCRIPT to existing native tool paths.\n'; exit 1; }
+
+typescript-check: typescript-tools-check
 	cd tests/fixtures/consumer && FOUNDRY_TEST_TYPESCRIPT_REQUIRED=1 $(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./clientcontracts -run '^(TestTypeScriptClientAgainstRealHTTPAndWebSocket|TestOptionalFormAdaptersWithRealReactAndVue)$$'
 
 test-postgres:
@@ -126,7 +133,8 @@ TYPESCRIPT_BENCH_COUNT ?= 5
 benchmark-typescript:
 	$(GO) test -timeout=$(TEST_TIMEOUT) -run '^TestRenderPerformanceFixtures$$' -bench '^(BenchmarkRender|BenchmarkRenderModules|BenchmarkReceivedNaming|BenchmarkGenerateCheck)$$' -benchmem -benchtime=$(TYPESCRIPT_BENCH_TIME) -count=$(TYPESCRIPT_BENCH_COUNT) ./typescript
 
-verify: toolchain-check fmt-check vet test fixture-check generate-check docs-check release-tools-check deploy-tools-check
+verify: export FOUNDRY_TEST_TYPESCRIPT_REQUIRED := 1
+verify: toolchain-check typescript-tools-check fmt-check vet test fixture-check generate-check docs-check release-tools-check deploy-tools-check
 
 # Scans reuse installed tools and warm caches; no cold package measurement.
 SECURITY_OUTPUT ?= .cache/security-check

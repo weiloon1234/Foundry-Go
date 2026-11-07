@@ -2,6 +2,7 @@ import * as sdk from "./contracts_foundry.gen.js";
 import * as members from "./contracts_members_foundry.gen.js";
 
 // Compiled guide example: the operation and code select one concrete payload.
+// doc-example:begin http-application-errors-example-2
 export async function createMember(api: sdk.API, name: string) {
   try {
     return (await api.membersCreate({ body: { name } })).id;
@@ -12,6 +13,7 @@ export async function createMember(api: sdk.API, name: string) {
     throw error;
   }
 }
+// doc-example:end http-application-errors-example-2
 
 export function errorDetailsTypes(error: unknown): void {
   // @ts-expect-error A caught value needs narrowing.

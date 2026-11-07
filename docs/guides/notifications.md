@@ -33,7 +33,7 @@ the database requires the same protection as application messages.
 
 Capture a typed reference and input once when caller retries must preserve an ID:
 
-<!-- compiled-source: tests/fixtures/consumer/notifying/orders.go -->
+<!-- compiled-source: tests/fixtures/consumer/notifying/orders.go#notifications-capture -->
 ```go
 func Capture(ctx context.Context, binding OrdersBinding, user models.User, input OrderPlaced) (notifications.PendingNotification[models.User, OrderPlaced], error) {
 	return binding.Capture(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), input, notifications.ID[models.User]{})

@@ -1,5 +1,15 @@
 # Typed HTTP pagination
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- List: [Numbered pages](#recipe-numbered-page)
+- Authenticate: [Page reads](#recipe-authenticated-pages)
+- Further reference: [Cursor pagination](http-cursor-pagination.md)
+
+<a id="recipe-numbered-page"></a>
+## Declare a numbered page
+
 Handwritten ORM consumers use `orm.PageResult[T]`, `orm.SimplePage[T]` and
 `orm.PageRequest`. These aliases retain the existing transport identities and
 work directly with `pagination.MapPage` and `pagination.MapSimplePage`. The
@@ -13,7 +23,7 @@ response metadata and navigation links. The service uses the normal ORM API.
 The independent [consumer](../../tests/fixtures/consumer/httppagination/pagination.go)
 contains the complete declarations and generated contracts for this example:
 
-<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go -->
+<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#http-pagination-list-request -->
 ```go
 type ListRequest = pagination.Request[foundryhttp.NoPath, MemberFilters]
 
@@ -23,7 +33,7 @@ var List = pagination.DefineNumbered(
 )
 ```
 
-<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go -->
+<!-- compiled-source: tests/fixtures/consumer/httppagination/pagination.go#http-pagination-example-2 -->
 ```go
 func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResult[MemberResponse], error) {
 	builder := memberQuery(in.Filters)
@@ -54,6 +64,7 @@ are removed.
 | `secured.Handle(handler)` | `pagination.HandleAuthenticated(secured, handler)` |
 | `secured.URL(ctx, path, filters, page)` | `pagination.AuthenticatedURL(secured, ctx, path, filters, page)` |
 
+<a id="recipe-authenticated-pages"></a>
 ## Authenticated page reads
 
 Declare the route with `Access: foundryhttp.Guarded`, configure pagination as
@@ -62,7 +73,7 @@ usual, and pass its concrete `foundryhttp.GuardBinding[Actor]` to
 `pagination.HandleAuthenticated(secured, service.List)`. Numbered, simple and cursor endpoints use the same
 adapter and infer all types from the endpoint and binding:
 
-<!-- compiled-source: tests/fixtures/consumer/httppagination/authenticated.go -->
+<!-- compiled-source: tests/fixtures/consumer/httppagination/authenticated.go#http-pagination-authenticated-numbered -->
 ```go
 func AuthenticatedNumbered(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
 	return pagination.Authenticated(GuardedList, binding)

@@ -36,12 +36,14 @@ func WebSessions(db *database.DB, provider UserProvider, persistence sessionpg.C
 func StartVerifiedSession(ctx context.Context, sessions *UserSessions, proof auth.Proof[models.User, model.ID[models.User]]) (IssuedSession, error) {
 	return sessions.Issue(ctx, proof, session.IssueOptions{})
 }
+
+// doc-example:begin sessions-listed-sessions
 func ListedSessions(ctx context.Context, sessions *UserSessions, user models.User) ([]UserSession, error) {
 	return sessions.List(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user))
 }
 func RevokeListedSession(ctx context.Context, sessions *UserSessions, user models.User, id session.ID[models.User]) (bool, error) {
 	return sessions.RevokeID(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), id)
-}
+} // doc-example:end sessions-listed-sessions
 func SessionSubject(info UserSession) model.Reference[models.User, model.ID[models.User]] {
 	return info.Subject()
 }

@@ -426,7 +426,7 @@ and other available native formats. The rule does not close the engine.
 Import `validation/database` as `databasevalidation`. The adapter composes the
 ORM declarations and typed column handles:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#database-rules -->
 ```go
 func availableEmail(db database.Executor) validation.Rule[string] {
 	return databasevalidation.Unique(db, models.Users.Query(), orm.TextExpr(models.Users.Email))
@@ -473,7 +473,7 @@ A rule tree is declared once, yet some scopes depend on the request: the row
 being updated, or the tenant of the authenticated actor. Declare a typed
 `validation.Slot` and provide its value per check instead of rebuilding rules:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#validation-email-change -->
 ```go
 type EmailChange struct {
 	ID    model.ID[models.User]
@@ -501,7 +501,7 @@ from trusted route or actor data, never from an untrusted body field alone.
 `databasevalidation.Scoped(db, scope, field)` derives the whole model scope at
 every check, for example from typed request metadata:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#validation-enabled-accounts -->
 ```go
 func enabledAccounts(db database.Executor, enabled func(context.Context) (bool, error)) validation.Rule[int64] {
 	lookup := databasevalidation.Scoped(db, func(ctx context.Context) (orm.Query[Account], error) {

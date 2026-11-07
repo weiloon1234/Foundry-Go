@@ -1,10 +1,22 @@
 # Typed model writes
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Write: [Create and update](#recipe-write-models)
+- Lock: [Unique columns](#recipe-lock-write)
+- Further reference: [Transaction outcomes](#transaction-ownership-and-failures)
+
+## Overview
+
 `orm.Table[M, K]` creates, updates and deletes complete models with concrete key and assignment types. Per-kind functions such as `orm.TextSet` construct `orm.Assignment[M]` values. Writes use the shared mutation compiler, codecs and complete `RETURNING` hydration.
 
+<a id="recipe-write-models"></a>
 ## Create and update
 
-<!-- orm-example: insert-member -->
+[Source and imports in the matching GitHub tree](../../tests/fixtures/goway/migration/examples_test.go).
+
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#insert-member -->
 ```go
 func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
 	f := hooks.Members
@@ -12,7 +24,7 @@ func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member,
 }
 ```
 
-<!-- orm-example: writes-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#writes-after -->
 ```go
 func write(ctx context.Context, tx *database.Tx, id int64) error {
 	_, err := orm.Update(ctx, tx, hooks.Members.Table.Query(), hooks.Members.Table.Key(), id, orm.InputTextSet(hooks.Members.Name, "Ada"), orm.NullableInputTextSetNull(hooks.Members.Note))
@@ -36,6 +48,7 @@ Writes reject read ordering, limits, offsets and eager-load options rather than 
 
 [Source writes](model-source-writes.md), [insert-select](model-insert-from-query.md), [upserts](model-upserts.md) and [batch writes](model-batch-writes.md) have explicit result bounds and lifecycle contracts.
 
+<a id="recipe-lock-write"></a>
 ## Row locks and unique columns
 
 For all hooked or observed models, the before-image read uses `FOR NO KEY UPDATE` for SQL updates, including soft deletes and restores. Physical and force deletes use `FOR UPDATE`. Batch candidate reads, `UpdateOrCreate` lookups and bound-rejected adjustment reads follow the same rule, including on models without hooks or observers. Primary-key assignments are rejected. `NO KEY UPDATE` serializes writers while allowing a concurrent foreign-key check to hold `KEY SHARE`.
@@ -44,7 +57,7 @@ The ORM cannot infer which other columns are unique. When an update changes a UN
 
 When changing such a column, acquire `FOR UPDATE` first, in the same transaction, before the operation reads candidates or the before-image. The model API uses `orm.Lock` for `FOR UPDATE`:
 
-<!-- orm-example: unique-column-lock -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#unique-column-lock -->
 ```go
 func changeUniqueColumn(ctx context.Context, db *database.DB, id int64) error {
 	return db.Transaction(ctx, func(tx *database.Tx) error {

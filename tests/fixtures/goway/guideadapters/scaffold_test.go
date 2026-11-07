@@ -11,6 +11,7 @@ import (
 )
 
 // guide:scaffold-roles
+// doc-example:begin model-scaffolding-name-input
 type NameInput struct{ Text string }
 
 type Widget struct {
@@ -47,11 +48,12 @@ var Widgets = orm.Define("widgets", func(b orm.Builder[Widget], m *Widget) Widge
 		Soft:      orm.SoftDeletes(deleted),
 		Children:  orm.ManyOf(b, &m.Children),
 	}
-})
+}) // doc-example:end model-scaffolding-name-input
 
 // guide:end
 
 // guide:scaffold-relations
+// doc-example:begin model-scaffolding-child
 type Child struct {
 	ID       model.ID[Child]
 	WidgetID model.ID[Widget]
@@ -72,6 +74,6 @@ func ChildTables() []orm.CheckedTable  { return []orm.CheckedTable{Children} }
 
 func Tables() []orm.CheckedTable {
 	return append(WidgetTables(), ChildTables()...)
-}
+} // doc-example:end model-scaffolding-child
 
 // guide:end

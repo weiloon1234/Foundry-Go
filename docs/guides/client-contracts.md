@@ -1,5 +1,20 @@
 # Client contracts and TypeScript
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Consume: [Portal entries](#recipe-portal-entries)
+- Encode: [Precision, presence and locales](#recipe-wire-values)
+- Connect: [Fetch transport](#recipe-fetch-transport)
+- Sign in: [Portal sessions](#recipe-portal-session)
+- Query tables: [Generated bindings](#recipe-table-bindings)
+- Handle errors: [Operation narrowing](http-application-errors.md#recipe-client-narrowing)
+- Edit forms: [Exact input values](client-forms.md#recipe-form-values)
+- Further reference: [Export ownership](#export-from-the-application)
+- Further reference: [Validation metadata](#validation-and-ui-metadata)
+
+## Overview
+
 Milestone 21 passed native framework/consumer verification, strict TypeScript,
 real HTTP/WebSocket interoperability, compiler/editor, generation/recovery, race
 and bounded fuzz checks.
@@ -182,6 +197,36 @@ package. `sideEffects: false` lets a bundler resolve a shared name such as
 `APIError` imported from the full entry straight to the runtime module, without
 the full entry's operation table.
 
+<a id="recipe-portal-entries"></a>
+### Consume portal entries
+
+[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/surfaces.ts).
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/surfaces.ts#portal-entries -->
+```typescript
+export function surfaceConsumer(): void {
+  void memberAPI.membersIndex({});
+  // @ts-expect-error A surface exposes only its selected operations.
+  void memberAPI.accountShow({});
+  void liveAPI.accountShow({});
+  // @ts-expect-error Another portal's operation is not part of this surface.
+  void liveAPI.membersIndex({});
+  // Schemas keep their names and identity brands in every entry of a directory.
+  const shared: full.Operations["membersIndex"]["response"] = memberPage;
+  void shared;
+  // Runtime classes come from the shared modules, so every entry has one class.
+  const apiError: typeof full.APIError = members.APIError;
+  void apiError;
+  // @ts-expect-error This portal declares no detailed operation errors.
+  void live.isOperationError;
+  void live.createRealtime;
+  // @ts-expect-error A surface without channels has no realtime client.
+  void members.createRealtime;
+  // @ts-expect-error A surface without Auth has no portal session helper.
+  void members.createPortalSession;
+}
+```
+
 ## Operation documentation, examples and servers
 
 Document an endpoint with `WithDocumentation(http.RouteDocumentation{Summary,
@@ -223,6 +268,7 @@ replacements are atomic; the entire set is recoverable rather than one atomic
 filesystem transaction. See [generator ownership](model-generation.md#commands-and-ownership)
 for process guards, retained backups and edit-conflict handling.
 
+<a id="recipe-wire-values"></a>
 ## Values and wire precision
 
 Generated `Operations` and `ContractTypes` expose the public types. Operation
@@ -276,6 +322,30 @@ locales against its current catalog. Received values keep `string` keys, because
 a newer server may support more locales than the client was generated with; a
 schema reachable from server output that contains such a map therefore has a
 `...Received` variant. OpenAPI keeps its open object keys.
+
+[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts).
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#wire-values -->
+```typescript
+export function wireValues(body: sdk.Operations["itemsEcho"]["request"]["body"]) {
+  const request: sdk.Operations["itemsEcho"]["request"] = {
+    path: { key: "9223372036854775807" },
+    body: { ...body, large: "9223372036854775807", amount: "1234567890.12", optional: null },
+  };
+  return request;
+}
+```
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#locale-fields -->
+```typescript
+export function localeFields() {
+  const titles: sdk.LocaleMap<string> = { en: "Hello", ms: "Helo" };
+  const operation = sdk.operation("itemsEcho");
+  const title = operation.field("body", "titles").at("en");
+  const tag = operation.field("body", "tags").element();
+  return { titles, title, tag };
+}
+```
 
 ## Tolerant server output
 
@@ -377,23 +447,24 @@ Typed details use per-operation error unions and `isOperationError`; see the
 with no detailed errors generates no guard; shared code cannot assume the export
 exists in every entry.
 
+<a id="recipe-table-bindings"></a>
 ### Typed datatable descriptors
 
 Generated entry modules export a frozen `tables` registry for surfaces that define datatables, together with typed identifiers and row helper types:
 
+[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts).
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts#table-registries -->
 ```typescript
-import { tables, tableQueries, tableDownloads, type TableId, type TableRow } from "./generated/contracts_foundry.gen.js";
-
-const membersTable = tables["reports.members"];
-const memberRow: TableRow<"reports.members"> = member;
-
-// Invoke the selected query and download through their registries:
-const page = await tableQueries["reports.members"](api, {
-  body: {
-    filters: [{ op: "eq", column: "state", values: ["active"] }],
-  },
-});
-const csv = await tableDownloads["reports.members"](api, {});
+export function query<Id extends sdk.QueryTableId>(id: Id, input: sdk.TableQueryInputs[Id]): Promise<sdk.TableQueryOutputs[Id]> {
+  return sdk.tableQueries[id](api, input);
+}
+export function exportTable<Id extends sdk.ExportTableId>(id: Id, input: sdk.TableExportInputs[Id]): Promise<sdk.TableExportOutputs[Id]> {
+  return sdk.tableExports[id](api, input);
+}
+export function download<Id extends sdk.DownloadTableId>(id: Id, input: sdk.TableDownloadInputs[Id]): Promise<sdk.TableDownloadOutputs[Id]> {
+  return sdk.tableDownloads[id](api, input);
+}
 ```
 
 Each descriptor in `tables` carries:
@@ -429,13 +500,10 @@ A missing slot has no key in its operation registry. `tableExportKinds[id]` is
 application response; files and downloads return `FileResult`, whose caller owns
 `close()`.
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts#table-download -->
 ```typescript
-const ticket = await tableExports["reports.members"](api, {
-  body: { format: "csv", request: {} },
-});
-const file = await tableDownloads["reports.members"](api, {
-  query: { ticket: ticket.url, format: "csv" },
-});
+const ticket: TableExportResource = await sdk.tableExports["reports.members"](api, { body: { format: "csv", request: {} } });
+const file: sdk.FileResult = await sdk.tableDownloads["reports.members"](api, { query: { ticket: ticket.url, format: "csv" } });
 await file.close();
 ```
 
@@ -450,26 +518,35 @@ availability in the selected client before offering an action.
 Uniform application adapters can use a checked optional export view without
 weakening the generated registries:
 
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts#table-adapter -->
 ```typescript
-type AdminExports = {
-  readonly [Id in QueryTableId]?: (
-    client: API,
-    input: { readonly body: TableExportRequest },
-    options?: CallOptions,
-  ) => Promise<TableExportResource>;
+type Request = sdk.ContractTypes["github.com/weiloon1234/Foundry-Go/datatable.Request"];
+type TableExportRequest = sdk.ContractTypes["foundry.test/consumer/clientcontracts.TableExportRequest"];
+type TableExportResource = sdk.ContractTypes["foundry.test/consumer/clientcontracts.TableExportResource"];
+type ExportFormat = TableExportRequest["format"];
+type TablePage<Row> = sdk.TablePageReceived<Row>;
+interface TableMemory { readonly page: number }
+interface StoreApi<T> { getState(): T }
+interface TableSource<DeclaredRow, ReceivedRow = DeclaredRow> {
+  readonly metadata: sdk.TableMetadata<DeclaredRow>;
+  query(request: Request, signal?: AbortSignal): Promise<TablePage<ReceivedRow>>;
+  readonly export: ((format: ExportFormat, request: Request) => Promise<TableExportResource>) | undefined;
+  readonly memory: StoreApi<TableMemory> | undefined;
+}
+type AdminExportTransports = {
+  readonly [Id in sdk.QueryTableId]?: (client: sdk.API, input: { readonly body: TableExportRequest }, options?: sdk.CallOptions) => Promise<TableExportResource>;
 };
-const exports: AdminExports = tableExports;
-
-function adminTable<Id extends QueryTableId>(id: Id) {
-  const exportCall = exports[id];
+const exportTransports: AdminExportTransports = sdk.tableExports;
+declare const api: sdk.API;
+declare const tableMemory: StoreApi<TableMemory>;
+export function adminTable<Id extends sdk.QueryTableId>(id: Id): TableSource<sdk.TableRow<Id>, sdk.TableReceivedRow<Id>> {
+  const descriptor = sdk.tables[id];
+  const exportCall = exportTransports[id];
   return {
-    metadata: tables[id],
-    query: (request: Datatable_Request, signal?: AbortSignal) =>
-      tableQueries[id](api, { body: request }, signal ? { signal } : {}),
-    export: exportCall
-      ? (format: ExportFormat, request: Datatable_Request) =>
-          exportCall(api, { body: { format, request } })
-      : undefined,
+    metadata: descriptor,
+    query: (request, signal) => sdk.tableQueries[id](api, { body: request }, signal ? { signal } : {}),
+    export: exportCall ? (format, request) => exportCall(api, { body: { format, request } }) : undefined,
+    memory: tableMemory,
   };
 }
 ```
@@ -512,11 +589,18 @@ The transport owns network I/O, credentials and cancellation. Use the optional
 `fetchTransport` exported by every generated client entry when Fetch and Web
 Streams are available:
 
-```typescript
-import { createClient, fetchTransport } from "./generated/contracts_foundry.gen.js";
+<a id="recipe-fetch-transport"></a>
+### Connect Fetch
 
-const api = createClient(fetchTransport, { baseURL: "https://api.example.com" });
+[Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/fetch-transport.ts).
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/fetch-transport.ts#fetch-client -->
+```typescript
+const transport: HTTPTransport = fetchTransport;
+createClient(transport, { credentials: "include" });
 ```
+
+### Transport behavior
 
 `fetchTransport: HTTPTransport` forwards the method, headers, body, abort signal
 and credentials. It sets `duplex: "half"` only for a `ReadableStream` request
@@ -737,15 +821,25 @@ Its session helper imports the separate
 `<prefix>_runtime_auth_foundry.gen.ts` module. Generation emits that module only
 when at least one surface declares `Auth`; other entries do not import it.
 
-```typescript
-import { createPortalSession } from "./generated/contracts_browser_foundry.gen.js";
+<a id="recipe-portal-session"></a>
+### Own a portal session
 
-const portal = createPortalSession(transport, { clientOptions: { baseURL } });
-const profile = await portal.signInWithPassword({ login_id: email, password });
-const restored = await portal.restoreSession();
-await portal.signOut();
-portal.session.dispose();
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#portal-lifecycle -->
+```typescript
+export async function portalLifecycle(transport: HTTPTransport, baseURL: string, login: string, password: string) {
+  const portal = createPortalSession(transport, { clientOptions: { baseURL } });
+  try {
+    await portal.restoreSession();
+    const profile = await portal.signInWithPassword({ login_id: login, password });
+    await portal.signOut();
+    return profile;
+  } finally {
+    portal.session.dispose();
+  }
+}
 ```
+
+### Session lifetime and failures
 
 Use the login DTO's JSON keys for credentials. This example follows the
 [client-contract consumer](../../tests/fixtures/consumer/clientcontracts/browser_auth.go),

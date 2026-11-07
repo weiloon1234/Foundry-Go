@@ -3,8 +3,10 @@ import { fetchTransport as surfaceTransport } from "./contracts_browser_foundry.
 import { fetchTransport as standaloneTransport } from "./legacy.js";
 
 export function fetchClients(): void {
+// doc-example:begin fetch-client
   const transport: HTTPTransport = fetchTransport;
   createClient(transport, { credentials: "include" });
+// doc-example:end fetch-client
   createClient(surfaceTransport);
   createClient(standaloneTransport);
   // Custom transport injection keeps the same request and response contract.

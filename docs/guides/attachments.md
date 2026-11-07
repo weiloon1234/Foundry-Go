@@ -19,12 +19,12 @@ still AVIF and explicit animation plans without an OS codec installation.
 
 ## Declare collection policy once
 
-<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go -->
+<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go#attachments-avatar -->
 ```go
 var Avatar = attachments.Define(Owners, "avatar", attachments.Policy{Disk: Files, Cardinality: attachments.Single, Accepted: []storage.MediaType{"image/png", "image/jpeg"}, Image: value.Set(imaging.NewPlan().Fill(32, 32, false).Format(imaging.PNG))})
 ```
 
-<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go -->
+<!-- compiled-source: tests/fixtures/consumer/profiles/profile.go#attachments-example-2 -->
 ```go
 func (s Services) ReplaceAvatar(ctx context.Context, profile Profile, upload attachments.Upload) (attachments.Result[Profile, model.ID[Profile]], error) {
 	return Avatar.Replace(ctx, s.Attachments, ProfileIdentity.ReferenceOf(profile), upload)
@@ -238,7 +238,7 @@ Locally active writers are excluded.
 
 ## Image variants
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#attachments-thumbnail -->
 ```go
 var Thumbnail = attachments.DefineVariant("thumbnail",
 	imaging.NewPlan().Fit(320, 320, false).Format(imaging.WebP))
@@ -300,7 +300,7 @@ IDs only, and exits with an error when any attachment failed.
 
 ## Ordinary jobs and outbox
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#attachments-queued-photos -->
 ```go
 func queuedPhotos(producer *jobs.Outbox) (attachments.Collection[ext.Article, int64], error) {
 	job := attachments.DefineReconcileJob("attachments.reconcile", jobs.DefaultPolicy("maintenance"))

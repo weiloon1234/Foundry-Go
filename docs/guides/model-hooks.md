@@ -1,8 +1,17 @@
 # Typed model hooks
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Declare: [Write hooks](#recipe-write-hooks)
+- Further reference: [Callback contracts](#callback-contracts)
+
+<a id="recipe-write-hooks"></a>
+## Attach write hooks
+
 Declare a per-write factory returning `orm.Hooks[M]` and attach it with `orm.WithHooks` in the options passed to `orm.Define`.
 
-<!-- orm-example: hooks-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#hooks-after -->
 ```go
 func memberHooks() orm.Hooks[hooks.Member] {
 	return orm.Hooks[hooks.Member]{Creating: func(_ context.Context, _ *database.Tx, draft *orm.Write[hooks.Member]) error {
@@ -17,7 +26,7 @@ func memberHooks() orm.Hooks[hooks.Member] {
 }
 ```
 
-<!-- orm-example: write-options -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#write-options -->
 ```go
 func writeOptions() []orm.Option {
 	return []orm.Option{orm.WithHooks(memberHooks)}

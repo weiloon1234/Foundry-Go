@@ -4,7 +4,7 @@ The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) recor
 
 Declare an identity from the handwritten table and its own primary-key handle:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#model-references-user-identity -->
 ```go
 var UserIdentity = orm.IdentityOf(models.Users.Table, models.Users.Key())
 
@@ -30,7 +30,7 @@ explicitly for presentation; identity remains a persistence boundary.
 
 ## Capturing provenance
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#model-references-with-origin -->
 ```go
 func withOrigin(ctx context.Context, account Account) (context.Context, error) {
 	origin, err := (attribution.Origin{}).WithModel(account)

@@ -105,7 +105,7 @@ Go's process memory. Rate limiting and model login policy remain separate contro
 
 ## Typed stored model fields
 
-<!-- compiled-source: tests/fixtures/consumer/passwords/tables.go -->
+<!-- compiled-source: tests/fixtures/consumer/passwords/tables.go#password-hashing-account-table -->
 ```go
 type AccountTable struct {
 	// Table owns the concrete account key. Example: orm.KeyEq(AccountRecords.Key(), id).

@@ -58,9 +58,10 @@ func card(_ context.Context, _ models.User, _ notifications.DeliveryContext, inp
 	return OrderCard{input.OrderID, input.Summary}, nil
 }
 
+// doc-example:begin notifications-capture
 func Capture(ctx context.Context, binding OrdersBinding, user models.User, input OrderPlaced) (notifications.PendingNotification[models.User, OrderPlaced], error) {
 	return binding.Capture(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), input, notifications.ID[models.User]{})
-}
+} // doc-example:end notifications-capture
 func Enqueue(ctx context.Context, tx *database.Tx, manager *notifications.Manager, producer *jobs.Outbox, pending notifications.PendingNotification[models.User, OrderPlaced]) (outbox.ID[notifications.DeliveryRequest], error) {
 	return pending.Enqueue(ctx, tx, manager, Delivery, producer)
 }

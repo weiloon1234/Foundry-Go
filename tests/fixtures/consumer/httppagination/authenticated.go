@@ -20,9 +20,10 @@ var GuardedList = pagination.DefineNumbered(guardedRoute("members.secure", "/mem
 var GuardedSimpleList = pagination.DefineSimple(guardedRoute("members.secure_simple", "/members/secure-simple"), MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig())
 var GuardedCursorList = pagination.DefineCursor[mutatorqueries.Member](guardedRoute("members.secure_cursor", "/members/secure-cursor"), MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultCursorConfig())
 
+// doc-example:begin http-pagination-authenticated-numbered
 func AuthenticatedNumbered(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedNumberedEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
 	return pagination.Authenticated(GuardedList, binding)
-}
+} // doc-example:end http-pagination-authenticated-numbered
 func AuthenticatedSimple(binding foundryhttp.GuardBinding[Actor]) pagination.AuthenticatedSimpleEndpoint[foundryhttp.NoPath, MemberFilters, Actor, MemberResponse] {
 	return pagination.Authenticated(GuardedSimpleList, binding)
 }

@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/docsource"
 	"github.com/weiloon1234/Foundry-Go/internal/retirement"
 )
 
@@ -22,15 +24,43 @@ var (
 )
 
 func main() {
-	if err := checkRepository("."); err != nil {
+	inputs := flag.String("go-inputs", "", "check guide coverage against fixture go list JSON")
+	flag.Parse()
+	if flag.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "checkdocs accepts flags only")
+		os.Exit(1)
+	}
+	if err := run(".", *inputs); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	fmt.Println("Documentation links, current guide milestone claims, blueprint numbering, and fixture Go requirements are valid.")
 }
 
+func run(root, inputs string) error {
+	if inputs == "" {
+		return checkRepository(root)
+	}
+	documents, err := docsource.Load(root)
+	if err != nil {
+		return err
+	}
+	file, err := os.Open(inputs)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return docsource.CheckGoInputs(root, documents, file)
+}
+
 func checkRepository(root string) error {
 	var failures []error
+	documents, sourceErr := docsource.Load(root)
+	if sourceErr != nil {
+		failures = append(failures, sourceErr)
+	} else {
+		failures = append(failures, docsource.Check(documents), docsource.CheckTypeScriptInputs(root, documents))
+	}
 	completed, err := completedMilestones(root)
 	if err != nil {
 		failures = append(failures, err)
@@ -163,17 +193,15 @@ func checkDocument(root, path string, current bool, completed map[string]bool) e
 		lineNumber++
 		line := scanner.Text()
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-			flushParagraph()
-			marker := trimmed[:3]
-			if fence == "" {
-				fence = marker
-			} else if fence == marker {
+		if fence != "" {
+			if docsource.ClosesFence(line, fence) {
 				fence = ""
 			}
 			continue
 		}
-		if fence != "" {
+		if marker, _ := docsource.FenceStart(line); marker != "" {
+			flushParagraph()
+			fence = marker
 			continue
 		}
 		masked := maskInlineCode(line)

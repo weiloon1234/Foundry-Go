@@ -12,7 +12,7 @@ cursor owner after mapping; it is separate from the public DTO type.
 The [independent consumer](../../tests/fixtures/consumer/httppagination/cursor.go)
 contains this complete handler pattern:
 
-<!-- compiled-source: tests/fixtures/consumer/httppagination/cursor.go -->
+<!-- compiled-source: tests/fixtures/consumer/httppagination/cursor.go#http-cursor-pagination-cursor-list-request -->
 ```go
 type CursorListRequest = pagination.CursorRequest[foundryhttp.NoPath, MemberFilters, mutatorqueries.Member]
 type CursorListResult = pagination.CursorResult[mutatorqueries.Member, MemberResponse]
@@ -23,7 +23,7 @@ var CursorList = pagination.DefineCursor[mutatorqueries.Member](
 )
 ```
 
-<!-- compiled-source: tests/fixtures/consumer/httppagination/cursor.go -->
+<!-- compiled-source: tests/fixtures/consumer/httppagination/cursor.go#http-cursor-pagination-example-2 -->
 ```go
 func (s DatabaseService) CursorList(ctx context.Context, in CursorListRequest) (CursorListResult, error) {
 	page, err := orm.CursorPaginate(ctx, s.DB, memberQuery(in.Filters), in.Page)

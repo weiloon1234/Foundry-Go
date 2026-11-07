@@ -173,6 +173,10 @@ func compilerCases() []compilerCase {
 		{"query_icontains_value", "cannot use"},
 		{"query_icontains_nullable", "does not match inferred type string"},
 
+		{"guide_attachment_slot_add", "has no field or method AddFile"},
+		{"guide_attachment_collection_replace_file", "has no field or method ReplaceFile"},
+		{"guide_metadata_translation_rule", "has no field or method Rule"},
+		{"guide_attachment_translation_rule", "has no field or method MergeRule"},
 		{"attachment_owner", "cannot use"},
 		{"extension_policy_kind", "cannot use"},
 		{"extension_slot_owner", "cannot use"},

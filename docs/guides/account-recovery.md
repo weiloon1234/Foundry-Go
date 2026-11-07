@@ -10,7 +10,7 @@ The [independent consumer](../../tests/fixtures/consumer/recovering/recovery.go)
 shows ordinary Go models, ORM declarations and typed callbacks. Its model's
 stored password remains `password.Hash`; getters do not replace stored fields.
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go#account-recovery-issue-reset -->
 ```go
 func issueReset(ctx context.Context, reset *passwordreset.Reset[Account, int64], account Account) (passwordreset.Issued[Account], error) {
 	return reset.Issue(ctx, AccountIdentity.ReferenceOf(account))
@@ -22,7 +22,7 @@ Deliver only to the current locked subject returned by `issued.Subject()`.
 tokens with `passwordreset.ParseToken[Account]` and pass the typed token and
 `password.Plaintext` to `Complete`; completion does not sign the account in.
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/auth_test.go#account-recovery-issue-verification -->
 ```go
 func issueVerification(ctx context.Context, verification *emailverification.Verification[Account, int64], account Account) (emailverification.Issued[Account], error) {
 	return verification.Issue(ctx, AccountIdentity.ReferenceOf(account))

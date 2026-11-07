@@ -230,7 +230,20 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "non_streaming.ts"), nonStreaming, 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"error-details.ts", "error-details.mjs", "types.ts", "runtime.mjs", "forms.mjs", "surfaces.ts", "surfaces.mjs", "messages.ts", "messages.mjs", "auth.ts", "portal-session.mjs", "token-session.mjs", "browser-storage.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs", "fetch-transport.ts", "fetch-transport.mjs"} {
+	inputData, err := os.ReadFile("typescript-inputs.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var compilerInputs []string
+	if err := json.Unmarshal(inputData, &compilerInputs); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range compilerInputs {
+		if filepath.Base(name) != name || !strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".d.ts") {
+			t.Fatalf("invalid TypeScript compiler input %q", name)
+		}
+	}
+	for _, name := range append(compilerInputs, "error-details.mjs", "runtime.mjs", "forms.mjs", "surfaces.mjs", "messages.mjs", "portal-session.mjs", "token-session.mjs", "browser-storage.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs", "fetch-transport.mjs") {
 		data, err := os.ReadFile(filepath.Join("testdata", name))
 		if err != nil {
 			t.Fatal(err)

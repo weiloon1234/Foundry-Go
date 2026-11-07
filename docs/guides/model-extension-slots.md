@@ -12,7 +12,7 @@ the old-to-new mapping.
 The [compiled extension example](../../tests/fixtures/goway/models/extensions/models.go)
 uses an integer key and four slot kinds:
 
-<!-- compiled-source: tests/fixtures/goway/models/extensions/models.go -->
+<!-- compiled-source: tests/fixtures/goway/models/extensions/models.go#model-extension-slots-article -->
 ```go
 type Article struct {
 	ID      int64
@@ -27,7 +27,7 @@ Its table namespace exposes `orm.Slot[Article, V]` handles; `V` is the exact
 slot field type. Bind each with `orm.SlotOf(b, &m.Field)` inside `orm.Define`.
 The owner derives from the table and its primary key:
 
-<!-- compiled-source: tests/fixtures/goway/models/extensions/models.go -->
+<!-- compiled-source: tests/fixtures/goway/models/extensions/models.go#model-extension-slots-owner -->
 ```go
 var Owner = extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table, Articles.Key()), extensions.OwnerOptions{StorageModel: "extension_articles"})
 ```
@@ -42,7 +42,7 @@ Slots are excluded from parent SQL, assignments and automatic column audit.
 The guide binds policies once below. Here, `ext` is the compiled extension model
 package linked above:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extension-slots-article-extensions -->
 ```go
 // ArticleExtensions binds policies to the exact stored slot types.
 // Example: ArticleExtensions.From(runtime).
@@ -95,7 +95,7 @@ paths embed the scope, so declare the stable storage model before renaming a tab
 Return `slots.DeclareORM(owner, parts)` from an application-owned declaration
 function. `parts` lists the handles' `Registration()` and `Describe()` values:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extension-slots-article-declaration -->
 ```go
 func articleDeclaration() slots.Declaration {
 	return slots.DeclareORM(ext.Owner, slots.Parts{
@@ -120,7 +120,7 @@ that can delete its owner and supplies `slots.Runtime.Store` for cross-pool clea
 
 ## Loading slots
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extension-slots-articles -->
 ```go
 func articles(ctx context.Context, db database.Executor, runtime slots.Runtime) ([]ext.Article, error) {
 	bound := ArticleExtensions.From(runtime)
@@ -161,7 +161,7 @@ Slots refuse implicit JSON serialization. Map loaded values into explicit DTOs.
 
 ## Writing slots
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extension-slots-save-article -->
 ```go
 func saveArticle(ctx context.Context, tx *database.Tx, bound ext.Descriptors, article ext.Article, title map[i18n.LocaleID]string, seo string) error {
 	if err := bound.Title.SyncIn(ctx, tx, article, title); err != nil {
@@ -200,15 +200,15 @@ A `map[i18n.LocaleID]string` retains locale-keyed JSON and TypeScript contracts.
 Use `value.Optional` for PATCH omission or a JSON multipart part. The articles
 consumer binds its complete input to the handle's rule:
 
-<!-- compiled-source: tests/fixtures/consumer/articles/http.go -->
+<!-- compiled-source: tests/fixtures/consumer/articles/http.go#article-input-rules -->
 ```go
 input := ArticleInputValidationFields()
-	textRules := validation.All(
-		validation.Rules(input.Slug, validation.NonBlank[string]()),
-		validation.Rules(input.Author, validation.NonBlank[string]()),
-		validation.Rules(input.Title, s.x.Title.Rule()),
-		validation.Rules(input.Summary, s.x.Summary.Rule()),
-	)
+textRules := validation.All(
+	validation.Rules(input.Slug, validation.NonBlank[string]()),
+	validation.Rules(input.Author, validation.NonBlank[string]()),
+	validation.Rules(input.Title, s.x.Title.Rule()),
+	validation.Rules(input.Summary, s.x.Summary.Rule()),
+)
 ```
 
 `Rule` enforces complete input for `SyncIn`. `MergeRule` validates partial input

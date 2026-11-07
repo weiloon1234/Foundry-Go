@@ -1,18 +1,28 @@
 # Declared query projections
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Declare: [Typed result rows](#recipe-declare-rows)
+- Select: [Typed values and pages](#recipe-select-rows)
+- Further reference: [Execution](#execution-and-failures)
+
+## Overview
+
 <!-- compiled-examples -->
 
 A projection returns a complete ordinary Go record with a handwritten
 `database/orm/rows` schema. It has no table or write lifecycle. Its fields keep
 concrete model IDs, enum types and `value.Nullable` wrappers.
 
+<a id="recipe-declare-rows"></a>
 ## Declare the result
 
 Declare the result struct, then bind its fields with `rows.Define`:
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/reports/rows.go):
 
-<!-- go-source: tests/fixtures/consumer/reports/rows.go -->
+<!-- compiled-source: tests/fixtures/consumer/reports/rows.go#user-summary -->
 ```go
 type UserSummaryColumns struct {
 	rows.Row[UserSummary]
@@ -46,6 +56,7 @@ schema. The DTO generator still owns JSON/validation descriptors. Keep type and
 package identity, JSON tags and descriptor names when migrating a report.
 [Reporting](datatable.md) uses this arrangement for Members, Orders and Totals.
 
+<a id="recipe-select-rows"></a>
 ## Select typed values
 
 `rows.Select(rows.From(modelQuery), schema, mappings...)` selects a complete result.
@@ -59,6 +70,22 @@ required selected value; it does not substitute a default for NULL.
 Sources retain scopes, filters, ordering and limit/offset. A projection exposes
 no model mutations or eager loading. For a reusable query source, wrap it in
 `rows.RecordOf`, then `rows.AsRecord`; query output columns with `rows.At`.
+
+<!-- compiled-source: tests/fixtures/consumer/reports/guide.go#paginate-projection -->
+```go
+func SummaryPage(ctx context.Context, db database.Executor, page orm.PageRequest) (orm.PageResult[UserSummary], error) {
+	users := models.Users
+	query := users.Query().Where(orm.EnumEq(users.Status, models.StatusActive)).
+		OrderBy(orm.TextAsc(users.Email), orm.KeyAsc(users.Key()))
+	selected := rows.Select(rows.From(query), UserSummaries,
+		rows.Map(UserSummaries.ID, expr.Value(orm.KeyExpr(users.Key()))),
+		rows.Map(UserSummaries.Email, expr.Value(orm.TextExpr(users.Email))),
+		rows.Map(UserSummaries.Nickname, expr.Value(orm.NullableTextExpr(users.Nickname))),
+		rows.Map(UserSummaries.Status, expr.Value(orm.EnumExpr(users.Status))),
+	)
+	return rows.Read(selected).Paginate(ctx, db, page)
+}
+```
 
 ## Grouped and scalar summaries
 

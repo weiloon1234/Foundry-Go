@@ -38,7 +38,7 @@ where the application uses table registration. No runtime package discovery runs
 The scaffold has no timestamp, soft-delete, mutator or ordinary relation flags.
 The following compiled example extends its initial struct and table declaration:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/scaffold_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/scaffold_test.go#model-scaffolding-name-input -->
 ```go
 type NameInput struct{ Text string }
 
@@ -91,7 +91,7 @@ mutator. Other `Input*` families preserve their corresponding storage types.
 Bind relation slots inside each `orm.Define`, then declare computations after both
 tables. This avoids initialization cycles:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/scaffold_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/scaffold_test.go#model-scaffolding-child -->
 ```go
 type Child struct {
 	ID       model.ID[Child]

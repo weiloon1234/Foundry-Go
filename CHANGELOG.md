@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added: source-bound guide recipes for models, typed endpoints and generated clients.
+  `make generate` renders marked consumer regions; `generate-check` and `docs-check`
+  reject stale or duplicate examples and unbound recipe fences. The fixture gate checks
+  Go compilation inputs, and `make verify` now requires the native TypeScript proof.
+
 - Fixed: when the migration lock deadline expires during the advisory lock query, `migrate.Postgres`
   reports the lock timeout instead of the driver's closed-connection error.
 

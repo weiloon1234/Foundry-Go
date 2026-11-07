@@ -17,12 +17,16 @@ func MemberTicketEndpoint(binding http.GuardBinding[Operator], tokens *token.Tok
 		http.DefineRoute(http.RouteSpec{ID: "reports.ticket", Method: http.GET, Access: http.Guarded}, http.StaticPath("/reports/ticket")),
 		http.EmptyQuery(), http.DownloadResponse("text/csv; charset=utf-8"),
 	)
+	// doc-example:begin ticket-authentication
 	return http.TicketAuthenticated(endpoint, binding, tokens)
+	// doc-example:end ticket-authentication
 }
 
 // MemberTicketURL is the explicit secret-to-URL delivery boundary.
 func MemberTicketURL(ctx context.Context, binding http.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]], ticket secret.String) (string, error) {
+	// doc-example:begin authentication-example-3
 	return MemberTicketEndpoint(binding, tokens).URL(ctx, http.NoPath{}, http.NoQuery{}, ticket)
+	// doc-example:end authentication-example-3
 }
 
 // MemberTicketRoute keeps the guard available when the deferred download opens.

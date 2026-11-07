@@ -1,5 +1,20 @@
 # Typed HTTP endpoints
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Compose: [Routes, preparation and handlers](#recipe-compose-endpoint)
+- Declare input: [Omission and null](http-presence.md#recipe-presence)
+- Bind resources: [Scoped lookup](http-model-binding.md#recipe-bind-resource)
+- Authenticate: [Resource binding](http-model-binding.md#recipe-authenticated-binding)
+- List: [Numbered pages](http-pagination.md#recipe-numbered-page)
+- Map failures: [Public details](http-application-errors.md#recipe-error-details)
+- Further reference: [Guards](authentication.md)
+- Further reference: [Middleware](http-middleware.md)
+
+<a id="recipe-compose-endpoint"></a>
+## Compose a typed endpoint
+
 **Typed endpoint and request-deadline APIs are available.** Focused runtime,
 generation, consumer race tests, six new compiler-rejection cases and vet passed.
 Canonical generation, consumer checks and actual editor probes also passed.
@@ -11,38 +26,40 @@ An endpoint combines a route, query declaration, request body and response
 descriptor. Generated descriptors retain the application types throughout
 decoding, handler invocation, response encoding and inspection.
 
+<!-- compiled-source: tests/fixtures/consumer/httpendpoints/guide.go#compose-endpoint -->
 ```go
-type UpdateRequest = foundryhttp.Input[
-    httpkernel.UserPath,
-    foundryhttp.NoQuery,
-    httpdto.UpdateUser,
-]
-
-var Update = foundryhttp.DefineEndpoint(
-    foundryhttp.DefineRoute(
-        foundryhttp.RouteSpec{
-            ID: "users.update",
-            Method: foundryhttp.PATCH,
-            Access: foundryhttp.Public,
-        },
-        httpkernel.UserPathDescriptor(),
-    ),
-    foundryhttp.EmptyQuery(),
-    foundryhttp.JSONBody(httpdto.UpdateUserJSON()),
-    foundryhttp.JSONResponse(200, httpdto.UserResponseJSON()),
-)
-
-type UserService interface {
-    Update(context.Context, UpdateRequest) (httpdto.UserResponse, error)
+type UpdateService interface {
+	UpdateValues(context.Context, model.ID[models.User], httpdto.UpdateUser) (httpdto.UserResponse, error)
 }
 
-func Router(service UserService) (*foundryhttp.Router, error) {
-    return foundryhttp.NewRouter(Update.Handle(service.Update))
+func GuideRouter(service UpdateService) (*foundryhttp.Router, error) {
+	api := foundryhttp.DefineScope("/api", "api")
+	users := foundryhttp.DefineScope("/members", "members").Within(api)
+	route := foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(
+		foundryhttp.RouteSpec{ID: "update", Method: foundryhttp.PATCH, Access: foundryhttp.Public},
+		httpkernel.UserPathDescriptor(),
+	), foundryhttp.Within(users))
+	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(),
+		foundryhttp.JSONBody(httpdto.UpdateUserJSON()), foundryhttp.JSONResponse(200, httpdto.UserResponseJSON()))
+	endpoint = foundryhttp.ValidateBody(endpoint,
+		validation.Rules(httpdto.UpdateUserValidationFields().Email, validation.Optional(validation.NonBlank[string]())))
+	endpoint = foundryhttp.PrepareEndpoint(endpoint, func(_ context.Context, in foundryhttp.Input[httpkernel.UserPath, foundryhttp.NoQuery, httpdto.UpdateUser]) (foundryhttp.NoQuery, httpdto.UpdateUser, error) {
+		if email, present := in.Body.Email.Get(); present {
+			in.Body.Email = value.Set(strings.TrimSpace(email))
+		}
+		return in.Query, in.Body, nil
+	})
+	return foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, in foundryhttp.Input[httpkernel.UserPath, foundryhttp.NoQuery, httpdto.UpdateUser]) (httpdto.UserResponse, error) {
+		return service.UpdateValues(ctx, in.Path.User, in.Body)
+	}))
 }
 ```
 
 `httpkernel` and `httpdto` are the independent fixture's application packages.
-The consumer fixture additionally binds a generated query declaration. The
+The [source in the matching GitHub tree](../../tests/fixtures/consumer/httpendpoints/guide.go) includes imports.
+The handler passes decoded values to an injected service. Services accept domain
+values and return domain errors; the HTTP adapter owns transport input and public error mapping.
+Preparation runs before validation. The
 framework owns the wire handling; the service owns business behavior and database
 transaction boundaries. The example's public route does not establish an
 authentication policy. For a concrete authenticated model parameter, use the

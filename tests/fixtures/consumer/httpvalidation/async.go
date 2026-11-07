@@ -13,6 +13,7 @@ import (
 
 // AsyncRouter uses the same request lifecycle and 422 mapping as local rules.
 // The lookup may be a scoped database query or an application API adapter.
+// doc-example:begin validation-expanded-async-router
 func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]) (*foundryhttp.Router, error) {
 	fields := httpdto.UpdateUserValidationFields()
 	endpoint := foundryhttp.ValidateBody(httpendpoints.Update, validation.Parallel(
@@ -20,7 +21,7 @@ func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]
 		validation.Rules(fields.Nickname, validation.Optional(validation.Nullable(validation.Lowercase[string]()))),
 	))
 	return foundryhttp.NewRouter(endpoint.Handle(service.Update))
-}
+} // doc-example:end validation-expanded-async-router
 
 // OwnEmailRouter is declared once. The trusted route key of the user being
 // updated is provided per request through a validation slot, so the lookup

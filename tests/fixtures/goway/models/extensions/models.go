@@ -13,13 +13,14 @@ import (
 )
 
 // Article is a methodless extension owner. Example: Article{ID:1}.
+// doc-example:begin model-extension-slots-article
 type Article struct {
 	ID      int64
 	Title   translations.Text
 	Cover   attachments.One[Article]
 	Gallery attachments.Many[Article]
 	SEO     metadata.Value[string]
-}
+} // doc-example:end model-extension-slots-article
 
 // Author supplies an unrelated owner for compiler fixtures. Example: Author{ID:1}.
 type Author struct{ ID int64 }
@@ -47,7 +48,8 @@ var Articles = orm.Define("extension_articles", func(b orm.Builder[Article], m *
 var Authors = orm.Define("extension_authors", func(b orm.Builder[Author], m *Author) orm.Table[Author, int64] { return orm.TableOf(b, &m.ID) })
 
 // Owner pins storage identity independently of future table renames. Example: extensions.ORMIdentity(Owner).Reference(1).
-var Owner = extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table, Articles.Key()), extensions.OwnerOptions{StorageModel: "extension_articles"})
+// doc-example:begin model-extension-slots-owner
+var Owner = extensions.DefineORMOwner("articles", orm.IdentityOf(Articles.Table, Articles.Key()), extensions.OwnerOptions{StorageModel: "extension_articles"}) // doc-example:end model-extension-slots-owner
 
 // Descriptors groups concrete extension capabilities. Example: ArticleExtensions.From(runtime).
 type Descriptors struct {

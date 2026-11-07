@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -65,7 +66,21 @@ func (tools Toolchain) check(t testing.TB, source *manifest.Manifest, baseURL, f
 	if _, err := typescript.Generate(t.Context(), source, options); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"types.ts", "runtime.mjs"} {
+	compilerInputs := []string{"types.ts"}
+	inputData, err := os.ReadFile(filepath.Join(fixtures, "typescript-inputs.json"))
+	if err == nil {
+		if err := json.Unmarshal(inputData, &compilerInputs); err != nil {
+			t.Fatal(err)
+		}
+	} else if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	for _, name := range compilerInputs {
+		if filepath.Base(name) != name || !strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".d.ts") {
+			t.Fatalf("invalid TypeScript compiler input %q", name)
+		}
+	}
+	for _, name := range append(compilerInputs, "runtime.mjs") {
 		data, err := os.ReadFile(filepath.Join(fixtures, name))
 		if err != nil {
 			t.Fatal(err)

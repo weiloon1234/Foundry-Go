@@ -9,7 +9,7 @@ Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/
 Declare the table once, then implement `FoundryIdentity` for the model-first
 authentication boundary. The provider reuses the stored key codec:
 
-<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go -->
+<!-- compiled-source: tests/fixtures/goway/guideadapters/examples_test.go#authentication-account -->
 ```go
 type Account struct {
 	ID      int64
@@ -528,7 +528,7 @@ Authorization header. Bind the same guard and `auth.TicketRedeemer` source.
 `ticket` query parameter, bounded by `auth.MaxCredentialBytes`. Its query DTO must
 not declare `ticket`.
 
-<!-- compiled-source: tests/fixtures/consumer/reporting/ticket_route.go -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/ticket_route.go#ticket-authentication -->
 ```go
 return http.TicketAuthenticated(endpoint, binding, tokens)
 ```
@@ -537,7 +537,7 @@ Issue a ticket inside an authenticated token scope, then deliver its URL through
 a protected, no-store response. `TicketEndpoint.URL` is the explicit disclosure
 boundary; ordinary formatting of `secret.String` never reveals the ticket.
 
-<!-- compiled-source: tests/fixtures/consumer/reporting/ticket_route.go -->
+<!-- compiled-source: tests/fixtures/consumer/reporting/ticket_route.go#authentication-example-3 -->
 ```go
 return MemberTicketEndpoint(binding, tokens).URL(ctx, http.NoPath{}, http.NoQuery{}, ticket)
 ```

@@ -15,6 +15,7 @@ type addressSide struct{}
 
 // FindDuplicates reproduces the bounded name/entity/address search. Exact decimal
 // hydration replaces the application's latitude::text and longitude::text casts.
+// doc-example:begin find-duplicates
 func FindDuplicates(ctx context.Context, tx *database.Tx, tables Tables, search Normalized, country string, except int64) ([]Duplicate, error) {
 	if err := expr.SetTrigramThreshold(ctx, tx, 0.6); err != nil {
 		return nil, err
@@ -49,12 +50,13 @@ func FindDuplicates(ctx context.Context, tx *database.Tx, tables Tables, search 
 		expr.Asc(expr.At(addressScope, orm.KeyExpr(tables.Addresses.Key()))),
 	)
 	return rows.Read(result).All(ctx, tx)
-}
+} // doc-example:end find-duplicates
 
 // SimilarReviews uses the threshold already set in the supplied transaction.
+// doc-example:begin similar-reviews
 func SimilarReviews(ctx context.Context, tx *database.Tx, reviews ReviewTable, search string, except int64) ([]string, error) {
 	body := expr.Value(orm.TextExpr(reviews.Body))
 	query := expr.Where(reviews.Query().Where(orm.KeyNe(reviews.Key(), except)), expr.TrigramMatch(body, search))
 	query = expr.OrderBy(query, expr.Asc(expr.Value(orm.KeyExpr(reviews.Key())))).Limit(101)
 	return rows.ReadScalar(rows.SelectScalar(rows.From(query), expr.AsSelected(expr.Row(body)))).All(ctx, tx)
-}
+} // doc-example:end similar-reviews

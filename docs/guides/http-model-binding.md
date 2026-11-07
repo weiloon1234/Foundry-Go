@@ -1,5 +1,15 @@
 # Typed route-model binding
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Resolve: [Typed resource lookup](#recipe-bind-resource)
+- Authenticate: [Resource authorization](#recipe-authenticated-binding)
+- Scope parents: [Nested resources](scoped-model-binding.md)
+
+<a id="recipe-bind-resource"></a>
+## Resolve a typed resource
+
 Model binding resolves decoded path keys into concrete models before a domain
 handler runs. The original endpoint still owns parsing, validation, middleware,
 errors, URL generation and the explicit response DTO.
@@ -7,12 +17,12 @@ errors, URL generation and the explicit response DTO.
 The [independent consumer](../../tests/fixtures/consumer/httpmodels/bindings.go)
 uses a handwritten model declaration with generated path and response contracts:
 
-<!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go -->
+<!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go#http-model-binding-show-request -->
 ```go
 type ShowRequest = modelbinding.Input[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User]
 ```
 
-<!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go -->
+<!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go#http-model-binding-user-by-id -->
 ```go
 func UserByID(db database.Executor) modelbinding.Resolver[httpkernel.UserPath, models.User] {
 	return modelbinding.ByKey(db, orm.Keyed(models.Users.Query().Where(orm.EnumEq(models.Users.Status, models.StatusActive)), models.Users.Key()),
@@ -74,7 +84,7 @@ Use `Define` for a slug, tenant-aware query, alternate key or child route. The
 callback returns `value.Optional[Model]`, preserving the same missing/error rules.
 The consumer's child resolver uses ordinary typed predicates:
 
-<!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go -->
+<!-- compiled-source: tests/fixtures/consumer/httpmodels/bindings.go#http-model-binding-order-within-user -->
 ```go
 func OrderWithinUser(db database.Executor) modelbinding.Resolver[OrderPath, models.Order] {
 	return modelbinding.Define(func(ctx context.Context, p OrderPath) (value.Optional[models.Order], error) {
@@ -164,3 +174,23 @@ after input validation. Ordinary binding runs before validation. Custom handler
 transports explicitly select late binding through `http.AfterValidation` or
 `http.AfterAuthenticatedValidation`; custom staged transports implement the
 required `HandleBound` capability directly.
+
+<a id="recipe-authenticated-binding"></a>
+## Bind an authenticated resource
+
+The [compiled source and aliases](../../tests/fixtures/consumer/authenticating/composed_routes.go) supply the concrete actor, resource and transport types. Resource policy runs before domain behavior.
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/composed_routes.go#authenticated-resource -->
+```go
+func BoundOrder(endpoint OrderTransport, resolver modelbinding.Resolver[OrderPath, models.Order], guard auth.Guard[models.User], read func(context.Context, models.User, models.Order) error) foundryhttp.RouteRegistration {
+	if read == nil {
+		return foundryhttp.InvalidRouteRegistration(fault.New(fault.Invalid, "order route requires domain behavior"))
+	}
+	return modelbinding.BindAuthenticated(endpoint, resolver).Handle(func(ctx context.Context, subject models.User, input OrderInput) (foundryhttp.NoContent, error) {
+		if err := ReadOrder.Authorize(ctx, guard, input.Model); err != nil {
+			return foundryhttp.NoContent{}, err
+		}
+		return foundryhttp.NoContent{}, read(ctx, subject, input.Model)
+	})
+}
+```

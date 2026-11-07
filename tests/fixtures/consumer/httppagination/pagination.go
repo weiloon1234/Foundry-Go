@@ -25,12 +25,13 @@ type MemberResponse struct {
 	Nickname value.Nullable[mutatorqueries.DisplayNickname] `json:"nickname"`
 }
 
+// doc-example:begin http-pagination-list-request
 type ListRequest = pagination.Request[foundryhttp.NoPath, MemberFilters]
 
 var List = pagination.DefineNumbered(
 	foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "members.index", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/members")),
 	MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig(),
-)
+) // doc-example:end http-pagination-list-request
 
 type Service interface {
 	List(context.Context, ListRequest) (orm.PageResult[MemberResponse], error)
@@ -44,6 +45,7 @@ func Router(service Service) (*foundryhttp.Router, error) {
 // page request. The endpoint owns page metadata, JSON contracts and links.
 type DatabaseService struct{ DB database.Executor }
 
+// doc-example:begin http-pagination-example-2
 func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResult[MemberResponse], error) {
 	builder := memberQuery(in.Filters)
 	page, err := orm.Paginate(ctx, s.DB, builder, in.Page)
@@ -51,7 +53,7 @@ func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResu
 		return orm.PageResult[MemberResponse]{}, err
 	}
 	return pagination.MapPage(ctx, page, PresentMember)
-}
+} // doc-example:end http-pagination-example-2
 
 // PresentMember explicitly chooses read accessors. Persisted identity stays
 // model-owned and untouched; a getter failure aborts the complete response.

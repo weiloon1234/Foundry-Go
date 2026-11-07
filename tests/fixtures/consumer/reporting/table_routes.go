@@ -18,5 +18,7 @@ func NumericLevelRoutes(group http.Scope, config datatable.RoutesConfig[Operator
 
 // NumericLevelTokenTickets retains the same operator type as NumericLevelRoutes.
 func NumericLevelTokenTickets(tokens *token.Tokens[Operator, model.ID[Operator]]) datatable.Tickets[Operator] {
+	// doc-example:begin tokens-example-1
 	return datatable.TokenTickets(tokens)
+	// doc-example:end tokens-example-1
 }

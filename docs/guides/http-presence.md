@@ -1,5 +1,14 @@
 # Presence through JSON and query transport
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Declare: [Omission, null and supplied values](#recipe-presence)
+- Compose: [Endpoint preparation](http-endpoints.md#recipe-compose-endpoint)
+
+<a id="recipe-presence"></a>
+## Declare presence and rules
+
 **Status: native HTTP consumer race acceptance passed.**
 
 Use generated DTO fields with `Optional[T]` to distinguish omission from a
@@ -24,17 +33,33 @@ element rule to reject its blank content.
 The [consumer DTO and rules](../../tests/fixtures/consumer/validationrules/presence.go)
 reuse generated JSON/validation declarations:
 
+<!-- compiled-source: tests/fixtures/consumer/validationrules/presence.go#presence-input-rules -->
 ```go
-fields := PresenceInputValidationFields()
-rules := validation.All(
-    validation.Rules(fields.Count, validation.Required[int]()),
-    validation.Rules(fields.Active, validation.Required[bool]()),
-    validation.Rules(fields.Nickname, validation.ProhibitedNullable[string]()),
-)
-endpoint = foundryhttp.ValidateBody(endpoint, rules)
+//
+//foundry:dto
+type PresenceInput struct {
+	Label     value.Optional[string]                 `json:"label,omitzero"`
+	Nickname  value.Optional[value.Nullable[string]] `json:"nickname,omitzero"`
+	Count     value.Optional[int]                    `json:"count,omitzero"`
+	Active    value.Optional[bool]                   `json:"active,omitzero"`
+	Forbidden value.Optional[value.Nullable[string]] `json:"forbidden,omitzero"`
+	Tags      value.Optional[[]string]               `json:"tags,omitzero"`
+}
+
+func PresenceRules() validation.Rule[PresenceInput] {
+	fields := PresenceInputValidationFields()
+	return validation.All(
+		validation.Rules(fields.Label, validation.Required(validation.MaxLength[string](40))),
+		validation.Rules(fields.Nickname, validation.RequiredNullable(validation.MinLength[string](2))),
+		validation.Rules(fields.Count, validation.Required(validation.Min(0))),
+		validation.Rules(fields.Active, validation.Required[bool]()),
+		validation.Rules(fields.Forbidden, validation.ProhibitedNullable[string]()),
+		validation.Rules(fields.Tags, validation.Required(validation.Each[[]string](validation.NonBlank[string]()))),
+	)
+}
 ```
 
-These are compositional fragments; the [HTTP acceptance fixture](../../tests/fixtures/consumer/validationrules/presence_http_test.go)
+The [HTTP acceptance fixture](../../tests/fixtures/consumer/validationrules/presence_http_test.go)
 contains the complete endpoint assembly using only public framework imports.
 
 Query input uses the same Optional presence semantics, with the representations

@@ -8,6 +8,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin user-summary
 type UserSummaryColumns struct {
 	rows.Row[UserSummary]
 	ID rows.Field[UserSummary, model.ID[models.User]]
@@ -24,7 +25,7 @@ var UserSummaries = rows.Define(func(b rows.Builder[UserSummary], r *UserSummary
 		Nickname: rows.NullableTextOf(b, &r.Nickname),
 		Status:   rows.EnumOf(b, &r.Status),
 	}
-})
+}) // doc-example:end user-summary
 
 type BuyerTotalsColumns struct {
 	rows.Row[BuyerTotals]

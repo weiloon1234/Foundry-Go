@@ -18,6 +18,21 @@ func TestRepositoryChecks(t *testing.T) {
 			change: func(t *testing.T, root string) {},
 		},
 		{
+			name: "stale compiled guide fence",
+			change: func(t *testing.T, root string) {
+				writeTestFile(t, root, "tests/fixtures/consumer/example/example.go", "package example\n// doc-example:begin value\nvar Value = 1\n// doc-example:end value\n")
+				writeTestFile(t, root, "docs/guides/example.md", "<!-- compiled-source: tests/fixtures/consumer/example/example.go#value -->\n```go\nvar Value = 2\n```\n")
+			},
+			wantError: "compiled-source fence differs",
+		},
+		{
+			name: "unbound recipe fence",
+			change: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/guides/example.md", "<a id=\"recipe-read\"></a>\n## Read\n```go\nvar Value = 1\n```\n")
+			},
+			wantError: "requires compiled-source",
+		},
+		{
 			name: "completed milestone future work",
 			change: func(t *testing.T, root string) {
 				writeTestFile(t, root, "docs/guides/lifecycle.md", "Events, outbox and audit remain milestone 01 work.\n")

@@ -91,7 +91,8 @@ func compiledRegions(t *testing.T, family string) (string, map[string]string) {
 			if _, exists := regions[match[1]]; exists {
 				t.Fatalf("duplicate source region %s", match[1])
 			}
-			regions[match[1]] = strings.TrimSpace(match[2])
+			body := regexp.MustCompile(`(?m)[ \t]*// doc-example:(?:begin|end) [a-z0-9-]+`).ReplaceAllString(match[2], "")
+			regions[match[1]] = strings.TrimSpace(body)
 		}
 	}
 	return root, regions
@@ -104,11 +105,19 @@ func checkGuideSnippets(t *testing.T, path string, regions map[string]string) ma
 		t.Fatal(err)
 	}
 	doc := string(data)
+	// Source-bound fences are checked by internal/docsource at the root gate.
+	// Retain their legacy region names for the historical coverage census.
+	compiled := regexp.MustCompile("(?s)<!-- compiled-source: [^#]+#([a-z0-9-]+) -->\\n`{3,}[^\\n]*\\n.*?\\n`{3,}\\n?")
+	converted := compiled.FindAllStringSubmatch(doc, -1)
+	doc = compiled.ReplaceAllString(doc, "")
 	blocks := regexp.MustCompile("(?s)<!-- orm-example: ([a-z0-9-]+) -->\\n```go\\n(.*?)\\n```").FindAllStringSubmatch(doc, -1)
-	if len(blocks) != strings.Count(doc, "```go\n") || len(blocks) == 0 {
+	if len(blocks) != strings.Count(doc, "```go\n") || len(blocks)+len(converted) == 0 {
 		t.Fatal("every guide needs Go blocks naming compiled examples")
 	}
 	used := map[string]bool{}
+	for _, block := range converted {
+		used[block[1]] = true
+	}
 	for _, block := range blocks {
 		name := block[1]
 		if strings.HasSuffix(name, "-before") {

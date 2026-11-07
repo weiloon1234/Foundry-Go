@@ -1,5 +1,6 @@
 import * as sdk from "./contracts_foundry.gen.js";
 
+// doc-example:begin table-adapter
 type Request = sdk.ContractTypes["github.com/weiloon1234/Foundry-Go/datatable.Request"];
 type TableExportRequest = sdk.ContractTypes["foundry.test/consumer/clientcontracts.TableExportRequest"];
 type TableExportResource = sdk.ContractTypes["foundry.test/consumer/clientcontracts.TableExportResource"];
@@ -29,6 +30,8 @@ export function adminTable<Id extends sdk.QueryTableId>(id: Id): TableSource<sdk
     memory: tableMemory,
   };
 }
+// doc-example:end table-adapter
+// doc-example:begin table-registries
 export function query<Id extends sdk.QueryTableId>(id: Id, input: sdk.TableQueryInputs[Id]): Promise<sdk.TableQueryOutputs[Id]> {
   return sdk.tableQueries[id](api, input);
 }
@@ -38,10 +41,13 @@ export function exportTable<Id extends sdk.ExportTableId>(id: Id, input: sdk.Tab
 export function download<Id extends sdk.DownloadTableId>(id: Id, input: sdk.TableDownloadInputs[Id]): Promise<sdk.TableDownloadOutputs[Id]> {
   return sdk.tableDownloads[id](api, input);
 }
+// doc-example:end table-registries
 export async function literalChecks(): Promise<void> {
+// doc-example:begin table-download
   const ticket: TableExportResource = await sdk.tableExports["reports.members"](api, { body: { format: "csv", request: {} } });
   const file: sdk.FileResult = await sdk.tableDownloads["reports.members"](api, { query: { ticket: ticket.url, format: "csv" } });
   await file.close();
+// doc-example:end table-download
   const kind: "ticket" = sdk.tableExportKinds["reports.members"];
   const fileKind: "file" = sdk.tableExportKinds["reports.orders"];
   void sdk.tableExports["reports.orders"](api, { path: { key: "1" }, query: { ticket: "a", format: "csv" } });

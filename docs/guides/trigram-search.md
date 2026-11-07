@@ -1,5 +1,12 @@
 # Trigram search
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- Search: [Transaction-local candidates](#recipe-trigram-search)
+
+## Overview
+
 <!-- compiled-examples -->
 
 `expr.TrigramMatch(text, search)` compiles to `text OPERATOR(public.%) $n`.
@@ -90,32 +97,58 @@ by country and excluded ID, orders by entity/name/address IDs and limits to
 and limits to 101. Exact decimal hydration replaces coordinate-to-text casts.
 Applications can format those decimal values at their output boundary.
 
-The duplicate search sets its transaction threshold before constructing the
-joined projection:
+<a id="recipe-trigram-search"></a>
+## Search within a transaction
 
-<!-- go-source: tests/fixtures/consumer/trigramqueries/search.go -->
+<!-- compiled-source: tests/fixtures/consumer/trigramqueries/search.go#find-duplicates -->
 ```go
-if err := expr.SetTrigramThreshold(ctx, tx, 0.6); err != nil {
-    return nil, err
+func FindDuplicates(ctx context.Context, tx *database.Tx, tables Tables, search Normalized, country string, except int64) ([]Duplicate, error) {
+	if err := expr.SetTrigramThreshold(ctx, tx, 0.6); err != nil {
+		return nil, err
+	}
+	n := rows.As[nameSide](tables.Names.Query(), "n")
+	e := rows.As[entitySide](tables.Entities.Query(), "e")
+	a := rows.As[addressSide](tables.Addresses.Query(), "a")
+	names := rows.InnerJoin(n, e, rows.On(expr.At(rows.Scope(n), orm.NumberExpr(tables.Names.EntityID)), expr.At(rows.Scope(e), orm.KeyExpr(tables.Entities.Key()))))
+	entity := rows.RightScope(names, rows.Scope(e))
+	joined := rows.InnerJoin(names, a, rows.On(expr.At(entity, orm.KeyExpr(tables.Entities.Key())), expr.At(rows.Scope(a), orm.NumberExpr(tables.Addresses.EntityID))))
+	nameScope := rows.LeftScope(joined, rows.LeftScope(names, rows.Scope(n)))
+	entityScope := rows.LeftScope(joined, entity)
+	addressScope := rows.RightScope(joined, rows.Scope(a))
+	normalized := expr.At(nameScope, orm.TextExpr(tables.Names.Normalized))
+	score := expr.TrigramSimilarity(normalized, search)
+	entityID := expr.At(entityScope, orm.KeyExpr(tables.Entities.Key()))
+	result := rows.Select(joined, Duplicates,
+		rows.Map(Duplicates.ID, entityID),
+		rows.Map(Duplicates.Normalized, normalized),
+		rows.MapSelected(Duplicates.Similarity, expr.AsSelected(score)),
+		rows.Map(Duplicates.Latitude, expr.At(addressScope, orm.NumberExpr(tables.Addresses.Latitude))),
+		rows.Map(Duplicates.Longitude, expr.At(addressScope, orm.NumberExpr(tables.Addresses.Longitude))),
+	).Where(
+		expr.TrigramMatch(normalized, search), expr.Gte(score, 0.6),
+		expr.Eq(expr.At(entityScope, orm.TextExpr(tables.Entities.Country)), country),
+		expr.Ne(entityID, except),
+	)
+	result = rows.Limit(result, 1001)
+	result = rows.OrderBy(result,
+		expr.Asc(entityID),
+		expr.Asc(expr.At(nameScope, orm.KeyExpr(tables.Names.Key()))),
+		expr.Asc(expr.At(addressScope, orm.KeyExpr(tables.Addresses.Key()))),
+	)
+	return rows.Read(result).All(ctx, tx)
 }
 ```
 
-It selects and compares one typed similarity expression:
+The second query reuses that transaction threshold.
 
-<!-- go-source: tests/fixtures/consumer/trigramqueries/search.go -->
+<!-- compiled-source: tests/fixtures/consumer/trigramqueries/search.go#similar-reviews -->
 ```go
-normalized := expr.At(nameScope, orm.TextExpr(tables.Names.Normalized))
-score := expr.TrigramSimilarity(normalized, search)
-```
-
-The review search uses the transaction's threshold:
-
-<!-- go-source: tests/fixtures/consumer/trigramqueries/search.go -->
-```go
-body := expr.Value(orm.TextExpr(reviews.Body))
-query := expr.Where(reviews.Query().Where(orm.KeyNe(reviews.Key(), except)), expr.TrigramMatch(body, search))
-query = expr.OrderBy(query, expr.Asc(expr.Value(orm.KeyExpr(reviews.Key())))).Limit(101)
-return rows.ReadScalar(rows.SelectScalar(rows.From(query), expr.AsSelected(expr.Row(body)))).All(ctx, tx)
+func SimilarReviews(ctx context.Context, tx *database.Tx, reviews ReviewTable, search string, except int64) ([]string, error) {
+	body := expr.Value(orm.TextExpr(reviews.Body))
+	query := expr.Where(reviews.Query().Where(orm.KeyNe(reviews.Key(), except)), expr.TrigramMatch(body, search))
+	query = expr.OrderBy(query, expr.Asc(expr.Value(orm.KeyExpr(reviews.Key())))).Limit(101)
+	return rows.ReadScalar(rows.SelectScalar(rows.From(query), expr.AsSelected(expr.Row(body)))).All(ctx, tx)
+}
 ```
 
 The [PostgreSQL acceptance source](../../tests/fixtures/consumer/trigramqueries/search_postgres_test.go)

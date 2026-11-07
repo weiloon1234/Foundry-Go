@@ -7,7 +7,7 @@ contains complete typed declarations and a three-level handler.
 
 ## Bind declared keys and relationships
 
-<!-- compiled-source: tests/fixtures/consumer/nestedbindings/bindings.go -->
+<!-- compiled-source: tests/fixtures/consumer/nestedbindings/bindings.go#scoped-model-binding-projects -->
 ```go
 func Projects(db database.Executor) modelbinding.Resolver[Path, TeamProject] {
 	teams := modelbinding.ByKey(db, orm.Keyed(TeamRecords.Query(), TeamRecords.Key()), func(path Path) model.ID[Team] { return path.Team })
@@ -36,7 +36,7 @@ with an explicit typed custom resolver when the domain relationship is different
 
 ## Add another level
 
-<!-- compiled-source: tests/fixtures/consumer/nestedbindings/bindings.go -->
+<!-- compiled-source: tests/fixtures/consumer/nestedbindings/bindings.go#scoped-model-binding-resolve -->
 ```go
 func Resolve(db database.Executor) modelbinding.Resolver[Path, Resources] {
 	return modelbinding.ThroughSelectedRelation(db, Projects(db), func(previous TeamProject) Project { return previous.Child }, ProjectLinks.Tasks, orm.TextExpr(TaskRecords.Slug), func(path Path) Slug { return path.Task })

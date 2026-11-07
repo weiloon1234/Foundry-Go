@@ -1,0 +1,9 @@
+[
+  "error-details.ts",
+  "types.ts",
+  "surfaces.ts",
+  "messages.ts",
+  "auth.ts",
+  "fetch-transport.ts",
+  "guide-recipes.ts"
+]
