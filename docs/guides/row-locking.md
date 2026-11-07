@@ -15,6 +15,16 @@ Use a locked read when domain work must inspect a row and then change it while e
 
 <!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking_recipes_test.go#locked-write -->
 ```go
+func incrementAge(ctx context.Context, db *database.DB, visible orm.Query[models.User], id model.ID[models.User]) error {
+	return db.Transaction(ctx, func(tx *database.Tx) error {
+		user, err := orm.RequireLocked(ctx, tx, orm.Lock(visible.Where(orm.KeyEq(models.Users.Key(), id))))
+		if err != nil {
+			return err
+		}
+		_, err = orm.Update(ctx, tx, visible, models.Users.Key(), user.ID, orm.NumberSet(models.Users.Age, user.Age+1))
+		return err
+	})
+}
 ```
 
 `orm.Find` and `orm.RequireKey` retain the model's exact primary-key type, including natural keys. `orm.FirstLocked` returns `value.Optional[models.User]`, `orm.RequireLocked` returns a model or `database.NotFound`, and `orm.AllLocked` returns `[]models.User`. Model `First` defaults to primary-key order, honors filters/offsets, and preserves a zero limit. Declared projections and single-value selections also support locking, retaining their exact result types.
@@ -31,6 +41,9 @@ Waiting is the default. `NoWait()` returns the PostgreSQL lock error when a row 
 
 <!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking_recipes_test.go#skip-locked -->
 ```go
+func claimUsers(ctx context.Context, tx *database.Tx, visible orm.Query[models.User]) ([]models.User, error) {
+	return orm.AllLocked(ctx, tx, orm.Lock(visible.OrderBy(orm.KeyAsc(models.Users.Key())).Limit(20)).SkipLocked())
+}
 ```
 
 An empty `SkipLocked` result does not prove that no eligible rows exist. Locks protect existing rows; a missing `First` does not reserve an absent key. Use unique constraints and [typed upserts](model-upserts.md) for insert conflicts.
@@ -42,6 +55,15 @@ Locking a join normally locks contributing rows from all eligible input tables. 
 
 <!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking_recipes_test.go#lock-joined-record -->
 ```go
+func lockBuyers(ctx context.Context, tx *database.Tx) ([]models.User, error) {
+	users := rows.As[lockedUserAlias](models.Users.Query(), "u")
+	orders := rows.As[lockedOrderAlias](models.Orders.Query(), "o")
+	joined := rows.LeftJoin(users, orders,
+		rows.On(expr.At(rows.Scope(users), orm.KeyExpr(models.Users.Key())),
+			expr.At(rows.Scope(orders), orm.ColumnExpr(models.Orders.BuyerID))))
+	userScope := rows.LeftScope(joined, rows.Scope(users))
+	return rows.ForUpdate(rows.ReadRecord(rows.SelectRecord(joined, userScope))).Of(rows.Target(userScope)).All(ctx, tx)
+}
 ```
 
 `Of` replaces its previous target list. Targets must be nonempty, unique and present in the query's input scope. Self-joins use typed aliases and their remapped join scopes. Complete record selection does not deduplicate repeated join rows.
@@ -55,6 +77,19 @@ Use `LockRows` on a complete record, projection or single-value selection to dec
 
 <!-- compiled-source: tests/fixtures/consumer/advancedqueries/locking_recipes_test.go#independent-lock-policies -->
 ```go
+func lockBuyerOrders(ctx context.Context, tx *database.Tx) ([]models.User, error) {
+	users := rows.As[lockedUserAlias](models.Users.Query(), "u")
+	orders := rows.As[lockedOrderAlias](models.Orders.Query(), "o")
+	joined := rows.InnerJoin(users, orders,
+		rows.On(expr.At(rows.Scope(users), orm.KeyExpr(models.Users.Key())),
+			expr.At(rows.Scope(orders), orm.ColumnExpr(models.Orders.BuyerID))))
+	userScope := rows.LeftScope(joined, rows.Scope(users))
+	orderScope := rows.RightScope(joined, rows.Scope(orders))
+	locked := rows.LockRows(rows.ReadRecord(rows.SelectRecord(joined, userScope)),
+		rows.UpdateLock(rows.Target(userScope)).NoWait(),
+		rows.ShareLock(rows.Target(orderScope)).SkipLocked())
+	return locked.All(ctx, tx)
+}
 ```
 
 `UpdateLock`, `NoKeyUpdateLock`, `ShareLock` and `KeyShareLock` accept one or more preserved input scopes. Each returns an immutable `RowLock[Scope]` descriptor with `NoWait`, `SkipLocked` and `Wait` modifiers. A modifier on the resulting locked query changes every clause; the original query stays unchanged. `Of` replaces targets only when the query has a single clause. For multiple clauses, supply each target list in its descriptor.

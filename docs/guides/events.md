@@ -22,6 +22,11 @@ Define a concrete payload DTO and one reusable descriptor:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/events.go#event-payload -->
 ```go
+type RecordCreated struct {
+	ID model.ID[observerqueries.Plain] `json:"id"`
+}
+
+var Created = events.Define[RecordCreated]("records.created", 1)
 ```
 
 The descriptor retains the payload type for listeners and publication. Its name
@@ -31,6 +36,9 @@ payload contract changes; a version is not a retry counter.
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#dispatch-event -->
 ```go
+func DispatchCreated(ctx context.Context, bus *events.Bus, id model.ID[observerqueries.Plain]) error {
+	return Created.Dispatch(ctx, bus, RecordCreated{ID: id})
+}
 ```
 
 Wrong payloads and model-owned IDs fail Go compilation. Converting a topic to
@@ -63,6 +71,17 @@ schema, so it does not require another registration. Undeclared topics fail.
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/configured_outbox_postgres_test.go#queued-listener -->
 ```go
+application.ListenQueued(handled, "queued", func(application.Services) (events.Handler[eventqueries.RecordCreated], error) {
+	return func(_ context.Context, p eventqueries.RecordCreated) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if p.ID != handledID {
+			return errors.New("queued listener lost typed payload")
+		}
+		queued++
+		return nil
+	}, nil
+}),
 ```
 
 `events.Listen(name, handler).Queued()` (or `events.RegisterQueuedListener`,
@@ -138,6 +157,13 @@ the typed stored model from `orm.Changes[observerqueries.Plain]`, then schedules
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/events.go#observer-after-commit -->
 ```go
+return orm.Hooks[observerqueries.Plain]{Created: func(ctx context.Context, tx *database.Tx, changes orm.Changes[observerqueries.Plain]) error {
+	after, present := changes.After().Get()
+	if !present {
+		return errors.New("created observer has no stored snapshot")
+	}
+	return Created.AfterCommit(ctx, tx, bus, RecordCreated{ID: after.ID})
+}}
 ```
 
 `AfterCommit` requires a concrete `*database.Tx`, not a pool. It snapshots the
@@ -166,10 +192,22 @@ Declare a producer key and its destination alongside the typed topic:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/configured_outbox.go#event-outbox -->
 ```go
+func ConfigurePublications(builder *application.Builder) *application.Builder {
+	return builder.Events(application.Topic(Created), application.EventOutbox(Publications, "consumer.publications"))
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#configured-event-producer -->
 ```go
+type PublicationService struct{ producer *events.Outbox }
+
+func NewPublicationService(services application.Services) (*PublicationService, error) {
+	producer, err := application.Resolve(services, Publications)
+	if err != nil {
+		return nil, err
+	}
+	return &PublicationService{producer: producer}, nil
+}
 ```
 
 Use the injected service to [enqueue in the business transaction](outbox.md#recipe-enqueue-event).

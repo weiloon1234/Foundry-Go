@@ -24,6 +24,15 @@ demonstrates declarations, injected domain services and kernel assembly.
 
 <!-- compiled-source: tests/fixtures/consumer/scheduling/reports.go#daily-schedule -->
 ```go
+func ReportSchedule(reports Reports) (schedule.Declaration, error) {
+	zone, err := temporal.ParseTimeZone("Asia/Kuala_Lumpur")
+	if err != nil {
+		return schedule.Declaration{}, err
+	}
+	return schedule.DailyAt(DailyReport, "03:00", zone, func(ctx context.Context, invocation schedule.Invocation) error {
+		return reports.BuildDaily(ctx, invocation.IntendedAt)
+	})
+}
 ```
 
 Handle returned errors. Declarations freeze timing/options; `With(options)` returns
@@ -175,6 +184,22 @@ bound. Authorize operational endpoints exposing attribution/occurrence IDs.
 
 <!-- compiled-source: tests/fixtures/consumer/background/guide.go#calendar-job -->
 ```go
+func WelcomeSchedule(services application.Services, dispatcher *jobs.Dispatcher, recipient model.ID[models.User]) (schedule.Declaration, error) {
+	handler, err := schedule.JobTarget(dispatcher, WelcomeJob, func(context.Context, schedule.Invocation) (Welcome, error) {
+		return Welcome{UserID: recipient}, nil
+	})
+	if err != nil {
+		return schedule.Declaration{}, err
+	}
+	declaration, err := services.Calendar().DailyAt("members.daily-welcome", "09:00", handler)
+	if err != nil {
+		return schedule.Declaration{}, err
+	}
+	options := declaration.Options()
+	options.WithoutOverlap = true
+	options.Timeout = time.Minute
+	return declaration.With(options)
+}
 ```
 
 `schedule.JobTarget(dispatcher, definition, payloadBuilder)` returns an ordinary

@@ -18,10 +18,25 @@ is also available directly for advanced composition.
 
 <!-- compiled-source: tests/fixtures/consumer/configured/settings.go#named-services -->
 ```go
+func Defaults() Settings {
+	s := infrastructure.DefaultSettings()
+	s.Cache.Stores = infrastructure.CacheStores{"default": infrastructure.DefaultCacheSettings(), Reports: infrastructure.DefaultCacheSettings()}
+	return Settings{Services: s}
+}
+func Build(ctx context.Context, settings Settings) (*foundation.App, error) {
+	plan, err := infrastructure.Configure(settings.Services)
+	if err != nil {
+		return nil, err
+	}
+	return plan.Register(foundation.NewBuilder()).Build(ctx)
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/configured/settings.go#select-named-cache -->
 ```go
+func ReportsCache(configured *infrastructure.Services) (*cache.Store, error) {
+	return configured.Caches.Store(Reports)
+}
 ```
 
 `services, err := foundation.Resolve(app.Services(), infrastructure.ServicesKey)`

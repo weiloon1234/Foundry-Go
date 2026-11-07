@@ -19,6 +19,15 @@ and migrations. They are separate from deployment configuration and secrets.
 
 <!-- compiled-source: tests/fixtures/consumer/configured/runtime_settings.go#declare-runtime-setting -->
 ```go
+var SiteName = settings.Define("site.name", 1, contract.StringJSON[string](),
+	settings.Presentation{Label: "Site name", Group: "site", Public: true})
+
+func SettingsApplication(ctx context.Context, deployment application.Settings) (*application.App, error) {
+	deployment.Features.Extensions.Enabled = true
+	return application.New(deployment).Features(func(application.Services) (application.FeatureDeclarations, error) {
+		return application.FeatureDeclarations{Settings: []settings.Registration{SiteName.Registration(), MailPortRegistration()}}, nil
+	}).Build(ctx)
+}
 ```
 
 Use the same declared key in registration and calls. Its name, version and JSON
@@ -50,6 +59,21 @@ to initialize defaults without replacing existing admin values:
 
 <!-- compiled-source: tests/fixtures/consumer/configured/runtime_settings.go#seed-runtime-setting -->
 ```go
+func SeedSiteName(ctx context.Context, tx *database.Tx, manager *settings.Manager) error {
+	return SiteName.EnsureIn(ctx, tx, manager, "My site")
+}
+
+func ReadSiteName(ctx context.Context, manager *settings.Manager) (string, error) {
+	return SiteName.GetOr(ctx, manager, "Unnamed site")
+}
+
+func SaveSiteName(ctx context.Context, manager *settings.Manager, name string) error {
+	return SiteName.Upsert(ctx, manager, name)
+}
+
+func SaveSiteNameIn(ctx context.Context, tx *database.Tx, manager *settings.Manager, name string) error {
+	return SiteName.UpsertIn(ctx, tx, manager, name)
+}
 ```
 
 The joined methods reject a nil transaction or one from another database pool.
@@ -89,6 +113,21 @@ older values convert:
 
 <!-- compiled-source: tests/fixtures/consumer/configured/runtime_settings.go#upgrade-runtime-setting -->
 ```go
+var MailPort = settings.Define("mail.port", 2, contract.IntegerJSON[int64](),
+	settings.Presentation{Kind: settings.Number, Group: "mail"})
+
+func MailPortRegistration() settings.Registration {
+	return MailPort.RegistrationWith(settings.Options[int64]{Upgrades: []settings.Upgrade[int64]{
+		settings.UpgradeFrom(1, contract.StringJSON[string](), func(_ context.Context, old string) (int64, error) {
+			return strconv.ParseInt(old, 10, 64)
+		}),
+	}})
+}
+
+func ReconcileSettings(ctx context.Context, manager *settings.Manager) error {
+	_, err := settings.Reconcile(ctx, manager)
+	return err
+}
 ```
 
 The previous codec decodes the stored value; the result is re-encoded and

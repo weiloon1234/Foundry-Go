@@ -29,6 +29,20 @@ use their selected default and supported set:
 
 <!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#configured-catalog -->
 ```go
+func CatalogApplication(ctx context.Context, deployment application.Settings, files fs.FS, messages []i18n.MessageDefinition) (*application.App, error) {
+	selection := deployment.Features.Locales
+	locales, err := i18n.NewLocaleSet(selection.Default, selection.Locales...)
+	if err != nil {
+		return nil, err
+	}
+	templates, err := i18n.ReadTemplates(ctx, files, locales)
+	if err != nil {
+		return nil, err
+	}
+	return application.New(deployment).Features(func(application.Services) (application.FeatureDeclarations, error) {
+		return application.FeatureDeclarations{Messages: messages, Catalog: templates}, nil
+	}).Build(ctx)
+}
 ```
 
 Built-in validation keys replace the `foundry.` rule prefix with `validation.`.
@@ -69,10 +83,23 @@ Successful responses retain their own language/cache policy.
 
 <!-- compiled-source: tests/fixtures/consumer/localization/messages.go#rule-message-arguments -->
 ```go
+// RuleArgs is approved declaration data, never submitted field contents.
+//
+//foundry:message key=profile.validation.name
+type RuleArgs struct {
+	Attribute string `json:"attribute"`
+	Team      string `json:"team"`
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/localization/validation.go#translated-field-rule -->
 ```go
+func NameRule() validation.Rule[WelcomeArgs] {
+	return validation.Rules(validation.WithLabelKey(validation.WithLabel(WelcomeArgsValidationFields().Name, "Name"), "fields.name"), validation.WithTranslation(
+		validation.WithMessage(validation.NonBlank[string](), "Enter your name."),
+		RuleArgsMessage(), RuleArgs{Team: "Foundry team"},
+	))
+}
 ```
 
 `WithMessage` is literal and wins over translations, including `{{braces}}`.
@@ -97,6 +124,18 @@ registration and JSON loading.
 
 <!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#localize-validation -->
 ```go
+func CheckName(ctx context.Context, catalog *i18n.Catalog, locale i18n.LocaleID, name string) error {
+	err := validation.Check(localization.NameRule(), ctx, localization.WelcomeArgs{Name: name}, validation.DefaultLimits())
+	var rejected *validation.Errors
+	if !errors.As(err, &rejected) {
+		return err
+	}
+	localized, err := rejected.Localize(ctx, catalog, locale)
+	if err != nil {
+		return err
+	}
+	return localized
+}
 ```
 
 Direct `validation.Check` returns English diagnostics. CLI/worker callers can explicitly

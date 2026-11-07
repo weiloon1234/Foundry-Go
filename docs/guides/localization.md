@@ -40,6 +40,11 @@ The Go argument struct is the source of truth for parameter names and types:
 
 <!-- compiled-source: tests/fixtures/consumer/localization/messages.go#typed-plural-message -->
 ```go
+//foundry:message key=cart.items plural=count
+type CartArgs struct {
+	Name  string          `json:"name"`
+	Count decimal.Decimal `json:"count"`
+}
 ```
 
 `foundry generate` emits `CartArgsMessage()`, `CartArgsJSON()` and
@@ -53,6 +58,9 @@ is supported through the existing DTO codec rules.
 
 <!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#format-cart-message -->
 ```go
+func FormatCart(ctx context.Context, catalog *i18n.Catalog, locale i18n.LocaleID, args localization.CartArgs) (i18n.Result, error) {
+	return localization.CartArgsMessage().Format(ctx, catalog, locale, args)
+}
 ```
 
 `Message.Key()` supplies the shared typed `i18n.MessageKey`. `Definition()` and
@@ -91,6 +99,9 @@ existing BCP 47 locale parser and must belong to the configured supported set.
 
 <!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#load-message-catalog -->
 ```go
+func LoadMessages(ctx context.Context, files fs.FS, locales i18n.LocaleCatalog) (*i18n.Catalog, error) {
+	return message.Load(ctx, files, locales, i18n.CatalogOptions{}, localization.CartArgsMessage().Registration())
+}
 ```
 
 Nested objects flatten with dots. Plain leaves are strings; plural leaves contain
@@ -160,10 +171,14 @@ rules without a second implementation:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-typed-messages -->
 ```typescript
+void formatMessage(messages, "cart.items", { count: 2, name: "Ada" });
+void formatMessage(messages, "cart.items", { count: "2.5", name: "Ada" });
+void formatMessage(messages, "fields.name");
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-text-message -->
 ```typescript
+void formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
 ```
 
 - `catalogTranslations(files)` flattens one locale's catalog files under the Go
@@ -180,6 +195,9 @@ rules without a second implementation:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-frontend-messages -->
 ```typescript
+void formatFrontendMessage(messages, "ui.welcome", { name: "Ada" });
+void formatFrontendMessage(messages, "ui.farewell");
+void formatFrontendMessage(messages, "auth.notice", { attempts: 3 });
 ```
 
 Frontend-only plural declarations require exactly one numeric placeholder across
@@ -209,6 +227,17 @@ function.
 
 <!-- compiled-source: tests/fixtures/consumer/configured/catalog.go#request-message -->
 ```go
+func MessageCatalog(services application.Services) (*i18n.Catalog, error) {
+	return services.Locales()
+}
+
+func WelcomeRequest(ctx context.Context, catalog *i18n.Catalog, name string) (i18n.Result, error) {
+	locale, ok := i18n.RequestLocale(ctx)
+	if !ok {
+		return i18n.Result{}, errors.New("request locale is not selected")
+	}
+	return localization.WelcomeArgsMessage().Format(ctx, catalog, locale, localization.WelcomeArgs{Name: name})
+}
 ```
 
 Use the request selection already installed by the HTTP locale middleware.
@@ -305,6 +334,13 @@ receive runtime signature checks rather than generated Go argument typing.
 
 <!-- compiled-source: tests/fixtures/consumer/localization/messages.go#enum-labels -->
 ```go
+//foundry:enum labels=enum.localization.status
+type Status string
+
+const (
+	Draft Status = "draft"
+	Ready Status = "ready"
+)
 ```
 
 Field labels belong on [DTO declarations](validation.md#recipe-field-labels).

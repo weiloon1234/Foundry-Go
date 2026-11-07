@@ -28,6 +28,21 @@ shows independent use verified by the milestone gate.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#token-store -->
 ```go
+func APITokens(db *database.DB, provider UserProvider, persistence tokenpg.Config, config token.Config) (*UserTokens, error) {
+	backend, err := tokenpg.New(db, persistence)
+	if err != nil {
+		return nil, err
+	}
+	store, err := token.NewStore(backend, config)
+	if err != nil {
+		return nil, err
+	}
+	declared, err := OrderReadScopes()
+	if err != nil {
+		return nil, err
+	}
+	return token.New(store, "users.tokens", provider, "users.bearer", declared)
+}
 ```
 
 Handwritten ORM declarations own subject locks, token families and retained token
@@ -47,6 +62,13 @@ validates the checks in its own transaction without blocking reads or writes.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#issue-token -->
 ```go
+func StartVerifiedToken(ctx context.Context, tokens *UserTokens, proof auth.Proof[models.User, model.ID[models.User]], name string, renewable bool) (IssuedUserToken, error) {
+	granted, err := OrderReadScopes()
+	if err != nil {
+		return IssuedUserToken{}, err
+	}
+	return tokens.Issue(ctx, proof, token.IssueOptions[models.User]{Name: name, Scopes: granted, Refresh: renewable})
+}
 ```
 
 Proofs retain both model and stored key types. `NewProof` is a trusted adapter
@@ -98,6 +120,22 @@ stored models or credential records into response DTOs.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/token_routes.go#native-token-delivery -->
 ```go
+route := func(id foundryhttp.RouteID, method foundryhttp.Method, path string, access foundryhttp.Access) foundryhttp.Route[foundryhttp.NoPath] {
+	return foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: access}, foundryhttp.StaticPath(path))
+}
+response := foundryhttp.TokenResponse[models.User, model.ID[models.User]](200, clock)
+login := foundryhttp.DefineEndpoint(route("api.login", foundryhttp.POST, "/login", foundryhttp.Public),
+	foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ ProfileInput) (IssuedUserToken, error) {
+	proof, err := verify(ctx)
+	if err != nil {
+		return IssuedUserToken{}, err
+	}
+	return StartVerifiedToken(ctx, tokens, proof, "API client", true)
+})
+refresh := foundryhttp.DefineEndpoint(route("api.refresh", foundryhttp.POST, "/refresh", foundryhttp.Public),
+	foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenBody(), response).Handle(func(ctx context.Context, input RefreshInput) (IssuedUserToken, error) {
+	return RefreshFromBody(ctx, tokens, input.Body)
+})
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/authenticating/token_routes.go)
@@ -150,10 +188,23 @@ the refresh token. The same guard serves it with a cookie transport:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#refresh-cookie -->
 ```go
+var UserRefreshCookie = foundryhttp.DefineRefreshCookie("__Host-refresh-user", foundryhttp.CSRFConfig{})
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/browser_tokens.go#browser-token-delivery -->
 ```go
+response := foundryhttp.TokenCookieResponse[models.User, model.ID[models.User]](cookie, 200, clock)
+login := foundryhttp.DefineEndpoint(route("login"), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), response).Handle(func(ctx context.Context, _ ProfileInput) (IssuedUserToken, error) {
+	proof, err := verify(ctx)
+	if err != nil {
+		return IssuedUserToken{}, err
+	}
+	return StartVerifiedToken(ctx, tokens, proof, "Browser", true)
+})
+// The handler is the same as for the JSON refresh body.
+refresh := foundryhttp.DefineEndpoint(route("refresh"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookie(cookie), response).Handle(func(ctx context.Context, input RefreshInput) (IssuedUserToken, error) {
+	return RefreshFromBody(ctx, tokens, input.Body)
+})
 ```
 
 `TokenCookieResponse` writes `{"tokens": {"access_token", "expires_in",
@@ -175,6 +226,15 @@ does not prevent it. A missing, repeated or malformed cookie arrives as an absen
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/browser_tokens.go#browser-token-logout -->
 ```go
+logout := foundryhttp.DefineEndpoint(route("logout"), foundryhttp.EmptyQuery(), foundryhttp.RefreshTokenCookieLogout(cookie),
+	foundryhttp.ClearRefreshCookie(cookie, foundryhttp.EmptyResponse(204))).Handle(func(ctx context.Context, input RefreshLogoutInput) (foundryhttp.NoContent, error) {
+	if refresh, ok := input.Body.RefreshToken.Get(); ok {
+		if _, err := tokens.LogoutRefresh(ctx, refresh.Secret()); err != nil {
+			return foundryhttp.NoContent{}, err
+		}
+	}
+	return foundryhttp.NoContent{}, nil
+})
 ```
 
 `LogoutRefresh` revokes the family of a current, previous or consumed refresh
@@ -222,6 +282,9 @@ The request type aliases expose the same descriptor without a copied schema.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/tokens.go#refresh-token -->
 ```go
+func RefreshVerifiedToken(ctx context.Context, tokens *UserTokens, raw secret.String) (IssuedUserToken, error) {
+	return tokens.Refresh(ctx, raw)
+}
 ```
 
 Each successful refresh retains the family's ID, original absolute deadline and
@@ -270,6 +333,16 @@ can shorten its own, for example admins on the same store as users:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#token-lifetime -->
 ```go
+func ShortLivedTokens(store *token.Store, provider UserProvider) (*UserTokens, error) {
+	scopes, err := OrderReadScopes()
+	if err != nil {
+		return nil, err
+	}
+	return token.New(store, "users.short", provider, "users.short.bearer", scopes,
+		token.WithLifetimes(token.Lifetimes{Renewable: token.Lifetime{
+			Access: 5 * time.Minute, RefreshIdle: 12 * time.Hour, Absolute: 24 * time.Hour,
+		}}))
+}
 ```
 
 `application.NewTokenGuard` accepts the same options for the configured store. A
@@ -321,6 +394,19 @@ single-use ticket for the token family that authenticated it:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#token-ticket -->
 ```go
+func TicketRoute(tokens *UserTokens) (foundryhttp.RouteRegistration, error) {
+	binding, err := TokenBinding(tokens)
+	if err != nil {
+		return foundryhttp.RouteRegistration{}, err
+	}
+	endpoint := foundryhttp.DefineEndpoint(
+		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "realtime.ticket", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/realtime/ticket")),
+		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.TicketResponse[models.User, model.ID[models.User]](200, clock.System{}),
+	)
+	return foundryhttp.Authenticated(endpoint, binding).Handle(func(ctx context.Context, _ models.User, _ ProfileInput) (token.Ticket[models.User, model.ID[models.User]], error) {
+		return tokens.IssueTicket(ctx)
+	}), nil
+}
 ```
 
 `TicketResponse` uses the same credential boundary as `TokenResponse` (POST, TLS

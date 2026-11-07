@@ -29,6 +29,22 @@ complete imports and application assembly.
 
 <!-- compiled-source: tests/fixtures/consumer/storing/guide.go#store-and-open -->
 ```go
+func StoreAndCopy(ctx context.Context, disk *storage.Disk, input io.Reader, destination io.Writer) error {
+	key, err := storage.ParseKey("reports/annual.pdf")
+	if err != nil {
+		return err
+	}
+	if _, err := disk.Put(ctx, key, input, storage.PutOptions{ContentType: "application/pdf", Condition: storage.IfAbsent()}); err != nil {
+		return err
+	}
+	body, _, err := disk.Open(ctx, key, storage.ReadOptions{})
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+	_, err = io.Copy(destination, body)
+	return err
+}
 ```
 
 An `ObjectKey` preserves exact UTF-8, case and literal percent characters. It is
@@ -188,6 +204,11 @@ waits for actual callback exit rather than closing infrastructure beneath it.
 
 <!-- compiled-source: tests/fixtures/consumer/storing/files.go#local-disk -->
 ```go
+func LocalProviders(root string) []foundation.Provider {
+	adapter := local.Module("infrastructure.local-files", localBackend, local.DefaultConfig(root))
+	disk := storage.Module("domain.documents", FileDisk, Files, storage.DefaultConfig(), []foundation.ProviderID{adapter.Name}, func(r foundation.Resolver) (storage.Backend, error) { return foundation.Resolve(r, localBackend) })
+	return []foundation.Provider{disk, adapter}
+}
 ```
 
 Provision an existing, empty, operator-controlled directory, then use
@@ -333,10 +354,16 @@ deadline is not treated as a credential expiry and does not shorten signed URLs.
 
 <!-- compiled-source: tests/fixtures/consumer/storing/files.go#persist-upload -->
 ```go
+func PersistUpload(ctx context.Context, disk *storage.Disk, key storage.ObjectKey, file foundryhttp.UploadedFile) (storage.StoredObject, error) {
+	return storagehttp.StoreUpload(ctx, disk, key, file, storage.PutOptions{})
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/storing/files.go#download-document -->
 ```go
+func DownloadDocument(disk *storage.Disk, key storage.ObjectKey) foundryhttp.Download {
+	return storagehttp.Download(disk, key, storage.ReadOptions{}).WithName("document.bin")
+}
 ```
 
 `storage/http.StoreUpload` persists an already validated `http.UploadedFile`, uses
@@ -365,6 +392,18 @@ cancellation failures use 503. Unclassified failures use 500.
 
 <!-- compiled-source: tests/fixtures/consumer/storing/guide.go#deferred-storage-errors -->
 ```go
+func AuthorizedStream(disk *storage.Disk, key storage.ObjectKey, authorize func(context.Context) error) foundryhttp.Stream {
+	return foundryhttp.StreamFrom(func(ctx context.Context) (foundryhttp.StreamContent, error) {
+		if err := authorize(ctx); err != nil {
+			return foundryhttp.StreamContent{}, err
+		}
+		body, info, err := disk.Open(ctx, key, storage.ReadOptions{})
+		if err != nil {
+			return foundryhttp.StreamContent{}, storagehttp.ResponseError(err)
+		}
+		return foundryhttp.StreamContent{Body: body, MediaType: foundryhttp.MediaType(info.Object.ContentType), Length: value.Set(info.Length)}, nil
+	}).WithDisposition(foundryhttp.DispositionAttachment)
+}
 ```
 
 Here `storagehttp` imports `github.com/weiloon1234/Foundry-Go/storage/http`.

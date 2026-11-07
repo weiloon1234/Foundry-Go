@@ -20,6 +20,13 @@ Handwritten Go models describe current application types. A `migrate.Definition`
 
 <!-- compiled-source: tests/fixtures/consumer/migrations/migrations.go#migration-definitions -->
 ```go
+func Definitions() []migrate.Definition {
+	initial := migrate.Key{Origin: Origin, ID: CreateRecords}
+	return []migrate.Definition{
+		{Key: initial, Version: Introduced, SQL: []string{"CREATE TABLE consumer_records (id bigint PRIMARY KEY)"}},
+		{Key: migrate.Key{Origin: Origin, ID: AddRecordLabel}, Version: Introduced, Requires: []migrate.Key{initial}, SQL: []string{"ALTER TABLE consumer_records ADD COLUMN label text NOT NULL DEFAULT ''"}},
+	}
+}
 ```
 
 Use imports from `github.com/weiloon1234/Foundry-Go/database/migrate`. Semantic names use lowercase letters, digits, underscores, hyphens, and dots; they start with a letter or digit and contain at most 128 bytes. Define constants once and reuse them. Origins separate framework, plugin, and application history. The introducing version is immutable metadata, not the currently installed release version.
@@ -35,12 +42,22 @@ By default, each statement must be valid inside a PostgreSQL transaction. Use se
 
 <!-- compiled-source: tests/fixtures/consumer/articles/migration_recipes.go#inspect-migrations -->
 ```go
+func MigrationStatus(ctx context.Context, db *database.DB, registry *migrate.Registry) (migrate.Report, error) {
+	runner, err := migrate.NewPostgres(db, registry, migrate.DefaultPostgresConfig())
+	if err != nil {
+		return migrate.Report{}, err
+	}
+	return runner.Status(ctx)
+}
 ```
 
 After reviewing status and choosing to apply, call:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/migration_recipes.go#apply-migrations -->
 ```go
+func ApplyMigrations(ctx context.Context, runner *migrate.Postgres) (migrate.RunResult, error) {
+	return runner.Up(ctx)
+}
 ```
 
 Constructing the runner performs no I/O. `Status` only reads committed history; an absent history table yields pending definitions without creating a table or taking a migration lock. `Up` acquires a session advisory lock, ensures its history namespace, rereads and validates history, then executes each pending definition according to its declared mode. The default commits SQL and history in one transaction. It never synchronizes schema during ordinary application boot.
@@ -82,6 +99,22 @@ with an explicit conflict policy:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/seeding.go#seed-reference-data -->
 ```go
+func AuthorSeeder(id model.ID[Author], name string) seed.Definition {
+	return seed.Definition{ID: "articles.author", Run: func(ctx context.Context, tx *database.Tx) error {
+		_, err := orm.Upsert(ctx, tx, Authors.Query(),
+			orm.OnConflict(orm.ConflictKey(orm.KeyExpr(Authors.Key()))).DoNothing(),
+			orm.KeySet(Authors.Key(), id), orm.TextSet(Authors.Name, name))
+		return err
+	}}
+}
+
+func SeedAuthors(ctx context.Context, db *database.DB, id model.ID[Author], name string) (seed.Result, error) {
+	registry, err := seed.New(AuthorSeeder(id, name))
+	if err != nil {
+		return seed.Result{}, err
+	}
+	return registry.Run(ctx, db, "articles.author")
+}
 ```
 
 `seed.New` validates named `seed.Definition` values and their dependencies. Each definition has a typed `seed.ID` and `Run func(context.Context, *database.Tx) error`. Use the supplied transaction for all work. The registry snapshots dependency lists and orders them deterministically before execution.
@@ -119,6 +152,28 @@ Status prints the report and returns a conflict error when history has drift. Mi
 
 <!-- compiled-source: tests/fixtures/consumer/database_command_test.go#application-migrations -->
 ```go
+func Example_applicationDatabaseCommand() {
+	run := func(ctx context.Context, settings application.Settings, args []string, stdout, stderr io.Writer) error {
+		invocation, err := dbcommand.Parse(args, stderr)
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		app, err := application.New(settings).Migrations(infrastructure.MigrationTarget{Definitions: migrations.Definitions()}).Build(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), app.ShutdownTimeout())
+			defer cancel()
+			_ = app.Shutdown(shutdown)
+		}()
+		return app.RunDatabaseCommand(ctx, invocation, application.DatabaseCommandResources{}, stdout)
+	}
+	_ = run
+}
 ```
 
 Each `infrastructure.MigrationTarget` names a connection (blank selects the default) and a schema (blank selects the connection's primary schema, or `public` for an unscoped connection). `DatabaseSettings.MigrationGroups` is the one resolution used by `Build`, `RunDatabaseCommand` and the PostgreSQL testkit. Targets addressing the same primary host, port, database and schema share one history, so they merge: a repeated identical definition collapses, a conflicting one fails, and each group must be a valid `migrate` registry. An undetected alias, such as a second hostname for one server, still shares the history table; the runner's drift check then refuses to apply rather than guessing.
@@ -152,6 +207,13 @@ Protocol tests exercise apply-once history, drift, bounded history reads/growth,
 
 <!-- compiled-source: tests/fixtures/consumer/security/contracts.go#online-migrations -->
 ```go
+func OnlineMigrations() (*migrate.Registry, error) {
+	first := migrate.Key{Origin: "security-consumer", ID: "001_records"}
+	return migrate.New(
+		migrate.Definition{Key: first, Version: "v1", SQL: []string{"CREATE TABLE consumer_security_records (id bigint PRIMARY KEY, label text)"}},
+		migrate.Definition{Key: migrate.Key{Origin: first.Origin, ID: "002_online_label"}, Version: "v1", Requires: []migrate.Key{first}, Mode: migrate.NonTransactional, SQL: []string{"CREATE INDEX CONCURRENTLY consumer_security_label_idx ON consumer_security_records (label)"}},
+	)
+}
 ```
 
 Execution mode participates in the immutable checksum. The zero/default mode
@@ -178,6 +240,9 @@ After inspecting the real catalog/data, pass that exact progress snapshot to:
 
 <!-- compiled-source: tests/fixtures/consumer/security/contracts.go#reconcile-migration -->
 ```go
+func Reconcile(ctx context.Context, runner *migrate.Postgres, inspected migrate.Progress, outcome migrate.StatementOutcome) (migrate.Progress, error) {
+	return runner.Reconcile(ctx, inspected, outcome)
+}
 ```
 
 Reconciliation takes the same advisory lock, checks definition identity and

@@ -96,12 +96,24 @@ Omitted fields leave stored values unchanged; map supplied values into the
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/dto.go#patch-presence -->
 ```go
+//foundry:dto
+type UpdateUser struct {
+	Email    value.Optional[string]                 `json:"email,omitzero"`
+	Nickname value.Optional[value.Nullable[string]] `json:"nickname,omitzero"`
+	State    value.Optional[models.Status]          `json:"state,omitzero"`
+}
 ```
 
 Query descriptors retain the same omission type but use query-string values:
 
 <!-- compiled-source: tests/fixtures/consumer/httpquery/query.go#query-presence -->
 ```go
+//foundry:query
+type SearchInput struct {
+	User     model.ID[models.User]
+	Search   value.Optional[string] `query:"q"`
+	Statuses []models.Status        `query:"status"`
+}
 ```
 
 Pointers and collection encoding follow [DTO JSON contracts](http-dtos.md).

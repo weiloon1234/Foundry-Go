@@ -14,6 +14,13 @@ Use `phone.Parse` with the selected `countries.Code` before storing a contact nu
 
 <!-- compiled-source: tests/fixtures/consumer/codecs/phone.go#normalize-phone -->
 ```go
+func NormalizePhone(country countries.Code, input string, options phone.Options) (string, error) {
+	number, err := phone.Parse(country, input, options)
+	if err != nil {
+		return "", err
+	}
+	return number.String(), nil
+}
 ```
 
 Import `github.com/weiloon1234/Foundry-Go/phone` and
@@ -46,6 +53,20 @@ For a contact with its own selected country, use typed fields:
 
 <!-- compiled-source: tests/fixtures/consumer/codecs/phone.go#validate-phone -->
 ```go
+type Contact struct {
+	Country countries.Code `json:"country"`
+	Number  string         `json:"number"`
+}
+
+func ContactRule(options phone.Options) validation.Rule[Contact] {
+	country := validation.DefineField("country", func(in Contact) countries.Code { return in.Country })
+	number := validation.DefineField("number", func(in Contact) string { return in.Number })
+	return phonevalidation.For(country, number, options)
+}
+
+func NationalPhoneRule(country countries.Code, options phone.Options) validation.Rule[string] {
+	return phonevalidation.Number[string](country, options)
+}
 ```
 
 Use generated validation fields when your DTO has them. `For` reports failures
@@ -67,6 +88,9 @@ empty text does not imply omission or null.
 
 <!-- compiled-source: tests/fixtures/consumer/codecs/phone.go#phone-messages -->
 ```go
+func PhoneMessages() []i18n.MessageDefinition {
+	return append(validation.MessageDefinitions(), phonevalidation.MessageDefinitions()...)
+}
 ```
 
 Register `phonevalidation.MessageDefinitions()` alongside your ordinary

@@ -28,6 +28,9 @@ providers register the same typed producer through `events.RegisterOutbox`:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/durable.go#register-event-outbox -->
 ```go
+if err := events.RegisterOutbox(r, Durable, Bus, "consumer.domain"); err != nil {
+	return err
+}
 ```
 
 `Bus` is the service key registered through `events.Module`. Its topic/listener
@@ -44,6 +47,9 @@ with its `orm.Changes[observerqueries.Plain]` stored snapshot:
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#enqueue-event -->
 ```go
+func (s *PublicationService) Enqueue(ctx context.Context, tx *database.Tx, id model.ID[observerqueries.Plain]) (outbox.ID[RecordCreated], error) {
+	return Created.Enqueue(ctx, tx, s.producer, RecordCreated{ID: id})
+}
 ```
 
 The ID is `outbox.ID[RecordCreated]`. An unrelated payload ID or model ID cannot
@@ -74,6 +80,21 @@ idempotent. Origin records attribution, never reusable authorization credentials
 
 <!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#reload-event -->
 ```go
+func (s *PublicationService) Payload(ctx context.Context, db database.Executor, id outbox.ID[RecordCreated]) (value.Optional[RecordCreated], error) {
+	result, err := Created.Find(ctx, db, s.producer, id)
+	if err != nil {
+		return value.Optional[RecordCreated]{}, err
+	}
+	stored, present := result.Get()
+	if !present {
+		return value.Optional[RecordCreated]{}, nil
+	}
+	payload, err := stored.Payload()
+	if err != nil {
+		return value.Optional[RecordCreated]{}, err
+	}
+	return value.Set(payload), nil
+}
 ```
 
 Reload selects the expected destination, topic and schema version along with the

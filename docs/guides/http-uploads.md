@@ -18,6 +18,21 @@ Foundry generator to produce the descriptor and typed validation fields.
 
 <!-- compiled-source: tests/fixtures/consumer/httpuploads/forms.go#multipart-input -->
 ```go
+type Gallery []foundryhttp.UploadedFile
+
+type Settings struct {
+	Caption string                                 `json:"caption"`
+	Note    value.Optional[value.Nullable[string]] `json:"note,omitzero"`
+}
+
+//foundry:multipart
+type ProfileInput struct {
+	Title      value.Optional[string]
+	Attachment foundryhttp.UploadedFile `form:"document"`
+	Photos     Gallery
+	Tags       []string                 `form:"tags[]"`
+	Settings   value.Optional[Settings] `form:",json"`
+}
 ```
 
 The generated `ProfileInputDescriptor()` returns
@@ -61,6 +76,25 @@ illustrates descriptor assembly, validation and an injected domain service.
 
 <!-- compiled-source: tests/fixtures/consumer/httpuploads/forms.go#multipart-endpoint -->
 ```go
+func Router(directory string, service Service) (*foundryhttp.Router, error) {
+	form := foundryhttp.MultipartDirectory(ProfileInputDescriptor(), directory)
+	fields := ProfileInputValidationFields()
+	rules := validation.All(
+		validation.Rules(fields.Title, validation.Optional(validation.MaxLength[string](80))),
+		validation.Rules(fields.Attachment,
+			validation.FileMinSize[foundryhttp.UploadedFile](1),
+			validation.FileMaxSize[foundryhttp.UploadedFile](1<<20),
+			validation.FileContentTypes[foundryhttp.UploadedFile]("text/plain", "image/png"),
+			validation.FileExtensions[foundryhttp.UploadedFile]("txt", "png"),
+		),
+		validation.Rules(fields.Photos, validation.Each[Gallery](validation.FileMaxSize[foundryhttp.UploadedFile](1<<20))),
+	)
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "uploads.profile", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/profile"))
+	endpoint := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.JSONResponse(201, UploadReplyJSON())), rules)
+	return foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, ProfileInput]) (UploadReply, error) {
+		return service.Save(ctx, input.Body)
+	}))
+}
 ```
 
 `FileValue` is the focused metadata interface used by these rules. FilePresent
@@ -140,6 +174,13 @@ PNG and PDF are allowed.
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/upload_rules.go#document-kinds -->
 ```go
+func DocumentRule() validation.Rule[foundryhttp.UploadedFile] {
+	return validation.Bail(
+		validation.FileMinSize[foundryhttp.UploadedFile](1),
+		validation.FileKinds[foundryhttp.UploadedFile](validation.PDFKind(), validation.TextKind(), validation.ZIPContainerKind("docx")),
+		validation.FileMaxSize[foundryhttp.UploadedFile](5<<20),
+	)
+}
 ```
 
 Declare custom pairs with `validation.FileKind{Extension: "txt", ContentType:
@@ -164,6 +205,18 @@ one bounded read and container inspection between format and dimension checks:
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/upload_rules.go#image-kinds -->
 ```go
+func ImageRule(engine *imaging.Engine) validation.Rule[foundryhttp.UploadedFile] {
+	jpeg := imagingvalidation.JPEGKind()
+	jpeg.Extension = "jpeg"
+	return validation.Bail(
+		validation.FileMinSize[foundryhttp.UploadedFile](1),
+		validation.FileMaxSize[foundryhttp.UploadedFile](5<<20),
+		imagingvalidation.KindsWithEngine[foundryhttp.UploadedFile](engine,
+			validation.DimensionConstraints{MaxWidth: 10000, MaxHeight: 10000},
+			imagingvalidation.JPEGKind(), jpeg, imagingvalidation.PNGKind(),
+			imagingvalidation.WebPKind(), imagingvalidation.GIFKind(), imagingvalidation.AVIFKind()),
+	)
+}
 ```
 
 `Kinds(limits, constraints, kinds...)` uses the portable inspector.
@@ -213,6 +266,17 @@ through the existing validation slot mechanism:
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/upload_rules.go#image-inspection-messages -->
 ```go
+func ImageRuleWithMessages(engine *imaging.Engine) validation.Rule[foundryhttp.UploadedFile] {
+	checked := validation.WithImageInspection[foundryhttp.UploadedFile](
+		imagingvalidation.NewEngineMeasurer[foundryhttp.UploadedFile](engine),
+		func(image validation.ImageRules[foundryhttp.UploadedFile, imaging.Format]) validation.Rule[foundryhttp.UploadedFile] {
+			matches := validation.WithMessage(image.Kinds(imagingvalidation.PNGKind()), "Must be a PNG image.")
+			dimensions := validation.WithMessage(image.Dimensions(validation.DimensionConstraints{MaxWidth: 10000, MaxHeight: 10000}), "Image dimensions are too large.")
+			return validation.Bail(matches, dimensions)
+		},
+	)
+	return validation.Bail(validation.FileMinSize[foundryhttp.UploadedFile](1), validation.FileMaxSize[foundryhttp.UploadedFile](5<<20), checked)
+}
 ```
 
 This form retains the existing `foundry.image_dimensions` diagnostic and its

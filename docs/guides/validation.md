@@ -31,6 +31,10 @@ adds rules to an existing typed endpoint:
 
 <!-- compiled-source: tests/fixtures/consumer/httpvalidation/validation.go#validate-http-body -->
 ```go
+var Update = foundryhttp.ValidateBody(httpendpoints.Update,
+	validation.Rules(validation.WithLabel(httpdto.UpdateUserValidationFields().Email, "Email address"), validation.Optional(validation.NonBlank[string]())),
+	validation.Rules(validation.WithLabel(httpdto.UpdateUserValidationFields().Nickname, "Display name"), validation.Optional(validation.Nullable(validation.MinLength[string](2)))),
+)
 ```
 
 `Email` remains `value.Optional[string]`; `Nickname` remains
@@ -90,10 +94,20 @@ Generated field sets and the public `contract.JSON[T]` API are unchanged.
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#patch-rules -->
 ```go
+func UpdateRules() validation.Rule[UpdateUser] {
+	f := UpdateUserValidationFields()
+	return validation.All(
+		validation.Rules(f.Email, validation.Optional(validation.Bail(validation.NonBlank[string](), validation.Email[string]()))),
+		validation.Rules(f.Nickname, validation.Optional(validation.Nullable(validation.MinLength[string](2)))),
+	)
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#check-update -->
 ```go
+func CheckUpdate(ctx context.Context, input UpdateUser) error {
+	return validation.Check(UpdateRules(), ctx, input, validation.DefaultLimits())
+}
 ```
 
 `validation.Check(rule, ctx, input, limits)` is usable from services, commands and jobs.
@@ -148,6 +162,13 @@ must have an accessible Go selector and a type the generating package can name.
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#custom-translated-rule -->
 ```go
+func SingleLineName() validation.Rule[string] {
+	rule := validation.Custom(validation.Spec{ID: "rules.single_line_name", Message: "Enter a name on one line."},
+		func(_ context.Context, name string) (bool, error) {
+			return !strings.ContainsAny(name, "\r\n"), nil
+		})
+	return validation.WithTranslation(rule, localization.RuleArgsMessage(), localization.RuleArgs{Team: "Support"})
+}
 ```
 
 Declare and register the typed arguments through
@@ -377,6 +398,11 @@ validation selectors and client descriptors inherit this metadata:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/dto.go#client-field-label -->
 ```go
+//foundry:query
+type Filters struct {
+	Search value.Optional[string] `query:"q" client:"kind=text,label=fields.search"`
+	Tags   []string               `query:"tag"`
+}
 ```
 
 An HTTP rejection keeps its JSON Pointer and adds the selected label beside its
@@ -398,6 +424,13 @@ the existing aggregate metadata limit. Wire decoding errors omit the label.
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#decimal-precision -->
 ```go
+func CheckAmount(ctx context.Context, amount decimal.Decimal) error {
+	return validation.Check(validation.DecimalMaxPlaces(2), ctx, amount, validation.DefaultLimits())
+}
+
+func WholeUnits(amount decimal.Decimal) (int64, error) {
+	return amount.Int64()
+}
 ```
 
 `DecimalMin`, `DecimalMax` and `DecimalBetween` bound exact decimals.
@@ -472,6 +505,9 @@ Run cheap checks before this I/O and keep the database constraint authoritative.
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/validation_recipes.go#typed-validation-lookup -->
 ```go
+func EmailLookup(executor database.Executor, scopedUsers orm.Query[models.User]) databasevalidation.ModelLookup[models.User, string] {
+	return databasevalidation.Lookup(executor, scopedUsers, orm.TextExpr(models.Users.Email))
+}
 ```
 
 Each result is an ordinary `validation.Rule` with the field's concrete value

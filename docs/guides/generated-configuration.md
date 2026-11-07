@@ -24,6 +24,21 @@ use snake case. Field names remain ordinary autocompletable Go fields.
 
 <!-- compiled-source: tests/fixtures/consumer/startupconfig/settings.go#deployment-settings -->
 ```go
+type HTTPSettings struct {
+	Listen  string        `config:"listen"`
+	Port    Port          `config:"port"` // Port is the public listener port.
+	Timeout time.Duration `config:"timeout"`
+	Origins []string      `config:"origins"`
+}
+
+//foundry:config
+type Settings struct {
+	// HTTP controls the public listener and its request timeout.
+	HTTP        HTTPSettings    `config:"http"`
+	Environment Environment     `config:"environment"`
+	SigningKey  secret.String   `config:"signing_key"`
+	Features    map[string]bool `config:"features"`
+}
 ```
 
 Original leading and trailing field comments also appear on generated key
@@ -42,14 +57,35 @@ owned by `Settings`. The generated schema uses the existing loader:
 
 <!-- compiled-source: tests/fixtures/consumer/startupconfig/load.go#load-configuration -->
 ```go
+func Load(path string) (Settings, config.Report, error) {
+	schema, err := SettingsConfigSchema()
+	if err != nil {
+		return Settings{}, config.Report{}, err
+	}
+	keys := SettingsConfigKeys()
+	return toml.LoadFile(path, schema, Defaults(), config.Inputs[Settings]{
+		Environment: os.LookupEnv, Environ: os.Environ, Prefix: "APP",
+		Overrides: []config.Override[Settings]{keys.HTTP.Timeout.Set(5 * time.Second)},
+		Validate:  Validate,
+	}, toml.Options{})
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/startupconfig/settings.go#configuration-defaults -->
 ```go
+func Defaults() Settings {
+	return Settings{HTTP: HTTPSettings{Listen: "127.0.0.1", Port: 8080, Timeout: 5 * time.Second}, Environment: Development}
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/startupconfig/settings.go#configuration-validation -->
 ```go
+func Validate(settings Settings) error {
+	if settings.HTTP.Port == 0 || settings.HTTP.Timeout <= 0 {
+		return fault.New(fault.Invalid, "HTTP port and timeout must be positive")
+	}
+	return nil
+}
 ```
 
 `Defaults` and `Validate` are ordinary application Go functions. There is no
@@ -101,6 +137,16 @@ document through either `schema.Load` or `toml.LoadFile`:
 
 <!-- compiled-source: tests/fixtures/consumer/startupconfig/load.go#load-dotenv -->
 ```go
+func LoadEnvFile(envPath string, overrides ...config.Override[Settings]) (Settings, config.Report, error) {
+	schema, err := SettingsConfigSchema()
+	if err != nil {
+		return Settings{}, config.Report{}, err
+	}
+	return schema.Load(Defaults(), config.Inputs[Settings]{
+		EnvFile:     config.EnvFile{Path: envPath, Name: "local.env"},
+		Environment: os.LookupEnv, Prefix: "APP", Overrides: overrides, Validate: Validate,
+	})
+}
 ```
 
 An empty `Path` disables the input. The loader does not search for `.env`, mutate

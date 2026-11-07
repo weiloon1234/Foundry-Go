@@ -117,6 +117,9 @@ excerpt reads the email field from a joined projection in deterministic order:
 
 <!-- compiled-source: tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go#read-scalar -->
 ```go
+if emails, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(again, expr.AsSelected(expr.Row(rowset.At(joinedFields, reports.UserOrderStatsRows.Email)))), expr.Asc(rowset.At(joinedFields, reports.UserOrderStatsRows.Email)))).All(t.Context(), tx); err != nil || len(emails) != 3 || emails[0] != users[0].Email {
+	t.Error("declared joined result could not be joined again", err)
+}
 ```
 
 Scalar subqueries become selected values through `expr.AsSelected`. Nullable
@@ -124,6 +127,18 @@ subqueries keep their explicit nullable type:
 
 <!-- compiled-source: tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go#scalar-projection -->
 ```go
+last := rowset.LimitScalar(rowset.OrderScalar(buyers, expr.Desc(expr.Value(orm.NumberExpr(o.TotalCents)))), 1)
+nicknames := rowset.SelectScalar(rowset.From(models.Users.Query().Where(orm.KeyEq(u.ID, users[1].ID))), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname)))))
+report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), reports.ScalarReports.Row,
+	rowset.Map(reports.ScalarReports.ID, expr.Value(orm.KeyExpr(u.ID))),
+	rowset.MapSelected(reports.ScalarReports.BuyerID, expr.AsSelected(rowset.ScalarRowQuery(rowset.From(models.Users.Query()), last))),
+	rowset.MapSelected(reports.ScalarReports.Nickname, expr.AsSelected(rowset.ScalarNullableRowQuery(rowset.From(models.Users.Query()), nicknames))),
+	rowset.MapSelected(reports.ScalarReports.Orders, expr.AsSelected(rowset.ScalarRowQuery(rowset.From(models.Users.Query()), count))),
+), expr.Asc(expr.Value(orm.TextExpr(u.Email))))
+scalars, err := rowset.Read(report).All(t.Context(), tx)
+if err != nil {
+	return err
+}
 ```
 
 For outer-row correlation, see [correlated subqueries](model-correlations.md).

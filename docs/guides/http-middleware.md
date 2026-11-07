@@ -18,12 +18,38 @@ scope. This example is exercised in the independent `httpmiddleware` consumer:
 
 <!-- compiled-source: tests/fixtures/consumer/httpmiddleware/router.go#middleware-scope -->
 ```go
+const RouteTrace foundryhttp.MiddlewareID = "fixture.route-trace"
+
+var trace = foundryhttp.DefineMiddleware(RouteTrace, func(next http.Handler) (http.Handler, error) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if matched, ok := foundryhttp.MatchedRoute(r.Context()); ok {
+			w.Header().Set("X-Matched-Route", string(matched.ID))
+		}
+		next.ServeHTTP(w, r)
+	}), nil
+})
+
+var API = foundryhttp.DefineScope("/api", "api").WithMiddleware(trace)
+var Update = foundryhttp.ConfigureEndpoint(httpendpoints.Update, foundryhttp.Within(API))
+
+func Router(service httpendpoints.Service) (*foundryhttp.Router, error) {
+	return foundryhttp.NewRouter(Update.Handle(service.Update))
+}
 ```
 
 For one route, configure its policy before declaring its endpoint:
 
 <!-- compiled-source: tests/fixtures/consumer/httpmiddleware/router.go#middleware-route -->
 ```go
+func Probe(policy foundryhttp.Middleware) foundryhttp.RouteRegistration {
+	route := foundryhttp.ConfigureRoute(foundryhttp.DefineRoute(foundryhttp.RouteSpec{
+		ID: "probe", Method: foundryhttp.GET, Access: foundryhttp.Public,
+	}, foundryhttp.StaticPath("/probe")), foundryhttp.Use(policy))
+	endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+	return endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
+		return foundryhttp.NoContent{}, nil
+	})
+}
 ```
 
 The returned endpoint retains the same concrete path/query/body/response types.
@@ -48,6 +74,9 @@ For configured global policy, use the application builder:
 
 <!-- compiled-source: tests/fixtures/consumer/httpmiddleware/router.go#middleware-global -->
 ```go
+func GlobalApplication(ctx context.Context, settings application.Settings, policies ...foundryhttp.Middleware) (*application.App, error) {
+	return application.New(settings).Use(policies...).Build(ctx)
+}
 ```
 
 Use `ApplyMiddleware(router, ...)` for global transport policy that must also
@@ -85,6 +114,10 @@ Use the [typed idempotency adapter](idempotent-operations.md#recipe-idempotent-e
 
 <!-- compiled-source: tests/fixtures/consumer/httpmiddleware/router.go#middleware-credential-group -->
 ```go
+func CredentialGroup(parent foundryhttp.Scope, limiter ratelimit.Limiter[netip.Addr]) foundryhttp.Scope {
+	return foundryhttp.DefineScope("/credentials", "credentials").Within(parent).
+		WithMiddleware(foundryhttp.RateLimitByIP(limiter))
+}
 ```
 
 Use [RateLimit or RateLimitByIP](rate-limiting.md) with a bound typed quota. The

@@ -47,6 +47,9 @@ func (s Services) ReplaceAvatar(ctx context.Context, profile Profile, upload att
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/attachment_recipes.go#add-collection-file -->
 ```go
+func (s Services) AddDocument(ctx context.Context, profile Profile, upload attachments.Upload) (attachments.Result[Profile, model.ID[Profile]], error) {
+	return Documents.Add(ctx, s.Attachments, ProfileIdentity.ReferenceOf(profile), upload)
+}
 ```
 
 Reuse the exact owner, disk and collection descriptors in assembly and calls.
@@ -58,6 +61,14 @@ Bound slots accept `FileSource` values, including request-owned uploads:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/http.go#publish-file-sources -->
 ```go
+if logo, ok := in.Body.Logo.Get(); ok {
+	if _, err := s.x.Logo.ReplaceFile(ctx, article, logo); err != nil {
+		return ArticleView{}, err
+	}
+}
+if _, err := attachments.AddFilesTo(ctx, s.x.Galleries, article, in.Body.Galleries); err != nil {
+	return ArticleView{}, err
+}
 ```
 
 `attachments.AddFilesTo` validates the bound handle and batch limit before opening
@@ -69,6 +80,13 @@ files must come from that same handle before the transaction begins:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#append-slot-file -->
 ```go
+func (s *Service) AddGalleryFile(ctx context.Context, article Article, file attachments.FileSource) (attachments.Result[Article, model.ID[Article]], error) {
+	return s.x.Galleries.AddFile(ctx, article, file)
+}
+
+func (s *Service) AddPreparedGallery(ctx context.Context, tx *database.Tx, article Article, prepared attachments.Prepared[Article, model.ID[Article]]) (attachments.Result[Article, model.ID[Article]], error) {
+	return s.x.Galleries.AddIn(ctx, tx, article, prepared)
+}
 ```
 
 `Single` replaces the current file. `Multiple` appends up to `MaxFiles` (100 by
@@ -142,6 +160,27 @@ keeps the caller's visibility query for the locked owner read and model write:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#publish-slot-file -->
 ```go
+func (s *Service) ReplaceLogo(ctx context.Context, visible orm.Query[Article], article Article, file attachments.FileSource, slug string) (attachments.Result[Article, model.ID[Article]], error) {
+	prepared, err := s.x.Logo.PrepareFile(ctx, article, file)
+	result := attachments.Result[Article, model.ID[Article]]{Operation: prepared.Operation()}
+	if err != nil {
+		return result, err
+	}
+	err = s.store.Write(ctx, func(ctx context.Context, tx *database.Tx) error {
+		locked, err := orm.RequireLocked(ctx, tx, orm.Lock(visible.Where(orm.KeyEq(Articles.Key(), article.ID))))
+		if err != nil {
+			return err
+		}
+		if _, err := orm.Update(ctx, tx, visible, Articles.Key(), locked.ID, orm.TextSet(Articles.Slug, slug)); err != nil {
+			return err
+		}
+		result, err = s.x.Logo.ReplaceIn(ctx, tx, locked, prepared)
+		return err
+	})
+	// Publication inside the callback remains subject to the outer commit.
+	// Preserve both the result and transaction error for reconciliation.
+	return result, err
+}
 ```
 
 Inspect the returned operation and transaction outcome together. A callback result
@@ -150,6 +189,9 @@ preparations for reconciliation; it never discards an uncertain publication.
 
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#reconcile-files -->
 ```go
+func ReconcileFiles(ctx context.Context, manager *attachments.Manager) ([]attachments.ReconcileResult, error) {
+	return manager.ReconcilePending(ctx, 100)
+}
 ```
 
 The storage disk must implement conditional creation and reading. Missing either
@@ -195,10 +237,27 @@ Explicit collections use the same preparation boundary. Close the reader after
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/attachment_recipes.go#prepare-collection-file -->
 ```go
+func (s Services) PrepareDocument(ctx context.Context, profile Profile, file attachments.FileSource) (attachments.Prepared[Profile, model.ID[Profile]], error) {
+	reader, err := file.Open(ctx)
+	if err != nil {
+		return attachments.Prepared[Profile, model.ID[Profile]]{}, err
+	}
+	defer reader.Close()
+	return Documents.Prepare(ctx, s.Attachments, ProfileIdentity.ReferenceOf(profile), attachments.Upload{
+		Source: reader, OriginalName: file.Name(), ContentType: storage.MediaType(file.ClientContentType()),
+	})
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/attachment_recipes.go#publish-collection-file -->
 ```go
+func (s Services) AddDocumentIn(ctx context.Context, tx *database.Tx, profile Profile, prepared attachments.Prepared[Profile, model.ID[Profile]]) (attachments.Result[Profile, model.ID[Profile]], error) {
+	return Documents.AddIn(ctx, tx, s.Attachments, ProfileIdentity.ReferenceOf(profile), prepared)
+}
+
+func (s Services) ReplaceDocumentsIn(ctx context.Context, tx *database.Tx, profile Profile, prepared attachments.Prepared[Profile, model.ID[Profile]]) (attachments.Result[Profile, model.ID[Profile]], error) {
+	return Documents.ReplaceIn(ctx, tx, s.Attachments, ProfileIdentity.ReferenceOf(profile), prepared)
+}
 ```
 
 To publish inside a caller's transaction, split the workflow in two.
@@ -389,6 +448,15 @@ settlement.
 
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#transaction-current-files -->
 ```go
+func CurrentFiles(ctx context.Context, tx *database.Tx, manager *attachments.Manager, bound ArticleSlotHandles, article Article) (value.Optional[attachments.Attachment[Article, model.ID[Article]]], []attachments.Attachment[Article, model.ID[Article]], error) {
+	owner := ArticleIdentity.ReferenceOf(article)
+	logo, err := attachments.OneCollection(bound.Logo).FirstIn(ctx, tx, manager, owner)
+	if err != nil {
+		return logo, nil, err
+	}
+	gallery, err := attachments.ManyCollection(bound.Galleries).ListIn(ctx, tx, manager, owner)
+	return logo, gallery, err
+}
 ```
 
 `List`, `First`, `Find` and `Collection.Load` recheck current owner visibility. `Collection.Load` takes
@@ -453,10 +521,28 @@ predicate is a captured membership list, not a live subquery.
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/attachment_recipes.go#retire-collection-files -->
 ```go
+func (s Services) DetachDocumentIn(ctx context.Context, tx *database.Tx, profile Profile, id attachments.ID[Profile]) (attachments.ChangeResult, error) {
+	return Documents.DetachIn(ctx, tx, s.Attachments, ProfileIdentity.ReferenceOf(profile), id)
+}
+
+func (s Services) ClearDocumentsIn(ctx context.Context, tx *database.Tx, profile Profile) (attachments.ChangeResult, error) {
+	return Documents.ClearIn(ctx, tx, s.Attachments, ProfileIdentity.ReferenceOf(profile))
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#clear-slot-files -->
 ```go
+func (s *Service) ClearFiles(ctx context.Context, tx *database.Tx, visible orm.Query[Article], id model.ID[Article]) error {
+	article, err := orm.RequireLocked(ctx, tx, orm.Lock(visible.Where(orm.KeyEq(Articles.Key(), id))))
+	if err != nil {
+		return err
+	}
+	if _, err := s.x.Logo.ClearIn(ctx, tx, article); err != nil {
+		return err
+	}
+	_, err = s.x.Galleries.ClearIn(ctx, tx, article)
+	return err
+}
 ```
 
 `Detach` and `Clear` retire ready ownership transactionally, then clean storage.

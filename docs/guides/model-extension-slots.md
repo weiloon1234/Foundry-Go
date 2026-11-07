@@ -82,10 +82,21 @@ The articles consumer groups its concrete handles in `ArticleSlotHandles`:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/tables.go#bind-slot-managers -->
 ```go
+func (d ArticleSlotHandles) From(runtime slots.Runtime) ArticleSlotHandles {
+	d.Title = d.Title.From(runtime.Translations)
+	d.Summary = d.Summary.From(runtime.Translations)
+	d.Logo = d.Logo.From(runtime.Attachments)
+	d.Galleries = d.Galleries.From(runtime.Attachments)
+	d.SEO = d.SEO.From(runtime.Metadata)
+	return d
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/articles/tables.go#slot-relations -->
 ```go
+func (d ArticleSlotHandles) All() []orm.Relation[Article] {
+	return []orm.Relation[Article]{d.Title.Relation(Articles.Title), d.Summary.Relation(Articles.Summary), d.Logo.Relation(Articles.Logo), d.Galleries.Relation(Articles.Galleries), d.SEO.Relation(Articles.SEO)}
+}
 ```
 
 | Field | Shared storage | Policy |
@@ -144,6 +155,17 @@ and attachments enabled.
 
 <!-- compiled-source: tests/fixtures/consumer/articles/slot_recipes.go#configure-slots -->
 ```go
+func ConfigureSlots(settings application.Settings) *application.Builder {
+	return application.New(settings, application.WithTables(Tables()...)).Models(ORMExtensionDeclaration())
+}
+
+func ServiceFrom(services application.Services) (*Service, error) {
+	runtime, err := services.ModelExtensions()
+	if err != nil {
+		return nil, err
+	}
+	return NewService(runtime.Store, runtime), nil
+}
 ```
 
 Bind managers once in a constructor using `services.ModelExtensions()` and your
@@ -184,10 +206,32 @@ including soft-deleted models read with `WithTrashed`, keep unloaded slots.
 
 <!-- compiled-source: tests/fixtures/consumer/articles/slot_recipes.go#loaded-slot-values -->
 ```go
+func EditorValues(article Article) (map[i18n.LocaleID]string, value.Optional[SEO], error) {
+	title, loaded := article.Title.Values()
+	if !loaded {
+		return nil, value.Optional[SEO]{}, errors.New("article title was not loaded")
+	}
+	seo, loaded := article.SEO.Get()
+	if !loaded {
+		return nil, value.Optional[SEO]{}, errors.New("article metadata was not loaded")
+	}
+	return title.Entries(), seo, nil
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/articles/slot_recipes.go#resolve-slot-text -->
 ```go
+func DisplayTitle(ctx context.Context, article Article) (value.Optional[string], error) {
+	resolved, err := article.Title.ResolveRequest(ctx)
+	if err != nil {
+		return value.Optional[string]{}, err
+	}
+	text, present := resolved.Get()
+	if !present {
+		return value.Optional[string]{}, nil
+	}
+	return value.Set(text.Text), nil
+}
 ```
 
 Reads never perform I/O. Loaded state distinguishes an unloaded slot from a loaded
@@ -219,6 +263,19 @@ For concrete metadata, including removal, the articles service uses:
 
 <!-- compiled-source: tests/fixtures/consumer/articles/http.go#write-slot-values -->
 ```go
+func (s *Service) writeText(ctx context.Context, tx *database.Tx, article Article, in ArticleInput) error {
+	if err := s.x.Title.SyncIn(ctx, tx, article, in.Title); err != nil {
+		return err
+	}
+	if err := s.x.Summary.SyncIn(ctx, tx, article, in.Summary); err != nil {
+		return err
+	}
+	if seo, ok := in.SEO.Get(); ok {
+		return s.x.SEO.SaveIn(ctx, tx, article, seo)
+	}
+	_, err := s.x.SEO.ForgetIn(ctx, tx, article)
+	return err
+}
 ```
 
 The `In` forms join the caller's transaction through savepoints. Other forms use
@@ -266,6 +323,18 @@ does. The eventual write remains authoritative.
 
 <!-- compiled-source: tests/fixtures/consumer/articles/http.go#slot-upload-rules -->
 ```go
+media := ArticleMediaValidationFields()
+logo := validation.Custom(validation.Spec{ID: "articles.logo", Message: "The logo is not an accepted image."}, func(ctx context.Context, file foundryhttp.UploadedFile) (bool, error) {
+	return s.x.Logo.Accepts(ctx, file)
+})
+gallery := validation.Custom(validation.Spec{ID: "articles.gallery", Message: "The gallery image is not accepted."}, func(ctx context.Context, file foundryhttp.UploadedFile) (bool, error) {
+	return s.x.Galleries.Accepts(ctx, file)
+})
+mediaRules := validation.All(
+	validation.Rules(media.Title, validation.Optional(s.x.Title.MergeRule())),
+	validation.Rules(media.Logo, validation.Optional(logo)),
+	validation.Rules(media.Galleries, validation.MaxItems[Gallery](s.x.Galleries.Describe().MaxFiles), validation.Each[Gallery](gallery)),
+)
 ```
 
 ## Inspection and maintenance

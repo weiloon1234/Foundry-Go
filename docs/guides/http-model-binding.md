@@ -208,6 +208,27 @@ the same actor or tenant constraint.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#scoped-resource-policy -->
 ```go
+func ScopedOrderRoute(db database.Executor, binding foundryhttp.GuardBinding[models.User], read func(context.Context, models.User, models.Order) error) (foundryhttp.RouteRegistration, error) {
+	endpoint, err := SecuredOrder(binding)
+	if err != nil {
+		return foundryhttp.RouteRegistration{}, err
+	}
+	guard := binding.Guard()
+	resolver := modelbinding.Define(func(ctx context.Context, path OrderPath) (value.Optional[models.Order], error) {
+		actor, err := guard.Require(ctx)
+		if err != nil {
+			return value.Optional[models.Order]{}, err
+		}
+		return orm.Keyed(models.Orders.Query().Where(orm.ColumnEq(models.Orders.BuyerID, actor.ID)), models.Orders.Key()).Find(ctx, db, path.Order)
+	})
+	bound := modelbinding.BindAuthenticated(foundryhttp.ForAuthenticatedBinding(endpoint), resolver)
+	authorized := modelbinding.AuthorizeAuthenticatedResource(bound, func(ctx context.Context, _ models.User, in OrderInput) error {
+		return ReadOrder.Authorize(ctx, guard, in.Model)
+	})
+	return authorized.Handle(func(ctx context.Context, actor models.User, in OrderInput) (foundryhttp.NoContent, error) {
+		return foundryhttp.NoContent{}, read(ctx, actor, in.Model)
+	}), nil
+}
 ```
 
 For nested resources, use the typed relation helpers in

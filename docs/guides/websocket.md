@@ -25,10 +25,21 @@ separate milestone 15 acceptance.
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#channel-events -->
 ```go
+var Orders = websocket.Public[OrdersOwner]("orders", websocket.DefineRooms(foundryhttp.ModelIDPath[models.Order]())).WithReplay(websocket.ReplayConfig{Messages: 8, Bytes: 32 << 10, TTL: time.Minute})
+var OrderUpdated = websocket.DefineOutgoing(Orders, "updated", httpdto.OrderResponseJSON())
+var Inspect = websocket.DefineIncoming(Orders, "inspect", httpdto.OrderResponseJSON())
+var Relay = websocket.DefineIncoming(Orders, "relay", httpdto.OrderResponseJSON()).AcknowledgeAccepted()
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#register-channel -->
 ```go
+func Registry(service OrderService) (*websocket.Registry, error) {
+	incoming := Inspect.Authorize(authorizeOrder).Handle(func(ctx context.Context, message websocket.MessageContext[model.ID[models.Order], websocket.Anonymous], input httpdto.OrderResponse) error {
+		room, _ := message.Target.Room.Get()
+		return service.Inspect(ctx, room, input)
+	})
+	return websocket.NewRegistry(websocket.Register(Orders, incoming, OrderUpdated.Registration(), Relay.Authorize(authorizeOrder).Relay(OrderUpdated)))
+}
 ```
 
 `websocket.Channel[Owner, Room, Subject]` retains a nominal channel owner, room-key
@@ -60,10 +71,19 @@ no typed payload schema. Contract metadata marks them dynamic.
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#publish-room -->
 ```go
+func PublishOrder(ctx context.Context, hub websocket.PublisherSource, room model.ID[models.Order], reply httpdto.OrderResponse) (websocket.MessageID, error) {
+	return websocket.Publish(ctx, hub, Orders, room, OrderUpdated, reply)
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#publish-after-commit -->
 ```go
+func (inbox Inbox) AfterCommit(tx *database.Tx, publisher websocket.PublisherSource, user model.ID[models.User], reply httpdto.OrderResponse) error {
+	return tx.AfterCommit(func(ctx context.Context) error {
+		_, err := websocket.Publish(ctx, publisher, inbox.channel, user, inbox.updated, reply)
+		return err
+	})
+}
 ```
 
 Construct the channel once, then share that value with registration and the
@@ -103,10 +123,26 @@ immediate capacity error.
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#owned-rooms -->
 ```go
+func UserInbox(guard auth.Guard[models.User]) websocket.Channel[InboxOwner, model.ID[models.User], models.User] {
+	return websocket.OwnedRooms[InboxOwner]("users.inbox", websocket.DefineRooms(foundryhttp.ModelIDPath[models.User]()), guard, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf((models.User{})))
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#owned-channel -->
 ```go
+type Inbox struct {
+	channel websocket.Channel[InboxOwner, model.ID[models.User], models.User]
+	updated websocket.Outgoing[InboxOwner, httpdto.OrderResponse]
+}
+
+func NewInbox(guard auth.Guard[models.User]) Inbox {
+	channel := UserInbox(guard)
+	return Inbox{channel: channel, updated: websocket.DefineOutgoing(channel, "updated", httpdto.OrderResponseJSON())}
+}
+
+func (inbox Inbox) Registration() websocket.Registration {
+	return websocket.Register(inbox.channel, inbox.updated.Registration())
+}
 ```
 
 For resource rooms, inject a policy that checks the actor against current resource
@@ -114,6 +150,18 @@ state. A matching room ID alone does not authorize access:
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#private-resource-channel -->
 ```go
+type PrivateOrdersOwner struct{}
+
+func PrivateOrders(guard auth.Guard[models.User], authorize func(context.Context, models.User, model.ID[models.Order]) error) websocket.Channel[PrivateOrdersOwner, model.ID[models.Order], models.User] {
+	return websocket.Private[PrivateOrdersOwner]("orders.private", websocket.DefineRooms(foundryhttp.ModelIDPath[models.Order]()), guard,
+		func(ctx context.Context, actor models.User, target websocket.Target[model.ID[models.Order]]) error {
+			room, present := target.Room.Get()
+			if !present {
+				return auth.Forbidden
+			}
+			return authorize(ctx, actor, room)
+		})
+}
 ```
 
 `websocket.New(registry, authentication, config)` borrows the existing HTTP authentication
@@ -154,6 +202,24 @@ rejected.
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#realtime-tickets -->
 ```go
+func SharedHubSettings(settings application.Settings, connection websocket.ConnectionName) application.Settings {
+	settings.HTTP.Enabled = true
+	settings.Realtime.Enabled = true
+	settings.Realtime.Shared = true
+	settings.Realtime.Publisher = false
+	settings.Realtime.Connection = connection
+	return settings
+}
+
+func ConfigureInbox(builder *application.Builder, inbox Inbox, authentication *foundryhttp.Authentication, tokens auth.TicketRedeemer) *application.Builder {
+	return builder.Realtime(func(application.Services) (application.RealtimeDeclarations, error) {
+		return application.RealtimeDeclarations{
+			Channels:       []websocket.Registration{inbox.Registration()},
+			Authentication: authentication,
+			Tickets:        []auth.TicketRedeemer{tokens},
+		}, nil
+	})
+}
 ```
 
 A browser that authenticates with bearer tokens cannot set `Authorization` on a

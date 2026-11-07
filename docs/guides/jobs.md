@@ -29,18 +29,32 @@ Declare one named DTO and reuse its definition for registration and dispatch:
 
 <!-- compiled-source: tests/fixtures/consumer/background/welcome.go#job-payload -->
 ```go
+type Welcome struct {
+	UserID model.ID[models.User] `json:"user_id"`
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/background/welcome.go#job-definition -->
 ```go
+var WelcomeJob = jobs.Define[Welcome]("members.welcome", 1, jobs.DefaultPolicy("communications"))
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/background/guide.go#configured-job -->
 ```go
+func ConfigureWelcome(builder *application.Builder, connection jobs.ConnectionName, sender WelcomeSender) *application.Builder {
+	return builder.Jobs(application.Job(WelcomeJob, func(application.Services) (jobs.Handler[Welcome], error) {
+		return func(ctx context.Context, payload Welcome) error {
+			return sender.SendWelcome(ctx, payload.UserID)
+		}, nil
+	}).On(connection))
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/background/welcome.go#dispatch-job -->
 ```go
+func DispatchWelcome(ctx context.Context, dispatcher *jobs.Dispatcher, id model.ID[models.User]) (jobs.Receipt[Welcome], error) {
+	return WelcomeJob.Dispatch(ctx, dispatcher, Welcome{UserID: id}, jobs.Options[Welcome]{})
+}
 ```
 
 Handle every returned error. Different payloads, options, IDs, middleware and
@@ -338,6 +352,19 @@ transitions have already been committed. See [retry semantics](jobs-operations.m
 
 <!-- compiled-source: tests/fixtures/consumer/background/guide.go#enqueue-job -->
 ```go
+type WelcomeProducer struct{ outbox *jobs.Outbox }
+
+func NewWelcomeProducer(services application.Services, connection jobs.ConnectionName) (*WelcomeProducer, error) {
+	producer, err := services.JobOutbox(connection)
+	if err != nil {
+		return nil, err
+	}
+	return &WelcomeProducer{outbox: producer}, nil
+}
+
+func (p *WelcomeProducer) Enqueue(ctx context.Context, tx *database.Tx, id model.ID[models.User]) (outbox.ID[Welcome], error) {
+	return WelcomeJob.Enqueue(ctx, tx, p.outbox, Welcome{UserID: id}, jobs.Options[Welcome]{})
+}
 ```
 
 Prepare a `jobs.Outbox` with a destination and dispatcher. Inside a business

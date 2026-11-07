@@ -19,10 +19,24 @@ The executable consumer is [realtime](../../tests/fixtures/consumer/realtime/ord
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#distributed-hub -->
 ```go
+func NewDistributedHub(service OrderService, config websocket.Config, backend websocket.ClusterBackend, cluster websocket.ClusterConfig) (*websocket.Hub, error) {
+	r, err := Registry(service)
+	if err != nil {
+		return nil, err
+	}
+	return websocket.NewDistributed(r, nil, config, backend, cluster)
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#standalone-publisher -->
 ```go
+func NewPublisher(config websocket.Config, backend websocket.ClusterBackend, cluster websocket.ClusterConfig) (*websocket.Publisher, error) {
+	r, err := Registry(nil)
+	if err != nil {
+		return nil, err
+	}
+	return websocket.NewPublisher(r, config, backend, cluster)
+}
 ```
 
 Prepare the existing Redis client, then call `redis.NewWebSocketBackend(client)`.
@@ -53,6 +67,31 @@ a canceled wait does not release a callback that continues to run.
 
 <!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#configured-realtime-publisher -->
 ```go
+func PublisherSettings(settings application.Settings, connection websocket.ConnectionName) application.Settings {
+	settings.HTTP.Enabled = false
+	settings.Realtime.Enabled = false
+	settings.Realtime.Shared = false
+	settings.Realtime.Publisher = true
+	settings.Realtime.Connection = connection
+	return settings
+}
+
+type InboxPublisher struct {
+	inbox     Inbox
+	publisher websocket.PublisherSource
+}
+
+func NewInboxPublisher(services application.Services, inbox Inbox) (*InboxPublisher, error) {
+	publisher, err := services.RealtimePublisher()
+	if err != nil {
+		return nil, err
+	}
+	return &InboxPublisher{inbox: inbox, publisher: publisher}, nil
+}
+
+func (p *InboxPublisher) Publish(ctx context.Context, user model.ID[models.User], reply httpdto.OrderResponse) (websocket.MessageID, error) {
+	return websocket.Publish(ctx, p.publisher, p.inbox.channel, user, p.inbox.updated, reply)
+}
 ```
 
 Register the same channel declarations with `Builder.Realtime` in both processes.

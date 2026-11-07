@@ -80,6 +80,12 @@ permission callbacks in the registry. Keep names stable across deployments.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#register-guards -->
 ```go
+func AccountGuards(provider UserProvider, token UserStrategy, session UserStrategy) (*auth.Registry, auth.Guard[models.User], auth.Guard[models.User], error) {
+	api := auth.DefineGuard("users.api", provider, token)
+	web := auth.DefineGuard("users.web", provider, session)
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), api.Registration(), web.Registration(), ReadOrder.Registration(), ViewAccount.Registration())
+	return registry, api, web, err
+}
 ```
 
 ## Strategies and credentials
@@ -175,10 +181,16 @@ stored values. Do not call `Close` from a callback belonging to that scope.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#resource-policy -->
 ```go
+var ReadOrder = auth.DefinePolicy("orders.read", func(_ context.Context, user models.User, order models.Order) (bool, error) {
+	return order.BuyerID == user.ID, nil
+})
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/accounts.go#check-resource-policy -->
 ```go
+func CheckOrder(ctx context.Context, guard auth.Guard[models.User], order models.Order) error {
+	return ReadOrder.Authorize(ctx, guard, order)
+}
 ```
 
 The policy model must match the guard, and its resource type must match the
@@ -232,6 +244,26 @@ present.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#bind-token-guard -->
 ```go
+func TokenBinding(tokens *UserTokens) (foundryhttp.GuardBinding[models.User], error) {
+	guard := tokens.Guard()
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration(), ViewAccount.Registration(), ReadOrder.Registration())
+	if err != nil {
+		return foundryhttp.GuardBinding[models.User]{}, err
+	}
+	transport, err := foundryhttp.NewAuthentication(registry, foundryhttp.BearerCredential(guard.Source()))
+	if err != nil {
+		return foundryhttp.GuardBinding[models.User]{}, err
+	}
+	return foundryhttp.BindGuard(transport, guard)
+}
+
+func SecuredOrder(binding foundryhttp.GuardBinding[models.User]) (OrderEndpoint, error) {
+	scopes, err := OrderReadScopes()
+	if err != nil {
+		return OrderEndpoint{}, err
+	}
+	return foundryhttp.Authenticated(showOrder, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(ViewAccount)), nil
+}
 ```
 
 `ProfileInput` is an alias for the matching `http.Input` type, as in the consumer
@@ -281,6 +313,9 @@ scope limits the credential, while a permission evaluates current domain state.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/permissions.go#declare-permission -->
 ```go
+var ViewAccount = auth.DefinePermission("accounts.view", func(_ context.Context, user models.User) (bool, error) {
+	return user.Status == models.StatusActive, nil
+})
 ```
 
 A callback can read typed role/permission relations when the domain requires
@@ -297,6 +332,9 @@ an error from the authority never becomes an allow decision.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/permissions.go#configure-permission -->
 ```go
+func PermissionProfile(endpoint ProfileEndpoint) ProfileEndpoint {
+	return http.ConfigureAuthenticated(endpoint, http.Permissions(ViewAccount))
+}
 ```
 
 The HTTP adapter accepts a nonempty list once, takes an owned copy, validates all
@@ -316,10 +354,18 @@ authority. Include the granted scopes when [issuing tokens](tokens.md#recipe-iss
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#declare-scopes -->
 ```go
+var OrderReadScope = auth.DefineAccessScope[models.User]("orders.read")
+
+func OrderReadScopes() (auth.AccessScopes[models.User], error) {
+	return auth.NewAccessScopes(OrderReadScope)
+}
 ```
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#configure-scopes -->
 ```go
+func ScopedProfile(endpoint ProfileEndpoint, required auth.AccessScopes[models.User]) ProfileEndpoint {
+	return http.ConfigureAuthenticated(endpoint, http.Scopes(required))
+}
 ```
 
 For a new endpoint, use [the bound guard](#recipe-bind-guard). For a resource,
@@ -335,6 +381,28 @@ before opening persistence transactions; see [password hashing](password-hashing
 
 <!-- compiled-source: tests/fixtures/consumer/passwords/login.go#password-login -->
 ```go
+func NewLogin(db AccountStore, provider AccountProvider, hasher *password.Hasher, requiresMFA func(context.Context, Account) (bool, error)) (*Login, error) {
+	return auth.NewPasswordLogin(provider, hasher, auth.PasswordModel[Account, string]{
+		Lock: func(ctx context.Context, tx *database.Tx, account Account) (value.Optional[Account], error) {
+			return orm.FirstLocked(ctx, tx, orm.Lock(AccountRecords.Query().Where(orm.KeyEq(AccountRecords.Key(), account.ID))))
+		},
+		Lookup: func(ctx context.Context, email string) (value.Optional[Account], error) {
+			return orm.First(ctx, db, AccountRecords.Query().Where(orm.TextEq(AccountRecords.Email, email)))
+		},
+		Hash: func(account Account) password.Hash { return account.Digest },
+		Rehash: func(ctx context.Context, account Account, old, next password.Hash) (value.Optional[Account], error) {
+			updated, err := orm.Update(ctx, db, AccountRecords.Query().Where(orm.ColumnEq(AccountRecords.Digest, old)), AccountRecords.Key(), account.ID, orm.ColumnSet(AccountRecords.Digest, next))
+			if errors.Is(err, database.NotFound) {
+				return value.Optional[Account]{}, nil
+			}
+			if err != nil {
+				return value.Optional[Account]{}, err
+			}
+			return value.Set(updated), nil
+		},
+		RequiresMFA: requiresMFA,
+	}, auth.DefaultConfig())
+}
 ```
 
 <a id="recipe-credential-protection"></a>
@@ -346,12 +414,34 @@ typed keys across actors; configured assembly owns store construction and cleanu
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#credential-stores -->
 ```go
+var CredentialLimitsKey = foundation.NewKey[*ratelimit.Store]("credentials.limits")
+var CredentialProtectionKey = foundation.NewKey[*lockout.Store]("credentials.protection")
+
+func CredentialStores(connection redis.ConnectionName) application.Option {
+	return application.WithRedisStores(
+		infrastructure.RedisRateLimitStore(CredentialLimitsKey, connection, ratelimit.DefaultConfig(keyspace.Namespace{})),
+		infrastructure.RedisLockoutStore(CredentialProtectionKey, connection, lockout.DefaultConfig(keyspace.Namespace{})),
+	)
+}
 ```
 
 Resolve the protection key during composition and bind the login declaration:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#password-lockout -->
 ```go
+var PasswordAttempts = lockout.DefineLogin("password.accounts", keyspace.StringKeys[string](), lockout.DefaultLimits())
+
+func ProtectPasswordLogin(resolver foundation.Resolver, login *passwords.Login) (*passwords.Login, error) {
+	store, err := foundation.Resolve(resolver, CredentialProtectionKey)
+	if err != nil {
+		return nil, err
+	}
+	throttle, err := PasswordAttempts.Bind(store)
+	if err != nil {
+		return nil, err
+	}
+	return login.WithLockout(throttle)
+}
 ```
 
 Use the same canonical sign-in key for lookup, provisioning and lockout. Resolve

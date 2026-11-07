@@ -25,6 +25,16 @@ collection. In an ordinary configured application, enable the built-in engine:
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/image_recipes.go#configured-image-engine -->
 ```go
+func ImageSettings() application.Settings {
+	settings := application.DefaultSettings()
+	settings.Image.Enabled = true
+	settings.Image.Config.MaxActive = 2
+	return settings
+}
+
+func ProfileImages(services application.Services) (*imaging.Engine, error) {
+	return services.Image()
+}
 ```
 
 `Services.Image()` returns that application's engine. The application closes it
@@ -43,6 +53,10 @@ the same immutable plans:
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/image_recipes.go#process-image -->
 ```go
+func ProcessCover(ctx context.Context, engine *imaging.Engine, source io.Reader) (imaging.Result, error) {
+	plan := imaging.NewPlan().Fill(1200, 630, true).Format(imaging.WebP)
+	return engine.Process(ctx, source, plan)
+}
 ```
 
 `Process` borrows the reader and never closes it. It rejects invalid byte counts
