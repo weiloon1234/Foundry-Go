@@ -98,7 +98,8 @@ func (s *operationScope) exec(ctx context.Context, executor sqlExecutor, classif
 	defer release()
 	operation, cancel := s.context(ctx)
 	defer cancel()
-	return execute(operation, executor, classify, instrument, statement, arguments)
+	result, err := execute(operation, executor, classify, instrument, statement, arguments)
+	return result, classify.withCallerDeadline(ctx, "execute", err)
 }
 
 func (s *operationScope) query(ctx context.Context, executor sqlExecutor, classify classifier, instrument statementProbe, observers lifecycle.Observers, statement string, arguments []any) (*Rows, error) {
@@ -109,7 +110,7 @@ func (s *operationScope) query(ctx context.Context, executor sqlExecutor, classi
 	operation, cancel := s.context(ctx)
 	rows, err := query(operation, executor, classify, instrument, observers, observerOwner{scope: s, ctx: ctx}, func() error { cancel(); return release() }, statement, arguments)
 	if err != nil {
-		return nil, err
+		return nil, classify.withCallerDeadline(ctx, "query", err)
 	}
 	if err := s.track(rows); err != nil {
 		return nil, err

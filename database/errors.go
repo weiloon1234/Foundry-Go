@@ -150,6 +150,42 @@ func (e *Error) FoundryDiagnostic(seal errordiag.Seal) []fault.Attribute {
 
 type classifier func(error) Detail
 
+// withCallerDeadline repairs cancellation reported by a derived context after
+// the caller's deadline. Keep the original graph and transaction outcome; a
+// server cancellation or uncertain commit must retain its own classification.
+func (classify classifier) withCallerDeadline(ctx context.Context, operation string, err error) error {
+	if err == nil || ctx.Err() != context.DeadlineExceeded {
+		return err
+	}
+	var result *Error
+	failed := callback.Isolated("classify database deadline", func() error {
+		canceled := false
+		complete := errorgraph.Walk(err, func(current error) bool {
+			canceled = canceled || errorgraph.Matches(current, context.Canceled) || errorgraph.Matches(current, Canceled)
+			return true
+		})
+		if !complete || !canceled {
+			return nil
+		}
+		classified := classify.inspect(operation, err)
+		switch classified.detail.Code {
+		case DeadlineExceeded, QueryCanceled, CommitUnknown, AfterCommitFailed:
+			return nil
+		}
+		classified.detail.Code = DeadlineExceeded
+		classified.cause = safeerror.Join("operation failed", context.DeadlineExceeded, err)
+		result = classified
+		return nil
+	})
+	if failed != nil {
+		return presentFailure(&Error{operation: operation, detail: Detail{Code: QueryFailed}, cause: safeerror.Join("operation failed", err, failed)})
+	}
+	if result == nil {
+		return err
+	}
+	return presentFailure(result)
+}
+
 func (classify classifier) wrap(operation string, err error) error {
 	if err == nil {
 		return nil

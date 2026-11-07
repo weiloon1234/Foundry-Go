@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed: database transactions and scoped operations report `DeadlineExceeded`
+  when an expired caller deadline caused a cancellation failure, retaining the
+  original cause. Explicit cancellation and server-side `QueryCanceled` keep
+  their existing classifications; context propagation is unchanged.
 - Fixed: packaged documentation acceptance resolves the candidate tool and records
   its checksums through local file proxies before offline checks. Release inventories
   now guard the shared guide-proof owners and retained consumer proof files.

@@ -152,7 +152,7 @@ func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify cla
 	raw, err := conn.BeginTx(transaction, options)
 	if err != nil {
 		unlink()
-		return classify.wrap("begin", err)
+		return classify.withCallerDeadline(ctx, "begin", classify.wrap("begin", err))
 	}
 	site := owner.instrumented(PrimaryPool).locate(ctx).site
 	tx := &Tx{statementSite: site, owner: owner, raw: raw, scope: &operationScope{ctx: lifetime, cancel: cancel}, classify: classify, state: TxActive, control: &transactionControl{cancel: cancel}, observers: observers, timeSource: source}
@@ -160,6 +160,7 @@ func runTransaction(ctx context.Context, conn *sql.Conn, owner *DB, classify cla
 	// is harmless after an already terminal commit/rollback.
 	defer raw.Rollback()
 	err = invokeScope("transaction callback", func() error { return fn(tx) })
+	err = classify.withCallerDeadline(ctx, "transaction", err)
 	// Join only when scope cleanup also failed so a lone callback error keeps
 	// its exact identity.
 	if scopeErr := safeerror.Join("operation failed", tx.finishScope(), tx.control.failure()); scopeErr != nil {
