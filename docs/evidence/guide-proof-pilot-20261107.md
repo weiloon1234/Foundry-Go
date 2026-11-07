@@ -23,6 +23,55 @@ Touched Go files were formatted. Earlier results do not verify this revision;
 the lead owns the commands below. This is implementation evidence, not milestone
 acceptance or a release claim.
 
+## Fix round 3 after 4720cb62
+
+The lead reports `make verify` passed toolchain, TypeScript tools, formatting, vet,
+root tests, fixture-check (including TypeScript proof), generate-check and docs-check.
+It stopped in release-tools-check at the packaged documentation consumer and Go-way
+source inventory. Those passes apply to the lead's revision before this fix.
+
+The source inventory still required the two removed fixture substring checkers.
+It now explicitly requires the shared docsource parser, coverage/input owners and
+repository/regression tests, plus checkdocs and its query-guide migration policy.
+Its independent Go-way inventory retains the compiled example sources and now also
+requires their behavior, slots, authentication and scaffold proof files. Nested
+fixtures remain excluded from the framework candidate. The previous round's claim
+that these old filename expectations were only synthetic packaging fixtures was
+incorrect; this is a live source inventory.
+
+The temporary packaged app had handwritten require/tool declarations but no go.sum.
+Invoking `go tool` did not populate the missing candidate checksum. Setup now runs
+`go get -tool <candidate-module>/cmd/foundry@<candidate-version>` using only the
+candidate file proxy and the existing dependency-cache file proxy. It asserts that
+the app's go.sum contains the candidate archive checksum from the package manifest
+and its go.mod checksum before invoking the tool. The existing private module cache,
+no-replacement assertion, offline `GOPROXY=off`/read-only commands, and app/cache
+immutability checks remain in place. No network fallback or skip was added.
+
+Files changed:
+
+- [tools/release/release_test.go](../../tools/release/release_test.go)
+- [tools/release/documentation_test.go](../../tools/release/documentation_test.go)
+- [CHANGELOG.md](../../CHANGELOG.md)
+- This evidence record, including the corrected inventory audit below.
+
+No tests, builds or verification commands ran in this round. Go files were
+formatted. The lead can resume the remaining gates without repeating the passed
+fixture/TypeScript proof:
+
+```sh
+make docs-check release-tools-check deploy-tools-check
+```
+
+For a focused failure rerun instead of the release package gate:
+
+```sh
+(cd tools/release && go test -count=1 -run '^(TestGoWaySourceInventory|TestDocumentationPackagedOfflineConsumer)$' .)
+```
+
+Use the same native toolchain/environment as the lead's preceding run. No design
+question is open; release acceptance remains pending the lead's results.
+
 ## Fix round 2 after 29340bbf
 
 The lead reports that the round 1 targeted tests (safeerror, docsource, docrefs,
@@ -85,8 +134,8 @@ reads in tests, and `strings.Contains` comparisons against guide/README text.
   checker delegates compiled-source equality to docsource. Its before/after markers,
   fences and census are unchanged in this round.
 - `tools/release/documentation_test.go` checks packaged guide bytes and anchors,
-  not source excerpts. `tools/release/release_test.go` mentions the old checker
-  filenames only as synthetic packaging-exclusion fixtures.
+  not source excerpts. `tools/release/release_test.go` guards the real framework
+  and consumer source inventories; round 3 updates its old checker expectations.
 - `tools/goway_catalogue_test.py` reads a blueprint README for catalogue metadata.
   Generator documentation/scaffold tests and agent completion tests compare generated
   Go or IDE documentation, not guide/README snippets. Devserver, i18n and deployment

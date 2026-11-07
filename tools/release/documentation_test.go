@@ -112,6 +112,17 @@ func TestDocumentationPackagedOfflineConsumer(t *testing.T) {
 	proxyURL := func(path string) string { return (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String() }
 	// Explicit setup reads only the new private candidate and cached dependency ZIPs.
 	setup := append(append([]string(nil), environment...), "GOMODCACHE="+cache, "GOPROXY="+proxyURL(filepath.Join(out, "proxy"))+","+proxyURL(filepath.Join(warmCache, "cache", "download")), "GOFLAGS=-mod=mod")
+	// Resolve the pinned tool as an application would, recording its module and
+	// dependency checksums before go tool loads it and before going read-only.
+	documentationCommand(t, app, setup, goBinary, "get", "-tool", framework.Path+"/cmd/foundry@"+version)
+	sums, err := os.ReadFile(filepath.Join(app, "go.sum"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains("\n"+string(sums), "\n"+framework.Path+" "+version+" "+framework.Sum+"\n") ||
+		!strings.Contains("\n"+string(sums), "\n"+framework.Path+" "+version+"/go.mod h1:") {
+		t.Fatal("consumer go.sum does not cover the packaged candidate module and go.mod")
+	}
 	documentationCommand(t, app, setup, goBinary, "tool", "foundry", "docs", "--help")
 	offline := append(append([]string(nil), environment...), "GOMODCACHE="+cache)
 	selected := strings.TrimSpace(documentationCommand(t, app, offline, goBinary, "list", "-m", "-f", "{{.Dir}}", framework.Path))

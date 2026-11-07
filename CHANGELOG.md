@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed: packaged documentation acceptance resolves the candidate tool and records
+  its checksums through local file proxies before offline checks. Release inventories
+  now guard the shared guide-proof owners and retained consumer proof files.
 - Fixed: query-guide excerpts now use explicit compiled-source regions under the
   shared documentation checker, retaining complete-guide coverage, migration links
   and generated-API rejection. Duplicate excerpts link to one owner. Rendering and
