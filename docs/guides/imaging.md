@@ -1,5 +1,14 @@
 # Imaging
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Configure and process images](#recipe-process-image)
+- [Validate image uploads](http-uploads.md#recipe-image-kinds)
+- [Declare attachment image policy](attachments.md#recipe-declare-collection)
+
+## Overview
+
 Milestone 18 passed native verification and consumer review. The
 [master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-18-verification-and-consumer-review)
 records the checks and operational limits.
@@ -8,20 +17,14 @@ also passed its final portable/native, consumer and framework verification gates
 The [runtime-loading follow-up](../evidence/imaging-runtime-loading-20261004.json)
 passed ordinary native builds, missing-library consumers and the full gate.
 
+<a id="recipe-process-image"></a>
+## Configure an engine and process an image
+
 An image plan owns transformation policy and can be reused by an attachment
 collection. In an ordinary configured application, enable the built-in engine:
 
+<!-- compiled-source: tests/fixtures/consumer/profiles/image_recipes.go#configured-image-engine -->
 ```go
-settings := application.DefaultSettings()
-settings.Image.Enabled = true
-// Optional per-application bounds and concurrency:
-settings.Image.Config.MaxActive = 2
-
-app, err := application.New(settings).HTTP(func(services application.Services) ([]http.RouteRegistration, error) {
-    engine, err := services.Image()
-    if err != nil { return nil, err }
-    return profileRoutes(engine) // Your constructor receives the concrete engine.
-}).Build(ctx)
 ```
 
 `Services.Image()` returns that application's engine. The application closes it
@@ -38,11 +41,8 @@ For standalone tools, construct an engine with
 remains available for advanced foundation provider composition. Both paths use
 the same immutable plans:
 
+<!-- compiled-source: tests/fixtures/consumer/profiles/image_recipes.go#process-image -->
 ```go
-plan := imaging.NewPlan().
-    Fill(1200, 630, true).
-    Format(imaging.WebP)
-result, err := engine.Process(ctx, uploadReader, plan)
 ```
 
 `Process` borrows the reader and never closes it. It rejects invalid byte counts

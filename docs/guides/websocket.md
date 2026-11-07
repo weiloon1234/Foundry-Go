@@ -1,5 +1,16 @@
 # WebSocket channels and protocol
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare channels](#recipe-declare-channel)
+- [Authorize owner rooms](#recipe-authorize-rooms)
+- [Register ticket redeemers](#recipe-realtime-tickets)
+- [Publish after commit](#recipe-publish-channel)
+- [Publish from a worker](websocket-distributed.md#recipe-realtime-publisher)
+
+## Overview
+
 Milestone 14 passed native acceptance, race checks, compiler/editor checks and
 bounded protocol fuzzing. The
 [roadmap](../../blueprint/00-master-architecture-and-parity.md) owns acceptance
@@ -9,7 +20,16 @@ fan-out, TTL presence, revocation refresh and bounded replay are described in th
 [distributed runtime guide](websocket-distributed.md); the roadmap records their
 separate milestone 15 acceptance.
 
+<a id="recipe-declare-channel"></a>
 ## Declare channels and events once
+
+<!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#channel-events -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#register-channel -->
+```go
+```
 
 `websocket.Channel[Owner, Room, Subject]` retains a nominal channel owner, room-key
 type and authenticated model. Give each channel its own owner type. `Public`
@@ -35,12 +55,23 @@ second declaration reusing the same Go owner and string name.
 hatches. They retain channel ownership and bounded strict JSON parsing, but have
 no typed payload schema. Contract metadata marks them dynamic.
 
+<a id="recipe-publish-channel"></a>
 ## Publishing and routing
 
+<!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#publish-room -->
 ```go
-messageID, err := websocket.Publish(ctx, hub, Orders, orderID, OrderUpdated, reply)
-messageID, err = websocket.Broadcast(ctx, hub, Orders, OrderUpdated, reply)
 ```
+
+<!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#publish-after-commit -->
+```go
+```
+
+Construct the channel once, then share that value with registration and the
+publisher. `AfterCommit` discards publication on rollback but is process-local.
+Its error cannot undo a committed write. Use the [outbox](outbox.md#recipe-enqueue-event)
+when losing a notification is unacceptable.
+
+Use `websocket.Broadcast` for whole-channel publication.
 
 Handle returned errors. Room publication reaches only that exact room's
 subscriptions. Whole-channel subscribers do not implicitly receive every room.
@@ -67,7 +98,23 @@ publication, presence inspection and disconnect operations share
 briefly for a slot and then receive `fault.Overloaded` (HTTP 503) instead of an
 immediate capacity error.
 
+<a id="recipe-authorize-rooms"></a>
 ## Authentication and room ownership
+
+<!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#owned-rooms -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#owned-channel -->
+```go
+```
+
+For resource rooms, inject a policy that checks the actor against current resource
+state. A matching room ID alone does not authorize access:
+
+<!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#private-resource-channel -->
+```go
+```
 
 `websocket.New(registry, authentication, config)` borrows the existing HTTP authentication
 adapter. It captures declared bearer/cookie inputs at the handshake. Each subscribe
@@ -91,8 +138,8 @@ metadata is copied from the handshake; request context values and inherited
 model/system authority are discarded. Unsubscribe can always release an existing
 subscription.
 
-For user-scoped channels, use `OwnedRooms` with the guard and generated zero
-model's `FoundryReference()`. It compares the room to the guard's verified stored
+For user-scoped channels, use `OwnedRooms` with the guard and the typed reference from
+`orm.IdentityOf(table.Table, table.Key())`. It compares the room to the guard's verified stored
 key and forbids whole-channel subscription. Matching IDs from another guard do
 not establish authority. The consumer's `UserInbox` shows this composition.
 
@@ -102,7 +149,12 @@ HTTPS endpoints; reconnect after changing credentials. No long-lived secret is
 accepted in a URL, subprotocol or protocol payload. All upgrade query strings are
 rejected.
 
+<a id="recipe-realtime-tickets"></a>
 ### Handshake tickets for bearer-token browsers
+
+<!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#realtime-tickets -->
+```go
+```
 
 A browser that authenticates with bearer tokens cannot set `Authorization` on a
 WebSocket. `websocket.WithTickets(tokens...)` (in a configured application,

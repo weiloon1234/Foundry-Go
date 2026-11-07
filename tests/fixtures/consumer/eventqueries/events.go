@@ -16,11 +16,14 @@ import (
 )
 
 // RecordCreated is a declared domain DTO, independent of the persisted model.
+// doc-example:begin event-payload
 type RecordCreated struct {
 	ID model.ID[observerqueries.Plain] `json:"id"`
 }
 
 var Created = events.Define[RecordCreated]("records.created", 1)
+
+// doc-example:end event-payload
 var Bus = foundation.NewKey[*events.Bus]("consumer.events")
 var Pool = foundation.NewKey[*database.DB]("consumer.events.pool")
 var Journal = foundation.NewKey[*Log]("consumer.events.log")
@@ -70,6 +73,7 @@ func Domain() foundation.Module {
 				return nil, err
 			}
 			return func() orm.Hooks[observerqueries.Plain] {
+				// doc-example:begin observer-after-commit
 				return orm.Hooks[observerqueries.Plain]{Created: func(ctx context.Context, tx *database.Tx, changes orm.Changes[observerqueries.Plain]) error {
 					after, present := changes.After().Get()
 					if !present {
@@ -77,6 +81,7 @@ func Domain() foundation.Module {
 					}
 					return Created.AfterCommit(ctx, tx, bus, RecordCreated{ID: after.ID})
 				}}
+				// doc-example:end observer-after-commit
 			}, nil
 		})
 	}}

@@ -1,11 +1,29 @@
 # Distributed WebSocket runtime
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Assemble a distributed hub](#recipe-distributed-hub)
+- [Publish from another process](#recipe-realtime-publisher)
+- [Declare channels](websocket.md#recipe-declare-channel)
+
+## Overview
+
 Milestone 15 passed native verification, race checks and consumer review.
 The local [channel/protocol guide](websocket.md) owns declarations, payload DTOs,
 room authorization and protocol version 1. This guide adds distributed behavior.
 The executable consumer is [realtime](../../tests/fixtures/consumer/realtime/orders.go).
 
+<a id="recipe-distributed-hub"></a>
 ## Assembly and ownership
+
+<!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#distributed-hub -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/realtime/orders.go#standalone-publisher -->
+```go
+```
 
 Prepare the existing Redis client, then call `redis.NewWebSocketBackend(client)`.
 `websocket.NewDistributed(registry, authentication, config, backend, cluster)`
@@ -29,6 +47,20 @@ one declaration/registry function across transports. A publisher does not subscr
 to fan-out. Close each publisher and stop each hub before closing the borrowed Redis
 client. Construction starts no goroutines. `Stop` waits for actual owned work;
 a canceled wait does not release a callback that continues to run.
+
+<a id="recipe-realtime-publisher"></a>
+## Configure a publishing process
+
+<!-- compiled-source: tests/fixtures/consumer/realtime/configured.go#configured-realtime-publisher -->
+```go
+```
+
+Register the same channel declarations with `Builder.Realtime` in both processes.
+Select the same named Redis realtime connection and namespace. A `local` backend
+cannot provide publisher mode. `Services.RealtimePublisher()` borrows the
+application-owned publisher; the application drains it before closing Redis.
+Channel construction and ticket registration remain in the
+[channel guide](websocket.md#recipe-realtime-tickets).
 
 ## Limits, heartbeat and shutdown
 

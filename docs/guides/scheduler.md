@@ -1,5 +1,13 @@
 # Scheduler kernel
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare timing](#recipe-declare-schedule)
+- [Schedule a typed job](#recipe-schedule-job)
+
+## Overview
+
 In configured applications, use `s.Calendar().DailyAt(id, "09:00", handler)` or
 its `Cron`, `Hourly`, `Daily`, `Weekly` and `Monthly` helpers to inherit
 `Settings.TimeZone`. `s.Calendar().In(zone)` returns an explicit override.
@@ -11,16 +19,11 @@ Milestone 13 passed native acceptance and consumer review. The
 status. The [independent consumer](../../tests/fixtures/consumer/scheduling/)
 demonstrates declarations, injected domain services and kernel assembly.
 
+<a id="recipe-declare-schedule"></a>
 ## Declare timing once
 
+<!-- compiled-source: tests/fixtures/consumer/scheduling/reports.go#daily-schedule -->
 ```go
-const DailyReport schedule.ID = "reports.daily"
-zone, err := temporal.ParseTimeZone("Asia/Kuala_Lumpur")
-// Handle err before declaring the schedule.
-declaration, err := schedule.DailyAt(DailyReport, "03:00", zone,
-    func(ctx context.Context, invocation schedule.Invocation) error {
-        return reports.BuildDaily(ctx, invocation.IntendedAt)
-    })
 ```
 
 Handle returned errors. Declarations freeze timing/options; `With(options)` returns
@@ -167,7 +170,12 @@ or panic text, and is not a durable ledger. Long-running callbacks remain active
 if their initial history entry is evicted; completion is recorded within the same
 bound. Authorize operational endpoints exposing attribution/occurrence IDs.
 
+<a id="recipe-schedule-job"></a>
 ## Typed job targets
+
+<!-- compiled-source: tests/fixtures/consumer/background/guide.go#calendar-job -->
+```go
+```
 
 `schedule.JobTarget(dispatcher, definition, payloadBuilder)` returns an ordinary
 schedule handler while preserving the job payload type. Derive the same payload

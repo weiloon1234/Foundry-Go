@@ -6,6 +6,8 @@
 - Declare: [Typed result rows](#recipe-declare-rows)
 - Select: [Typed values and pages](#recipe-select-rows)
 
+- [Grouped and scalar summaries](#recipe-grouped-rows)
+
 ## Overview
 
 Further reading: [Execution](#execution-and-failures).
@@ -86,6 +88,7 @@ func SummaryPage(ctx context.Context, db database.Executor, page orm.PageRequest
 }
 ```
 
+<a id="recipe-grouped-rows"></a>
 ## Grouped and scalar summaries
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go):
@@ -106,6 +109,24 @@ or ordered ordinary column to be grouped; it does not infer primary-key function
 dependencies. Counts return `int64`; integer/decimal sums and averages return
 `value.Nullable[decimal.Decimal]`. An ungrouped aggregate over empty input yields
 one record with zero counts and NULL summaries; grouped empty input yields no rows.
+
+### Scalar terminals and subqueries
+
+`rows.ReadScalar` keeps the selected value type through the terminal. This
+excerpt reads the email field from a joined projection in deterministic order:
+
+<!-- compiled-source: tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go#read-scalar -->
+```go
+```
+
+Scalar subqueries become selected values through `expr.AsSelected`. Nullable
+subqueries keep their explicit nullable type:
+
+<!-- compiled-source: tests/fixtures/consumer/advancedqueries/subqueries_postgres_test.go#scalar-projection -->
+```go
+```
+
+For outer-row correlation, see [correlated subqueries](model-correlations.md).
 
 ## Filter and order groups
 

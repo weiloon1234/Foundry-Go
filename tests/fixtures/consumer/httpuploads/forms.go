@@ -11,6 +11,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin multipart-input
 type Gallery []foundryhttp.UploadedFile
 
 type Settings struct {
@@ -27,6 +28,8 @@ type ProfileInput struct {
 	Settings   value.Optional[Settings] `form:",json"`
 }
 
+// doc-example:end multipart-input
+
 //foundry:dto
 type UploadReply struct {
 	Name         string `json:"name"`
@@ -40,6 +43,7 @@ type Service interface {
 	Save(context.Context, ProfileInput) (UploadReply, error)
 }
 
+// doc-example:begin multipart-endpoint
 func Router(directory string, service Service) (*foundryhttp.Router, error) {
 	form := foundryhttp.MultipartDirectory(ProfileInputDescriptor(), directory)
 	fields := ProfileInputValidationFields()
@@ -59,6 +63,8 @@ func Router(directory string, service Service) (*foundryhttp.Router, error) {
 		return service.Save(ctx, input.Body)
 	}))
 }
+
+// doc-example:end multipart-endpoint
 
 // ReadContents tests the native streaming boundary. A storage adapter can use
 // the same reader; this fixture consumes bytes without claiming persistence.

@@ -113,6 +113,7 @@ func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
 		validation.Rules(input.Summary, s.x.Summary.Rule()),
 	)
 	// doc-example:end article-input-rules
+	// doc-example:begin slot-upload-rules
 	media := ArticleMediaValidationFields()
 	logo := validation.Custom(validation.Spec{ID: "articles.logo", Message: "The logo is not an accepted image."}, func(ctx context.Context, file foundryhttp.UploadedFile) (bool, error) {
 		return s.x.Logo.Accepts(ctx, file)
@@ -125,6 +126,7 @@ func (s *Service) Routes() ([]foundryhttp.RouteRegistration, error) {
 		validation.Rules(media.Logo, validation.Optional(logo)),
 		validation.Rules(media.Galleries, validation.MaxItems[Gallery](s.x.Galleries.Describe().MaxFiles), validation.Each[Gallery](gallery)),
 	)
+	// doc-example:end slot-upload-rules
 	create := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.create", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/articles")), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(ArticleInputJSON()), foundryhttp.JSONResponse(201, ArticleViewJSON())), textRules)
 	update := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.update", Method: foundryhttp.PUT, Access: foundryhttp.Public}, ArticlePathDescriptor()), foundryhttp.EmptyQuery(), foundryhttp.JSONBody(ArticleInputJSON()), foundryhttp.JSONResponse(200, ArticleViewJSON())), textRules)
 	upload := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "articles.media", Method: foundryhttp.POST, Access: foundryhttp.Public}, ArticleMediaPathDescriptor()), foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(ArticleMediaDescriptor()), foundryhttp.JSONResponse(200, ArticleViewJSON())), mediaRules)
@@ -187,6 +189,7 @@ func (s *Service) Update(ctx context.Context, in foundryhttp.Input[ArticlePath, 
 	return s.present(ctx, article)
 }
 
+// doc-example:begin write-slot-values
 func (s *Service) writeText(ctx context.Context, tx *database.Tx, article Article, in ArticleInput) error {
 	if err := s.x.Title.SyncIn(ctx, tx, article, in.Title); err != nil {
 		return err
@@ -201,6 +204,8 @@ func (s *Service) writeText(ctx context.Context, tx *database.Tx, article Articl
 	return err
 }
 
+// doc-example:end write-slot-values
+
 // Upload publishes files after the article exists. Attachments publish
 // outside the text transaction; a failure leaves earlier files published.
 func (s *Service) Upload(ctx context.Context, in foundryhttp.Input[ArticleMediaPath, foundryhttp.NoQuery, ArticleMedia]) (ArticleView, error) {
@@ -213,6 +218,7 @@ func (s *Service) Upload(ctx context.Context, in foundryhttp.Input[ArticleMediaP
 			return ArticleView{}, err
 		}
 	}
+	// doc-example:begin publish-file-sources
 	if logo, ok := in.Body.Logo.Get(); ok {
 		if _, err := s.x.Logo.ReplaceFile(ctx, article, logo); err != nil {
 			return ArticleView{}, err
@@ -221,6 +227,7 @@ func (s *Service) Upload(ctx context.Context, in foundryhttp.Input[ArticleMediaP
 	if _, err := attachments.AddFilesTo(ctx, s.x.Galleries, article, in.Body.Galleries); err != nil {
 		return ArticleView{}, err
 	}
+	// doc-example:end publish-file-sources
 	return s.Show(ctx, foundryhttp.Input[ArticlePath, foundryhttp.NoQuery, foundryhttp.NoBody]{Path: ArticlePath{Article: in.Path.Article}})
 }
 

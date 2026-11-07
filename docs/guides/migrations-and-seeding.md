@@ -1,23 +1,25 @@
 # Migrations and seeding
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare immutable migrations](#recipe-declare-migration)
+- [Register and run migration commands](#recipe-migration-targets)
+- [Inspect and explicitly run migrations](#recipe-run-migrations)
+- [Seed reference data](#recipe-seed-data)
+- [Create concurrent indexes and reconcile](#recipe-online-migration)
+
+## Overview
+
 Foundry provides immutable migration definitions, history inspection, an explicit PostgreSQL runner, transactional seeders, consumer command adapters, and development scaffolding. Verification combines driver protocol fixtures, independent consumer modules, and real PostgreSQL acceptance through the [PostgreSQL adapter](postgresql.md).
 
+<a id="recipe-declare-migration"></a>
 ## Historical definitions
 
 Handwritten Go models describe current application types. A `migrate.Definition` records a historical schema change: a typed origin and ID, the release that introduced it, ordered SQL statements, and typed prerequisites. The [consumer migration package](../../tests/fixtures/consumer/migrations/migrations.go) and its [test](../../tests/fixtures/consumer/migrations_test.go) demonstrate public usage.
 
+<!-- compiled-source: tests/fixtures/consumer/migrations/migrations.go#migration-definitions -->
 ```go
-const (
-    Origin migrate.Origin = "app"
-    CreateRecords migrate.ID = "20260911000000_create_records"
-    Introduced migrate.Version = "v0.1.0"
-)
-
-registry, err := migrate.New(migrate.Definition{
-    Key: migrate.Key{Origin: Origin, ID: CreateRecords},
-    Version: Introduced,
-    SQL: []string{"CREATE TABLE records (id bigint PRIMARY KEY)"},
-})
 ```
 
 Use imports from `github.com/weiloon1234/Foundry-Go/database/migrate`. Semantic names use lowercase letters, digits, underscores, hyphens, and dots; they start with a letter or digit and contain at most 128 bytes. Define constants once and reuse them. Origins separate framework, plugin, and application history. The introducing version is immutable metadata, not the currently installed release version.
@@ -26,16 +28,19 @@ Use imports from `github.com/weiloon1234/Foundry-Go/database/migrate`. Semantic 
 
 By default, each statement must be valid inside a PostgreSQL transaction. Use separate SQL entries for separate statements. Do not include `BEGIN`, `COMMIT`, `ROLLBACK`, or manual savepoint commands, and use explicit `Mode: migrate.NonTransactional` for operations requiring execution outside a transaction. Foundry owns the transaction and its history insertion. SQL content is an explicit reviewed boundary; Go types cannot prove SQL semantics.
 
+<a id="recipe-run-migrations"></a>
 ## History and explicit execution
 
 `registry.Inspect(history)` returns copied status entries and all detected problems. It validates record shape, checksum encoding, positive batch numbers, and timestamps. Changed or missing definitions and unapplied dependencies block `Report.Check` and `registry.Pending`. A caller-owned report is informative; it is never authorization to skip the runner's locked history check.
 
+<!-- compiled-source: tests/fixtures/consumer/articles/migration_recipes.go#inspect-migrations -->
 ```go
-runner, err := migrate.NewPostgres(db, registry, migrate.DefaultPostgresConfig())
-// Handle err before using runner.
-report, err := runner.Status(ctx)
-// Review report and handle err. Explicitly execute when intended:
-result, err := runner.Up(ctx)
+```
+
+After reviewing status and choosing to apply, call:
+
+<!-- compiled-source: tests/fixtures/consumer/articles/migration_recipes.go#apply-migrations -->
+```go
 ```
 
 Constructing the runner performs no I/O. `Status` only reads committed history; an absent history table yields pending definitions without creating a table or taking a migration lock. `Up` acquires a session advisory lock, ensures its history namespace, rereads and validates history, then executes each pending definition according to its declared mode. The default commits SQL and history in one transaction. It never synchronizes schema during ordinary application boot.
@@ -65,12 +70,19 @@ migrate.Definition{
 
 Rollback is never implicit and is destructive by nature. `migrate rollback --step N` (default 1) prints the plan and exits with an error; only `--confirm` executes it. Rolled-back migrations become pending again, and a later `migrate up` reapplies them.
 
+<a id="recipe-seed-data"></a>
 ## Transactional seeders
 
 Handwritten ORM declarations use the same `seed.Definition.Run(ctx, tx)` callback.
-Call the table's `Insert` with that supplied transaction and typed assignments;
+Call `orm.Insert` with that supplied transaction and typed assignments;
 the normal defaults and write lifecycle apply. The [ORM seeder example](../../tests/fixtures/goway/integrations/seeding/seeder.go)
 uses this path without a generated draft or changes to the seeder registry.
+For repeatable reference data, supply a stable key and preserve existing values
+with an explicit conflict policy:
+
+<!-- compiled-source: tests/fixtures/consumer/articles/seeding.go#seed-reference-data -->
+```go
+```
 
 `seed.New` validates named `seed.Definition` values and their dependencies. Each definition has a typed `seed.ID` and `Run func(context.Context, *database.Tx) error`. Use the supplied transaction for all work. The registry snapshots dependency lists and orders them deterministically before execution.
 
@@ -100,18 +112,13 @@ These commands run in the consumer's compiled binary, which owns its declaration
 
 Status prints the report and returns a conflict error when history has drift. Migration and seeder execution print confirmed progress even if later work fails; the returned error preserves the database outcome. An output-writer failure can follow committed work and reports the confirmed count. Neither command retries an operation because output failed. Status, execution and rollback JSON contains typed metadata and progress, never migration SQL, credential values, or unwrapped database causes. `migrate show` is the explicit exception for reviewed SQL: it prints one definition's identity, version, mode, checksum, prerequisites, `SQL` and `Down` from the registry, per matching schema target, without database I/O. Use it to read a framework feature's migrations, such as `--migration foundry.outbox/000001_create_messages`; framework definitions are applied from the framework, not copied into the application, so the checksum always matches the code that reads the tables. `invocation.NeedsDatabase()` is false for `migrate show`, `seed list` and `prune list`, so `RunDatabaseCommand` does not connect for them. Commands propagate the caller's context.
 
+<a id="recipe-migration-targets"></a>
 ## Application migration targets
 
 `app.Migrations()` returns the enabled framework feature targets followed by the application's own, declared with `Builder.Migrations`:
 
+<!-- compiled-source: tests/fixtures/consumer/database_command_test.go#application-migrations -->
 ```go
-app, err := application.New(settings).
-    Migrations(infrastructure.MigrationTarget{Definitions: migrations.Definitions()}).
-    Build(ctx)
-// Handle err; Build validates every target without I/O. Shut the app down after use.
-invocation, err := dbcommand.Parse(args, stderr)
-// Handle err and flag.ErrHelp, then run without starting the application:
-err = app.RunDatabaseCommand(ctx, invocation, application.DatabaseCommandResources{Seeders: seeders}, stdout)
 ```
 
 Each `infrastructure.MigrationTarget` names a connection (blank selects the default) and a schema (blank selects the connection's primary schema, or `public` for an unscoped connection). `DatabaseSettings.MigrationGroups` is the one resolution used by `Build`, `RunDatabaseCommand` and the PostgreSQL testkit. Targets addressing the same primary host, port, database and schema share one history, so they merge: a repeated identical definition collapses, a conflicting one fails, and each group must be a valid `migrate` registry. An undetected alias, such as a second hostname for one server, still shares the history table; the runner's drift check then refuses to apply rather than guessing.
@@ -140,15 +147,11 @@ Once created, a scaffold belongs to the consumer. Edit it normally; it has no ge
 
 Protocol tests exercise apply-once history, drift, bounded history reads/growth, concurrent runners, lock timeout, partial commits, lost commit responses, connection disposal, seeder dependencies, and after-commit outcomes. Command tests cover service-free help/listing, drift exit errors, typed selection, progress on failure, and writer failure after commit. Scaffold tests compile a separate consumer, verify that unfinished work fails, and cover deterministic output, ownership, name/file collisions, exclusive creation, and recovery. Consumer metadata tests inspect declarations without SQL. Real PostgreSQL tests additionally run competing migration runners, verify read-only status, reject checksum drift, recover after a failed pending migration, and execute an explicitly repeatable seeder twice. The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) records verification evidence. Lost commit responses are tested through protocol fault injection, not a live network interruption.
 
+<a id="recipe-online-migration"></a>
 ## Concurrent indexes and nontransactional statements
 
+<!-- compiled-source: tests/fixtures/consumer/security/contracts.go#online-migrations -->
 ```go
-migrate.Definition{
-    Key: migrate.Key{Origin: "app", ID: "202609240001_index_email"},
-    Version: "v0.1.0",
-    Mode: migrate.NonTransactional,
-    SQL: []string{"CREATE INDEX CONCURRENTLY users_email_idx ON users (email)"},
-}
 ```
 
 Execution mode participates in the immutable checksum. The zero/default mode
@@ -173,10 +176,8 @@ consumer command `migrate status --format json` exposes the full progress record
 
 After inspecting the real catalog/data, pass that exact progress snapshot to:
 
+<!-- compiled-source: tests/fixtures/consumer/security/contracts.go#reconcile-migration -->
 ```go
-ready, err := runner.Reconcile(ctx, inspectedProgress, migrate.StatementApplied)
-// Or StatementNotApplied only after confirming that no durable effect remains.
-// Handle err, then explicitly call runner.Up(ctx) to resume.
 ```
 
 Reconciliation takes the same advisory lock, checks definition identity and

@@ -1,22 +1,23 @@
 # Typed multipart uploads
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare upload inputs](#recipe-multipart-input)
+- [Compose an upload endpoint](#recipe-multipart-endpoint)
+- [Match extension and content](#recipe-file-kinds)
+- [Validate image kinds and dimensions](#recipe-image-kinds)
+- [Keep separate image messages](#recipe-image-messages)
+
+<a id="recipe-multipart-input"></a>
+## Declare multipart input
+
 The runtime and generator
 use handwritten Go request structs as their source of truth. Run the ordinary
 Foundry generator to produce the descriptor and typed validation fields.
 
+<!-- compiled-source: tests/fixtures/consumer/httpuploads/forms.go#multipart-input -->
 ```go
-//foundry:multipart
-type ProfileInput struct {
-    Title      value.Optional[string]
-    Attachment foundryhttp.UploadedFile `form:"document"`
-    Photos     []foundryhttp.UploadedFile
-    Settings   value.Optional[Settings] `form:",json"`
-}
-
-type Settings struct {
-    Caption string `json:"caption"`
-    Note value.Optional[value.Nullable[string]] `json:"note,omitzero"`
-}
 ```
 
 The generated `ProfileInputDescriptor()` returns
@@ -50,6 +51,7 @@ application/json content type. Their contracts reuse the same native shape,
 custom codec, enum and key discovery as [JSON DTOs](http-dtos.md). Persistence
 models and uploaded files do not implicitly become JSON objects.
 
+<a id="recipe-multipart-endpoint"></a>
 ## Endpoint and validation
 
 Compose `MultipartBody(ProfileInputDescriptor())` into an ordinary typed endpoint.
@@ -57,23 +59,8 @@ The handler receives `request.Body` as ProfileInput and returns its separately
 declared response DTO. The [independent consumer](../../tests/fixtures/consumer/httpuploads/forms.go)
 illustrates descriptor assembly, validation and an injected domain service.
 
+<!-- compiled-source: tests/fixtures/consumer/httpuploads/forms.go#multipart-endpoint -->
 ```go
-fields := ProfileInputValidationFields()
-form := foundryhttp.MultipartDirectory(ProfileInputDescriptor(), uploadDirectory)
-
-endpoint := foundryhttp.ValidateBody(foundryhttp.DefineEndpoint(
-    route,
-    foundryhttp.EmptyQuery(),
-    foundryhttp.MultipartBody(form),
-    foundryhttp.JSONResponse(201, UploadReplyJSON()),
-), 
-    validation.Rules(fields.Attachment,
-        validation.FileMinSize[foundryhttp.UploadedFile](1),
-        validation.FileMaxSize[foundryhttp.UploadedFile](1 << 20),
-        validation.FileContentTypes[foundryhttp.UploadedFile]("image/*"),
-        validation.FileExtensions[foundryhttp.UploadedFile]("jpg", "png"),
-    ),
-)
 ```
 
 `FileValue` is the focused metadata interface used by these rules. FilePresent
@@ -143,6 +130,7 @@ ContentType() reports the bounded content sniff. Neither declares cross-system
 atomicity or durable delivery; attachment/database compensation belongs to the
 storage and model-extension integration.
 
+<a id="recipe-file-kinds"></a>
 ## Match extension and content together
 
 Use `FileKinds` when a file's extension must agree with its detected content.
@@ -150,16 +138,8 @@ Independent `FileExtensions` and `FileContentTypes` lists do not enforce that
 relationship. For example, both lists can accept a PNG renamed to `.pdf` when
 PNG and PDF are allowed.
 
+<!-- compiled-source: tests/fixtures/consumer/profiles/upload_rules.go#document-kinds -->
 ```go
-document := validation.Bail(
-	validation.FileMinSize[foundryhttp.UploadedFile](1),
-	validation.FileKinds[foundryhttp.UploadedFile](
-		validation.PDFKind(),
-		validation.TextKind(),
-		validation.ZIPContainerKind("docx"),
-	),
-	validation.FileMaxSize[foundryhttp.UploadedFile](5 << 20),
-)
 ```
 
 Declare custom pairs with `validation.FileKind{Extension: "txt", ContentType:
@@ -176,24 +156,14 @@ The common declarations are `PDFKind`, `TextKind`, `CSVKind`, and
 **They do not validate Office documents**, ZIP entries, or package structure.
 Applications choose their allowed kinds and any further document validation.
 
+<a id="recipe-image-kinds"></a>
 ## Check image kinds and dimensions with one inspection
 
 Import `validation/imaging` as `imagingvalidation`. Use `KindsWithEngine` to share
 one bounded read and container inspection between format and dimension checks:
 
+<!-- compiled-source: tests/fixtures/consumer/profiles/upload_rules.go#image-kinds -->
 ```go
-jpeg := imagingvalidation.JPEGKind()
-jpeg.Extension = "jpeg"
-imageRule := validation.Bail(
-	validation.FileMinSize[foundryhttp.UploadedFile](1),
-	validation.FileMaxSize[foundryhttp.UploadedFile](5 << 20),
-	imagingvalidation.KindsWithEngine[foundryhttp.UploadedFile](engine,
-		validation.DimensionConstraints{MaxWidth: 10000, MaxHeight: 10000},
-		imagingvalidation.JPEGKind(), jpeg, imagingvalidation.PNGKind(),
-		imagingvalidation.WebPKind(), imagingvalidation.GIFKind(),
-		imagingvalidation.AVIFKind(),
-	),
-)
 ```
 
 `Kinds(limits, constraints, kinds...)` uses the portable inspector.
@@ -221,19 +191,15 @@ Open, read, and internal inspection failures remain execution errors. Container
 inspection does not decode every pixel or prove that compressed pixels are valid.
 Keep full decoding in the image-processing path when the application needs it.
 
+<a id="recipe-image-messages"></a>
 ## Retain upload messages and client hints
 
 `FileKinds` and the combined image rule are server-only leaves. Wrap them in
 `WithMessage` and `WithTranslation` to retain the application's fallback and typed
-translation arguments. For example, inside an application's image policy:
+translation arguments.
 
-```go
-matches := imagingvalidation.KindsWithEngine[F](engine, constraints, kinds...)
-matches = validation.WithTranslation(
-	validation.WithMessage(matches, "Must be an image file."),
-	ImageArgsMessage(), ImageArgs{Extensions: extensionsText},
-)
-```
+See [typed validation messages](validation-messages.md) for the message
+declaration and translation arguments.
 
 The combined image leaf uses one message for kind and dimension rejection and
 reports `foundry.image_kinds`. `FileKinds` reports `foundry.file_kinds`. Existing
@@ -245,20 +211,8 @@ To preserve separate kind and dimension messages, use `WithImageInspection`.
 Its callback declares the rule tree once. Both leaves read the same observation
 through the existing validation slot mechanism:
 
+<!-- compiled-source: tests/fixtures/consumer/profiles/upload_rules.go#image-inspection-messages -->
 ```go
-checked := validation.WithImageInspection[F](
-	imagingvalidation.NewEngineMeasurer[F](engine),
-	func(image validation.ImageRules[F, imaging.Format]) validation.Rule[F] {
-		matches := validation.WithTranslation(
-			validation.WithMessage(image.Kinds(kinds...), "Must be an image file."),
-			ImageArgsMessage(), ImageArgs{Extensions: extensionsText},
-		)
-		return validation.Bail(matches, image.Dimensions(constraints))
-	},
-)
-return validation.Bail(
-	validation.FileMinSize[F](1), validation.FileMaxSize[F](maxBytes), checked,
-)
 ```
 
 This form retains the existing `foundry.image_dimensions` diagnostic and its
@@ -279,6 +233,6 @@ present zero-byte upload remains distinct from an omitted value. Use
 `validation.FileMinSize(1)` when empty uploads must reject.
 
 The `foundry-files` skill should point to this guide's
-[correlated file validation](#match-extension-and-content-together) and
-[single-inspection image validation](#check-image-kinds-and-dimensions-with-one-inspection)
+[correlated file validation](#recipe-file-kinds) and
+[single-inspection image validation](#recipe-image-kinds)
 sections.

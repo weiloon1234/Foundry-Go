@@ -9,14 +9,20 @@ import (
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
+// doc-example:begin job-payload
 type Welcome struct {
 	UserID model.ID[models.User] `json:"user_id"`
 }
+
+// doc-example:end job-payload
 type RemoveExport struct {
 	Name string `json:"name"`
 }
 
+// doc-example:begin job-definition
 var WelcomeJob = jobs.Define[Welcome]("members.welcome", 1, jobs.DefaultPolicy("communications"))
+
+// doc-example:end job-definition
 
 type WelcomeSender interface {
 	SendWelcome(context.Context, model.ID[models.User]) error
@@ -25,6 +31,10 @@ type WelcomeSender interface {
 func WelcomeDeclaration(sender WelcomeSender) (jobs.Declaration, error) {
 	return WelcomeJob.Declare(func(ctx context.Context, payload Welcome) error { return sender.SendWelcome(ctx, payload.UserID) })
 }
+
+// doc-example:begin dispatch-job
 func DispatchWelcome(ctx context.Context, dispatcher *jobs.Dispatcher, id model.ID[models.User]) (jobs.Receipt[Welcome], error) {
 	return WelcomeJob.Dispatch(ctx, dispatcher, Welcome{UserID: id}, jobs.Options[Welcome]{})
 }
+
+// doc-example:end dispatch-job

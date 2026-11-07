@@ -1,17 +1,27 @@
 # Typed events and transaction-aware dispatch
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare and dispatch an event](#recipe-declare-event)
+- [Queue a listener](#recipe-queued-listener)
+- [Publish after commit](#recipe-after-commit-event)
+- [Configure durable events](#recipe-durable-events)
+- [Enqueue in a business transaction](outbox.md#recipe-enqueue-event)
+
+## Overview
+
 Runtime and consumer races, PostgreSQL, compiler-rejection, actual-gopls and
 full repository checks have passed. The
 [master roadmap](../../blueprint/00-master-architecture-and-parity.md) owns milestone status.
 
+<a id="recipe-declare-event"></a>
+## Declare and dispatch an event
+
 Define a concrete payload DTO and one reusable descriptor:
 
+<!-- compiled-source: tests/fixtures/consumer/eventqueries/events.go#event-payload -->
 ```go
-type RecordCreated struct {
-    ID model.ID[observerqueries.Plain] `json:"id"`
-}
-
-var Created = events.Define[RecordCreated]("records.created", 1)
 ```
 
 The descriptor retains the payload type for listeners and publication. Its name
@@ -19,8 +29,8 @@ is a semantic identifier and its version is a nonzero schema version. Keep the
 same descriptor across domain code. Register new versions explicitly when a
 payload contract changes; a version is not a retry counter.
 
+<!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#dispatch-event -->
 ```go
-err := Created.Dispatch(ctx, bus, RecordCreated{ID: record.ID})
 ```
 
 Wrong payloads and model-owned IDs fail Go compilation. Converting a topic to
@@ -48,7 +58,12 @@ provider dependency order, determines listener order. `RegisterTopic` permits an
 intentional topic with no listeners; listener registration already declares its
 schema, so it does not require another registration. Undeclared topics fail.
 
+<a id="recipe-queued-listener"></a>
 ## Queued listeners, subscribers and test fakes
+
+<!-- compiled-source: tests/fixtures/consumer/eventqueries/configured_outbox_postgres_test.go#queued-listener -->
+```go
+```
 
 `events.Listen(name, handler).Queued()` (or `events.RegisterQueuedListener`,
 `application.ListenQueued`) marks one listener to run as a job instead of
@@ -115,13 +130,14 @@ they return. Callers can wait again. A handler cannot wait for its own bus to cl
 using its active handler context. Custom code that ignores cancellation can delay
 shutdown; Foundry must keep its dependencies alive until that code exits.
 
+<a id="recipe-after-commit-event"></a>
 ## Dispatching from a model lifecycle
 
-The consumer registers a generated `PlainObserver` whose `Created` callback reads
-the typed stored model from `PlainChanges`, then schedules its event:
+The consumer registers an `orm.NewObserver[observerqueries.Plain]` whose `Created` callback reads
+the typed stored model from `orm.Changes[observerqueries.Plain]`, then schedules its event:
 
+<!-- compiled-source: tests/fixtures/consumer/eventqueries/events.go#observer-after-commit -->
 ```go
-return Created.AfterCommit(ctx, tx, bus, RecordCreated{ID: after.ID})
 ```
 
 `AfterCommit` requires a concrete `*database.Tx`, not a pool. It snapshots the
@@ -143,22 +159,20 @@ checks the stored model after an injected listener failure.
 These callbacks are process-local and have no crash durability. Use the
 transactional event outbox below for required durable delivery.
 
+<a id="recipe-durable-events"></a>
 ## Durable events with application.New
 
 Declare a producer key and its destination alongside the typed topic:
 
+<!-- compiled-source: tests/fixtures/consumer/eventqueries/configured_outbox.go#event-outbox -->
 ```go
-var Publications = foundation.NewKey[*events.Outbox]("app.publications")
-
-builder := application.New(settings).Events(
-    application.Topic(Created),
-    application.EventOutbox(Publications, "app.publications"),
-)
-// In a domain service constructor (services is application.Services):
-producer, err := application.Resolve(services, Publications)
-// Inject producer; inside the business transaction:
-id, err := Created.Enqueue(ctx, tx, producer, RecordCreated{ID: record.ID})
 ```
+
+<!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#configured-event-producer -->
+```go
+```
+
+Use the injected service to [enqueue in the business transaction](outbox.md#recipe-enqueue-event).
 
 Configure the destination's job connection in TOML. Here `publications` is an
 existing named Redis job connection whose default queue the worker consumes:
@@ -172,7 +186,7 @@ database = 'default'
 schema = 'public'
 kernels = ['worker']
 [features.outbox.events]
-'app.publications' = 'publications'
+'consumer.publications' = 'publications'
 [worker]
 enabled = true
 connection = 'publications'

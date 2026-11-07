@@ -1,5 +1,20 @@
 # Model extension slots
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare slots on the model](#recipe-declare-slots)
+- [Declare policies outside the table](#recipe-slot-policies)
+- [Stored names and owner identity](#recipe-stored-slot-identity)
+- [Application assembly](#recipe-register-slots)
+- [Loading slots](#recipe-load-slots)
+- [Reading loaded slots](#recipe-read-slots)
+- [Writing slots](#recipe-write-slots)
+- [Request input and validation](#recipe-validate-slots)
+- [Deletion cleanup](#recipe-slot-cleanup)
+
+## Overview
+
 Declare translations, attachments and metadata as ordinary model fields, bind their
 offsets with `orm.SlotOf`, and declare their policies outside `orm.Define`. Slots
 store data in shared framework tables, not columns in the model's own table.
@@ -7,6 +22,7 @@ The [articles consumer](../../tests/fixtures/consumer/articles/tables.go) contai
 the full declaration and HTTP workflow. See [ORM migration](orm-migration.md) for
 the old-to-new mapping.
 
+<a id="recipe-declare-slots"></a>
 ## Declare slots on the model
 
 The [compiled extension example](../../tests/fixtures/goway/models/extensions/models.go)
@@ -37,6 +53,7 @@ Slot bindings retain the concrete owner, key and value. A translation handle can
 load an attachment slot, and a handle for one owner cannot be used on another.
 Slots are excluded from parent SQL, assignments and automatic column audit.
 
+<a id="recipe-slot-policies"></a>
 ## Declare policies outside the table
 
 The guide binds policies once below. Here, `ext` is the compiled extension model
@@ -61,6 +78,16 @@ and `All` methods compose those handles. The [compiled declaration](../../tests/
 shows both methods; `All` returns `[]orm.Relation[Article]`, built with each
 handle's `Relation(tableSlot)`.
 
+The articles consumer groups its concrete handles in `ArticleSlotHandles`:
+
+<!-- compiled-source: tests/fixtures/consumer/articles/tables.go#bind-slot-managers -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/articles/tables.go#slot-relations -->
+```go
+```
+
 | Field | Shared storage | Policy |
 | --- | --- | --- |
 | `translations.Text` | `foundry_model_translations` | `translations.Options`; default 64 KiB per value and no required locale |
@@ -78,6 +105,7 @@ DTO codec or explicit `contract` descriptor as its public value contract. Adding
 optional DTO fields needs no storage migration. Removing or renaming fields needs
 a metadata version change because strict decoding rejects stored unknown fields.
 
+<a id="recipe-stored-slot-identity"></a>
 ## Stored names and owner identity
 
 The owner name, `StorageModel`, and each slot's name are explicit persisted identity.
@@ -90,6 +118,7 @@ the owner's slots. See [owner renames and recovery](model-extensions.md#owner-id
 for `StorageModel`, `PreviousModels` and maintenance commands. Attachment object
 paths embed the scope, so declare the stable storage model before renaming a table.
 
+<a id="recipe-register-slots"></a>
 ## Application assembly
 
 Return `slots.DeclareORM(owner, parts)` from an application-owned declaration
@@ -113,11 +142,16 @@ registrations and missing feature dependencies before acquiring resources. Every
 slot needs extensions; translated slots need locales, and attachments need storage
 and attachments enabled.
 
+<!-- compiled-source: tests/fixtures/consumer/articles/slot_recipes.go#configure-slots -->
+```go
+```
+
 Bind managers once in a constructor using `services.ModelExtensions()` and your
 namespace's `From(runtime)`. A nil manager leaves its handle unbound. Direct
 foundation assembly registers the declaration's cleanup observers for every pool
 that can delete its owner and supplies `slots.Runtime.Store` for cross-pool cleanup.
 
+<a id="recipe-load-slots"></a>
 ## Loading slots
 
 <!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extension-slots-articles -->
@@ -145,7 +179,16 @@ that transaction through a savepoint. Other executors use the store's read-only
 snapshot. Parent reads and slot reads remain separate statements. Inactive owners,
 including soft-deleted models read with `WithTrashed`, keep unloaded slots.
 
+<a id="recipe-read-slots"></a>
 ## Reading loaded slots
+
+<!-- compiled-source: tests/fixtures/consumer/articles/slot_recipes.go#loaded-slot-values -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/articles/slot_recipes.go#resolve-slot-text -->
+```go
+```
 
 Reads never perform I/O. Loaded state distinguishes an unloaded slot from a loaded
 empty value. Translations expose `Exact`, `Resolve`, `ResolveRequest` and `Values`.
@@ -159,6 +202,7 @@ Attachment handles derive `PublicURL`, `PublicURLs`, `URL`, `TemporaryURL` and
 before creating links; script-capable files retain the download-only default.
 Slots refuse implicit JSON serialization. Map loaded values into explicit DTOs.
 
+<a id="recipe-write-slots"></a>
 ## Writing slots
 
 <!-- compiled-source: tests/fixtures/goway/guideadapters/slots_test.go#model-extension-slots-save-article -->
@@ -171,6 +215,12 @@ func saveArticle(ctx context.Context, tx *database.Tx, bound ext.Descriptors, ar
 }
 ```
 
+For concrete metadata, including removal, the articles service uses:
+
+<!-- compiled-source: tests/fixtures/consumer/articles/http.go#write-slot-values -->
+```go
+```
+
 The `In` forms join the caller's transaction through savepoints. Other forms use
 the manager's transaction. Parent rollback rolls back text and metadata writes.
 Unknown commit outcomes require reconciliation, never an automatic retry.
@@ -180,20 +230,12 @@ input and enforces required locales. `Forget` removes one locale, and `Clear`
 removes the field. `ValueHandle.Save` writes the declared metadata version and
 contract; `Forget` removes it. Both have transaction-bound `In` forms.
 
-Attachment handles provide `PrepareFile`/`Prepare`, `ReplaceFile`/`Replace`,
-`ReplaceIn`, `Discard`, `Detach` and `Clear`; `ManyHandle` also has `AddFile`, `Add`,
-`AddIn` and `Reorder`. Prepare uploads before the business transaction so its
-snapshot can see them. Publish inside with `ReplaceIn` or `AddIn`; the owner may
-have been created by that transaction. Failed publication leaves the stored upload
-available for explicit recovery or `Discard`. Superseded files are cleaned after
-commit. See [publication and recovery](attachments.md#publication-and-recovery)
-for the full outcome contract.
+For attachment handles, use the [publication and recovery recipe](attachments.md#recipe-publish-files)
+and [transactional retirement](attachments.md#recipe-retire-files). The
+[collection and file-source recipe](attachments.md#recipe-declare-collection)
+shows publication from request-owned uploads.
 
-`attachments.AddFilesTo(ctx, bound.Galleries, article, files)` reuses the bounded
-batch implementation. It validates the bound handle and batch limit before opening
-files, publishes in order, and returns every attempted result, including a failed
-attempt. Earlier files remain published. Inspect unknown outcomes before retrying.
-
+<a id="recipe-validate-slots"></a>
 ## Request input and validation
 
 A `map[i18n.LocaleID]string` retains locale-keyed JSON and TypeScript contracts.
@@ -222,6 +264,10 @@ image checks without database or storage work. It buffers under manager admissio
 Wrap it in a typed `validation.Custom` rule as the [HTTP example](../../tests/fixtures/consumer/articles/http.go)
 does. The eventual write remains authoritative.
 
+<!-- compiled-source: tests/fixtures/consumer/articles/http.go#slot-upload-rules -->
+```go
+```
+
 ## Inspection and maintenance
 
 `inspection.Sources{Models: app.Models()}` adds an `extensions` section to [declaration inspection](developer-tooling-and-testing.md#doctor-and-declaration-inspection):
@@ -249,6 +295,7 @@ load stored text, values or files, and modify nothing. Restore the name
 in the handle declaration, or remove the data deliberately through the explicit
 APIs.
 
+<a id="recipe-slot-cleanup"></a>
 ## Deletion cleanup
 
 Each declaration registers a deletion observer (`orm.NewDeletionObserver`)

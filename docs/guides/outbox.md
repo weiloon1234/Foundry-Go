@@ -1,5 +1,15 @@
 # Transactional outbox
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Enqueue an event](#recipe-enqueue-event)
+- [Reload a typed message](#recipe-reload-event)
+- [Configure an event destination](events.md#recipe-durable-events)
+- [Enqueue a typed job](jobs.md#recipe-enqueue-job)
+
+## Overview
+
 Runtime and consumer PostgreSQL races, vet, current generation, and clean-copy
 generation/compilation have passed. Seven compiler-rejection cases and four
 real-gopls probes also passed, followed by full repository acceptance. The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) owns status.
@@ -9,15 +19,15 @@ successful enqueue returns a typed message ID; the outer transaction still owns
 commit or rollback. Enqueue does not invoke listeners or establish delivery.
 Milestone 12 adds the [shared publisher and typed job/event delivery](jobs.md#transactional-publication); its acceptance status is recorded in the roadmap.
 
+<a id="recipe-enqueue-event"></a>
 ## Register once, publish a concrete DTO
 
-Keep the existing typed event descriptor and declare one durable destination:
+Configured applications declare the destination in
+[durable event assembly](events.md#recipe-durable-events). Advanced foundation
+providers register the same typed producer through `events.RegisterOutbox`:
 
+<!-- compiled-source: tests/fixtures/consumer/eventqueries/durable.go#register-event-outbox -->
 ```go
-var Durable = foundation.NewKey[*events.Outbox]("domain.outbox")
-
-// Inside a provider's OnRegister:
-err := events.RegisterOutbox(r, Durable, Bus, "domain.events")
 ```
 
 `Bus` is the service key registered through `events.Module`. Its topic/listener
@@ -28,12 +38,12 @@ service keys. Independent applications have independent constructed producers.
 Direct owners can use `PrepareOutbox(destination, bus)` and are responsible for
 their own destination configuration.
 
-The [consumer provider](../../tests/fixtures/consumer/eventqueries/durable.go)
-maps a generated `PlainChanges` snapshot to `RecordCreated`, inside its model
-observer's supplied transaction:
+The service constructed in [durable event assembly](events.md#recipe-durable-events)
+enqueues using the business transaction. A model observer can use the same call
+with its `orm.Changes[observerqueries.Plain]` stored snapshot:
 
+<!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#enqueue-event -->
 ```go
-id, err := Created.Enqueue(ctx, tx, producer, RecordCreated{ID: after.ID})
 ```
 
 The ID is `outbox.ID[RecordCreated]`. An unrelated payload ID or model ID cannot
@@ -59,16 +69,11 @@ explicit committed/unknown outcome semantics after a commit error; do not blindl
 repeat business work. Delivery will be at least once, so receiving work must be
 idempotent. Origin records attribution, never reusable authorization credentials.
 
+<a id="recipe-reload-event"></a>
 ## Typed reload and model fields
 
+<!-- compiled-source: tests/fixtures/consumer/eventqueries/guide.go#reload-event -->
 ```go
-result, err := Created.Find(ctx, db, producer, id)
-// Handle err, then inspect the optional result.
-stored, present := result.Get()
-if present {
-    payload, err := stored.Payload() // RecordCreated, error
-    // Map the concrete payload deliberately to the required domain/response DTO.
-}
 ```
 
 Reload selects the expected destination, topic and schema version along with the
@@ -79,9 +84,9 @@ captured metadata without exposing the heterogeneous storage envelope.
 
 A handwritten model may store an `outbox.ID[RecordCreated]` field. The
 [consumer model](../../tests/fixtures/consumer/eventqueries/event_link.go) verifies
-generated setters, predicates and hydration retain that payload owner. UUID
+typed assignments, predicates and hydration retain that payload owner. UUID
 behavior comes from the existing model ID implementation. `outbox.Message[E]`
-is its exported type marker so generated codecs can name the complete Go type;
+is its exported type marker so codecs can name the complete Go type;
 it does not contain a payload or represent a delivered message.
 
 ## Explicit framework migrations

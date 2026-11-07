@@ -99,6 +99,7 @@ enabled = true
 				return nil
 			}, nil
 		}),
+		// doc-example:begin queued-listener
 		application.ListenQueued(handled, "queued", func(application.Services) (events.Handler[eventqueries.RecordCreated], error) {
 			return func(_ context.Context, p eventqueries.RecordCreated) error {
 				mu.Lock()
@@ -110,6 +111,7 @@ enabled = true
 				return nil
 			}, nil
 		}),
+		// doc-example:end queued-listener
 		application.Listen(retried, "retry", func(application.Services) (events.Handler[eventqueries.RecordCreated], error) {
 			return func(ctx context.Context, _ eventqueries.RecordCreated) error {
 				mu.Lock()

@@ -85,9 +85,11 @@ func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) err
 	df := rowset.Scope(derived)
 	again := rowset.InnerJoin(u, derived, rowset.OnEqual(expr.At(rowset.Scope(u), orm.KeyExpr(models.Users.ID)), rowset.At(df, reports.UserOrderStatsRows.ID)))
 	joinedFields := rowset.RightScope(again, rowset.Scope(derived))
+	// doc-example:begin read-scalar
 	if emails, err := rowset.ReadScalar(rowset.OrderScalar(rowset.SelectScalar(again, expr.AsSelected(expr.Row(rowset.At(joinedFields, reports.UserOrderStatsRows.Email)))), expr.Asc(rowset.At(joinedFields, reports.UserOrderStatsRows.Email)))).All(t.Context(), tx); err != nil || len(emails) != 3 || emails[0] != users[0].Email {
 		t.Error("declared joined result could not be joined again", err)
 	}
+	// doc-example:end read-scalar
 	// Derived enum fields retain enum operators and decoders, including output aliases.
 	base := models.Users
 	summary := rowset.Select(rowset.From(models.Users.Query()), reports.UserSummaries.Row,
@@ -141,6 +143,7 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 	if n, err := orm.Count(t.Context(), tx, expr.Where(models.Users.Query(), rowset.ExistsQuery(rowset.From(models.Users.Query()), rowset.HavingScalar(count, expr.GtValue(expr.Count[models.Order](), 0))))); err != nil || n != 0 {
 		t.Error("EXISTS lost HAVING", err)
 	}
+	// doc-example:begin scalar-projection
 	last := rowset.LimitScalar(rowset.OrderScalar(buyers, expr.Desc(expr.Value(orm.NumberExpr(o.TotalCents)))), 1)
 	nicknames := rowset.SelectScalar(rowset.From(models.Users.Query().Where(orm.KeyEq(u.ID, users[1].ID))), expr.AsSelected(expr.Row(expr.Value(orm.NullableTextExpr(u.Nickname)))))
 	report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), reports.ScalarReports.Row,
@@ -153,6 +156,7 @@ func checkSubqueryValues(t *testing.T, tx *database.Tx, users []models.User) err
 	if err != nil {
 		return err
 	}
+	// doc-example:end scalar-projection
 	if len(scalars) != 3 {
 		t.Fatal("scalar expressions changed outer cardinality")
 	}

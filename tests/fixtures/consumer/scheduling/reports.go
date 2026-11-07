@@ -19,6 +19,7 @@ type Reports interface {
 	BuildDaily(context.Context, time.Time) error
 }
 
+// doc-example:begin daily-schedule
 func ReportSchedule(reports Reports) (schedule.Declaration, error) {
 	zone, err := temporal.ParseTimeZone("Asia/Kuala_Lumpur")
 	if err != nil {
@@ -28,6 +29,8 @@ func ReportSchedule(reports Reports) (schedule.Declaration, error) {
 		return reports.BuildDaily(ctx, invocation.IntendedAt)
 	})
 }
+
+// doc-example:end daily-schedule
 func NextReport(declaration schedule.Declaration, after time.Time) (time.Time, error) {
 	spec := declaration.Spec()
 	return spec.Next(after)

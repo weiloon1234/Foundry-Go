@@ -1,10 +1,19 @@
 # Transaction-required query composition
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Compose a locked CTE](#recipe-locked-cte)
+- [Lock a model](row-locking.md#recipe-lock-models)
+
+## Overview
+
 Use `database/orm/rows` transaction sources when a derived SELECT or CTE must
 retain row locks. Its executable result requires `*database.Tx`; ordinary source
 adapters cannot erase that requirement. Handwritten model and rows declarations
 are shared with ordinary reads.
 
+<a id="recipe-locked-cte"></a>
 ## Lock inside a CTE
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/transactionqueries/models.go):

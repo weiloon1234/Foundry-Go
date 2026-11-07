@@ -1,5 +1,18 @@
 # Model attachments
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare a collection](#recipe-declare-collection)
+- [Publish and reconcile files](#recipe-publish-files)
+- [Read current membership](#recipe-read-files)
+- [Retire membership](#recipe-retire-files)
+- [Declare model slots](model-extension-slots.md#recipe-declare-slots)
+- [Validate uploads](http-uploads.md#recipe-file-kinds)
+- [Serve private bytes](storage.md#recipe-storage-http)
+
+## Overview
+
 Milestone 18 passed native verification and consumer review. The
 [master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-18-verification-and-consumer-review)
 records the checks and operational limits.
@@ -17,6 +30,7 @@ AVIF uploads can use the same image policies and variants with
 `Accepted: []storage.MediaType{"image/avif"}`. The portable engine handles
 still AVIF and explicit animation plans without an OS codec installation.
 
+<a id="recipe-declare-collection"></a>
 ## Declare collection policy once
 
 <!-- compiled-source: tests/fixtures/consumer/profiles/profile.go#attachments-avatar -->
@@ -31,10 +45,31 @@ func (s Services) ReplaceAvatar(ctx context.Context, profile Profile, upload att
 }
 ```
 
+<!-- compiled-source: tests/fixtures/consumer/profiles/attachment_recipes.go#add-collection-file -->
+```go
+```
+
 Reuse the exact owner, disk and collection descriptors in assembly and calls.
 Redeclaring a matching name cannot replace a registered policy. Collection calls
 retain the owner's model and primary key type; file IDs also retain the model.
 See the [independent consumer](../../tests/fixtures/consumer/profiles/profile.go).
+
+Bound slots accept `FileSource` values, including request-owned uploads:
+
+<!-- compiled-source: tests/fixtures/consumer/articles/http.go#publish-file-sources -->
+```go
+```
+
+`attachments.AddFilesTo` validates the bound handle and batch limit before opening
+files, publishes in order, and returns every attempted result, including a failed
+attempt. Earlier files remain published. Inspect unknown outcomes before retrying.
+
+For one additional gallery file, use the multiple-slot handle directly. Prepared
+files must come from that same handle before the transaction begins:
+
+<!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#append-slot-file -->
+```go
+```
 
 `Single` replaces the current file. `Multiple` appends up to `MaxFiles` (100 by
 default, at most 256); `Replace` replaces the entire current collection. `Reorder`
@@ -99,7 +134,23 @@ transaction; an error, panic or Goexit vetoes publication. Use transactional
 outboxes for external effects from that transaction. The framework rechecks the
 owner and acknowledged object identity after these hooks.
 
+<a id="recipe-publish-files"></a>
 ## Publication and recovery
+
+For a bound single slot, prepare before opening the transaction. This service
+keeps the caller's visibility query for the locked owner read and model write:
+
+<!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#publish-slot-file -->
+```go
+```
+
+Inspect the returned operation and transaction outcome together. A callback result
+marked `Published` remains subject to the outer commit. This example leaves failed
+preparations for reconciliation; it never discards an uncertain publication.
+
+<!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#reconcile-files -->
+```go
+```
 
 The storage disk must implement conditional creation and reading. Missing either
 capability rejects manager construction. Conditional deletion selects pinned
@@ -138,6 +189,17 @@ row are never deleted: they may belong to another database or an aliased disk
 sharing this namespace. `InspectStorage` reports those unknown keys. All other
 rows, including `writing`, `uncertain`, `stored`, `ready`, and `retained`, prevent
 orphan deletion. Journal cleanup runs separately and remains retryable.
+
+Explicit collections use the same preparation boundary. Close the reader after
+`Prepare` returns, then pass the prepared value into the transaction:
+
+<!-- compiled-source: tests/fixtures/consumer/profiles/attachment_recipes.go#prepare-collection-file -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/profiles/attachment_recipes.go#publish-collection-file -->
+```go
+```
 
 To publish inside a caller's transaction, split the workflow in two.
 `Prepare` runs the intent, storage and pin steps in the manager's own
@@ -322,7 +384,12 @@ existing outbox publisher and worker explicitly. A periodic ordinary job can cal
 publisher. Aged unresolved writes with ambiguous storage still require operator
 settlement.
 
+<a id="recipe-read-files"></a>
 ## Reads and localization
+
+<!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#transaction-current-files -->
+```go
+```
 
 `List`, `First`, `Find` and `Collection.Load` recheck current owner visibility. `Collection.Load` takes
 up to 1000 owner references, uses one repeatable-read snapshot and two SELECTs
@@ -381,7 +448,16 @@ and exact locale. It is bounded to 4096 files/1000 distinct owners. The later
 ordinary model query keeps its own visibility and authorization filters; the
 predicate is a captured membership list, not a live subquery.
 
+<a id="recipe-retire-files"></a>
 ## Deletion and inspection
+
+<!-- compiled-source: tests/fixtures/consumer/profiles/attachment_recipes.go#retire-collection-files -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#clear-slot-files -->
+```go
+```
 
 `Detach` and `Clear` retire ready ownership transactionally, then clean storage.
 `DetachIn(ctx, tx, manager, owner, id)` and

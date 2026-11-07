@@ -1,5 +1,14 @@
 # Typed storage
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Store and open bytes](#recipe-store-files)
+- [Configure a local disk](#recipe-local-disk)
+- [Persist uploads and serve files](#recipe-storage-http)
+
+## Overview
+
 **Milestone 11 passed live Cloudflare R2 and AWS S3 verification.** Native
 framework/consumer checks and the scoped cloud suites cover the contracts below.
 The [owning blueprint](../../blueprint/11-storage-reliability.md) records the
@@ -12,30 +21,14 @@ explicitly declared capabilities. Applications declare their disks once,
 select their adapters and write domain policies; they do not implement transfers,
 multipart cleanup or HTTP file transport.
 
+<a id="recipe-store-files"></a>
 ## Ordinary application operations
 
-These fragments show the public API. The verified
-[independent consumer](../../tests/fixtures/consumer/storing/files.go) supplies
+The [independent consumer](../../tests/fixtures/consumer/storing/files.go) supplies
 complete imports and application assembly.
 
+<!-- compiled-source: tests/fixtures/consumer/storing/guide.go#store-and-open -->
 ```go
-var Documents = storage.DefineDisk("documents")
-
-key, err := storage.ParseKey("reports/annual.pdf")
-if err != nil { return err }
-
-stored, err := disk.Put(ctx, key, input, storage.PutOptions{
-    ContentType: "application/pdf",
-    Condition:   storage.IfAbsent(),
-})
-if err != nil { return err }
-
-body, info, err := disk.Open(ctx, key, storage.ReadOptions{})
-if err != nil { return err }
-defer body.Close()
-// Stream body to the application-owned destination.
-_ = stored
-_ = info
 ```
 
 An `ObjectKey` preserves exact UTF-8, case and literal percent characters. It is
@@ -190,7 +183,12 @@ For application assembly use adapter modules (`local.Module`/`s3.Module`) and
 perform no I/O; adapters start at boot and close after disks drain. Module cleanup
 waits for actual callback exit rather than closing infrastructure beneath it.
 
+<a id="recipe-local-disk"></a>
 ## Local managed store
+
+<!-- compiled-source: tests/fixtures/consumer/storing/files.go#local-disk -->
+```go
+```
 
 Provision an existing, empty, operator-controlled directory, then use
 `local.DefaultConfig(absoluteRoot)`. The adapter rejects unrelated populated roots.
@@ -330,7 +328,16 @@ Credentials from a Foundry provider that reports no expiry are cached for at
 most five minutes, so rotating providers are consulted again; that refresh
 deadline is not treated as a credential expiry and does not shorten signed URLs.
 
+<a id="recipe-storage-http"></a>
 ## HTTP and links
+
+<!-- compiled-source: tests/fixtures/consumer/storing/files.go#persist-upload -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/storing/files.go#download-document -->
+```go
+```
 
 `storage/http.StoreUpload` persists an already validated `http.UploadedFile`, uses
 a server-selected key, closes its temporary reader and returns a stable
@@ -356,14 +363,8 @@ non-nil read error. It preserves the original cause and the same mapping used by
 precondition failure 412, and an unsatisfiable range 416. Capacity, shutdown and
 cancellation failures use 503. Unclassified failures use 500.
 
+<!-- compiled-source: tests/fixtures/consumer/storing/guide.go#deferred-storage-errors -->
 ```go
-return http.StreamFrom(func(ctx context.Context) (http.StreamContent, error) {
-	body, info, err := disk.Open(ctx, key, storage.ReadOptions{})
-	if err != nil {
-		return http.StreamContent{}, storagehttp.ResponseError(err)
-	}
-	return http.StreamContent{Body: body, MediaType: http.MediaType(info.Object.ContentType), Length: value.Set(info.Length)}, nil
-}), nil
 ```
 
 Here `storagehttp` imports `github.com/weiloon1234/Foundry-Go/storage/http`.

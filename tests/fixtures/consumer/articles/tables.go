@@ -103,6 +103,7 @@ var ArticleSlots = func() ArticleSlotHandles {
 }()
 
 // From borrows each runtime manager once. Example: bound:=ArticleSlots.From(runtime).
+// doc-example:begin bind-slot-managers
 func (d ArticleSlotHandles) From(runtime slots.Runtime) ArticleSlotHandles {
 	d.Title = d.Title.From(runtime.Translations)
 	d.Summary = d.Summary.From(runtime.Translations)
@@ -112,10 +113,15 @@ func (d ArticleSlotHandles) From(runtime slots.Runtime) ArticleSlotHandles {
 	return d
 }
 
+// doc-example:end bind-slot-managers
+
 // All returns typed eager loaders. Example: Articles.Query().With(bound.All()...).
+// doc-example:begin slot-relations
 func (d ArticleSlotHandles) All() []orm.Relation[Article] {
 	return []orm.Relation[Article]{d.Title.Relation(Articles.Title), d.Summary.Relation(Articles.Summary), d.Logo.Relation(Articles.Logo), d.Galleries.Relation(Articles.Galleries), d.SEO.Relation(Articles.SEO)}
 }
+
+// doc-example:end slot-relations
 
 // ORMExtensionDeclaration registers only the ORM cleanup observer family.
 // Example: builder.Models(ORMExtensionDeclaration()).

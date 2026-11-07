@@ -1,5 +1,15 @@
 # Jobs and the worker kernel
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare and dispatch a job](#recipe-declare-job)
+- [Enqueue within a transaction](#recipe-enqueue-job)
+- [Schedule a typed job](scheduler.md#recipe-schedule-job)
+- [Publish durable events](events.md#recipe-durable-events)
+
+## Overview
+
 Workers support shared observations, maintenance admission and optional
 versioned trace snapshots. Default envelopes retain their legacy wire shape.
 Read the [workers-first rollout](job-trace-rollout.md) before enabling propagation.
@@ -12,25 +22,25 @@ failed-job inspection, explicit retry tokens, application CLI registration and
 deployment ownership. The [boilerplate handoff](jobs-boilerplate-handoff.md)
 collects the integration steps for a separate application repository.
 
+<a id="recipe-declare-job"></a>
 ## Concrete payloads and stable dispatch
 
 Declare one named DTO and reuse its definition for registration and dispatch:
 
+<!-- compiled-source: tests/fixtures/consumer/background/welcome.go#job-payload -->
 ```go
-type Welcome struct {
-    UserID model.ID[User] `json:"user_id"`
-}
-var WelcomeJob = jobs.Define[Welcome]("members.welcome", 1,
-    jobs.DefaultPolicy("communications"))
+```
 
-declaration, err := WelcomeJob.Declare(func(ctx context.Context, input Welcome) error {
-    return sender.SendWelcome(ctx, input.UserID)
-})
-registry, err := jobs.NewRegistry(declaration)
-dispatcher, err := jobs.NewDispatcher(backend, registry,
-    jobs.DefaultDispatchConfig(namespace))
-receipt, err := WelcomeJob.Dispatch(ctx, dispatcher,
-    Welcome{UserID: userID}, jobs.Options[Welcome]{})
+<!-- compiled-source: tests/fixtures/consumer/background/welcome.go#job-definition -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/background/guide.go#configured-job -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/background/welcome.go#dispatch-job -->
+```go
 ```
 
 Handle every returned error. Different payloads, options, IDs, middleware and
@@ -323,7 +333,12 @@ and bounded history stay intact; each manual retry starts a new attempt budget.
 Workflow members cannot be reopened individually because their dependent
 transitions have already been committed. See [retry semantics](jobs-operations.md).
 
+<a id="recipe-enqueue-job"></a>
 ## Transactional publication
+
+<!-- compiled-source: tests/fixtures/consumer/background/guide.go#enqueue-job -->
+```go
+```
 
 Prepare a `jobs.Outbox` with a destination and dispatcher. Inside a business
 transaction use `Definition.Enqueue`, or capture once and use `Pending.Enqueue`

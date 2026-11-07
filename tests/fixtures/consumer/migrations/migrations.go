@@ -13,6 +13,7 @@ const (
 
 // Definitions returns fresh historical definitions for Registry or an
 // application migration target.
+// doc-example:begin migration-definitions
 func Definitions() []migrate.Definition {
 	initial := migrate.Key{Origin: Origin, ID: CreateRecords}
 	return []migrate.Definition{
@@ -20,5 +21,7 @@ func Definitions() []migrate.Definition {
 		{Key: migrate.Key{Origin: Origin, ID: AddRecordLabel}, Version: Introduced, Requires: []migrate.Key{initial}, SQL: []string{"ALTER TABLE consumer_records ADD COLUMN label text NOT NULL DEFAULT ''"}},
 	}
 }
+
+// doc-example:end migration-definitions
 
 func Registry() (*migrate.Registry, error) { return migrate.New(Definitions()...) }
