@@ -11,6 +11,7 @@ import (
 )
 
 var codeSpan = regexp.MustCompile("`+([^`]+)`+")
+var proseSelector = regexp.MustCompile(`[A-Za-z_][A-Za-z_0-9]*(\(\))?(\.[A-Za-z_][A-Za-z_0-9]*(\(\))?)+`)
 
 var beforeMarker = regexp.MustCompile(`^<!-- orm-example: [a-z0-9-]+-before -->$`)
 
@@ -24,10 +25,17 @@ func CheckDocument(name string, data []byte) error {
 	if err != nil {
 		return err
 	}
+	rules, err := loadDocumentRules(denied)
+	if err != nil {
+		return err
+	}
 	patterns := []*regexp.Regexp{regexp.MustCompile(`database/query\b`), regexp.MustCompile(`\bquery\.[A-Z]\w*`), regexp.MustCompile(`\bLegacy[A-Z]\w*`)}
 	unqualified := map[string]bool{}
 	for owner, names := range denied {
 		for _, member := range names {
+			if rules.owns(owner, member) {
+				continue
+			}
 			unqualified[member] = true
 			unqualified[path.Base(owner)+"."+member] = true
 			name := member
@@ -40,8 +48,12 @@ func CheckDocument(name string, data []byte) error {
 	var code []string
 	codeLine := 0
 	checkCode := func() {
-		if !before && (language == "" || language == "go" || language == "golang") && retiredCodeName(strings.Join(code, "\n"), unqualified) {
-			failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: unqualified retired API in Go block; use its retained qualified owner", name, codeLine)))
+		if !before {
+			text := strings.Join(code, "\n")
+			failures = append(failures, rules.checkCode(name, text, codeLine)...)
+			if (language == "" || language == "go" || language == "golang") && retiredCodeName(text, unqualified) {
+				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: unqualified retired API in Go block; use its retained qualified owner", name, codeLine)))
+			}
 		}
 	}
 	for i, line := range strings.Split(string(data), "\n") {
@@ -51,31 +63,46 @@ func CheckDocument(name string, data []byte) error {
 			continue
 		}
 		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-			marker := trimmed[:3]
-			if fence == "" {
+			n := 0
+			for n < len(trimmed) && trimmed[n] == trimmed[0] {
+				n++
+			}
+			marker := trimmed[:n]
+			if fence == "" && (marker[0] != '`' || !strings.Contains(trimmed[n:], "`")) {
 				fence = marker
 				code = nil
 				codeLine = i + 2
 				language = strings.TrimSpace(strings.TrimLeft(trimmed, string(marker[0])))
 				before = pending
 				pending = false
-			} else if fence == marker {
+				continue
+			} else if fence != "" && fence[0] == marker[0] && len(marker) >= len(fence) && strings.TrimSpace(trimmed[n:]) == "" {
 				checkCode()
 				fence = ""
 				before = false
+				continue
 			}
-			continue
 		}
 		if before {
 			continue
 		}
 		pending = false
 		bad := false
-		if fence != "" && (language == "" || language == "go" || language == "golang") {
+		if fence != "" {
 			code = append(code, line)
 		} else if fence == "" {
 			for _, span := range codeSpan.FindAllStringSubmatch(line, -1) {
 				bad = bad || retiredCodeName(span[1], unqualified)
+				failures = append(failures, rules.checkCode(name, span[1], i+1)...)
+			}
+			prose := codeSpan.ReplaceAllString(line, "")
+			for _, selector := range proseSelector.FindAllString(prose, -1) {
+				failures = append(failures, rules.checkCode(name, selector, i+1)...)
+			}
+			for helper, replacement := range rules.Helpers {
+				if regexp.MustCompile(`\b` + regexp.QuoteMeta(helper) + `\b`).MatchString(prose) {
+					failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: retired documentation helper %s; use %s", name, i+1, helper, replacement)))
+				}
 			}
 		}
 		if bad {

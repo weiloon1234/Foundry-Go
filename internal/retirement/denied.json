@@ -26,7 +26,8 @@
     "MorphName",
     "Morphable",
     "Mutate",
-    "DoesntHave"
+    "DoesntHave",
+    "Query.ForUpdate"
   ],
   "database/prune": [
     "Model"
@@ -43,7 +44,27 @@
   "http/modelbinding": [
     "ByField",
     "Through",
-    "ThroughSelected"
+    "ThroughSelected",
+    "Endpoint.WithBodyValidation",
+    "Endpoint.WithScopes",
+    "Endpoint.WithPermissions",
+    "Endpoint.WithAuthorization",
+    "Endpoint.WithMiddleware",
+    "AuthenticatedEndpoint.WithBodyValidation",
+    "AuthenticatedEndpoint.WithScopes",
+    "AuthenticatedEndpoint.WithPermissions",
+    "AuthenticatedEndpoint.WithAuthorization",
+    "AuthenticatedEndpoint.WithMiddleware",
+    "IdempotentEndpoint.WithBodyValidation",
+    "IdempotentEndpoint.WithScopes",
+    "IdempotentEndpoint.WithPermissions",
+    "IdempotentEndpoint.WithAuthorization",
+    "IdempotentEndpoint.WithMiddleware",
+    "AuthenticatedIdempotentEndpoint.WithBodyValidation",
+    "AuthenticatedIdempotentEndpoint.WithScopes",
+    "AuthenticatedIdempotentEndpoint.WithPermissions",
+    "AuthenticatedIdempotentEndpoint.WithAuthorization",
+    "AuthenticatedIdempotentEndpoint.WithMiddleware"
   ],
   "metadata": [
     "DefineValue",
@@ -138,5 +159,51 @@
   ],
   "jobs": [
     "LegacyEnvelope"
+  ],
+  "http": [
+    "Endpoint.WithBodyValidation",
+    "Endpoint.WithScopes",
+    "Endpoint.WithPermissions",
+    "Endpoint.WithAuthorization",
+    "Endpoint.WithMiddleware",
+    "AuthenticatedEndpoint.WithBodyValidation",
+    "AuthenticatedEndpoint.WithScopes",
+    "AuthenticatedEndpoint.WithPermissions",
+    "AuthenticatedEndpoint.WithAuthorization",
+    "AuthenticatedEndpoint.WithMiddleware",
+    "OptionalAuthenticationEndpoint.WithBodyValidation",
+    "OptionalAuthenticationEndpoint.WithScopes",
+    "OptionalAuthenticationEndpoint.WithPermissions",
+    "OptionalAuthenticationEndpoint.WithAuthorization",
+    "OptionalAuthenticationEndpoint.WithMiddleware",
+    "SignedEndpoint.WithBodyValidation",
+    "SignedEndpoint.WithScopes",
+    "SignedEndpoint.WithPermissions",
+    "SignedEndpoint.WithAuthorization",
+    "SignedEndpoint.WithMiddleware",
+    "SignedAuthenticatedEndpoint.WithBodyValidation",
+    "SignedAuthenticatedEndpoint.WithScopes",
+    "SignedAuthenticatedEndpoint.WithPermissions",
+    "SignedAuthenticatedEndpoint.WithAuthorization",
+    "SignedAuthenticatedEndpoint.WithMiddleware",
+    "TicketEndpoint.WithBodyValidation",
+    "TicketEndpoint.WithScopes",
+    "TicketEndpoint.WithPermissions",
+    "TicketEndpoint.WithAuthorization",
+    "TicketEndpoint.WithMiddleware",
+    "IdempotentEndpoint.WithBodyValidation",
+    "IdempotentEndpoint.WithScopes",
+    "IdempotentEndpoint.WithPermissions",
+    "IdempotentEndpoint.WithAuthorization",
+    "IdempotentEndpoint.WithMiddleware",
+    "AuthenticatedIdempotentEndpoint.WithBodyValidation",
+    "AuthenticatedIdempotentEndpoint.WithScopes",
+    "AuthenticatedIdempotentEndpoint.WithPermissions",
+    "AuthenticatedIdempotentEndpoint.WithAuthorization",
+    "AuthenticatedIdempotentEndpoint.WithMiddleware"
+  ],
+  "validation": [
+    "Field.Rules",
+    "Rule.Check"
   ]
 }

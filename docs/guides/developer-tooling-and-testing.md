@@ -4,6 +4,74 @@ Milestone 23 passed native verification, independent consumer review, relevant
 races and bounded fuzzing. This guide explains the public APIs and their
 executable consumer recipes.
 
+<a id="pinned-documentation-checks"></a>
+## Check documentation against the framework pin
+
+From the application module, run:
+
+```sh
+GOWORK=off go tool foundry docs check --dir .
+```
+
+The command checks module-local `AGENTS.md` files and every Markdown file under
+`.claude/skills`, including reference files and app-owned regions. It skips the
+`.agents/skills` mirror, nested Go modules, dependency and build directories,
+caches, test data, and records whose names contain a `YYYYMMDD` or `YYYY-MM-DD`
+date. It does not need Git metadata. From a repository containing a nested app
+module, use `GOWORK=off go -C system tool foundry docs check --dir .`.
+`--dir` alone cannot select the module before `go tool` starts.
+
+Declare references on complete lines outside Markdown fences:
+
+```markdown
+Foundry guides: `http-endpoints`, `developer-tooling-and-testing#pinned-documentation-checks`
+Foundry guides: `orm-migration`
+```
+
+Each line contains one or more backtick tokens, separated by commas. A token is
+`guide-name` or `guide-name#anchor-id`. Names and IDs contain lowercase ASCII
+letters, digits, and internal hyphens, with a letter or digit at each end.
+Whitespace around tokens is allowed. Paths, extensions, URLs, empty fragments,
+trailing commas, and trailing prose are invalid. Repeat the declaration for long
+lists instead of wrapping a list onto an undeclared line. Backtick and tilde
+fences can contain examples without declaring references.
+
+An anchor is a literal `<a id="anchor-id"></a>` on its own line, immediately
+before its heading. IDs must be unique within the guide. Heading text does not
+create an explicit ID. Guide navigation links can use `#anchor-id`; the shared
+`internal/docrefs` index lets framework documentation checks validate those
+fragments without reproducing GitHub's heading-slug rules.
+
+Resolve the application's selected framework for offline reading:
+
+```sh
+GOWORK=off GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly \
+	go list -m -f '{{.Dir}}' github.com/weiloon1234/Foundry-Go
+```
+
+Read `<resolved directory>/docs/guides/<guide-name>.md` and locate the literal ID
+when the reference includes a fragment. Read prerequisites when the task needs
+them. For GitHub, append `<guide-name>.md#<anchor-id>` to the application's pinned
+`tree/<version>/docs/guides` base, using its commit for a pseudo-version. Do not
+store module-cache paths in instructions or use sibling checkouts as authority.
+
+The module and toolchain must already be cached. The checker disables downloads,
+workspace selection, and module-file updates, and reports missing setup rather
+than falling back to another release. It requires a verified match between the
+running tool and selected framework version. A global binary from a different
+release, an unversioned build, or a local replacement fails. There is no version
+bypass or mutation mode. The checker reads instructions and shipped guides; it
+does not compile the application, render guide sources, run Node, or start
+services. `go tool` may compile the checker into Go's normal build cache.
+
+The selected release also owns retirement rules. The checker distinguishes
+qualified owners and local constructor bindings, preserving valid scope
+middleware, row locking, and exported session helpers. If a receiver's owner is
+unclear, it reports ambiguous teaching. Qualify that owner or replace the example
+with a guide reference. App-owned regions cannot exempt stale teaching by labeling
+it an example. See the [compatibility policy](../compatibility.md#pinned-documentation)
+for upgrades and rollback.
+
 ## Commands and bootstrap
 
 Declare an argument struct, bind it with `cli.Flags`, and pass the decoder to

@@ -6,6 +6,29 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+## Pinned documentation
+
+The first release supporting `go tool foundry docs check`, explicit guide anchors,
+and the extended `Foundry guides:` grammar is the next normal release after
+v0.10.0. These changes are currently unreleased; v0.10.0 and earlier pins do not
+provide this command. Adopt the supporting release before delegating application
+documentation checks to it. An unsupported command must fail the verifier.
+
+Each API release ships its matching guides and retirement rules. Guide names and
+explicit anchor IDs are reference contracts. Preserve an ID when its heading
+moves or changes. Removing or renaming a referenced page or ID requires a
+documented transition, with a redirect link at the old owner when practical.
+Corrections ship in a new normal or patch release, never by changing a published
+tag or overwriting module-cache documentation.
+
+Review reference diagnostics alongside runtime and generator changes during an
+upgrade. A rollback must restore compatible application references and workflow
+instructions if the earlier pin lacks the checker or newer anchors. No separate
+skill version or copied framework teaching is installed. These checks change no
+runtime, wire, persisted-data, or generated-client format. The
+[developer-tooling guide](guides/developer-tooling-and-testing.md#pinned-documentation-checks)
+owns the grammar, offline lookup, scan scope, and command instructions.
+
 ## Persisted telemetry
 
 `telemetry`, `telemetry/sourcemap`, and `application.TelemetrySettings` are

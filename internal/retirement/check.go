@@ -1,4 +1,4 @@
-// Package retirement enforces the removed data-layer surface across source modules.
+// Package retirement enforces retired APIs in source and active documentation.
 package retirement
 
 import (
@@ -18,7 +18,7 @@ import (
 	"strings"
 )
 
-//go:embed denied.json
+//go:embed denied.json document_rules.json
 var ledger embed.FS
 
 const framework = "github.com/weiloon1234/Foundry-Go/"

@@ -6,6 +6,13 @@
   `make generate` renders marked consumer regions; `generate-check` and `docs-check`
   reject stale or duplicate examples and unbound recipe fences. The fixture gate checks
   Go compilation inputs, and `make verify` now requires the native TypeScript proof.
+- Added: `go tool foundry docs check --dir .` checks active application instructions
+  against the cached framework pin without changing files. References accept bare
+  guide names and explicit anchors; malformed declarations and missing or duplicate
+  anchors fail with file/line diagnostics. The command requires a verified tool
+  version match and applies owner-aware HTTP, validation, translation, and data-layer
+  retirement rules, including app-owned skill regions. See
+  [pinned documentation checks](docs/guides/developer-tooling-and-testing.md#pinned-documentation-checks).
 
 - Fixed: when the migration lock deadline expires during the advisory lock query, `migrate.Postgres`
   reports the lock timeout instead of the driver's closed-connection error.
