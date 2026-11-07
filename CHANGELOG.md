@@ -1,39 +1,28 @@
 # Changelog
 
-## Unreleased
+## v0.11.0 — 2026-11-08
 
-- Fixed: database transactions and scoped operations report `DeadlineExceeded`
-  when an expired caller deadline caused a cancellation failure, retaining the
-  original cause. Explicit cancellation and server-side `QueryCanceled` keep
-  their existing classifications; context propagation is unchanged.
-- Fixed: packaged documentation acceptance resolves the candidate tool and records
-  its checksums through local file proxies before offline checks. Release inventories
-  now guard the shared guide-proof owners and retained consumer proof files.
-- Fixed: query-guide excerpts now use explicit compiled-source regions under the
-  shared documentation checker, retaining complete-guide coverage, migration links
-  and generated-API rejection. Duplicate excerpts link to one owner. Rendering and
-  read-only comparison trim only named regions' boundary blank lines before common
-  indentation removal, keeping Go declaration comments separate without changing
-  interior blank lines.
-- Added: source-bound guide recipes for models, typed endpoints and generated clients.
-  `make generate` renders marked consumer regions; `generate-check` and `docs-check`
-  reject stale or duplicate examples and unbound recipe fences. The fixture gate checks
-  Go compilation inputs, and `make verify` now requires the native TypeScript proof.
-- Added: `go tool foundry docs check --dir .` checks active application instructions
-  against the cached framework pin without changing files. References accept bare
-  guide names and explicit anchors; malformed declarations and missing or duplicate
-  anchors fail with file/line diagnostics. The command requires a verified tool
-  module path and version match and applies owner-aware HTTP, validation, translation, and data-layer
-  retirement rules, including app-owned skill regions. See
+- Added: the guides are the single source of API teaching for applications and agents.
+  Executable Go and TypeScript examples are rendered from marked regions of compiled consumer
+  fixtures (`<!-- compiled-source: path#region -->` with `// doc-example:begin/end`), and
+  `make generate`, `generate-check` and `docs-check` reject stale, duplicate or unbound recipe
+  fences. Guides used by application skills carry a navigation-only `Agent entry` and stable
+  `recipe-<task>` anchors covering models, migrations, extensions, endpoints, authentication,
+  middleware, configuration, validation and localization, files and storage, jobs, events, mail,
+  webhooks, realtime, caching, leases, encryption, telemetry, operations, datatables and the
+  generated client. `make verify` now requires the native TypeScript proof. See
+  [developer tooling](docs/guides/developer-tooling-and-testing.md).
+- Added: `go tool foundry docs check --dir .` checks an application's active `AGENTS.md` and skill
+  files against its pinned framework module, offline and without writing. `Foundry guides:` lines
+  accept `guide` or `guide#anchor`; missing guides or anchors and owner-aware retired HTTP,
+  validation, translation and data-layer APIs fail with file/line diagnostics. The command
+  requires the running tool to match the selected module path and version. See
   [pinned documentation checks](docs/guides/developer-tooling-and-testing.md#pinned-documentation-checks).
-- Fixed: documentation checks now inspect symlinked application roots, reject active
-  skill-directory symlinks, displaced recipe anchors and source markers inside literals
-  or block comments, and validate framework guide declarations and reference-style links.
-  Retirement rules cover authenticated pagination while preserving transaction-row locks;
-  documentation failures retain captured diagnostics and typed source locations.
-
-- Fixed: when the migration lock deadline expires during the advisory lock query, `migrate.Postgres`
-  reports the lock timeout instead of the driver's closed-connection error.
+- Fixed: database transactions and scoped operations report `DeadlineExceeded` when an expired
+  caller deadline caused a cancellation failure, keeping the original cause. Explicit
+  cancellation and server-side `QueryCanceled` keep their classifications.
+- Fixed: when the migration lock deadline expires during the advisory lock query,
+  `migrate.Postgres` reports the lock timeout instead of the driver's closed-connection error.
 
 ## v0.10.0 — 2026-11-07
 

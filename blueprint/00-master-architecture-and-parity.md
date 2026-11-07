@@ -8,6 +8,24 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Guides as the single API-teaching source — v0.11.0, 2026-11-08
+
+Status: **implemented; `make verify` (including the native TypeScript proof) passed, independent reviews of the
+mechanism (8 findings) and of the extracted recipes (12 findings) were fixed, and CI gates this tag**. Starter,
+ooo and Boss Club each taught framework APIs in their own skills, and those copies drifted; the framework guides
+now own that teaching.
+- Executable guide examples are rendered from marked regions of compiled consumer fixtures; generation and
+  documentation checks reject stale, duplicate and unbound recipe fences, and one mechanism owns every example
+  (the labelled `orm-migration.md` before/after examples remain the migration exception).
+- Guides used by application skills have a navigation-only `Agent entry` and stable `recipe-<task>` anchors
+  covering the API recipes the applications' 19 mixed skills taught.
+- `go tool foundry docs check --dir .` validates an application's `Foundry guides:` references and owner-aware
+  retired-API rules against its pinned module, offline and read-only.
+- Database operations report a caller deadline as `DeadlineExceeded`; the migration lock deadline is reported
+  as a timeout.
+Open: Starter, ooo and Boss Club adopt this tag next, shorten their skills to app workflow plus guide anchors,
+and run `docs check` from `verify.py`.
+
 ## Persisted operations telemetry — v0.10.0, 2026-11-07
 
 Status: **implemented; `make verify` and race tests on `telemetry` and `application` passed, an independent
@@ -23,8 +41,8 @@ copy of a persisted telemetry engine; the framework now owns it.
 - Configured assembly through `application.FeatureSettings.Telemetry`; nothing changes when it is off.
 - `telemetry/sourcemap` reads and prunes private release source maps.
 - `testkit/telemetry.Flush` persists telemetry synchronously in tests without a kernel loop.
-Open: Starter, ooo and Boss Club passed their full gates on the pre-release pin and adopt this tag next;
-their old `developer_*` tables stay frozen, not copied or dropped.
+Adopted 2026-11-07: Starter, ooo and Boss Club moved to v0.10.0 and deleted their copied engines; their old
+`developer_*` tables stay frozen, not copied or dropped.
 
 ## SPA runtime data — v0.9.0, 2026-11-06
 
