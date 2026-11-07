@@ -4,7 +4,7 @@
 ## Agent entry
 
 - [Scaffold a model](#recipe-scaffold-model)
-- [Register tables](#recipe-register-tables)
+- [Register tables](model-declarations.md#recipe-register-tables)
 - [Add fields](#recipe-add-fields)
 - [Add relations](#recipe-add-relations)
 - [Scaffold extension slots](#recipe-scaffold-slots)
@@ -38,23 +38,7 @@ the scaffold prefixes `Query`: `_` becomes `Query`, and `_9` becomes `Query9`.
 The same rule applies to schema-qualified tables. SQL-name validation remains
 unchanged; bare digit-leading and non-ASCII SQL identifiers are rejected.
 
-<a id="recipe-register-tables"></a>
-## Register and check declarations
-
-<!-- compiled-source: tests/fixtures/consumer/configuredprofile/settings.go#register-tables -->
-```go
-func Build(ctx context.Context, settings application.Settings, options ...application.Option) (*application.App, error) {
-	if err := productionprofile.Check(); err != nil {
-		return nil, err
-	}
-	return application.New(settings, append([]application.Option{application.WithTables(productionprofile.Tables()...)}, options...)...).HTTP(Routes).Build(ctx)
-}
-```
-
-The scaffold supplies a per-model `WidgetTables()` helper. Compose it with other
-models in an application-owned `Tables()` function, shown below. Check that list
-with `orm.Check(Tables()...)` and pass it to `application.WithTables(Tables()...)`
-where the application uses table registration. No runtime package discovery runs.
+See [registering and checking tables](model-declarations.md#recipe-register-tables).
 
 <a id="recipe-add-fields"></a>
 ## Add fields with lifecycle roles

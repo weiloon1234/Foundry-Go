@@ -23,6 +23,8 @@ type AccountReceipt struct {
 type Accounts struct{ client *httpclient.Client }
 
 func NewAccounts(client *httpclient.Client) *Accounts { return &Accounts{client: client} }
+
+// doc-example:begin typed-http-request
 func (s *Accounts) Create(ctx context.Context, name string, token secret.String) (AccountReceipt, error) {
 	request, err := httpclient.JSON(ctx, s.client.Post("accounts").Bearer(token), CreateAccountJSON(), CreateAccount{Name: name})
 	if err != nil {
@@ -37,6 +39,8 @@ func (s *Accounts) Create(ctx context.Context, name string, token secret.String)
 	}
 	return httpclient.DecodeJSON(ctx, response, AccountReceiptJSON())
 }
+
+// doc-example:end typed-http-request
 
 func (s *Accounts) Download(ctx context.Context, consume func(context.Context, *httpclient.StreamResponse) error) error {
 	return s.client.Stream(ctx, s.client.Get("accounts/export"), consume)

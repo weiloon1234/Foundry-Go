@@ -31,6 +31,7 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	matched := link.Where(expr.Equal(expr.At(order, orm.ColumnExpr(models.Orders.BuyerID)), expr.At(buyer, orm.KeyExpr(models.Users.ID))))
 	counts := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.CountFieldAt(order, orm.KeyExpr(models.Orders.ID))))
 	totals := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.SumAt(order, orm.NumberExpr(models.Orders.TotalCents)))) // doc-example:end model-correlations
+	// doc-example:begin embed-correlated-scalar
 	r := reports.UserOrderStatsRows
 	report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), r.Row,
 		rowset.Map(r.ID, expr.Value(orm.KeyExpr(u.ID))), rowset.Map(r.Email, expr.Value(orm.TextExpr(u.Email))),
@@ -40,6 +41,7 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	if err != nil {
 		return err
 	}
+	// doc-example:end embed-correlated-scalar
 	if len(rows) != 3 {
 		t.Fatal("correlated aggregates changed outer row cardinality")
 	}

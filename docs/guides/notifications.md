@@ -1,5 +1,15 @@
 # Notifications
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare and capture notifications](#recipe-notification)
+- [Bind delivery channels](#recipe-notification-channels)
+- [Enqueue in a transaction](#recipe-enqueue-notification)
+- [Localize email output](email.md#recipe-localized-mail-job)
+
+## Overview
+
 Milestone 17 passed native verification and consumer review. The
 [master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-17-verification-and-consumer-review)
 records the full gate, focused regressions and operational limits.
@@ -11,6 +21,7 @@ and jobs/outbox infrastructure. No separate queue or transport runtime is create
 The independent [consumer fixture](../../tests/fixtures/consumer/notifying/orders.go)
 shows generated DTO contracts, model-owned keys and thin domain services.
 
+<a id="recipe-notification"></a>
 ## Declarations and sending
 
 Declare an input DTO with `//foundry:dto`, generate its JSON descriptor, then use
@@ -30,6 +41,10 @@ Run `notifications.Migrations()` explicitly using the ordinary migration runner
 in `Config.Schema`. Keep notifications and the jobs outbox in the same schema.
 The tables contain private payloads, email routes and rendered content; access to
 the database requires the same protection as application messages.
+
+<!-- compiled-source: tests/fixtures/consumer/notifying/orders.go#notification-recipient -->
+```go
+```
 
 Capture a typed reference and input once when caller retries must preserve an ID:
 
@@ -57,7 +72,15 @@ contract. Runtime pending handles are deliberately not JSON serializable.
 handle to retry the same notification. Inspect its report even when an error is
 returned. A delivered channel is never run again by notification retries.
 
+<a id="recipe-notification-channels"></a>
 ## Channel outputs and timing
+
+<!-- compiled-source: tests/fixtures/consumer/notifying/orders.go#notification-channels -->
+```go
+```
+
+For localized email output, use the [captured-locale message recipe](email.md#recipe-localized-mail-job)
+when constructing the email channel's message.
 
 `Database(id, OutputJSON(), renderer)` returns a typed database channel. Bind its
 `Channel()`, and use `Decode(ctx, definition, record)` to obtain the concrete inbox
@@ -164,6 +187,7 @@ record. Migration `000002_add_inbox_prune_index` adds the supporting
 be indexed `CONCURRENTLY` beforehand. Configured applications can run it on a
 schedule through the [housekeeping schedule](production-operations.md#housekeeping-schedule) (read records older than 90 days by default).
 
+<a id="recipe-enqueue-notification"></a>
 ## Queued and transactional delivery
 
 `DefineDeliveryJob(name, jobs.Policy)` declares the existing worker handler.
@@ -171,8 +195,8 @@ Register `job.Declare(manager)` in the normal jobs registry and prepare an ordin
 `jobs.Outbox`. Capture the notification outside retrying business transactions,
 then enqueue it inside the business transaction:
 
+<!-- compiled-source: tests/fixtures/consumer/notifying/orders.go#enqueue-notification -->
 ```go
-_, err := pending.Enqueue(ctx, tx, manager, deliveryJob, jobOutbox)
 ```
 
 Notification rows and the ordinary outbox message share a savepoint in that exact

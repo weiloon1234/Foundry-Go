@@ -12,7 +12,7 @@ owns milestone status. [Final evidence](../evidence/consumer-startup-c05.json),
 ## Agent entry
 
 - [Run a configured consumer](#recipe-run-consumer)
-- [Register native tables](model-scaffolding.md#recipe-register-tables)
+- [Register native tables](model-declarations.md#recipe-register-tables)
 - [Run test-owned kernels](isolated-http-tests.md#recipe-run-kernels)
 
 <a id="recipe-run-consumer"></a>

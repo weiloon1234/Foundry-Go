@@ -79,6 +79,7 @@ func TestVerifiedWebhookReauthenticatesEveryReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	var calls atomic.Int32
+	// doc-example:begin verified-webhook-route
 	endpoint := http.Idempotent(http.ConfigureEndpoint(http.DefineEndpoint(http.DefineRoute(http.RouteSpec{ID: "provider.webhook", Method: http.POST, Access: http.Public}, http.StaticPath("/webhook")), http.EmptyQuery(), http.JSONBody(SubmissionJSON()), http.EmptyResponse(204)), http.Use(http.VerifyWebhook(verifier))), store, idempotency.Definition{ID: "provider.delivery", Version: 1})
 	type input = http.Input[http.NoPath, http.NoQuery, Submission]
 	router, err := http.NewRouter(endpoint.Handle(func(ctx context.Context, _ input) (idempotency.Scope, error) {
@@ -96,6 +97,7 @@ func TestVerifiedWebhookReauthenticatesEveryReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// doc-example:end verified-webhook-route
 	id, body := "provider-delivery-001", `{"name":"webhook"}`
 	stamp := strconv.FormatInt(now.Unix(), 10)
 	send := func(signature, stamp, untrustedKey string) int {

@@ -102,11 +102,13 @@ func TestConfiguredMailProvidersAndFailover(t *testing.T) {
 	if err := app.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	// doc-example:begin configured-mailer
 	services := app.Resources()
 	mailer, err := services.Mailers.Mailer(transactional)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// doc-example:end configured-mailer
 	defaultMailer, err := services.Mailers.Default()
 	if err != nil || defaultMailer != mailer {
 		t.Fatal("default created a second mailer", err)

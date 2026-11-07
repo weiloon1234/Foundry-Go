@@ -10,6 +10,7 @@ and permission system as ordinary application routes.
 
 - [Diagnose readiness](#recipe-startup-readiness)
 - [Roll or stop an instance](#recipe-rolling-termination)
+- [Prune retained services](#recipe-prune-services)
 - [Record recovery evidence](#recipe-recover-operations)
 - [Deploy a pinned release](deployment.md#recipe-deploy)
 
@@ -126,6 +127,7 @@ also obey database/sql's own driver contract, including error methods invoked
 inside that package; Foundry cannot repair internal driver state after a driver
 panics or calls Goexit.
 
+<a id="recipe-prune-services"></a>
 ## Housekeeping schedule
 
 Bounded stores grow until something prunes them. `features.maintenance.enabled`
@@ -165,11 +167,8 @@ export artifacts own their cleanup and are not scheduled. Outbound webhooks
 (`webhook/outbound`) are constructed by the application rather than configured
 assembly, so declare their delivery retention yourself:
 
+<!-- compiled-source: tests/fixtures/consumer/background/pruning.go#prune-retained-service -->
 ```go
-application.PruneWith("webhooks.deliveries", outbound.MaxPruneBatch, func(ctx context.Context, limit int) (int64, error) {
-    removed, err := webhooks.PruneDeliveries(ctx, 30*24*time.Hour, limit)
-    return int64(removed), err
-})
 ```
 
 Use `PruneWith` when you already have the store, including a database connection
@@ -182,13 +181,8 @@ registers. For example, if `WebhooksKey` has type
 `foundation.Key[*outbound.Service]`, return this declaration in
 `FeatureDeclarations.Pruning`:
 
+<!-- compiled-source: tests/fixtures/consumer/background/pruning.go#prune-owned-service -->
 ```go
-application.PruneService("webhooks.deliveries", outbound.MaxPruneBatch, WebhooksKey,
-	func(ctx context.Context, webhooks *outbound.Service, limit int) (int64, error) {
-		removed, err := webhooks.PruneDeliveries(ctx, 30*24*time.Hour, limit)
-		return int64(removed), err
-	},
-)
 ```
 
 For an enabled task, `PruneService` resolves the service during schedule

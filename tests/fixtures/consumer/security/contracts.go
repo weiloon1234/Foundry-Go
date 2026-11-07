@@ -16,9 +16,12 @@ import (
 type BillingAccountID int64
 type CustomerAccountID int64
 
+// doc-example:begin webhook-verifier
 func BillingWebhook(account BillingAccountID, key secret.String, source clock.Clock) (*webhook.Verifier[BillingAccountID], error) {
 	return webhook.New(webhook.DefaultConfig("billing", webhook.Standard), account, []secret.String{key}, source)
 }
+
+// doc-example:end webhook-verifier
 func VerifiedAccount(ctx context.Context, verifier *webhook.Verifier[BillingAccountID]) (BillingAccountID, bool) {
 	delivery, ok := verifier.FromContext(ctx)
 	return delivery.Account(), ok

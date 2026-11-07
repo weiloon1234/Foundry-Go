@@ -5,12 +5,41 @@
 vet, documentation checks, generation checks, or browser checks were run.
 `gofmt` formatted the changed Go sources.
 
-Rendering is pending. The authorized `go run ./internal/cmd/renderdocs` invocation
-with the 15 changed guides failed before rendering because the sandbox denied
-access to `/Users/weiloon/Library/Caches/go-build`. Following `COMMON.md`, rendering
-is left to the lead. New directives currently have empty fences. Existing pilot
-renderings remain intact. Source regions below are intended compilation inputs,
-not a claim that this revision has compiled or passed acceptance.
+## Fix round: M3-001, M3-004, M3-005 and M3-009
+
+Based on combined milestone head `1fabf821` and `FIX-common.md`. The lead rendered
+and tidied the initial combined milestone. This round changes only the assigned
+recipes and their routing. The source and owner mappings are ready for lead
+rendering and proof; no new compilation or runtime result is asserted. Keep the
+Starter skill teaching until the lead's proof is complete.
+
+The fix-round renderer command below was attempted once and failed before
+rendering: access to `/Users/weiloon/Library/Caches/go-build` was denied with
+`operation not permitted`. Per `COMMON.md`, rendering is left to the lead.
+New directives have empty fences; the attachment fence still shows its previous
+rendering until that command runs. No rendered fence was edited by hand.
+
+- **M3-001:** `articles.PublishMedia` returns the optional logo result and every
+  attempted gallery result alongside the error. Earlier batch successes and the
+  failed attempt retain their operation IDs and publication/cleanup/variant state.
+  `Upload` preserves that report in `MediaPublicationError` on publication or
+  subsequent reload failure. Disclosure, reconciliation and retry remain app policy.
+- **M3-004:** Added the email, notifications, HTTP client, webhook and pruning
+  recipe mappings below. The mail job applies its captured locale to its context,
+  formats typed catalog text and sends with the resolved locale and pinned files.
+  Pruning retains the module's exact typed service key in `FeatureDeclarations.Pruning`.
+- **M3-005:** Explicit allocation and correlated scalar embedding now have recipe
+  anchors and regions showing the actual calls, rather than reference-only links.
+- **M3-009:** `model-declarations#recipe-register-tables` is the sole registration
+  and checking owner. Scaffolding, startup acceptance, tooling navigation and the
+  tooling evidence map link there. The existing pilot registration stays intact.
+
+The expanded M3-004 guide ownership is `email.md`, `notifications.md`,
+`http-client.md`, `webhooks.md`, and the pruning section of
+`production-operations.md`. M3-005 additionally edits `typed-values.md` and
+`model-correlations.md`; M3-009 edits `model-scaffolding.md` and makes routing-only
+changes in `consumer-startup-acceptance.md`, `developer-tooling-and-testing.md`
+and `guide-recipes-tooling-ops-20261107.md`.
 
 ## Inputs and ownership
 
@@ -31,14 +60,15 @@ existing pilot owner retain its region rather than copying its call sequence.
 
 ## foundry-model
 
-The declaration and basic query pilot is retained. `model-declarations.md` and
-`model-queries.md` need no edits for this lane. The following table includes the
-inherited coverage so the rest of the skill does not disappear from the inventory.
+The declaration and basic query pilot is retained. `model-queries.md` needs no
+edits; `model-declarations.md` retains its pilot registration and gains the
+explicit registry check in the fix round. The following table includes inherited
+coverage so the rest of the skill does not disappear from the inventory.
 
 | Skill lines and recipe | Guide owner | Fixture region or retained reference |
 | --- | --- | --- |
 | 29–44: concrete fields, table binding, timestamps, soft deletion | [Declare tables](../guides/model-declarations.md#recipe-declare-table), [soft deletion](../guides/model-declarations.md#recipe-soft-delete) | `goway/migration/examples_test.go#roles-after`, `#force-after`; pilot retained |
-| 50–60, 186–190: stored identity and complete table registration | [Register tables](../guides/model-declarations.md#recipe-register-tables) | `goway/migration/examples_test.go#application-after`, `#identity-after`; pilot retained |
+| 50–60, 186–190: stored identity and complete table registration | [Register tables](../guides/model-declarations.md#recipe-register-tables) | `goway/migration/examples_test.go#application-after`, `#identity-after`; `consumer/productionprofile/queries.go#check-table-registry` |
 | 63–67: scoped reads, optional and required keyed terminals | [Read models](../guides/model-queries.md#recipe-read-models) | `goway/migration/examples_test.go#reads-after`; pilot retained |
 | 68–71, 82–89: locks and writes in one transaction | [Lock models](../guides/row-locking.md#recipe-lock-models), [waiting](../guides/row-locking.md#recipe-lock-waiting) | `consumer/advancedqueries/locking_recipes_test.go#locked-write`, `#skip-locked` |
 | 68–71: joined lock targets and per-table policies | [Lock joins](../guides/row-locking.md#recipe-lock-joins), [lock policies](../guides/row-locking.md#recipe-lock-policies) | Same file: `#lock-joined-record`, `#independent-lock-policies` |
@@ -50,16 +80,16 @@ inherited coverage so the rest of the skill does not disappear from the inventor
 | 124–130: trigram candidates, scores and threshold in one transaction | [Trigram search](../guides/trigram-search.md#recipe-trigram-search) | Pilot `consumer/trigramqueries/search.go#find-duplicates`, `#similar-reviews` |
 | 134–153, 180–185: explicit accessors and mutation input | [Access fields](../guides/model-accessors.md#recipe-access-field), [mutate fields](../guides/model-mutators.md#recipe-mutate-field) | Pilot `goway/migration/examples_test.go#accessors-after`, `#inputs-after`; existing owner prose retains omission, NULL, purity and normalization rules |
 | 45–49, 154–164: hooks and typed audit disclosures | [Write hooks](../guides/model-hooks.md#recipe-write-hooks), [audit](../guides/audit.md#recipe-register-audit) | Pilot `goway/migration/examples_test.go#hooks-after`, `#write-options`, `#audit-registration` |
+| 111–113: embed a correlated scalar in a row selection | [Correlated scalar selection](../guides/model-correlations.md#recipe-correlated-scalar) | `consumer/correlations/correlations_postgres_test.go#embed-correlated-scalar`; uses `expr.AsSelected(rowset.CorrelatedScalarRowQuery(counts))` and its nullable counterpart |
+| 121–123: allocate a model ID explicitly | [Allocate a model ID](../guides/typed-values.md#recipe-allocate-model-id) | `consumer/values_test.go#allocate-model-id`; calls `model.NewIDAt[User]` |
 
-The pilot explicitly leaves constructor families, enum annotations, schema types,
-scaffolding and advanced families as reference reading. Preserve that boundary:
-lines 26–34 route to [typed values](../guides/typed-values.md) and
-[model scaffolding](../guides/model-scaffolding.md); lines 121–123 retain the
-UUIDv7/default explanation at [model writes](../guides/model-writes.md#recipe-write-models)
-and explicit `model.NewIDAt` at [typed values](../guides/typed-values.md).
-Correlated scalar adapters remain at [correlated queries](../guides/model-correlations.md),
-which already includes `consumer/correlations/correlations_postgres_test.go#model-correlations`.
-No new coverage is claimed for those reference sections.
+The pilot's constructor families, enum annotations and schema-type references
+remain reference reading. The two call sequences above are extracted recipes.
+Correlated query construction retains its existing
+`consumer/correlations/correlations_postgres_test.go#model-correlations` region at
+[matching inner rows](../guides/model-correlations.md#recipe-correlate-rows).
+Scaffolding retains CLI and filename teaching and links to the single table
+registration owner.
 
 ## foundry-model-extensions
 
@@ -102,7 +132,7 @@ No migrations or seeders were executed. No unresolved in-lane recipe.
 | 15–21, 85–89: owner reuse, slot/collection policy, cardinality and disk | [Declare collections](../guides/attachments.md#recipe-declare-collection), [slot policies](../guides/model-extension-slots.md#recipe-slot-policies) | Existing `consumer/profiles/profile.go#attachments-avatar`, `#attachments-example-2`; slot regions above |
 | 22–29, 95–100: correlated file kinds and bounded image inspection | [File kinds](../guides/http-uploads.md#recipe-file-kinds), [image kinds](../guides/http-uploads.md#recipe-image-kinds), [separate messages](../guides/http-uploads.md#recipe-image-messages) | `consumer/profiles/upload_rules.go#document-kinds`, `#image-kinds`, `#image-inspection-messages` |
 | 30–32, 96–100: configured image engine and explicit processing plan | [Process images](../guides/imaging.md#recipe-process-image) | `consumer/profiles/image_recipes.go#configured-image-engine`, `#process-image` |
-| 33–39: collection Replace/Add and bound FileSource publication | [Publish collection/file sources](../guides/attachments.md#recipe-declare-collection) | Existing `consumer/profiles/profile.go#attachments-example-2`; `consumer/profiles/attachment_recipes.go#add-collection-file`; `consumer/articles/http.go#publish-file-sources`; `consumer/articles/attachment_recipes.go#append-slot-file` |
+| 33–39: collection Replace/Add and bound FileSource publication | [Publish collection/file sources](../guides/attachments.md#recipe-declare-collection) | Existing `consumer/profiles/profile.go#attachments-example-2`; `consumer/profiles/attachment_recipes.go#add-collection-file`; `consumer/articles/attachment_recipes.go#publish-file-sources`; `consumer/articles/attachment_recipes.go#append-slot-file` |
 | 40–49: prepare before transaction, reader ownership, ReplaceIn/AddIn and unknown outcomes | [Publish files](../guides/attachments.md#recipe-publish-files) | `consumer/articles/attachment_recipes.go#publish-slot-file`; `consumer/profiles/attachment_recipes.go#prepare-collection-file`, `#publish-collection-file` |
 | 50–53: DetachIn/ClearIn, owner locks and post-commit cleanup | [Retire files](../guides/attachments.md#recipe-retire-files) | `consumer/profiles/attachment_recipes.go#retire-collection-files`; `consumer/articles/attachment_recipes.go#clear-slot-files` |
 | 54–60: transaction-current FirstIn/ListIn and collection adapters | [Read files](../guides/attachments.md#recipe-read-files) | `consumer/articles/attachment_recipes.go#transaction-current-files` |
@@ -129,11 +159,19 @@ sections without claiming that their advanced fences were converted.
 | 36–42: typed job payload, stable definition, configured handler and dispatch | [Declare jobs](../guides/jobs.md#recipe-declare-job) | `consumer/background/welcome.go#job-payload`, `#job-definition`, `#dispatch-job`; `consumer/background/guide.go#configured-job` |
 | 43–44: application Calendar, job target, overlap and timeout | [Schedule jobs](../guides/scheduler.md#recipe-schedule-job), [explicit-zone schedule](../guides/scheduler.md#recipe-declare-schedule) | `consumer/background/guide.go#calendar-job`; `consumer/scheduling/reports.go#daily-schedule` |
 | Durable message inspection supporting 18–29 | [Reload event](../guides/outbox.md#recipe-reload-event) | `consumer/eventqueries/guide.go#reload-event` |
+| 45–48, 84: configured transports and typed mail | [Configured mailer](../guides/email.md#recipe-configured-mailer), [typed messages](../guides/email.md#recipe-mail-template) | `consumer/mailing/configured_test.go#configured-mailer`; `consumer/mailing/welcome.go#mail-template`, `#send-templated-mail`, `#send-mail` |
+| 45–48: upload snapshots, stored files and durable references | [Mail attachments](../guides/email.md#recipe-mail-attachments) | `consumer/mailing/uploads_test.go#attach-request-upload`; `consumer/articles/email_postgres_test.go#attach-stored-files`; `consumer/articles/email_references.go#durable-email-references` |
+| 45–48, 84: captured-locale background mail | [Localized mail job](../guides/email.md#recipe-localized-mail-job) | `consumer/background/localized_mail.go#localized-mail-job` |
+| 45–48: typed notification recipient, channels, capture and enqueue | [Declare notifications](../guides/notifications.md#recipe-notification), [channels](../guides/notifications.md#recipe-notification-channels), [enqueue](../guides/notifications.md#recipe-enqueue-notification) | `consumer/notifying/orders.go#notification-recipient`, `#notifications-capture`, `#notification-channels`, `#enqueue-notification`; localized email output links to the mail owner |
+| 49–50: named HTTP client and bounded typed request | [Named client/deadline](../guides/http-client.md#recipe-named-http-client), [typed JSON](../guides/http-client.md#recipe-http-request) | `consumer/background/account_client.go#named-client-deadline`; `consumer/outgoing/client.go#typed-http-request` |
+| 51–52: original-body signature verification and authenticated deduplication | [Verifier](../guides/webhooks.md#recipe-webhook-verifier), [durable deduplication](../guides/webhooks.md#recipe-webhook-deduplication) | `consumer/security/contracts.go#webhook-verifier`; `consumer/idempotenthttp/publication_test.go#verified-webhook-route` |
+| 56–64: retained/module-owned pruning | [Prune services](../guides/production-operations.md#recipe-prune-services) | `consumer/background/pruning.go#prune-retained-service`, `#prune-owned-service` |
 
-Mail, notifications, outbound HTTP/webhooks and operations have owners outside
-this lane. Their unclaimed extraction work is listed below. App payload choices,
-locale policy, delivery profile, schedule frequency and retry authorization stay
-in the app.
+Worker maintenance and scheduler catch-up are runtime behavior references,
+not additional call sequences: [worker execution](../guides/jobs.md#execution-and-cancellation)
+and [missed occurrences](../guides/scheduler.md#missed-occurrences-and-capacity)
+retain those contracts. App payload choices, locale policy, delivery profile, schedule frequency
+and retry authorization stay in the app.
 
 ## foundry-realtime
 
@@ -158,9 +196,6 @@ removing their app teaching or claim new source/anchor coverage for them.
 | Skill lines | Existing owner outside this lane | Remaining extraction |
 | --- | --- | --- |
 | foundry-files 22–29, 95–100 | [Validation messages](../guides/validation-messages.md) | Typed WithTranslation arguments; the upload guide now links here. Check the validation lane's final anchor and source region. |
-| foundry-async 45–48, 84 | [Email](../guides/email.md), [notifications](../guides/notifications.md), [localization](../guides/localization.md) | Configured/localized delivery, AttachStored/EmailAttachment/AttachUpload and captured-locale handler calls, including this-app teaching. |
-| foundry-async 49–52 | [HTTP client](../guides/http-client.md), [webhooks](../guides/webhooks.md) | Named client/deadline, original-body signature verification and authenticated deduplication. |
-| foundry-async 56–64 | [Production operations](../guides/production-operations.md) | PruneService in FeatureDeclarations.Pruning, construction-time resolution, worker maintenance and scheduler catch-up. |
 | foundry-realtime 19–22, 30–32, 46–47 | [Client contracts](../guides/client-contracts.md), [tokens](../guides/tokens.md) | Browser realtimeProtocols(ticket), fresh tickets, handle/socket disposal and generated client export. Keep issuance with the token/HTTP owner. |
 
 No check/renderer/framework changes were made or requested. Rendering and all
@@ -184,12 +219,28 @@ avoids duplicating migration history, multipart contracts or schedule setup.
 The transaction CTE guide reuses its existing `transactionqueries/models.go`
 region without modifying that package. Existing goway/pilot regions are unchanged.
 
+Fix-round marker-only exceptions reuse existing calls that owned packages did
+not already contain:
+
+- `consumer/values_test.go`: explicit model ID allocation.
+- `consumer/correlations/correlations_postgres_test.go`: correlated scalar embedding.
+- `consumer/productionprofile/queries.go`: complete registry checking.
+- `consumer/mailing/configured_test.go`, `mailing/welcome.go`, `mailing/uploads_test.go`:
+  configured mailer, template/send and request-upload snapshot examples.
+- `consumer/outgoing/client.go`: generated JSON request/response descriptors.
+- `consumer/security/contracts.go`: the existing typed webhook verifier.
+- `consumer/idempotenthttp/publication_test.go`: authenticated deduplication middleware.
+- `consumer/notifying/orders.go`: existing recipient/channel/queue declarations.
+
+All new functions in this round are in owned `articles` and `background` packages.
+No generated declaration, dependency, manifest or framework implementation changed.
+
 ## Lead commands
 
 Run rendering first, in the normal writable Go-cache environment:
 
 ```sh
-go run ./internal/cmd/renderdocs --guide attachments.md --guide events.md --guide http-uploads.md --guide imaging.md --guide jobs.md --guide migrations-and-seeding.md --guide model-extension-slots.md --guide model-projections.md --guide outbox.md --guide row-locking.md --guide scheduler.md --guide storage.md --guide transaction-query-composition.md --guide websocket-distributed.md --guide websocket.md
+go run ./internal/cmd/renderdocs --guide attachments.md --guide email.md --guide notifications.md --guide http-client.md --guide webhooks.md --guide production-operations.md --guide typed-values.md --guide model-correlations.md --guide model-declarations.md --guide model-scaffolding.md
 make docs-check
 ```
 
@@ -200,7 +251,41 @@ it. Existing PostgreSQL/Redis integration and TypeScript gates remain the lead's
 milestone decision. No declaration generation is needed for these handwritten
 functions and marker-only edits; no DTO, enum, manifest or generated file changed.
 
-## Changed files
+## Fix-round changed files
+
+- [docs/evidence/guide-recipes-model-files-20261107.md](../../docs/evidence/guide-recipes-model-files-20261107.md)
+- [docs/evidence/guide-recipes-tooling-ops-20261107.md](../../docs/evidence/guide-recipes-tooling-ops-20261107.md)
+- [docs/guides/attachments.md](../../docs/guides/attachments.md)
+- [docs/guides/consumer-startup-acceptance.md](../../docs/guides/consumer-startup-acceptance.md)
+- [docs/guides/developer-tooling-and-testing.md](../../docs/guides/developer-tooling-and-testing.md)
+- [docs/guides/email.md](../../docs/guides/email.md)
+- [docs/guides/http-client.md](../../docs/guides/http-client.md)
+- [docs/guides/model-correlations.md](../../docs/guides/model-correlations.md)
+- [docs/guides/model-declarations.md](../../docs/guides/model-declarations.md)
+- [docs/guides/model-scaffolding.md](../../docs/guides/model-scaffolding.md)
+- [docs/guides/notifications.md](../../docs/guides/notifications.md)
+- [docs/guides/production-operations.md](../../docs/guides/production-operations.md)
+- [docs/guides/typed-values.md](../../docs/guides/typed-values.md)
+- [docs/guides/webhooks.md](../../docs/guides/webhooks.md)
+- [tests/fixtures/consumer/articles/attachment_recipes.go](../../tests/fixtures/consumer/articles/attachment_recipes.go)
+- [tests/fixtures/consumer/articles/email_postgres_test.go](../../tests/fixtures/consumer/articles/email_postgres_test.go)
+- [tests/fixtures/consumer/articles/email_references.go](../../tests/fixtures/consumer/articles/email_references.go)
+- [tests/fixtures/consumer/articles/http.go](../../tests/fixtures/consumer/articles/http.go)
+- [tests/fixtures/consumer/background/account_client.go](../../tests/fixtures/consumer/background/account_client.go)
+- [tests/fixtures/consumer/background/localized_mail.go](../../tests/fixtures/consumer/background/localized_mail.go)
+- [tests/fixtures/consumer/background/pruning.go](../../tests/fixtures/consumer/background/pruning.go)
+- [tests/fixtures/consumer/correlations/correlations_postgres_test.go](../../tests/fixtures/consumer/correlations/correlations_postgres_test.go)
+- [tests/fixtures/consumer/idempotenthttp/publication_test.go](../../tests/fixtures/consumer/idempotenthttp/publication_test.go)
+- [tests/fixtures/consumer/mailing/configured_test.go](../../tests/fixtures/consumer/mailing/configured_test.go)
+- [tests/fixtures/consumer/mailing/uploads_test.go](../../tests/fixtures/consumer/mailing/uploads_test.go)
+- [tests/fixtures/consumer/mailing/welcome.go](../../tests/fixtures/consumer/mailing/welcome.go)
+- [tests/fixtures/consumer/notifying/orders.go](../../tests/fixtures/consumer/notifying/orders.go)
+- [tests/fixtures/consumer/outgoing/client.go](../../tests/fixtures/consumer/outgoing/client.go)
+- [tests/fixtures/consumer/productionprofile/queries.go](../../tests/fixtures/consumer/productionprofile/queries.go)
+- [tests/fixtures/consumer/security/contracts.go](../../tests/fixtures/consumer/security/contracts.go)
+- [tests/fixtures/consumer/values_test.go](../../tests/fixtures/consumer/values_test.go)
+
+## Initial extraction files (already in the combined base)
 
 - This evidence file.
 - [docs/guides/attachments.md](../../docs/guides/attachments.md)

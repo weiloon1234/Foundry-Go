@@ -17,11 +17,13 @@ type ProfilePatch struct {
 }
 
 func TestPublicValuesPreserveOwnershipAndPatchMeaning(t *testing.T) {
+	// doc-example:begin allocate-model-id
 	id, err := model.NewIDAt[User](time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
 	user := User{ID: id}
+	// doc-example:end allocate-model-id
 	if user.ID.IsZero() {
 		t.Fatal("generated identity is zero")
 	}

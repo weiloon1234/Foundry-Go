@@ -1,5 +1,13 @@
 # Outbound HTTP clients
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Resolve a named client and bound a call](#recipe-named-http-client)
+- [Send typed JSON](#recipe-http-request)
+
+## Overview
+
 Milestone 24 delivered shared logical-operation observations and explicit
 `Config.PropagateTrace`. Trace headers are off by default and remain subject to
 the named client's header budget. See [observability](observability.md); the
@@ -9,15 +17,23 @@ Milestone 20 passed native verification and consumer review. The
 [master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-20-verification-and-consumer-review)
 records the checks and operational limits.
 
+<a id="recipe-named-http-client"></a>
+## Resolve a client and bound the request
+
 Construct one named client per upstream and inject it into domain services:
 
+<!-- compiled-source: tests/fixtures/consumer/background/account_client.go#named-client-deadline -->
 ```go
-config := httpclient.DefaultConfig("accounts.api")
-config.BaseURL = "https://accounts.example.com/v1"
-client, err := httpclient.New(config, nil)
 ```
 
-`nil` selects an owned, reusable standard-library transport. A supplied
+Configure `accounts.api` under `services.http_clients.clients`; the explicit name never
+falls back to a default. Resolve and retain the client during construction.
+The child deadline also covers request encoding, response reads and decoding.
+An error after provider submission can leave the external outcome unknown; keep
+idempotency and reconciliation in the provider integration instead of retrying blindly.
+
+For direct composition, `httpclient.New(config, nil)` selects an owned, reusable
+standard-library transport. A supplied
 `http.RoundTripper` is borrowed and is useful for adapters and deterministic
 tests. It must honor context cancellation, close request bodies and avoid adding
 its own retry/redirect policy. Construction performs no network I/O.
@@ -29,17 +45,11 @@ dependencies are released. Direct callers use `Close(ctx)` and `Done()`; if Clos
 waiting context expires, ownership remains visible through Done and Close can be
 called again. A callback cannot wait for its own client shutdown.
 
+<a id="recipe-http-request"></a>
 ## Requests and DTOs
 
+<!-- compiled-source: tests/fixtures/consumer/outgoing/client.go#typed-http-request -->
 ```go
-request, err := httpclient.JSON(ctx,
-    client.Post("accounts").Bearer(token),
-    CreateAccountJSON(), CreateAccount{Name: "Ada"},
-)
-response, err := client.Do(ctx, request)
-if err != nil { return err }
-if err := response.EnsureSuccess(); err != nil { return err }
-receipt, err := httpclient.DecodeJSON(ctx, response, AccountReceiptJSON())
 ```
 
 Generated `contract.JSON[T]` descriptors own both request encoding and response

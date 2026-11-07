@@ -218,17 +218,15 @@ func (s *Service) Upload(ctx context.Context, in foundryhttp.Input[ArticleMediaP
 			return ArticleView{}, err
 		}
 	}
-	// doc-example:begin publish-file-sources
-	if logo, ok := in.Body.Logo.Get(); ok {
-		if _, err := s.x.Logo.ReplaceFile(ctx, article, logo); err != nil {
-			return ArticleView{}, err
-		}
+	publication, err := s.PublishMedia(ctx, article, in.Body)
+	if err != nil {
+		return ArticleView{}, &MediaPublicationError{Publication: publication, cause: err}
 	}
-	if _, err := attachments.AddFilesTo(ctx, s.x.Galleries, article, in.Body.Galleries); err != nil {
-		return ArticleView{}, err
+	view, err := s.Show(ctx, foundryhttp.Input[ArticlePath, foundryhttp.NoQuery, foundryhttp.NoBody]{Path: ArticlePath{Article: in.Path.Article}})
+	if err != nil {
+		return ArticleView{}, &MediaPublicationError{Publication: publication, cause: err}
 	}
-	// doc-example:end publish-file-sources
-	return s.Show(ctx, foundryhttp.Input[ArticlePath, foundryhttp.NoQuery, foundryhttp.NoBody]{Path: ArticlePath{Article: in.Path.Article}})
+	return view, nil
 }
 
 // Show loads every slot with the article.

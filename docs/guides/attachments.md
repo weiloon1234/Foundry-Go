@@ -57,9 +57,10 @@ Redeclaring a matching name cannot replace a registered policy. Collection calls
 retain the owner's model and primary key type; file IDs also retain the model.
 See the [independent consumer](../../tests/fixtures/consumer/profiles/profile.go).
 
-Bound slots accept `FileSource` values, including request-owned uploads:
+Bound slots accept request-owned uploads. Return the typed publication report
+together with any error to the application decision boundary:
 
-<!-- compiled-source: tests/fixtures/consumer/articles/http.go#publish-file-sources -->
+<!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#publish-file-sources -->
 ```go
 if logo, ok := in.Body.Logo.Get(); ok {
 	if _, err := s.x.Logo.ReplaceFile(ctx, article, logo); err != nil {
@@ -70,6 +71,13 @@ if _, err := attachments.AddFilesTo(ctx, s.x.Galleries, article, in.Body.Galleri
 	return ArticleView{}, err
 }
 ```
+
+The optional logo result distinguishes an unattempted logo from a failed attempt.
+Every returned result retains `Operation`, `Publication`, `PendingCleanup` and
+`PendingVariants`. On a batch error, inspect successful earlier entries and the
+failed entry; do not replay the whole batch. The HTTP consumer preserves this
+report in `MediaPublicationError` for application error handling. Disclosure,
+reconciliation and retry decisions remain application-owned.
 
 `attachments.AddFilesTo` validates the bound handle and batch limit before opening
 files, publishes in order, and returns every attempted result, including a failed

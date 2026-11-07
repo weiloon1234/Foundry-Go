@@ -1,9 +1,18 @@
 # Typed correlated subqueries
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Match inner rows](#recipe-correlate-rows)
+- [Select a correlated scalar](#recipe-correlated-scalar)
+
+## Overview
+
 `rows.Correlate(outer, inner)` explicitly permits an inner SELECT to reference
 its outer row. Lift each side through `rows.OuterScope` and `rows.InnerScope`;
 `expr.At` then constructs operands in the combined correlation scope.
 
+<a id="recipe-correlate-rows"></a>
 ## Find users with matching orders
 
 [Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/correlations/correlations_postgres_test.go):
@@ -23,6 +32,7 @@ the outer user scope. Apply it with `expr.Where`; use `expr.Not` for NOT EXISTS.
 This is one SQL statement, not an application query per user. The outer argument
 supplies scope; keep outer filters on the executing outer query.
 
+<a id="recipe-correlated-scalar"></a>
 ## Select a value per outer row
 
 `rows.SelectCorrelatedScalar` returns a value tied to its outer owner. Embed it
@@ -31,6 +41,10 @@ with `expr.AsSelected(rows.CorrelatedScalarRowQuery(selected))`, or
 already nullable. A scalar COUNT yields a present zero over empty input,
 but the general scalar result stays nullable because a SELECT can yield no row.
 Multiple rows cause a database cardinality error; no implicit limit is added.
+
+<!-- compiled-source: tests/fixtures/consumer/correlations/correlations_postgres_test.go#embed-correlated-scalar -->
+```go
+```
 
 `InCorrelatedQuery` and `InNullableCorrelatedQuery` retain exact value types and
 outer ownership. `CorrelatedScalarRowQuery` and its nullable counterpart produce

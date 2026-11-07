@@ -1,10 +1,22 @@
 # Typed foundational values
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Allocate a model ID](#recipe-allocate-model-id)
+
+## Overview
+
 These values are ordinary Go types visible to the compiler and gopls. The [external consumer test](../../tests/fixtures/consumer/values_test.go) demonstrates model IDs and a nullable date patch using public imports.
 
+<a id="recipe-allocate-model-id"></a>
 ## Model identity
 
 Declare `ID model.ID[User]` on a `User` model. `model.NewIDAt[User](clock.Now())` generates an identity using explicit time for deterministic timestamp behavior. IDs remain comparable and usable as map keys even when the model contains slices or maps. An order ID cannot be passed as a user ID or converted directly between those instantiated ID types.
+
+<!-- compiled-source: tests/fixtures/consumer/values_test.go#allocate-model-id -->
+```go
+```
 
 New identities use UUIDv7: millisecond timestamp plus cryptographic random bits. Ordering within a millisecond, after clock rollback, and between hosts is not promised. The representation follows [RFC 9562 section 5.7](https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7); randomness comes from [Go crypto/rand](https://pkg.go.dev/crypto/rand#Read).
 

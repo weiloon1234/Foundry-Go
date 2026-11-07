@@ -10,6 +10,38 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// doc-example:begin publish-file-sources
+type MediaPublication struct {
+	Logo    value.Optional[attachments.Result[Article, model.ID[Article]]]
+	Gallery []attachments.Result[Article, model.ID[Article]]
+}
+
+func (s *Service) PublishMedia(ctx context.Context, article Article, input ArticleMedia) (MediaPublication, error) {
+	var publication MediaPublication
+	if logo, supplied := input.Logo.Get(); supplied {
+		result, err := s.x.Logo.ReplaceFile(ctx, article, logo)
+		publication.Logo = value.Set(result)
+		if err != nil {
+			return publication, err
+		}
+	}
+	results, err := attachments.AddFilesTo(ctx, s.x.Galleries, article, input.Galleries)
+	publication.Gallery = results
+	return publication, err
+}
+
+// doc-example:end publish-file-sources
+
+// MediaPublicationError keeps attempted publication outcomes available to the
+// application's error boundary without exposing them through error formatting.
+type MediaPublicationError struct {
+	Publication MediaPublication
+	cause       error
+}
+
+func (e *MediaPublicationError) Error() string { return "article media publication failed" }
+func (e *MediaPublicationError) Unwrap() error { return e.cause }
+
 // doc-example:begin publish-slot-file
 func (s *Service) ReplaceLogo(ctx context.Context, visible orm.Query[Article], article Article, file attachments.FileSource, slug string) (attachments.Result[Article, model.ID[Article]], error) {
 	prepared, err := s.x.Logo.PrepareFile(ctx, article, file)

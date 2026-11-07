@@ -20,12 +20,15 @@ type uploadMailService struct {
 	file    foundryhttp.UploadedFile
 }
 
+// doc-example:begin attach-request-upload
 func (s *uploadMailService) Save(ctx context.Context, input httpuploads.ProfileInput) (httpuploads.UploadReply, error) {
 	s.file = input.Attachment
 	var err error
 	s.message, err = s.message.AttachUpload(ctx, input.Attachment)
 	return httpuploads.UploadReply{Name: input.Attachment.Name(), Bytes: input.Attachment.Size(), DetectedType: input.Attachment.ContentType()}, err
 }
+
+// doc-example:end attach-request-upload
 
 func TestBrowserUploadCanBeEmailedWithoutAttachmentStorage(t *testing.T) {
 	from, err := email.ParseAddress("sender@example.test")

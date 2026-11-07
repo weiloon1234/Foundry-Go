@@ -29,6 +29,7 @@ func TestStoredModelAttachmentsCanBeEmailed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// doc-example:begin attach-stored-files
 	message, err := email.NewMessage(from, "Article images", to).Text("Attached").AttachStored(row.Logo)
 	if err != nil {
 		t.Fatal(err)
@@ -39,6 +40,7 @@ func TestStoredModelAttachmentsCanBeEmailed(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// doc-example:end attach-stored-files
 	snapshot, err := email.CaptureMessage(message)
 	if err != nil {
 		t.Fatal("stored attachments were not durable", err)

@@ -27,6 +27,7 @@ type Sender struct {
 	template email.Template[Welcome]
 }
 
+// doc-example:begin mail-template
 func NewSender(mailer *email.Mailer, from email.Address) (*Sender, error) {
 	if from.Validate() != nil {
 		return nil, email.Construction
@@ -37,6 +38,9 @@ func NewSender(mailer *email.Mailer, from email.Address) (*Sender, error) {
 	}
 	return &Sender{mailer: mailer, from: from, template: template}, nil
 }
+
+// doc-example:end mail-template
+// doc-example:begin send-templated-mail
 func (s *Sender) Build(ctx context.Context, input Welcome) (email.Message, error) {
 	body, err := s.template.Render(ctx, input)
 	if err != nil {
@@ -44,6 +48,9 @@ func (s *Sender) Build(ctx context.Context, input Welcome) (email.Message, error
 	}
 	return body.Message(s.from, input.Recipient).Attach(input.Documents...), nil
 }
+
+// doc-example:end send-templated-mail
+// doc-example:begin send-mail
 func (s *Sender) Send(ctx context.Context, input Welcome) (email.Result, error) {
 	message, err := s.Build(ctx, input)
 	if err != nil {
@@ -51,6 +58,8 @@ func (s *Sender) Send(ctx context.Context, input Welcome) (email.Result, error) 
 	}
 	return s.mailer.Send(ctx, message, email.SendOptions{})
 }
+
+// doc-example:end send-mail
 func (s *Sender) Declaration() (jobs.Declaration, error) {
 	return WelcomeEmail.Declare(email.JobHandler(s.mailer, s.Build))
 }

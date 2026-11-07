@@ -14,7 +14,7 @@ executable consumer recipes.
 - [Individual artifact scaffolds](#recipe-scaffold-artifacts)
 - [Doctor and declaration inspection](#recipe-inspect-declarations)
 - [Test-owned application and transports](#recipe-test-transports)
-- [Register model tables](model-scaffolding.md#recipe-register-tables)
+- [Register model tables](model-declarations.md#recipe-register-tables)
 - [Isolate service tests](isolated-http-tests.md#agent-entry)
 
 <a id="recipe-author-examples"></a>

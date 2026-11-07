@@ -8,9 +8,11 @@ import (
 
 // Check exercises typed assignments and query composition without acquiring resources.
 func Check() error {
+	// doc-example:begin check-table-registry
 	if err := orm.Check(Tables()...); err != nil {
 		return err
 	}
+	// doc-example:end check-table-registry
 	f := Records
 	base := f.Query().Where(orm.ColumnEq(f.Active, true), orm.NumberGte(f.Score, 10)).OrderBy(orm.NumberDesc(f.Score), orm.KeyAsc(f.ID)).Limit(25)
 	if _, err := orm.Compile(base); err != nil {

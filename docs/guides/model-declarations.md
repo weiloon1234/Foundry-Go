@@ -116,6 +116,16 @@ func configuredApplication(settings application.Settings, pool foundation.Key[*d
 }
 ```
 
+Compose per-model table lists in the application's complete `Tables()` registry.
+For an explicit declaration check before assembly, use the same list:
+
+<!-- compiled-source: tests/fixtures/consumer/productionprofile/queries.go#check-table-registry -->
+```go
+```
+
+`application.WithTables` checks its supplied declarations during construction.
+Neither path discovers omitted model packages.
+
 Keep references backed by the same stored key.
 
 <!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#identity-after -->

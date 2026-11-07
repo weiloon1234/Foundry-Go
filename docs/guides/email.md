@@ -1,5 +1,15 @@
 # Email
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Resolve a configured mailer](#recipe-configured-mailer)
+- [Render and send typed mail](#recipe-mail-template)
+- [Attach files](#recipe-mail-attachments)
+- [Send mail in a captured locale](#recipe-localized-mail-job)
+
+## Overview
+
 Milestone 16 passed native verification and consumer review. Real-account provider
 smoke sends remain an explicit verification gap. The stable blueprint contract is [email](../../blueprint/16-email.md).
 The Cloudflare and direct attachment source additions passed the
@@ -7,6 +17,7 @@ The Cloudflare and direct attachment source additions passed the
 
 `email` owns validated addresses, immutable message builders, typed templates, bounded attachment resolution and MIME. A `Mailer` borrows a transport and the existing storage registry. Use the ordinary [jobs](jobs.md) API for queued data and transactional publication; there is no separate email queue.
 
+<a id="recipe-configured-mailer"></a>
 ## Consumer configuration and provider selection
 
 Configure mailers under `application.Settings.Services.Mail`; `application.New`
@@ -50,42 +61,29 @@ For typed Go configuration use `infrastructure.Mailers` keyed by
 including `API.AccountID` and `API.Token`. Driver-specific settings affect
 transport only; messages, templates and attachment APIs stay the same.
 
+<!-- compiled-source: tests/fixtures/consumer/mailing/configured_test.go#configured-mailer -->
 ```go
-const Transactional email.MailerName = "transactional"
-services := app.Resources()
-mailer, err := services.Mailers.Mailer(Transactional)
-if err != nil { return err }
-// services.Mailers.Default() selects services.mail.default.
-message := mailer.Message("Welcome", recipient).Text("Hello")
-result, err := mailer.Send(ctx, message, email.SendOptions{})
 ```
 
 Resolve the mailer once in a domain constructor and retain that concrete handle.
 Consumers may also register their own transport with `application.WithMailDriver`
 under a distinct `infrastructure.MailDriver`; built-in names cannot be overridden.
 
+<a id="recipe-mail-template"></a>
 ## Typed messages and templates
 
-See the [consumer mailing package](../../tests/fixtures/consumer/mailing/welcome.go) for the complete verified pattern:
+See the [consumer mailing package](../../tests/fixtures/consumer/mailing/welcome.go) for the complete pattern:
 
+<!-- compiled-source: tests/fixtures/consumer/mailing/welcome.go#mail-template -->
 ```go
-type Welcome struct {
-    Recipient email.Address `json:"recipient"`
-    Name string `json:"name"`
-    Documents []email.Attachment `json:"documents,omitempty"`
-}
+```
 
-template, err := email.NewTemplate[Welcome](email.TemplateSource{
-    Subject: "Welcome {{.Name}}",
-    Text: "Hello {{.Name}}",
-    HTML: "<p>Hello {{.Name}}</p>",
-    MaxBytes: 16 << 10,
-})
-// Handle err before using template.
-body, err := template.Render(ctx, input)
-// Handle err before sending.
-message := body.Message(from, input.Recipient).Attach(input.Documents...)
-result, err := mailer.Send(ctx, message, email.SendOptions{})
+<!-- compiled-source: tests/fixtures/consumer/mailing/welcome.go#send-templated-mail -->
+```go
+```
+
+<!-- compiled-source: tests/fixtures/consumer/mailing/welcome.go#send-mail -->
+```go
 ```
 
 `TemplateSource.Layout` (`email.Layout{Text, HTML}`) wraps the message bodies with a shared trusted layout: the layout renders the body where it calls `{{template "content" .}}`, receives the same typed data, and applies only to parts the message defines; the subject is never wrapped. `email.NewLocalizedTemplate[T](localeSet, map[i18n.LocaleID]TemplateSource)` holds one template per locale (the set's default is required) and `Render(ctx, locale, data)` selects along the set's fallback chain (`pt-BR`, then `pt`, then the default). The returned `Body.Locale` records the locale used, and `Body.Message` carries it to `Message.Locale`. MIME transports send a message's locale as `Content-Language`; it is kept in rendered snapshots.
@@ -100,26 +98,22 @@ as shown by the consumer `RecipientRequest`; runtime parsing stays in email.
 
 `NewMessage(from, subject, to...)` has immutable `Text`, `HTML`, `Cc`, `Bcc`, `ReplyTo`, `Header` and `Attach` builders. Collections returned by accessors are copies. Custom headers cannot replace delivery/MIME/authentication headers. Limits are 50 combined recipients, 32 attachments, 32 custom headers and a 2,000-byte subject. BCC is included in the SMTP/SES envelope and provider API envelope, and excluded from MIME headers. MIME supports text/HTML alternatives, related inline parts and ordinary mixed attachments, with encoded subject/filenames and bounded physical lines. Runtime messages reject JSON serialization; queue their declared source DTO instead.
 
+<a id="recipe-mail-attachments"></a>
 ## Storage attachments and limits
 
 Consumers do not convert uploads or model attachments into provider-specific
 blobs. These helpers feed the same attachment preparation used by every adapter:
 
+<!-- compiled-source: tests/fixtures/consumer/mailing/uploads_test.go#attach-request-upload -->
 ```go
-// input.Document is http.UploadedFile from a multipart request.
-message, err = message.AttachUpload(ctx, input.Document)
-if err != nil { return err }
+```
 
-// row.Attachment is a loaded attachments.One[YourModel] slot.
-message, err = message.AttachStored(row.Attachment)
-if err != nil { return err }
+<!-- compiled-source: tests/fixtures/consumer/articles/email_postgres_test.go#attach-stored-files -->
+```go
+```
 
-// Loaded collections expose files; each retains its concrete model type.
-for _, file := range row.Documents.All() {
-    message, err = message.AttachStored(file)
-    if err != nil { return err }
-}
-result, err := mailer.Send(ctx, message, email.SendOptions{})
+<!-- compiled-source: tests/fixtures/consumer/articles/email_references.go#durable-email-references -->
+```go
 ```
 
 `AttachUpload` opens, reads up to `MaxDataAttachmentBytes` (10 MiB), and closes
@@ -207,7 +201,24 @@ is scoped to the live attempt and cannot survive a worker crash before finalizat
 
 Worker/process loss after acceptance but before recording success can still redeliver an email. Other adapters provide no general idempotency guarantee. There is no exactly-once claim; use provider reconciliation and domain idempotency when duplicate delivery is unacceptable. Retrying an uncertain send is an explicit operational decision.
 
+<a id="recipe-localized-mail-job"></a>
 ## Jobs and transactional enqueue
+
+Capture the supported recipient locale in the concrete job payload. Resolve the
+configured mailer and catalog during handler construction. Apply that locale to
+the job context, format typed catalog text, and set the resolved message locale before
+delivery:
+
+<!-- compiled-source: tests/fixtures/consumer/background/localized_mail.go#localized-mail-job -->
+```go
+```
+
+Register `LocalizedWelcomeDeclaration` through `Builder.Jobs`. Register the
+existing `WelcomeArgsMessage` definition and its catalog translations through
+the application's locale declarations. `i18n.WithLocale` is the public operation
+behind generated translator locale helpers. The payload carries pinned stored
+references, never request upload bytes. Provider outcome/retry classification
+remains in `email.JobHandler`.
 
 Define one `jobs.Definition[Welcome]` and register `WelcomeEmail.Declare(email.JobHandler(mailer, build))`. The builder has the concrete signature `func(context.Context, Welcome) (email.Message, error)`. The existing job middleware, attribution, capture, dispatch, scheduling and worker kernel apply. `JobHandler` requires a live job context and refuses unpinned attachments.
 

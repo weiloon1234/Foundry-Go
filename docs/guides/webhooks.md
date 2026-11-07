@@ -1,5 +1,14 @@
 # Inbound webhook verification
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Construct a verifier](#recipe-webhook-verifier)
+- [Deduplicate verified delivery](#recipe-webhook-deduplication)
+
+<a id="recipe-webhook-verifier"></a>
+## Verify original request bytes
+
 Foundry verifies provider signatures before typed decoding and every idempotent
 replay. `webhook.Standard` supports Standard Webhooks HMAC-SHA256 (`whsec_`)
 and Ed25519 public verification keys (`whpk_`). `webhook.Stripe` supports Stripe's
@@ -9,15 +18,8 @@ and Ed25519 public verification keys (`whpk_`). `webhook.Stripe` supports Stripe
 The same `whsec_` prefix has different key semantics in these protocols; select
 the provider's actual protocol rather than guessing from its key prefix.
 
+<!-- compiled-source: tests/fixtures/consumer/security/contracts.go#webhook-verifier -->
 ```go
-verifier, err := webhook.New(
-    webhook.DefaultConfig("billing", webhook.Standard),
-    BillingAccountID(42),
-    []secret.String{currentKey, previousKey},
-    clock.System{},
-)
-// Handle err. Attach before any body-transforming middleware:
-endpoint = http.ConfigureEndpoint(endpoint, http.Use(http.VerifyWebhook(verifier)))
 ```
 
 Account IDs retain their concrete Go type. The configured account/provider are
@@ -90,7 +92,16 @@ that exact verifier. Its `Account`, `Provider`, `ID` and `Timestamp` methods exp
 verified metadata without turning it into a global service container. Metadata
 is not current resource authorization; apply ordinary account/resource policy.
 
+<a id="recipe-webhook-deduplication"></a>
 ## Durable duplicate handling
+
+<!-- compiled-source: tests/fixtures/consumer/idempotenthttp/publication_test.go#verified-webhook-route -->
+```go
+```
+
+The region uses the enclosing test's typed verifier and configured idempotency
+store. `http.VerifyWebhook` verifies the original body before JSON decoding or
+any replay. The transaction callback is the sole owner of the database effect.
 
 The HTTP adapter replaces untrusted `Idempotency-Key` with a stable digest of the
 verified provider and delivery ID. Scope the existing idempotency operation using

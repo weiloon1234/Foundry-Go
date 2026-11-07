@@ -38,14 +38,19 @@ var Placed = notifications.Define("order.placed", 1, OrderPlacedJSON())
 var Delivery = notifications.DefineDeliveryJob("notifications.deliver", jobs.DefaultPolicy("communications"))
 var Database = notifications.Database("inbox", OrderCardJSON(), card)
 
+// doc-example:begin notification-recipient
 func Users(provider auth.Provider[models.User, model.ID[models.User]], guard auth.Guard[models.User]) UserRecipient {
 	return notifications.DefineRecipient("users", provider, guard, func(context.Context, models.User, notifications.Name, notifications.ChannelID) (bool, error) {
 		return true, nil
 	})
 }
+
+// doc-example:end notification-recipient
 func Private(recipient UserRecipient) PrivateNotifications {
 	return notifications.DefineRealtime[UserNotifications](recipient, "users.notifications", websocket.DefineRooms(foundryhttp.ModelIDPath[models.User]()), "notification", OrderCardJSON())
 }
+
+// doc-example:begin notification-channels
 func NewOrders(recipient UserRecipient, mailer *email.Mailer, from email.Address, realtime PrivateNotifications, publisher websocket.PublisherSource) OrdersBinding {
 	mail := notifications.Email("email", mailer, func(_ context.Context, user models.User, _ notifications.DeliveryContext, input OrderPlaced) (email.Message, error) {
 		to, err := email.ParseAddress(user.Email)
@@ -54,6 +59,8 @@ func NewOrders(recipient UserRecipient, mailer *email.Mailer, from email.Address
 	real := notifications.RealtimeChannel("realtime", realtime, publisher, card)
 	return notifications.Bind(Placed, recipient, Database.Channel(), mail, real)
 }
+
+// doc-example:end notification-channels
 func card(_ context.Context, _ models.User, _ notifications.DeliveryContext, input OrderPlaced) (OrderCard, error) {
 	return OrderCard{input.OrderID, input.Summary}, nil
 }
@@ -62,9 +69,12 @@ func card(_ context.Context, _ models.User, _ notifications.DeliveryContext, inp
 func Capture(ctx context.Context, binding OrdersBinding, user models.User, input OrderPlaced) (notifications.PendingNotification[models.User, OrderPlaced], error) {
 	return binding.Capture(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), input, notifications.ID[models.User]{})
 } // doc-example:end notifications-capture
+// doc-example:begin enqueue-notification
 func Enqueue(ctx context.Context, tx *database.Tx, manager *notifications.Manager, producer *jobs.Outbox, pending notifications.PendingNotification[models.User, OrderPlaced]) (outbox.ID[notifications.DeliveryRequest], error) {
 	return pending.Enqueue(ctx, tx, manager, Delivery, producer)
 }
+
+// doc-example:end enqueue-notification
 func Unread(ctx context.Context, inbox notifications.Inbox[models.User, model.ID[models.User]], page orm.PageRequest) (orm.PageResult[notifications.Record[models.User]], error) {
 	return inbox.List(ctx, page, true)
 }
