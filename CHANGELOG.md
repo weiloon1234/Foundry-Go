@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.10.0 — 2026-11-07
 
 - Added: opt-in persisted operations telemetry. The `telemetry` package collects bounded
   HTTP, security, backend-failure, runtime and browser observations into immutable batches

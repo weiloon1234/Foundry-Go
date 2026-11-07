@@ -8,6 +8,24 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Persisted operations telemetry — v0.10.0, 2026-11-07
+
+Status: **implemented; `make verify` and race tests on `telemetry` and `application` passed, an independent
+review's three findings were fixed, and CI gates this tag**. Starter, ooo and Boss Club each kept their own
+copy of a persisted telemetry engine; the framework now owns it.
+- The `telemetry` package collects bounded HTTP, security, backend-failure, runtime and browser
+  observations into immutable batches and stores them in framework-owned `foundry_telemetry_*` tables
+  (`telemetry.Migrations()`). Flush receipts make retries after an unknown commit safe; loss stays visible
+  as counters, and bucket capture stays monotonic across wall-clock steps.
+- Six typed incident rules with episodes, `Engine.AcknowledgeIn` in the caller's transaction, bounded
+  retention-aware reads (`Reader.Overview`, `Traffic`, `Issue`, `Issues`, `Events`, `Alerts`),
+  `Engine.RecordBrowser` and `Engine.RunID`.
+- Configured assembly through `application.FeatureSettings.Telemetry`; nothing changes when it is off.
+- `telemetry/sourcemap` reads and prunes private release source maps.
+- `testkit/telemetry.Flush` persists telemetry synchronously in tests without a kernel loop.
+Open: Starter, ooo and Boss Club passed their full gates on the pre-release pin and adopt this tag next;
+their old `developer_*` tables stay frozen, not copied or dropped.
+
 ## SPA runtime data — v0.9.0, 2026-11-06
 
 Status: **implemented; `make verify` and race tests on `http` passed, an independent review's three
@@ -19,7 +37,7 @@ HTML responses in their own middleware to inject public runtime data; the framew
 - `SPARuntime.WrapProxy` applies the same injection to an application's existing development reverse
   proxy, with a bounded buffer, concurrency limit, body cleanup and rejection of late trailers.
 - `SPARuntimeConfig.StyleNonceCarrier` optionally adds a nonce-carrying style element.
-Open: Starter, ooo and Boss Club haven't adopted this release or deleted their middleware yet.
+Adopted 2026-11-06: Starter, ooo and Boss Club each moved to v0.9.0 and deleted their middleware.
 
 ## Capabilities the applications used to copy — v0.8.0, 2026-11-06
 
