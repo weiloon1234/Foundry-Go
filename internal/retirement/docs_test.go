@@ -78,6 +78,7 @@ func TestRetiredDocumentationUnqualifiedCode(t *testing.T) {
 		"```go\nreturn Load\n```",
 		"```go\nconsume(Load)\n```",
 		"```go\nvar callback func() = Each\n```",
+		"```go\nfunc build() { _ = New(build) }\n```",
 	} {
 		if err := CheckDocument("README.md", []byte(text)); err == nil {
 			t.Errorf("accepted %s", text)
@@ -93,6 +94,10 @@ func TestRetiredDocumentationUnqualifiedCode(t *testing.T) {
 		"Use `orm.Query[S].OrderBy` and `orm.Query[S].All`.",
 		"Use `orm.Compile(q)`, `rows.Read(q).Paginate(ctx, db, request)` and `orm.Query.OrderBy`.",
 		"```go\nfmt.Println(\"Load Each Compile\") // Load resources\nrows.EachRead(ctx, db, rows.Read(q), yield)\n```",
+		// Declaring a function or method that shares a retired name is not a use of it.
+		"```go\nfunc New(dependencies datatable.Dependencies) (*datatable.Manager, error) {\n\treturn datatable.New(dependencies, config)\n}\n```",
+		"```go\nfunc (r Reports) Load(ctx context.Context) error { return nil }\n```",
+		"```go\nfunc (r *Reports[T]) Each(yield func(T) bool) {}\n```",
 	} {
 		if err := CheckDocument("README.md", []byte(text)); err != nil {
 			t.Fatal(err)

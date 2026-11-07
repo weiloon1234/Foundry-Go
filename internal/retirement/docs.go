@@ -172,6 +172,11 @@ func retiredCodeName(code string, denied map[string]bool) bool {
 		if item.kind != token.IDENT {
 			continue
 		}
+		// A function or method declaration names its own symbol; that name is
+		// not a use of a retired API that happens to share it.
+		if declaredFunctionName(tokens[:i], func(t lexeme) token.Token { return t.kind }) {
+			continue
+		}
 		qualifier := ""
 		if i > 0 && tokens[i-1].kind == token.PERIOD {
 			if i < 2 || tokens[i-2].kind != token.IDENT {
@@ -213,6 +218,35 @@ func retiredCodeName(code string, denied map[string]bool) bool {
 		}
 		if end+1 < len(tokens) && tokens[end].kind == token.PERIOD && tokens[end+1].kind == token.IDENT && denied[qualifier+item.name+"."+tokens[end+1].name] {
 			return true
+		}
+	}
+	return false
+}
+
+// declaredFunctionName reports whether the identifier after prefix is the name
+// in a function declaration ("func Name") or a method declaration
+// ("func (receiver) Name").
+func declaredFunctionName[T any](prefix []T, kind func(T) token.Token) bool {
+	n := len(prefix)
+	if n == 0 {
+		return false
+	}
+	if kind(prefix[n-1]) == token.FUNC {
+		return true
+	}
+	if kind(prefix[n-1]) != token.RPAREN {
+		return false
+	}
+	depth := 0
+	for i := n - 1; i >= 0; i-- {
+		switch kind(prefix[i]) {
+		case token.RPAREN:
+			depth++
+		case token.LPAREN:
+			depth--
+			if depth == 0 {
+				return i > 0 && kind(prefix[i-1]) == token.FUNC
+			}
 		}
 	}
 	return false
