@@ -38,31 +38,50 @@ pruner (see [Atomicity and bounds](#atomicity-and-bounds)); a standalone
 Adapt an existing typed endpoint after declaring its decoding, normalization,
 validation and authorization:
 
-<!-- compiled-source: tests/fixtures/consumer/idempotenthttp/application.go#authenticated-idempotency -->
+<!-- compiled-source: tests/fixtures/consumer/idempotenthttp/order_route.go#authenticated-idempotency -->
 ```go
-required := http.AuthorizeActor(http.RequireAuthentication(Endpoint(), transport, guard), func(_ context.Context, _ Actor, in Request) error {
-	if in.Body.Name == "request-denied" {
-		return http.Forbidden
-	}
-	return nil
-})
-resolver := modelbinding.ByKey(db, orm.Keyed(Workspaces.Query(), Workspaces.Key()), func(path Path) int64 { return path.Workspace })
-operation := modelbinding.AuthorizeAuthenticatedIdempotentResource(modelbinding.BindAuthenticatedIdempotent(http.IdempotentAuthenticated(required, store, idempotency.Definition{ID: "orders.create", Version: 1}), resolver), func(_ context.Context, actor Actor, in BoundRequest) error {
-	if !in.Model.Enabled || in.Model.Tenant != actor.Tenant || hooks.Deny != nil && hooks.Deny.Load() {
-		return http.Forbidden
-	}
-	return nil
-})
-operation = modelbinding.AuthenticatedIdempotentHeaders(operation, func(_ context.Context, result Receipt) ([]http.ResponseHeader, error) {
-	return []http.ResponseHeader{{Name: "Location", Value: http.HeaderValue("/orders/" + result.ID.String())}}, nil
-})
-return []http.RouteRegistration{operation.Handle(func(_ context.Context, actor Actor, _ BoundRequest) (idempotency.Scope, error) {
-	return idempotency.NewScope(actor.Tenant, strconv.FormatInt(actor.ID, 10))
-}, func(ctx context.Context, tx *database.Tx, actor Actor, in BoundRequest) (Receipt, error) {
-	if hooks.Calls != nil {
-		hooks.Calls.Add(1)
-	}
-	order, err := orm.Insert(ctx, tx, Orders.Table, orm.NumberSet(Orders.WorkspaceID, in.Model.ID), orm.NumberSet(Orders.Caller, actor.ID), orm.TextSet(Orders.Name, in.Request.Body.Name))
+func OrderRoute(db database.Executor, endpoint http.AuthenticatedEndpoint[Path, http.NoQuery, Submission, Actor, Receipt], guard auth.Guard[Actor], store *idempotency.Store, create func(context.Context, *database.Tx, Actor, BoundRequest) (Receipt, error)) http.RouteRegistration {
+	resolver := modelbinding.Define(func(ctx context.Context, path Path) (value.Optional[Workspace], error) {
+		actor, err := guard.Require(ctx)
+		if err != nil {
+			return value.Optional[Workspace]{}, err
+		}
+		workspaces := Workspaces.Query().Where(orm.TextEq(Workspaces.Tenant, actor.Tenant))
+		return orm.Keyed(workspaces, Workspaces.Key()).Find(ctx, db, path.Workspace)
+	})
+	operation := modelbinding.AuthorizeAuthenticatedIdempotentResource(
+		modelbinding.BindAuthenticatedIdempotent(http.IdempotentAuthenticated(endpoint, store, idempotency.Definition{ID: "orders.create", Version: 1}), resolver),
+		func(_ context.Context, _ Actor, in BoundRequest) error {
+			if !in.Model.Enabled {
+				return http.Forbidden
+			}
+			return nil
+		},
+	)
+	operation = modelbinding.AuthenticatedIdempotentHeaders(operation, func(_ context.Context, result Receipt) ([]http.ResponseHeader, error) {
+		return []http.ResponseHeader{{Name: "Location", Value: http.HeaderValue("/orders/" + result.ID.String())}}, nil
+	})
+	return operation.Handle(func(_ context.Context, actor Actor, _ BoundRequest) (idempotency.Scope, error) {
+		return idempotency.NewScope(actor.Tenant, strconv.FormatInt(actor.ID, 10))
+	}, create)
+}
+```
+
+The resolver reads the authenticated actor from the same guard that secured the
+endpoint. It filters by tenant before looking up the workspace key. Both a foreign
+workspace and an absent workspace return 404. The enabled-workspace policy runs
+before execution and before every replay.
+
+Supply the transaction callback with the existing outbox producer:
+
+<!-- compiled-source: tests/fixtures/consumer/idempotenthttp/order_route.go#create-order-transaction -->
+```go
+func CreateOrder(ctx context.Context, tx *database.Tx, actor Actor, in BoundRequest, producer *events.Outbox) (Receipt, error) {
+	order, err := orm.Insert(ctx, tx, Orders.Table,
+		orm.NumberSet(Orders.WorkspaceID, in.Model.ID),
+		orm.NumberSet(Orders.Caller, actor.ID),
+		orm.TextSet(Orders.Name, in.Request.Body.Name),
+	)
 	if err != nil {
 		return Receipt{}, err
 	}
@@ -70,31 +89,13 @@ return []http.RouteRegistration{operation.Handle(func(_ context.Context, actor A
 	if _, err := Created.Enqueue(ctx, tx, producer, receipt); err != nil {
 		return Receipt{}, err
 	}
-	if hooks.InTransaction != nil {
-		if err := hooks.InTransaction(ctx, tx, in); err != nil {
-			return Receipt{}, err
-		}
-	}
-	if hooks.AfterCommit != nil {
-		if err := tx.AfterCommit(func(ctx context.Context) error { return hooks.AfterCommit(ctx, receipt) }); err != nil {
-			return Receipt{}, err
-		}
-	}
-	switch in.Request.Body.Failure {
-	case "business":
-		return Receipt{}, Rejected
-	case "encode":
-		receipt.Score = math.NaN()
-	case "oversized":
-		receipt.Name = strings.Repeat("x", settings.Features.Idempotency.Config.MaxResultBytes)
-	}
 	return receipt, nil
-})}, nil
+}
 ```
 
-The excerpt uses the declarations and dependencies in the complete
+The complete
 [independent consumer](../../tests/fixtures/consumer/idempotenthttp/application.go)
-uses required authentication, a bound workspace, its current resource policy,
+uses these functions with required authentication, a bound workspace, its current resource policy,
 typed ORM assignments, typed DTOs and the existing outbox. The authenticated adapter
 passes the concrete actor to both callbacks. The model-binding adapter additionally
 passes its concrete bound request. `Prepare` is the lower-level composition point

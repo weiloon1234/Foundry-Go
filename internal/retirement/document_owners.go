@@ -167,11 +167,19 @@ func (r documentRules) checkCode(name, code string, line int) []error {
 	return failures
 }
 
-// Fixed-arity calls can rule out a retired method on an unknown receiver.
-// Method references and variadic methods still need owner evidence.
+// Only explicit single-value arguments can rule out a fixed-arity method.
+// A sole call may return multiple values; spread arguments need owner evidence.
 func (r documentRules) matchesCallArguments(method string, call *ast.CallExpr) bool {
 	count, fixed := r.CallArguments[method]
-	return !fixed || call == nil || len(call.Args) == count && !call.Ellipsis.IsValid()
+	if !fixed || call == nil || call.Ellipsis.IsValid() {
+		return true
+	}
+	if len(call.Args) == 1 {
+		if _, expands := ast.Unparen(call.Args[0]).(*ast.CallExpr); expands {
+			return true
+		}
+	}
+	return len(call.Args) == count
 }
 
 func stripTypeArguments(expr ast.Expr) ast.Expr {

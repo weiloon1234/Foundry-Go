@@ -5,6 +5,13 @@ keep using the [typed cache API](caching.md): model-specific keys, concrete valu
 explicit TTLs and typed counters. The vendor client remains private; advanced
 capabilities use the explicit [scoped command boundary](redis-commands.md).
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare stores and inspect their keys](#recipe-credential-stores)
+- [Bind password lockout](login-lockout.md#recipe-password-lockout)
+
+<a id="recipe-credential-stores"></a>
 ## Inspect configured Redis key permissions
 
 `infrastructure.Plan.RedisKeys()` returns the resolved Redis address requirements
@@ -27,20 +34,29 @@ Explicit namespace overrides retain their configured application and environment
 Declare application rate-limit and credential-protection stores alongside the
 application settings so construction and inspection use the same declarations:
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#credential-stores -->
 ```go
-var Limits = foundation.NewKey[*ratelimit.Store]("app.limits")
-var Protection = foundation.NewKey[*lockout.Store]("app.protection")
+var CredentialLimitsKey = foundation.NewKey[*ratelimit.Store]("credentials.limits")
+var CredentialProtectionKey = foundation.NewKey[*lockout.Store]("credentials.protection")
 
-builder := application.New(settings, application.WithRedisStores(
-    infrastructure.RedisRateLimitStore(
-        Limits, "default", ratelimit.DefaultConfig(keyspace.Namespace{})),
-    infrastructure.RedisLockoutStore(
-        Protection, "default", lockout.DefaultConfig(keyspace.Namespace{})),
-))
-inventory, err := builder.RedisKeys()
-if err != nil { return err }
-if err := json.NewEncoder(output).Encode(inventory); err != nil { return err }
+func CredentialStores(connection redis.ConnectionName) application.Option {
+	return application.WithRedisStores(
+		infrastructure.RedisRateLimitStore(CredentialLimitsKey, connection, ratelimit.DefaultConfig(keyspace.Namespace{})),
+		infrastructure.RedisLockoutStore(CredentialProtectionKey, connection, lockout.DefaultConfig(keyspace.Namespace{})),
+	)
+}
 ```
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#credential-store-inventory -->
+```go
+func CredentialStoreInventory(settings application.Settings, connection redis.ConnectionName) ([]infrastructure.RedisConnectionInventory, error) {
+	return application.New(settings, CredentialStores(connection)).RedisKeys()
+}
+```
+
+Enable these declarations only with their consuming feature and configured Redis
+connection. Reuse the typed keys across actors. Configured assembly owns store
+construction and cleanup.
 
 The store constructors accept concrete `foundation.Key[*ratelimit.Store]` and
 `foundation.Key[*lockout.Store]` keys. Key names follow named-service syntax.

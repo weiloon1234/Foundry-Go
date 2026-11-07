@@ -24,6 +24,13 @@ func CredentialStores(connection redis.ConnectionName) application.Option {
 
 // doc-example:end credential-stores
 
+// doc-example:begin credential-store-inventory
+func CredentialStoreInventory(settings application.Settings, connection redis.ConnectionName) ([]infrastructure.RedisConnectionInventory, error) {
+	return application.New(settings, CredentialStores(connection)).RedisKeys()
+}
+
+// doc-example:end credential-store-inventory
+
 // doc-example:begin password-lockout
 var PasswordAttempts = lockout.DefineLogin("password.accounts", keyspace.StringKeys[string](), lockout.DefaultLimits())
 

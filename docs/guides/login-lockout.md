@@ -4,22 +4,34 @@ Typed failed-attempt policies use atomic Redis or an explicit local authority. P
 
 Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Bind a password login policy](#recipe-password-lockout)
+- [Declare shared Redis stores](redis.md#recipe-credential-stores)
+
+<a id="recipe-password-lockout"></a>
 ## Configure the account's login policy
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#password-lockout -->
 ```go
-var PasswordAttempts = lockout.DefineLogin(
-    "accounts.password",
-    keyspace.StringKeys[Email](),
-    lockout.DefaultLimits(),
-)
+var PasswordAttempts = lockout.DefineLogin("password.accounts", keyspace.StringKeys[string](), lockout.DefaultLimits())
 
-// Reuse the application's existing Redis client and namespace.
-store, err := lockout.NewStore(redisClient, lockout.DefaultConfig(namespace))
-// Check err before binding.
-throttle, err := PasswordAttempts.Bind(store)
-// Check err and keep the protected view returned by WithLockout.
-login, err = login.WithLockout(throttle)
+func ProtectPasswordLogin(resolver foundation.Resolver, login *passwords.Login) (*passwords.Login, error) {
+	store, err := foundation.Resolve(resolver, CredentialProtectionKey)
+	if err != nil {
+		return nil, err
+	}
+	throttle, err := PasswordAttempts.Bind(store)
+	if err != nil {
+		return nil, err
+	}
+	return login.WithLockout(throttle)
+}
 ```
+
+Resolve the store key from [configured Redis declarations](redis.md#recipe-credential-stores)
+during composition. Request quotas use their separate rate-limit key.
 
 The throttle key must match the login's concrete input key type. Use one canonical
 key for lockout and model lookup, including tenant/provider identity where needed.

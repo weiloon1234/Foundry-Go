@@ -7,7 +7,7 @@
 - Select: [Portal surfaces](#recipe-select-surfaces)
 - Decode: [Received values](#recipe-received-values), [Schema handles](#recipe-schema-handles)
 - Label: [Enum metadata](#recipe-enum-labels)
-- Localize: [Client options and catalog locales](#recipe-localized-client)
+- Localize: [Client options and catalog locales](#recipe-localized-client), [Message formatting](#recipe-browser-messages)
 - Configure: [Public browser environment](#recipe-public-environment)
 - Coordinate credentials: [Session locks and failures](#recipe-session-coordination)
 - Inspect fields: [Descriptors](client-descriptors.md#recipe-field-descriptors)
@@ -1064,6 +1064,62 @@ Go owns absence and fallback behavior; frontends use decoded values directly.
 In this example, a blank `VITE_TIME_ZONE` lets `Intl` use the viewer's browser
 zone. A supplied, validated zone fixes the display zone.
 
+<a id="recipe-browser-messages"></a>
+## Browser catalogs
+
+Import the following functions and the `ValidationMessages` type from the
+generated client entry. Supply the selected locale and `catalogTranslations` of
+its JSON catalog files as `messages`, with an explicit fallback catalog.
+Generated clients format the same JSON with the runtime renderer that localizes
+validation messages, so a browser applies Go's placeholder, plural and fallback
+rules without a second implementation:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-typed-messages -->
+```typescript
+void formatMessage(messages, "cart.items", { count: 2, name: "Ada" });
+void formatMessage(messages, "cart.items", { count: "2.5", name: "Ada" });
+void formatMessage(messages, "fields.name");
+```
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-text-message -->
+```typescript
+void formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
+```
+
+- `catalogTranslations(files)` flattens one locale's catalog files under the Go
+  rules: semantic keys, string or `$plural` leaves with known forms including
+  `other`, bounded text and no key defined twice. A violation throws
+  `ContractError` naming the file index and key. The same `messages` object can
+  be passed as `ClientOptions.validationMessages`.
+- `formatMessage(messages, key, args)` formats a key the exported catalog
+  declares. `CatalogMessageKey` and `CatalogMessageArguments` type its key and
+  arguments, so a misspelled key or missing argument fails to compile. The
+  plural parameter and its kind come from the declaration.
+- `formatText(messages, key, args, { plural, pluralKind })` formats a key only a
+  frontend catalog defines, naming its plural argument explicitly.
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-frontend-messages -->
+```typescript
+void formatFrontendMessage(messages, "ui.welcome", { name: "Ada" });
+void formatFrontendMessage(messages, "ui.farewell");
+void formatFrontendMessage(messages, "auth.notice", { attempts: 3 });
+```
+
+Frontend-only catalog discovery and plural signatures follow [frontend message metadata](#frontend-message-keys).
+
+`formatFrontendMessage` checks keys and arguments exported from frontend-only
+catalogs. The message formatters use the fallback catalog and return the key when
+no text renders. Number arguments may be numbers or exact decimal strings.
+
+For locale selection and validation messages, see [localized client options](#recipe-localized-client).
+
+In an application with [portal surfaces](#portal-surfaces),
+import `formatMessage` and `contractMetadata` from the portal's own entry. Its
+embedded manifest is the portal's projection, while the full entry's carries
+every operation and schema into the bundle. `catalogTranslations` and
+`formatText` come from the shared runtime, so any entry's export is the same
+function.
+
 ## Frontend message keys
 
 Pass a filesystem of frontend JSON catalogs to `manifest.Sources.Frontend`, with
@@ -1094,20 +1150,7 @@ catalog and declare its numeric argument with `MessageDefinition.Plural`.
 
 The generated `FrontendMessageKey` union and `FrontendMessageArguments` interface
 keep frontend keys separate from Go-declared `CatalogMessageKey` values.
-`formatFrontendMessage` uses the same translations, fallback catalogs, and plural
-renderer as `formatMessage`:
-
-```typescript
-import { catalogTranslations, formatFrontendMessage } from "./generated/contracts_foundry.gen.js";
-
-const messages = { locale: "en", translations: catalogTranslations([frontendEnglish]) };
-const greeting = formatFrontendMessage(messages, "ui.welcome", { name: "Ada" });
-const farewell = formatFrontendMessage(messages, "ui.farewell");
-```
-
-Unknown keys and missing arguments fail TypeScript compilation. Missing or
-unrenderable translation text returns the key at runtime. Applications own
-catalog text and error presentation.
+See [browser message formatting](#recipe-browser-messages) for calls and fallback behavior.
 
 <a id="recipe-localized-client"></a>
 ## Configure locale and validation messages
@@ -1132,8 +1175,8 @@ export function localizedClient(transport: sdk.HTTPTransport, messages: sdk.Vali
 Application helpers such as `clientOptions(translations)` may wrap these options;
 they are not generated SDK functions. Formatting locale is independent of the
 translation language; [public environment decoding](#recipe-public-environment)
-retains that distinction. [Browser catalogs](localization.md#browser-catalogs)
-own catalog loading and translation formatting.
+retains that distinction. See [browser catalogs](#recipe-browser-messages)
+for catalog loading and translation formatting.
 
 ## Validation and UI metadata
 

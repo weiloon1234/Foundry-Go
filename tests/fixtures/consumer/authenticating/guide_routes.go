@@ -30,6 +30,9 @@ func TokenBinding(tokens *UserTokens) (foundryhttp.GuardBinding[models.User], er
 	return foundryhttp.BindGuard(transport, guard)
 }
 
+// doc-example:end bind-token-guard
+
+// doc-example:begin configure-bound-scopes
 func SecuredOrder(binding foundryhttp.GuardBinding[models.User]) (OrderEndpoint, error) {
 	scopes, err := OrderReadScopes()
 	if err != nil {
@@ -38,7 +41,7 @@ func SecuredOrder(binding foundryhttp.GuardBinding[models.User]) (OrderEndpoint,
 	return foundryhttp.Authenticated(showOrder, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(ViewAccount)), nil
 }
 
-// doc-example:end bind-token-guard
+// doc-example:end configure-bound-scopes
 
 // doc-example:begin scoped-resource-policy
 func ScopedOrderRoute(db database.Executor, binding foundryhttp.GuardBinding[models.User], read func(context.Context, models.User, models.Order) error) (foundryhttp.RouteRegistration, error) {

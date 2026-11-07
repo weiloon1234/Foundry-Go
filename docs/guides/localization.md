@@ -28,7 +28,7 @@ supported.
 
 - [Declare typed messages](#recipe-declare-messages)
 - [Load JSON catalogs](#recipe-load-catalogs)
-- [Format browser messages](#recipe-browser-messages)
+- [Format browser messages](client-contracts.md#recipe-browser-messages)
 - [Read the selected request locale](#recipe-request-locale)
 - [Declare enum and field labels](#recipe-feature-labels)
 - [Configure automatic HTTP selection](validation-messages.md#recipe-configure-messages)
@@ -159,68 +159,9 @@ Compilation still rejects a placeholder the declaration lacks and plural forms o
 a key declared without a plural parameter, naming the locale and key. Templates
 from `ReadTemplates` carry no file names into those later errors.
 
-<a id="recipe-browser-messages"></a>
 ## Browser catalogs
 
-Import the following functions and the `ValidationMessages` type from the
-generated client entry. Supply the selected locale and `catalogTranslations` of
-its JSON catalog files as `messages`, with an explicit fallback catalog.
-Generated clients format the same JSON with the runtime renderer that localizes
-validation messages, so a browser applies Go's placeholder, plural and fallback
-rules without a second implementation:
-
-<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-typed-messages -->
-```typescript
-void formatMessage(messages, "cart.items", { count: 2, name: "Ada" });
-void formatMessage(messages, "cart.items", { count: "2.5", name: "Ada" });
-void formatMessage(messages, "fields.name");
-```
-
-<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-text-message -->
-```typescript
-void formatText(messages, "auth.lockout", { minutes: 5 }, { plural: "minutes" });
-```
-
-- `catalogTranslations(files)` flattens one locale's catalog files under the Go
-  rules: semantic keys, string or `$plural` leaves with known forms including
-  `other`, bounded text and no key defined twice. A violation throws
-  `ContractError` naming the file index and key. The same `messages` object can
-  be passed as `ClientOptions.validationMessages`.
-- `formatMessage(messages, key, args)` formats a key the exported catalog
-  declares. `CatalogMessageKey` and `CatalogMessageArguments` type its key and
-  arguments, so a misspelled key or missing argument fails to compile. The
-  plural parameter and its kind come from the declaration.
-- `formatText(messages, key, args, { plural, pluralKind })` formats a key only a
-  frontend catalog defines, naming its plural argument explicitly.
-
-<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/messages.ts#browser-frontend-messages -->
-```typescript
-void formatFrontendMessage(messages, "ui.welcome", { name: "Ada" });
-void formatFrontendMessage(messages, "ui.farewell");
-void formatFrontendMessage(messages, "auth.notice", { attempts: 3 });
-```
-
-Frontend-only plural declarations require exactly one numeric placeholder across
-all forms and locales. A plural with additional arguments belongs in a shared
-catalog with an explicit Go message declaration. Every enabled locale must cover
-each key in its tree, including the `other` plural form.
-
-`formatFrontendMessage` checks keys and arguments exported from frontend-only
-catalogs. The message formatters use the fallback catalog and return the key when
-no text renders. Number arguments may be numbers or exact decimal strings.
-
-`catalogLocales` holds the server's configured default and supported locales as
-a frozen `{ default, supported }` typed by `Locale`, or `undefined` when no
-catalog is exported. Choose a portal's language from it rather than from the
-translation folders that exist. It is a literal of its own, so importing it does
-not bundle the embedded manifest or the runtime.
-
-In an application with [portal surfaces](client-contracts.md#portal-surfaces),
-import `formatMessage` and `contractMetadata` from the portal's own entry. Its
-embedded manifest is the portal's projection, while the full entry's carries
-every operation and schema into the bundle. `catalogTranslations` and
-`formatText` come from the shared runtime, so any entry's export is the same
-function.
+See [generated browser message formatting](client-contracts.md#recipe-browser-messages).
 
 <a id="recipe-request-locale"></a>
 ## Resolution and fallback

@@ -9,12 +9,13 @@ Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/
 
 - [Declare a model provider](#recipe-declare-provider)
 - [Register actor guards](#recipe-register-guards)
-- [Declare token scopes](#recipe-access-scopes)
+- [Declare token scopes](access-scopes.md#recipe-access-scopes)
 - [Declare permissions](#recipe-declare-permission)
 - [Declare resource policies](#recipe-resource-policy)
 - [Bind a guard to HTTP](#recipe-bind-guard)
 - [Construct password login](#recipe-password-login)
-- [Share credential protection](#recipe-credential-protection)
+- [Share credential protection](redis.md#recipe-credential-stores)
+- [Protect password login](login-lockout.md#recipe-password-lockout)
 - [Scope resource access](http-model-binding.md#recipe-scoped-resource-policy)
 - [Deliver tokens](tokens.md#recipe-token-delivery)
 
@@ -256,14 +257,6 @@ func TokenBinding(tokens *UserTokens) (foundryhttp.GuardBinding[models.User], er
 	}
 	return foundryhttp.BindGuard(transport, guard)
 }
-
-func SecuredOrder(binding foundryhttp.GuardBinding[models.User]) (OrderEndpoint, error) {
-	scopes, err := OrderReadScopes()
-	if err != nil {
-		return OrderEndpoint{}, err
-	}
-	return foundryhttp.Authenticated(showOrder, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(ViewAccount)), nil
-}
 ```
 
 `ProfileInput` is an alias for the matching `http.Input` type, as in the consumer
@@ -346,30 +339,9 @@ explicit in the handler or service. Route metadata includes typed
 The [consumer](../../tests/fixtures/consumer/authenticating/permissions.go) uses
 these actual declarations in its ordinary profile route.
 
-<a id="recipe-access-scopes"></a>
 ## Declare required access scopes
 
-Scopes limit the credential; permissions and resource policies evaluate current
-authority. Include the granted scopes when [issuing tokens](tokens.md#recipe-issue-token).
-
-<!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#declare-scopes -->
-```go
-var OrderReadScope = auth.DefineAccessScope[models.User]("orders.read")
-
-func OrderReadScopes() (auth.AccessScopes[models.User], error) {
-	return auth.NewAccessScopes(OrderReadScope)
-}
-```
-
-<!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#configure-scopes -->
-```go
-func ScopedProfile(endpoint ProfileEndpoint, required auth.AccessScopes[models.User]) ProfileEndpoint {
-	return http.ConfigureAuthenticated(endpoint, http.Scopes(required))
-}
-```
-
-For a new endpoint, use [the bound guard](#recipe-bind-guard). For a resource,
-[scope its lookup and authorize it](http-model-binding.md#recipe-scoped-resource-policy).
+See [credential access scopes](access-scopes.md#recipe-access-scopes) for declarations and [HTTP scope requirements](access-scopes.md#recipe-http-scopes) for application.
 
 <a id="recipe-password-login"></a>
 ## Construct password login
@@ -405,48 +377,9 @@ func NewLogin(db AccountStore, provider AccountProvider, hasher *password.Hasher
 }
 ```
 
-<a id="recipe-credential-protection"></a>
 ## Share credential protection stores
 
-Pass the store option to `application.New(settings, CredentialStores(connection))`
-only when its consuming feature and Redis connection are enabled. Reuse the same
-typed keys across actors; configured assembly owns store construction and cleanup.
-
-<!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#credential-stores -->
-```go
-var CredentialLimitsKey = foundation.NewKey[*ratelimit.Store]("credentials.limits")
-var CredentialProtectionKey = foundation.NewKey[*lockout.Store]("credentials.protection")
-
-func CredentialStores(connection redis.ConnectionName) application.Option {
-	return application.WithRedisStores(
-		infrastructure.RedisRateLimitStore(CredentialLimitsKey, connection, ratelimit.DefaultConfig(keyspace.Namespace{})),
-		infrastructure.RedisLockoutStore(CredentialProtectionKey, connection, lockout.DefaultConfig(keyspace.Namespace{})),
-	)
-}
-```
-
-Resolve the protection key during composition and bind the login declaration:
-
-<!-- compiled-source: tests/fixtures/consumer/authenticating/credential_stores.go#password-lockout -->
-```go
-var PasswordAttempts = lockout.DefineLogin("password.accounts", keyspace.StringKeys[string](), lockout.DefaultLimits())
-
-func ProtectPasswordLogin(resolver foundation.Resolver, login *passwords.Login) (*passwords.Login, error) {
-	store, err := foundation.Resolve(resolver, CredentialProtectionKey)
-	if err != nil {
-		return nil, err
-	}
-	throttle, err := PasswordAttempts.Bind(store)
-	if err != nil {
-		return nil, err
-	}
-	return login.WithLockout(throttle)
-}
-```
-
-Use the same canonical sign-in key for lookup, provisioning and lockout. Resolve
-`CredentialLimitsKey` the same way for the actor's [credential quota](rate-limiting.md).
-See [login lockout](login-lockout.md) for client-aware limits and indistinguishable failures.
+See [configured Redis stores](redis.md#recipe-credential-stores) and [password lockout](login-lockout.md#recipe-password-lockout).
 
 ## Automatic authenticated attribution
 

@@ -3,18 +3,15 @@ package idempotenthttp
 import (
 	"context"
 	"math"
-	"strconv"
 	"strings"
 	"sync/atomic"
 
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
-	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/events"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/modelbinding"
-	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/outbox/publisher"
 	"github.com/weiloon1234/Foundry-Go/validation"
@@ -93,35 +90,18 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 		if err != nil {
 			return nil, err
 		}
-		// doc-example:begin authenticated-idempotency
 		required := http.AuthorizeActor(http.RequireAuthentication(Endpoint(), transport, guard), func(_ context.Context, _ Actor, in Request) error {
-			if in.Body.Name == "request-denied" {
+			if in.Body.Name == "request-denied" || hooks.Deny != nil && hooks.Deny.Load() {
 				return http.Forbidden
 			}
 			return nil
 		})
-		resolver := modelbinding.ByKey(db, orm.Keyed(Workspaces.Query(), Workspaces.Key()), func(path Path) int64 { return path.Workspace })
-		operation := modelbinding.AuthorizeAuthenticatedIdempotentResource(modelbinding.BindAuthenticatedIdempotent(http.IdempotentAuthenticated(required, store, idempotency.Definition{ID: "orders.create", Version: 1}), resolver), func(_ context.Context, actor Actor, in BoundRequest) error {
-			if !in.Model.Enabled || in.Model.Tenant != actor.Tenant || hooks.Deny != nil && hooks.Deny.Load() {
-				return http.Forbidden
-			}
-			return nil
-		})
-		operation = modelbinding.AuthenticatedIdempotentHeaders(operation, func(_ context.Context, result Receipt) ([]http.ResponseHeader, error) {
-			return []http.ResponseHeader{{Name: "Location", Value: http.HeaderValue("/orders/" + result.ID.String())}}, nil
-		})
-		return []http.RouteRegistration{operation.Handle(func(_ context.Context, actor Actor, _ BoundRequest) (idempotency.Scope, error) {
-			return idempotency.NewScope(actor.Tenant, strconv.FormatInt(actor.ID, 10))
-		}, func(ctx context.Context, tx *database.Tx, actor Actor, in BoundRequest) (Receipt, error) {
+		return []http.RouteRegistration{OrderRoute(db, required, guard, store, func(ctx context.Context, tx *database.Tx, actor Actor, in BoundRequest) (Receipt, error) {
 			if hooks.Calls != nil {
 				hooks.Calls.Add(1)
 			}
-			order, err := orm.Insert(ctx, tx, Orders.Table, orm.NumberSet(Orders.WorkspaceID, in.Model.ID), orm.NumberSet(Orders.Caller, actor.ID), orm.TextSet(Orders.Name, in.Request.Body.Name))
+			receipt, err := CreateOrder(ctx, tx, actor, in, producer)
 			if err != nil {
-				return Receipt{}, err
-			}
-			receipt := Receipt{ID: order.ID, Name: order.Name, Memo: in.Request.Body.Memo, Score: 1}
-			if _, err := Created.Enqueue(ctx, tx, producer, receipt); err != nil {
 				return Receipt{}, err
 			}
 			if hooks.InTransaction != nil {
@@ -144,6 +124,5 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 			}
 			return receipt, nil
 		})}, nil
-		// doc-example:end authenticated-idempotency
 	}).Build(ctx)
 }

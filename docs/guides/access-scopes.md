@@ -4,16 +4,23 @@ Access scopes place a typed ceiling on a credential and compose with current-mod
 
 Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
 
+<a id="agent-entry"></a>
+## Agent entry
+
+- [Declare typed scope sets](#recipe-access-scopes)
+- [Require scopes on HTTP endpoints](#recipe-http-scopes)
+- [Bind an HTTP guard](authentication.md#recipe-bind-guard)
+
+<a id="recipe-access-scopes"></a>
 ## Declare scopes and immutable sets
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#declare-scopes -->
 ```go
-var OrderRead = auth.DefineAccessScope[User]("orders.read")
-var ProfileRead = auth.DefineAccessScope[User]("profile.read")
+var OrderReadScope = auth.DefineAccessScope[models.User]("orders.read")
 
-grants, err := auth.NewAccessScopes(OrderRead, ProfileRead)
-// Check err before issuing or accepting a credential.
-required, err := auth.NewAccessScopes(OrderRead)
-// Check err before registering a route.
+func OrderReadScopes() (auth.AccessScopes[models.User], error) {
+	return auth.NewAccessScopes(OrderReadScope)
+}
 ```
 
 Names follow Foundry's semantic identifier grammar: lowercase ASCII letters,
@@ -64,10 +71,27 @@ needs the policy to authorize the selected order and account's current state.
 Ordinary `Guard.Require` authenticates only; use an explicit scope requirement on
 operations intended to enforce token capabilities.
 
+<a id="recipe-http-scopes"></a>
 ## Require scopes at the HTTP boundary
 
+<!-- compiled-source: tests/fixtures/consumer/authenticating/access_scopes.go#configure-scopes -->
 ```go
-endpoint := http.RequireAuthentication(declaration, transport, api, http.Scopes(required))
+func ScopedProfile(endpoint ProfileEndpoint, required auth.AccessScopes[models.User]) ProfileEndpoint {
+	return http.ConfigureAuthenticated(endpoint, http.Scopes(required))
+}
+```
+
+For a new endpoint, apply the same requirements with its bound guard:
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/guide_routes.go#configure-bound-scopes -->
+```go
+func SecuredOrder(binding foundryhttp.GuardBinding[models.User]) (OrderEndpoint, error) {
+	scopes, err := OrderReadScopes()
+	if err != nil {
+		return OrderEndpoint{}, err
+	}
+	return foundryhttp.Authenticated(showOrder, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(ViewAccount)), nil
+}
 ```
 
 The scope check runs before request decoding and supplies the same concrete model

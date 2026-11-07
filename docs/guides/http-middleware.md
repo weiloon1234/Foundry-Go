@@ -5,7 +5,7 @@
 
 - [Declare and attach middleware](#recipe-attach-middleware)
 - [Attach a credential quota](#recipe-credential-quota)
-- [Protect credential stores](authentication.md#recipe-credential-protection)
+- [Protect credential stores](redis.md#recipe-credential-stores)
 - [Make an operation replayable](idempotent-operations.md#recipe-idempotent-endpoint)
 - [Configure request locales](validation-messages.md#recipe-configure-messages)
 

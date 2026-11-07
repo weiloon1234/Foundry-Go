@@ -1,26 +1,51 @@
 # HTTP and configuration recipe extraction
 
 Milestone 3, `lane/m3-http-config`, 2026-11-07. This is an implementation handoff,
-not acceptance evidence. Work is confined to the assigned worktree. No application
-repository, framework runtime, checker, Makefile, changelog or unrelated guide was
-changed.
+not acceptance evidence. Work is confined to the assigned worktree. The fix round
+starts from combined head `1fabf821`, including the lead's earlier render and
+fixture module tidy. No commits, pushes or merges were made.
 
-## Status and limits
+## Fix-round status and final owners
 
-The five assigned skills have an inventory below. The owned guides now have
-navigation-only agent entries, explicit recipe anchors and source directives for
-the extracted executable examples. Existing pilot owners remain authoritative.
-No new generated DTO, enum, message or configuration declaration was introduced;
-new fixture functions reuse existing generated contracts and public APIs.
+Read FIX-common.md and the assigned review findings. These changes address only
+M3-002, M3-007, M3-008 and M3-010:
 
-Changed Go files were formatted with `gofmt`. No tests, framework builds, typechecks,
+- **M3-002:** `idempotenthttp.OrderRoute` resolves workspace keys inside the
+  authenticated actor's tenant. Foreign and absent workspaces both return 404;
+  the enabled-resource policy still runs before execution and replay. The two
+  source regions in `order_route.go` teach binding and transaction/outbox writes.
+  Failure injection, NaN and oversized responses remain in `application.go`,
+  outside those regions, with their existing failure tests. Added a regression
+  for foreign/absent responses, no claims or writes, successful same-tenant
+  replay, tenant changes before replay, and disabled-resource denial. Error
+  comparison excludes only the per-request correlation ID.
+- **M3-007:** access-scopes owns scope declarations and HTTP scope requirements;
+  redis owns Redis credential-store registration and inventory; login-lockout
+  owns password lockout binding. Authentication keeps links to those owners.
+  The bound endpoint region moved out of the authentication guard-binding region
+  so scoped endpoint teaching also has one owner.
+- **M3-008:** client-contracts owns `recipe-browser-messages` and all three
+  `messages.ts` formatting regions, because the generated client exports the
+  formatter. Localization links there. The previous handwritten frontend
+  formatting call in client-contracts was replaced with a link to that recipe;
+  export/discovery metadata remains in its existing reference section.
+- **M3-010:** the retirement filter no longer infers runtime arity from a sole
+  call argument or a spread call. Those shapes require owner evidence. Added
+  cases for multi-result functions, parenthesized and generic calls, variadic
+  calls, retained package-level calls and explicit retired owners. Definite
+  fixed-arity mismatches, including `productionprofile.Check()`, remain accepted.
+
+Changed Go files were formatted with `gofmt`. No tests, builds, typechecks,
 verification commands or generator checks were run. The explicitly permitted
-`go run ./internal/cmd/renderdocs` write attempt failed before the renderer ran:
-the sandbox denied access to the existing Go build cache under
-`/Users/weiloon/Library/Caches/go-build`. Following COMMON.md, rendering is left
-to the lead. New source-bound fences remain empty until that command runs; old
-pilot fences have not been manually normalized. Compilation and current-source
-acceptance remain unverified.
+renderer invocation for the eight changed guides failed before rendering:
+`open /Users/weiloon/Library/Caches/go-build/...: operation not permitted`.
+Following COMMON.md, rendering is left to the lead. New source-bound fences are
+empty pending rendering; existing rendered excerpts moved with their owners.
+Compilation and current-source acceptance remain unverified.
+
+The inventory below records the final recipe owners, including these fixes.
+The original extraction introduced no new generated DTO, enum, message or
+configuration declaration; fixture functions reuse existing contracts and APIs.
 
 ## Inventory conventions and provenance
 
@@ -49,13 +74,13 @@ from additional executable recipes, following the pilot's inventory convention.
 | --- | --- | --- |
 | 21–24, 41–43, 55: concrete stored-model provider | [Declare provider](../guides/authentication.md#recipe-declare-provider) | `goway/guideadapters/examples_test.go#authentication-account` (existing) |
 | 25–27, 41–43, 58–61, 101–105, 115–117: register guards, policies and permissions for the actor | [Register guards](../guides/authentication.md#recipe-register-guards) | `authenticating/accounts.go#register-guards` |
-| 21, 28–32: declare and construct typed scopes; configure an authenticated endpoint | [Access scopes](../guides/authentication.md#recipe-access-scopes) | `authenticating/access_scopes.go#declare-scopes`, `#configure-scopes` |
+| 21, 28–32: declare and construct typed scopes; configure an authenticated endpoint | [Access scopes](../guides/access-scopes.md#recipe-access-scopes), [HTTP scopes](../guides/access-scopes.md#recipe-http-scopes) | `authenticating/access_scopes.go#declare-scopes`, `#configure-scopes`; `authenticating/guide_routes.go#configure-bound-scopes` |
 | 21–24, 28–32: declare current account permission and apply it | [Permissions](../guides/authentication.md#recipe-declare-permission) | `authenticating/permissions.go#declare-permission`, `#configure-permission` |
 | 22–24: declare and evaluate a concrete resource policy | [Resource policy](../guides/authentication.md#recipe-resource-policy) | `authenticating/accounts.go#resource-policy`, `#check-resource-policy` |
-| 28–35, 58–61: capture bearer credentials, bind exact guard, require scopes and permissions | [HTTP guard binding](../guides/authentication.md#recipe-bind-guard) | `authenticating/guide_routes.go#bind-token-guard` |
+| 28–35, 58–61: capture bearer credentials and bind exact guard | [HTTP guard binding](../guides/authentication.md#recipe-bind-guard) | `authenticating/guide_routes.go#bind-token-guard` |
 | 33–38, 125–128: actor-scoped lookup, staged authenticated binding and resource authorization | [Scope resource access](../guides/http-model-binding.md#recipe-scoped-resource-policy) | `authenticating/guide_routes.go#scoped-resource-policy` |
 | 44–46, 55: password login and shared provider | [Password login](../guides/authentication.md#recipe-password-login) | `passwords/login.go#password-login` |
-| 44–54, 118–122: typed Redis store keys, WithRedisStores, resolution, DefineLogin and WithLockout | [Credential protection](../guides/authentication.md#recipe-credential-protection) | `authenticating/credential_stores.go#credential-stores`, `#password-lockout` |
+| 44–54, 118–122: typed Redis store keys, WithRedisStores, resolution, DefineLogin and WithLockout | [Redis stores](../guides/redis.md#recipe-credential-stores), [password lockout](../guides/login-lockout.md#recipe-password-lockout) | `authenticating/credential_stores.go#credential-stores`, `#credential-store-inventory`, `#password-lockout` |
 | 55–57: shared token store and declared scope ceiling | [Token store](../guides/tokens.md#recipe-token-store) | `authenticating/tokens.go#token-store` |
 | 25–27, 55–57: issue only from trusted proof with typed granted scopes | [Token issuance](../guides/tokens.md#recipe-issue-token) | `authenticating/tokens.go#issue-token` |
 | 56–57: shorten a guard's renewable lifetime within the store ceiling | [Token lifetimes](../guides/tokens.md#recipe-token-lifetimes) | `authenticating/guide_routes.go#token-lifetime` |
@@ -69,7 +94,7 @@ revocation, logout-all, failure privacy and scope freshness remain in their
 existing token/authentication prose. Credential quotas link to their rate-limit
 owner. Actor models, provisioning and grant policy, `*` account capabilities,
 canonicalization choices, filenames, migrations, seeders and execution cadence
-remain application-owned. This lane does not claim new runtime or security tests.
+remain application-owned. The fix-round regression sources are listed above; they have not been executed.
 
 ## foundry-middleware
 
@@ -79,7 +104,7 @@ remain application-owned. This lane does not claim new runtime or security tests
 | 20–25, 60–61: endpoint, nested scope and global attachment | [Attach middleware](../guides/http-middleware.md#recipe-attach-middleware) | `httpmiddleware/router.go#middleware-route`, `#middleware-scope`, `#middleware-global` |
 | 26–35, 55–65: proxy ordering, locale ownership, credential limits and policy ownership | [Attachment/order](../guides/http-middleware.md#recipe-attach-middleware), [credential quotas](../guides/http-middleware.md#recipe-credential-quota) | Existing middleware source plus `httpmiddleware/router.go#middleware-credential-group`; built-in constructor reference guides stay linked |
 | 29–31: configured locale selection | [Configured messages](../guides/validation-messages.md#recipe-configure-messages) | `configured/catalog.go#configured-catalog` |
-| 36–45: authenticated idempotency with current resource policy, trusted caller scope, transactional writes and outbox | [Idempotent endpoint](../guides/idempotent-operations.md#recipe-idempotent-endpoint) | `idempotenthttp/application.go#authenticated-idempotency` |
+| 36–45: authenticated idempotency with current resource policy, trusted caller scope, transactional writes and outbox | [Idempotent endpoint](../guides/idempotent-operations.md#recipe-idempotent-endpoint) | `idempotenthttp/order_route.go#authenticated-idempotency`, `#create-order-transaction` |
 
 No owned recipe is unresolved. The idempotency owner retains supported/unsupported
 transport rules, replay checks, unknown outcomes and resource bounds. The example
@@ -141,7 +166,7 @@ endpoints or encrypt secrets. This lane changes no migrations or stored data.
 | 49–51: generated message arguments and field-specific translation | [Translate a rule](../guides/validation-messages.md#recipe-translate-rule) | `localization/messages.go#rule-message-arguments`; `localization/validation.go#translated-field-rule`; `configured/catalog.go#localize-validation` |
 | 57–62: generated field and enum labels | [Field labels](../guides/validation.md#recipe-field-labels), [enum labels](../guides/localization.md#recipe-feature-labels) | `clientcontracts/dto.go#client-field-label`; `localization/messages.go#enum-labels`; trim_type remains declaration reference prose |
 | 63–72, 89–97: JSON catalogs, typed plural arguments, other form, framework definitions and locale parity | [Messages](../guides/localization.md#recipe-declare-messages), [catalogs](../guides/localization.md#recipe-load-catalogs), [configured messages](../guides/validation-messages.md#recipe-configure-messages) | `localization/messages.go#typed-plural-message`; `configured/catalog.go#format-cart-message`, `#load-message-catalog`, `#configured-catalog` |
-| 65–67, 98–101: browser typed messages and frontend-only plural restriction | [Browser messages](../guides/localization.md#recipe-browser-messages) | `clientcontracts/testdata/messages.ts#browser-typed-messages`, `#browser-text-message`, `#browser-frontend-messages`; already registered in typescript-inputs.json |
+| 65–67, 98–101: browser typed messages and frontend-only plural restriction | [Browser messages](../guides/client-contracts.md#recipe-browser-messages) | `clientcontracts/testdata/messages.ts#browser-typed-messages`, `#browser-text-message`, `#browser-frontend-messages`; already registered in typescript-inputs.json |
 | 73–77, 98–101: injected Services.Locales, RequestLocale and explicit background locale | [Request locale](../guides/localization.md#recipe-request-locale), [typed formatter](../guides/localization.md#recipe-declare-messages) | `configured/catalog.go#request-message`, `#format-cart-message` |
 
 No owned recipe is unresolved. Correlated uploads are explicitly handed to the
@@ -150,14 +175,14 @@ wrapper names, catalog locations, locale choices, username policy, ownership
 checks and execution instructions remain local. Framework message definitions
 and native rule names are documented at their existing owners.
 
-## Changes and ownership exceptions
+## Original extraction changes and ownership exceptions
 
-All thirteen assigned guides are changed. New functions live in the owned
+The original extraction changed all thirteen assigned guides. New functions live in the owned
 `authenticating`, `httpmiddleware`, `httpdto`, `configured`, `startupconfig` and
 `codecs` packages. The new codecs package has a real phone implementation, not a
 placeholder. No fixture annotations or generated outputs changed.
 
-Marker-only additions outside the owned fixture packages reuse the existing
+The original marker-only additions outside the owned fixture packages reused the existing
 compiled declaration or scenario; duplicating those in an owned package would
 create a second recipe or generated owner:
 
@@ -167,12 +192,12 @@ create a second recipe or generated owner:
 | `tests/fixtures/consumer/localization/messages.go` | Existing generated message argument and enum declarations |
 | `tests/fixtures/consumer/localization/validation.go` | Existing translated field rule uses those generated messages |
 | `tests/fixtures/consumer/httpvalidation/validation.go` | Existing ValidateBody wiring to the generated endpoint; moving it into httpdto would create an import cycle |
-| `tests/fixtures/consumer/idempotenthttp/application.go` | Existing complete authenticated idempotency/resource/outbox scenario |
+| `tests/fixtures/consumer/idempotenthttp/application.go` | Original complete authenticated idempotency/resource/outbox scenario; M3-002 now authorizes code changes and moves its regions to `order_route.go` |
 | `tests/fixtures/consumer/clientcontracts/dto.go` | Existing generated query label/kind declaration, with matching client export |
 | `tests/fixtures/consumer/clientcontracts/testdata/messages.ts` | Existing registered browser message typing input |
 
-The remaining changed-file inventory follows. Entries above are included once in
-the complete list below; generated files, tooling and framework source are absent.
+The original extraction file inventory follows. The fix-round inventory is
+listed separately below; no generated files were changed in this round.
 - [docs/evidence/guide-recipes-http-config-20261107.md](../../docs/evidence/guide-recipes-http-config-20261107.md)
 - [docs/guides/authentication.md](../../docs/guides/authentication.md)
 - [docs/guides/generated-configuration.md](../../docs/guides/generated-configuration.md)
@@ -213,34 +238,49 @@ the complete list below; generated files, tooling and framework source are absen
 - [tests/fixtures/consumer/startupconfig/load.go](../../tests/fixtures/consumer/startupconfig/load.go)
 - [tests/fixtures/consumer/startupconfig/settings.go](../../tests/fixtures/consumer/startupconfig/settings.go)
 
+## Fix-round changed files
+
+- `docs/guides/authentication.md`, `access-scopes.md`, `redis.md`,
+  `login-lockout.md`, `http-middleware.md`: specialized recipe ownership and links.
+- `docs/guides/idempotent-operations.md`: tenant-scoped binding and clean
+  transaction source regions.
+- `docs/guides/localization.md`, `client-contracts.md`: single formatter owner.
+- `tests/fixtures/consumer/authenticating/guide_routes.go`: split guard binding
+  from scoped endpoint teaching.
+- `tests/fixtures/consumer/authenticating/credential_stores.go`: source-backed
+  Redis inventory example.
+- `tests/fixtures/consumer/idempotenthttp/application.go`, `order_route.go` (new),
+  `tenant_scope_test.go` (new): authorized M3-002 changes outside the lane's
+  original fixture ownership; business/failure scenarios share the clean route
+  and transaction functions.
+- `internal/retirement/document_owners.go`, `document_owners_test.go`: authorized
+  M3-010 filter and regression sources.
+- `docs/evidence/guide-recipes-http-config-20261107.md`: this handoff and final
+  recipe mapping.
+
 ## Lead commands
 
-Render the owned guides first, using the existing native Go toolchain and cache:
+Render the eight changed guides first, using the native Go toolchain and cache:
 
 ```sh
 go run ./internal/cmd/renderdocs \
-  -guide authentication.md -guide tokens.md -guide http-middleware.md \
-  -guide idempotent-operations.md -guide http-model-binding.md \
-  -guide http-presence.md -guide generated-configuration.md \
-  -guide named-services.md -guide settings.md -guide validation.md \
-  -guide validation-messages.md -guide localization.md -guide phone.md
+  -guide authentication.md -guide access-scopes.md -guide redis.md \
+  -guide login-lockout.md -guide http-middleware.md \
+  -guide idempotent-operations.md -guide localization.md \
+  -guide client-contracts.md
 make docs-check
 ```
 
-For the lead's combined milestone checkpoint, `make fixture-check` compiles and
-exercises the independent consumers, records actual Go input membership for
-checkdocs, and requires the registered TypeScript proof. Supply the existing
-service configuration and native Node/TypeScript environment. If the combined
-checkpoint uses `make verify`, do not repeat fixture-check separately.
-
-For a selective Go checkpoint instead, the changed package set is:
+Selective fix-round checks for the lead, not run by this lane:
 
 ```sh
-(cd tests/fixtures/consumer && go test ./authenticating ./httpmiddleware ./httpdto ./httpquery ./configured ./startupconfig ./codecs ./localization ./passwords ./httpvalidation ./idempotenthttp)
+go test ./internal/retirement
+(cd tests/fixtures/consumer && go test ./authenticating ./idempotenthttp)
 ```
 
-The clientcontracts edits are marker-only; use its existing required TypeScript
-checkpoint to prove `messages.ts` remains a registered compiler input. No new
-TypeScript source or registration was added. Existing goway regions are reused
-without changing their source or prior test results. Renderer output and these
-checks must pass before removing duplicated teaching from application skills.
+The consumer checks need the existing service configuration. The idempotenthttp
+package includes the new tenant/replay regression and the retained failure,
+concurrency and process scenarios. No TypeScript source or registration changed.
+For a combined milestone checkpoint, use the lead's existing fixture-check or
+verify workflow rather than repeating both. Rendering and applicable checks must
+pass before these fixes are treated as accepted.
