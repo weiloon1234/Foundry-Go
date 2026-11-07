@@ -133,6 +133,12 @@ as shown by the consumer `RecipientRequest`; runtime parsing stays in email.
 Consumers do not convert uploads or model attachments into provider-specific
 blobs. These helpers feed the same attachment preparation used by every adapter:
 
+Keep the base message immutable on a reused service. Each invocation returns a
+request-local message containing that invocation's upload; send that returned
+message without assigning it back to the service. Do not retain request upload
+handles on the service. The consumer test captures handles separately to check
+request cleanup.
+
 <!-- compiled-source: tests/fixtures/consumer/mailing/uploads_test.go#attach-request-upload -->
 ```go
 func (s *uploadMailService) Save(ctx context.Context, input httpuploads.ProfileInput) (httpuploads.UploadReply, error) {
