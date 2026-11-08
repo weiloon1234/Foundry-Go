@@ -226,3 +226,43 @@ func TestSPADeclarationsFailBuild(t *testing.T) {
 		}
 	}
 }
+
+func TestPortalFallbackPreservesAPIMethods(t *testing.T) {
+	builder, err := spaportals.New(settings(), quiet())
+	if err != nil {
+		t.Fatal(err)
+	}
+	builder.HTTP(func(application.Services) ([]foundryhttp.RouteRegistration, error) {
+		declaration := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "api.post", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/api/session"))
+		return []foundryhttp.RouteRegistration{foundryhttp.HandleRaw(declaration, func(w stdhttp.ResponseWriter, _ *stdhttp.Request, _ foundryhttp.NoPath) { w.WriteHeader(204) })}, nil
+	})
+	app, err := spaportals.Declare(builder, true).Build(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := app.Shutdown(ctx); err != nil {
+			t.Error(err)
+		}
+	})
+	if err := app.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	router, err := foundation.Resolve(app.Services(), application.RouterKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, method := range []string{"GET", "HEAD", "PUT", "OPTIONS"} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(method, "/api/session", nil))
+		if w.Code != 405 || w.Header().Get("Allow") != "POST" {
+			t.Fatal(method, w.Code, w.Header())
+		}
+	}
+	check(t, router, map[string]exchange{
+		"unknown API":         {"GET", "/api/unknown", html, 404, "not_found", ""},
+		"trailing navigation": {"GET", "/account/orders/", html, 200, "home portal", "no-cache"},
+	})
+}

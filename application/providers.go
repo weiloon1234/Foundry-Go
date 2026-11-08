@@ -59,7 +59,7 @@ func stickyReadsConfigured(s infrastructure.DatabaseSettings) bool {
 	return false
 }
 
-func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEnabled, stickyReads bool, routes []Routes, spas []spaDeclaration, middleware []http.Middleware, observers []http.RequestObserver, collector *telemetry.Collector) {
+func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEnabled, stickyReads bool, routes []Routes, spas []spaDeclaration, fallbacks []FallbackRoutes, middleware []http.Middleware, observers []http.RequestObserver, collector *telemetry.Collector) {
 	if settings.Enabled {
 		builder.Register(foundation.Module{Name: RouterProvider, Requires: []foundation.ProviderID{Provider}, OnRegister: func(r *foundation.Registrar) error {
 			for _, spa := range spas {
@@ -81,6 +81,23 @@ func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEna
 					registrations = append(registrations, part...)
 				}
 				return registrations, nil
+			}, func(r foundation.Resolver) ([]http.Fallback, error) {
+				services, err := FromResolver(r)
+				if err != nil {
+					return nil, err
+				}
+				var declarations []http.Fallback
+				for _, construct := range fallbacks {
+					part, err := construct(services)
+					if err != nil {
+						return nil, err
+					}
+					if len(part) > 64-len(declarations) {
+						return nil, safeerror.NewFault(fault.Invalid, "too many fallback declarations")
+					}
+					declarations = append(declarations, part...)
+				}
+				return declarations, nil
 			})
 		}})
 		global := slices.Clone(middleware)

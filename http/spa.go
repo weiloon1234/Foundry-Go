@@ -43,6 +43,11 @@ func (r *Router) WithSPA(id RouteID, assets *Assets, config SPAConfig) (*Router,
 			return nil, safeerror.NewFault(fault.Duplicate, "SPA prefix already configured")
 		}
 	}
+	for _, fallback := range r.fallbacks {
+		if fallback.declaration.prefix.normalized() == mount.prefix && fallback.declaration.mount == nil {
+			return nil, safeerror.NewFault(fault.Conflict, "raw fallback and SPA share a prefix")
+		}
+	}
 	if !assets.config.allowed(string(config.Index)) {
 		return nil, safeerror.NewFault(fault.Invalid, "SPA entry is hidden by asset policy")
 	}
@@ -68,7 +73,7 @@ func (r *Router) WithSPA(id RouteID, assets *Assets, config SPAConfig) (*Router,
 	})
 	return &result, nil
 }
-func (s *spaFallback) serve(w stdhttp.ResponseWriter, r *stdhttp.Request) bool {
+func (s *spaFallback) accepts(r *stdhttp.Request) bool {
 	if s == nil || (r.Method != stdhttp.MethodGet && r.Method != stdhttp.MethodHead) || !matchesAssetPrefix(r.URL.Path, s.prefix) {
 		return false
 	}
@@ -76,6 +81,13 @@ func (s *spaFallback) serve(w stdhttp.ResponseWriter, r *stdhttp.Request) bool {
 		if matchesAssetPrefix(r.URL.Path, prefix) {
 			return false
 		}
+	}
+	return true
+}
+
+func (s *spaFallback) serve(w stdhttp.ResponseWriter, r *stdhttp.Request) bool {
+	if !s.accepts(r) {
+		return false
 	}
 	if scope := requestScopeFrom(r.Context()); scope != nil && scope.observation != nil {
 		scope.observation.route.Store(s.state)
@@ -132,15 +144,6 @@ func (s *spaFallback) entry(ctx context.Context) (assetSelection, error) {
 		return assetSelection{}, InternalError.WithCause(safeerror.NewFault(fault.Invalid, "SPA entry must be a regular file"))
 	}
 	return assetSelection{name: string(s.config.Index)}, nil
-}
-
-// Select the most specific prefix once. A missing asset or excluded API path
-// in that application must not fall through to an unrelated outer SPA.
-func (r *Router) serveSPA(w stdhttp.ResponseWriter, request *stdhttp.Request) bool {
-	if fallback := coveringSPA(r.spas, request.URL.Path); fallback != nil {
-		return fallback.serve(w, request)
-	}
-	return false
 }
 
 // coveringSPA returns the most specific SPA whose prefix covers location; spas

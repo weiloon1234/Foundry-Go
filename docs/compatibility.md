@@ -6,6 +6,34 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+<a id="unmatched-fallbacks-b10"></a>
+
+## Unmatched fallbacks: B10 parts 1–2
+
+The router fallback API now accepts typed declarations through
+`Router.WithFallbacks`. The former two-argument method has been removed; migrate
+custom not-found handlers to `DefineFallback` with a parsed root `PathPrefix` and
+`DefaultFallbackConfig`. Configured applications use `Builder.Fallback` with an
+`application.FallbackRoutes` factory. There is no compatibility dispatch path.
+
+Root asset mounts migrate from `Register()` to `Fallback(config)`; development
+proxies migrate from typed-tail routes to `DefineFallback`. Remove those native
+catch-alls when adopting. Specific asset mounts and ordinary routes retain their
+existing registration behavior. Fallbacks run only after native routing reports
+404, preserving native 405 and `Allow`. The most specific owner is terminal on
+method misses, exclusions and missing assets; exclusions are declaration-local.
+A raw fallback and SPA at the same prefix now fail registration as ambiguous.
+
+Methods are explicit; the default lists GET and HEAD. HEAD is not inferred from
+GET. Asset fallbacks retain middleware and B30 navigation composition, reject
+escaped separators before file lookup, and reuse existing confined asset
+sources. Typed-tail canonicalization is unchanged; fallback requests bypass that
+decoder. No manifest, OpenAPI or TypeScript operation is added, and no generated
+client or persisted data migration is required. `RegisterRouterWithRoutes` gains
+optional fallback constructors; exact function-value assignments to its former
+signature need updating. See [routing](guides/http-routing.md) and
+[assets](guides/http-assets.md#recipe-declare-fallbacks).
+
 <a id="any-of-route-guards-manifest-10"></a>
 
 ## Any-of route guards: manifest 10

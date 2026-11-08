@@ -20,14 +20,17 @@ func TestRouterFallbackServesUnmatchedNavigationOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	root := fallbackPrefix(t, "/")
 	var matched RouteID
-	withFallback, err := router.WithFallback("pages.missing", stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	withFallback, err := router.WithFallbacks(DefineFallback("pages.missing", root, stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		info, _ := MatchedRoute(r.Context())
 		matched = info.ID
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(stdhttp.StatusNotFound)
-		_, _ = w.Write([]byte("<h1>Missing</h1>"))
-	}))
+		if r.Method != "HEAD" {
+			_, _ = w.Write([]byte("<h1>Missing</h1>"))
+		}
+	}), DefaultFallbackConfig()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,16 +63,16 @@ func TestRouterFallbackServesUnmatchedNavigationOnly(t *testing.T) {
 			fallback = info
 		}
 	}
-	if !fallback.Fallback || !fallback.Raw || fallback.Method != GET || fallback.Path != fallbackPattern || len(router.Routes()) != 1 {
+	if !fallback.Fallback || !fallback.Raw || fallback.Method != GET || fallback.Path != "/{path...}" || len(router.Routes()) != 1 {
 		t.Fatal("fallback inspection", fallback)
 	}
-	if _, err := withFallback.WithFallback("pages.other", stdhttp.NotFoundHandler()); !errors.Is(err, fault.Duplicate) {
+	if _, err := withFallback.WithFallbacks(DefineFallback("pages.other", root, stdhttp.NotFoundHandler(), DefaultFallbackConfig())); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("second fallback accepted", err)
 	}
-	if _, err := router.WithFallback("home", stdhttp.NotFoundHandler()); !errors.Is(err, fault.Duplicate) {
+	if _, err := router.WithFallbacks(DefineFallback("home", root, stdhttp.NotFoundHandler(), DefaultFallbackConfig())); !errors.Is(err, fault.Duplicate) {
 		t.Fatal("duplicate fallback ID accepted", err)
 	}
-	if _, err := router.WithFallback("pages.missing", nil); !errors.Is(err, fault.Invalid) {
+	if _, err := router.WithFallbacks(DefineFallback("pages.missing", root, nil, DefaultFallbackConfig())); !errors.Is(err, fault.Invalid) {
 		t.Fatal("nil fallback accepted", err)
 	}
 }

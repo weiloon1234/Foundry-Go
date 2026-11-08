@@ -26,6 +26,10 @@ import (
 // owns router/server creation. It runs once at Build and must perform no I/O.
 type Routes func(Services) ([]http.RouteRegistration, error)
 
+// FallbackRoutes constructs unmatched-request declarations from typed resources.
+// Like Routes, it runs once during Build and must perform no I/O.
+type FallbackRoutes func(Services) ([]http.Fallback, error)
+
 // Builder collects configuration and declarations for a single application build.
 type Builder struct{ state *builderState }
 type builderState struct {
@@ -33,6 +37,7 @@ type builderState struct {
 	settings           Settings
 	options            options
 	routes             []Routes
+	fallbacks          []FallbackRoutes
 	spas               []spaDeclaration
 	middleware         []http.Middleware
 	observers          []http.RequestObserver
@@ -104,6 +109,25 @@ func (b *Builder) HTTP(routes ...Routes) *Builder {
 	return b
 }
 
+// Fallback adds constructors for unmatched-request fallbacks. Build validates
+// their ownership together with ordinary routes and SPAs before resources boot.
+func (b *Builder) Fallback(constructors ...FallbackRoutes) *Builder {
+	b.mutate(func() {
+		if len(constructors) > 64-len(b.state.fallbacks) {
+			b.state.err = safeerror.NewFault(fault.Invalid, "too many fallback constructors")
+			return
+		}
+		for _, construct := range constructors {
+			if construct == nil {
+				b.state.err = safeerror.NewFault(fault.Invalid, "nil fallback constructor")
+				return
+			}
+		}
+		b.state.fallbacks = append(b.state.fallbacks, constructors...)
+	})
+	return b
+}
+
 // spaDeclaration is one Builder.SPA call, snapshotted when declared.
 type spaDeclaration struct {
 	id     http.RouteID
@@ -170,6 +194,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	b.state.built = true
 	settings, configured, routes, spas, middleware, observers, providers, plugins, buildErr := b.state.settings, b.state.options, slices.Clone(b.state.routes), slices.Clone(b.state.spas), slices.Clone(b.state.middleware), slices.Clone(b.state.observers), slices.Clone(b.state.providers), slices.Clone(b.state.plugins), b.state.err
 	jobDeclarations, eventDeclarations, schedules, realtime, features, models := slices.Clone(b.state.jobs), slices.Clone(b.state.events), slices.Clone(b.state.schedules), b.state.realtime, slices.Clone(b.state.features), slices.Clone(b.state.models)
+	fallbacks := slices.Clone(b.state.fallbacks)
 	domainMigrations := cloneMigrations(b.state.migrations)
 	readiness := b.state.telemetryReadiness
 	b.state.mu.Unlock()
@@ -201,7 +226,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err := validateShutdownBudget(s); err != nil {
 		return nil, err
 	}
-	if !s.HTTP.Enabled && (len(routes) > 0 || len(spas) > 0 || len(middleware) > 0 || len(observers) > 0) {
+	if !s.HTTP.Enabled && (len(routes) > 0 || len(fallbacks) > 0 || len(spas) > 0 || len(middleware) > 0 || len(observers) > 0) {
 		return nil, safeerror.NewFault(fault.Invalid, "HTTP declarations require HTTP to be enabled")
 	}
 	channels, err := logging.PrepareChannels(s.Log.Default, s.Log.inTimeZone(s.TimeZone), configured.logger, configured.logHandlers...)
@@ -298,7 +323,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if mount := realtimeRoutes(s); mount != nil {
 		routes = append(routes, mount)
 	}
-	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, stickyReadsConfigured(s.Services.Database), routes, spas, middleware, observers, collector)
+	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, stickyReadsConfigured(s.Services.Database), routes, spas, fallbacks, middleware, observers, collector)
 	registerMetricsCollectors(builder, recorder, channels, s.Realtime.Enabled)
 	if err := registerTelemetry(ctx, builder, s.Features.Telemetry, collector, readiness); err != nil {
 		return nil, err

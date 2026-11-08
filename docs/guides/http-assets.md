@@ -5,6 +5,7 @@
 
 - [Serve assets and client navigation](#recipe-serve-assets)
 - [Declare a configured SPA](#recipe-declare-spa)
+- [Serve root assets and scoped proxies after routing](#recipe-declare-fallbacks)
 - [Inject public runtime data](#recipe-spa-runtime)
 - [Wrap a development proxy](#recipe-runtime-proxy)
 
@@ -118,23 +119,86 @@ and `MatchedRoute` reports the SPA. A SPA with the same prefix extends the mount
 so it answers the mount's misses inside that mount's route middleware; keep that
 middleware free of assumptions about which directory answers.
 
-For an application-rendered not-found page, register
-`assets.Mount("web.public", "/").WithNavigationFallback(siteLost).Register()`,
-where `siteLost` is a `net/http.Handler`. It runs inside the mount's middleware
-only for a missing, allowed asset path that passes
+For an application-rendered not-found page, retain
+`WithNavigationFallback(siteLost)` on the asset mount and declare it through
+`AssetMount.Fallback(config)` in `Builder.Fallback`. The handler runs inside the
+mount's middleware only for a missing, allowed asset path that passes
 `http.IsHTMLNavigation(request, name)`: GET/HEAD, an extensionless asset name,
 and a bounded Accept header explicitly permitting `text/html` with positive
 quality. Existing files, hidden paths, missing images/scripts, JSON requests
-and lookup failures retain their existing behavior. A nil handler disables it;
-the original mount value is unchanged.
+and lookup failures retain their behavior. A nil handler disables navigation
+fallback; the original mount value is unchanged.
 
-The handler owns its status, body and headers, including cache policy and HEAD
-body handling; the mount adds no asset cache headers. Declared routes and equal
-or more specific SPAs retain precedence. A covering SPA's exclusions and misses
-remain JSON 404s rather than falling through to this handler. Reserve API
-namespaces through declared routes or SPA exclusions as before; this hook does
-not define a new reserved-prefix list. The exported predicate is also the SPA's
-single navigation rule; it does not itself check asset existence or exclusions.
+The navigation handler owns its status, body and headers, including cache policy
+and HEAD body handling. The mount adds no asset cache headers. An equal-prefix
+SPA answers asset misses before this handler; a more specific SPA owns its
+subtree outside the outer asset middleware. A covering SPA's exclusions and
+misses remain JSON 404s. `IsHTMLNavigation` is the shared navigation predicate;
+it does not check existence or exclusions.
+
+<a id="recipe-declare-fallbacks"></a>
+## Serve root assets and scoped proxies after routing
+
+Move root public assets and development proxies out of native catch-all routes.
+Keep explicit APIs and specific hashed-bundle mounts in ordinary routing.
+This configured example serves root public files and a `/account` development
+proxy together. Supply a handler from `SPARuntime.WrapProxy` for runtime injection
+and an application-rendered `lost` handler for B30 navigation misses.
+
+<!-- compiled-source: tests/fixtures/consumer/httpassets/fallback.go#configured-fallbacks -->
+```go
+func DeclareFallbacks(builder *application.Builder, source foundryhttp.AssetSource, proxy, lost stdhttp.Handler) (*application.Builder, error) {
+	api, err := foundryhttp.ParsePathPrefix("/api")
+	if err != nil {
+		return nil, err
+	}
+	account, err := foundryhttp.ParsePathPrefix("/account")
+	if err != nil {
+		return nil, err
+	}
+	bundles, err := foundryhttp.ParsePathPrefix("/account/_assets")
+	if err != nil {
+		return nil, err
+	}
+	return builder.Register(foundryhttp.AssetsModule("web.public", AssetsKey, foundryhttp.DefaultAssetsConfig(source))).
+		Fallback(func(services application.Services) ([]foundryhttp.Fallback, error) {
+			assets, err := application.Resolve(services, AssetsKey)
+			if err != nil {
+				return nil, err
+			}
+			publicConfig := foundryhttp.DefaultFallbackConfig()
+			publicConfig.Exclude = []foundryhttp.PathPrefix{api, account}
+			proxyConfig := foundryhttp.DefaultFallbackConfig()
+			proxyConfig.Exclude = []foundryhttp.PathPrefix{bundles}
+			return []foundryhttp.Fallback{
+				assets.Mount("web.public", "/").WithNavigationFallback(lost).Fallback(publicConfig),
+				foundryhttp.DefineFallback("web.account.dev", account, proxy, proxyConfig),
+			}, nil
+		}), nil
+}
+```
+
+The root's `/account` exclusion does not block the more specific account proxy.
+The proxy's bundle exclusion is terminal; it cannot reach root assets or `lost`.
+Extend the registry-owned exclusions for health/build namespaces as needed.
+In production, use `Builder.SPA` for built portals instead of proxy declarations.
+Root file hits precede an equal-prefix SPA; that SPA answers misses inside the
+asset middleware. More specific SPAs retain ownership of their full subtrees.
+
+`AssetMount.Fallback` retains its ID, prefix, middleware and navigation handler.
+It shares asset selection, cache/conditional/range transfers and lifecycle with
+`Register`, but contributes no native pattern. Exclusions and method eligibility
+are checked before any file lookup or middleware. Asset URL escapes are checked
+before decoded lookup: escaped separators and traversal are rejected. Selection
+reuses `assetPathParts` and directory sources retain `os.Root` confinement.
+A directory trailing slash remains valid. The proxy receives the original URL
+and query without typed-tail decoding.
+
+Fallback inspection lists the declaration's full methods and typed exclusions
+in `RouteInfo.FallbackDetails`; no OpenAPI/client operation is exported.
+[Routing semantics](http-routing.md) describe validation and ownership limits.
+Native `AssetMount.Register` remains available with its existing routing behavior;
+use the fallback declaration for root portal integration.
 
 Successful asset lookups are cached for one second (at most 4,096 entries), so a
 replaced file in a directory source is observed within that window; misses are

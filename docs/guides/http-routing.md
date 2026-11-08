@@ -130,16 +130,66 @@ identity described in [HTTP request handling](http-requests.md). HEAD error
 responses omit their bodies. Native relative redirects retain their method and
 query semantics.
 
-`router.WithFallback(id, handler)` returns an independent router view whose
-unmatched GET and HEAD requests run `handler` instead of the shared 404, like
-Laravel's `Route::fallback`, for example a custom HTML 404 page. It runs only
-after no route matched and no [SPA fallback](http-assets.md) served the request;
-declared routes, 405 responses and other methods are unchanged. The handler owns
-its response and status. Global middleware around the router applies to it;
-compose fallback-specific middleware with `ApplyMiddleware`. `MatchedRoute`,
-request observation and audit attribution report its ID, and `Routes()` lists it
-as the raw route `GET /{path...}` with `RouteInfo.Fallback` set. A router has at
-most one fallback.
+`router.WithFallbacks(declarations...)` returns an independent router view with
+unmatched-request owners. Use `DefineFallback` for a native `net/http.Handler`,
+or `AssetMount.Fallback` for assets with SPA/navigation composition.
+
+<!-- compiled-source: tests/fixtures/consumer/httpassets/fallback.go#router-fallback -->
+```go
+func RouterFallback(router *foundryhttp.Router, handler stdhttp.Handler) (*foundryhttp.Router, error) {
+	root, err := foundryhttp.ParsePathPrefix("/")
+	if err != nil {
+		return nil, err
+	}
+	api, err := foundryhttp.ParsePathPrefix("/api")
+	if err != nil {
+		return nil, err
+	}
+	config := foundryhttp.DefaultFallbackConfig()
+	config.Exclude = []foundryhttp.PathPrefix{api}
+	return router.WithFallbacks(foundryhttp.DefineFallback("pages.missing", root, handler, config))
+}
+```
+
+Native route matches and redirects run first. A native 405 retains its exact
+`Allow`; fallback methods never enter the native route table. Only a native 404
+selects a fallback. A handler-generated 404 is final.
+
+The most specific covering fallback or SPA owns the request. Its method mismatch,
+exclusion or missing resource returns the ordinary JSON 404 without trying an
+outer owner. `FallbackConfig.Methods` is exact: GET does not imply HEAD.
+`DefaultFallbackConfig()` explicitly declares GET and HEAD. Other methods,
+including OPTIONS, keep ordinary routing behavior unless explicitly declared.
+Existing CORS middleware and explicit OPTIONS routes retain precedence. Custom
+handlers own response status, headers and HEAD body handling.
+
+Construct prefixes with `ParsePathPrefix`. Empty, relative, encoded, wildcard
+and noncanonical prefixes are invalid; `/` is valid. Exclusions match the prefix
+itself and descendants at segment boundaries: `/api` excludes `/api/orders`,
+not `/apix`. Exclusions apply only to their declaration: excluding `/admin` on a
+root fallback does not disable a separately declared `/admin` owner. Put reserved
+API exclusions on the owner that could otherwise answer them.
+
+Declarations snapshot method/exclusion slices. Registration rejects invalid or
+empty methods, duplicate methods/exclusions, zero prefixes, duplicate fallback
+prefixes and duplicate route IDs. There are at most 64 fallback declarations and
+64 exclusions per declaration. Assets accept only GET/HEAD. An asset fallback
+and SPA can share a prefix; a raw fallback and SPA cannot. See
+[asset composition](http-assets.md#recipe-declare-fallbacks).
+
+Fallbacks receive the original request without typed-tail decoding, so a trailing
+slash such as `/account/orders/` reaches the proxy or SPA. Ordinary typed-tail
+canonicalization is unchanged. Global middleware applies to fallbacks; use
+`ApplyMiddleware` for raw-handler middleware or retain `AssetMount.WithMiddleware`
+for assets. `MatchedRoute`, request observation and audit attribution identify
+the selected fallback. `RouteInfo.FallbackDetails` supplies owned prefix, exact
+method and exclusion snapshots; it is inspection-only (`json:"-"`). Fallbacks do
+not become OpenAPI or client operations.
+
+Configured applications use `Builder.Fallback` with `application.FallbackRoutes`,
+a Build-time factory like `application.Routes`. Resolve retained services there;
+factories must perform no I/O. Build checks the assembled graph before provider
+boot and rejects fallback declarations when HTTP is disabled.
 
 `Router.Routes()` returns metadata sorted by route ID. `MatchedRoute(ctx)` returns
 the selected route's metadata inside its handler. Both return independent

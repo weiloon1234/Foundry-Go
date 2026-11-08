@@ -115,18 +115,27 @@ func RegisterSPA(r *foundation.Registrar, key foundation.Key[*Router], id RouteI
 // An application may register this in its HTTP provider and resolve it from the
 // HTTP Module handler factory. Assembly performs no network I/O.
 func RegisterRouter(r *foundation.Registrar, key foundation.Key[*Router]) error {
-	return registerRouter(r, key, nil)
+	return registerRouter(r, key, nil, nil)
 }
 
 // RegisterRouterWithRoutes combines ordinary typed handler registrations with
-// provider/plugin contributions. Duplicate/ambiguous routes fail as one graph.
-func RegisterRouterWithRoutes(r *foundation.Registrar, key foundation.Key[*Router], construct func(foundation.Resolver) ([]RouteRegistration, error)) error {
+// provider/plugin contributions. Optional fallback constructors run after SPA
+// assembly and before boot. Duplicate/ambiguous declarations fail as one graph.
+func RegisterRouterWithRoutes(r *foundation.Registrar, key foundation.Key[*Router], construct func(foundation.Resolver) ([]RouteRegistration, error), fallbacks ...func(foundation.Resolver) ([]Fallback, error)) error {
 	if construct == nil {
 		return safeerror.NewFault(fault.Invalid, "router requires a route constructor")
 	}
-	return registerRouter(r, key, construct)
+	if len(fallbacks) > fallbackLimit {
+		return safeerror.NewFault(fault.Invalid, "too many fallback constructors")
+	}
+	for _, construct := range fallbacks {
+		if construct == nil {
+			return safeerror.NewFault(fault.Invalid, "nil fallback constructor")
+		}
+	}
+	return registerRouter(r, key, construct, slices.Clone(fallbacks))
 }
-func registerRouter(r *foundation.Registrar, key foundation.Key[*Router], construct func(foundation.Resolver) ([]RouteRegistration, error)) error {
+func registerRouter(r *foundation.Registrar, key foundation.Key[*Router], construct func(foundation.Resolver) ([]RouteRegistration, error), fallbacks []func(foundation.Resolver) ([]Fallback, error)) error {
 	if err := foundation.Provide(r, routerRegistrationKey(key), routerRegistration{}); err != nil {
 		return err
 	}
@@ -169,6 +178,16 @@ func registerRouter(r *foundation.Registrar, key foundation.Key[*Router], constr
 		}
 		for _, spa := range spas {
 			if router, err = router.WithSPA(spa.id, spa.assets, spa.config); err != nil {
+				return nil, err
+			}
+		}
+		for _, construct := range fallbacks {
+			declarations, err := construct(resolver)
+			if err != nil {
+				return nil, err
+			}
+			router, err = router.WithFallbacks(declarations...)
+			if err != nil {
 				return nil, err
 			}
 		}

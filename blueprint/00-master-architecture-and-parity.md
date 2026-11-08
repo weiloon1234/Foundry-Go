@@ -8,6 +8,37 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Unmatched portal fallbacks — B10 parts 1–2, Unreleased
+
+Status: **implemented; requested targeted verification passed**. Typed `PathPrefix`,
+`FallbackConfig`, `DefineFallback`, `AssetMount.Fallback`, `Router.WithFallbacks`
+and `application.Builder.Fallback` move adopted public mounts and development
+proxies outside native routing. Native 405/Allow wins; exclusions and exact
+methods apply to the most specific unmatched owner. Trailing-slash proxy and SPA
+requests avoid typed-tail decoding; ordinary typed-tail canonicalization stays
+unchanged. Asset selection retains confinement and B30/SPA middleware composition.
+The former two-argument router method is removed. The
+[routing guide](../docs/guides/http-routing.md),
+[assets guide](../docs/guides/http-assets.md#recipe-declare-fallbacks) and
+[compatibility note](../docs/compatibility.md#unmatched-fallbacks-b10) own the contract.
+
+Independent `spaportals` and `httpassets` fixtures include root public assets beside
+an `/account` development proxy. Starter, ooo and Boss Club adoption belongs to
+the lead after release; no sibling app was edited. This entry covers only B10
+parts 1–2 and does not claim milestone-wide acceptance or B10 part 3.
+
+Targeted `go test -run` checks passed in `http`, `application`, `spaportals` and
+`httpassets`, including native API method errors, exclusions, trailing slashes,
+asset/SPA/B30 ownership, directory confinement and the unchanged typed-tail
+regression. The run was segmented: the proxy HEAD assertion was corrected to the
+existing runtime wrapper's upstream GET behavior, and the redirect assertion now
+compares with native routing rather than assuming a status code; only affected
+checks were rerun. All four new `http_fallback_*` compiler negatives passed through
+the existing consumer harness. `go vet` passed for the changed framework and
+consumer packages; `gofmt -l` returned no files. The two guides were rendered from
+consumer sources. No full package suites, race suites, docs-check or `make verify`
+were run under this targeted-only scope.
+
 ## Any-of route guards and CMS sanitizing — v0.12.0, 2026-11-08
 
 Status: **implemented; `make verify` passed (in segments after two fixes), an independent review found no

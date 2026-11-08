@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Added: typed unmatched-request fallback declarations through `http.DefineFallback`,
+  `AssetMount.Fallback`, `Router.WithFallbacks` and `application.Builder.Fallback`.
+  Segment-boundary exclusions and exact methods are validated before serving;
+  root assets and scoped development proxies no longer need native catch-alls.
+  Native 404/405 and `Allow` retain ordinary routing semantics. Fallbacks preserve
+  trailing slashes without changing typed-tail decoding, and asset fallbacks
+  retain B30/SPA composition, middleware and confined file transfers.
+- Changed: removed the former two-argument router fallback method. Use the typed
+  declaration API; see [B10 migration](docs/compatibility.md#unmatched-fallbacks-b10).
+  Fallback metadata is inspection-only and exports no client operations.
+
 - Fixed: directory-backed HTTP assets observe replaced build directories without
   restarting the application. Root identity checks run on demand at most once
   per second, retain `os.Root` confinement, and let existing downloads finish
@@ -2069,7 +2080,7 @@ area; earlier unreleased changes follow them.
   `RouteLocation` and `EndpointLocation` build a `Location` from typed URL
   generation. Invalid or disallowed headers are internal failures; idempotent
   endpoints keep using `IdempotentEndpoint.WithHeaders`.
-- `Router.WithFallback(id, handler)` runs a handler, such as a custom HTML 404
+- The original router fallback API (superseded by `Router.WithFallbacks`) runs a handler, such as a custom HTML 404
   page, for GET and HEAD requests that match no route and no SPA fallback, like
   Laravel's `Route::fallback`. Declared routes, 405 responses and other methods
   are unchanged; route inspection lists it with `RouteInfo.Fallback`.

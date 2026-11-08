@@ -20,7 +20,7 @@ import (
 // into a shared/global ServeMux. Registration order does not resolve ambiguity.
 type Router struct {
 	spas           []*spaFallback
-	fallback       *routeFallback
+	fallbacks      []*routeFallback
 	mux            *stdhttp.ServeMux
 	routes         []RouteInfo
 	endpoints      map[RouteID]func() EndpointInfo
@@ -214,7 +214,7 @@ func (r *Router) ServeHTTP(w stdhttp.ResponseWriter, request *stdhttp.Request) {
 	}
 	switch probe.status {
 	case stdhttp.StatusNotFound:
-		if r.serveSPA(w, request) || r.fallback.serve(w, request) {
+		if r.serveFallback(w, request) {
 			return
 		}
 		writeError(NotFound)

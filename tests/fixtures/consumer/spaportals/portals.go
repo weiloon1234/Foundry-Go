@@ -73,7 +73,7 @@ func New(settings application.Settings, options ...application.Option) (*applica
 		}
 		builder.Register(provider)
 	}
-	return builder.HTTP(Routes), nil
+	return builder.HTTP(Routes).Fallback(PublicFallback), nil
 }
 
 // Declare adds the portal SPAs. The admin portal excludes its API namespace.
@@ -89,13 +89,9 @@ func Declare(builder *application.Builder, home bool) *application.Builder {
 	return builder
 }
 
-// Routes declares the ordinary routes: the root public mount, the admin
+// Routes declares the ordinary routes: the admin
 // portal's hashed bundles and a typed API route inside the admin prefix.
 func Routes(services application.Services) ([]foundryhttp.RouteRegistration, error) {
-	public, err := application.Resolve(services, PublicKey)
-	if err != nil {
-		return nil, err
-	}
 	bundles, err := application.Resolve(services, BundlesKey)
 	if err != nil {
 		return nil, err
@@ -104,10 +100,24 @@ func Routes(services application.Services) ([]foundryhttp.RouteRegistration, err
 		foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "admin.session", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/admin/api/session")),
 		foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, contract.StringJSON[string]()))
 	return []foundryhttp.RouteRegistration{
-		public.Mount("portals.public_files", "/").Register(),
 		bundles.Mount("portals.admin_bundles", "/admin/assets").Register(),
 		session.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {
 			return "admin", nil
 		}),
 	}, nil
+}
+
+// PublicFallback keeps root files outside native API method matching.
+func PublicFallback(services application.Services) ([]foundryhttp.Fallback, error) {
+	public, err := application.Resolve(services, PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	api, err := foundryhttp.ParsePathPrefix("/api")
+	if err != nil {
+		return nil, err
+	}
+	config := foundryhttp.DefaultFallbackConfig()
+	config.Exclude = []foundryhttp.PathPrefix{api}
+	return []foundryhttp.Fallback{public.Mount("portals.public_files", "/").Fallback(config)}, nil
 }

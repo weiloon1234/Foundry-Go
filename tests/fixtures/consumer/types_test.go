@@ -4,6 +4,11 @@ package consumer_test
 // diagnostic. Batch execution and named subtest selection use this one catalogue.
 func compilerCases() []compilerCase {
 	return []compilerCase{
+		{"http_fallback_prefix", "cannot use"},
+		{"http_fallback_exclusions", "cannot use"},
+		{"http_fallback_registration", "cannot use"},
+		{"http_fallback_factory", "cannot use"},
+
 		{"computed_filter_scope", "cannot use"},
 		{"computed_filter_value", "does not match"},
 		{"computed_filter_phase", "missing method rowValue"},

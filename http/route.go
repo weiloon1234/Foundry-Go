@@ -174,12 +174,16 @@ type RouteInfo struct {
 	// They are server policy, not client contract metadata.
 	Timeout      time.Duration `json:"-"`
 	MaxBodyBytes int64         `json:"-"`
-	// Fallback marks the router's WithFallback handler for unmatched GET/HEAD
-	// requests. It is inspection metadata only, like Timeout.
-	Fallback bool `json:"-"`
+	// Fallback marks an unmatched-request declaration; details are inspection only.
+	Fallback        bool          `json:"-"`
+	FallbackDetails *FallbackInfo `json:"-"`
 }
 
 func (i RouteInfo) clone() RouteInfo {
+	if i.FallbackDetails != nil {
+		details := i.FallbackDetails.clone()
+		i.FallbackDetails = &details
+	}
 	i.Parameters = slices.Clone(i.Parameters)
 	i.Middlewares = slices.Clone(i.Middlewares)
 	if i.Authentication != nil {
