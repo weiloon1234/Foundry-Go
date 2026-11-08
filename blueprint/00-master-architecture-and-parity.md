@@ -442,7 +442,9 @@ verified through the Go export command, installed SDK consumers and both real
 HTTPS profiles using a private overlay/local framework replacement. The
 [evidence](../docs/evidence/forms-startup-20260930.json) records final source hashes
 and review corrections. Publication, the actual starter upgrade and its independent
-platform release checks remain separate; B08 is open.
+platform release checks remain separate. B08 was closed by the owner on 2026-11-08:
+it occurred once in about 94 Linux runs and was never reproduced. The
+`StartupTimeout` overrun found while investigating it is fixed.
 
 Re-audited on 2026-09-30: edits no longer abort a sent submission, whose outcome
 is reported (`changed`, or `canceled` with `not_sent`/`unknown`); debouncing task
@@ -463,7 +465,7 @@ JavaScript consumers, intended compiler failures, real-gopls probes, affected
 races and bounded manifest fuzzing passed. The
 [acceptance evidence](../docs/evidence/client-descriptors-20260930.json) records
 source hashes, review corrections and exact check scopes. Starter adoption and
-publication remain separate; B08 remains an open release-acceptance item.
+publication remain separate. B08 is closed (owner decision, 2026-11-08).
 
 Re-audited on 2026-09-30: route registration rejects password-hinted responses
 and URL parameters; model-ID-keyed maps navigate by identity; `.at` applies codec
