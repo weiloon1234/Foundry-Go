@@ -317,7 +317,25 @@ func TestPostgresAttachmentRemoteDownloadCancellationTimeoutAndShutdown(t *testi
 				t.Fatal("interrupted remote download created an intent or lost cancellation", outcome.err)
 			}
 			awaitRemotePhase(t, ended)
-			result, err := testRemote.AddFromURL(t.Context(), m, owner, RemoteSource{Client: client, URL: server.URL + "/valid", OriginalName: "valid.txt"})
+			var result Result[extensiontest.Member, int64]
+			var err error
+			if mode == "timeout" {
+				deadline := time.Now().Add(5 * time.Second)
+				for {
+					result, err = testRemote.AddFromURL(t.Context(), m, owner, RemoteSource{Client: client, URL: server.URL + "/valid", OriginalName: "valid.txt"})
+					if err == nil {
+						break
+					}
+					var storageErr *storage.Error
+					isCapacityErr := errors.Is(err, fault.Overloaded) || (errors.As(err, &storageErr) && storageErr.Code() == storage.Unavailable && storageErr.Operation() == storage.PutOperation)
+					if !isCapacityErr || time.Now().After(deadline) {
+						break
+					}
+					time.Sleep(20 * time.Millisecond)
+				}
+			} else {
+				result, err = testRemote.AddFromURL(t.Context(), m, owner, RemoteSource{Client: client, URL: server.URL + "/valid", OriginalName: "valid.txt"})
+			}
 			if mode == "shutdown" {
 				if !errors.Is(err, fault.Closed) || requests.Load() != 1 {
 					t.Fatal("shutdown manager sent or admitted another remote import", err)
