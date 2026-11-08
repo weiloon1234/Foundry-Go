@@ -8,7 +8,21 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
-## Unmatched portal fallbacks — B10 parts 1–2, Unreleased
+## Typed fallbacks, replaced asset directories and worker recovery — v0.13.0, 2026-11-08
+
+Status: **implemented; targeted checks passed; independent read-only reviews found no defect in the fallback
+or the worker wake change; the owner deferred the full local `make verify` to the end of the program, so CI
+gates this tag**.
+- B10 parts 1–2: typed fallbacks, detailed below.
+- B10 part 3: directory-backed assets reopen a replaced build directory, checked at most once per second, keeping
+  `os.Root` confinement. A failed check keeps serving from the current root.
+- Job workers paused after backend failures wake on local enqueue after at least `PollInterval`.
+- B08 is closed by the owner. The attachments remote-download timeout test waits for released capacity.
+Not in this release: quarantining corrupt Redis queue records. Two independent reviews found accounting defects
+in its refund and workflow design; a simpler move-aside-and-list design follows in v0.13.1.
+Open: Starter, ooo and Boss Club adopt this tag and its fallbacks.
+
+### Unmatched portal fallbacks — B10 parts 1–2
 
 Status: **implemented; requested targeted verification passed**. Typed `PathPrefix`,
 `FallbackConfig`, `DefineFallback`, `AssetMount.Fallback`, `Router.WithFallbacks`
@@ -51,8 +65,8 @@ authorization or sanitizer bypass and its one low finding was fixed, and CI gate
   HTML with the framework policy instead of their own.
 - `go tool foundry docs check` accepts application names that share a retired framework name; framework
   documentation stays strict.
-Open: Starter, ooo and Boss Club adopt this tag and regenerate their clients; Pages with a Tiptap HTML editor lands
-in all three; ooo decides whether its editorial table admits write or approve.
+Adopted 2026-11-08: Starter, ooo and Boss Club moved to v0.12.0 and regenerated their clients; Pages with a Tiptap
+HTML editor landed in all three; ooo's editorial table admits write or approve through `http.AnyOf`.
 
 ## Guides as the single API-teaching source — v0.11.0, 2026-11-08
 

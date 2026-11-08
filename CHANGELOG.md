@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.13.0 — 2026-11-08
 
 - Added: typed unmatched-request fallback declarations through `http.DefineFallback`,
   `AssetMount.Fallback`, `Router.WithFallbacks` and `application.Builder.Fallback`.
@@ -18,6 +18,12 @@
   per second, retain `os.Root` confinement, and let existing downloads finish
   before closing retired roots. Failed refreshes keep serving from the current
   root and retry at the next interval. Configured cache headers are unchanged.
+- Changed: a job worker paused after backend failures resumes as soon as work is
+  enqueued locally, after at least `PollInterval`, instead of waiting out the rest
+  of its backoff (up to `FailureBackoff`, 30 s by default). A wake never resets the
+  failure count, so a still-failing backend keeps its growing backoff.
+- Fixed: the attachments remote-download timeout test waits for the timed-out
+  download to release capacity before its follow-up import.
 
 ## v0.12.0 — 2026-11-08
 
