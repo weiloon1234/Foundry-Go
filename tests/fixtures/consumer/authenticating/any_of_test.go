@@ -75,7 +75,7 @@ func TestEditorialAlternativesKeepActorScopeAndResourceTypes(t *testing.T) {
 	if status := serve("approve"); status != 403 {
 		t.Fatal("permission revocation ignored", status)
 	}
-	if err := h.ValidateAuthenticated(h.ConfigureAuthenticated(authenticating.Profile(transport, guard), authenticating.LegacyScopeOption(approveScopes))); err != nil {
+	if err := h.ValidateAuthenticated(h.ConfigureAuthenticated(authenticating.Profile(transport, guard), authenticating.ExactScopeOption(approveScopes))); err != nil {
 		t.Fatal("legacy function-value wrapper", err)
 	}
 }

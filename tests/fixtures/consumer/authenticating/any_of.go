@@ -19,6 +19,6 @@ func EditorialProfile(endpoint ProfileEndpoint, writeScopes, approveScopes auth.
 // doc-example:end editorial-alternatives
 
 // Existing exact function values can preserve their old signature with a wrapper.
-var LegacyScopeOption func(auth.AccessScopes[models.User]) http.GuardOption[models.User] = func(required auth.AccessScopes[models.User]) http.GuardOption[models.User] {
+var ExactScopeOption func(auth.AccessScopes[models.User]) http.GuardOption[models.User] = func(required auth.AccessScopes[models.User]) http.GuardOption[models.User] {
 	return http.Scopes(required)
 }
