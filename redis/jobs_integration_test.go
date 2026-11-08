@@ -128,17 +128,7 @@ func TestRedisCorruptJobCountersDoNotMutateAnyQueueKey(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			snapshot := func() map[string]string {
-				result := make(map[string]string)
-				for _, key := range keys {
-					data, err := client.raw.Dump(t.Context(), key).Result()
-					if err != nil && !errors.Is(err, driver.Nil) {
-						t.Fatal(err)
-					}
-					result[key] = data
-				}
-				return result
-			}
+			snapshot := func() map[string]string { return snapshotJobKeys(t, client, keys) }
 			before := snapshot()
 			if _, err := backend.JobCancel(t.Context(), key, pending.Envelope().Target()); !errors.Is(err, fault.Invalid) {
 				t.Fatal(err)
@@ -370,17 +360,7 @@ func TestRedisJobLayoutOneQueueMigratesOnlyExplicitly(t *testing.T) {
 	if _, err := pipe.Exec(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	snapshot := func() map[string]string {
-		result := make(map[string]string)
-		for _, physical := range keys {
-			data, err := client.raw.Dump(t.Context(), physical).Result()
-			if err != nil && !errors.Is(err, driver.Nil) {
-				t.Fatal(err)
-			}
-			result[physical] = data
-		}
-		return result
-	}
+	snapshot := func() map[string]string { return snapshotJobKeys(t, client, keys) }
 	before := snapshot()
 	// Implicit use never migrates: the previous release keeps working.
 	owner, err := lease.NewOwner()
@@ -400,15 +380,22 @@ func TestRedisJobLayoutOneQueueMigratesOnlyExplicitly(t *testing.T) {
 	if !maps.Equal(before, snapshot()) {
 		t.Fatal("implicit use changed a layout-1 queue")
 	}
-	// The explicit migration preserves records and is idempotent.
+	// Layout 1 requires the pinned v0.13.0 migration before the new cutover.
+	if migrated, err := backend.JobMigrateLayout(t.Context(), key); !errors.Is(err, jobs.ErrLegacyLayout) || migrated {
+		t.Fatal("new release must not migrate layout 1", migrated, err)
+	}
+	if status := oldJobCommand(t, backend, key, jobRequest{Op: "migrate_layout"}); status != 1 {
+		t.Fatal("v0.13.0 prerequisite migration", status)
+	}
+	// The layout-2 cutover preserves records and is idempotent.
 	if migrated, err := backend.JobMigrateLayout(t.Context(), key); err != nil || !migrated {
 		t.Fatal("explicit migration", migrated, err)
 	}
 	if migrated, err := backend.JobMigrateLayout(t.Context(), key); err != nil || migrated {
 		t.Fatal("repeated migration changed the queue", migrated, err)
 	}
-	if client.raw.HGet(t.Context(), keys[4], "layout").Val() != "2" || client.raw.HGet(t.Context(), keys[4], "live").Val() != "1" {
-		t.Fatal("queue was not migrated to layout 2")
+	if client.raw.HGet(t.Context(), keys[4], "layout").Val() != "3" || client.raw.HGet(t.Context(), keys[4], "live").Val() != "1" {
+		t.Fatal("queue was not migrated to layout 3")
 	}
 	found, err := backend.JobReserve(t.Context(), key, owner, time.Minute)
 	reservation, ok := found.Get()
@@ -556,6 +543,9 @@ func TestRedisLayoutMigrationCountsDecodedRecordState(t *testing.T) {
 	pipe.HSet(ctx, keys[4], "config", backend.legacy, "count", count, "bytes", bytes)
 	if _, err := pipe.Exec(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if status := oldJobCommand(t, backend, key, jobRequest{Op: "migrate_layout"}); status != 1 {
+		t.Fatal("v0.13.0 prerequisite migration", status)
 	}
 	if migrated, err := backend.JobMigrateLayout(ctx, key); err != nil || !migrated {
 		t.Fatal("explicit migration", migrated, err)

@@ -26,8 +26,9 @@ Queue capacity defaults to 4,096 live (unfinished) jobs and 64 MiB of accounted
 envelope storage; a full queue returns the retryable `jobs.ErrQueueFull`
 (`fault.Overloaded`). Terminal records are retained separately, up to 65,536
 (`MaxRetained`) with the oldest evicted first, so retained successes and failures
-never block new work. Configure both for the workload. Unfinished jobs are never
-evicted.
+never block new work while their records remain valid. Quarantined charges cannot
+be reclaimed and can exceed retained limits. Configure both for the workload.
+Unfinished jobs are never evicted.
 
 Each worker runs a bounded number of goroutine reservation loops. Active work has
 a heartbeat goroutine; channels coordinate its completion and cancellation.
@@ -71,11 +72,11 @@ safe reason, requested state, retry delay and whether finalization was acknowled
 can take precedence at the backend. `finalized=false` means no confirmed completion;
 inspect the queue before making recovery decisions.
 
-A repeating `Redis job state or operation is invalid` means a stored queue record
-or index failed validation. The queue fails closed: the operation writes nothing,
-and the error repeats until the state is corrected. There is no automatic repair.
-Queue records are not meant to reach this state through ordinary use. Treat this
-as outside interference and inspect the state before changing anything.
+A repeating `Redis job state or operation is invalid` means queue state failed
+validation and could not be safely isolated. Workflow corruption and uncertain
+membership remain fail-closed. Independently corrupt records can be moved aside
+by bounded indexed scans, under the [quarantine rules](#independent-record-quarantine).
+A direct invalid-target operation changes nothing. There is no automatic repair.
 
 The logger never receives the payload, raw error, panic value, reservation owner
 or retry token. Context-aware handlers retain framework correlation. Existing log
@@ -177,7 +178,7 @@ cursor exists. `inspect` includes bounded history. Output never includes payload
 raw errors, secrets or reservation owners.
 
 `stats` reports queue depth (`waiting`, `delayed`, `blocked`, `leased`, `failed`,
-`retained`) from indexes and counters without reading payloads
+`retained`, `quarantined`) from indexes and counters without reading payloads
 (`Dispatcher.Stats`, optional `jobs.StatsBackend`). The bulk operations walk the
 whole queue in bounded pages and require `--confirm`; `--name`/`--version`
 narrow them to one job schema. `retry-failed` (`Dispatcher.RetryFailed`) retries
@@ -197,6 +198,65 @@ Retry output reports `acceptance=confirmed` only when the backend confirms the
 operation, including a deduplicated retry. An output failure may follow successful
 mutation. Operator permissions, shell access and audit of who approved replay
 belong to the application's deployment; tokens are concurrency guards only.
+
+## Independent-record quarantine
+
+Redis quarantines a corrupt record only after proving it is independent of every
+active and retained workflow. The proof checks all ordinary members, completion,
+catch, and finally references in the existing group catalog. It examines at most
+128 groups and 1 MiB of encoded group data, with the existing 64 KiB bound per
+group. An incomplete or invalid catalog means unknown membership and fails
+closed. A record with any workflow field is never quarantined. The immutable
+envelope contains no workflow identity and is not used as proof.
+
+Ready scans, expired-lease maintenance, terminal retention, eviction, and ordinary
+lists can discover quarantine. An exhausted 128-entry ready window commits safe
+quarantine progress but reserves nothing until the earliest valid candidate can
+be established. A recovered lease cannot jump older unseen ready work.
+
+Quarantine removes scheduling, lease, and terminal-retention index entries. It
+keeps the raw record, envelope, deduplication identity, uniqueness window, and all
+accounting charges. The first-quarantine timestamp stays fixed. Ordinary expiry
+of a uniqueness window still occurs. Group cleanup never quarantines: it validates
+all members and removes them with their group. Missing members retain their group
+and fail closed, including groups partially retired by older releases.
+
+Use the application's existing command declaration:
+
+```sh
+./service jobs quarantined --connection background --queue communications --limit 20 --format json
+./service jobs quarantined --connection background --queue communications --limit 20 --after JOB_ID
+```
+
+`Dispatcher.Quarantined`, optional `jobs.QuarantineBackend`, and
+`jobs.QuarantineOptions` provide the same bounded read. See
+`QuarantinedWork` in the [consumer operations](../../tests/fixtures/consumer/background/operations.go).
+Pages contain only `id` and `quarantined_at`, with `next` when another scan may be
+needed. Follow `next` even after an empty page. Cursors use the existing identity
+index and remain valid when a prior identity disappears. The memory backend
+returns an empty page. Custom backends without this capability return an error.
+
+The quarantine read does not decode records or run maintenance. It remains usable
+when unrelated workflow corruption blocks ordinary operations. Normal lists omit
+quarantined records. Direct inspect, cancel, renew, start, finish, retry, forget,
+and re-enqueue reject quarantined identities. Bulk clear, retry-failed, and
+flush-failed cannot act on them. There is no quarantine delete, release, repair,
+or replay command.
+
+`stats.quarantined` counts markers. Failed and retained counts preserve their
+original charges, including quarantined work. Blocked becomes an upper bound that
+also includes quarantined live charges. Quarantined live work can exhaust queue
+capacity indefinitely. Retained quarantine can exceed normal retention bounds and
+cause eviction of other healthy terminal records. Do not interpret a quarantine
+count as a refundable live, failed, or retained count.
+
+Workflow corruption can still stall the queue, including a corrupt blocked
+successor reached by lease expiry. Independent corruption can also stall when its
+membership cannot be proved within the limits. Present but semantically invalid
+envelopes and coherently forged multi-key data are not repaired. Protect Redis
+queue keys from unrelated writes and investigate before recovery. Snapshot and
+reconciliation decisions belong to the operator; never infer a safe refund from
+a corrupt record or delete shared Redis data to clear a stall.
 
 ## Queue depth metrics
 
@@ -243,38 +303,54 @@ can prune it on a schedule through the [housekeeping schedule](production-operat
 
 ## Redis queue layout upgrade
 
-This release stores Redis queues in layout 2. It never migrates a queue written
-by the previous release (layout 1) implicitly: every operation on such a queue
-returns `jobs.ErrLegacyLayout` ("stop or drain every process of the previous
-release, then run `jobs migrate-layout`") and changes nothing, so the previous
-release keeps working on it. The previous release cannot read a migrated queue,
-so migrate each queue explicitly:
+This release uses layout 3. Ordinary calls to a layout-2 queue return
+`jobs.ErrLegacyLayout` without writes. The explicit migration changes only the
+layout marker, preserving all records, envelopes, groups, counters, and timestamps.
+It neither runs maintenance nor backfills membership. A repeated migration does
+nothing. New empty queues initialize directly in layout 3.
 
-1. Stop or drain every worker, dispatcher and operator tool of the previous
-   release that uses the queue (drain: stop dispatching, let workers finish,
-   then stop them).
-2. Take a Redis snapshot (for example `BGSAVE`) if you may need to roll back.
-3. Run `./service jobs migrate-layout --connection NAME --queue QUEUE --confirm`
-   (or `Dispatcher.MigrateLayout`). It is one atomic script that keeps every
-   record's ID, state and history; `migrated=false` means the queue was already
-   migrated or empty, and repeating is safe.
-4. Start the new release.
+All queue clients must cut over together. There is no supported overlap between
+old and new workers, publishers, or operator binaries. v0.13.0 rejects layout 3
+before mutation, but can still write a queue that has not migrated yet.
 
-Rollback to the previous release requires restoring the pre-migration snapshot,
-or draining the migrated queue completely (no unfinished or retained jobs you
-still need) before the previous release uses it. New queues are created in
-layout 2 directly.
+1. Stop admission from HTTP publishers, schedulers, outbox relays, and operator
+   tools on every affected queue and connection.
+2. Stop new reservations. Drain admitted handlers, heartbeats, and finalization,
+   then stop every old queue client. A drain timeout does not prove a handler exited.
+3. Retain a pre-cutover backup and queue/policy inventory. Investigate known
+   corruption or partially retired groups. Do not run blind cleanup with an old
+   binary: it can delete the group while missing-member artifacts remain.
+4. Deploy the new binaries without starting ordinary queue traffic. Run
+   `./service jobs migrate-layout --connection NAME --queue QUEUE --confirm`
+   for each queue, or use `Dispatcher.MigrateLayout`.
+5. Start only new clients after all affected queues have migrated. Reconcile an
+   ambiguous migration by repeating that idempotent operation.
+
+Layout 1 must first use v0.13.0's explicit layout-1 to layout-2 migration while all
+older clients are stopped, then follow the cutover above. This release rejects a
+direct layout-1 migration. It still reads embedded envelopes left by that earlier
+migration and moves them on their next normal write. Old groups without callback
+fields and old history without retry-cycle fields remain readable.
+
+Strict group cleanup refuses already-partially-retired legacy groups because
+missing artifacts cannot prove that their accounting was refunded. These groups
+require investigation before recovery. Migration does not repair them. Queues
+from experimental quarantine branches with quarantine state in layout 2 are
+rejected rather than adopted.
+
+Rollback requires a reviewed recovery from the pre-cutover backup or separately
+reconciled queue state. Never change the layout marker back, delete quarantine
+markers, or start an old binary against new state. Restoring a backup may replay
+work with completed external side effects, so application idempotency remains
+necessary. No destructive recovery command is provided.
 
 ## Rollout and limits
 
-The envelope format is unchanged unless a job opts into the format-3 fields. The
-Redis queue configuration identity now includes `MaxRetained`, and existing
-queues need the explicit layout upgrade above. Stored records gain optional
-retry metadata; readers treat older
-records as cycle zero. Upgrade
-workers and operator tools together before enabling manual retries so all history
-writers preserve cycle metadata. Regenerate configuration with the selected
-framework version to obtain the new logging key.
+The envelope format is unchanged unless a job opts into the format-3 fields.
+Queue policy identities are unchanged by this cutover. Layout-2 queues need the
+explicit upgrade above. Readers treat older records without retry metadata as
+cycle zero. Lua validates history array elements before any mutation, and every
+record read requires its stored or staged envelope.
 
 There is no queue dashboard, autoscaling controller or automatic failed-workflow
 recovery. The framework owns queue execution and the reusable operator commands;

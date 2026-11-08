@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Added: Redis quarantine for corrupt records proven independent by a complete
+  group-reference check bounded to 128 groups and 1 MiB. Quarantine preserves
+  raw data, identity, and accounting, while detaching scheduling indexes.
+  `Dispatcher.Quarantined`, optional `jobs.QuarantineBackend`, and
+  `jobs quarantined` expose safe paginated metadata; queue stats add `quarantined`.
+  Workflow members and unknown membership remain fail-closed. No quarantine
+  deletion, refund, repair, or replay operation is provided.
+- Changed: Redis queues use layout 3 behind an explicit coordinated cutover with
+  no old/new client overlap. Layout-2 migration changes only the metadata marker;
+  layout 1 must first migrate through v0.13.0. Existing membership needs no backfill.
+  See [queue operations](docs/guides/jobs-operations.md#redis-queue-layout-upgrade).
+- Fixed: shared Redis record loading validates history entries and envelope
+  presence before direct mutations. Workflow members retire only with their
+  owning group; missing or corrupt members preserve that owner and fail closed.
+  Exhausting a ready scan without proving the earliest candidate commits safe
+  quarantine progress and reserves nothing, including when leases were reclaimed.
+
 ## v0.13.0 — 2026-11-08
 
 - Added: typed unmatched-request fallback declarations through `http.DefineFallback`,

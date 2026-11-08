@@ -8,6 +8,22 @@ import (
 	"github.com/weiloon1234/Foundry-Go/jobs"
 )
 
+var _ jobs.QuarantineBackend = (*Backend)(nil)
+
+// JobQuarantined returns a validated empty page; memory records cannot be
+// externally corrupted and this backend does not quarantine work.
+func (b *Backend) JobQuarantined(ctx context.Context, key jobs.Key, options jobs.QuarantineOptions) (jobs.QuarantinePage, error) {
+	if err := options.Validate(); err != nil {
+		return jobs.QuarantinePage{}, err
+	}
+	_, release, err := b.begin(ctx, key)
+	if err != nil {
+		return jobs.QuarantinePage{}, err
+	}
+	defer release()
+	return jobs.QuarantinePage{Records: []jobs.QuarantinedRecord{}}, nil
+}
+
 // JobList scans retained identities in ascending order and returns owned matching records with a continuation cursor.
 func (b *Backend) JobList(ctx context.Context, key jobs.Key, options jobs.ListOptions) (jobs.Page, error) {
 	if err := options.Validate(); err != nil {

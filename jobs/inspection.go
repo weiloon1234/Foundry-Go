@@ -10,7 +10,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
+// MaxListLimit bounds the number of records returned by one inspection page.
 const MaxListLimit = 100
+
+// ListScanLimit bounds the number of identities examined for one inspection page.
 const ListScanLimit = 128
 
 // ListOptions scans execution IDs in ascending order. Zero After begins a scan;
@@ -26,8 +29,8 @@ type ListOptions struct {
 
 // Validate checks the page limit, paired schema filter, and recognized state.
 func (o ListOptions) Validate() error {
-	if o.Limit < 1 || o.Limit > MaxListLimit {
-		return safeerror.NewFault(fault.Invalid, "job list limit must be between 1 and 100")
+	if err := validateListLimit(o.Limit); err != nil {
+		return err
 	}
 	if (o.Name == "") != (o.Version == 0) || (o.Name != "" && !identifier.Semantic(string(o.Name))) {
 		return safeerror.NewFault(fault.Invalid, "job list schema filter requires name and version")
@@ -37,6 +40,65 @@ func (o ListOptions) Validate() error {
 		return nil
 	}
 	return safeerror.NewFault(fault.Invalid, "invalid job list state")
+}
+
+func validateListLimit(limit int) error {
+	if limit < 1 || limit > MaxListLimit {
+		return safeerror.NewFault(fault.Invalid, "job list limit must be between 1 and 100")
+	}
+	return nil
+}
+
+// QuarantineOptions scans quarantined execution IDs in ascending order.
+// Zero After begins a scan. An empty page can still have a continuation cursor.
+type QuarantineOptions struct {
+	After ExecutionID
+	Limit int
+}
+
+// Validate checks the shared inspection page limit.
+func (o QuarantineOptions) Validate() error { return validateListLimit(o.Limit) }
+
+// QuarantinedRecord identifies independent corrupt work without exposing its data.
+// QuarantinedAt is the first observation time, not the job's completion time.
+type QuarantinedRecord struct {
+	ID            ExecutionID `json:"id"`
+	QuarantinedAt time.Time   `json:"quarantined_at"`
+}
+
+// QuarantinePage contains safe metadata and a continuation identity, which may
+// be nonzero even when Records is empty. Pagination is weakly consistent.
+type QuarantinePage struct {
+	Records []QuarantinedRecord `json:"records"`
+	Next    ExecutionID         `json:"next,omitzero"`
+}
+
+// QuarantineBackend is an optional inspection capability. Quarantine preserves
+// raw data, deduplication identities and accounting; it does not authorize deletion.
+type QuarantineBackend interface {
+	// JobQuarantined lists existing quarantine metadata without decoding damaged records.
+	JobQuarantined(context.Context, Key, QuarantineOptions) (QuarantinePage, error)
+}
+
+// Quarantined lists safe metadata through the optional QuarantineBackend.
+func (d *Dispatcher) Quarantined(ctx context.Context, queue Queue, options QuarantineOptions) (QuarantinePage, error) {
+	release, err := d.begin(ctx)
+	if err != nil {
+		return QuarantinePage{}, err
+	}
+	defer release()
+	if err := options.Validate(); err != nil {
+		return QuarantinePage{}, err
+	}
+	key, err := NewKey(d.config.Namespace, queue)
+	if err != nil {
+		return QuarantinePage{}, err
+	}
+	backend, ok := d.backend.(QuarantineBackend)
+	if !ok {
+		return QuarantinePage{}, safeerror.NewFault(fault.Invalid, "job backend does not report quarantine metadata")
+	}
+	return backend.JobQuarantined(ctx, key, options)
 }
 
 // Matches reports whether the record satisfies the state and schema filters.

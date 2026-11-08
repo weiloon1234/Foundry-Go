@@ -35,7 +35,7 @@ type Command struct {
 	json       bool
 }
 
-const usage = "jobs failed|inspect|retry|stats|retry-failed|flush-failed|forget|clear|migrate-layout [--connection name] [--queue name] [--format text|json]; failed: [--limit 20] [--after id]; inspect|forget: --id id; retry: --id id --token failed-state-token; retry-failed|flush-failed|clear: --confirm [--name job --version n]; migrate-layout: --confirm (after the previous release stopped or drained)"
+const usage = "jobs failed|quarantined|inspect|retry|stats|retry-failed|flush-failed|forget|clear|migrate-layout [--connection name] [--queue name] [--format text|json]; failed|quarantined: [--limit 20] [--after id]; inspect|forget: --id id; retry: --id id --token failed-state-token; retry-failed|flush-failed|clear: --confirm [--name job --version n]; migrate-layout: --confirm (after the previous release stopped or drained)"
 
 func bulk(operation string) bool {
 	return operation == "retry-failed" || operation == "flush-failed" || operation == "clear"
@@ -59,7 +59,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	}
 	result := Command{operation: args[1], options: jobs.ListOptions{State: jobs.Failed, Limit: 20}}
 	switch result.operation {
-	case "failed", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear", "migrate-layout":
+	case "failed", "quarantined", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear", "migrate-layout":
 	default:
 		return Command{}, clidiag.Usage(usage)
 	}
@@ -75,7 +75,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	})
 	format := flags.String("format", "text", "text or json")
 	switch {
-	case result.operation == "failed":
+	case result.operation == "failed" || result.operation == "quarantined":
 		flags.IntVar(&result.options.Limit, "limit", 20, "maximum records in this page (1-100)")
 		flags.Func("after", "cursor from the previous page", func(text string) error {
 			id, err := model.ParseID[jobs.Execution](text)
@@ -180,7 +180,7 @@ func (c Command) Run(ctx context.Context, connections *jobs.Connections, output 
 		return safeerror.NewFault(fault.Invalid, "job command requires context and output")
 	}
 	switch c.operation {
-	case "failed", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear", "migrate-layout":
+	case "failed", "quarantined", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear", "migrate-layout":
 	default:
 		return safeerror.NewFault(fault.Invalid, "uninitialized job command; use Parse")
 	}
@@ -224,7 +224,24 @@ func (c Command) Run(ctx context.Context, connections *jobs.Connections, output 
 		if c.json {
 			return json.NewEncoder(output).Encode(stats)
 		}
-		_, err = fmt.Fprintf(output, "waiting=%d delayed=%d blocked=%d leased=%d failed=%d retained=%d\n", stats.Waiting, stats.Delayed, stats.Blocked, stats.Leased, stats.Failed, stats.Retained)
+		_, err = fmt.Fprintf(output, "waiting=%d delayed=%d blocked=%d leased=%d failed=%d retained=%d quarantined=%d\n", stats.Waiting, stats.Delayed, stats.Blocked, stats.Leased, stats.Failed, stats.Retained, stats.Quarantined)
+		return err
+	case c.operation == "quarantined":
+		page, err := dispatcher.Quarantined(ctx, queue, jobs.QuarantineOptions{After: c.options.After, Limit: c.options.Limit})
+		if err != nil {
+			return err
+		}
+		if c.json {
+			return json.NewEncoder(output).Encode(page)
+		}
+		for _, record := range page.Records {
+			if _, err := fmt.Fprintf(output, "%s\t%s\n", record.ID.String(), record.QuarantinedAt.Format(time.RFC3339Nano)); err != nil {
+				return err
+			}
+		}
+		if !page.Next.IsZero() {
+			_, err = fmt.Fprintln(output, "next:", page.Next.String())
+		}
 		return err
 	case bulk(c.operation):
 		return c.runBulk(ctx, dispatcher, queue, output)

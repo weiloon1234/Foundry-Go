@@ -254,8 +254,9 @@ var ErrQueuePolicy = safeerror.Sentinel(fault.Internal, "job queue policy differ
 // ErrLegacyLayout reports a queue still stored in an older layout that this
 // release does not migrate implicitly. Stop or drain every process of the
 // previous release, then migrate explicitly (`jobs migrate-layout`,
-// Dispatcher.MigrateLayout). Nothing was changed.
-var ErrLegacyLayout = safeerror.Sentinel(fault.Internal, "job queue uses an older storage layout; stop or drain every process of the previous release, then run `jobs migrate-layout` for this queue")
+// Dispatcher.MigrateLayout). Layout 1 must first migrate through v0.13.0.
+// Nothing was changed.
+var ErrLegacyLayout = safeerror.Sentinel(fault.Internal, "job queue uses an older storage layout; stop or drain every process of the previous release, then run `jobs migrate-layout` for this queue (layout 1 must first migrate with v0.13.0)")
 
 // LayoutMigrator is optional: an authority whose stored queue layout changed
 // migrates a queue only when explicitly asked. migrated=false means the queue

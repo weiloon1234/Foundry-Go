@@ -131,12 +131,15 @@ Redis acceptance depends on the deployment's persistence/failover configuration,
 not merely the existence of a queue key. Scripts are atomic but not automatically
 retried after network ambiguity. Queue keys must be protected from unrelated writes.
 
-Redis queues use storage layout 2: each job's immutable envelope is stored apart
-from its small mutable state, so heartbeats and transitions never decode or
-rewrite the payload, and a reservation that finds no work writes nothing. A
-queue written by an earlier release (layout 1) is never migrated implicitly:
-every operation on it returns `jobs.ErrLegacyLayout` until an operator migrates
-it explicitly with `jobs migrate-layout` (`Dispatcher.MigrateLayout`). See the
+Redis queues use storage layout 3. Each immutable envelope remains separate from
+mutable state. Lua checks envelope presence and history elements before mutations.
+Indexed scans can quarantine corrupt records proven independent within the bounded
+group-catalog check, preserving their data and accounting. Workflow members and
+unknown membership still fail closed. See [quarantine operations](jobs-operations.md#independent-record-quarantine).
+
+Layout-2 queues require an explicit coordinated cutover with no old/new client
+overlap. Layout 1 must first migrate through v0.13.0. A reserve that makes no
+maintenance or quarantine progress writes nothing. See the
 [upgrade procedure](jobs-operations.md#redis-queue-layout-upgrade).
 
 `QueueConfig.MaxEntries` and `MaxBytes` bound live (unfinished) jobs. A full
@@ -145,7 +148,9 @@ and never evicts unfinished work. Terminal records kept for deduplication and
 inspection are bounded separately by `MaxRetained` (default 65536) and their own
 `MaxBytes` budget; beyond either bound the oldest terminal records (then the
 oldest finished workflows) are evicted, and until `Retention` after completion
-otherwise. Retained succeeded or failed jobs never make enqueue fail. Redis
+otherwise. Quarantine preserves uncertain charges indefinitely and can exceed
+these retention bounds or consume live capacity. Healthy terminal records do not
+consume live capacity. Redis
 limits apply per queue; the memory authority's limits apply to its whole
 instance. Workflow/uniqueness metadata is also bounded. Redis reports an identity
 conflict (`fault.Conflict`), a full queue (`fault.Overloaded`) and a queue policy

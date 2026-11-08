@@ -12,13 +12,17 @@ import (
 // now; Delayed wait for a future availability; Blocked are workflow members
 // awaiting predecessors; Leased are reserved or running. Retained counts
 // terminal records kept for deduplication and inspection, including Failed.
+// Redis quarantine preserves uncertain charges: Failed and Retained can include
+// quarantined work, and Blocked is an upper bound that also includes quarantined
+// live charges. Quarantined reports marker count, not an accounting classification.
 type QueueStats struct {
-	Waiting  int64 `json:"waiting"`
-	Delayed  int64 `json:"delayed"`
-	Blocked  int64 `json:"blocked"`
-	Leased   int64 `json:"leased"`
-	Failed   int64 `json:"failed"`
-	Retained int64 `json:"retained"`
+	Waiting     int64 `json:"waiting"`
+	Delayed     int64 `json:"delayed"`
+	Blocked     int64 `json:"blocked"`
+	Leased      int64 `json:"leased"`
+	Failed      int64 `json:"failed"`
+	Retained    int64 `json:"retained"`
+	Quarantined int64 `json:"quarantined"`
 }
 
 // StatsBackend is optional; built-in memory and Redis authorities implement it
@@ -167,6 +171,7 @@ func (d *Dispatcher) bulk(ctx context.Context, queue Queue, options ListOptions,
 // MigrateLayout explicitly migrates queue to the backend's current storage
 // layout (see ErrLegacyLayout). Run it only after every process of the
 // previous release stopped or drained: they cannot read the migrated queue.
+// Redis layout 1 must first migrate through v0.13.0 before the layout-3 cutover.
 // migrated=false means nothing needed migrating; repeating is safe. A backend
 // without layouts reports false.
 func (d *Dispatcher) MigrateLayout(ctx context.Context, queue Queue) (bool, error) {

@@ -27,11 +27,10 @@ var jobsScript string
 // Redis persistence/failover. Stop workers and publication before closing the
 // client's owning module.
 //
-// Queues use storage layout 2: the immutable envelope is stored apart from
-// small mutable state. A layout-1 queue is never migrated implicitly: every
-// operation returns jobs.ErrLegacyLayout until an operator stops or drains the
-// previous release and runs JobMigrateLayout (`jobs migrate-layout`). The
-// previous release cannot read a migrated queue.
+// Queues use storage layout 3. Stop every old queue client before explicitly
+// migrating layout 2 with JobMigrateLayout (jobs migrate-layout). Layout 1 must
+// first migrate through v0.13.0. Earlier writers reject layout 3. Quarantine
+// preserves uncertain charges and never deletes corrupt records.
 type JobBackend struct {
 	client   *Client
 	config   jobs.QueueConfig
@@ -42,7 +41,7 @@ type JobBackend struct {
 	wake     map[jobs.Key]chan struct{}
 }
 
-// legacyQueueConfig reproduces the layout-1 policy identity for migration.
+// legacyQueueConfig recognizes layout-1 queues that need the v0.13.0 migration.
 type legacyQueueConfig struct {
 	MaxEntries int
 	MaxBytes   int64
@@ -73,7 +72,8 @@ func NewJobBackend(client *Client, config jobs.QueueConfig) (*JobBackend, error)
 		"record_bytes": 2*(jobs.MaxPayloadBytes+64*1024) + config.MaxHistory*256,
 		"owner_bytes":  lease.OwnerBytes * 2, "attempts": jobs.MaxAttempts, "scan_limit": jobs.ListScanLimit,
 		"workflow_steps": jobs.MaxWorkflowSteps, "workflow_members": jobs.MaxWorkflowMembers,
-		"manual_retries": jobs.MaxManualRetries,
+		"manual_retries": jobs.MaxManualRetries, "list_limit": jobs.MaxListLimit,
+		"proof_groups": 128, "proof_bytes": 1 << 20,
 	})
 	if err != nil {
 		return nil, err
@@ -85,6 +85,7 @@ var _ jobs.Backend = (*JobBackend)(nil)
 var _ jobs.WakeBackend = (*JobBackend)(nil)
 var _ jobs.StatsBackend = (*JobBackend)(nil)
 var _ jobs.ForgetBackend = (*JobBackend)(nil)
+var _ jobs.QuarantineBackend = (*JobBackend)(nil)
 
 // JobWakeup wakes idle workers of this process subscribed to key after this
 // process's own accepted enqueue in that queue. Workers in other processes rely
@@ -172,6 +173,10 @@ type jobStoredRecord struct {
 	} `json:"history"`
 }
 type jobReply struct {
+	Quarantined []struct {
+		ID jobs.ExecutionID `json:"id"`
+		At int64            `json:"at"`
+	} `json:"quarantined"`
 	Records   []jobStoredRecord `json:"records"`
 	Next      string            `json:"next"`
 	Inserted  bool              `json:"inserted"`
@@ -182,6 +187,33 @@ type jobReply struct {
 	Record    *jobStoredRecord  `json:"record"`
 	Stats     *jobs.QueueStats  `json:"stats"`
 	Workflow  *workflowStatus   `json:"workflow"`
+}
+
+// JobQuarantined returns a bounded page of safe metadata without running queue
+// maintenance, so a corrupt workflow does not prevent quarantine inspection.
+func (b *JobBackend) JobQuarantined(ctx context.Context, key jobs.Key, options jobs.QuarantineOptions) (jobs.QuarantinePage, error) {
+	if err := options.Validate(); err != nil {
+		return jobs.QuarantinePage{}, err
+	}
+	request := jobRequest{Op: "quarantined", Limit: options.Limit}
+	if !options.After.IsZero() {
+		request.After = options.After.String()
+	}
+	reply, err := b.command(ctx, key, request)
+	if err != nil {
+		return jobs.QuarantinePage{}, err
+	}
+	page := jobs.QuarantinePage{Records: make([]jobs.QuarantinedRecord, 0, len(reply.Quarantined))}
+	for _, item := range reply.Quarantined {
+		page.Records = append(page.Records, jobs.QuarantinedRecord{ID: item.ID, QuarantinedAt: time.UnixMilli(item.At).UTC()})
+	}
+	if reply.Next != "" {
+		page.Next, err = model.ParseID[jobs.Execution](reply.Next)
+		if err != nil {
+			return jobs.QuarantinePage{}, err
+		}
+	}
+	return page, nil
 }
 
 // workflowStatus is the script's status reply; finished is Unix milliseconds.
@@ -201,7 +233,7 @@ type workflowStatus struct {
 
 func jobKeys(key jobs.Key) []string {
 	base := key.String()
-	return []string{base + ":records", base + ":ready", base + ":leases", base + ":finished", base + ":metadata", base + ":unique", base + ":workflows", base + ":workflow_finished", base + ":index", base + ":envelopes"}
+	return []string{base + ":records", base + ":ready", base + ":leases", base + ":finished", base + ":metadata", base + ":unique", base + ":workflows", base + ":workflow_finished", base + ":index", base + ":envelopes", base + ":quarantine"}
 }
 func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobRequest) (jobReply, error) {
 	if err := jobs.ValidateOperation(ctx, key); err != nil {
@@ -476,9 +508,9 @@ func (b *JobBackend) JobWorkflowStatus(ctx context.Context, key jobs.Key, id job
 var _ jobs.WorkflowStatusBackend = (*JobBackend)(nil)
 var _ jobs.LayoutMigrator = (*JobBackend)(nil)
 
-// JobMigrateLayout moves a layout-1 queue to layout 2 in one atomic script.
-// Records keep their IDs, state and history; embedded envelopes move on each
-// record's next write. It is idempotent.
+// JobMigrateLayout explicitly fences old writers by moving layout 2 to layout 3.
+// It changes only the layout marker, without maintenance or accounting changes.
+// Stop every old queue client first. Layout 1 must migrate through v0.13.0.
 func (b *JobBackend) JobMigrateLayout(ctx context.Context, key jobs.Key) (bool, error) {
 	reply, err := b.command(ctx, key, jobRequest{Op: "migrate_layout"})
 	return reply.Changed, err

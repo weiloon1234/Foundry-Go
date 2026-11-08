@@ -34,3 +34,9 @@ func JobCommands() (cli.Declaration, error) {
 		return services.Jobs, nil
 	})
 }
+
+// QuarantinedWork returns one safe metadata page for the application's operations UI.
+// Pass the returned Next identity to a later call even when Records is empty.
+func QuarantinedWork(ctx context.Context, dispatcher *jobs.Dispatcher, after jobs.ExecutionID) (jobs.QuarantinePage, error) {
+	return dispatcher.Quarantined(ctx, "communications", jobs.QuarantineOptions{After: after, Limit: 20})
+}

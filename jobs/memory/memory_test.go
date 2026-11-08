@@ -447,3 +447,29 @@ func TestWakeupsArePerQueue(t *testing.T) {
 		t.Fatal("an unsignalled wakeup was replaced")
 	}
 }
+
+func TestQuarantineInspectionIsEmptyAndPreservesJobs(t *testing.T) {
+	f := setup(t, 3)
+	e := f.enqueue(t, 1)
+	page, err := f.backend.JobQuarantined(t.Context(), f.key, jobs.QuarantineOptions{Limit: 20, After: e.ID()})
+	if err != nil || len(page.Records) != 0 || !page.Next.IsZero() {
+		t.Fatal(page, err)
+	}
+	if r := f.record(t, e.ID()); r.State != jobs.Waiting {
+		t.Fatal("inspection changed work")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := f.backend.JobQuarantined(ctx, f.key, jobs.QuarantineOptions{Limit: 20}); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if _, err := f.backend.JobQuarantined(t.Context(), f.key, jobs.QuarantineOptions{Limit: 0}); !errors.Is(err, fault.Invalid) {
+		t.Fatal(err)
+	}
+	if err := f.backend.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.backend.JobQuarantined(t.Context(), f.key, jobs.QuarantineOptions{Limit: 20}); !errors.Is(err, fault.Closed) {
+		t.Fatal(err)
+	}
+}
