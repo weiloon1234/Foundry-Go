@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"os"
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -17,7 +16,7 @@ import (
 type Assets struct {
 	config           AssetsConfig
 	mu               sync.Mutex
-	root             *os.Root
+	root             *assetDirectory
 	started, closing bool
 	active           int
 	done             chan struct{}
@@ -61,7 +60,7 @@ func (a *Assets) start(ctx context.Context) error {
 		return err
 	}
 	if a.config.Source.directory != "" {
-		root, err := os.OpenRoot(a.config.Source.directory)
+		root, err := openAssetDirectory(a.config.Source.directory)
 		if err != nil {
 			return err
 		}
@@ -73,25 +72,35 @@ func (a *Assets) start(ctx context.Context) error {
 	a.started = true
 	return nil
 }
-func (a *Assets) acquire(ctx context.Context) (func(), error) {
+func (a *Assets) acquire(ctx context.Context) (*assetDirectory, func(), error) {
 	if a == nil || ctx == nil {
-		return nil, Unavailable.WithCause(nil)
+		return nil, nil, Unavailable.WithCause(nil)
 	}
 	// Asset requests carry no body: a deadline here is the server's own budget.
 	if err := ctx.Err(); err != nil {
-		return nil, Unavailable.WithCause(err)
+		return nil, nil, Unavailable.WithCause(err)
 	}
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	if !a.started || a.closing {
-		return nil, Unavailable.WithCause(nil)
+		a.mu.Unlock()
+		return nil, nil, Unavailable.WithCause(nil)
+	}
+	a.refreshDirectory()
+	root := a.root
+	if root != nil {
+		root.leases++
 	}
 	a.active++
+	a.mu.Unlock()
 	var once sync.Once
-	return func() { once.Do(a.release) }, nil
+	return root, func() { once.Do(func() { a.release(root) }) }, nil
 }
-func (a *Assets) release() {
+func (a *Assets) release(root *assetDirectory) {
 	a.mu.Lock()
+	if root != nil {
+		root.leases--
+		a.closeRetiredDirectory(root)
+	}
 	a.active--
 	finish := a.closing && a.active == 0
 	a.mu.Unlock()
@@ -106,7 +115,7 @@ func (a *Assets) finishClose() {
 			err = a.root.Close()
 		}
 		a.mu.Lock()
-		a.closeErr = err
+		a.closeErr = safeerror.Join("operation failed", a.closeErr, err)
 		close(a.done)
 		a.mu.Unlock()
 	})

@@ -54,9 +54,17 @@ The [independent consumer](../../tests/fixtures/consumer/httpassets/assets.go)
 shows complete application assembly with embedded or local assets; it is a
 framework fixture, not a starter project.
 
-`AssetsModule` opens the local `os.Root` only during provider boot and closes it
-after managed kernels and requests exit. Build validates configuration without
-opening directories. `OpenAssets(ctx, config)` and `Close(ctx)` support explicit
+`AssetsModule` first opens the local `os.Root` during provider boot. Directory
+sources check the configured path's identity on demand, at most once per second,
+and reopen the root when a build replaces that directory. New requests observe
+the replacement on the next successful check. If checking or reopening the
+configured directory fails, requests continue using the current root and refresh
+retries at the next interval. Existing downloads retain
+their original root until their bodies close. Each replacement keeps `os.Root`
+traversal and symlink confinement, and configured cache headers are unchanged.
+Shutdown closes the current root after managed kernels and requests exit.
+Build validates configuration without opening directories.
+`OpenAssets(ctx, config)` and `Close(ctx)` support explicit
 standalone use. Close stops new lookups and waits for acquired files; if its
 waiting context is canceled, the last owner still finishes closure and a later
 Close observes the result. Consumers do not manage directory handles themselves.

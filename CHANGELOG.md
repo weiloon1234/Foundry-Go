@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: directory-backed HTTP assets observe replaced build directories without
+  restarting the application. Root identity checks run on demand at most once
+  per second, retain `os.Root` confinement, and let existing downloads finish
+  before closing retired roots. Failed refreshes keep serving from the current
+  root and retry at the next interval. Configured cache headers are unchanged.
+
 ## v0.12.0 — 2026-11-08
 
 - Fixed: `go tool foundry docs check` accepts application identifiers that share bare names

@@ -75,7 +75,7 @@ func TestApplicationFaultMessagesAreNotLogDiagnosticAuthority(t *testing.T) {
 
 func TestAssetAdmissionAndPrivateCodesReporting(t *testing.T) {
 	closed := &Assets{closing: true}
-	_, refused := closed.acquire(context.Background())
+	_, _, refused := closed.acquire(context.Background())
 	for _, test := range []struct {
 		name   string
 		err    error

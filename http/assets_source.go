@@ -18,8 +18,8 @@ import (
 type assetStat struct{ mode fs.FileMode }
 
 // assetStatTTL bounds how long a successful lookup is reused. Directory sources
-// observe replaced files within this window; misses are never cached, so a new
-// file is visible immediately.
+// observe replaced files within this window; misses are never cached. Replacing
+// the source directory itself also uses the bounded root identity check.
 const (
 	assetStatTTL     = time.Second
 	assetStatEntries = 4096
@@ -83,21 +83,25 @@ func assetSourceError(ctx context.Context, err error) error {
 	return result
 }
 func (a *Assets) stat(ctx context.Context, name string) (assetStat, error) {
-	release, err := a.acquire(ctx)
+	root, release, err := a.acquire(ctx)
 	if err != nil {
 		return assetStat{}, err
 	}
 	defer release()
 	now := time.Now()
-	if cached, ok := a.stats.get(name, now); ok {
+	a.mu.Lock()
+	cached, ok := a.stats.get(name, now)
+	current := root == a.root
+	a.mu.Unlock()
+	if ok && current {
 		return cached, nil
 	}
 	var result assetStat
 	var returned error
 	owned := callback.Isolated("HTTP asset stat", func() error {
 		var info fs.FileInfo
-		if a.root != nil {
-			info, returned = a.root.Stat(name)
+		if root != nil {
+			info, returned = root.Stat(name)
 		} else {
 			info, returned = assetFilesystemStat(a.config.Source.filesystem, name)
 		}
@@ -117,7 +121,11 @@ func (a *Assets) stat(ctx context.Context, name string) (assetStat, error) {
 		returned = ctx.Err()
 	}
 	if returned == nil {
-		a.stats.put(name, result, now)
+		a.mu.Lock()
+		if root == a.root {
+			a.stats.put(name, result, now)
+		}
+		a.mu.Unlock()
 	}
 	return result, assetSourceError(ctx, returned)
 }
@@ -179,7 +187,7 @@ func (a *Assets) openFile(ctx context.Context, name string, validators bool) (co
 	if !a.config.allowed(name) {
 		return content, NotFound.WithCause(nil)
 	}
-	release, err := a.acquire(ctx)
+	root, release, err := a.acquire(ctx)
 	if err != nil {
 		return content, err
 	}
@@ -194,8 +202,8 @@ func (a *Assets) openFile(ctx context.Context, name string, validators bool) (co
 			release()
 		}
 	}()
-	if a.root != nil {
-		content, err = LocalDownload(a.root, name).source(ctx)
+	if root != nil {
+		content, err = LocalDownload(root.Root, name).source(ctx)
 		body = content.Body
 	} else {
 		content, err = openFilesystemAsset(a.config.Source.filesystem, name)
