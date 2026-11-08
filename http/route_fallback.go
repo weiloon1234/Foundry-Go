@@ -28,6 +28,7 @@ func ParsePathPrefix(text string) (PathPrefix, error) {
 	return PathPrefix{path: text}, nil
 }
 
+// String returns the prefix exactly as parsed.
 func (p PathPrefix) String() string     { return p.path }
 func (p PathPrefix) normalized() string { return strings.TrimSuffix(p.path, "/") }
 
@@ -38,8 +39,11 @@ type FallbackConfig struct {
 	Exclude []PathPrefix
 }
 
+// DefaultFallbackConfig declares GET and HEAD with no exclusions.
 func DefaultFallbackConfig() FallbackConfig { return FallbackConfig{Methods: []Method{GET, HEAD}} }
 
+// Validate rejects empty, oversized, invalid or duplicate methods and
+// unconstructed or duplicate exclusions.
 func (c FallbackConfig) Validate() error {
 	if len(c.Methods) == 0 || len(c.Methods) > fallbackLimit || len(c.Exclude) > fallbackLimit {
 		return safeerror.NewFault(fault.Invalid, "fallback requires methods and bounded exclusions")
@@ -99,6 +103,8 @@ func (m AssetMount) Fallback(config FallbackConfig) Fallback {
 	return Fallback{id: RouteIDOf(m.route), prefix: parsed, config: config.snapshot(), mount: &m}
 }
 
+// Validate rejects a zero or malformed declaration: it requires a semantic ID,
+// a constructed prefix, a valid configuration and a handler or asset mount.
 func (f Fallback) Validate() error {
 	if !identifier.Semantic(string(f.id)) || f.prefix.path == "" {
 		return safeerror.NewFault(fault.Invalid, "fallback requires a semantic ID and a constructed prefix")
