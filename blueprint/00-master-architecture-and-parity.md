@@ -18,8 +18,9 @@ gates this tag**.
   `os.Root` confinement. A failed check keeps serving from the current root.
 - Job workers paused after backend failures wake on local enqueue after at least `PollInterval`.
 - B08 is closed by the owner. The attachments remote-download timeout test waits for released capacity.
-Not in this release: quarantining corrupt Redis queue records. Two independent reviews found accounting defects
-in its refund and workflow design; a simpler move-aside-and-list design follows in v0.13.1.
+Not in this release: quarantining corrupt Redis queue records. Three independent reviews found defects where
+quarantine meets workflow bookkeeping, so it is deferred to a focused follow-up that quarantines independent
+records only and keeps workflow members fail-closed.
 Open: Starter, ooo and Boss Club adopt this tag and its fallbacks.
 
 ### Unmatched portal fallbacks — B10 parts 1–2

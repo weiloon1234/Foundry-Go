@@ -507,8 +507,8 @@ intentionally accepts byte slices, while identity does not.
 | port | 0 |
 | merge | 0 |
 | obsolete | 0 |
-| unaffected | 472 |
-| **Total** | **1071** |
+| unaffected | 476 |
+| **Total** | **1075** |
 
 | Area | Cases |
 | --- | ---: |
@@ -519,7 +519,7 @@ intentionally accepts byte slices, while identity does not.
 | Events, jobs and messaging | 54 |
 | Expressions and aggregates | 73 |
 | Framework integrations | 89 |
-| HTTP, DTOs and transport contracts | 128 |
+| HTTP, DTOs and transport contracts | 132 |
 | Joins and correlation | 102 |
 | Lifecycle, mutators and observers | 39 |
 | Other framework services and contracts | 87 |
@@ -540,7 +540,7 @@ intentionally accepts byte slices, while identity does not.
 | 6d | 60 |
 | 6e | 61 |
 | 7 | 88 |
-| — | 472 |
+| — | 476 |
 
 599 old catalogue rows are covered by 594 distinct Go-way cases.
 
