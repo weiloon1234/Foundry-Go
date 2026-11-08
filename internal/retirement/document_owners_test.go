@@ -121,6 +121,61 @@ func TestApplicationDocumentationImportNames(t *testing.T) {
 	}
 }
 
+func TestApplicationDocumentationDotImportReferences(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		code string
+	}{
+		{"function value", "var count = Count"},
+		{"local function value", "func example() { count := Count; _ = count }"},
+		{"argument", "func example() { register(Count) }"},
+		{"instantiated reference", "var count = Count[Item]"},
+		{"instantiated reference with multiple types", "var count = Count[Item, Key]"},
+		{"instantiated argument", "func example() { register(Count[Item]) }"},
+		{"outside shadowing block", "func example() { { Count := custom; register(Count) }; register(Count) }"},
+		{"before local declaration", "func example() { count := Count; Count := custom; register(Count); _ = count }"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			code := "package example\nimport . \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\n" + tc.code
+			err := CheckApplicationDocument("AGENTS.md", []byte("```go\n"+code+"\n```"))
+			if err == nil || !strings.Contains(err.Error(), "AGENTS.md:4: retired API Count from framework dot import") {
+				t.Fatalf("accepted imported retirement or missing location: %v", err)
+			}
+			if strings.Count(err.Error(), "retired API Count from framework dot import") != 1 {
+				t.Fatalf("expected one retired reference: %v", err)
+			}
+		})
+	}
+}
+
+func TestApplicationDocumentationDotImportLocalNames(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		code string
+	}{
+		{"package function", "var count = Count\nfunc Count() {}"},
+		{"package variable", "var Count = custom\nvar count = Count"},
+		{"local variable", "func example() { Count := custom; count := Count; register(Count); _ = count }"},
+		{"parameter", "func example(Count func()) { register(Count) }"},
+		{"type parameter", "func example[Count any]() { var count Count; _ = count }"},
+		{"local generic function", "var count = Count[Item]\nfunc Count[T any]() {}"},
+		{"local generic argument", "func example() { register(Count[Item]) }\nfunc Count[T any]() {}"},
+		{"method declaration", "type Report struct{}\nfunc (Report) Count() {}"},
+		{"field declaration", "type Report struct { Count int }"},
+		{"interface method", "type Report interface { Count() }"},
+		{"selector", "func example(report Report) { register(report.Count) }"},
+		{"field key", "var report = Report{Count: 1}"},
+		{"field key with local shadow", "var Count = 1\nvar report = Report{Count: 2}"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			code := "package example\nimport . \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\n" + tc.code
+			if err := CheckApplicationDocument("AGENTS.md", []byte("```go\n"+code+"\n```")); err != nil {
+				t.Fatalf("application name rejected: %v", err)
+			}
+		})
+	}
+}
+
 func TestDocumentRetainedOwners(t *testing.T) {
 	for _, code := range []string{
 		"Scope.WithMiddleware", "http.Scope.WithMiddleware", "http.AssetMount.WithMiddleware",

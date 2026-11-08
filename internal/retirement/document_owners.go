@@ -126,12 +126,14 @@ func (r documentRules) checkCode(name, code string, line int, application bool) 
 		n := line + fset.Position(pos).Line - strings.Count(prefix, "\n") - 1
 		failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, n, message)))
 	}
-	ast.Inspect(file, func(node ast.Node) bool {
-		if call, ok := node.(*ast.CallExpr); ok {
-			if id, ok := stripTypeArguments(call.Fun).(*ast.Ident); ok && id.Obj == nil && dotRetirements[id.Name] {
-				report(id.Pos(), "retired API "+id.Name+" from framework dot import")
-			}
+	// The parser's unresolved uses exclude local bindings, declarations,
+	// selector names and composite literal field names.
+	for _, id := range file.Unresolved {
+		if dotRetirements[id.Name] {
+			report(id.Pos(), "retired API "+id.Name+" from framework dot import")
 		}
+	}
+	ast.Inspect(file, func(node ast.Node) bool {
 		selected, ok := node.(*ast.SelectorExpr)
 		if !ok {
 			return true
