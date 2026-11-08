@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -18,14 +19,29 @@ import (
 const MaxInputBytes = 1 << 20
 const MaxOutputBytes = 4 << 20
 
-// Config configures allowed HTML tags and byte budgets.
+// URLScheme is an additional URL scheme supported by a sanitization policy.
+type URLScheme string
+
+// URLSchemeTel permits telephone links in addition to HTTP, HTTPS and mailto.
+const URLSchemeTel URLScheme = "tel"
+
+// Config configures allowed HTML tags, URLs and byte budgets.
 type Config struct {
 	AllowedTags []string
 	InputBytes  int
 	OutputBytes int
+
+	// AdditionalURLSchemes accepts only URLSchemeTel. Unknown values and
+	// duplicates are invalid; the default HTTP, HTTPS and mailto schemes cannot be added.
+	AdditionalURLSchemes []URLScheme
+
+	// AllowRelativeURLs permits local paths, queries and fragments. Protocol-relative
+	// URLs (//host) and backslash authority prefixes remain forbidden.
+	AllowRelativeURLs bool
 }
 
-// DefaultConfig returns default allowed HTML tags and input and output budgets.
+// DefaultConfig returns default tags and byte budgets, with only HTTP, HTTPS and
+// mailto URLs allowed and relative URLs disabled.
 func DefaultConfig() Config {
 	return Config{AllowedTags: []string{"a", "b", "blockquote", "br", "code", "em", "i", "li", "ol", "p", "pre", "strong", "ul"}, InputBytes: MaxInputBytes, OutputBytes: MaxOutputBytes}
 }
@@ -38,8 +54,8 @@ type Policy struct {
 	inputBytes, outputBytes int
 }
 
-// New validates and copies allowed tags into a sanitization policy with restricted attributes and
-// URL schemes.
+// New validates and snapshots configuration into a sanitization policy with
+// restricted attributes and URL schemes.
 func New(config Config) (*Policy, error) {
 	if config.InputBytes < 1 || config.InputBytes > MaxInputBytes || config.OutputBytes < 1 || config.OutputBytes > MaxOutputBytes || len(config.AllowedTags) > 64 {
 		return nil, invalid()
@@ -59,18 +75,42 @@ func New(config Config) (*Policy, error) {
 		seen[tag] = true
 		allowed = append(allowed, tag)
 	}
+	schemes := []string{"https", "http", "mailto"}
+	seenSchemes := make(map[URLScheme]bool)
+	for _, scheme := range config.AdditionalURLSchemes {
+		if scheme != URLSchemeTel || seenSchemes[scheme] {
+			return nil, invalid()
+		}
+		seenSchemes[scheme] = true
+		schemes = append(schemes, string(scheme))
+	}
 	p := bluemonday.NewPolicy()
 	p.AllowElements(allowed...)
 	p.SkipElementsContent("applet", "base", "embed", "frame", "frameset", "iframe", "link", "math", "meta", "object", "script", "style", "svg", "template")
 	if seen["a"] {
-		p.AllowAttrs("href", "title").OnElements("a")
+		p.AllowAttrs("title").OnElements("a")
+		if config.AllowRelativeURLs {
+			p.AllowAttrs("href").Matching(localOrAbsoluteURL).OnElements("a")
+		} else {
+			p.AllowAttrs("href").OnElements("a")
+		}
 	}
 	if seen["img"] {
-		p.AllowAttrs("src", "alt", "title").OnElements("img")
+		p.AllowAttrs("alt", "title").OnElements("img")
+		if config.AllowRelativeURLs {
+			p.AllowAttrs("src").Matching(localOrAbsoluteURL).OnElements("img")
+		} else {
+			p.AllowAttrs("src").OnElements("img")
+		}
 	}
-	p.RequireParseableURLs(true).AllowURLSchemes("https", "http", "mailto").AllowRelativeURLs(false).RequireNoFollowOnLinks(true).RequireNoReferrerOnLinks(true)
+	p.RequireParseableURLs(true).AllowURLSchemes(schemes...).AllowRelativeURLs(config.AllowRelativeURLs).RequireNoFollowOnLinks(true).RequireNoReferrerOnLinks(true)
 	return &Policy{policy: p, inputBytes: config.InputBytes, outputBytes: config.OutputBytes}, nil
 }
+
+// Bluemonday treats //host as relative. Before its URL validation, require a
+// non-slash/backslash first character, or a single leading slash. Match all
+// strings.TrimSpace whitespace so padding cannot hide an authority prefix.
+var localOrAbsoluteURL = regexp.MustCompile(`\A[[:space:]\p{Z}\x{0085}]*(?:[^/\\[:space:]\p{Z}\x{0085}]|/[^/\\[:space:]\p{Z}\x{0085}]|/[[:space:]\p{Z}\x{0085}]*\z)`)
 
 // HTML sanitizes valid UTF-8 HTML within input and output budgets, honoring context cancellation.
 func (p *Policy) HTML(ctx context.Context, input string) (string, error) {

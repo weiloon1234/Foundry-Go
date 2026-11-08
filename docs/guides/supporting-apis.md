@@ -33,7 +33,17 @@ passive tag allowlist at construction; active tags, forms, embedded documents,
 SVG/MathML, scripts, styles, event handlers and data attributes cannot be enabled.
 An unsupported tag request is an error.
 
-Links accept parseable HTTP, HTTPS or mailto URLs, with no relative or data URLs.
+By default, links accept parseable HTTP, HTTPS or mailto URLs and reject relative URLs.
+`Config.AdditionalURLSchemes` accepts `[]sanitize.URLScheme{sanitize.URLSchemeTel}`
+to permit telephone links. `sanitize.New` rejects unknown schemes, duplicates and attempts
+to add the default schemes again. The closed additional-scheme set currently
+contains only `URLSchemeTel` (`tel`); configuration values are case-sensitive.
+
+`Config.AllowRelativeURLs` permits path-relative and root-relative URLs such as
+`support`, `../support` and `/me/support`, plus query-only and fragment-only links.
+Protocol-relative URLs (`//host`) and backslash authority prefixes remain rejected.
+These URL options also apply to `src` on enabled images. Neither option permits
+`javascript`, `data`, `vbscript` or `file` URLs, including mixed-case variants.
 Only `href`/`title` on enabled anchors and `src`/`alt`/`title` on enabled images are
 permitted; links gain nofollow/noreferrer. Image support requires explicitly
 adding `img`. The default allowlist contains basic text/list/anchor tags.

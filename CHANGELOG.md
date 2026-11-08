@@ -8,6 +8,9 @@
   JSX elements and JavaScript or TypeScript fences from Go reference checks, preserve
   generic placeholders such as `Mutate<Field>`, and no longer flag the application helper
   `nullableJoinedText` as a retired framework API.
+- Added: `sanitize.Config.AdditionalURLSchemes` supports the typed `sanitize.URLSchemeTel`
+  opt-in, and `AllowRelativeURLs` permits local CMS links while rejecting protocol-relative
+  URLs. Default URL handling, link protections and byte budgets are unchanged.
 
 ## v0.11.0 — 2026-11-08
 
