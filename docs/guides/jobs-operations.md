@@ -219,6 +219,9 @@ Ready scans, expired-lease maintenance, terminal retention, eviction, and ordina
 lists can discover quarantine. An exhausted 128-entry ready window commits safe
 quarantine progress but reserves nothing until the earliest valid candidate can
 be established. A recovered lease cannot jump older unseen ready work.
+Before reserving a workflow candidate, Redis checks its ownership and position
+against its group. A mismatch rejects the call before writes; this does not scan
+other member records or freeze a group because of unrelated corruption.
 
 Quarantine removes scheduling, lease, and terminal-retention index entries. It
 keeps the raw record, envelope, deduplication identity, uniqueness window, and all
@@ -376,7 +379,10 @@ millisecond timestamps and accounting totals, must be nonnegative and at most
 99,999,999,999,999. Lua and Go enforce that ceiling so Redis cjson never emits
 exponent-form integers that Go cannot decode. The ceiling does not change opaque
 application payloads or envelope serialization. A transition that would exceed
-it fails before writes. Quarantine inspection in both built-in backends runs no
+it fails before writes. Signed zero (`-0`) is invalid in every field checked by
+the shared integer validator, including history attempt/retry and record fields;
+ordinary zero remains valid wherever the field's range permits it.
+Quarantine inspection in both built-in backends runs no
 maintenance, including lease expiry, retention, accounting or workflow advancement.
 
 There is no queue dashboard, autoscaling controller or automatic failed-workflow

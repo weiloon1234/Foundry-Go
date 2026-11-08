@@ -153,7 +153,9 @@ func TestRedisQuarantineWorkflowPositionMismatch(t *testing.T) {
 			if damage == "orphan" {
 				fields = map[string]any{"workflow": nil}
 			}
+			f.at(t, member.ID(), 1)
 			f.edit(t, member.ID(), fields)
+			f.unchanged(t, func() error { _, err := f.backend.JobReserve(t.Context(), f.key, f.owner, time.Minute); return err })
 			f.unchanged(t, func() error { _, err := f.backend.JobCancel(t.Context(), f.key, member.Target()); return err })
 			f.unchanged(t, func() error { _, err := f.backend.JobWorkflowStatus(t.Context(), f.key, group.ID()); return err })
 			f.unchanged(t, func() error {
@@ -497,6 +499,147 @@ func TestRedisQuarantineCompletedProofExtendsAcrossByteBudget(t *testing.T) {
 				if len(f.quarantine(t).Records) != 2 {
 					t.Fatal("completed proof did not extend")
 				}
+			}
+		})
+	}
+}
+
+// Second release review: every candidate role is checked before leasing, even
+// when its range, envelope and scheduling placement are otherwise valid.
+func TestRedisQuarantineReserveChecksSpecialMemberPositions(t *testing.T) {
+	for _, role := range []string{"completion", "catch", "finally"} {
+		t.Run(role, func(t *testing.T) {
+			f := newQuarantineFixture(t)
+			group := f.workflow(t, true, 1, true)
+			member, _ := group.Envelope().Completion().Get()
+			if role == "completion" {
+				f.finish(t, f.reserve(t), jobs.Succeeded)
+			} else {
+				f.finish(t, f.reserve(t), jobs.Failed)
+				if role == "catch" {
+					member, _ = group.Envelope().Catch().Get()
+				} else {
+					member, _ = group.Envelope().Finally().Get()
+				}
+			}
+			f.at(t, member.ID(), 1)
+			f.edit(t, member.ID(), map[string]any{"position": 0})
+			f.unchanged(t, func() error { _, err := f.backend.JobReserve(t.Context(), f.key, f.owner, time.Minute); return err })
+		})
+	}
+}
+
+func TestRedisQuarantineSignedZeroRoundTripsThroughReserveAndList(t *testing.T) {
+	fields := []string{"history.attempt", "history.retry", "history.at", "attempts", "exceptions", "abandoned", "retries", "available", "expiry", "created", "finished", "unique_until", "maximum", "version", "bytes"}
+	for _, field := range fields {
+		for _, path := range []string{"reserve", "list"} {
+			t.Run(field+"/"+path, func(t *testing.T) {
+				f := newQuarantineFixture(t)
+				bad, good := f.enqueue(t), f.enqueue(t)
+				f.at(t, bad.ID(), 0)
+				f.at(t, good.ID(), 1)
+				// RawMessage preserves the JSON sign. Ordinary Go integer fields
+				// cannot manufacture -0 for the Redis decoder.
+				values := map[string]any{field: json.RawMessage(`-0`)}
+				if strings.HasPrefix(field, "history.") {
+					entry := map[string]any{"state": "waiting", "reason": "", "at": 1, "attempt": 0, "retry": 0}
+					entry[strings.TrimPrefix(field, "history.")] = json.RawMessage(`-0`)
+					values = map[string]any{"history": []any{entry}}
+				} else if field == "unique_until" {
+					values["unique"] = strings.Repeat("a", 64)
+				}
+				f.edit(t, bad.ID(), values)
+				// Canonical zero must still pass the actual cjson -> Go path.
+				f.edit(t, good.ID(), map[string]any{"attempts": 0, "exceptions": 0, "abandoned": 0, "retries": 0, "expiry": 0, "created": 0, "finished": 0,
+					"history": []any{map[string]any{"state": "waiting", "reason": "", "at": 0, "attempt": 0, "retry": 0}}})
+				raw := f.stored(t, 0, bad.ID())
+				if !strings.Contains(raw, ":-0") {
+					t.Fatal("fixture lost signed zero")
+				}
+				f.assertUnavailable(t, bad)
+				if path == "reserve" {
+					r := f.reserve(t)
+					if r.Envelope.ID() != good.ID() || r.Attempts != 0 || r.Exceptions != 0 || r.Retries != 0 {
+						t.Fatal("signed zero leased or canonical zero failed", r)
+					}
+				} else {
+					page := f.list(t)
+					if len(page.Records) != 1 || page.Records[0].Envelope.ID() != good.ID() {
+						t.Fatal("signed zero listed")
+					}
+					r := page.Records[0]
+					if r.Attempts != 0 || r.Exceptions != 0 || r.Retries != 0 || r.CreatedAt.UnixMilli() != 0 || r.History[0].Attempt != 0 || r.History[0].Retry != 0 || r.History[0].At.UnixMilli() != 0 {
+						t.Fatal("canonical zero did not round trip")
+					}
+				}
+				if page := f.quarantine(t); len(page.Records) != 1 || page.Records[0].ID != bad.ID() {
+					t.Fatal("signed zero not quarantined")
+				}
+				if f.stored(t, 0, bad.ID()) != raw {
+					t.Fatal("rejected record rewritten")
+				}
+			})
+		}
+	}
+	for _, path := range []string{"reserve", "list"} {
+		t.Run("position/"+path, func(t *testing.T) {
+			f := newQuarantineFixture(t)
+			group := f.workflow(t, false, 2, false)
+			member := group.Envelope().Steps()[0]
+			f.edit(t, member.ID(), map[string]any{"position": json.RawMessage(`-0`)})
+			f.unchanged(t, func() error {
+				if path == "reserve" {
+					_, err := f.backend.JobReserve(t.Context(), f.key, f.owner, time.Minute)
+					return err
+				}
+				_, err := f.backend.JobList(t.Context(), f.key, jobs.ListOptions{Limit: 100})
+				return err
+			})
+		})
+	}
+}
+
+func TestRedisQuarantineAdmissionRejectsMarkerStagedInSameCall(t *testing.T) {
+	for _, kind := range []string{"independent", "workflow"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newQuarantineFixture(t)
+			pending := f.pending(t)
+			e := pending.Envelope()
+			if _, err := f.backend.JobEnqueue(t.Context(), f.key, e); err != nil {
+				t.Fatal(err)
+			}
+			f.finish(t, f.reserve(t), jobs.Succeeded)
+			var row jobStoredRecord
+			if err := json.Unmarshal([]byte(f.stored(t, 0, e.ID())), &row); err != nil {
+				t.Fatal(err)
+			}
+			// The record itself stays valid and is due for retirement. Only its
+			// index score is corrupt, so maintenance stages a quarantine marker.
+			if err := f.client.raw.ZAdd(t.Context(), f.keys[3], driver.Z{Score: 0, Member: e.ID().String()}).Err(); err != nil {
+				t.Fatal(err)
+			}
+			f.advance(t, f.backend.config.Retention+time.Second)
+			group, err := jobs.NewChain(pending.Step())
+			if err != nil {
+				t.Fatal(err)
+			}
+			admit := func() (bool, error) {
+				if kind == "workflow" {
+					return f.backend.JobWorkflow(t.Context(), f.key, group.Envelope())
+				}
+				return f.backend.JobEnqueue(t.Context(), f.key, e)
+			}
+			f.unchanged(t, func() error { _, err := admit(); return err })
+			if len(f.quarantine(t).Records) != 0 {
+				t.Fatal("failed admission committed its staged marker")
+			}
+			// With coherent placement, the same expired record can be retired
+			// and this exact admission succeeds: the marker caused rejection.
+			if err := f.client.raw.ZAdd(t.Context(), f.keys[3], driver.Z{Score: float64(row.Finished), Member: e.ID().String()}).Err(); err != nil {
+				t.Fatal(err)
+			}
+			if inserted, err := admit(); err != nil || !inserted {
+				t.Fatal(inserted, err)
 			}
 		})
 	}

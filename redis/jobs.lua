@@ -10,7 +10,9 @@ local request = cjson.decode(ARGV[3])
 local legacy = ARGV[4]
 local expected = {'hash', 'zset', 'zset', 'zset', 'hash', 'zset', 'hash', 'zset', 'zset', 'hash', 'zset'}
 local function integer(value, minimum, maximum)
+    -- cjson can preserve -0, which Go's unsigned integer decoder rejects.
     return type(value) == 'number' and value >= minimum and value <= maximum and value == math.floor(value)
+        and (value ~= 0 or 1 / value > 0)
 end
 -- Redis cjson emits exponent notation at 1e14; Go integer decoding rejects it.
 -- The Go boundary owns this common ceiling for all encoded integers.
@@ -576,9 +578,13 @@ elseif op == 'reserve' then
     -- Consider both indexed ready entries and leases reclaimed by this call.
     local chosen = nil
     local function consider(candidate)
-        if candidate and candidate.state == 'waiting' and candidate.available <= now
-            and (not chosen or candidate.available < chosen.available
-                 or (candidate.available == chosen.available and candidate.id < chosen.id)) then chosen = candidate end
+        if not candidate or candidate.state ~= 'waiting' or candidate.available > now then return end
+        if candidate.workflow then
+            local group = load_group(candidate.workflow)
+            if not group or not load_member(group, candidate.id) then corrupt = true; return end
+        end
+        if not chosen or candidate.available < chosen.available
+            or (candidate.available == chosen.available and candidate.id < chosen.id) then chosen = candidate end
     end
     local ready = redis.call('ZRANGEBYSCORE', KEYS[2], '-inf', now, 'WITHSCORES', 'LIMIT', 0, limits.scan_limit)
     local ordered = #ready < limits.scan_limit * 2
@@ -592,7 +598,7 @@ elseif op == 'reserve' then
     if ordered then
         for id, _ in pairs(dirty) do if not removed[id] then consider(loaded[id]) end end
     end
-    if chosen then
+    if chosen and not corrupt then
         chosen.owner = request.owner; chosen.expiry = now + request.ttl
         transition(chosen, 'reserved', '')
         result.record = chosen

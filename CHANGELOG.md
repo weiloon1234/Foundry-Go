@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed: Redis reserve validates a candidate's workflow membership and position
+  before leasing it, without scanning other member records. Shared integer
+  validation rejects signed zero before cjson can emit an unsigned value that
+  Go rejects. Regression coverage includes staged-detachment rollback, admission
+  against a staged quarantine marker, and full legacy windows from v0.13.0.
 - Fixed: Redis record/history validation rejects unknown and case-variant fields
   before mutation; Lua and Go cap wire integers at 99,999,999,999,999 for exact
   cjson round trips. Individual deletion now requires the same bounded membership
