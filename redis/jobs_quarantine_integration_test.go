@@ -478,7 +478,7 @@ func TestRedisQuarantineRollsBackWithInvalidDirectTarget(t *testing.T) {
 	a := f.enqueue(t)
 	f.finish(t, f.reserve(t), jobs.Succeeded)
 	b := f.enqueue(t)
-	f.at(t, b.ID(), 253402300799000)
+	f.at(t, b.ID(), maxJobInteger-1000)
 	f.put(t, a.ID(), "corrupt retained")
 	f.put(t, b.ID(), "corrupt target")
 	f.advance(t, f.backend.config.Retention+time.Second)
@@ -765,7 +765,7 @@ func TestRedisQuarantineIndexScoreValidation(t *testing.T) {
 			case "identity":
 				index = 8
 			case "delayed":
-				f.at(t, e.ID(), 253402300799000)
+				f.at(t, e.ID(), maxJobInteger-1000)
 				f.put(t, e.ID(), "corrupt delayed record")
 			}
 			if state != "delayed" {

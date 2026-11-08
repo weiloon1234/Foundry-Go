@@ -378,7 +378,7 @@ func TestRedisQuarantineProofCoversEveryWorkflowRole(t *testing.T) {
 						t.Fatal(err)
 					}
 				case "erased-workflow":
-					f.edit(t, member.ID(), map[string]any{"workflow": nil, "attempts": 0.5})
+					f.edit(t, member.ID(), map[string]any{"workflow": nil})
 				case "oversized":
 					f.put(t, member.ID(), strings.Repeat("x", 3<<20))
 				case "history":
@@ -425,32 +425,7 @@ func TestRedisQuarantineProofBudgetsAndCatalogIntegrity(t *testing.T) {
 			for i := range groups {
 				groups[i] = f.workflow(t, false, 1, false)
 			}
-			remaining := budget
-			for i, g := range groups {
-				raw, err := f.client.raw.HGet(t.Context(), f.keys[6], g.ID().String()).Result()
-				if err != nil {
-					t.Fatal(err)
-				}
-				var fields map[string]any
-				if err := json.Unmarshal([]byte(raw), &fields); err != nil {
-					t.Fatal(err)
-				}
-				fields["padding"] = ""
-				encoded, err := json.Marshal(fields)
-				if err != nil {
-					t.Fatal(err)
-				}
-				size := remaining / (len(groups) - i)
-				fields["padding"] = strings.Repeat("x", size-len(encoded))
-				encoded, err = json.Marshal(fields)
-				if err != nil {
-					t.Fatal(err)
-				}
-				remaining -= len(encoded)
-				if err := f.client.raw.HSet(t.Context(), f.keys[6], g.ID().String(), encoded).Err(); err != nil {
-					t.Fatal(err)
-				}
-			}
+			padQuarantineCatalog(t, f, groups, budget)
 			bad := f.enqueue(t)
 			f.at(t, bad.ID(), 1)
 			f.put(t, bad.ID(), "corrupt")
@@ -511,6 +486,35 @@ func TestRedisQuarantineProofBudgetsAndCatalogIntegrity(t *testing.T) {
 				t.Fatal("invalid catalog proved independence", err)
 			}
 		})
+	}
+}
+
+func padQuarantineCatalog(t *testing.T, f quarantineFixture, groups []jobs.Workflow, budget int) {
+	t.Helper()
+	for i, g := range groups {
+		raw, err := f.client.raw.HGet(t.Context(), f.keys[6], g.ID().String()).Result()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal([]byte(raw), &fields); err != nil {
+			t.Fatal(err)
+		}
+		fields["padding"] = ""
+		encoded, err := json.Marshal(fields)
+		if err != nil {
+			t.Fatal(err)
+		}
+		size := budget / (len(groups) - i)
+		fields["padding"] = strings.Repeat("x", size-len(encoded))
+		encoded, err = json.Marshal(fields)
+		if err != nil {
+			t.Fatal(err)
+		}
+		budget -= len(encoded)
+		if err := f.client.raw.HSet(t.Context(), f.keys[6], g.ID().String(), encoded).Err(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

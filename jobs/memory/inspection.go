@@ -11,12 +11,13 @@ import (
 var _ jobs.QuarantineBackend = (*Backend)(nil)
 
 // JobQuarantined returns a validated empty page; memory records cannot be
-// externally corrupted and this backend does not quarantine work.
+// externally corrupted and this backend does not quarantine work. This read
+// does not observe the clock or run maintenance in any queue.
 func (b *Backend) JobQuarantined(ctx context.Context, key jobs.Key, options jobs.QuarantineOptions) (jobs.QuarantinePage, error) {
 	if err := options.Validate(); err != nil {
 		return jobs.QuarantinePage{}, err
 	}
-	_, release, err := b.begin(ctx, key)
+	release, err := b.lock(ctx, key)
 	if err != nil {
 		return jobs.QuarantinePage{}, err
 	}

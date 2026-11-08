@@ -21,6 +21,10 @@ import (
 //go:embed jobs.lua
 var jobsScript string
 
+// Redis cjson uses 14 significant digits and emits exponent notation at 1e14.
+// Keep the Lua authority and Go wire boundary on the same exact integer range.
+const maxJobInteger int64 = 99_999_999_999_999
+
 // JobBackend borrows the existing Redis client and owns no connections. Limits
 // apply per queue and must match across processes. Accepted work persists until
 // terminal retention expires or retained-record eviction; durability depends on
@@ -74,6 +78,7 @@ func NewJobBackend(client *Client, config jobs.QueueConfig) (*JobBackend, error)
 		"workflow_steps": jobs.MaxWorkflowSteps, "workflow_members": jobs.MaxWorkflowMembers,
 		"manual_retries": jobs.MaxManualRetries, "list_limit": jobs.MaxListLimit,
 		"proof_groups": 128, "proof_bytes": 1 << 20,
+		"integer_max": maxJobInteger,
 	})
 	if err != nil {
 		return nil, err
@@ -242,6 +247,9 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 	if b == nil || b.client == nil {
 		return jobReply{}, safeerror.NewFault(fault.Invalid, "Redis job backend is not initialized")
 	}
+	if !request.validNumbers() {
+		return jobReply{}, safeerror.NewFault(fault.Invalid, "Redis job operation exceeds the integer range")
+	}
 	encoded, err := json.Marshal(request)
 	if err != nil {
 		return jobReply{}, err
@@ -294,7 +302,69 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 	if err := json.Unmarshal([]byte(text), &reply); err != nil {
 		return jobReply{}, safeerror.NewFault(fault.Internal, "invalid Redis job result encoding")
 	}
+	if !reply.validNumbers() {
+		return jobReply{}, safeerror.NewFault(fault.Internal, "Redis job result exceeds the integer range")
+	}
 	return reply, nil
+}
+
+func jobIntegers(values ...int64) bool {
+	for _, value := range values {
+		if value < 0 || value > maxJobInteger {
+			return false
+		}
+	}
+	return true
+}
+
+func (r jobRequest) validNumbers() bool {
+	if !jobIntegers(r.ExpectedCreated, r.ExpectedFinished, int64(r.Limit), r.GroupBytes, r.UniqueFor, r.TTL, r.Available, r.Bytes, r.Delay) {
+		return false
+	}
+	for _, step := range r.Steps {
+		if !step.validNumbers() {
+			return false
+		}
+	}
+	return true
+}
+
+func (r *jobStoredRecord) validNumbers() bool {
+	if r == nil {
+		return true
+	}
+	if !jobIntegers(r.Available, r.Expiry, r.Created, r.Finished) {
+		return false
+	}
+	for _, item := range r.History {
+		if !jobIntegers(item.At) {
+			return false
+		}
+	}
+	return true
+}
+
+func (r jobReply) validNumbers() bool {
+	if !r.Record.validNumbers() {
+		return false
+	}
+	for _, record := range r.Records {
+		if !record.validNumbers() {
+			return false
+		}
+	}
+	for _, item := range r.Quarantined {
+		if !jobIntegers(item.At) {
+			return false
+		}
+	}
+	if s := r.Stats; s != nil && !jobIntegers(s.Waiting, s.Delayed, s.Blocked, s.Leased, s.Failed, s.Retained, s.Quarantined) {
+		return false
+	}
+	if w := r.Workflow; w != nil && !jobIntegers(w.Finished, int64(w.Total), int64(w.Pending), int64(w.Processed), int64(w.Succeeded), int64(w.FailedJobs), int64(w.Cancelled)) {
+		return false
+	}
+	return true
 }
 
 // JobEnqueue atomically accepts an envelope and reports whether it was newly inserted.

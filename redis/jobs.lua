@@ -12,9 +12,19 @@ local expected = {'hash', 'zset', 'zset', 'zset', 'hash', 'zset', 'hash', 'zset'
 local function integer(value, minimum, maximum)
     return type(value) == 'number' and value >= minimum and value <= maximum and value == math.floor(value)
 end
-local max_time = 253402300799999 -- final millisecond in year 9999
+-- Redis cjson emits exponent notation at 1e14; Go integer decoding rejects it.
+-- The Go boundary owns this common ceiling for all encoded integers.
+local max_time = limits.integer_max
 local max_count = 2147483647
-local max_bytes = 1125899906842624
+local max_bytes = limits.integer_max
+local function valid_numbers(value)
+    if type(value) == 'number' then return integer(value, 0, limits.integer_max) end
+    if type(value) == 'table' then
+        for _, item in pairs(value) do if not valid_numbers(item) then return false end end
+    end
+    return true
+end
+if not valid_numbers(request) then return {-2} end
 for i, kind in ipairs(expected) do
     local actual = redis.call('TYPE', KEYS[i]).ok
     if actual ~= 'none' and actual ~= kind then return {-2} end
@@ -41,6 +51,7 @@ local now = tonumber(timestamp[1]) * 1000 + math.floor(tonumber(timestamp[2]) / 
 local last = tonumber(redis.call('HGET', KEYS[5], 'time') or '0')
 if not integer(last, 0, max_time) then return {-2} end
 now = math.max(now, last)
+if not integer(now, 0, max_time) then return {-2} end
 -- Live records count against MaxEntries/MaxBytes; terminal records are retained
 -- separately and evicted oldest-first when their own bounds are exceeded.
 local live = tonumber(redis.call('HGET', KEYS[5], 'live') or '0')
@@ -63,6 +74,7 @@ end
 local loaded, dirty, removed = {}, {}, {}
 local groups, dirty_groups, removed_groups = {}, {}, {}
 local quarantined = {}
+local detached_finished = {}
 local advance
 local corrupt = false
 local states = {blocked=true, waiting=true, reserved=true, running=true, succeeded=true, failed=true, cancelled=true}
@@ -96,12 +108,22 @@ local function dense_array(items, maximum)
     end
     return count == #items
 end
+local record_fields = {id=true, envelope=true, state=true, maximum=true, attempts=true,
+    available=true, expiry=true, created=true, finished=true, owner=true, cancelled=true,
+    bytes=true, history=true, name=true, version=true, abandoned=true, exceptions=true,
+    unique=true, unique_until=true, position=true, workflow=true, retries=true, last_retry=true}
+local history_fields = {state=true, reason=true, at=true, attempt=true, retry=true}
+local function canonical_fields(object, allowed)
+    if type(object) ~= 'table' then return false end
+    for key, _ in pairs(object) do if not allowed[key] then return false end end
+    return true
+end
 local function validate_history(history)
     -- Persisted records always have an initial transition. Empty Lua tables
     -- would encode as objects, not the arrays required by the Go decoder.
     if not dense_array(history, limits.history) then return false end
     for _, entry in ipairs(history) do
-        if type(entry) ~= 'table' or type(entry.state) ~= 'string' or not states[entry.state]
+        if not canonical_fields(entry, history_fields) or type(entry.state) ~= 'string' or not states[entry.state]
             or type(entry.reason) ~= 'string' or not integer(entry.at, 0, max_time)
             or not integer(entry.attempt, 0, 4294967295)
             or (entry.retry ~= nil and not integer(entry.retry, 0, limits.manual_retries)) then return false end
@@ -125,7 +147,7 @@ local function read_record(id)
     local workflow = ok and type(record) == 'table' and record.workflow ~= nil
     workflow_observed[id] = workflow
     invalid_records[id] = true
-    if not ok or type(record) ~= 'table' or not identifier(id) or record.id ~= id
+    if not ok or not canonical_fields(record, record_fields) or not identifier(id) or record.id ~= id
         or (record.envelope ~= nil and type(record.envelope) ~= 'string')
         or type(record.state) ~= 'string' or not states[record.state]
         or not integer(record.maximum, 1, limits.attempts) or not integer(record.attempts, 0, record.maximum)
@@ -138,7 +160,7 @@ local function read_record(id)
         or (record.exceptions ~= nil and not integer(record.exceptions, 0, record.maximum))
         or ((record.unique ~= nil) ~= (record.unique_until ~= nil))
         or (record.unique ~= nil and (type(record.unique) ~= 'string' or #record.unique ~= 64 or not string.match(record.unique, '^[0-9a-f]+$') or not integer(record.unique_until, 0, max_time)))
-        or (record.position ~= nil and not integer(record.position, 0, 4294967295))
+        or (record.position ~= nil and not workflow)
         or (workflow and (not identifier(record.workflow) or not integer(record.position, 0, limits.workflow_members - 1))) then
         return nil, true, workflow
     end
@@ -212,7 +234,7 @@ local function read_group(id, persisted)
     return group
 end
 local function load_group(id)
-    if removed_groups[id] then return nil end
+    if removed_groups[id] and not new_groups[id] then return nil end
     local group = read_group(id)
     if not group and redis.call('HEXISTS', KEYS[7], id) ~= 0 then corrupt = true end
     return group
@@ -277,6 +299,14 @@ local function load_indexed(id, index, score)
         if prove_independent(id, workflow) then stage_quarantine(id) else corrupt = true end
         return nil
     end
+    if index == 4 and record.workflow then
+        local group = load_group(record.workflow)
+        if not group or not load_member(group, id) then corrupt = true; return nil end
+        -- Layout-2 terminal members (and pre-release layout-3 entries) detach
+        -- in bounded staged batches. Only their group may delete them.
+        detached_finished[id] = true
+        return nil
+    end
     return record
 end
 if request.op == 'quarantined' then
@@ -320,7 +350,7 @@ local function transition(r, state, reason)
     dirty[r.id] = true
     if terminal(state) and not was_terminal and r.workflow then advance(r) end
 end
--- remove drops one record and its accounting. Callers own workflow integrity.
+-- Only a preflighted group or a complete independence proof owns deletion.
 local function remove(r)
     if terminal(r.state) then
         retained = retained - 1; retained_bytes = retained_bytes - r.bytes
@@ -329,6 +359,10 @@ local function remove(r)
         live = live - 1; live_bytes = live_bytes - r.bytes
     end
     removed[r.id] = true
+end
+local function remove_independent(r)
+    if not prove_independent(r.id, r.workflow ~= nil) then corrupt = true; return end
+    remove(r)
 end
 local function expire(r)
     if r and (r.state == 'reserved' or r.state == 'running') and r.expiry <= now then
@@ -346,7 +380,7 @@ local function expire(r)
         local group = load_group(r.workflow)
         if not group or not load_member(group, r.id) then corrupt = true end
     elseif r and terminal(r.state) and r.finished > 0 and r.finished + limits.retention <= now then
-        remove(r); return nil
+        remove_independent(r); return nil
     end
     return r
 end
@@ -425,7 +459,7 @@ advance = function(r)
     end
 end
 local function remove_group(group, forced)
-    if removed_groups[group.id] then return end
+    if removed_groups[group.id] == group then return end
     if group.finished == 0 or (not forced and group.finished + limits.retention > now) then corrupt = true; return end
     local members = {}
     for _, id in ipairs(group_ids(group)) do
@@ -434,7 +468,7 @@ local function remove_group(group, forced)
         table.insert(members, item)
     end
     for _, item in ipairs(members) do remove(item) end
-    removed_groups[group.id] = true; retained_bytes = retained_bytes - group.bytes
+    removed_groups[group.id] = group; retained_bytes = retained_bytes - group.bytes
 end
 for _, id in ipairs(redis.call('ZRANGEBYSCORE', KEYS[8], '-inf', now - limits.retention, 'LIMIT', 0, 128)) do
     local group = load_group(id)
@@ -496,7 +530,7 @@ if op == 'workflow' then
             transition(item, state, '')
         end
         group.remaining = #group.members
-        groups[group.id] = group; dirty_groups[group.id] = true; removed_groups[group.id] = nil
+        groups[group.id] = group; dirty_groups[group.id] = true; group_positions[group.id] = nil
         new_groups[group.id] = group
         if proof then add_proof_group(group, #cjson.encode(group)) end
         result.inserted = true
@@ -604,8 +638,8 @@ elseif op == 'stats' then
     result.stats = true
 elseif op == 'forget' then
     result.changed = false
-    if r and terminal(r.state) and not r.workflow and r.name == request.name and r.version == request.version then
-        remove(r); result.changed = true
+    if r and terminal(r.state) and r.name == request.name and r.version == request.version then
+        remove_independent(r); result.changed = true
     end
 elseif op == 'retry' then
     if not r or r.name ~= request.name or r.version ~= request.version then return {-7} end
@@ -676,7 +710,7 @@ while over() and scanned < 512 and not corrupt do
         if not over() then break end
         if not removed[id] then
             local item = load_indexed(id, 4)
-            if item and terminal(item.state) and not item.workflow then remove(item) end
+            if item and terminal(item.state) then remove_independent(item) end
         end
     end
     scanned = scanned + 64
@@ -685,7 +719,7 @@ local evicted_groups = 0
 while over() and evicted_groups < 16 and not corrupt do
     local ids = redis.call('ZRANGE', KEYS[8], evicted_groups, evicted_groups)
     if #ids == 0 then break end
-    if not removed_groups[ids[1]] then
+    if not removed_groups[ids[1]] and not new_groups[ids[1]] then
         local group = load_group(ids[1])
         if not group or group.finished == 0 then corrupt = true else remove_group(group, true) end
     end
@@ -694,18 +728,25 @@ end
 if corrupt or not integer(live, 0, max_count) or not integer(live_bytes, 0, max_bytes)
     or not integer(retained, 0, max_count) or not integer(retained_bytes, 0, max_bytes)
     or not integer(failed, 0, retained) then return {-2} end
+if add_unique and not integer(now + request.unique_for, 0, max_time) then return {-2} end
 -- Encode before the first write. Corrupt records and incompatible live config
 -- fail without changing the queue; Redis scripts do not provide rollback.
 local writes, envelope_writes = {}, {}
 for id, _ in pairs(dirty) do
     if not removed[id] then
         local item = loaded[id]
+        if not valid_numbers(item) then return {-2} end
         if item.envelope then envelope_writes[id] = item.envelope; item.envelope = nil end
         writes[id] = cjson.encode(item)
     end
 end
 local group_writes = {}
-for id, _ in pairs(dirty_groups) do if not removed_groups[id] then group_writes[id] = cjson.encode(groups[id]) end end
+for id, _ in pairs(dirty_groups) do
+    if removed_groups[id] ~= groups[id] then
+        if not valid_numbers(groups[id]) then return {-2} end
+        group_writes[id] = cjson.encode(groups[id])
+    end
+end
 local function with_envelope(item)
     if item then item.envelope = envelope_writes[item.id] or envelope_of(item) end
 end
@@ -742,10 +783,12 @@ if result.stats then
     result = {stats={waiting=waiting, delayed=ready - waiting, blocked=math.max(0, live - ready - leased),
         leased=leased, failed=failed, retained=retained, quarantined=quarantine_count}}
 end
+if not valid_numbers(result) then return {-2} end
 local response = cjson.encode(result)
 -- A reservation or read that changed nothing writes nothing, not even metadata.
 local changed = not previous or add_unique or #expired_unique > 0 or next(dirty) ~= nil or next(removed) ~= nil
-    or next(dirty_groups) ~= nil or next(removed_groups) ~= nil or next(quarantined) ~= nil
+    or next(dirty_groups) ~= nil or next(removed_groups) ~= nil or next(quarantined) ~= nil or next(detached_finished) ~= nil
+for id, _ in pairs(detached_finished) do redis.call('ZREM', KEYS[4], id) end
 for id, _ in pairs(removed) do
     redis.call('HDEL', KEYS[1], id)
     redis.call('HDEL', KEYS[10], id)
@@ -765,7 +808,7 @@ for id, encoded in pairs(writes) do
     for i = 2, 4 do redis.call('ZREM', KEYS[i], id) end
     if item.state == 'waiting' then redis.call('ZADD', KEYS[2], item.available, id)
     elseif item.state == 'reserved' or item.state == 'running' then redis.call('ZADD', KEYS[3], item.expiry, id)
-    elseif terminal(item.state) then redis.call('ZADD', KEYS[4], item.finished, id) end
+    elseif terminal(item.state) and not item.workflow then redis.call('ZADD', KEYS[4], item.finished, id) end
 end
 for id, _ in pairs(removed_groups) do redis.call('HDEL', KEYS[7], id); redis.call('ZREM', KEYS[8], id) end
 for id, encoded in pairs(group_writes) do

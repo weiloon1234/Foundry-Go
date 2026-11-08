@@ -473,3 +473,45 @@ func TestQuarantineInspectionIsEmptyAndPreservesJobs(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestQuarantineInspectionDoesNotReapAnyQueue(t *testing.T) {
+	f := setup(t, 1)
+	leased := f.enqueue(t, 1)
+	claim := f.reserve(t)
+	if _, err := f.backend.JobStart(t.Context(), f.key, claim.Ownership); err != nil {
+		t.Fatal(err)
+	}
+	retained := f.enqueue(t, 2)
+	if _, err := f.backend.JobCancel(t.Context(), f.key, retained.Target()); err != nil {
+		t.Fatal(err)
+	}
+	before, err := f.backend.JobStats(t.Context(), f.key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := f.clock.Now()
+	f.clock.Advance(2 * time.Hour)
+	other, err := jobs.NewKey(keyspace.Namespace{Application: "jobs", Environment: "test"}, "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []jobs.Key{f.key, other} {
+		page, err := f.backend.JobQuarantined(t.Context(), key, jobs.QuarantineOptions{Limit: 20})
+		if err != nil || len(page.Records) != 0 {
+			t.Fatal(page, err)
+		}
+	}
+	// Rewind before ordinary inspection. A maintenance read would both mutate
+	// records and advance the backend's monotonic clock, making this fail.
+	f.clock.Set(at)
+	if r := f.record(t, leased.ID()); r.State != jobs.Running || len(r.History) != 3 {
+		t.Fatal("read transitioned expired lease", r.State)
+	}
+	if r := f.record(t, retained.ID()); r.State != jobs.Cancelled {
+		t.Fatal("read deleted retained record")
+	}
+	after, err := f.backend.JobStats(t.Context(), f.key)
+	if err != nil || after != before {
+		t.Fatal("read changed counts", before, after, err)
+	}
+}

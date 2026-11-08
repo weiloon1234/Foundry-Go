@@ -498,8 +498,9 @@ func TestRedisLayoutMigrationCountsDecodedRecordState(t *testing.T) {
 	if expected[4] != "1" || expected[2] != "3" {
 		t.Fatal("unexpected layout-2 accounting", expected)
 	}
-	// Rewrite every record as layout 1: embedded envelope and one count/bytes
-	// pair, as the previous release stores the queue.
+	// Rewrite every record as layout 1: embedded envelope, terminal workflow
+	// members in :finished, and one count/bytes pair. Layout 3 no longer places
+	// those members in the independent terminal index.
 	rows, err := client.raw.HGetAll(ctx, keys[0]).Result()
 	if err != nil {
 		t.Fatal(err)
@@ -524,6 +525,17 @@ func TestRedisLayoutMigrationCountsDecodedRecordState(t *testing.T) {
 			t.Fatal(err)
 		}
 		pipe.HSet(ctx, keys[0], id, data)
+		var state jobs.State
+		if err := json.Unmarshal(row["state"], &state); err != nil {
+			t.Fatal(err)
+		}
+		if state.Terminal() {
+			var finished int64
+			if err := json.Unmarshal(row["finished"], &finished); err != nil {
+				t.Fatal(err)
+			}
+			pipe.ZAdd(ctx, keys[3], driver.Z{Score: float64(finished), Member: id})
+		}
 	}
 	sum := func(fields ...string) int64 {
 		t.Helper()

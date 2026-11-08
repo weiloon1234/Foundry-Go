@@ -96,21 +96,30 @@ var _ jobs.StatsBackend = (*Backend)(nil)
 var _ jobs.ForgetBackend = (*Backend)(nil)
 var _ jobs.WorkflowStatusBackend = (*Backend)(nil)
 
-func (b *Backend) begin(ctx context.Context, key jobs.Key) (time.Time, func(), error) {
+// lock validates lifecycle and context without observing time or maintaining work.
+func (b *Backend) lock(ctx context.Context, key jobs.Key) (func(), error) {
 	if err := jobs.ValidateOperation(ctx, key); err != nil {
-		return time.Time{}, nil, err
+		return nil, err
 	}
 	if b == nil || b.entries == nil {
-		return time.Time{}, nil, safeerror.NewFault(fault.Invalid, "memory job backend is not initialized")
+		return nil, safeerror.NewFault(fault.Invalid, "memory job backend is not initialized")
 	}
 	b.mu.Lock()
 	if err := ctx.Err(); err != nil {
 		b.mu.Unlock()
-		return time.Time{}, nil, err
+		return nil, err
 	}
 	if b.closed {
 		b.mu.Unlock()
-		return time.Time{}, nil, safeerror.NewFault(fault.Closed, "memory job backend is closed")
+		return nil, safeerror.NewFault(fault.Closed, "memory job backend is closed")
+	}
+	return b.mu.Unlock, nil
+}
+
+func (b *Backend) begin(ctx context.Context, key jobs.Key) (time.Time, func(), error) {
+	release, err := b.lock(ctx, key)
+	if err != nil {
+		return time.Time{}, nil, err
 	}
 	now := b.config.Clock.Now()
 	if now.Before(b.lastTime) {
@@ -119,7 +128,7 @@ func (b *Backend) begin(ctx context.Context, key jobs.Key) (time.Time, func(), e
 		b.lastTime = now
 	}
 	b.reap(now)
-	return now, b.mu.Unlock, nil
+	return now, release, nil
 }
 
 // JobWakeup returns a channel closed by the next accepted enqueue, workflow or

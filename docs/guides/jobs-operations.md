@@ -209,6 +209,12 @@ group. An incomplete or invalid catalog means unknown membership and fails
 closed. A record with any workflow field is never quarantined. The immutable
 envelope contains no workflow identity and is not used as proof.
 
+Individual deletion uses this same proof, even for a structurally valid record.
+Forget, direct/list expiry, retention, and independent eviction cannot infer
+ownership from absent `workflow` or `position` fields. Unknown membership fails
+closed without deleting or refunding anything. Consequently a catalog over either
+proof limit can also block deletion of healthy independent terminal jobs.
+
 Ready scans, expired-lease maintenance, terminal retention, eviction, and ordinary
 lists can discover quarantine. An exhausted 128-entry ready window commits safe
 quarantine progress but reserves nothing until the earliest valid candidate can
@@ -309,6 +315,17 @@ layout marker, preserving all records, envelopes, groups, counters, and timestam
 It neither runs maintenance nor backfills membership. A repeated migration does
 nothing. New empty queues initialize directly in layout 3.
 
+Layout 3 reserves `:finished` for independent terminal maintenance. Terminal
+workflow members retain their records, envelopes, identity entries and charges;
+their existing group owns cleanup through `:workflows` and `:workflow_finished`.
+There is no additional group-member index. New writes exclude members from
+`:finished`. Legacy entries from layout 2 or a pre-release layout-3 build detach
+after strict member/group validation in the existing bounded retention (128)
+and capacity-eviction (512) scans. Detachment changes no accounting and commits
+with the rest of the call; repeated successful scans progress past a full legacy
+window. It may take several calls to reach a later independent entry. A corrupt
+member still fails closed. Migration itself remains metadata-only and idempotent.
+
 All queue clients must cut over together. There is no supported overlap between
 old and new workers, publishers, or operator binaries. v0.13.0 rejects layout 3
 before mutation, but can still write a queue that has not migrated yet.
@@ -351,6 +368,16 @@ Queue policy identities are unchanged by this cutover. Layout-2 queues need the
 explicit upgrade above. Readers treat older records without retry metadata as
 cycle zero. Lua validates history array elements before any mutation, and every
 record read requires its stored or staged envelope.
+
+Mutable records and history entries accept only their exact canonical field
+names. Unknown fields and case variants such as `At` reject before mutation;
+`position` without `workflow` is invalid. Redis wire integers, including all
+millisecond timestamps and accounting totals, must be nonnegative and at most
+99,999,999,999,999. Lua and Go enforce that ceiling so Redis cjson never emits
+exponent-form integers that Go cannot decode. The ceiling does not change opaque
+application payloads or envelope serialization. A transition that would exceed
+it fails before writes. Quarantine inspection in both built-in backends runs no
+maintenance, including lease expiry, retention, accounting or workflow advancement.
 
 There is no queue dashboard, autoscaling controller or automatic failed-workflow
 recovery. The framework owns queue execution and the reusable operator commands;

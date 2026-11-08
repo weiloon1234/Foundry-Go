@@ -157,7 +157,7 @@ func TestRedisJobLayoutCutoverNeedsNoMembershipBackfill(t *testing.T) {
 	f := newQuarantineFixture(t)
 	group := f.workflow(t, true, 1, true)
 	independent := f.enqueue(t)
-	// Layout 3 leaves record placement and the group schema identical to layout 2.
+	// Waiting members and the group membership schema are unchanged from layout 2.
 	if err := f.client.raw.HSet(t.Context(), f.keys[4], "layout", "2").Err(); err != nil {
 		t.Fatal(err)
 	}
@@ -219,5 +219,55 @@ func TestRedisJobLayoutCutoverCanResumeAcrossQueues(t *testing.T) {
 	}
 	if _, err := empty.backend.JobCancel(t.Context(), empty.key, jobs.Target{}); !errors.Is(err, fault.Invalid) {
 		t.Fatal(err)
+	}
+}
+
+func TestRedisJobLayoutThreeDetachesLegacyTerminalMembers(t *testing.T) {
+	f := newQuarantineFixture(t)
+	group := f.workflow(t, true, 2, false)
+	member := group.Envelope().Steps()[0]
+	if err := f.client.raw.HSet(t.Context(), f.keys[4], "layout", "2").Err(); err != nil {
+		t.Fatal(err)
+	}
+	if status := oldJobCommand(t, f.backend, f.key, jobRequest{Op: "cancel", ID: member.ID().String(), Name: member.Name(), Version: member.Version()}); status != 1 {
+		t.Fatal(status)
+	}
+	if f.client.raw.ZCard(t.Context(), f.keys[3]).Val() != 1 {
+		t.Fatal("baseline did not create terminal placement")
+	}
+	before := snapshotJobKeys(t, f.client, f.keys)
+	if ok, err := f.backend.JobMigrateLayout(t.Context(), f.key); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	after := snapshotJobKeys(t, f.client, f.keys)
+	delete(before, f.keys[4])
+	delete(after, f.keys[4])
+	if !maps.Equal(before, after) {
+		t.Fatal("migration rewrote legacy data")
+	}
+	charges := f.counters(t)
+	f.advance(t, f.backend.config.Retention+time.Second)
+	if _, err := f.backend.JobStats(t.Context(), f.key); err != nil {
+		t.Fatal(err)
+	}
+	if f.client.raw.ZCard(t.Context(), f.keys[3]).Val() != 0 {
+		t.Fatal("legacy terminal member not detached")
+	}
+	if !maps.Equal(charges, f.counters(t)) {
+		t.Fatal("detachment changed accounting")
+	}
+	after = snapshotJobKeys(t, f.client, f.keys)
+	delete(after, f.keys[4])
+	delete(before, f.keys[3])
+	delete(after, f.keys[3])
+	if !maps.Equal(before, after) {
+		t.Fatal("detachment changed records, envelopes or groups")
+	}
+	before = snapshotJobKeys(t, f.client, f.keys)
+	if _, err := f.backend.JobStats(t.Context(), f.key); err != nil {
+		t.Fatal(err)
+	}
+	if !maps.Equal(before, snapshotJobKeys(t, f.client, f.keys)) {
+		t.Fatal("repeat detachment was not idempotent")
 	}
 }

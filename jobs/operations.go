@@ -35,6 +35,8 @@ type StatsBackend interface {
 // ForgetBackend is optional. It removes one retained terminal record that is
 // not a workflow member, including its deduplication identity: a later dispatch
 // or outbox republication of the same ID is then accepted as new work.
+// Redis requires a complete bounded membership proof; unknown ownership fails
+// closed even when the record itself appears independent.
 type ForgetBackend interface {
 	// JobForget removes a retained terminal independent record and its deduplication identity.
 	JobForget(context.Context, Key, Target) (bool, error)
@@ -59,7 +61,8 @@ func (d *Dispatcher) Stats(ctx context.Context, queue Queue) (QueueStats, error)
 }
 
 // Forget removes one retained terminal independent job. Live and workflow jobs
-// are never removed; changed=false means nothing matching was retained.
+// are never removed; changed=false means nothing matching was retained. An
+// authority may reject workflow targets or ownership it cannot prove independent.
 func (d *Dispatcher) Forget(ctx context.Context, queue Queue, target Target) (bool, error) {
 	release, err := d.begin(ctx)
 	if err != nil {

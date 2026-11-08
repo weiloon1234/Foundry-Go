@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Fixed: Redis record/history validation rejects unknown and case-variant fields
+  before mutation; Lua and Go cap wire integers at 99,999,999,999,999 for exact
+  cjson round trips. Individual deletion now requires the same bounded membership
+  proof as quarantine, including records with erased ownership fields.
+- Fixed: recreated workflow identities no longer inherit superseded terminal
+  index entries during capacity eviction. Layout 3 keeps terminal members out of
+  the independent `:finished` index; bounded scans detach validated legacy entries
+  without accounting changes or an additional index.
+- Fixed: memory quarantine inspection no longer runs lease, retention, accounting
+  or workflow maintenance in any queue sharing the backend.
 - Added: Redis quarantine for corrupt records proven independent by a complete
   group-reference check bounded to 128 groups and 1 MiB. Quarantine preserves
   raw data, identity, and accounting, while detaching scheduling indexes.
