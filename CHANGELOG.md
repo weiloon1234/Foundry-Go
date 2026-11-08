@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.12.0 — 2026-11-08
 
 - Fixed: `go tool foundry docs check` accepts application identifiers that share bare names
   with retired framework APIs while still rejecting qualified and owner-inferred retired

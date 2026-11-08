@@ -8,6 +8,21 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Any-of route guards and CMS sanitizing — v0.12.0, 2026-11-08
+
+Status: **implemented; `make verify` passed (in segments after two fixes), an independent review found no
+authorization or sanitizer bypass and its one low finding was fixed, and CI gates this tag**.
+- `http.AnyOf(http.AllOf(http.Scopes(..), http.Permissions(..)), ...)` admits an authenticated actor when one
+  complete alternative passes; authority errors, timeouts and joined or partially inspected denials stop admission
+  instead of falling through. Manifest 10, OpenAPI security alternatives and TypeScript metadata keep each branch's
+  pairing; version 9 manifests are rejected.
+- `sanitize.Config` gains `AdditionalURLSchemes` (`URLSchemeTel`) and `AllowRelativeURLs`, so applications clean CMS
+  HTML with the framework policy instead of their own.
+- `go tool foundry docs check` accepts application names that share a retired framework name; framework
+  documentation stays strict.
+Open: Starter, ooo and Boss Club adopt this tag and regenerate their clients; Pages with a Tiptap HTML editor lands
+in all three; ooo decides whether its editorial table admits write or approve.
+
 ## Guides as the single API-teaching source — v0.11.0, 2026-11-08
 
 Status: **implemented; `make verify` (including the native TypeScript proof) passed, independent reviews of the
@@ -23,8 +38,8 @@ now own that teaching.
   retired-API rules against its pinned module, offline and read-only.
 - Database operations report a caller deadline as `DeadlineExceeded`; the migration lock deadline is reported
   as a timeout.
-Open: Starter, ooo and Boss Club adopt this tag next, shorten their skills to app workflow plus guide anchors,
-and run `docs check` from `verify.py`.
+Adopted 2026-11-08: Starter, ooo and Boss Club moved to v0.11.0, shortened their skills to app workflow plus guide
+anchors, and run `docs check` from `verify.py`.
 
 ## Persisted operations telemetry — v0.10.0, 2026-11-07
 
