@@ -8,6 +8,21 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Redis queue quarantine for independent records — v0.14.0, 2026-11-09
+
+Status: **implemented; targeted Redis/jobs package tests and the framework guards passed; the approved design
+went through five independent read-only reviews, and the final review found no defects; the owner deferred
+the full local `make verify` to the end of the program, so CI gates this tag**.
+- A queue-wide scan moves a corrupt record aside only when a complete bounded scan of the workflow catalog
+  (at most 128 groups and 1 MiB) proves it independent. Otherwise it fails closed as before.
+- Quarantine never changes accounting. There is no delete command. Group cleanup is the only owner of workflow
+  member deletion, and individual deletion needs the same independence proof.
+- Lua validates exact record and history shapes, so Go can decode anything Lua accepts. Workflow members leave
+  the independent terminal index, so they no longer pin retention or eviction windows.
+- `jobs quarantined` lists quarantined IDs, and `jobs stats` reports the quarantined count.
+- **Breaking:** storage layout 3, reached by a coordinated `jobs migrate-layout` cutover with no old/new overlap.
+Open: Starter, ooo and Boss Club adopt this tag through that cutover.
+
 ## Typed fallbacks, replaced asset directories and worker recovery — v0.13.0, 2026-11-08
 
 Status: **implemented; targeted checks passed; independent read-only reviews found no defect in the fallback

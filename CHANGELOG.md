@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## v0.14.0 — 2026-11-09
+
+**Breaking (operations):** Redis job queues move to storage layout 3. Every queue needs a coordinated
+cutover: stop all publishers and workers, drain, run `jobs migrate-layout --confirm` per queue, then start
+only v0.14.0 clients. There is no old/new client overlap. See the jobs operations guide.
 
 - Fixed: Redis reserve validates a candidate's workflow membership and position
   before leasing it, without scanning other member records. Shared integer
