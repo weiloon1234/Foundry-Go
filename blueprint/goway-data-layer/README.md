@@ -507,12 +507,12 @@ intentionally accepts byte slices, while identity does not.
 | port | 0 |
 | merge | 0 |
 | obsolete | 0 |
-| unaffected | 465 |
-| **Total** | **1064** |
+| unaffected | 472 |
+| **Total** | **1071** |
 
 | Area | Cases |
 | --- | ---: |
-| Authentication and security | 94 |
+| Authentication and security | 101 |
 | Bulk writes and conflict policies | 61 |
 | Cache, Redis and coordination | 61 |
 | Core reads, writes and codecs | 74 |
@@ -540,7 +540,7 @@ intentionally accepts byte slices, while identity does not.
 | 6d | 60 |
 | 6e | 61 |
 | 7 | 88 |
-| — | 465 |
+| — | 472 |
 
 599 old catalogue rows are covered by 594 distinct Go-way cases.
 

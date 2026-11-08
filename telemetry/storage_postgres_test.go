@@ -211,7 +211,9 @@ func TestPostgresTelemetryCoalescesDelayedAndTiedIssues(t *testing.T) {
 func TestPostgresTelemetryWritesAcrossInsertBatchBoundary(t *testing.T) {
 	cc := collectorConfig()
 	cc.MaxSeries, cc.MaxEvents = 4096, 4096
-	s, db, schema, _ := postgresStorage(t, cc, engineConfig())
+	config := engineConfig()
+	config.FlushTimeout = 60 * time.Second
+	s, db, schema, _ := postgresStorage(t, cc, config)
 	count := orm.MaxInsertRows + 1
 	for i := range count {
 		route := http.RouteID(fmt.Sprintf("bulk.%04d", i))
