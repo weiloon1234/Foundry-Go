@@ -8,10 +8,13 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 var codeSpan = regexp.MustCompile("`+([^`]+)`+")
 var proseSelector = regexp.MustCompile(`[A-Za-z_][A-Za-z_0-9]*(\(\))?(\.[A-Za-z_][A-Za-z_0-9]*(\(\))?)+`)
+var jsxElement = regexp.MustCompile(`</?[A-Za-z_$][A-Za-z_0-9$]*(\.[A-Za-z_$][A-Za-z_0-9$]*)*([ \t\r\n]+([A-Za-z_{]([^<>"']|"[^"]*"|'[^']*')*)?)?/?>`)
 
 var beforeMarker = regexp.MustCompile(`^<!-- orm-example: [a-z0-9-]+-before -->$`)
 var textBlockBoundary = regexp.MustCompile(`^(#{1,6}([ \t]|$)|>|<|[-=_*]{3,}[ \t]*$)`)
@@ -25,6 +28,16 @@ var listItemStart = regexp.MustCompile(`^([-+*][ \t]|[0-9]+[.)][ \t])`)
 // Unqualified member spellings also require their retained owner where a type
 // name is shared (for example orm.Query.OrderBy).
 func CheckDocument(name string, data []byte) error {
+	return checkDocument(name, data, true)
+}
+
+// CheckApplicationDocument checks framework teaching in application instructions.
+// Bare names alone do not establish framework ownership.
+func CheckApplicationDocument(name string, data []byte) error {
+	return checkDocument(name, data, false)
+}
+
+func checkDocument(name string, data []byte, strict bool) error {
 	denied, err := declarations()
 	if err != nil {
 		return err
@@ -33,14 +46,19 @@ func CheckDocument(name string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	patterns := []*regexp.Regexp{regexp.MustCompile(`database/query\b`), regexp.MustCompile(`\bquery\.[A-Z]\w*`), regexp.MustCompile(`\bLegacy[A-Z]\w*`)}
+	patterns := []*regexp.Regexp{regexp.MustCompile(`database/query\b`), regexp.MustCompile(`\bquery\.[A-Z]\w*`)}
+	if strict {
+		patterns = append(patterns, regexp.MustCompile(`\bLegacy[A-Z]\w*`))
+	}
 	unqualified := map[string]bool{}
 	for owner, names := range denied {
 		for _, member := range names {
 			if rules.owns(owner, member) {
 				continue
 			}
-			unqualified[member] = true
+			if strict {
+				unqualified[member] = true
+			}
 			unqualified[path.Base(owner)+"."+member] = true
 			name := member
 			patterns = append(patterns, regexp.MustCompile(`\b`+regexp.QuoteMeta(path.Base(owner)+"."+name)+`\b`))
@@ -53,9 +71,9 @@ func CheckDocument(name string, data []byte) error {
 	var code []string
 	codeLine := 0
 	checkCode := func() {
-		if !before {
-			text := strings.Join(code, "\n")
-			failures = append(failures, rules.checkCode(name, text, codeLine)...)
+		if !before && !javascriptFence(language) {
+			text := withoutJSXElements(strings.Join(code, "\n"))
+			failures = append(failures, rules.checkCode(name, text, codeLine, !strict)...)
 			if (language == "" || language == "go" || language == "golang") && retiredCodeName(text, unqualified) {
 				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: unqualified retired API in Go block; use its retained qualified owner", name, codeLine)))
 			}
@@ -96,6 +114,9 @@ func CheckDocument(name string, data []byte) error {
 		if before {
 			continue
 		}
+		if fence != "" && javascriptFence(language) {
+			continue
+		}
 		if fence == "" {
 			if pending {
 				textBefore = trimmed != "" && !textBlockBoundary.MatchString(trimmed)
@@ -111,19 +132,16 @@ func CheckDocument(name string, data []byte) error {
 		bad := false
 		if fence != "" {
 			code = append(code, line)
-		} else if fence == "" {
+		}
+		line = withoutJSXElements(line)
+		if fence == "" {
 			for _, span := range codeSpan.FindAllStringSubmatch(line, -1) {
 				bad = bad || retiredCodeName(span[1], unqualified)
-				failures = append(failures, rules.checkCode(name, span[1], i+1)...)
+				failures = append(failures, rules.checkCode(name, span[1], i+1, !strict)...)
 			}
 			prose := codeSpan.ReplaceAllString(line, "")
 			for _, selector := range proseSelector.FindAllString(prose, -1) {
-				failures = append(failures, rules.checkCode(name, selector, i+1)...)
-			}
-			for helper, replacement := range rules.Helpers {
-				if regexp.MustCompile(`\b` + regexp.QuoteMeta(helper) + `\b`).MatchString(prose) {
-					failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: retired documentation helper %s; use %s", name, i+1, helper, replacement)))
-				}
+				failures = append(failures, rules.checkCode(name, selector, i+1, !strict)...)
 			}
 		}
 		if bad {
@@ -141,6 +159,43 @@ func CheckDocument(name string, data []byte) error {
 		checkCode()
 	}
 	return safeerror.Join("operation failed", failures...)
+}
+
+func javascriptFence(language string) bool {
+	fields := strings.Fields(strings.ToLower(language))
+	if len(fields) == 0 {
+		return false
+	}
+	switch fields[0] {
+	case "js", "javascript", "jsx", "ts", "typescript", "tsx":
+		return true
+	}
+	return false
+}
+
+func withoutJSXElements(text string) string {
+	var masked []byte
+	for _, match := range jsxElement.FindAllStringIndex(text, -1) {
+		if match[0] > 0 {
+			previous, _ := utf8.DecodeLastRuneInString(text[:match[0]])
+			// Name<Placeholder> is documentation notation, not a JSX tag.
+			if previous == '_' || previous == '$' || unicode.IsLetter(previous) || unicode.IsDigit(previous) {
+				continue
+			}
+		}
+		if masked == nil {
+			masked = []byte(text)
+		}
+		for i := match[0]; i < match[1]; i++ {
+			if masked[i] != '\n' {
+				masked[i] = ' '
+			}
+		}
+	}
+	if masked == nil {
+		return text
+	}
+	return string(masked)
 }
 
 // Scan code rather than prose or string contents. A selector rooted at another

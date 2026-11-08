@@ -118,8 +118,5 @@
       ],
       "replacement": "unpack translations.Text.Values() before calling Entries()"
     }
-  ],
-  "helpers": {
-    "nullableJoinedText": "expr.NullableTextFilter with a nullable joined expression"
-  }
+  ]
 }

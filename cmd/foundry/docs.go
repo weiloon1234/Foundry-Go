@@ -106,7 +106,7 @@ func checkDocs(ctx context.Context, dir, goBinary string, build frameworkinfo.Bu
 		}
 		parsed, err := docrefs.Parse(rel, data)
 		refs = append(refs, parsed...)
-		failures = append(failures, err, retirement.CheckDocument(rel, data))
+		failures = append(failures, err, retirement.CheckApplicationDocument(rel, data))
 		return nil
 	})
 	failures = append(failures, err, docrefs.CheckReferences(filepath.Join(selected.Dir, "docs", "guides"), refs))

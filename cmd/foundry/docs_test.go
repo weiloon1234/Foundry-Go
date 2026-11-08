@@ -242,6 +242,19 @@ func TestDocsPaginationRetirement(t *testing.T) {
 	}
 }
 
+func TestDocsApplicationNames(t *testing.T) {
+	app, _, goBinary, build := documentationFixture(t, "match")
+	putDocumentation(t, app, ".claude/skills/datatables/SKILL.md", "Codecs: `Text`, `DateTime`, `Decimal`, `Count`.\n")
+	putDocumentation(t, app, "web/shared/AGENTS.md", "Components: `Button`, `Input`, `Select`, `<Select>`, `<Select prop>`, `</Select>`.\n```tsx\nrows.Count(items)\nendpoint.WithScopes(scopes)\n```\n")
+	if err := checkDocs(t.Context(), app, goBinary, build); err != nil {
+		t.Fatal(err)
+	}
+	putDocumentation(t, app, ".claude/skills/datatables/SKILL.md", "Use `rows.Count(items)`.\n")
+	if err := checkDocs(t.Context(), app, goBinary, build); err == nil || !strings.Contains(err.Error(), "SKILL.md:1:") {
+		t.Fatalf("accepted retired framework call: %v", err)
+	}
+}
+
 func TestDocsRejectsActiveDirectorySymlinks(t *testing.T) {
 	for _, name := range []string{".claude", ".claude/skills", ".claude/skills/workflow", ".claude/skills/workflow/references"} {
 		t.Run(name, func(t *testing.T) {

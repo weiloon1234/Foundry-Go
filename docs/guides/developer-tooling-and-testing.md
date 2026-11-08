@@ -199,8 +199,17 @@ services. `go tool` may compile the checker into Go's normal build cache.
 
 The selected release also owns retirement rules. The checker distinguishes
 qualified owners and local constructor bindings, preserving valid scope
-middleware, row locking, and exported session helpers. If a receiver's owner is
-unclear, it reports ambiguous teaching. Qualify that owner or replace the example
+middleware, row locking, and exported session helpers. Application identifiers
+such as codec names and React components can share a bare name with a retired
+framework API. Bare names alone do not identify framework teaching in application
+files. Qualified framework spellings and Go examples with framework owners inferred
+from imports or known constructors still fail when they use retired APIs.
+Application helpers such as `nullableJoinedText` are not framework retirement rules.
+The framework's `make docs-check` retains strict checks for bare retired names.
+Both checks exclude JSX elements and JavaScript, TypeScript, JSX, and TSX fences
+from Go reference checks. Generic placeholders such as `Mutate<Field>` remain
+documentation notation, not JSX elements. If a receiver's owner is unclear, the checker reports
+ambiguous teaching. Qualify that owner or replace the example
 with a guide reference. App-owned regions cannot exempt stale teaching by labeling
 it an example. See the [compatibility policy](../compatibility.md#pinned-documentation)
 for upgrades and rollback.

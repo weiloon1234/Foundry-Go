@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: `go tool foundry docs check` accepts application identifiers that share bare names
+  with retired framework APIs while still rejecting qualified and owner-inferred retired
+  teaching. Framework documentation keeps strict bare-name checks. Both checks exclude
+  JSX elements and JavaScript or TypeScript fences from Go reference checks, preserve
+  generic placeholders such as `Mutate<Field>`, and no longer flag the application helper
+  `nullableJoinedText` as a retired framework API.
+
 ## v0.11.0 — 2026-11-08
 
 - Added: the guides are the single source of API teaching for applications and agents.

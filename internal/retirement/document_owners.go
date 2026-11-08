@@ -24,8 +24,8 @@ type documentRules struct {
 		Methods     []string `json:"methods"`
 		Replacement string   `json:"replacement"`
 	} `json:"chains"`
-	Helpers map[string]string `json:"helpers"`
-	denied  map[string]map[string]bool
+	denied       map[string]map[string]bool
+	declarations map[string][]string
 }
 
 func loadDocumentRules(declarations map[string][]string) (documentRules, error) {
@@ -37,6 +37,7 @@ func loadDocumentRules(declarations map[string][]string) (documentRules, error) 
 	if err := json.Unmarshal(data, &rules); err != nil {
 		return rules, err
 	}
+	rules.declarations = declarations
 	rules.denied = make(map[string]map[string]bool)
 	for pkg, members := range declarations {
 		for _, member := range members {
@@ -61,7 +62,7 @@ func (r documentRules) owns(pkg, member string) bool {
 
 // documentCode parses fragments without loading or type-checking an application.
 // Parse errors leave unknown receivers ambiguous, never evidence of retirement.
-func (r documentRules) checkCode(name, code string, line int) []error {
+func (r documentRules) checkCode(name, code string, line int, application bool) []error {
 	if strings.HasPrefix(strings.TrimSpace(code), ".") {
 		code = "unknown" + strings.TrimSpace(code)
 	}
@@ -88,6 +89,8 @@ func (r documentRules) checkCode(name, code string, line int) []error {
 		return true
 	})
 	aliases := map[string]string{"foundryhttp": "http"}
+	importedRetirements := make(map[string]bool)
+	dotRetirements := make(map[string]bool)
 	for _, spec := range file.Imports {
 		imported, err := strconv.Unquote(spec.Path.Value)
 		if err != nil {
@@ -105,6 +108,15 @@ func (r documentRules) checkCode(name, code string, line int) []error {
 			default:
 				aliases[alias] = "framework:" + owner
 			}
+			if application {
+				for _, member := range r.declarations[owner] {
+					if alias == "." {
+						dotRetirements[member] = true
+					} else if !r.owns(owner, member) {
+						importedRetirements[aliases[alias]+"."+member] = true
+					}
+				}
+			}
 		} else {
 			aliases[alias] = "external:" + imported
 		}
@@ -115,14 +127,20 @@ func (r documentRules) checkCode(name, code string, line int) []error {
 		failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, n, message)))
 	}
 	ast.Inspect(file, func(node ast.Node) bool {
-		if id, ok := node.(*ast.Ident); ok {
-			if replacement, exists := r.Helpers[id.Name]; exists {
-				report(id.Pos(), "retired documentation helper "+id.Name+"; use "+replacement)
+		if call, ok := node.(*ast.CallExpr); ok {
+			if id, ok := stripTypeArguments(call.Fun).(*ast.Ident); ok && id.Obj == nil && dotRetirements[id.Name] {
+				report(id.Pos(), "retired API "+id.Name+" from framework dot import")
 			}
 		}
 		selected, ok := node.(*ast.SelectorExpr)
 		if !ok {
 			return true
+		}
+		if len(importedRetirements) != 0 {
+			bindings := r.bindingsAt(file, selected.Pos(), aliases)
+			if spelling := qualifiedName(selected, bindings, aliases); importedRetirements[spelling] {
+				report(selected.Sel.Pos(), "retired API "+spelling)
+			}
 		}
 		denied := r.denied[selected.Sel.Name]
 		var chainOwner, replacement string

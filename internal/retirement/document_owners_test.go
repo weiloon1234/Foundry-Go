@@ -77,15 +77,47 @@ func TestDocumentOwnerRetirements(t *testing.T) {
 		"t := translations.Text{}\nt.Values().Entries()", "translations.Text.Values().Entries()",
 		"orm.Query[User].ForUpdate()", "table := orm.TableOf(b, &user.ID)\nq := table.Query()\nq.ForUpdate()",
 		"e := modelbinding.Bind(transport, resolver)\ne.WithAuthorization(policy)",
-		"nullableJoinedText(joined)",
 		"package example\nimport transport \"github.com/weiloon1234/Foundry-Go/http\"\nfunc example() { e := transport.DefineEndpoint(route, query, body, response); e.WithMiddleware(m) }",
 	} {
 		t.Run(code, func(t *testing.T) {
-			err := CheckDocument(".claude/skills/api/SKILL.md", []byte("```go\n"+code+"\n```"))
-			if err == nil || !strings.Contains(err.Error(), "retired") || strings.Contains(err.Error(), "ambiguous") {
-				t.Fatalf("%s: %v", code, err)
+			for _, check := range []func(string, []byte) error{CheckDocument, CheckApplicationDocument} {
+				err := check(".claude/skills/api/SKILL.md", []byte("```go\n"+code+"\n```"))
+				if err == nil || !strings.Contains(err.Error(), "retired") || strings.Contains(err.Error(), "ambiguous") {
+					t.Fatalf("%s: %v", code, err)
+				}
 			}
 		})
+	}
+}
+
+func TestApplicationDocumentationFrameworkImports(t *testing.T) {
+	for _, tc := range []struct {
+		code             string
+		frameworkRetired bool
+	}{
+		{"package example\nimport result \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\nfunc example() { result.Count(items) }", false},
+		{"package example\nimport expression \"github.com/weiloon1234/Foundry-Go/database/orm/expr\"\nfunc example() { expression.Select(mapping) }", false},
+		{"package example\nimport . \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\nfunc example() { Count(items) }", true},
+	} {
+		text := []byte("```go\n" + tc.code + "\n```")
+		if err := CheckApplicationDocument("AGENTS.md", text); err == nil || !strings.Contains(err.Error(), "retired API") {
+			t.Fatalf("accepted imported retirement: %v", err)
+		}
+		if err := CheckDocument("README.md", text); (err != nil) != tc.frameworkRetired {
+			t.Fatalf("changed framework import detection for %s: %v", tc.code, err)
+		}
+	}
+}
+
+func TestApplicationDocumentationImportNames(t *testing.T) {
+	for _, code := range []string{
+		"package example\nimport result \"example.test/rows\"\nfunc example() { result.Count(items) }",
+		"package example\nimport result \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\nfunc example(result Custom) { result.Count(items) }",
+		"package example\nimport . \"github.com/weiloon1234/Foundry-Go/database/orm/rows\"\nfunc Count(items []Item) {}\nfunc example() { Count(items) }",
+	} {
+		if err := CheckApplicationDocument("AGENTS.md", []byte("```go\n"+code+"\n```")); err != nil {
+			t.Fatalf("application name rejected: %v", err)
+		}
 	}
 }
 
@@ -121,9 +153,11 @@ func TestDocumentAmbiguousTeaching(t *testing.T) {
 		"s := http.DefineScope(\"/api\", \"api\")\nif condition { s = unknown() }\ns.WithMiddleware(m)",
 		"{ s := http.DefineScope(\"/api\", \"api\") }\ns.WithMiddleware(m)",
 	} {
-		err := CheckDocument("AGENTS.md", []byte("```go\n"+code+"\n```"))
-		if err == nil || !strings.Contains(err.Error(), "ambiguous API teaching") || strings.Contains(err.Error(), "retired API") {
-			t.Fatalf("%s: %v", code, err)
+		for _, check := range []func(string, []byte) error{CheckDocument, CheckApplicationDocument} {
+			err := check("AGENTS.md", []byte("```go\n"+code+"\n```"))
+			if err == nil || !strings.Contains(err.Error(), "ambiguous API teaching") || strings.Contains(err.Error(), "retired API") {
+				t.Fatalf("%s: %v", code, err)
+			}
 		}
 	}
 }
@@ -203,7 +237,7 @@ func TestDocumentRegionsAndHistory(t *testing.T) {
 	if err := CheckDocument("AGENTS.md", []byte(before)); err == nil {
 		t.Fatal("app historical label exempted active teaching")
 	}
-	for _, text := range []string{"Use http.Endpoint.WithAuthorization.", "Use f.Field.Rules.", "Use nullableJoinedText for joins.", "Use `translations.Text.Values().Entries()`.", "````go\nhttp.Endpoint.WithScopes(scope)\n````", "```text\nhttp.Endpoint.WithScopes(scope)\n```"} {
+	for _, text := range []string{"Use http.Endpoint.WithAuthorization.", "Use f.Field.Rules.", "Use `translations.Text.Values().Entries()`.", "````go\nhttp.Endpoint.WithScopes(scope)\n````", "```text\nhttp.Endpoint.WithScopes(scope)\n```"} {
 		if err := CheckDocument("AGENTS.md", []byte(text)); err == nil {
 			t.Fatalf("accepted %s", text)
 		}
