@@ -29,7 +29,9 @@ type Subscription struct {
 // DrainTimeout plus OperationTimeout within the application shutdown timeout.
 //
 // FailureBackoff caps the jittered exponential wait after backend failures;
-// the worker logs them and keeps running. RetryUnregistered treats an unknown job
+// each wait lasts at least PollInterval. Local enqueue can end the remaining
+// backoff early without resetting failures. The worker logs failures and keeps
+// running. RetryUnregistered treats an unknown job
 // name/version as transient (for example during a rolling deploy): it consumes
 // attempts under the envelope's own retry policy before failing as unregistered.
 type WorkerConfig struct {

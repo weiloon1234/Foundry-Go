@@ -144,7 +144,7 @@ func (w *Worker) loop(run workerRun) {
 			}
 			failures++
 			w.logBackendFailure(run.work, "reserve", key, err)
-			if !pause(run.reserve, w.failureDelay(failures), nil) {
+			if !w.pauseFailure(run.reserve, failures, wake) {
 				return
 			}
 			continue
@@ -166,7 +166,7 @@ func (w *Worker) loop(run workerRun) {
 			continue
 		}
 		failures++
-		if !pause(run.reserve, w.failureDelay(failures), nil) {
+		if !w.pauseFailure(run.reserve, failures, wake) {
 			return
 		}
 	}
@@ -288,6 +288,16 @@ func (w *Worker) failureDelay(failures int) time.Duration {
 	delay = min(delay, ceiling)
 	half := delay / 2
 	return half + rand.N(delay-half+1)
+}
+
+// pauseFailure retains the subscription captured before reservation, including
+// wakes received during the minimum wait. A wake never changes the failure count.
+func (w *Worker) pauseFailure(ctx context.Context, failures int, wakes []<-chan struct{}) bool {
+	deadline := time.Now().Add(max(w.config.PollInterval, w.failureDelay(failures)))
+	if !pause(ctx, w.config.PollInterval, nil) {
+		return false
+	}
+	return pause(ctx, max(0, time.Until(deadline)), wakes)
 }
 
 // pause waits for delay, any wake signal or ctx. It reports false when ctx
