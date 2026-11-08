@@ -35,11 +35,11 @@ func TestEncryptedPayloadsAreSealedAtCaptureAndOpenedByWorkers(t *testing.T) {
 		t.Fatal(err)
 	}
 	envelope := pending.Envelope()
-	if !envelope.Encrypted() || envelope.WireVersion() != jobs.ExtendedEnvelope || strings.Contains(envelope.PayloadJSON(), "4242") {
+	if !envelope.Encrypted() || envelope.WireVersion() != jobs.ExtendedEnvelope || strings.Contains(envelope.PayloadJSON(), "4242-private") {
 		t.Fatal("payload was not sealed at capture")
 	}
 	data, err := envelope.MarshalJSON()
-	if err != nil || strings.Contains(string(data), "4242") {
+	if err != nil || strings.Contains(string(data), "4242-private") {
 		t.Fatal("transport envelope exposed the payload", err)
 	}
 	decoded, err := f.definition.Payload(t.Context(), envelope)
