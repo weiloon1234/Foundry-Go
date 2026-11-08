@@ -308,6 +308,7 @@ type AuthenticationInfo struct {
 	Credential          CredentialInfo         `json:"credential"`
 	RequiredScopes      []auth.AccessScopeName `json:"required_scopes,omitempty"`
 	RequiredPermissions []auth.PermissionName  `json:"required_permissions,omitempty"`
+	AnyOf               []GuardAlternativeInfo `json:"any_of,omitempty"`
 }
 
 func (a *Authentication) writeFailure(w stdhttp.ResponseWriter, r *stdhttp.Request, source auth.CredentialName, err error) {

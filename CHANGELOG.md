@@ -11,6 +11,23 @@
 - Added: `sanitize.Config.AdditionalURLSchemes` supports the typed `sanitize.URLSchemeTel`
   opt-in, and `AllowRelativeURLs` permits local CMS links while rejecting protocol-relative
   URLs. Default URL handling, link protections and byte budgets are unchanged.
+- Added: typed `http.AnyOf` / `http.AllOf` route guards admit an authenticated
+  actor when one complete scope-and-permission alternative succeeds. Scope
+  mismatches and normal denials try the next branch; authority errors stop
+  admission. Empty, duplicate, mixed and excessive declarations fail before
+  registration. Resource authorization still runs. `auth.Guard.AllowsScopes`
+  exposes structured scope decisions without interpreting errors as mismatches.
+- Changed: `http.Scopes` and `http.Permissions` return the narrower
+  `RequirementOption[M]`. Ordinary route calls remain valid; exact function-value
+  assignments may need a wrapper. Manifest 10, OpenAPI security alternatives and
+  readonly TypeScript metadata preserve branch pairings. Regenerate contracts
+  together; version 9 manifests are rejected. See the
+  [compatibility note](docs/compatibility.md#any-of-route-guards-manifest-10).
+- Fixed: policy, permission and hook inspection no longer turns joined,
+  classified, projected or incompletely inspected denials into normal negative
+  decisions. These remain errors, preventing an authority failure from enabling
+  any-of fallback. Pure typed denials and transparent unary wrappers retain their
+  existing behavior.
 
 ## v0.11.0 — 2026-11-08
 

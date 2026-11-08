@@ -13,13 +13,13 @@ import (
 // authenticationBinding is shared by typed payload endpoints and native routes.
 // It owns declaration validation, immutable requirements and scope attribution.
 type authenticationBinding[M any] struct {
-	authentication      *Authentication
-	guard               auth.Guard[M]
-	requiredScopes      *auth.AccessScopes[M]
-	requiredPermissions []auth.Permission[M]
-	actorMiddleware     []Middleware
-	requirementError    error
-	ticket              auth.TicketRedeemer
+	guardRequirements[M]
+	authentication   *Authentication
+	guard            auth.Guard[M]
+	alternatives     []GuardAlternative[M]
+	actorMiddleware  []Middleware
+	requirementError error
+	ticket           auth.TicketRedeemer
 }
 
 // authenticationWithActorMiddleware appends middleware that runs after authentication and its
@@ -41,6 +41,12 @@ func authenticationChain[M any](b authenticationBinding[M], optional bool) []Mid
 }
 
 func authenticationWithScopes[M any](b authenticationBinding[M], required auth.AccessScopes[M]) authenticationBinding[M] {
+	if b.alternatives != nil {
+		if b.requirementError == nil {
+			b.requirementError = safeerror.NewFault(fault.Invalid, "HTTP guard alternatives cannot be mixed with flat requirements")
+		}
+		return b
+	}
 	if b.requiredScopes != nil {
 		if b.requirementError == nil {
 			b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP access scopes are already declared")
@@ -51,6 +57,12 @@ func authenticationWithScopes[M any](b authenticationBinding[M], required auth.A
 	return b
 }
 func authenticationWithPermissions[M any](b authenticationBinding[M], required ...auth.Permission[M]) authenticationBinding[M] {
+	if b.alternatives != nil {
+		if b.requirementError == nil {
+			b.requirementError = safeerror.NewFault(fault.Invalid, "HTTP guard alternatives cannot be mixed with flat requirements")
+		}
+		return b
+	}
 	if b.requiredPermissions != nil {
 		if b.requirementError == nil {
 			b.requirementError = safeerror.NewFault(fault.Duplicate, "HTTP permissions are already declared")
@@ -82,15 +94,24 @@ func authenticationValidate[M any](b authenticationBinding[M], access Access, op
 	if optional && len(b.requiredPermissions) > 0 {
 		return safeerror.NewFault(fault.Invalid, "HTTP permission requirements need an authenticated endpoint")
 	}
-	names := make(map[auth.PermissionName]bool, len(b.requiredPermissions))
-	for _, permission := range b.requiredPermissions {
-		if err := permission.ValidateIn(b.authentication.registry); err != nil {
+	validatePermissions := func(requirements guardRequirements[M]) error {
+		for _, permission := range requirements.requiredPermissions {
+			if err := permission.ValidateIn(b.authentication.registry); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := validatePermissions(b.guardRequirements); err != nil {
+		return err
+	}
+	for _, alternative := range b.alternatives {
+		if err := validatePermissions(alternative.requirements); err != nil {
 			return err
 		}
-		if names[permission.Name()] {
-			return safeerror.NewFault(fault.Duplicate, "HTTP permission requirement is repeated")
-		}
-		names[permission.Name()] = true
+	}
+	if err := authenticationInfo(b, optional).ValidateRequirements(); err != nil {
+		return err
 	}
 	if !b.authentication.hasSource(b.guard.Source()) {
 		return safeerror.NewFault(fault.Missing, "HTTP authentication guard source is not configured")
@@ -112,11 +133,13 @@ func authenticationInfo[M any](b authenticationBinding[M], optional bool) *Authe
 			break
 		}
 	}
-	if b.requiredScopes != nil {
-		info.RequiredScopes = b.requiredScopes.Names()
-	}
-	for _, permission := range b.requiredPermissions {
-		info.RequiredPermissions = append(info.RequiredPermissions, permission.Name())
+	flat := b.guardRequirements.info()
+	info.RequiredScopes, info.RequiredPermissions = flat.RequiredScopes, flat.RequiredPermissions
+	if b.alternatives != nil {
+		info.AnyOf = make([]GuardAlternativeInfo, len(b.alternatives))
+		for i, alternative := range b.alternatives {
+			info.AnyOf[i] = alternative.requirements.info()
+		}
 	}
 	if b.ticket != nil {
 		info.Credential = CredentialInfo{Source: b.guard.Source(), Kind: TicketCredentialKind, Name: ticketParameter}
@@ -125,6 +148,9 @@ func authenticationInfo[M any](b authenticationBinding[M], optional bool) *Authe
 }
 func authenticationMiddleware[M any](b authenticationBinding[M], optional bool) Middleware {
 	resolve := func(ctx context.Context) (context.Context, error) {
+		if b.alternatives != nil {
+			return b.admitAlternative(ctx)
+		}
 		if optional {
 			subject, err := b.guard.Optional(ctx)
 			if err != nil {

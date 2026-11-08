@@ -290,15 +290,11 @@ func validateRoute(route foundryhttp.RouteInfo) error {
 		if !identifier.Semantic(string(a.Guard)) || !identifier.Semantic(string(a.Provider)) {
 			return invalid("invalid authentication identity")
 		}
-		for _, scope := range a.RequiredScopes {
-			if !identifier.Semantic(string(scope)) {
-				return invalid("invalid scope identity")
-			}
+		if route.Access != foundryhttp.Guarded && (a.RequiredScopes != nil || a.RequiredPermissions != nil || a.AnyOf != nil) {
+			return invalid("public route cannot declare guard requirements")
 		}
-		for _, permission := range a.RequiredPermissions {
-			if !identifier.Semantic(string(permission)) {
-				return invalid("invalid permission identity")
-			}
+		if err := a.ValidateRequirements(); err != nil {
+			return err
 		}
 	}
 	return nil

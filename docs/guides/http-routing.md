@@ -63,6 +63,21 @@ construct URLs, but handler registration requires the matching typed
 [authentication adapter](authentication.md). Unbound guarded routes and unknown
 access values are rejected. Ordinary typed endpoints support required or optional authentication. [Authenticated raw routes and signed endpoints](authentication.md) preserve the same concrete actor and route contracts.
 
+<a id="recipe-route-guard-alternatives"></a>
+## Guard alternatives
+
+A guarded route can require any complete scope/permission alternative through
+`http.AnyOf(http.AllOf(...), ...)`. Use the same `GuardOption[M]` on typed endpoints,
+native routes, signed endpoints and pagination. Each branch retains the actor's
+model type. `Scopes` and `Permissions` inside one branch mean AND; branches mean OR.
+
+See the [typed declaration and failure semantics](authentication.md#recipe-any-of-guards).
+Requirements run before request decoding. Passing a branch does not bypass model
+binding, tenant/resource authorization or a table's policy. Do not implement OR
+by catching `Forbidden` from an arbitrary callback: authority failures can also
+match that error. The framework distinguishes scope mismatch and normal permission
+denial from terminal failures at their existing auth owners.
+
 ## Path values and scopes
 
 `StringPath[T]()` retains ordinary or named string types such as `MemberCode`.

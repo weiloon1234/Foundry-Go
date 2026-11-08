@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "types": [
     {
       "id": "[]contract.Issue",

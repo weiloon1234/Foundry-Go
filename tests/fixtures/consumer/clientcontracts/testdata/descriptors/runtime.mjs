@@ -42,6 +42,17 @@ for (const op of metadata.http) {
   }
 }
 assert.equal(sdk.operation("accountShow").metadata.route.authentication.credential.name, "fixture_session");
+const accountAuth = sdk.operation("accountShow").metadata.route.authentication;
+// Descriptor metadata uses null-prototype records, including each alternative.
+assert.deepEqual(accountAuth.any_of, [
+  Object.assign(Object.create(null), { required_scopes: ["consumer.approve"], required_permissions: ["consumer.manage"] }),
+  Object.assign(Object.create(null), { required_permissions: ["consumer.manage"] }),
+]);
+assert.equal(accountAuth.required_permissions, undefined);
+const mutableAuth = sdk.contractMetadata().http.find(op => op.name === "accountShow").route.authentication;
+mutableAuth.any_of[0].required_scopes[0] = "changed";
+assert.equal(sdk.operation("accountShow").metadata.route.authentication.any_of[0].required_scopes[0], "consumer.approve");
+
 // A JSON body is described from its root; a form body has no JSON root.
 const methodOp = sdk.operation("unionsMethod");
 assert.equal(methodOp.body().path, "/body");

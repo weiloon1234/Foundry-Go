@@ -325,6 +325,26 @@ capabilities. An omitted access option adds no permission requirement; table
 authorization still runs. The app owns any wrapper that shares these declarations
 with its domain policy.
 
+For [alternative route guards](authentication.md#recipe-any-of-guards), keep
+separate typed read and export capability lists in the application's table
+wrapper. Derive one `http.AllOf(http.Scopes(scopes), http.Permissions(permission))`
+from each existing capability declaration, then pass the resulting
+`[]http.GuardAlternative[Actor]` to `datatable.ReadAccess(http.AnyOf(read...))` and
+`datatable.ExportAccess(http.AnyOf(export...))`. A single-capability table uses one
+branch. Snapshot the capability lists and use the same declarations in the table
+policy; do not copy names into a second route permission map.
+
+An editorial read list can contain write and approve capabilities. Export keeps
+its independently approved capability list; it never inherits read access.
+Reject an empty list when the application requires an access declaration. Keep
+export-disabled as an explicit table setting, not an empty `AnyOf`.
+
+Export alternatives run at both ticket issuance and ticket-authenticated download.
+Redemption rechecks current permissions and credential scope ceilings. The issuing
+branch is not saved as an authorization grant. `Spec.Authorize`, tenant constraints
+and scoped source construction continue to run after route admission. The
+framework does not infer equality between arbitrary application policy callbacks.
+
 Register each declaration once in the manager used by the routes:
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/http.go#register-tables -->

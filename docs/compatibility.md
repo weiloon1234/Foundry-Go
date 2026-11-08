@@ -6,6 +6,49 @@ reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. No public version has been published by
 this acceptance work.
 
+<a id="any-of-route-guards-manifest-10"></a>
+
+## Any-of route guards: manifest 10
+
+`http.AnyOf(http.AllOf(...), ...)` adds ordered alternatives to required route
+authentication. Each alternative is a conjunction of typed scopes and permissions.
+Existing direct `Scopes` and `Permissions` calls keep their AND semantics. See
+[declarations and admission](guides/authentication.md#recipe-any-of-guards).
+
+`Scopes` and `Permissions` now return `http.RequirementOption[M]`, which embeds
+`http.GuardOption[M]`. Ordinary calls and `[]GuardOption[M]` route collections
+remain valid. Exact function-value assignments using the old return type need
+an updated signature or an explicit wrapper returning `GuardOption[M]`. Branch
+collections use `[]RequirementOption[M]`; Go slices are not covariant. Adding
+`AuthenticationInfo.AnyOf` also requires updating positional struct literals;
+keyed literals remain valid.
+
+Manifest version 10 adds mutually exclusive grouped `any_of` requirements.
+Version 9 readers reject version 10, and version 10 readers reject version 9.
+Regenerate and publish the manifest, OpenAPI and TypeScript together with the
+matching framework pin, even for applications that retain flat guards. Strict
+metadata readers must understand the grouped form before adopting it. OpenAPI
+3.1.1 uses non-OAuth role labels on the existing credential scheme for each
+alternative; consumers needing the scope/permission distinction must read
+`x-foundry-authentication`. Generated TypeScript metadata is readonly and
+descriptive, not an authorization evaluator. See
+[contract encoding](guides/client-contracts.md#recipe-guard-contracts).
+
+Shared policy, permission and hook inspection now treats only a concrete typed
+denial behind a fully inspected transparent unary wrapper chain as a normal
+denied decision. `auth.NewDenial` and ordinary `fmt.Errorf` wrapping continue to
+work. Joined errors (including all-denial joins), classified wrappers, custom
+`As` denial projections, cycles, exhausted inspection and inspection failures
+remain terminal errors. In particular, an authority failure joined with a denial
+cannot enable fallback to another branch. Custom classification methods are not
+invoked to establish fallback eligibility. Existing flat guards still refuse
+such requests, but `Inspect` results and HTTP error classification can change.
+Return a single typed denial when expressing one normal authorization decision.
+
+No database, stored token, session, ticket, DTO or public error-code migration is
+required. Resource and tenant policies still run after admission. Application
+owners retain control of which read and export alternatives to declare.
+
 ## Pinned documentation
 
 The first release supporting `go tool foundry docs check`, explicit guide anchors,

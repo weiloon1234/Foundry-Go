@@ -54,7 +54,10 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	permission := auth.DefinePermission("tables.export", func(_ context.Context, actor routeActor) (bool, error) { return actor.Allowed, nil })
+	permissionAllowed := true
+	permission := auth.DefinePermission("tables.export", func(_ context.Context, actor routeActor) (bool, error) {
+		return actor.Allowed && permissionAllowed, nil
+	})
 	registry, err := auth.NewRegistry(auth.DefaultConfig(), tokens.Guard().Registration(), permission.Registration())
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +102,12 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := routeRouter(t, table, config, ExportAccess(h.Scopes(scopes)))
+	otherScopes, err := auth.NewAccessScopes(auth.DefineAccessScope[routeActor]("tables.approve"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	exportAccess := h.AnyOf(h.AllOf(h.Scopes(otherScopes), h.Permissions(permission)), h.AllOf(h.Scopes(scopes), h.Permissions(permission)))
+	router := routeRouter(t, table, config, ExportAccess(exportAccess))
 	response := routeRequest(t, router, "POST", "https://example.test/tables/reports.members/export", `{"format":"csv","request":{}}`, issued.AccessSecret().Reveal(), 200)
 	var ticket ExportTicket
 	if err := json.Unmarshal(response.Body.Bytes(), &ticket); err != nil {
@@ -126,7 +134,7 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 		isolated.Authority = func(context.Context, routeActor) (reportActor, error) {
 			return reportActor{Tenant: 7, Allowed: true}, nil
 		}
-		guarded := routeRouter(t, table, isolated, ExportAccess(h.Scopes(scopes), h.Permissions(permission)))
+		guarded := routeRouter(t, table, isolated, ExportAccess(exportAccess))
 		tableOnly := routeRouter(t, table, isolated)
 		for _, tc := range []struct {
 			name   string
@@ -175,6 +183,25 @@ func TestPostgresTokenRoutesKeepScopeThroughDeferredDownload(t *testing.T) {
 				}
 			})
 		}
+	})
+	t.Run("alternatives-recheck-permission-and-revocation-at-redemption", func(t *testing.T) {
+		issue := func() ExportTicket {
+			response := routeRequest(t, router, "POST", "https://example.test/tables/reports.members/export", `{"format":"csv","request":{}}`, issued.AccessSecret().Reveal(), 200)
+			var next ExportTicket
+			if err := json.Unmarshal(response.Body.Bytes(), &next); err != nil {
+				t.Fatal(err)
+			}
+			return next
+		}
+		next := issue()
+		permissionAllowed = false
+		routeRequest(t, router, "GET", "https://example.test"+next.URL, "", "ignored", 403)
+		permissionAllowed = true
+		next = issue()
+		if revoked, err := tokens.Revoke(t.Context(), issued.AccessSecret()); err != nil || !revoked {
+			t.Fatal("token revocation", err)
+		}
+		routeRequest(t, router, "GET", "https://example.test"+next.URL, "", "ignored", 401)
 	})
 	disabled := tokenConfig
 	disabled.TicketLifetime = 0

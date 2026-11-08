@@ -86,7 +86,7 @@ func TestSignedAuthenticatedModelBindingPreservesAllBoundaries(t *testing.T) {
 	}
 	signer, now := compositionSigner(t)
 	endpoint := foundryhttp.DefineEndpoint(compositionRoute(foundryhttp.Guarded, &parses), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204), foundryhttp.TableOperation(contract.TableOperationBinding{Table: "orders", Kind: contract.TableQuery}))
-	signed := foundryhttp.SignedAuthenticated(foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(endpoint, transport, guard), foundryhttp.Permissions(permission)), signer)
+	signed := foundryhttp.SignedAuthenticated(foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(endpoint, transport, guard), foundryhttp.AnyOf(foundryhttp.AllOf(foundryhttp.Permissions(permission)))), signer)
 	resolver := modelbinding.Define(func(ctx context.Context, path compositionPath) (value.Optional[compositionOrder], error) {
 		lookups.Add(1)
 		if origin := attribution.FromContext(ctx); origin.Guard() != "api" {
@@ -186,7 +186,7 @@ func TestSignedAuthenticatedModelBindingPreservesAllBoundaries(t *testing.T) {
 	if info.TableOperation == nil || info.TableOperation.Table != "orders" || info.TableOperation.Kind != contract.TableQuery {
 		t.Fatal("auth/signing/model binding lost table metadata")
 	}
-	if info.Route.SignedURL == nil || info.Route.Authentication == nil || len(info.Route.Authentication.RequiredPermissions) != 1 || info.Response != nil || len(info.Query) != 0 {
+	if info.Route.SignedURL == nil || info.Route.Authentication == nil || len(info.Route.Authentication.AnyOf) != 1 || info.Response != nil || len(info.Query) != 0 {
 		t.Fatal("transport metadata lost or models became DTOs")
 	}
 	if len(router.Endpoints()) != 1 || router.Endpoints()[0].Route.SignedURL == nil {

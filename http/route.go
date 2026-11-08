@@ -186,6 +186,10 @@ func (i RouteInfo) clone() RouteInfo {
 		auth := *i.Authentication
 		auth.RequiredScopes = slices.Clone(auth.RequiredScopes)
 		auth.RequiredPermissions = slices.Clone(auth.RequiredPermissions)
+		auth.AnyOf = slices.Clone(auth.AnyOf)
+		for i := range auth.AnyOf {
+			auth.AnyOf[i] = auth.AnyOf[i].clone()
+		}
 		i.Authentication = &auth
 	}
 	if i.Assets != nil {

@@ -176,6 +176,13 @@ type GuardOption[M any] interface {
 	applyGuard(authenticationBinding[M]) authenticationBinding[M]
 }
 
+// RequirementOption is the sealed scope/permission subset accepted by AllOf.
+// It also remains a GuardOption for existing flat authenticated declarations.
+type RequirementOption[M any] interface {
+	GuardOption[M]
+	requirementOption()
+}
+
 // ActorOption is the middleware-only subset accepted by optional authentication.
 type ActorOption[M any] interface {
 	GuardOption[M]
@@ -193,19 +200,23 @@ type actorOption[M any] struct{ guardOption[M] }
 
 func (actorOption[M]) actorOption() {}
 
+type requirementOption[M any] struct{ guardOption[M] }
+
+func (requirementOption[M]) requirementOption() {}
+
 // Scopes requires the credential to grant the supplied model-owned access scopes.
-func Scopes[M any](required auth.AccessScopes[M]) GuardOption[M] {
-	return guardOption[M]{apply: func(binding authenticationBinding[M]) authenticationBinding[M] {
+func Scopes[M any](required auth.AccessScopes[M]) RequirementOption[M] {
+	return requirementOption[M]{guardOption[M]{apply: func(binding authenticationBinding[M]) authenticationBinding[M] {
 		return authenticationWithScopes(binding, required)
-	}}
+	}}}
 }
 
 // Permissions snapshots model permissions required by the authentication binding.
-func Permissions[M any](required ...auth.Permission[M]) GuardOption[M] {
+func Permissions[M any](required ...auth.Permission[M]) RequirementOption[M] {
 	required = slices.Clone(required)
-	return guardOption[M]{apply: func(binding authenticationBinding[M]) authenticationBinding[M] {
+	return requirementOption[M]{guardOption[M]{apply: func(binding authenticationBinding[M]) authenticationBinding[M] {
 		return authenticationWithPermissions(binding, required...)
-	}}
+	}}}
 }
 
 // ActorMiddleware snapshots middleware to run with the resolved authentication actor.

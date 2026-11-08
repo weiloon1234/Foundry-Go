@@ -173,7 +173,7 @@ func (s *Scope) run(ctx context.Context, id *declarationID, fn func(context.Cont
 	var denial *Denial
 	err := s.execute(ctx, id, func(op context.Context) error {
 		err := fn(op)
-		if found, present, complete := errorgraph.As[*Denial](err); complete && present && found != nil {
+		if found := pureDenial(err); found != nil {
 			denial = found
 			return nil
 		}
@@ -186,4 +186,29 @@ func (s *Scope) run(ctx context.Context, id *declarationID, fn func(context.Cont
 		return safeerror.Owned(denial.Error(), denial)
 	}
 	return nil
+}
+
+// A denial is a decision only when contextual wrappers cannot hide another
+// failure. In particular, a joined authority error must never enable OR fallback.
+// Scope.run retains callback ownership while Walk invokes custom Unwrap methods.
+func pureDenial(err error) *Denial {
+	var denial *Denial
+	complete := errorgraph.Walk(err, func(current error) bool {
+		if found, ok := current.(*Denial); ok {
+			denial = found
+			return false
+		}
+		switch current.(type) {
+		case interface{ Is(error) bool }, interface{ IsShallow(error) bool },
+			interface{ As(any) bool }, interface{ AsShallow(any) bool },
+			interface{ Unwrap() []error }, interface{ UnwrapBounded(int) ([]error, bool) }:
+			return false
+		}
+		_, transparent := current.(interface{ Unwrap() error })
+		return transparent
+	})
+	if !complete {
+		return nil
+	}
+	return denial
 }

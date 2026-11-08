@@ -35,7 +35,7 @@ func TestAuthenticatedRawRoutesPreserveNativeTransportAndRequirements(t *testing
 				t.Fatal(err)
 			}
 			route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "raw.write", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.DefinePath("/raw/{order}", foundryhttp.Param("order", compositionCodec{&parses}, func(p *compositionPath) *int64 { return &p.Order })))
-			bound := foundryhttp.ConfigureAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(route, transport, guard), foundryhttp.Permissions(permission))
+			bound := foundryhttp.ConfigureAuthenticatedRoute(foundryhttp.RequireRouteAuthentication(route, transport, guard), foundryhttp.AnyOf(foundryhttp.AllOf(foundryhttp.Permissions(permission))))
 			signer, now := compositionSigner(t)
 			var original *http.Request
 			var writer *httptest.ResponseRecorder
@@ -80,7 +80,7 @@ func TestAuthenticatedRawRoutesPreserveNativeTransportAndRequirements(t *testing
 				}
 			}
 			handler, router := compositionHandler(t, registration)
-			if !info.Raw || info.Authentication == nil || info.Authentication.RequiredPermissions[0] != "raw.write" || len(router.Endpoints()) != 0 {
+			if !info.Raw || info.Authentication == nil || info.Authentication.AnyOf[0].RequiredPermissions[0] != "raw.write" || len(router.Endpoints()) != 0 {
 				t.Fatal("raw route lost auth or claimed DTO contract")
 			}
 			serve := func(url, credential string) *httptest.ResponseRecorder {
@@ -130,8 +130,8 @@ func TestAuthenticatedRawRoutesPreserveNativeTransportAndRequirements(t *testing
 			if _, err := foundryhttp.NewRouter(foundryhttp.HandleAuthenticatedRaw(bound, nil)); err == nil {
 				t.Fatal("nil raw handler accepted")
 			}
-			info.Authentication.RequiredPermissions[0] = "changed"
-			if router.Routes()[0].Authentication.RequiredPermissions[0] != "raw.write" {
+			info.Authentication.AnyOf[0].RequiredPermissions[0] = "changed"
+			if router.Routes()[0].Authentication.AnyOf[0].RequiredPermissions[0] != "raw.write" {
 				t.Fatal("raw inspection mutated requirements")
 			}
 		})

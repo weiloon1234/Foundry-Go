@@ -66,6 +66,12 @@ one strategy result and one model lookup per guard, including concurrent checks.
 A fresh request resolves the current model again. A retained closed request context
 cannot reuse the grant.
 
+`Guard.AllowsScopes(ctx, required)` uses the same scope check, returning `(false,
+nil)` only for missing or insufficient grants after successful authentication.
+Empty requirements and authentication or authority failures return errors. This
+structured result supports [alternative guards](authentication.md#recipe-any-of-guards)
+without interpreting a callback's `Forbidden` error as a scope mismatch.
+
 Scope names do not become model permissions. A credential with `orders.read` still
 needs the policy to authorize the selected order and account's current state.
 Ordinary `Guard.Require` authenticates only; use an explicit scope requirement on

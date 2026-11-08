@@ -11,6 +11,7 @@ Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/
 - [Register actor guards](#recipe-register-guards)
 - [Declare token scopes](access-scopes.md#recipe-access-scopes)
 - [Declare permissions](#recipe-declare-permission)
+- [Require any complete alternative](#recipe-any-of-guards)
 - [Declare resource policies](#recipe-resource-policy)
 - [Bind a guard to HTTP](#recipe-bind-guard)
 - [Construct password login](#recipe-password-login)
@@ -338,6 +339,63 @@ explicit in the handler or service. Route metadata includes typed
 `RequiredPermissions` alongside `RequiredScopes`; inspection returns owned copies.
 The [consumer](../../tests/fixtures/consumer/authenticating/permissions.go) uses
 these actual declarations in its ordinary profile route.
+
+<a id="recipe-any-of-guards"></a>
+## Require any complete alternative
+
+`http.AnyOf` accepts `http.AllOf` branches for the same actor model. Each branch
+requires every declared scope and permission. The endpoint's guard registry must
+contain the exact permission declarations, including those in later branches.
+
+<!-- compiled-source: tests/fixtures/consumer/authenticating/any_of.go#editorial-alternatives -->
+```go
+func EditorialProfile(endpoint ProfileEndpoint, writeScopes, approveScopes auth.AccessScopes[models.User], write, approve auth.Permission[models.User]) ProfileEndpoint {
+	return http.ConfigureAuthenticated(endpoint, http.AnyOf(
+		http.AllOf(http.Scopes(writeScopes), http.Permissions(write)),
+		http.AllOf(http.Scopes(approveScopes), http.Permissions(approve)),
+	))
+}
+```
+
+This admits either a write-scoped credential whose actor can write or an
+approve-scoped credential whose actor can approve. A write scope combined with
+only approve permission fails. Scope checks precede permission callbacks, and
+all route requirements precede actor middleware, input decoding and resource
+lookup. Resource and tenant policies still run after route admission.
+
+Branches run in declaration order. A scope mismatch or normal permission denial
+tries the next branch. Any observed authority error stops admission immediately.
+The first complete success stops evaluation; later callbacks do not run. If all
+branches deny, the response is the existing generic forbidden response. Permission
+decisions and hooks are not cached across branches. Guard hydration remains once
+per request.
+
+A permission-only branch deliberately has no credential-scope restriction and can
+admit an unscoped authenticated session. A scope-only branch deliberately requires
+no actor permission. Neither skips authentication or downstream resource policy.
+An explicit `Scopes(empty)` or `Permissions()` is invalid, never an omitted check.
+
+`AllOf` accepts the sealed `RequirementOption[M]` subset returned by `Scopes` and
+`Permissions`; it cannot contain middleware or another `AnyOf`. `AnyOf` cannot
+attach to optional authentication. Empty branches, repeated attachments, duplicate
+permissions or alternatives, and zero alternatives fail declaration validation.
+A single branch is valid. There are at most `http.MaxGuardAlternatives` (32)
+branches, 128 total scope references and 256 total permission references, counting
+repeated references in different branches.
+
+Do not mix `AnyOf` with top-level `Scopes` or `Permissions`, or attach it twice.
+Put a shared requirement in each branch where it applies. Existing flat guards
+keep their AND semantics. Input slices and inspection metadata are owned snapshots;
+`AuthenticationInfo.AnyOf` preserves the branch pairing in the manifest and clients.
+See [contract alternatives](client-contracts.md#recipe-guard-contracts) and the
+[compatibility note](../compatibility.md#any-of-route-guards-manifest-10).
+
+A typed denial is a normal negative decision only when it is a concrete
+`*auth.Denial`, optionally wrapped by transparent single-cause context such as
+`fmt.Errorf("context: %w", auth.NewDenial(...))`. Joined errors, classified wrappers,
+custom-`As` projections and incomplete inspection remain terminal errors. In
+particular, joining a denial with a storage failure must not enable fallback.
+The auth scope retains callback ownership during bounded error inspection.
 
 ## Declare required access scopes
 

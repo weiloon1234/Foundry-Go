@@ -4,6 +4,7 @@
 ## Agent entry
 
 - Export: [Registered contracts](#recipe-export-contracts)
+- Inspect access: [Guard alternatives and OpenAPI](#recipe-guard-contracts)
 - Select: [Portal surfaces](#recipe-select-surfaces)
 - Decode: [Received values](#recipe-received-values), [Schema handles](#recipe-schema-handles)
 - Label: [Enum metadata](#recipe-enum-labels)
@@ -49,10 +50,47 @@ operation names and feature metadata. Conflicting definitions or ambiguous
 camel-cased names are errors. `Snapshot()` and `JSON()` return owned copies.
 `manifest.Decode(data)` validates a saved manifest without loading application
 code. The decoder rejects unknown versions, duplicate JSON keys, unknown fields,
-broken references and oversized/deep documents. Manifest version 7 includes explicit table operation bindings and canonical page schemas, alongside bounded
-property/parameter presentation metadata. Regenerate saved manifests and clients
+broken references and oversized/deep documents. Manifest version 10 adds grouped guard alternatives to the existing operation,
+presentation and typed-error contracts. Regenerate saved manifests and clients
 together. [Typed descriptors](client-descriptors.md) expose operation/field lookup
 and explicit semantic hints through the same contract.
+
+<a id="recipe-guard-contracts"></a>
+## Guard alternatives and OpenAPI
+
+`AuthenticationInfo.AnyOf` exports a nonempty `any_of` array. Each branch contains
+`required_scopes`, `required_permissions`, or both. Every name within a branch is
+required; one complete branch admits the request. Legacy declarations retain
+their flat fields, and a declaration cannot contain both forms. Manifest 10 rejects
+invalid names, duplicates, empty branches and excessive requirement totals.
+Projections and raw-route inspection preserve the same grouped metadata.
+
+OpenAPI 3.1.1 emits one Security Requirement Object per alternative using the
+actual bearer, cookie or ticket scheme. A branch requiring editorial write scope
+and permission has role labels `scope:editorial.write` and
+`permission:editorial.write` on that scheme. Another security object can require
+the approve pair. Each required refresh-cookie credential stays in every
+alternative. Guarded alternatives never include an anonymous `{}` object.
+
+These are Foundry-specific non-OAuth role labels, permitted by the
+[OpenAPI 3.1.1 security requirement contract](https://spec.openapis.org/oas/v3.1.1.html#security-requirement-object).
+They are not token values, OAuth scopes or extra credentials. Scheme descriptions
+explain the encoding, while `x-foundry-authentication` retains the exact typed
+scope/permission distinction. Generic tooling may display the labels without
+understanding the live policy or ordered failure semantics.
+
+Generated `operation(name).metadata.route.authentication` exposes readonly grouped
+metadata. Its flat and grouped requirement types are mutually exclusive. The
+manifest, generic metadata snapshots, operation descriptors and selected client
+surfaces share one source. This metadata describes server checks; it cannot
+prove that a browser may perform an operation. The server still evaluates current
+permissions and resource policies.
+
+Regenerate saved manifests, OpenAPI and TypeScript with the same framework pin.
+Version 9 and version 10 readers reject each other's formats. See the
+[upgrade note](../compatibility.md#any-of-route-guards-manifest-10).
+
+## Generate the client
 
 Generate into an existing, dedicated client directory:
 

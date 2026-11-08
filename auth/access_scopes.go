@@ -143,19 +143,39 @@ func (p Proof[M, K]) AccessScopes() (AccessScopes[M], bool) {
 // pending MFA. Resolution shares Require/Optional's once-per-request model lookup.
 // This does not replace a current model/resource policy decision.
 func (g Guard[M]) RequireScopes(ctx context.Context, required AccessScopes[M]) (M, error) {
-	if required.Len() == 0 {
-		return *new(M), safeerror.NewFault(fault.Invalid, "scope requirement cannot be empty")
-	}
-	resolved, err := g.resolve(ctx)
+	subject, allowed, err := g.checkScopes(ctx, required)
 	if err != nil {
 		return *new(M), err
 	}
-	subject, present := resolved.subject.Get()
-	if !present {
-		return *new(M), Unauthenticated.WithCause(nil)
-	}
-	if resolved.grants == nil || !(AccessScopes[M]{grant: resolved.grants}).ContainsAll(required) {
+	if !allowed {
 		return *new(M), Forbidden.WithCause(nil)
 	}
 	return subject, nil
+}
+
+// AllowsScopes authenticates the selected guard and checks every required scope.
+// Only missing or insufficient grants return false without an error. Empty
+// requirements, absent or pending credentials and authority failures are errors.
+// A scope match does not replace current permissions or resource authorization.
+func (g Guard[M]) AllowsScopes(ctx context.Context, required AccessScopes[M]) (bool, error) {
+	_, allowed, err := g.checkScopes(ctx, required)
+	return allowed, err
+}
+
+func (g Guard[M]) checkScopes(ctx context.Context, required AccessScopes[M]) (M, bool, error) {
+	if required.Len() == 0 {
+		return *new(M), false, safeerror.NewFault(fault.Invalid, "scope requirement cannot be empty")
+	}
+	resolved, err := g.resolve(ctx)
+	if err != nil {
+		return *new(M), false, err
+	}
+	subject, present := resolved.subject.Get()
+	if !present {
+		return *new(M), false, Unauthenticated.WithCause(nil)
+	}
+	if resolved.grants == nil || !(AccessScopes[M]{grant: resolved.grants}).ContainsAll(required) {
+		return *new(M), false, nil
+	}
+	return subject, true, nil
 }

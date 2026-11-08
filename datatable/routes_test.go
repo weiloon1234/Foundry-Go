@@ -71,7 +71,8 @@ func routeConfig(t *testing.T, manager *Manager) (RoutesConfig[routeActor, repor
 	strategy, binder := auth.BindStrategy(auth.DefineStrategy("tables.bearer", verify), verify)
 	guard := auth.DefineGuard("table.guard", provider, strategy)
 	permission := auth.DefinePermission("table.read", func(_ context.Context, actor routeActor) (bool, error) { return actor.Allowed, nil })
-	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration(), permission.Registration())
+	unavailable := auth.DefinePermission("table.unavailable", func(context.Context, routeActor) (bool, error) { return false, nil })
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration(), permission.Registration(), unavailable.Registration())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +98,7 @@ func routeConfig(t *testing.T, manager *Manager) (RoutesConfig[routeActor, repor
 		}
 		bound, err := binder.Bind(raw)
 		return value.Set(bound), err
-	}}}, Quota: h.DefineMiddleware("table.quota", func(next stdhttp.Handler) (stdhttp.Handler, error) { return next, nil })}, []h.GuardOption[routeActor]{h.Scopes(required), h.Permissions(permission)}
+	}}}, Quota: h.DefineMiddleware("table.quota", func(next stdhttp.Handler) (stdhttp.Handler, error) { return next, nil })}, []h.GuardOption[routeActor]{h.AnyOf(h.AllOf(h.Scopes(required), h.Permissions(unavailable)), h.AllOf(h.Scopes(required), h.Permissions(permission)))}
 }
 
 func routeRouter(t *testing.T, table Table[reportRecord, ReportRow, reportActor], config RoutesConfig[routeActor, reportActor], options ...RouteOption[routeActor]) *h.Router {
@@ -176,8 +177,9 @@ func TestRoutesValidateDeclarationsAndSnapshotAccess(t *testing.T) {
 		t.Fatal("different declaration accepted")
 	}
 	read, export := ReadAccess(access...), ExportAccess(access...)
-	access[0] = nil
-	access[1] = nil
+	for i := range access {
+		access[i] = nil
+	}
 	router := routeRouter(t, table, config, read, export)
 	for _, suffix := range []string{"", "/export"} {
 		for _, token := range []string{"scope-denied", "permission-denied"} {

@@ -223,8 +223,25 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 			if a.Credential.Kind == foundryhttp.TicketCredentialKind {
 				scheme = object{"type": "apiKey", "in": "query", "name": a.Credential.Name}
 			}
+			if existing, present := security[name]; present {
+				scheme = existing.(object)
+			}
 			security[name] = scheme
 			credentials = []object{{name: []string{}}}
+			if a.AnyOf != nil {
+				scheme["description"] = "Foundry requirement roles use scope:<name> for verified credential grants and permission:<name> for current actor permissions. Every role in one security requirement must pass; security requirements are alternatives. See x-foundry-authentication for the exact declaration. These labels are not credential values or OAuth scopes."
+				credentials = make([]object, len(a.AnyOf))
+				for i, alternative := range a.AnyOf {
+					roles := make([]string, 0, len(alternative.RequiredScopes)+len(alternative.RequiredPermissions))
+					for _, scope := range alternative.RequiredScopes {
+						roles = append(roles, "scope:"+string(scope))
+					}
+					for _, permission := range alternative.RequiredPermissions {
+						roles = append(roles, "permission:"+string(permission))
+					}
+					credentials[i] = object{name: roles}
+				}
+			}
 			if a.Optional {
 				// Anonymous access still presents a required refresh cookie.
 				credentials = append(credentials, object{})

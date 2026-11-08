@@ -1658,6 +1658,7 @@
         "type": "http"
       },
       "Credential_Fixture_session_df0dc837d5b1a24b": {
+        "description": "Foundry requirement roles use scope:\u003cname\u003e for verified credential grants and permission:\u003cname\u003e for current actor permissions. Every role in one security requirement must pass; security requirements are alternatives. See x-foundry-authentication for the exact declaration. These labels are not credential values or OAuth scopes.",
         "in": "cookie",
         "name": "fixture_session",
         "type": "apiKey"
@@ -2109,7 +2110,15 @@
         },
         "security": [
           {
-            "Credential_Fixture_session_df0dc837d5b1a24b": []
+            "Credential_Fixture_session_df0dc837d5b1a24b": [
+              "scope:consumer.approve",
+              "permission:consumer.manage"
+            ]
+          },
+          {
+            "Credential_Fixture_session_df0dc837d5b1a24b": [
+              "permission:consumer.manage"
+            ]
           }
         ],
         "x-foundry-access": "guarded",
@@ -2122,8 +2131,20 @@
             "kind": "cookie",
             "name": "fixture_session"
           },
-          "required_permissions": [
-            "consumer.manage"
+          "any_of": [
+            {
+              "required_scopes": [
+                "consumer.approve"
+              ],
+              "required_permissions": [
+                "consumer.manage"
+              ]
+            },
+            {
+              "required_permissions": [
+                "consumer.manage"
+              ]
+            }
           ]
         },
         "x-foundry-client-name": "accountShow",
@@ -17492,5 +17513,5 @@
       }
     }
   },
-  "x-foundry-manifest-version": 9
+  "x-foundry-manifest-version": 10
 }

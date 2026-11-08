@@ -72,7 +72,7 @@ func TestConsumerClientManifestKeepsRealFeatureBoundaries(t *testing.T) {
 		switch op.Name {
 		case "accountShow":
 			account = true
-			if op.Route.Authentication == nil || op.Route.Authentication.Credential.Name != "fixture_session" || len(op.Route.Authentication.RequiredPermissions) != 1 {
+			if op.Route.Authentication == nil || op.Route.Authentication.Credential.Name != "fixture_session" || len(op.Route.Authentication.AnyOf) != 2 || op.Route.Authentication.RequiredPermissions != nil {
 				t.Fatal("credential/permission metadata missing")
 			}
 		case "membersSecure", "membersSecureSimple", "membersSecureCursor":

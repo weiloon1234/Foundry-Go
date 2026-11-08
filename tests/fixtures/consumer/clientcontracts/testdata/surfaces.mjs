@@ -25,6 +25,9 @@ assert.ok(membersMetadata.http.length < fullMetadata.http.length);
 assert.equal(membersMetadata.realtime, undefined); assert.equal(members.createRealtime, undefined);
 assert.deepEqual(live.contractMetadata().realtime.channels.map(channel => channel.id).sort(), ["accounts", "updates"]);
 assert.ok(members.manifestJSON.length < full.manifestJSON.length);
+assert.deepEqual(live.operation("accountShow").metadata.route.authentication.any_of,
+  full.operation("accountShow").metadata.route.authentication.any_of);
+assert.equal(live.operation("accountShow").metadata.route.authentication.any_of.length, 2);
 
 // The realtime runtime serves a surface with channels.
 const native = new WebSocket(baseURL.replace(/^http/, "ws") + "/ws", live.realtimeSubprotocol);

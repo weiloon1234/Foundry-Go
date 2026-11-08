@@ -122,6 +122,14 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 	if err != nil {
 		return result, err
 	}
+	approvalScopes, err := auth.NewAccessScopes(auth.DefineAccessScope[Account]("consumer.approve"))
+	if err != nil {
+		return result, err
+	}
+	accountAccess := foundryhttp.AnyOf(
+		foundryhttp.AllOf(foundryhttp.Scopes(approvalScopes), foundryhttp.Permissions(Manage)),
+		foundryhttp.AllOf(foundryhttp.Permissions(Manage)),
+	)
 	secure := foundryhttp.DefineEndpoint(AccountRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, MemberJSON()))
 	broken := foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "failure", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/failure")), foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, contract.StringJSON[string]())), foundryhttp.Errors(Changed))
 	form := foundryhttp.MultipartDirectory(httpuploads.ProfileInputDescriptor(), temporary)
@@ -148,7 +156,7 @@ func NewFixture(ctx context.Context, root *os.Root, temporary string) (Fixture, 
 				return Payload{}, foundryhttp.BadRequest
 			}
 			return input.Body, nil
-		}), foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(secure, transport, guard), foundryhttp.Permissions(Manage)).Handle(func(_ context.Context, subject Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
+		}), foundryhttp.ConfigureAuthenticated(foundryhttp.RequireAuthentication(secure, transport, guard), accountAccess).Handle(func(_ context.Context, subject Account, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (Member, error) {
 			return Member{Display: subject.Display}, nil
 		}), broken.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (string, error) {
 			return "", Changed

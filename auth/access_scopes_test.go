@@ -119,6 +119,9 @@ func TestScopedGuardSharesModelAndRefreshesPolicyAtNextRequest(t *testing.T) {
 	var workers sync.WaitGroup
 	for range 24 {
 		workers.Go(func() {
+			if allowed, err := guard.AllowsScopes(current.Context(), granted); err != nil || !allowed {
+				t.Error("scope decision", err)
+			}
 			if a, err := guard.RequireScopes(current.Context(), granted); err != nil || a.ID != 7 {
 				t.Error("scope resolution", err)
 			}
@@ -139,6 +142,9 @@ func TestScopedGuardSharesModelAndRefreshesPolicyAtNextRequest(t *testing.T) {
 	}
 	if a, err := guard.RequireScopes(current.Context(), accountScopes(t, "orders.write")); !errors.Is(err, auth.Forbidden) || a != (account{}) {
 		t.Fatal("missing scope", a, err)
+	}
+	if allowed, err := guard.AllowsScopes(current.Context(), accountScopes(t, "orders.write")); allowed || err != nil {
+		t.Fatal("scope mismatch became an authority failure", err)
 	}
 	allowed.Store(false)
 	next := scope(t, registry, input)
@@ -205,12 +211,35 @@ func TestScopedGuardRejectsInvalidMissingAndPendingAuthority(t *testing.T) {
 			if !errors.Is(err, test.want) || (err != nil && a != (account{})) {
 				t.Fatal(a, err)
 			}
+			allowed, checkErr := guard.AllowsScopes(s.Context(), required)
+			wantErr := test.want
+			if wantErr == auth.Forbidden {
+				wantErr = nil
+			}
+			if allowed != (test.name == "valid") || !errors.Is(checkErr, wantErr) {
+				t.Fatal("scope decision", allowed, checkErr)
+			}
 			if (test.name == "absent" || test.name == "invalid" || test.name == "pending") && loads.Load() != 0 {
 				t.Fatal("invalid credential hydrated")
 			}
 			if _, err := guard.RequireScopes(s.Context(), auth.AccessScopes[account]{}); !errors.Is(err, fault.Invalid) {
 				t.Fatal("empty requirement accepted", err)
 			}
+			if allowed, err := guard.AllowsScopes(s.Context(), auth.AccessScopes[account]{}); allowed || !errors.Is(err, fault.Invalid) {
+				t.Fatal("empty scope decision accepted", err)
+			}
 		})
+	}
+}
+
+func TestAllowsScopesDoesNotTreatAuthorityForbiddenAsMismatch(t *testing.T) {
+	failure := auth.Forbidden.WithCause(errors.New("authority unavailable"))
+	p := provider(func(context.Context, accountKey) (value.Optional[account], error) {
+		return value.Optional[account]{}, failure
+	})
+	g := auth.DefineGuard("api", p, strategy(t, "bearer", 7))
+	s := scope(t, registry(t, g.Registration()), auth.Credential{Name: "bearer", Secret: secret.New("valid")})
+	if allowed, err := g.AllowsScopes(s.Context(), accountScopes(t, "orders.read")); allowed || err == nil || !errors.Is(err, failure) {
+		t.Fatal("authority error was a normal mismatch", err)
 	}
 }

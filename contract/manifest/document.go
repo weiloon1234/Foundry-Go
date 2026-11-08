@@ -19,9 +19,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
-// Version 9 adds typed application error details. Earlier
+// Version 10 adds grouped any-of route guard requirements. Earlier
 // formats must be regenerated; older readers reject unsupported versions.
-const Version = 9
+const Version = 10
 const MaxBytes = 16 << 20
 const MaxOperations = 4096
 

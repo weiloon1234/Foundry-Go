@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "types": [
     {
       "id": "[]contract.Issue",
@@ -1403,8 +1403,20 @@
             "kind": "cookie",
             "name": "fixture_session"
           },
-          "required_permissions": [
-            "consumer.manage"
+          "any_of": [
+            {
+              "required_scopes": [
+                "consumer.approve"
+              ],
+              "required_permissions": [
+                "consumer.manage"
+              ]
+            },
+            {
+              "required_permissions": [
+                "consumer.manage"
+              ]
+            }
           ]
         }
       },

@@ -2,12 +2,14 @@ package auth_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"testing"
 	"testing/synctest"
 
 	"github.com/weiloon1234/Foundry-Go/auth"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -19,8 +21,8 @@ type policyInspectionFailure struct {
 }
 
 func (*policyInspectionFailure) Error() string { return "private policy failure" }
-func (e *policyInspectionFailure) As(any) bool { e.inspect(); return false }
 func (e *policyInspectionFailure) Unwrap() error {
+	e.inspect()
 	if e.cycle {
 		return e
 	}
@@ -29,7 +31,7 @@ func (e *policyInspectionFailure) Unwrap() error {
 
 func TestPolicyErrorInspectionStaysInScope(t *testing.T) {
 	for _, mode := range []string{"policy", "before", "after", "guest"} {
-		for _, behavior := range []string{"panic", "goexit", "cycle", "wrapped denial"} {
+		for _, behavior := range []string{"panic", "goexit", "cycle", "wrapped denial", "denial then failure", "failure then denial", "joined denials", "classified denial", "auth failure with denial", "partial denial", "custom as", "typed nil"} {
 			t.Run(mode+"/"+behavior, func(t *testing.T) {
 				failure := error(&policyInspectionFailure{inspect: func() {}, cycle: behavior == "cycle"})
 				switch behavior {
@@ -39,6 +41,25 @@ func TestPolicyErrorInspectionStaysInScope(t *testing.T) {
 					failure = &policyInspectionFailure{inspect: runtime.Goexit}
 				case "wrapped denial":
 					failure = fmt.Errorf("wrapped: %w", auth.NewDenial("documents.closed", "Closed"))
+				case "denial then failure":
+					failure = errors.Join(auth.NewDenial("documents.closed", "Closed"), errors.New("authority unavailable"))
+				case "failure then denial":
+					failure = errors.Join(errors.New("authority unavailable"), auth.NewDenial("documents.closed", "Closed"))
+				case "joined denials":
+					failure = errors.Join(auth.NewDenial("documents.closed", "Closed"), auth.NewDenial("documents.hidden", "Hidden"))
+				case "classified denial":
+					failure = fault.Wrap(fault.Internal, "authority unavailable", auth.NewDenial("documents.closed", "Closed"))
+				case "auth failure with denial":
+					failure = auth.Unauthenticated.WithCause(auth.NewDenial("documents.closed", "Closed"))
+				case "partial denial":
+					failure = auth.NewDenial("documents.closed", "Closed")
+					for range 70 {
+						failure = fmt.Errorf("context: %w", failure)
+					}
+				case "custom as":
+					failure = denialProjection{}
+				case "typed nil":
+					failure = (*auth.Denial)(nil)
 				}
 				p := provider(func(context.Context, accountKey) (value.Optional[account], error) {
 					return value.Set(account{ID: 7, Enabled: true}), nil
@@ -103,6 +124,17 @@ func TestPolicyErrorInspectionStaysInScope(t *testing.T) {
 			})
 		}
 	}
+}
+
+type denialProjection struct{}
+
+func (denialProjection) Error() string { return "private authority failure" }
+func (denialProjection) As(target any) bool {
+	if slot, ok := target.(**auth.Denial); ok {
+		*slot = &auth.Denial{}
+		return true
+	}
+	return false
 }
 
 func TestPolicyInspectionRetainsScopeUntilExit(t *testing.T) {

@@ -1,4 +1,22 @@
 import * as sdk from "./contracts_foundry.gen.js";
+const authentication = sdk.operation("accountShow").metadata.route.authentication;
+if (authentication?.any_of) {
+  const alternatives: readonly { readonly required_scopes?: readonly string[]; readonly required_permissions?: readonly string[] }[] = authentication.any_of;
+  // @ts-expect-error Alternative declarations are readonly metadata.
+  alternatives.push({ required_permissions: ["invented"] });
+  // @ts-expect-error A grouped declaration cannot also require flat permissions.
+  const flat: readonly string[] = authentication.required_permissions;
+  const branch = alternatives[0];
+  if (branch?.required_scopes) {
+    // @ts-expect-error Scope lists are readonly too.
+    branch.required_scopes[0] = "changed";
+  }
+  void flat;
+}
+type Authentication = NonNullable<typeof authentication>;
+// @ts-expect-error Flat and grouped requirements cannot be declared together.
+const mixedAuthentication: Authentication = { guard: "api", provider: "users", optional: false, credential: { source: "api", kind: "bearer", name: "Authorization" }, required_permissions: ["write"], any_of: [{ required_permissions: ["approve"] }] };
+void mixedAuthentication;
 const choice = sdk.schema("client.ExactEnum");
 const values: readonly "9223372036854775807"[] = choice.choices;
 const quoted: readonly "9223372036854775807"[] = sdk.schema("client.QuotedExactEnum").choices;

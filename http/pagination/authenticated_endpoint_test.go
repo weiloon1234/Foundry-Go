@@ -91,7 +91,7 @@ func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 	binding, scopes, permission := pageBinding(t)
 	base := pagination.Configure(pagination.DefineNumbered(guardedPageRoute(), filterQuery(), itemJSON(), pagination.DefaultConfig()), foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 	policies, reads := 0, 0
-	endpoint := pagination.AuthorizeActor(pagination.ConfigureAuthenticated(pagination.ConfigureAuthenticated(pagination.Authenticated(base, binding), foundryhttp.Scopes(scopes)), foundryhttp.Permissions(permission)), func(ctx context.Context, actor pageActor, in pageInput) error {
+	endpoint := pagination.AuthorizeActor(pagination.ConfigureAuthenticated(pagination.Authenticated(base, binding), foundryhttp.AnyOf(foundryhttp.AllOf(foundryhttp.Scopes(scopes), foundryhttp.Permissions(permission)))), func(ctx context.Context, actor pageActor, in pageInput) error {
 		policies++
 		if actor.ID == 3 {
 			return auth.Forbidden
@@ -143,12 +143,12 @@ func TestAuthenticatedPagesPreserveAuthorityBeforePageReads(t *testing.T) {
 	if err != nil || info.Route.Authentication == nil {
 		t.Fatal("missing authentication metadata", err)
 	}
-	if info.Route.Authentication.Guard != "pages" || len(info.Route.Authentication.RequiredScopes) != 1 || len(info.Route.Authentication.RequiredPermissions) != 1 {
+	if info.Route.Authentication.Guard != "pages" || len(info.Route.Authentication.AnyOf[0].RequiredScopes) != 1 || len(info.Route.Authentication.AnyOf[0].RequiredPermissions) != 1 {
 		t.Fatal("authority metadata lost")
 	}
-	info.Route.Authentication.RequiredScopes[0] = "mutated"
+	info.Route.Authentication.AnyOf[0].RequiredScopes[0] = "mutated"
 	again, err := pagination.InspectAuthenticated(endpoint)
-	if err != nil || again.Route.Authentication.RequiredScopes[0] != "pages.read" {
+	if err != nil || again.Route.Authentication.AnyOf[0].RequiredScopes[0] != "pages.read" {
 		t.Fatal("metadata aliases caller", err)
 	}
 }
