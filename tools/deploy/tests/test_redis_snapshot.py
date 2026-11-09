@@ -226,6 +226,69 @@ class RedisSnapshotTests(unittest.TestCase):
         self.quiescence.assert_called_with(self.host, self.entry, self.request["operation_id"])
         self.assert_code("operation_conflict", lambda: self.capture(source_release="different"))
 
+    def test_m4_restore_plan_completes_real_m3_intake_and_archive_validation(self):
+        import cutover_contracts as contract
+        import compatibility
+        import test_cutover
+        import test_release
+        import upgrades
+        from contracts import digest
+
+        self.root = self.host.paths.root
+        archive, manifest = test_release.ReleaseTests.bundle(self)
+        candidate = release.release_path(self.host, self.entry, manifest['version'])
+        release.unpack_archive(archive, candidate, self.entry, digest(archive))
+        release.switch_to(self.host, self.entry, manifest['version'])
+        state = self.host.load_state(self.entry)
+        state.update(current=manifest, status='healthy')
+        self.host.save_state(self.entry, state)
+        self.host.write_registry(self.registry)
+
+        inventory = test_cutover.inspection(self.entry)
+        descriptor = inventory['connections'][0]['queues'][0]
+        keys = sorted(descriptor['base'] + ':' + name for name in ('metadata', 'ready', 'records'))
+        self.data = {keys[index]: value for index, value in enumerate(self.data.values())}
+        self.keys = descriptor['keys'] = keys
+        self.scopes = contract.scopes(inventory)
+        self.request.update(source_release=manifest['version'], scopes=self.scopes,
+                            inventory_sha256=contract.inventory_identity(inventory))
+        captured = self.capture()
+        plan = {'source': manifest, 'target': manifest, 'inventory': inventory,
+                'configuration_revision': self.entry['configuration_revision'],
+                'inventory_sha256': self.request['inventory_sha256']}
+        release._save_snapshot_binding(self.host, self.entry, plan, self.request, captured)
+        self.data[keys[2]] = (b'extra-key-after-snapshot', 0)
+        operation = str(uuid.uuid4())
+        project = {'schema': 1, 'id': self.entry['project_id'], 'slug': 'abc'}
+        admin = self.redis
+        def redis(host, *args, **options):
+            if args[0] == 'SCAN':
+                return ['0', sorted(self.data)]
+            return admin(host, *args, **options)
+
+        # Only host/platform and external Redis/age/repository processes are fake.
+        # M4, M3, ownership/ACL checks, inventory binding, identity validation,
+        # archive verification and both private plans execute their real code.
+        with patch.object(redis_acl, '_redis', side_effect=redis), \
+                patch.object(compatibility, 'require_guards'), \
+                patch.object(release, '_cutover_fingerprint', return_value='d' * 64), \
+                patch.object(release, 'enabled_roles', return_value=[]), \
+                patch.object(upgrades, '_installed', return_value=self.root / 'tools'):
+            result = release.plan_redis_restore(self.host, project, self.entry['profile'], operation,
+                                                captured['snapshot_id'], 'private-identity-canary')
+        self.assertEqual(captured, result['snapshot'])
+        self.assertEqual((2, 1), (result['restore_keys'], result['remove_keys']))
+        self.assertEqual(operation, result['operation_id'])
+        intake = self.host.paths.p(instance_paths(self.entry['name'])['private']) / 'operations' / operation
+        self.assertEqual(0o700, stat.S_IMODE(intake.stat().st_mode))
+        self.assertFalse((intake / 'restore.identity').exists())
+        saved = json.loads(contract.private_path(self.host, self.entry, 'restore', operation).read_text())
+        self.assertEqual(result, saved['module_plan'])
+        _, module_plan, _, _ = snapshot._restore_paths(self.host, self.entry, operation)
+        self.assertEqual(result, json.loads(module_plan.read_text())['public'])
+        self.assertNotIn('private-identity-canary', json.dumps(saved))
+        self.assertTrue(any('redis-check-rdb' in args for args, _ in self.commands))
+
     def test_capture_calls_quiescence_and_propagates_its_error(self):
         self.quiescence.side_effect = DeployError("cutover_not_drained", "Roles remain live.")
         self.assert_code("cutover_not_drained", self.capture)

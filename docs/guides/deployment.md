@@ -399,11 +399,11 @@ not a deadline. The owner chooses the window by running apply. Once a queue
 migration may have run, recovery moves forward. The tool never automatically
 starts the old release after that boundary.
 
-Current integration status: these generation-5 tools are intended for v0.15.0.
-The release-owned `deploy:jobs-inspect` command is still awaiting integration.
-An absent command blocks planning. Do not schedule a production cutover until
-the inspection command and the complete recovery path are verified, including
-the snapshot module's reconciliation of a restore interrupted before its first write.
+These generation-5 tools and the release-owned `deploy:jobs-inspect` command ship
+in v0.15.0. An absent command blocks planning. Restore resume reconciles an
+unstarted intent only after exit proof and the module's safety and drift checks.
+The [local integration checks](../../tools/deploy/README.md) exercise the consumer
+command and restore intake; they do not certify a production host's recovery setup.
 
 Before planning, install generation-5 host tools, configure the existing backup
 repository and age recipients, and retain the corresponding recovery identity.

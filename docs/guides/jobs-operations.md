@@ -356,8 +356,8 @@ reviewed operation that leaves startup blocked.
 
 Use [reviewed forward recovery](deployment.md#apply-a-reviewed-forward-fix) to bind
 a repaired candidate to an unresolved layout-3 operation. A normal resume retains
-its original artifact. The v0.15.0 inspection command and snapshot-lane restore
-reconciliation changes still need integration and verification. Follow the deployment guide's
+its original artifact. Restore resume reconciles an unstarted intent after exit
+proof and safety checks. Follow the deployment guide's
 [prerequisites](deployment.md#coordinated-redis-queue-cutover) and
 [restore procedure](deployment.md#restore-a-redis-snapshot) before using
 these actions in production. Do not substitute manual SSH changes on a managed

@@ -31,11 +31,11 @@ discovery, snapshot evidence, failure handling, and resumption. The
 [snapshot module reference](redis-snapshot.md) describes exact-key ownership,
 private journals, expiration, and restore limits.
 
-The release-owned `deploy:jobs-inspect` implementation and the snapshot lane's
-unstarted-restore reconciliation changes still need integration and verification.
-Restore intake uses a private operation-UUID directory. See the
+The release-owned `deploy:jobs-inspect` command supplies the validated inventory.
+Restore intake uses a private operation-UUID directory, and the snapshot module
+reconciles unstarted restores after exit proof and safety checks. See the
 [restore procedure](../../docs/guides/deployment.md#restore-a-redis-snapshot).
-Passing fake-based tests does not establish production cutover or restore readiness.
+Local tests do not establish production cutover or restore readiness.
 
 Run the local tool tests and documentation checks from the worktree root:
 
@@ -44,6 +44,24 @@ make deploy-tools-check
 make docs-check
 ```
 
-Tests use temporary instance state and process, Redis, age, and rclone fakes.
-They do not contact a real server. Container acceptance and merged-command
-integration remain separate release checks.
+To include the real consumer artisan and Redis boundary, build the fixture and
+require integration coverage:
+
+```sh
+cutover_artisan_dir=$(mktemp -d)
+(cd tests/fixtures/consumer && GOWORK=off go build -o "$cutover_artisan_dir/artisan" ./bootstrap/cmd/artisan)
+FOUNDRY_TEST_CUTOVER_ARTISAN="$cutover_artisan_dir/artisan" \
+FOUNDRY_TEST_REDIS_ADDR=127.0.0.1:6379 FOUNDRY_TEST_CUTOVER_REQUIRED=1 \
+make deploy-tools-check
+```
+
+This executes M4's inspection argv against M1's real command and strict parser,
+including absent, layout-2, layout-3, blocked and no-Redis inventories. It uses
+unique namespaces and deletes only their exact keys. The test removes the Linux
+`runuser` wrapper on macOS; it does not exercise systemd. The restore intake test
+executes M4 and M3's real identity, inventory binding and archive validation paths;
+Redis, age and repository processes use the existing local fakes.
+
+The default suite uses temporary instance state and process, Redis, age and
+rclone fakes. The opt-in artisan tests contact only loopback Redis. Container
+acceptance remains a separate release check.

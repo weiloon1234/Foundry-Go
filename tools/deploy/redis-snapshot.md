@@ -135,8 +135,7 @@ Only the plan's exact extra keys are deleted. No FLUSH command is used.
 The coordinator records dispatch before calling the module. After that point,
 it calls `resume_restore` on every retry, even if interruption preceded the module's
 initial progress write. The module owns reconciliation of that unstarted intent.
-The snapshot lane's corresponding reconciliation change must be integrated and
-verified; the coordinator never skips the module's plan, safety-snapshot, or drift checks.
+The coordinator never skips the module's plan, safety-snapshot, or drift checks.
 
 Success and failure both retain the startup fence. Restored layout-2 queues still
 require a reviewed forward cutover before candidate startup. Redis recovery does
@@ -156,6 +155,9 @@ archive validation, exact deletion, and partial restore. No test contacts a serv
 They also cover the exact M4 identity path, private file and directory permissions,
 the dispatch gap before initial progress, missing progress after a possible write,
 and the actual Redis admin argv/stdin boundary for capture and restore.
+The M4 restore-plan test invokes M3 directly through identity intake, immutable
+inventory binding, archive validation and both persisted plans. Only platform and
+external processes are faked at that boundary.
 
 The affected suites run with:
 
