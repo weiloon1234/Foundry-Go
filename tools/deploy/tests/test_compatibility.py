@@ -158,6 +158,57 @@ class QuiescenceTests(unittest.TestCase):
             compatibility.prove_stopped(self.host, self.entry)
         self.assertEqual('cutover_stop_unproven', error.exception.code)
 
+    def test_default_cgroup_matches_systemd_instance_slices(self):
+        self.assertEqual(('system.slice', '/system.slice/app.service'), compatibility.default_cgroup('app.service'))
+        self.assertEqual(('system-foundry\\x2dhttp.slice',
+                          '/system.slice/system-foundry\\x2dhttp.slice/foundry-http@semaklah-production.service'),
+                         compatibility.default_cgroup('foundry-http@semaklah-production.service'))
+
+    def test_stopped_instance_units_prove_exit_in_their_template_slice(self):
+        # Real systemd clears ControlGroup on stopped units and places instances in
+        # system-<escaped template>.slice, not system.slice.
+        units = instance_units(self.entry)
+        self.assertTrue(all('@' in unit for unit in units.values()))
+        self.values.update(ControlGroup='')
+        observed = {}
+        def observe(args, **kwargs):
+            unit = args[2]
+            observed[unit] = compatibility.default_cgroup(unit)
+            values = {**self.values, 'Slice': self.slice or observed[unit][0]}
+            return subprocess.CompletedProcess(args, 0, ''.join(f'{k}={v}\n' for k, v in values.items()), '')
+        self.run.side_effect = observe
+        self.slice = None
+        compatibility.prove_stopped(self.host, self.entry)
+        busy = self.host.paths.p('/sys/fs/cgroup' + observed[units['worker']][1])
+        busy.mkdir(parents=True)
+        (busy / 'cgroup.procs').write_text('123\n')
+        with self.assertRaises(DeployError) as error:
+            compatibility.prove_stopped(self.host, self.entry, roles=['worker'])
+        self.assertEqual('cutover_stop_unproven', error.exception.code)
+        (busy / 'cgroup.procs').write_text('')
+        self.slice = 'system.slice'
+        with self.assertRaises(DeployError) as error:
+            compatibility.prove_stopped(self.host, self.entry, roles=['worker'])
+        self.assertEqual('cutover_stop_unproven', error.exception.code)
+
+    def test_tool_upgrade_waits_for_a_running_cutover_executor(self):
+        state = self.host.load_state(self.entry)
+        state['cutover'] = progress(str(uuid.uuid4()))
+        for outcome, executor, allowed in [('needs_reconciliation', 'exited', True),
+                                           ('needs_reconciliation', 'running', False),
+                                           ('running', 'exited', False)]:
+            with self.subTest(outcome=outcome, executor=executor):
+                state['cutover']['outcome'] = outcome
+                with patch.object(release, 'cutover_executor', return_value=executor):
+                    if allowed:
+                        compatibility.require_upgrade_idle(self.host, self.entry, state)
+                    else:
+                        with self.assertRaises(DeployError) as error:
+                            compatibility.require_upgrade_idle(self.host, self.entry, state)
+                        self.assertEqual('cutover_pending', error.exception.code)
+        with self.assertRaises(DeployError):
+            compatibility.require_mutation_idle(state)
+
     def test_pending_job_and_forced_termination_fail_closed(self):
         for key, value, code in [('Job', '99', 'cutover_stop_unproven'),
                                  ('ControlPID', '99', 'cutover_stop_unproven'),

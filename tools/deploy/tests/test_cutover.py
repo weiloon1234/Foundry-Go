@@ -734,7 +734,7 @@ class CutoverTests(unittest.TestCase):
         def run(args, **options):
             if any(str(arg).startswith('--property=LoadState,ActiveState,SubState,MainPID,ControlPID,ControlGroup,Slice') for arg in args):
                 values = dict(LoadState='loaded', ActiveState='failed', SubState='failed', MainPID='0',
-                              ControlPID='0', ControlGroup='', Slice='system.slice', Job='0', Result=result,
+                              ControlPID='0', ControlGroup='', Slice=compatibility.default_cgroup(args[2])[0], Job='0', Result=result,
                               ExecMainCode=code, ExecMainStatus=status, ExecMainPID=pid,
                               ExecMainStartTimestampMonotonic=started, InvocationID=self.invocations[args[2]])
                 if after_start and 'restart' not in self.events:

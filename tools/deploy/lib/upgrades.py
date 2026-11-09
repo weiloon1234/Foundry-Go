@@ -154,7 +154,7 @@ def check_client(host, request: dict, action: str) -> None:
     if registry and action in UPGRADE_ACTIONS:
         import compatibility
         for entry in registry["instances"].values():
-            compatibility.require_mutation_idle(host.load_state(entry))
+            compatibility.require_upgrade_idle(host, entry, host.load_state(entry))
     if registry and action != "capacity-apply":
         import capacity
         capacity.require_idle(host)

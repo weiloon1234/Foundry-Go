@@ -31,6 +31,21 @@ def require_mutation_idle(state):
             'cutover_pending', 'Resume the recorded cutover before another lifecycle operation.')
 
 
+def require_upgrade_idle(host, entry, state):
+    """A defective tool bundle may be replaced while an operation awaits reconciliation.
+
+    The executor must have exited. Resume refuses changed tools, so the stopped
+    operation continues only through a reviewed recovery plan built on the new tools.
+    """
+    cutover = state.get('cutover')
+    if not cutover or cutover.get('outcome') in ('succeeded', 'failed'):
+        return
+    import release
+    require(cutover.get('outcome') == 'needs_reconciliation'
+            and release.cutover_executor(host, entry, cutover['operation_id']) != 'running',
+            'cutover_pending', 'Resume the recorded cutover before another lifecycle operation.')
+
+
 def validate_state(state):
     progress = state.get('cutover')
     gate = state.get('queue_compatibility')
@@ -133,6 +148,34 @@ def require_guards(host, entry):
                 'cutover_guard_missing', 'Loaded units must match the guarded owned units.')
 
 
+def _escape_unit_prefix(prefix):
+    # systemd unit_name_escape(): keep [A-Za-z0-9:_.] (no leading '.'), '/' becomes '-',
+    # every other byte becomes \xNN.
+    escaped = []
+    for index, byte in enumerate(prefix.encode()):
+        char = chr(byte)
+        if char == '/':
+            escaped.append('-')
+        elif (char.isascii() and char.isalnum()) or char in ':_' or (char == '.' and index > 0):
+            escaped.append(char)
+        else:
+            escaped.append('\\x%02x' % byte)
+    return ''.join(escaped)
+
+
+def default_cgroup(unit):
+    """Return systemd's implicit slice and cgroup path for a stopped system unit.
+
+    Instantiated units (name@instance.service) live in a per-template slice,
+    system-<escaped prefix>.slice, nested under system.slice.
+    """
+    name, at, _ = unit.partition('@')
+    if not at:
+        return 'system.slice', '/system.slice/' + unit
+    slice_name = 'system-' + _escape_unit_prefix(name) + '.slice'
+    return slice_name, '/system.slice/' + slice_name + '/' + unit
+
+
 def _empty_cgroup(host, group):
     require(isinstance(group, str) and group.startswith('/') and group != '/'
             and '..' not in Path(group).parts, 'cutover_stop_unproven', 'Cannot establish the service cgroup.')
@@ -163,8 +206,8 @@ def prove_stopped(host, entry, *, roles=None, review=False):
                 'A role has not completed shutdown; a timeout is not exit proof.')
         group = value.get('ControlGroup')
         if group == '':
-            require(value.get('Slice') == 'system.slice', 'cutover_stop_unproven', 'Unexpected role slice.')
-            group = '/system.slice/' + unit
+            expected_slice, group = default_cgroup(unit)
+            require(value.get('Slice') == expected_slice, 'cutover_stop_unproven', 'Unexpected role slice.')
         _empty_cgroup(host, group)
         # Only a reboot after completed drain, before any candidate attempt,
         # can use a guard refusal as evidence. A retry may hide earlier work.
