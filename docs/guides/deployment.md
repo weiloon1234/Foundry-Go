@@ -10,6 +10,7 @@ release requirement; unit tests do not establish live package or provider behavi
 ## Agent entry
 
 - [Invoke pinned deployment tools](#recipe-deploy)
+- [Coordinate a Redis queue cutover](#recipe-queue-cutover)
 - [Probe release storage](#recipe-storage-probe)
 - [Prepare readiness](production-operations.md#recipe-startup-readiness)
 
@@ -46,6 +47,12 @@ remain in the selected module, and local state remains in the application direct
 | `ACTION=tools-plan make deploy` | Stage the selected framework bundle and inspect an upgrade plan |
 | `ACTION=tools-apply make deploy` | Apply the reviewed tool plan with `PLAN_TOKEN` and `OPERATION` |
 | `ACTION=upgrade-resume make deploy` | Resume that same tool operation after interruption |
+| `ACTION=cutover-plan make deploy` | Stage a release and review the full-downtime queue cutover |
+| `ACTION=cutover-apply make deploy` | Start the reviewed cutover with `PLAN_TOKEN` and `OPERATION` |
+| `ACTION=cutover-resume make deploy` | Resume the same cutover after inspecting its recorded outcome |
+| `ACTION=redis-restore-plan make deploy` | Review an instance snapshot selected by `SNAPSHOT`, using a private age identity |
+| `ACTION=redis-restore-apply make deploy` | Confirm the reviewed Redis restore with `PLAN_TOKEN` and `OPERATION` |
+| `ACTION=redis-restore-resume make deploy` | Resume the same restore while keeping application startup blocked |
 | `ACTION=backup-configure make deploy` | Reconcile the persisted backup binding and schedules |
 | `ACTION=backup-run BACKUP_KIND=full make deploy` | Complete a database and encrypted key/config backup |
 | `ACTION=restore-drill BACKUP_ID=<UUID> make deploy` | Restore an isolated PostgreSQL recovery target |
@@ -53,8 +60,10 @@ remain in the selected module, and local state remains in the application direct
 `ENVIRONMENT` selects an existing profile. `RELEASE` selects an exact retained
 release version, or `build`. Interactive operations request confirmation after
 showing their plan. `CONFIRM=yes` supplies that confirmation in automation.
-Upgrade application additionally requires the digest-bound `PLAN_TOKEN` and a
-stable UUID in `OPERATION`.
+Tool upgrades, cutover application, and Redis restore application additionally
+require the reviewed `PLAN_TOKEN` and a stable UUIDv4 in `OPERATION`.
+The [cutover prerequisites](#coordinated-redis-queue-cutover) describe the current
+integration limits of the new actions.
 
 `ACTION=restart` and `ACTION=stop` accept `ROLE=http`, `ROLE=worker`, or
 `ROLE=scheduler` when that role is declared in the instance topology. Without
@@ -68,6 +77,8 @@ health; naming the only role a topology declares acts as the plain action. Repor
 show inactive roles and raise `role_inactive` and `instance_degraded` as applicable;
 a deliberately `stopped` instance raises neither. A plain restart or deploy starts and verifies
 every declared role, including when deploying the same release again.
+These starts also require admission through the
+[persistent queue startup gate](#queue-startup-gate).
 
 Unit enablement is the single source of truth for which roles should run.
 A named `ACTION=stop` disables and stops its unit. Plain `ACTION=stop` disables
@@ -270,7 +281,7 @@ match both content and metadata.
 
 ## Tool protocol and upgrades
 
-`tools/deploy/protocol.json` owns protocol 2.0 and generation 4. The stable
+`tools/deploy/protocol.json` owns protocol 2.0 and generation 5. The stable
 launcher dispatches to the active immutable bundle. `hello` reports host tool
 metadata without an application mutation. Requests include the client's protocol,
 framework version, generation, and bundle digest.
@@ -279,6 +290,17 @@ A mutation from a newer client returns `host_upgrade_required`. A client below
 the supported floor receives `client_too_old`. Generation 2 adds credential
 replacement actions and continues to support generation-1 clients. Upgrade the host tools before using the new actions.
 Compatibility adapters are deferred.
+
+Generation 5 installs an `ExecStartPre` startup guard on every managed role and
+adds coordinated queue cutover and Redis restore actions. Upgrade the host through
+`ACTION=tools-plan`, then confirmed `ACTION=tools-apply` with that plan's token and
+operation UUID, before planning a cutover. Ordinary deployment does not upgrade
+host tools. The cutover checks both the owned unit files and the loaded units.
+An absent guard, a drop-in, or a pending daemon reload blocks the operation.
+
+The base client floor remains generation 1 so existing hosts can upgrade. Once
+any instance has persisted queue compatibility state, host mutations require a
+generation-5 client. Reads remain available. A pending cutover blocks tool upgrades.
 
 Tool plans bind the candidate inventory digest to the current host state.
 Application uses the reviewed plan token and durable operation UUID. Upgrades
@@ -296,6 +318,10 @@ role and verifies its running executable through `/proc/<pid>/exe` against the
 selected release. `ACTION=status` returns live observations per role;
 `ACTION=logs ROLE=scheduler` reads that role's journal.
 
+This ordinary activation sequence does not perform a queue-layout migration.
+An existing instance whose Redis queues need coordinated activation receives
+`queue_cutover_required`. Use the cutover actions below.
+
 The nonroot report can read systemd state and HTTP readiness, but Linux may deny
 access to another account's executable link. In that case it reports
 `running_release_unverified` and an unknown overall instance status. A privileged
@@ -309,6 +335,8 @@ returns its recorded result; changing the intent refuses. Rollback selects code
 and does not reverse database migrations. `ACTION=reconcile` inspects interrupted
 operations and requires process identity evidence before adopting a live release.
 An unproven outcome remains blocked for reconciliation.
+Queue cutovers and Redis restores use their own resume actions. Generic reconcile
+does not bypass their startup gate or unresolved operation.
 
 Configuration edits accept 1 through 16 string-valued settings in one revision.
 The current application's `config:inspect` and `config:check` commands own key
@@ -359,6 +387,222 @@ stay inside the snapshot root, including `system/.agents/skills -> ../.claude/sk
 Copying preserves each link without copying its target. Absolute or escaping
 symlinks, cycles, entries beneath symlinked directories, hardlinks, and special
 files are refused.
+
+<a id="recipe-queue-cutover"></a>
+## Coordinated Redis queue cutover
+
+Use this operation to move one instance's Redis job queues to layout 3. Every
+managed role stops, including HTTP. About one minute of full downtime is a target,
+not a deadline. The owner chooses the window by running apply. Once a queue
+migration may have run, recovery moves forward. The tool never automatically
+starts the old release after that boundary.
+
+Current integration status: these generation-5 tools are intended for v0.15.0.
+The release-owned `deploy:jobs-inspect` command is still awaiting integration.
+An absent command blocks planning. The Redis restore intake also has a
+[known integration blocker](#restore-a-redis-snapshot). Do not schedule a production
+cutover until the inspection command and the complete recovery path are verified.
+
+Before planning, install generation-5 host tools, configure the existing backup
+repository and age recipients, and retain the corresponding recovery identity.
+The owner must attest that only the instance's managed topology roles use its job
+namespaces. External publishers, workers, relays, or operator processes invalidate
+that attestation. The tool supports only its Foundry-owned local TLS Redis
+allocation and verifies exclusive ownership of the instance's captured scopes.
+
+### Plan and choose the window
+
+Build or select the candidate without stopping clients:
+
+```sh
+ENVIRONMENT=production ACTION=cutover-plan RELEASE=build make deploy
+```
+
+The tool validates the archive, configuration, native runtime, and configured
+storage bindings. It retains the candidate and may widen owned Redis grants.
+Planning neither stops roles nor migrates queues. The candidate's
+`artisan deploy:jobs-inspect --format json` supplies every configured Redis job
+connection and queue through the release's normal `--config` and `--env-file`
+settings. Its schema-1 contract reports `supported_layout: 3`,
+`coverage: "declared"`, connections, queues, observed layouts, eligibility, and
+safe blocker codes. Declaration coverage alone is not proof of storage coverage:
+the deploy tool completes a privileged SCAN and rejects any key outside the
+release's allowed key inventory. There is no manual queue list. Unknown providers,
+layouts, policies, orphan keys, or incomplete discovery block the plan.
+
+The public plan contains these fields:
+
+| Fields | Meaning |
+| --- | --- |
+| `schema`, `plan_token`, `checked_at` | Schema 1, immutable plan digest, and preflight time |
+| `instance`, `instance_id`, `host_id` | Bound deployment identity |
+| `source`, `target`, `candidate_sha256` | Old and candidate release versions and candidate artisan checksum |
+| `roles`, `original_enabled_roles` | All roles to start on success and roles eligible for pre-migration recovery |
+| `queues` | Logical `connection`, `queue`, observed `layout`, and `target_layout: 3` for each queue |
+| `downtime`, `warning`, `owner_attestation` | Full downtime, rollback restriction, and the owner's no-external-clients attestation |
+| `snapshot` | Capture after verified drain, with encrypted off-host verification |
+| `database_migrations_pending`, `seeders` | Database work observed during preflight and the required seeding step |
+| `queue_cutover_required` | False for a complete no-Redis inventory |
+
+Private intent additionally binds configuration and referenced-file fingerprints,
+topology, inventory, the startup gate, and the exact installed tool bundle. Changes
+to these inputs invalidate the plan. A no-Redis operation skips queue migration and
+Redis capture; the remaining activation sequence still runs. Layout-3 queues are
+eligible for repeated migration. The tool deduplicates matching physical aliases.
+
+After reviewing the plan, supply its token and a new UUIDv4. Apply prints the saved
+plan again before confirmation. For an approved automation window:
+
+```sh
+ENVIRONMENT=production ACTION=cutover-apply \
+	PLAN_TOKEN=<reviewed-token> OPERATION=<new-uuid-v4> CONFIRM=yes make deploy
+```
+
+Without `CONFIRM=yes`, type `yes` at the confirmation prompt. Apply and resume
+reject `ROLE` and `RELEASE` overrides. They use all roles and the retained candidate
+bound by the token. Preserve both identifiers for recovery.
+
+### Activation and resumption
+
+Apply repeats preflight before stopping anything, persists the accepted operation,
+and closes startup permission. A systemd executor runs the pinned tool bundle
+independently of the SSH connection. Its sequence is:
+
+1. Stop HTTP, scheduler, and worker roles using their existing shutdown semantics.
+   Verify unit jobs, process IDs, role cgroups, instance-owned processes, and
+   previous executor children. A timeout is not exit proof. Forced termination
+   records `drain_failed` and requires review before any snapshot or migration.
+2. Repeat inventory and storage coverage checks. Capture the in-window Redis
+   snapshot and persist verified evidence before dispatching a queue migration.
+3. Use the candidate's `jobs migrate-layout --connection C --queue Q --confirm
+   --format json` for each physical queue. Reinspect to confirm layout 3.
+4. Inspect database migration status. If migrations are pending, take the existing
+   database backup, run forward migrations, and confirm no migrations remain.
+5. Run seeders, select the candidate, admit its exact binary checksum, start the
+   roles, verify health and executable identity, and enable all declared roles.
+
+Apply returning `outcome: running` confirms submission, not healthy completion.
+Read `ACTION=status make deploy`. `state.cutover` records the operation ID, phase,
+outcome, per-queue progress, database and seed progress, snapshot evidence, and
+safe errors. Status also reports executor state and a suggested next action.
+Reports expose cutover progress and queue compatibility state.
+
+Before migration dispatch, a proven safe failure can restore the source and only
+its originally enabled roles. An unproven drain, changed inputs, or failed recovery
+keeps startup blocked. Before each migration dispatch, the tool persists the
+layout-3 requirement and prohibits old-release recovery. A lost response therefore
+cannot cause an old-code restart. This restriction also applies when inspection
+already observes layout 3.
+
+After interruption, inspect status and explicitly resume the same intent:
+
+```sh
+ENVIRONMENT=production ACTION=cutover-resume \
+	PLAN_TOKEN=<same-token> OPERATION=<same-uuid-v4> CONFIRM=yes make deploy
+```
+
+A live executor is joined, not duplicated. After reboot there is no automatic
+resume. Confirmed queues are not migrated again; an uncertain queue call can repeat
+idempotently. Snapshot retries retain the original captured artifact. An interrupted
+initial capture without a complete archive requires review. Database uncertainty
+can be reconciled when status proves no pending migrations. An uncertain seeder
+is never repeated automatically. Forced termination, unresolved database or seed
+outcomes, and post-migration failures require operator review and a lead-prepared,
+owner-approved forward recovery. Reusing a completed operation returns its receipt.
+
+### Queue startup gate
+
+`state.queue_compatibility` persists separately from bounded attempt history. It
+contains `schema`, the required layout `floor`, startup `permission`, and an
+`admitted` map of release versions to artisan checksums. The layout-3 floor cannot
+be removed or lowered through state writes. Every role's startup guard checks
+the selected release against this record, including systemd restarts and reboot.
+
+`ACTION=restart` refuses a pending cutover, closed permission, or an unadmitted
+release. `ACTION=rollback` refuses an old unadmitted target before side effects;
+retaining its files does not make it compatible. Ordinary activation cannot clear
+a closed gate. Successful forward activation admits verified compatible code.
+
+Confirmed `ACTION=stop` remains available for containment. During a pending cutover
+it first stops and proves exit of the executor, closes startup permission, and
+records a hold. It then stops and disables the selected roles. It never runs old
+artisan code or restarts incompatible processes. Use the matching resume action
+after review. Stopping an already admitted compatible release preserves its
+admission for a later ordinary restart.
+
+### Redis snapshot evidence
+
+The snapshot captures only the instance's exact allowed job keys after verified
+drain. It uses SCAN, then atomic DUMP and PEXPIRETIME reads, preserving absolute
+expiration. It never captures a shared database as one instance's backup. Ownership
+checks include the Foundry Redis journal, persisted and live ACLs, storage identity,
+and other instances' grants. Unknown keys or shared scopes block capture.
+
+The existing backup pipeline encrypts with the configured age recipients and
+uploads to the existing backup bucket at
+`redis/<instance UUID>/<snapshot UUID>.json.age`. Downloaded ciphertext must match
+before capture is complete. Public `state.cutover.snapshot` evidence contains:
+
+- `schema`, `status`, `snapshot_id`, and `operation_id`;
+- `host_id`, `project_id`, `instance_id`, `source_release`, and `configuration_revision`;
+- `inventory_sha256` and `scope_sha256`;
+- `captured_at`, `completed_at`, `key_count`, and `encrypted_bytes`;
+- `sha256` of encrypted bytes and `object_key`.
+
+Freshness means capture inside this operation's downtime window. Evidence contains
+no credentials, private key contents, or job payloads. Root-only journals retain
+the capture intent, ciphertext, and receipt for reconciliation. See the
+[Redis snapshot module reference](../../tools/deploy/redis-snapshot.md) for bounds
+and record ownership. These are operation snapshots, not scheduled Redis backups.
+
+### Restore a Redis snapshot
+
+Restore is explicit, confirmed, and never automatic. It can replay jobs whose
+external side effects already completed. Review application idempotency and database
+changes before restoring. The operation retains the startup gate even on success;
+it does not authorize old code or reverse database migrations.
+
+Current integration blocker: `release.plan_redis_restore` creates a flat
+`cutover-restore-<UUID>.identity` file, while `redis_snapshot.plan_restore` requires
+an operation-UUID directory component. The merged actions therefore reject restore
+intake with `redis_restore_identity`. The procedure below requires that integration
+fix and verification first. Do not bypass the check or make manual production changes.
+
+1. Read status and retain the selected snapshot's identity and evidence. If an
+   executor is still active, use confirmed `ACTION=stop` to contain it first.
+   Forced worker termination remains a review blocker.
+2. Supply the private age identity through a local file or the hidden prompt.
+   Choose a new restore UUID, distinct from the original cutover UUID:
+
+   ```sh
+   ENVIRONMENT=production ACTION=redis-restore-plan \
+       SNAPSHOT=<snapshot-uuid> OPERATION=<new-restore-uuid-v4> \
+       FOUNDRY_SECRET_AGE_IDENTITY_FILE=/private/path/recovery.agekey make deploy
+   ```
+
+   The identity travels through the private stdin envelope, never argv or public
+   receipts. Planning downloads and verifies the ciphertext, decrypts privately,
+   validates serialized values offline, and binds the exact restore and deletion
+   inventory. Retain the returned `plan_token` and `operation_id`. Review `snapshot`,
+   `scope_sha256`, `restore_keys`, `remove_keys`, and the warning
+   `restore_may_replay_external_side_effects`.
+3. Confirm the saved plan in the chosen window:
+
+   ```sh
+   ENVIRONMENT=production ACTION=redis-restore-apply \
+       PLAN_TOKEN=<restore-token> OPERATION=<restore-uuid-v4> CONFIRM=yes make deploy
+   ```
+
+   The executor stops and verifies every role, captures a fresh safety snapshot,
+   then restores exact keys and deletes only planned extra keys. It never flushes
+   Redis. Expired keys are skipped; natural expiration does not extend lifetimes.
+   Changed scope or an unstarted plan's changed key inventory blocks application.
+4. Inspect status. After interruption, use `ACTION=redis-restore-resume` with the
+   same token, UUID, and confirmation. The original safety snapshot is retained.
+   Completion records `state.cutover.restore`, including the restored and safety
+   snapshot IDs, scope checksum, completion time, and restored and removed counts.
+5. Keep roles stopped. Review a new `cutover-plan` for forward recovery before
+   starting compatible code, including when the restored queues are layout 2.
 
 <a id="recipe-storage-probe"></a>
 ## Storage probe
@@ -708,6 +952,9 @@ trips and R2 credential isolation still require application acceptance.
 Backups cover PostgreSQL data (full/differential backups and WAL for point-in-time
 recovery) and an age-encrypted key/config archive. Attachments remain in the
 application's object storage and are not copied.
+Coordinated queue operations also create
+[instance Redis snapshots](#redis-snapshot-evidence) in the same backup bucket.
+The database backup schedule and `ACTION=backup-run` do not capture Redis queues.
 
 pgBackRest provides continuous WAL archiving for the dedicated Foundry cluster.
 WAL is uploaded about once a minute while there is activity, so losing a server
@@ -945,8 +1192,9 @@ not prove application-specific invariants, existing ciphertext decryption, or
 large-database restore times. Verify those against representative application data
 before routing production traffic.
 
-Deployment tool generation 4 adds per-role restart and stop requests; generation 3
-introduced recovery. The wire protocol remains 2.0. Upgrade existing hosts through
+Deployment tool generation 5 adds the queue startup gate and coordinated cutover
+and Redis restore actions. Generation 4 added per-role restart and stop requests;
+generation 3 introduced replacement-host recovery. The wire protocol remains 2.0. Upgrade existing hosts through
 `ACTION=tools-plan` and `ACTION=tools-apply`; normal deployment does not replace
 installed host tools. An empty recovery target receives the selected generation
 during recovery.
@@ -966,6 +1214,7 @@ values are `null`, never zero or false.
 | `host.resources` | Memory and disk | `memory_low` under 10% available; `disk_low` under 10% or 2 GiB available |
 | instance `certificate` | TLS handshake on 443 | `certificate_expiring` under 14 days; `certificate_invalid`, `certificate_renewal_unverified` |
 | instance `backup` | Backup receipts | `backup_stale`, `backup_failed` |
+| instance `queue_compatibility`, `cutover` | Persistent startup admission and operation progress | `queue_start_fenced` when startup permission is closed |
 
 The root-only fields are `null` for a nonroot reader and add no problem.
 

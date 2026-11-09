@@ -1,9 +1,14 @@
 # Redis cutover recovery module
 
-[redis_snapshot.py](lib/redis_snapshot.py) implements the M3 module boundary.
-Server and local action dispatch belong to M4. Startup fencing, process ownership,
-and verified drain belong to M2. This module does not change application state,
-start roles, clear compatibility protection, or invoke queue migration.
+[redis_snapshot.py](lib/redis_snapshot.py) owns scoped capture and restore.
+[release.py](lib/release.py) coordinates the operation through the server and local
+`redis-restore-plan`, `redis-restore-apply`, and `redis-restore-resume` actions.
+The [operator procedure](../../docs/guides/deployment.md#restore-a-redis-snapshot)
+owns plan review, private identity intake, confirmation, and resumption.
+Startup admission, process ownership, and verified drain remain with the
+coordinator and [compatibility guard](lib/compatibility.py). This module does not
+change application state, start roles, clear compatibility protection, or invoke
+queue migration.
 
 The existing [backup pipeline](lib/backup.py) owns recipients, private repository
 settings, age encryption, immutable rclone upload, and downloaded-byte verification.
@@ -27,11 +32,11 @@ The caller holds host and instance locks, in that order, and proves previous
 executor children have exited before retrying. `capture`, `apply_restore`, and
 `resume_restore` independently call
 `release.require_cutover_quiescence(host, entry, operation_id)`.
-A missing M2 boundary fails closed with `operation_locked`. Exceptions from an
-installed boundary propagate unchanged.
+A missing quiescence boundary fails closed with `operation_locked`. Exceptions
+from an installed boundary propagate unchanged.
 
-Scopes contain the M1 storage identity, literal job prefix, and exact allowed
-physical keys. The module checks the Foundry Redis preparation journal, persisted
+Scopes contain the release-owned storage identity, literal job prefix, and exact
+allowed physical keys. The module checks the Foundry Redis preparation journal, persisted
 and live instance ACLs, and other registered instances' grants before data access.
 Only the managed local TLS allocation and database zero are accepted. A shared
 Redis service can contain other applications' namespaces; the approved job scopes
@@ -39,8 +44,18 @@ must belong exclusively to this instance. Application ACLs gain no privileges.
 
 Capture uses cursor-complete SCAN and atomic Lua DUMP plus PEXPIRETIME. Unknown
 keys, incomplete scans, foreign ownership, and exhausted limits fail closed.
-The module consumes physical keys from M1; it does not reconstruct job key names.
-A proven no-Redis operation skips capture in M4.
+The module consumes physical keys from the `deploy:jobs-inspect` contract; it does
+not reconstruct job key names. That command is still pending integration.
+A proven no-Redis operation skips capture in the coordinator.
+
+The coordinator stores complete capture evidence at `state.cutover.snapshot`
+before migration dispatch. Evidence binds the snapshot and operation UUIDs,
+host, project, and instance identities, source release, configuration revision, inventory
+and scope digests, capture and completion times, key count, encrypted byte count,
+ciphertext checksum, and object key. A restore's fresh safety capture is stored at
+`state.cutover.safety_snapshot`; completion is stored at `state.cutover.restore`.
+The [evidence reference](../../docs/guides/deployment.md#redis-snapshot-evidence)
+lists the public field names. Freshness means capture inside the operation window.
 
 ## Private records and recovery
 
@@ -76,9 +91,17 @@ changes, missing capture records, and altered artifacts require reconciliation.
 
 The restore identity file is an absolute, root-owned mode-0600 file beneath the
 instance private directory, within a directory component named by the operation
-UUID. For example, M4 can place it at `intake/<operation UUID>/identity`.
+UUID, for example `intake/<operation UUID>/identity`.
 The identity contents are never passed in process arguments. The private plan
-and public result omit the identity path and contents. M4 owns intake cleanup.
+and public result omit the identity path and contents. The coordinator owns
+intake cleanup.
+
+Current integration blocker: the coordinator creates
+`cutover-restore-<operation UUID>.identity` directly beneath the private directory.
+The UUID is part of a filename, not a directory component, so `plan_restore`
+rejects that intake with `redis_restore_identity`. The action must satisfy the
+module's ownership check before the operator procedure can complete. Do not weaken
+the check or work around it with manual production changes.
 
 Restore planning downloads and checks the ciphertext, decrypts privately, and
 validates every archive member, DUMP checksum, and serialized Redis value before
@@ -90,8 +113,8 @@ file limits through `prlimit`, with bounded command deadlines.
 The plan binds the archive, exact deletion inventory, identities, and scope.
 Its warning is `restore_may_replay_external_side_effects`. Apply requires literal
 `confirm: true`, the plan token, and a complete safety snapshot from the same
-restore operation after planning. M4 captures that safety snapshot after verified
-drain. New keys or missing unexpired keys invalidate an unstarted plan. Natural
+restore operation after planning. The coordinator captures that safety snapshot
+after verified drain. New keys or missing unexpired keys invalidate an unstarted plan. Natural
 expiration is allowed and never extends a key's original lifetime.
 
 Each RESTORE or exact-key DEL has durable dispatch intent before execution.

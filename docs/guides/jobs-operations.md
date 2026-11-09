@@ -333,6 +333,39 @@ All queue clients must cut over together. There is no supported overlap between
 old and new workers, publishers, or operator binaries. v0.13.0 rejects layout 3
 before mutation, but can still write a queue that has not migrated yet.
 
+### Foundry deployment-tool instances
+
+Use the [coordinated Redis queue cutover](deployment.md#coordinated-redis-queue-cutover)
+for instances managed by the deploy tool. Upgrade host tools to generation 5,
+review `ACTION=cutover-plan`, and run confirmed `ACTION=cutover-apply` with the
+reviewed `PLAN_TOKEN` and a stable `OPERATION` UUID in the owner's chosen window.
+The owner attests that every client belongs to the managed roles.
+
+The candidate's `deploy:jobs-inspect --format json` contract supplies every
+configured Redis job connection and queue. The tool checks stored-key coverage,
+stops and verifies all roles, takes an encrypted in-window Redis snapshot, migrates
+each queue, runs database migrations and seeders, then starts and verifies the
+new release. There is no manual queue list. No-Redis inventories skip queue work;
+layout-3 migrations remain idempotent.
+
+Keep the token and operation UUID. Inspect `ACTION=status` after interruption and
+use confirmed `ACTION=cutover-resume` for the same intent. Forced worker termination
+requires review. Once migration may have run, the persistent startup gate prevents
+old-code restart and rollback. Recovery moves forward; Redis restore is a separate
+reviewed operation that leaves startup blocked.
+
+The v0.15.0 inspection command is still awaiting integration, and the merged
+restore intake has a path-validation mismatch. Follow the deployment guide's
+[prerequisites](deployment.md#coordinated-redis-queue-cutover) and
+[restore integration notice](deployment.md#restore-a-redis-snapshot) before using
+these actions in production. Do not substitute manual SSH changes on a managed
+production instance.
+
+### Non-tool deployments
+
+For deployments with another process supervisor, coordinate all affected clients
+with that deployment system and follow this manual runbook:
+
 1. Stop admission from HTTP publishers, schedulers, outbox relays, and operator
    tools on every affected queue and connection.
 2. Stop new reservations. Drain admitted handlers, heartbeats, and finalization,
@@ -362,7 +395,10 @@ Rollback requires a reviewed recovery from the pre-cutover backup or separately
 reconciled queue state. Never change the layout marker back, delete quarantine
 markers, or start an old binary against new state. Restoring a backup may replay
 work with completed external side effects, so application idempotency remains
-necessary. No destructive recovery command is provided.
+necessary. The artisan jobs command provides no destructive recovery operation.
+For managed instances, use only the separately reviewed
+[deploy-tool Redis restore](deployment.md#restore-a-redis-snapshot), subject to
+its integration prerequisites. A Redis restore never clears startup protection.
 
 ## Rollout and limits
 

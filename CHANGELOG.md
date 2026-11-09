@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+- Added: generation-5 deployment actions `cutover-plan`, `cutover-apply`, and
+  `cutover-resume` coordinate one instance's full-downtime Redis job-layout
+  transition. Immutable plan tokens, stable operation IDs, verified role drain,
+  supervised execution, and durable per-queue progress prevent old/new overlap.
+  Queue migration precedes database migrations, seeders, and new-release health checks.
+- Added: instance-owned Redis job snapshots use exact-key DUMP values and absolute
+  expiration, encrypted with existing age recipients and uploaded through the
+  existing backup pipeline. Download-verified evidence is required before queue
+  migration. The actions `redis-restore-plan`, `redis-restore-apply`, and
+  `redis-restore-resume` support reviewed exact-key recovery with a fresh safety
+  snapshot and retained startup protection. Apply and resume require confirmation. See the
+  [current restore integration blocker](docs/guides/deployment.md#restore-a-redis-snapshot).
+- Added: the schema-1 `deploy:jobs-inspect --format json` integration contract
+  reports configured Redis job connections, queues, layout states, eligibility,
+  and safe blockers from the release. The command implementation is pending
+  integration; the deploy tool refuses incomplete inspection and unknown stored keys.
+- Changed: a persistent queue compatibility gate checks the selected release's
+  version and artisan checksum before every managed role starts. Restart and
+  rollback refuse incompatible code after migration; confirmed containment stop
+  remains available. Migration uncertainty prevents automatic old-release recovery.
+  Cutover requires generation-5 host tools, and hosts with persisted queue gates
+  require generation-5 mutation clients. See the
+  [deployment guide](docs/guides/deployment.md#coordinated-redis-queue-cutover).
+
 ## v0.14.0 — 2026-11-09
 
 **Breaking (operations):** Redis job queues move to storage layout 3. Every queue needs a coordinated
