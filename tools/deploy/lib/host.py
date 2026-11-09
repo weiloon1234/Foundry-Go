@@ -254,6 +254,8 @@ class Host:
         for attempt in state["history"]:
             validate_attempt(attempt)
             require(attempt["outcome"] != "running", code, detail)
+        from compatibility import reconcile_candidate_admission
+        reconcile_candidate_admission(self, entry, state)
         return state
 
     def save_state(self, entry, state):

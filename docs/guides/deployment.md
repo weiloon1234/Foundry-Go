@@ -530,7 +530,17 @@ ENVIRONMENT=production ACTION=cutover-resume \
 ```
 
 A live executor is joined, not duplicated. After reboot there is no automatic
-resume. Confirmed queues are not migrated again; an uncertain queue call can repeat
+executor resume. During candidate readiness, admission is bound to the attempt's
+recorded boot and live executor invocation. Enabled roles cannot restart the
+unresolved candidate on another boot, with missing or invalid boot evidence, or
+under another executor invocation. The guard refuses startup and state reads mark
+the attempt review-required, even before an operator runs a recovery action.
+Use confirmed `stop`, audited `cutover-drain-resolve`, then explicit `cutover-resume`.
+Resolution leaves the gate closed; resume records a new attempt binding before
+starting roles. Only a startup attempt recorded as successfully healthy retains
+ordinary admission across reboot, subject to the existing compatibility gate.
+
+Confirmed queues are not migrated again; an uncertain queue call can repeat
 idempotently. Snapshot retries retain the original captured artifact. An interrupted
 initial capture without a complete archive requires review. Database uncertainty
 can be reconciled when status proves no pending migrations. An uncertain seeder
@@ -577,7 +587,11 @@ can a stopped unit's zero-main-process evidence exempt a guard refusal from drai
 review. This includes both `Result=exit-code` and `Result=start-limit-hit`.
 Empty cgroups and absence of instance-owned clients must still be proved.
 
-Before candidate startup, the tool persists an attempt UUID and start time.
+Before candidate startup, the tool persists an attempt UUID, start time, boot ID
+and supervised executor invocation ID. While the attempt is unresolved, each
+admission check requires that same boot and live executor. The startup guard reads
+this evidence without taking coordinator locks or overwriting shared state;
+containment and recovery persist the resulting review requirement.
 Any failed startup or readiness check, unsuccessful unit exit, kill, timeout, or
 interruption requires confirmed, audited drain resolution before resume or forward
 recovery. A later guard-refused invocation cannot establish that the earlier

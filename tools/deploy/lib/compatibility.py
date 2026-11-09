@@ -61,10 +61,37 @@ def require_release(host, entry, manifest, *, selecting=False):
     validate(gate)
     require(gate['permission'] == 'admitted', 'queue_start_fenced',
             'Application startup is fenced by the recorded cutover.')
+    attempt = (progress or {}).get('candidate_start')
+    if attempt is not None and attempt['outcome'] != 'healthy':
+        require(candidate_executor_matches(host, entry, progress), 'cutover_drain_review',
+                'Candidate admission belongs to another boot or executor; resolve and explicitly resume.')
     if gate['floor'] is None:
         return  # No queue compatibility transition: ordinary retained-release rollback remains valid.
     require(gate['admitted'].get(manifest['version']) == manifest['files']['artisan'],
             'queue_release_incompatible', 'This release is not admitted against the queue layout; reviewed forward recovery is required.')
+
+
+def candidate_executor_matches(host, entry, progress):
+    import release
+    attempt = progress.get('candidate_start') or {}
+    try:
+        return (attempt.get('outcome') == 'dispatched_or_unknown'
+                and attempt.get('boot_id') == (progress.get('drain') or {}).get('boot_id') == release._boot_id(host)
+                and isinstance(attempt.get('executor_invocation_id'), str)
+                and re.fullmatch('[a-f0-9]{32}', attempt['executor_invocation_id']) is not None
+                and release.cutover_executor(host, entry, progress['operation_id']) == 'running'
+                and release._role_invocation(host, release.cutover_unit(entry, progress['operation_id'])) == attempt['executor_invocation_id'])
+    except (DeployError, OSError):
+        return False
+
+
+def reconcile_candidate_admission(host, entry, state):
+    """Derive the fence on every read, without racing the coordinator's state writer."""
+    import cutover_contracts as contract
+    progress = state.get('cutover')
+    if progress and contract.candidate_review_required(progress) and not candidate_executor_matches(host, entry, progress):
+        progress['drain_failed'] = True
+        state['queue_compatibility']['permission'] = 'closed'
 
 
 def require_current(host, entry):

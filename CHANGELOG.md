@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed: unresolved candidate startup admission is bound to its recorded boot and
+  live executor invocation. Reboot, missing or invalid attempt boot evidence, or
+  lost executor ownership fences enabled roles and requires audited drain
+  resolution plus explicit resume. Only a successfully healthy startup attempt
+  retains ordinary admission across reboot, subject to the compatibility gate.
+
 - Fixed: Redis restore reconciles selected release identity after hard executor
   death and preserves it through completion. Completed cutover records remain
   history; a later ordinary deployment can be selected for restore.

@@ -64,6 +64,8 @@ class CutoverTests(unittest.TestCase):
         self.entry = registry['instances'][self.profile['instance_id']]
         self.events = []
         self.invocations = {unit: uuid.uuid4().hex for unit in instance_units(self.entry).values()}
+        self.executor_invocation = uuid.uuid4().hex
+        self.executor_running = False
         self.fail_at = None
         self.unknown_at = None
         self.interrupt_at = None
@@ -74,7 +76,16 @@ class CutoverTests(unittest.TestCase):
         patch.object(compatibility, 'require_guards').start()
         patch.object(compatibility, 'prove_stopped', side_effect=self.stopped).start()
         patch.object(compatibility, 'require_no_clients').start()
-        patch.object(release, 'cutover_executor', return_value='absent').start()
+        patch.object(release, 'cutover_executor', side_effect=lambda *args: 'running' if self.executor_running else 'absent').start()
+        execute = release.execute_cutover
+        def supervised(*args):
+            self.executor_running = True
+            self.executor_invocation = uuid.uuid4().hex
+            try:
+                return execute(*args)
+            finally:
+                self.executor_running = False
+        patch.object(release, 'execute_cutover', side_effect=supervised).start()
         patch.object(release, '_require_executor_alone').start()
         patch('upgrades._installed', return_value=self.root / 'tools').start()
         patch.object(release.backup, '_settings', return_value={}).start()
@@ -108,7 +119,8 @@ class CutoverTests(unittest.TestCase):
     def command(self, args, **kwargs):
         args = list(map(str, args))
         if '--property=InvocationID' in args:
-            value = self.invocations[args[2]] if self.host.role_states.get(args[2]) == 'active' else ''
+            value = (self.executor_invocation if args[2].startswith('foundry-cutover-') else
+                     self.invocations[args[2]] if self.host.role_states.get(args[2]) == 'active' else '')
             return subprocess.CompletedProcess(args, 0, value + '\n', '')
         event = next((item for item in ('config:check', 'deploy:storage-probe', 'migrate:status', 'migrate-layout', 'migrate', 'db:seed') if item in args), None)
         if args[:2] in (['systemctl', 'stop'], ['systemctl', 'restart'], ['systemctl', 'start']):
@@ -888,7 +900,7 @@ class CutoverTests(unittest.TestCase):
         self.health.side_effect = KeyboardInterrupt()
         with self.assertRaises(KeyboardInterrupt):
             self.execute()
-        self.assertFalse(self.state()['cutover']['drain_failed'])
+        self.assertTrue(self.state()['cutover']['drain_failed'])  # The original executor has exited.
         attempt = self.state()['cutover']['candidate_start']
         self.assertEqual('dispatched_or_unknown', attempt['outcome'])
         contained = release.containment_stop(self.host, self.entry, self.state())
@@ -899,6 +911,85 @@ class CutoverTests(unittest.TestCase):
         self.health.side_effect = None
         release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
         self.assertTrue(self.execute()['ok'])
+
+    def interrupt_candidate_readiness(self):
+        self.apply()
+        self.health.side_effect = KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            self.execute()
+        self.health.side_effect = None
+
+    def test_reboot_during_candidate_readiness_fences_enabled_roles_until_review_and_resume(self):
+        self.interrupt_candidate_readiness()
+        persisted = json.loads((self.host.paths.instance_state(self.entry['name']) / 'state.json').read_text())
+        attempt = persisted['cutover']['candidate_start']
+        self.assertEqual('admitted', persisted['queue_compatibility']['permission'])
+        self.assertEqual('dispatched_or_unknown', attempt['outcome'])
+        self.assertEqual(set(instance_units(self.entry).values()), self.host.enabled_roles)
+        self.boot_path.write_text(str(uuid.uuid4()))
+        for role in instance_units(self.entry):
+            with self.assertRaises(DeployError) as error:
+                compatibility.startup_check(self.host, self.entry['name'], role)
+            self.assertEqual('cutover_drain_review', error.exception.code)
+        self.assertTrue(self.state()['cutover']['drain_failed'])
+        self.assertEqual('closed', self.state()['queue_compatibility']['permission'])
+        contained = release.containment_stop(self.host, self.entry, self.state())
+        self.assertEqual('cutover-drain-resolve', contained['next_action'])
+        reviewed = release.resolve_cutover_drain(self.host, self.project, self.profile, self.operation,
+                                               'owner@example.test', 'Reviewed candidate work interrupted by reboot')
+        self.assertEqual(attempt, reviewed['resolution']['candidate_start'])
+        with self.assertRaises(DeployError):
+            compatibility.startup_check(self.host, self.entry['name'], 'http')
+        release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        self.assertTrue(self.execute()['ok'])
+        current = self.state()['cutover']['candidate_start']
+        self.assertEqual(self.boot_path.read_text(), current['boot_id'])
+        self.assertNotEqual(attempt['executor_invocation_id'], current['executor_invocation_id'])
+        self.assertEqual('healthy', current['outcome'])
+        self.boot_path.write_text(str(uuid.uuid4()))
+        compatibility.startup_check(self.host, self.entry['name'], 'http')
+
+    def test_unresolved_admission_requires_same_boot_and_live_executor_invocation(self):
+        self.apply()
+        def check_admission(*args, **kwargs):
+            compatibility.startup_check(self.host, self.entry['name'], 'http')
+            invocation = self.executor_invocation
+            for replacement in (uuid.uuid4().hex, ''):
+                self.executor_invocation = replacement
+                with self.assertRaises(DeployError) as error:
+                    compatibility.startup_check(self.host, self.entry['name'], 'http')
+                self.assertEqual('cutover_drain_review', error.exception.code)
+            self.executor_invocation = invocation
+            self.executor_running = False
+            with self.assertRaises(DeployError) as error:
+                compatibility.startup_check(self.host, self.entry['name'], 'http')
+            self.assertEqual('cutover_drain_review', error.exception.code)
+            self.executor_running = True
+            raise KeyboardInterrupt()
+        self.health.side_effect = check_admission
+        with self.assertRaises(KeyboardInterrupt):
+            self.execute()
+
+    def test_missing_or_invalid_attempt_boot_evidence_refuses_guard_and_allows_review(self):
+        self.interrupt_candidate_readiness()
+        path = self.host.paths.instance_state(self.entry['name']) / 'state.json'
+        original = json.loads(path.read_text())
+        for boot in (None, 'invalid-boot'):
+            with self.subTest(boot=boot):
+                state = copy.deepcopy(original)
+                if boot is None:
+                    state['cutover']['candidate_start'].pop('boot_id')
+                else:
+                    state['cutover']['candidate_start']['boot_id'] = boot
+                path.write_text(json.dumps(state))
+                with self.assertRaises(DeployError) as error:
+                    compatibility.startup_check(self.host, self.entry['name'], 'http')
+                self.assertEqual('cutover_drain_review', error.exception.code)
+                self.assertTrue(self.state()['cutover']['drain_failed'])
+                release.containment_stop(self.host, self.entry, self.state())
+                release.resolve_cutover_drain(self.host, self.project, self.profile, self.operation,
+                                              'owner@example.test', 'Reviewed missing or invalid attempt boot evidence')
+                self.assertEqual('closed', self.state()['queue_compatibility']['permission'])
 
     def test_invalid_start_history_can_be_reviewed_and_later_loss_needs_fresh_review(self):
         self.apply()

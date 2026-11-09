@@ -2217,7 +2217,11 @@ def execute_cutover(host, instance_id, operation_id):
             _cutover_phase(host, entry, state, 'health')
             prepare_worker(host, entry, candidate)
             progress['drain'] = _new_drain(host, entry, starting=True)
+            executor_invocation = _role_invocation(host, cutover_unit(entry, operation_id))
+            require(re.fullmatch('[a-f0-9]{32}', executor_invocation),
+                    'cutover_executor_unknown', 'Candidate startup requires the supervised executor invocation.')
             progress['candidate_start'] = {'id': str(uuid.uuid4()), 'started_at': now(),
+                                           'boot_id': progress['drain']['boot_id'], 'executor_invocation_id': executor_invocation,
                                            'outcome': 'dispatched_or_unknown', 'error': None}
             state['queue_compatibility']['admitted'] = {plan['target']['version']: plan['target']['files']['artisan']}
             state['queue_compatibility']['permission'] = 'admitted'

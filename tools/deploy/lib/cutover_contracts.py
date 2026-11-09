@@ -197,11 +197,19 @@ def _validate_candidate_start(value):
         fields(value, 'outcome evidence_sha256', 'cutover_state_invalid')
         require(hash_value(value['evidence_sha256']), 'cutover_state_invalid', 'Invalid unknown startup evidence.')
         return
-    fields(value, 'id started_at outcome error', 'cutover_state_invalid')
+    fields(value, 'id started_at outcome error' +
+           (' boot_id' if isinstance(value, dict) and 'boot_id' in value else '') +
+           (' executor_invocation_id' if isinstance(value, dict) and 'executor_invocation_id' in value else ''),
+           'cutover_state_invalid')
     require(valid_uuid(value['id']) and valid_timestamp(value['started_at'])
             and value['outcome'] in ('dispatched_or_unknown', 'failed', 'healthy')
             and (value['error'] is None or name(value['error'])),
             'cutover_state_invalid', 'Invalid candidate startup evidence.')
+    require(('boot_id' not in value or isinstance(value['boot_id'], str)
+             and re.fullmatch('[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}', value['boot_id']))
+            and ('executor_invocation_id' not in value or isinstance(value['executor_invocation_id'], str)
+                 and re.fullmatch('[a-f0-9]{32}', value['executor_invocation_id'])),
+            'cutover_state_invalid', 'Invalid candidate startup binding.')
 
 
 def candidate_review_required(progress):
