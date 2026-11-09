@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: PostgreSQL pool and Redis TLS shutdown accept connections already closed
+  by the server after a restart, while preserving genuine cleanup failures.
+
 ## v0.15.1 — 2026-11-09
 
 **Deploy-tool fix for the first production queue cutover.** Upgrade generation-5 hosts with

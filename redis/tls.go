@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/closeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
@@ -133,7 +134,13 @@ func (c *containedTLSConn) Write(data []byte) (n int, err error) {
 // Close contains TLS shutdown failures and closes the underlying connection.
 func (c *containedTLSConn) Close() error {
 	defer c.raw.Close()
-	return c.boundary.run(c.Conn.Close)
+	return c.boundary.run(func() error {
+		err := c.Conn.Close()
+		if closeerror.OnlyDisconnected(err, nil) {
+			return nil
+		}
+		return err
+	})
 }
 
 func (b *tlsBoundary) config(config *tls.Config) *tls.Config {
