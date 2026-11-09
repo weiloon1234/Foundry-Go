@@ -1,6 +1,8 @@
 package application
 
 import (
+	"context"
+
 	"github.com/weiloon1234/Foundry-Go/auth"
 	"github.com/weiloon1234/Foundry-Go/events"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -17,40 +19,55 @@ import (
 // captured Definition and RegisterJob's compiler-checked contribution boundary.
 type JobDeclaration struct {
 	connection jobs.ConnectionName
+	name       jobs.Name
+	version    jobs.Version
+	policy     jobs.Policy
+	err        error
 	install    func(*foundation.Registrar, jobs.ConnectionName) error
 }
 
 // Job declares a typed job with a handler constructor and default handler options.
 func Job[P any](definition jobs.Definition[P], construct func(Services) (jobs.Handler[P], error)) JobDeclaration {
-	return JobWith(definition, func(services Services) (jobs.Handler[P], jobs.HandlerOptions[P], error) {
-		if construct == nil {
-			return nil, jobs.HandlerOptions[P]{}, safeerror.NewFault(fault.Invalid, "job requires a typed handler constructor")
+	var wrapped func(Services) (jobs.Handler[P], jobs.HandlerOptions[P], error)
+	if construct != nil {
+		wrapped = func(services Services) (jobs.Handler[P], jobs.HandlerOptions[P], error) {
+			handler, err := construct(services)
+			return handler, jobs.HandlerOptions[P]{}, err
 		}
-		handler, err := construct(services)
-		return handler, jobs.HandlerOptions[P]{}, err
-	})
+	}
+	return JobWith(definition, wrapped)
 }
 
 // JobWith binds typed middleware and admission using the same configured
 // registration as Job. Use Failed middleware for explicit domain diagnostics;
 // worker failure metadata is logged automatically by the configured worker.
 func JobWith[P any](definition jobs.Definition[P], construct func(Services) (jobs.Handler[P], jobs.HandlerOptions[P], error)) JobDeclaration {
-	return JobDeclaration{install: func(r *foundation.Registrar, connection jobs.ConnectionName) error {
-		if construct == nil {
-			return safeerror.NewFault(fault.Invalid, "job requires a typed handler constructor")
-		}
-		return jobs.RegisterJob(r, infrastructure.JobDispatcherKey(connection), definition, func(resolver foundation.Resolver) (jobs.Declaration, error) {
-			services, err := FromResolver(resolver)
-			if err != nil {
-				return jobs.Declaration{}, err
+	err := definition.Validate()
+	if err == nil && construct == nil {
+		err = safeerror.NewFault(fault.Invalid, "job requires a typed handler constructor")
+	}
+	return JobDeclaration{
+		name:    definition.Name(),
+		version: definition.Version(),
+		policy:  definition.Policy(),
+		err:     err,
+		install: func(r *foundation.Registrar, connection jobs.ConnectionName) error {
+			if construct == nil {
+				return safeerror.NewFault(fault.Invalid, "job requires a typed handler constructor")
 			}
-			handler, options, err := construct(services)
-			if err != nil {
-				return jobs.Declaration{}, err
-			}
-			return definition.DeclareWith(handler, options)
-		})
-	}}
+			return jobs.RegisterJob(r, infrastructure.JobDispatcherKey(connection), definition, func(resolver foundation.Resolver) (jobs.Declaration, error) {
+				services, err := FromResolver(resolver)
+				if err != nil {
+					return jobs.Declaration{}, err
+				}
+				handler, options, err := construct(services)
+				if err != nil {
+					return jobs.Declaration{}, err
+				}
+				return definition.DeclareWith(handler, options)
+			})
+		},
+	}
 }
 
 // On selects a named backend for registration; zero selects the configured default.
@@ -67,13 +84,19 @@ func (b *Builder) Jobs(declarations ...JobDeclaration) *Builder {
 
 // EventDeclaration holds an event registration and optional outbox declaration.
 type EventDeclaration struct {
+	queued  bool
+	err     error
 	install func(*foundation.Registrar) error
 	outbox  *eventOutboxDeclaration
 }
 
 // Listen declares a typed event listener whose handler is constructed from application services.
 func Listen[E any](topic events.Topic[E], name events.ListenerID, construct func(Services) (events.Handler[E], error)) EventDeclaration {
-	return EventDeclaration{install: func(r *foundation.Registrar) error {
+	_, err := topic.Declare(events.Listen(name, func(context.Context, E) error { return nil }))
+	if err == nil && construct == nil {
+		err = safeerror.NewFault(fault.Invalid, "event listener requires a typed handler constructor")
+	}
+	return EventDeclaration{err: err, install: func(r *foundation.Registrar) error {
 		if construct == nil {
 			return safeerror.NewFault(fault.Invalid, "event listener requires a typed handler constructor")
 		}
@@ -90,7 +113,11 @@ func Listen[E any](topic events.Topic[E], name events.ListenerID, construct func
 // ListenQueued registers a listener that runs as a job instead of inline.
 // It requires features.events.queued_listeners.
 func ListenQueued[E any](topic events.Topic[E], name events.ListenerID, construct func(Services) (events.Handler[E], error)) EventDeclaration {
-	return EventDeclaration{install: func(r *foundation.Registrar) error {
+	_, err := topic.Declare(events.Listen(name, func(context.Context, E) error { return nil }).Queued())
+	if err == nil && construct == nil {
+		err = safeerror.NewFault(fault.Invalid, "event listener requires a typed handler constructor")
+	}
+	return EventDeclaration{queued: true, err: err, install: func(r *foundation.Registrar) error {
 		if construct == nil {
 			return safeerror.NewFault(fault.Invalid, "event listener requires a typed handler constructor")
 		}
@@ -107,7 +134,11 @@ func ListenQueued[E any](topic events.Topic[E], name events.ListenerID, construc
 // Subscribe registers every listener of one subscriber type constructed from
 // the application's services. id names the subscriber uniquely.
 func Subscribe(id string, construct func(Services) (events.Subscriber, error)) EventDeclaration {
-	return EventDeclaration{install: func(r *foundation.Registrar) error {
+	var err error
+	if construct == nil {
+		err = safeerror.NewFault(fault.Invalid, "event subscriber requires a constructor")
+	}
+	return EventDeclaration{err: err, install: func(r *foundation.Registrar) error {
 		if construct == nil {
 			return safeerror.NewFault(fault.Invalid, "event subscriber requires a constructor")
 		}
@@ -123,7 +154,7 @@ func Subscribe(id string, construct func(Services) (events.Subscriber, error)) E
 
 // Topic declares an event topic for registration.
 func Topic[E any](topic events.Topic[E]) EventDeclaration {
-	return EventDeclaration{install: func(r *foundation.Registrar) error { return events.RegisterTopic(r, EventKey, topic) }}
+	return EventDeclaration{err: topic.Validate(), install: func(r *foundation.Registrar) error { return events.RegisterTopic(r, EventKey, topic) }}
 }
 
 // Events adds event declarations to the builder.

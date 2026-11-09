@@ -339,3 +339,23 @@ func TestCanceledInvocationDoesNotConstructOrConsumeClaim(t *testing.T) {
 		t.Fatal("canceled preflight consumed invocation", err)
 	}
 }
+
+func TestColonNamespacedCommandNames(t *testing.T) {
+	noopDecode := func(args []string, _ io.Writer) (struct{}, error) { return struct{}{}, nil }
+	for _, valid := range []cli.Name{"deploy:jobs-inspect", "redis:keys", "deploy.jobs-inspect"} {
+		decl, err := cli.Define(valid, "Inspect deployment state", noopDecode).Declare(func(foundation.Resolver) (cli.Handler[struct{}], error) {
+			return func(context.Context, struct{}, cli.Streams) error { return nil }, nil
+		})
+		if err != nil {
+			t.Fatalf("expected valid command name %q, got %v", valid, err)
+		}
+		if _, err := cli.New(decl); err != nil {
+			t.Fatalf("expected registry to accept %q, got %v", valid, err)
+		}
+	}
+	for _, invalid := range []cli.Name{"", ":jobs-inspect", "deploy:", "deploy::jobs-inspect", "Deploy:jobs-inspect"} {
+		if err := cli.Define(invalid, "Invalid name", noopDecode).Validate(); err == nil {
+			t.Fatalf("expected invalid command name %q to be rejected", invalid)
+		}
+	}
+}

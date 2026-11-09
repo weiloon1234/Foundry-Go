@@ -30,10 +30,12 @@
   `redis-restore-resume` support reviewed exact-key recovery with a fresh safety
   snapshot and retained startup protection. Apply and resume require confirmation. See the
   [restore procedure](docs/guides/deployment.md#restore-a-redis-snapshot).
-- Added: the schema-1 `deploy:jobs-inspect --format json` integration contract
-  reports configured Redis job connections, queues, layout states, eligibility,
-  and safe blockers from the release. The command implementation is pending
-  integration; the deploy tool refuses incomplete inspection and unknown stored keys.
+- Added: the schema-1 `deploy:jobs-inspect --format json` command reports configured
+  Redis job connections, queues, layout states, eligibility, and safe blockers from
+  the release. Queued listeners resolve their connection and queue exactly as the
+  runtime does, and unknown explicit connections block inspection. Restricted
+  deployment job commands start no logging sinks, so stdout is only the command JSON.
+  The deploy tool refuses incomplete inspection and unknown stored keys.
 - Changed: a persistent queue compatibility gate checks the selected release's
   version and artisan checksum before every managed role starts. Restart and
   rollback refuse incompatible code after migration; confirmed containment stop

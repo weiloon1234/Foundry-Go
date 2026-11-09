@@ -163,6 +163,58 @@ func ConfigureStorage(settings Settings, optionsList ...Option) (*Plan, error) {
 	return Configure(selected, append(slices.Clone(optionsList), withoutRedisStores)...)
 }
 
+// ConfigureJobs plans only job connections and the Redis pools they use, leaving
+// out databases, storage, caches, mailers, pub/sub, realtime, coordination and
+// application Redis stores. Deployment inspection and layout migration use it so
+// unrelated services are never started.
+func ConfigureJobs(settings Settings, optionsList ...Option) (*Plan, error) {
+	selected := DefaultSettings()
+	selected.Namespace, selected.Jobs = settings.Namespace, settings.Jobs
+	selected.Redis.MaxConnections = settings.Redis.MaxConnections
+	hasRedisJobs := false
+	usedRedis := make(RedisConnections)
+	var firstRedis string
+	for _, name := range keys(settings.Jobs.Connections) {
+		c := settings.Jobs.Connections[name]
+		if c.Driver != RedisJobs {
+			continue
+		}
+		hasRedisJobs = true
+		redisName := c.Redis
+		if redisName == "" {
+			redisName = settings.Redis.Default
+		}
+		if conn, ok := settings.Redis.Connections[redisName]; ok {
+			usedRedis[redisName] = conn
+			if firstRedis == "" {
+				firstRedis = string(redisName)
+			}
+		}
+	}
+	if hasRedisJobs {
+		fields := SettingsConfigKeys()
+		if err := selection(fields.Redis.Default, settings.Redis.Default, settings.Redis.Connections); err != nil {
+			return nil, err
+		}
+		if len(usedRedis) > 0 {
+			selected.Redis.Connections = usedRedis
+			selected.Redis.Default = settings.Redis.Default
+			if _, ok := usedRedis[selected.Redis.Default]; !ok {
+				selected.Redis.Default = settings.Redis.Default
+				for _, name := range keys(usedRedis) {
+					selected.Redis.Default = name
+					break
+				}
+			}
+		}
+	}
+	withoutRedisStores := func(o *options) error {
+		o.redisStores = nil
+		return nil
+	}
+	return Configure(selected, append(slices.Clone(optionsList), withoutRedisStores)...)
+}
+
 // Providers returns a fresh declaration slice. Every registration constructs
 // independent services, so the same plan may be used by independent applications.
 func (p *Plan) Providers() []foundation.Provider {

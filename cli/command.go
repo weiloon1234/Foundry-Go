@@ -90,9 +90,21 @@ func (c Command[A]) AllowDuringMaintenance() Command[A] {
 	return c
 }
 
+func validName(name Name) bool {
+	if len(name) == 0 || len(name) > identifier.MaxSemanticBytes {
+		return false
+	}
+	for _, segment := range strings.Split(string(name), ":") {
+		if !identifier.Semantic(segment) {
+			return false
+		}
+	}
+	return true
+}
+
 // Validate checks the command name, summary, and decoder.
 func (c Command[A]) Validate() error {
-	if !identifier.Semantic(string(c.Name())) || len(c.description.Summary) > 4096 || !utf8.ValidString(c.description.Summary) || strings.IndexFunc(c.description.Summary, unicode.IsControl) >= 0 || c.decode == nil {
+	if !validName(c.Name()) || len(c.description.Summary) > 4096 || !utf8.ValidString(c.description.Summary) || strings.IndexFunc(c.description.Summary, unicode.IsControl) >= 0 || c.decode == nil {
 		return safeerror.NewFault(fault.Invalid, "command requires a semantic name, single-line summary and typed decoder")
 	}
 	return nil
@@ -149,7 +161,7 @@ func New(declarations ...Declaration) (*Registry, error) {
 	}
 	r := &Registry{entries: make(map[Name]Declaration, len(declarations))}
 	for _, d := range declarations {
-		if d.parse == nil || !identifier.Semantic(string(d.description.Name)) {
+		if d.parse == nil || !validName(d.description.Name) {
 			return nil, safeerror.NewFault(fault.Invalid, "invalid CLI declaration")
 		}
 		if _, exists := r.entries[d.description.Name]; exists {
@@ -281,7 +293,7 @@ func (i Invocation) Run(ctx context.Context, resolver foundation.Resolver, strea
 	if !i.state.claimed.CompareAndSwap(false, true) {
 		return safeerror.NewFault(fault.Closed, "CLI invocation already ran")
 	}
-	return observability.Observe(ctx, observability.Operation{Kind: observability.CLI, Name: observability.Name(i.Name())}, func(ctx context.Context) error {
+	return observability.Observe(ctx, observability.Operation{Kind: observability.CLI, Name: observability.Name(strings.ReplaceAll(string(i.Name()), ":", "."))}, func(ctx context.Context) error {
 		gate := maintenance.FromContext(ctx)
 		if gate == nil {
 			// Manual compositions may attach only an observation recorder.

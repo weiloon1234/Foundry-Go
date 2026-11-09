@@ -33,11 +33,16 @@ func Defaults() Settings {
 	return Settings{App: s, Schema: "public", Greeting: "Welcome"}
 }
 func Load(path string, overrides ...config.Override[Settings]) (Settings, error) {
+	return LoadWithEnvFile(path, "", overrides...)
+}
+
+// LoadWithEnvFile applies the same settings schema with an explicit deployment env file.
+func LoadWithEnvFile(path, envFile string, overrides ...config.Override[Settings]) (Settings, error) {
 	schema, err := SettingsConfigSchema()
 	if err != nil {
 		return Settings{}, err
 	}
-	inputs := config.Inputs[Settings]{Environment: os.LookupEnv, Prefix: "BOOTSTRAP", Overrides: overrides}
+	inputs := config.Inputs[Settings]{Environment: os.LookupEnv, EnvFile: config.EnvFile{Path: envFile}, Prefix: "BOOTSTRAP", Overrides: overrides}
 	if path == "" {
 		settings, _, err := schema.Load(Defaults(), inputs)
 		return settings, err

@@ -67,3 +67,36 @@ Reference implementations:
 - [Typed registration and CLI declaration](../../tests/fixtures/consumer/background/operations.go)
 - [Configured worker, named connection, failure hook, logs and CLI retry acceptance](../../tests/fixtures/consumer/background/operations_test.go)
 - [Shared memory/Redis retry contract](../../internal/jobtest/retry.go)
+
+## Restricted deployment commands
+
+Register `application.DeployJobCommands(builder)` in a separate CLI path before
+`Builder.Build`. It provides `deploy:jobs-inspect` and `jobs` operations, including
+`jobs migrate-layout`. Run the parsed invocation with a nil resolver. These
+commands construct no business handlers and start no application kernels,
+databases, outbox relays, or logging sinks. Restricted migration uses a discard
+logger for lifecycle records and opens only the Redis pools used by job connections.
+
+The consumer entry point owns global `--config` and `--env-file` parsing and
+loads both through the existing typed settings schema, including `_FILE`
+resolution, before passing command-local flags to the restricted registry:
+
+```sh
+artisan deploy:jobs-inspect --format json --config config/deploy.toml --env-file app.env
+artisan jobs migrate-layout --connection primary --queue delivery --confirm --format json --config config/deploy.toml --env-file app.env
+```
+
+Inspection writes one schema-1 JSON envelope. Each connection's `namespace`
+contains exactly `application` and `environment` in lowercase. Inventory includes
+connection defaults, worker subscriptions, typed job policies, queued listeners,
+event outbox groups, and extension cleanup destinations. A blank listener
+connection selects the default job connection. A blank listener queue selects
+`default`, even when the connection's default queue differs. An unknown explicit
+connection produces an `invalid_configuration` blocker. Custom providers and
+plugins produce `opaque_job_provider`; declared coverage does not discover
+runtime-only persisted queues.
+
+Migration success writes exactly `{"queue":"delivery","migrated":true}` or the
+same object with `migrated:false`. Both values confirm a migration call. Reinspect
+to establish layout 3. See the [restricted consumer entry point](../../tests/fixtures/consumer/bootstrap/deploy_jobs.go)
+and its [process acceptance](../../tests/fixtures/consumer/bootstrap/deploy_jobs_test.go).

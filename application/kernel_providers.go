@@ -303,22 +303,32 @@ const EventListenerQueueProvider foundation.ProviderID = "foundry.application.ev
 
 var eventListenerQueueKey = foundation.NewKey[*events.ListenerQueue](string(EventListenerQueueProvider))
 
-// registerListenerQueue delivers queued event listeners as jobs on the
-// configured connection and binds its dispatcher at boot.
-func registerListenerQueue(builder *foundation.Builder, s Settings) error {
-	connection := s.Features.Events.ListenerConnection
+// resolveListenerDestination owns the runtime defaults and validation shared by
+// listener registration and deployment inventory.
+func resolveListenerDestination(settings EventsSettings, connections infrastructure.JobsSettings) (jobs.ConnectionName, jobs.Policy, error) {
+	connection := settings.ListenerConnection
 	if connection == "" {
-		connection = s.Services.Jobs.Default
+		connection = connections.Default
 	}
-	if _, ok := s.Services.Jobs.Connections[connection]; !ok {
-		return safeerror.NewFault(fault.Missing, "queued event listener connection is not configured")
+	if _, ok := connections.Connections[connection]; !ok {
+		return "", jobs.Policy{}, safeerror.NewFault(fault.Missing, "queued event listener connection is not configured")
 	}
-	queue := s.Features.Events.ListenerQueue
+	queue := settings.ListenerQueue
 	if queue == "" {
 		queue = "default"
 	}
 	policy := jobs.DefaultPolicy(queue)
 	if err := policy.Validate(); err != nil {
+		return "", jobs.Policy{}, err
+	}
+	return connection, policy, nil
+}
+
+// registerListenerQueue delivers queued event listeners as jobs on the
+// configured connection and binds its dispatcher at boot.
+func registerListenerQueue(builder *foundation.Builder, s Settings) error {
+	connection, policy, err := resolveListenerDestination(s.Features.Events, s.Services.Jobs)
+	if err != nil {
 		return err
 	}
 	builder.Register(foundation.Module{Name: EventListenerQueueProvider, Requires: []foundation.ProviderID{EventProvider, infrastructure.JobProvider(connection)}, OnRegister: func(r *foundation.Registrar) error {
