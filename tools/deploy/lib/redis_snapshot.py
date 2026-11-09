@@ -47,28 +47,37 @@ local function snapshot(key, limit)
     return {hex, expiry}
 end
 """
-DUMP_SCRIPT = DUMP_FUNCTION + "return snapshot(KEYS[1], tonumber(ARGV[1]))"
+DUMP_SCRIPT = DUMP_FUNCTION + """
+local request = cjson.decode(ARGV[1])
+return snapshot(request.key, request.limit)
+"""
 SCAN_SCRIPT = """
-local page = redis.call('SCAN', ARGV[1], 'MATCH', ARGV[2], 'COUNT', 256)
+local request = cjson.decode(ARGV[1])
+local page = redis.call('SCAN', request.cursor, 'MATCH', request.pattern, 'COUNT', 256)
 local size = 0
 for _, key in ipairs(page[2]) do
     size = size + #key
-    if #key > tonumber(ARGV[3]) or size > tonumber(ARGV[4]) then return {'limit'} end
+    if #key > request.key_limit or size > request.page_limit then return {'limit'} end
 end
 return page
 """
 RESTORE_SCRIPT = DUMP_FUNCTION + """
-local expiry = tonumber(ARGV[1])
+local request = cjson.decode(ARGV[1])
+local expiry = request.expiry
 if expiry > 0 then
     local clock = redis.call('TIME')
     if expiry <= tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000) then
-        redis.call('DEL', KEYS[1])
+        redis.call('DEL', request.key)
         return false
     end
 end
-local dump = string.gsub(ARGV[3], '..', function(c) return string.char(tonumber(c, 16)) end)
-redis.call('RESTORE', KEYS[1], expiry, dump, 'REPLACE', 'ABSTTL')
-return snapshot(KEYS[1], tonumber(ARGV[2]))
+local dump = string.gsub(request.dump, '..', function(c) return string.char(tonumber(c, 16)) end)
+redis.call('RESTORE', request.key, expiry, dump, 'REPLACE', 'ABSTTL')
+return snapshot(request.key, request.limit)
+"""
+DELETE_SCRIPT = """
+local request = cjson.decode(ARGV[1])
+return redis.call('DEL', request.key)
 """
 
 
@@ -78,6 +87,12 @@ def _json(value):
 
 def _digest(value):
     return hashlib.sha256(_json(value).encode()).hexdigest()
+
+
+def _eval(host, script, **request):
+    # This boundary supports only the owned standalone Redis allocation. The
+    # fixed script receives its complete private request as the final stdin arg.
+    return redis_acl._redis(host, "EVAL", script, "0", input=_json(request))
 
 
 def _crc64_table():
@@ -250,8 +265,8 @@ def _scan(host, scopes):
             while True:
                 calls += 1
                 _check(calls <= MAX_SCAN_CALLS and time.monotonic() < deadline, "redis_snapshot_limit")
-                page = redis_acl._redis(host, "EVAL", SCAN_SCRIPT, "0", cursor, scope["prefix"] + "*",
-                                        str(MAX_KEY_BYTES), str(MAX_JSON))
+                page = _eval(host, SCAN_SCRIPT, cursor=cursor, pattern=scope["prefix"] + "*",
+                             key_limit=MAX_KEY_BYTES, page_limit=MAX_JSON)
                 _check(page != ["limit"], "redis_snapshot_limit")
                 _check(isinstance(page, list) and len(page) == 2 and isinstance(page[0], str)
                        and re.fullmatch(r"0|[1-9][0-9]{0,19}", page[0]) and isinstance(page[1], list),
@@ -268,7 +283,7 @@ def _scan(host, scopes):
 
 def _dump(host, key):
     with _failure("redis_snapshot_capture"):
-        value = redis_acl._redis(host, "EVAL", DUMP_SCRIPT, "1", key, str(MAX_DUMP_BYTES))
+        value = _eval(host, DUMP_SCRIPT, key=key, limit=MAX_DUMP_BYTES)
         return _dump_record(key, value)
 
 
@@ -474,11 +489,13 @@ def plan_restore(host, registry, entry, request: dict) -> dict:
         _ownership(host, registry, entry, request["scopes"])
         identity = request["identity_file"]
         private = host.paths.p(instance_paths(entry["name"])["private"])
+        operation_directory = private / "operations" / request["operation_id"]
         with _failure("redis_restore_identity"):
             _check(isinstance(identity, str) and Path(identity).is_absolute()
-                   and ".." not in Path(identity).parts and Path(identity).is_relative_to(private)
-                   and request["operation_id"] in Path(identity).relative_to(private).parts,
+                   and ".." not in Path(identity).parts
+                   and Path(identity) == operation_directory / "restore.identity",
                    "redis_restore_identity")
+            backup._private(host, operation_directory, directory=True)
             backup._private(host, Path(identity))
         root, plan_path, progress_path, _ = _restore_paths(host, entry, request["operation_id"])
         intent = {key: value for key, value in request.items() if key != "identity_file"}
@@ -549,6 +566,7 @@ def _restore(host, registry, entry, request, *, resume):
     with _failure("redis_restore_reconciliation"):
         backup.require_writable(host)
         root, plan_path, progress_path, receipt_path = _restore_paths(host, entry, request["operation_id"])
+        write_intent_path = check_path(root / "write-intent.json", "file")
         plan = _read(host, plan_path, "redis_restore_stale_plan")
         binding = {key: value for key, value in plan.items() if key != "public"}
         _check(_digest(binding) == request["plan_token"] == plan["public"]["plan_token"], "redis_restore_stale_plan")
@@ -581,8 +599,12 @@ def _restore(host, registry, entry, request, *, resume):
                 return receipt
             _check(resume, "redis_restore_reconciliation")
         else:
-            _check(not resume and not receipt_path.exists(), "redis_restore_reconciliation")
+            # M4 can record dispatch before M3 publishes progress. After exit
+            # proof, only an operation with no possible write may start here.
+            _check(not receipt_path.exists() and not write_intent_path.exists(), "redis_restore_reconciliation")
             progress = {"request": request, "writes": {}, "phase": "prepared"}
+        if write_intent_path.exists():
+            _check(_read(host, write_intent_path, "redis_restore_reconciliation") == request, "operation_conflict")
         archive = _archive(host, root / "archive.json", evidence, scopes)
         _check(_digest(archive) == plan["archive_sha256"], "redis_restore_archive")
         current = set(_scan(host, scopes))
@@ -606,15 +628,19 @@ def _restore(host, registry, entry, request, *, resume):
                 continue
             progress["writes"][identity] = "dispatched_or_unknown"
             _write(host, progress_path, progress)
+            # Retain this marker independently of progress so losing progress
+            # after a write can never be mistaken for the pre-M3 dispatch gap.
+            if not write_intent_path.exists():
+                _write(host, write_intent_path, request)
             if action == "restore":
-                result = redis_acl._redis(host, "EVAL", RESTORE_SCRIPT, "1", key, str(item["expires_at_ms"]),
-                                          str(MAX_DUMP_BYTES), input=item["dump"])
+                result = _eval(host, RESTORE_SCRIPT, key=key, expiry=item["expires_at_ms"],
+                               limit=MAX_DUMP_BYTES, dump=item["dump"])
                 postimage = _dump_record(key, result)
                 _check(postimage is None and not _alive(item, _clock(host))
                        or postimage is not None and postimage["expires_at_ms"] == item["expires_at_ms"],
                        "redis_restore_reconciliation")
             else:
-                result = redis_acl._redis(host, "DEL", key)
+                result = _eval(host, DELETE_SCRIPT, key=key)
                 _check(type(result) is int and result in (0, 1), "redis_restore_reconciliation")
                 postimage = None
             progress["writes"][identity] = {"postimage_sha256": _digest(postimage), "present": postimage is not None}
