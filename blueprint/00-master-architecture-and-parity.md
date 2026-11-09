@@ -8,6 +8,25 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Coordinated Redis queue cutover — v0.15.0, 2026-11-09
+
+Status: **implemented; deploy-tool (620 tests), release-tool, docs and the touched Go packages passed, including a
+real local Redis/age/redis-check-rdb snapshot round trip and the real `deploy:jobs-inspect` output through the
+tool's strict parser; built in parallel lanes and reviewed until a focused independent review approved the first
+production cutover; the owner deferred the full local `make verify`, so CI gates this tag**.
+- `deploy:jobs-inspect` reports every configured Redis job connection and queue with its layout, failing closed on
+  anything not derivable from the release.
+- `cutover-plan`/`cutover-apply`/`cutover-resume` stop every role and verify the drain, take a verified encrypted
+  snapshot of the instance's own Redis keys, migrate each queue with the candidate binary, then run database
+  migrations and start the candidate. After migration it always rolls forward.
+- A persistent startup gate refuses old code against migrated queues. While a candidate attempt is unresolved, the
+  gate binds admission to that attempt's boot and its live executor.
+- Reviewed recovery: `cutover-forward-plan`/`-apply`, `cutover-abort-plan`/`-apply` before dispatch,
+  `cutover-drain-resolve`, and `redis-restore-plan`/`-apply`/`-resume`.
+- Requires generation-5 host tools.
+Open: ooo (Semaklah) upgrades its server tools and runs the cutover in an owner-chosen window. Boss Club and Starter
+have no Redis job queues.
+
 ## Redis queue quarantine for independent records — v0.14.0, 2026-11-09
 
 Status: **implemented; targeted Redis/jobs package tests and the framework guards passed; the approved design

@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## v0.15.0 — 2026-11-09
+
+**New deployment operations for the v0.14.0 Redis queue layout cutover.** Generation-5 host tools are required;
+upgrade hosts through `tools-plan`/`tools-apply` before using them.
 
 - Fixed: unresolved candidate startup admission is bound to its recorded boot and
   executor invocation. Admission requires `ActiveState=active`, `SubState=running`,
