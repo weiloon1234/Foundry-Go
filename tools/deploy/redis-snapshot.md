@@ -45,8 +45,10 @@ must belong exclusively to this instance. Application ACLs gain no privileges.
 Capture uses cursor-complete SCAN and atomic Lua DUMP plus PEXPIRETIME. Unknown
 keys, incomplete scans, foreign ownership, and exhausted limits fail closed.
 The module consumes physical keys from the `deploy:jobs-inspect` contract; it does
-not reconstruct job key names. That command is still pending integration.
-A proven no-Redis operation skips capture in the coordinator.
+not reconstruct job key names. SCAN patterns, physical keys, and serialized values
+travel in a JSON request on stdin through the existing private Redis admin boundary.
+Process arguments contain fixed Lua scripts, with no physical key names or payloads
+embedded in them. A proven no-Redis operation skips capture in the coordinator.
 
 The coordinator stores complete capture evidence at `state.cutover.snapshot`
 before migration dispatch. Evidence binds the snapshot and operation UUIDs,
@@ -72,6 +74,7 @@ backups/redis/
     archive.json
     plan.json
     progress.json
+    write-intent.json
     receipt.json
 ```
 
@@ -89,9 +92,10 @@ first checks the remote bytes, then can retry the retained artifact with
 `--immutable`. Only downloaded-byte verification permits a receipt. Destination
 changes, missing capture records, and altered artifacts require reconciliation.
 
-The restore identity file is an absolute, root-owned mode-0600 file beneath the
-instance private directory at `operations/<operation UUID>/restore.identity`.
-The operation directory has mode 0700 and is named exactly by that UUID.
+The restore identity file is an absolute, root-owned mode-0600 file at
+`<instance private>/operations/<operation UUID>/restore.identity`.
+The UUID directory must match the request's operation, be root-owned, and have
+mode 0700. Other filenames, directory layouts, UUIDs, and symlinks are rejected.
 The identity contents are never passed in process arguments. The private plan
 and public result omit the identity path and contents. The coordinator owns
 intake cleanup.
@@ -116,6 +120,12 @@ after verified drain. New keys or missing unexpired keys invalidate an unstarted
 expiration is allowed and never extends a key's original lifetime.
 
 Each RESTORE or exact-key DEL has durable dispatch intent before execution.
+A separate `write-intent.json` binds the accepted request before the first Redis
+write and remains after completion. If M4 records dispatch but M3 never publishes
+`progress.json`, same-intent resume can proceed after exit proof and all existing
+plan, safety-snapshot, ownership, and drift checks. A write marker or receipt with
+missing progress requires reconciliation; it cannot be treated as unstarted.
+Unreadable or corrupt progress also fails closed.
 A failed write remains uncertain. Only explicit same-intent `resume_restore` can
 retry after quiescence proof. RESTORE uses absolute expiration and takes an atomic
 post-write observation. Final verification compares that representation and its
@@ -143,6 +153,9 @@ no partial archive satisfies the snapshot prerequisite.
 with private temporary files and Redis, age, and rclone fakes. They cover ownership,
 checksums, bounded discovery, upload reconciliation, confirmation, expiration,
 archive validation, exact deletion, and partial restore. No test contacts a server.
+They also cover the exact M4 identity path, private file and directory permissions,
+the dispatch gap before initial progress, missing progress after a possible write,
+and the actual Redis admin argv/stdin boundary for capture and restore.
 
 The affected suites run with:
 
