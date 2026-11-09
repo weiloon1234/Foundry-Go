@@ -554,13 +554,16 @@ def _host_secrets(host: Host) -> dict:
     return value
 
 
-def _redis(host: Host, *args: str, allow_denied: bool = False, raw: bool = False):
+def _redis(host: Host, *args: str, allow_denied: bool = False, raw: bool = False, input: str | None = None):
     # raw: INFO replies are verbatim strings that redis-cli --json prints as
     # plain text on Redis 7.0, so they are read unformatted instead.
     credentials = _host_secrets(host)
     command = ["redis-cli", "-3", "--no-auth-warning", *([] if raw else ["--json"]), "--tls", "--cacert", ROOTS,
                "--sni", "localhost", "-h", "localhost", "-p", str(REDIS_PORT), "--user", credentials["redis_user"]]
-    result = host.run(command + list(args), env={"REDISCLI_AUTH": credentials["redis_password"]}, timeout=15)
+    # Binary snapshot writes are hex-encoded on private stdin, never process arguments.
+    options = {"input": input} if input is not None else {}
+    result = host.run(command + (["-x"] if input is not None else []) + list(args),
+                      env={"REDISCLI_AUTH": credentials["redis_password"]}, timeout=15, **options)
     if raw:
         text = result.stdout.decode() if isinstance(result.stdout, bytes) else (result.stdout or "")
         require(not text.startswith("(error)") and not text.startswith("ERR"), "redis_inspection",

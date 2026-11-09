@@ -259,6 +259,32 @@ def _rclone(host, arguments):
                         timeout=1800)
 
 
+def encrypt_archive(host, plain, encrypted, recipients):
+    """Shared private age boundary; publish durable ciphertext before discarding plaintext."""
+    _private(host, plain)
+    arguments = [argument for recipient in _recipients(recipients) for argument in ("-r", recipient)]
+    host.run(["age", *arguments, "-o", str(encrypted), str(plain)], timeout=120)
+    check_path(encrypted, "file")
+    require(encrypted.is_file() and encrypted.stat().st_size > 0,
+            "backup_encryption_failed", "age did not produce a completed encrypted archive.")
+    os.chmod(encrypted, 0o600)
+    with open(encrypted, "rb") as stream:
+        os.fsync(stream.fileno())
+
+
+def upload_archive(host, encrypted, object_key):
+    repository = _repository_settings(host)
+    _rclone(host, ["copyto", str(encrypted), f"backup:{repository['bucket']}/{object_key}", "--immutable"])
+
+
+def verify_archive(host, encrypted, object_key):
+    repository = _repository_settings(host)
+    parent, name = object_key.rsplit("/", 1)
+    require(encrypted.name == name, "backup_archive_path", "Archive filename must match its repository object.")
+    _rclone(host, ["check", str(encrypted.parent), f"backup:{repository['bucket']}/{parent}",
+                   "--include", "/" + name, "--one-way", "--download"])
+
+
 def _archive_files(host, entry):
     directory = host.paths.instance_config(entry["name"])
     files = {}
@@ -299,7 +325,7 @@ def archive_keys(host: Host, entry: dict) -> dict:
     require(entry.get("recovered_from", {}).get("mode") != "rehearsal",
             "rehearsal_read_only", "A rehearsal cannot upload a key archive.")
     settings = _settings(host, entry)
-    repository = _repository_settings(host)
+    _repository_settings(host)
     files, size = _archive_files(host, entry)
     metadata = copy.deepcopy(entry)
     for name in ("uid", "gid"):
@@ -325,17 +351,12 @@ def archive_keys(host: Host, entry: dict) -> dict:
                 check_path(path, "file")
                 archive.add(path, arcname=name, recursive=False)
         os.chmod(plain, 0o600)
-        recipients = [argument for recipient in settings["age_recipients"] for argument in ("-r", recipient)]
-        host.run(["age", *recipients, "-o", str(encrypted), str(plain)], timeout=120)
-        require(encrypted.is_file() and encrypted.stat().st_size > 0,
-                "backup_encryption_failed", "age did not produce a completed encrypted archive.")
+        encrypt_archive(host, plain, encrypted, settings["age_recipients"])
         plain.unlink()
-        target = f"backup:{repository['bucket']}/{key}"
-        _rclone(host, ["copyto", str(encrypted), target, "--immutable"])
+        upload_archive(host, encrypted, key)
         # Download-check compares the uploaded bytes; an exit-zero upload alone
         # is not a completion receipt and a timeout never becomes success.
-        _rclone(host, ["check", str(Path(temporary)), f"backup:{repository['bucket']}/keys/{entry['profile']['instance_id']}",
-                       "--include", "/" + encrypted.name, "--one-way", "--download"])
+        verify_archive(host, encrypted, key)
     receipt = {"object_key": key, "completed_at": now(), "status": "complete"}
     _record(host, entry, "keys", receipt)
     return receipt
