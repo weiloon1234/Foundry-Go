@@ -1847,7 +1847,7 @@ def apply_cutover(host, project, profile, token, operation_id, *, resume=False, 
                                 'source': (plan['source'] or {}).get('version'), 'target': plan['target']['version'],
                                 'phase': 'prepared', 'outcome': 'running', 'started_at': now(), 'rollback_prohibited': prohibited,
                                 'drain_failed': False, 'hold': False, 'database': 'not_started', 'seed': 'not_started', 'error': None,
-                                'snapshot_started': False,
+                                'snapshot_started': False, 'candidate_start': None,
                                 'queues': [{'connection': t['connection'], 'queue': t['queue'], 'status': 'pending'} for t in contract.targets(inventory)]}
             state['cutover']['drain'] = _new_drain(host, entry)
             if superseded:
@@ -1920,12 +1920,15 @@ def resolve_cutover_drain(host, project, profile, operation_id, reviewed_by, rea
         boot = _boot_id(host)
         reviews = progress.setdefault('drain_resolutions', [])
         if reviews and all(reviews[-1][key] == value for key, value in
-                           (('boot_id', boot), ('observations', observations), ('reviewed_by', reviewed_by), ('reason', reason))):
+                           (('boot_id', boot), ('observations', observations), ('reviewed_by', reviewed_by), ('reason', reason))) \
+                and reviews[-1].get('candidate_start') == progress.get('candidate_start'):
             return {'ok': True, 'operation_id': operation_id, 'resolution': reviews[-1], 'next_action': cutover_next_action(state)}
         require(progress['drain_failed'], 'cutover_review_not_required', 'No unresolved drain flag requires approval.')
         require(len(reviews) < 32, 'cutover_review_limit', 'Drain review history requires lead reconciliation.')
         resolution = {'reviewed_by': reviewed_by, 'reason': reason, 'recorded_at': now(),
                       'boot_id': boot, 'observations': observations}
+        if progress.get('candidate_start'):
+            resolution['candidate_start'] = copy.deepcopy(progress['candidate_start'])
         reviews.append(resolution)
         progress['drain'] = _new_drain(host, entry)
         for role in progress['drain']['roles'].values():
@@ -1939,6 +1942,13 @@ def _drain_continuity(host, entry, state):
     progress = state['cutover']
     if progress['outcome'] in ('succeeded', 'failed'):
         return
+    attempt = progress.get('candidate_start')
+    if attempt and attempt['outcome'] != 'healthy' and not any(
+            review.get('candidate_start') == attempt for review in progress.get('drain_resolutions', [])):
+        progress['drain_failed'] = True
+        state['queue_compatibility']['permission'] = 'closed'
+        host.save_state(entry, state)
+        raise DeployError('cutover_drain_review', 'Candidate startup failed or was interrupted; audited resolution is required.')
     drain = progress.get('drain')
     require(drain and set(drain['roles']) == set(instance_units(entry)),
             'cutover_drain_review', 'Durable role drain evidence is missing; review is required.')
@@ -2051,7 +2061,12 @@ def _cutover_failure(host, registry, entry, state, plan, record, error):
     if progress['hold'] or progress['rollback_prohibited'] or progress['drain_failed'] or progress['database'] != 'not_started' or progress['seed'] != 'not_started':
         # Even candidate traffic must cease after a health failure. A failed stop stays uncertain.
         try:
-            _cutover_stop(host, entry, state)
+            if progress['drain_failed']:
+                # Contain remaining roles without converting stop evidence into
+                # approval of the failed startup attempt.
+                host.run(['systemctl', 'stop', '--no-block', *instance_units(entry).values()], timeout=10)
+            else:
+                _cutover_stop(host, entry, state)
         except (DeployError, OSError):
             pass
         progress['outcome'] = 'needs_reconciliation'
@@ -2192,10 +2207,21 @@ def execute_cutover(host, instance_id, operation_id):
             _cutover_phase(host, entry, state, 'health')
             prepare_worker(host, entry, candidate)
             progress['drain'] = _new_drain(host, entry, starting=True)
+            progress['candidate_start'] = {'id': str(uuid.uuid4()), 'started_at': now(),
+                                           'outcome': 'dispatched_or_unknown', 'error': None}
             state['queue_compatibility']['admitted'] = {plan['target']['version']: plan['target']['files']['artisan']}
             state['queue_compatibility']['permission'] = 'admitted'
             host.save_state(entry, state)
-            restart(host, entry, state, roles=plan['roles'])
+            try:
+                restart(host, entry, state, roles=plan['roles'])
+            except (DeployError, OSError) as error:
+                progress['candidate_start'].update(outcome='failed', error=error.code if isinstance(error, DeployError) else 'cutover_execution_failed')
+                progress['drain_failed'] = True
+                state['queue_compatibility']['permission'] = 'closed'
+                host.save_state(entry, state)
+                raise
+            progress['candidate_start']['outcome'] = 'healthy'
+            host.save_state(entry, state)
             host.run(['systemctl', 'enable', *instance_units(entry).values()])
             if state['current'] != plan['target']:
                 state['previous'] = plan['source']
@@ -2246,7 +2272,7 @@ def _observe_cutover_selection(host, entry, state, plan):
 def _observe_active_selection(host, entry, state):
     import cutover_contracts as contract
     active = state.get('cutover')
-    if active:
+    if active and active['outcome'] not in ('succeeded', 'failed'):
         record = read_json(contract.private_path(host, entry, 'operation', active['operation_id']))
         plan = (_load_cutover_plan(host, entry, record['plan_token']) if active['action'] == 'cutover'
                 else read_json(contract.private_path(host, entry, 'restore', active['operation_id'])))
@@ -2332,7 +2358,7 @@ def plan_redis_restore(host, project, profile, operation_id, snapshot_id, identi
             saved = read_json(path)
             require(saved['snapshot_id'] == snapshot_id, 'operation_conflict', 'Restore operation identifies another snapshot.')
             return saved['module_plan']
-        version = active['target'] if active else current_version(host, entry)
+        version = active['target'] if active and active['outcome'] not in ('succeeded', 'failed') else current_version(host, entry)
         require(version is not None, 'no_release', 'Restore planning requires a retained compatible candidate.')
         candidate = release_path(host, entry, version)
         manifest = read_json(candidate / 'manifest.json')
@@ -2435,7 +2461,8 @@ def apply_redis_restore(host, project, profile, token, operation_id, *, resume=F
             state['cutover'] = {'schema': 1, 'operation_id': operation_id, 'plan_token': token, 'action': 'redis-restore',
                                 'source': (plan['source'] or {}).get('version'), 'target': plan['target']['version'],
                                 'phase': 'prepared', 'outcome': 'running', 'started_at': now(), 'rollback_prohibited': True,
-                                'drain_failed': False, 'hold': False, 'queues': [], 'database': 'not_started', 'seed': 'not_started', 'error': None}
+                                'drain_failed': False, 'hold': False, 'queues': [], 'database': 'not_started', 'seed': 'not_started', 'error': None,
+                                'candidate_start': None}
             state['cutover']['drain'] = _new_drain(host, entry)
             record = {'schema': 1, 'action': 'redis-restore', 'operation_id': operation_id, 'plan_token': token,
                       'snapshot_id': str(uuid.uuid4()), 'restore_dispatched': False,

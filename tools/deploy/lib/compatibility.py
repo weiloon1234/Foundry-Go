@@ -137,17 +137,25 @@ def prove_stopped(host, entry, *, roles=None, review=False):
             require(value.get('Slice') == 'system.slice', 'cutover_stop_unproven', 'Unexpected role slice.')
             group = '/system.slice/' + unit
         _empty_cgroup(host, group)
-        # A failed pre-start guard has no main process. A main-process exit
-        # status alone (even a reserved systemd status) cannot prove no work ran.
-        no_application = value.get('Result') == 'exit-code' and (
+        # Only a reboot after completed drain, before any candidate attempt,
+        # can use a guard refusal as evidence. A retry may hide earlier work.
+        progress = host.load_state(entry).get('cutover') or {}
+        drain = progress.get('drain') or {}
+        no_application = False
+        if value.get('Result') in ('exit-code', 'start-limit-hit') and (
             value.get('ExecMainPID') == '0' and value.get('ExecMainStartTimestampMonotonic') == '0'
-            and value.get('ExecMainCode') == '0' and value.get('ExecMainStatus') == '0')
+                and value.get('ExecMainCode') == '0' and value.get('ExecMainStatus') == '0'):
+            import release
+            no_application = ('candidate_start' in progress and progress['candidate_start'] is None
+                              and not progress.get('drain_failed')
+                              and set(drain.get('roles', {})) == set(instance_units(entry))
+                              and all(item['complete'] for item in drain['roles'].values())
+                              and drain['boot_id'] != release._boot_id(host))
         clean = value.get('Result') == 'success' and not (value.get('ExecMainCode') in ('2', '3')
                 and value.get('ExecMainStatus') == '9')
         approved = False
         if not clean and not no_application and not review:
             import release
-            progress = host.load_state(entry).get('cutover') or {}
             approved = any(item['boot_id'] == release._boot_id(host) and item['observations'].get(role) == value
                            for item in progress.get('drain_resolutions', []))
         require(clean or no_application or review or approved, 'cutover_drain_review',

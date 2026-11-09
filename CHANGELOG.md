@@ -3,8 +3,13 @@
 ## Unreleased
 
 - Fixed: Redis restore reconciles selected release identity after hard executor
-  death and preserves it through completion. Guard-refused starts with no main
-  process no longer become failed drains after reboot.
+  death and preserves it through completion. Completed cutover records remain
+  history; a later ordinary deployment can be selected for restore.
+- Changed: every failed or interrupted candidate startup attempt requires confirmed,
+  audited drain resolution before cutover resume or forward recovery. Later guard
+  refusals cannot erase the durable attempt. Zero-main-process `exit-code` and
+  `start-limit-hit` refusals are exempt only after reboot following a completed
+  drain, when no candidate attempt has started.
 - Added: confirmed `cutover-drain-resolve` records a reviewer and reason against
   stopped invocation evidence. `cutover-abort-plan` and `cutover-abort-apply`
   supersede an undispatched cutover with a corrected inventory while retaining the

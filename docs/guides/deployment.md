@@ -503,6 +503,9 @@ forward planning use that observed identity without starting the fenced release.
 Restore planning and acceptance also reconcile the selected artifact after hard
 executor death, when no exception handler could publish state. That identity is
 retained through restore completion and the next cutover plan.
+Only an unresolved operation constrains selection to its source or target.
+Completed cutovers remain history: after a later ordinary deployment, restore
+planning uses the currently selected release.
 
 Apply returning `outcome: running` confirms submission, not healthy completion.
 Read `ACTION=status make deploy`. `state.cutover` records the operation ID, phase,
@@ -569,12 +572,18 @@ use ordinary `cutover-plan` for the new forward activation instead.
 
 ### Resolve an uncertain drain
 
-After a completed drain and reboot, a failed startup guard does not mean the
-application ran. The tool accepts stopped units whose main process never started,
-while still proving empty cgroups and no instance-owned clients. An unsuccessful
-main process exit, including a reserved systemd exit status, cannot establish that
-no application work ran. Forced termination and unresolved boot evidence retain
-`drain_failed`; status directs the operator to `cutover-drain-resolve`.
+Only after a completed drain and reboot, before any candidate startup attempt,
+can a stopped unit's zero-main-process evidence exempt a guard refusal from drain
+review. This includes both `Result=exit-code` and `Result=start-limit-hit`.
+Empty cgroups and absence of instance-owned clients must still be proved.
+
+Before candidate startup, the tool persists an attempt UUID and start time.
+Any failed startup or readiness check, unsuccessful unit exit, kill, timeout, or
+interruption requires confirmed, audited drain resolution before resume or forward
+recovery. A later guard-refused invocation cannot establish that the earlier
+attempt did no work. The failed or uncertain attempt remains in `candidate_start`,
+and `drain_failed` directs the operator to `cutover-drain-resolve`. Forced termination
+and unresolved boot evidence also retain that requirement.
 
 Contain the executor and roles with confirmed `ACTION=stop`. The lead reviews
 interrupted work and external side effects, and the owner approves the resolution.
@@ -588,9 +597,10 @@ ENVIRONMENT=production ACTION=cutover-drain-resolve OPERATION=<active-uuid-v4> \
 
 This action requires executor exit, stopped roles, empty cgroups, no remaining
 clients, installed guards and closed startup permission. It records who, why,
-when, the boot identity and each role's observed invocation/exit evidence. It
+when, the boot identity, each role's observed invocation/exit evidence, and the
+failed or uncertain candidate attempt being approved. It
 clears the review flag without claiming a clean drain or starting any process.
-The approval applies only to those observations; a changed invocation or boot
+The approval applies only to that attempt and those observations; a new attempt, changed invocation or boot
 requires fresh proof. Do not put secrets in the reason. Then resume the same
 intent, plan a reviewed forward fix for a broken candidate, or plan Redis restore.
 

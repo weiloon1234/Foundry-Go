@@ -526,6 +526,8 @@ class CutoverTests(unittest.TestCase):
         with self.assertRaises(DeployError):
             self.execute()
         self.assertEqual(self.target, self.state()['current'])
+        release.resolve_cutover_drain(self.host, self.project, self.profile, self.operation,
+                                      'owner@example.test', 'Reviewed readiness failure and interrupted work')
         prior_operation, prior_progress = self.operation, self.state()['cutover']
         archive, replacement = self.bundle(3)
         plan = release.plan_cutover(self.host, self.project, self.profile, archive, digest(archive), forward=True)
@@ -552,6 +554,8 @@ class CutoverTests(unittest.TestCase):
         with self.assertRaises(DeployError):
             self.execute()
         self.assertEqual(self.target, self.state()['current'])
+        release.resolve_cutover_drain(self.host, self.project, self.profile, self.operation,
+                                      'owner@example.test', 'Reviewed readiness failure before restore')
         plan = self.restore_plan()
         release.apply_redis_restore(self.host, self.project, self.profile, plan['plan_token'], self.restore_operation)
         release.execute_cutover(self.host, self.profile['instance_id'], self.restore_operation)
@@ -702,12 +706,12 @@ class CutoverTests(unittest.TestCase):
         self.assertEqual(self.target, self.state()['current'])
         self.assertEqual('closed', self.state()['queue_compatibility']['permission'])
 
-    def systemd_exit(self, *, status='203', code='1', pid='123', started='99', after_start=False):
+    def systemd_exit(self, *, status='203', code='1', pid='123', started='99', after_start=False, result='exit-code'):
         original = self.host.run
         def run(args, **options):
             if any(str(arg).startswith('--property=LoadState,ActiveState,SubState,MainPID,ControlPID,ControlGroup,Slice') for arg in args):
                 values = dict(LoadState='loaded', ActiveState='failed', SubState='failed', MainPID='0',
-                              ControlPID='0', ControlGroup='', Slice='system.slice', Job='0', Result='exit-code',
+                              ControlPID='0', ControlGroup='', Slice='system.slice', Job='0', Result=result,
                               ExecMainCode=code, ExecMainStatus=status, ExecMainPID=pid,
                               ExecMainStartTimestampMonotonic=started, InvocationID=self.invocations[args[2]])
                 if after_start and 'restart' not in self.events:
@@ -742,6 +746,26 @@ class CutoverTests(unittest.TestCase):
         self.assertTrue(release.plan_cutover(self.host, self.project, self.profile, archive, digest(archive))['applicable'])
 
     def test_reboot_guard_refusals_after_completed_drain_allow_resume(self):
+        self.reboot_guard_refusal('exit-code')
+
+    def test_reboot_start_limit_after_completed_drain_allows_resume(self):
+        self.reboot_guard_refusal('start-limit-hit')
+
+    def test_missing_candidate_history_cannot_grant_reboot_exemption(self):
+        self.apply()
+        self.interrupt_at = 'migrate-layout'
+        with self.assertRaises(KeyboardInterrupt):
+            self.execute()
+        state = self.state()
+        state['cutover'].pop('candidate_start')
+        self.host.save_state(self.entry, state)
+        self.boot_path.write_text(str(uuid.uuid4()))
+        with self.systemd_exit(status='0', code='0', pid='0', started='0', result='start-limit-hit'):
+            with self.assertRaises(DeployError) as error:
+                real_prove_stopped(self.host, self.entry)
+        self.assertEqual('cutover_drain_review', error.exception.code)
+
+    def reboot_guard_refusal(self, result):
         self.apply()
         self.interrupt_at = 'migrate-layout'
         with self.assertRaises(KeyboardInterrupt):
@@ -749,20 +773,85 @@ class CutoverTests(unittest.TestCase):
         self.assertTrue(all(v['complete'] for v in self.state()['cutover']['drain']['roles'].values()))
         self.boot_path.write_text(str(uuid.uuid4()))
         self.interrupt_at = None
-        with self.systemd_exit(status='0', code='0', pid='0', started='0'), \
+        with self.systemd_exit(status='0', code='0', pid='0', started='0', result=result), \
                 patch.object(compatibility, 'prove_stopped', side_effect=real_prove_stopped):
             release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
             self.assertTrue(self.execute()['ok'])
         self.assertFalse(self.state()['cutover']['drain_failed'])
 
-    def test_failed_pre_start_allows_forward_recovery_without_false_drain(self):
+    def test_completed_cutover_is_history_after_ordinary_deploy_and_restore(self):
+        self.apply()
+        self.execute()
+        archive, current = self.bundle(3)
+        self.deploy(archive)
+        self.assertEqual(current, self.state()['current'])
+        self.assertEqual(self.target['version'], self.state()['cutover']['target'])
+        release.containment_stop(self.host, self.entry, self.state())
+        plan = self.restore_plan()
+        saved = json.loads(contract.private_path(self.host, self.entry, 'restore', self.restore_operation).read_text())
+        self.assertEqual(current, saved['source'])
+        self.assertEqual(current, saved['target'])
+        release.apply_redis_restore(self.host, self.project, self.profile, plan['plan_token'], self.restore_operation)
+        release.execute_cutover(self.host, self.profile['instance_id'], self.restore_operation)
+        self.assertEqual(current, self.state()['current'])
+
+    def test_candidate_killed_during_readiness_then_guard_retry_requires_review(self):
+        self.apply()
+        def killed(*args, **kwargs):
+            unit = instance_units(self.entry)['http']
+            self.host.role_states[unit] = 'failed'
+            self.invocations[unit] = uuid.uuid4().hex  # A later, guard-refused invocation hides the kill.
+            return False
+        self.health.side_effect = killed
+        with self.systemd_exit(status='0', code='0', pid='0', started='0', after_start=True), \
+                patch.object(compatibility, 'prove_stopped', side_effect=real_prove_stopped):
+            with self.assertRaises(DeployError):
+                self.execute()
+            failed = self.state()['cutover']['candidate_start']
+            self.assertEqual('failed', failed['outcome'])
+            self.assertTrue(self.state()['cutover']['drain_failed'])
+            self.assertEqual('closed', self.state()['queue_compatibility']['permission'])
+            archive, replacement = self.bundle(3)
+            with self.assertRaises(DeployError) as error:
+                release.plan_cutover(self.host, self.project, self.profile, archive, digest(archive), forward=True)
+            self.assertEqual('cutover_drain_review', error.exception.code)
+            with self.assertRaises(DeployError) as error:
+                release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+            self.assertEqual('cutover_drain_review', error.exception.code)
+            reviewed = release.resolve_cutover_drain(self.host, self.project, self.profile, self.operation,
+                                                   'owner@example.test', 'Reviewed killed candidate and external effects')
+            self.assertEqual(failed, reviewed['resolution']['candidate_start'])
+            plan = release.plan_cutover(self.host, self.project, self.profile, archive, digest(archive), forward=True)
+            self.health.side_effect = None
+            self.health.return_value = True
+            operation = str(uuid.uuid4())
+            release.apply_cutover(self.host, self.project, self.profile, plan['plan_token'], operation, forward=True)
+            self.assertTrue(release.execute_cutover(self.host, self.profile['instance_id'], operation)['ok'])
+            self.assertEqual(replacement, self.state()['current'])
+
+    def test_interrupted_candidate_attempt_requires_review_even_after_clean_stop(self):
+        self.apply()
+        self.interrupt_at = 'restart'
+        with self.assertRaises(KeyboardInterrupt):
+            self.execute()
+        self.assertEqual('dispatched_or_unknown', self.state()['cutover']['candidate_start']['outcome'])
+        self.interrupt_at = None
+        with self.assertRaises(DeployError) as error:
+            release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        self.assertEqual('cutover_drain_review', error.exception.code)
+        self.assertTrue(self.state()['cutover']['drain_failed'])
+        self.assertEqual('closed', self.state()['queue_compatibility']['permission'])
+
+    def test_failed_candidate_pre_start_requires_resolution_before_forward_recovery(self):
         self.apply()
         self.fail_at = 'restart'
         with self.systemd_exit(status='0', code='0', pid='0', started='0', after_start=True), \
                 patch.object(compatibility, 'prove_stopped', side_effect=real_prove_stopped):
             with self.assertRaises(DeployError):
                 self.execute()
-            self.assertFalse(self.state()['cutover']['drain_failed'])
+            self.assertTrue(self.state()['cutover']['drain_failed'])
+            release.resolve_cutover_drain(self.host, self.project, self.profile, self.operation,
+                                          'owner@example.test', 'Reviewed candidate pre-start failure')
             archive, replacement = self.bundle(3)
             plan = release.plan_cutover(self.host, self.project, self.profile, archive, digest(archive), forward=True)
             self.fail_at = None

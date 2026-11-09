@@ -192,10 +192,18 @@ def save_private(host, path, value):
     host.owned_write(path, payload, mode=0o600)
 
 
+def _validate_candidate_start(value):
+    fields(value, 'id started_at outcome error', 'cutover_state_invalid')
+    require(valid_uuid(value['id']) and valid_timestamp(value['started_at'])
+            and value['outcome'] in ('dispatched_or_unknown', 'failed', 'healthy')
+            and (value['error'] is None or name(value['error'])),
+            'cutover_state_invalid', 'Invalid candidate startup evidence.')
+
+
 def validate_progress(value):
     required = {'schema', 'operation_id', 'plan_token', 'action', 'source', 'target', 'phase', 'outcome',
                 'started_at', 'rollback_prohibited', 'drain_failed', 'hold', 'queues', 'database', 'seed', 'error'}
-    optional = {'snapshot', 'restore', 'safety_snapshot', 'completed_at', 'error_phase', 'drain', 'supersedes_operation', 'drain_resolutions', 'snapshot_started'}
+    optional = {'snapshot', 'restore', 'safety_snapshot', 'completed_at', 'error_phase', 'drain', 'supersedes_operation', 'drain_resolutions', 'snapshot_started', 'candidate_start'}
     require(isinstance(value, dict) and required <= set(value) <= required | optional
             and type(value['schema']) is int and value['schema'] == 1 and valid_uuid(value['operation_id'])
             and hash_value(value['plan_token']) and value['action'] in ('cutover', 'redis-restore')
@@ -226,11 +234,16 @@ def validate_progress(value):
                     'cutover_state_invalid', 'Invalid role drain evidence.')
     require('snapshot_started' not in value or type(value['snapshot_started']) is bool,
             'cutover_state_invalid', 'Invalid snapshot dispatch evidence.')
+    if value.get('candidate_start') is not None:
+        _validate_candidate_start(value['candidate_start'])
     if 'drain_resolutions' in value:
         require(isinstance(value['drain_resolutions'], list) and len(value['drain_resolutions']) <= 32,
                 'cutover_state_invalid', 'Invalid drain review history.')
         for resolution in value['drain_resolutions']:
-            fields(resolution, 'reviewed_by reason recorded_at boot_id observations', 'cutover_state_invalid')
+            fields(resolution, 'reviewed_by reason recorded_at boot_id observations' +
+                   (' candidate_start' if 'candidate_start' in resolution else ''), 'cutover_state_invalid')
+            if 'candidate_start' in resolution:
+                _validate_candidate_start(resolution['candidate_start'])
             require(valid_timestamp(resolution['recorded_at']) and isinstance(resolution['boot_id'], str)
                     and re.fullmatch('[a-f0-9-]{36}', resolution['boot_id'])
                     and isinstance(resolution['observations'], dict)

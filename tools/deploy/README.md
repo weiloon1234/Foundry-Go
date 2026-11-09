@@ -25,7 +25,11 @@ may have run. A confirmed stop can contain processes while retaining the gate.
 artifact to an unresolved operation. They retain the floor and recovery evidence.
 The replacement operation resumes through `cutover-resume`.
 `cutover-drain-resolve` records a confirmed reviewer decision against exact stopped
-process evidence. `cutover-abort-plan` and confirmed `cutover-abort-apply` replace
+process evidence and the failed or uncertain candidate startup attempt. Every
+candidate startup failure requires this review, even if a later retry was refused
+by the guard. The guard-refusal exemption applies only after reboot following a
+completed drain, before any candidate attempt, including `start-limit-hit` with
+zero main-process evidence. `cutover-abort-plan` and confirmed `cutover-abort-apply` replace
 a pre-dispatch operation with a corrected inventory while keeping startup fenced.
 Both procedures are described in the deployment guide.
 
