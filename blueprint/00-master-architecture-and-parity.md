@@ -8,6 +8,23 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Real-host deploy acceptance — v0.15.2, 2026-11-10
+
+Status: **released; full container acceptance passed on Ubuntu 24.04 and 26.04 arm64 (48 checks each), the
+real-systemd contract suite (12 cases) passed on both, deploy-tool suite (671 tests), targeted database/Redis race
+tests with real PostgreSQL, and framework CI**.
+- `test_systemd_contract.py` checks the systemd facts the deploy tool relies on and runs in CI on ubuntu-24.04.
+- `tests/fixtures/deploy-acceptance` makes container acceptance self-contained. `--recovery` reproduces the v0.15.0
+  incident and runs the fast recovery slice (in-flight drain, forced drain review, forward replacement,
+  containment, Redis snapshot restore).
+- Fixed: disaster recovery to a new host could not start the application since v0.15.0; recovered releases are
+  admitted and recorded before roles start. Admission requires absent or layout-3 queues.
+- Fixed: after a PostgreSQL or Redis restart under a running app, graceful shutdown exited 1 on TLS close errors
+  from already-dropped connections, so cutover and containment stops demanded drain review.
+- Fixed: readiness accepts the framework's built-in probe body.
+Open: the full recovery matrix (executor-death boundaries, reboots, legacy-baseline abort) is required before the
+next queue layout change; amd64 acceptance needs a native host.
+
 ## Cutover stop-proof fix — v0.15.1, 2026-11-09
 
 Status: **released after a production incident; deploy-tool suite (623 tests) and framework CI passed on 9240c966**.

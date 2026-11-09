@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## v0.15.2 — 2026-11-10
+
+**Fixes found by the first real-systemd deploy acceptance.** Repin applications before any disaster
+recovery; upgrade hosts with `tools-plan`/`tools-apply` (the generation is unchanged) and redeploy to pick up
+the shutdown fix.
 
 - Fixed: disaster recovery to a new host refused to start the application since v0.15.0.
   Recovery now persists release admission before starting roles, including the
