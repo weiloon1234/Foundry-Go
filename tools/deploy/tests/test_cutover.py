@@ -18,6 +18,7 @@ import test_release
 from topology import instance_units
 
 executor_alone = release._require_executor_alone
+outstanding_executor = release.cutover_executor
 real_prove_stopped = compatibility.prove_stopped
 
 
@@ -66,6 +67,7 @@ class CutoverTests(unittest.TestCase):
         self.invocations = {unit: uuid.uuid4().hex for unit in instance_units(self.entry).values()}
         self.executor_invocation = uuid.uuid4().hex
         self.executor_running = False
+        self.executor_observation = {}
         self.fail_at = None
         self.unknown_at = None
         self.interrupt_at = None
@@ -122,6 +124,15 @@ class CutoverTests(unittest.TestCase):
             value = (self.executor_invocation if args[2].startswith('foundry-cutover-') else
                      self.invocations[args[2]] if self.host.role_states.get(args[2]) == 'active' else '')
             return subprocess.CompletedProcess(args, 0, value + '\n', '')
+        if args[:2] == ['systemctl', 'show'] and args[2].startswith('foundry-cutover-'):
+            operation = args[2].removeprefix('foundry-cutover-' + self.profile['instance_id'] + '-').removesuffix('.service')
+            value = {'LoadState': 'loaded', 'ActiveState': 'active' if self.executor_running else 'inactive',
+                     'SubState': 'running' if self.executor_running else 'dead',
+                     'MainPID': str(os.getpid()) if self.executor_running else '0', 'ControlPID': '0', 'Job': '0',
+                     'ControlGroup': '/system.slice/' + args[2], 'InvocationID': self.executor_invocation,
+                     'Transient': 'yes', 'Description': f"Foundry cutover {self.profile['instance_id']} {operation}"}
+            value.update(self.executor_observation)
+            return subprocess.CompletedProcess(args, 0, ''.join(f'{key}={item}\n' for key, item in value.items() if item is not None), '')
         event = next((item for item in ('config:check', 'deploy:storage-probe', 'migrate:status', 'migrate-layout', 'migrate', 'db:seed') if item in args), None)
         if args[:2] in (['systemctl', 'stop'], ['systemctl', 'restart'], ['systemctl', 'start']):
             event = args[1]
@@ -969,6 +980,73 @@ class CutoverTests(unittest.TestCase):
         self.health.side_effect = check_admission
         with self.assertRaises(KeyboardInterrupt):
             self.execute()
+
+    def test_unresolved_admission_requires_strict_systemd_executor_liveness(self):
+        self.apply()
+        def check_admission(*args, **kwargs):
+            compatibility.startup_check(self.host, self.entry['name'], 'http')
+            self.assertFalse(self.state()['cutover']['drain_failed'])
+            observations = [
+                {'ActiveState': 'deactivating', 'MainPID': '0'},
+                {'ActiveState': 'activating'},
+                {'ActiveState': 'reloading'},
+                {'ActiveState': None},
+                {'SubState': 'dead'},
+                {'SubState': None},
+                {'MainPID': '0'},
+                {'MainPID': None},
+                {'MainPID': 'invalid'},
+                {'InvocationID': None},
+                {'InvocationID': uuid.uuid4().hex},
+                {'LoadState': 'not-found'},
+            ]
+            for observation in observations:
+                with self.subTest(observation=observation):
+                    self.executor_observation = observation
+                    for role in instance_units(self.entry):
+                        with self.assertRaises(DeployError) as error:
+                            compatibility.startup_check(self.host, self.entry['name'], role)
+                        self.assertEqual('cutover_drain_review', error.exception.code)
+                    state = self.state()
+                    self.assertTrue(state['cutover']['drain_failed'])
+                    self.assertEqual('closed', state['queue_compatibility']['permission'])
+            self.executor_observation = {}
+            compatibility.startup_check(self.host, self.entry['name'], 'http')
+            return True
+        self.health.side_effect = check_admission
+        self.assertTrue(self.execute()['ok'])
+
+    def test_deactivating_executor_fences_admission_until_resolution_and_explicit_resume(self):
+        self.apply()
+        def executor_dying(*args, **kwargs):
+            self.executor_observation = {'ActiveState': 'deactivating', 'MainPID': '0'}
+            # Pending children still count as outstanding work, but cannot authorize startup.
+            self.assertEqual('running', outstanding_executor(self.host, self.entry, self.operation))
+            with self.assertRaises(DeployError) as error:
+                compatibility.startup_check(self.host, self.entry['name'], 'http')
+            self.assertEqual('cutover_drain_review', error.exception.code)
+            self.assertTrue(self.state()['cutover']['drain_failed'])
+            raise KeyboardInterrupt()
+        self.health.side_effect = executor_dying
+        with self.assertRaises(KeyboardInterrupt):
+            self.execute()
+        self.health.side_effect = None
+        self.executor_observation = {}  # Executor and remaining work have now exited.
+        contained = release.containment_stop(self.host, self.entry, self.state())
+        self.assertEqual('cutover-drain-resolve', contained['next_action'])
+        attempt = self.state()['cutover']['candidate_start']
+        with self.assertRaises(DeployError) as error:
+            release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        self.assertEqual('cutover_drain_review', error.exception.code)
+        reviewed = release.resolve_cutover_drain(self.host, self.project, self.profile, self.operation,
+                                               'owner@example.test', 'Reviewed work after executor death during readiness')
+        self.assertEqual(attempt, reviewed['resolution']['candidate_start'])
+        self.assertEqual('closed', self.state()['queue_compatibility']['permission'])
+        with self.assertRaises(DeployError):
+            compatibility.startup_check(self.host, self.entry['name'], 'http')
+        release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        self.assertTrue(self.execute()['ok'])
+        self.assertNotEqual(attempt['executor_invocation_id'], self.state()['cutover']['candidate_start']['executor_invocation_id'])
 
     def test_missing_or_invalid_attempt_boot_evidence_refuses_guard_and_allows_review(self):
         self.interrupt_candidate_readiness()

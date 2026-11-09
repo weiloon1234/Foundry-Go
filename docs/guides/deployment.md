@@ -529,10 +529,14 @@ ENVIRONMENT=production ACTION=cutover-resume \
 	PLAN_TOKEN=<same-token> OPERATION=<same-uuid-v4> CONFIRM=yes make deploy
 ```
 
-A live executor is joined, not duplicated. After reboot there is no automatic
-executor resume. During candidate readiness, admission is bound to the attempt's
-recorded boot and live executor invocation. Enabled roles cannot restart the
-unresolved candidate on another boot, with missing or invalid boot evidence, or
+An executor with outstanding work is joined, not duplicated. After reboot there
+is no automatic executor resume. During readiness, candidate admission is stricter:
+the executor unit must have `ActiveState=active`, `SubState=running`, a positive
+`MainPID` and the attempt's recorded `InvocationID`, on the recorded boot.
+Activating, deactivating and reloading units cannot admit candidates, even with
+the original invocation ID. Missing or mismatched evidence also closes admission.
+Enabled roles cannot restart the unresolved candidate on another boot,
+with missing or invalid boot evidence, or
 under another executor invocation. The guard refuses startup and state reads mark
 the attempt review-required, even before an operator runs a recovery action.
 Use confirmed `stop`, audited `cutover-drain-resolve`, then explicit `cutover-resume`.
@@ -589,8 +593,11 @@ Empty cgroups and absence of instance-owned clients must still be proved.
 
 Before candidate startup, the tool persists an attempt UUID, start time, boot ID
 and supervised executor invocation ID. While the attempt is unresolved, each
-admission check requires that same boot and live executor. The startup guard reads
-this evidence without taking coordinator locks or overwriting shared state;
+admission check requires that same boot and executor invocation, with
+`ActiveState=active`, `SubState=running` and `MainPID>0`. A unit with outstanding
+work but without these liveness properties cannot authorize startup.
+The startup guard reads this evidence without taking coordinator locks or
+overwriting shared state;
 containment and recovery persist the resulting review requirement.
 Any failed startup or readiness check, unsuccessful unit exit, kill, timeout, or
 interruption requires confirmed, audited drain resolution before resume or forward

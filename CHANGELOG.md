@@ -3,8 +3,10 @@
 ## Unreleased
 
 - Fixed: unresolved candidate startup admission is bound to its recorded boot and
-  live executor invocation. Reboot, missing or invalid attempt boot evidence, or
-  lost executor ownership fences enabled roles and requires audited drain
+  executor invocation. Admission requires `ActiveState=active`, `SubState=running`,
+  a positive `MainPID` and the recorded `InvocationID`; activating, deactivating or
+  reloading units cannot admit candidates. Reboot, missing or invalid evidence, or
+  failure of this liveness check fences enabled roles and requires audited drain
   resolution plus explicit resume. Only a successfully healthy startup attempt
   retains ordinary admission across reboot, subject to the compatibility gate.
 

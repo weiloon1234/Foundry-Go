@@ -79,8 +79,7 @@ def candidate_executor_matches(host, entry, progress):
                 and attempt.get('boot_id') == (progress.get('drain') or {}).get('boot_id') == release._boot_id(host)
                 and isinstance(attempt.get('executor_invocation_id'), str)
                 and re.fullmatch('[a-f0-9]{32}', attempt['executor_invocation_id']) is not None
-                and release.cutover_executor(host, entry, progress['operation_id']) == 'running'
-                and release._role_invocation(host, release.cutover_unit(entry, progress['operation_id'])) == attempt['executor_invocation_id'])
+                and release.cutover_executor_admits_start(host, entry, progress['operation_id'], attempt['executor_invocation_id']))
     except (DeployError, OSError):
         return False
 

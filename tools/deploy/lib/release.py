@@ -1713,6 +1713,21 @@ def cutover_executor(host, entry, operation_id):
     return 'exited'
 
 
+def cutover_executor_admits_start(host, entry, operation_id, invocation_id):
+    """Require a live coordinator, not merely outstanding work in its unit."""
+    unit = cutover_unit(entry, operation_id)
+    result = host.run(['systemctl', 'show', unit,
+                       '--property=LoadState,ActiveState,SubState,MainPID,InvocationID,Transient,Description', '--no-pager'],
+                      timeout=5, check=False)
+    value = dict(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line)
+    return (result.returncode == 0 and value.get('LoadState') == 'loaded'
+            and value.get('Transient') == 'yes'
+            and value.get('Description') == f"Foundry cutover {entry['profile']['instance_id']} {operation_id}"
+            and value.get('ActiveState') == 'active' and value.get('SubState') == 'running'
+            and re.fullmatch('[1-9][0-9]*', value.get('MainPID', '')) is not None
+            and value.get('InvocationID') == invocation_id)
+
+
 def _submit_cutover(host, entry, plan, operation_id):
     unit = cutover_unit(entry, operation_id)
     observed = cutover_executor(host, entry, operation_id)
