@@ -8,6 +8,19 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Cutover stop-proof fix — v0.15.1, 2026-11-09
+
+Status: **released after a production incident; deploy-tool suite (623 tests) and framework CI passed on 9240c966**.
+- The first Semaklah cutover stopped before its snapshot. v0.15.0 compared stopped template instances against
+  `system.slice`, but systemd places them in `system-<template>.slice`. All roles stayed fenced, so the site was down
+  12:11–13:43 UTC. No snapshot or queue migration ran.
+- The stop proof now derives systemd's implicit slice and cgroup. A cutover awaiting reconciliation with an exited
+  executor may receive a tool upgrade; it then continues through a reviewed recovery plan.
+- Semaklah completed the cutover through `cutover-abort-plan`/`-apply` on the fixed tools (operation `9802c285`):
+  both `delivery` queues are on layout 3 and the instance is healthy.
+Lesson: the deploy-tool fakes modelled systemd without per-template slices. Host-facing proofs need fixtures taken
+from a real host, or a container-backed systemd check, before a production-only path ships.
+
 ## Coordinated Redis queue cutover — v0.15.0, 2026-11-09
 
 Status: **implemented; deploy-tool (620 tests), release-tool, docs and the touched Go packages passed, including a

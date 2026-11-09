@@ -302,7 +302,11 @@ An absent guard, a drop-in, or a pending daemon reload blocks the operation.
 
 The base client floor remains generation 1 so existing hosts can upgrade. Once
 any instance has persisted queue compatibility state, host mutations require a
-generation-5 client. Reads remain available. A pending cutover blocks tool upgrades.
+generation-5 client. Reads remain available. A running cutover blocks tool upgrades.
+An operation in `needs_reconciliation` whose executor has exited allows one, so a
+defective tool can be replaced. Resume refuses the changed tools, so continue that
+operation through a reviewed `cutover-abort-plan` (before dispatch) or
+`cutover-forward-plan` (after migration) built on the new tools.
 
 Tool plans bind the candidate inventory digest to the current host state.
 Application uses the reviewed plan token and durable operation UUID. Upgrades

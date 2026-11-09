@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.15.1 — 2026-11-09
+
+**Deploy-tool fix for the first production queue cutover.** Upgrade generation-5 hosts with
+`tools-plan`/`tools-apply`; the generation is unchanged.
+
+- Fixed: cutover stop proof derives systemd's implicit slice and cgroup for stopped template
+  instances (`foundry-http@<instance>.service` lives in `system-foundry\x2dhttp.slice`).
+  v0.15.0 expected `system.slice`, so on a real host every cutover stopped with
+  `cutover_stop_unproven` before its snapshot, leaving the instance down with startup fenced.
+- Fixed: `tools-apply` may replace a defective bundle while a cutover is in
+  `needs_reconciliation` and its executor has exited. Resume still refuses changed tools;
+  continue through a reviewed `cutover-abort-plan` (before dispatch) or `cutover-forward-plan`.
+
 ## v0.15.0 — 2026-11-09
 
 **New deployment operations for the v0.14.0 Redis queue layout cutover.** Generation-5 host tools are required;
