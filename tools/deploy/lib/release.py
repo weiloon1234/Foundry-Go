@@ -1463,6 +1463,7 @@ def containment_stop(host, entry, state, role="all"):
     if active:
         state["queue_compatibility"]["permission"] = "closed"
         progress["hold"] = True
+        _mark_candidate_review(state)
     else:
         try:
             compatibility.require_current(host, entry)
@@ -1471,7 +1472,8 @@ def containment_stop(host, entry, state, role="all"):
     state['status'] = 'unknown'
     host.save_state(entry, state)
     stop(host, entry, role=role, disable=True)
-    compatibility.prove_stopped(host, entry, roles=list(selected_units(entry, role)))
+    compatibility.prove_stopped(host, entry, roles=list(selected_units(entry, role)),
+                                review=bool(active and progress['drain_failed']))
     if active:
         state['status'] = 'unknown'
         next_action = cutover_next_action(state)
@@ -1797,8 +1799,8 @@ def apply_cutover(host, project, profile, token, operation_id, *, resume=False, 
             progress = state['cutover']
             if progress['outcome'] in ('succeeded', 'failed'):
                 return _finish_cutover(host, entry, state, recorded, succeeded=progress['outcome'] == 'succeeded', error=progress['error'])
-            require(not progress['drain_failed'], 'cutover_drain_review', 'Forced termination requires operator review.')
             _drain_continuity(host, entry, state)
+            require(not progress['drain_failed'], 'cutover_drain_review', 'Forced termination requires operator review.')
             _verify_cutover_inputs(host, registry, entry, plan)
             progress['hold'] = False
             progress['outcome'] = 'running'
@@ -1913,6 +1915,8 @@ def resolve_cutover_drain(host, project, profile, operation_id, reviewed_by, rea
         require(progress.get('operation_id') == operation_id and progress.get('outcome') not in ('succeeded', 'failed'),
                 'operation_conflict', 'Review must name the active unresolved operation.')
         require(cutover_executor(host, entry, operation_id) != 'running', 'operation_locked', 'Contain the executor before review.')
+        if _mark_candidate_review(state):
+            host.save_state(entry, state)
         require(state['queue_compatibility']['permission'] == 'closed', 'queue_start_fenced', 'Review requires closed startup permission.')
         compatibility.require_guards(host, entry)
         observations = compatibility.prove_stopped(host, entry, review=True)
@@ -1938,17 +1942,23 @@ def resolve_cutover_drain(host, project, profile, operation_id, reviewed_by, rea
         return {'ok': True, 'operation_id': operation_id, 'resolution': resolution, 'next_action': cutover_next_action(state)}
 
 
+def _mark_candidate_review(state):
+    import cutover_contracts as contract
+    progress = state['cutover']
+    if contract.candidate_review_required(progress):
+        progress['drain_failed'] = True
+        state['queue_compatibility']['permission'] = 'closed'
+        return True
+    return False
+
+
 def _drain_continuity(host, entry, state):
     progress = state['cutover']
     if progress['outcome'] in ('succeeded', 'failed'):
         return
-    attempt = progress.get('candidate_start')
-    if attempt and attempt['outcome'] != 'healthy' and not any(
-            review.get('candidate_start') == attempt for review in progress.get('drain_resolutions', [])):
-        progress['drain_failed'] = True
-        state['queue_compatibility']['permission'] = 'closed'
+    if _mark_candidate_review(state):
         host.save_state(entry, state)
-        raise DeployError('cutover_drain_review', 'Candidate startup failed or was interrupted; audited resolution is required.')
+        raise DeployError('cutover_drain_review', 'Candidate startup failed, was interrupted, or has unknown history; audited resolution is required.')
     drain = progress.get('drain')
     require(drain and set(drain['roles']) == set(instance_units(entry)),
             'cutover_drain_review', 'Durable role drain evidence is missing; review is required.')

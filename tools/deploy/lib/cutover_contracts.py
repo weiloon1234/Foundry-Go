@@ -193,11 +193,30 @@ def save_private(host, path, value):
 
 
 def _validate_candidate_start(value):
+    if isinstance(value, dict) and value.get('outcome') == 'history_unknown':
+        fields(value, 'outcome evidence_sha256', 'cutover_state_invalid')
+        require(hash_value(value['evidence_sha256']), 'cutover_state_invalid', 'Invalid unknown startup evidence.')
+        return
     fields(value, 'id started_at outcome error', 'cutover_state_invalid')
     require(valid_uuid(value['id']) and valid_timestamp(value['started_at'])
             and value['outcome'] in ('dispatched_or_unknown', 'failed', 'healthy')
             and (value['error'] is None or name(value['error'])),
             'cutover_state_invalid', 'Invalid candidate startup evidence.')
+
+
+def candidate_review_required(progress):
+    attempt = progress.get('candidate_start')
+    return (progress['outcome'] not in ('succeeded', 'failed') and attempt is not None
+            and attempt['outcome'] != 'healthy' and not any(
+                review.get('candidate_start') == attempt for review in progress.get('drain_resolutions', [])))
+
+
+def _candidate_start_possible(progress):
+    return progress['action'] == 'cutover' and (
+        progress['rollback_prohibited'] or any(q['status'] != 'pending' for q in progress['queues'])
+        or progress['database'] != 'not_started' or progress['seed'] != 'not_started'
+        or any(progress.get(key) in ('queues', 'database', 'seed', 'switch', 'health', 'recovering')
+               for key in ('phase', 'error_phase')))
 
 
 def validate_progress(value):
@@ -234,8 +253,20 @@ def validate_progress(value):
                     'cutover_state_invalid', 'Invalid role drain evidence.')
     require('snapshot_started' not in value or type(value['snapshot_started']) is bool,
             'cutover_state_invalid', 'Invalid snapshot dispatch evidence.')
+    # Decode damaged startup evidence into an explicit reviewable unknown. Keep
+    # its fingerprint, never reinterpret a missing/invalid record as "not started".
+    unknown = 'candidate_start' not in value and _candidate_start_possible(value)
     if value.get('candidate_start') is not None:
-        _validate_candidate_start(value['candidate_start'])
+        try:
+            _validate_candidate_start(value['candidate_start'])
+        except DeployError:
+            if value['outcome'] in ('succeeded', 'failed'):
+                raise
+            unknown = True
+    if unknown and value['outcome'] not in ('succeeded', 'failed'):
+        value['candidate_start'] = {'outcome': 'history_unknown', 'evidence_sha256': sha({
+            'operation_id': value['operation_id'], 'present': 'candidate_start' in value,
+            'value': value.get('candidate_start'), 'prior_reviews': value.get('drain_resolutions', [])})}
     if 'drain_resolutions' in value:
         require(isinstance(value['drain_resolutions'], list) and len(value['drain_resolutions']) <= 32,
                 'cutover_state_invalid', 'Invalid drain review history.')
@@ -253,6 +284,8 @@ def validate_progress(value):
                     and all(isinstance(resolution[k], str) and 1 <= len(resolution[k]) <= limit
                             for k, limit in (('reviewed_by', 200), ('reason', 2000))),
                     'cutover_state_invalid', 'Invalid drain review evidence.')
+    if (value.get('candidate_start') or {}).get('outcome') == 'history_unknown' and candidate_review_required(value):
+        value['drain_failed'] = True
     return value
 
 

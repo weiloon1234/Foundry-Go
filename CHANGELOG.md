@@ -6,8 +6,11 @@
   death and preserves it through completion. Completed cutover records remain
   history; a later ordinary deployment can be selected for restore.
 - Changed: every failed or interrupted candidate startup attempt requires confirmed,
-  audited drain resolution before cutover resume or forward recovery. Later guard
-  refusals cannot erase the durable attempt. Zero-main-process `exit-code` and
+  audited drain resolution before cutover resume or forward recovery. From migration
+  dispatch onward, missing or malformed startup history is unknown and also requires
+  review, even after a clean stop. Containment records the requirement directly so
+  `stop` can be followed by `cutover-drain-resolve` without a failed resume first.
+  Later guard refusals cannot erase the durable attempt. Zero-main-process `exit-code` and
   `start-limit-hit` refusals are exempt only after reboot following a completed
   drain, when no candidate attempt has started.
 - Added: confirmed `cutover-drain-resolve` records a reviewer and reason against

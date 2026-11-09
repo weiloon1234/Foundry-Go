@@ -49,6 +49,9 @@ def require_release(host, entry, manifest, *, selecting=False):
     state_path = host.paths.instance_state(entry['name']) / 'state.json'
     state = host.load_state(entry)
     validate_state(state)
+    progress = state.get('cutover')
+    require(not progress or progress['outcome'] in ('succeeded', 'failed') or not progress['drain_failed'],
+            'cutover_drain_review', 'Startup is blocked until the recorded drain uncertainty is reviewed.')
     gate = state.get('queue_compatibility')
     if gate is None:
         # A unit cannot establish a safe legacy deployment from a missing state.

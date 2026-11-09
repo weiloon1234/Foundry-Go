@@ -842,6 +842,108 @@ class CutoverTests(unittest.TestCase):
         self.assertTrue(self.state()['cutover']['drain_failed'])
         self.assertEqual('closed', self.state()['queue_compatibility']['permission'])
 
+    def test_missing_start_history_after_executor_death_requires_review_despite_clean_containment(self):
+        self.apply()
+        def die_during_readiness(*args, **kwargs):
+            path = self.host.paths.instance_state(self.entry['name']) / 'state.json'
+            state = json.loads(path.read_text())
+            state['cutover'].pop('candidate_start')  # Simulate lost startup evidence, bypassing validation.
+            path.write_text(json.dumps(state))
+            os._exit(87)
+        child = os.fork()
+        if child == 0:
+            self.health.side_effect = die_during_readiness
+            try:
+                self.execute()
+            finally:
+                os._exit(88)
+        _, status = os.waitpid(child, 0)
+        self.assertEqual(87, os.waitstatus_to_exitcode(status))
+        for connection in self.inventory['connections']:
+            for queue in connection['queues']:
+                queue['layout'] = '3'  # The child migrated the fixture's queue before startup.
+        with self.assertRaises(DeployError) as error:
+            compatibility.startup_check(self.host, self.entry['name'], 'http')
+        self.assertEqual('cutover_drain_review', error.exception.code)
+        contained = release.containment_stop(self.host, self.entry, self.state())
+        self.assertEqual('cutover-drain-resolve', contained['next_action'])
+        attempt = self.state()['cutover']['candidate_start']
+        self.assertEqual('history_unknown', attempt['outcome'])
+        self.assertTrue(self.state()['cutover']['drain_failed'])
+        with self.assertRaises(DeployError) as error:
+            release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        self.assertEqual('cutover_drain_review', error.exception.code)
+        archive, _ = self.bundle(3)
+        with self.assertRaises(DeployError) as error:
+            release.plan_cutover(self.host, self.project, self.profile, archive, digest(archive), forward=True)
+        self.assertEqual('cutover_drain_review', error.exception.code)
+        reviewed = release.resolve_cutover_drain(self.host, self.project, self.profile, self.operation,
+                                               'owner@example.test', 'Reviewed lost startup history and interrupted work')
+        self.assertEqual(attempt, reviewed['resolution']['candidate_start'])
+        release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        self.assertTrue(self.execute()['ok'])
+
+    def test_interrupted_readiness_stop_then_resolution_without_failed_resume(self):
+        self.apply()
+        self.health.side_effect = KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            self.execute()
+        self.assertFalse(self.state()['cutover']['drain_failed'])
+        attempt = self.state()['cutover']['candidate_start']
+        self.assertEqual('dispatched_or_unknown', attempt['outcome'])
+        contained = release.containment_stop(self.host, self.entry, self.state())
+        self.assertEqual('cutover-drain-resolve', contained['next_action'])
+        reviewed = release.resolve_cutover_drain(self.host, self.project, self.profile, self.operation,
+                                               'owner@example.test', 'Reviewed interrupted readiness after containment')
+        self.assertEqual(attempt, reviewed['resolution']['candidate_start'])
+        self.health.side_effect = None
+        release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        self.assertTrue(self.execute()['ok'])
+
+    def test_invalid_start_history_can_be_reviewed_and_later_loss_needs_fresh_review(self):
+        self.apply()
+        self.interrupt_at = 'restart'
+        with self.assertRaises(KeyboardInterrupt):
+            self.execute()
+        path = self.host.paths.instance_state(self.entry['name']) / 'state.json'
+        state = json.loads(path.read_text())
+        state['cutover']['candidate_start'] = {'outcome': 'healthy', 'id': 'invalid'}
+        path.write_text(json.dumps(state))
+        release.containment_stop(self.host, self.entry, self.state())
+        attempt = self.state()['cutover']['candidate_start']
+        self.assertEqual('history_unknown', attempt['outcome'])
+        self.assertNotIn('invalid', json.dumps(attempt))
+        release.resolve_cutover_drain(self.host, self.project, self.profile, self.operation,
+                                      'owner@example.test', 'Reviewed malformed startup history')
+        release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        with self.assertRaises(KeyboardInterrupt):
+            self.execute()
+        state = json.loads(path.read_text())
+        state['cutover']['candidate_start'] = {'outcome': 'healthy', 'id': 'invalid'}
+        path.write_text(json.dumps(state))
+        with self.assertRaises(DeployError) as error:
+            release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        self.assertEqual('cutover_drain_review', error.exception.code)
+        self.assertNotEqual(attempt, self.state()['cutover']['candidate_start'])
+        self.assertTrue(self.state()['cutover']['drain_failed'])
+
+    def test_missing_history_at_migration_dispatch_is_unknown_before_clean_stop(self):
+        self.apply()
+        self.interrupt_at = 'migrate-layout'
+        with self.assertRaises(KeyboardInterrupt):
+            self.execute()
+        path = self.host.paths.instance_state(self.entry['name']) / 'state.json'
+        state = json.loads(path.read_text())
+        state['cutover'].pop('candidate_start')
+        path.write_text(json.dumps(state))
+        with self.assertRaises(DeployError) as error:
+            release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        self.assertEqual('cutover_drain_review', error.exception.code)
+        persisted = json.loads(path.read_text())
+        self.assertTrue(persisted['cutover']['drain_failed'])
+        self.assertEqual('history_unknown', persisted['cutover']['candidate_start']['outcome'])
+        self.assertEqual('closed', persisted['queue_compatibility']['permission'])
+
     def test_failed_candidate_pre_start_requires_resolution_before_forward_recovery(self):
         self.apply()
         self.fail_at = 'restart'

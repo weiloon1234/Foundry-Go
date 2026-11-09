@@ -585,8 +585,19 @@ attempt did no work. The failed or uncertain attempt remains in `candidate_start
 and `drain_failed` directs the operator to `cutover-drain-resolve`. Forced termination
 and unresolved boot evidence also retain that requirement.
 
+For an unresolved cutover, missing startup history from migration dispatch onward
+(or any later state where candidate startup is possible) is unknown, not evidence
+that no attempt ran. Malformed startup history is also unknown. The tool retains
+a fingerprint of that evidence in `candidate_start` with outcome `history_unknown`,
+blocks startup and requires audited resolution before resume or forward recovery.
+A clean stop does not remove this requirement. A later loss of history requires a
+new review; an earlier approval cannot authorize it.
+
 Contain the executor and roles with confirmed `ACTION=stop`. The lead reviews
 interrupted work and external side effects, and the owner approves the resolution.
+Containment records `drain_failed` for an interrupted or unknown candidate attempt
+and returns `cutover-drain-resolve` as the next action. No failed resume is needed
+to make resolution available. Process-exit and client checks still apply.
 Record that decision with the active operation UUID:
 
 ```sh

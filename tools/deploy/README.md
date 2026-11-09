@@ -27,7 +27,10 @@ The replacement operation resumes through `cutover-resume`.
 `cutover-drain-resolve` records a confirmed reviewer decision against exact stopped
 process evidence and the failed or uncertain candidate startup attempt. Every
 candidate startup failure requires this review, even if a later retry was refused
-by the guard. The guard-refusal exemption applies only after reboot following a
+by the guard. Missing history from migration dispatch onward and malformed history
+also require review; clean containment cannot clear the uncertainty. `stop` records
+that requirement, so `cutover-drain-resolve` is available directly afterward.
+The guard-refusal exemption applies only after reboot following a
 completed drain, before any candidate attempt, including `start-limit-hit` with
 zero main-process evidence. `cutover-abort-plan` and confirmed `cutover-abort-apply` replace
 a pre-dispatch operation with a corrected inventory while keeping startup fenced.
