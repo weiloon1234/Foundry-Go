@@ -49,7 +49,7 @@ var consumerAPIPrivateMethodExceptions = map[string]string{
 	"database/postgres.multirangeSetter":    "ScanIndex ScanIndexType ScanNull SetLen",
 	"database/postgres.privateSQLValue":     "Format",
 	"database/postgres.protectedCodec":      "DecodeDatabaseSQLValue DecodeValue FormatSupported PlanEncode PlanScan PreferredFormat",
-	"database/postgres.protectedConnection": "CheckNamedValue ExecContext Prepare PrepareContext QueryContext",
+	"database/postgres.protectedConnection": "CheckNamedValue Close ExecContext Prepare PrepareContext QueryContext",
 	"database/postgres.protectedConnector":  "Connect Driver",
 	"database/postgres.protectedRewriter":   "RewriteQuery",
 	"database/postgres.protectedRows":       "ScanColumn",
