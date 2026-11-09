@@ -181,8 +181,14 @@ def execute(host, action, request):
             # Naming a topology's only role selects the whole instance.
             if set(selected_units(entry, role)) == set(instance_units(entry)):
                 role = "all"
-            release.validate_runtime_environment(host, entry)
             state = host.load_state(entry)
+            if action == "stop" and state.get("queue_compatibility"):
+                require(request.get("confirm") is True, "confirmation_required", "Confirm containment stop.")
+                return release.containment_stop(host, entry, state, role)
+            if action == "restart":
+                release.compatibility.require_mutation_idle(state)
+                release.compatibility.require_current(host, entry)
+            release.validate_runtime_environment(host, entry)
             require(role == "all" or not (state.get("last_attempt") or {}).get("role_recovery_pending"),
                     "role_recovery", "Complete pending background recovery with a plain restart before selecting a role.")
             if action == "restart":

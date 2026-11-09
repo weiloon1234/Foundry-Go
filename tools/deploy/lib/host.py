@@ -244,6 +244,9 @@ class Host:
                     validate_manifest(state[key], entry)
                 except (DeployError, TypeError):
                     raise DeployError(code, detail) from None
+        if "queue_compatibility" in state:
+            from compatibility import validate
+            validate(state["queue_compatibility"])
         if state["last_attempt"] is not None:
             validate_attempt(state["last_attempt"])
         for attempt in state["history"]:
@@ -252,6 +255,17 @@ class Host:
         return state
 
     def save_state(self, entry, state):
+        path = check_path(self.paths.instance_state(entry["name"]) / "state.json", "file")
+        if path.exists():
+            previous = read_json(path).get("queue_compatibility")
+            if previous is not None:
+                from compatibility import validate
+                validate(previous)
+                candidate = state.get("queue_compatibility")
+                require(candidate is not None, "queue_compatibility_invalid", "A persisted queue gate cannot be discarded.")
+                validate(candidate)
+                require(previous["floor"] != 3 or candidate["floor"] == 3,
+                        "queue_compatibility_invalid", "The queue layout requirement cannot be lowered.")
         state["updated_at"] = now()
         self.validate_state(entry, state)
         from release import persist_configuration_intents, public_state

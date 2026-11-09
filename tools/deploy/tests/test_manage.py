@@ -39,6 +39,17 @@ class ManagerTests(unittest.TestCase):
                 self.assertEqual(code, error.exception.code)
             run.assert_not_called()
 
+    def test_legacy_clients_remain_upgradeable_but_cannot_mutate_a_fenced_host(self):
+        request = copy.deepcopy(self.request)
+        request["client"]["generation"] = 4
+        upgrades.check_client(self.host, request, "stop")
+        state = self.host.load_state(self.entry)
+        state["queue_compatibility"] = {"schema": 1, "floor": 3, "permission": "closed", "admitted": {}}
+        self.host.save_state(self.entry, state)
+        with self.assertRaises(DeployError) as error:
+            upgrades.check_client(self.host, request, "stop")
+        self.assertEqual("client_too_old", error.exception.code)
+
     def test_unknown_mutation_fields_are_rejected(self):
         with self.assertRaises(DeployError) as error:
             manager.execute(self.host, "stop", {**self.request, "unreviewed": True})
@@ -78,7 +89,7 @@ class ManagerTests(unittest.TestCase):
         self.assertEqual(2, loaded["schema"])
         response = manager.execute(self.host, "hello", {})
         self.assertEqual({"major": 2, "minor": 0}, response["protocol"])
-        self.assertEqual({"minimum": 1, "maximum": upgrades.protocol()["generation"]}, response["client_generation"])
+        self.assertEqual({"minimum": upgrades.protocol()["minimum_client_generation"], "maximum": upgrades.protocol()["generation"]}, response["client_generation"])
         self.assertEqual(loaded["tools"]["bundle_sha256"], response["tools"]["bundle_sha256"])
 
 

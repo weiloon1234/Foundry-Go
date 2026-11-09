@@ -16,6 +16,7 @@ StateDirectoryMode=0750
 UMask=0077
 RuntimeDirectory=@RUNTIME_DIRECTORY@/scheduler
 RuntimeDirectoryMode=0750
+ExecStartPre=+/usr/bin/python3 -I /usr/local/lib/foundry/current/server/start_check.py @SERVICE@ scheduler
 ExecStart=@APPLICATION@/current/artisan schedule:work --config @APPLICATION@/current/config/deploy.toml --env-file @CONFIGURATION@/app.env
 Restart=on-failure
 RestartSec=5s

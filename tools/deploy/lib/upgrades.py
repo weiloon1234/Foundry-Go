@@ -72,6 +72,8 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
         inventory.append({"path": path.relative_to(source).as_posix(), "size": size, "mode": 0o644,
                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
     required = REQUIRED_FILES if protocol(source)["generation"] >= 3 else REQUIRED_FILES - {"lib/recover.py"}
+    if protocol(source)["generation"] >= 5:
+        required = required | {"lib/compatibility.py", "server/start_check.py"}
     require(required <= {item["path"] for item in inventory}, "tools_incomplete", "The tool bundle is incomplete.")
     return source, files, inventory
 
@@ -141,7 +143,7 @@ def hello(host) -> dict:
             "protocol": metadata["protocol"], "supported_protocols": [{"major": 2, "minor_min": 0, "minor_max": 0}],
             "client_generation": {"minimum": metadata["minimum_client_generation"], "maximum": metadata["generation"]},
             "archive_schema": 1, "inspection_schema": 1,
-            "capabilities": ["topology-v1", "registry-v2", "digest-bound-tool-upgrade"]}
+            "capabilities": ["queue-layout-cutover-v1", "topology-v1", "registry-v2", "digest-bound-tool-upgrade"]}
 
 
 def check_client(host, request: dict, action: str) -> None:
@@ -149,6 +151,10 @@ def check_client(host, request: dict, action: str) -> None:
     if action in READ_ACTIONS:
         return
     registry = host.read_registry(missing=True)
+    if registry and action in UPGRADE_ACTIONS:
+        import compatibility
+        for entry in registry["instances"].values():
+            compatibility.require_mutation_idle(host.load_state(entry))
     if registry and action != "capacity-apply":
         import capacity
         capacity.require_idle(host)
@@ -170,6 +176,8 @@ def check_client(host, request: dict, action: str) -> None:
             type(wire.get("minor")) is int and 0 <= wire["minor"] <= metadata["protocol"]["minor"] and
             client["generation"] >= metadata["minimum_client_generation"],
             "client_too_old", "Bump your Foundry-Go pin to a supported deploy generation.")
+    if registry and any(host.load_state(entry).get("queue_compatibility") for entry in registry["instances"].values()):
+        require(client["generation"] >= 5, "client_too_old", "Queue-fenced hosts require a cutover-aware deployment client.")
     require(action in UPGRADE_ACTIONS or client["generation"] <= metadata["generation"],
             "host_upgrade_required", "Review and apply a host tool upgrade before this mutation.")
 
@@ -352,6 +360,11 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
         # Execute the selected bundle's implementation, not this old process's imports.
         host.run(["/usr/bin/python3", "-I", str(destination / "lib/backup.py"), "rebind"], timeout=1800)
         registry = host.read_registry()
+    if protocol(source)["generation"] >= 5:
+        from provision import _install_unit
+        for entry in registry["instances"].values():
+            if entry["provisioning"]["state"] == "ready":
+                _install_unit(host, registry, entry, destination)
     journal["phase"] = "complete"
     atomic_json(journal_path, journal, 0o600)
     registry["tools"]["upgrade_operation"] = None

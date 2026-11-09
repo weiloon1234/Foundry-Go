@@ -31,6 +31,7 @@ from host import OperationTimeout, wall_clock_budget
 from redis_acl import (granted_redis_patterns, granted_redis_channels, reconcile_redis_grants,
                        redis_grant_patterns, redis_channel_patterns)
 import backup
+import compatibility
 
 MAX_ARCHIVE_BYTES = 2 * 1024**3
 MAX_EXPANDED_BYTES = 8 * 1024**3
@@ -164,7 +165,8 @@ def current_version(host, entry):
 
 
 def switch_to(host, entry, version):
-    release_path(host, entry, version)
+    path = release_path(host, entry, version)
+    compatibility.require_release(host, entry, read_json(path / "manifest.json"), selecting=True)
     current_version(host, entry)  # refuse a foreign/non-symlink current
     opt = host.paths.opt(entry["name"])
     temporary = opt / (".current-" + uuid.uuid4().hex)
@@ -334,6 +336,7 @@ def resume_background_recovery(host, entry, state):
     attempt = state.get("last_attempt") or {}
     if not attempt.get("role_recovery_pending"):
         return False
+    compatibility.require_current(host, entry)
     ensure_key_archive(host, entry, state)
     units = instance_units(entry)
     for role, prior in attempt["prior_background"].items():
@@ -453,6 +456,7 @@ def _prepare_units(host, units, deadline, enable):
 
 def start_roles(host, entry, *, http_only=False, role="all", roles=None, enable=True):
     """Start selected roles under one deadline, with HTTP ready before backgrounds."""
+    compatibility.require_current(host, entry)
     units = selected_units(entry, role, roles=roles)
     if http_only:
         units = {"http": units["http"]}
@@ -637,6 +641,7 @@ def native_runtime(host, entry):
 
 
 def require_idle(state):
+    compatibility.require_mutation_idle(state)
     previous = state.get("last_attempt")
     require(not previous or previous.get("outcome") not in ("running", "needs_reconciliation"), "reconciliation_required", "An operation was interrupted; inspect status and reconcile before retrying.")
 
@@ -753,6 +758,7 @@ def check_live_state(host, entry, state):
 
 def restore_code(host, entry, state, current, previous, recovered_status, *, roles=None):
     """Restore verified code only; never reverse database work."""
+    compatibility.require_release(host, entry, current)
     verified_release(host, entry, current)
     if roles is not None and state["last_attempt"]["action"] == "deploy":
         stop(host, entry, roles=[name for name in instance_units(entry) if name not in roles])
@@ -898,6 +904,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                     require(ready(host, entry, timeout=10), "readiness_failed", "Current release is no longer ready; inspect it before retrying.")
                     return {"ok": True, "unchanged": True, "instance": entry["name"], "version": version}
             release = publish_release(host, entry, staging, manifest)
+            compatibility.require_release(host, entry, manifest, selecting=True)
             attempt = begin(host, entry, state, "deploy", version,
                             metadata={"recovery_operation_id": operation_id or str(uuid.uuid4()), "roles": prior_roles})
             prior_current, prior_previous = state["current"], state["previous"]
@@ -1001,6 +1008,10 @@ def rollback(host, project, profile, target, expected_current, operation_id):
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
         state = host.load_state(entry)
+        compatibility.require_mutation_idle(state)
+        target_manifest = read_json(release_path(host, entry, target) / "manifest.json")
+        validate_manifest(target_manifest, entry)
+        compatibility.require_release(host, entry, target_manifest, selecting=True)
         receipt = _operation_path(host, entry, operation_id)
         recorded = next((item for item in [state.get("last_attempt"), *reversed(state["history"])]
                          if item and item.get("operation_id") == operation_id), None)
@@ -1072,6 +1083,7 @@ def reconcile(host, project, profile):
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
         state = host.load_state(entry)
+        compatibility.require_mutation_idle(state)
         attempt = state.get("last_attempt")
         require(attempt is not None, "no_attempt", "There is no operation to reconcile.")
         if attempt["outcome"] not in ("running", "needs_reconciliation"):
@@ -1272,6 +1284,8 @@ def _config_set(host, registry, entry, changes, rotation_operation_id=None):
     check_live_state(host, entry, state)
     resume_terminal_obligations(host, registry, entry, state)
     manifest = state.get("current")
+    if manifest is not None:
+        compatibility.require_release(host, entry, manifest)
     if manifest is None:
         version = (state.get("last_attempt") or {}).get("release")
         require(version is not None, "no_release", "Upload the first candidate before editing application configuration.")
@@ -1384,3 +1398,21 @@ if __name__ == "__main__":
         prune_runtime_maps(Path(sys.argv[2]), set(sys.argv[3:]))
     else:
         raise DeployError("invalid_operation", "Unknown release helper operation.")
+
+
+def require_cutover_quiescence(host, entry, operation_id):
+    """Shared M2 boundary used by the snapshot and cutover owners."""
+    compatibility.require_quiescence(host, entry, operation_id)
+
+
+def containment_stop(host, entry, state, role="all"):
+    """Stop processes without treating incompatible current code as runnable."""
+    selected_units(entry, role)
+    state["queue_compatibility"]["permission"] = "closed"
+    if state.get("cutover"):
+        state["cutover"]["hold"] = True
+    host.save_state(entry, state)
+    stop(host, entry, role=role, disable=True)
+    compatibility.prove_stopped(host, entry, roles=list(selected_units(entry, role)))
+    return {"ok": True, "contained": True, "instance": entry["name"],
+            "next_action": "cutover-resume", "old_release_start_allowed": False}

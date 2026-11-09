@@ -159,6 +159,15 @@ class ReleaseTests(unittest.TestCase):
     def deploy(self, archive):
         return release.activate(self.host, self.project, self.profile, archive, digest(archive))
 
+    def select_fixture_release(self):
+        archive, manifest = self.bundle()
+        release.unpack_archive(archive, release.release_path(self.host, self.entry, manifest["version"]), self.entry, digest(archive))
+        release.switch_to(self.host, self.entry, manifest["version"])
+        state = self.host.load_state(self.entry)
+        state["current"] = manifest
+        self.host.save_state(self.entry, state)
+        return manifest
+
     def test_storage_probe_ok_and_app_arguments(self):
         names = ["uploads", "0.assets_v2-archive", "a" * 128]
         self.host.storage_probe_output = json.dumps({"schema": 1, "disks": [
@@ -641,9 +650,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn(self.secret, json.dumps(self.state()))
 
     def test_background_starts_after_http_readiness_and_failed_http_keeps_it_stopped(self):
-        archive, manifest = self.bundle()
-        release.unpack_archive(archive, release.release_path(self.host, self.entry, manifest["version"]), self.entry, digest(archive))
-        release.switch_to(self.host, self.entry, manifest["version"])
+        self.select_fixture_release()
         units = instance_units(self.entry)
         self.health.return_value = False
         with self.assertRaises(DeployError) as failure:
@@ -1074,6 +1081,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(set(units.values()), self.host.enabled_roles)
 
     def test_reset_failed_on_a_never_loaded_unit_does_not_stop_the_start(self):
+        self.select_fixture_release()
         units = instance_units(self.entry)
         run = self.host.run
 
@@ -1090,6 +1098,7 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual({units["worker"]}, self.host.enabled_roles)
 
     def test_named_roles_only_touch_selected_unit_and_wait_for_it(self):
+        self.select_fixture_release()
         units = instance_units(self.entry)
         for role, unit in units.items():
             self.host.commands.clear()
@@ -1911,9 +1920,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual("failed", self.state()["status"])
 
     def test_required_background_failure_uses_one_remaining_deadline(self):
-        archive, manifest = self.bundle()
-        release.unpack_archive(archive, release.release_path(self.host, self.entry, manifest["version"]), self.entry, digest(archive))
-        release.switch_to(self.host, self.entry, manifest["version"])
+        self.select_fixture_release()
         self.health.side_effect = [True, False]
         with self.assertRaises(DeployError) as failure:
             release.restart(self.host, self.entry)
@@ -1926,6 +1933,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn(["systemctl", "start", units["scheduler"]], [args for args, _ in self.host.commands])
 
     def test_undeclared_worker_is_never_started(self):
+        self.select_fixture_release()
         from topology import validate_topology
         entry = copy.deepcopy(self.entry)
         entry["topology"] = validate_topology({"schema": 1, "roles": [{"name": "http"}, {"name": "scheduler"}]})

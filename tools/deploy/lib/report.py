@@ -387,6 +387,8 @@ def instance_report(host, entry, deadline, problems):
         # Host errors are deliberately not rendered: their text can carry paths/diagnostics.
         problem(problems, "instance_state_unavailable", instance_id)
         state = {}
+    if state.get("queue_compatibility", {}).get("permission") == "closed":
+        problem(problems, "queue_start_fenced", instance_id)
     recorded_status = state.get("status")
     if recorded_status not in INSTANCE_STATUSES:
         recorded_status = "unknown"
@@ -490,6 +492,7 @@ def instance_report(host, entry, deadline, problems):
         "configuration_revision": integer(entry.get("configuration_revision")),
         "status": "unknown" if recorded_status in {"healthy", "rolled_back"} and not consistent else recorded_status,
         "recorded_status": recorded_status, "metadata_consistent": consistent,
+        "queue_compatibility": state.get("queue_compatibility"),
         "current_release": current, "previous_release": previous, "last_attempt": attempt(state.get("last_attempt")),
         "service": unit_status, "services": topology, "readiness": ready, "certificate": cert, "backup": backup,
         "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),
