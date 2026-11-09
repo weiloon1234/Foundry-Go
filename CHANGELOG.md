@@ -2,8 +2,20 @@
 
 ## Unreleased
 
+- Fixed: disaster recovery to a new host refused to start the application since v0.15.0.
+  Recovery now persists release admission before starting roles, including the
+  normal queue compatibility gate for applications with Redis queues.
+  First deploy and recovery admission require absent or layout-3 queues;
+  existing layout-2 data requires a reviewed cutover.
+
 - Fixed: PostgreSQL pool and Redis TLS shutdown accept connections already closed
   by the server after a restart, while preserving genuine cleanup failures.
+
+- Fixed: deploy readiness accepts the framework's built-in readiness probe body.
+
+- Added: opt-in real-systemd contract tests in framework CI and a dedicated deploy
+  acceptance fixture with a container recovery slice covering queue drain, tool
+  upgrade and forward recovery, Redis snapshot restore, and containment.
 
 ## v0.15.1 — 2026-11-09
 

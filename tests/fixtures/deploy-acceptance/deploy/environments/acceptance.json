@@ -1,0 +1,14 @@
+{
+  "schema": 2,
+  "environment": "acceptance",
+  "instance_id": "58b70e4f-670e-48dc-bc1c-c77e03b63fb2",
+  "host": {"address": "deploy-acceptance.invalid", "port": 22, "host_id": null},
+  "runtime_environment": "testing",
+  "domain": "deploy-acceptance.invalid",
+  "certbot_email": "acceptance@example.invalid",
+  "architecture": "arm64",
+  "public_env": {},
+  "edge_origin_lockdown": true,
+  "retention": {"server_releases": 5, "local_releases": 3, "pre_migration_dumps": 7},
+  "backup_policy": {"interval_hours": 24, "full_retention_days": 35, "pitr_days": 28}
+}

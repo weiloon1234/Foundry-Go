@@ -92,7 +92,7 @@ func checkRepository(root string) error {
 		}
 		if entry.IsDir() {
 			switch entry.Name() {
-			case ".git", ".cache", "node_modules", "vendor":
+			case ".git", ".cache", "node_modules", "vendor", ".deploy": // .deploy holds local deploy build copies
 				return filepath.SkipDir
 			}
 			return nil

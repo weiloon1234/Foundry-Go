@@ -28,7 +28,7 @@ import uuid
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from topology import instance_units, validate_topology
-from contracts import PROFILE_SCHEMA, atomic_json, atomic_write, digest, identity, read_json
+from contracts import PROFILE_SCHEMA, atomic_json, atomic_write, check_path, digest, identity, read_json
 from host import Host
 from provision import bootstrap_plan
 from release import activate
@@ -53,7 +53,7 @@ def fixtures():
     return result
 
 
-def archive_contract(source):
+def archive_contract(source, *, reuse=False):
     with tarfile.open(source, "r:gz") as archive:
         manifest = json.load(archive.extractfile("manifest.json"))
         config = tomllib.loads(archive.extractfile("config/deploy.toml").read().decode())
@@ -62,19 +62,26 @@ def archive_contract(source):
                   if "http" in roles and "scheduler" in roles]
     topology = next((item for item in candidates if item["sha256"] == manifest.get("topology_sha256")), None)
     assert topology is not None, "Archive must declare HTTP + scheduler (worker optional) and its topology checksum"
-    private_json(WORK / "topology.json", topology)
+    if reuse:
+        assert read_json(check_path(WORK / "topology.json", "file")) == topology, "Prepared topology differs from archive"
+    else:
+        private_json(WORK / "topology.json", topology)
     disks = copy.deepcopy(config["app"]["services"]["storage"]["disks"])
     assert disks, "Archive must declare its private attachment disks"
     return topology, disks
 
 
-def bootstrap_secrets(disks):
+def bootstrap_secrets(disks, *, reuse_identity=False):
     from acceptance_backup import rclone, s3_settings
     settings = s3_settings(include_app=True)
     for bucket in (settings["app_bucket"], settings["backup_bucket"]):
         rclone(settings, "mkdir", "acceptance:" + bucket)
     identity_file = WORK / "age-identity.txt"
-    run(["age-keygen", "-o", str(identity_file)])
+    if reuse_identity:
+        check_path(identity_file, "file")
+        assert identity_file.is_file(), "Prepared recovery identity is missing"
+    else:
+        run(["age-keygen", "-o", str(identity_file)])
     recipient = run(["age-keygen", "-y", str(identity_file)]).stdout.strip()
     for disk in disks.values():
         assert disk["driver"] == "r2", "Acceptance archive must select the R2 attachment contract"
@@ -102,14 +109,14 @@ def fixture_topology():
     return read_json(WORK / "topology.json")
 
 
-def prepare(host, fixture, private=None):
+def prepare(host, fixture, private=None, *, tools=TOOLS):
     project, profile = fixture
     payload = request(project, profile, topology=fixture_topology())
-    plan = json.loads(run([sys.executable, str(TOOLS / "server/manage.py"), "bootstrap-plan"],
+    plan = json.loads(run([sys.executable, str(tools / "server/manage.py"), "bootstrap-plan"],
                           input=json.dumps(payload), timeout=180).stdout)
     assert plan["ok"], "Bootstrap plan refused"
     payload.update(plan_token=plan["plan_token"], secrets=private or {})
-    result = json.loads(run([sys.executable, str(TOOLS / "server/manage.py"), "bootstrap-apply"],
+    result = json.loads(run([sys.executable, str(tools / "server/manage.py"), "bootstrap-apply"],
                             input=json.dumps(payload), timeout=1200).stdout)
     assert result["ok"] and result["provisioning"] == "ready"
     return result
@@ -329,6 +336,14 @@ def archive_for(source, project, profile):
     return destination
 
 
+def check_failed_units(host, units):
+    from acceptance_diagnostics import unit_failure_details
+    # A container can't load kernel modules and has no tty1.
+    unexpected = sorted(set(units) - {'systemd-modules-load.service', 'getty@tty1.service'})
+    assert not unexpected, 'Unexpected failed units: ' + json.dumps(
+        {unit: unit_failure_details(host, unit) for unit in unexpected}, sort_keys=True)
+
+
 def report(host):
     registered = list(host.read_registry()["instances"].values())
     states = {entry["profile"]["instance_id"]: host.load_state(entry) for entry in registered}
@@ -350,8 +365,7 @@ def report(host):
         reported = {item["instance_id"]: item for item in entries}
         assert set(reported) == set(states)
         expected_problems = {("backup_stale", instance_id) for instance_id in missing_receipts}
-        # A container can't load kernel modules and has no tty1, so these units can fail in the fixture.
-        assert set(value["host"]["failed_units"]) <= {"systemd-modules-load.service", "getty@tty1.service"}
+        check_failed_units(host, value["host"]["failed_units"])
         if value["host"]["failed_units"]:
             expected_problems.add(("units_failed", None))
         assert set(value["host"]["network"]["public_listeners"]) <= {22, 80, 443}
@@ -400,8 +414,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--redis-source", type=Path, help="Read lease Lua directly from this mounted pinned Foundry-Go module root")
+    parser.add_argument("--tools-root", type=Path, default=TOOLS,
+                        help="Unmodified staged bundle used for bootstrap; recovery acceptance selects v0.15.0")
+    stage = parser.add_mutually_exclusive_group()
+    stage.add_argument("--prepare-incident", action="store_true",
+                        help="Bootstrap and activate only the first instance, then return for incident recovery")
+    stage.add_argument("--after-incident", action="store_true",
+                       help="Verify and reuse incident preparation files after successful recovery")
     args = parser.parse_args()
     guard()
+    tools = args.tools_root.resolve(strict=True)
+    if tools != TOOLS.resolve() and not args.prepare_incident:
+        parser.error("Historical tools are restricted to --prepare-incident")
+    if not (tools / 'server/manage.py').is_file() or not (tools / 'protocol.json').is_file():
+        raise RuntimeError('Bootstrap bundle lacks its normal entrypoint or protocol')
     lease_script = None
     if args.redis_source:
         paths = [args.redis_source / "redis" / name for name in ("lease_owner.lua", "lease.lua")]
@@ -412,6 +438,13 @@ def main():
     registry = host.read_registry(missing=True)
     if registry and (registry["host_id"] != HOST_ID or not (WORK / "owned").exists()):
         raise RuntimeError("Refusing an existing host outside this fixture")
+    prepared = None
+    if args.after_incident:
+        from upgrades import tool_bundle
+        assert registry and registry['tools']['bundle_sha256'] == tool_bundle(TOOLS)[2], "Incident upgrade must complete first"
+        _, prepared = host.require_identity(*fixtures()[0])
+        state = host.load_state(prepared)
+        assert state['status'] == 'healthy' and state['current'] and state['cutover']['outcome'] == 'succeeded', "Incident recovery must complete first"
     WORK.mkdir(mode=0o700, exist_ok=True)
     atomic_write(WORK / "owned", "disposable acceptance fixture\n", 0o600)
     unrelated = Path("/etc/systemd/system/foundry-acceptance-unrelated.service")
@@ -419,8 +452,11 @@ def main():
     host.run(["systemctl", "daemon-reload"])
     host.run(["systemctl", "start", unrelated.name])
     counter = host.run(["systemctl", "show", unrelated.name, "-p", "ActiveEnterTimestampMonotonic", "-p", "NRestarts"]).stdout
-    topology, disks = archive_contract(args.archive)
-    private = bootstrap_secrets(disks)
+    topology, disks = archive_contract(args.archive, reuse=args.after_incident)
+    private = bootstrap_secrets(disks, reuse_identity=args.after_incident)
+    if prepared:
+        intake = read_json(check_path(host.paths.instance_config(prepared['name']) / 'bootstrap-secrets.json', 'file'))
+        assert private['age_recipients'] == intake['age_recipients'], "Prepared recovery identity does not match the installed recipient"
     from acceptance_backup import rclone, s3_settings
     settings = s3_settings(include_app=True)
     for number, fixture in enumerate(fixtures(), 1):
@@ -429,8 +465,16 @@ def main():
         rclone(settings, "mkdir", "acceptance:" + bucket)
         for disk in instance_private["app_storage"]["disks"].values():
             disk["cloud"]["bucket"] = bucket
-        prepare(host, fixture, instance_private)
+        # The first instance already acknowledged its secrets before the incident.
+        prepare(host, fixture, None if args.after_incident and number == 1 else instance_private, tools=tools)
         print("PASS bootstrap " + identity(*fixture)["name"], flush=True)
+        if args.prepare_incident:
+            project, profile = fixture
+            archive = archive_for(args.archive, project, profile)
+            # Exercise the installed historical entrypoint, not the mounted current library.
+            action("activate", request(project, profile, archive=str(archive), archive_sha256=digest(archive)))
+            print("PASS incident baseline activation; ordinary host exercises deferred until upgrade", flush=True)
+            return
     from acceptance_capacity import verify_settings
     import capacity
     verify_settings(host, capacity.memory_mib(host))
@@ -440,14 +484,14 @@ def main():
     certificate_renewal(host)
     before = snapshot(host)
     for fixture in fixtures():
-        assert prepare(host, fixture)["unchanged"]
+        assert prepare(host, fixture, tools=tools)["unchanged"]
     assert before == snapshot(host)
     print("PASS repeated bootstrap preserves exact registry, credentials and allocations", flush=True)
-    plans = [(project, profile, bootstrap_plan(host, project, profile, topology=topology)) for project, profile in fixtures()]
+    plans = [(project, profile, bootstrap_plan(host, project, profile, tools, topology=topology)) for project, profile in fixtures()]
     def repeat_bootstrap(item):
         project, profile, plan = item
         payload = request(project, profile, plan_token=plan["plan_token"], topology=topology)
-        return json.loads(run([sys.executable, str(TOOLS / "server/manage.py"), "bootstrap-apply"],
+        return json.loads(run([sys.executable, str(tools / "server/manage.py"), "bootstrap-apply"],
                                    input=json.dumps(payload), timeout=180).stdout)
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
         assert all(result["unchanged"] for result in pool.map(repeat_bootstrap, plans))

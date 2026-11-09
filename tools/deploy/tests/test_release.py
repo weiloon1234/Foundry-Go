@@ -4,6 +4,7 @@ No services are started. These fixtures exercise the production state machine,
 archive validation, atomic links, locks and recovery on an isolated temporary host.
 """
 import copy
+from contextlib import contextmanager
 import base64
 import io
 import json
@@ -332,9 +333,9 @@ class ReleaseTests(unittest.TestCase):
         probe.assert_not_called()
 
     def test_recovery_in_both_modes_checks_schema_without_migrations_seeds_or_backups(self):
-        for sequence, http_only in enumerate((True, False), start=1):
+        archive, manifest = self.bundle()
+        for http_only in (True, False):
             with self.subTest(http_only=http_only):
-                archive, manifest = self.bundle(sequence)
                 self.host.commands.clear()
                 with patch.object(release.backup, "recovery_point") as point, \
                         patch.object(release.backup, "archive_keys") as keys:
@@ -347,6 +348,161 @@ class ReleaseTests(unittest.TestCase):
                 self.assertFalse(any("migrate" in args or "db:seed" in args for args in commands))
                 self.assertEqual(result["version"], manifest["version"])
                 self.assertEqual(self.state()["current"], manifest)
+
+    @contextmanager
+    def recovered_startup(self, queues):
+        import compatibility
+        import cutover_contracts
+        from test_cutover import inspection
+        archive, manifest = self.bundle()
+        self.assertFalse((self.host.paths.instance_state(self.entry['name']) / 'state.json').exists())
+        prefix = None
+        if queues:
+            inspected = inspection(self.entry, layout='absent')
+            prefix = inspected['connections'][0]['prefix']
+            self.host.jobs_inspect_output = json.dumps(inspected)
+            self.host.redis_keys_output = json.dumps([{'connection': 'primary', 'keys': [{'prefix': prefix}], 'channels': []}])
+        run = self.host.run
+        def guarded(args, **kwargs):
+            if 'deploy:jobs-inspect' in args and prefix:
+                _, persisted = self.host.require_identity(self.project, self.profile)
+                self.assertIn(prefix, persisted['redis_grants']['keys'])
+            if args[:2] in (['systemctl', 'start'], ['systemctl', 'restart']):
+                fresh = Host(Paths(self.root))
+                recorded = fresh.load_state(self.entry)
+                self.assertEqual(manifest, recorded['current'])
+                self.assertEqual('unknown', recorded['status'])
+                self.assertEqual(manifest['version'], release.current_version(fresh, self.entry))
+                for role, unit in instance_units(self.entry).items():
+                    if unit in args[2:]:
+                        compatibility.startup_check(fresh, self.entry['name'], role)
+            return run(args, **kwargs)
+        self.health.side_effect = lambda *args, **kwargs: self.host.role_states.get(instance_units(self.entry)['http']) == 'active'
+        with patch.object(self.host, 'run', side_effect=guarded), \
+                patch.object(cutover_contracts.redis_acl, 'inspect', return_value={'owner': 'foundry', 'state': 'ready'}), \
+                patch.object(cutover_contracts.redis_acl, '_redis', return_value=['0', []]):
+            yield archive, manifest
+
+    def test_recovered_activation_without_queues_records_state_before_start(self):
+        with self.recovered_startup(False) as (archive, manifest):
+            release.activate_recovered(self.host, self.registry, self.entry, archive, digest(archive), http_only=True)
+            self.assertNotIn('queue_compatibility', self.state())
+            self.assertEqual('healthy', self.state()['status'])
+            self.assertEqual({instance_units(self.entry)['http']: 'active'}, self.host.role_states)
+
+    def test_recovered_activation_with_empty_queues_uses_normal_admission(self):
+        with self.recovered_startup(True) as (archive, manifest):
+            release.activate_recovered(self.host, self.registry, self.entry, archive, digest(archive))
+            self.assertEqual({'schema': 1, 'floor': 3, 'permission': 'admitted',
+                              'admitted': {manifest['version']: manifest['files']['artisan']}}, self.state()['queue_compatibility'])
+            self.assertEqual('healthy', self.state()['status'])
+            self.assertTrue(all(self.host.role_states[unit] == 'active' for unit in instance_units(self.entry).values()))
+
+    def test_first_deploy_refuses_layout_two_queues_before_admission(self):
+        with self.recovered_startup(True) as (archive, _):
+            inspected = json.loads(self.host.jobs_inspect_output)
+            inspected['connections'][0]['queues'][0]['layout'] = '2'
+            self.host.jobs_inspect_output = json.dumps(inspected)
+            with self.assertRaises(DeployError) as caught:
+                self.deploy(archive)
+            self.assertEqual('queue_cutover_required', caught.exception.code)
+            self.assertNotIn('queue_compatibility', self.state())
+            self.assertIsNone(release.current_version(self.host, self.entry))
+            self.assertFalse(self.host.role_states)
+
+    def test_recovered_admission_refuses_layout_two_queues(self):
+        with self.recovered_startup(True) as (archive, _):
+            inspected = json.loads(self.host.jobs_inspect_output)
+            inspected['connections'][0]['queues'][0]['layout'] = '2'
+            self.host.jobs_inspect_output = json.dumps(inspected)
+            with self.assertRaises(DeployError) as caught:
+                release.activate_recovered(self.host, self.registry, self.entry, archive, digest(archive))
+            self.assertEqual('queue_cutover_required', caught.exception.code)
+            self.assertNotIn('queue_compatibility', self.state())
+            self.assertIsNone(release.current_version(self.host, self.entry))
+            self.assertFalse(self.host.role_states)
+
+    def test_recovered_admission_accepts_layout_three_queues(self):
+        with self.recovered_startup(True) as (archive, manifest):
+            inspected = json.loads(self.host.jobs_inspect_output)
+            inspected['connections'][0]['queues'][0]['layout'] = '3'
+            self.host.jobs_inspect_output = json.dumps(inspected)
+            release.activate_recovered(self.host, self.registry, self.entry, archive, digest(archive))
+            self.assertEqual('healthy', self.state()['status'])
+            self.assertEqual({'schema': 1, 'floor': 3, 'permission': 'admitted',
+                              'admitted': {manifest['version']: manifest['files']['artisan']}}, self.state()['queue_compatibility'])
+
+    def recovered_interruption(self, queues, selected):
+        with self.recovered_startup(queues) as (archive, manifest):
+            switch = release.switch_to
+            def interrupt(host, entry, version):
+                if selected:
+                    switch(host, entry, version)
+                raise KeyboardInterrupt()
+            with patch.object(release, 'switch_to', side_effect=interrupt), self.assertRaises(KeyboardInterrupt):
+                release.activate_recovered(self.host, self.registry, self.entry, archive, digest(archive))
+            self.assertEqual(manifest, self.state()['current'])
+            self.assertEqual('unknown', self.state()['status'])
+            self.assertEqual(manifest['version'] if selected else None, release.current_version(self.host, self.entry))
+            self.assertFalse(self.host.role_states)
+            # Rerun reads the saved state; absent queues must not become
+            # queue_cutover_required merely because current was already recorded.
+            release.activate_recovered(self.host, self.registry, self.entry, archive, digest(archive))
+            self.assertEqual('healthy', self.state()['status'])
+            commands = [args for args, _ in self.host.commands]
+            self.assertEqual(1, sum('deploy:jobs-inspect' in args for args in commands))
+
+    def test_recovered_empty_queues_resume_after_state_write(self):
+        self.recovered_interruption(True, False)
+
+    def test_recovered_empty_queues_resume_after_selection(self):
+        self.recovered_interruption(True, True)
+
+    def test_recovered_no_queue_app_resumes_after_selection(self):
+        self.recovered_interruption(False, True)
+
+    def test_recovered_resume_cannot_reopen_a_closed_gate_or_admit_a_different_digest(self):
+        with self.recovered_startup(True) as (archive, manifest):
+            with patch.object(release, 'switch_to', side_effect=KeyboardInterrupt), self.assertRaises(KeyboardInterrupt):
+                release.activate_recovered(self.host, self.registry, self.entry, archive, digest(archive))
+            admitted = self.state()
+            for code in ('queue_start_fenced', 'queue_release_incompatible'):
+                with self.subTest(code=code):
+                    state = copy.deepcopy(admitted)
+                    if code == 'queue_start_fenced':
+                        state['queue_compatibility']['permission'] = 'closed'
+                    else:
+                        state['queue_compatibility']['admitted'][manifest['version']] = 'f' * 64
+                    self.host.save_state(self.entry, state)
+                    with self.assertRaises(DeployError) as caught:
+                        release.activate_recovered(self.host, self.registry, self.entry, archive, digest(archive))
+                    self.assertEqual(code, caught.exception.code)
+                    self.assertIsNone(release.current_version(self.host, self.entry))
+                    self.assertFalse(self.host.role_states)
+
+    def test_recovered_resume_refuses_a_different_archive(self):
+        with self.recovered_startup(True) as (archive, manifest):
+            with patch.object(release, 'switch_to', side_effect=KeyboardInterrupt), self.assertRaises(KeyboardInterrupt):
+                release.activate_recovered(self.host, self.registry, self.entry, archive, digest(archive))
+            other, _ = self.bundle(2)
+            with self.assertRaises(DeployError) as caught:
+                release.activate_recovered(self.host, self.registry, self.entry, other, digest(other))
+            self.assertEqual('recovery_release_changed', caught.exception.code)
+            self.assertEqual(manifest, self.state()['current'])
+            self.assertIsNone(release.current_version(self.host, self.entry))
+            self.assertFalse(self.host.role_states)
+
+    def test_recovered_queue_inspection_refusal_never_selects_or_starts(self):
+        with self.recovered_startup(True) as (archive, _):
+            inspected = json.loads(self.host.jobs_inspect_output)
+            inspected['blockers'] = [{'code': 'layout_inspection_unsupported', 'connection': 'delivery', 'queue': 'default'}]
+            self.host.jobs_inspect_output = json.dumps(inspected)
+            with self.assertRaises(DeployError) as caught:
+                release.activate_recovered(self.host, self.registry, self.entry, archive, digest(archive))
+            self.assertEqual('cutover_inventory_blocked', caught.exception.code)
+            self.assertFalse((self.host.paths.instance_state(self.entry['name']) / 'state.json').exists())
+            self.assertIsNone(release.current_version(self.host, self.entry))
+            self.assertFalse(self.host.role_states)
 
     def test_recovery_refuses_pending_and_unknown_applied_migrations_with_commit_guidance(self):
         archive, _ = self.bundle()
@@ -1717,7 +1873,15 @@ class ReleaseTests(unittest.TestCase):
 
     def test_readiness_requires_exact_json_and_the_selected_process_listener(self):
         observations = self.process_observations()
-        for listener_pid, body, expected in ((42, {"ready": True}, True), (99, {"ready": True}, False), (42, {"ready": 1}, False)):
+        cases = (
+            (42, 200, {"ready": True}, True), (42, 200, {"status": "ready"}, True),
+            (99, 200, {"ready": True}, False), (99, 200, {"status": "ready"}, False),
+            (42, 503, {"ready": True}, False), (42, 503, {"status": "ready"}, False),
+            (42, 200, {"ready": 1}, False), (42, 200, {"ready": "true"}, False),
+            (42, 200, {"status": "ready", "x": 1}, False), (42, 200, {"status": "starting"}, False),
+            (42, 200, {"ready": True, "status": "ready"}, False), (42, 200, None, False),
+        )
+        for listener_pid, status, body, expected in cases:
             def command(args, **kwargs):
                 output = observations.get(args[2], "")
                 if args[0] == "ss":
@@ -1725,13 +1889,14 @@ class ReleaseTests(unittest.TestCase):
                 return subprocess.CompletedProcess(args, 0, output, "")
             response = MagicMock()
             response.__enter__.return_value = response
-            response.status = 200
+            response.status = status
             response.read.return_value = json.dumps(body).encode()
             opener = MagicMock()
             opener.open.return_value = response
             with patch.object(self.host, "run", side_effect=command), patch.object(release.urllib.request, "build_opener", return_value=opener), patch.object(release, "STABILITY_SECONDS", 0):
                 # A negative case polls until its deadline; a positive one returns at once.
-                self.assertEqual(expected, CHECK_READY(self.host, self.entry, timeout=30 if expected else 0.01))
+                with self.subTest(listener_pid=listener_pid, status=status, body=body):
+                    self.assertEqual(expected, CHECK_READY(self.host, self.entry, timeout=30 if expected else 0.01))
 
     def test_readiness_wall_clock_bounds_a_slow_response_body(self):
         observations = self.process_observations()
@@ -1963,6 +2128,24 @@ class ReleaseTests(unittest.TestCase):
             self.assertFalse(changed["http"]["executable_matches"])
             with patch.object(release, "STABILITY_SECONDS", 0):
                 self.assertFalse(CHECK_READY(self.host, self.entry, timeout=0.01))
+
+    def test_first_deploy_grants_job_prefix_before_admission(self):
+        archive, _ = self.bundle()
+        namespace = self.entry['allocations']['namespace']
+        prefix = f"foundry:jobs:v1:{namespace['application']}.jobs.background:{namespace['environment']}:"
+        self.assertEqual([], self.entry['redis_grants']['keys'])
+        self.host.redis_keys_output = json.dumps([{'connection': 'background', 'keys': [{'prefix': prefix}], 'channels': []}])
+        admit = release.admit_normal_release
+        def admitted(host, registry, entry, state, candidate, manifest):
+            self.assertIsNone(state['current'])
+            self.assertEqual([prefix], entry['redis_grants']['keys'])
+            _, persisted = host.require_identity(self.project, self.profile)
+            self.assertEqual([prefix], persisted['redis_grants']['keys'])
+            self.assertEqual(1, self.grants.call_count)
+            return admit(host, registry, entry, state, candidate, manifest)
+        with patch.object(release, 'admit_normal_release', side_effect=admitted) as admission:
+            self.assertTrue(self.deploy(archive)['ok'])
+        admission.assert_called_once()
 
     def test_redis_transition_widens_both_inventories_then_narrows_after_readiness(self):
         archive, _ = self.bundle()

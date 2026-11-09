@@ -1,0 +1,6 @@
+/.deploy/
+/dist/
+/artisan
+/hostdrill/
+/public/
+/storage/

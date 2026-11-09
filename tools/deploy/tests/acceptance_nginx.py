@@ -31,7 +31,8 @@ import time
 sys.dont_write_bytecode = True
 from acceptance_host import HOST_ID, TOOLS, WORK, Host, fixtures, fixture_topology, snapshot
 from topology import instance_units
-from contracts import PREFIX, atomic_write, check_path, digest, identity
+from contracts import PREFIX, atomic_write, check_path, digest, identity, parse_json
+from release import readiness_body
 from provision import _template, bootstrap_plan
 from upgrades import tool_bundle
 from acceptance_http import https_response
@@ -108,7 +109,7 @@ def settled_workers(host, previous=None):
 def http_readiness(entry):
     status, headers, payload = https_response(entry, "/health/ready", 4096)
     assert status == 200, f"HTTPS readiness failed: instance={entry['name']} status={status}"
-    assert json.loads(payload).get("ready") is True, f"Application did not report readiness: instance={entry['name']}"
+    assert readiness_body(parse_json(payload)), f"Application did not report readiness: instance={entry['name']}"
     return headers.get(HEADER)
 
 

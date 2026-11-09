@@ -15,7 +15,7 @@ import urllib.request
 
 from contracts import BACKUP_FRESH_SECONDS, BACKUP_POLICY, DeployError, INSTANCE_STATUSES, PREFIX, SCHEMA, SLUG_PATTERN, check_path, instance_paths, now, parse_json, valid_uuid
 from topology import instance_units
-from release import enabled_roles, service as role_service
+from release import enabled_roles, readiness_body, service as role_service
 from host import OperationTimeout as ReportBudgetExceeded, wall_clock_budget
 
 REPORT_SCHEMA = 2
@@ -238,7 +238,7 @@ def readiness(port, deadline):
             payload = response.read(4097)
             try:
                 body = parse_json(payload) if len(payload) <= 4096 else None
-                ready = isinstance(body, dict) and set(body) == {"ready"} and body["ready"] is True
+                ready = readiness_body(body)
             except (DeployError, ValueError, UnicodeError):
                 ready = False
             return {"ready": response.status == 200 and ready, "http_status": response.status}

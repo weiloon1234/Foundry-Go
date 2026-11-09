@@ -1,0 +1,78 @@
+[project]
+name = "deployacceptance"
+env = "testing"
+
+[fixture]
+readiness = "healthy"
+
+[app.worker]
+enabled = true
+connection = "background"
+
+[app.worker.config]
+queues = [{Queue = "first", Weight = 1}, {Queue = "second", Weight = 1}]
+concurrency = 2
+drain_timeout = "20s"
+
+[app.scheduler]
+enabled = true
+poll_interval = "1s"
+
+[app.services.namespace]
+application = "deployacceptance"
+environment = "testing"
+
+[app.services.database]
+default = "primary"
+
+[app.services.database.connections.primary.primary]
+host = "localhost"
+port = 5432
+database = "deployacceptance"
+user = "deployacceptance"
+tls = "verify-full"
+
+[app.services.redis]
+default = "main"
+
+[app.services.redis.connections.main]
+host = "localhost"
+port = 6379
+
+[app.services.redis.connections.background]
+host = "localhost"
+port = 6379
+
+[app.services.jobs]
+default = "background"
+
+[app.services.jobs.connections.background]
+driver = "redis"
+redis = "background"
+default_queue = "first"
+
+[app.services.coordination]
+enabled = true
+driver = "redis"
+redis = "main"
+
+[app.services.cache]
+default = "portal-runtime"
+
+[app.services.cache.stores.portal-runtime]
+driver = "redis"
+redis = "main"
+
+[app.services.storage]
+default = "attachments"
+
+[app.services.storage.disks.attachments]
+driver = "r2"
+
+[app.services.storage.disks.attachments.config]
+visibility = 0
+
+[app.services.storage.disks.attachments.cloud]
+bucket = "deploy-acceptance"
+endpoint = "https://00000000000000000000000000000000.r2.cloudflarestorage.com"
+credentials = "acceptance"

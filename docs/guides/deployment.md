@@ -323,6 +323,7 @@ readiness, and then starts the declared background roles. Readiness checks every
 role and verifies its running executable through `/proc/<pid>/exe` against the
 selected release. `ACTION=status` returns live observations per role;
 `ACTION=logs ROLE=scheduler` reads that role's journal.
+HTTP readiness requires status 200 and exactly `{"ready":true}` or `{"status":"ready"}` at `/health/ready`, within 4096 bytes; listener PID, executable identity and stability checks still apply.
 
 This ordinary activation sequence does not perform a queue-layout migration.
 An existing instance whose Redis queues need coordinated activation receives
@@ -765,6 +766,26 @@ snapshot evidence blocks restore planning.
    snapshot IDs, scope checksum, completion time, and restored and removed counts.
 5. Keep roles stopped. Review a new `cutover-plan` for forward recovery before
    starting compatible code, including when the restored queues are layout 2.
+
+### Full matrix: required before the next queue layout change ships
+
+The opt-in [container recovery slice](#container-acceptance) uses the current
+layout-3/floor-3 fixture. It verifies the v0.15.0 stop-proof incident followed by
+tool upgrade and **forward** recovery; abort must refuse on that baseline.
+Before another queue layout change ships, extend real-systemd acceptance with:
+
+- A legal pre-layout-3 release: old-tool stop-proof failure, exited executor,
+  current-tool upgrade, abort-plan/apply, then a successful fresh cutover.
+- Executor death and lost responses at every durable boundary, including Redis
+  restore progress and dispatch uncertainty, with a test-side ptrace controller
+  where no observable barrier can select the boundary reliably.
+- Host reboots with active gates, dependency failure during recovery, late
+  undeclared queues, and uncertain database migration or seed outcomes. Each case must prove stopped
+  roles, retained gates and evidence, and the permitted next recovery action.
+
+The fast slice does not claim Redis restore-resume coverage: killing its short
+restore after observing progress cannot deterministically select an incomplete
+restore. That boundary belongs in this full matrix.
 
 <a id="recipe-storage-probe"></a>
 ## Storage probe
@@ -1268,6 +1289,12 @@ commit in `recovery/instance.json`; a schema refusal names that commit. For old
 archives, the commit is reported as unknown. After takeover, upgrade through
 normal `make deploy`, which takes its own recovery point before migrations.
 
+Before starting roles, recovery records the selected release and admits its queues
+against the replacement host's fresh Redis using the normal first-deploy checks.
+Interrupted startup reuses that durable admission for the same approved archive;
+the instance is marked healthy only after readiness succeeds. No additional operator
+step is required.
+
 To prove the backup while the old server remains alive, run:
 
 ```sh
@@ -1390,12 +1417,43 @@ backup or certificate renewal. Alerts are [deferred](../../blueprint/25-deferred
 
 The runner accepts an application release archive and the integrated framework
 root, with Ubuntu 24.04 or 26.04, arm64 or amd64, and `--foreign` or `--fresh`.
-For example, from the framework checkout:
+The dedicated `tests/fixtures/deploy-acceptance` app supplies all existing phases
+and the opt-in recovery slice. From the framework checkout, build one Linux
+archive through the normal deploy builder and run both arm64 cells:
 
 ```sh
+framework="$PWD"
+build_info=$(mktemp -d)
+python3 tools/deploy/tests/build_acceptance.py --architecture arm64 \
+  --archive-file "$build_info/archive.txt"
+archive=$(cat "$build_info/archive.txt")
 tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
-  --archive /absolute/app.tar.gz --framework-root "$PWD" --foreign
+  --archive "$archive" --framework-root "$framework" --foreign --recovery
+tools/deploy/tests/run_acceptance.sh --ubuntu 26.04 --platform linux/arm64 \
+  --archive "$archive" --framework-root "$framework" --foreign --recovery
 ```
+
+The fixture pins the published framework with no local module replacement. The
+builder uses its acceptance profile and writes the completed archive path to a
+new file. Omitting `--recovery` preserves the existing phase sequence and accepts
+the same archive.
+
+`--recovery` requires the local `v0.15.0` Git tag. The runner exports its original
+tool tree to private logs, mounts it read-only, and bootstraps through that bundle.
+Before roles acceptance, it reproduces `cutover_stop_unproven`, observes an exited
+executor and `needs_reconciliation`, upgrades through `tools-plan/tools-apply`,
+checks the documented abort refusal on layout 3, and recovers forward. After the
+backup and edge phases, it exercises work in flight on two queues, forced drain
+review after worker SIGKILL, readiness-failure forward recovery, snapshot restore
+with exact expiration and outside-scope sentinels, and containment during held
+readiness and after a completed release. Test-side archive variants update their
+checksums and manifest; installed bundles are never patched. The remaining
+boundaries are owned by the [full matrix](#full-matrix-required-before-the-next-queue-layout-change-ships).
+
+The runner prints its private log directory and retains phase logs on success or
+failure. Use `FOUNDRY_ACCEPTANCE_KEEP=1` to retain a failed host for inspection.
+Container runtime for the new recovery slice must be measured by the lead;
+the systemd contract suite's timing does not estimate the container matrix.
 
 Run each platform on a native Docker host of that architecture. QEMU user
 emulation of amd64 on arm64 cannot complete it: Ubuntu 24.04's `rclone`

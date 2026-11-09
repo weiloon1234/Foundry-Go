@@ -6,7 +6,7 @@ umask 077
 usage() {
   cat <<'EOF'
 Usage: run_acceptance.sh --ubuntu 24.04|26.04 --platform linux/arm64|linux/amd64 \
-  --archive /absolute/app.tar.gz --framework-root /absolute/Foundry-Go --foreign|--fresh
+  --archive /absolute/app.tar.gz --framework-root /absolute/Foundry-Go --foreign|--fresh [--recovery]
 
 Run each OS/architecture/mode separately with a matching Linux app archive.
 The archive must declare HTTP + scheduler (worker optional), private R2 disks,
@@ -18,13 +18,16 @@ DOCKER_CONFIG and DOCKER_HOST are inherited. No host ports are published.
 Public reports must show live roles/readiness; Linux may withhold cross-UID
 executable identity, which must be reported as unverified. Root reports must
 prove every running role matches its selected release.
+--recovery requires the deploy-acceptance fixture archive. It bootstraps with
+the unmodified v0.15.0 tool bundle, reproduces the stop-proof incident, upgrades
+through tools-plan/tools-apply, and runs the fast host-recovery scenarios.
 Optional: ACCEPTANCE_LOG_DIR, ACCEPTANCE_SCHEDULE_MESSAGE (see acceptance_roles.py),
 ACCEPTANCE_SECRET_CONFIG_KEYS (comma-separated keys the first deploy needs, such as
 seed passwords; each receives a random bootstrap value).
 EOF
 }
 
-ubuntu= platform= archive= framework= mode=
+ubuntu= platform= archive= framework= mode= recovery=0
 while (($#)); do
   case "$1" in
     --ubuntu|--platform|--archive|--framework-root)
@@ -37,6 +40,7 @@ while (($#)); do
     --foreign|--fresh)
       [[ -z "$mode" ]] || { echo 'Select one host mode' >&2; exit 2; }
       mode=${1#--}; shift ;;
+    --recovery) recovery=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -47,7 +51,10 @@ done
 framework=$(cd "$framework" && pwd -P)
 archive=$(cd "$(dirname "$archive")" && pwd -P)/$(basename "$archive")
 tests="$framework/tools/deploy/tests"
-for required in host.Dockerfile acceptance.Dockerfile acceptance_host.py acceptance_nginx.py acceptance_foreign.py acceptance_roles.py acceptance_backup.py acceptance_recover.py acceptance_edge.py acceptance_support.py acceptance_http.py; do
+if ((recovery)); then
+  [[ -f "$tests/acceptance_recovery.py" ]] || { echo 'Missing recovery acceptance driver' >&2; exit 2; }
+fi
+for required in host.Dockerfile acceptance.Dockerfile acceptance_host.py acceptance_nginx.py acceptance_foreign.py acceptance_roles.py acceptance_backup.py acceptance_recover.py acceptance_edge.py acceptance_support.py acceptance_http.py acceptance_diagnostics.py acceptance_phase.py; do
   [[ -f "$tests/$required" ]] || { echo "Missing integrated fixture: $required" >&2; exit 2; }
 done
 if [[ -n "${ACCEPTANCE_LOG_DIR:-}" ]]; then
@@ -115,6 +122,16 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+old_tools_mount=()
+if ((recovery)); then
+  # Export the immutable historical tree, never patch an installed bundle.
+  mkdir -m 700 "$logs/old-tools"
+  git -C "$framework" rev-parse 'v0.15.0^{commit}' >"$logs/old-tools-commit.txt"
+  git -C "$framework" archive --format=tar --output="$logs/old-tools.tar" v0.15.0 tools/deploy
+  tar -xf "$logs/old-tools.tar" -C "$logs/old-tools"
+  old_tools_mount=(--mount "type=bind,source=$logs/old-tools/tools/deploy,target=/verification/old-deploy,readonly")
+fi
+
 access=acceptance-$token
 secret=$(openssl rand -hex 32)
 cat >"$env_file" <<EOF
@@ -163,7 +180,7 @@ openssl x509 -req -in "$certs/s3.csr" -CA "$certs/ca.crt" -CAkey "$certs/ca.key"
   -CAcreateserial -days 2 -sha256 -extfile "$certs/s3.ext" -out "$certs/public.crt" \
   >>"$logs/tls-setup.log" 2>&1
 chmod 600 "$certs/ca.key" "$certs/private.key"
-printf 'ubuntu=%s\nplatform=%s\nmode=%s\ns3=%s\n' "$ubuntu" "$platform" "$mode" "$s3_image" >"$logs/run.txt"
+printf 'ubuntu=%s\nplatform=%s\nmode=%s\nrecovery=%s\ns3=%s\n' "$ubuntu" "$platform" "$mode" "$recovery" "$s3_image" >"$logs/run.txt"
 echo "Acceptance logs: $logs"
 if [[ "$platform" == linux/amd64 ]]; then
   echo 'linux/amd64 uses emulation on arm64 hosts; expect substantially slower startup and execution.'
@@ -195,6 +212,7 @@ docker create --platform "$platform" --name "$host" --network "$network" \
   --tmpfs /run --tmpfs /run/lock --tmpfs /tmp \
   --mount "type=bind,source=$framework/tools/deploy,target=/verification/deploy,readonly" \
   --mount "type=bind,source=$framework,target=/verification/foundry-go,readonly" \
+  ${old_tools_mount[@]+"${old_tools_mount[@]}"} \
   "$image" >"$logs/host-create.log" 2>&1
 host_created=1
 docker start "$host" >"$logs/host-start.log" 2>&1
@@ -231,23 +249,51 @@ else:
     raise SystemExit('S3 stand-in readiness deadline exceeded')
 PY
 
-phase() {
-  name=$1; shift
+phase_on() {
+  local target=$1 name=$2 result
+  shift 2
   echo "Running $name"
-  docker exec --env-file "$env_file" "$host" python3 -B "$@" >"$logs/$name.log" 2>&1
+  if docker exec --env-file "$env_file" "$target" python3 -B \
+    /verification/deploy/tests/acceptance_phase.py "$@" >"$logs/$name.log" 2>&1; then
+    return 0
+  else
+    result=$?
+    # Preserve the failed action's status even when diagnosis is unavailable.
+    docker exec --env-file "$env_file" "$target" python3 -B \
+      /verification/deploy/tests/acceptance_diagnostics.py >>"$logs/$name.log" 2>&1 || \
+      echo 'ACCEPTANCE DIAGNOSTICS: collector unavailable' >>"$logs/$name.log"
+    return "$result"
+  fi
+}
+phase() {
+  phase_on "$host" "$@"
 }
 # Refresh before foreign ownership/audit capture; production package planning
 # deliberately never changes the repository view underneath its reviewed plan.
 docker exec "$host" apt-get update -qq >"$logs/package-index.log" 2>&1
 phase foreign-baseline /verification/deploy/tests/acceptance_foreign.py baseline --mode "$mode"
 baseline_done=1
+host_phase=()
+if ((recovery)); then
+  phase recovery-prepare /verification/deploy/tests/acceptance_host.py \
+    --archive /var/lib/foundry-acceptance-f4a/input.tar.gz \
+    --prepare-incident --tools-root /verification/old-deploy
+  phase recovery-incident /verification/deploy/tests/acceptance_recovery.py incident \
+    --archive /var/lib/foundry-acceptance-f4a/input.tar.gz --old-tools /verification/old-deploy
+  host_phase=(--after-incident)
+fi
 phase host /verification/deploy/tests/acceptance_host.py \
-  --archive /var/lib/foundry-acceptance-f4a/input.tar.gz --redis-source /verification/foundry-go
+  --archive /var/lib/foundry-acceptance-f4a/input.tar.gz --redis-source /verification/foundry-go \
+  ${host_phase[@]+"${host_phase[@]}"}
 phase roles /verification/deploy/tests/acceptance_roles.py --archive /var/lib/foundry-acceptance-f4a/input.tar.gz
 phase capacity /verification/deploy/tests/acceptance_capacity.py
 phase backup /verification/deploy/tests/acceptance_backup.py
 phase nginx /verification/deploy/tests/acceptance_nginx.py --rounds 1
 phase edge /verification/deploy/tests/acceptance_edge.py
+if ((recovery)); then
+  phase recovery-fast /verification/deploy/tests/acceptance_recovery.py fast \
+    --archive /var/lib/foundry-acceptance-f4a/input.tar.gz
+fi
 # Set before invocation: a failed verify must not be repeated after it has closed
 # its Redis observation window.
 foreign_verified=1
@@ -286,7 +332,7 @@ recovery_target() {
   docker exec "$recovery_host" apt-get update -qq >"$logs/$recovery_mode-packages.log" 2>&1
   # Real recovery runs from a root-only staged bundle that service accounts can't read.
   docker exec "$recovery_host" sh -c 'umask 077; mkdir /var/lib/foundry-acceptance-f4a/staged-tools; cp -R /verification/deploy/. /var/lib/foundry-acceptance-f4a/staged-tools/'
-  docker exec --env-file "$env_file" "$recovery_host" python3 -B /var/lib/foundry-acceptance-f4a/staged-tools/tests/acceptance_recover.py "$recovery_mode" >"$logs/recover-$recovery_mode.log" 2>&1
+  phase_on "$recovery_host" "recover-$recovery_mode" /var/lib/foundry-acceptance-f4a/staged-tools/tests/acceptance_recover.py "$recovery_mode"
 }
 recovery_target "$rehearsal" rehearsal
 phase recover-repository-unchanged /verification/deploy/tests/acceptance_recover.py unchanged

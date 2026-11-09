@@ -86,3 +86,54 @@ started. Encryption, DUMP/RESTORE, absolute expiry and RDB validation run for re
 systemd/managed ACL observations, Linux `prlimit`, and remote object transport use
 local fixture adapters. The repository adapter stores and compares real ciphertext
 in a temporary directory. This does not verify a production repository or systemd.
+
+The dedicated [deploy acceptance fixture](../../tests/fixtures/deploy-acceptance/)
+supplies the archive for every container phase. Build it with the normal deploy
+builder, then run both arm64 cells on a native arm64 Docker host:
+
+```sh
+framework="$PWD"
+build_info=$(mktemp -d)
+python3 tools/deploy/tests/build_acceptance.py --architecture arm64 \
+  --archive-file "$build_info/archive.txt"
+archive=$(cat "$build_info/archive.txt")
+tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
+  --archive "$archive" --framework-root "$framework" --foreign --recovery
+tools/deploy/tests/run_acceptance.sh --ubuntu 26.04 --platform linux/arm64 \
+  --archive "$archive" --framework-root "$framework" --foreign --recovery
+```
+
+The helper uses `local/cli.py`'s builder with the fixture's acceptance profile and
+published framework pin; it installs nothing on a host. Docker builds the Linux
+archive once, and both cells consume that archive. Without `--recovery`, the
+existing phases run unchanged and can use the same fixture archive.
+
+`--recovery` exports `v0.15.0:tools/deploy` from the local Git tag into the private
+run logs and mounts it read-only. A preparation phase bootstraps and activates only
+the first instance with that historical bundle. The incident phase proves ordinary
+queue-gated stop and cutover stop-proof refusals on layout 3, upgrades through current
+`tools-plan/tools-apply`, proves abort refusal, recovers forward, and verifies stop
+and restart. Only then does the full host phase run on current tools with
+`--after-incident`: it verifies the prepared topology and age recipient, reuses
+the identity, and leaves the existing instance's acknowledged bootstrap secrets
+unchanged. Fresh runs retain exclusive creation. After backup and edge acceptance,
+the fast phase covers two-queue drain with work in flight, forced worker death
+and drain review, readiness failure and forward recovery, exact Redis snapshot
+restore, and containment of held and completed releases. Readiness variants are
+immutable test-side archive repacks with updated manifests, using the same built
+binary. No installed tool bundle is patched.
+
+After successful incident recovery, the test records the superseded executor's
+`failed`/`exit-code`/`ExecMainStatus=1` evidence and resets only that exact unit.
+Production recovery currently retains this systemd failure record; the acceptance
+report still rejects every unexpected failed unit and prints its result/status.
+
+Phase diagnostics identify artisan calls visible in an exception traceback.
+Only a failed `config:check` is re-invoked (read-only, ten-second limit); its stderr
+sample is limited to 4 KiB/eight lines with only fixed diagnostic phrases exposed.
+Subprocess-only failures without that traceback retain the ordinary state/journal
+diagnostics; no failed migration, seed, restore or other mutation is replayed.
+
+Container evidence, retained phase logs and the deferred requirements are described
+under [container acceptance](../../docs/guides/deployment.md#container-acceptance)
+and the [full cutover matrix](../../docs/guides/deployment.md#full-matrix-required-before-the-next-queue-layout-change-ships).

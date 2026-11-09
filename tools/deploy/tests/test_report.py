@@ -575,10 +575,19 @@ class ReportTests(unittest.TestCase):
         response.__enter__.return_value = response
         with patch.object(report.urllib.request, "build_opener") as opener:
             opener.return_value.open.return_value = response
-            for payload, expected in [(b'{"ready": true}', True), (b'<html>Login</html>', False), (b'{"ready": false}', False), (b'{"ready": 1}', False), (b'{"ready": false, "ready": true}', False), (b'x' * 4097, False)]:
+            for payload, expected in [
+                (b'{"ready": true}', True), (b'{"status": "ready"}', True),
+                (b'{"ready": "true"}', False), (b'{"status": "ready", "x": 1}', False),
+                (b'{"status": "starting"}', False), (b'<html>Login</html>', False),
+                (b'{"ready": false}', False), (b'{"ready": 1}', False),
+                (b'{"ready": false, "ready": true}', False), (b'x' * 4097, False),
+            ]:
                 response.read.return_value = payload
                 self.assertEqual(report.readiness(8100, report.time.monotonic() + 1), {"ready": expected, "http_status": 200})
                 response.read.assert_called_with(4097)
+            response.status = 503
+            response.read.return_value = b'{"status": "ready"}'
+            self.assertEqual(report.readiness(8100, report.time.monotonic() + 1), {"ready": False, "http_status": 503})
 
     def test_applied_config_failure_preserves_public_outcome(self):
         result = report.attempt({"outcome": "failed", "result": "failed_applied", "secret": SECRET})

@@ -23,6 +23,17 @@ env:
   FOUNDRY_TEST_REDIS_ADDR: '127.0.0.1:6379'
 
 jobs:
+  systemd-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Deployment contracts against real systemd
+        timeout-minutes: 1
+        run: sudo -E env FOUNDRY_REAL_SYSTEMD=1 python3 -B -m unittest discover -s tools/deploy/tests -p test_systemd_contract.py -v
+
   verify:
     runs-on: macos-15
     timeout-minutes: 120

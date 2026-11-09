@@ -104,8 +104,9 @@ class CompatibilityTests(unittest.TestCase):
         self.install()
         path = self.host.paths.instance_state(self.entry['name']) / 'state.json'
         path.unlink()
-        with self.assertRaises(DeployError):
+        with self.assertRaises(DeployError) as caught:
             compatibility.startup_check(self.host, self.entry['name'], 'http')
+        self.assertEqual('queue_compatibility_missing', caught.exception.code)
         for value in ({}, {'schema': 1, 'floor': True, 'permission': 'admitted', 'admitted': {}},
                       {'schema': 1, 'floor': 3, 'permission': 'allow_everything', 'admitted': {}}):
             with self.assertRaises(DeployError):

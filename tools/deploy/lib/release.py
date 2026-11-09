@@ -585,6 +585,13 @@ def services(host, entry):
     return result
 
 
+def readiness_body(body):
+    return isinstance(body, dict) and (
+        (set(body) == {"ready"} and body["ready"] is True)
+        or (set(body) == {"status"} and body["status"] == "ready")
+    )
+
+
 def ready(host, entry, timeout=90, include_background=True, *, role="all", roles=None):
     try:
         with wall_clock_budget(timeout):
@@ -616,7 +623,7 @@ def _ready(host, entry, deadline, include_background=True, role="all", roles=Non
                 with opener.open(f"http://127.0.0.1:{entry['allocations']['http_port']}/health/ready", timeout=_remaining(deadline, 3)) as response:
                     payload = response.read(4097)
                     body = parse_json(payload) if len(payload) <= 4096 else None
-                    healthy = response.status == 200 and isinstance(body, dict) and set(body) == {"ready"} and body["ready"] is True
+                    healthy = response.status == 200 and readiness_body(body)
                 listeners = host.run(["ss", "-Hltpn", f"sport = :{entry['allocations']['http_port']}"],
                                      check=False, timeout=_remaining(deadline))
                 healthy = (healthy and listeners.returncode == 0
@@ -886,11 +893,23 @@ def activate_recovered(host, registry, entry, archive, checksum, *, http_only=Fa
         require_recovered_schema(host, entry, release)
         inventory = release_redis_inventory(host, entry, release)
         widen_redis_grants(host, registry, entry, inventory)
+        state = host.load_state(entry)
+        require_idle(state)
+        if state['current'] is None:
+            admit_normal_release(host, registry, entry, state, release, manifest)
+        else:
+            # Recovery's journal binds one artifact. An interrupted first start
+            # may still have absent queues; reuse its already durable admission.
+            require(state['current'] == manifest, 'recovery_release_changed',
+                    'Recorded recovered release differs; resume with the approved archive.')
+        compatibility.require_release(host, entry, manifest, selecting=True)
+        state.update(current=manifest, previous=None, status="unknown")
+        host.save_state(entry, state)
         switch_to(host, entry, manifest["version"])
         if not ready(host, entry, timeout=10, include_background=not http_only):
             start_roles(host, entry, http_only=http_only)
         state = host.load_state(entry)
-        state.update(current=manifest, previous=None, status="healthy")
+        state['status'] = "healthy"
         host.save_state(entry, state)
         warnings = narrow_redis_grants(host, registry, entry, inventory)
         require(not warnings, "recovery_redis_pending", "Redis grant reconciliation must complete before recovery finishes.")
@@ -2349,8 +2368,10 @@ def admit_normal_release(host, registry, entry, state, candidate, manifest):
     inventory = _cutover_inspection(host, registry, entry, candidate)
     physical = contract.targets(inventory)
     gate = state.get('queue_compatibility')
+    require(all(t['layout'] in ('absent', '3') for t in physical),
+            'queue_cutover_required', 'Review cutover-plan and apply it in the chosen downtime window.')
     if physical and state['current']:
-        require(gate is not None and gate['floor'] == 3 and all(t['layout'] == '3' for t in physical),
+        require(gate is not None and gate['floor'] == 3,
                 'queue_cutover_required', 'Review cutover-plan and apply it in the chosen downtime window.')
     if physical or gate:
         if gate is None:
