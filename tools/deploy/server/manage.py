@@ -14,7 +14,7 @@ from topology import instance_units, selected_units
 from host import Host
 
 ACTIONS = ("capacity-plan", "capacity-apply", "hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect", "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "activate", "status", "rollback", "restart", "stop",
-           "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate", "backup-configure", "backup-run", "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report", "cutover-plan", "cutover-apply", "cutover-resume", "redis-restore-plan", "redis-restore-apply", "redis-restore-resume")
+           "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate", "backup-configure", "backup-run", "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report", "cutover-plan", "cutover-apply", "cutover-resume", "cutover-forward-plan", "cutover-forward-apply", "redis-restore-plan", "redis-restore-apply", "redis-restore-resume")
 
 
 def execute(host, action, request):
@@ -28,7 +28,8 @@ def execute(host, action, request):
         return upgrades.hello(host)
     common = {"protocol", "client", "project", "profile", "operation_id", "confirm"}
     recovery_fields = {"topology", "mode", "recovery_archive", "archive_sha256", "target_time"}
-    arguments = {"redis-restore-plan": {"snapshot_id", "secrets", "plan_token"},
+    arguments = {"cutover-forward-plan": {"archive", "archive_sha256", "plan_token"},
+                 "cutover-forward-apply": {"plan_token"}, "redis-restore-plan": {"snapshot_id", "secrets", "plan_token"},
                  "redis-restore-apply": {"plan_token"}, "redis-restore-resume": {"plan_token"},
                  "cutover-plan": {"archive", "archive_sha256", "plan_token"},
                  "cutover-apply": {"plan_token"}, "cutover-resume": {"plan_token"},
@@ -160,16 +161,19 @@ def execute(host, action, request):
         require(request.get("confirm") is True, "confirmation_required", "Confirm the reviewed Redis restore and possible replay of side effects.")
         return release.apply_redis_restore(host, project, profile, request.get("plan_token"), request.get("operation_id"),
                                           resume=action == "redis-restore-resume")
-    if action == "cutover-plan":
+    if action in ("cutover-plan", "cutover-forward-plan"):
         if "plan_token" in request:
             require(not {"archive", "archive_sha256"}.intersection(request), "invalid_request", "Select a stored plan or a staged candidate.")
             return release._cutover_public_plan(release._load_cutover_plan(host, entry, request["plan_token"]), request["plan_token"])
         require(isinstance(request.get("archive"), str), "invalid_request", "A staged release archive is required.")
-        return release.plan_cutover(host, project, profile, request["archive"], request.get("archive_sha256"))
-    if action in ("cutover-apply", "cutover-resume"):
+        return release.plan_cutover(host, project, profile, request["archive"], request.get("archive_sha256"),
+                                    forward=action == "cutover-forward-plan")
+    if action in ("cutover-apply", "cutover-resume", "cutover-forward-apply"):
         require(request.get("confirm") is True, "confirmation_required", "Confirm the reviewed full-downtime cutover plan.")
-        return release.apply_cutover(host, project, profile, request.get("plan_token"), request.get("operation_id"),
-                                     resume=action == "cutover-resume")
+        options = {"resume": action == "cutover-resume"}
+        if action == "cutover-forward-apply":
+            options["forward"] = True
+        return release.apply_cutover(host, project, profile, request.get("plan_token"), request.get("operation_id"), **options)
     if action == "activate":
         require(isinstance(request.get("archive"), str), "invalid_request", "A staged release archive is required.")
         return release.activate(host, project, profile, request["archive"], request.get("archive_sha256"),

@@ -177,6 +177,11 @@ class QuiescenceTests(unittest.TestCase):
         executor.mkdir(parents=True)
         (executor / 'cgroup.procs').write_text(str(os.getpid()) + '\n')
         state['cutover'] = progress(operation)
+        boot = self.host.paths.p('/proc/sys/kernel/random/boot_id')
+        boot.parent.mkdir(parents=True)
+        boot.write_text(str(uuid.uuid4()))
+        state['cutover']['drain'] = {'boot_id': boot.read_text(), 'roles': {
+            role: {'invocation_id': '', 'complete': True} for role in instance_units(self.entry)}}
         state['queue_compatibility'] = {'schema': 1, 'floor': None, 'permission': 'closed', 'admitted': {}}
         self.host.save_state(self.entry, state)
         with patch.object(compatibility, 'require_no_clients'):

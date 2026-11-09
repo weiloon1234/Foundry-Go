@@ -402,12 +402,10 @@ def _remaining(deadline, maximum=5):
     return min(maximum, available)
 
 
-def prepare_worker(host, entry):
-    """Select the explicit worker connection from the selected release/config."""
+def worker_connection(host, entry, candidate):
+    """Validate the tool's worker selection against a specific release."""
     if "worker" not in instance_units(entry):
         return
-    version = current_version(host, entry)
-    require(version is not None, "worker_configuration", "A selected release is required for the worker.")
     configuration = host.paths.instance_config(entry["name"])
     values = parse_env(check_path(configuration / "app.env", "file").read_text())
     key = "APP__WORKER__CONNECTION"
@@ -417,11 +415,23 @@ def prepare_worker(host, entry):
     elif key in values:
         connection = values[key]
     else:
-        with (release_path(host, entry, version) / "config/deploy.toml").open("rb") as source:
+        with (candidate / "config/deploy.toml").open("rb") as source:
             settings = tomllib.load(source)
         connection = settings.get("app", {}).get("worker", {}).get("connection")
     require(isinstance(connection, str) and re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,127}", connection),
             "worker_configuration", "Declare app.worker.connection explicitly for the worker role.")
+    return connection
+
+
+def prepare_worker(host, entry, candidate=None):
+    if "worker" not in instance_units(entry):
+        return
+    if candidate is None:
+        version = current_version(host, entry)
+        require(version is not None, "worker_configuration", "A selected release is required for the worker.")
+        candidate = release_path(host, entry, version)
+    connection = worker_connection(host, entry, candidate)
+    configuration = host.paths.instance_config(entry["name"])
     host.owned_write(configuration / "worker.env", dump_env({"FOUNDRY_WORKER_CONNECTION": connection}),
                      mode=0o640, group=entry["name"])
 
@@ -1418,6 +1428,10 @@ if __name__ == "__main__":
 def require_cutover_quiescence(host, entry, operation_id):
     """Shared M2 boundary used by the snapshot and cutover owners."""
     compatibility.require_quiescence(host, entry, operation_id)
+    state = host.load_state(entry)
+    _drain_continuity(host, entry, state)
+    require(all(role['complete'] for role in state['cutover']['drain']['roles'].values()),
+            'cutover_stop_unproven', 'Every role requires durable clean-drain completion.')
     _require_executor_alone(host, entry, operation_id)
 
 
@@ -1454,18 +1468,28 @@ def containment_stop(host, entry, state, role="all"):
             compatibility.require_current(host, entry)
         except DeployError:
             state["queue_compatibility"]["permission"] = "closed"
+    state['status'] = 'unknown'
     host.save_state(entry, state)
     stop(host, entry, role=role, disable=True)
     compatibility.prove_stopped(host, entry, roles=list(selected_units(entry, role)))
+    if active:
+        state['status'] = 'unknown'
+        next_action = cutover_next_action(state)
+    else:
+        roles = running_roles(host, entry)
+        state['status'] = 'degraded' if roles else 'stopped'
+        next_action = 'restart' if state['queue_compatibility']['permission'] == 'admitted' else 'cutover-plan'
+    host.save_state(entry, state)
     return {"ok": True, "contained": True, "instance": entry["name"],
-            "next_action": "cutover-resume", "old_release_start_allowed": False}
+            "status": state['status'], "next_action": next_action,
+            "old_release_start_allowed": state['queue_compatibility']['floor'] is None}
 
 
 # Cutover lifecycle stays with release activation; wire validation has no side effects.
-def inspect_job_queues(host, entry, candidate):
+def inspect_job_queues(host, entry, candidate, *, allow_blocked=False):
     import cutover_contracts as contract
     result = app(host, entry, candidate, 'deploy:jobs-inspect', extra=('--format', 'json'), check=False)
-    return contract.inventory(result.stdout, result.returncode)
+    return contract.inventory(result.stdout, result.returncode, allow_blocked=allow_blocked)
 
 
 def _cutover_fingerprint(host, entry):
@@ -1486,10 +1510,12 @@ def _cutover_inspection(host, registry, entry, candidate):
 
 def _cutover_public_plan(plan, token):
     import cutover_contracts as contract
-    return {'schema': 1, 'plan_token': token, 'instance': plan['instance'], 'instance_id': plan['instance_id'],
+    return {'schema': 1, 'plan_token': token, 'applicable': True, 'blockers': [],
+            'forward_recovery': plan.get('forward_recovery'),
+            'instance': plan['instance'], 'instance_id': plan['instance_id'],
             'host_id': plan['host_id'], 'source': (plan['source'] or {}).get('version'),
             'target': plan['target']['version'], 'candidate_sha256': plan['target']['files']['artisan'],
-            'roles': plan['roles'], 'original_enabled_roles': plan['enabled_roles'],
+            'roles': plan['roles'], 'original_enabled_roles': plan['enabled_roles'], 'original_running_roles': plan['running_roles'],
             'queues': [{'connection': c['connection'], 'queue': q['queue'], 'layout': q['layout'], 'target_layout': 3}
                        for c in plan['inventory']['connections'] for q in c['queues']],
             'downtime': 'full; about one minute is a target, not a deadline', 'warning': contract.WARNING,
@@ -1498,7 +1524,16 @@ def _cutover_public_plan(plan, token):
             'queue_cutover_required': bool(plan['inventory']['connections']), 'checked_at': plan['checked_at']}
 
 
-def plan_cutover(host, project, profile, archive, checksum):
+def _blocked_cutover_plan(entry, manifest, inventory, blockers):
+    import cutover_contracts as contract
+    return {'schema': 1, 'applicable': False, 'plan_token': None, 'instance': entry['name'],
+            'target': manifest['version'], 'candidate_sha256': manifest['files']['artisan'],
+            'queues': [{'connection': c['connection'], 'queue': q['queue'], 'layout': q['layout'], 'eligible': q['eligible']}
+                       for c in inventory['connections'] for q in c['queues']],
+            'blockers': blockers, 'warning': contract.WARNING, 'owner_attestation': contract.ATTESTATION}
+
+
+def plan_cutover(host, project, profile, archive, checksum, *, forward=False):
     import cutover_contracts as contract
     import upgrades
     _, entry = host.require_identity(project, profile)
@@ -1507,9 +1542,28 @@ def plan_cutover(host, project, profile, archive, checksum):
         require(registry['tools']['generation'] >= compatibility.GENERATION, 'host_upgrade_required', 'Install cutover-aware tools first.')
         tools = upgrades._installed(host, registry['tools'])
         state = host.load_state(entry)
-        require_idle(state)
+        recovery = None
+        if forward:
+            active = state.get('cutover')
+            require(active and active['outcome'] not in ('succeeded', 'failed')
+                    and state['queue_compatibility']['floor'] == 3,
+                    'cutover_forward_required', 'Forward recovery requires an unresolved layout-3 operation.')
+            require(cutover_executor(host, entry, active['operation_id']) != 'running',
+                    'operation_locked', 'Contain the previous executor before planning forward recovery.')
+            _drain_continuity(host, entry, state)
+            require(not active['drain_failed'], 'cutover_drain_review', 'Drain requires review before forward recovery.')
+            old_record = read_json(contract.private_path(host, entry, 'operation', active['operation_id']))
+            old_plan = (_load_cutover_plan(host, entry, old_record['plan_token']) if active['action'] == 'cutover'
+                        else read_json(contract.private_path(host, entry, 'restore', active['operation_id'])))
+            _observe_cutover_selection(host, entry, state, old_plan)
+            recovery = {'operation_id': active['operation_id'], 'progress_sha256': contract.sha(active),
+                        'database': active['database'], 'seed': active['seed'],
+                        'warning': 'Replacement migrations and seeders run under explicit forward-recovery approval; prior side effects may have completed.'}
+        else:
+            require_idle(state)
         check_live_state(host, entry, state)
-        resume_terminal_obligations(host, registry, entry, state)
+        if not forward:
+            resume_terminal_obligations(host, registry, entry, state)
         compatibility.require_guards(host, entry)
         staging = host.paths.opt(entry['name']) / 'releases' / ('.stage-' + uuid.uuid4().hex)
         try:
@@ -1518,6 +1572,7 @@ def plan_cutover(host, project, profile, archive, checksum):
             native_runtime(host, entry)
             protect_maps(host, entry, candidate)
             app(host, entry, candidate, 'config:check')
+            worker_connection(host, entry, candidate)
             if entry.get('storage_bindings'):
                 probe_storage(host, entry, candidate)
             redis_inventory = release_redis_inventory(host, entry, candidate)
@@ -1529,7 +1584,19 @@ def plan_cutover(host, project, profile, archive, checksum):
             require(not source or old_jobs == new_jobs, 'cutover_scope_changed', 'The cutover cannot rename or remove job storage scopes.')
             require(registered_jobs <= new_jobs, 'cutover_scope_changed', 'Registered historical job scopes are absent from the candidate.')
             widen_redis_grants(host, registry, entry, redis_inventory)
-            inventory = _cutover_inspection(host, registry, entry, candidate)
+            inventory = inspect_job_queues(host, entry, candidate, allow_blocked=True)
+            if not contract.applicable(inventory):
+                return _blocked_cutover_plan(entry, manifest, inventory, inventory['blockers'])
+            try:
+                contract.coverage(host, registry, entry, inventory)
+            except DeployError as error:
+                if error.code not in ('cutover_unknown_queue', 'cutover_coverage', 'cutover_redis_ownership'):
+                    raise
+                return _blocked_cutover_plan(entry, manifest, inventory, [{'code': error.code, 'connection': None, 'queue': None}])
+            if forward:
+                require(manifest != old_plan['target'], 'cutover_forward_artifact', 'Forward recovery must bind a replacement artifact.')
+                require(contract.inventory_identity(inventory) == old_plan['inventory_sha256'],
+                        'cutover_scope_changed', 'Forward recovery must retain the validated queue inventory.')
             require({s['prefix'] + '*' for s in contract.scopes(inventory)} == new_jobs,
                     'cutover_scope_changed', 'Job inspection and Redis grants disagree about the queue scope.')
             if inventory['connections']:
@@ -1551,7 +1618,8 @@ def plan_cutover(host, project, profile, archive, checksum):
                     'redis_inventory': redis_inventory, 'database_pending': migration_status(host, entry, candidate),
                     'tools_path': str(tools), 'tools_sha256': registry['tools']['bundle_sha256'],
                     'owner_attestation': contract.ATTESTATION, 'checked_at': now(),
-                    'gate': copy.deepcopy(state.get('queue_compatibility')), 'nonce': str(uuid.uuid4())}
+                    'gate': copy.deepcopy(state.get('queue_compatibility')), 'nonce': str(uuid.uuid4()),
+                    'forward_recovery': recovery}
             # A private random nonce prevents the public digest exposing configuration guesses.
             token = contract.sha(plan)
             contract.save_private(host, contract.private_path(host, entry, 'plan', token), plan)
@@ -1662,7 +1730,7 @@ def _recover_cutover_acceptance(host, entry, state, record):
             prior = read_json(path)
             prior['superseded_progress'] = superseded
             prior['result'] = {'ok': False, 'operation_id': superseded['operation_id'],
-                              'outcome': 'superseded', 'restore_operation': record['operation_id']}
+                              'outcome': 'superseded', 'replacement_operation': record['operation_id']}
             contract.save_private(host, path, prior)
         record['accepted'] = True
         record.pop('acceptance', None)
@@ -1673,7 +1741,7 @@ def _recover_cutover_acceptance(host, entry, state, record):
     return state
 
 
-def apply_cutover(host, project, profile, token, operation_id, *, resume=False):
+def apply_cutover(host, project, profile, token, operation_id, *, resume=False, forward=False):
     import cutover_contracts as contract
     require(valid_uuid(operation_id) and contract.hash_value(token), 'invalid_operation', 'Apply requires reviewed PLAN_TOKEN and stable OPERATION.')
     _, entry = host.require_identity(project, profile)
@@ -1689,6 +1757,8 @@ def apply_cutover(host, project, profile, token, operation_id, *, resume=False):
         registry, entry = host.require_identity(project, profile)
         state = host.load_state(entry)
         plan = _load_cutover_plan(host, entry, token)
+        require(resume or bool(plan.get('forward_recovery')) == forward,
+                'cutover_forward_confirmation', 'Use the explicit forward-recovery action for this plan.')
         if record_path.exists():
             recorded = read_json(record_path)
             require(recorded.get('plan_token') == token and recorded.get('action') == 'cutover',
@@ -1702,19 +1772,34 @@ def apply_cutover(host, project, profile, token, operation_id, *, resume=False):
             if progress['outcome'] in ('succeeded', 'failed'):
                 return _finish_cutover(host, entry, state, recorded, succeeded=progress['outcome'] == 'succeeded', error=progress['error'])
             require(not progress['drain_failed'], 'cutover_drain_review', 'Forced termination requires operator review.')
+            _drain_continuity(host, entry, state)
             _verify_cutover_inputs(host, registry, entry, plan)
             progress['hold'] = False
             progress['outcome'] = 'running'
             host.save_state(entry, state)
         else:
             require(not resume, 'cutover_operation_missing', 'No accepted operation exists for this ID.')
-            require_idle(state)
+            superseded = None
+            if forward:
+                superseded = copy.deepcopy(state.get('cutover'))
+                recovery = plan['forward_recovery']
+                require(superseded and superseded['operation_id'] == recovery['operation_id']
+                        and contract.sha(superseded) == recovery['progress_sha256'],
+                        'cutover_plan_changed', 'The operation changed after forward-recovery review.')
+                require(cutover_executor(host, entry, superseded['operation_id']) != 'running',
+                        'operation_locked', 'The previous executor must exit before supersession.')
+                _drain_continuity(host, entry, state)
+                require(not superseded['drain_failed'], 'cutover_drain_review', 'Drain requires review.')
+            else:
+                require_idle(state)
             candidate = _verify_cutover_inputs(host, registry, entry, plan)
             require(state['current'] == plan['source'] and current_version(host, entry) == (plan['source'] or {}).get('version')
                     and enabled_roles(host, entry) == plan['enabled_roles']
+                    and running_roles(host, entry) == plan['running_roles']
                     and state.get('queue_compatibility') == plan['gate'], 'cutover_plan_changed', 'Current release or role intent changed.')
             native_runtime(host, entry)
             app(host, entry, candidate, 'config:check')
+            worker_connection(host, entry, candidate)
             if entry.get('storage_bindings'):
                 probe_storage(host, entry, candidate)
             inventory = _cutover_inspection(host, registry, entry, candidate)
@@ -1724,6 +1809,9 @@ def apply_cutover(host, project, profile, token, operation_id, *, resume=False):
                 backup._settings(host, entry)
                 backup._repository_settings(host)
             before = copy.deepcopy(state)
+            if superseded:
+                state.pop('cutover')
+                state['last_attempt'].update(outcome='failed', finished_at=now(), error='reviewed_forward_recovery')
             begin(host, entry, state, 'deploy', plan['target']['version'], metadata={'roles': plan['enabled_roles']}, persist=False)
             prohibited = any(q['layout'] == '3' for c in inventory['connections'] for q in c['queues']) or (plan['gate'] or {}).get('floor') == 3
             state['cutover'] = {'schema': 1, 'operation_id': operation_id, 'plan_token': token, 'action': 'cutover',
@@ -1731,6 +1819,9 @@ def apply_cutover(host, project, profile, token, operation_id, *, resume=False):
                                 'phase': 'prepared', 'outcome': 'running', 'started_at': now(), 'rollback_prohibited': prohibited,
                                 'drain_failed': False, 'hold': False, 'database': 'not_started', 'seed': 'not_started', 'error': None,
                                 'queues': [{'connection': t['connection'], 'queue': t['queue'], 'status': 'pending'} for t in contract.targets(inventory)]}
+            state['cutover']['drain'] = _new_drain(host, entry)
+            if superseded:
+                state['cutover']['supersedes_operation'] = superseded['operation_id']
             gate = copy.deepcopy(plan['gate']) if plan['gate'] else {'schema': 1, 'floor': None, 'permission': 'closed', 'admitted': {}}
             gate['permission'] = 'closed'
             if prohibited:
@@ -1738,7 +1829,8 @@ def apply_cutover(host, project, profile, token, operation_id, *, resume=False):
             state['queue_compatibility'] = gate
             # Intent first, then fenced progress. An incomplete acceptance cannot launch work.
             record = {'schema': 1, 'operation_id': operation_id, 'plan_token': token, 'action': 'cutover',
-                      'snapshot_id': str(uuid.uuid4()), 'backup_operation_id': str(uuid.uuid4())}
+                      'snapshot_id': str(uuid.uuid4()), 'backup_operation_id': str(uuid.uuid4()),
+                      'superseded_progress': superseded}
             _accept_cutover_state(host, entry, before, state, record)
     return _submit_cutover(host, entry, plan, operation_id)
 
@@ -1751,17 +1843,75 @@ def _cutover_phase(host, entry, state, phase_name):
     host.save_state(entry, state)
 
 
+def running_roles(host, entry):
+    observed = services(host, entry)
+    require(all(v['ActiveState'] in ('active', 'inactive', 'failed')
+                and (v['ActiveState'] != 'active' or v['executable_matches']) for v in observed.values()),
+            'cutover_clients_unproven', 'Running role identities are not established.')
+    return [role for role, value in observed.items() if value['ActiveState'] == 'active']
+
+
+def _boot_id(host):
+    value = check_path(host.paths.p('/proc/sys/kernel/random/boot_id'), 'file').read_text().strip()
+    require(re.fullmatch('[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}', value),
+            'cutover_stop_unproven', 'Host boot identity is unavailable.')
+    return value
+
+
+def _role_invocation(host, unit):
+    result = host.run(['systemctl', 'show', unit, '--property=InvocationID', '--value'], timeout=5)
+    value = result.stdout.strip()
+    require(re.fullmatch('[a-f0-9]{32}|', value), 'cutover_stop_unproven', 'Role invocation identity is unavailable.')
+    return value
+
+
+def _new_drain(host, entry, *, starting=False):
+    return {'boot_id': _boot_id(host), 'roles': {
+        role: {'invocation_id': None if starting else _role_invocation(host, unit), 'complete': False}
+        for role, unit in instance_units(entry).items()}}
+
+
+def _drain_continuity(host, entry, state):
+    progress = state['cutover']
+    if progress['outcome'] in ('succeeded', 'failed'):
+        return
+    drain = progress.get('drain')
+    require(drain and set(drain['roles']) == set(instance_units(entry)),
+            'cutover_drain_review', 'Durable role drain evidence is missing; review is required.')
+    if drain['boot_id'] != _boot_id(host) and not all(role['complete'] for role in drain['roles'].values()):
+        progress['drain_failed'] = True
+        host.save_state(entry, state)
+        raise DeployError('cutover_drain_review', 'The host rebooted before clean drain was recorded.')
+
+
 def _cutover_stop(host, entry, state):
+    _drain_continuity(host, entry, state)
+    require(not state['cutover']['drain_failed'], 'cutover_drain_review', 'Prior drain requires review.')
     _cutover_phase(host, entry, state, 'stopping')
     state['queue_compatibility']['permission'] = 'closed'
     host.save_state(entry, state)
     units = instance_units(entry)
+    drain = state['cutover']['drain']
+    for role, unit in units.items():
+        observed = _role_invocation(host, unit)
+        prior = drain['roles'][role]
+        if not prior['complete'] and prior['invocation_id'] is not None and observed and prior['invocation_id'] != observed:
+            state['cutover']['drain_failed'] = True
+            host.save_state(entry, state)
+            raise DeployError('cutover_drain_review', 'A role invocation changed before clean drain was recorded.')
+        if prior['invocation_id'] is None:
+            prior['invocation_id'] = observed
+    host.save_state(entry, state)
     ordered = [units[r] for r in ('http', 'scheduler', 'worker') if r in units]
     host.run(['systemctl', 'stop', '--no-block', *ordered], timeout=10)
     deadline = time.monotonic() + 100
     while True:
         try:
-            compatibility.prove_stopped(host, entry)
+            for role in units:
+                compatibility.prove_stopped(host, entry, roles=[role])
+                if not drain['roles'][role]['complete']:
+                    drain['roles'][role]['complete'] = True
+                    host.save_state(entry, state)
             compatibility.require_no_clients(host, entry)
             _require_executor_alone(host, entry, state['cutover']['operation_id'])
             return
@@ -1781,6 +1931,31 @@ def _snapshot_request(entry, plan, record):
             'source_release': (plan['source'] or plan['target'])['version'],
             'configuration_revision': plan['configuration_revision'], 'inventory_sha256': plan['inventory_sha256'],
             'scopes': contract.scopes(plan['inventory'])}
+
+
+def _save_snapshot_binding(host, entry, plan, record, evidence):
+    import cutover_contracts as contract
+    contract.snapshot_evidence(evidence, _snapshot_request(entry, plan, record), entry)
+    value = {'inventory': plan['inventory'], 'evidence': evidence}
+    path = contract.private_path(host, entry, 'snapshot', evidence['snapshot_id'])
+    if path.exists():
+        require(read_json(path) == value, 'operation_conflict', 'Snapshot binding cannot change.')
+    else:
+        contract.save_private(host, path, value)
+
+
+def _load_snapshot_binding(host, entry, snapshot_id):
+    import cutover_contracts as contract
+    path = contract.private_path(host, entry, 'snapshot', snapshot_id)
+    require(path.exists(), 'redis_restore_archive', 'The immutable snapshot inventory binding is missing.')
+    value = read_json(path)
+    contract.fields(value, 'inventory evidence', 'redis_restore_archive')
+    inventory = contract.inventory(json.dumps(value['inventory']))
+    evidence = value['evidence']
+    request = {key: evidence[key] for key in ('operation_id', 'source_release', 'configuration_revision')}
+    request.update(snapshot_id=snapshot_id, inventory_sha256=contract.inventory_identity(inventory), scopes=contract.scopes(inventory))
+    contract.snapshot_evidence(evidence, request, entry)
+    return value
 
 
 def _finish_cutover(host, entry, state, record, *, succeeded, error=None):
@@ -1805,6 +1980,10 @@ def _cutover_failure(host, registry, entry, state, plan, record, error):
     state['queue_compatibility']['permission'] = 'closed'
     state['status'] = 'unknown'
     host.save_state(entry, state)
+    try:
+        _observe_cutover_selection(host, entry, state, plan)
+    except (DeployError, OSError):
+        return  # Keep the fence closed when even selected-artifact identity is uncertain.
     if progress['hold'] or progress['rollback_prohibited'] or progress['drain_failed'] or progress['database'] != 'not_started' or progress['seed'] != 'not_started':
         # Even candidate traffic must cease after a health failure. A failed stop stays uncertain.
         try:
@@ -1826,13 +2005,16 @@ def _cutover_failure(host, registry, entry, state, plan, record, error):
         source = plan['source']
         if source:
             verified_release(host, entry, source)
+            prepare_worker(host, entry, verified_release(host, entry, source))
+            state['cutover']['drain'] = _new_drain(host, entry, starting=True)
             state['queue_compatibility']['admitted'] = {source['version']: source['files']['artisan']}
             state['queue_compatibility']['permission'] = 'admitted'
             host.save_state(entry, state)
             switch_to(host, entry, source['version'])
             state['current'], state['previous'] = source, plan['previous']
-            restart(host, entry, state, roles=plan['enabled_roles'])
-        state['status'] = role_status(entry, plan['enabled_roles']) if source else 'failed'
+            restart(host, entry, state, roles=plan['running_roles'])
+            require(enabled_roles(host, entry) == plan['enabled_roles'], 'service_enablement', 'Recovery changed original enablement.')
+        state['status'] = role_status(entry, plan['running_roles']) if source else 'failed'
         _finish_cutover(host, entry, state, record, succeeded=False, error=code)
     except (DeployError, OSError):
         state['queue_compatibility']['permission'] = 'closed'
@@ -1865,6 +2047,7 @@ def execute_cutover(host, instance_id, operation_id):
             require(not progress['hold'], 'cutover_held', 'Containment stop requires explicit resume.')
             require(not progress['drain_failed'], 'cutover_drain_review', 'Forced termination requires operator review.')
             candidate = _verify_cutover_inputs(host, registry, entry, plan)
+            worker_connection(host, entry, candidate)
             _cutover_stop(host, entry, state)
             inventory = _cutover_inspection(host, registry, entry, candidate)
             require(contract.inventory_identity(inventory) == plan['inventory_sha256'], 'cutover_plan_changed', 'The frozen queue inventory changed.')
@@ -1882,10 +2065,12 @@ def execute_cutover(host, instance_id, operation_id):
                     evidence = _snapshot_module().capture(host, registry, entry, request)
                     contract.snapshot_evidence(evidence, request, entry)
                     require(evidence['captured_at'] >= progress['started_at'], 'cutover_snapshot_evidence', 'Snapshot predates this cutover window.')
+                    _save_snapshot_binding(host, entry, plan, record, evidence)
                     progress['snapshot'] = evidence
                     host.save_state(entry, state)
                 else:
                     contract.snapshot_evidence(progress['snapshot'], request, entry)
+                    _save_snapshot_binding(host, entry, plan, record, progress['snapshot'])
                 _cutover_phase(host, entry, state, 'queues')
                 for item, target in zip(progress['queues'], contract.targets(inventory), strict=True):
                     if item['status'] == 'confirmed':
@@ -1940,6 +2125,8 @@ def execute_cutover(host, instance_id, operation_id):
             # Selecting a fenced candidate is the sole internal switch exception; no start is yet permitted.
             _select_cutover_candidate(host, entry, state, plan)
             _cutover_phase(host, entry, state, 'health')
+            prepare_worker(host, entry, candidate)
+            progress['drain'] = _new_drain(host, entry, starting=True)
             state['queue_compatibility']['admitted'] = {plan['target']['version']: plan['target']['files']['artisan']}
             state['queue_compatibility']['permission'] = 'admitted'
             host.save_state(entry, state)
@@ -1970,7 +2157,25 @@ def _select_cutover_candidate(host, entry, state, plan):
             and all(q['status'] == 'confirmed' for q in state['cutover']['queues']),
             'cutover_start_unproven', 'Queue and database completion must precede candidate selection.')
     verified_release(host, entry, plan['target'])
-    _switch_pointer(host, entry, plan['target']['version'])
+    try:
+        _switch_pointer(host, entry, plan['target']['version'])
+    finally:
+        _observe_cutover_selection(host, entry, state, plan)
+
+
+def _observe_cutover_selection(host, entry, state, plan):
+    version = current_version(host, entry)
+    known = [item for item in (plan['source'], plan['target']) if item and item['version'] == version]
+    require(known or version is None and plan['source'] is None,
+            'cutover_selection_unknown', 'Selected release is outside the accepted operation.')
+    selected = known[0] if known else None
+    if selected:
+        verified_release(host, entry, selected)
+    if state['current'] != selected:
+        state['current'] = selected
+        if selected == plan['target']:
+            state['previous'] = plan['source']
+        host.save_state(entry, state)
 
 
 def cutover_status(host, entry):
@@ -1982,11 +2187,20 @@ def cutover_status(host, entry):
         progress['executor'] = cutover_executor(host, entry, progress['operation_id'])
     except (DeployError, OSError):
         progress['executor'] = 'unknown'
-    progress['next_action'] = ('cutover-plan' if progress['action'] == 'redis-restore' and progress['outcome'] == 'succeeded'
-                               else 'none' if progress['outcome'] == 'succeeded'
-                               else 'redis-restore-resume' if progress['action'] == 'redis-restore' else 'cutover-resume')
+    progress['next_action'] = cutover_next_action(state)
     progress['old_release_start_allowed'] = not progress['rollback_prohibited']
     return progress
+
+
+def cutover_next_action(state):
+    progress = state['cutover']
+    if progress['drain_failed']:
+        return 'operator-review'
+    if progress['outcome'] not in ('succeeded', 'failed'):
+        return 'redis-restore-resume' if progress['action'] == 'redis-restore' else 'cutover-resume'
+    if state['queue_compatibility']['permission'] == 'closed':
+        return 'cutover-plan'
+    return 'restart' if state['status'] in ('stopped', 'degraded') else 'none'
 
 
 def stop_cutover_executor(host, entry):
@@ -2033,6 +2247,8 @@ def plan_redis_restore(host, project, profile, operation_id, snapshot_id, identi
         state = host.load_state(entry)
         active = state.get('cutover')
         require(not active or not active['drain_failed'], 'cutover_drain_review', 'Forced termination requires lead-reviewed recovery first.')
+        if active:
+            _drain_continuity(host, entry, state)
         path = contract.private_path(host, entry, 'restore', operation_id)
         if path.exists():
             saved = read_json(path)
@@ -2044,10 +2260,20 @@ def plan_redis_restore(host, project, profile, operation_id, snapshot_id, identi
         manifest = read_json(candidate / 'manifest.json')
         verified_release(host, entry, manifest)
         compatibility.require_guards(host, entry)
-        inventory = _cutover_inspection(host, registry, entry, candidate)
+        binding = _load_snapshot_binding(host, entry, snapshot_id)
+        inventory = binding['inventory']
+        contract.coverage(host, registry, entry, inventory)
         spaces = contract.scopes(inventory)
         require(bool(spaces), 'redis_restore_archive', 'This instance has no Redis job scope to restore.')
-        identity_file = path.with_suffix('.identity')
+        operations = path.parent / 'operations'
+        host.check_control_directory(operations)
+        operations.mkdir(mode=0o700, exist_ok=True)
+        intake = operations / operation_id
+        host.check_control_directory(intake)
+        intake.mkdir(mode=0o700, exist_ok=True)
+        require(intake.stat().st_mode & 0o777 == 0o700 and (intake.stat().st_uid == 0 or host.paths.root != Path('/')),
+                'redis_restore_identity', 'Restore intake must be an operation-owned private directory.')
+        identity_file = check_path(intake / 'restore.identity', 'file')
         host.owned_write(identity_file, identity_text, mode=0o600)
         try:
             module_plan = _snapshot_module().plan_restore(host, registry, entry, {
@@ -2058,6 +2284,7 @@ def plan_redis_restore(host, project, profile, operation_id, snapshot_id, identi
             require(module_plan['schema'] == 1 and module_plan['operation_id'] == operation_id
                     and module_plan['snapshot']['snapshot_id'] == snapshot_id
                     and module_plan['snapshot']['instance_id'] == profile['instance_id']
+                    and module_plan['snapshot'] == binding['evidence']
                     and module_plan['scope_sha256'] == contract.sha(spaces)
                     and contract.hash_value(module_plan['plan_token'])
                     and module_plan['warning'] == 'restore_may_replay_external_side_effects'
@@ -2105,6 +2332,7 @@ def apply_redis_restore(host, project, profile, token, operation_id, *, resume=F
                 progress = state['cutover']
                 return _finish_cutover(host, entry, state, record, succeeded=progress['outcome'] == 'succeeded', error=progress['error'])
             require(not state['cutover']['drain_failed'], 'cutover_drain_review', 'Forced termination requires review.')
+            _drain_continuity(host, entry, state)
             state['cutover'].update(hold=False, outcome='running')
             host.save_state(entry, state)
         else:
@@ -2114,6 +2342,7 @@ def apply_redis_restore(host, project, profile, token, operation_id, *, resume=F
             require((active['operation_id'] if active else None) == plan['replaces_operation'],
                     'redis_restore_stale_plan', 'Active recovery changed since restore planning.')
             if active:
+                _drain_continuity(host, entry, state)
                 require(cutover_executor(host, entry, active['operation_id']) != 'running'
                         and not active['drain_failed'], 'operation_locked', 'The prior executor has not released ownership.')
                 state.pop('cutover')
@@ -2126,6 +2355,7 @@ def apply_redis_restore(host, project, profile, token, operation_id, *, resume=F
                                 'source': (plan['source'] or {}).get('version'), 'target': plan['target']['version'],
                                 'phase': 'prepared', 'outcome': 'running', 'started_at': now(), 'rollback_prohibited': True,
                                 'drain_failed': False, 'hold': False, 'queues': [], 'database': 'not_started', 'seed': 'not_started', 'error': None}
+            state['cutover']['drain'] = _new_drain(host, entry)
             record = {'schema': 1, 'action': 'redis-restore', 'operation_id': operation_id, 'plan_token': token,
                       'snapshot_id': str(uuid.uuid4()), 'restore_dispatched': False,
                       'superseded_progress': copy.deepcopy(active)}
@@ -2150,6 +2380,7 @@ def _execute_redis_restore(host, registry, entry, state, record):
             captured = _snapshot_module().capture(host, registry, entry, request)
             contract.snapshot_evidence(captured, request, entry)
             require(captured['captured_at'] >= progress['started_at'], 'cutover_snapshot_evidence', 'Safety snapshot predates the restore window.')
+            _save_snapshot_binding(host, entry, plan, record, captured)
             progress['safety_snapshot'] = captured
             host.save_state(entry, state)
         _cutover_phase(host, entry, state, 'queues')

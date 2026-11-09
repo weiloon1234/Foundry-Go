@@ -38,7 +38,7 @@ def fields(value, keys, code='cutover_inventory'):
     require(isinstance(value, dict) and set(value) == set(keys.split()), code, 'Invalid cutover boundary fields.')
 
 
-def inventory(payload, returncode=0):
+def inventory(payload, returncode=0, *, allow_blocked=False):
     require(isinstance(payload, str) and len(payload.encode()) <= MAX_JSON,
             'cutover_inventory', 'Queue inspection exceeds its output bound.')
     value = parse_json(payload)
@@ -86,10 +86,18 @@ def inventory(payload, returncode=0):
         identity = tuple(blocker[k] for k in ('code', 'connection', 'queue'))
         require(identity not in seen, 'cutover_inventory', 'Duplicate queue blocker.')
         seen.add(identity)
-    require(returncode == 0 and not value['blockers']
-            and all(q['eligible'] and q['layout'] in ('absent', '2', '3') for c in value['connections'] for q in c['queues']),
-            'cutover_inventory_blocked', 'Queue inspection is incomplete or reports a blocker; no clients were stopped.')
+    require(returncode in (0, 1) and (returncode != 1 or value['blockers']),
+            'cutover_inventory', 'Inspection failed without recognized blockers.')
+    require(value['blockers'] or applicable(value), 'cutover_inventory', 'Ineligible inspection has no blockers.')
+    if not allow_blocked:
+        require(returncode == 0 and applicable(value), 'cutover_inventory_blocked',
+                'Queue inspection is incomplete or reports a blocker; no clients were stopped.')
     return value
+
+
+def applicable(value):
+    return not value['blockers'] and all(q['eligible'] and q['layout'] in ('absent', '2', '3')
+                                       for c in value['connections'] for q in c['queues'])
 
 
 def inventory_identity(value):
@@ -165,7 +173,7 @@ def coverage(host, registry, entry, value):
 
 
 def private_path(host, entry, kind, identity):
-    require(kind in ('plan', 'operation', 'restore') and (hash_value(identity) if kind == 'plan' else valid_uuid(identity)),
+    require(kind in ('plan', 'operation', 'restore', 'snapshot') and (hash_value(identity) if kind == 'plan' else valid_uuid(identity)),
             'invalid_operation', 'Invalid cutover record identity.')
     root = host.paths.p(instance_paths(entry['name'])['private'])
     host.check_control_directory(root)
@@ -187,7 +195,7 @@ def save_private(host, path, value):
 def validate_progress(value):
     required = {'schema', 'operation_id', 'plan_token', 'action', 'source', 'target', 'phase', 'outcome',
                 'started_at', 'rollback_prohibited', 'drain_failed', 'hold', 'queues', 'database', 'seed', 'error'}
-    optional = {'snapshot', 'restore', 'safety_snapshot', 'completed_at', 'error_phase'}
+    optional = {'snapshot', 'restore', 'safety_snapshot', 'completed_at', 'error_phase', 'drain', 'supersedes_operation'}
     require(isinstance(value, dict) and required <= set(value) <= required | optional
             and type(value['schema']) is int and value['schema'] == 1 and valid_uuid(value['operation_id'])
             and hash_value(value['plan_token']) and value['action'] in ('cutover', 'redis-restore')
@@ -205,6 +213,17 @@ def validate_progress(value):
         fields(queue, 'connection queue status', 'cutover_state_invalid')
         require(name(queue['connection']) and name(queue['queue']) and queue['status'] in ('pending', 'dispatched_or_unknown', 'confirmed'),
                 'cutover_state_invalid', 'Invalid queue progress.')
+    if 'drain' in value:
+        drain = value['drain']
+        fields(drain, 'boot_id roles', 'cutover_state_invalid')
+        require(isinstance(drain['boot_id'], str) and re.fullmatch('[a-f0-9-]{36}', drain['boot_id'])
+                and isinstance(drain['roles'], dict) and set(drain['roles']) <= {'http', 'worker', 'scheduler'},
+                'cutover_state_invalid', 'Invalid drain identity.')
+        for role in drain['roles'].values():
+            fields(role, 'invocation_id complete', 'cutover_state_invalid')
+            require(type(role['complete']) is bool and (role['invocation_id'] is None or
+                    isinstance(role['invocation_id'], str) and re.fullmatch('[a-f0-9]{32}|', role['invocation_id'])),
+                    'cutover_state_invalid', 'Invalid role drain evidence.')
     return value
 
 

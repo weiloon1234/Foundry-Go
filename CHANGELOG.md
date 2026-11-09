@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Fixed: cutover progress requires its persistent startup gate; migration dispatch
+  requires the layout-3 floor. Candidate worker selection is checked before downtime,
+  and worker runtime configuration is prepared before startup admission. Selected
+  artifacts are recorded independently of health, so restore and forward activation
+  do not rely on stale release state.
+- Added: `cutover-forward-plan` and explicitly confirmed `cutover-forward-apply`
+  bind a replacement artifact to an unresolved layout-3 operation while retaining
+  prior progress and snapshot evidence. Boot identity, role invocation identity,
+  and per-role clean drain completion prevent reboot from erasing uncertain drain.
+- Fixed: pre-migration recovery restores the original running role set while
+  preserving enablement. No-Redis cutovers retain ordinary rollback. Blocked plans
+  show safe inventory and blockers without an applicable token; containment reports
+  stopped or degraded status and directs terminal compatible deployments to restart.
+- Fixed: Redis restore intake uses an operation-owned private UUID directory.
+  Restore scope comes from the immutable validated inventory and snapshot binding,
+  so damaged live values need not pass forward-migration eligibility.
 - Added: generation-5 deployment actions `cutover-plan`, `cutover-apply`, and
   `cutover-resume` coordinate one instance's full-downtime Redis job-layout
   transition. Immutable plan tokens, stable operation IDs, verified role drain,
@@ -13,7 +29,7 @@
   migration. The actions `redis-restore-plan`, `redis-restore-apply`, and
   `redis-restore-resume` support reviewed exact-key recovery with a fresh safety
   snapshot and retained startup protection. Apply and resume require confirmation. See the
-  [current restore integration blocker](docs/guides/deployment.md#restore-a-redis-snapshot).
+  [restore procedure](docs/guides/deployment.md#restore-a-redis-snapshot).
 - Added: the schema-1 `deploy:jobs-inspect --format json` integration contract
   reports configured Redis job connections, queues, layout states, eligibility,
   and safe blockers from the release. The command implementation is pending

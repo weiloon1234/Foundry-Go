@@ -52,6 +52,9 @@ class CutoverTests(unittest.TestCase):
         self.deploy(archive)
         self.archive, self.target = self.bundle(2)
         self.inventory = inspection(self.entry)
+        self.boot_path = self.host.paths.p('/proc/sys/kernel/random/boot_id')
+        self.boot_path.parent.mkdir(parents=True)
+        self.boot_path.write_text(str(uuid.uuid4()))
         prefix = self.inventory['connections'][0]['prefix']
         registry = self.host.read_registry()
         registry['tools']['generation'] = 5
@@ -59,6 +62,7 @@ class CutoverTests(unittest.TestCase):
         self.host.write_registry(registry)
         self.entry = registry['instances'][self.profile['instance_id']]
         self.events = []
+        self.invocations = {unit: uuid.uuid4().hex for unit in instance_units(self.entry).values()}
         self.fail_at = None
         self.unknown_at = None
         self.interrupt_at = None
@@ -74,7 +78,7 @@ class CutoverTests(unittest.TestCase):
         patch('upgrades._installed', return_value=self.root / 'tools').start()
         patch.object(release.backup, '_settings', return_value={}).start()
         patch.object(release.backup, '_repository_settings', return_value={}).start()
-        patch.object(release, 'inspect_job_queues', side_effect=lambda *args: copy.deepcopy(self.inventory)).start()
+        patch.object(release, 'inspect_job_queues', side_effect=lambda *args, **kwargs: copy.deepcopy(self.inventory)).start()
         patch.object(release, 'release_redis_inventory', return_value={'patterns': [prefix + '*'], 'channels': []}).start()
         patch.object(contract.redis_acl, 'inspect', return_value={'owner': 'foundry', 'state': 'ready'}).start()
         patch.object(contract.redis_acl, '_redis', side_effect=self.scan).start()
@@ -102,6 +106,9 @@ class CutoverTests(unittest.TestCase):
 
     def command(self, args, **kwargs):
         args = list(map(str, args))
+        if '--property=InvocationID' in args:
+            value = self.invocations[args[2]] if self.host.role_states.get(args[2]) == 'active' else ''
+            return subprocess.CompletedProcess(args, 0, value + '\n', '')
         event = next((item for item in ('config:check', 'deploy:storage-probe', 'migrate:status', 'migrate-layout', 'migrate', 'db:seed') if item in args), None)
         if args[:2] in (['systemctl', 'stop'], ['systemctl', 'restart'], ['systemctl', 'start']):
             event = args[1]
@@ -372,16 +379,23 @@ class CutoverTests(unittest.TestCase):
 
     def restore_plan(self):
         self.restore_operation, snapshot_id = str(uuid.uuid4()), str(uuid.uuid4())
+        snapshot_request = {'operation_id': str(uuid.uuid4()), 'snapshot_id': snapshot_id,
+                            'source_release': self.source['version'], 'configuration_revision': self.entry['configuration_revision'],
+                            'inventory_sha256': contract.inventory_identity(self.inventory), 'scopes': contract.scopes(self.inventory)}
+        bound_evidence = evidence(self.entry, snapshot_request)
+        contract.save_private(self.host, contract.private_path(self.host, self.entry, 'snapshot', snapshot_id),
+                              {'inventory': copy.deepcopy(self.inventory), 'evidence': bound_evidence})
         self.restore_calls = []
         def plan(host, registry, entry, request):
             self.assertEqual({'schema', 'operation_id', 'snapshot_id', 'inventory_sha256', 'scopes', 'identity_file'}, set(request))
             identity = Path(request['identity_file'])
             self.assertEqual(0o600, identity.stat().st_mode & 0o777)
+            self.assertEqual(self.restore_operation, identity.parent.name)
+            self.assertEqual('restore.identity', identity.name)
+            self.assertEqual(0o700, identity.parent.stat().st_mode & 0o777)
             self.assertEqual('PRIVATE IDENTITY', identity.read_text())
             self.identity_file = identity
-            source_request = {**request, 'operation_id': str(uuid.uuid4()), 'source_release': self.source['version'],
-                              'configuration_revision': entry['configuration_revision']}
-            return {'schema': 1, 'operation_id': self.restore_operation, 'snapshot': evidence(entry, source_request),
+            return {'schema': 1, 'operation_id': self.restore_operation, 'snapshot': bound_evidence,
                     'scope_sha256': contract.sha(request['scopes']), 'restore_keys': 1, 'remove_keys': 1,
                     'plan_token': 'f' * 64, 'warning': 'restore_may_replay_external_side_effects'}
         def restore(kind, host, registry, entry, request):
@@ -464,6 +478,229 @@ class CutoverTests(unittest.TestCase):
         self.assertTrue(self.state()['cutover']['hold'])
         self.assertEqual('closed', self.state()['queue_compatibility']['permission'])
 
+    def test_missing_gate_and_inconsistent_dispatch_fail_closed(self):
+        self.apply()
+        state = self.state()
+        state['cutover']['queues'][0]['status'] = 'dispatched_or_unknown'
+        with self.assertRaises(DeployError):
+            self.host.save_state(self.entry, state)
+        state.pop('queue_compatibility')
+        path = self.host.paths.instance_state(self.entry['name']) / 'state.json'
+        path.write_text(json.dumps(state))
+        with self.assertRaises(DeployError) as error:
+            compatibility.startup_check(self.host, self.entry['name'], 'worker')
+        self.assertEqual('queue_compatibility_missing', error.exception.code)
+
+    def test_worker_selection_validates_candidate_before_downtime(self):
+        def remove_selection(manifest):
+            config = self.root / 'source-3/config/deploy.toml'
+            config.write_text('[project]\n')
+            manifest['files']['config/deploy.toml'] = digest(config)
+        archive, _ = self.bundle(3, mutate=remove_selection)
+        with self.assertRaises(DeployError) as error:
+            release.plan_cutover(self.host, self.project, self.profile, archive, digest(archive))
+        self.assertEqual('worker_configuration', error.exception.code)
+        self.assertNotIn('stop', self.events)
+        plan = self.plan()
+        with patch.object(release, 'worker_connection', side_effect=DeployError('worker_configuration', 'Changed selection')):
+            with self.assertRaises(DeployError):
+                release.apply_cutover(self.host, self.project, self.profile, plan['plan_token'], str(uuid.uuid4()))
+        self.assertNotIn('cutover', self.state())
+        self.assertNotIn('stop', self.events)
+
+    def test_worker_environment_is_prepared_before_start_admission(self):
+        self.apply()
+        write, permissions = self.host.owned_write, []
+        def capture(path, *args, **kwargs):
+            if path.name == 'worker.env':
+                permissions.append(self.state()['queue_compatibility']['permission'])
+            return write(path, *args, **kwargs)
+        with patch.object(self.host, 'owned_write', side_effect=capture):
+            self.execute()
+        self.assertEqual('closed', permissions[0])
+
+    def test_forward_recovery_binds_replacement_and_retains_prior_evidence(self):
+        self.apply()
+        self.health.return_value = False
+        with self.assertRaises(DeployError):
+            self.execute()
+        self.assertEqual(self.target, self.state()['current'])
+        prior_operation, prior_progress = self.operation, self.state()['cutover']
+        archive, replacement = self.bundle(3)
+        plan = release.plan_cutover(self.host, self.project, self.profile, archive, digest(archive), forward=True)
+        self.assertEqual(prior_operation, plan['forward_recovery']['operation_id'])
+        operation = str(uuid.uuid4())
+        with self.assertRaises(DeployError) as error:
+            release.apply_cutover(self.host, self.project, self.profile, plan['plan_token'], operation)
+        self.assertEqual('cutover_forward_confirmation', error.exception.code)
+        self.health.return_value = True
+        release.apply_cutover(self.host, self.project, self.profile, plan['plan_token'], operation, forward=True)
+        self.assertEqual(3, self.state()['queue_compatibility']['floor'])
+        result = release.execute_cutover(self.host, self.profile['instance_id'], operation)
+        self.assertTrue(result['ok'])
+        self.assertEqual(replacement, self.state()['current'])
+        prior = json.loads(contract.private_path(self.host, self.entry, 'operation', prior_operation).read_text())
+        self.assertEqual(prior_progress, prior['superseded_progress'])
+        self.assertEqual('superseded', prior['result']['outcome'])
+        binding = release._load_snapshot_binding(self.host, self.entry, prior_progress['snapshot']['snapshot_id'])
+        self.assertEqual(prior_progress['snapshot'], binding['evidence'])
+
+    def test_failed_health_restore_then_forward_activation_has_no_state_drift(self):
+        self.apply()
+        self.health.return_value = False
+        with self.assertRaises(DeployError):
+            self.execute()
+        self.assertEqual(self.target, self.state()['current'])
+        plan = self.restore_plan()
+        release.apply_redis_restore(self.host, self.project, self.profile, plan['plan_token'], self.restore_operation)
+        release.execute_cutover(self.host, self.profile['instance_id'], self.restore_operation)
+        self.inventory['connections'][0]['queues'][0]['layout'] = '2'
+        archive, replacement = self.bundle(3)
+        forward = release.plan_cutover(self.host, self.project, self.profile, archive, digest(archive))
+        self.health.return_value = True
+        operation = str(uuid.uuid4())
+        release.apply_cutover(self.host, self.project, self.profile, forward['plan_token'], operation)
+        release.execute_cutover(self.host, self.profile['instance_id'], operation)
+        self.assertEqual(replacement, self.state()['current'])
+        self.assertEqual('healthy', self.state()['status'])
+
+    def test_restore_uses_bound_scope_when_live_inspection_is_damaged(self):
+        self.apply()
+        self.unknown_at = 'migrate-layout'
+        with self.assertRaises(DeployError):
+            self.execute()
+        with patch.object(release, 'inspect_job_queues', side_effect=DeployError('cutover_inventory_blocked', 'Damaged values')):
+            self.restore_plan()
+        self.assertFalse(self.identity_file.exists())
+
+    def test_recovery_restores_running_set_and_preserves_distinct_enablement(self):
+        units = instance_units(self.entry)
+        self.host.enabled_roles.discard(units['worker'])  # disabled, but running
+        self.host.role_states[units['scheduler']] = 'inactive'  # enabled, but not running
+        enabled = set(self.host.enabled_roles)
+        self.apply()
+        self.fail_at = 'snapshot'
+        with self.assertRaises(DeployError):
+            self.execute()
+        self.assertEqual('active', self.host.role_states[units['worker']])
+        self.assertEqual('inactive', self.host.role_states[units['scheduler']])
+        self.assertEqual(enabled, self.host.enabled_roles)
+        self.assertEqual('degraded', self.state()['status'])
+
+    def test_no_redis_cutover_keeps_ordinary_rollback(self):
+        self.test_no_redis_skips_snapshot_and_migration()
+        with patch.object(release, 'release_redis_inventory', return_value={'patterns': [], 'channels': []}):
+            result = release.rollback(self.host, self.project, self.profile, self.source['version'],
+                                      self.target['version'], str(uuid.uuid4()))
+        self.assertTrue(result['ok'])
+        self.assertEqual(self.source, self.state()['current'])
+
+    def test_blocked_plan_shows_logical_inventory_and_cannot_apply(self):
+        self.inventory['blockers'] = [{'code': 'invalid_queue_state', 'connection': 'delivery', 'queue': 'default'}]
+        self.inventory['connections'][0]['queues'][0].update(layout='unknown', eligible=False)
+        plan = self.plan()
+        self.assertFalse(plan['applicable'])
+        self.assertIsNone(plan['plan_token'])
+        self.assertEqual(self.inventory['blockers'], plan['blockers'])
+        self.assertEqual('unknown', plan['queues'][0]['layout'])
+        self.assertNotIn(self.inventory['connections'][0]['prefix'], json.dumps(plan))
+        with self.assertRaises(DeployError):
+            release.apply_cutover(self.host, self.project, self.profile, plan['plan_token'], str(uuid.uuid4()))
+        self.assertNotIn('stop', self.events)
+
+    def test_terminal_stop_reports_stopped_and_restart(self):
+        self.apply()
+        self.execute()
+        result = release.containment_stop(self.host, self.entry, self.state())
+        self.assertEqual('stopped', self.state()['status'])
+        self.assertEqual('restart', result['next_action'])
+        self.assertEqual('restart', release.cutover_status(self.host, self.entry)['next_action'])
+        self.assertEqual('admitted', self.state()['queue_compatibility']['permission'])
+
+    def test_boot_change_during_unresolved_drain_requires_review(self):
+        self.apply()
+        self.interrupt_at = 'stop'
+        with self.assertRaises(KeyboardInterrupt):
+            self.execute()
+        self.boot_path.write_text(str(uuid.uuid4()))
+        self.interrupt_at = None
+        with self.assertRaises(DeployError) as error:
+            release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        self.assertEqual('cutover_drain_review', error.exception.code)
+        self.assertTrue(self.state()['cutover']['drain_failed'])
+        self.assertNotIn('snapshot', self.events)
+
+    def test_restore_dispatch_gap_calls_module_resume_without_bypass(self):
+        plan = self.restore_plan()
+        release.apply_redis_restore(self.host, self.project, self.profile, plan['plan_token'], self.restore_operation)
+        with patch.object(self.snapshot, 'apply_restore', side_effect=KeyboardInterrupt()):
+            with self.assertRaises(KeyboardInterrupt):
+                release.execute_cutover(self.host, self.profile['instance_id'], self.restore_operation)
+        release.apply_redis_restore(self.host, self.project, self.profile, plan['plan_token'], self.restore_operation, resume=True)
+        release.execute_cutover(self.host, self.profile['instance_id'], self.restore_operation)
+        self.assertEqual(['resume'], self.restore_calls)
+
+    def test_real_m3_intake_accepts_m4_operation_directory_and_cleans_identity(self):
+        import redis_snapshot
+        plan = self.restore_plan()
+        operation = str(uuid.uuid4())
+        self.snapshot.plan_restore = redis_snapshot.plan_restore
+        with patch.object(redis_snapshot, '_ownership'), \
+                patch.object(redis_snapshot, '_restore_paths', side_effect=DeployError('redis_restore_boundary_reached', 'After real identity validation')) as boundary:
+            with self.assertRaises(DeployError) as error:
+                release.plan_redis_restore(self.host, self.project, self.profile, operation,
+                                           plan['snapshot']['snapshot_id'], 'PRIVATE IDENTITY')
+        self.assertEqual('redis_restore_boundary_reached', error.exception.code)
+        boundary.assert_called_once()
+        private = contract.private_path(self.host, self.entry, 'restore', operation).parent
+        self.assertFalse((private / 'operations' / operation / 'restore.identity').exists())
+
+    def test_invocation_change_before_completed_drain_requires_review(self):
+        self.apply()
+        self.invocations[instance_units(self.entry)['worker']] = uuid.uuid4().hex
+        with self.assertRaises(DeployError) as error:
+            self.execute()
+        self.assertEqual('cutover_drain_review', error.exception.code)
+        self.assertTrue(self.state()['cutover']['drain_failed'])
+        self.assertNotIn('snapshot', self.events)
+
+    def test_per_role_drain_completion_survives_interruption(self):
+        self.apply()
+        stopped = self.stopped
+        def interrupt_worker(host, entry, *, roles=None):
+            if roles == ['worker']:
+                raise KeyboardInterrupt()
+            return stopped(host, entry, roles=roles)
+        with patch.object(compatibility, 'prove_stopped', side_effect=interrupt_worker):
+            with self.assertRaises(KeyboardInterrupt):
+                self.execute()
+        recorded = self.state()['cutover']['drain']['roles']
+        self.assertTrue(recorded['http']['complete'])
+        self.assertFalse(recorded['worker']['complete'])
+        self.boot_path.write_text(str(uuid.uuid4()))
+        with self.assertRaises(DeployError):
+            release.apply_cutover(self.host, self.project, self.profile, self.plan_result['plan_token'], self.operation, resume=True)
+        self.assertTrue(self.state()['cutover']['drain_failed'])
+
+    def test_blocked_storage_coverage_preserves_safe_plan_without_private_keys(self):
+        with patch.object(contract.redis_acl, '_redis', return_value=['0', ['private-orphan-key']]):
+            plan = self.plan()
+        self.assertFalse(plan['applicable'])
+        self.assertEqual('cutover_unknown_queue', plan['blockers'][0]['code'])
+        self.assertNotIn('private-orphan-key', json.dumps(plan))
+
+    def test_switch_publication_uncertainty_records_observed_candidate(self):
+        self.apply()
+        switch = release._switch_pointer
+        def uncertain(*args):
+            switch(*args)
+            raise OSError('Response lost after selection')
+        with patch.object(release, '_switch_pointer', side_effect=uncertain):
+            with self.assertRaises(DeployError):
+                self.execute()
+        self.assertEqual(self.target, self.state()['current'])
+        self.assertEqual('closed', self.state()['queue_compatibility']['permission'])
+
 
 class InventoryContractTests(unittest.TestCase):
     def setUp(self):
@@ -476,6 +713,16 @@ class InventoryContractTests(unittest.TestCase):
         self.value['connections'][0]['queues'][0]['layout'] = '3'
         self.assertEqual(identity, contract.inventory_identity(self.value))
         self.assertEqual(self.value, contract.inventory(json.dumps(self.value)))
+
+    def test_exit_one_blockers_are_displayable_but_never_applicable(self):
+        self.value['blockers'] = [{'code': 'invalid_queue_state', 'connection': 'delivery', 'queue': 'default'}]
+        self.value['connections'][0]['queues'][0].update(layout='unknown', eligible=False)
+        payload = json.dumps(self.value)
+        displayed = contract.inventory(payload, 1, allow_blocked=True)
+        self.assertEqual(self.value, displayed)
+        self.assertFalse(contract.applicable(displayed))
+        with self.assertRaises(DeployError):
+            contract.inventory(payload, 1)
 
     def test_unknown_fields_bad_states_and_ineligible_sources_refuse(self):
         cases = []

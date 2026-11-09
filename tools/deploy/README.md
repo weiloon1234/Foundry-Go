@@ -21,6 +21,9 @@ Generation 5 installs role startup guards and adds `cutover-plan`, `cutover-appl
 `redis-restore-resume`. Apply and resume require the reviewed plan token, the same
 operation UUID, and confirmation. They cannot start old code after a migration
 may have run. A confirmed stop can contain processes while retaining the gate.
+`cutover-forward-plan` and confirmed `cutover-forward-apply` bind a replacement
+artifact to an unresolved operation. They retain the floor and recovery evidence.
+The replacement operation resumes through `cutover-resume`.
 
 The [cutover procedure](../../docs/guides/deployment.md#coordinated-redis-queue-cutover)
 describes full downtime, the owner's client-coverage attestation, fail-closed queue
@@ -28,10 +31,10 @@ discovery, snapshot evidence, failure handling, and resumption. The
 [snapshot module reference](redis-snapshot.md) describes exact-key ownership,
 private journals, expiration, and restore limits.
 
-Current integration prerequisites remain unresolved: the release-owned
-`deploy:jobs-inspect` implementation is pending integration, and restore intake
-does not yet satisfy the snapshot module's operation-directory requirement.
-See the [restore notice](../../docs/guides/deployment.md#restore-a-redis-snapshot).
+The release-owned `deploy:jobs-inspect` implementation and the snapshot lane's
+unstarted-restore reconciliation changes still need integration and verification.
+Restore intake uses a private operation-UUID directory. See the
+[restore procedure](../../docs/guides/deployment.md#restore-a-redis-snapshot).
 Passing fake-based tests does not establish production cutover or restore readiness.
 
 Run the local tool tests and documentation checks from the worktree root:

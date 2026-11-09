@@ -31,9 +31,24 @@ def require_mutation_idle(state):
             'cutover_pending', 'Resume the recorded cutover before another lifecycle operation.')
 
 
+def validate_state(state):
+    progress = state.get('cutover')
+    gate = state.get('queue_compatibility')
+    require(not progress or gate is not None, 'queue_compatibility_missing',
+            'Cutover progress without its persistent startup gate requires review.')
+    if gate is not None:
+        validate(gate)
+    if progress:
+        dispatched = any(q['status'] != 'pending' for q in progress['queues'])
+        irreversible = progress['rollback_prohibited'] or dispatched or progress['action'] == 'redis-restore'
+        require(not irreversible or gate['floor'] == 3 and progress['rollback_prohibited'],
+                'queue_compatibility_invalid', 'Queue dispatch requires the persistent layout-3 floor.')
+
+
 def require_release(host, entry, manifest, *, selecting=False):
     state_path = host.paths.instance_state(entry['name']) / 'state.json'
     state = host.load_state(entry)
+    validate_state(state)
     gate = state.get('queue_compatibility')
     if gate is None:
         # A unit cannot establish a safe legacy deployment from a missing state.
@@ -43,6 +58,8 @@ def require_release(host, entry, manifest, *, selecting=False):
     validate(gate)
     require(gate['permission'] == 'admitted', 'queue_start_fenced',
             'Application startup is fenced by the recorded cutover.')
+    if gate['floor'] is None:
+        return  # No queue compatibility transition: ordinary retained-release rollback remains valid.
     require(gate['admitted'].get(manifest['version']) == manifest['files']['artisan'],
             'queue_release_incompatible', 'This release is not admitted against the queue layout; reviewed forward recovery is required.')
 

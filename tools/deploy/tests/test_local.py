@@ -102,7 +102,7 @@ class LocalDeploymentTests(unittest.TestCase):
     def test_cutover_and_restore_display_saved_plan_before_confirming_exact_operation(self):
         project, profile = fixture()
         operation, token = str(uuid.uuid4()), 'a' * 64
-        for action in ('cutover-apply', 'cutover-resume', 'redis-restore-apply', 'redis-restore-resume'):
+        for action in ('cutover-apply', 'cutover-resume', 'cutover-forward-apply', 'redis-restore-apply', 'redis-restore-resume'):
             remote = MagicMock()
             events = []
             remote.request.side_effect = lambda action, request: events.append((action, request)) or {'ok': True}
@@ -111,7 +111,8 @@ class LocalDeploymentTests(unittest.TestCase):
                     patch.object(cli, 'confirm', side_effect=lambda _: events.append(('confirm', {}))), \
                     patch.object(cli, 'display'), patch.object(cli, 'say'):
                 cli.deploy(project, profile, {})
-            self.assertEqual([action.rsplit('-', 1)[0] + '-plan', 'confirm', action], [item[0] for item in events])
+            planned = 'cutover-plan' if action == 'cutover-forward-apply' else action.rsplit('-', 1)[0] + '-plan'
+            self.assertEqual([planned, 'confirm', action], [item[0] for item in events])
             sent = events[-1][1]
             self.assertEqual(operation, sent['operation_id'])
             self.assertEqual(token, sent['plan_token'])

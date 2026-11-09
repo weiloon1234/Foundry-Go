@@ -90,18 +90,16 @@ first checks the remote bytes, then can retry the retained artifact with
 changes, missing capture records, and altered artifacts require reconciliation.
 
 The restore identity file is an absolute, root-owned mode-0600 file beneath the
-instance private directory, within a directory component named by the operation
-UUID, for example `intake/<operation UUID>/identity`.
+instance private directory at `operations/<operation UUID>/restore.identity`.
+The operation directory has mode 0700 and is named exactly by that UUID.
 The identity contents are never passed in process arguments. The private plan
 and public result omit the identity path and contents. The coordinator owns
 intake cleanup.
 
-Current integration blocker: the coordinator creates
-`cutover-restore-<operation UUID>.identity` directly beneath the private directory.
-The UUID is part of a filename, not a directory component, so `plan_restore`
-rejects that intake with `redis_restore_identity`. The action must satisfy the
-module's ownership check before the operator procedure can complete. Do not weaken
-the check or work around it with manual production changes.
+The coordinator saves each snapshot's validated inventory and evidence in an
+immutable private binding. Restore planning uses that binding even when current
+values fail migration eligibility. Both ownership and exact-key coverage remain
+mandatory, and the returned snapshot evidence must match the binding.
 
 Restore planning downloads and checks the ciphertext, decrypts privately, and
 validates every archive member, DUMP checksum, and serialized Redis value before
@@ -123,6 +121,12 @@ retry after quiescence proof. RESTORE uses absolute expiration and takes an atom
 post-write observation. Final verification compares that representation and its
 expiration; Redis may change a hash or set's serialized ordering while loading.
 Only the plan's exact extra keys are deleted. No FLUSH command is used.
+
+The coordinator records dispatch before calling the module. After that point,
+it calls `resume_restore` on every retry, even if interruption preceded the module's
+initial progress write. The module owns reconciliation of that unstarted intent.
+The snapshot lane's corresponding reconciliation change must be integrated and
+verified; the coordinator never skips the module's plan, safety-snapshot, or drift checks.
 
 Success and failure both retain the startup fence. Restored layout-2 queues still
 require a reviewed forward cutover before candidate startup. Redis recovery does

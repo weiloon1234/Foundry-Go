@@ -247,9 +247,8 @@ class Host:
         if "cutover" in state:
             from cutover_contracts import validate_progress
             validate_progress(state["cutover"])
-        if "queue_compatibility" in state:
-            from compatibility import validate
-            validate(state["queue_compatibility"])
+        from compatibility import validate_state
+        validate_state(state)
         if state["last_attempt"] is not None:
             validate_attempt(state["last_attempt"])
         for attempt in state["history"]:

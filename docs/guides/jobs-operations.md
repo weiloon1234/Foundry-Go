@@ -354,10 +354,12 @@ requires review. Once migration may have run, the persistent startup gate preven
 old-code restart and rollback. Recovery moves forward; Redis restore is a separate
 reviewed operation that leaves startup blocked.
 
-The v0.15.0 inspection command is still awaiting integration, and the merged
-restore intake has a path-validation mismatch. Follow the deployment guide's
+Use [reviewed forward recovery](deployment.md#apply-a-reviewed-forward-fix) to bind
+a repaired candidate to an unresolved layout-3 operation. A normal resume retains
+its original artifact. The v0.15.0 inspection command and snapshot-lane restore
+reconciliation changes still need integration and verification. Follow the deployment guide's
 [prerequisites](deployment.md#coordinated-redis-queue-cutover) and
-[restore integration notice](deployment.md#restore-a-redis-snapshot) before using
+[restore procedure](deployment.md#restore-a-redis-snapshot) before using
 these actions in production. Do not substitute manual SSH changes on a managed
 production instance.
 

@@ -55,6 +55,22 @@ class ManagerTests(unittest.TestCase):
             manager.execute(self.host, "stop", {**self.request, "unreviewed": True})
         self.assertEqual("invalid_request", error.exception.code)
 
+    def test_forward_recovery_has_separate_confirmation_and_artifact_plan(self):
+        import release
+        operation, token = str(uuid.uuid4()), 'a' * 64
+        with patch.object(release, 'apply_cutover', return_value={'ok': True}) as apply:
+            request = {**self.request, 'operation_id': operation, 'plan_token': token}
+            with self.assertRaises(DeployError) as error:
+                manager.execute(self.host, 'cutover-forward-apply', request)
+            self.assertEqual('confirmation_required', error.exception.code)
+            apply.assert_not_called()
+            manager.execute(self.host, 'cutover-forward-apply', {**request, 'confirm': True})
+            self.assertEqual({'resume': False, 'forward': True}, apply.call_args.kwargs)
+        with patch.object(release, 'plan_cutover', return_value={'applicable': True}) as plan:
+            manager.execute(self.host, 'cutover-forward-plan', {**self.request, 'archive': '/tmp/replacement.tar.gz', 'archive_sha256': token})
+            self.assertTrue(plan.call_args.kwargs['forward'])
+            self.assertEqual(('/tmp/replacement.tar.gz', token), plan.call_args.args[-2:])
+
     def test_cutover_and_restore_require_confirmation_and_forward_exact_intent(self):
         import release
         operation, token = str(uuid.uuid4()), 'a' * 64
