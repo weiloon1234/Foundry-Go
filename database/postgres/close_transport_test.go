@@ -18,10 +18,13 @@ import (
 // postgresTLSBridge supplies TLS even when the existing test PostgreSQL has it
 // disabled. It forwards real protocol traffic and closes only its own sockets
 // when PostgreSQL terminates a backend; it never starts another database server.
-func postgresTLSBridge(t *testing.T, upstream postgres.Config) (func(*postgres.Config), <-chan struct{}) {
+func postgresTLSBridge(t *testing.T, upstream postgres.Config, configure ...func(*tls.Config)) (func(*postgres.Config), <-chan struct{}) {
 	t.Helper()
 	certificate := httptest.NewTLSServer(nil)
 	serverTLS := certificate.TLS.Clone()
+	for _, adjust := range configure {
+		adjust(serverTLS)
+	}
 	roots := x509.NewCertPool()
 	roots.AddCert(certificate.Certificate())
 	certificate.Close()

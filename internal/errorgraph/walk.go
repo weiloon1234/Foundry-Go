@@ -2,7 +2,10 @@
 // Callers isolate custom Is/As/Unwrap methods and retain callback ownership.
 package errorgraph
 
-import "reflect"
+import (
+	"reflect"
+	"slices"
+)
 
 // Walk visits non-nil errors in depth-first order. A false visitor result stops
 // successfully. False means traversal exceeded its node/depth bounds. A callback
@@ -14,6 +17,18 @@ func Walk(err error, visit func(error) bool) bool {
 // WalkPruned omits a pruned node and its descendants while keeping the shared
 // traversal budget and depth-first sibling precedence.
 func WalkPruned(err error, visit func(error) bool, prune func(error) bool) bool {
+	return walk(err, visit, prune, nil)
+}
+
+// WalkWithLeaf visits each node after unwrapping it once within the shared
+// bounds. Leaf status and traversal use the same children; nil children do not
+// make a node non-leaf. Unlike Walk, even an early-stopped node is unwrapped.
+// Depth starts at zero and lets visitors track ancestry without re-unwrapping.
+func WalkWithLeaf(err error, visit func(current error, leaf bool, depth int) bool) bool {
+	return walk(err, nil, nil, visit)
+}
+
+func walk(err error, visit func(error) bool, prune func(error) bool, visitLeaf func(error, bool, int) bool) bool {
 	type frame struct {
 		err   error
 		depth int
@@ -34,7 +49,7 @@ func WalkPruned(err error, visit func(error) bool, prune func(error) bool) bool 
 		if prune != nil && prune(current.err) {
 			continue
 		}
-		if !visit(current.err) {
+		if visitLeaf == nil && !visit(current.err) {
 			return true
 		}
 		var children []error
@@ -53,6 +68,9 @@ func WalkPruned(err error, visit func(error) bool, prune func(error) bool) bool 
 		}
 		if len(children) > childBudget {
 			return false
+		}
+		if visitLeaf != nil && !visitLeaf(current.err, !slices.ContainsFunc(children, func(child error) bool { return child != nil }), current.depth) {
+			return true
 		}
 		for i := len(children) - 1; i >= 0; i-- {
 			pending = append(pending, frame{children[i], current.depth + 1})

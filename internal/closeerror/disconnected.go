@@ -4,7 +4,6 @@ package closeerror
 import (
 	"io"
 	"net"
-	"slices"
 	"syscall"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -13,6 +12,8 @@ import (
 )
 
 // OnlyDisconnected requires every leaf to identify a disconnected connection.
+// EOF and syscall failures require a net.OpError ancestor; TLS delegates can
+// return the same errors without any socket failure. net.ErrClosed is explicit.
 // protocol may recognize additional protocol-specific leaves. Unknown failures,
 // classified faults and incomplete inspection remain failures. Never use this
 // to classify queries, commands, transactions, or shutdown wait deadlines.
@@ -22,25 +23,31 @@ func OnlyDisconnected(err error, protocol func(error) bool) bool {
 	}
 	closed, other := false, false
 	inspected := callback.Isolated("classify connection close", func() error {
-		complete := errorgraph.Walk(err, func(current error) bool {
+		var transportPath []bool
+		complete := errorgraph.WalkWithLeaf(err, func(current error, leaf bool, depth int) bool {
+			_, transport := current.(*net.OpError)
+			if depth > 0 {
+				transport = transport || transportPath[depth-1]
+			}
+			transportPath = append(transportPath[:depth], transport)
 			switch current {
-			case io.EOF, io.ErrUnexpectedEOF, io.ErrClosedPipe, net.ErrClosed, syscall.ECONNRESET, syscall.EPIPE:
+			case net.ErrClosed:
 				closed = true
 				return true
+			case io.EOF, io.ErrUnexpectedEOF, io.ErrClosedPipe, syscall.ECONNRESET, syscall.EPIPE:
+				if transport {
+					closed = true
+					return true
+				}
 			}
 			if protocol != nil && protocol(current) {
 				closed = true
 				return true
 			}
-			switch current := current.(type) {
-			case *fault.Error:
+			if _, classified := current.(*fault.Error); classified {
 				other = true
-			case interface{ Unwrap() error }:
-				other = current.Unwrap() == nil
-			case interface{ Unwrap() []error }:
-				other = !slices.ContainsFunc(current.Unwrap(), func(child error) bool { return child != nil })
-			default:
-				other = true
+			} else {
+				other = leaf
 			}
 			return !other
 		})

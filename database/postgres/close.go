@@ -12,7 +12,9 @@ import (
 // the session. TLS close_notify can fail after pgx has closed the socket.
 func (c *protectedConnection) Close() error {
 	err := c.Conn.Close()
-	if closedConnectionOnly(err) {
+	// Custom entropy may itself return socket errors; their transport does not
+	// establish that PostgreSQL disconnected. Preserve the raw close result.
+	if !c.customTLSRand && closedConnectionOnly(err) {
 		return nil
 	}
 	return err

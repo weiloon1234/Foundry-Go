@@ -157,3 +157,36 @@ func TestWalkPassesRemainingBudgetBeforeProjection(t *testing.T) {
 		t.Fatal("incomplete projection accepted")
 	}
 }
+
+func TestWalkWithLeafUsesBoundedChildren(t *testing.T) {
+	leaf := errors.New("leaf")
+	projection := &boundedProjection{}
+	root := errors.Join(leaf, projection)
+	var visited []error
+	var leaves []bool
+	var depths []int
+	if !errorgraph.WalkWithLeaf(root, func(current error, isLeaf bool, depth int) bool {
+		visited = append(visited, current)
+		leaves = append(leaves, isLeaf)
+		depths = append(depths, depth)
+		return true
+	}) || !slices.Equal(visited, []error{root, leaf, projection}) || !slices.Equal(leaves, []bool{false, true, true}) {
+		t.Fatal("leaf inspection changed order or did not use bounded children")
+	}
+	if !slices.Equal(depths, []int{0, 1, 1}) {
+		t.Fatal("leaf inspection lost sibling depth")
+	}
+	if projection.calls != 1 {
+		t.Fatal("bounded children were obtained more than once")
+	}
+	projection.refuse = true
+	if errorgraph.WalkWithLeaf(projection, func(error, bool, int) bool {
+		t.Fatal("incomplete projection was presented as a leaf")
+		return true
+	}) {
+		t.Fatal("incomplete projection accepted")
+	}
+	if errorgraph.WalkWithLeaf(&cycle{}, func(error, bool, int) bool { return true }) {
+		t.Fatal("leaf inspection lost traversal bounds")
+	}
+}

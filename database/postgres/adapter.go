@@ -24,7 +24,11 @@ func New(config Config) (database.Adapter, error) {
 	if err != nil {
 		return database.Adapter{}, err
 	}
-	return database.Adapter{Connector: protectedConnector{source: stdlib.GetConnector(*parsed, connectionOptions(config.Schema, config.Pool.MaxLifetime)...), registerTypes: config.RegisterTypes}, Classify: classify}, nil
+	return database.Adapter{Connector: protectedConnector{
+		source:        stdlib.GetConnector(*parsed, connectionOptions(config.Schema, config.Pool.MaxLifetime)...),
+		registerTypes: config.RegisterTypes,
+		customTLSRand: parsed.TLSConfig != nil && parsed.TLSConfig.Rand != nil,
+	}, Classify: classify}, nil
 }
 
 // Open validates the PostgreSQL configuration and starts an owned database pool.

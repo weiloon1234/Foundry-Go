@@ -16,6 +16,7 @@ import (
 type protectedConnector struct {
 	source        driver.Connector
 	registerTypes func(context.Context, *TypeRegistry) error
+	customTLSRand bool
 }
 
 // Driver returns the underlying connector's driver.
@@ -33,10 +34,13 @@ func (c protectedConnector) Connect(ctx context.Context) (driver.Conn, error) {
 		discardRewriterConnection(ctx, native.Conn())
 		return nil, err
 	}
-	return &protectedConnection{Conn: native}, nil
+	return &protectedConnection{Conn: native, customTLSRand: c.customTLSRand}, nil
 }
 
-type protectedConnection struct{ *stdlib.Conn }
+type protectedConnection struct {
+	*stdlib.Conn
+	customTLSRand bool
+}
 
 // CheckNamedValue forwards argument checking to the underlying pgx connection.
 func (c *protectedConnection) CheckNamedValue(v *driver.NamedValue) error {
