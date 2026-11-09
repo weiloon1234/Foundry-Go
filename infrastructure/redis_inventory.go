@@ -2,10 +2,14 @@ package infrastructure
 
 import (
 	"cmp"
+	"context"
+	"maps"
 	"slices"
 
 	"github.com/weiloon1234/Foundry-Go/cache"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/lease"
@@ -100,4 +104,110 @@ func (p *Plan) RedisKeys() []RedisConnectionInventory {
 		result = append(result, *entry)
 	}
 	return result
+}
+
+// Jobs returns an owned snapshot of the plan's resolved job connection settings.
+func (p *Plan) Jobs() JobsSettings {
+	if p == nil {
+		return JobsSettings{}
+	}
+	return JobsSettings{
+		Default:     p.settings.Jobs.Default,
+		Connections: maps.Clone(p.settings.Jobs.Connections),
+	}
+}
+
+// RedisStorageID returns the physical storage digest for a configured Redis connection.
+func (p *Plan) RedisStorageID(name redis.ConnectionName) (string, error) {
+	if p == nil {
+		return "", safeerror.NewFault(fault.Invalid, "Redis storage identity requires an infrastructure plan")
+	}
+	conn, ok := p.settings.Redis.Connections[name]
+	if !ok {
+		return "", safeerror.NewFault(fault.Missing, "Redis connection is not configured")
+	}
+	return conn.Config().StorageID()
+}
+
+// JobConnectionLayoutResult holds read-only layout inspection outcomes for one job connection.
+type JobConnectionLayoutResult struct {
+	Queues          map[jobs.Queue]redis.JobLayoutInspection
+	QueueErrors     map[jobs.Queue]error
+	ConnectionError error
+}
+
+// InspectJobLayouts opens only the Redis pools referenced by targets, inspects
+// each declared queue layout without mutating Redis state, and closes the pools.
+func (p *Plan) InspectJobLayouts(ctx context.Context, targets map[jobs.ConnectionName][]jobs.Queue) map[jobs.ConnectionName]JobConnectionLayoutResult {
+	results := make(map[jobs.ConnectionName]JobConnectionLayoutResult, len(targets))
+	if p == nil || len(targets) == 0 {
+		return results
+	}
+	byRedis := make(map[redis.ConnectionName][]jobs.ConnectionName)
+	for _, connName := range keys(targets) {
+		jobCfg, ok := p.settings.Jobs.Connections[connName]
+		if !ok || jobCfg.Driver != RedisJobs {
+			continue
+		}
+		byRedis[jobCfg.Redis] = append(byRedis[jobCfg.Redis], connName)
+	}
+	for _, redisName := range keys(byRedis) {
+		connNames := byRedis[redisName]
+		redisCfg, ok := p.settings.Redis.Connections[redisName]
+		if !ok {
+			err := safeerror.NewFault(fault.Missing, "job Redis connection is not configured")
+			for _, connName := range connNames {
+				results[connName] = JobConnectionLayoutResult{ConnectionError: err}
+			}
+			continue
+		}
+		client, err := redis.Prepare(redisCfg.Config())
+		if err != nil {
+			for _, connName := range connNames {
+				results[connName] = JobConnectionLayoutResult{ConnectionError: err}
+			}
+			continue
+		}
+		startErr := client.Start(ctx)
+		if startErr != nil {
+			closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), redisCfg.OperationTimeout)
+			_ = client.Close(closeCtx)
+			cancel()
+			for _, connName := range connNames {
+				results[connName] = JobConnectionLayoutResult{ConnectionError: startErr}
+			}
+			continue
+		}
+		for _, connName := range connNames {
+			jobCfg := p.settings.Jobs.Connections[connName]
+			res := JobConnectionLayoutResult{
+				Queues:      make(map[jobs.Queue]redis.JobLayoutInspection, len(targets[connName])),
+				QueueErrors: make(map[jobs.Queue]error),
+			}
+			backend, err := redis.NewJobBackend(client, jobCfg.Queue)
+			if err != nil {
+				res.ConnectionError = err
+				results[connName] = res
+				continue
+			}
+			for _, queue := range targets[connName] {
+				key, err := jobs.NewKey(jobCfg.Dispatch.Namespace, queue)
+				if err != nil {
+					res.QueueErrors[queue] = err
+					continue
+				}
+				inspection, err := backend.InspectLayout(ctx, key)
+				if err != nil {
+					res.QueueErrors[queue] = err
+					continue
+				}
+				res.Queues[queue] = inspection
+			}
+			results[connName] = res
+		}
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), redisCfg.OperationTimeout)
+		_ = client.Close(closeCtx)
+		cancel()
+	}
+	return results
 }

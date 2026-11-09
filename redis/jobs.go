@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"slices"
 	"sync"
 	"time"
 
@@ -182,16 +183,106 @@ type jobReply struct {
 		ID jobs.ExecutionID `json:"id"`
 		At int64            `json:"at"`
 	} `json:"quarantined"`
-	Records   []jobStoredRecord `json:"records"`
-	Next      string            `json:"next"`
-	Inserted  bool              `json:"inserted"`
-	Changed   bool              `json:"changed"`
-	Owned     bool              `json:"owned"`
-	Cancelled bool              `json:"cancelled"`
-	Attempt   uint32            `json:"attempt"`
-	Record    *jobStoredRecord  `json:"record"`
-	Stats     *jobs.QueueStats  `json:"stats"`
-	Workflow  *workflowStatus   `json:"workflow"`
+	Records    []jobStoredRecord `json:"records"`
+	Next       string            `json:"next"`
+	Inserted   bool              `json:"inserted"`
+	Changed    bool              `json:"changed"`
+	Owned      bool              `json:"owned"`
+	Cancelled  bool              `json:"cancelled"`
+	Attempt    uint32            `json:"attempt"`
+	Record     *jobStoredRecord  `json:"record"`
+	Stats      *jobs.QueueStats  `json:"stats"`
+	Workflow   *workflowStatus   `json:"workflow"`
+	Inspection *jobLayoutReply   `json:"inspection"`
+}
+
+// JobSupportedLayout is the Redis job-queue storage layout required by this release.
+const JobSupportedLayout = 3
+
+// JobQueueLayout describes the observed storage layout of a Redis job queue.
+type JobQueueLayout string
+
+const (
+	// JobQueueLayoutAbsent reports that none of the queue's 11 Redis keys exist.
+	JobQueueLayoutAbsent JobQueueLayout = "absent"
+	// JobQueueLayout1 reports a legacy layout-1 queue that requires v0.13.0 upgrade first.
+	JobQueueLayout1 JobQueueLayout = "1"
+	// JobQueueLayout2 reports a layout-2 queue eligible for migration to layout 3.
+	JobQueueLayout2 JobQueueLayout = "2"
+	// JobQueueLayout3 reports a layout-3 queue already on the supported layout.
+	JobQueueLayout3 JobQueueLayout = "3"
+	// JobQueueLayoutUnknown reports corrupt, mismatched, or unsupported queue state.
+	JobQueueLayoutUnknown JobQueueLayout = "unknown"
+)
+
+// JobLayoutBlocker identifies why a Redis job queue is not eligible for cutover.
+type JobLayoutBlocker string
+
+const (
+	// JobLayoutBlockerNone indicates no layout or policy blocker on the queue.
+	JobLayoutBlockerNone JobLayoutBlocker = ""
+	// JobLayoutBlockerUpgradeRequired indicates a layout-1 queue that must upgrade through v0.13.0.
+	JobLayoutBlockerUpgradeRequired JobLayoutBlocker = "layout_1_requires_upgrade"
+	// JobLayoutBlockerUnsupportedLayout indicates an unknown or future layout marker.
+	JobLayoutBlockerUnsupportedLayout JobLayoutBlocker = "unsupported_layout"
+	// JobLayoutBlockerPolicyMismatch indicates stored queue policy metadata differs from configured policy.
+	JobLayoutBlockerPolicyMismatch JobLayoutBlocker = "queue_policy_mismatch"
+	// JobLayoutBlockerInvalidState indicates partial keys, wrong Redis key types, or invalid metadata counters.
+	JobLayoutBlockerInvalidState JobLayoutBlocker = "invalid_queue_state"
+)
+
+// JobLayoutInspection reports the read-only layout and cutover eligibility of one Redis job queue.
+type JobLayoutInspection struct {
+	Layout   JobQueueLayout
+	Eligible bool
+	Blocker  JobLayoutBlocker
+}
+
+func (i JobLayoutInspection) valid() bool {
+	if i.Eligible {
+		return i.Blocker == JobLayoutBlockerNone &&
+			(i.Layout == JobQueueLayoutAbsent || i.Layout == JobQueueLayout2 || i.Layout == JobQueueLayout3)
+	}
+	switch i.Layout {
+	case JobQueueLayout1:
+		return i.Blocker == JobLayoutBlockerUpgradeRequired
+	case JobQueueLayoutUnknown:
+		return i.Blocker == JobLayoutBlockerUnsupportedLayout ||
+			i.Blocker == JobLayoutBlockerPolicyMismatch ||
+			i.Blocker == JobLayoutBlockerInvalidState
+	default:
+		return false
+	}
+}
+
+type jobLayoutReply struct {
+	Layout   JobQueueLayout   `json:"layout"`
+	Eligible bool             `json:"eligible"`
+	Blocker  JobLayoutBlocker `json:"blocker"`
+}
+
+// JobPolicyID returns the 64-character lowercase hex SHA-256 digest of the
+// canonical Redis job queue policy configuration.
+func JobPolicyID(config jobs.QueueConfig) (string, error) {
+	if err := config.Validate(); err != nil {
+		return "", err
+	}
+	identity, err := json.Marshal(config)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(identity)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+// JobKeys returns the sorted, deduplicated 11 physical Redis keys owned by key.
+func JobKeys(key jobs.Key) ([]string, error) {
+	if err := key.Validate(); err != nil {
+		return nil, err
+	}
+	keys := jobKeys(key)
+	slices.Sort(keys)
+	return slices.Compact(keys), nil
 }
 
 // JobQuarantined returns a bounded page of safe metadata without running queue
@@ -584,6 +675,27 @@ var _ jobs.LayoutMigrator = (*JobBackend)(nil)
 func (b *JobBackend) JobMigrateLayout(ctx context.Context, key jobs.Key) (bool, error) {
 	reply, err := b.command(ctx, key, jobRequest{Op: "migrate_layout"})
 	return reply.Changed, err
+}
+
+// InspectLayout inspects one queue's storage layout and policy compatibility
+// without mutating Redis state or initializing an absent queue.
+func (b *JobBackend) InspectLayout(ctx context.Context, key jobs.Key) (JobLayoutInspection, error) {
+	reply, err := b.command(ctx, key, jobRequest{Op: "inspect_layout"})
+	if err != nil {
+		return JobLayoutInspection{}, err
+	}
+	if reply.Inspection == nil {
+		return JobLayoutInspection{}, safeerror.NewFault(fault.Internal, "invalid Redis job layout inspection reply")
+	}
+	inspection := JobLayoutInspection{
+		Layout:   reply.Inspection.Layout,
+		Eligible: reply.Inspection.Eligible,
+		Blocker:  reply.Inspection.Blocker,
+	}
+	if !inspection.valid() {
+		return JobLayoutInspection{}, safeerror.NewFault(fault.Internal, "invalid Redis job layout inspection state")
+	}
+	return inspection, nil
 }
 
 // JobCancelWorkflow requests cancellation of a workflow and reports whether state changed.
