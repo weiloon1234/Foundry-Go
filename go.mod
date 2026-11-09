@@ -16,7 +16,7 @@ require (
 	github.com/disintegration/gift v1.2.1
 	github.com/gen2brain/gav1d v0.2.5
 	github.com/gen2brain/vpx v0.2.1
-	github.com/jackc/pgx/v5 v5.11.0
+	github.com/jackc/pgx/v5 v5.12.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/nyaruka/phonenumbers/v2 v2.0.15
 	github.com/pelletier/go-toml/v2 v2.4.3
@@ -47,7 +47,7 @@ require (
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
