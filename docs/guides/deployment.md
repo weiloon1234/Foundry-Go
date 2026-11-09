@@ -500,6 +500,9 @@ artifact observed at the `current` pointer even when pointer publication is
 uncertain or health fails. A selected candidate remains blocked after failure;
 its presence in `state.current` is not startup admission. Restore and subsequent
 forward planning use that observed identity without starting the fenced release.
+Restore planning and acceptance also reconcile the selected artifact after hard
+executor death, when no exception handler could publish state. That identity is
+retained through restore completion and the next cutover plan.
 
 Apply returning `outcome: running` confirms submission, not healthy completion.
 Read `ACTION=status make deploy`. `state.cutover` records the operation ID, phase,
@@ -538,7 +541,8 @@ For an unresolved operation with a layout-3 floor and a defective candidate, the
 lead prepares a replacement release and the owner approves its recovery behavior.
 If necessary, use confirmed `ACTION=stop` to contain the existing executor first.
 Forced termination and unresolved boot/drain evidence remain review blockers.
-Forward recovery does not bypass those checks.
+Use the explicit drain resolution below after review; forward recovery does not
+bypass process-exit proof.
 
 ```sh
 ENVIRONMENT=production ACTION=cutover-forward-plan RELEASE=<replacement-version> make deploy
@@ -562,6 +566,55 @@ a new supervised operation for the replacement. Original snapshot evidence stays
 available for reviewed restore. If interrupted, use `cutover-resume` with the
 replacement plan's token and operation UUID. After a completed Redis restore,
 use ordinary `cutover-plan` for the new forward activation instead.
+
+### Resolve an uncertain drain
+
+After a completed drain and reboot, a failed startup guard does not mean the
+application ran. The tool accepts stopped units whose main process never started,
+while still proving empty cgroups and no instance-owned clients. An unsuccessful
+main process exit, including a reserved systemd exit status, cannot establish that
+no application work ran. Forced termination and unresolved boot evidence retain
+`drain_failed`; status directs the operator to `cutover-drain-resolve`.
+
+Contain the executor and roles with confirmed `ACTION=stop`. The lead reviews
+interrupted work and external side effects, and the owner approves the resolution.
+Record that decision with the active operation UUID:
+
+```sh
+ENVIRONMENT=production ACTION=cutover-drain-resolve OPERATION=<active-uuid-v4> \
+	REVIEWED_BY=<reviewer-identity> REASON='<reviewed evidence and resolution>' \
+	CONFIRM=yes make deploy
+```
+
+This action requires executor exit, stopped roles, empty cgroups, no remaining
+clients, installed guards and closed startup permission. It records who, why,
+when, the boot identity and each role's observed invocation/exit evidence. It
+clears the review flag without claiming a clean drain or starting any process.
+The approval applies only to those observations; a changed invocation or boot
+requires fresh proof. Do not put secrets in the reason. Then resume the same
+intent, plan a reviewed forward fix for a broken candidate, or plan Redis restore.
+
+### Replace a pre-dispatch plan
+
+An admitted request can publish an undeclared queue between preflight and drain
+completion. Post-drain coverage then blocks the operation and keeps startup
+fenced. Preserve the queue data. The lead prepares a candidate that declares the
+missing queue, and the owner approves supersession:
+
+```sh
+ENVIRONMENT=production ACTION=cutover-abort-plan RELEASE=<corrected-version> \
+	REVIEWED_BY=<reviewer-identity> REASON='<why the inventory must change>' make deploy
+ENVIRONMENT=production ACTION=cutover-abort-apply PLAN_TOKEN=<reviewed-token> \
+	OPERATION=<new-uuid-v4> CONFIRM=yes make deploy
+```
+
+Planning requires durable proof that neither snapshot capture nor queue/database
+migration or seeding has begun, and that no layout-3 floor exists. It validates
+the corrected candidate's configuration, inventory and complete stored-key coverage.
+The token binds the reviewer, reason, replacement artifact and prior progress.
+Apply rechecks those conditions, archives the superseded operation, and starts a
+new cutover without opening the fence or deleting queue data. Resume the replacement
+with `cutover-resume`. Once dispatch has begun, use the forward or restore procedures.
 
 ### Queue startup gate
 

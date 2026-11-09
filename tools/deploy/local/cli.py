@@ -41,7 +41,7 @@ COMMANDS = {
     "deploy": "interactive deployment, status, rollback, capacity and configuration",
     "release": "build a local Docker release without contacting a server",
 }
-ACTIONS = ("redis-restore-plan", "redis-restore-apply", "redis-restore-resume", "cutover-plan", "cutover-apply", "cutover-resume", "cutover-forward-plan", "cutover-forward-apply", "capacity", "deploy", "status", "rollback", "restart", "stop", "logs", "config", "keys rotate", "reconcile", "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run", "restore-drill", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate")
+ACTIONS = ("redis-restore-plan", "redis-restore-apply", "redis-restore-resume", "cutover-plan", "cutover-apply", "cutover-resume", "cutover-forward-plan", "cutover-forward-apply", "cutover-abort-plan", "cutover-abort-apply", "cutover-drain-resolve", "capacity", "deploy", "status", "rollback", "restart", "stop", "logs", "config", "keys rotate", "reconcile", "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run", "restore-drill", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate")
 
 
 class LocalError(Exception):
@@ -1094,14 +1094,26 @@ def deploy(project, profile, settings):
             confirm("Apply/resume the reviewed Redis restore")
             display(ssh.request(action, {**request, "operation_id": operation, "plan_token": token, "confirm": True}))
             return
-        if action in ("cutover-plan", "cutover-forward-plan"):
+        if action == "cutover-drain-resolve":
+            operation = operation_uuid(os.environ.get("OPERATION") or ask("Active operation UUID"))
+            review = {"reviewed_by": os.environ.get("REVIEWED_BY") or ask("Reviewer identity"),
+                      "reason": os.environ.get("REASON") or ask("Reviewed resolution and reason")}
+            display(ssh.request("status", request))
+            display({"operation_id": operation, **review})
+            confirm("Record this approved drain resolution; keep startup fenced")
+            display(ssh.request(action, {**request, **review, "operation_id": operation, "confirm": True}))
+            return
+        if action in ("cutover-plan", "cutover-forward-plan", "cutover-abort-plan"):
+            review = ({"reviewed_by": os.environ.get("REVIEWED_BY") or ask("Reviewer identity"),
+                       "reason": os.environ.get("REASON") or ask("Reason for pre-dispatch supersession")}
+                      if action == "cutover-abort-plan" else {})
             archive = select_archive(project, profile)
             with ssh.temporary() as remote:
                 destination = remote + "/app.tar.gz"
                 ssh.upload(archive, destination)
-                display(ssh.request(action, {**request, "archive": destination, "archive_sha256": digest(archive)}))
+                display(ssh.request(action, {**request, **review, "archive": destination, "archive_sha256": digest(archive)}))
             return
-        if action in ("cutover-apply", "cutover-resume", "cutover-forward-apply"):
+        if action in ("cutover-apply", "cutover-resume", "cutover-forward-apply", "cutover-abort-apply"):
             token, supplied = os.environ.get("PLAN_TOKEN"), os.environ.get("OPERATION")
             if not token or not supplied or not re.fullmatch("[a-f0-9]{64}", token):
                 raise LocalError("cutover apply/resume requires reviewed PLAN_TOKEN and stable OPERATION UUID")
@@ -1114,6 +1126,8 @@ def deploy(project, profile, settings):
             display({"plan_token": token, "operation_id": operation, "instance": instance_name(project, profile)})
             if action == "cutover-forward-apply":
                 say("Forward recovery supersedes the prior operation and runs the replacement migrations and seeders; prior side effects may have completed.")
+            if action == "cutover-abort-apply":
+                say("Supersede the pre-dispatch operation using the corrected inventory; retain queue data and the closed startup fence.")
             confirm("Apply/resume this reviewed cutover in the owner's chosen downtime window")
             display(ssh.request(action, {**request, "plan_token": token, "operation_id": operation, "confirm": True}))
             return

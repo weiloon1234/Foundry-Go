@@ -71,6 +71,26 @@ class ManagerTests(unittest.TestCase):
             self.assertTrue(plan.call_args.kwargs['forward'])
             self.assertEqual(('/tmp/replacement.tar.gz', token), plan.call_args.args[-2:])
 
+    def test_review_actions_require_confirmation_and_preserve_identity(self):
+        import release
+        operation = str(uuid.uuid4())
+        review = {'reviewed_by': 'owner@example.test', 'reason': 'Reviewed startup and external effects'}
+        with patch.object(release, 'resolve_cutover_drain') as resolve:
+            request = {**self.request, **review, 'operation_id': operation}
+            with self.assertRaises(DeployError) as error:
+                manager.execute(self.host, 'cutover-drain-resolve', request)
+            self.assertEqual('confirmation_required', error.exception.code)
+            resolve.assert_not_called()
+            manager.execute(self.host, 'cutover-drain-resolve', {**request, 'confirm': True})
+            self.assertEqual((operation, review['reviewed_by'], review['reason']), resolve.call_args.args[-3:])
+        with patch.object(release, 'apply_cutover') as apply:
+            request = {**self.request, 'operation_id': operation, 'plan_token': 'a' * 64}
+            with self.assertRaises(DeployError):
+                manager.execute(self.host, 'cutover-abort-apply', request)
+            apply.assert_not_called()
+            manager.execute(self.host, 'cutover-abort-apply', {**request, 'confirm': True})
+            self.assertEqual({'resume': False, 'abort': True}, apply.call_args.kwargs)
+
     def test_cutover_and_restore_require_confirmation_and_forward_exact_intent(self):
         import release
         operation, token = str(uuid.uuid4()), 'a' * 64

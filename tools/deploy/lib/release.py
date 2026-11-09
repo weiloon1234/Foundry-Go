@@ -1533,7 +1533,25 @@ def _blocked_cutover_plan(entry, manifest, inventory, blockers):
             'blockers': blockers, 'warning': contract.WARNING, 'owner_attestation': contract.ATTESTATION}
 
 
-def plan_cutover(host, project, profile, archive, checksum, *, forward=False):
+def _review_identity(reviewed_by, reason):
+    require(all(isinstance(value, str) and value.strip() == value and 1 <= len(value) <= limit
+                and all(ord(char) >= 32 for char in value)
+                for value, limit in ((reviewed_by, 200), (reason, 2000))),
+            'cutover_review_required', 'Supply REVIEWED_BY and REASON for the approved recovery decision.')
+
+
+def _require_pre_dispatch(state):
+    progress = state.get('cutover') or {}
+    require(progress.get('action') == 'cutover' and progress.get('outcome') not in ('succeeded', 'failed')
+            and not progress['rollback_prohibited'] and state['queue_compatibility']['floor'] is None
+            and progress['phase'] in ('prepared', 'stopping')
+            and progress.get('snapshot_started') is False
+            and 'snapshot' not in progress and all(q['status'] == 'pending' for q in progress['queues'])
+            and progress['database'] == progress['seed'] == 'not_started',
+            'cutover_abort_unsafe', 'Abort/replan requires proof that snapshot and migration dispatch never began.')
+
+
+def plan_cutover(host, project, profile, archive, checksum, *, forward=False, abort=False, reviewed_by=None, reason=None):
     import cutover_contracts as contract
     import upgrades
     _, entry = host.require_identity(project, profile)
@@ -1543,10 +1561,13 @@ def plan_cutover(host, project, profile, archive, checksum, *, forward=False):
         tools = upgrades._installed(host, registry['tools'])
         state = host.load_state(entry)
         recovery = None
-        if forward:
+        if forward or abort:
             active = state.get('cutover')
+            if abort:
+                _review_identity(reviewed_by, reason)
+                _require_pre_dispatch(state)
             require(active and active['outcome'] not in ('succeeded', 'failed')
-                    and state['queue_compatibility']['floor'] == 3,
+                    and (abort or state['queue_compatibility']['floor'] == 3),
                     'cutover_forward_required', 'Forward recovery requires an unresolved layout-3 operation.')
             require(cutover_executor(host, entry, active['operation_id']) != 'running',
                     'operation_locked', 'Contain the previous executor before planning forward recovery.')
@@ -1559,10 +1580,13 @@ def plan_cutover(host, project, profile, archive, checksum, *, forward=False):
             recovery = {'operation_id': active['operation_id'], 'progress_sha256': contract.sha(active),
                         'database': active['database'], 'seed': active['seed'],
                         'warning': 'Replacement migrations and seeders run under explicit forward-recovery approval; prior side effects may have completed.'}
+            if abort:
+                recovery.update(kind='pre_dispatch_abort', reviewed_by=reviewed_by, reason=reason,
+                                warning='Supersede before snapshot/migration dispatch; keep all queue data and the startup fence.')
         else:
             require_idle(state)
         check_live_state(host, entry, state)
-        if not forward:
+        if not (forward or abort):
             resume_terminal_obligations(host, registry, entry, state)
         compatibility.require_guards(host, entry)
         staging = host.paths.opt(entry['name']) / 'releases' / ('.stage-' + uuid.uuid4().hex)
@@ -1593,9 +1617,9 @@ def plan_cutover(host, project, profile, archive, checksum, *, forward=False):
                 if error.code not in ('cutover_unknown_queue', 'cutover_coverage', 'cutover_redis_ownership'):
                     raise
                 return _blocked_cutover_plan(entry, manifest, inventory, [{'code': error.code, 'connection': None, 'queue': None}])
-            if forward:
+            if forward or abort:
                 require(manifest != old_plan['target'], 'cutover_forward_artifact', 'Forward recovery must bind a replacement artifact.')
-                require(contract.inventory_identity(inventory) == old_plan['inventory_sha256'],
+                require(abort or contract.inventory_identity(inventory) == old_plan['inventory_sha256'],
                         'cutover_scope_changed', 'Forward recovery must retain the validated queue inventory.')
             require({s['prefix'] + '*' for s in contract.scopes(inventory)} == new_jobs,
                     'cutover_scope_changed', 'Job inspection and Redis grants disagree about the queue scope.')
@@ -1741,7 +1765,7 @@ def _recover_cutover_acceptance(host, entry, state, record):
     return state
 
 
-def apply_cutover(host, project, profile, token, operation_id, *, resume=False, forward=False):
+def apply_cutover(host, project, profile, token, operation_id, *, resume=False, forward=False, abort=False):
     import cutover_contracts as contract
     require(valid_uuid(operation_id) and contract.hash_value(token), 'invalid_operation', 'Apply requires reviewed PLAN_TOKEN and stable OPERATION.')
     _, entry = host.require_identity(project, profile)
@@ -1757,8 +1781,10 @@ def apply_cutover(host, project, profile, token, operation_id, *, resume=False, 
         registry, entry = host.require_identity(project, profile)
         state = host.load_state(entry)
         plan = _load_cutover_plan(host, entry, token)
-        require(resume or bool(plan.get('forward_recovery')) == forward,
-                'cutover_forward_confirmation', 'Use the explicit forward-recovery action for this plan.')
+        recovery = plan.get('forward_recovery')
+        abort_plan = bool(recovery and recovery.get('kind') == 'pre_dispatch_abort')
+        require(resume or (bool(recovery) == (forward or abort) and abort_plan == abort),
+                'cutover_forward_confirmation', 'Use the explicit recovery apply action matching this plan.')
         if record_path.exists():
             recorded = read_json(record_path)
             require(recorded.get('plan_token') == token and recorded.get('action') == 'cutover',
@@ -1780,7 +1806,9 @@ def apply_cutover(host, project, profile, token, operation_id, *, resume=False, 
         else:
             require(not resume, 'cutover_operation_missing', 'No accepted operation exists for this ID.')
             superseded = None
-            if forward:
+            if forward or abort:
+                if abort:
+                    _require_pre_dispatch(state)
                 superseded = copy.deepcopy(state.get('cutover'))
                 recovery = plan['forward_recovery']
                 require(superseded and superseded['operation_id'] == recovery['operation_id']
@@ -1811,17 +1839,21 @@ def apply_cutover(host, project, profile, token, operation_id, *, resume=False, 
             before = copy.deepcopy(state)
             if superseded:
                 state.pop('cutover')
-                state['last_attempt'].update(outcome='failed', finished_at=now(), error='reviewed_forward_recovery')
+                state['last_attempt'].update(outcome='failed', finished_at=now(),
+                                             error='reviewed_pre_dispatch_abort' if abort else 'reviewed_forward_recovery')
             begin(host, entry, state, 'deploy', plan['target']['version'], metadata={'roles': plan['enabled_roles']}, persist=False)
             prohibited = any(q['layout'] == '3' for c in inventory['connections'] for q in c['queues']) or (plan['gate'] or {}).get('floor') == 3
             state['cutover'] = {'schema': 1, 'operation_id': operation_id, 'plan_token': token, 'action': 'cutover',
                                 'source': (plan['source'] or {}).get('version'), 'target': plan['target']['version'],
                                 'phase': 'prepared', 'outcome': 'running', 'started_at': now(), 'rollback_prohibited': prohibited,
                                 'drain_failed': False, 'hold': False, 'database': 'not_started', 'seed': 'not_started', 'error': None,
+                                'snapshot_started': False,
                                 'queues': [{'connection': t['connection'], 'queue': t['queue'], 'status': 'pending'} for t in contract.targets(inventory)]}
             state['cutover']['drain'] = _new_drain(host, entry)
             if superseded:
                 state['cutover']['supersedes_operation'] = superseded['operation_id']
+                if superseded.get('drain_resolutions'):
+                    state['cutover']['drain_resolutions'] = copy.deepcopy(superseded['drain_resolutions'])
             gate = copy.deepcopy(plan['gate']) if plan['gate'] else {'schema': 1, 'floor': None, 'permission': 'closed', 'admitted': {}}
             gate['permission'] = 'closed'
             if prohibited:
@@ -1869,6 +1901,38 @@ def _new_drain(host, entry, *, starting=False):
     return {'boot_id': _boot_id(host), 'roles': {
         role: {'invocation_id': None if starting else _role_invocation(host, unit), 'complete': False}
         for role, unit in instance_units(entry).items()}}
+
+
+def resolve_cutover_drain(host, project, profile, operation_id, reviewed_by, reason):
+    """Record an explicit review of uncertain work; never infer a successful drain."""
+    _review_identity(reviewed_by, reason)
+    with host.lock('host'), host.lock(profile['instance_id']):
+        _, entry = host.require_identity(project, profile)
+        state = host.load_state(entry)
+        progress = state.get('cutover') or {}
+        require(progress.get('operation_id') == operation_id and progress.get('outcome') not in ('succeeded', 'failed'),
+                'operation_conflict', 'Review must name the active unresolved operation.')
+        require(cutover_executor(host, entry, operation_id) != 'running', 'operation_locked', 'Contain the executor before review.')
+        require(state['queue_compatibility']['permission'] == 'closed', 'queue_start_fenced', 'Review requires closed startup permission.')
+        compatibility.require_guards(host, entry)
+        observations = compatibility.prove_stopped(host, entry, review=True)
+        compatibility.require_no_clients(host, entry)
+        boot = _boot_id(host)
+        reviews = progress.setdefault('drain_resolutions', [])
+        if reviews and all(reviews[-1][key] == value for key, value in
+                           (('boot_id', boot), ('observations', observations), ('reviewed_by', reviewed_by), ('reason', reason))):
+            return {'ok': True, 'operation_id': operation_id, 'resolution': reviews[-1], 'next_action': cutover_next_action(state)}
+        require(progress['drain_failed'], 'cutover_review_not_required', 'No unresolved drain flag requires approval.')
+        require(len(reviews) < 32, 'cutover_review_limit', 'Drain review history requires lead reconciliation.')
+        resolution = {'reviewed_by': reviewed_by, 'reason': reason, 'recorded_at': now(),
+                      'boot_id': boot, 'observations': observations}
+        reviews.append(resolution)
+        progress['drain'] = _new_drain(host, entry)
+        for role in progress['drain']['roles'].values():
+            role['complete'] = True
+        progress.update(drain_failed=False, hold=True, outcome='needs_reconciliation')
+        host.save_state(entry, state)
+        return {'ok': True, 'operation_id': operation_id, 'resolution': resolution, 'next_action': cutover_next_action(state)}
 
 
 def _drain_continuity(host, entry, state):
@@ -2057,6 +2121,7 @@ def execute_cutover(host, instance_id, operation_id):
                 host.save_state(entry, state)
             require_cutover_quiescence(host, entry, operation_id)
             if progress['queues']:
+                progress['snapshot_started'] = True
                 _cutover_phase(host, entry, state, 'snapshot')
                 request = _snapshot_request(entry, plan, record)
                 if 'snapshot' not in progress:
@@ -2178,6 +2243,16 @@ def _observe_cutover_selection(host, entry, state, plan):
         host.save_state(entry, state)
 
 
+def _observe_active_selection(host, entry, state):
+    import cutover_contracts as contract
+    active = state.get('cutover')
+    if active:
+        record = read_json(contract.private_path(host, entry, 'operation', active['operation_id']))
+        plan = (_load_cutover_plan(host, entry, record['plan_token']) if active['action'] == 'cutover'
+                else read_json(contract.private_path(host, entry, 'restore', active['operation_id'])))
+        _observe_cutover_selection(host, entry, state, plan)
+
+
 def cutover_status(host, entry):
     state = host.load_state(entry)
     progress = copy.deepcopy(state.get('cutover'))
@@ -2195,7 +2270,7 @@ def cutover_status(host, entry):
 def cutover_next_action(state):
     progress = state['cutover']
     if progress['drain_failed']:
-        return 'operator-review'
+        return 'cutover-drain-resolve'
     if progress['outcome'] not in ('succeeded', 'failed'):
         return 'redis-restore-resume' if progress['action'] == 'redis-restore' else 'cutover-resume'
     if state['queue_compatibility']['permission'] == 'closed':
@@ -2248,7 +2323,10 @@ def plan_redis_restore(host, project, profile, operation_id, snapshot_id, identi
         active = state.get('cutover')
         require(not active or not active['drain_failed'], 'cutover_drain_review', 'Forced termination requires lead-reviewed recovery first.')
         if active:
+            require(cutover_executor(host, entry, active['operation_id']) != 'running',
+                    'operation_locked', 'Contain the active executor before planning recovery.')
             _drain_continuity(host, entry, state)
+            _observe_active_selection(host, entry, state)
         path = contract.private_path(host, entry, 'restore', operation_id)
         if path.exists():
             saved = read_json(path)
@@ -2337,6 +2415,9 @@ def apply_redis_restore(host, project, profile, token, operation_id, *, resume=F
             host.save_state(entry, state)
         else:
             require(not resume, 'cutover_operation_missing', 'There is no accepted restore to resume.')
+            _observe_active_selection(host, entry, state)
+            require(state['current'] == plan['source'] and state['previous'] == plan['previous'],
+                    'redis_restore_stale_plan', 'Selected artifact changed since restore planning.')
             before = copy.deepcopy(state)
             active = state.get('cutover')
             require((active['operation_id'] if active else None) == plan['replaces_operation'],
@@ -2359,6 +2440,8 @@ def apply_redis_restore(host, project, profile, token, operation_id, *, resume=F
             record = {'schema': 1, 'action': 'redis-restore', 'operation_id': operation_id, 'plan_token': token,
                       'snapshot_id': str(uuid.uuid4()), 'restore_dispatched': False,
                       'superseded_progress': copy.deepcopy(active)}
+            if active and active.get('drain_resolutions'):
+                state['cutover']['drain_resolutions'] = copy.deepcopy(active['drain_resolutions'])
             _accept_cutover_state(host, entry, before, state, record)
     return _submit_cutover(host, entry, plan, operation_id)
 

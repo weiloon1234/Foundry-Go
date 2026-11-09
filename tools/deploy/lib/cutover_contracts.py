@@ -195,7 +195,7 @@ def save_private(host, path, value):
 def validate_progress(value):
     required = {'schema', 'operation_id', 'plan_token', 'action', 'source', 'target', 'phase', 'outcome',
                 'started_at', 'rollback_prohibited', 'drain_failed', 'hold', 'queues', 'database', 'seed', 'error'}
-    optional = {'snapshot', 'restore', 'safety_snapshot', 'completed_at', 'error_phase', 'drain', 'supersedes_operation'}
+    optional = {'snapshot', 'restore', 'safety_snapshot', 'completed_at', 'error_phase', 'drain', 'supersedes_operation', 'drain_resolutions', 'snapshot_started'}
     require(isinstance(value, dict) and required <= set(value) <= required | optional
             and type(value['schema']) is int and value['schema'] == 1 and valid_uuid(value['operation_id'])
             and hash_value(value['plan_token']) and value['action'] in ('cutover', 'redis-restore')
@@ -224,6 +224,22 @@ def validate_progress(value):
             require(type(role['complete']) is bool and (role['invocation_id'] is None or
                     isinstance(role['invocation_id'], str) and re.fullmatch('[a-f0-9]{32}|', role['invocation_id'])),
                     'cutover_state_invalid', 'Invalid role drain evidence.')
+    require('snapshot_started' not in value or type(value['snapshot_started']) is bool,
+            'cutover_state_invalid', 'Invalid snapshot dispatch evidence.')
+    if 'drain_resolutions' in value:
+        require(isinstance(value['drain_resolutions'], list) and len(value['drain_resolutions']) <= 32,
+                'cutover_state_invalid', 'Invalid drain review history.')
+        for resolution in value['drain_resolutions']:
+            fields(resolution, 'reviewed_by reason recorded_at boot_id observations', 'cutover_state_invalid')
+            require(valid_timestamp(resolution['recorded_at']) and isinstance(resolution['boot_id'], str)
+                    and re.fullmatch('[a-f0-9-]{36}', resolution['boot_id'])
+                    and isinstance(resolution['observations'], dict)
+                    and set(resolution['observations']) <= {'http', 'worker', 'scheduler'}
+                    and all(isinstance(v, dict) and all(isinstance(k, str) and isinstance(s, str) for k, s in v.items())
+                            for v in resolution['observations'].values())
+                    and all(isinstance(resolution[k], str) and 1 <= len(resolution[k]) <= limit
+                            for k, limit in (('reviewed_by', 200), ('reason', 2000))),
+                    'cutover_state_invalid', 'Invalid drain review evidence.')
     return value
 
 

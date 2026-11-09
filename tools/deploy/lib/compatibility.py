@@ -120,11 +120,11 @@ def _empty_cgroup(host, group):
                 'cutover_stop_unproven', 'A service cgroup still owns processes or cannot be inspected.')
 
 
-def prove_stopped(host, entry, *, roles=None):
+def prove_stopped(host, entry, *, roles=None, review=False):
     observations = {}
     for role, unit in selected_units(entry, roles=roles).items():
         result = host.run(['systemctl', 'show', unit,
-                           '--property=LoadState,ActiveState,SubState,MainPID,ControlPID,ControlGroup,Slice,Job,Result,ExecMainCode,ExecMainStatus',
+                           '--property=LoadState,ActiveState,SubState,MainPID,ControlPID,ControlGroup,Slice,Job,Result,ExecMainCode,ExecMainStatus,ExecMainPID,ExecMainStartTimestampMonotonic,InvocationID',
                            '--no-pager'], timeout=5)
         value = dict(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line)
         require(value.get('LoadState') == 'loaded' and value.get('ActiveState') in ('inactive', 'failed')
@@ -137,10 +137,22 @@ def prove_stopped(host, entry, *, roles=None):
             require(value.get('Slice') == 'system.slice', 'cutover_stop_unproven', 'Unexpected role slice.')
             group = '/system.slice/' + unit
         _empty_cgroup(host, group)
-        require(value.get('Result') == 'success' and not (value.get('ExecMainCode') in ('2', '3')
-                and value.get('ExecMainStatus') == '9'), 'cutover_drain_review',
+        # A failed pre-start guard has no main process. A main-process exit
+        # status alone (even a reserved systemd status) cannot prove no work ran.
+        no_application = value.get('Result') == 'exit-code' and (
+            value.get('ExecMainPID') == '0' and value.get('ExecMainStartTimestampMonotonic') == '0'
+            and value.get('ExecMainCode') == '0' and value.get('ExecMainStatus') == '0')
+        clean = value.get('Result') == 'success' and not (value.get('ExecMainCode') in ('2', '3')
+                and value.get('ExecMainStatus') == '9')
+        approved = False
+        if not clean and not no_application and not review:
+            import release
+            progress = host.load_state(entry).get('cutover') or {}
+            approved = any(item['boot_id'] == release._boot_id(host) and item['observations'].get(role) == value
+                           for item in progress.get('drain_resolutions', []))
+        require(clean or no_application or review or approved, 'cutover_drain_review',
                 'A role did not drain cleanly; operator review is required.')
-        observations[role] = {'unit': unit, 'stopped': True}
+        observations[role] = value
     return observations
 
 

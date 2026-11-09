@@ -354,6 +354,12 @@ requires review. Once migration may have run, the persistent startup gate preven
 old-code restart and rollback. Recovery moves forward; Redis restore is a separate
 reviewed operation that leaves startup blocked.
 
+Use the tool's [drain resolution](deployment.md#resolve-an-uncertain-drain) to
+record an approved decision about interrupted work before resuming or replacing
+a failed candidate. If shutdown exposed an undeclared queue before dispatch,
+use [pre-dispatch supersession](deployment.md#replace-a-pre-dispatch-plan) with a
+corrected candidate. Preserve the queue data; do not delete keys to make coverage pass.
+
 Use [reviewed forward recovery](deployment.md#apply-a-reviewed-forward-fix) to bind
 a repaired candidate to an unresolved layout-3 operation. A normal resume retains
 its original artifact. Restore resume reconciles an unstarted intent after exit

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fixed: Redis restore reconciles selected release identity after hard executor
+  death and preserves it through completion. Guard-refused starts with no main
+  process no longer become failed drains after reboot.
+- Added: confirmed `cutover-drain-resolve` records a reviewer and reason against
+  stopped invocation evidence. `cutover-abort-plan` and `cutover-abort-apply`
+  supersede an undispatched cutover with a corrected inventory while retaining the
+  startup fence and all queue data.
+
 - Fixed: cutover progress requires its persistent startup gate; migration dispatch
   requires the layout-3 floor. Candidate worker selection is checked before downtime,
   and worker runtime configuration is prepared before startup admission. Selected

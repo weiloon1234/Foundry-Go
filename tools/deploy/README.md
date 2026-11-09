@@ -24,6 +24,10 @@ may have run. A confirmed stop can contain processes while retaining the gate.
 `cutover-forward-plan` and confirmed `cutover-forward-apply` bind a replacement
 artifact to an unresolved operation. They retain the floor and recovery evidence.
 The replacement operation resumes through `cutover-resume`.
+`cutover-drain-resolve` records a confirmed reviewer decision against exact stopped
+process evidence. `cutover-abort-plan` and confirmed `cutover-abort-apply` replace
+a pre-dispatch operation with a corrected inventory while keeping startup fenced.
+Both procedures are described in the deployment guide.
 
 The [cutover procedure](../../docs/guides/deployment.md#coordinated-redis-queue-cutover)
 describes full downtime, the owner's client-coverage attestation, fail-closed queue
@@ -65,3 +69,13 @@ Redis, age and repository processes use the existing local fakes.
 The default suite uses temporary instance state and process, Redis, age and
 rclone fakes. The opt-in artisan tests contact only loopback Redis. Container
 acceptance remains a separate release check.
+
+When `redis-server`, `redis-cli`, `redis-check-rdb`, `age` and `age-keygen` are
+available, the suite also runs a real local M4/M3 capture, restore and lost-response
+resume against existing loopback Redis (`FOUNDRY_TEST_REDIS_ADDR`, default
+`127.0.0.1:6379`). It creates unique keys and deletes only those keys. Missing tools
+skip this test; a configured local service failure fails it. No Redis server is
+started. Encryption, DUMP/RESTORE, absolute expiry and RDB validation run for real;
+systemd/managed ACL observations, Linux `prlimit`, and remote object transport use
+local fixture adapters. The repository adapter stores and compares real ciphertext
+in a temporary directory. This does not verify a production repository or systemd.

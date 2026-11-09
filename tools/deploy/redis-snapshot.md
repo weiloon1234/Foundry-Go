@@ -159,6 +159,12 @@ The M4 restore-plan test invokes M3 directly through identity intake, immutable
 inventory binding, archive validation and both persisted plans. Only platform and
 external processes are faked at that boundary.
 
+The separate [local round trip](tests/test_cutover_snapshot_local.py) exercises
+M4/M3 capture, apply and resume with real loopback Redis, age and `redis-check-rdb`.
+It injects a lost response after an actual restore write and checks recovered data,
+absolute expiry and exact extra-key removal. It starts no server and cleans up
+only its own keys. See the [tool prerequisites and fixture limits](README.md).
+
 The affected suites run with:
 
 ```sh
