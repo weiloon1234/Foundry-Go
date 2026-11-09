@@ -18,7 +18,7 @@ require (
 	github.com/gen2brain/vpx v0.2.1
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/microcosm-cc/bluemonday v1.0.27
-	github.com/nyaruka/phonenumbers/v2 v2.0.15
+	github.com/nyaruka/phonenumbers/v2 v2.0.16
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/robfig/cron/v3 v3.0.1
