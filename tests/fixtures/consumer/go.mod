@@ -7,7 +7,8 @@ tool github.com/weiloon1234/Foundry-Go/cmd/foundry
 require (
 	foundry.test/pluginbase v0.0.0
 	foundry.test/plugindep v0.0.0
-	github.com/andybalholm/brotli v1.2.7
+	github.com/andybalholm/brotli v1.2.8
+	github.com/redis/go-redis/v9 v9.22.0
 	github.com/weiloon1234/Foundry-Go v0.0.0
 )
 
@@ -45,7 +46,6 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/nyaruka/phonenumbers/v2 v2.0.15 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
-	github.com/redis/go-redis/v9 v9.22.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
