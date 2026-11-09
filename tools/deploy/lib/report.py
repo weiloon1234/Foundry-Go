@@ -492,7 +492,7 @@ def instance_report(host, entry, deadline, problems):
         "configuration_revision": integer(entry.get("configuration_revision")),
         "status": "unknown" if recorded_status in {"healthy", "rolled_back"} and not consistent else recorded_status,
         "recorded_status": recorded_status, "metadata_consistent": consistent,
-        "queue_compatibility": state.get("queue_compatibility"),
+        "queue_compatibility": state.get("queue_compatibility"), "cutover": state.get("cutover"),
         "current_release": current, "previous_release": previous, "last_attempt": attempt(state.get("last_attempt")),
         "service": unit_status, "services": topology, "readiness": ready, "certificate": cert, "backup": backup,
         "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),

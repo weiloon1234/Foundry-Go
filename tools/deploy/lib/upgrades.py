@@ -73,7 +73,7 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
     required = REQUIRED_FILES if protocol(source)["generation"] >= 3 else REQUIRED_FILES - {"lib/recover.py"}
     if protocol(source)["generation"] >= 5:
-        required = required | {"lib/compatibility.py", "server/start_check.py"}
+        required = required | {"lib/compatibility.py", "server/start_check.py", "lib/cutover_contracts.py", "server/cutover_runner.py"}
     require(required <= {item["path"] for item in inventory}, "tools_incomplete", "The tool bundle is incomplete.")
     return source, files, inventory
 

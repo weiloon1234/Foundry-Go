@@ -55,6 +55,25 @@ class ManagerTests(unittest.TestCase):
             manager.execute(self.host, "stop", {**self.request, "unreviewed": True})
         self.assertEqual("invalid_request", error.exception.code)
 
+    def test_cutover_and_restore_require_confirmation_and_forward_exact_intent(self):
+        import release
+        operation, token = str(uuid.uuid4()), 'a' * 64
+        for prefix, implementation in (("cutover", "apply_cutover"), ("redis-restore", "apply_redis_restore")):
+            for suffix in ("apply", "resume"):
+                action = prefix + "-" + suffix
+                request = {**self.request, "plan_token": token, "operation_id": operation}
+                with patch.object(release, implementation, return_value={"ok": True}) as apply:
+                    with self.assertRaises(DeployError) as error:
+                        manager.execute(self.host, action, request)
+                    self.assertEqual("confirmation_required", error.exception.code)
+                    apply.assert_not_called()
+                    manager.execute(self.host, action, {**request, "confirm": True})
+                    self.assertEqual((token, operation), apply.call_args.args[-2:])
+                    self.assertEqual({"resume": suffix == "resume"}, apply.call_args.kwargs)
+                    with self.assertRaises(DeployError) as error:
+                        manager.execute(self.host, action, {**request, "confirm": True, "role": "worker"})
+                    self.assertEqual("invalid_request", error.exception.code)
+
     def test_rotation_requires_and_dispatches_stable_operation_id(self):
         import release
         with self.assertRaises(DeployError) as missing:

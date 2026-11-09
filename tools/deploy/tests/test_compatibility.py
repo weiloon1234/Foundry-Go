@@ -1,5 +1,6 @@
 """Queue fences survive process restart, history pruning and recovery shortcuts."""
 import copy
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -11,12 +12,19 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
 import compatibility
-from contracts import DeployError
+from contracts import DeployError, now
 from host import Host, Paths
 import release
 from test_contracts import fixture, registry
 import test_release
 from topology import instance_units
+
+
+def progress(operation):
+    return {'schema': 1, 'operation_id': operation, 'plan_token': 'a' * 64, 'action': 'cutover',
+            'source': None, 'target': None, 'phase': 'stopping', 'outcome': 'needs_reconciliation',
+            'started_at': now(), 'rollback_prohibited': False, 'drain_failed': False, 'hold': False,
+            'queues': [], 'database': 'not_started', 'seed': 'not_started', 'error': None}
 
 
 class CompatibilityTests(unittest.TestCase):
@@ -106,7 +114,7 @@ class CompatibilityTests(unittest.TestCase):
     def test_containment_preserves_floor_and_operation_without_running_artisan(self):
         _, state = self.install()
         operation = str(uuid.uuid4())
-        state['cutover'] = {'operation_id': operation, 'outcome': 'needs_reconciliation'}
+        state['cutover'] = progress(operation)
         self.host.save_state(self.entry, state)
         self.host.commands.clear()
         with patch.object(compatibility, 'prove_stopped', return_value={}):
@@ -137,6 +145,8 @@ class QuiescenceTests(unittest.TestCase):
         self.addCleanup(patch.stopall)
 
     def observe(self, args, **kwargs):
+        if '--property=MainPID,ControlGroup' in args:
+            return subprocess.CompletedProcess(args, 0, f'MainPID={os.getpid()}\nControlGroup=/system.slice/{args[2]}\n', '')
         return subprocess.CompletedProcess(args, 0, ''.join(f'{key}={value}\n' for key, value in self.values.items()), '')
 
     def test_main_pid_zero_is_not_descendant_exit_proof(self):
@@ -163,7 +173,10 @@ class QuiescenceTests(unittest.TestCase):
     def test_quiescence_requires_matching_closed_operation(self):
         state = self.host.load_state(self.entry)
         operation = str(uuid.uuid4())
-        state['cutover'] = {'operation_id': operation}
+        executor = self.host.paths.p('/sys/fs/cgroup/system.slice/' + release.cutover_unit(self.entry, operation))
+        executor.mkdir(parents=True)
+        (executor / 'cgroup.procs').write_text(str(os.getpid()) + '\n')
+        state['cutover'] = progress(operation)
         state['queue_compatibility'] = {'schema': 1, 'floor': None, 'permission': 'closed', 'admitted': {}}
         self.host.save_state(self.entry, state)
         with patch.object(compatibility, 'require_no_clients'):

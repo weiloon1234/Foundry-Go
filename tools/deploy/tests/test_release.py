@@ -43,6 +43,7 @@ class ProcessHost(Host):
                                           {"Name": "developer.enabled", "Source": "defaults", "Secret": False}])
         self.commands_output = json.dumps([{"name": "about"}, {"name": "config.check"}])
         self.redis_keys_output = json.dumps([])
+        self.jobs_inspect_output = json.dumps({"schema": 1, "supported_layout": 3, "coverage": "declared", "connections": [], "blockers": []})
         self.storage_probe_output = json.dumps({"schema": 1, "disks": []})
         self.storage_probe_status = 0
         self.role_states = {}
@@ -78,6 +79,8 @@ class ProcessHost(Host):
             output = self.inspect_output
         if "command:list" in args:
             output = self.commands_output
+        if "deploy:jobs-inspect" in args:
+            output = self.jobs_inspect_output
         if "redis:keys" in args:
             output = self.redis_keys_output
         if "deploy:storage-probe" in args:

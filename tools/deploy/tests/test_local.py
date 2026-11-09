@@ -99,6 +99,34 @@ class UploadRemote:
 
 
 class LocalDeploymentTests(unittest.TestCase):
+    def test_cutover_and_restore_display_saved_plan_before_confirming_exact_operation(self):
+        project, profile = fixture()
+        operation, token = str(uuid.uuid4()), 'a' * 64
+        for action in ('cutover-apply', 'cutover-resume', 'redis-restore-apply', 'redis-restore-resume'):
+            remote = MagicMock()
+            events = []
+            remote.request.side_effect = lambda action, request: events.append((action, request)) or {'ok': True}
+            with patch.dict(os.environ, {'ACTION': action, 'PLAN_TOKEN': token, 'OPERATION': operation}, clear=True), \
+                    patch.object(cli, 'ROOT', self.root), patch.object(cli, 'SSH', return_value=remote), \
+                    patch.object(cli, 'confirm', side_effect=lambda _: events.append(('confirm', {}))), \
+                    patch.object(cli, 'display'), patch.object(cli, 'say'):
+                cli.deploy(project, profile, {})
+            self.assertEqual([action.rsplit('-', 1)[0] + '-plan', 'confirm', action], [item[0] for item in events])
+            sent = events[-1][1]
+            self.assertEqual(operation, sent['operation_id'])
+            self.assertEqual(token, sent['plan_token'])
+            self.assertIs(True, sent['confirm'])
+            remote.close.assert_called_once()
+
+    def test_cutover_refuses_missing_stable_operation_before_requests(self):
+        project, profile = fixture()
+        remote = MagicMock()
+        with patch.dict(os.environ, {'ACTION': 'cutover-apply', 'PLAN_TOKEN': 'a' * 64}, clear=True), \
+                patch.object(cli, 'SSH', return_value=remote):
+            with self.assertRaises(cli.LocalError):
+                cli.deploy(project, profile, {})
+        remote.request.assert_not_called()
+
     def test_restart_and_stop_forward_only_explicit_declared_role(self):
         project, profile = fixture()
         for action in ("restart", "stop"):

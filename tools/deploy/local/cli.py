@@ -41,7 +41,7 @@ COMMANDS = {
     "deploy": "interactive deployment, status, rollback, capacity and configuration",
     "release": "build a local Docker release without contacting a server",
 }
-ACTIONS = ("capacity", "deploy", "status", "rollback", "restart", "stop", "logs", "config", "keys rotate", "reconcile", "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run", "restore-drill", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate")
+ACTIONS = ("redis-restore-plan", "redis-restore-apply", "redis-restore-resume", "cutover-plan", "cutover-apply", "cutover-resume", "capacity", "deploy", "status", "rollback", "restart", "stop", "logs", "config", "keys rotate", "reconcile", "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run", "restore-drill", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate")
 
 
 class LocalError(Exception):
@@ -1076,6 +1076,44 @@ def deploy(project, profile, settings):
                     arguments["target_time"] = os.environ["TARGET_TIME"]
             confirm(f"{action} for {instance_name(project, profile)}")
             display(ssh.request(action, {**request, **arguments, "confirm": True}))
+            return
+        if action == "redis-restore-plan":
+            snapshot = operation_uuid(os.environ.get("SNAPSHOT") or ask("Snapshot UUID"))
+            operation = operation_id(profile, "redis-restore", {"snapshot_id": snapshot})
+            identity_text = secret_input("age_identity", "Private age recovery identity")
+            display(ssh.request(action, {**request, "snapshot_id": snapshot, "operation_id": operation,
+                                        "secrets": {"age_identity": identity_text}}))
+            return
+        if action in ("redis-restore-apply", "redis-restore-resume"):
+            token, operation = os.environ.get("PLAN_TOKEN"), os.environ.get("OPERATION")
+            if not token or not re.fullmatch("[a-f0-9]{64}", token) or not operation:
+                raise LocalError("Redis restore requires reviewed PLAN_TOKEN and stable OPERATION")
+            operation = operation_uuid(operation)
+            display(ssh.request("redis-restore-plan", {**request, "operation_id": operation, "plan_token": token}))
+            display({"operation_id": operation, "plan_token": token, "warning": "Restore may replay external side effects; roles remain fenced for forward recovery."})
+            confirm("Apply/resume the reviewed Redis restore")
+            display(ssh.request(action, {**request, "operation_id": operation, "plan_token": token, "confirm": True}))
+            return
+        if action == "cutover-plan":
+            archive = select_archive(project, profile)
+            with ssh.temporary() as remote:
+                destination = remote + "/app.tar.gz"
+                ssh.upload(archive, destination)
+                display(ssh.request(action, {**request, "archive": destination, "archive_sha256": digest(archive)}))
+            return
+        if action in ("cutover-apply", "cutover-resume"):
+            token, supplied = os.environ.get("PLAN_TOKEN"), os.environ.get("OPERATION")
+            if not token or not supplied or not re.fullmatch("[a-f0-9]{64}", token):
+                raise LocalError("cutover apply/resume requires reviewed PLAN_TOKEN and stable OPERATION UUID")
+            if "ROLE" in os.environ or "RELEASE" in os.environ:
+                raise LocalError("cutover apply/resume uses all roles and the release pinned by PLAN_TOKEN")
+            operation = operation_id(profile, "cutover", {"plan_token": token})
+            display(ssh.request("cutover-plan", {**request, "plan_token": token}))
+            say("Full downtime; after migration may have run, old-release rollback requires reviewed recovery.")
+            say("Owner attestation: only this instance's managed topology roles use its job namespaces; no external clients.")
+            display({"plan_token": token, "operation_id": operation, "instance": instance_name(project, profile)})
+            confirm("Apply/resume this reviewed cutover in the owner's chosen downtime window")
+            display(ssh.request(action, {**request, "plan_token": token, "operation_id": operation, "confirm": True}))
             return
         status = ssh.request("status", request)
         remember_releases(profile, status)

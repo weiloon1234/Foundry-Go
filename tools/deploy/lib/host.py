@@ -244,6 +244,9 @@ class Host:
                     validate_manifest(state[key], entry)
                 except (DeployError, TypeError):
                     raise DeployError(code, detail) from None
+        if "cutover" in state:
+            from cutover_contracts import validate_progress
+            validate_progress(state["cutover"])
         if "queue_compatibility" in state:
             from compatibility import validate
             validate(state["queue_compatibility"])
