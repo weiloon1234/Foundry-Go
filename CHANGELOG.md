@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: schema-1 job inventory emits lowercase `namespace.application` and
+  `namespace.environment`. Queued listeners share runtime connection and queue
+  defaults with inspection, and unknown explicit connections block inspection.
+- Fixed: restricted deployment job commands never start application logging
+  sinks. Lifecycle records are discarded, keeping stdout limited to command JSON
+  and avoiding unrelated logging connections.
+
 ## v0.14.0 — 2026-11-09
 
 **Breaking (operations):** Redis job queues move to storage layout 3. Every queue needs a coordinated

@@ -159,27 +159,9 @@ func TestJobQueuesEmptyWhenNoRedisQueuesConfigured(t *testing.T) {
 }
 
 func TestJobQueuesFailClosedCoverageAndBounds(t *testing.T) {
-	baseSettings := func() Settings {
-		s := DefaultSettings()
-		s.Services.Namespace = keyspace.Namespace{Application: "foundry-app", Environment: "production"}
-		rCfg := infrastructure.DefaultRedisConnectionSettings()
-		rCfg.Host = "127.0.0.1"
-		rCfg.Port = 6379
-		rCfg.TLS = redis.DisableTLS
-		s.Services.Redis = infrastructure.RedisSettings{
-			Default:        "primary",
-			MaxConnections: 1024,
-			Connections:    infrastructure.RedisConnections{"primary": rCfg},
-		}
-		jCfg := infrastructure.DefaultJobConnectionSettings()
-		jCfg.Driver = infrastructure.RedisJobs
-		jCfg.Redis = "primary"
-		s.Services.Jobs.Connections = infrastructure.JobConnections{"default": jCfg}
-		return s
-	}
 
 	t.Run("opaque_provider", func(t *testing.T) {
-		builder := New(baseSettings()).Register(foundation.Module{Name: "custom.opaque.provider"})
+		builder := New(jobInventorySettings()).Register(foundation.Module{Name: "custom.opaque.provider"})
 		report, err := builder.JobQueues()
 		if err == nil {
 			t.Fatal("expected error for opaque provider")
@@ -190,7 +172,7 @@ func TestJobQueuesFailClosedCoverageAndBounds(t *testing.T) {
 	})
 
 	t.Run("opaque_plugin", func(t *testing.T) {
-		builder := New(baseSettings()).RegisterPlugin(testOpaquePlugin{})
+		builder := New(jobInventorySettings()).RegisterPlugin(testOpaquePlugin{})
 		report, err := builder.JobQueues()
 		if err == nil {
 			t.Fatal("expected error for opaque plugin")
@@ -202,7 +184,7 @@ func TestJobQueuesFailClosedCoverageAndBounds(t *testing.T) {
 
 	t.Run("invalid_job_declaration_unconfigured_connection", func(t *testing.T) {
 		def := jobs.Define[inventoryTestPayload]("orders.send", 1, jobs.DefaultPolicy("orders"))
-		builder := New(baseSettings()).Jobs(Job(def, func(Services) (jobs.Handler[inventoryTestPayload], error) {
+		builder := New(jobInventorySettings()).Jobs(Job(def, func(Services) (jobs.Handler[inventoryTestPayload], error) {
 			t.Fatal("handler constructor must not run during inventory")
 			return nil, nil
 		}).On("missing"))
@@ -238,7 +220,7 @@ func TestJobQueuesFailClosedCoverageAndBounds(t *testing.T) {
 		decl := Job(def, func(Services) (jobs.Handler[inventoryTestPayload], error) {
 			return func(context.Context, inventoryTestPayload) error { return nil }, nil
 		})
-		builder := New(baseSettings()).Jobs(decl, decl)
+		builder := New(jobInventorySettings()).Jobs(decl, decl)
 		report, err := builder.JobQueues()
 		if err == nil || len(report.Blockers) != 1 || report.Blockers[0].Code != JobQueueBlockerInvalidConfiguration {
 			t.Fatalf("expected invalid_configuration blocker on duplicate job, got %+v err=%v", report, err)
@@ -247,7 +229,7 @@ func TestJobQueuesFailClosedCoverageAndBounds(t *testing.T) {
 
 	t.Run("nil_job_constructor", func(t *testing.T) {
 		def := jobs.Define[inventoryTestPayload]("orders.send", 1, jobs.DefaultPolicy("orders"))
-		builder := New(baseSettings()).Jobs(Job[inventoryTestPayload](def, nil))
+		builder := New(jobInventorySettings()).Jobs(Job[inventoryTestPayload](def, nil))
 		report, err := builder.JobQueues()
 		if err == nil || len(report.Blockers) != 1 || report.Blockers[0].Code != JobQueueBlockerInvalidConfiguration {
 			t.Fatalf("expected invalid_configuration blocker on nil job constructor, got %+v err=%v", report, err)
@@ -255,7 +237,7 @@ func TestJobQueuesFailClosedCoverageAndBounds(t *testing.T) {
 	})
 
 	t.Run("inventory_limit_connections", func(t *testing.T) {
-		s := baseSettings()
+		s := jobInventorySettings()
 		s.Services.Jobs.Connections = make(infrastructure.JobConnections, MaxJobQueueConnections+1)
 		for i := range MaxJobQueueConnections + 1 {
 			name := jobs.ConnectionName(fmt.Sprintf("conn-%02d", i))
@@ -274,7 +256,7 @@ func TestJobQueuesFailClosedCoverageAndBounds(t *testing.T) {
 	})
 
 	t.Run("inventory_limit_queues", func(t *testing.T) {
-		s := baseSettings()
+		s := jobInventorySettings()
 		// Register 4096 jobs on unique queues plus the connection's default queue = 4097 total queues (> MaxJobQueues = 4096).
 		decls := make([]JobDeclaration, 0, MaxJobQueues)
 		for i := range MaxJobQueues {
@@ -738,4 +720,23 @@ func TestJobQueuesRedisUnavailableAndUsageExitCodes(t *testing.T) {
 	if got := classifyQueueInspectionError(safeerror.NewFault(fault.Timeout, "timed out")); got != JobQueueBlockerRedisUnavailable {
 		t.Fatalf("expected redis_unavailable, got %s", got)
 	}
+}
+
+func jobInventorySettings() Settings {
+	s := DefaultSettings()
+	s.Services.Namespace = keyspace.Namespace{Application: "foundry-app", Environment: "production"}
+	rCfg := infrastructure.DefaultRedisConnectionSettings()
+	rCfg.Host = "127.0.0.1"
+	rCfg.Port = 6379
+	rCfg.TLS = redis.DisableTLS
+	s.Services.Redis = infrastructure.RedisSettings{
+		Default:        "primary",
+		MaxConnections: 1024,
+		Connections:    infrastructure.RedisConnections{"primary": rCfg},
+	}
+	jCfg := infrastructure.DefaultJobConnectionSettings()
+	jCfg.Driver = infrastructure.RedisJobs
+	jCfg.Redis = "primary"
+	s.Services.Jobs.Connections = infrastructure.JobConnections{"default": jCfg}
+	return s
 }

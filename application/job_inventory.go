@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"net"
 	"slices"
@@ -27,9 +28,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/jobs"
 	jobcommand "github.com/weiloon1234/Foundry-Go/jobs/command"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
-	"github.com/weiloon1234/Foundry-Go/logging"
 	"github.com/weiloon1234/Foundry-Go/redis"
-	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -96,15 +95,21 @@ type JobQueueInventory struct {
 	Eligible bool                 `json:"eligible"`
 }
 
+// JobInventoryNamespace is the schema-1 namespace representation.
+type JobInventoryNamespace struct {
+	Application string `json:"application"`
+	Environment string `json:"environment"`
+}
+
 // JobConnectionInventory describes one configured Redis job connection and its declared queues.
 type JobConnectionInventory struct {
-	Connection      jobs.ConnectionName  `json:"connection"`
-	RedisConnection redis.ConnectionName `json:"redis_connection"`
-	StorageID       string               `json:"storage_id"`
-	Namespace       keyspace.Namespace   `json:"namespace"`
-	Prefix          string               `json:"prefix"`
-	PolicyID        string               `json:"policy_id"`
-	Queues          []JobQueueInventory  `json:"queues"`
+	Connection      jobs.ConnectionName   `json:"connection"`
+	RedisConnection redis.ConnectionName  `json:"redis_connection"`
+	StorageID       string                `json:"storage_id"`
+	Namespace       JobInventoryNamespace `json:"namespace"`
+	Prefix          string                `json:"prefix"`
+	PolicyID        string                `json:"policy_id"`
+	Queues          []JobQueueInventory   `json:"queues"`
 }
 
 // JobQueueReport is the JSON envelope emitted by deploy:jobs-inspect.
@@ -328,9 +333,12 @@ func (b *Builder) jobQueuesWithPlan() (JobQueueReport, *infrastructure.Plan, err
 		}
 	}
 	if s.Features.Events.Enabled && s.Features.Events.QueuedListeners {
-		connName := s.Features.Events.ListenerConnection
-		queue := s.Features.Events.ListenerQueue
-		listenerDef := events.ListenerDefinition(jobs.DefaultPolicy(queue))
+		connName, policy, err := resolveListenerDestination(s.Features.Events, jobsSettings)
+		if err != nil {
+			return failConfig(err)
+		}
+		queue := policy.Queue
+		listenerDef := events.ListenerDefinition(policy)
 		if err := recordJob(connName, listenerDef.Name(), listenerDef.Version(), queue); err != nil {
 			return failConfig(err)
 		}
@@ -389,7 +397,7 @@ func (b *Builder) jobQueuesWithPlan() (JobQueueReport, *infrastructure.Plan, err
 			Connection:      connName,
 			RedisConnection: conn.Redis,
 			StorageID:       storageID,
-			Namespace:       conn.Dispatch.Namespace,
+			Namespace:       JobInventoryNamespace{Application: conn.Dispatch.Namespace.Application, Environment: conn.Dispatch.Namespace.Environment},
 			Prefix:          prefix,
 			PolicyID:        policyID,
 			Queues:          queues,
@@ -725,20 +733,11 @@ func RunJobCommand(ctx context.Context, builder *Builder, command jobcommand.Com
 	if err != nil {
 		return err
 	}
-	if s.TimeZone == "" {
-		s.TimeZone = temporal.UTC
-	}
 	if err := validateShutdownBudget(s); err != nil {
 		return err
 	}
-	channels, err := logging.PrepareChannels(s.Log.Default, s.Log.inTimeZone(s.TimeZone), configured.logger, configured.logHandlers...)
-	if err != nil {
-		return err
-	}
-	logger, err := channels.Channels().Default()
-	if err != nil {
-		return err
-	}
+	// Restricted commands never acquire application sinks or invoke borrowed log handlers.
+	logger := slog.New(slog.DiscardHandler)
 	plan, err := infrastructure.ConfigureJobs(s.Services, append(slices.Clone(configured.infrastructure), infrastructure.WithClock(configured.clock), infrastructure.WithLogger(logger))...)
 	if err != nil {
 		return err
@@ -750,12 +749,6 @@ func RunJobCommand(ctx context.Context, builder *Builder, command jobcommand.Com
 		foundation.WithStopDelay(s.StopDelay),
 		foundation.WithStartupTimeout(s.StartupTimeout),
 	)
-	fBuilder.Register(foundation.Module{Name: "foundry.application.logging", OnBoot: func(ctx context.Context, r *foundation.Runtime) error {
-		if err := r.OnShutdown("channels", func(context.Context) error { return channels.Close() }); err != nil {
-			return safeerror.Join("operation failed", err, channels.Close())
-		}
-		return channels.Start(ctx)
-	}})
 	plan.Register(fBuilder)
 	app, err := fBuilder.Build(ctx)
 	if err != nil {
