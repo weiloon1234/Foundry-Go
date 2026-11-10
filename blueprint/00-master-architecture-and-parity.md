@@ -8,6 +8,22 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Webhook capture and cleanup step 3 — v0.17.0, 2026-11-11
+
+Status: **released; deploy-tool suite (558 tests), targeted Go packages with race and real PostgreSQL, the
+teamworkflow consumer with a strict TypeScript client capturing `/wh/gateway`, container acceptance on Ubuntu
+24.04 and 26.04 amd64 in CI (fresh hosts and an upgrade from the published v0.16.1 tools), and framework CI**.
+- Added webhook capture: `Builder.CaptureWebhooks`, kernel capture with exact body replay, a bounded recorder,
+  a booted store with redaction, retention and loss accounting, and the guarded `capture.Routes` viewer.
+- Deploy tools delete superseded tool bundles; the one-off unit refresh guard is gone.
+- Removed eleven compatibility blocks from the inventory plus version-1 rate-limit buckets, unsharded cache
+  pending names and generator journal v1/v3 recovery. Job envelope readers accept format 3 without extended
+  fields.
+Open: readers for production-data formats (layout-1/2 job records, workflow groups without catch/finally,
+job envelope formats 1/2, old attachment variant keys, deploy `result` metadata, old backup receipt fields)
+stay until a read-only audit of Semaklah and Boss Club shows none remain; the job writer moves to format 3
+in that release.
+
 ## Migration cleanup step 2 — v0.16.1, 2026-11-10
 
 Status: **released; deploy-tool suite (551 tests), the acceptance fixture, container acceptance on Ubuntu 24.04 and

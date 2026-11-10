@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## v0.17.0 — 2026-11-11
+
+**Webhook capture and compatibility cleanup.** Repin applications, remove any `Locales.Fallback`
+assignment, regenerate settings and client contracts, apply the new framework migration before
+serving, then upgrade hosts with `tools-plan`/`tools-apply` and redeploy. Protocol 2.0 and
+generation 6 are unchanged; the first `tools-apply` deletes every superseded tool bundle.
 
 - Added: webhook capture. `application.Builder.CaptureWebhooks(http.CapturePrefix(prefix))`
   records requests under declared prefixes, including router misses, kernel rejections and
