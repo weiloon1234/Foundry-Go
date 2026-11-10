@@ -91,10 +91,10 @@ func redact(s httpcapture.Snapshot, p policy) (store.Capture, error) {
 		ID: id, ReceivedAt: received, Method: storedText(m.Method, 32), Path: storedText(m.EscapedPath, 4<<10),
 		ContentType: storedText(m.ContentType, 256), ContentEncoding: storedText(m.ContentEncoding, 256),
 		DeclaredBytes: m.DeclaredBytes, MeasuredBytes: s.Body.MeasuredBytes, ObservedBytes: s.Body.ObservedBytes,
-		BodyMode: string(mode), BodyState: string(state), Body: body,
+		BodyMode: string(mode), BodyState: string(state), Body: storedBytes(body),
 		Outcome: outcome(c.Result), ResponseState: string(responseState(c)),
 		ResponseContentType: storedText(c.ResponseContentType, 256), ResponseEncoding: storedText(c.ResponseEncoding, 256),
-		ResponseBytes: c.ResponseBytes, ResponseHead: c.ResponseHead,
+		ResponseBytes: c.ResponseBytes, ResponseHead: storedBytes(c.ResponseHead),
 		DurationMS: max(0, c.Duration.Milliseconds()), DroppedBefore: int64(min(s.DroppedBefore, math.MaxInt64)),
 	}
 	if omission != "" {
@@ -141,6 +141,15 @@ func storedText(text string, limit int) string {
 		cut--
 	}
 	return text[:cut]
+}
+
+// storedBytes keeps an absent body or response head as zero bytes: the
+// columns are NOT NULL and the byte codec rejects a nil slice.
+func storedBytes(data []byte) []byte {
+	if data == nil {
+		return []byte{}
+	}
+	return data
 }
 
 func outcome(result observability.Result) observability.Outcome {

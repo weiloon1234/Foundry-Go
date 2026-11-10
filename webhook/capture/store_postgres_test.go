@@ -299,6 +299,36 @@ func TestPostgresCaptureWriterReadsAndShutdownDrain(t *testing.T) {
 	}
 }
 
+func TestPostgresCaptureStoresEmptyBodiesAndResponses(t *testing.T) {
+	f := newCaptureFixture(t, true)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- f.store.Run(ctx) }()
+	ping := snapshot("", nil)
+	ping.Metadata.Method = "GET"
+	ping.Completion.Route, ping.Completion.Status = "", value.Of(uint16(404))
+	f.complete(t, ping)
+	noContent := snapshot("application/json", []byte(`{"id":"evt_2"}`))
+	noContent.Metadata.RequestID = testID(2)
+	noContent.Completion.Status, noContent.Completion.ResponseHead, noContent.Completion.ResponseBytes = value.Of(uint16(204)), nil, 0
+	f.complete(t, noContent)
+	deadline := time.Now().Add(10 * time.Second)
+	for f.count(t) != 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("a capture with an empty body or response was not stored")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	detail, err := f.store.find(t.Context(), testRequestID)
+	if err != nil || len(detail.Body) != 0 || detail.Request.BodyState != BodyEmpty {
+		t.Fatal("empty request body changed", err)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPostgresCaptureUnavailableTableDegradesAndCarriesLoss(t *testing.T) {
 	f := newCaptureFixture(t, false)
 	f.store.check(t.Context())
