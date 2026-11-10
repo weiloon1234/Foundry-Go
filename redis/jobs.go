@@ -32,26 +32,15 @@ const maxJobInteger int64 = 99_999_999_999_999
 // Redis persistence/failover. Stop workers and publication before closing the
 // client's owning module.
 //
-// Queues use storage layout 3. Stop every old queue client before explicitly
-// migrating layout 2 with JobMigrateLayout (jobs migrate-layout). Layout 1 must
-// first migrate through v0.13.0. Earlier writers reject layout 3. Quarantine
+// Queues require storage layout 3. Unsupported layouts fail closed. Quarantine
 // preserves uncertain charges and never deletes corrupt records.
 type JobBackend struct {
 	client   *Client
 	config   jobs.QueueConfig
 	identity string
-	legacy   string
 	limits   string
 	mu       sync.Mutex
 	wake     map[jobs.Key]chan struct{}
-}
-
-// legacyQueueConfig recognizes layout-1 queues that need the v0.13.0 migration.
-type legacyQueueConfig struct {
-	MaxEntries int
-	MaxBytes   int64
-	MaxHistory int
-	Retention  time.Duration
 }
 
 // NewJobBackend validates queue configuration and borrows a prepared Redis client without I/O.
@@ -63,10 +52,6 @@ func NewJobBackend(client *Client, config jobs.QueueConfig) (*JobBackend, error)
 		return nil, err
 	}
 	identity, err := json.Marshal(config)
-	if err != nil {
-		return nil, err
-	}
-	legacy, err := json.Marshal(legacyQueueConfig{MaxEntries: config.MaxEntries, MaxBytes: config.MaxBytes, MaxHistory: config.MaxHistory, Retention: config.Retention})
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +69,7 @@ func NewJobBackend(client *Client, config jobs.QueueConfig) (*JobBackend, error)
 	if err != nil {
 		return nil, err
 	}
-	return &JobBackend{client: client, config: config, identity: string(identity), legacy: string(legacy), limits: string(limits)}, nil
+	return &JobBackend{client: client, config: config, identity: string(identity), limits: string(limits)}, nil
 }
 
 var _ jobs.Backend = (*JobBackend)(nil)
@@ -205,24 +190,18 @@ type JobQueueLayout string
 const (
 	// JobQueueLayoutAbsent reports that none of the queue's 11 Redis keys exist.
 	JobQueueLayoutAbsent JobQueueLayout = "absent"
-	// JobQueueLayout1 reports a legacy layout-1 queue that requires v0.13.0 upgrade first.
-	JobQueueLayout1 JobQueueLayout = "1"
-	// JobQueueLayout2 reports a layout-2 queue eligible for migration to layout 3.
-	JobQueueLayout2 JobQueueLayout = "2"
 	// JobQueueLayout3 reports a layout-3 queue already on the supported layout.
 	JobQueueLayout3 JobQueueLayout = "3"
 	// JobQueueLayoutUnknown reports corrupt, mismatched, or unsupported queue state.
 	JobQueueLayoutUnknown JobQueueLayout = "unknown"
 )
 
-// JobLayoutBlocker identifies why a Redis job queue is not eligible for cutover.
+// JobLayoutBlocker identifies why a Redis job queue is not compatible with this runtime.
 type JobLayoutBlocker string
 
 const (
 	// JobLayoutBlockerNone indicates no layout or policy blocker on the queue.
 	JobLayoutBlockerNone JobLayoutBlocker = ""
-	// JobLayoutBlockerUpgradeRequired indicates a layout-1 queue that must upgrade through v0.13.0.
-	JobLayoutBlockerUpgradeRequired JobLayoutBlocker = "layout_1_requires_upgrade"
 	// JobLayoutBlockerUnsupportedLayout indicates an unknown or future layout marker.
 	JobLayoutBlockerUnsupportedLayout JobLayoutBlocker = "unsupported_layout"
 	// JobLayoutBlockerPolicyMismatch indicates stored queue policy metadata differs from configured policy.
@@ -231,7 +210,7 @@ const (
 	JobLayoutBlockerInvalidState JobLayoutBlocker = "invalid_queue_state"
 )
 
-// JobLayoutInspection reports the read-only layout and cutover eligibility of one Redis job queue.
+// JobLayoutInspection reports the read-only layout and runtime compatibility of one Redis job queue.
 type JobLayoutInspection struct {
 	Layout   JobQueueLayout
 	Eligible bool
@@ -241,11 +220,9 @@ type JobLayoutInspection struct {
 func (i JobLayoutInspection) valid() bool {
 	if i.Eligible {
 		return i.Blocker == JobLayoutBlockerNone &&
-			(i.Layout == JobQueueLayoutAbsent || i.Layout == JobQueueLayout2 || i.Layout == JobQueueLayout3)
+			(i.Layout == JobQueueLayoutAbsent || i.Layout == JobQueueLayout3)
 	}
 	switch i.Layout {
-	case JobQueueLayout1:
-		return i.Blocker == JobLayoutBlockerUpgradeRequired
 	case JobQueueLayoutUnknown:
 		return i.Blocker == JobLayoutBlockerUnsupportedLayout ||
 			i.Blocker == JobLayoutBlockerPolicyMismatch ||
@@ -259,20 +236,6 @@ type jobLayoutReply struct {
 	Layout   JobQueueLayout   `json:"layout"`
 	Eligible bool             `json:"eligible"`
 	Blocker  JobLayoutBlocker `json:"blocker"`
-}
-
-// JobPolicyID returns the 64-character lowercase hex SHA-256 digest of the
-// canonical Redis job queue policy configuration.
-func JobPolicyID(config jobs.QueueConfig) (string, error) {
-	if err := config.Validate(); err != nil {
-		return "", err
-	}
-	identity, err := json.Marshal(config)
-	if err != nil {
-		return "", err
-	}
-	digest := sha256.Sum256(identity)
-	return hex.EncodeToString(digest[:]), nil
 }
 
 // JobKeys returns the sorted, deduplicated 11 physical Redis keys owned by key.
@@ -346,7 +309,7 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 		return jobReply{}, err
 	}
 	raw, err := b.client.execute(ctx, func(ctx context.Context, c *driver.Client) (any, error) {
-		return evalScript(ctx, c, jobsScript, jobKeys(key), b.identity, b.limits, string(encoded), b.legacy).Result()
+		return evalScript(ctx, c, jobsScript, jobKeys(key), b.identity, b.limits, string(encoded)).Result()
 	})
 	if err != nil {
 		return jobReply{}, err
@@ -376,8 +339,6 @@ func (b *JobBackend) command(ctx context.Context, key jobs.Key, request jobReque
 		return jobReply{}, jobs.ErrQueueFull
 	case -9:
 		return jobReply{}, jobs.ErrQueuePolicy
-	case -10:
-		return jobReply{}, jobs.ErrLegacyLayout
 	case 1:
 	default:
 		return jobReply{}, safeerror.NewFault(fault.Internal, "invalid Redis job status")
@@ -667,15 +628,6 @@ func (b *JobBackend) JobWorkflowStatus(ctx context.Context, key jobs.Key, id job
 }
 
 var _ jobs.WorkflowStatusBackend = (*JobBackend)(nil)
-var _ jobs.LayoutMigrator = (*JobBackend)(nil)
-
-// JobMigrateLayout explicitly fences old writers by moving layout 2 to layout 3.
-// It changes only the layout marker, without maintenance or accounting changes.
-// Stop every old queue client first. Layout 1 must migrate through v0.13.0.
-func (b *JobBackend) JobMigrateLayout(ctx context.Context, key jobs.Key) (bool, error) {
-	reply, err := b.command(ctx, key, jobRequest{Op: "migrate_layout"})
-	return reply.Changed, err
-}
 
 // InspectLayout inspects one queue's storage layout and policy compatibility
 // without mutating Redis state or initializing an absent queue.

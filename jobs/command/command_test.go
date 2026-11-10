@@ -32,7 +32,6 @@ func TestCommandValidatesBeforeServiceStartup(t *testing.T) {
 		{"jobs", "inspect", "--id", "bad"}, {"jobs", "retry", "--token", "bad"},
 		{"jobs", "retry-failed"}, {"jobs", "flush-failed"}, {"jobs", "clear"}, {"jobs", "forget"},
 		{"jobs", "retry-failed", "--confirm", "--name", "work"}, {"jobs", "stats", "--id", "bad"},
-		{"jobs", "migrate-layout"},
 		{"jobs", "quarantined", "--limit", "0"}, {"jobs", "quarantined", "--limit", "101"},
 		{"jobs", "quarantined", "--after", "bad"}, {"jobs", "quarantined", "--confirm"},
 		{"jobs", "quarantined", "--id", "bad"}, {"jobs", "quarantined", "--name", "work"},
@@ -230,31 +229,6 @@ func TestBulkQueueOperationsRetryFlushAndReportDepth(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(run("jobs", "stats", "--format", "json")), &depth); err != nil || depth.Failed != 0 || depth.Retained != 2 {
 		t.Fatalf("flushed failures still retained: %+v %v", depth, err)
-	}
-}
-
-func TestMigrateLayoutReportsNothingToMigrateForLayoutFreeBackends(t *testing.T) {
-	d := jobs.Define[payload]("commands.layout", 1, jobs.DefaultPolicy("work"))
-	declaration, err := d.Declare(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := jobtest.New(t, clock.System{}, declaration)
-	connection, err := jobs.NewConnection(h.Dispatcher, "work")
-	if err != nil {
-		t.Fatal(err)
-	}
-	connections, err := jobs.NewConnections("primary", jobs.NamedConnection{Name: "primary", Value: connection})
-	if err != nil {
-		t.Fatal(err)
-	}
-	c, err := jobcommand.Parse([]string{"jobs", "migrate-layout", "--confirm", "--format", "json"}, io.Discard)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var output bytes.Buffer
-	if err := c.Run(t.Context(), connections, &output); err != nil || !strings.Contains(output.String(), `"migrated":false`) {
-		t.Fatal("migrate-layout", output.String(), err)
 	}
 }
 

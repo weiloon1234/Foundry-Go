@@ -84,7 +84,7 @@ func TestDeployJobsProcessStdoutAndGlobalSettings(t *testing.T) {
 	if err := os.WriteFile(appPath, []byte("consumer-process\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	environment := "cutover-" + rand.Text()
+	environment := "jobs-" + rand.Text()
 	configPath, envPath := filepath.Join(dir, "deploy.toml"), filepath.Join(dir, "app.env")
 	configText := fmt.Sprintf(`
 [app.services.namespace]
@@ -163,50 +163,21 @@ address = %q
 		}
 		return output
 	}
-	assertInspection := func(output []byte, layout string) {
-		t.Helper()
-		var report struct {
-			Connections []struct {
-				Connection string            `json:"connection"`
-				Namespace  map[string]string `json:"namespace"`
-				Queues     []struct {
-					Queue    string `json:"queue"`
-					Layout   string `json:"layout"`
-					Eligible bool   `json:"eligible"`
-				} `json:"queues"`
-			} `json:"connections"`
-			Blockers []json.RawMessage `json:"blockers"`
-		}
-		decoder := json.NewDecoder(bytes.NewReader(output))
-		if err := decoder.Decode(&report); err != nil {
-			t.Fatalf("stdout is not contract JSON: %v", err)
-		}
-		if err := decoder.Decode(new(json.RawMessage)); err != io.EOF {
-			t.Fatalf("stdout contains extra output: %v", err)
-		}
-		if len(report.Blockers) != 0 || len(report.Connections) != 1 {
-			t.Fatalf("unexpected inspection: %s", output)
-		}
-		conn := report.Connections[0]
-		if conn.Connection != "primary" || len(conn.Namespace) != 2 || conn.Namespace["application"] != "consumer-process.jobs.primary" || conn.Namespace["environment"] != environment || len(conn.Queues) != 1 || conn.Queues[0].Queue != "delivery" || conn.Queues[0].Layout != layout || !conn.Queues[0].Eligible {
-			t.Fatalf("settings flags were not applied: %s", output)
-		}
-	}
-	assertInspection(run("deploy:jobs-inspect", "--format", "json"), "absent")
-	policy, err := json.Marshal(jobs.DefaultQueueConfig())
-	if err != nil {
+	output := run("jobs", "stats", "--connection", "primary", "--queue", "delivery", "--format", "json")
+	var stats jobs.QueueStats
+	decoder := json.NewDecoder(bytes.NewReader(output))
+	if err := decoder.Decode(&stats); err != nil {
 		t.Fatal(err)
 	}
-	if err := raw.HSet(t.Context(), key.String()+":metadata", "config", string(policy), "layout", "2").Err(); err != nil {
-		t.Fatal(err)
+	if err := decoder.Decode(new(json.RawMessage)); err != io.EOF {
+		t.Fatal("stdout contains extra output", err)
 	}
-	for _, changed := range []bool{true, false} {
-		output := run("jobs", "migrate-layout", "--connection", "primary", "--queue", "delivery", "--confirm", "--format", "json")
-		if string(output) != fmt.Sprintf("{\"queue\":\"delivery\",\"migrated\":%t}\n", changed) {
-			t.Fatalf("migration stdout = %s", output)
-		}
+	if stats != (jobs.QueueStats{}) {
+		t.Fatalf("unexpected stats: %+v", stats)
 	}
-	assertInspection(run("deploy:jobs-inspect", "--format", "json"), "3")
+	if layout := raw.HGet(t.Context(), key.String()+":metadata", "layout").Val(); layout != "3" {
+		t.Fatalf("settings flags did not select the expected queue: layout=%q", layout)
+	}
 	trap.Close()
 	if <-contacts {
 		t.Fatal("restricted boot contacted the application syslog sink")

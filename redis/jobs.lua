@@ -7,7 +7,6 @@
 local config = ARGV[1]
 local limits = cjson.decode(ARGV[2])
 local request = cjson.decode(ARGV[3])
-local legacy = ARGV[4]
 local expected = {'hash', 'zset', 'zset', 'zset', 'hash', 'zset', 'hash', 'zset', 'zset', 'hash', 'zset'}
 local function integer(value, minimum, maximum)
     -- cjson can preserve -0, which Go's unsigned integer decoder rejects.
@@ -52,18 +51,14 @@ if request.op == 'inspect_layout' then
         end
         return inspect_result('absent', true, '')
     end
-    local legacy_layout_1 = (previous == legacy and (not layout or layout == '1'))
-        or (previous == config and layout == '1')
-    if previous ~= config and not legacy_layout_1 then
+    if previous ~= config then
         return inspect_result('unknown', false, 'queue_policy_mismatch')
     end
-    if not legacy_layout_1 then
-        if not layout or layout == '' then
-            return inspect_result('unknown', false, 'invalid_queue_state')
-        end
-        if layout ~= '2' and layout ~= '3' then
-            return inspect_result('unknown', false, 'unsupported_layout')
-        end
+    if not layout or layout == '' then
+        return inspect_result('unknown', false, 'invalid_queue_state')
+    end
+    if layout ~= '3' then
+        return inspect_result('unknown', false, 'unsupported_layout')
     end
     local timestamp = redis.call('TIME')
     local now = tonumber(timestamp[1]) * 1000 + math.floor(tonumber(timestamp[2]) / 1000)
@@ -80,12 +75,6 @@ if request.op == 'inspect_layout' then
         or not integer(retained_bytes, 0, max_bytes) or not integer(failed, 0, retained) then
         return inspect_result('unknown', false, 'invalid_queue_state')
     end
-    if legacy_layout_1 then
-        return inspect_result('1', false, 'layout_1_requires_upgrade')
-    end
-    if layout == '2' and redis.call('ZCARD', KEYS[11]) ~= 0 then
-        return inspect_result('unknown', false, 'invalid_queue_state')
-    end
     return inspect_result(layout, true, '')
 end
 for i, kind in ipairs(expected) do
@@ -94,16 +83,8 @@ for i, kind in ipairs(expected) do
 end
 local previous = redis.call('HGET', KEYS[5], 'config')
 local layout = redis.call('HGET', KEYS[5], 'layout')
--- Layout 1 must first migrate with v0.13.0. Layout 2 changes only its
--- metadata marker after a coordinated cutover; ordinary calls never migrate.
-if previous and previous ~= config then
-    if previous == legacy and not layout then return {-10} end
-    return {-9}
-end
-if previous then
-    if layout ~= '2' and layout ~= '3' then return {-2} end
-    if layout == '2' and request.op ~= 'migrate_layout' then return {-10} end
-end
+if previous and previous ~= config then return {-9} end
+if previous and layout ~= '3' then return {-2} end
 if not previous then
     for i = 1, #KEYS do
         if redis.call('EXISTS', KEYS[i]) ~= 0 then return {-2} end
@@ -124,16 +105,6 @@ local retained_bytes = tonumber(redis.call('HGET', KEYS[5], 'retained_bytes') or
 local failed = tonumber(redis.call('HGET', KEYS[5], 'failed') or '0')
 if not integer(live, 0, max_count) or not integer(live_bytes, 0, max_bytes) or not integer(retained, 0, max_count)
     or not integer(retained_bytes, 0, max_bytes) or not integer(failed, 0, retained) then return {-2} end
-if request.op == 'migrate_layout' then
-    if layout == '2' and redis.call('ZCARD', KEYS[11]) ~= 0 then return {-2} end
-    local response = cjson.encode({changed=layout == '2'})
-    if layout == '2' then redis.call('HSET', KEYS[5], 'layout', '3')
-    elseif not previous then
-        redis.call('HSET', KEYS[5], 'config', config, 'layout', '3', 'live', 0, 'live_bytes', 0,
-            'retained', 0, 'retained_bytes', 0, 'failed', 0, 'time', now)
-    end
-    return {1, response}
-end
 local loaded, dirty, removed = {}, {}, {}
 local groups, dirty_groups, removed_groups = {}, {}, {}
 local quarantined = {}

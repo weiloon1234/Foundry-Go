@@ -11,16 +11,48 @@ import (
 	"testing"
 	"time"
 
-	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/jobs"
 )
 
-// Frozen v0.13.0 authority, byte-for-byte from 670db4ca:redis/jobs.lua. It proves
-// the actual older writer rejects layout 3, without approximating its behavior.
+// Frozen v0.13.0 authority, byte-for-byte from 670db4ca:redis/jobs.lua. It seeds
+// terminal workflow members with the original index placement for lazy-reader tests.
 //
 //go:embed testdata/jobs_layout2.lua
 var jobsLayout2Script string
+
+func TestRedisJobUnsupportedLayoutsRejectWithoutWrites(t *testing.T) {
+	for _, layout := range []string{"", "1", "2", "99", "foreign"} {
+		t.Run(layout, func(t *testing.T) {
+			f := newQuarantineFixture(t)
+			f.enqueue(t)
+			if err := f.client.raw.HSet(t.Context(), f.keys[4], "layout", layout).Err(); err != nil {
+				t.Fatal(err)
+			}
+			before := snapshotJobKeys(t, f.client, f.keys)
+			inspection, err := f.backend.InspectLayout(t.Context(), f.key)
+			blocker := JobLayoutBlockerUnsupportedLayout
+			if layout == "" {
+				blocker = JobLayoutBlockerInvalidState
+			}
+			if err != nil || inspection.Layout != JobQueueLayoutUnknown || inspection.Eligible || inspection.Blocker != blocker {
+				t.Fatal("unsupported layout inspection", inspection, err)
+			}
+			if _, err := f.backend.JobStats(t.Context(), f.key); !errors.Is(err, fault.Invalid) {
+				t.Fatal("unsupported layout accepted by stats", err)
+			}
+			if _, err := f.backend.JobReserve(t.Context(), f.key, f.owner, time.Minute); !errors.Is(err, fault.Invalid) {
+				t.Fatal("unsupported layout accepted by reserve", err)
+			}
+			if _, err := f.backend.JobEnqueue(t.Context(), f.key, f.pending(t).Envelope()); !errors.Is(err, fault.Invalid) {
+				t.Fatal("unsupported layout accepted by enqueue", err)
+			}
+			if !maps.Equal(before, snapshotJobKeys(t, f.client, f.keys)) {
+				t.Fatal("unsupported layout changed queue state")
+			}
+		})
+	}
+}
 
 func oldJobCommand(t *testing.T, backend *JobBackend, key jobs.Key, request jobRequest) int64 {
 	t.Helper()
@@ -28,7 +60,7 @@ func oldJobCommand(t *testing.T, backend *JobBackend, key jobs.Key, request jobR
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := evalScript(t.Context(), backend.client.raw, jobsLayout2Script, jobKeys(key)[:10], backend.identity, backend.limits, string(encoded), backend.legacy).Result()
+	raw, err := evalScript(t.Context(), backend.client.raw, jobsLayout2Script, jobKeys(key)[:10], backend.identity, backend.limits, string(encoded), "").Result()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,176 +118,6 @@ func oldJobBatch(t *testing.T, f quarantineFixture, count int) jobs.Workflow {
 	return group
 }
 
-// R2 F4 and R3 mixed-version note: old operations cannot mutate quarantined state.
-func TestRedisJobLayoutThreeCutoverFencesOldWriters(t *testing.T) {
-	f := newQuarantineFixture(t)
-	a := f.pending(t).Envelope()
-	oldJobEnqueue(t, f, a)
-	before := snapshotJobKeys(t, f.client, f.keys)
-	if _, err := f.backend.JobReserve(t.Context(), f.key, f.owner, time.Minute); !errors.Is(err, jobs.ErrLegacyLayout) {
-		t.Fatal(err)
-	}
-	if !maps.Equal(before, snapshotJobKeys(t, f.client, f.keys)) {
-		t.Fatal("new client implicitly migrated queue")
-	}
-	metadata, err := f.client.raw.HGetAll(t.Context(), f.keys[4]).Result()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Migration must not parse this unreadable record or run maintenance.
-	f.put(t, a.ID(), "corrupt old record")
-	if ok, err := f.backend.JobMigrateLayout(t.Context(), f.key); err != nil || !ok {
-		t.Fatal(ok, err)
-	}
-	metadata["layout"] = "3"
-	after, err := f.client.raw.HGetAll(t.Context(), f.keys[4]).Result()
-	if err != nil || !maps.Equal(metadata, after) {
-		t.Fatal("migration changed accounting or time", err)
-	}
-	before = snapshotJobKeys(t, f.client, f.keys)
-	if ok, err := f.backend.JobMigrateLayout(t.Context(), f.key); err != nil || ok {
-		t.Fatal(ok, err)
-	}
-	if !maps.Equal(before, snapshotJobKeys(t, f.client, f.keys)) {
-		t.Fatal("repeat migration ran maintenance")
-	}
-	if got, err := f.backend.JobReserve(t.Context(), f.key, f.owner, time.Minute); err != nil || got.IsSet() {
-		t.Fatal(err)
-	}
-	if len(f.quarantine(t).Records) != 1 {
-		t.Fatal("old independent record not quarantined")
-	}
-	// Include the missing-envelope path that an unfenced old finish could mutate.
-	if err := f.client.raw.HDel(t.Context(), f.keys[9], a.ID().String()).Err(); err != nil {
-		t.Fatal(err)
-	}
-	before = snapshotJobKeys(t, f.client, f.keys)
-	for _, op := range []string{"renew", "start", "finish", "forget", "enqueue", "list", "stats", "workflow_status", "cancel_workflow", "migrate_layout"} {
-		status := oldJobCommand(t, f.backend, f.key, jobRequest{Op: op, ID: a.ID().String(), State: jobs.Succeeded, TTL: 60000, Limit: 100})
-		if status != -2 {
-			t.Fatal("old writer accepted layout 3", op, status)
-		}
-		if !maps.Equal(before, snapshotJobKeys(t, f.client, f.keys)) {
-			t.Fatal("old writer changed layout 3", op)
-		}
-	}
-}
-
-func TestRedisJobLayoutThreeMigrationRejectsAmbiguousState(t *testing.T) {
-	for _, damage := range []string{"policy", "unknown-layout", "counters", "key-type", "experimental-quarantine", "layout-one"} {
-		t.Run(damage, func(t *testing.T) {
-			f := newQuarantineFixture(t)
-			a := f.pending(t).Envelope()
-			oldJobEnqueue(t, f, a)
-			switch damage {
-			case "policy":
-				if err := f.client.raw.HSet(t.Context(), f.keys[4], "config", "different").Err(); err != nil {
-					t.Fatal(err)
-				}
-			case "unknown-layout":
-				if err := f.client.raw.HSet(t.Context(), f.keys[4], "layout", "99").Err(); err != nil {
-					t.Fatal(err)
-				}
-			case "counters":
-				if err := f.client.raw.HSet(t.Context(), f.keys[4], "failed", 1).Err(); err != nil {
-					t.Fatal(err)
-				}
-			case "key-type":
-				if err := f.client.raw.Set(t.Context(), f.keys[10], "wrong type", 0).Err(); err != nil {
-					t.Fatal(err)
-				}
-			case "experimental-quarantine":
-				if err := f.client.raw.ZAdd(t.Context(), f.keys[10], driver.Z{Score: 1, Member: a.ID().String()}).Err(); err != nil {
-					t.Fatal(err)
-				}
-			case "layout-one":
-				if err := f.client.raw.HDel(t.Context(), f.keys[4], "layout").Err(); err != nil {
-					t.Fatal(err)
-				}
-				if err := f.client.raw.HSet(t.Context(), f.keys[4], "config", f.backend.legacy).Err(); err != nil {
-					t.Fatal(err)
-				}
-			}
-			before := snapshotJobKeys(t, f.client, f.keys)
-			if ok, err := f.backend.JobMigrateLayout(t.Context(), f.key); err == nil || ok {
-				t.Fatal("invalid migration accepted", ok, err)
-			}
-			if !maps.Equal(before, snapshotJobKeys(t, f.client, f.keys)) {
-				t.Fatal("failed migration wrote state")
-			}
-		})
-	}
-}
-
-func TestRedisJobLayoutCutoverNeedsNoMembershipBackfill(t *testing.T) {
-	f := newQuarantineFixture(t)
-	group := f.workflow(t, true, 1, true)
-	independent := f.enqueue(t)
-	// Waiting members and the group membership schema are unchanged from layout 2.
-	if err := f.client.raw.HSet(t.Context(), f.keys[4], "layout", "2").Err(); err != nil {
-		t.Fatal(err)
-	}
-	before := snapshotJobKeys(t, f.client, f.keys)
-	if ok, err := f.backend.JobMigrateLayout(t.Context(), f.key); err != nil || !ok {
-		t.Fatal(ok, err)
-	}
-	after := snapshotJobKeys(t, f.client, f.keys)
-	delete(before, f.keys[4])
-	delete(after, f.keys[4])
-	if !maps.Equal(before, after) {
-		t.Fatal("migration rewrote records or required a membership structure")
-	}
-	f.at(t, independent.ID(), 1)
-	f.put(t, independent.ID(), "corrupt independent")
-	if _, err := f.backend.JobReserve(t.Context(), f.key, f.owner, time.Minute); err != nil {
-		t.Fatal(err)
-	}
-	member := group.Envelope().Steps()[0]
-	f.edit(t, member.ID(), map[string]any{"workflow": nil, "attempts": 0.5})
-	f.unchanged(t, func() error {
-		_, err := f.backend.JobList(t.Context(), f.key, jobs.ListOptions{Limit: 100})
-		return err
-	})
-	if f.client.raw.ZCard(t.Context(), f.keys[10]).Val() != 1 {
-		t.Fatal("old membership lost")
-	}
-}
-
-func TestRedisJobLayoutCutoverCanResumeAcrossQueues(t *testing.T) {
-	first, second := newQuarantineFixture(t), newQuarantineFixture(t)
-	oldJobEnqueue(t, first, first.pending(t).Envelope())
-	oldJobEnqueue(t, second, second.pending(t).Envelope())
-	if _, err := first.backend.JobMigrateLayout(t.Context(), first.key); err != nil {
-		t.Fatal(err)
-	}
-	if status := oldJobCommand(t, first.backend, first.key, jobRequest{Op: "stats"}); status != -2 {
-		t.Fatal(status)
-	}
-	if _, err := second.backend.JobStats(t.Context(), second.key); !errors.Is(err, jobs.ErrLegacyLayout) {
-		t.Fatal(err)
-	}
-	if _, err := second.backend.JobMigrateLayout(t.Context(), second.key); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := first.backend.JobStats(t.Context(), first.key); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := second.backend.JobStats(t.Context(), second.key); err != nil {
-		t.Fatal(err)
-	}
-	// Empty queues initialize layout 3 and reject the old client as well.
-	empty := newQuarantineFixture(t)
-	if ok, err := empty.backend.JobMigrateLayout(t.Context(), empty.key); err != nil || ok {
-		t.Fatal(ok, err)
-	}
-	if status := oldJobCommand(t, empty.backend, empty.key, jobRequest{Op: "stats"}); status != -2 {
-		t.Fatal(status)
-	}
-	if _, err := empty.backend.JobCancel(t.Context(), empty.key, jobs.Target{}); !errors.Is(err, fault.Invalid) {
-		t.Fatal(err)
-	}
-}
-
 func TestRedisJobLayoutThreeDetachesLegacyTerminalMembers(t *testing.T) {
 	f := newQuarantineFixture(t)
 	group := f.workflow(t, true, 2, false)
@@ -270,14 +132,14 @@ func TestRedisJobLayoutThreeDetachesLegacyTerminalMembers(t *testing.T) {
 		t.Fatal("baseline did not create terminal placement")
 	}
 	before := snapshotJobKeys(t, f.client, f.keys)
-	if ok, err := f.backend.JobMigrateLayout(t.Context(), f.key); err != nil || !ok {
-		t.Fatal(ok, err)
+	if err := f.client.raw.HSet(t.Context(), f.keys[4], "layout", "3").Err(); err != nil {
+		t.Fatal(err)
 	}
 	after := snapshotJobKeys(t, f.client, f.keys)
 	delete(before, f.keys[4])
 	delete(after, f.keys[4])
 	if !maps.Equal(before, after) {
-		t.Fatal("migration rewrote legacy data")
+		t.Fatal("fixture changed legacy data")
 	}
 	charges := f.counters(t)
 	f.advance(t, f.backend.config.Retention+time.Second)
@@ -313,7 +175,7 @@ func TestRedisJobLegacyDetachmentRollsBackBeforeReserveFailure(t *testing.T) {
 	if status := oldJobCommand(t, f.backend, f.key, jobRequest{Op: "cancel", ID: done.ID().String(), Name: done.Name(), Version: done.Version()}); status != 1 {
 		t.Fatal(status)
 	}
-	if _, err := f.backend.JobMigrateLayout(t.Context(), f.key); err != nil {
+	if err := f.client.raw.HSet(t.Context(), f.keys[4], "layout", "3").Err(); err != nil {
 		t.Fatal(err)
 	}
 	f.advance(t, f.backend.config.Retention+time.Second)
@@ -366,8 +228,8 @@ func TestRedisJobBaselineFullTerminalWindowsDetachWithProgress(t *testing.T) {
 			if f.client.raw.ZCard(t.Context(), f.keys[3]).Val() != int64(count+1) {
 				t.Fatal("baseline did not produce a full legacy window")
 			}
-			if ok, err := f.backend.JobMigrateLayout(t.Context(), f.key); err != nil || !ok {
-				t.Fatal(ok, err)
+			if err := f.client.raw.HSet(t.Context(), f.keys[4], "layout", "3").Err(); err != nil {
+				t.Fatal(err)
 			}
 			if count == 128 {
 				f.advance(t, f.backend.config.Retention+time.Second)
@@ -429,37 +291,6 @@ func TestRedisJobInspectLayoutIsReadOnlyAndClassifiesBlockers(t *testing.T) {
 	}
 	if !maps.Equal(beforeThree, snapshotJobKeys(t, f.client, f.keys)) {
 		t.Fatal("InspectLayout modified a layout 3 queue")
-	}
-
-	// 3. Layout 2 queue: eligible, not mutated to layout 3 by inspection.
-	if err := f.client.raw.HSet(t.Context(), f.keys[4], "layout", "2").Err(); err != nil {
-		t.Fatal(err)
-	}
-	beforeTwo := snapshotJobKeys(t, f.client, f.keys)
-	insp, err = f.backend.InspectLayout(t.Context(), f.key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if insp.Layout != JobQueueLayout2 || !insp.Eligible || insp.Blocker != JobLayoutBlockerNone {
-		t.Fatalf("unexpected layout 2 inspection: %+v", insp)
-	}
-	if !maps.Equal(beforeTwo, snapshotJobKeys(t, f.client, f.keys)) {
-		t.Fatal("InspectLayout modified a layout 2 queue")
-	}
-
-	// 4. Layout 1 queue: ineligible with layout_1_requires_upgrade.
-	if err := f.client.raw.HDel(t.Context(), f.keys[4], "layout").Err(); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.client.raw.HSet(t.Context(), f.keys[4], "config", f.backend.legacy).Err(); err != nil {
-		t.Fatal(err)
-	}
-	insp, err = f.backend.InspectLayout(t.Context(), f.key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if insp.Layout != JobQueueLayout1 || insp.Eligible || insp.Blocker != JobLayoutBlockerUpgradeRequired {
-		t.Fatalf("unexpected layout 1 inspection: %+v", insp)
 	}
 
 	// 5. Unsupported layout: unknown + unsupported_layout.

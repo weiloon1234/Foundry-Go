@@ -137,10 +137,9 @@ Indexed scans can quarantine corrupt records proven independent within the bound
 group-catalog check, preserving their data and accounting. Workflow members and
 unknown membership still fail closed. See [quarantine operations](jobs-operations.md#independent-record-quarantine).
 
-Layout-2 queues require an explicit coordinated cutover with no old/new client
-overlap. Layout 1 must first migrate through v0.13.0. A reserve that makes no
-maintenance or quarantine progress writes nothing. See the
-[upgrade procedure](jobs-operations.md#redis-queue-layout-upgrade).
+Unsupported queue layouts fail closed. A reserve that makes no maintenance or
+quarantine progress writes nothing. See the
+[storage layout contract](jobs-operations.md#redis-queue-storage-layout).
 
 `QueueConfig.MaxEntries` and `MaxBytes` bound live (unfinished) jobs. A full
 queue rejects enqueue with `jobs.ErrQueueFull` (`fault.Overloaded`, retryable)

@@ -170,26 +170,3 @@ func (d *Dispatcher) bulk(ctx context.Context, queue Queue, options ListOptions,
 	}
 	return result, nil
 }
-
-// MigrateLayout explicitly migrates queue to the backend's current storage
-// layout (see ErrLegacyLayout). Run it only after every process of the
-// previous release stopped or drained: they cannot read the migrated queue.
-// Redis layout 1 must first migrate through v0.13.0 before the layout-3 cutover.
-// migrated=false means nothing needed migrating; repeating is safe. A backend
-// without layouts reports false.
-func (d *Dispatcher) MigrateLayout(ctx context.Context, queue Queue) (bool, error) {
-	release, err := d.begin(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer release()
-	key, err := NewKey(d.config.Namespace, queue)
-	if err != nil {
-		return false, err
-	}
-	migrator, ok := d.backend.(LayoutMigrator)
-	if !ok {
-		return false, nil
-	}
-	return migrator.JobMigrateLayout(ctx, key)
-}
