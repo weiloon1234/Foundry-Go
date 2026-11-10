@@ -101,6 +101,10 @@ release-tools-check:
 deploy-tools-check:
 	cd tools/deploy/tests && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s . -p 'test_*.py'
 
+.PHONY: deploy-container-acceptance-amd64
+deploy-container-acceptance-amd64:
+	GO="$(GO)" PYTHONDONTWRITEBYTECODE=1 bash tools/deploy/tests/run_ci_acceptance.sh "$(DEPLOY_ACCEPTANCE_UBUNTU)" "$(DEPLOY_ACCEPTANCE_MODE)"
+
 datatable-contracts:
 	cd tests/fixtures/consumer && $(GO) test -timeout=$(TEST_TIMEOUT) -v ./clientcontracts -run '^(TestDatatableContractBytes|TestReportingContractCoverage|TestCursorContractPublication|TestReleasedContractCohorts)$$'
 

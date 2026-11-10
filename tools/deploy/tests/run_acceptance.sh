@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Lead-only integration runner. Nothing here is run by Python/shell syntax checks.
+# CI/lead integration runner. Nothing here is run by Python/shell syntax checks.
 set -euo pipefail
 umask 077
 

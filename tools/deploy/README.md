@@ -32,12 +32,30 @@ Run the local tests and documentation checks from the worktree root:
 
 ```sh
 python3 -B -m unittest discover -s tools/deploy/tests
-bash -n tools/deploy/tests/run_acceptance.sh
+bash -n tools/deploy/tests/run_acceptance.sh tools/deploy/tests/run_ci_acceptance.sh
 make docs-check
 ```
 
 The default suite uses temporary instance state and process/service fakes.
-Real-systemd contracts are opt-in. The lead runs container acceptance separately.
+Real-systemd contracts are opt-in locally and run in framework CI.
+The same [Verify and security workflow](../../.github/workflows/verify.yml) runs
+container acceptance on native amd64 Ubuntu 24.04 runners for pushes and manual
+dispatches. Its four cells cover Ubuntu 24.04 and 26.04, each with `--fresh` and
+`--foreign --upgrade`. Pull requests and weekly schedules skip this matrix.
+Each cell builds one archive, has a 60-minute timeout, and runs independently
+with fail-fast disabled. Failure artifacts retain only top-level `.log`, `.txt`,
+and `.out` files for 14 days. Private files and directories are excluded, and
+the runner still cleans up its containers, volumes, and private material.
+
+The CI entry point requires a new log directory and one OS/mode pair:
+
+```sh
+ACCEPTANCE_LOG_DIR="$RUNNER_TEMP/deploy-acceptance-logs" \
+  make deploy-container-acceptance-amd64 DEPLOY_ACCEPTANCE_UBUNTU=24.04 \
+  DEPLOY_ACCEPTANCE_MODE=foreign-upgrade
+```
+
+The lead's native arm64 Mac covers the same matrix on arm64.
 The [acceptance fixture](../../tests/fixtures/deploy-acceptance/) supplies the archive
 for every phase. It keeps its published framework pin. On a native arm64 Docker host:
 
@@ -52,11 +70,15 @@ tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
 ```
 
 The opt-in `--upgrade` phase permanently tests upgrades from the previous published
-release. Supply its unmodified module-cache bundle through `--tools-root` (currently
-v0.16.0). The same fixture archive serves both baseline and candidate tools:
+release. The fixture's framework pin defines "the previous published release"
+for this phase. Resolve its unmodified module-cache bundle through the fixture,
+then supply it through `--tools-root`. CI uses the same resolution, and the same
+fixture archive serves both baseline and candidate tools:
 
 ```sh
-old_tools="$(go env GOMODCACHE)/github.com/weiloon1234/!foundry-!go@v0.16.0/tools/deploy"
+baseline=$(cd tests/fixtures/deploy-acceptance && go mod download && \
+  go list -m -f '{{.Dir}}' github.com/weiloon1234/Foundry-Go)
+old_tools="$baseline/tools/deploy"
 tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
   --archive "$archive" --framework-root "$framework" --foreign \
   --upgrade --tools-root "$old_tools"

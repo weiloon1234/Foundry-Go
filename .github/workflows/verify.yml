@@ -34,6 +34,47 @@ jobs:
         timeout-minutes: 1
         run: sudo -E env FOUNDRY_REAL_SYSTEMD=1 python3 -B -m unittest discover -s tools/deploy/tests -p test_systemd_contract.py -v
 
+  deploy-acceptance-amd64:
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ['24.04', '26.04']
+        mode: [fresh, foreign-upgrade]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Real-systemd container acceptance
+        id: acceptance
+        env:
+          ACCEPTANCE_LOG_DIR: ${{ runner.temp }}/deploy-acceptance-logs
+          DEPLOY_ACCEPTANCE_UBUNTU: ${{ matrix.ubuntu }}
+          DEPLOY_ACCEPTANCE_MODE: ${{ matrix.mode }}
+        run: |
+          echo "logs=$ACCEPTANCE_LOG_DIR" >> "$GITHUB_OUTPUT"
+          make deploy-container-acceptance-amd64
+      - name: Retain non-private failure logs
+        if: ${{ failure() && steps.acceptance.outputs.logs != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deploy-acceptance-amd64-${{ matrix.ubuntu }}-${{ matrix.mode }}
+          # Top-level allowlist only; never recurse into private recovery or TLS directories.
+          path: |
+            ${{ steps.acceptance.outputs.logs }}/*.log
+            ${{ steps.acceptance.outputs.logs }}/*.txt
+            ${{ steps.acceptance.outputs.logs }}/*.out
+            !${{ steps.acceptance.outputs.logs }}/.private-*
+          include-hidden-files: false
+          if-no-files-found: warn
+          retention-days: 14
+
   verify:
     runs-on: macos-15
     timeout-minutes: 120

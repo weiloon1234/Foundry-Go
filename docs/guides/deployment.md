@@ -1017,6 +1017,29 @@ backup or certificate renewal. Alerts are [deferred](../../blueprint/25-deferred
 `make deploy-tools-check` runs the tooling's service-free unit tests, and
 `make verify` includes it. Container acceptance exercises real services.
 
+Framework CI covers native amd64 in the
+[Verify and security workflow](../../.github/workflows/verify.yml) on
+`ubuntu-24.04` runners. Four independent cells cover Ubuntu 24.04 and 26.04,
+each with `--fresh` and `--foreign --upgrade`, with fail-fast disabled and a
+60-minute timeout per cell. The matrix runs on pushes and manual dispatches.
+Pull requests and weekly schedules skip these longer service runs.
+Each job builds its own archive, avoiding an artifact transfer and keeping
+each cell self-contained. The lead's native arm64 Mac covers the same matrix
+on arm64.
+
+CI invokes the Makefile entry point with a new log directory:
+
+```sh
+ACCEPTANCE_LOG_DIR="$RUNNER_TEMP/deploy-acceptance-logs" \
+  make deploy-container-acceptance-amd64 DEPLOY_ACCEPTANCE_UBUNTU=24.04 \
+  DEPLOY_ACCEPTANCE_MODE=foreign-upgrade
+```
+
+Use `DEPLOY_ACCEPTANCE_MODE=fresh` for the fresh-host cell. On failure, CI uploads
+only top-level `.log`, `.txt`, and `.out` files for 14 days. It excludes `.private-*`
+files and directories, environment files, keys, and certificates. The existing
+runner cleanup still removes disposable containers, volumes, and private material.
+
 The runner accepts an application release archive and the integrated framework
 root, with Ubuntu 24.04 or 26.04, arm64 or amd64, and `--foreign` or `--fresh`.
 The dedicated `tests/fixtures/deploy-acceptance` app supplies all existing phases
@@ -1039,12 +1062,14 @@ The fixture pins the published framework with no local module replacement. The
 builder uses its acceptance profile and writes the completed archive path to a
 new file.
 
-The opt-in upgrade phase uses the previous published tools (currently v0.16.0)
-and the same archive built above. Supply the unmodified published bundle from
-the Go module cache:
+The fixture's framework pin defines "the previous published release" for the
+opt-in upgrade phase. The phase uses the same archive built above. Resolve the
+unmodified published tools through the fixture after downloading its modules:
 
 ```sh
-old_tools="$(go env GOMODCACHE)/github.com/weiloon1234/!foundry-!go@v0.16.0/tools/deploy"
+baseline=$(cd tests/fixtures/deploy-acceptance && go mod download && \
+  go list -m -f '{{.Dir}}' github.com/weiloon1234/Foundry-Go)
+old_tools="$baseline/tools/deploy"
 for ubuntu in 24.04 26.04; do
   tools/deploy/tests/run_acceptance.sh --ubuntu "$ubuntu" --platform linux/arm64 \
     --archive "$archive" --framework-root "$framework" \
@@ -1052,9 +1077,9 @@ for ubuntu in 24.04 26.04; do
 done
 ```
 
-The fixture pins v0.16.0 without a local replacement. `--tools-root` must point to
-the previous published release's tools already present in the module cache; the
-runner mounts that bundle read-only. It bootstraps and deploys with those tools,
+The fixture has no local replacement. CI resolves the baseline with the same
+commands. `--tools-root` must point to the fixture pin's tools in the module cache.
+The runner mounts that bundle read-only. It bootstraps and deploys with those tools,
 then upgrades through the candidate's `tools-plan` and `tools-apply` and deploys
 normally. Assertions cover the exact active candidate bundle, absence of removed
 files from that bundle, role files and loaded units without `ExecStartPre`, healthy
@@ -1064,7 +1089,8 @@ immutable bundles remain on disk; they are never patched or selected again.
 
 The runner prints its private log directory and retains phase logs on success or
 failure. Use `FOUNDRY_ACCEPTANCE_KEEP=1` to retain a failed host for inspection.
-The lead runs container acceptance; the Python suite does not execute it.
+CI runs the amd64 matrix and the lead runs arm64 acceptance. The Python suite
+does not execute either matrix.
 
 Run each platform on a native Docker host of that architecture. QEMU user
 emulation of amd64 on arm64 cannot complete it: Ubuntu 24.04's `rclone`
@@ -1112,7 +1138,7 @@ provider acceptance.
 Python unit tests cover state machines and fault paths. Release-tool tests cover
 source packaging. Neither proves Ubuntu package side effects, live TLS/service
 behavior, restore correctness, or the application console contract. Those remain
-requirements of the lead's container matrix before production use.
+requirements of the CI amd64 and lead's arm64 container matrices before production use.
 
 ## Bundle interfaces
 
