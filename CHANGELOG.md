@@ -6,8 +6,10 @@
 
 - For v0.16.0, removed Redis layout-1/2 migration APIs, `jobs migrate-layout`,
   legacy layout detection, and `deploy:jobs-inspect` with its admission inventory
-  APIs. `DeployJobCommands` now declares only `jobs`. Layout 3, quarantine,
-  provider-free operations, and lazy legacy record handling remain. Deploy-tool
+  APIs, plus the restricted `application.DeployJobCommands`, `JobCommand`,
+  `RunJobCommand`, and `infrastructure.ConfigureJobs` path. The normal
+  `jobs/command` application path, layout 3, quarantine, and lazy legacy record
+  handling remain. Deploy-tool
   generation 6 is required; see [compatibility](docs/compatibility.md).
 
 ## v0.15.3 — 2026-11-10

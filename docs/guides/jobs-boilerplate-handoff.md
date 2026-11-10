@@ -68,24 +68,19 @@ Reference implementations:
 - [Configured worker, named connection, failure hook, logs and CLI retry acceptance](../../tests/fixtures/consumer/background/operations_test.go)
 - [Shared memory/Redis retry contract](../../internal/jobtest/retry.go)
 
-## Restricted deployment commands
+## Application jobs command
 
-Register `application.DeployJobCommands(builder)` in a separate CLI path before
-`Builder.Build`. It declares the `jobs` operations command. Run the parsed
-invocation with a nil resolver. The command constructs no business handlers and
-starts no application kernels, databases, outbox relays, or logging sinks.
-It uses a discard logger and opens only the Redis pools used by job connections.
-Use `application.JobCommand(builder)` when registering a single declaration.
-
-The consumer entry point owns global `--config` and `--env-file` parsing and
-loads both through the typed settings schema, including `_FILE` resolution,
-before passing command-local flags to the restricted registry:
+Register `jobs/command.Declaration` in the application's CLI registry. Its
+constructor resolves `application.FromResolver(resolver)` and returns
+`services.Jobs`. Parse command arguments before startup, then run the invocation
+with the built application's service resolver and ordinary CLI lifecycle.
 
 ```sh
-artisan jobs stats --connection primary --queue delivery --format json --config config/deploy.toml --env-file app.env
-artisan jobs quarantined --connection primary --queue delivery --format json --config config/deploy.toml --env-file app.env
+artisan jobs stats --connection primary --queue delivery --format json
+artisan jobs quarantined --connection primary --queue delivery --format json
 ```
 
-Output contains operational metadata without payloads. See the
-[restricted consumer entry point](../../tests/fixtures/consumer/bootstrap/deploy_jobs.go)
-and its [process acceptance](../../tests/fixtures/consumer/bootstrap/deploy_jobs_test.go).
+The application entry point owns global configuration flags. Output contains
+operational metadata without payloads. See the
+[normal command declaration](../../tests/fixtures/consumer/background/operations.go)
+and its [configured application acceptance](../../tests/fixtures/consumer/background/operations_test.go).
