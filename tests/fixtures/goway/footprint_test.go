@@ -28,6 +28,8 @@ const footprintFailureAdvice = "a generic method, field or codec helper has expa
 // Budgets remeasured for v0.2 Compile Footprint on 2026-10-30 (Go 1.27.3 darwin/arm64).
 // T/t symbols in each package archive.
 // Budget is ceil(measured * 1.15), calculated exactly with integer arithmetic.
+// framework_application_control and framework_registration were remeasured for v0.17.0 on
+// 2026-11-11: application assembly now reaches the webhook capture enums and DTO descriptors.
 var footprintBudgets = map[string]footprintBudget{
 	"pilot_expressions":         {"./testdata/footprint/pilot_expressions", 1222},
 	"load_query":                {"./testdata/footprint/load_query", 599},
@@ -73,8 +75,8 @@ var footprintBudgets = map[string]footprintBudget{
 	"framework_auditstore":          {"github.com/weiloon1234/Foundry-Go/internal/auditstore", 4077},
 	"rows_each":                     {"./testdata/footprint/rows_each", 626},
 	"framework_registration_option": {"./integrations/registrationoption", 475},
-	"framework_application_control": {"./integrations/applicationcontrol", 3003},
-	"framework_registration":        {"./integrations/registration", 3135},
+	"framework_application_control": {"./integrations/applicationcontrol", 3734},
+	"framework_registration":        {"./integrations/registration", 3860},
 	"framework_pagination":          {"./integrations", 2144},
 	"framework_seeder":              {"./integrations/seeding", 266},
 	"each_soft_writes":              {"./testdata/footprint/each_soft_writes", 987},
