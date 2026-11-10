@@ -75,6 +75,7 @@ var consumerAPIPrivateMethodExceptions = map[string]string{
 	"foundation.taskName":       "String",
 	// Existing HTTP, codec, body, diagnostic, and response-controller adapters; lead review deferred.
 	// Runtime proxy adapters implement io.Closer and native response control.
+	"http.replayCaptureBody":       "Close Read",
 	"http.spaRuntimeProxyBody":     "Close",
 	"http.spaRuntimeHeadWriter":    "Unwrap Write",
 	"http.assetBody":               "Close",

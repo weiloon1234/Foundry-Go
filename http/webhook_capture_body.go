@@ -99,6 +99,7 @@ func captureFailureCode(err error) httpcapture.ReadFailure {
 	return code
 }
 
+// Read returns the preread prefix, then the untouched remainder of the source.
 func (b *replayCaptureBody) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
@@ -118,6 +119,7 @@ func (b *replayCaptureBody) Read(p []byte) (int, error) {
 	return b.readSource(p)
 }
 
+// Close closes the original source once; later reads report a closed body.
 func (b *replayCaptureBody) Close() error {
 	b.closeOnce.Do(func() { b.closed.Store(true); b.closeErr = b.source.Close() })
 	return b.closeErr
