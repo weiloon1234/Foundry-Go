@@ -5,9 +5,10 @@
 Planned for v0.16.0: removes the finished Redis queue layout migration. Repin applications, upgrade
 generation-5 hosts with `tools-plan`/`tools-apply` to deploy-tool generation 6, then run an ordinary deploy.
 
-- Removed: Redis layout-1/2 migration APIs, `jobs migrate-layout`, legacy layout detection, and
-  `deploy:jobs-inspect` with its admission inventory APIs. `DeployJobCommands` now declares only `jobs`.
-  Layout 3, quarantine, provider-free operations, and lazy legacy record handling remain. See
+- Removed: Redis layout-1/2 migration APIs, `jobs migrate-layout`, legacy layout detection,
+  `deploy:jobs-inspect` with its admission inventory APIs, and the restricted provider-free jobs path
+  (`application.DeployJobCommands`, `JobCommand`, `RunJobCommand`, `infrastructure.ConfigureJobs`). The normal
+  `jobs/command` application path, layout 3, quarantine, and lazy legacy record handling remain. See
   [compatibility](docs/compatibility.md).
 - Removed: the deploy tool's queue cutover actions, persistent startup admission, containment, and Redis
   snapshot/restore. Role units no longer use `ExecStartPre`; ordinary deploys no longer call
