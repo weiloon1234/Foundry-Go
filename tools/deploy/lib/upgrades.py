@@ -192,7 +192,9 @@ def _check_unit_commands(host, entry: dict) -> None:
         result = host.run(["systemctl", "show", name, "--property=ExecStartPre,LoadState", "--all", "--no-pager"], check=False)
         properties = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
         absent = not path.exists() and properties.get("LoadState") == "not-found"
-        require(properties.get("ExecStartPre") == "" and
+        # systemd 255 omits an empty ExecStartPre even with --all; later versions print it empty.
+        # Only an answer that reports LoadState proves the unit was inspected.
+        require("LoadState" in properties and properties.get("ExecStartPre", "") == "" and
                 (result.returncode == 0 or (result.returncode == 1 and absent)), code, detail)
 
 

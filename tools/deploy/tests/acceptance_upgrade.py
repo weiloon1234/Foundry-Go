@@ -58,7 +58,8 @@ def upgrade(archive, old_tools):
         assert 'ExecStartPre=' not in Path('/etc/systemd/system', unit).read_text()
         loaded = host.run(['systemctl', 'show', unit, '--property=ExecStartPre,NeedDaemonReload', '--all']).stdout
         properties = dict(line.split('=', 1) for line in loaded.splitlines() if '=' in line)
-        assert properties.get('NeedDaemonReload') == 'no' and properties.get('ExecStartPre') == ''
+        # systemd 255 omits an empty ExecStartPre even with --all.
+        assert properties.get('NeedDaemonReload') == 'no' and properties.get('ExecStartPre', '') == ''
     candidate, version = second_archive(archive, project, profile)
     invoke('activate', {**current, 'archive': str(candidate), 'archive_sha256': digest(candidate)})
     _, entry = host.require_identity(project, profile)

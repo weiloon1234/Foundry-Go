@@ -36,7 +36,7 @@ class UpgradeHost:
 
     def run(self, args, **kwargs):
         if args[:2] == ['systemctl', 'show']:
-            return subprocess.CompletedProcess(args, 0, 'ExecStartPre=\n', '')
+            return subprocess.CompletedProcess(args, 0, 'LoadState=loaded\nExecStartPre=\n', '')
         raise AssertionError('Unexpected host command')
 
 
@@ -290,7 +290,7 @@ class UpgradeTests(unittest.TestCase):
             for on_disk in (True, False):
                 with self.subTest(state=state, on_disk=on_disk):
                     unit.write_text('[Service]\n' + ('ExecStartPre=/usr/bin/python3 /retired/guard.py\n' if on_disk else ''))
-                    loaded = 'ExecStartPre=\n' if on_disk else 'ExecStartPre={ path=/retired/guard.py ; }\n'
+                    loaded = 'LoadState=loaded\n' + ('ExecStartPre=\n' if on_disk else 'ExecStartPre={ path=/retired/guard.py ; }\n')
                     before = self.host.read_registry()
                     with patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, loaded, '')):
                         for action in (lambda: upgrades.plan_upgrade(self.host, self.source),
@@ -324,6 +324,27 @@ class UpgradeTests(unittest.TestCase):
             plan = upgrades.plan_upgrade(self.host, self.source)
         self.assertEqual([profile['instance_id']], plan['upgrade']['instances'])
 
+    def test_systemd_255_omitting_empty_pre_start_allows_planning(self):
+        # Ubuntu 24.04's systemd 255 prints no ExecStartPre line at all when a unit has none.
+        from test_contracts import fixture
+        from topology import instance_units
+        self.install()
+        _, profile, entry = fixture()
+        self.host.registry['instances'][profile['instance_id']] = entry
+        (self.source / 'lib/new_module.py').write_text('# candidate change\n')
+        units = self.host.paths.p('/etc/systemd/system')
+        units.mkdir(parents=True)
+        for name in instance_units(entry).values():
+            (units / name).write_text('[Service]\nExecStart=/bin/true\n')
+        with patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, 'LoadState=loaded\n', '')):
+            plan = upgrades.plan_upgrade(self.host, self.source)
+        self.assertEqual([profile['instance_id']], plan['upgrade']['instances'])
+        entry['provisioning']['state'] = 'preparing'
+        for name in instance_units(entry).values():
+            (units / name).unlink()
+        with patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, 'LoadState=not-found\n', '')):
+            self.assertEqual([profile['instance_id']], upgrades.plan_upgrade(self.host, self.source)['upgrade']['instances'])
+
     def test_candidate_python_inventory_contains_only_runtime_modules(self):
         source = Path(__file__).resolve().parents[1]
         _, files, _ = upgrades.tool_bundle(source)
@@ -350,7 +371,7 @@ class UpgradeTests(unittest.TestCase):
         self.host.registry['instances'][profile['instance_id']] = entry
         (self.source / 'lib/new_module.py').write_text('# candidate change\n')
         with patch.object(provision, '_install_unit') as reinstall, \
-                patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, 'ExecStartPre=\n', '')) as run:
+                patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, 'LoadState=loaded\nExecStartPre=\n', '')) as run:
             result = self.install(allow_upgrade=True)
         self.assertEqual('succeeded', result['outcome'])
         reinstall.assert_called_once()
