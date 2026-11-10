@@ -49,20 +49,18 @@ for every phase. It keeps its published framework pin. On a native arm64 Docker 
 
 ```sh
 framework="$PWD"
-old_tools="$(go env GOMODCACHE)/github.com/weiloon1234/!foundry-!go@v0.15.3/tools/deploy"
 build_info=$(mktemp -d)
 python3 tools/deploy/tests/build_acceptance.py --architecture arm64 \
   --archive-file "$build_info/archive.txt"
 archive=$(cat "$build_info/archive.txt")
 tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
-  --archive "$archive" --framework-root "$framework" --foreign \
-  --upgrade --tools-root "$old_tools"
-tools/deploy/tests/run_acceptance.sh --ubuntu 26.04 --platform linux/arm64 \
-  --archive "$archive" --framework-root "$framework" --foreign \
-  --upgrade --tools-root "$old_tools"
+  --archive "$archive" --framework-root "$framework" --fresh
 ```
 
-The historical tools must already be present in the Go module cache. `--upgrade`
+The opt-in `--upgrade` phase drives v0.15.3 tools, which call the application's
+`deploy:jobs-inspect` and `jobs migrate-layout`, so its archive is built from a v0.15.3
+checkout of this fixture ([deployment guide](../../docs/guides/deployment.md)). The
+historical tools must already be present in the Go module cache. `--upgrade`
 prepares the published v0.15.3 host with a completed queue migration, two admitted
 versions, private records, and a real failed superseded executor. It upgrades through
 normal tool planning/application, deploys, and proves cleanup, loaded unit changes,

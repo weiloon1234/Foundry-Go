@@ -18,7 +18,8 @@ DOCKER_CONFIG and DOCKER_HOST are inherited. No host ports are published.
 Public reports must show live roles/readiness; Linux may withhold cross-UID
 executable identity, which must be reported as unverified. Root reports must
 prove every running role matches its selected release.
---upgrade requires the deploy-acceptance fixture archive and --tools-root pointing
+--upgrade requires a deploy-acceptance fixture archive built from the v0.15.3 checkout
+(those tools call deploy:jobs-inspect and jobs migrate-layout) and --tools-root pointing
 to the published v0.15.3 bundle in the Go module cache. It prepares historical state,
 then upgrades through tools-plan/tools-apply and verifies generation-6 cleanup.
 Optional: ACCEPTANCE_LOG_DIR, ACCEPTANCE_SCHEDULE_MESSAGE (see acceptance_roles.py),

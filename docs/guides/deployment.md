@@ -1032,21 +1032,34 @@ archive through the normal deploy builder and run both arm64 cells:
 
 ```sh
 framework="$PWD"
-old_tools="$(go env GOMODCACHE)/github.com/weiloon1234/!foundry-!go@v0.15.3/tools/deploy"
 build_info=$(mktemp -d)
 python3 tools/deploy/tests/build_acceptance.py --architecture arm64 \
   --archive-file "$build_info/archive.txt"
 archive=$(cat "$build_info/archive.txt")
-tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
-  --archive "$archive" --framework-root "$framework" --foreign --upgrade --tools-root "$old_tools"
-tools/deploy/tests/run_acceptance.sh --ubuntu 26.04 --platform linux/arm64 \
-  --archive "$archive" --framework-root "$framework" --foreign --upgrade --tools-root "$old_tools"
+for ubuntu in 24.04 26.04; do
+  tools/deploy/tests/run_acceptance.sh --ubuntu "$ubuntu" --platform linux/arm64 \
+    --archive "$archive" --framework-root "$framework" --fresh
+done
 ```
 
 The fixture pins the published framework with no local module replacement. The
 builder uses its acceptance profile and writes the completed archive path to a
-new file. Omitting `--upgrade` preserves the existing phase sequence and accepts
-the same archive.
+new file.
+
+The opt-in upgrade phase drives v0.15.3 tools, which call the application's
+`deploy:jobs-inspect` and `jobs migrate-layout`. Build its archive from the fixture
+as released in v0.15.3, and pass the current checkout as the framework root:
+
+```sh
+old_tools="$(go env GOMODCACHE)/github.com/weiloon1234/!foundry-!go@v0.15.3/tools/deploy"
+old_checkout="$(mktemp -d)/foundry-v0.15.3"
+git worktree add --detach "$old_checkout" v0.15.3
+(cd "$old_checkout" && python3 tools/deploy/tests/build_acceptance.py --architecture arm64 \
+  --archive-file "$build_info/old-archive.txt")
+tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
+  --archive "$(cat "$build_info/old-archive.txt")" --framework-root "$framework" \
+  --foreign --upgrade --tools-root "$old_tools"
+```
 
 `--upgrade` requires the published v0.15.3 tools already present in the Go module
 cache, supplied through `--tools-root`. The runner mounts that bundle read-only.

@@ -97,16 +97,12 @@ func Run(ctx context.Context, arguments []string, streams cli.Streams) error {
 			return err
 		}
 		return json.NewEncoder(streams.Out).Encode(inventory)
-	case "jobs:queues", "deploy:jobs-inspect", "jobs":
+	case "jobs":
 		declarations, err := application.DeployJobCommands(builder)
 		if err != nil {
 			return err
 		}
-		queues, err := application.JobQueuesCommand("jobs:queues", builder)
-		if err != nil {
-			return err
-		}
-		registry, err := cli.New(append(declarations, queues)...)
+		registry, err := cli.New(declarations...)
 		if err != nil {
 			return err
 		}
