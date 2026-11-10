@@ -59,7 +59,7 @@ func stickyReadsConfigured(s infrastructure.DatabaseSettings) bool {
 	return false
 }
 
-func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEnabled, stickyReads bool, routes []Routes, spas []spaDeclaration, fallbacks []FallbackRoutes, middleware []http.Middleware, observers []http.RequestObserver, collector *telemetry.Collector) {
+func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEnabled, stickyReads bool, routes []Routes, spas []spaDeclaration, fallbacks []FallbackRoutes, middleware []http.Middleware, observers []http.RequestObserver, collector *telemetry.Collector, capture http.ServerOption) {
 	if settings.Enabled {
 		builder.Register(foundation.Module{Name: RouterProvider, Requires: []foundation.ProviderID{Provider}, OnRegister: func(r *foundation.Registrar) error {
 			for _, spa := range spas {
@@ -111,9 +111,14 @@ func registerHTTP(builder *foundation.Builder, settings HTTPSettings, localesEna
 				return database.StickyReadsHandler(next), nil
 			})}, global...)
 		}
-		serverOptions := make([]http.ServerOption, 0, len(observers)+1)
+		serverOptions := make([]http.ServerOption, 0, len(observers)+2)
 		for _, observer := range observers {
 			serverOptions = append(serverOptions, http.WithRequestObserver(observer))
+		}
+		// Server preparation checks that no authenticated route lies under a
+		// capture prefix, against the final routed handler built below.
+		if capture != nil {
+			serverOptions = append(serverOptions, capture)
 		}
 		// Maintenance admission runs before the chain; reuse the global
 		// TrustedProxy so allow networks match the real client address.

@@ -23,7 +23,8 @@ func (a Actor) reference() model.Reference[Actor, int64] {
 func (a Actor) FoundryIdentity() (model.Identity, error) { return a.reference().Identity() }
 
 // Authentication uses fixed loopback test credentials, never deployment secrets.
-func Authentication() (*http.Authentication, auth.Guard[Actor], error) {
+// extra registers fixture-owned permissions beside the shared guard.
+func Authentication(extra ...auth.Registration) (*http.Authentication, auth.Guard[Actor], error) {
 	provider := auth.DefineProvider("idempotent_actors", (Actor{}).reference(), func(_ context.Context, id int64) (value.Optional[Actor], error) {
 		tenant := "tenant-a"
 		if id == 3 {
@@ -47,7 +48,7 @@ func Authentication() (*http.Authentication, auth.Guard[Actor], error) {
 		return value.Set(proof), err
 	})
 	guard := auth.DefineGuard("idempotent", provider, strategy)
-	registry, err := auth.NewRegistry(auth.DefaultConfig(), guard.Registration())
+	registry, err := auth.NewRegistry(auth.DefaultConfig(), append([]auth.Registration{guard.Registration()}, extra...)...)
 	if err != nil {
 		return nil, guard, err
 	}

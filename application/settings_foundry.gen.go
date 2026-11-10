@@ -661,6 +661,10 @@ type SettingsFeaturesConfigKeySet struct {
 	// Maintenance schedules framework housekeeping (features.maintenance).
 	//
 	Maintenance SettingsFeaturesMaintenanceConfigKeySet
+	//
+	// WebhookCapture configures prefixes declared with Builder.CaptureWebhooks.
+	//
+	WebhookCapture SettingsFeaturesWebhookCaptureConfigKeySet
 }
 
 // SettingsFeaturesIdempotencyConfigKeySet exposes compiler-checked configuration overrides.
@@ -1708,6 +1712,72 @@ type SettingsFeaturesMaintenanceCustomConfigKeySet struct {
 	Retention config.Key[Settings, time.Duration]
 }
 
+// SettingsFeaturesWebhookCaptureConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsFeaturesWebhookCaptureConfigKeySet struct {
+	// Enabled selects features.webhook_capture.enabled. Set accepts bool.
+	Enabled config.Key[Settings, bool]
+	// Database selects features.webhook_capture.database. Set accepts database.ConnectionName.
+	Database config.Key[Settings, database.ConnectionName]
+	// Schema selects features.webhook_capture.schema. Set accepts string.
+	Schema config.Key[Settings, string]
+	Config SettingsFeaturesWebhookCaptureConfigConfigKeySet
+}
+
+// SettingsFeaturesWebhookCaptureConfigConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsFeaturesWebhookCaptureConfigConfigKeySet struct {
+	// BodyBytes selects features.webhook_capture.config.body_bytes. Set accepts int.
+	//
+	// BodyBytes bounds the request body read before the handler (1 KiB to
+	// 8 MiB). A larger body is omitted; the handler still receives every byte.
+	//
+	BodyBytes config.Key[Settings, int]
+	// ValueBytes selects features.webhook_capture.config.value_bytes. Set accepts int.
+	//
+	// ValueBytes bounds a redacted JSON string or form, query or multipart
+	// field value (64 bytes to 1 MiB); longer values read "[omitted N bytes]".
+	//
+	ValueBytes config.Key[Settings, int]
+	// ForceRedacted selects features.webhook_capture.config.force_redacted. Set accepts bool.
+	//
+	// ForceRedacted stores every prefix redacted, including prefixes declared
+	// with http.FullCaptureBody.
+	//
+	ForceRedacted config.Key[Settings, bool]
+	// Rate selects features.webhook_capture.config.rate. Set accepts int.
+	//
+	// Rate admits at most this many captures per second per process (1 to
+	// 10,000). Refused requests are served normally and counted as lost.
+	//
+	Rate config.Key[Settings, int]
+	// Burst selects features.webhook_capture.config.burst. Set accepts int.
+	//
+	// Burst is the admission burst (1 to 10,000).
+	//
+	Burst config.Key[Settings, int]
+	// QueueRows selects features.webhook_capture.config.queue_rows. Set accepts int.
+	//
+	// QueueRows bounds captures being read, queued or written (1 to 256).
+	//
+	QueueRows config.Key[Settings, int]
+	// RetainedBytes selects features.webhook_capture.config.retained_bytes. Set accepts int64.
+	//
+	// RetainedBytes bounds memory held by those captures (enough for one
+	// capture, up to 1 GiB).
+	//
+	RetainedBytes config.Key[Settings, int64]
+	// Retention selects features.webhook_capture.config.retention. Set accepts time.Duration.
+	//
+	// Retention deletes captures older than this (1 hour to 365 days).
+	//
+	Retention config.Key[Settings, time.Duration]
+	// MaxRows selects features.webhook_capture.config.max_rows. Set accepts int.
+	//
+	// MaxRows keeps about this many newest captures in the table (1,000 to
+	// 10,000,000). Pruning catches up every minute while over the cap.
+	//
+	MaxRows config.Key[Settings, int]
+}
+
 // SettingsImageConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsImageConfigKeySet struct {
 	// Enabled selects image.enabled. Set accepts bool.
@@ -2422,6 +2492,22 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 					Retention:  config.Duration[Settings]("features.maintenance.custom.retention", func(settings *Settings) *time.Duration { return &settings.Features.Maintenance.Custom.Retention }),
 				},
 			},
+			WebhookCapture: SettingsFeaturesWebhookCaptureConfigKeySet{
+				Enabled:  config.Scalar[Settings, bool]("features.webhook_capture.enabled", func(settings *Settings) *bool { return &settings.Features.WebhookCapture.Enabled }),
+				Database: config.Scalar[Settings, database.ConnectionName]("features.webhook_capture.database", func(settings *Settings) *database.ConnectionName { return &settings.Features.WebhookCapture.Database }),
+				Schema:   config.Scalar[Settings, string]("features.webhook_capture.schema", func(settings *Settings) *string { return &settings.Features.WebhookCapture.Schema }),
+				Config: SettingsFeaturesWebhookCaptureConfigConfigKeySet{
+					BodyBytes:     config.Scalar[Settings, int]("features.webhook_capture.config.body_bytes", func(settings *Settings) *int { return &settings.Features.WebhookCapture.Config.BodyBytes }),
+					ValueBytes:    config.Scalar[Settings, int]("features.webhook_capture.config.value_bytes", func(settings *Settings) *int { return &settings.Features.WebhookCapture.Config.ValueBytes }),
+					ForceRedacted: config.Scalar[Settings, bool]("features.webhook_capture.config.force_redacted", func(settings *Settings) *bool { return &settings.Features.WebhookCapture.Config.ForceRedacted }),
+					Rate:          config.Scalar[Settings, int]("features.webhook_capture.config.rate", func(settings *Settings) *int { return &settings.Features.WebhookCapture.Config.Rate }),
+					Burst:         config.Scalar[Settings, int]("features.webhook_capture.config.burst", func(settings *Settings) *int { return &settings.Features.WebhookCapture.Config.Burst }),
+					QueueRows:     config.Scalar[Settings, int]("features.webhook_capture.config.queue_rows", func(settings *Settings) *int { return &settings.Features.WebhookCapture.Config.QueueRows }),
+					RetainedBytes: config.Scalar[Settings, int64]("features.webhook_capture.config.retained_bytes", func(settings *Settings) *int64 { return &settings.Features.WebhookCapture.Config.RetainedBytes }),
+					Retention:     config.Duration[Settings]("features.webhook_capture.config.retention", func(settings *Settings) *time.Duration { return &settings.Features.WebhookCapture.Config.Retention }),
+					MaxRows:       config.Scalar[Settings, int]("features.webhook_capture.config.max_rows", func(settings *Settings) *int { return &settings.Features.WebhookCapture.Config.MaxRows }),
+				},
+			},
 		},
 		Image: SettingsImageConfigKeySet{
 			Enabled: config.Scalar[Settings, bool]("image.enabled", func(settings *Settings) *bool { return &settings.Image.Enabled }),
@@ -2876,6 +2962,18 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Features.Maintenance.Custom.MaxBatches,
 		keys.Features.Maintenance.Custom.Timeout,
 		keys.Features.Maintenance.Custom.Retention,
+		keys.Features.WebhookCapture.Enabled,
+		keys.Features.WebhookCapture.Database,
+		keys.Features.WebhookCapture.Schema,
+		keys.Features.WebhookCapture.Config.BodyBytes,
+		keys.Features.WebhookCapture.Config.ValueBytes,
+		keys.Features.WebhookCapture.Config.ForceRedacted,
+		keys.Features.WebhookCapture.Config.Rate,
+		keys.Features.WebhookCapture.Config.Burst,
+		keys.Features.WebhookCapture.Config.QueueRows,
+		keys.Features.WebhookCapture.Config.RetainedBytes,
+		keys.Features.WebhookCapture.Config.Retention,
+		keys.Features.WebhookCapture.Config.MaxRows,
 		keys.Image.Enabled,
 		keys.Image.Config.Backend,
 		keys.Image.Config.Limits.InputBytes,

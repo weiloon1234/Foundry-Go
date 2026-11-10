@@ -23,7 +23,11 @@ func Defaults() application.Settings {
 // Build uses configured defaults and a named receiver. Constructors receive
 // concrete dependencies during assembly; handlers retain them after sealing.
 func Build(ctx context.Context, settings application.Settings, hooks Hooks, options ...application.Option) (*application.App, error) {
-	return application.New(settings, options...).Events(application.Topic(Submitted)).Features(func(services application.Services) (application.FeatureDeclarations, error) {
+	webhooks, err := Webhooks()
+	if err != nil {
+		return nil, err
+	}
+	return application.New(settings, options...).CaptureWebhooks(webhooks).Events(application.Topic(Submitted)).Features(func(services application.Services) (application.FeatureDeclarations, error) {
 		receiver, err := services.Databases.Connection("receiver")
 		if err != nil {
 			return application.FeatureDeclarations{}, err
@@ -47,6 +51,15 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 		if err != nil {
 			return nil, err
 		}
-		return service.Routes()
+		routes, err := service.Routes()
+		if err != nil {
+			return nil, err
+		}
+		captures, err := services.WebhookCaptures()
+		if err != nil {
+			return nil, err
+		}
+		viewer, err := CaptureRoutes(captures)
+		return append(routes, viewer...), err
 	}).Build(ctx)
 }

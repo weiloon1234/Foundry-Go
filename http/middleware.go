@@ -129,8 +129,8 @@ func ApplyMiddleware(handler stdhttp.Handler, middlewares ...Middleware) (stdhtt
 	if protected {
 		current = idempotentHTTPHandler{current}
 	}
-	if ceiling := routeBodyCeiling(handler); ceiling > 0 {
-		current = routedHandler{current, ceiling}
+	if ceiling, inventory := routeBodyCeiling(handler), captureRouteInventory(handler); ceiling > 0 || len(inventory) > 0 {
+		current = routedHandler{Handler: current, ceiling: ceiling, captureInventory: inventory}
 	}
 	return current, nil
 }

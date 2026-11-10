@@ -31,6 +31,8 @@ type Router struct {
 	bodyCeiling int64
 }
 
+func (r *Router) captureRoutes() []RouteInfo { return r.routes }
+
 // matchedRoute is the immutable per-route state published to a matched
 // request. It is built once at registration, so matching allocates no metadata.
 type matchedRoute struct {

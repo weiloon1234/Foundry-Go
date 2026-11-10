@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "files": {
+    "capture_body_omission_foundry.gen.go": "803d52dda91f644905b0393a4cfc8cd728cad0bb06381ba1add72bbe1870a901",
+    "capture_body_state_foundry.gen.go": "c21da3d5d1b946703e8a246d6df0c392848a20f71c399e4ff4d0c898a022268d",
+    "capture_mode_foundry.gen.go": "9d3198b4112c4ae356014aa707ce34495162515a2fe33c86a785e25808e05a47",
+    "capture_omission_foundry.gen.go": "e35b61293840e327d61d38ed7f1b93da8c164be1cfbf673b761353fdd30164bf",
+    "capture_response_state_foundry.gen.go": "f7027ba2be4b856f1e5f6b0a5e24bb3ed23e63432d4950a1a9d4ae134dcf9238",
+    "captured_field_foundry.gen.go": "d09e6b079cbd415f3d8a026aa4df3dad335fa35889055064fefa4d28ce895bb3",
+    "captured_request_detail_foundry.gen.go": "f05bc6e5090b3f12957fb189adcad12afa2cb9e91b7dff360a484e02e41c2600",
+    "captured_request_filters_foundry.gen.go": "c7ce558869cab9f3068de8036773ef9845181ab85bbb6d701c9a3592dcb71612",
+    "captured_request_foundry.gen.go": "92cecd598aaeb9fac5035edc352050cdbc379bf5078fc61e818c7e0d36be8e2c",
+    "captured_request_path_foundry.gen.go": "4fe4eb5a59fba92d9f9a1aad7576fe1105db0221e087fd3329d215aa4acb667d"
+  }
+}

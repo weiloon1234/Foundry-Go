@@ -45,6 +45,29 @@ framework cannot replace an HTTP response a raw handler has already sent or
 infer success from an ignored read error. Typed endpoint decoding owns this
 mapping before invoking the domain handler.
 
+<a id="webhook-capture-in-the-request-lifecycle"></a>
+## Webhook capture in the request lifecycle
+
+A request under a prefix declared with `Builder.CaptureWebhooks` is selected by
+its decoded path at a segment boundary, after the kernel assigns the request
+ID and before maintenance, capacity and declared-length checks. If the
+recorder admits it, the kernel snapshots method, escaped path, query, headers
+and the trusted client address. Kernel rejections are stored without reading
+the body.
+
+For an admitted request the kernel reads at most the capture limit plus one
+byte from the original stream, then replays those bytes followed by the rest of
+the stream. Handlers, verifiers and route body limits see the original bytes,
+`ContentLength` and the same terminal read error. The read happens before
+routing, so a `100-continue` client gets `Continue` early and the read uses
+the server read timeout rather than a route's extended deadline.
+
+The completion snapshot is handed to the recorder before request observers
+run. Status, outcome and accepted response bytes come from the kernel's
+response observer; a raw panic is recorded as an aborted response with no
+status. Persistence happens on one background writer, never on the request
+path. See [webhook capture](webhooks.md#recipe-webhook-capture).
+
 ## Typed public errors
 
 `http.ErrorCode` implements Go's `error` interface. Built-in values include

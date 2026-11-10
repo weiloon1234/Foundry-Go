@@ -30,6 +30,21 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 			return f, err
 		}
 	}
+	// The prune command uses these defaults after a declaration is removed.
+	if capture := &f.WebhookCapture; capture.Database == "" {
+		capture.Database = s.Services.Database.Default
+	}
+	if capture := &f.WebhookCapture; capture.Schema == "" {
+		capture.Schema = s.Services.Database.Connections[capture.Database].Primary.Schema
+		if capture.Schema == "" {
+			capture.Schema = "public"
+		}
+	}
+	if f.WebhookCapture.declared {
+		if err := f.WebhookCapture.Config.Validate(); err != nil {
+			return f, err
+		}
+	}
 	for _, target := range persistenceTargets(&f) {
 		if *target.connection == "" {
 			*target.connection = s.Services.Database.Default

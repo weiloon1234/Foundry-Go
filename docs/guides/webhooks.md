@@ -5,6 +5,7 @@
 
 - [Construct a verifier](#recipe-webhook-verifier)
 - [Deduplicate verified delivery](#recipe-webhook-deduplication)
+- [Capture webhook requests for debugging](#recipe-webhook-capture)
 
 <a id="recipe-webhook-verifier"></a>
 ## Verify original request bytes
@@ -140,6 +141,123 @@ reuse a previous delivery as authorization for a new request.
 
 Protocol references: [Standard Webhooks](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md),
 [Stripe signature verification](https://docs.stripe.com/webhooks/signature).
+
+<a id="recipe-webhook-capture"></a>
+## Capture webhook requests for debugging
+
+`webhook/capture` records requests under declared path prefixes, including
+router misses, kernel rejections and handler failures, so developers can see
+what a gateway sent and what the application answered. Capture is a debugging
+aid. Payment and other gateway domain tables stay authoritative.
+
+Declare prefixes in Go next to the HTTP composition. Prefixes and full-body
+mode never come from deployment files. Pass the declaration to
+`application.New(settings, options...).CaptureWebhooks(declaration)`.
+
+<!-- compiled-source: tests/fixtures/consumer/teamworkflow/capture.go#webhook-capture-declaration -->
+```go
+func Webhooks() (http.CaptureDeclaration, error) {
+	prefix, err := http.ParsePathPrefix("/wh")
+	return http.CapturePrefix(prefix), err
+}
+```
+
+Mount the viewer inside an existing guarded group with the store from
+`services.WebhookCaptures()`. At least one access option is required; in an
+admin portal use the developer read scope and the developer type permission so
+a wildcard grant cannot read captured payloads. The routes send
+`Cache-Control: no-store`.
+
+<!-- compiled-source: tests/fixtures/consumer/teamworkflow/capture.go#webhook-capture-routes -->
+```go
+func CaptureRoutes(captures *capture.Store) ([]http.RouteRegistration, error) {
+	transport, guard, err := authfixture.Authentication(ReadCaptures.Registration())
+	if err != nil {
+		return nil, err
+	}
+	binding, err := http.BindGuard(transport, guard)
+	if err != nil {
+		return nil, err
+	}
+	return capture.Routes(http.DefineScope("/developer", "developer"), captures, binding, http.Permissions(ReadCaptures))
+}
+```
+
+The group's IDs become `<group>.webhook-captures.list` and `.show`. The list
+takes `from` (required), `until`, `method`, `path_prefix`, `status` and `mode`,
+spans at most 30 days and pages newest first with 30 items by default and 100
+at most. Show takes the request ID from `X-Request-ID`. Both are generated
+client operations, such as `developerWebhookCapturesList`.
+
+The root prefix, duplicate prefixes, more than 32 prefixes, capture without
+HTTP and an authenticated route under a prefix fail `Build`. The most specific
+prefix selects the body mode.
+
+### Settings
+
+Runtime settings live under `features.webhook_capture` and only reduce what the
+declaration allows.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `true` | `false` stops capturing; the viewer and retention keep working |
+| `database`, `schema` | default connection, its schema or `public` | where the table lives |
+| `config.force_redacted` | `false` | store every prefix redacted |
+| `config.body_bytes` | 2 MiB (1 KiB to 8 MiB) | body read before the handler; larger bodies are omitted |
+| `config.value_bytes` | 4 KiB (64 B to 1 MiB) | longer redacted values read `[omitted N bytes]` |
+| `config.rate`, `config.burst` | 50, 50 (1 to 10,000) | captures admitted per second per process |
+| `config.queue_rows` | 256 (1 to 256) | captures being read, queued or written |
+| `config.retained_bytes` | 64 MiB (up to 1 GiB) | memory those captures may hold |
+| `config.retention` | 30 days (1 hour to 365 days) | age after which rows are deleted and hidden |
+| `config.max_rows` | 100,000 (1,000 to 10,000,000) | newest rows kept |
+
+Apply the framework migration `foundry.webhook_capture/000001_create_webhook_captures`
+with the ordinary migration command before relying on capture. Rolling the
+framework back keeps the table; `webhook-captures prune --apply` empties it.
+
+### Privacy
+
+Redacted mode is the default. It masks credential-named JSON, form and
+multipart fields with the shared audit sensitive-name rule, replaces long
+values with their size, keeps multipart file names, media types and sizes but
+never file bytes, and stores only JSON, URL-encoded and multipart bodies.
+Malformed, compressed or other bodies are omitted with a reason, never stored
+raw. Credential headers such as `Authorization` and `Cookie` and the `ticket`
+and signed-URL `signature` query values are masked in every mode; signature
+headers such as `Stripe-Signature` stay visible.
+
+`http.FullCaptureBody()` stores complete bodies within the limit exactly as
+received, which is what a signature check needs. Those bodies can hold card
+data, personal data and secrets. Declare full mode only on a narrow sandbox
+prefix, keep the viewer behind the developer type gate and use
+`config.force_redacted` to turn it off in production without a deploy. A
+body over the limit is omitted, never stored in part.
+
+The response head is the first 4 KiB the server accepted for writing. It is
+not redacted, and it does not prove the gateway received it.
+
+### Loss and timing
+
+Capture is best effort so a gateway never waits on the database. Admission
+refusals, a full queue, failed writes (after two retries), a missing table and
+shutdown leftovers are counted. The next stored row carries the count in
+`dropped_before`, and the process logs `webhook captures were not stored` at
+most once a minute with counts by reason. A crash loses queued captures.
+
+The kernel reads up to `config.body_bytes` before routing, so a `100-continue`
+client receives `Continue` before route checks, a slow upload spends the
+server read timeout before the handler runs, and the handler still receives
+every byte. See [request lifecycle](http-requests.md#webhook-capture-in-the-request-lifecycle).
+
+### Storage sizing
+
+Each row holds at most `config.body_bytes` of body plus about 40 KiB of
+headers, query and response head. Budget `max_rows` times that for the worst
+case: 100,000 rows of 2 MiB bodies is about 200 GiB, while typical JSON
+webhooks of a few KiB need well under 1 GiB. Every replica admits its own
+`config.rate`. Retention runs beside the HTTP kernel every 10 minutes, and
+every minute while it is behind, in 1,000-row batches under a lock that keeps
+replicas from duplicating work.
 
 ## Sending webhooks
 

@@ -224,6 +224,25 @@ retention = '168h'
 interval = '30m'
 ```
 
+### Webhook capture retention and loss
+
+Applications that declare `Builder.CaptureWebhooks` add the framework migration
+`foundry.webhook_capture/000001_create_webhook_captures` to the ordinary
+migration targets; apply it before the release serves traffic. Capture does not
+use `features.maintenance`: the capture store prunes its own table beside the
+HTTP kernel at startup, every 10 minutes and every minute while behind, by age
+and then down to `features.webhook_capture.config.max_rows`. A missing table
+logs `webhook capture table is unavailable` once and serving continues.
+Captures that could not be stored are logged as `webhook captures were not
+stored` with counts by reason only.
+
+After removing the declaration or disabling capture, register
+`application.WebhookCaptureCommand()` in the CLI registry and run
+`webhook-captures prune` to count rows past retention, then add `--apply` to
+delete them. `--before <RFC 3339>` purges everything older than an explicit
+instant; rolling the framework back keeps the table. See
+[webhook capture](webhooks.md#recipe-webhook-capture).
+
 ## Resource pressure
 
 | Shared resource | Default | Exhaustion/lifetime behavior |

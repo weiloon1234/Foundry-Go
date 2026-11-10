@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/settings"
 	"github.com/weiloon1234/Foundry-Go/telemetry"
 	"github.com/weiloon1234/Foundry-Go/translations"
+	"github.com/weiloon1234/Foundry-Go/webhook/capture"
 )
 
 type persistenceTarget struct {
@@ -38,6 +39,7 @@ func persistenceTargets(s *FeatureSettings) []persistenceTarget {
 	add(s.Audit.Enabled, &s.Audit.Database, &s.Audit.Schema, audit.Migrations)
 	add(s.Telemetry.Enabled, &s.Telemetry.Database, &s.Telemetry.Schema, telemetry.Migrations)
 	add(s.Notifications.Enabled, &s.Notifications.Database, &s.Notifications.Schema, notifications.Migrations)
+	add(s.WebhookCapture.declared, &s.WebhookCapture.Database, &s.WebhookCapture.Schema, capture.Migrations)
 	if s.Extensions.Enabled {
 		add(true, &s.Extensions.Database, &s.Extensions.Schema, func() []migrate.Definition {
 			definitions := append(settings.Migrations(), metadata.Migrations()...)

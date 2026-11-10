@@ -57,4 +57,22 @@ assert.equal(accepted.data.kind, "queued");
 assert.equal(accepted.data.name, "Generated client");
 assert.deepEqual(await client.workflowSubmit({ ...submission, body: {name:" Generated client "} }), accepted);
 await assert.rejects(() => client.workflowSubmit({ ...submission, body: {name:"Changed"} }), e => e instanceof sdk.APIError && e.status === 409 && e.code === "idempotency_mismatch");
-console.log("integrated PATCH, tagged envelopes, pagination, source rules and durable replay passed");
+const from = new Date(Date.now() - 60_000).toISOString();
+const gateway = await fetch(new URL("/wh/gateway?ticket=secret-ticket", baseURL), { method: "POST", headers: { "Content-Type": "application/json", "Stripe-Signature": "t=1,v1=abc" }, body: JSON.stringify({ id: "evt_1", token: "secret-token" }) });
+assert.equal(gateway.status, 404);
+let captured;
+for (let attempt = 0; attempt < 200 && !captured; attempt++) {
+ captured = (await client.developerWebhookCapturesList({ query: { from, path_prefix: "/wh/" } })).data[0];
+ if (!captured) await new Promise(resolve => setTimeout(resolve, 25));
+}
+assert.ok(captured, "the gateway request was not captured");
+assert.equal(captured.status, 404);
+assert.equal(captured.body_state, "json");
+assert.equal(captured.mode, "redacted");
+const detail = await client.developerWebhookCapturesShow({ path: { request: captured.request_id } });
+assert.equal(Buffer.from(detail.body, "base64").toString(), '{"id":"evt_1","token":"[masked]"}');
+assert.deepEqual(detail.query.map(field => [field.name, [...field.values]]), [["ticket", ["[masked]"]]]);
+assert.ok(detail.headers.some(field => field.name === "Stripe-Signature" && field.values[0] === "t=1,v1=abc"));
+const ordinary = sdk.createClient(transport, { baseURL, headers: { Authorization: "Bearer bob" } });
+await assert.rejects(() => ordinary.developerWebhookCapturesList({ query: { from } }), e => e instanceof sdk.APIError && e.status === 403);
+console.log("integrated PATCH, tagged envelopes, pagination, source rules, durable replay and webhook capture passed");

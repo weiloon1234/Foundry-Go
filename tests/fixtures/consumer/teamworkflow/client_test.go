@@ -28,7 +28,7 @@ func TestGeneratedWorkflowClientAgainstCompleteApplication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(document.HTTP) != 8 {
+	if len(document.HTTP) != 10 {
 		t.Fatal("workflow transport surface changed")
 	}
 	for _, operation := range document.HTTP {
@@ -36,6 +36,10 @@ func TestGeneratedWorkflowClientAgainstCompleteApplication(t *testing.T) {
 		case "workflow.submit":
 			if operation.Status != 202 || operation.Idempotency == nil || !operation.Preparation || operation.Route.Authentication == nil {
 				t.Fatal("submission contract lost transaction/auth/preparation")
+			}
+		case "developer.webhook-captures.list", "developer.webhook-captures.show":
+			if operation.Status != 200 || operation.Route.Authentication == nil {
+				t.Fatal("capture viewer lost its guard", operation.Route.ID)
 			}
 		case "workflow.patch":
 			if operation.Status != 200 || !operation.Preparation || operation.Route.Authentication == nil {

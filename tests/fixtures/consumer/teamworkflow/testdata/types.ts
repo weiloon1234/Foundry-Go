@@ -34,3 +34,18 @@ export function typedWorkflow(): void {
  const failure: sdk.Operations["workflowSubmit"]["errorCode"] = "workflow_rejected";
  void failure;
 }
+type CaptureDetail = sdk.Operations["developerWebhookCapturesShow"]["response"];
+declare const capture: CaptureDetail;
+export function typedCaptures(): void {
+ void client.developerWebhookCapturesList({ query: { from: "2026-11-11T00:00:00Z", mode: "full", path_prefix: "/wh/", per_page: "30" } });
+ // @ts-expect-error The capture list always has a time bound.
+ void client.developerWebhookCapturesList({ query: { mode: "full" } });
+ // @ts-expect-error Body mode is a closed enum.
+ void client.developerWebhookCapturesList({ query: { from: "2026-11-11T00:00:00Z", mode: "raw" } });
+ void client.developerWebhookCapturesShow({ path: { request: "0192f3a4-5b6c-7d8e-9f01-23456789abcd" } });
+ const state: sdk.CaptureBodyStateReceived = capture.request.body_state;
+ const omission: sdk.Nullable_CaptureBodyOmissionReceived = capture.request.body_omission;
+ // @ts-expect-error A missing status is null, never zero.
+ const status: number = capture.request.status;
+ void [state === "omitted" && omission, status, capture.body, capture.headers?.[0]?.values];
+}

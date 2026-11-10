@@ -43,6 +43,7 @@ func (f RequestObserverFunc) ObserveRequest(ctx context.Context, event RequestEv
 
 type serverOptions struct {
 	observers []RequestObserver
+	capture   *capturePolicy
 	// proxy resolves client address and scheme for kernel-level admission.
 	proxy *proxyPolicy
 }

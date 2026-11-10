@@ -39,6 +39,7 @@ type builderState struct {
 	routes             []Routes
 	fallbacks          []FallbackRoutes
 	spas               []spaDeclaration
+	captures           []http.CaptureDeclaration
 	middleware         []http.Middleware
 	observers          []http.RequestObserver
 	providers          []foundation.Provider
@@ -194,7 +195,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	b.state.built = true
 	settings, configured, routes, spas, middleware, observers, providers, plugins, buildErr := b.state.settings, b.state.options, slices.Clone(b.state.routes), slices.Clone(b.state.spas), slices.Clone(b.state.middleware), slices.Clone(b.state.observers), slices.Clone(b.state.providers), slices.Clone(b.state.plugins), b.state.err
 	jobDeclarations, eventDeclarations, schedules, realtime, features, models := slices.Clone(b.state.jobs), slices.Clone(b.state.events), slices.Clone(b.state.schedules), b.state.realtime, slices.Clone(b.state.features), slices.Clone(b.state.models)
-	fallbacks := slices.Clone(b.state.fallbacks)
+	fallbacks, captures := slices.Clone(b.state.fallbacks), slices.Clone(b.state.captures)
 	domainMigrations := cloneMigrations(b.state.migrations)
 	readiness := b.state.telemetryReadiness
 	b.state.mu.Unlock()
@@ -226,9 +227,15 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err := validateShutdownBudget(s); err != nil {
 		return nil, err
 	}
-	if !s.HTTP.Enabled && (len(routes) > 0 || len(fallbacks) > 0 || len(spas) > 0 || len(middleware) > 0 || len(observers) > 0) {
+	if !s.HTTP.Enabled && (len(routes) > 0 || len(fallbacks) > 0 || len(spas) > 0 || len(middleware) > 0 || len(observers) > 0 || len(captures) > 0) {
 		return nil, safeerror.NewFault(fault.Invalid, "HTTP declarations require HTTP to be enabled")
 	}
+	if len(captures) > 0 {
+		if err := http.ValidateCaptureDeclarations(captures...); err != nil {
+			return nil, err
+		}
+	}
+	s.Features.WebhookCapture.declared = len(captures) > 0
 	channels, err := logging.PrepareChannels(s.Log.Default, s.Log.inTimeZone(s.TimeZone), configured.logger, configured.logHandlers...)
 	if err != nil {
 		return nil, err
@@ -286,6 +293,10 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 			observers = append(observers, collector)
 		}
 	}
+	captureRecorder, captureOption, err := prepareWebhookCapture(s.Features.WebhookCapture, captures)
+	if err != nil {
+		return nil, err
+	}
 	recorder, err := prepareObservation(s.Features.Observability, configured, logger, gate)
 	if err != nil {
 		return nil, err
@@ -323,7 +334,8 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if mount := realtimeRoutes(s); mount != nil {
 		routes = append(routes, mount)
 	}
-	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, stickyReadsConfigured(s.Services.Database), routes, spas, fallbacks, middleware, observers, collector)
+	registerHTTP(builder, s.HTTP, s.Features.Locales.Enabled, stickyReadsConfigured(s.Services.Database), routes, spas, fallbacks, middleware, observers, collector, captureOption)
+	registerWebhookCapture(builder, s.Features.WebhookCapture, captureRecorder)
 	registerMetricsCollectors(builder, recorder, channels, s.Realtime.Enabled)
 	if err := registerTelemetry(ctx, builder, s.Features.Telemetry, collector, readiness); err != nil {
 		return nil, err

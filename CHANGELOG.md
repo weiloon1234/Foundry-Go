@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Added: webhook capture. `application.Builder.CaptureWebhooks(http.CapturePrefix(prefix))`
+  records requests under declared prefixes, including router misses, kernel rejections and
+  handler failures, without changing the bytes handlers read or the response. Bodies are
+  redacted by default; `http.FullCaptureBody()` opts a prefix into exact bodies. A bounded
+  in-memory recorder hands captures to one background writer; loss is counted, carried into the
+  next row's `dropped_before` and logged with counts only.
+- Added: `webhook/capture` with `capture.Routes(group, store, guard, access...)` for a guarded,
+  `no-store` list and detail viewer, `Services.WebhookCaptures()`, the `webhook-captures prune`
+  command through `application.WebhookCaptureCommand()`, store-owned retention by age and row
+  cap, and `features.webhook_capture` settings (`enabled`, `database`, `schema`, `config.*`).
+  Apply the new framework migration `foundry.webhook_capture/000001_create_webhook_captures`.
+- Added: `http.ValidateCaptureDeclarations`, `http.MaxCapturePrefixes` and
+  `http.CredentialQueryName`.
 - Removed: redundant application locale `Fallback`; configured catalogs use `Default`.
   Remove consumer assignments and the old configuration key, then regenerate configuration output.
 - Removed: obsolete ORM migration-link requirements and current-guide adoption instructions,

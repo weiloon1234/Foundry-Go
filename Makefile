@@ -1,7 +1,7 @@
 GO ?= go
 TEST_PACKAGE_BATCH_SIZE ?= 6
 TEST_TIMEOUT ?= 20m
-GENERATION_DIRS := logging cloud/credentials infrastructure application internal/auditstore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/webhookstore countries datatable database/orm/internal/enuminit telemetry tests/fixtures/consumer tests/fixtures/goway
+GENERATION_DIRS := logging cloud/credentials infrastructure application internal/auditstore internal/notificationstore internal/authtransport internal/extensionstore internal/attachmentstore internal/webhookstore webhook/capture countries datatable database/orm/internal/enuminit telemetry tests/fixtures/consumer tests/fixtures/goway
 FIXTURE_DIRS := tests/fixtures/plugin_base tests/fixtures/plugin_dep tests/fixtures/consumer tests/fixtures/goway
 export GOWORK := off
 # Nested modules do not inherit the root module's preferred toolchain.

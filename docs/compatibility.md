@@ -111,6 +111,31 @@ runtime, wire, persisted-data, or generated-client format. The
 [developer-tooling guide](guides/developer-tooling-and-testing.md#pinned-documentation-checks)
 owns the grammar, offline lookup, scan scope, and command instructions.
 
+<a id="webhook-capture"></a>
+
+## Webhook capture
+
+`Builder.CaptureWebhooks`, `http.CapturePrefix`, `http.FullCaptureBody`,
+`webhook/capture` and `application.WebhookCaptureSettings` are additive. An
+application without a capture declaration gets no store, writer, migration
+target or kernel capture, and its request handling is unchanged.
+
+Declaring capture adds the framework migration
+`foundry.webhook_capture/000001_create_webhook_captures`, which creates
+`foundry_webhook_captures` in the configured schema. Apply it before the
+release serves traffic; until then capture logs that the table is unavailable
+and drops captures without affecting responses. There is no legacy table or
+reader. Rolling the framework back leaves the table in place; remove its rows
+with `webhook-captures prune --apply` before dropping it by hand.
+
+Mounting `capture.Routes` adds two generated operations, `<group>.webhook-captures.list`
+and `.show`, with the `Capture*` enums and `Captured*` DTOs. Regenerate the
+manifest, OpenAPI and TypeScript client under the matching framework pin.
+Admitted requests are read up to `features.webhook_capture.config.body_bytes`
+before routing, which sends `100 Continue` earlier and spends the server read
+timeout before the handler; response status and bytes are unchanged. See
+[webhook capture](guides/webhooks.md#recipe-webhook-capture).
+
 ## Persisted telemetry
 
 `telemetry`, `telemetry/sourcemap`, and `application.TelemetrySettings` are

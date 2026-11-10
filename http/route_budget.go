@@ -160,8 +160,11 @@ func routeBodyCeiling(handler stdhttp.Handler) int64 {
 // routedHandler retains a router's body ceiling across ApplyMiddleware.
 type routedHandler struct {
 	stdhttp.Handler
-	ceiling int64
+	ceiling          int64
+	captureInventory []RouteInfo
 }
+
+func (h routedHandler) captureRoutes() []RouteInfo { return h.captureInventory }
 
 func (h routedHandler) routeBodyCeiling() int64 { return h.ceiling }
 func (h routedHandler) requiresIdempotentMiddleware() bool {

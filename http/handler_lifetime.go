@@ -22,7 +22,8 @@ type handlerLifetime struct {
 	closing chan struct{}
 	done    chan struct{}
 	// proxy lets maintenance admission see the TrustedProxy client address.
-	proxy *proxyPolicy
+	proxy   *proxyPolicy
+	capture *capturePolicy
 }
 
 func newHandlerLifetime() *handlerLifetime {
@@ -82,6 +83,7 @@ func (o *handlerLifetime) wrap(handler stdhttp.Handler, logger *slog.Logger, con
 			return
 		}
 		admitted := false
+		started := time.Now()
 		defer func() {
 			if admitted {
 				capacity.Release()
@@ -89,9 +91,10 @@ func (o *handlerLifetime) wrap(handler stdhttp.Handler, logger *slog.Logger, con
 			o.release()
 		}()
 		r, err := prepareRequest(r)
+		captured := o.capture.begin(r, o.proxy, started)
 		scope := &requestScope{base: logger, requestID: RequestID(r.Context())}
 		ctx, observation := beginRequestObservation(r, config.TrustTraceContext)
-		if observation == nil && (config.AccessLog || len(observers) > 0) {
+		if observation == nil && (config.AccessLog || len(observers) > 0 || captured != nil) {
 			observation = &requestObservation{returned: true}
 		}
 		var capture *observedResponse
@@ -110,6 +113,9 @@ func (o *handlerLifetime) wrap(handler stdhttp.Handler, logger *slog.Logger, con
 			}
 			scope.observation = observation
 			capture = &observedResponse{native: w}
+			if captured != nil {
+				capture.head = captured.head
+			}
 			w = responseCapabilities(capture)
 		}
 		// One request copy carries the logger, observation and budget.
@@ -118,6 +124,7 @@ func (o *handlerLifetime) wrap(handler stdhttp.Handler, logger *slog.Logger, con
 			// Completion hooks are owned work; a slow callback cannot release
 			// dependencies while it still uses them.
 			if observation != nil {
+				captured.finish(observation, capture)
 				observation.complete(r.Context(), Method(r.Method), capture, scope, config.AccessLog, observers)
 			}
 		}()
@@ -163,7 +170,16 @@ func (o *handlerLifetime) wrap(handler stdhttp.Handler, logger *slog.Logger, con
 		}
 		if r.Body != nil {
 			r.Body = stdhttp.MaxBytesReader(w, r.Body, ceiling)
-			defer r.Body.Close()
+			// Keep one close owner even when preread replaces the body. Route
+			// wrappers/verifiers may replace r.Body again; they do not change it.
+			body := r.Body
+			defer func() {
+				if captured != nil && captured.replay != nil {
+					_ = captured.replay.Close()
+				} else {
+					_ = body.Close()
+				}
+			}()
 		}
 		var aborted bool
 		if observation != nil {
@@ -179,6 +195,9 @@ func (o *handlerLifetime) wrap(handler stdhttp.Handler, logger *slog.Logger, con
 					panic(value)
 				}
 			}()
+			if captured != nil {
+				r.Body = captured.preread(r.Body, r.ContentLength)
+			}
 			handler.ServeHTTP(w, r)
 			return nil
 		}); err != nil {
