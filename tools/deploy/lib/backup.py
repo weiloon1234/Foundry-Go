@@ -210,6 +210,7 @@ def _attempt(host, entry):
     except BaseException:
         _record(host, entry, "attempt", {"outcome": "unknown", "at": now()})
         raise
+    _record(host, entry, "attempt", {"outcome": "complete", "at": now()})
 
 
 def _info(host, *, config=None, allow_missing=False, inventory=False, user=None):

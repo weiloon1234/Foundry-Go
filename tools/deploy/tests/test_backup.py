@@ -149,6 +149,9 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(receipt["status"], "complete")
         self.assertEqual(receipt["configuration_revision"], self.entry["configuration_revision"])
         self.assertEqual(receipt["fresh_at"], receipt["database_point"]["completed_at"])
+        state = self.host.load_state(self.entry)["backup"]
+        self.assertEqual(state["attempt"]["outcome"], "complete")
+        self.assertEqual(state["last_attempt_outcome"], "complete")
         journal = read_json(backup._operation_path(self.host, self.entry, operation))
         self.assertEqual(set(journal["components"]), {"database", "keys"})
         commands = [args for args, _ in self.commands]

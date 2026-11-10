@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: a successful backup bundle now records its attempt as `complete` in the instance
+  backup state instead of leaving it at `running`. Host reports were unaffected; hosts pick
+  this up through `tools-plan`/`tools-apply`.
+
 ## v0.15.2 — 2026-11-10
 
 **Fixes found by the first real-systemd deploy acceptance.** Repin applications before any disaster
