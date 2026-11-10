@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.17.1 — 2026-11-11
+
+**Webhook capture fix; no API, tool or migration change.** Repin applications and redeploy;
+hosts keep the v0.17.0 tool bundle.
+
+- Fixed: webhook capture dropped every request without a body (for example a `GET` ping) and every
+  response without a body (for example `204`), counting them as write losses. Absent bodies and
+  response heads are now stored as zero bytes.
+
 ## v0.17.0 — 2026-11-11
 
 **Webhook capture and compatibility cleanup.** Repin applications, remove any `Locales.Fallback`

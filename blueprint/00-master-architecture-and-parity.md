@@ -8,6 +8,12 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Webhook capture fix — v0.17.1, 2026-11-11
+
+Status: **released; capture PostgreSQL tests including a new empty-body and empty-response regression, and
+framework CI**. Boss Club staging on v0.17.0 logged a write loss for a body-less `GET /wh/ping`; the byte codec
+rejected a nil body, so absent bodies and response heads are now stored as zero bytes.
+
 ## Webhook capture and cleanup step 3 — v0.17.0, 2026-11-11
 
 Status: **released; deploy-tool suite (558 tests), targeted Go packages with race and real PostgreSQL, the
