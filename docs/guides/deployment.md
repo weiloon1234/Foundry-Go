@@ -896,7 +896,11 @@ identity outside that directory and off every server. Recovery reads the decrypt
 files and streams them over SSH stdin. It never requests the age private identity.
 
 Choose a new, empty Ubuntu server with the backup's PostgreSQL major: Ubuntu 24.04
-provides PostgreSQL 16, and Ubuntu 26.04 provides PostgreSQL 18. The release must
+provides PostgreSQL 16, and Ubuntu 26.04 provides PostgreSQL 18. Bring its installed
+packages up to date first (`apt-get update && apt-get -y upgrade`, then reboot if
+required): the tool only installs new packages and refuses a package plan that would
+upgrade installed ones (`package_plan_refused`), which a cloud image older than the
+current archive otherwise triggers. The release must
 match the server architecture and the restored schema. `RELEASE` accepts the same
 retained version or `build` selection as deployment. In both modes, recovery runs
 the selected release's own `migrate:status` and refuses pending migrations,

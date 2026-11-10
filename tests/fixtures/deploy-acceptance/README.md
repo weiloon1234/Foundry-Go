@@ -68,8 +68,7 @@ row. It never resets a database.
 The console contract was compared with Starter: `config:check` returns
 `{"valid":true}` without booting services; `config:inspect` reports sources only;
 storage probes use `application.ProbeStorage`; migration and seed commands use the
-database command owner with JSON output; job inspection and layout migration use
-`application.DeployJobCommands`. Worker startup requires the configured explicit
+database command owner with JSON output. Worker startup requires the configured explicit
 connection. Scheduler output matches the runner's expected message and maximum
 interval.
 

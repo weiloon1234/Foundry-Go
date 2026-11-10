@@ -97,20 +97,6 @@ func Run(ctx context.Context, arguments []string, streams cli.Streams) error {
 			return err
 		}
 		return json.NewEncoder(streams.Out).Encode(inventory)
-	case "jobs":
-		declarations, err := application.DeployJobCommands(builder)
-		if err != nil {
-			return err
-		}
-		registry, err := cli.New(declarations...)
-		if err != nil {
-			return err
-		}
-		invocation, err := registry.Parse(args, streams.Err)
-		if err != nil {
-			return err
-		}
-		return invocation.Run(ctx, nil, streams)
 	case "migrate:status", "migrate", "db:seed":
 		prefix := []string{"migrate", "up"}
 		if args[0] == "migrate:status" {

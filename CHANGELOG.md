@@ -20,6 +20,9 @@ generation-5 hosts with `tools-plan`/`tools-apply` to deploy-tool generation 6, 
   releases follow ordinary retention. A later release removes the bridges.
 - Container acceptance now upgrades a published v0.15.3 host through generation 6, replacing the
   historical incident replay and recovery matrix.
+- Documented: bring a replacement server's installed packages up to date before `ACTION=recover`; the tool
+  only installs new packages and refuses plans that upgrade installed ones (`package_plan_refused`).
+  Container acceptance images now model an updated server.
 
 ## v0.15.3 — 2026-11-10
 

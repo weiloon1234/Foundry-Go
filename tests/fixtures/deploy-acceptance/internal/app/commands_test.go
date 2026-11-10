@@ -11,7 +11,6 @@ import (
 
 	fixtureconfig "foundry.test/deployacceptance/internal/config"
 	"foundry.test/deployacceptance/internal/work"
-	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/cli"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 )
@@ -140,13 +139,6 @@ func TestArchiveConfigurationAndRealDeclarations(t *testing.T) {
 	}
 	if len(inventory) != 2 {
 		t.Fatalf("got %d Redis connections", len(inventory))
-	}
-	jobs, err := application.DeployJobCommands(builder)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := cli.New(jobs...); err != nil || len(jobs) != 1 {
-		t.Fatalf("unexpected jobs declarations: %d, %v", len(jobs), err)
 	}
 	built, err := builder.Build(t.Context())
 	if err != nil {
