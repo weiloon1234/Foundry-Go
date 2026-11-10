@@ -36,6 +36,20 @@ class PackageSimulationTests(unittest.TestCase):
                 packages._parse_simulation(output, before)
             self.assertIn("foreign", error.exception.detail)
 
+    def test_refusal_names_the_installed_packages_apt_would_change(self):
+        before = {"perl-base": installed("5.38.2-3.2build2"), "old-tool": installed("1")}
+        output = ("Inst perl-base [5.38.2-3.2build2] (5.38.2-3.2ubuntu0.2 Ubuntu:24.04 [amd64])\n"
+                  "Inst pgbackrest (2.50-1build2 Ubuntu:24.04 [amd64])\n"
+                  "Remv old-tool [1]\n"
+                  "Conf perl-base (5.38.2-3.2ubuntu0.2 Ubuntu:24.04 [amd64])\n"
+                  "Conf pgbackrest (2.50-1build2 Ubuntu:24.04 [amd64])\n"
+                  "1 upgraded, 1 newly installed, 1 to remove and 0 not upgraded.")
+        with self.assertRaises(DeployError) as error:
+            packages._parse_simulation(output, before)
+        self.assertEqual("package_plan_refused", error.exception.code)
+        self.assertIn("it would change installed packages: old-tool 1 -> removed, "
+                      "perl-base 5.38.2-3.2build2 -> 5.38.2-3.2ubuntu0.2", error.exception.detail)
+
     def test_unowned_pending_configuration_refuses(self):
         with self.assertRaises(DeployError):
             packages._parse_simulation("Conf broken (1 Ubuntu)",

@@ -269,7 +269,8 @@ phase() {
 }
 # Refresh before foreign ownership/audit capture; production package planning
 # deliberately never changes the repository view underneath its reviewed plan.
-docker exec "$host" apt-get update -qq >"$logs/package-index.log" 2>&1
+# Model the documented operator step: the tool never upgrades installed packages.
+docker exec "$host" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade' >"$logs/package-index.log" 2>&1
 phase foreign-baseline /verification/deploy/tests/acceptance_foreign.py baseline --mode "$mode"
 baseline_done=1
 host_phase=()
@@ -325,7 +326,7 @@ recovery_target() {
   docker exec "$recovery_host" chmod 644 /usr/local/share/ca-certificates/acceptance-root.crt
   docker exec "$recovery_host" chmod 600 /var/lib/foundry-acceptance-f4a/ca.key
   docker exec "$recovery_host" update-ca-certificates >"$logs/$recovery_mode-trust.log" 2>&1
-  docker exec "$recovery_host" apt-get update -qq >"$logs/$recovery_mode-packages.log" 2>&1
+  docker exec "$recovery_host" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade' >"$logs/$recovery_mode-packages.log" 2>&1
   # Real recovery runs from a root-only staged bundle that service accounts can't read.
   docker exec "$recovery_host" sh -c 'umask 077; mkdir /var/lib/foundry-acceptance-f4a/staged-tools; cp -R /verification/deploy/. /var/lib/foundry-acceptance-f4a/staged-tools/'
   phase_on "$recovery_host" "recover-$recovery_mode" /var/lib/foundry-acceptance-f4a/staged-tools/tests/acceptance_recover.py "$recovery_mode"

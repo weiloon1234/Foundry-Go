@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Added: native amd64 deploy container acceptance in framework CI for Ubuntu 24.04 and 26.04,
+  covering fresh hosts and foreign-host upgrades on pushes and manual dispatches. The lead's Mac covers arm64.
+- Changed: a refused package plan (`package_plan_refused`) now names each installed package apt would
+  change, with its current and planned versions.
+- Documented: update a new or replacement server's installed packages before `make bootstrap` or
+  `ACTION=recover`; container acceptance hosts now do the same before the tool runs.
+
 ## v0.16.1 — 2026-11-10
 
 **Deploy-tool internals only; no public Go API change.** Repin applications and upgrade hosts with
@@ -14,8 +23,6 @@
   It accepts systemd 255 (Ubuntu 24.04), which omits an empty `ExecStartPre` property.
 - Changed: container upgrade acceptance now tests the previous published release through ordinary
   `tools-plan`/`tools-apply` and deploy. The fixture pins v0.16.0; one archive serves both tool bundles.
-- Added: native amd64 deploy container acceptance in framework CI for Ubuntu 24.04 and 26.04,
-  covering fresh hosts and foreign-host upgrades on pushes and manual dispatches. The lead's Mac covers arm64.
 
 ## v0.16.0 — 2026-11-10
 

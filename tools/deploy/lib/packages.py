@@ -160,15 +160,19 @@ def _digest(value) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def _refuse(names, reason="Package transaction is not a pure new install"):
-    raise DeployError("package_plan_refused", reason + ": " + ", ".join(sorted(set(names))))
+def _refuse(names, reason="Package transaction is not a pure new install", changes=None):
+    detail = reason + ": " + ", ".join(sorted(set(names)))
+    if changes:
+        # Name the installed packages apt would change so an operator can update the server first.
+        detail += "; it would change installed packages: " + ", ".join(f"{name} {changes[name]}" for name in sorted(changes))
+    raise DeployError("package_plan_refused", detail)
 
 
 def _parse_simulation(output: str, inventory: dict, *, approved: dict | None = None) -> dict:
     """Reject every installed-package action, including Conf without Inst."""
-    installs, configurations = {}, {}
+    installs, configurations, changes = {}, {}, {}
     rejected = set()
-    approval = {_package_key(inventory, name): version for name, version in approved.items()} if approved is not None else None
+    approval ={_package_key(inventory, name): version for name, version in approved.items()} if approved is not None else None
     for line in output.splitlines():
         match = re.match(r"^(Inst|Conf|Remv|Purg)\s+(\S+)(.*)$", line)
         if not match:
@@ -185,6 +189,11 @@ def _parse_simulation(output: str, inventory: dict, *, approved: dict | None = N
                 or not VERSION.fullmatch(version[1])
                 or (previous and previous.get("status") != "unknown ok not-installed" and not resumable)):
             rejected.add(name)
+            if previous and previous.get("status") == "install ok installed" and action != "Conf":
+                # Upgrade lines read "Inst name [old] (new ...)"; report only, never approve from this.
+                target = re.search(r"\(([^\s)]+)", detail)
+                changes[name] = (previous.get("version") or "?") + " -> " + (
+                    "removed" if action in {"Remv", "Purg"} else target[1] if target else "?")
             continue
         target = version[1]
         if approval is not None and expected != target:
@@ -199,7 +208,7 @@ def _parse_simulation(output: str, inventory: dict, *, approved: dict | None = N
     if re.search(r"(?m)^(?!0 upgraded,)\d+ upgraded,|\b[1-9]\d* (?:to remove|reinstalled)", output):
         rejected.update(installs or {"apt-summary"})
     if rejected:
-        _refuse(rejected)
+        _refuse(rejected, changes=changes)
     require(bool(installs or configurations), "package_simulation", "apt produced no approved package actions.")
     require(set(installs) <= set(configurations), "package_simulation", "apt did not plan configuration of every new package.")
     return dict(sorted((installs | configurations).items()))

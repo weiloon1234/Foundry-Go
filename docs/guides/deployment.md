@@ -544,6 +544,15 @@ follow the existing reconciliation procedure for an unresolved operation.
 
 ## PostgreSQL, Redis, and foreign services
 
+The tool installs distro packages only as pure new installs and never upgrades,
+reinstalls, or removes an installed package, so it cannot change a foreign service's
+dependencies. Before `make bootstrap` on a new server or `ACTION=recover` on a
+replacement, bring the server's installed packages up to date
+(`apt-get update && apt-get -y upgrade`, then reboot if required). Otherwise a cloud
+image older than the current archive can make a dependency upgrade necessary, and the
+plan is refused with `package_plan_refused`, naming each installed package apt would
+change and its versions.
+
 Foundry uses the distro PostgreSQL major for the supported Ubuntu release:
 16 on Ubuntu 24.04 and 18 on Ubuntu 26.04. Its cluster is `<major>/foundry`, with
 `postgresql@<major>-foundry.service`, its own configuration and data directories,
