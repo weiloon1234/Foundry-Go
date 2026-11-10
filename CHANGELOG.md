@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## v0.16.0 — 2026-11-10
 
-Planned for v0.16.0: removes the finished Redis queue layout migration. Repin applications, upgrade
-generation-5 hosts with `tools-plan`/`tools-apply` to deploy-tool generation 6, then run an ordinary deploy.
+**Removes the finished Redis queue layout migration (breaking).** Repin applications and remove their
+`deploy:jobs-inspect` and `jobs migrate-layout` wiring, upgrade generation-5 hosts with
+`tools-plan`/`tools-apply` to deploy-tool generation 6, then run an ordinary deploy, which clears finished
+cutover state. A later release removes the generation-5 upgrade bridges.
 
 - Removed: Redis layout-1/2 migration APIs, `jobs migrate-layout`, legacy layout detection,
   `deploy:jobs-inspect` with its admission inventory APIs, and the restricted provider-free jobs path

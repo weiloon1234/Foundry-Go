@@ -8,6 +8,24 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Migration cleanup — v0.16.0, 2026-11-10
+
+Status: **released; deploy-tool suite (560 tests), targeted Go packages with race and real PostgreSQL, consumer
+fixtures, an independent review, container acceptance on Ubuntu 24.04 and 26.04 arm64 (fresh hosts and a published
+v0.15.3 host carrying a completed cutover upgraded through generation 6), and framework CI**.
+- Removed the one-off Redis queue layout migration: `jobs migrate-layout`, layout-1/2 detection,
+  `deploy:jobs-inspect` and its inventory, and the restricted provider-free jobs path; layout 3, quarantine and the
+  normal `jobs` command remain.
+- Deploy-tool generation 6 removes cutover, the persistent queue gate and start check, containment and Redis
+  snapshot/restore. A temporary shim clears finished cutover state, private records and finished executor units
+  (failed or `active/exited` transient units) on the first mutating action after upgrade.
+- Real-systemd acceptance found that successful v0.15.x executors stay `active/exited` (RemainAfterExit), which the
+  first shim refused; fixed before release.
+- Documented updating a replacement server's packages before recovery (the tool never upgrades installed packages).
+Open (step 2, after every host runs generation 6 and has run one ordinary deploy): delete the four bridge files, the
+shim and the generation-5 upgrade path; decide the lazy layout-1/2 Lua record handling after a read-only scan of
+ooo's Redis (records can persist indefinitely).
+
 ## Backup attempt record — v0.15.3, 2026-11-10
 
 Status: **released; deploy-tool suite (671 tests) and framework CI**.
