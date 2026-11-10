@@ -289,5 +289,3 @@ No new dependency or external email provider send is required by notifications.
 Email transport support and the remaining real-provider smoke gap are documented
 in [email](email.md). Verification evidence is recorded in the
 [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-17-verification-and-consumer-review).
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

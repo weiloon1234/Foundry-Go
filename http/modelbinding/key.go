@@ -10,8 +10,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// KeyQuery is satisfied by orm.Keyed and legacy generated model queries. Both model M and key K
-// remain concrete; a query for one model cannot resolve another model's ID.
+// KeyQuery is satisfied by orm.Keyed. Both model M and key K remain concrete; a query for one model cannot resolve another model's ID.
 // Find retains the query's filters, eager loads, soft-delete scope and retrieval
 // hooks. Transaction-only locked queries have a different executor contract.
 type KeyQuery[M, K any] interface {

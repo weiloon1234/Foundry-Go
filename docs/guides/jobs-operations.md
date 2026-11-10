@@ -333,6 +333,29 @@ Redis TTL. Terminal retention runs during queue operations; unfinished jobs and
 members of unfinished workflows can remain indefinitely. Elapsed time alone does
 not prove that legacy-shaped records are gone.
 
+The [queue policy](../../jobs/queue_config.go) and
+[Redis transitions](../../redis/jobs.lua) impose these bounds:
+
+| Record state | Time before an embedded envelope must disappear |
+| --- | --- |
+| Waiting or delayed | Admission allows a delay of up to `jobs.MaxDelay` (365 days). Becoming due does not write the record. Without a successful reservation or other mutation, it can remain indefinitely. |
+| Reserved or running | A lease lasts at most 24 hours. The next successful heartbeat, transition or expired-lease maintenance writes the record and separates its envelope. Without queue operations, lease expiry alone does not write it. |
+| Blocked workflow member or callback | No age limit. It waits for its dependency or group to advance. |
+| Independent succeeded, failed or cancelled record | Eligible for removal at `finished + Retention`, with a default of seven days and a maximum of 365 days. Capacity eviction can remove it sooner. Bounded maintenance needs queue operations, so eligibility is not a wall-clock deletion deadline. |
+| Terminal workflow member | Retained until the whole workflow and its callbacks finish, then eligible for group retention or eviction. An unfinished group has no age limit. Detaching a legacy terminal index entry does not rewrite its record. |
+| Quarantined record | No automatic expiry or normal retention eviction. Quarantine preserves the raw record, including any embedded envelope, until explicit operator resolution. |
+
+A read or no-op does not normalize an unchanged record. Maintenance can still
+rewrite or delete expired work.
+Before removing this reader, stop old writers and prove that every configured
+Redis queue's `:records` hash has zero records with an embedded `envelope` field.
+Use a complete, bounded `HSCAN` under quiesced queue activity, including quarantined
+records and workflow members. Count undecodable records as blockers and expose
+only counts and safe identities, never payloads. Public list or stats output is
+insufficient because it can omit hidden or quarantined records. Keep the reader
+until this proof succeeds, and prevent old writers or snapshot restores from
+reintroducing the old shape.
+
 ## Rollout and limits
 
 The envelope format is unchanged unless a job opts into the format-3 fields.

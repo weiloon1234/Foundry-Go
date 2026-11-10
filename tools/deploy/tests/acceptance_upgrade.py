@@ -47,11 +47,16 @@ def upgrade(archive, old_tools):
     plan = invoke('tools-plan', current, tools=TOOLS)
     assert plan['upgrade']['from_digest'] == baseline['tools']['bundle_sha256']
     assert plan['upgrade']['generation'] == protocol(TOOLS)['generation']
-    invoke('tools-apply', {**current, 'plan_token': plan['plan_token']}, tools=TOOLS)
+    assert baseline['tools']['bundle_sha256'] in plan['prune_bundles']
+    applied = invoke('tools-apply', {**current, 'plan_token': plan['plan_token']}, tools=TOOLS)
+    assert applied['removed_bundles'] == plan['prune_bundles']
     installed = host.read_registry()
     assert installed['tools']['bundle_sha256'] == tool_bundle(TOOLS)[2]
     assert installed['instances'][profile['instance_id']]['client_generation'] == registration
     active = host.paths.p(installed['tools']['active_path'])
+    assert list(active.parent.iterdir()) == [active]
+    repeated = invoke('tools-plan', current, tools=TOOLS)
+    assert repeated['upgrade'] is None and repeated['prune_bundles'] == []
     assert tool_bundle(active)[2] == tool_bundle(TOOLS)[2]
     assert all(not (active / name).exists() for name in plan['upgrade']['removed_paths'])
     for unit in instance_units(entry).values():
@@ -61,7 +66,12 @@ def upgrade(archive, old_tools):
         # systemd 255 omits an empty ExecStartPre even with --all.
         assert properties.get('NeedDaemonReload') == 'no' and properties.get('ExecStartPre', '') == ''
     candidate, version = second_archive(archive, project, profile)
-    invoke('activate', {**current, 'archive': str(candidate), 'archive_sha256': digest(candidate)})
+    leftover = active.parent / ('f' * 64)
+    leftover.mkdir()
+    (leftover / 'prune-fixture.txt').write_text('acceptance-owned leftover\n')
+    deployed = invoke('activate', {**current, 'archive': str(candidate), 'archive_sha256': digest(candidate)})
+    assert deployed['removed_bundles'] == [leftover.name]
+    assert list(active.parent.iterdir()) == [active]
     _, entry = host.require_identity(project, profile)
     assert host.load_state(entry)['current']['version'] == version
     prove_running(host, entry)

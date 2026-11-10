@@ -54,5 +54,3 @@ Lookups retain scopes and soft-delete visibility, reject read windows/eager-load
 Related callback work uses the supplied context and transaction. Callback errors leave the boundary as safe lifecycle failures with `errors.Is`/`errors.As` identity. Hook, codec, constraint, cancellation and postcondition failures roll back the helper's changes and queued after-commit work.
 
 An absent lookup does not lock absence. `FirstOrCreate` and `UpdateOrCreate` can race to insert; physical uniqueness decides the winner. `CreateOrFirst` has the restricted conflict recovery above, not a general retry loop. Inspect `orm.WriteError[M]` and the outer transaction outcome before reconciliation. See [transaction ownership](model-writes.md#transaction-ownership-and-failures).
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

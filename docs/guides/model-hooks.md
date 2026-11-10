@@ -105,5 +105,3 @@ No callback is automatically retried. Unknown commit outcomes require reconcilia
 ## Set and per-model behavior
 
 Set updates/deletes skip per-model factories and require the applicable `WithoutModelHooks` acknowledgement. Insert batches, upserts and source writes explicitly skip these callbacks without a separate acknowledgement. Normal writes never silently switch to set behavior. [Per-model batches](model-batch-writes.md) preserve callbacks for every model inside one bounded atomic operation. Retrieval uses a separate factory and observer family described in [retrieval events](model-retrieval.md).
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

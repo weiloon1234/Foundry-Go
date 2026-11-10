@@ -1035,21 +1035,12 @@ def _archive_command():
     return f"/usr/bin/pgbackrest --config={CONFIG} --stanza={STANZA} archive-push %p"
 
 
-def _remove_wal_bridge(host):
-    sudoers = check_path(host.paths.p("/etc/sudoers.d/foundry-backup-archive"), "file")
-    if sudoers.exists():
-        require(sudoers.read_text().startswith("# Foundry owned WAL archive bridge"),
-                "backup_resource_conflict", "The obsolete WAL bridge has unknown ownership.")
-        sudoers.unlink()
-
-
 def rebind(host, registry):
     """Converge every privileged entrypoint before an upgrade can complete."""
     require_writable(host)
     if not registry.get("shared", {}).get("backup"):
         return
     cluster = _cluster(host, registry)
-    _remove_wal_bridge(host)
     _install_configuration(host, cluster)
     plan = postgres.cluster_settings(host, registry)
     plan["archive_command"] = _archive_command()
@@ -1073,7 +1064,6 @@ def configure(host: Host, registry: dict, entry: dict) -> None:
     require_writable(host)
     cluster = _cluster(host, registry)
     with _repository_lock(host):
-        _remove_wal_bridge(host)
         _stage_settings(host, registry, entry, cluster)
         packages.install_missing(host, ["pgbackrest", "age", "rclone"])
         for path in (CONFIG_DIR, WORK):

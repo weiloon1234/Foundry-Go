@@ -67,12 +67,11 @@ func (e Envelope) Origin() attribution.Origin { return e.wire.Origin }
 func (e Envelope) Encrypted() bool { return e.wire.Encrypted }
 
 // EnvelopeVersion identifies the transport format independently of a job's
-// payload Version. EnvelopeV1 omits new fields for older strict readers.
-// ExtendedEnvelope (3) is selected automatically when an envelope uses a field
-// older readers reject: Policy.MaxExceptions, Policy.RetryUntil,
-// Unique.UntilProcessing or payload encryption. Its trace is optional. Envelopes
-// without those fields keep the legacy or traced format. Upgrade every worker,
-// publisher and inspection tool before dispatching extended envelopes.
+// payload Version. Captures write EnvelopeV1 unless they carry a trace
+// (TracedEnvelope) or a field that needs ExtendedEnvelope (3): Policy.MaxExceptions,
+// Policy.RetryUntil, Unique.UntilProcessing or payload encryption. Readers also
+// accept format 3 without those fields, so a later release can write format 3 for
+// every job while this release stays a safe rollback target.
 type EnvelopeVersion uint8
 
 const (
@@ -116,9 +115,6 @@ func (e Envelope) Validate() error {
 			return safeerror.NewFault(fault.Invalid, "traced job envelope requires trace context")
 		}
 	case ExtendedEnvelope:
-		if !e.wire.extended() {
-			return safeerror.NewFault(fault.Invalid, "extended job envelope carries no extended field")
-		}
 	default:
 		return safeerror.NewFault(fault.Invalid, "unsupported job envelope transport version")
 	}

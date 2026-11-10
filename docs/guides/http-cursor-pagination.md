@@ -105,5 +105,3 @@ error declarations, middleware, validation, URL policy and DTO boundaries.
 Custom database cursor-codec errors use the same bounded inspection. A reached
 invalid-value marker retains its client-input classification; an incomplete
 search remains a server failure and publishes no cursor boundary.
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

@@ -47,5 +47,3 @@ Ordinary `DeleteUsing` soft-deletes configured models and physically deletes ord
 `Exec` returns a count without collecting models. `Returning` requires an explicit positive bound, at most 1,000 models. Overflow rolls back rather than truncating. Results have no promised order. Empty matches return zero or an empty slice; destination-excluded and trigger-suppressed rows do not count as affected.
 
 These source writes skip write hooks, observers, audit and retrieval callbacks by their explicit contract, without separate acknowledgement. Source and destination scopes still apply. Transactions/savepoints preserve rollback on failure and cancellation; no hidden retry occurs. `orm.WriteError[R]` retains a complete candidate only for outcome reconciliation, never as proof of commit. See [write outcomes](model-writes.md#transaction-ownership-and-failures).
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

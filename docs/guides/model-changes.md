@@ -35,5 +35,3 @@ Field codecs validate present values and provide canonical comparison values. Ex
 Comparison errors return no partial changes. Safe diagnostics retain cause identity through `errors.Is` and `errors.As` without formatting model values or codec error text. A zero change value is not proof of a successful write.
 
 Built-in binary snapshots own their buffers; custom mutable values retain normal Go copy semantics and must be treated as read-only. Routine formatting hides snapshots. Explicit `Before()` and `After()` access returns their typed values. Audit uses these same stored changes, without a second comparison or getter evaluation. See [audit](audit.md) and [hooks](model-hooks.md).
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

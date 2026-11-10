@@ -186,5 +186,3 @@ its item fields and codecs. Models do not automatically become public DTOs.
 by the shared [client contract exporters](client-contracts.md).
 
 [Cursor HTTP pagination](http-cursor-pagination.md) uses the same transport composition while preserving model/projection ownership in navigation positions after DTO mapping.
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

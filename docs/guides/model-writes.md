@@ -87,5 +87,3 @@ Framework outcome inspection is bounded to **256 error nodes and 64 wrapping lev
 Routine error formatting omits model values and application error text. Use `errors.Is` and `errors.As` for identity and cause inspection. Candidate access is deliberate and can reveal sensitive stored data. When you own the outer transaction, retain reconciliation identity in caller scope and inspect that transaction's final error.
 
 Use the transaction supplied to hooks for durable [outbox](outbox.md) or [audit](audit.md) writes. In-process after-commit callbacks are not crash durable.
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

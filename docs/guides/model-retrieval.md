@@ -44,5 +44,3 @@ Model reads, complete-record selections, pages and relation loads carry retrieva
 `orm.Each` and complete-record `rows.EachRead` use bounded closed batches when callbacks may run. Unknown executor wrappers count as potentially observed. Concrete owners with no callbacks can stream directly where no eager load is requested. Each batch constructs its own factories. Pagination lookahead rows can dispatch before being trimmed.
 
 Offset batches do not share a database snapshot: concurrent changes can shift later results. Use the typed keyset traversal APIs when that traversal suits the operation. `All` collects its selected result, so apply a query limit when the collection must be bounded.
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

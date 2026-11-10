@@ -160,7 +160,6 @@ or model resolution. The shared resolver still runs once per request, at the
 binding stage before validation; resource policies remain explicit. See [authentication composition](authentication.md#signed-endpoints-and-bound-resources)
 and the [consumer](../../tests/fixtures/consumer/authenticating/composed_routes.go).
 
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).
 
 Replay binding is explicit. Construct the HTTP replay descriptor with
 `http.Idempotent`, `http.IdempotentSigned`, or `http.IdempotentAuthenticated`, then

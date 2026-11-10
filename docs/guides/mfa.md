@@ -302,5 +302,3 @@ Compiler and editor cases verify model/key/response ownership. Authentication ev
 rejection notices. `RetireIn` joins an authorized administrative account-deletion
 transaction. See [events and maintenance](auth-operations.md) for concrete consumer
 composition, rollback semantics, lock ordering and limits. These additions passed the milestone gate.
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

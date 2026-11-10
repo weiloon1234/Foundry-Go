@@ -87,5 +87,3 @@ Bindings, CTE discovery and compiler budgets span the statement. Decode failures
 discard collected output; database cardinality errors require ordinary transaction
 or savepoint recovery. See [lateral joins](lateral-joins.md) for correlated complete
 records, and [transaction correlations](transaction-correlations.md) for locks.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

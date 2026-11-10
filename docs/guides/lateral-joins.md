@@ -56,5 +56,3 @@ zero-limit reads. Ordinary derived sources still reject accidental correlation.
 Use [transaction correlations](transaction-correlations.md) when locks belong to
 the dependent SELECT. Parameter binding and decoding share the normal
 [projection runtime](model-projections.md).
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

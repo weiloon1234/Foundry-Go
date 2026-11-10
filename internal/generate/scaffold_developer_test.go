@@ -186,12 +186,12 @@ func TestDeveloperScaffoldOptionsAndRecoveryAuthority(t *testing.T) {
 	for _, kind := range []ScaffoldKind{ModelScaffold, DTOScaffold, JobScaffold, CommandScaffold} {
 		name := "record_" + string(kind) + ".go"
 		entry := journalEntry{After: state(oldFile{true, []byte("package sample\n"), 0644})}
-		for _, version := range []int{3, 7} {
+		for _, version := range []int{1, 3, 7} {
 			log := journal{Version: version, Guards: []string{"."}, Files: map[string]journalEntry{name: entry}}
 			data, _ := json.Marshal(log)
 			_, err := decodeJournal(data)
 			if (err == nil) != (version == 7) {
-				t.Fatal("legacy journal authority changed", version, kind, err)
+				t.Fatal("unsupported journal version or scaffold authority changed", version, kind, err)
 			}
 			log.Files[name] = journalEntry{Before: entry.After, After: entry.After}
 			data, _ = json.Marshal(log)

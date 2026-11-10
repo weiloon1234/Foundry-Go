@@ -30,14 +30,6 @@ func TestRedisJobUnsupportedLayoutsRejectWithoutWrites(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := snapshotJobKeys(t, f.client, f.keys)
-			inspection, err := f.backend.InspectLayout(t.Context(), f.key)
-			blocker := JobLayoutBlockerUnsupportedLayout
-			if layout == "" {
-				blocker = JobLayoutBlockerInvalidState
-			}
-			if err != nil || inspection.Layout != JobQueueLayoutUnknown || inspection.Eligible || inspection.Blocker != blocker {
-				t.Fatal("unsupported layout inspection", inspection, err)
-			}
 			if _, err := f.backend.JobStats(t.Context(), f.key); !errors.Is(err, fault.Invalid) {
 				t.Fatal("unsupported layout accepted by stats", err)
 			}
@@ -118,7 +110,7 @@ func oldJobBatch(t *testing.T, f quarantineFixture, count int) jobs.Workflow {
 	return group
 }
 
-func TestRedisJobLayoutThreeDetachesLegacyTerminalMembers(t *testing.T) {
+func TestRedisJobStorageThreeDetachesLegacyTerminalMembers(t *testing.T) {
 	f := newQuarantineFixture(t)
 	group := f.workflow(t, true, 2, false)
 	member := group.Envelope().Steps()[0]
@@ -260,72 +252,5 @@ func TestRedisJobBaselineFullTerminalWindowsDetachWithProgress(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestRedisJobInspectLayoutIsReadOnlyAndClassifiesBlockers(t *testing.T) {
-	f := newQuarantineFixture(t)
-
-	// 1. Absent queue: eligible, no keys created by inspection.
-	beforeAbsent := snapshotJobKeys(t, f.client, f.keys)
-	insp, err := f.backend.InspectLayout(t.Context(), f.key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if insp.Layout != JobQueueLayoutAbsent || !insp.Eligible || insp.Blocker != JobLayoutBlockerNone {
-		t.Fatalf("unexpected absent inspection: %+v", insp)
-	}
-	if !maps.Equal(beforeAbsent, snapshotJobKeys(t, f.client, f.keys)) {
-		t.Fatal("InspectLayout modified an absent queue")
-	}
-
-	// 2. Layout 3 queue: eligible, read-only.
-	_ = f.enqueue(t)
-	beforeThree := snapshotJobKeys(t, f.client, f.keys)
-	insp, err = f.backend.InspectLayout(t.Context(), f.key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if insp.Layout != JobQueueLayout3 || !insp.Eligible || insp.Blocker != JobLayoutBlockerNone {
-		t.Fatalf("unexpected layout 3 inspection: %+v", insp)
-	}
-	if !maps.Equal(beforeThree, snapshotJobKeys(t, f.client, f.keys)) {
-		t.Fatal("InspectLayout modified a layout 3 queue")
-	}
-
-	// 5. Unsupported layout: unknown + unsupported_layout.
-	if err := f.client.raw.HSet(t.Context(), f.keys[4], "config", f.backend.identity, "layout", "99").Err(); err != nil {
-		t.Fatal(err)
-	}
-	insp, err = f.backend.InspectLayout(t.Context(), f.key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if insp.Layout != JobQueueLayoutUnknown || insp.Eligible || insp.Blocker != JobLayoutBlockerUnsupportedLayout {
-		t.Fatalf("unexpected unsupported layout inspection: %+v", insp)
-	}
-
-	// 6. Policy mismatch: unknown + queue_policy_mismatch.
-	if err := f.client.raw.HSet(t.Context(), f.keys[4], "config", `{"MaxEntries":1}`, "layout", "3").Err(); err != nil {
-		t.Fatal(err)
-	}
-	insp, err = f.backend.InspectLayout(t.Context(), f.key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if insp.Layout != JobQueueLayoutUnknown || insp.Eligible || insp.Blocker != JobLayoutBlockerPolicyMismatch {
-		t.Fatalf("unexpected policy mismatch inspection: %+v", insp)
-	}
-
-	// 7. Invalid queue state (corrupt counter): unknown + invalid_queue_state.
-	if err := f.client.raw.HSet(t.Context(), f.keys[4], "config", f.backend.identity, "layout", "3", "failed", 99).Err(); err != nil {
-		t.Fatal(err)
-	}
-	insp, err = f.backend.InspectLayout(t.Context(), f.key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if insp.Layout != JobQueueLayoutUnknown || insp.Eligible || insp.Blocker != JobLayoutBlockerInvalidState {
-		t.Fatalf("unexpected invalid state inspection: %+v", insp)
 	}
 }

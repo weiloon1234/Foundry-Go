@@ -262,5 +262,3 @@ products [--apply]` with the metadata re-scope semantics. Apply `translations.Mi
 
 Settings and country reference data use the same store and are documented in
 [Settings](settings.md) and [Countries](countries.md).
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

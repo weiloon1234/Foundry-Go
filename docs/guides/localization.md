@@ -16,12 +16,9 @@ injected with an ordinary foundation factory. Each operation receives an explici
 locale; there is no process-wide current locale.
 
 With `application.LocaleSettings` enabled, `Default` drives both content
-resolution and message catalog fallback. Leave `Fallback` empty to use
-`Default`, or set it to the same locale. Startup rejects a configured `Fallback`
-that differs from `Default` with `fault.Invalid`, and still rejects an
-unconfigured fallback with `fault.Missing`. To change the common fallback, change
-`Default` and either clear `Fallback` or update it to match; the field remains
-supported.
+resolution and message catalog fallback. Configure it as a member of `Locales`.
+Standalone catalogs retain `i18n.CatalogOptions.Fallback` for an independently
+selected message fallback.
 
 <a id="agent-entry"></a>
 ## Agent entry

@@ -992,8 +992,6 @@ type SettingsFeaturesLocalesConfigKeySet struct {
 	Default config.Key[Settings, i18n.LocaleID]
 	// Locales selects features.locales.locales. Set accepts []i18n.LocaleID.
 	Locales config.Key[Settings, []i18n.LocaleID]
-	// Fallback selects features.locales.fallback. Set accepts i18n.LocaleID.
-	Fallback config.Key[Settings, i18n.LocaleID]
 }
 
 // SettingsFeaturesExtensionsConfigKeySet exposes compiler-checked configuration overrides.
@@ -2160,10 +2158,9 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 				},
 			},
 			Locales: SettingsFeaturesLocalesConfigKeySet{
-				Enabled:  config.Scalar[Settings, bool]("features.locales.enabled", func(settings *Settings) *bool { return &settings.Features.Locales.Enabled }),
-				Default:  config.Scalar[Settings, i18n.LocaleID]("features.locales.default", func(settings *Settings) *i18n.LocaleID { return &settings.Features.Locales.Default }),
-				Locales:  config.JSON[Settings, []i18n.LocaleID]("features.locales.locales", func(settings *Settings) *[]i18n.LocaleID { return &settings.Features.Locales.Locales }),
-				Fallback: config.Scalar[Settings, i18n.LocaleID]("features.locales.fallback", func(settings *Settings) *i18n.LocaleID { return &settings.Features.Locales.Fallback }),
+				Enabled: config.Scalar[Settings, bool]("features.locales.enabled", func(settings *Settings) *bool { return &settings.Features.Locales.Enabled }),
+				Default: config.Scalar[Settings, i18n.LocaleID]("features.locales.default", func(settings *Settings) *i18n.LocaleID { return &settings.Features.Locales.Default }),
+				Locales: config.JSON[Settings, []i18n.LocaleID]("features.locales.locales", func(settings *Settings) *[]i18n.LocaleID { return &settings.Features.Locales.Locales }),
 			},
 			Extensions: SettingsFeaturesExtensionsConfigKeySet{
 				Enabled:   config.Scalar[Settings, bool]("features.extensions.enabled", func(settings *Settings) *bool { return &settings.Features.Extensions.Enabled }),
@@ -2707,7 +2704,6 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Features.Locales.Enabled,
 		keys.Features.Locales.Default,
 		keys.Features.Locales.Locales,
-		keys.Features.Locales.Fallback,
 		keys.Features.Extensions.Enabled,
 		keys.Features.Extensions.Database,
 		keys.Features.Extensions.Schema,

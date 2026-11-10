@@ -651,6 +651,5 @@ test helper pattern. It does not add a production storage-pin accessor.
 For application reads inside deferred HTTP sources, use the
 [storage HTTP error mapper](storage.md#http-and-links) after handling domain errors.
 
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

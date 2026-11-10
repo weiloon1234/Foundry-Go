@@ -58,5 +58,3 @@ source capabilities are validated before I/O. Lock contention, cancellation and
 cardinality failures retain normal transaction/savepoint recovery requirements.
 See [transaction composition](transaction-query-composition.md) and
 [row locking](row-locking.md).
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

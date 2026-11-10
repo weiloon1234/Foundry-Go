@@ -59,5 +59,3 @@ SQL types, collations or equality support; those remain database checks.
 
 See [derived records](model-subqueries.md), [distinct reads](model-distinct.md) and
 [read terminals](model-projections.md#execution-and-failures).
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

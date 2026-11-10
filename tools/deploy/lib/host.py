@@ -101,8 +101,9 @@ class Paths:
 class Host:
     def __init__(self, paths=None):
         self.paths = paths or Paths()
+        self.host_lock_fd = None
 
-    def run(self, args, input=None, env=None, timeout=30, check=True, cwd=None):
+    def run(self, args, input=None, env=None, timeout=30, check=True, cwd=None, pass_fds=()):
         # No inherited application settings, sudo/session variables or proxy.
         environment = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
         if env:
@@ -111,7 +112,7 @@ class Host:
             process = subprocess.Popen([str(a) for a in args], text=True,
                                        stdin=subprocess.PIPE if input is not None else None,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                       env=environment, cwd=cwd, start_new_session=True)
+                                       env=environment, cwd=cwd, start_new_session=True, pass_fds=pass_fds)
             try:
                 stdout, stderr = process.communicate(input=input, timeout=timeout)
             except BaseException:
@@ -195,8 +196,12 @@ class Host:
                 # client validation before another process began resizing.
                 from capacity import require_idle
                 require_idle(self)
+            if name == "host":
+                self.host_lock_fd = fd
             yield
         finally:
+            if name == "host":
+                self.host_lock_fd = None
             os.close(fd)
 
     def require_identity(self, project, profile):

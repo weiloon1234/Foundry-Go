@@ -278,9 +278,8 @@ instances registered with generation 3 remain supported.
 Starting with v0.16.1, tool upgrades require an installed host generation of at
 least 6. `tools-plan` checks the installed host's generation through `hello` before
 staging anything. The candidate also enforces this floor before planning or
-installation. Older hosts receive `tools_upgrade_floor`: "Upgrade to v0.16.x tools
-first, then run one ordinary deploy." Use v0.16.0 for that intermediate upgrade
-and deploy before selecting v0.16.1 or newer tools. The temporary upgrade bridges
+installation. Older hosts receive `tools_upgrade_floor`: "Upgrade to v0.16.0 or
+v0.16.1 tools first, then retry the tool upgrade." The temporary upgrade bridges
 and finished-state cleanup are no longer shipped.
 
 To upgrade a generation-6 host:
@@ -300,13 +299,6 @@ To upgrade a generation-6 host:
 Obtain the owner's approval before applying tools on production hosts. If apply
 is interrupted, use `ACTION=upgrade-resume` with the same token and operation UUID.
 
-Plans refuse with `tools_unit_refresh_required` if any registered role has a
-nonempty `ExecStartPre` in its unit file or loaded systemd configuration. This
-includes instances whose provisioning is incomplete. Refresh the units using
-the installed v0.16.0 tools and reload systemd before retrying. Installation
-rechecks this condition before writes, so a unit cannot retain a command whose
-implementation disappears when the active bundle changes.
-
 The installer replaces unit files for every ready instance using the new bundle's
 templates, then runs `systemctl daemon-reload`. Upgrade resume reloads even when
 the prior process already wrote the files. The templates have no `ExecStartPre`.
@@ -318,6 +310,18 @@ move forward only. Interrupted application resumes the recorded operation rather
 than creating a second upgrade or downgrading the host. Bundle staging excludes
 Python bytecode and preserves the manifest's ownership of installed files.
 
+`tools-plan` lists the bundle digests to remove in `prune_bundles`. The first
+`tools-apply` of this release removes superseded bundles after saving the active
+selection and completing its upgrade journal. `tools-apply`, bootstrap and ordinary
+deploy report removed digests in `removed_bundles`. Unchanged installs and deploys
+also finish leftover cleanup.
+
+Pruning runs from the selected bundle under the host lock. Any pending upgrade
+journal blocks pruning. Only directories with canonical 64-character lowercase
+hex digests are eligible; symlinks and unexpected entries require administrator
+review. The active bundle and completed upgrade journals remain. A retry finishes
+an interrupted removal without selecting an older bundle.
+
 ## Release lifecycle and configuration
 
 Activation validates the release identity and configuration before switching the
@@ -327,7 +331,7 @@ readiness, and then starts the declared background roles. Readiness checks every
 role and verifies its running executable through `/proc/<pid>/exe` against the
 selected release. `ACTION=status` returns live observations per role;
 `ACTION=logs ROLE=scheduler` reads that role's journal.
-HTTP readiness requires status 200 and exactly `{"ready":true}` or `{"status":"ready"}` at `/health/ready`, within 4096 bytes; listener PID, executable identity and stability checks still apply.
+HTTP readiness requires status 200 and exactly `{"ready":true}` at `/health/ready`, within 4096 bytes; listener PID, executable identity and stability checks still apply.
 
 The nonroot report can read systemd state and HTTP readiness, but Linux may deny
 access to another account's executable link. In that case it reports

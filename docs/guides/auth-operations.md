@@ -87,5 +87,3 @@ model. Recovery links from the old revision then remain invalid. Already orphane
 factors from out-of-band deletes require an audited maintenance procedure while
 creation/issuance for that identity is stopped. Retirement cannot infer a deleted
 model's policies or safely race a replacement account into existence.
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

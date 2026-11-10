@@ -212,7 +212,7 @@ func TestScaffoldJournalRecoveryAndCreationOnlyBoundary(t *testing.T) {
 		})
 	}
 	for _, kind := range []string{"replace", "delete", "arbitrary-name", "multiple"} {
-		log := journal{Version: 3, Guards: []string{"."}, Files: map[string]journalEntry{"records_migration.go": {After: state(oldFile{true, []byte("package sample"), 0644})}}}
+		log := journal{Version: 7, Guards: []string{"."}, Files: map[string]journalEntry{"records_migration.go": {After: state(oldFile{true, []byte("package sample"), 0644})}}}
 		entry := log.Files["records_migration.go"]
 		switch kind {
 		case "replace":

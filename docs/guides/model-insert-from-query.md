@@ -64,5 +64,3 @@ Insert-select does not synthesize one Go UUID for every selected row. Supply a p
 Source predicates, ordering, windows, scopes and soft-delete visibility remain effective. The insertion is explicitly set-based and skips per-model hooks, observers, audit and retrieval; no separate hook acknowledgement is required. Literal inputs are validated even when no source rows match.
 
 An operation owns a transaction or nested savepoint. Invalid inputs, constraints, cancellation or excess returned rows roll it back without hidden retries. Uncertain commit results retain reconciliation data in `orm.WriteError[int64]` for `Exec` or `orm.WriteError[[]M]` for `Returning`. Ordinary plan formatting omits inputs.
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

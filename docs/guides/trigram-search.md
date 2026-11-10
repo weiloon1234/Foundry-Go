@@ -154,5 +154,3 @@ uses `FOUNDRY_TEST_POSTGRES_URL` and an isolated schema with
 [passing-test cleanup](contributing.md#postgresql-acceptance). It covers both
 searches, ordering, NULLs, locks, threshold range validation, savepoint release
 and rollback, threshold restoration on the same backend and a GIN plan with `enable_seqscan=off`.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

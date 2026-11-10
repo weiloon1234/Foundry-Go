@@ -66,5 +66,3 @@ Use [explicit correlation](model-correlations.md) to capture outer fields,
 [CTEs](model-ctes.md) to share a definition and [read terminals](model-projections.md#execution-and-failures)
 for bounded execution. Ordinary sources cannot silently acquire outer references
 or erase transaction requirements.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

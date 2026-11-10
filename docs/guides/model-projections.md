@@ -185,7 +185,6 @@ A total and data read need a suitable transaction isolation level for one snapsh
 See [pagination](model-pagination.md), [derived records](model-subqueries.md),
 [joins](model-joins.md) and [transaction-required composition](transaction-query-composition.md).
 
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).
 
 ### Boolean fields and framework enums
 

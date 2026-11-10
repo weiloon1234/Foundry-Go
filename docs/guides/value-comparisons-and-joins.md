@@ -60,5 +60,3 @@ a direct aggregate cannot masquerade as a row operand.
 
 See [derived records](model-subqueries.md), [correlations](model-correlations.md)
 and [lateral joins](lateral-joins.md).
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

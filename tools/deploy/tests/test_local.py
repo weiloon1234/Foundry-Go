@@ -108,7 +108,7 @@ class LocalDeploymentTests(unittest.TestCase):
             remote.request.return_value = {'tools': {'generation': 5}, 'client_generation': {'maximum': 6}}
             with patch.dict(os.environ, {'ACTION': action}, clear=True), \
                     patch.object(cli, 'SSH', return_value=remote):
-                with self.assertRaisesRegex(cli.LocalError, 'tools_upgrade_floor:.*v0.16.x tools first'):
+                with self.assertRaisesRegex(cli.LocalError, 'tools_upgrade_floor:.*v0.16.0 or v0.16.1 tools first'):
                     cli.deploy(project, profile, {})
             remote.request.assert_called_once_with('hello', {'project': project, 'profile': profile})
             remote.staged_tools.assert_not_called()

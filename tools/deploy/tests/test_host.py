@@ -48,3 +48,10 @@ class HostCommandTests(unittest.TestCase):
         self.assertEqual(popen.call_args.kwargs["env"]["BOUND"], "yes")
         self.assertNotIn("HOME", popen.call_args.kwargs["env"])
         kill.assert_not_called()
+
+    def test_child_inherits_only_explicit_lock_descriptors(self):
+        process = self.process()
+        process.communicate.return_value = ("[]\n", "")
+        with patch("host.subprocess.Popen", return_value=process) as popen:
+            Host().run(["/usr/bin/python3", "-I", "upgrades.py"], pass_fds=(42,))
+        self.assertEqual((42,), popen.call_args.kwargs["pass_fds"])

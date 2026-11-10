@@ -254,7 +254,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual([i["environment"] for i in result["projects"][0]["instances"]], ["production", "staging"])
 
     def test_release_and_failure_projection_excludes_diagnostics(self):
-        self.host.states[INSTANCE_ID].update({"status": "failed", "current": {"version": "v1", "commit": "abcdef", "secrets": SECRET}, "last_attempt": {"id": "attempt1", "outcome": "failed", "error": {"code": "migration_failed", "detail": SECRET}, "stdout": SECRET}, "history": [{"secret": SECRET}]})
+        self.host.states[INSTANCE_ID].update({"status": "failed", "current": {"version": "v1", "commit": "abcdef", "secrets": SECRET}, "last_attempt": {"id": "attempt1", "outcome": "failed", "error": "migration_failed", "stdout": SECRET}, "history": [{"secret": SECRET}]})
         result = report.collect_report(self.host)
         self.assertEqual(self.item(result)["last_attempt"]["error_code"], "migration_failed")
         self.assertNotIn(SECRET, json.dumps(result))
@@ -576,7 +576,7 @@ class ReportTests(unittest.TestCase):
         with patch.object(report.urllib.request, "build_opener") as opener:
             opener.return_value.open.return_value = response
             for payload, expected in [
-                (b'{"ready": true}', True), (b'{"status": "ready"}', True),
+                (b'{"ready": true}', True), (b'{"status": "ready"}', False),
                 (b'{"ready": "true"}', False), (b'{"status": "ready", "x": 1}', False),
                 (b'{"status": "starting"}', False), (b'<html>Login</html>', False),
                 (b'{"ready": false}', False), (b'{"ready": 1}', False),
@@ -596,6 +596,7 @@ class ReportTests(unittest.TestCase):
 
     def test_attempt_error_accepts_machine_codes_only(self):
         self.assertEqual(report.attempt({"error": "readiness_failed"})["error_code"], "readiness_failed")
+        self.assertIsNone(report.attempt({"error": {"code": "readiness_failed"}})["error_code"])
         self.assertIsNone(report.attempt({"error": "password=" + SECRET})["error_code"])
 
     def test_wall_clock_budget_interrupts_a_slow_drip_and_keeps_completed_instances(self):

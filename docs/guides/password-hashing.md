@@ -64,14 +64,15 @@ Verification ceilings are separate from issuance parameters. Defaults permit
 existing hashes up to 128 MiB, six passes and eight lanes, with at most four active
 KDF operations per shared hasher (`MaxConcurrent`). Each running Argon2 check
 allocates its hash's memory cost: 64 MiB with the default parameters and up to
-`VerifyLimit.MemoryKiB` (128 MiB) for stored legacy hashes, so the default bounds
+`VerifyLimit.MemoryKiB` (128 MiB) for imported hashes, so the default bounds
 KDF memory to about 256 MiB (512 MiB worst case). Size `MaxConcurrent` to the
 instance's memory budget. Parameters and salt/key lengths are bounded before
 any Argon2 allocation. A hash above this instance's ceiling is rejected; configure
-an explicit ceiling suitable for supported legacy hashes rather than letting stored
+an explicit ceiling suitable for supported imported hashes rather than letting stored
 parameters choose unbounded memory/CPU work. New hashing requires at least 19 MiB
 and two passes. New hashes are always version 19 Argon2id PHC values.
 
+Password import is a permanent feature, independent of framework upgrades.
 Imported hashes are accepted for verification only: version 19 Argon2i PHC values
 and bcrypt (`$2a$`, `$2b$`, `$2y$`, for example users imported from Laravel).
 `MaxBcryptCost` (default 13; zero rejects bcrypt) bounds bcrypt work, and like PHP
@@ -194,7 +195,7 @@ typed revocation group and lock/rollback contracts. These additions passed the m
 Missing accounts, disabled models, unusable hashes and mismatched passwords all
 produce `auth.Unauthenticated`. Missing or unusable credentials run bounded dummy
 verification using the same hasher admission policy. This removes a cheap rejection
-branch, but legacy hash costs and database latency still differ; it is not a
+branch, but imported hash costs and database latency still differ; it is not a
 constant-time account-discovery guarantee. Operational errors retain their cause
 behind safe formatting. Every failure or cancellation returns a zero result.
 Lockout classification inspects at most 256 error nodes and 64 wrapping levels.
@@ -215,5 +216,3 @@ It requires the same provider declaration as the original login and performs
 no second provider lookup. Keep the result request-local; the recheck verifies
 current state, not a persisted ticket's age. Pending MFA still requires its
 second factor. See [typed MFA factors](mfa.md). This addition passed the milestone gate.
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

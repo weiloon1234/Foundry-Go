@@ -45,5 +45,3 @@ Filters preserve subquery/CTE discovery and explicit correlation. A measured
 field must belong to the aggregate's SELECT. Count/Exists filters that capture
 outer data must also reference their own input; outer-only aggregates are rejected
 before execution. See the [compiled consumer](../../tests/fixtures/consumer/filterqueries/filters_postgres_test.go).
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

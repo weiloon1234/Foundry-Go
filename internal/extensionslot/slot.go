@@ -1,4 +1,4 @@
-// Package extensionslot owns external-store loading shared by ORM and legacy adapters.
+// Package extensionslot owns external-store loading for ORM slot handles.
 package extensionslot
 
 import (

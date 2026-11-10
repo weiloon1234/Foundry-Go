@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Removed: redundant application locale `Fallback`; configured catalogs use `Default`.
+  Remove consumer assignments and the old configuration key, then regenerate configuration output.
+- Removed: obsolete ORM migration-link requirements and current-guide adoption instructions,
+  WAL sudo-bridge cleanup, local encryption action aliases, the old readiness body, and
+  dictionary-shaped attempt error projection. Historical release records remain unchanged.
+- Removed: version-1 Redis rate-limit bucket reading and generator journal v1/v3 recovery.
+  Cache pruning no longer recognizes unsharded `.pending-*` files: leftovers are unpublished,
+  inert garbage that remains on disk, never readable cache data.
+- Changed: job envelope readers accept format 3 without extended policy fields, so a later
+  release can write format 3 for every job while this release stays a safe rollback target.
+  Captures still write the smallest format they need.
+- Documented: bcrypt/Argon2i password import remains a permanent feature.
+
+- Removed: the unused Redis job-layout inspection API, its result types and Lua operation,
+  plus the completed deploy-unit refresh guard. The generation-6 host upgrade floor remains.
+- Changed: deploy tools prune superseded bundles after selection, registry publication and
+  upgrade completion. Plans list digests to remove; apply, bootstrap and ordinary deploy
+  report removed digests. Unchanged installs and deploys finish interrupted pruning.
+  Pending upgrade journals block pruning, and unsafe bundle entries require administrator review.
 - Added: native amd64 deploy container acceptance in framework CI for Ubuntu 24.04 and 26.04,
   covering fresh hosts and foreign-host upgrades on pushes and manual dispatches. The lead's Mac covers arm64.
 - Changed: a refused package plan (`package_plan_refused`) now names each installed package apt would

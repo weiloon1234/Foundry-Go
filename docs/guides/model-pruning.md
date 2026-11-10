@@ -37,5 +37,3 @@ Without `--name`, the command runs declarations in name order.
 Configured applications can return `application.PruneModels(services, connection, declare)` in `FeatureDeclarations.Pruning`. The `declare(now)` callback returns `[]prune.Target` with cutoffs derived from the application clock at the start of each run.
 
 The [housekeeping schedule](production-operations.md#housekeeping-schedule) runs on the scheduler leader. Task `models.<connection>` uses `features.maintenance.models` settings: `batch` supplies `BatchSize`, and `max_batches` supplies `MaxBatches`. Registration does not authorize destructive schema changes or reset any data store.
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

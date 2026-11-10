@@ -49,5 +49,3 @@ declaration provides typed queries and administrative updates, for example
 `orm.Update(ctx, tx, countries.Countries.Query(), countries.Countries.Key(), code, orm.EnumSet(countries.Countries.Status, countries.EnabledStatus))`. Currency and timezone collections use typed immutable JSON snapshots;
 decode them explicitly to obtain fresh slices. Activation status is a generated
 enum, and optional fields retain the distinction between null and zero.
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

@@ -702,6 +702,5 @@ optional real React/Vue adapter checks. Missing peers fail required-mode checks.
 External-input fingerprints include the selected compiler's dedicated
 `node_modules` tree, including transitive adapter implementations and types.
 
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

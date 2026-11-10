@@ -43,5 +43,3 @@ Soft deletion and managed update time share one clock sample. Restoration clears
 Ordinary assignments to the deletion field remain create/update operations. They do not dispatch deletion or restoration callbacks. Hook errors, cancellation, invalid values and SQL failures roll back the operation or savepoint. A unique-conflict restore leaves the model deleted. After-commit callbacks follow the [normal transaction contract](model-hooks.md#transactions-and-ownership).
 
 [Per-model batches](model-batch-writes.md) preserve lifecycle and audit. Set-based operations skip those callbacks, and upsert visibility does not silently become a restoration action.
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

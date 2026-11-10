@@ -76,7 +76,7 @@ class AcceptanceWiringTests(unittest.TestCase):
             isolation.assert_not_called()
 
     def test_nginx_readiness_uses_the_deploy_body_contract(self):
-        for body, expected in (({"ready": True}, True), ({"status": "ready"}, True),
+        for body, expected in (({"ready": True}, True), ({"status": "ready"}, False),
                                ({"ready": "true"}, False), ({"status": "ready", "x": 1}, False),
                                ({"status": "starting"}, False)):
             with self.subTest(body=body), patch.object(acceptance_nginx, 'https_response',

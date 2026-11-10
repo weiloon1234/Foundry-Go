@@ -64,5 +64,3 @@ A direct named reference may include a frame. Extending or inheriting a named wi
 Definitions are local to a SELECT. Nested scalar/derived queries may use the same name for independent definitions. CTE references inside definitions remain discoverable, and explicit correlated fields retain their parent scope. A named partition/order containing an ordinary aggregate establishes grouping just as its inline equivalent does. Distinct selection, result counting and handwritten rows projections retain their existing contracts.
 
 Dependency depth/node limits, cycle detection, duplicate-name checks and nested-window checks run before execution. Compiler bounds do not limit database sorting/partition memory; use appropriate indexes, cancellation deadlines and input scopes.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

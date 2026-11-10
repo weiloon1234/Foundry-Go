@@ -92,5 +92,3 @@ projection := rows.Select(rows.From(Samples.Query()), Summaries,
 Every calculation has `Nullable`, `Value` and `NullableValue` forms. Nullable binary operations require both operands to be nullable; use `NullableRow` or `Nullable` to widen the other operand explicitly. SQL NULL propagates. Selected forms retain aggregates and windows, for example `expr.IntervalMonthsNullableValue(expr.AsSelected(expr.SumInterval(orm.IntervalExpr(f.Period))))`. They cannot silently become row predicates.
 
 Expression depth, node and parameter limits still apply. The shared compiler bounds cumulative scalar SQL expansion during one compiler run, excluding parameter contents; it is not a universal statement-byte limit. Nested calculations exceeding that work budget fail before execution. Arithmetic overflow, physical database types and stored values still require runtime checks.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

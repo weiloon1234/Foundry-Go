@@ -100,12 +100,11 @@ type HealthSettings struct {
 	ConfiguredMail        bool
 }
 
-// LocaleSettings configures supported locales and default and fallback locale identifiers.
+// LocaleSettings configures supported locales and their default identifier.
 type LocaleSettings struct {
-	Enabled  bool
-	Default  i18n.LocaleID
-	Locales  []i18n.LocaleID `config:",json"`
-	Fallback i18n.LocaleID
+	Enabled bool
+	Default i18n.LocaleID
+	Locales []i18n.LocaleID `config:",json"`
 }
 
 // OutboxSettings configures the shared publisher. Kernels selects which running

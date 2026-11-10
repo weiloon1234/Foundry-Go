@@ -14,7 +14,7 @@ The [member table](../../tests/fixtures/goway/models/hooks/models.go) used here 
 
 Both roles must form a valid pair. A conventional lone field remains ordinary unless an explicit role requires the pair. Binding a managed field through `TimeOf` fails declaration validation with the required carrier. For application-managed fields, use ordinary declarations and `orm.NoTimestamps()`. The opt-out conflicts with explicit managed roles. Role constructors do not accept a Go mutator; put business transformations in hooks or ordinary input fields.
 
-A lone `CreatedAt` or `UpdatedAt` was never clock-managed by the retired legacy generator; migrate it with `orm.NoTimestamps()`, `orm.TimeOf` and the existing explicit `Set` calls, as shown in the [migration guide](orm-migration.md).
+For a lone `CreatedAt` or `UpdatedAt`, use `orm.NoTimestamps()`, `orm.TimeOf` and explicit `Set` calls.
 
 ## Clock and precision
 
@@ -31,5 +31,3 @@ Conventions run after before hooks and before field preparation and SQL. Capture
 Empty batches do not sample time. Set insert/upsert batches share one sample while retaining their explicit callback-skipping contract. On conflict update, managed update time copies the proposed `EXCLUDED` value, including `BEFORE INSERT` trigger effects. Creation time changes on conflict only if selected explicitly. An otherwise invalid empty update policy does not become valid because timestamps exist.
 
 Insert-select may map creation time. It cannot map managed update time, which comes from the operation's clock. See [source insertion](model-insert-from-query.md).
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

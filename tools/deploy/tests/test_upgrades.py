@@ -1,6 +1,5 @@
 """Tool upgrade fault coverage uses an isolated filesystem, never host services."""
 import copy
-from contextlib import nullcontext
 import json
 import os
 import subprocess
@@ -13,13 +12,13 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import DeployError, HOST_PATHS
-from host import Paths
+from host import Host, Paths
 import upgrades
 
 
-class UpgradeHost:
+class UpgradeHost(Host):
     def __init__(self, root, registry):
-        self.paths = Paths(root)
+        super().__init__(Paths(root))
         self.registry = copy.deepcopy(registry)
 
     def read_registry(self, missing=False):
@@ -28,15 +27,11 @@ class UpgradeHost:
     def write_registry(self, registry):
         self.registry = copy.deepcopy(registry)
 
-    def check_control_directory(self, directory):
-        return directory
-
-    def lock(self, name):
-        return nullcontext()
-
     def run(self, args, **kwargs):
-        if args[:2] == ['systemctl', 'show']:
-            return subprocess.CompletedProcess(args, 0, 'LoadState=loaded\nExecStartPre=\n', '')
+        if len(args) > 3 and args[3] == 'prune':
+            assert args[2] == str(self.paths.tools / 'tools' / self.registry['tools']['bundle_sha256'] / 'lib/upgrades.py')
+            assert kwargs['pass_fds'] == (self.host_lock_fd,)
+            return subprocess.CompletedProcess(args, 0, json.dumps(upgrades._prune_bundles(self)), '')
         raise AssertionError('Unexpected host command')
 
 
@@ -62,7 +57,8 @@ class UpgradeTests(unittest.TestCase):
             "tools": upgrades._active_record(self.source, self.digest, None)})
 
     def install(self, **kwargs):
-        return upgrades.install_tools(self.host, self.host.read_registry(), self.source, **kwargs)
+        with self.host.lock("host"):
+            return upgrades.install_tools(self.host, self.host.read_registry(), self.source, **kwargs)
 
     def test_fresh_install_is_immutable_and_unchanged_retry_keeps_revision(self):
         self.assertEqual("succeeded", self.install()["outcome"])
@@ -144,7 +140,8 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual("tools_upgrade_pending", caught.exception.code)
         result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], operation)
         self.assertEqual("succeeded", result["outcome"])
-        self.assertTrue((self.host.paths.tools / "tools" / self.digest).is_dir())
+        self.assertFalse((self.host.paths.tools / "tools" / self.digest).exists())
+        self.assertEqual([self.digest], result["removed_bundles"])
         self.assertIsNone(self.host.registry["tools"]["upgrade_operation"])
         self.assertEqual("unchanged", upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], operation)["outcome"])
 
@@ -273,83 +270,148 @@ class UpgradeTests(unittest.TestCase):
             with self.assertRaises(DeployError) as caught:
                 action()
             self.assertEqual('tools_upgrade_floor', caught.exception.code)
-            self.assertIn('v0.16.x tools first, then run one ordinary deploy', caught.exception.detail)
+            self.assertIn('v0.16.0 or v0.16.1 tools first', caught.exception.detail)
             self.assertEqual(before, self.host.read_registry())
-
-    def test_role_pre_start_commands_refuse_plans_and_apply_for_every_provisioning_state(self):
-        from test_contracts import fixture
-        from topology import instance_units
-        self.install()
-        _, profile, entry = fixture()
-        self.host.registry['instances'][profile['instance_id']] = entry
-        (self.source / 'lib/new_module.py').write_text('# candidate change\n')
-        unit = self.host.paths.p('/etc/systemd/system/' + instance_units(entry)['worker'])
-        unit.parent.mkdir(parents=True)
-        for state in ('ready', 'failed', 'preparing', 'rehearsal'):
-            entry['provisioning']['state'] = state
-            for on_disk in (True, False):
-                with self.subTest(state=state, on_disk=on_disk):
-                    unit.write_text('[Service]\n' + ('ExecStartPre=/usr/bin/python3 /retired/guard.py\n' if on_disk else ''))
-                    loaded = 'LoadState=loaded\n' + ('ExecStartPre=\n' if on_disk else 'ExecStartPre={ path=/retired/guard.py ; }\n')
-                    before = self.host.read_registry()
-                    with patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, loaded, '')):
-                        for action in (lambda: upgrades.plan_upgrade(self.host, self.source),
-                                       lambda: self.install(allow_upgrade=True)):
-                            with self.assertRaises(DeployError) as caught:
-                                action()
-                            self.assertEqual('tools_unit_refresh_required', caught.exception.code)
-                    self.assertEqual(before, self.host.read_registry())
-
-    def test_unit_inspection_failure_refuses_upgrade(self):
-        from test_contracts import fixture
-        self.install()
-        _, profile, entry = fixture()
-        self.host.registry['instances'][profile['instance_id']] = entry
-        (self.source / 'lib/new_module.py').write_text('# candidate change\n')
-        for code, output in ((1, ''), (0, '')):
-            with patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], code, output, '')):
-                with self.assertRaises(DeployError) as caught:
-                    upgrades.plan_upgrade(self.host, self.source)
-                self.assertEqual('tools_unit_refresh_required', caught.exception.code)
-
-    def test_unprovisioned_roles_without_unit_files_allow_planning(self):
-        from test_contracts import fixture
-        self.install()
-        _, profile, entry = fixture()
-        entry['provisioning']['state'] = 'preparing'
-        self.host.registry['instances'][profile['instance_id']] = entry
-        (self.source / 'lib/new_module.py').write_text('# candidate change\n')
-        missing = subprocess.CompletedProcess([], 1, 'LoadState=not-found\nExecStartPre=\n', '')
-        with patch.object(self.host, 'run', return_value=missing):
-            plan = upgrades.plan_upgrade(self.host, self.source)
-        self.assertEqual([profile['instance_id']], plan['upgrade']['instances'])
-
-    def test_systemd_255_omitting_empty_pre_start_allows_planning(self):
-        # Ubuntu 24.04's systemd 255 prints no ExecStartPre line at all when a unit has none.
-        from test_contracts import fixture
-        from topology import instance_units
-        self.install()
-        _, profile, entry = fixture()
-        self.host.registry['instances'][profile['instance_id']] = entry
-        (self.source / 'lib/new_module.py').write_text('# candidate change\n')
-        units = self.host.paths.p('/etc/systemd/system')
-        units.mkdir(parents=True)
-        for name in instance_units(entry).values():
-            (units / name).write_text('[Service]\nExecStart=/bin/true\n')
-        with patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, 'LoadState=loaded\n', '')):
-            plan = upgrades.plan_upgrade(self.host, self.source)
-        self.assertEqual([profile['instance_id']], plan['upgrade']['instances'])
-        entry['provisioning']['state'] = 'preparing'
-        for name in instance_units(entry).values():
-            (units / name).unlink()
-        with patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, 'LoadState=not-found\n', '')):
-            self.assertEqual([profile['instance_id']], upgrades.plan_upgrade(self.host, self.source)['upgrade']['instances'])
 
     def test_candidate_python_inventory_contains_only_runtime_modules(self):
         source = Path(__file__).resolve().parents[1]
         _, files, _ = upgrades.tool_bundle(source)
         expected = {name for name in upgrades.REQUIRED_FILES if name.endswith('.py')} | {'lib/capacity.py'}
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
+
+    def leftover(self, digest="b" * 64):
+        path = self.host.paths.tools / "tools" / digest
+        path.mkdir()
+        (path / "old.py").write_text("# retired implementation\n")
+        return path
+
+    def test_upgrade_plan_lists_and_apply_prunes_all_superseded_bundles(self):
+        self.install()
+        leftover = self.leftover()
+        (self.source / "lib/new_module.py").write_text("# new implementation\n")
+        plan = upgrades.plan_upgrade(self.host, self.source)
+        expected = sorted([self.digest, leftover.name])
+        self.assertEqual(expected, plan["prune_bundles"])
+        result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
+        self.assertEqual(expected, result["removed_bundles"])
+        self.assertEqual([result["bundle_sha256"]],
+                         [path.name for path in leftover.parent.iterdir()])
+
+    def test_unchanged_install_prunes_leftovers_and_rerun_is_idempotent(self):
+        self.install()
+        leftover = self.leftover()
+        plan = upgrades.plan_upgrade(self.host, self.source)
+        self.assertIsNone(plan["upgrade"])
+        self.assertEqual([leftover.name], plan["prune_bundles"])
+        before = self.host.read_registry()
+        result = self.install()
+        self.assertEqual("unchanged", result["outcome"])
+        self.assertEqual([leftover.name], result["removed_bundles"])
+        self.assertEqual([], self.install()["removed_bundles"])
+        self.assertEqual(before, self.host.read_registry())
+        self.assertEqual([], upgrades.plan_upgrade(self.host, self.source)["prune_bundles"])
+
+    def test_pending_registry_or_unclaimed_journal_blocks_prune(self):
+        self.install()
+        leftover = self.leftover()
+        operation = str(uuid.uuid4())
+        for claimed in (True, False):
+            with self.subTest(claimed=claimed):
+                self.host.registry["tools"]["upgrade_operation"] = operation if claimed else None
+                journal = self.host.paths.p(HOST_PATHS["upgrades"]) / operation / "intent.json"
+                upgrades.atomic_json(journal, {"phase": "staged", "bundle_sha256": leftover.name})
+                with self.host.lock("host"), self.assertRaises(DeployError) as caught:
+                    upgrades._prune_bundles(self.host)
+                self.assertEqual("tools_upgrade_pending", caught.exception.code)
+                self.assertTrue(leftover.is_dir())
+                self.assertTrue((leftover.parent / self.digest).is_dir())
+                self.assertEqual([], upgrades.plan_upgrade(self.host, self.source)["prune_bundles"])
+
+    def test_unsafe_entries_refuse_plans_and_pruning_before_any_removal(self):
+        self.install()
+        leftover = self.leftover("0" * 64)
+        outside = self.root / "outside"
+        outside.mkdir()
+        marker = outside / "keep"
+        marker.write_text("keep")
+        directory = leftover.parent
+        for kind in ("name", "uppercase", "file", "symlink", "nested_symlink"):
+            with self.subTest(kind=kind):
+                path = directory / ("unexpected" if kind == "name" else "C" * 64 if kind == "uppercase" else "c" * 64)
+                if kind in {"name", "uppercase", "nested_symlink"}:
+                    path.mkdir()
+                    if kind == "nested_symlink":
+                        (path / "escape").symlink_to(outside, target_is_directory=True)
+                elif kind == "file":
+                    path.write_text("unexpected")
+                else:
+                    path.symlink_to(outside, target_is_directory=True)
+                try:
+                    with self.assertRaises(DeployError) as caught:
+                        upgrades.plan_upgrade(self.host, self.source)
+                    self.assertEqual("unsafe_path", caught.exception.code)
+                    with self.host.lock("host"), self.assertRaises(DeployError) as caught:
+                        upgrades._prune_bundles(self.host)
+                    self.assertEqual("unsafe_path", caught.exception.code)
+                    self.assertTrue(leftover.is_dir())
+                    self.assertEqual("keep", marker.read_text())
+                finally:
+                    if kind == "nested_symlink":
+                        (path / "escape").unlink()
+                    if path.is_symlink() or path.is_file():
+                        path.unlink()
+                    else:
+                        path.rmdir()
+
+    def test_interrupted_prune_retries_after_completed_upgrade(self):
+        self.install()
+        (self.source / "lib/new_module.py").write_text("# new implementation\n")
+        def interrupted(path):
+            (path / "manifest.json").unlink()
+            raise OSError("injected partial removal")
+        operation = str(uuid.uuid4())
+        plan = upgrades.plan_upgrade(self.host, self.source)
+        with patch.object(upgrades.shutil, "rmtree", side_effect=interrupted), self.assertRaises(OSError):
+            upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], operation)
+        self.assertIsNone(self.host.registry["tools"]["upgrade_operation"])
+        intent = self.host.paths.p(HOST_PATHS["upgrades"]) / operation / "intent.json"
+        self.assertEqual("complete", upgrades.read_json(intent)["phase"])
+        self.assertTrue((self.host.paths.tools / "tools" / self.digest).is_dir())
+        result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], operation)
+        self.assertEqual([self.digest], result["removed_bundles"])
+        self.assertEqual([], self.install()["removed_bundles"])
+
+    def test_installation_and_pruning_require_host_lock(self):
+        with self.assertRaises(DeployError) as caught:
+            upgrades.install_tools(self.host, self.host.read_registry(), self.source)
+        self.assertEqual("tools_lock_required", caught.exception.code)
+        self.assertFalse(self.host.paths.tools.exists())
+        self.install()
+        self.leftover()
+        with self.assertRaises(DeployError) as caught:
+            upgrades._prune_bundles(self.host)
+        self.assertEqual("tools_lock_required", caught.exception.code)
+
+    def test_prune_inventory_drift_invalidates_plan(self):
+        self.install()
+        plan = upgrades.plan_upgrade(self.host, self.source)
+        leftover = self.leftover()
+        with self.assertRaises(DeployError) as caught:
+            upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
+        self.assertEqual("plan_changed", caught.exception.code)
+        self.assertTrue(leftover.is_dir())
+
+    def test_pointer_disagreement_never_removes_either_bundle(self):
+        self.install()
+        leftover = self.leftover()
+        pointer = self.host.paths.tools / "current"
+        pointer.unlink()
+        pointer.symlink_to("tools/" + leftover.name)
+        with self.host.lock("host"), self.assertRaises(DeployError) as caught:
+            upgrades._prune_bundles(self.host)
+        self.assertEqual("tools_pointer_conflict", caught.exception.code)
+        self.assertTrue(leftover.is_dir())
+        self.assertTrue((leftover.parent / self.digest).is_dir())
 
     def test_retired_bundle_cannot_be_selected_again(self):
         self.install()
@@ -370,14 +432,19 @@ class UpgradeTests(unittest.TestCase):
         entry['provisioning']['state'] = 'ready'
         self.host.registry['instances'][profile['instance_id']] = entry
         (self.source / 'lib/new_module.py').write_text('# candidate change\n')
+        original_run = self.host.run
+        def command(args, **kwargs):
+            if args == ['systemctl', 'daemon-reload']:
+                return subprocess.CompletedProcess(args, 0, '', '')
+            return original_run(args, **kwargs)
         with patch.object(provision, '_install_unit') as reinstall, \
-                patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, 'LoadState=loaded\nExecStartPre=\n', '')) as run:
+                patch.object(self.host, 'run', side_effect=command) as run:
             result = self.install(allow_upgrade=True)
         self.assertEqual('succeeded', result['outcome'])
         reinstall.assert_called_once()
         self.assertEqual(entry, reinstall.call_args.args[2])
         self.assertEqual(self.host.paths.tools / 'tools' / result['bundle_sha256'], reinstall.call_args.args[3])
-        self.assertEqual(['systemctl', 'daemon-reload'], run.call_args.args[0])
+        self.assertIn(['systemctl', 'daemon-reload'], [call.args[0] for call in run.call_args_list])
         self.assertEqual(3, self.host.read_registry()['instances'][profile['instance_id']]['client_generation'])
 
     def test_upgrade_stays_pending_until_new_bundle_rebinds_backup_commands(self):
@@ -387,7 +454,10 @@ class UpgradeTests(unittest.TestCase):
         (self.source / "lib/new_module.py").write_text("# updated bundle\n")
         operation = str(uuid.uuid4())
         calls = []
+        original_run = self.host.run
         def command(args, **kwargs):
+            if len(args) > 3 and args[3] == "prune":
+                return original_run(args, **kwargs)
             calls.append(args)
             if len(calls) == 1:
                 raise DeployError("backup_rebind_failed", "loaded command is old")

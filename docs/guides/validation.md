@@ -598,6 +598,5 @@ clients execute supported rules and explicitly report skipped server checks.
 Request-locale rule messages are described in
 [validation messages](validation-messages.md).
 
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

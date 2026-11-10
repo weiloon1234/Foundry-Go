@@ -115,5 +115,3 @@ compared with 130.414s for 903 cases. All actual assertions remain required.
 These are observed acceptance timings under the default native compiler settings;
 controlled resource measurements belong to milestone 24. Cache invalidation and
 unchanged-input reuse were exercised with actual Go child processes.
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

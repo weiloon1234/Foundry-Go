@@ -19,8 +19,7 @@ Declare translations, attachments and metadata as ordinary model fields, bind th
 offsets with `orm.SlotOf`, and declare their policies outside `orm.Define`. Slots
 store data in shared framework tables, not columns in the model's own table.
 The [articles consumer](../../tests/fixtures/consumer/articles/tables.go) contains
-the full declaration and HTTP workflow. See [ORM migration](orm-migration.md) for
-the old-to-new mapping.
+the full declaration and HTTP workflow.
 
 <a id="recipe-declare-slots"></a>
 ## Declare slots on the model

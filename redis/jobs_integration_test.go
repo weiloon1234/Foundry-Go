@@ -285,7 +285,7 @@ func TestRedisQueueCapacityCountsOnlyLiveWorkAndEvictsOldestTerminal(t *testing.
 	}
 }
 
-func TestRedisJobLayoutSeparatesEnvelopeAndSkipsNoopWrites(t *testing.T) {
+func TestRedisJobStorageSeparatesEnvelopeAndSkipsNoopWrites(t *testing.T) {
 	client, backend, key := jobFixture(t)
 	d := jobs.Define[jobtest.Payload]("layout.work", 1, jobs.DefaultPolicy(key.Queue()))
 	pending, err := d.Capture(t.Context(), jobtest.Payload{Text: "envelope"}, jobs.Options[jobtest.Payload]{})
@@ -322,7 +322,7 @@ func TestRedisJobLayoutSeparatesEnvelopeAndSkipsNoopWrites(t *testing.T) {
 	}
 }
 
-func TestRedisJobLayoutThreeReadsEmbeddedEnvelope(t *testing.T) {
+func TestRedisJobStorageThreeReadsEmbeddedEnvelope(t *testing.T) {
 	client, backend, key := jobFixture(t)
 	d := jobs.Define[jobtest.Payload]("legacy.work", 1, jobs.DefaultPolicy(key.Queue()))
 	pending, err := d.Capture(t.Context(), jobtest.Payload{Text: "legacy"}, jobs.Options[jobtest.Payload]{})

@@ -659,7 +659,6 @@ Explicit downstream cache headers remain an application-owned override; never
 make personalized cookie responses publicly cacheable. Bearer-only routes keep
 their existing response policy.
 
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.
 

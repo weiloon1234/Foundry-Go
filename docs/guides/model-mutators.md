@@ -50,5 +50,3 @@ Encrypted columns reject Go mutators. Transform plaintext before assigning the e
 Bulk inserts transform each supplied input. Conflict literals supplied through `orm.ConflictSet` transform once per statement, independently of the number of proposed rows. Reusing a conflict policy retains its original input. `ConflictNull` preserves NULL.
 
 `ConflictIncoming` copies the proposed stored value without running the Go transform twice. An own-field proposed expression can do the same. Other SQL calculations into mutated fields are rejected before SQL: PostgreSQL cannot execute an application Go mutator per row. Input carriers are excluded from source `MapInsert` and `MapUpdate`; fixed `Values` inputs still transform once per attempt. Use per-model batches when each source value needs Go behavior.
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

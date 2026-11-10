@@ -85,5 +85,3 @@ transaction isolation when separate aggregate statements need one snapshot.
 [Projections](model-projections.md) reuse these expressions for grouped reports;
 [aggregate FILTER](model-aggregate-filters.md) and [windows](model-windows.md) retain
 the same result codecs and phase rules.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

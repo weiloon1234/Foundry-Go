@@ -56,5 +56,3 @@ For [result cursors](result-cursor-pagination.md), project the computed value in
 a handwritten rows schema, then name its output field in `UniqueBy`. A computed
 group key is not a declared cursor identity. `rows.CompileCursor` and
 `rows.PreflightCursor` validate cursor keys without I/O.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

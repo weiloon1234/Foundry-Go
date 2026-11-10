@@ -118,7 +118,6 @@ scalar property uses `->>` and its scalar cast; index that same expression.
 Containment uses `@>` and can use an appropriate JSONB GIN index. Inspect actual
 SQL and [plans](query-plans.md) before choosing an index.
 
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).
 
 ### Startup validation
 

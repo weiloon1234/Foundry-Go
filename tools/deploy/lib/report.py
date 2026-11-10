@@ -68,7 +68,7 @@ def attempt(value):
         result["outcome"] = "failed_applied"
     # Failure details may contain command diagnostics; publish only the machine code.
     error = value.get("error")
-    code = error.get("code") if isinstance(error, dict) else error
+    code = error
     result["error_code"] = code if isinstance(code, str) and len(code) <= 128 and re.fullmatch(r"[a-z][a-z0-9_]*", code) else None
     return result
 

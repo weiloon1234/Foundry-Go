@@ -18,11 +18,6 @@ if kind ~= 'none' then
     if kind ~= 'string' or redis.call('STRLEN', KEYS[1]) > max_bytes then return {-1} end
     local stored = redis.call('GET', KEYS[1])
     local a,b,c,d,e = string.match(stored, '^2:(%d+):(%d+):(%d+):(%d+):(%d+)$')
-    if not a then
-        -- Version 1 buckets were aligned to Unix-epoch multiples (phase zero).
-        a,b,d,e = string.match(stored, '^1:(%d+):(%d+):(%d+):(%d+)$')
-        c = '0'
-    end
     old_capacity, old_window = integer(a, max_capacity), integer(b, max_window)
     old_offset, old_end, used = integer(c, max_window), integer(d, max_time), integer(e, max_capacity)
     if not old_capacity or old_capacity == 0 or not old_window or old_window == 0 or not old_offset or

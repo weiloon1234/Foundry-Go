@@ -238,7 +238,7 @@ func decodeJournal(data []byte) (journal, error) {
 	if err := decodePublicationJSON(data, &log); err != nil {
 		return log, fmt.Errorf("invalid generation journal: %w", err)
 	}
-	if (log.Version != 1 && log.Version != 2 && log.Version != 3 && log.Version != 4 && log.Version != 5 && log.Version != 6 && log.Version != 7) || len(log.Files) == 0 {
+	if (log.Version != 2 && log.Version != 4 && log.Version != 5 && log.Version != 6 && log.Version != 7) || len(log.Files) == 0 {
 		return log, fmt.Errorf("unsupported generation journal")
 	}
 	if (log.Version == 6) != (log.Distribution != nil) || (log.Version != 6 && len(log.NewDirs) != 0) {
@@ -268,24 +268,17 @@ func decodeJournal(data []byte) (journal, error) {
 		notes[name] = true
 	}
 	dirs := make(map[string]bool)
-	if log.Version == 1 {
-		if len(log.Guards) != 0 {
-			return log, fmt.Errorf("legacy journal cannot contain graph guards")
+	for _, dir := range log.Guards {
+		if !localPath(dir) || dirs[dir] {
+			return log, fmt.Errorf("invalid journal guard directory")
 		}
-		dirs["."] = true
-	} else {
-		for _, dir := range log.Guards {
-			if !localPath(dir) || dirs[dir] {
-				return log, fmt.Errorf("invalid journal guard directory")
-			}
-			if log.Version == 6 && dir != "." && !DistributionPath(dir) {
-				return log, fmt.Errorf("invalid plugin journal guard")
-			}
-			dirs[dir] = true
+		if log.Version == 6 && dir != "." && !DistributionPath(dir) {
+			return log, fmt.Errorf("invalid plugin journal guard")
 		}
-		if !dirs["."] {
-			return log, fmt.Errorf("graph journal requires its root guard")
-		}
+		dirs[dir] = true
+	}
+	if !dirs["."] {
+		return log, fmt.Errorf("graph journal requires its root guard")
 	}
 	if log.Version == 6 {
 		for _, name := range log.NewDirs {
@@ -304,15 +297,8 @@ func decodeJournal(data []byte) (journal, error) {
 		if log.Version == 6 {
 			validTarget = name == manifestName || DistributionPath(name)
 		}
-		if log.Version == 3 || log.Version == 7 {
-			// Both versions permit only one new consumer-owned file. Version 3
-			// retains its original migration/seeder authority; version 7 adds
-			// the other scaffold kinds without replacement or deletion rights.
-			allowed := legacyScaffoldName.MatchString(base)
-			if log.Version == 7 {
-				allowed = scaffoldName.MatchString(base)
-			}
-			validTarget = len(log.Files) == 1 && len(log.Guards) == 1 && log.Guards[0] == "." && name == base && allowed && !entry.Before.Exists && entry.After.Exists
+		if log.Version == 7 {
+			validTarget = len(log.Files) == 1 && len(log.Guards) == 1 && log.Guards[0] == "." && name == base && scaffoldName.MatchString(base) && !entry.Before.Exists && entry.After.Exists
 		}
 		if !localPath(name) || !dirs[filepath.ToSlash(filepath.Dir(name))] || !validTarget {
 			return log, fmt.Errorf("unsafe journal target")
@@ -337,11 +323,7 @@ func prepareStaging(dir string, plan writePlan) error {
 	if err := writeSynced(filepath.Join(lock, stagingProtocol), []byte("1\n"), 0600); err != nil {
 		return err
 	}
-	log := journal{Version: 1, Files: make(map[string]journalEntry)}
-	if len(plan.guards) > 0 {
-		log.Version = 2
-		log.Guards = plan.guards
-	}
+	log := journal{Version: 2, Guards: plan.guards, Files: make(map[string]journalEntry)}
 	if plan.scaffold {
 		log.Version = 7
 	}

@@ -90,8 +90,6 @@ func (o ScaffoldOptions) generation() Options {
 	return Options{Dir: o.Dir, FieldDocumentation: o.FieldDocumentation, Framework: o.Framework}
 }
 
-var legacyScaffoldName = regexp.MustCompile(`^[\pL\pN_]+_(migration|seeder)\.go$`)
-
 // scaffoldName also admits the dots and hyphens of a migration ID, which leads
 // its file name; a leading letter or digit keeps the file visible to go build.
 var scaffoldName = regexp.MustCompile(`^[\pL\pN][\pL\pN_.-]*_(migration|seeder|model|dto|job|command|endpoint|enum|middleware|rule|event|listener|policy|notification)\.go$`)

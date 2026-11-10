@@ -75,5 +75,3 @@ T04 tests cover native PostgreSQL, duplicate/scoped keys, deeper relations,
 soft deletion, policy ordering, hooks, metadata, compiler rejection, IDE support
 and owned cancellation/concurrency. The [acceptance evidence](../evidence/typed-api-t04.json) records the passed
 checks, source hashes and observed query counts.
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

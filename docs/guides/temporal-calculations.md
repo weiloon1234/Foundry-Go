@@ -69,5 +69,3 @@ The `Value` forms accept selected expressions, including aggregates and windows.
 Dates and timestamps retain Foundry's years 1–9999 and whole-microsecond codec contracts. PostgreSQL can represent values outside this range, but result decoding rejects them and collected reads publish no partial slice. Database arithmetic overflow remains a database error; callers can use a savepoint when recovering within a transaction. Invalid units, zero zones, unsupported resolution policies and sub-microsecond elapsed values fail before I/O. Cancellation follows the normal query runtime.
 
 Interval fields, computed differences and dynamic shifts are also available; see [interval calculations](interval-queries.md).
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

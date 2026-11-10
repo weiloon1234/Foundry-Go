@@ -388,16 +388,14 @@ func isShardLock(name string) bool {
 	return err == nil && value < lockShards
 }
 
-// pendingShard recovers the shard of an in-flight publication. Legacy names
-// without a shard belong to shard zero; mixing versions on one root is unsupported.
-func pendingShard(name string) int {
-	rest := strings.TrimPrefix(name, pendingPrefix)
-	if len(rest) > 3 && rest[2] == '-' {
-		if value, err := strconv.ParseUint(rest[:2], 16, 8); err == nil && value < lockShards {
-			return int(value)
-		}
+// pendingShard recognizes current publication filenames; unknown files remain untouched.
+func pendingShard(name string) (int, bool) {
+	rest, ok := strings.CutPrefix(name, pendingPrefix)
+	if !ok || len(rest) <= 3 || rest[2] != '-' {
+		return 0, false
 	}
-	return 0
+	value, err := strconv.ParseUint(rest[:2], 16, 8)
+	return int(value), err == nil && value < lockShards
 }
 
 // lockShard serializes one address shard: an in-process slot first, so local
@@ -568,7 +566,11 @@ func (b *Backend) sweep(ctx context.Context, root *os.Root, limit int, flush str
 		switch {
 		case name == marker || name == lockName || isShardLock(name):
 		case strings.HasPrefix(name, pendingPrefix):
-			groups[pendingShard(name)] = append(groups[pendingShard(name)], name)
+			if shard, ok := pendingShard(name); ok {
+				groups[shard] = append(groups[shard], name)
+			} else {
+				result.Unrecognized++
+			}
 		case isRecord(name):
 			groups[shardOf(name)] = append(groups[shardOf(name)], name)
 		default:

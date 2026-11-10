@@ -44,6 +44,32 @@ func TestSharedCacheContract(t *testing.T) {
 		return b, func(s string) cache.EntryKey { return key(t, s) }
 	})
 }
+
+func TestSweepLeavesUnshardedPendingFilesInert(t *testing.T) {
+	root := t.TempDir()
+	config := file.DefaultConfig(root)
+	config.PruneInterval = 0
+	backend := open(t, config)
+	for _, name := range []string{".pending-old-style", ".pending-00-orphan"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("unpublished"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result, err := backend.Sweep(t.Context(), file.MaxPrune)
+	if err != nil || result.Removed != 1 || result.Unrecognized != 1 {
+		t.Fatal(result, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".pending-old-style")); err != nil {
+		t.Fatal("unrecognized temporary file was removed", err)
+	}
+	if err := backend.Put(t.Context(), key(t, "current"), []byte("published"), cache.Forever()); err != nil {
+		t.Fatal(err)
+	}
+	data, found, err := backend.Get(t.Context(), key(t, "current"))
+	if err != nil || !found || string(data) != "published" {
+		t.Fatal("leftover temporary file affected readable data", found, err)
+	}
+}
 func TestExpiryReopenCapacityAndOwnedRoot(t *testing.T) {
 	source := testkit.NewClock(time.Now())
 	c := file.DefaultConfig(t.TempDir())

@@ -188,7 +188,7 @@ func checkDocument(root, path string, current bool, completed map[string]bool, a
 	definitions := linkDefinitions(data)
 	var failures []error
 	if current {
-		failures = append(failures, checkMigrationGuide(path, data))
+		failures = append(failures, checkModelGuide(path, data))
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 4096), 1024*1024)

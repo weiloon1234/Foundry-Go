@@ -34,5 +34,3 @@ fails before execution. The same checks apply to adapters such as `TextRow`,
 See [result types and empty input](model-aggregates.md#loading-and-result-types),
 [conditional expressions](conditional-expressions.md) and
 [scalar calculations](scalar-calculations.md).
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

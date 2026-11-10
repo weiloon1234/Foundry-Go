@@ -60,5 +60,3 @@ PostgreSQL responsibilities.
 Use [derived records](model-subqueries.md), [CTEs](model-ctes.md) or
 [lateral joins](lateral-joins.md) for additional SELECT boundaries. Read terminals
 and pagination retain the [projection contracts](model-projections.md).
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

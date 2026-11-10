@@ -56,7 +56,7 @@ class ProcessHost(Host):
             raise KeyboardInterrupt()
         if self.fail and self.fail in args:
             raise DeployError("injected_failure", "Synthetic failure")
-        output = ""
+        output = "[]" if len(args) > 3 and args[3] == "prune" else ""
         if args[:2] == ["systemctl", "is-enabled"]:
             enabled = args[2] in self.enabled_roles
             return subprocess.CompletedProcess(args, 0 if enabled else 1, "enabled\n" if enabled else "disabled\n", "")
@@ -708,7 +708,8 @@ class ReleaseTests(unittest.TestCase):
         commands = len(self.host.commands)
         state_bytes = (self.host.paths.instance_state(self.entry["name"]) / "state.json").read_bytes()
         self.assertTrue(self.deploy(archive)["unchanged"])
-        self.assertTrue(all(args[:2] == ["systemctl", "is-enabled"] for args, _ in self.host.commands[commands:]))
+        self.assertTrue(all(args[:2] == ["systemctl", "is-enabled"] or args[3:4] == ["prune"]
+                            for args, _ in self.host.commands[commands:]))
         self.assertEqual(state_bytes, (self.host.paths.instance_state(self.entry["name"]) / "state.json").read_bytes())
         self.assertEqual(manifest, self.state()["current"])
         self.assertEqual("healthy", self.state()["status"])
@@ -1784,7 +1785,7 @@ class ReleaseTests(unittest.TestCase):
     def test_readiness_requires_exact_json_and_the_selected_process_listener(self):
         observations = self.process_observations()
         cases = (
-            (42, 200, {"ready": True}, True), (42, 200, {"status": "ready"}, True),
+            (42, 200, {"ready": True}, True), (42, 200, {"status": "ready"}, False),
             (99, 200, {"ready": True}, False), (99, 200, {"status": "ready"}, False),
             (42, 503, {"ready": True}, False), (42, 503, {"status": "ready"}, False),
             (42, 200, {"ready": 1}, False), (42, 200, {"ready": "true"}, False),

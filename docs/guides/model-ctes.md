@@ -47,5 +47,3 @@ execute until an enclosing read executes.
 For recursive definitions use [recursive CTEs](model-recursive-ctes.md). For locked
 inputs use [transaction-required CTEs](transaction-query-composition.md); an ordinary
 CTE cannot erase a transaction requirement.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

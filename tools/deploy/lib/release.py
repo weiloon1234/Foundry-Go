@@ -577,10 +577,7 @@ def services(host, entry):
 
 
 def readiness_body(body):
-    return isinstance(body, dict) and (
-        (set(body) == {"ready"} and body["ready"] is True)
-        or (set(body) == {"status"} and body["status"] == "ready")
-    )
+    return isinstance(body, dict) and set(body) == {"ready"} and body["ready"] is True
 
 
 def ready(host, entry, timeout=90, include_background=True, *, role="all", roles=None):
@@ -915,6 +912,8 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
         staging = host.paths.opt(entry["name"]) / "releases" / (".stage-" + uuid.uuid4().hex)
         try:
             manifest = unpack_archive(Path(archive), staging, entry, checksum)
+            import upgrades
+            removed_bundles = upgrades.prune_tools(host, registry["tools"]["bundle_sha256"])
             version = manifest["version"]
             prior_roles = enabled_roles(host, entry)
             if state["current"] and state["current"]["version"] == version:
@@ -922,7 +921,8 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                 if state["status"] in ("healthy", "rolled_back") and set(prior_roles) == set(instance_units(entry)):
                     verified_release(host, entry, state["current"])
                     require(ready(host, entry, timeout=10), "readiness_failed", "Current release is no longer ready; inspect it before retrying.")
-                    return {"ok": True, "unchanged": True, "instance": entry["name"], "version": version}
+                    return {"ok": True, "unchanged": True, "instance": entry["name"], "version": version,
+                            "removed_bundles": removed_bundles}
             release = publish_release(host, entry, staging, manifest)
             attempt = begin(host, entry, state, "deploy", version,
                             metadata={"recovery_operation_id": operation_id or str(uuid.uuid4()), "roles": prior_roles})
@@ -1006,7 +1006,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                 # A probe report holds no secrets, and naming the bad disk is what the operator needs.
                 raise DeployError(code, error.detail if code.startswith("storage_probe_") else
                                   "Deployment failed; status records the phase and recovery outcome. Inspect the instance before retrying.") from None
-            result = {"ok": True, "instance": entry["name"], "version": version}
+            result = {"ok": True, "instance": entry["name"], "version": version, "removed_bundles": removed_bundles}
             warnings = narrow_redis_grants(host, registry, entry, redis_patterns, state)
             try:
                 prune(host, entry, state)

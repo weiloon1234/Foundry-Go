@@ -1002,7 +1002,6 @@ def declared_role(role):
 
 def deploy(project, profile, settings):
     action = os.environ.get("ACTION") or ask("Action (" + " / ".join(ACTIONS) + ")", "deploy")
-    action = {"keys-rotate": "keys rotate", "keys": "keys rotate"}.get(action, action)
     if action not in ACTIONS:
         raise LocalError("unsupported deployment action")
     if not profile["host"]["host_id"]:

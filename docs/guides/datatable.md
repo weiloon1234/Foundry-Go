@@ -738,7 +738,6 @@ The gate never updates those artifacts automatically.
 real completion, hover and definition requests. Select the existing native tools
 as described in the [tooling guide](developer-tooling-and-testing.md).
 
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).
 
 <a id="recipe-table-routes"></a>
 ## Register the standard table routes

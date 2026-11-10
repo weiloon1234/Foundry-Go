@@ -67,5 +67,3 @@ Collect a bounded result before other work on that transaction. Database lock,
 cardinality and cancellation failures follow its transaction/savepoint rules.
 `SkipLocked` deliberately permits partial candidate sets and is unsuitable for
 operations that require a complete bounded set.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

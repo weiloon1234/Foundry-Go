@@ -9,22 +9,21 @@ import (
 	"github.com/weiloon1234/Foundry-Go/i18n"
 )
 
-func TestLocaleFallbackMustMatchDefault(t *testing.T) {
+func TestLocaleDefaultMustBeConfigured(t *testing.T) {
 	for _, test := range []struct {
-		name     string
-		fallback i18n.LocaleID
-		want     error
+		name   string
+		locale i18n.LocaleID
+		want   error
 	}{
-		{name: "empty"},
-		{name: "default", fallback: "en"},
-		{name: "different configured locale", fallback: "ms", want: fault.Invalid},
-		{name: "unconfigured locale", fallback: "fr", want: fault.Missing},
+		{name: "default", locale: "en"},
+		{name: "different configured locale", locale: "ms"},
+		{name: "unconfigured locale", locale: "fr", want: fault.Invalid},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s := settings()
 			s.HTTP.Enabled = false
 			s.Features.Locales = application.LocaleSettings{
-				Enabled: true, Default: "en", Locales: []i18n.LocaleID{"en", "ms"}, Fallback: test.fallback,
+				Enabled: true, Default: test.locale, Locales: []i18n.LocaleID{"en", "ms"},
 			}
 			app, err := application.New(s, quiet()).Build(t.Context())
 			if err == nil {

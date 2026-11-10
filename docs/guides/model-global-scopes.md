@@ -53,5 +53,3 @@ func bypass() orm.Query[reads.Member] {
 For relation targets, use `WithoutRelationGlobalScope` or `WithoutRelationGlobalScopes`. Through relations separately accept `WithoutPivotGlobalScope` or `WithoutPivotGlobalScopes`. They retain the exact descriptor kind and affect only that descriptor's target or pivot.
 
 Execution, including explain, resolves scopes with its context. For SQL inspection, pass `orm.WithScopeContext(q, ctx)` to `orm.Compile`. Without required context, compilation fails closed. Recursive scope dependencies are bounded and rejected rather than evaluated indefinitely.
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

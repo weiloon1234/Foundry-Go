@@ -291,6 +291,5 @@ email revisions, rollback, compiler and real-gopls tests passed. Generation is
 current for framework stores and consumer DTOs. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance)
 for complete evidence. Email transport acceptance and durable job delivery retain their separate operational requirements.
 
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

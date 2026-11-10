@@ -200,7 +200,7 @@ func TestRecoveryBeforeJournalAndUnsafeJournal(t *testing.T) {
 	if result, err := Recover(t.Context(), dir); err != nil || !result.Found || result.Kept || result.RolledBack {
 		t.Fatalf("unpublished recovery: %+v %v", result, err)
 	}
-	if _, err := decodeJournal([]byte(`{"version":1,"files":{"../escape.go":{"before":{},"after":{}}}}`)); err == nil {
+	if _, err := decodeJournal([]byte(`{"version":2,"guards":["."],"files":{"../escape.go":{"before":{},"after":{}}}}`)); err == nil || !strings.Contains(err.Error(), "unsafe journal target") {
 		t.Fatal("unsafe journal path accepted")
 	}
 }
@@ -213,7 +213,7 @@ func TestRecoveryRestoresDeletedAndRemovesNewOutputs(t *testing.T) {
 	original := []byte(generatedHeader + "\npackage sample\n")
 	write(t, dir, "deleted_foundry.gen.go", string(original))
 	deleted := snapshotFile(t, dir, "deleted_foundry.gen.go")
-	plan := writePlan{changes: map[string][]byte{"created_foundry.gen.go": original, "deleted_foundry.gen.go": nil, manifestName: []byte("new manifest")}, before: map[string]oldFile{"created_foundry.gen.go": {}, "deleted_foundry.gen.go": deleted, manifestName: {}}}
+	plan := writePlan{guards: []string{"."}, changes: map[string][]byte{"created_foundry.gen.go": original, "deleted_foundry.gen.go": nil, manifestName: []byte("new manifest")}, before: map[string]oldFile{"created_foundry.gen.go": {}, "deleted_foundry.gen.go": deleted, manifestName: {}}}
 	if err := prepareStaging(dir, plan); err != nil {
 		t.Fatal(err)
 	}

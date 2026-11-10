@@ -70,7 +70,6 @@ text. CASE does not suppress planning-time or earlier aggregate errors.
 See [computed keys](computed-query-keys.md), [arithmetic and text](scalar-calculations.md)
 and [typed JSON paths](json-models.md) for composition.
 
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).
 
 ## Parameters without an exemplar
 

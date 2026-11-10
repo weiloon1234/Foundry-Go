@@ -91,6 +91,5 @@ Unit and protocol tests cover offset overflow, ambiguity rejection, bound SQL, s
 
 Simple/projection acceptance additionally checks query counts, exactly full last pages, eager lookahead exclusion, failed related reads, malformed lookahead records, grouped/distinct/join/set totals, nested CTE/set limits, window evaluation and complete result types. Unit checks verify immutable windows, cleared lookahead references, count overflow and failure ordering. Negative compilation checks retain model/projection ownership and nullable result types, and reject totals on simple pages.
 
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

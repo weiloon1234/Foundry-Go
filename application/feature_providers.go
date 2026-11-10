@@ -69,7 +69,7 @@ func registerFeatures(ctx context.Context, builder *foundation.Builder, settings
 					return nil, err
 				}
 				definitions := append(MessageDefinitions(), d.Messages...)
-				return i18n.NewCatalog(ctx, locales, i18n.CatalogOptions{Fallback: s.Locales.Fallback}, definitions, d.Catalog)
+				return i18n.NewCatalog(ctx, locales, i18n.CatalogOptions{Fallback: s.Locales.Default}, definitions, d.Catalog)
 			})
 		}})
 	}

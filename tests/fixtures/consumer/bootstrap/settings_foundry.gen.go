@@ -1011,8 +1011,6 @@ type SettingsAppFeaturesLocalesConfigKeySet struct {
 	Default config.Key[Settings, i18n.LocaleID]
 	// Locales selects app.features.locales.locales. Set accepts []i18n.LocaleID.
 	Locales config.Key[Settings, []i18n.LocaleID]
-	// Fallback selects app.features.locales.fallback. Set accepts i18n.LocaleID.
-	Fallback config.Key[Settings, i18n.LocaleID]
 }
 
 // SettingsAppFeaturesExtensionsConfigKeySet exposes compiler-checked configuration overrides.
@@ -2220,10 +2218,9 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 					},
 				},
 				Locales: SettingsAppFeaturesLocalesConfigKeySet{
-					Enabled:  config.Scalar[Settings, bool]("app.features.locales.enabled", func(settings *Settings) *bool { return &settings.App.Features.Locales.Enabled }),
-					Default:  config.Scalar[Settings, i18n.LocaleID]("app.features.locales.default", func(settings *Settings) *i18n.LocaleID { return &settings.App.Features.Locales.Default }),
-					Locales:  config.JSON[Settings, []i18n.LocaleID]("app.features.locales.locales", func(settings *Settings) *[]i18n.LocaleID { return &settings.App.Features.Locales.Locales }),
-					Fallback: config.Scalar[Settings, i18n.LocaleID]("app.features.locales.fallback", func(settings *Settings) *i18n.LocaleID { return &settings.App.Features.Locales.Fallback }),
+					Enabled: config.Scalar[Settings, bool]("app.features.locales.enabled", func(settings *Settings) *bool { return &settings.App.Features.Locales.Enabled }),
+					Default: config.Scalar[Settings, i18n.LocaleID]("app.features.locales.default", func(settings *Settings) *i18n.LocaleID { return &settings.App.Features.Locales.Default }),
+					Locales: config.JSON[Settings, []i18n.LocaleID]("app.features.locales.locales", func(settings *Settings) *[]i18n.LocaleID { return &settings.App.Features.Locales.Locales }),
 				},
 				Extensions: SettingsAppFeaturesExtensionsConfigKeySet{
 					Enabled:   config.Scalar[Settings, bool]("app.features.extensions.enabled", func(settings *Settings) *bool { return &settings.App.Features.Extensions.Enabled }),
@@ -2802,7 +2799,6 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.Features.Locales.Enabled,
 		keys.App.Features.Locales.Default,
 		keys.App.Features.Locales.Locales,
-		keys.App.Features.Locales.Fallback,
 		keys.App.Features.Extensions.Enabled,
 		keys.App.Features.Extensions.Database,
 		keys.App.Features.Extensions.Schema,

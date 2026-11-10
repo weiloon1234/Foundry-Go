@@ -70,5 +70,3 @@ Named windows, CTE discovery, correlations and bindings share the compiler.
 Compiler bounds do not cap server sorting/partition memory; choose input limits,
 indexes and cancellation deadlines. PostgreSQL IGNORE NULLS and FROM LAST are not
 implied by these helpers.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

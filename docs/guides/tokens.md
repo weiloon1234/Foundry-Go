@@ -479,5 +479,3 @@ and factor in the same transaction that creates the authenticated replacement.
 The original guard/provider and current model eligibility remain authoritative.
 See [MFA completion and HTTP delivery](mfa.md#complete-a-pending-login) for the
 actual API, failure behavior and transport composition.
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

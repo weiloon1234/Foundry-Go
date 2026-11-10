@@ -79,7 +79,7 @@ func TestRateLimitTwoClientsAndServerClock(t *testing.T) {
 }
 func TestRateLimitCorruptMetadataIsPreserved(t *testing.T) {
 	c, key := rateFixture(t)
-	for _, wire := range []string{"private", strings.Repeat("x", rateLimitMetadataBytes+1), "1:0:1000:2000:1", "1:1:1000:2000:2", "1:01:1000:2000:1", "1:1:1000:2001:1", "1:1:1000:9007199254740992:1", "1:1:1000:2000:0",
+	for _, wire := range []string{"1:2:1000:2000:1", "private", strings.Repeat("x", rateLimitMetadataBytes+1), "1:0:1000:2000:1", "1:1:1000:2000:2", "1:01:1000:2000:1", "1:1:1000:2001:1", "1:1:1000:9007199254740992:1", "1:1:1000:2000:0",
 		"2:1:1000:1000:3000:1", "2:1:1000:5:3000:1", "2:1:1000:05:3005:1", "2:1:1000:5:3005", "3:1:1000:0:3000:1"} {
 		k := key(fmt.Sprintf("corrupt-%d", len(wire)) + wire[:1])
 		if err := c.raw.Set(t.Context(), k.String(), wire, time.Minute).Err(); err != nil {
@@ -191,35 +191,6 @@ func TestRateLimitBoundaryDenialAndPolicyReplacement(t *testing.T) {
 	d, err = c.RateLimit(t.Context(), k, ratelimit.PerSecond(3), 3)
 	if err != nil || !d.Allowed || d.ResetAfter != time.Second {
 		t.Fatal(d, err)
-	}
-}
-func TestRateLimitVersionOneBucketsRemainCompatible(t *testing.T) {
-	c, key := rateFixture(t)
-	k := key("version-one")
-	window := ratelimit.MaxWindow
-	now := c.raw.Time(t.Context()).Val().UnixMilli()
-	end := now - now%window.Milliseconds() + window.Milliseconds()
-	if end-now < 10000 {
-		t.Skip("too close to the epoch window boundary for a stable fixture")
-	}
-	// An epoch-aligned version 1 bucket written by an earlier release.
-	wire := fmt.Sprintf("1:2:%d:%d:1", window.Milliseconds(), end)
-	if err := c.raw.Set(t.Context(), k.String(), wire, 0).Err(); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.raw.PExpireAt(t.Context(), k.String(), time.UnixMilli(end)).Err(); err != nil {
-		t.Fatal(err)
-	}
-	limit := ratelimit.Limit{Requests: 2, Window: window}
-	d, err := c.RateLimit(t.Context(), k, limit, 1)
-	if err != nil || !d.Allowed || d.Remaining != 0 || d.ResetAfter > time.Duration(end-now)*time.Millisecond {
-		t.Fatal(d, err)
-	}
-	if got := c.raw.Get(t.Context(), k.String()).Val(); got != fmt.Sprintf("2:2:%d:0:%d:2", window.Milliseconds(), end) {
-		t.Fatal("version 1 usage or expiry was not preserved", got)
-	}
-	if d, err := c.RateLimit(t.Context(), k, limit, 1); err != nil || d.Allowed {
-		t.Fatal("migrated bucket reopened quota", d, err)
 	}
 }
 func TestRateLimitClearRemovesUnreadableState(t *testing.T) {

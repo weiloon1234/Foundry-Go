@@ -170,6 +170,5 @@ are delivered in the separate [message follow-up](validation-messages.md).
 The expansion passed the complete gate and relevant races; see
 [acceptance evidence](../evidence/validation-expanded-20260926.json).
 
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

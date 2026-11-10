@@ -30,5 +30,3 @@ Unlike mutators, accessors receive the actual stored model. Keep them free of hi
 Document storage, mutation input and accessor behavior beside the handwritten model field and table declaration. Those are the source of ordinary gopls hover and definition information. No generated per-field method or managed-comment regeneration step is required.
 
 Use [typed input columns](model-mutators.md) for automatic write transformations and [retrieval hooks](model-retrieval.md) for explicit post-hydration callbacks. Neither substitutes for DTO mapping. Persistence models are not implicitly public response contracts.
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

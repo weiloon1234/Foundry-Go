@@ -68,5 +68,3 @@ and respect `Limit(0)`. The [common read terminals](model-projections.md#executi
 keep normal collection, streaming and cancellation behavior. Read-only first-row
 selection adds no implicit ordering. SQL equality support and collation behavior
 remain database constraints; a typed declaration cannot prove them.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

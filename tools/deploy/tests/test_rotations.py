@@ -32,12 +32,12 @@ def bootstrap_without_secrets(host, project, profile, *, backup_stage=None, cert
     with ExitStack() as stack:
         stack.enter_context(patch.object(provision, "bootstrap_plan", return_value=plan))
         for module, names in ((provision, ("_ensure_roots", "_prepare_instance", "_install_unit")),
-                              (upgrades, ("install_tools",)),
                               (provision.packages, ("install_missing",)),
                               (provision.postgres, ("prepare", "provision")),
                               (provision.redis_acl, ("prepare", "provision"))):
             for name in names:
                 stack.enter_context(patch.object(module, name))
+        stack.enter_context(patch.object(upgrades, "install_tools", return_value={"removed_bundles": []}))
         stack.enter_context(patch.object(backup, "configure", side_effect=backup_stage))
         stack.enter_context(patch.object(provision, "_install_site",
             side_effect=lambda host, registry, entry, *args, **kwargs: certificate_stage(host, registry, entry)
@@ -125,7 +125,7 @@ class RotationTests(unittest.TestCase):
                 raise DeployError("command_failed", "provider-private-canary")
             return subprocess.CompletedProcess([], 0, "", "")
         with patch.object(backup.packages, "install_missing"), patch.object(backup, "_cluster_owned_directory"), \
-                patch.object(backup, "_remove_wal_bridge"), patch.object(backup, "rebind"), \
+                patch.object(backup, "rebind"), \
                 patch.object(backup, "_backrest", side_effect=backrest):
             with self.assertRaises(DeployError):
                 backup.configure(self.host, self.registry, self.entry)

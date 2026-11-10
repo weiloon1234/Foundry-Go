@@ -125,5 +125,3 @@ The new `Provider.RecheckPassword` shares the issuance validator and returns the
 current locked model to factor management. It retains model/key types and the
 original provider declaration; it does not convert a pending password result
 into full authentication. See [MFA prerequisites](mfa.md). Tests passed the milestone gate.
-
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).

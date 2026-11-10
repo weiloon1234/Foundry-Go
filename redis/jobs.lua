@@ -26,57 +26,6 @@ local function valid_numbers(value)
     return true
 end
 if not valid_numbers(request) then return {-2} end
-if request.op == 'inspect_layout' then
-    local function inspect_result(state, eligible, blocker)
-        return {1, cjson.encode({inspection={layout=state, eligible=eligible, blocker=blocker}})}
-    end
-    for i, kind in ipairs(expected) do
-        local actual = redis.call('TYPE', KEYS[i]).ok
-        if actual ~= 'none' and actual ~= kind then
-            return inspect_result('unknown', false, 'invalid_queue_state')
-        end
-    end
-    local previous = redis.call('HGET', KEYS[5], 'config')
-    local layout = redis.call('HGET', KEYS[5], 'layout')
-    if not previous then
-        for i = 1, #KEYS do
-            if redis.call('EXISTS', KEYS[i]) ~= 0 then
-                return inspect_result('unknown', false, 'invalid_queue_state')
-            end
-        end
-        local timestamp = redis.call('TIME')
-        local now = tonumber(timestamp[1]) * 1000 + math.floor(tonumber(timestamp[2]) / 1000)
-        if not integer(now, 0, max_time) then
-            return inspect_result('unknown', false, 'invalid_queue_state')
-        end
-        return inspect_result('absent', true, '')
-    end
-    if previous ~= config then
-        return inspect_result('unknown', false, 'queue_policy_mismatch')
-    end
-    if not layout or layout == '' then
-        return inspect_result('unknown', false, 'invalid_queue_state')
-    end
-    if layout ~= '3' then
-        return inspect_result('unknown', false, 'unsupported_layout')
-    end
-    local timestamp = redis.call('TIME')
-    local now = tonumber(timestamp[1]) * 1000 + math.floor(tonumber(timestamp[2]) / 1000)
-    local last = tonumber(redis.call('HGET', KEYS[5], 'time') or '0')
-    if not integer(last, 0, max_time) or not integer(math.max(now, last), 0, max_time) then
-        return inspect_result('unknown', false, 'invalid_queue_state')
-    end
-    local live = tonumber(redis.call('HGET', KEYS[5], 'live') or '0')
-    local live_bytes = tonumber(redis.call('HGET', KEYS[5], 'live_bytes') or '0')
-    local retained = tonumber(redis.call('HGET', KEYS[5], 'retained') or '0')
-    local retained_bytes = tonumber(redis.call('HGET', KEYS[5], 'retained_bytes') or '0')
-    local failed = tonumber(redis.call('HGET', KEYS[5], 'failed') or '0')
-    if not integer(live, 0, max_count) or not integer(live_bytes, 0, max_bytes) or not integer(retained, 0, max_count)
-        or not integer(retained_bytes, 0, max_bytes) or not integer(failed, 0, retained) then
-        return inspect_result('unknown', false, 'invalid_queue_state')
-    end
-    return inspect_result(layout, true, '')
-end
 for i, kind in ipairs(expected) do
     local actual = redis.call('TYPE', KEYS[i]).ok
     if actual ~= 'none' and actual ~= kind then return {-2} end

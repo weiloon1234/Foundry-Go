@@ -87,9 +87,12 @@ func TestJobTraceRequiresExplicitVersionedWorkersFirstRollout(t *testing.T) {
 			t.Fatal("legacy message gained trace metadata")
 		}
 	}
+	current, err := jobs.DecodeEnvelope([]byte(strings.Replace(string(tracedBytes), `"envelope_version":2`, `"envelope_version":3`, 1)))
+	if err != nil || current.WireVersion() != jobs.ExtendedEnvelope || !current.Trace().IsSet() {
+		t.Fatal("format 3 without extended policy fields was not accepted", err)
+	}
 	for _, data := range []string{
 		strings.Replace(string(tracedBytes), `"envelope_version":2,`, "", 1),
-		strings.Replace(string(tracedBytes), `"envelope_version":2`, `"envelope_version":3`, 1),
 		strings.Replace(string(legacyBytes), `"id":`, `"envelope_version":2,"id":`, 1),
 		strings.Replace(string(legacyBytes), `"id":`, `"trace":null,"id":`, 1),
 	} {

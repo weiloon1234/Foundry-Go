@@ -57,5 +57,3 @@ Batches return only complete inserted/updated rows. Skipped rows are absent, and
 These insert/upsert operations explicitly skip per-model write hooks, observers, audit and retrieval hooks. They do not require a separate hook acknowledgement. Mutators and managed conventions still run. Choose `CreateEach` for per-model behavior.
 
 No automatic retries occur. An uncertain commit or committed callback failure can retain typed results through `orm.WriteError[R]`; a candidate is not proof of persistence. See [write outcomes](model-writes.md#transaction-ownership-and-failures).
-
-For the old-to-new API mapping, see [the ORM migration guide](orm-migration.md).

@@ -151,5 +151,3 @@ engine is required. See the [diagnostic contract](../../database/orm/README.md#d
 and [ORM performance](orm-performance.md). [Writes](model-writes.md),
 [relations](model-relations.md) and [pagination](model-pagination.md) share these
 handwritten declarations.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

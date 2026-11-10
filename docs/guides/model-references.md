@@ -88,6 +88,5 @@ return owned decoded values. Identity capture/restoration contains codec panics
 and `runtime.Goexit` without exposing their payloads, while preserving ordinary
 error identity. This does not make an uncooperative custom codec cancellable.
 
-For the old-to-new API mapping, see [ORM migration](orm-migration.md).
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

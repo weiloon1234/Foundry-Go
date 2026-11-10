@@ -57,5 +57,3 @@ record and set read handles. Complete models that may run retrieval behavior use
 bounded closed batches; DTO/scalar results stream directly. Ordering and windows
 remain in their original SELECT. See [read terminals](model-projections.md#execution-and-failures).
 Streaming an export must not first collect all results in a slice.
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

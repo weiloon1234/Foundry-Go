@@ -76,5 +76,3 @@ add locks to the recursive body or authorize transaction-required anchors/steps.
 
 Go record compatibility does not prove physical SQL types, typmods or collations;
 PostgreSQL still checks them. For nonrecursive composition see [CTEs](model-ctes.md).
-
-For declaration and API migration, see the [ORM migration guide](orm-migration.md).

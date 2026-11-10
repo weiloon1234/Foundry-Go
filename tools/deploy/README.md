@@ -17,16 +17,21 @@ Protocol 2.0 and generation 6 remain unchanged. Tool upgrades require an install
 host generation of at least 6. The local command checks the installed host's
 `hello` response before staging any bundle; the candidate checks again before
 planning or installation. Older hosts receive `tools_upgrade_floor`: upgrade to
-v0.16.x tools first, then run one ordinary deploy. Use v0.16.0 for that intermediate
-upgrade. The minimum client generation remains 1, preserving existing registrations.
+v0.16.0 or v0.16.1 tools first, then retry the tool upgrade. The minimum client
+generation remains 1, preserving existing registrations.
 
-Use `tools-plan`, confirmed `tools-apply`, then an ordinary deploy. Plans refuse
-with `tools_unit_refresh_required` if any registered role unit file or loaded
-unit has a pre-start command, including instances whose provisioning is incomplete.
-Refresh those units with the installed v0.16.0 tools and reload systemd first.
-Installation repeats this check before writes. Ready instances receive current
-unit templates followed by a daemon reload; enablement is preserved and roles
-are not restarted by the tool upgrade.
+Use `tools-plan`, confirmed `tools-apply`, then an ordinary deploy. Ready instances
+receive current unit templates followed by a daemon reload; enablement is preserved
+and roles are not restarted by the tool upgrade.
+
+Plans list superseded bundle digests in `prune_bundles`. After selection, registry
+publication and journal completion, installation runs the selected bundle's pruning
+code with the host lock inherited. Only canonical digest directories are removed;
+symlinks and unexpected entries require administrator review. Any incomplete upgrade
+journal blocks pruning, including an intent not yet claimed in the registry.
+`tools-apply`, bootstrap and ordinary deploy return `removed_bundles`. Unchanged
+installs and deploys also prune leftovers, so retries finish interrupted cleanup.
+Completed upgrade journals remain the authority for refusing retired bundles.
 
 Run the local tests and documentation checks from the worktree root:
 

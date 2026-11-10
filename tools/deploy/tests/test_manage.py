@@ -75,13 +75,37 @@ class ManagerTests(unittest.TestCase):
         from provision import new_registry
         self.host.paths.registry.unlink()
         value = new_registry(str(uuid.uuid4()), TOOLS)
-        upgrades.install_tools(self.host, value, TOOLS)
+        with self.host.lock("host"):
+            upgrades.install_tools(self.host, value, TOOLS)
         loaded = self.host.read_registry()
         self.assertEqual(2, loaded["schema"])
         response = manager.execute(self.host, "hello", {})
         self.assertEqual({"major": 2, "minor": 0}, response["protocol"])
         self.assertEqual({"minimum": upgrades.protocol()["minimum_client_generation"], "maximum": upgrades.protocol()["generation"]}, response["client_generation"])
         self.assertEqual(loaded["tools"]["bundle_sha256"], response["tools"]["bundle_sha256"])
+
+    def test_selected_bundle_prunes_in_a_real_child_with_inherited_lock(self):
+        from provision import new_registry
+        value = new_registry(str(uuid.uuid4()), TOOLS)
+        with self.host.lock("host"):
+            upgrades.install_tools(self.host, value, TOOLS)
+            leftover = self.host.paths.tools / "tools" / ("b" * 64)
+            leftover.mkdir()
+            (leftover / "old.py").write_text("# retired\n")
+            result = upgrades.install_tools(self.host, self.host.read_registry(), TOOLS)
+            self.assertEqual([leftover.name], result["removed_bundles"])
+            self.assertFalse(leftover.exists())
+            # The child's exit must not release the parent's shared lock description.
+            import fcntl
+            import os
+            from contracts import HOST_PATHS
+            descriptor = os.open(self.host.paths.p(HOST_PATHS["locks"]) / "host.lock", os.O_WRONLY)
+            try:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            finally:
+                os.close(descriptor)
+        self.assertIsNone(self.host.host_lock_fd)
 
 
     def test_backup_requests_dispatch_under_the_registered_identity(self):

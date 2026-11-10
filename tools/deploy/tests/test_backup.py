@@ -262,7 +262,6 @@ class BackupTests(unittest.TestCase):
         plan = prepare.call_args.kwargs["shared_service_plan"]
         self.assertIn("archive-push %p", plan["archive_command"])
         self.assertEqual(plan["ownership_token"], cluster["ownership_token"])
-        self.assertFalse(self.host.paths.p("/etc/sudoers.d/foundry-backup-archive").exists())
         self.assertNotIn("sudo", plan["archive_command"])
         self.assertEqual(self.host.paths.p(backup.CONFIG).stat().st_mode & 0o777, 0o600)
         for path in (backup.CONFIG_DIR, backup.WORK):
@@ -567,11 +566,9 @@ class BackupTests(unittest.TestCase):
             backup._install_timers(self.host, self.registry)
         self.assertEqual(caught.exception.code, "backup_rebind_failed")
 
-    def test_rebinding_removes_bridge_and_requires_live_archive_command(self):
+    def test_rebinding_requires_live_archive_command(self):
         cluster = self.cluster()
         self.registry["shared"]["backup"] = {"owner": "foundry"}
-        bridge = self.host.paths.p("/etc/sudoers.d/foundry-backup-archive")
-        self.host.owned_write(bridge, "# Foundry owned WAL archive bridge\nold rule\n", mode=0o440)
         with patch.object(backup, "_cluster", return_value=cluster), \
                 patch.object(backup.postgres, "cluster_settings", return_value=dict(cluster)), \
                 patch.object(backup.postgres, "prepare"), \
@@ -579,7 +576,6 @@ class BackupTests(unittest.TestCase):
                 patch.object(backup, "_backrest") as backrest:
             with self.assertRaises(DeployError) as caught:
                 backup.rebind(self.host, self.registry)
-        self.assertFalse(bridge.exists())
         self.assertEqual(caught.exception.code, "backup_rebind_failed")
         backrest.assert_not_called()
 
