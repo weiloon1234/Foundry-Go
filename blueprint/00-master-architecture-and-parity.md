@@ -8,6 +8,12 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Backup attempt record — v0.15.3, 2026-11-10
+
+Status: **released; deploy-tool suite (671 tests) and framework CI**.
+- Fixed: a successful backup bundle records its attempt as `complete` instead of leaving it at `running`
+  (seen on the live Boss Club and Semaklah hosts after the v0.15.2 rollout). Host reports were unaffected.
+
 ## Real-host deploy acceptance — v0.15.2, 2026-11-10
 
 Status: **released; full container acceptance passed on Ubuntu 24.04 and 26.04 arm64 (48 checks each), the
