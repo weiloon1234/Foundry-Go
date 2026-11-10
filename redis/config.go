@@ -3,11 +3,7 @@
 package redis
 
 import (
-	"bytes"
-	"crypto/sha256"
 	"crypto/tls"
-	"encoding/hex"
-	"encoding/json"
 	"net"
 	"strconv"
 	"strings"
@@ -92,28 +88,6 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// StorageID returns the 64-character lowercase hex SHA-256 digest of the
-// physical Redis database identity [normalized_host, port, database, username,
-// tls_enabled], without passwords or secret material.
-func (c Config) StorageID() (string, error) {
-	if err := c.Validate(); err != nil {
-		return "", err
-	}
-	host := strings.ToLower(c.Host)
-	switch host {
-	case "localhost", "127.0.0.1", "::1", "[::1]":
-		host = "localhost"
-	}
-	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode([]any{host, int(c.Port), c.Database, c.User, c.TLS == VerifyTLS}); err != nil {
-		return "", err
-	}
-	raw := bytes.TrimSuffix(buf.Bytes(), []byte{'\n'})
-	digest := sha256.Sum256(raw)
-	return hex.EncodeToString(digest[:]), nil
-}
 func validText(s string) bool { return utf8.ValidString(s) && !strings.ContainsRune(s, 0) }
 func (c Config) snapshot() Config {
 	if c.TLSConfig != nil {

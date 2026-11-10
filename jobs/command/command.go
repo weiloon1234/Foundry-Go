@@ -35,7 +35,7 @@ type Command struct {
 	json       bool
 }
 
-const usage = "jobs failed|quarantined|inspect|retry|stats|retry-failed|flush-failed|forget|clear|migrate-layout [--connection name] [--queue name] [--format text|json]; failed|quarantined: [--limit 20] [--after id]; inspect|forget: --id id; retry: --id id --token failed-state-token; retry-failed|flush-failed|clear: --confirm [--name job --version n]; migrate-layout: --confirm (after the previous release stopped or drained)"
+const usage = "jobs failed|quarantined|inspect|retry|stats|retry-failed|flush-failed|forget|clear [--connection name] [--queue name] [--format text|json]; failed|quarantined: [--limit 20] [--after id]; inspect|forget: --id id; retry: --id id --token failed-state-token; retry-failed|flush-failed|clear: --confirm [--name job --version n]"
 
 func bulk(operation string) bool {
 	return operation == "retry-failed" || operation == "flush-failed" || operation == "clear"
@@ -59,7 +59,7 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	}
 	result := Command{operation: args[1], options: jobs.ListOptions{State: jobs.Failed, Limit: 20}}
 	switch result.operation {
-	case "failed", "quarantined", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear", "migrate-layout":
+	case "failed", "quarantined", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear":
 	default:
 		return Command{}, clidiag.Usage(usage)
 	}
@@ -94,8 +94,6 @@ func Parse(args []string, help io.Writer) (Command, error) {
 			result.options.Version = jobs.Version(version)
 			return err
 		})
-	case result.operation == "migrate-layout":
-		flags.BoolVar(&result.confirm, "confirm", false, "confirm that every process of the previous release stopped or drained")
 	case result.operation != "stats":
 		flags.Func("id", "retained job execution ID", func(text string) error {
 			id, err := model.ParseID[jobs.Execution](text)
@@ -120,9 +118,6 @@ func Parse(args []string, help io.Writer) (Command, error) {
 	}
 	if (result.operation == "inspect" || result.operation == "retry" || result.operation == "forget") && result.id.IsZero() {
 		return Command{}, clidiag.Usage("--id is required")
-	}
-	if result.operation == "migrate-layout" && !result.confirm {
-		return Command{}, clidiag.Usage("--confirm is required: stop or drain every process of the previous release first")
 	}
 	if bulk(result.operation) && !result.confirm {
 		return Command{}, clidiag.Usage("--confirm is required for bulk queue operations")
@@ -180,7 +175,7 @@ func (c Command) Run(ctx context.Context, connections *jobs.Connections, output 
 		return safeerror.NewFault(fault.Invalid, "job command requires context and output")
 	}
 	switch c.operation {
-	case "failed", "quarantined", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear", "migrate-layout":
+	case "failed", "quarantined", "inspect", "retry", "stats", "retry-failed", "flush-failed", "forget", "clear":
 	default:
 		return safeerror.NewFault(fault.Invalid, "uninitialized job command; use Parse")
 	}
@@ -203,19 +198,6 @@ func (c Command) Run(ctx context.Context, connections *jobs.Connections, output 
 	}
 	dispatcher := connection.Dispatcher()
 	switch {
-	case c.operation == "migrate-layout":
-		migrated, err := dispatcher.MigrateLayout(ctx, queue)
-		if err != nil {
-			return err
-		}
-		if c.json {
-			return json.NewEncoder(output).Encode(struct {
-				Queue    jobs.Queue `json:"queue"`
-				Migrated bool       `json:"migrated"`
-			}{queue, migrated})
-		}
-		_, err = fmt.Fprintf(output, "%s\tmigrated=%t\n", queue, migrated)
-		return err
 	case c.operation == "stats":
 		stats, err := dispatcher.Stats(ctx, queue)
 		if err != nil {

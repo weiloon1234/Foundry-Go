@@ -251,21 +251,6 @@ type WakeBackend interface {
 // outbox publication keeps such rows pending and retries them.
 var ErrQueuePolicy = safeerror.Sentinel(fault.Internal, "job queue policy differs from this process; use the same QueueConfig on every process sharing the queue")
 
-// ErrLegacyLayout reports a queue still stored in an older layout that this
-// release does not migrate implicitly. Stop or drain every process of the
-// previous release, then migrate explicitly (`jobs migrate-layout`,
-// Dispatcher.MigrateLayout). Layout 1 must first migrate through v0.13.0.
-// Nothing was changed.
-var ErrLegacyLayout = safeerror.Sentinel(fault.Internal, "job queue uses an older storage layout; stop or drain every process of the previous release, then run `jobs migrate-layout` for this queue (layout 1 must first migrate with v0.13.0)")
-
-// LayoutMigrator is optional: an authority whose stored queue layout changed
-// migrates a queue only when explicitly asked. migrated=false means the queue
-// already used the current layout (or did not exist); repeating is safe.
-type LayoutMigrator interface {
-	// JobMigrateLayout explicitly updates a queue's storage layout and reports whether migration occurred.
-	JobMigrateLayout(context.Context, Key) (bool, error)
-}
-
 // ErrOwnershipLost means the reservation can no longer authorize a mutation.
 var ErrOwnershipLost = safeerror.Sentinel(fault.Conflict, "job reservation ownership lost")
 var ErrCancelled = safeerror.Sentinel(fault.Closed, "job cancellation requested")

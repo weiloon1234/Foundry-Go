@@ -310,110 +310,34 @@ commands; configured applications resolve the store with
 `services.JobArchive()`, include `archive.Migrations()` in `app.Migrations()`, and
 can prune it on a schedule through the [housekeeping schedule](production-operations.md#housekeeping-schedule).
 
-## Redis queue layout upgrade
+## Redis queue storage layout
 
-This release uses layout 3. Ordinary calls to a layout-2 queue return
-`jobs.ErrLegacyLayout` without writes. The explicit migration changes only the
-layout marker, preserving all records, envelopes, groups, counters, and timestamps.
-It neither runs maintenance nor backfills membership. A repeated migration does
-nothing. New empty queues initialize directly in layout 3.
+Redis queues require layout 3. Empty queues initialize in layout 3. Unsupported
+layout markers fail closed without writes; this release has no layout migration
+command. Queues with a different stored policy still return `jobs.ErrQueuePolicy`.
+Do not reset layout markers or delete quarantine markers to bypass a rejection.
 
 Layout 3 reserves `:finished` for independent terminal maintenance. Terminal
-workflow members retain their records, envelopes, identity entries and charges;
-their existing group owns cleanup through `:workflows` and `:workflow_finished`.
+workflow members retain their records, envelopes, identities, and charges until
+their group owns cleanup through `:workflows` and `:workflow_finished`.
 There is no additional group-member index. New writes exclude members from
-`:finished`. Legacy entries from layout 2 or a pre-release layout-3 build detach
-after strict member/group validation in the existing bounded retention (128)
-and capacity-eviction (512) scans. Detachment changes no accounting and commits
-with the rest of the call; repeated successful scans progress past a full legacy
-window. It may take several calls to reach a later independent entry. A corrupt
-member still fails closed. Migration itself remains metadata-only and idempotent.
+`:finished`. Legacy entries detach after strict member/group validation in the
+existing bounded retention (128) and capacity-eviction (512) scans. Detachment
+changes no accounting and commits with the rest of the call. Several calls may
+be needed to reach a later independent entry. Corrupt or partially retired groups
+fail closed and require investigation.
 
-All queue clients must cut over together. There is no supported overlap between
-old and new workers, publishers, or operator binaries. v0.13.0 rejects layout 3
-before mutation, but can still write a queue that has not migrated yet.
-
-### Foundry deployment-tool instances
-
-Use the [coordinated Redis queue cutover](deployment.md#coordinated-redis-queue-cutover)
-for instances managed by the deploy tool. Upgrade host tools to generation 5,
-review `ACTION=cutover-plan`, and run confirmed `ACTION=cutover-apply` with the
-reviewed `PLAN_TOKEN` and a stable `OPERATION` UUID in the owner's chosen window.
-The owner attests that every client belongs to the managed roles.
-
-The candidate's `deploy:jobs-inspect --format json` contract supplies every
-configured Redis job connection and queue. The tool checks stored-key coverage,
-stops and verifies all roles, takes an encrypted in-window Redis snapshot, migrates
-each queue, runs database migrations and seeders, then starts and verifies the
-new release. There is no manual queue list. No-Redis inventories skip queue work;
-layout-3 migrations remain idempotent.
-
-Keep the token and operation UUID. Inspect `ACTION=status` after interruption and
-use confirmed `ACTION=cutover-resume` for the same intent. Forced worker termination
-requires review. Once migration may have run, the persistent startup gate prevents
-old-code restart and rollback. Recovery moves forward; Redis restore is a separate
-reviewed operation that leaves startup blocked.
-
-Use the tool's [drain resolution](deployment.md#resolve-an-uncertain-drain) to
-record an approved decision about interrupted work before resuming or replacing
-a failed candidate. If shutdown exposed an undeclared queue before dispatch,
-use [pre-dispatch supersession](deployment.md#replace-a-pre-dispatch-plan) with a
-corrected candidate. Preserve the queue data; do not delete keys to make coverage pass.
-
-Use [reviewed forward recovery](deployment.md#apply-a-reviewed-forward-fix) to bind
-a repaired candidate to an unresolved layout-3 operation. A normal resume retains
-its original artifact. Restore resume reconciles an unstarted intent after exit
-proof and safety checks. Follow the deployment guide's
-[prerequisites](deployment.md#coordinated-redis-queue-cutover) and
-[restore procedure](deployment.md#restore-a-redis-snapshot) before using
-these actions in production. Do not substitute manual SSH changes on a managed
-production instance.
-
-### Non-tool deployments
-
-For deployments with another process supervisor, coordinate all affected clients
-with that deployment system and follow this manual runbook:
-
-1. Stop admission from HTTP publishers, schedulers, outbox relays, and operator
-   tools on every affected queue and connection.
-2. Stop new reservations. Drain admitted handlers, heartbeats, and finalization,
-   then stop every old queue client. A drain timeout does not prove a handler exited.
-3. Retain a pre-cutover backup and queue/policy inventory. Investigate known
-   corruption or partially retired groups. Do not run blind cleanup with an old
-   binary: it can delete the group while missing-member artifacts remain.
-4. Deploy the new binaries without starting ordinary queue traffic. Run
-   `./service jobs migrate-layout --connection NAME --queue QUEUE --confirm`
-   for each queue, or use `Dispatcher.MigrateLayout`.
-5. Start only new clients after all affected queues have migrated. Reconcile an
-   ambiguous migration by repeating that idempotent operation.
-
-Layout 1 must first use v0.13.0's explicit layout-1 to layout-2 migration while all
-older clients are stopped, then follow the cutover above. This release rejects a
-direct layout-1 migration. It still reads embedded envelopes left by that earlier
-migration and moves them on their next normal write. Old groups without callback
-fields and old history without retry-cycle fields remain readable.
-
-Strict group cleanup refuses already-partially-retired legacy groups because
-missing artifacts cannot prove that their accounting was refunded. These groups
-require investigation before recovery. Migration does not repair them. Queues
-from experimental quarantine branches with quarantine state in layout 2 are
-rejected rather than adopted.
-
-Rollback requires a reviewed recovery from the pre-cutover backup or separately
-reconciled queue state. Never change the layout marker back, delete quarantine
-markers, or start an old binary against new state. Restoring a backup may replay
-work with completed external side effects, so application idempotency remains
-necessary. The artisan jobs command provides no destructive recovery operation.
-For managed instances, use only the separately reviewed
-[deploy-tool Redis restore](deployment.md#restore-a-redis-snapshot), subject to
-its integration prerequisites. A Redis restore never clears startup protection.
+Embedded envelopes left by an earlier upgrade remain readable and move to the
+separate envelope hash on their next normal write. These records have no automatic
+Redis TTL. Terminal retention runs during queue operations; unfinished jobs and
+members of unfinished workflows can remain indefinitely. Elapsed time alone does
+not prove that legacy-shaped records are gone.
 
 ## Rollout and limits
 
 The envelope format is unchanged unless a job opts into the format-3 fields.
-Queue policy identities are unchanged by this cutover. Layout-2 queues need the
-explicit upgrade above. Readers treat older records without retry metadata as
-cycle zero. Lua validates history array elements before any mutation, and every
+Queue policy identities remain unchanged. Readers treat older records without
+retry metadata as cycle zero. Lua validates history array elements before any mutation, and every
 record read requires its stored or staged envelope.
 
 Mutable records and history entries accept only their exact canonical field

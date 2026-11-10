@@ -5,7 +5,6 @@ import (
 	"errors"
 	driver "github.com/redis/go-redis/v9"
 	"maps"
-	"slices"
 	"testing"
 	"time"
 
@@ -323,7 +322,7 @@ func TestRedisJobLayoutSeparatesEnvelopeAndSkipsNoopWrites(t *testing.T) {
 	}
 }
 
-func TestRedisJobLayoutOneQueueMigratesOnlyExplicitly(t *testing.T) {
+func TestRedisJobLayoutThreeReadsEmbeddedEnvelope(t *testing.T) {
 	client, backend, key := jobFixture(t)
 	d := jobs.Define[jobtest.Payload]("legacy.work", 1, jobs.DefaultPolicy(key.Queue()))
 	pending, err := d.Capture(t.Context(), jobtest.Payload{Text: "legacy"}, jobs.Options[jobtest.Payload]{})
@@ -333,8 +332,7 @@ func TestRedisJobLayoutOneQueueMigratesOnlyExplicitly(t *testing.T) {
 	if _, err := backend.JobEnqueue(t.Context(), key, pending.Envelope()); err != nil {
 		t.Fatal(err)
 	}
-	// Rewrite the queue as layout 1: embedded envelope, count/bytes counters and
-	// the former policy identity, as the previous release stores it.
+	// Seed an embedded envelope left by a completed layout upgrade.
 	keys := jobKeys(key)
 	id := pending.Envelope().ID().String()
 	envelope := client.raw.HGet(t.Context(), keys[9], id).Val()
@@ -351,51 +349,15 @@ func TestRedisJobLayoutOneQueueMigratesOnlyExplicitly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bytes := client.raw.HGet(t.Context(), keys[4], "live_bytes").Val()
 	pipe := client.raw.TxPipeline()
 	pipe.HSet(t.Context(), keys[0], id, data)
-	pipe.Del(t.Context(), keys[9])
-	pipe.HDel(t.Context(), keys[4], "layout", "live", "live_bytes", "retained", "retained_bytes", "failed")
-	pipe.HSet(t.Context(), keys[4], "config", backend.legacy, "count", 1, "bytes", bytes)
+	pipe.HDel(t.Context(), keys[9], id)
 	if _, err := pipe.Exec(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	snapshot := func() map[string]string { return snapshotJobKeys(t, client, keys) }
-	before := snapshot()
-	// Implicit use never migrates: the previous release keeps working.
 	owner, err := lease.NewOwner()
 	if err != nil {
 		t.Fatal(err)
-	}
-	if _, err := backend.JobReserve(t.Context(), key, owner, time.Minute); !errors.Is(err, jobs.ErrLegacyLayout) {
-		t.Fatal("layout-1 queue was used without an explicit migration", err)
-	}
-	other, err := d.Capture(t.Context(), jobtest.Payload{Text: "new"}, jobs.Options[jobtest.Payload]{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := backend.JobEnqueue(t.Context(), key, other.Envelope()); !errors.Is(err, jobs.ErrLegacyLayout) || errors.Is(err, fault.Conflict) {
-		t.Fatal("legacy layout was not reported as such", err)
-	}
-	if !maps.Equal(before, snapshot()) {
-		t.Fatal("implicit use changed a layout-1 queue")
-	}
-	// Layout 1 requires the pinned v0.13.0 migration before the new cutover.
-	if migrated, err := backend.JobMigrateLayout(t.Context(), key); !errors.Is(err, jobs.ErrLegacyLayout) || migrated {
-		t.Fatal("new release must not migrate layout 1", migrated, err)
-	}
-	if status := oldJobCommand(t, backend, key, jobRequest{Op: "migrate_layout"}); status != 1 {
-		t.Fatal("v0.13.0 prerequisite migration", status)
-	}
-	// The layout-2 cutover preserves records and is idempotent.
-	if migrated, err := backend.JobMigrateLayout(t.Context(), key); err != nil || !migrated {
-		t.Fatal("explicit migration", migrated, err)
-	}
-	if migrated, err := backend.JobMigrateLayout(t.Context(), key); err != nil || migrated {
-		t.Fatal("repeated migration changed the queue", migrated, err)
-	}
-	if client.raw.HGet(t.Context(), keys[4], "layout").Val() != "3" || client.raw.HGet(t.Context(), keys[4], "live").Val() != "1" {
-		t.Fatal("queue was not migrated to layout 3")
 	}
 	found, err := backend.JobReserve(t.Context(), key, owner, time.Minute)
 	reservation, ok := found.Get()
@@ -405,172 +367,6 @@ func TestRedisJobLayoutOneQueueMigratesOnlyExplicitly(t *testing.T) {
 	if !client.raw.HExists(t.Context(), keys[9], id).Val() {
 		t.Fatal("record did not move its envelope on its next write")
 	}
-}
-
-// TestRedisLayoutMigrationCountsDecodedRecordState migrates a layout-1 queue
-// holding a retried-then-succeeded record (its history contains a failed
-// transition), a failed record, live work and a finished workflow group. The
-// migrated counters must equal the layout-2 accounting of the same records.
-func TestRedisLayoutMigrationCountsDecodedRecordState(t *testing.T) {
-	client, backend, key := jobFixture(t)
-	ctx := t.Context()
-	d := jobs.Define[jobtest.Payload]("legacy.mixed", 1, jobs.DefaultPolicy(key.Queue()))
-	capture := func(text string) jobs.Envelope {
-		t.Helper()
-		pending, err := d.Capture(ctx, jobtest.Payload{Text: text}, jobs.Options[jobtest.Payload]{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return pending.Envelope()
-	}
-	finish := func(want jobs.ExecutionID, state jobs.State) {
-		t.Helper()
-		owner, err := lease.NewOwner()
-		if err != nil {
-			t.Fatal(err)
-		}
-		found, err := backend.JobReserve(ctx, key, owner, time.Minute)
-		claim, ok := found.Get()
-		if err != nil || !ok || claim.Envelope.ID() != want {
-			t.Fatal("expected reservation", err)
-		}
-		if _, err := backend.JobStart(ctx, key, claim.Ownership); err != nil {
-			t.Fatal(err)
-		}
-		result := jobs.Result{State: state}
-		if state == jobs.Failed {
-			result.Reason = jobs.HandlerFailed
-		}
-		if changed, err := backend.JobFinish(ctx, key, claim.Ownership, result); err != nil || !changed {
-			t.Fatal(changed, err)
-		}
-	}
-	retried, failed, waiting := capture("retried"), capture("failed"), capture("waiting")
-	if _, err := backend.JobEnqueue(ctx, key, retried); err != nil {
-		t.Fatal(err)
-	}
-	finish(retried.ID(), jobs.Failed)
-	found, err := backend.JobInspect(ctx, key, retried.ID())
-	record, _ := found.Get()
-	token, tokenErr := record.RetryToken()
-	if err != nil || tokenErr != nil {
-		t.Fatal(err, tokenErr)
-	}
-	if changed, err := backend.JobRetry(ctx, key, jobs.RetryRequest{Target: retried.Target(), Token: token}); err != nil || !changed {
-		t.Fatal("manual retry", changed, err)
-	}
-	finish(retried.ID(), jobs.Succeeded)
-	if _, err := backend.JobEnqueue(ctx, key, failed); err != nil {
-		t.Fatal(err)
-	}
-	finish(failed.ID(), jobs.Failed)
-	pending, err := d.Capture(ctx, jobtest.Payload{Text: "workflow"}, jobs.Options[jobtest.Payload]{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	group, err := jobs.NewChain(pending.Step())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ok, err := backend.JobWorkflow(ctx, key, group.Envelope()); err != nil || !ok {
-		t.Fatal(ok, err)
-	}
-	if ok, err := backend.JobCancelWorkflow(ctx, key, group.ID()); err != nil || !ok {
-		t.Fatal(ok, err)
-	}
-	if _, err := backend.JobEnqueue(ctx, key, waiting); err != nil {
-		t.Fatal(err)
-	}
-	keys := jobKeys(key)
-	counters := []string{"live", "live_bytes", "retained", "retained_bytes", "failed"}
-	read := func() []string {
-		values, err := client.raw.HMGet(ctx, keys[4], counters...).Result()
-		if err != nil {
-			t.Fatal(err)
-		}
-		result := make([]string, len(values))
-		for i, value := range values {
-			result[i], _ = value.(string)
-		}
-		return result
-	}
-	expected := read()
-	if expected[4] != "1" || expected[2] != "3" {
-		t.Fatal("unexpected layout-2 accounting", expected)
-	}
-	// Rewrite every record as layout 1: embedded envelope, terminal workflow
-	// members in :finished, and one count/bytes pair. Layout 3 no longer places
-	// those members in the independent terminal index.
-	rows, err := client.raw.HGetAll(ctx, keys[0]).Result()
-	if err != nil {
-		t.Fatal(err)
-	}
-	envelopes, err := client.raw.HGetAll(ctx, keys[9]).Result()
-	if err != nil {
-		t.Fatal(err)
-	}
-	pipe := client.raw.TxPipeline()
-	for id, text := range rows {
-		var row map[string]json.RawMessage
-		if err := json.Unmarshal([]byte(text), &row); err != nil {
-			t.Fatal(err)
-		}
-		encoded, err := json.Marshal(envelopes[id])
-		if err != nil {
-			t.Fatal(err)
-		}
-		row["envelope"] = encoded
-		data, err := json.Marshal(row)
-		if err != nil {
-			t.Fatal(err)
-		}
-		pipe.HSet(ctx, keys[0], id, data)
-		var state jobs.State
-		if err := json.Unmarshal(row["state"], &state); err != nil {
-			t.Fatal(err)
-		}
-		if state.Terminal() {
-			var finished int64
-			if err := json.Unmarshal(row["finished"], &finished); err != nil {
-				t.Fatal(err)
-			}
-			pipe.ZAdd(ctx, keys[3], driver.Z{Score: float64(finished), Member: id})
-		}
-	}
-	sum := func(fields ...string) int64 {
-		t.Helper()
-		var total int64
-		for _, field := range fields {
-			n, err := client.raw.HGet(ctx, keys[4], field).Int64()
-			if err != nil {
-				t.Fatal(err)
-			}
-			total += n
-		}
-		return total
-	}
-	count, bytes := sum("live", "retained"), sum("live_bytes", "retained_bytes")
-	pipe.Del(ctx, keys[9])
-	pipe.HDel(ctx, keys[4], append([]string{"layout"}, counters...)...)
-	pipe.HSet(ctx, keys[4], "config", backend.legacy, "count", count, "bytes", bytes)
-	if _, err := pipe.Exec(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if status := oldJobCommand(t, backend, key, jobRequest{Op: "migrate_layout"}); status != 1 {
-		t.Fatal("v0.13.0 prerequisite migration", status)
-	}
-	if migrated, err := backend.JobMigrateLayout(ctx, key); err != nil || !migrated {
-		t.Fatal("explicit migration", migrated, err)
-	}
-	if got := read(); !slices.Equal(got, expected) {
-		t.Fatal("migrated counters differ from the records' accounting", got, expected)
-	}
-	stats, err := backend.JobStats(ctx, key)
-	if err != nil || stats.Failed != 1 || stats.Retained != 3 || stats.Waiting != 1 {
-		t.Fatalf("migrated stats: %+v %v", stats, err)
-	}
-	// The migrated queue keeps working: the live record completes.
-	finish(waiting.ID(), jobs.Succeeded)
 }
 
 // A finished workflow's group bytes move from live to retained accounting and

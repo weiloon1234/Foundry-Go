@@ -2,19 +2,22 @@
 
 ## Unreleased
 
-Planned for v0.16.0.
+Planned for v0.16.0: removes the finished Redis queue layout migration. Repin applications, upgrade
+generation-5 hosts with `tools-plan`/`tools-apply` to deploy-tool generation 6, then run an ordinary deploy.
 
-- Deploy tools move to generation 6. Upgrade generation-5 hosts with `tools-plan`
-  and `tools-apply` before ordinary deployments. The minimum client generation
-  remains 1, so existing generation-3 instance registrations stay upgradeable.
-- Removed finished queue cutover actions, persistent startup admission, containment,
-  and Redis snapshot/restore. Role units no longer use `ExecStartPre`; ordinary
-  deploys no longer call `deploy:jobs-inspect`. Removed actions have no aliases.
-- Added temporary upgrade bridges and retryable cleanup of finished instance state,
-  private migration records, and exact failed executor unit records. Off-host
-  snapshots remain untouched; old releases follow ordinary retention.
-- Container acceptance now upgrades a published v0.15.3 host through generation 6,
-  replacing the historical incident replay and recovery matrix.
+- Removed: Redis layout-1/2 migration APIs, `jobs migrate-layout`, legacy layout detection, and
+  `deploy:jobs-inspect` with its admission inventory APIs. `DeployJobCommands` now declares only `jobs`.
+  Layout 3, quarantine, provider-free operations, and lazy legacy record handling remain. See
+  [compatibility](docs/compatibility.md).
+- Removed: the deploy tool's queue cutover actions, persistent startup admission, containment, and Redis
+  snapshot/restore. Role units no longer use `ExecStartPre`; ordinary deploys no longer call
+  `deploy:jobs-inspect`. Removed actions have no aliases. The minimum client generation remains 1, so
+  existing instance registrations stay upgradeable.
+- Added: temporary upgrade bridges and retryable cleanup of finished instance cutover state, private
+  migration records, and exact failed executor unit records. Off-host snapshots remain untouched; old
+  releases follow ordinary retention. A later release removes the bridges.
+- Container acceptance now upgrades a published v0.15.3 host through generation 6, replacing the
+  historical incident replay and recovery matrix.
 
 ## v0.15.3 — 2026-11-10
 

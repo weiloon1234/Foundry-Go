@@ -165,8 +165,8 @@ func ConfigureStorage(settings Settings, optionsList ...Option) (*Plan, error) {
 
 // ConfigureJobs plans only job connections and the Redis pools they use, leaving
 // out databases, storage, caches, mailers, pub/sub, realtime, coordination and
-// application Redis stores. Deployment inspection and layout migration use it so
-// unrelated services are never started.
+// application Redis stores. Restricted jobs operations use it so unrelated
+// services are never started.
 func ConfigureJobs(settings Settings, optionsList ...Option) (*Plan, error) {
 	selected := DefaultSettings()
 	selected.Namespace, selected.Jobs = settings.Namespace, settings.Jobs

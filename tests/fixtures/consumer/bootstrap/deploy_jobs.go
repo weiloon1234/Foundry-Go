@@ -9,7 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/cli"
 )
 
-// RunDeployJobs is the consumer's restricted artisan entry point. Global settings
+// RunDeployJobs is the consumer's restricted jobs operations entry point. Global settings
 // flags are removed before the framework parses command-local flags.
 func RunDeployJobs(ctx context.Context, args []string, streams cli.Streams) error {
 	globals := flag.NewFlagSet("artisan", flag.ContinueOnError)

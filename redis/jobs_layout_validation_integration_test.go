@@ -22,8 +22,8 @@ func jobKeyExpirations(t *testing.T, f quarantineFixture) map[string]int64 {
 	return result
 }
 
-func TestRedisInspectionAndMigrationValidationMatrix(t *testing.T) {
-	for _, layout := range []JobQueueLayout{JobQueueLayoutAbsent, JobQueueLayout2, JobQueueLayout3} {
+func TestRedisInspectionValidationMatrix(t *testing.T) {
+	for _, layout := range []JobQueueLayout{JobQueueLayoutAbsent, JobQueueLayout3} {
 		type validationCase struct {
 			name    string
 			damage  func(*testing.T, quarantineFixture)
@@ -68,9 +68,6 @@ func TestRedisInspectionAndMigrationValidationMatrix(t *testing.T) {
 					}
 				},
 			})
-			if layout == JobQueueLayout2 {
-				cases[len(cases)-1].blocker = JobLayoutBlockerInvalidState
-			}
 		}
 		for index := range 11 {
 			cases = append(cases, validationCase{
@@ -84,10 +81,7 @@ func TestRedisInspectionAndMigrationValidationMatrix(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(string(layout)+"/"+tc.name, func(t *testing.T) {
 				f := newQuarantineFixture(t)
-				switch layout {
-				case JobQueueLayout2:
-					oldJobEnqueue(t, f, f.pending(t).Envelope())
-				case JobQueueLayout3:
+				if layout == JobQueueLayout3 {
 					f.enqueue(t)
 				}
 				if tc.damage != nil {
@@ -114,23 +108,6 @@ func TestRedisInspectionAndMigrationValidationMatrix(t *testing.T) {
 				}
 				if !maps.Equal(before, snapshotJobKeys(t, f.client, f.keys)) || !maps.Equal(expirations, jobKeyExpirations(t, f)) {
 					t.Fatal("inspection changed bytes, types, or expiration metadata")
-				}
-				changed, migrationErr := f.backend.JobMigrateLayout(t.Context(), f.key)
-				if (migrationErr == nil) != eligible {
-					t.Fatalf("inspection/migration disagree: %+v, migration=%v", inspection, migrationErr)
-				}
-				if !eligible {
-					if changed || !maps.Equal(before, snapshotJobKeys(t, f.client, f.keys)) || !maps.Equal(expirations, jobKeyExpirations(t, f)) {
-						t.Fatal("rejected migration changed state")
-					}
-					return
-				}
-				if changed != (layout == JobQueueLayout2) {
-					t.Fatalf("changed = %v for %s", changed, layout)
-				}
-				after, err := f.backend.InspectLayout(t.Context(), f.key)
-				if err != nil || !after.Eligible || after.Layout != JobQueueLayout3 {
-					t.Fatalf("post-migration inspection = %+v, %v", after, err)
 				}
 			})
 		}
