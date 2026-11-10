@@ -81,6 +81,7 @@ var foundryCapturedRequestDetailJSON = sync.OnceValue(func() foundrycontract.JSO
 				{Name: "response_content_type", Type: "string", Required: true},
 				{Name: "response_encoding", Type: "string", Required: true},
 				{Name: "response_head", Type: "go:874612457cdc8d7319303305c10492405e8dd6f1b85c024df63dbfb73046fa1e", Required: true},
+				{Name: "response_headers", Type: "go:4d42dfae421d52d989390944808cab2531174f9d9de097b1d27b6307b3725f2a", Required: true},
 			},
 		},
 		{ID: "go:4af101177fe720bf0766557228231c42b38635920ef7206f518a04030b3dcdf0", Kind: foundrycontract.Kind("array"), Nullable: true,
@@ -132,6 +133,13 @@ type CapturedRequestDetailValidationFieldSet struct {
 	ResponseEncoding foundryvalidation.Field[CapturedRequestDetail, string]
 	// ResponseHead validates the declared JSON property "response_head".
 	ResponseHead foundryvalidation.Field[CapturedRequestDetail, []byte]
+	// ResponseHeaders validates the declared JSON property "response_headers".
+	//
+	// ResponseHeaders are the headers the application set when the response
+	// was committed, unmasked. Transport headers net/http adds afterwards
+	// (Date, Content-Length, a sniffed Content-Type) are not included.
+	//
+	ResponseHeaders foundryvalidation.Field[CapturedRequestDetail, []CapturedField]
 }
 
 // CapturedRequestDetailValidationFields returns typed field descriptors.
@@ -175,6 +183,9 @@ var foundryCapturedRequestDetailValidationFields = sync.OnceValue(func() *Captur
 		}),
 		ResponseHead: foundryvalidation.DefineField("response_head", func(input CapturedRequestDetail) []byte {
 			return input.ResponseHead
+		}),
+		ResponseHeaders: foundryvalidation.DefineField("response_headers", func(input CapturedRequestDetail) []CapturedField {
+			return input.ResponseHeaders
 		}),
 	}
 })

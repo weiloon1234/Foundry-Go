@@ -211,9 +211,11 @@ declaration allows.
 | `config.retention` | 30 days (1 hour to 365 days) | age after which rows are deleted and hidden |
 | `config.max_rows` | 100,000 (1,000 to 10,000,000) | newest rows kept |
 
-Apply the framework migration `foundry.webhook_capture/000001_create_webhook_captures`
-with the ordinary migration command before relying on capture. Rolling the
-framework back keeps the table; `webhook-captures prune --apply` empties it.
+Apply the framework migrations `foundry.webhook_capture/000001_create_webhook_captures`
+and `foundry.webhook_capture/000002_add_response_headers` with the ordinary
+migration command before relying on capture. Rolling the framework back keeps
+the table; older releases leave `response_headers` empty, and
+`webhook-captures prune --apply` empties the table.
 
 ### Privacy
 
@@ -233,8 +235,13 @@ prefix, keep the viewer behind the developer type gate and use
 `config.force_redacted` to turn it off in production without a deploy. A
 body over the limit is omitted, never stored in part.
 
-The response head is the first 4 KiB the server accepted for writing. It is
-not redacted, and it does not prove the gateway received it.
+The response head is the first 4 KiB the server accepted for writing. Response
+headers are the header map the application had set when the response was
+committed (first write or final status), within the same 16 KiB, 128-name
+bound as request headers. Neither is redacted: `Set-Cookie` and any token a
+handler returns are stored as sent. Headers net/http adds afterwards, such as
+`Date`, `Content-Length` and a sniffed `Content-Type`, are not included.
+Neither proves the gateway received the response.
 
 ### Loss and timing
 
@@ -251,8 +258,8 @@ every byte. See [request lifecycle](http-requests.md#webhook-capture-in-the-requ
 
 ### Storage sizing
 
-Each row holds at most `config.body_bytes` of body plus about 40 KiB of
-headers, query and response head. Budget `max_rows` times that for the worst
+Each row holds at most `config.body_bytes` of body plus about 56 KiB of
+request and response headers, query and response head. Budget `max_rows` times that for the worst
 case: 100,000 rows of 2 MiB bodies is about 200 GiB, while typical JSON
 webhooks of a few KiB need well under 1 GiB. Every replica admits its own
 `config.rate`. Retention runs beside the HTTP kernel every 10 minutes, and

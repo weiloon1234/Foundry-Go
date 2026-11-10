@@ -84,6 +84,7 @@ func captureOrigins(app *application.App) []string {
 		for _, definition := range target.Definitions {
 			if definition.Key.Origin == capture.MigrationOrigin {
 				origins = append(origins, string(target.Connection)+"/"+target.Schema)
+				break
 			}
 		}
 	}

@@ -261,8 +261,14 @@ func (c *kernelCapture) finish(observation *requestObservation, response *observ
 	}
 	if status != 0 {
 		completion.Status = value.Of(uint16(status))
+		// A handler that returns without writing gets net/http's implicit 200
+		// with the header map as it is now.
+		if !response.hijacked {
+			c.head.commit(response.Header())
+		}
 	}
 	completion.ResponseHead = c.head.prefix
+	completion.ResponseHeaders = c.head.headers
 	completion.ResponseTruncated = c.head.truncated
 	completion.ResponseContentType = c.head.contentType
 	completion.ResponseEncoding = c.head.encoding
@@ -271,5 +277,5 @@ func (c *kernelCapture) finish(observation *requestObservation, response *observ
 	c.reservation.Complete(s)
 	// No payload remains owned by the request while extension observers run.
 	c.snapshot = httpcapture.Snapshot{}
-	c.head.prefix = nil
+	c.head.prefix, c.head.headers = nil, nil
 }

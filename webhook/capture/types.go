@@ -182,15 +182,19 @@ type CapturedField struct {
 //
 //foundry:dto
 type CapturedRequestDetail struct {
-	Request             CapturedRequest   `json:"request"`
-	Headers             []CapturedField   `json:"headers"`
-	Query               []CapturedField   `json:"query"`
-	ContentType         string            `json:"content_type"`
-	ContentEncoding     string            `json:"content_encoding"`
-	Body                []byte            `json:"body"`
-	ResponseContentType string            `json:"response_content_type"`
-	ResponseEncoding    string            `json:"response_encoding"`
-	ResponseBytes       int64             `json:"response_bytes"`
-	ResponseHead        []byte            `json:"response_head"`
-	Omissions           []CaptureOmission `json:"omissions"`
+	Request             CapturedRequest `json:"request"`
+	Headers             []CapturedField `json:"headers"`
+	Query               []CapturedField `json:"query"`
+	ContentType         string          `json:"content_type"`
+	ContentEncoding     string          `json:"content_encoding"`
+	Body                []byte          `json:"body"`
+	ResponseContentType string          `json:"response_content_type"`
+	ResponseEncoding    string          `json:"response_encoding"`
+	ResponseBytes       int64           `json:"response_bytes"`
+	ResponseHead        []byte          `json:"response_head"`
+	// ResponseHeaders are the headers the application set when the response
+	// was committed, unmasked. Transport headers net/http adds afterwards
+	// (Date, Content-Length, a sniffed Content-Type) are not included.
+	ResponseHeaders []CapturedField   `json:"response_headers"`
+	Omissions       []CaptureOmission `json:"omissions"`
 }

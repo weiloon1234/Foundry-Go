@@ -8,6 +8,7 @@ import (
 	"net"
 	stdhttp "net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -62,6 +63,8 @@ func TestWebhookCaptureResponseCapabilities(t *testing.T) {
 				}
 				w.Header().Set("Content-Type", "text/plain")
 				w.Header().Set("Content-Encoding", "identity")
+				w.Header().Add("Set-Cookie", "sid=abc")
+				w.Header().Add("Set-Cookie", "theme=dark")
 				switch mode {
 				case "hijack":
 					_, _, err := stdhttp.NewResponseController(w).Hijack()
@@ -88,6 +91,7 @@ func TestWebhookCaptureResponseCapabilities(t *testing.T) {
 				}
 				_, _ = io.WriteString(w, data)
 				w.Header().Set("Content-Type", "mutated-after-commit")
+				w.Header().Set("X-Late", "after-commit")
 			}), DefaultServerConfig(), recorder)
 			method := "POST"
 			if mode == "head" {
@@ -104,6 +108,13 @@ func TestWebhookCaptureResponseCapabilities(t *testing.T) {
 			}
 			if c.ResponseContentType != "text/plain" || c.ResponseEncoding != "identity" {
 				t.Fatal("committed response metadata changed")
+			}
+			names := make([]string, len(c.ResponseHeaders))
+			for i, field := range c.ResponseHeaders {
+				names[i] = field.Name
+			}
+			if !slices.Equal(names, []string{"Content-Encoding", "Content-Type", "Set-Cookie", stdhttp.CanonicalHeaderKey(RequestIDHeader)}) || !slices.Equal(c.ResponseHeaders[1].Values, []string{"text/plain"}) || !slices.Equal(c.ResponseHeaders[2].Values, []string{"sid=abc", "theme=dark"}) || c.ResponseMetadataTruncated {
+				t.Fatal("response headers were not captured whole at commit", c.ResponseHeaders)
 			}
 			status, ok := c.Status.Get()
 			wantStatus := uint16(200)
@@ -137,6 +148,20 @@ func TestWebhookCaptureResponseCapabilities(t *testing.T) {
 				t.Fatal("flush lost")
 			}
 		})
+	}
+}
+
+func TestWebhookCaptureImplicitResponseHeaders(t *testing.T) {
+	recorder := captureTestRecorder(t)
+	handler := captureTestHandler(t, stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
+		w.Header().Set("X-Ack", "received")
+	}), DefaultServerConfig(), recorder)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("POST", "/wh", nil))
+	c := captureTestTake(t, recorder).Completion
+	status, _ := c.Status.Get()
+	if status != 200 || len(c.ResponseHeaders) != 2 || c.ResponseHeaders[0].Name != "X-Ack" || c.ResponseHeaders[0].Values[0] != "received" || c.ResponseHeaders[1].Values[0] != response.Header().Get(RequestIDHeader) {
+		t.Fatal("headers of an implicit 200 were not captured", c.ResponseHeaders)
 	}
 }
 

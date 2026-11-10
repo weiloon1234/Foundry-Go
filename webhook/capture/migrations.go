@@ -3,17 +3,27 @@ package capture
 import "github.com/weiloon1234/Foundry-Go/database/migrate"
 
 const (
-	MigrationOrigin migrate.Origin  = "foundry.webhook_capture"
-	CreateTable     migrate.ID      = "000001_create_webhook_captures"
-	Introduced      migrate.Version = "v0.17.0"
+	MigrationOrigin    migrate.Origin  = "foundry.webhook_capture"
+	CreateTable        migrate.ID      = "000001_create_webhook_captures"
+	AddResponseHeaders migrate.ID      = "000002_add_response_headers"
+	Introduced         migrate.Version = "v0.17.0"
+	ResponseHeadersIn  migrate.Version = "v0.18.0"
 )
 
 // Migrations returns the framework-owned capture table. Application assembly
 // registers it for the configured database and schema; apply it with the
 // ordinary migration command before capture can store rows. Rolling back the
-// framework keeps the table.
+// framework keeps the table; older writers omit response_headers and get its
+// empty default.
 func Migrations() []migrate.Definition {
-	return []migrate.Definition{{Key: migrate.Key{Origin: MigrationOrigin, ID: CreateTable}, Version: Introduced, SQL: []string{
+	return []migrate.Definition{createTable(), {Key: migrate.Key{Origin: MigrationOrigin, ID: AddResponseHeaders}, Version: ResponseHeadersIn, SQL: []string{
+		`ALTER TABLE foundry_webhook_captures ADD COLUMN response_headers jsonb NOT NULL DEFAULT '[]'::jsonb
+CHECK (jsonb_typeof(response_headers) = 'array' AND jsonb_array_length(response_headers) <= 128)`,
+	}}}
+}
+
+func createTable() migrate.Definition {
+	return migrate.Definition{Key: migrate.Key{Origin: MigrationOrigin, ID: CreateTable}, Version: Introduced, SQL: []string{
 		`CREATE TABLE foundry_webhook_captures (
 id uuid PRIMARY KEY,
 received_at timestamptz NOT NULL CHECK (isfinite(received_at)),
@@ -51,5 +61,5 @@ CHECK (body_mode = 'redacted' OR body_state IN ('empty','exact','omitted'))
 		`CREATE INDEX foundry_webhook_captures_received ON foundry_webhook_captures (received_at DESC, id DESC)`,
 		`CREATE INDEX foundry_webhook_captures_method ON foundry_webhook_captures (method, received_at DESC, id DESC)`,
 		`CREATE INDEX foundry_webhook_captures_status ON foundry_webhook_captures (response_status, received_at DESC, id DESC)`,
-	}}}
+	}}
 }

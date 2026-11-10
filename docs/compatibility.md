@@ -120,13 +120,16 @@ owns the grammar, offline lookup, scan scope, and command instructions.
 application without a capture declaration gets no store, writer, migration
 target or kernel capture, and its request handling is unchanged.
 
-Declaring capture adds the framework migration
+Declaring capture adds the framework migrations
 `foundry.webhook_capture/000001_create_webhook_captures`, which creates
-`foundry_webhook_captures` in the configured schema. Apply it before the
-release serves traffic; until then capture logs that the table is unavailable
-and drops captures without affecting responses. There is no legacy table or
-reader. Rolling the framework back leaves the table in place; remove its rows
-with `webhook-captures prune --apply` before dropping it by hand.
+`foundry_webhook_captures` in the configured schema, and
+`000002_add_response_headers` (v0.18.0), which adds `response_headers` with an
+empty-array default. Apply them before the release serves traffic; until then
+capture logs that the table is unavailable or counts failed writes, and drops
+captures without affecting responses. There is no legacy table or reader.
+Rolling the framework back leaves the table and column in place; older writers
+store an empty `response_headers`. Remove rows with `webhook-captures prune
+--apply` before dropping the table by hand.
 
 Mounting `capture.Routes` adds two generated operations, `<group>.webhook-captures.list`
 and `.show`, with the `Capture*` enums and `Captured*` DTOs. Regenerate the

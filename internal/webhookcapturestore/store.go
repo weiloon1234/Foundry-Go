@@ -80,6 +80,7 @@ func Insert(ctx context.Context, tx *database.Tx, captures []Capture) error {
 			orm.TextSet(c.ResponseEncoding, row.ResponseEncoding),
 			orm.NumberSet(c.ResponseBytes, row.ResponseBytes),
 			orm.ColumnSet(c.ResponseHead, row.ResponseHead),
+			orm.JSONSet(c.ResponseHeaders, row.ResponseHeaders),
 			orm.NumberSet(c.DurationMS, row.DurationMS),
 			orm.JSONSet(c.Omissions, row.Omissions),
 			orm.NumberSet(c.DroppedBefore, row.DroppedBefore),

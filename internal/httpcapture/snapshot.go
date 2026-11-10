@@ -62,6 +62,7 @@ type Completion struct {
 	Result                                observability.Result
 	Status                                value.Nullable[uint16] // actual committed status; absent on precommit abort/hijack
 	ResponseHead                          []byte
+	ResponseHeaders                       []Field // the handler's header map at commit, before net/http adds transport headers
 	ResponseContentType, ResponseEncoding string
 	ResponseMetadataTruncated             bool
 	ResponseTruncated                     bool

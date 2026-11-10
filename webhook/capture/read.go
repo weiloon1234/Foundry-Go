@@ -160,6 +160,10 @@ func presentDetail(row store.Capture) (CapturedRequestDetail, error) {
 	if err != nil {
 		return CapturedRequestDetail{}, err
 	}
+	responseHeaders, err := fields(row.ResponseHeaders)
+	if err != nil {
+		return CapturedRequestDetail{}, err
+	}
 	names, err := row.Omissions.Decode()
 	if err != nil {
 		return CapturedRequestDetail{}, err
@@ -173,7 +177,7 @@ func presentDetail(row store.Capture) (CapturedRequestDetail, error) {
 	return CapturedRequestDetail{
 		Request: summary, Headers: headers, Query: query, ContentType: row.ContentType, ContentEncoding: row.ContentEncoding,
 		Body: nonNil(row.Body), ResponseContentType: row.ResponseContentType, ResponseEncoding: row.ResponseEncoding,
-		ResponseBytes: row.ResponseBytes, ResponseHead: nonNil(row.ResponseHead), Omissions: omissions,
+		ResponseBytes: row.ResponseBytes, ResponseHead: nonNil(row.ResponseHead), ResponseHeaders: responseHeaders, Omissions: omissions,
 	}, nil
 }
 

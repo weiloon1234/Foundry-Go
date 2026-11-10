@@ -148,6 +148,7 @@ type captureResponse struct {
 	truncated             bool
 	committed             bool
 	contentType, encoding string
+	headers               []httpcapture.Field
 	metadataTruncated     bool
 }
 
@@ -165,8 +166,9 @@ func (c *captureResponse) commit(header stdhttp.Header) {
 		return
 	}
 	c.committed = true
-	var cut bool
-	c.contentType, c.metadataTruncated = captureString(header.Get("Content-Type"), 256)
-	c.encoding, cut = captureString(header.Get("Content-Encoding"), 256)
-	c.metadataTruncated = c.metadataTruncated || cut
+	var typeCut, encodingCut, headersCut bool
+	c.contentType, typeCut = captureString(header.Get("Content-Type"), 256)
+	c.encoding, encodingCut = captureString(header.Get("Content-Encoding"), 256)
+	c.headers, headersCut = captureHeaders(header)
+	c.metadataTruncated = typeCut || encodingCut || headersCut
 }

@@ -48,6 +48,7 @@ type Capture struct {
 	ResponseEncoding    string
 	ResponseBytes       int64
 	ResponseHead        []byte
+	ResponseHeaders     value.JSON[[]Field]
 	DurationMS          int64
 	Omissions           value.JSON[[]string]
 	DroppedBefore       int64
@@ -60,7 +61,8 @@ func (Capture) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("webhook capt
 func (c Capture) Size() int {
 	headers, _ := c.Headers.Text()
 	query, _ := c.Query.Text()
-	return len(c.Body) + len(c.ResponseHead) + len(headers) + len(query) + len(c.Path) + 1024
+	responseHeaders, _ := c.ResponseHeaders.Text()
+	return len(c.Body) + len(c.ResponseHead) + len(headers) + len(query) + len(responseHeaders) + len(c.Path) + 1024
 }
 
 // Summary is the narrow list projection. It never selects bodies, headers or

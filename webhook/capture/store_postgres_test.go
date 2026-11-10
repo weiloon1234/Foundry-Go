@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -30,7 +31,10 @@ import (
 
 // Derived from migrate.Registry's canonical definition encoding. A change to
 // the shipped migration needs a new migration ID, not a new checksum.
-const captureMigrationChecksum = "3be40b3a8c510d49bfa598b9ce05ba6a38c3572491c0929fedc6826fa279877f"
+const (
+	captureMigrationChecksum         = "3be40b3a8c510d49bfa598b9ce05ba6a38c3572491c0929fedc6826fa279877f"
+	responseHeadersMigrationChecksum = "a001ef4710c54aef5d28b54b3c09eb43ac0e5a594814ea2e77f8d639bcc671fc"
+)
 
 type testClock struct{ now atomic.Pointer[time.Time] }
 
@@ -49,15 +53,24 @@ func testID(i int) attribution.RequestID {
 
 func TestCaptureMigrationIdentity(t *testing.T) {
 	definitions := Migrations()
-	if len(definitions) != 1 || definitions[0].Key != (migrate.Key{Origin: "foundry.webhook_capture", ID: "000001_create_webhook_captures"}) || definitions[0].Mode != migrate.Transactional || len(definitions[0].Down) != 0 {
-		t.Fatal("capture migration identity or reversal policy changed")
+	shipped := []struct {
+		id       migrate.ID
+		checksum string
+	}{{"000001_create_webhook_captures", captureMigrationChecksum}, {"000002_add_response_headers", responseHeadersMigrationChecksum}}
+	if len(definitions) != len(shipped) {
+		t.Fatal("capture migration count changed", len(definitions))
 	}
 	registry, err := migrate.New(definitions...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if checksum := registry.Entries()[0].Checksum.String(); checksum != captureMigrationChecksum {
-		t.Fatalf("shipped capture migration changed: %s", checksum)
+	for i, want := range shipped {
+		if definitions[i].Key != (migrate.Key{Origin: "foundry.webhook_capture", ID: want.id}) || definitions[i].Mode != migrate.Transactional || len(definitions[i].Down) != 0 {
+			t.Fatal("capture migration identity or reversal policy changed", want.id)
+		}
+		if checksum := registry.Entries()[i].Checksum.String(); checksum != want.checksum {
+			t.Fatalf("shipped capture migration %s changed: %s", want.id, checksum)
+		}
 	}
 	definitions[0].SQL[0] = "SELECT 1"
 	if Migrations()[0].SQL[0] == "SELECT 1" {
@@ -226,6 +239,7 @@ func TestPostgresCaptureWriterReadsAndShutdownDrain(t *testing.T) {
 	go func() { done <- f.store.Run(ctx) }()
 	first := snapshot("application/json", []byte(`{"token":"secret","amount":12}`))
 	first.Metadata.Headers = []httpcapture.Field{{Name: "Authorization", Values: []string{"Bearer x"}}}
+	first.Completion.ResponseHeaders = []httpcapture.Field{{Name: "Set-Cookie", Values: []string{"sid=abc", "theme=dark"}}, {Name: "X-Request-Id", Values: []string{string(testRequestID)}}}
 	f.complete(t, first)
 	second := snapshot("application/octet-stream", []byte{0, 1, 2})
 	second.Metadata.RequestID, second.Metadata.ReceivedAt, second.Metadata.Full = testID(2), testInstant(1), true
@@ -272,6 +286,9 @@ func TestPostgresCaptureWriterReadsAndShutdownDrain(t *testing.T) {
 	}
 	if string(detail.Body) != `{"token":"[masked]","amount":12}` || detail.Headers[0].Values[0] != maskedValue || string(detail.ResponseHead) != `{"ok":true}` || detail.Request.BodyState != BodyJSON {
 		t.Fatal("detail lost redacted content", string(detail.Body))
+	}
+	if want := []CapturedField{{Name: "Set-Cookie", Values: []string{"sid=abc", "theme=dark"}}, {Name: "X-Request-Id", Values: []string{string(testRequestID)}}}; !reflect.DeepEqual(detail.ResponseHeaders, want) {
+		t.Fatal("response headers were not stored whole", detail.ResponseHeaders)
 	}
 	for _, id := range []attribution.RequestID{"not-a-uuid", testID(9)} {
 		if _, err := f.store.find(t.Context(), id); !errors.Is(err, http.NotFound) {
@@ -320,8 +337,8 @@ func TestPostgresCaptureStoresEmptyBodiesAndResponses(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	detail, err := f.store.find(t.Context(), testRequestID)
-	if err != nil || len(detail.Body) != 0 || detail.Request.BodyState != BodyEmpty {
-		t.Fatal("empty request body changed", err)
+	if err != nil || len(detail.Body) != 0 || detail.Request.BodyState != BodyEmpty || detail.ResponseHeaders == nil || len(detail.ResponseHeaders) != 0 {
+		t.Fatal("empty request body or response headers changed", err)
 	}
 	cancel()
 	if err := <-done; err != nil {

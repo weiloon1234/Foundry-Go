@@ -39,6 +39,7 @@ type CaptureTable struct {
 	ResponseEncoding    orm.Text[Capture, string]
 	ResponseBytes       orm.Number[Capture, int64]
 	ResponseHead        orm.Column[Capture, []byte]
+	ResponseHeaders     orm.JSON[Capture, []Field]
 	DurationMS          orm.Number[Capture, int64]
 	Omissions           orm.JSON[Capture, []string]
 	DroppedBefore       orm.Number[Capture, int64]
@@ -72,6 +73,7 @@ var Captures = orm.Define("foundry_webhook_captures", func(b orm.Builder[Capture
 		ResponseEncoding:    orm.TextOf(b, &m.ResponseEncoding),
 		ResponseBytes:       orm.NumberOf(b, &m.ResponseBytes),
 		ResponseHead:        orm.BytesOf(b, &m.ResponseHead),
+		ResponseHeaders:     orm.JSONOf(b, &m.ResponseHeaders),
 		DurationMS:          orm.NumberOf(b, &m.DurationMS),
 		Omissions:           orm.JSONOf(b, &m.Omissions),
 		DroppedBefore:       orm.NumberOf(b, &m.DroppedBefore),

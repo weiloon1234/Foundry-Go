@@ -177,9 +177,20 @@ func TestRedactFormMultipartQueryAndMetadata(t *testing.T) {
 
 func TestRedactSensitiveHeaderNames(t *testing.T) {
 	for name, masked := range map[string]bool{"Authorization": true, "Proxy-Authorization": true, "Cookie": true, "X-Api-Key": true, "X-Auth-Token": true, "Stripe-Signature": false, "X-Hub-Signature-256": false, "Content-Type": false} {
-		got := redactHeaders([]httpcapture.Field{{Name: name, Values: []string{"value"}}})[0]
-		if got.Name != name || (got.Values[0] == maskedValue) != masked {
-			t.Fatal("header disclosure rule changed for", name, got.Values)
+		s := snapshot("application/json", nil)
+		s.Metadata.Headers = []httpcapture.Field{{Name: name, Values: []string{"value"}}}
+		s.Completion.ResponseHeaders = []httpcapture.Field{{Name: name, Values: []string{"sent"}}}
+		row, err := redact(s, testPolicy())
+		if err != nil {
+			t.Fatal(err)
+		}
+		request, _ := row.Headers.Decode()
+		response, _ := row.ResponseHeaders.Decode()
+		if request[0].Name != name || (request[0].Values[0] == maskedValue) != masked {
+			t.Fatal("request header disclosure rule changed for", name, request[0].Values)
+		}
+		if response[0].Name != name || response[0].Values[0] != "sent" {
+			t.Fatal("response header was not stored whole", name, response[0].Values)
 		}
 	}
 }
@@ -190,15 +201,17 @@ func TestRedactStoresOnlyValidText(t *testing.T) {
 	s.Metadata.EscapedPath = strings.Repeat("p", 4095) + "\xff"
 	s.Metadata.RawQuery = "q=%00&n=%C3"
 	s.Metadata.Headers = []httpcapture.Field{{Name: "X-Latin", Values: []string{"caf\xe9"}}}
+	s.Completion.ResponseHeaders = []httpcapture.Field{{Name: "X-N\x00ul", Values: []string{"a\x00\xff"}}}
 	s.Metadata.ClientIP = netip.MustParseAddr("fe80::1%eth0")
 	row, err := redact(s, testPolicy())
 	if err != nil {
 		t.Fatal(err)
 	}
 	headers, _ := row.Headers.Text()
+	responseHeaders, _ := row.ResponseHeaders.Text()
 	query, _ := row.Query.Text()
 	ip, _ := row.ClientIP.Get()
-	for _, text := range []string{row.Method, row.Path, headers, query, string(row.Body)} {
+	for _, text := range []string{row.Method, row.Path, headers, responseHeaders, query, string(row.Body)} {
 		if !utf8.ValidString(text) || strings.Contains(text, "\x00") || strings.Contains(text, `\u0000`) {
 			t.Fatal("stored text is not valid PostgreSQL text", text)
 		}

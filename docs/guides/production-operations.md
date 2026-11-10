@@ -226,9 +226,10 @@ interval = '30m'
 
 ### Webhook capture retention and loss
 
-Applications that declare `Builder.CaptureWebhooks` add the framework migration
-`foundry.webhook_capture/000001_create_webhook_captures` to the ordinary
-migration targets; apply it before the release serves traffic. Capture does not
+Applications that declare `Builder.CaptureWebhooks` add the framework migrations
+`foundry.webhook_capture/000001_create_webhook_captures` and
+`000002_add_response_headers` to the ordinary migration targets; apply them
+before the release serves traffic. Capture does not
 use `features.maintenance`: the capture store prunes its own table beside the
 HTTP kernel at startup, every 10 minutes and every minute while behind, by age
 and then down to `features.webhook_capture.config.max_rows`. A missing table

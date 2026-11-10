@@ -109,7 +109,10 @@ func redact(s httpcapture.Snapshot, p policy) (store.Capture, error) {
 	if status, present := c.Status.Get(); present {
 		row.ResponseStatus = value.Of(int32(status))
 	}
-	if row.Headers, err = value.NewJSON(redactHeaders(m.Headers)); err != nil {
+	if row.Headers, err = value.NewJSON(storedHeaders(m.Headers, record.SensitiveName)); err != nil {
+		return store.Capture{}, err
+	}
+	if row.ResponseHeaders, err = value.NewJSON(storedHeaders(c.ResponseHeaders, func(string) bool { return false })); err != nil {
 		return store.Capture{}, err
 	}
 	if row.Query, err = value.NewJSON(nonNil(query)); err != nil {
@@ -240,13 +243,16 @@ func sensitiveQueryName(name string) bool {
 	return record.SensitiveName(name) || http.CredentialQueryName(name)
 }
 
-func redactHeaders(fields []httpcapture.Field) []store.Field {
+// storedHeaders masks the values of names that sensitive matches. Response
+// headers pass a matcher that masks nothing: they are what this application
+// sent, kept whole for debugging.
+func storedHeaders(fields []httpcapture.Field, sensitive func(string) bool) []store.Field {
 	result := make([]store.Field, len(fields))
 	for i, field := range fields {
 		values := make([]string, len(field.Values))
 		for j, v := range field.Values {
 			values[j] = jsonText(v)
-			if record.SensitiveName(field.Name) {
+			if sensitive(field.Name) {
 				values[j] = maskedValue
 			}
 		}
