@@ -18,6 +18,7 @@ import release
 from state_cleanup import EXECUTOR_PROPERTIES, executor_finished
 from topology import instance_units
 from upgrades import protocol_metadata, tool_bundle
+from acceptance_host import check_failed_units
 from acceptance_roles import prove_running, second_archive
 from acceptance_support import LAUNCHER, WORK, fixture, guard, request, run, wait_for
 
@@ -180,8 +181,12 @@ def upgrade(archive, old_tools):
     prove_running(host, entry)
     assert not loaded_executors(host, entry), 'Historical executor units remain loaded'
     report = invoke('report', current)
-    assert not report['host']['failed_units']
-    assert not report['problems'], report['problems']
+    failed = report['host']['failed_units']
+    # Only the container-only units the host phase also tolerates may remain failed.
+    check_failed_units(host, failed)
+    assert not any(unit.startswith('foundry-') for unit in failed), failed
+    expected = [{'code': 'units_failed'}] if failed else []
+    assert report['problems'] == expected, report['problems']
     print('PASS published v0.15.3 upgrade: state, private records, unloaded executors, loaded role units, retention and report', flush=True)
 
 
