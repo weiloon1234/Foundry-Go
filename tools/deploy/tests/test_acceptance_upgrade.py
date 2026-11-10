@@ -7,7 +7,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import acceptance_upgrade as upgrade
 
@@ -26,6 +26,54 @@ class UpgradeHarnessTests(unittest.TestCase):
             upgrade.invoke('restart', {}, error='host_upgrade_required')
             with self.assertRaises(AssertionError):
                 upgrade.invoke('restart', {})
+
+    def test_completed_accepts_successful_executor_retained_after_exit(self):
+        host = Mock()
+        state = {'cutover': {'operation_id': 'operation', 'outcome': 'succeeded'}}
+        host.load_state.return_value = state
+        observed = {'ActiveState': 'active', 'SubState': 'exited', 'Result': 'success',
+                    'MainPID': '0', 'ControlPID': '0', 'Job': ''}
+        def poll_once(probe, message, **kwargs):
+            result = probe()
+            self.assertIsNotNone(result, message)
+            return result
+        with patch.object(upgrade, 'executor_state', return_value=observed), \
+                patch.object(upgrade, 'wait_for', side_effect=poll_once):
+            self.assertEqual(state, upgrade.completed(host, {'profile': {'instance_id': 'instance'}},
+                                                      'operation', 'succeeded'))
+
+    def test_completed_waits_for_pids_and_queued_jobs_after_recorded_success(self):
+        host = Mock()
+        state = {'cutover': {'operation_id': 'operation', 'outcome': 'succeeded'}}
+        host.load_state.return_value = state
+        exited = {'ActiveState': 'active', 'SubState': 'exited', 'Result': 'success',
+                  'MainPID': '0', 'ControlPID': '0', 'Job': ''}
+        observations = [{**exited, **change} for change in (
+            {'SubState': 'running'}, {'MainPID': '42'}, {'ControlPID': '43'}, {'Job': '123'},
+            {'ActiveState': 'activating'}, {'ActiveState': 'deactivating'})]
+        def poll(probe, message, **kwargs):
+            for _ in observations:
+                self.assertIsNone(probe())
+            return probe()
+        with patch.object(upgrade, 'executor_state', side_effect=[*observations, exited]), \
+                patch.object(upgrade, 'wait_for', side_effect=poll):
+            self.assertEqual(state, upgrade.completed(host, {'profile': {'instance_id': 'instance'}},
+                                                      'operation', 'succeeded'))
+
+    def test_loaded_executors_includes_failed_and_exited_units_only_for_this_instance(self):
+        host = Mock()
+        entry = {'profile': {'instance_id': 'instance'}}
+        failed = upgrade.executor_unit(entry, 'failed')
+        exited = upgrade.executor_unit(entry, 'successful')
+        foreign = 'foundry-cutover-other-successful.service'
+        host.run.return_value = subprocess.CompletedProcess([], 0,
+            failed + ' loaded failed failed description\n' +
+            exited + ' loaded active exited description\n' +
+            foreign + ' loaded active exited description\n', '')
+        self.assertEqual([failed, exited], upgrade.loaded_executors(host, entry))
+        host.run.return_value = subprocess.CompletedProcess([], 0,
+            foreign + ' loaded active exited description\n', '')
+        self.assertEqual([], upgrade.loaded_executors(host, entry))
 
     def test_readiness_variant_preserves_binary_and_rebinds_manifest_hash(self):
         with tempfile.TemporaryDirectory() as temporary:

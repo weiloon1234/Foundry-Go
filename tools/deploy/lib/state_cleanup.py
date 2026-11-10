@@ -2,7 +2,7 @@
 
 Call mutations under the existing host/instance locks. External cleanup precedes
 state publication, so a failed command or crash retains the durable retry trigger.
-Read-only loads and upgrade planning never remove records or reset units.
+Read-only loads and upgrade planning never remove records or change units.
 """
 import os
 
@@ -11,6 +11,9 @@ from contracts import check_path, instance_paths, read_json, require, valid_uuid
 
 BRIDGE_FILES = frozenset({"lib/compatibility.py", "lib/cutover_contracts.py",
                           "server/start_check.py", "server/cutover_runner.py"})
+
+EXECUTOR_PROPERTIES = 'ActiveState,SubState,Result,MainPID,ControlPID,Job'
+
 
 def require_finished(state):
     progress = state.get('cutover')
@@ -32,12 +35,19 @@ def _records(host, entry):
     return private, sorted(records)
 
 
-def _failed_units(host, entry):
+def executor_finished(observed):
+    active = observed.get('ActiveState')
+    return ((active in ('inactive', 'failed') or active == 'active' and observed.get('SubState') == 'exited')
+            and observed.get('MainPID') == '0' and observed.get('ControlPID') == '0'
+            and observed.get('Job') in ('', '0'))
+
+
+def _finished_units(host, entry):
     instance_id = entry['profile']['instance_id']
     require(valid_uuid(instance_id), 'invalid_state', 'Invalid instance identity.')
     prefix = 'foundry-cutover-' + instance_id + '-'
     result = host.run(['systemctl', 'list-units', '--all', '--type=service', '--no-legend', '--plain', '--no-pager'], timeout=10)
-    failed = []
+    finished = {}
     for line in result.stdout.splitlines():
         fields = line.split()
         if not fields or not fields[0].startswith(prefix) or not fields[0].endswith('.service'):
@@ -45,16 +55,13 @@ def _failed_units(host, entry):
         unit = fields[0]
         if not valid_uuid(unit[len(prefix):-len('.service')]):
             continue
-        require(len(fields) >= 4 and fields[2] in ('inactive', 'failed'),
-                'state_cleanup_pending', 'A queue operation executor is still active; finish it before upgrading.')
-        result = host.run(['systemctl', 'show', unit, '--property=MainPID,ControlPID,Job', '--no-pager'], timeout=5)
+        result = host.run(['systemctl', 'show', unit, '--property=' + EXECUTOR_PROPERTIES, '--no-pager'], timeout=5)
         observed = dict(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line)
-        require(observed.get('MainPID') == '0' and observed.get('ControlPID') == '0'
-                and observed.get('Job') in ('', '0'),
+        require(executor_finished(observed),
                 'state_cleanup_pending', 'A queue operation executor still has pending work.')
-        if fields[2] == 'failed':
-            failed.append(unit)
-    return failed
+        if observed['ActiveState'] in ('failed', 'active'):
+            finished[unit] = observed['ActiveState']
+    return finished
 
 
 def check_upgrade(host, entry):
@@ -63,7 +70,7 @@ def check_upgrade(host, entry):
     require_finished(state)
     _, records = _records(host, entry)
     if records or 'cutover' in state or 'queue_compatibility' in state:
-        _failed_units(host, entry)
+        _finished_units(host, entry)
 
 
 def remove_finished_state(host, entry, state):
@@ -76,8 +83,8 @@ def remove_finished_state(host, entry, state):
                   for value in (state, recorded)) or bool(records)
     if not changed:
         return False
-    for unit in _failed_units(host, entry):
-        host.run(['systemctl', 'reset-failed', unit], timeout=5)
+    for unit, active in _finished_units(host, entry).items():
+        host.run(['systemctl', 'reset-failed' if active == 'failed' else 'stop', unit], timeout=5)
     for path in records:
         path.unlink(missing_ok=True)
     if private.exists():

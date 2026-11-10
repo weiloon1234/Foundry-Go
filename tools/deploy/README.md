@@ -27,8 +27,10 @@ its bundle validator, including a successful no-op at the old startup-check path
 
 New-code mutating state loads and saves remove finished operation state, the old
 gate, and only the instance's private migration records. They reset only that
-instance's exact failed executor names. Backup rebinding during tool application
-can trigger cleanup; an ordinary deploy also triggers it. Reports stay read-only.
+instance's exact failed executor names and stop its finished `active/exited`
+executors so their transient units unload. Both PIDs must be zero and no job may
+be queued. Backup rebinding during tool application can trigger cleanup; an
+ordinary deploy also triggers it. Reports stay read-only.
 External cleanup completes before atomic state publication, so interrupted cleanup
 retries from persisted state. Off-host encrypted objects remain untouched. Unfinished
 operations must be resolved on generation 5 before upgrading. Step 2 deletes the

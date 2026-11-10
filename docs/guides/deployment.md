@@ -311,10 +311,12 @@ A temporary shim runs on a mutating state load or save in new code. An ordinary
 deploy triggers it; new-code backup rebinding during `tools-apply` can trigger it
 earlier. It removes `cutover` and `queue_compatibility` from instance state, deletes
 only that instance's private plan, operation, and snapshot JSON records, and resets
-only its exact failed executor unit names. It leaves the encrypted off-host snapshot
-object untouched. Reports and status reads never trigger cleanup.
+only its exact failed executor unit names. Finished `active/exited` executors are
+stopped by exact name so their transient units unload. Both PIDs must be zero and
+no job may be queued. It leaves the encrypted off-host snapshot object untouched.
+Reports and status reads never trigger cleanup.
 
-Cleanup resets failed units and removes private records before atomically saving
+Cleanup clears executor units and removes private records before atomically saving
 the stripped state. Deletions are synced before publication. A crash leaves the
 persisted state available as a retry trigger; the next mutation repeats unfinished
 cleanup. Other instances and unrelated failed units are untouched. Operators see
@@ -1067,7 +1069,7 @@ It bootstraps a host with Redis queues, completes a historical operation after a
 fixture readiness failure, and retains its real failed superseded executor. It
 sets the registered client generation to 3, matching the live host, then upgrades
 through `tools-plan` and `tools-apply` and deploys normally. Assertions cover state
-and private-record cleanup, exact failed-unit cleanup, loaded units without startup
+and private-record cleanup, removal of all instance executor units, role units without startup
 checks, healthy roles, ordinary retention, and a clean report. The historical bundle
 validator also checks the candidate. Installed bundles are never patched.
 

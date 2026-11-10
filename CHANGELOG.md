@@ -14,7 +14,8 @@ generation-5 hosts with `tools-plan`/`tools-apply` to deploy-tool generation 6, 
   `deploy:jobs-inspect`. Removed actions have no aliases. The minimum client generation remains 1, so
   existing instance registrations stay upgradeable.
 - Added: temporary upgrade bridges and retryable cleanup of finished instance cutover state, private
-  migration records, and exact failed executor unit records. Off-host snapshots remain untouched; old
+  migration records, and exact executor units: reset failed units and stop finished `active/exited`
+  units with no live PIDs or queued job. Off-host snapshots remain untouched; old
   releases follow ordinary retention. A later release removes the bridges.
 - Container acceptance now upgrades a published v0.15.3 host through generation 6, replacing the
   historical incident replay and recovery matrix.

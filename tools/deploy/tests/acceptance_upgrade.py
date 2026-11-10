@@ -15,6 +15,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
 from contracts import digest, instance_paths, read_json
 import release
+from state_cleanup import EXECUTOR_PROPERTIES, executor_finished
 from topology import instance_units
 from upgrades import protocol_metadata, tool_bundle
 from acceptance_roles import prove_running, second_archive
@@ -62,8 +63,15 @@ def executor_unit(entry, operation):
 
 
 def executor_state(host, unit):
-    result = host.run(['systemctl', 'show', unit, '--property=ActiveState,Result,ExecMainStatus', '--no-pager'], check=False)
+    result = host.run(['systemctl', 'show', unit, '--property=' + EXECUTOR_PROPERTIES + ',ExecMainStatus', '--no-pager'], check=False)
     return dict(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line)
+
+
+def loaded_executors(host, entry):
+    prefix = 'foundry-cutover-' + entry['profile']['instance_id'] + '-'
+    result = host.run(['systemctl', 'list-units', '--all', '--type=service', '--no-legend', '--plain', '--no-pager'])
+    return [fields[0] for line in result.stdout.splitlines() if (fields := line.split())
+            and fields[0].startswith(prefix) and fields[0].endswith('.service')]
 
 
 def completed(host, entry, operation, outcome):
@@ -72,7 +80,7 @@ def completed(host, entry, operation, outcome):
         progress = state.get('cutover', {})
         if progress.get('operation_id') != operation or progress.get('outcome') == 'running':
             return None
-        if executor_state(host, executor_unit(entry, operation)).get('ActiveState') not in ('inactive', 'failed'):
+        if not executor_finished(executor_state(host, executor_unit(entry, operation))):
             return None
         return state
     state = wait_for(finished, 'Historical operation did not finish', timeout=300)
@@ -122,7 +130,12 @@ def upgrade(archive, old_tools):
     assert gate['floor'] == 3 and gate['permission'] == 'admitted'
     assert len(gate['admitted']) == 2
     failed_unit = executor_unit(entry, failed)
-    assert executor_state(host, failed_unit) == {'ActiveState': 'failed', 'Result': 'exit-code', 'ExecMainStatus': '1'}
+    failed_state = executor_state(host, failed_unit)
+    assert tuple(failed_state[key] for key in ('ActiveState', 'Result', 'ExecMainStatus')) == ('failed', 'exit-code', '1')
+    assert executor_finished(failed_state)
+    successful_state = executor_state(host, executor_unit(entry, successor))
+    assert (successful_state['ActiveState'], successful_state['SubState'], successful_state['Result']) == ('active', 'exited', 'success')
+    assert executor_finished(successful_state)
     private = host.paths.p(instance_paths(entry['name'])['private'])
     records = [path for kind in ('plan', 'operation', 'snapshot') for path in private.glob('cutover-' + kind + '-*.json')]
     assert all(any(path.name.startswith('cutover-' + kind + '-') for path in records) for kind in ('plan', 'operation', 'snapshot'))
@@ -157,7 +170,7 @@ def upgrade(archive, old_tools):
     state = host.load_state(entry)
     assert 'cutover' not in state and 'queue_compatibility' not in state
     assert all(not path.exists() for path in records)
-    assert executor_state(host, failed_unit).get('ActiveState') == 'inactive'
+    wait_for(lambda: not loaded_executors(host, entry), 'Historical executor units remain loaded', timeout=10)
     prove_running(host, entry)
     # One more release puts every pre-upgrade source outside current/previous and retention.
     candidate, _ = second_archive(archive, project, profile)
@@ -165,10 +178,11 @@ def upgrade(archive, old_tools):
     assert not (host.paths.opt(entry['name']) / 'releases' / protected_source).exists()
     assert not (host.paths.opt(entry['name']) / 'releases' / healthy_version).exists()
     prove_running(host, entry)
+    assert not loaded_executors(host, entry), 'Historical executor units remain loaded'
     report = invoke('report', current)
     assert not report['host']['failed_units']
     assert not report['problems'], report['problems']
-    print('PASS published v0.15.3 upgrade: state, private records, failed executor, loaded units, retention and report', flush=True)
+    print('PASS published v0.15.3 upgrade: state, private records, unloaded executors, loaded role units, retention and report', flush=True)
 
 
 def main():

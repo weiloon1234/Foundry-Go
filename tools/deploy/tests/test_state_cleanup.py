@@ -44,6 +44,10 @@ class CleanupTests(unittest.TestCase):
         self.unit = 'foundry-cutover-' + self.profile['instance_id'] + '-' + str(uuid.uuid4()) + '.service'
         self.other_unit = 'foundry-cutover-' + str(uuid.uuid4()) + '-' + str(uuid.uuid4()) + '.service'
         self.failed = {self.unit, self.other_unit, 'foreign.service'}
+        self.exited_unit = 'foundry-cutover-' + self.profile['instance_id'] + '-' + str(uuid.uuid4()) + '.service'
+        self.other_exited_unit = 'foundry-cutover-' + str(uuid.uuid4()) + '-' + str(uuid.uuid4()) + '.service'
+        self.exited = set()
+        self.observations = {}
         self.commands = []
         self.run = patch.object(self.host, 'run', side_effect=self.command).start()
         self.addCleanup(patch.stopall)
@@ -53,10 +57,18 @@ class CleanupTests(unittest.TestCase):
         output = ''
         if args[:2] == ['systemctl', 'list-units']:
             output = ''.join(unit + ' loaded failed failed description\n' for unit in sorted(self.failed))
+            output += ''.join(unit + ' loaded active exited description\n' for unit in sorted(self.exited))
         elif args[:2] == ['systemctl', 'show']:
-            output = 'MainPID=0\nControlPID=0\nJob=\n'
+            observed = {'ActiveState': 'active' if args[2] in self.exited else 'failed',
+                        'SubState': 'exited' if args[2] in self.exited else 'failed',
+                        'Result': 'success' if args[2] in self.exited else 'exit-code',
+                        'MainPID': '0', 'ControlPID': '0', 'Job': ''}
+            observed.update(self.observations.get(args[2], {}))
+            output = ''.join(key + '=' + value + '\n' for key, value in observed.items())
         elif args[:2] == ['systemctl', 'reset-failed']:
             self.failed.discard(args[2])
+        elif args[:2] == ['systemctl', 'stop']:
+            self.exited.discard(args[2])
         return subprocess.CompletedProcess(args, 0, output, '')
 
     def test_mutating_load_strips_only_owned_records_and_exact_units_idempotently(self):
@@ -89,6 +101,72 @@ class CleanupTests(unittest.TestCase):
         self.host.load_state(self.entry, mutating=True)
         self.assertEqual(before, self.path.read_bytes())
         self.assertEqual(commands, self.commands)
+
+    def test_ooo_executors_allow_upgrade_and_cleanup_exact_names(self):
+        self.exited.update((self.exited_unit, self.other_exited_unit))
+        before = self.path.read_bytes()
+        state_cleanup.check_upgrade(self.host, self.entry)
+        self.assertEqual(before, self.path.read_bytes())
+        self.assertTrue(all(path.exists() for path in self.records))
+        self.assertFalse(any(args[1] in ('reset-failed', 'stop') for args in self.commands))
+        self.host.load_state(self.entry, mutating=True)
+        mutations = [args for args in self.commands if args[1] in ('reset-failed', 'stop')]
+        self.assertCountEqual([['systemctl', 'reset-failed', self.unit],
+                               ['systemctl', 'stop', self.exited_unit]], mutations)
+        self.assertEqual({self.other_unit, 'foreign.service'}, self.failed)
+        self.assertEqual({self.other_exited_unit}, self.exited)
+        self.assertNotIn('cutover', read_json(self.path))
+        self.assertNotIn('queue_compatibility', read_json(self.path))
+        self.assertFalse(any(path.exists() for path in self.records))
+        before, commands = self.path.read_bytes(), list(self.commands)
+        self.host.load_state(self.entry, mutating=True)
+        self.assertEqual(before, self.path.read_bytes())
+        self.assertEqual(commands, self.commands)
+
+    def test_show_properties_override_stale_list_columns(self):
+        self.exited.add(self.exited_unit)
+        self.observations[self.exited_unit] = {'ActiveState': 'inactive', 'SubState': 'dead'}
+        state_cleanup.check_upgrade(self.host, self.entry)
+        self.host.load_state(self.entry, mutating=True)
+        self.assertFalse(any(args[1] == 'stop' for args in self.commands))
+
+    def test_unfinished_executor_properties_refuse_before_any_cleanup(self):
+        self.exited.add(self.exited_unit)
+        for unit in (self.unit, self.exited_unit):
+            for changes in ({'ActiveState': 'active', 'SubState': 'running'}, {'MainPID': '42'},
+                            {'ControlPID': '43'}, {'Job': '123'},
+                            {'ActiveState': 'activating'}, {'ActiveState': 'deactivating'}):
+                with self.subTest(unit=unit, changes=changes):
+                    self.observations = {unit: changes}
+                    before = self.path.read_bytes()
+                    for action in (lambda: state_cleanup.check_upgrade(self.host, self.entry),
+                                   lambda: self.host.load_state(self.entry, mutating=True)):
+                        with self.assertRaises(DeployError) as caught:
+                            action()
+                        self.assertEqual('state_cleanup_pending', caught.exception.code)
+                    self.assertEqual(before, self.path.read_bytes())
+                    self.assertTrue(all(path.exists() for path in self.records))
+                    self.assertFalse(any(args[1] in ('stop', 'reset-failed') for args in self.commands))
+
+    def test_crash_after_stopping_exited_executor_retries_before_state_publication(self):
+        self.exited.add(self.exited_unit)
+        def interrupt(args, **kwargs):
+            result = self.command(args, **kwargs)
+            if args[1] == 'stop':
+                raise KeyboardInterrupt()
+            return result
+        self.run.side_effect = interrupt
+        with self.assertRaises(KeyboardInterrupt):
+            self.host.load_state(self.entry, mutating=True)
+        self.assertNotIn(self.exited_unit, self.exited)
+        self.assertIn('cutover', read_json(self.path))
+        self.assertTrue(all(path.exists() for path in self.records))
+        self.run.side_effect = self.command
+        self.host.load_state(self.entry, mutating=True)
+        self.assertNotIn(self.unit, self.failed)
+        self.assertNotIn('cutover', read_json(self.path))
+        self.assertEqual([['systemctl', 'stop', self.exited_unit]],
+                         [args for args in self.commands if args[1] == 'stop'])
 
     def test_read_only_load_status_and_report_leave_state_files_and_units_unchanged(self):
         spec = importlib.util.spec_from_file_location('cleanup_manager', TOOLS / 'server/manage.py')
