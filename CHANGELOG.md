@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## v0.16.1 — 2026-11-10
 
-**v0.16.1: deploy-tool internals only; no public Go API change.** Protocol 2.0 and generation 6 remain unchanged.
+**Deploy-tool internals only; no public Go API change.** Repin applications and upgrade hosts with
+`tools-plan`/`tools-apply`; protocol 2.0 and generation 6 remain unchanged and no redeploy is needed.
 
 - Removed: the four temporary generation-5 upgrade bridge files and the finished-state cleanup shim.
 - Added: a generation-6 installed-host floor for tool upgrades (`tools_upgrade_floor`), checked before
@@ -10,6 +11,7 @@
   deploy; use v0.16.0 as the intermediate release.
 - Added: `tools_unit_refresh_required` refuses plans and installation while any registered role unit file
   or loaded unit retains a pre-start command, including incompletely provisioned instances.
+  It accepts systemd 255 (Ubuntu 24.04), which omits an empty `ExecStartPre` property.
 - Changed: container upgrade acceptance now tests the previous published release through ordinary
   `tools-plan`/`tools-apply` and deploy. The fixture pins v0.16.0; one archive serves both tool bundles.
 

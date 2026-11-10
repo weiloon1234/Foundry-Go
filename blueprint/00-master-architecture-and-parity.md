@@ -8,6 +8,17 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Migration cleanup step 2 — v0.16.1, 2026-11-10
+
+Status: **released; deploy-tool suite (551 tests), the acceptance fixture, container acceptance on Ubuntu 24.04 and
+26.04 arm64 (fresh hosts and an upgrade from the published v0.16.0 tools), and framework CI**.
+- Removed the four generation-5 upgrade bridge files and the finished-state cleanup shim; all live hosts had run
+  generation 6 and been cleaned.
+- Tool upgrades now require an installed generation-6 host (`tools_upgrade_floor`) and refuse role units that still
+  carry a pre-start command (`tools_unit_refresh_required`).
+- Container upgrade acceptance is now a permanent "upgrade from the previous published release" phase.
+Open: the lazy layout-1/2 Redis record handling stays until a read-only scan shows ooo holds no such records.
+
 ## Migration cleanup — v0.16.0, 2026-11-10
 
 Status: **released; deploy-tool suite (560 tests), targeted Go packages with race and real PostgreSQL, consumer
