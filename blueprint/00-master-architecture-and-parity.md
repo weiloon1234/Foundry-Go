@@ -8,6 +8,12 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Webhook capture response headers — v0.18.0, 2026-11-11
+
+Status: **released; capture, HTTP kernel (race) and application capture tests with real PostgreSQL, and
+framework CI**. Captures store the response header map at commit, unmasked at the owner's request, through
+the additive migration `000002_add_response_headers`.
+
 ## Webhook capture fix — v0.17.1, 2026-11-11
 
 Status: **released; capture PostgreSQL tests including a new empty-body and empty-response regression, and

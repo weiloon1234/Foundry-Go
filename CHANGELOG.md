@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.18.0 — 2026-11-11
+
+**Webhook capture stores response headers.** Repin applications, regenerate client contracts,
+apply the new framework migration before serving and redeploy; hosts keep the v0.17.0 tool bundle.
+
+- Added: `capture.CapturedRequestDetail.ResponseHeaders`. Each capture stores the header map the
+  application had set when the response was committed, including headers of an implicit `200`
+  from a handler that wrote nothing. Values are not masked; `Set-Cookie` and returned tokens are
+  stored as sent. Headers net/http adds afterwards (`Date`, `Content-Length`, a sniffed
+  `Content-Type`) are not included. A cut header list marks `response_metadata_truncated`.
+- Added: framework migration `foundry.webhook_capture/000002_add_response_headers`, an
+  empty-array default column, so a rollback to v0.17.x keeps writing rows.
+
 ## v0.17.1 — 2026-11-11
 
 **Webhook capture fix; no API, tool or migration change.** Repin applications and redeploy;
