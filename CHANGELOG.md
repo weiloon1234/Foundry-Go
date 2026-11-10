@@ -2,12 +2,12 @@
 
 ## v0.15.3 — 2026-11-10
 
-**Deploy-tool fix only; no application runtime change.** Upgrade hosts with `tools-plan`/`tools-apply`
-(the generation is unchanged); repinning applications is optional.
+**Deploy-tool fix only; no application runtime change.** Repin applications so `go tool foundry deploy`
+stages the new tool bundle, then upgrade hosts with `tools-plan`/`tools-apply` (the generation is
+unchanged). No redeploy is needed.
 
 - Fixed: a successful backup bundle now records its attempt as `complete` in the instance
-  backup state instead of leaving it at `running`. Host reports were unaffected; hosts pick
-  this up through `tools-plan`/`tools-apply`.
+  backup state instead of leaving it at `running`. Host reports were unaffected.
 
 ## v0.15.2 — 2026-11-10
 
