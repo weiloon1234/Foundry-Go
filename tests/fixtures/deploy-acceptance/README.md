@@ -1,8 +1,9 @@
 # Deploy acceptance consumer
 
 This independent application supplies the archive for the deploy tool's systemd
-container acceptance. Its module pins Foundry-Go without a local replacement and
-uses the normal deploy builder. It is not a starter application.
+container acceptance. Its module pins Foundry-Go v0.16.0 without a local replacement
+and uses the normal deploy builder. One archive serves both the previous published
+tools and the candidate in the upgrade phase. It is not a starter application.
 
 The topology declares HTTP, one Redis worker consuming `first` and `second`, and
 a scheduler that logs `acceptance schedule completed` every ten seconds. The
@@ -59,7 +60,7 @@ fail/hold probe. The built-in `/ready` route registers that runtime without a
 custom provider that would make job inventory opaque. Its separate
 `{"status":"ready"}` wire shape is also accepted by the deploy tool.
 
-The CLI delegates configuration, jobs inventory/migration, Redis grants, storage
+The CLI delegates configuration, jobs operations, Redis grants, storage
 probes, database migration and seeding to their public framework owners. The
 `redis:keys` adapter emits JSON without flags, as required by the deploy tool.
 Its migration creates `acceptance_fixture`; its idempotent seed inserts one fixture

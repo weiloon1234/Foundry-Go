@@ -159,6 +159,25 @@ class DeploymentContractTests(unittest.TestCase):
                     with self.subTest(scope=scope, key=key, value=value), self.assertRaises(DeployError):
                         validate_registry(record)
 
+    def test_state_round_trip_preserves_fields_and_private_records_without_service_calls(self):
+        from release import public_state
+        state = self.host.load_state(self.entry)
+        state['extension'] = {'retained': [1, 2]}
+        private = self.host.paths.p(instance_paths(self.entry['name'])['private'])
+        private.mkdir(parents=True)
+        record = private / 'retained.json'
+        record.write_text('{"retained":true}')
+        with patch.object(self.host, 'run') as run:
+            self.host.save_state(self.entry, state)
+            path = self.host.paths.instance_state(self.entry['name']) / 'state.json'
+            before = path.read_bytes()
+            self.assertEqual(state, self.host.load_state(self.entry))
+            self.assertEqual(before, path.read_bytes())
+            self.assertEqual(state, public_state(state))
+            run.assert_not_called()
+        self.assertEqual('{"retained":true}', record.read_text())
+        self.assertEqual([record], list(private.iterdir()))
+
     def test_malformed_state_refuses_before_commands_or_file_changes(self):
         version = "20261013T000000Z-0123456789abcdef"
         manifest = {"schema": 1, "layout_version": 2, "project_id": self.entry["project_id"],

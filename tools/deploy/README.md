@@ -9,32 +9,24 @@ confirmation rules, host prerequisites, and recovery procedures.
 | `local/cli.py` | Local release selection, private input, plan review, confirmation, and SSH requests |
 | `server/manage.py` | Request validation and registered-instance dispatch |
 | `lib/release.py` | Release lifecycle and configuration |
-| `lib/state_cleanup.py` | Temporary generation-5 state and private-record cleanup |
 | `lib/upgrades.py` | Immutable bundle installation and protocol negotiation |
 | `lib/backup.py` | PostgreSQL and encrypted key/config backups |
 | `protocol.json` | Wire protocol and tool generation |
 
-Generation 6 (v0.16.0) removes finished queue migration actions, startup admission,
-containment, and Redis snapshot capture and restore. Ordinary deploys no longer
-inspect job layouts. There are no aliases for removed actions. Generation-6
-clients require generation-5 hosts to upgrade before ordinary mutations; the
-minimum client generation remains 1, preserving generation-3 registrations.
+Protocol 2.0 and generation 6 remain unchanged. Tool upgrades require an installed
+host generation of at least 6. The local command checks the installed host's
+`hello` response before staging any bundle; the candidate checks again before
+planning or installation. Older hosts receive `tools_upgrade_floor`: upgrade to
+v0.16.x tools first, then run one ordinary deploy. Use v0.16.0 for that intermediate
+upgrade. The minimum client generation remains 1, preserving existing registrations.
 
-Use `tools-plan`, confirmed `tools-apply`, then an ordinary deploy. Ready instances
-receive new unit templates without startup checks, followed by a daemon reload.
-This works with the generation-5 installer as well. Four inert files remain for
-its bundle validator, including a successful no-op at the old startup-check path.
-
-New-code mutating state loads and saves remove finished operation state, the old
-gate, and only the instance's private migration records. They reset only that
-instance's exact failed executor names and stop its finished `active/exited`
-executors so their transient units unload. Both PIDs must be zero and no job may
-be queued. Backup rebinding during tool application can trigger cleanup; an
-ordinary deploy also triggers it. Reports stay read-only.
-External cleanup completes before atomic state publication, so interrupted cleanup
-retries from persisted state. Off-host encrypted objects remain untouched. Unfinished
-operations must be resolved on generation 5 before upgrading. Step 2 deletes the
-four bridge files and this temporary shim after all hosts have upgraded and cleaned up.
+Use `tools-plan`, confirmed `tools-apply`, then an ordinary deploy. Plans refuse
+with `tools_unit_refresh_required` if any registered role unit file or loaded
+unit has a pre-start command, including instances whose provisioning is incomplete.
+Refresh those units with the installed v0.16.0 tools and reload systemd first.
+Installation repeats this check before writes. Ready instances receive current
+unit templates followed by a daemon reload; enablement is preserved and roles
+are not restarted by the tool upgrade.
 
 Run the local tests and documentation checks from the worktree root:
 
@@ -59,16 +51,24 @@ tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
   --archive "$archive" --framework-root "$framework" --fresh
 ```
 
-The opt-in `--upgrade` phase drives v0.15.3 tools, which call the application's
-`deploy:jobs-inspect` and `jobs migrate-layout`, so its archive is built from a v0.15.3
-checkout of this fixture ([deployment guide](../../docs/guides/deployment.md)). The
-historical tools must already be present in the Go module cache. `--upgrade`
-prepares the published v0.15.3 host with a completed queue migration, two admitted
-versions, private records, and a real failed superseded executor. It upgrades through
-normal tool planning/application, deploys, and proves cleanup, loaded unit changes,
-role health, release retention, and clean reporting. It preserves the registered
-client generation of 3. The remaining host, role, backup, edge, and replacement-host
-recovery phases then run normally. Omitting `--upgrade` runs those phases directly.
+The opt-in `--upgrade` phase permanently tests upgrades from the previous published
+release. Supply its unmodified module-cache bundle through `--tools-root` (currently
+v0.16.0). The same fixture archive serves both baseline and candidate tools:
+
+```sh
+old_tools="$(go env GOMODCACHE)/github.com/weiloon1234/!foundry-!go@v0.16.0/tools/deploy"
+tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
+  --archive "$archive" --framework-root "$framework" --foreign \
+  --upgrade --tools-root "$old_tools"
+```
+
+The runner bootstraps and deploys using the published bundle, upgrades through the
+candidate's `tools-plan`/`tools-apply`, then deploys again. It proves the active
+bundle matches the candidate and excludes removed files, role files and loaded
+units have no `ExecStartPre`, roles are healthy, and the report is clean except
+for the same container-only failed units tolerated by the host phase. The host,
+role, backup, edge, and replacement-host recovery phases then run normally.
+Omitting `--upgrade` runs those phases directly.
 
 Phase diagnostics identify artisan calls visible in an exception traceback.
 Only a failed `config:check` is re-invoked (read-only, ten-second limit); its stderr

@@ -208,7 +208,7 @@ class Host:
         require(entry["profile"] == profile, "profile_drift", "Shared environment profile differs from the host; run bootstrap check first.")
         return registry, entry
 
-    def load_state(self, entry, *, mutating=False):
+    def load_state(self, entry):
         for directory in (self.paths.state, self.paths.state / "instances", self.paths.instance_state(entry["name"])):
             self.check_control_directory(directory)
         path = check_path(self.paths.instance_state(entry["name"]) / "state.json", "file")
@@ -223,10 +223,6 @@ class Host:
         if os.geteuid() == 0 or self.paths.root != Path("/"):
             from release import load_configuration_intents
             state = self.validate_state(entry, load_configuration_intents(self, entry, state))
-        if mutating:
-            from state_cleanup import remove_finished_state
-            if remove_finished_state(self, entry, state):
-                self.save_state(entry, state)
         return state
 
     def validate_state(self, entry, state):
@@ -257,10 +253,7 @@ class Host:
 
     def save_state(self, entry, state):
         self.validate_state(entry, state)
-        from state_cleanup import remove_finished_state
-        remove_finished_state(self, entry, state)
         state["updated_at"] = now()
-        self.validate_state(entry, state)
         from release import persist_configuration_intents, public_state
         persist_configuration_intents(self, entry, state)
         atomic_json(self.paths.instance_state(entry["name"]) / "state.json", public_state(state))

@@ -269,21 +269,23 @@ match both content and metadata.
 
 ## Tool protocol and upgrades
 
-`tools/deploy/protocol.json` owns protocol 2.0 and generation 6 (v0.16.0).
-The stable launcher dispatches to the active immutable bundle. `hello` reports
-host metadata without a mutation. Requests include the client's protocol,
-framework version, generation, and bundle digest.
+`tools/deploy/protocol.json` owns protocol 2.0 and generation 6. The stable
+launcher dispatches to the active immutable bundle. `hello` reports host metadata
+without a mutation. Requests include the client's protocol, framework version,
+generation, and bundle digest. The minimum client generation remains 1, so
+instances registered with generation 3 remain supported.
 
-Generation-6 clients receive `host_upgrade_required` from generation-5 hosts
-until the host tools are upgraded. The minimum client generation remains 1;
-instances registered with generation 3 can upgrade. Read operations remain available.
-Generation 6 removes the finished queue migration actions, startup admission gate,
-containment, and Redis snapshot capture and restore. Removed actions have no aliases.
-Ordinary deployments no longer call `deploy:jobs-inspect`.
+Starting with v0.16.1, tool upgrades require an installed host generation of at
+least 6. `tools-plan` checks the installed host's generation through `hello` before
+staging anything. The candidate also enforces this floor before planning or
+installation. Older hosts receive `tools_upgrade_floor`: "Upgrade to v0.16.x tools
+first, then run one ordinary deploy." Use v0.16.0 for that intermediate upgrade
+and deploy before selecting v0.16.1 or newer tools. The temporary upgrade bridges
+and finished-state cleanup are no longer shipped.
 
-To upgrade a generation-5 host:
+To upgrade a generation-6 host:
 
-1. Repin the application to v0.16.0 so its deploy command stages generation 6.
+1. Repin the application to the desired published framework release.
 2. Run `ENVIRONMENT=production ACTION=tools-plan make deploy` and review the plan.
 3. Apply the reviewed plan with a new UUIDv4:
 
@@ -297,33 +299,18 @@ To upgrade a generation-5 host:
 
 Obtain the owner's approval before applying tools on production hosts. If apply
 is interrupted, use `ACTION=upgrade-resume` with the same token and operation UUID.
-An unfinished queue operation or a closed gate must be resolved on generation 5
-before this upgrade. Generation 6 cannot resume it.
+
+Plans refuse with `tools_unit_refresh_required` if any registered role has a
+nonempty `ExecStartPre` in its unit file or loaded systemd configuration. This
+includes instances whose provisioning is incomplete. Refresh the units using
+the installed v0.16.0 tools and reload systemd before retrying. Installation
+rechecks this condition before writes, so a unit cannot retain a command whose
+implementation disappears when the active bundle changes.
 
 The installer replaces unit files for every ready instance using the new bundle's
 templates, then runs `systemctl daemon-reload`. Upgrade resume reloads even when
-the prior process already wrote the files. The templates have no `ExecStartPre`. This also works when the generation-5 installer runs the upgrade:
-it reads the candidate templates. Four minimal files remain solely for its bundle
-validator. The old startup-check path exits successfully while a unit still names it.
+the prior process already wrote the files. The templates have no `ExecStartPre`.
 Tool upgrades preserve unit enablement and do not restart application roles.
-
-A temporary shim runs on a mutating state load or save in new code. An ordinary
-deploy triggers it; new-code backup rebinding during `tools-apply` can trigger it
-earlier. It removes `cutover` and `queue_compatibility` from instance state, deletes
-only that instance's private plan, operation, and snapshot JSON records, and resets
-only its exact failed executor unit names. Finished `active/exited` executors are
-stopped by exact name so their transient units unload. Both PIDs must be zero and
-no job may be queued. It leaves the encrypted off-host snapshot object untouched.
-Reports and status reads never trigger cleanup.
-
-Cleanup clears executor units and removes private records before atomically saving
-the stripped state. Deletions are synced before publication. A crash leaves the
-persisted state available as a retry trigger; the next mutation repeats unfinished
-cleanup. Other instances and unrelated failed units are untouched. Operators see
-ordinary status/report fields, no queue startup warning, and no superseded executor
-failure after cleanup. Previously protected releases age out under normal retention.
-The four files and the shim remain until step 2, after all hosts run generation 6
-and their old state is cleared.
 
 Tool plans bind the candidate inventory digest to the current host state.
 Application uses the reviewed plan token and durable operation UUID. Upgrades
@@ -1033,7 +1020,7 @@ backup or certificate renewal. Alerts are [deferred](../../blueprint/25-deferred
 The runner accepts an application release archive and the integrated framework
 root, with Ubuntu 24.04 or 26.04, arm64 or amd64, and `--foreign` or `--fresh`.
 The dedicated `tests/fixtures/deploy-acceptance` app supplies all existing phases
-and the opt-in generation-5 upgrade phase. From the framework checkout, build one Linux
+and the opt-in previous-release upgrade phase. From the framework checkout, build one Linux
 archive through the normal deploy builder and run both arm64 cells:
 
 ```sh
@@ -1052,30 +1039,28 @@ The fixture pins the published framework with no local module replacement. The
 builder uses its acceptance profile and writes the completed archive path to a
 new file.
 
-The opt-in upgrade phase drives v0.15.3 tools, which call the application's
-`deploy:jobs-inspect` and `jobs migrate-layout`. Build its archive from the fixture
-as released in v0.15.3, and pass the current checkout as the framework root:
+The opt-in upgrade phase uses the previous published tools (currently v0.16.0)
+and the same archive built above. Supply the unmodified published bundle from
+the Go module cache:
 
 ```sh
-old_tools="$(go env GOMODCACHE)/github.com/weiloon1234/!foundry-!go@v0.15.3/tools/deploy"
-old_checkout="$(mktemp -d)/foundry-v0.15.3"
-git worktree add --detach "$old_checkout" v0.15.3
-(cd "$old_checkout" && python3 tools/deploy/tests/build_acceptance.py --architecture arm64 \
-  --archive-file "$build_info/old-archive.txt")
-tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
-  --archive "$(cat "$build_info/old-archive.txt")" --framework-root "$framework" \
-  --foreign --upgrade --tools-root "$old_tools"
+old_tools="$(go env GOMODCACHE)/github.com/weiloon1234/!foundry-!go@v0.16.0/tools/deploy"
+for ubuntu in 24.04 26.04; do
+  tools/deploy/tests/run_acceptance.sh --ubuntu "$ubuntu" --platform linux/arm64 \
+    --archive "$archive" --framework-root "$framework" \
+    --foreign --upgrade --tools-root "$old_tools"
+done
 ```
 
-`--upgrade` requires the published v0.15.3 tools already present in the Go module
-cache, supplied through `--tools-root`. The runner mounts that bundle read-only.
-It bootstraps a host with Redis queues, completes a historical operation after a
-fixture readiness failure, and retains its real failed superseded executor. It
-sets the registered client generation to 3, matching the live host, then upgrades
-through `tools-plan` and `tools-apply` and deploys normally. Assertions cover state
-and private-record cleanup, removal of all instance executor units, role units without startup
-checks, healthy roles, ordinary retention, and a clean report. The historical bundle
-validator also checks the candidate. Installed bundles are never patched.
+The fixture pins v0.16.0 without a local replacement. `--tools-root` must point to
+the previous published release's tools already present in the module cache; the
+runner mounts that bundle read-only. It bootstraps and deploys with those tools,
+then upgrades through the candidate's `tools-plan` and `tools-apply` and deploys
+normally. Assertions cover the exact active candidate bundle, absence of removed
+files from that bundle, role files and loaded units without `ExecStartPre`, healthy
+roles, preserved client registration, and a clean report. The report tolerates
+only the same container-only failed units as the ordinary host phase. Retired
+immutable bundles remain on disk; they are never patched or selected again.
 
 The runner prints its private log directory and retains phase logs on success or
 failure. Use `FOUNDRY_ACCEPTANCE_KEEP=1` to retain a failed host for inspection.

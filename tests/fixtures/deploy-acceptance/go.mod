@@ -4,7 +4,7 @@ go 1.27.1
 
 tool github.com/weiloon1234/Foundry-Go/cmd/foundry
 
-require github.com/weiloon1234/Foundry-Go v0.15.4-0.20261110052727-6fd84270c4a8
+require github.com/weiloon1234/Foundry-Go v0.16.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect

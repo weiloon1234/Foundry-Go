@@ -17,7 +17,7 @@ import uuid
 
 from contracts import (HOST_PATHS, DeployError, atomic_json, atomic_write, check_path,
                        now, read_json, require, valid_uuid)
-from state_cleanup import BRIDGE_FILES
+from topology import instance_units
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
@@ -72,10 +72,7 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
                 "tools_too_large", "The tool bundle exceeds its size limit.")
         inventory.append({"path": path.relative_to(source).as_posix(), "size": size, "mode": 0o644,
                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    required = REQUIRED_FILES | BRIDGE_FILES
-    if protocol(source)["generation"] >= 6:
-        required = required | {"lib/state_cleanup.py"}
-    require(required <= {item["path"] for item in inventory}, "tools_incomplete", "The tool bundle is incomplete.")
+    require(REQUIRED_FILES <= {item["path"] for item in inventory}, "tools_incomplete", "The tool bundle is incomplete.")
     return source, files, inventory
 
 
@@ -177,16 +174,39 @@ def check_client(host, request: dict, action: str) -> None:
             "host_upgrade_required", "Review and apply a host tool upgrade before this mutation.")
 
 
+def check_upgrade_generation(installed: dict, tools_dir: Path | None = None) -> None:
+    """Reject unsupported installed hosts before uploading or installing a candidate."""
+    generation = installed.get("generation") if isinstance(installed, dict) else None
+    require(type(generation) is int and generation >= protocol(tools_dir)["minimum_host_generation"],
+            "tools_upgrade_floor", "Upgrade to v0.16.x tools first, then run one ordinary deploy.")
+
+
+def _check_unit_commands(host, entry: dict) -> None:
+    """Role templates have no pre-start commands; refuse stale files or loaded units."""
+    code = "tools_unit_refresh_required"
+    detail = "Refresh role units with the installed v0.16.0 tools and reload systemd before upgrading."
+    for name in instance_units(entry).values():
+        path = check_path(host.paths.p("/etc/systemd/system/" + name), "file")
+        if path.exists():
+            require(not re.search(r"(?m)^[ \t]*ExecStartPre[ \t]*=[ \t]*\S", path.read_text()), code, detail)
+        result = host.run(["systemctl", "show", name, "--property=ExecStartPre,LoadState", "--all", "--no-pager"], check=False)
+        properties = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+        absent = not path.exists() and properties.get("LoadState") == "not-found"
+        require(properties.get("ExecStartPre") == "" and
+                (result.returncode == 0 or (result.returncode == 1 and absent)), code, detail)
+
+
 def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
     """Describe changed/removed paths and compatibility impact without mutating the host."""
-    source, _, digest = tool_bundle(tools_dir)
     current = registry["tools"]
+    check_upgrade_generation(current, tools_dir)
+    source, _, digest = tool_bundle(tools_dir)
     target = protocol(source)
     require(target["generation"] >= current["generation"], "tools_downgrade", "Host tool generations cannot be downgraded.")
     retained_releases = []
-    from state_cleanup import check_upgrade
     for instance_id, entry in registry["instances"].items():
-        check_upgrade(host, entry)
+        if digest != current["bundle_sha256"] or current["upgrade_operation"]:
+            _check_unit_commands(host, entry)
         require(target["minimum_client_generation"] <= entry["client_generation"] <= target["generation"],
                 "tools_incompatible", "The proposed tool generation would strand a registered application pin.")
         releases = check_path(host.paths.opt(entry["name"]) / "releases", "directory")

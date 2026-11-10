@@ -33,7 +33,7 @@ from contracts import (BACKUP_POLICY, DeployError, PREFIX, RENEWAL_WARNING, SCHE
                        validate_profile, validate_project)
 from release import MAX_CONFIGURATION_CHANGES, validate_manifest
 from topology import load_topology
-from upgrades import READ_ACTIONS, protocol_metadata, tool_bundle
+from upgrades import READ_ACTIONS, check_upgrade_generation, protocol_metadata, tool_bundle
 
 INSTALLED = f"/usr/local/sbin/{PREFIX}-host"
 COMMANDS = {
@@ -1038,6 +1038,11 @@ def deploy(project, profile, settings):
             display(ssh.request("capacity-apply", {**request, "plan_token": plan["plan_token"], "confirm": True}))
             return
         if action in {"tools-plan", "tools-apply", "upgrade-resume"}:
+            installed = ssh.request("hello", request)
+            try:
+                check_upgrade_generation(installed.get("tools"), TOOLS_ROOT)
+            except DeployError as error:
+                raise LocalError(f"{error.code}: {error.detail}") from None
             with ssh.staged_tools() as remote:
                 if action == "tools-plan":
                     display(ssh.request(action, request, remote))

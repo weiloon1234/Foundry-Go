@@ -416,7 +416,7 @@ def main():
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--redis-source", type=Path, help="Read lease Lua directly from this mounted pinned Foundry-Go module root")
     parser.add_argument("--tools-root", type=Path, default=TOOLS,
-                        help="Unmodified staged bundle used for bootstrap; upgrade acceptance selects v0.15.3")
+                        help="Unmodified staged bundle used for bootstrap; upgrade acceptance selects the previous published release")
     stage = parser.add_mutually_exclusive_group()
     stage.add_argument("--prepare-upgrade", action="store_true",
                         help="Bootstrap and activate only the first instance, then return for the tool upgrade")
@@ -426,7 +426,7 @@ def main():
     guard()
     tools = args.tools_root.resolve(strict=True)
     if tools != TOOLS.resolve() and not args.prepare_upgrade:
-        parser.error("Historical tools are restricted to --prepare-upgrade")
+        parser.error("Published baseline tools are restricted to --prepare-upgrade")
     if not (tools / 'server/manage.py').is_file() or not (tools / 'protocol.json').is_file():
         raise RuntimeError('Bootstrap bundle lacks its normal entrypoint or protocol')
     lease_script = None
@@ -442,10 +442,10 @@ def main():
     prepared = None
     if args.after_upgrade:
         from upgrades import tool_bundle
-        assert registry and registry['tools']['bundle_sha256'] == tool_bundle(TOOLS)[2], "Historical upgrade must complete first"
+        assert registry and registry['tools']['bundle_sha256'] == tool_bundle(TOOLS)[2], "Published tools upgrade must complete first"
         _, prepared = host.require_identity(*fixtures()[0])
         state = host.load_state(prepared)
-        assert state['status'] == 'healthy' and state['current'], "Historical upgrade and deployment must complete first"
+        assert state['status'] == 'healthy' and state['current'], "Published tools upgrade and deployment must complete first"
     WORK.mkdir(mode=0o700, exist_ok=True)
     atomic_write(WORK / "owned", "disposable acceptance fixture\n", 0o600)
     unrelated = Path("/etc/systemd/system/foundry-acceptance-unrelated.service")
@@ -472,7 +472,7 @@ def main():
         if args.prepare_upgrade:
             project, profile = fixture
             archive = archive_for(args.archive, project, profile)
-            # Exercise the installed historical entrypoint, not the mounted current library.
+            # Exercise the installed published entrypoint, not the mounted current library.
             from upgrades import protocol_metadata
             action("activate", {**request(project, profile, archive=str(archive), archive_sha256=digest(archive)),
                                 **protocol_metadata(tools)})

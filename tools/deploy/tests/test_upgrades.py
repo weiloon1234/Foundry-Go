@@ -34,6 +34,11 @@ class UpgradeHost:
     def lock(self, name):
         return nullcontext()
 
+    def run(self, args, **kwargs):
+        if args[:2] == ['systemctl', 'show']:
+            return subprocess.CompletedProcess(args, 0, 'ExecStartPre=\n', '')
+        raise AssertionError('Unexpected host command')
+
 
 class UpgradeTests(unittest.TestCase):
     def setUp(self):
@@ -41,13 +46,13 @@ class UpgradeTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
         self.source = self.root / "source"
-        for name in upgrades.REQUIRED_FILES | upgrades.BRIDGE_FILES:
+        for name in upgrades.REQUIRED_FILES:
             path = self.source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("# test bundle\n")
-        self.metadata = {"protocol": {"major": 2, "minor": 0}, "generation": 5,
-                         "minimum_host_generation": 1, "minimum_client_generation": 1,
-                         "framework_version": "v0.15.3"}
+        self.metadata = {"protocol": {"major": 2, "minor": 0}, "generation": 6,
+                         "minimum_host_generation": 6, "minimum_client_generation": 1,
+                         "framework_version": "v0.16.0"}
         (self.source / "protocol.json").write_text(json.dumps(self.metadata))
         (self.source / "server/launcher.py").write_text(
             (Path(__file__).resolve().parents[1] / "server/launcher.py").read_text())
@@ -249,15 +254,81 @@ class UpgradeTests(unittest.TestCase):
             upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
         self.assertEqual("plan_changed", caught.exception.code)
 
-    def test_generation_six_client_refuses_generation_five_host_but_allows_hello(self):
+    def test_newer_client_refuses_host_but_allows_hello(self):
         self.install()
-        for generation, code in [(6, "host_upgrade_required"), (0, "client_too_old")]:
+        for generation, code in [(7, "host_upgrade_required"), (0, "client_too_old")]:
             request = {"protocol": {"major": 2, "minor": 0}, "client": {"generation": generation}}
             with self.assertRaises(DeployError) as caught:
                 upgrades.check_client(self.host, request, "activate")
             self.assertEqual(code, caught.exception.code)
             upgrades.check_client(self.host, request, "hello")
-        self.assertEqual({"minimum": 1, "maximum": 5}, upgrades.hello(self.host)["client_generation"])
+        self.assertEqual({"minimum": 1, "maximum": 6}, upgrades.hello(self.host)["client_generation"])
+
+    def test_generation_five_refuses_planning_and_installation_before_writes(self):
+        self.install()
+        self.host.registry['tools']['generation'] = 5
+        before = self.host.read_registry()
+        for action in (lambda: upgrades.plan_upgrade(self.host, self.source),
+                       lambda: self.install(allow_upgrade=True)):
+            with self.assertRaises(DeployError) as caught:
+                action()
+            self.assertEqual('tools_upgrade_floor', caught.exception.code)
+            self.assertIn('v0.16.x tools first, then run one ordinary deploy', caught.exception.detail)
+            self.assertEqual(before, self.host.read_registry())
+
+    def test_role_pre_start_commands_refuse_plans_and_apply_for_every_provisioning_state(self):
+        from test_contracts import fixture
+        from topology import instance_units
+        self.install()
+        _, profile, entry = fixture()
+        self.host.registry['instances'][profile['instance_id']] = entry
+        (self.source / 'lib/new_module.py').write_text('# candidate change\n')
+        unit = self.host.paths.p('/etc/systemd/system/' + instance_units(entry)['worker'])
+        unit.parent.mkdir(parents=True)
+        for state in ('ready', 'failed', 'preparing', 'rehearsal'):
+            entry['provisioning']['state'] = state
+            for on_disk in (True, False):
+                with self.subTest(state=state, on_disk=on_disk):
+                    unit.write_text('[Service]\n' + ('ExecStartPre=/usr/bin/python3 /retired/guard.py\n' if on_disk else ''))
+                    loaded = 'ExecStartPre=\n' if on_disk else 'ExecStartPre={ path=/retired/guard.py ; }\n'
+                    before = self.host.read_registry()
+                    with patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, loaded, '')):
+                        for action in (lambda: upgrades.plan_upgrade(self.host, self.source),
+                                       lambda: self.install(allow_upgrade=True)):
+                            with self.assertRaises(DeployError) as caught:
+                                action()
+                            self.assertEqual('tools_unit_refresh_required', caught.exception.code)
+                    self.assertEqual(before, self.host.read_registry())
+
+    def test_unit_inspection_failure_refuses_upgrade(self):
+        from test_contracts import fixture
+        self.install()
+        _, profile, entry = fixture()
+        self.host.registry['instances'][profile['instance_id']] = entry
+        (self.source / 'lib/new_module.py').write_text('# candidate change\n')
+        for code, output in ((1, ''), (0, '')):
+            with patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], code, output, '')):
+                with self.assertRaises(DeployError) as caught:
+                    upgrades.plan_upgrade(self.host, self.source)
+                self.assertEqual('tools_unit_refresh_required', caught.exception.code)
+
+    def test_unprovisioned_roles_without_unit_files_allow_planning(self):
+        from test_contracts import fixture
+        self.install()
+        _, profile, entry = fixture()
+        entry['provisioning']['state'] = 'preparing'
+        self.host.registry['instances'][profile['instance_id']] = entry
+        (self.source / 'lib/new_module.py').write_text('# candidate change\n')
+        missing = subprocess.CompletedProcess([], 1, 'LoadState=not-found\nExecStartPre=\n', '')
+        with patch.object(self.host, 'run', return_value=missing):
+            plan = upgrades.plan_upgrade(self.host, self.source)
+        self.assertEqual([profile['instance_id']], plan['upgrade']['instances'])
+
+    def test_candidate_python_inventory_contains_only_runtime_modules(self):
+        source = Path(__file__).resolve().parents[1]
+        _, files, _ = upgrades.tool_bundle(source)
+        expected = {name for name in upgrades.REQUIRED_FILES if name.endswith('.py')} | {'lib/capacity.py'}
+        self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
     def test_retired_bundle_cannot_be_selected_again(self):
         self.install()
@@ -271,7 +342,6 @@ class UpgradeTests(unittest.TestCase):
 
     def test_upgrade_reloads_even_when_units_were_already_written(self):
         import provision
-        import state_cleanup
         from test_contracts import fixture
         self.install()
         _, profile, entry = fixture()
@@ -279,15 +349,14 @@ class UpgradeTests(unittest.TestCase):
         entry['provisioning']['state'] = 'ready'
         self.host.registry['instances'][profile['instance_id']] = entry
         (self.source / 'lib/new_module.py').write_text('# candidate change\n')
-        with patch.object(state_cleanup, 'check_upgrade'), \
-                patch.object(provision, '_install_unit') as reinstall, \
-                patch.object(self.host, 'run', create=True) as run:
+        with patch.object(provision, '_install_unit') as reinstall, \
+                patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, 'ExecStartPre=\n', '')) as run:
             result = self.install(allow_upgrade=True)
         self.assertEqual('succeeded', result['outcome'])
         reinstall.assert_called_once()
         self.assertEqual(entry, reinstall.call_args.args[2])
         self.assertEqual(self.host.paths.tools / 'tools' / result['bundle_sha256'], reinstall.call_args.args[3])
-        run.assert_called_once_with(['systemctl', 'daemon-reload'])
+        self.assertEqual(['systemctl', 'daemon-reload'], run.call_args.args[0])
         self.assertEqual(3, self.host.read_registry()['instances'][profile['instance_id']]['client_generation'])
 
     def test_upgrade_stays_pending_until_new_bundle_rebinds_backup_commands(self):

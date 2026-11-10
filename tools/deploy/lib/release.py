@@ -733,9 +733,7 @@ def load_configuration_intents(host, entry, state):
 
 
 def public_state(state):
-    from state_cleanup import strip_fields
     value = copy.deepcopy(state)
-    strip_fields(value)
     for item in [value.get("last_attempt"), *value.get("history", [])]:
         if item:
             if item.get("action") == "config":
@@ -877,7 +875,7 @@ def activate_recovered(host, registry, entry, archive, checksum, *, http_only=Fa
         require_recovered_schema(host, entry, release)
         inventory = release_redis_inventory(host, entry, release)
         widen_redis_grants(host, registry, entry, inventory)
-        state = host.load_state(entry, mutating=True)
+        state = host.load_state(entry)
         require_idle(state)
         if state['current'] is not None:
             # Recovery's journal binds one artifact across interrupted starts.
@@ -888,7 +886,7 @@ def activate_recovered(host, registry, entry, archive, checksum, *, http_only=Fa
         switch_to(host, entry, manifest["version"])
         if not ready(host, entry, timeout=10, include_background=not http_only):
             start_roles(host, entry, http_only=http_only)
-        state = host.load_state(entry, mutating=True)
+        state = host.load_state(entry)
         state['status'] = "healthy"
         host.save_state(entry, state)
         warnings = narrow_redis_grants(host, registry, entry, inventory)
@@ -908,7 +906,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
         validate_runtime_environment(host, entry)
-        state = host.load_state(entry, mutating=True)
+        state = host.load_state(entry)
         require_idle(state)
         check_live_state(host, entry, state)
         resume_terminal_obligations(host, registry, entry, state)
@@ -1028,7 +1026,7 @@ def rollback(host, project, profile, target, expected_current, operation_id):
     _, entry = host.require_identity(project, profile)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
-        state = host.load_state(entry, mutating=True)
+        state = host.load_state(entry)
         target_manifest = read_json(release_path(host, entry, target) / "manifest.json")
         validate_manifest(target_manifest, entry)
         receipt = _operation_path(host, entry, operation_id)
@@ -1101,7 +1099,7 @@ def reconcile(host, project, profile):
     _, entry = host.require_identity(project, profile)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
-        state = host.load_state(entry, mutating=True)
+        state = host.load_state(entry)
         attempt = state.get("last_attempt")
         require(attempt is not None, "no_attempt", "There is no operation to reconcile.")
         if attempt["outcome"] not in ("running", "needs_reconciliation"):
@@ -1262,7 +1260,7 @@ def keys_rotate(host, project, profile, operation_id, encryption=None):
     _, entry = host.require_identity(project, profile)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
-        state = host.load_state(entry, mutating=True)
+        state = host.load_state(entry)
         path = _operation_path(host, entry, operation_id)
         if path.exists():
             receipt = read_json(path)
@@ -1296,7 +1294,7 @@ def keys_rotate(host, project, profile, operation_id, encryption=None):
 
 
 def _config_set(host, registry, entry, changes, rotation_operation_id=None):
-    state = host.load_state(entry, mutating=True)
+    state = host.load_state(entry)
     values = validate_runtime_environment(host, entry)
     require_idle(state)
     check_live_state(host, entry, state)

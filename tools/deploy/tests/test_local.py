@@ -101,6 +101,35 @@ class UploadRemote:
 class LocalDeploymentTests(unittest.TestCase):
 
 
+    def test_tool_actions_refuse_old_installed_generation_before_staging(self):
+        project, profile = fixture()
+        for action in ('tools-plan', 'tools-apply', 'upgrade-resume'):
+            remote = MagicMock()
+            remote.request.return_value = {'tools': {'generation': 5}, 'client_generation': {'maximum': 6}}
+            with patch.dict(os.environ, {'ACTION': action}, clear=True), \
+                    patch.object(cli, 'SSH', return_value=remote):
+                with self.assertRaisesRegex(cli.LocalError, 'tools_upgrade_floor:.*v0.16.x tools first'):
+                    cli.deploy(project, profile, {})
+            remote.request.assert_called_once_with('hello', {'project': project, 'profile': profile})
+            remote.staged_tools.assert_not_called()
+
+    def test_tool_plan_stages_after_installed_generation_six_is_observed(self):
+        project, profile = fixture()
+        remote = MagicMock()
+        remote.staged_tools.return_value.__enter__.return_value = '/candidate'
+        def request(action, payload, tools=None):
+            if action == 'hello':
+                remote.staged_tools.assert_not_called()
+                return {'tools': {'generation': 6}}
+            self.assertEqual('tools-plan', action)
+            self.assertEqual('/candidate', tools)
+            return {'plan_token': 'reviewed'}
+        remote.request.side_effect = request
+        with patch.dict(os.environ, {'ACTION': 'tools-plan'}, clear=True), \
+                patch.object(cli, 'SSH', return_value=remote), patch.object(cli, 'display'):
+            cli.deploy(project, profile, {})
+        self.assertEqual(['hello', 'tools-plan'], [call.args[0] for call in remote.request.call_args_list])
+
     def test_restart_and_stop_forward_only_explicit_declared_role(self):
         project, profile = fixture()
         for action in ("restart", "stop"):

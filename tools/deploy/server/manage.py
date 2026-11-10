@@ -121,7 +121,7 @@ def execute(host, action, request):
             for item in sorted(affected, key=lambda item: item["profile"]["instance_id"]):
                 locks.enter_context(host.lock(item["profile"]["instance_id"]))
             for item in affected:
-                release.require_idle(host.load_state(item, mutating=True))
+                release.require_idle(host.load_state(item))
             return rotate(host, registry, entry, private[name])
     if action in ("backup-configure", "backup-run", "restore-drill"):
         import backup
@@ -184,7 +184,7 @@ def execute(host, action, request):
             # Naming a topology's only role selects the whole instance.
             if set(selected_units(entry, role)) == set(instance_units(entry)):
                 role = "all"
-            state = host.load_state(entry, mutating=True)
+            state = host.load_state(entry)
             release.validate_runtime_environment(host, entry)
             require(role == "all" or not (state.get("last_attempt") or {}).get("role_recovery_pending"),
                     "role_recovery", "Complete pending background recovery with a plain restart before selecting a role.")
