@@ -111,7 +111,8 @@ def fixture_topology():
 
 def prepare(host, fixture, private=None, *, tools=TOOLS):
     project, profile = fixture
-    payload = request(project, profile, topology=fixture_topology())
+    from upgrades import protocol_metadata
+    payload = {**request(project, profile, topology=fixture_topology()), **protocol_metadata(tools)}
     plan = json.loads(run([sys.executable, str(tools / "server/manage.py"), "bootstrap-plan"],
                           input=json.dumps(payload), timeout=180).stdout)
     assert plan["ok"], "Bootstrap plan refused"
@@ -415,17 +416,17 @@ def main():
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--redis-source", type=Path, help="Read lease Lua directly from this mounted pinned Foundry-Go module root")
     parser.add_argument("--tools-root", type=Path, default=TOOLS,
-                        help="Unmodified staged bundle used for bootstrap; recovery acceptance selects v0.15.0")
+                        help="Unmodified staged bundle used for bootstrap; upgrade acceptance selects v0.15.3")
     stage = parser.add_mutually_exclusive_group()
-    stage.add_argument("--prepare-incident", action="store_true",
-                        help="Bootstrap and activate only the first instance, then return for incident recovery")
-    stage.add_argument("--after-incident", action="store_true",
-                       help="Verify and reuse incident preparation files after successful recovery")
+    stage.add_argument("--prepare-upgrade", action="store_true",
+                        help="Bootstrap and activate only the first instance, then return for the tool upgrade")
+    stage.add_argument("--after-upgrade", action="store_true",
+                       help="Verify and reuse upgrade preparation files after a successful tool upgrade")
     args = parser.parse_args()
     guard()
     tools = args.tools_root.resolve(strict=True)
-    if tools != TOOLS.resolve() and not args.prepare_incident:
-        parser.error("Historical tools are restricted to --prepare-incident")
+    if tools != TOOLS.resolve() and not args.prepare_upgrade:
+        parser.error("Historical tools are restricted to --prepare-upgrade")
     if not (tools / 'server/manage.py').is_file() or not (tools / 'protocol.json').is_file():
         raise RuntimeError('Bootstrap bundle lacks its normal entrypoint or protocol')
     lease_script = None
@@ -439,12 +440,12 @@ def main():
     if registry and (registry["host_id"] != HOST_ID or not (WORK / "owned").exists()):
         raise RuntimeError("Refusing an existing host outside this fixture")
     prepared = None
-    if args.after_incident:
+    if args.after_upgrade:
         from upgrades import tool_bundle
-        assert registry and registry['tools']['bundle_sha256'] == tool_bundle(TOOLS)[2], "Incident upgrade must complete first"
+        assert registry and registry['tools']['bundle_sha256'] == tool_bundle(TOOLS)[2], "Historical upgrade must complete first"
         _, prepared = host.require_identity(*fixtures()[0])
         state = host.load_state(prepared)
-        assert state['status'] == 'healthy' and state['current'] and state['cutover']['outcome'] == 'succeeded', "Incident recovery must complete first"
+        assert state['status'] == 'healthy' and state['current'], "Historical upgrade and deployment must complete first"
     WORK.mkdir(mode=0o700, exist_ok=True)
     atomic_write(WORK / "owned", "disposable acceptance fixture\n", 0o600)
     unrelated = Path("/etc/systemd/system/foundry-acceptance-unrelated.service")
@@ -452,8 +453,8 @@ def main():
     host.run(["systemctl", "daemon-reload"])
     host.run(["systemctl", "start", unrelated.name])
     counter = host.run(["systemctl", "show", unrelated.name, "-p", "ActiveEnterTimestampMonotonic", "-p", "NRestarts"]).stdout
-    topology, disks = archive_contract(args.archive, reuse=args.after_incident)
-    private = bootstrap_secrets(disks, reuse_identity=args.after_incident)
+    topology, disks = archive_contract(args.archive, reuse=args.after_upgrade)
+    private = bootstrap_secrets(disks, reuse_identity=args.after_upgrade)
     if prepared:
         intake = read_json(check_path(host.paths.instance_config(prepared['name']) / 'bootstrap-secrets.json', 'file'))
         assert private['age_recipients'] == intake['age_recipients'], "Prepared recovery identity does not match the installed recipient"
@@ -465,15 +466,17 @@ def main():
         rclone(settings, "mkdir", "acceptance:" + bucket)
         for disk in instance_private["app_storage"]["disks"].values():
             disk["cloud"]["bucket"] = bucket
-        # The first instance already acknowledged its secrets before the incident.
-        prepare(host, fixture, None if args.after_incident and number == 1 else instance_private, tools=tools)
+        # The first instance already acknowledged its secrets before the upgrade.
+        prepare(host, fixture, None if args.after_upgrade and number == 1 else instance_private, tools=tools)
         print("PASS bootstrap " + identity(*fixture)["name"], flush=True)
-        if args.prepare_incident:
+        if args.prepare_upgrade:
             project, profile = fixture
             archive = archive_for(args.archive, project, profile)
             # Exercise the installed historical entrypoint, not the mounted current library.
-            action("activate", request(project, profile, archive=str(archive), archive_sha256=digest(archive)))
-            print("PASS incident baseline activation; ordinary host exercises deferred until upgrade", flush=True)
+            from upgrades import protocol_metadata
+            action("activate", {**request(project, profile, archive=str(archive), archive_sha256=digest(archive)),
+                                **protocol_metadata(tools)})
+            print("PASS upgrade baseline activation; ordinary host exercises deferred until upgrade", flush=True)
             return
     from acceptance_capacity import verify_settings
     import capacity

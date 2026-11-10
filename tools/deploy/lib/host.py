@@ -208,7 +208,7 @@ class Host:
         require(entry["profile"] == profile, "profile_drift", "Shared environment profile differs from the host; run bootstrap check first.")
         return registry, entry
 
-    def load_state(self, entry):
+    def load_state(self, entry, *, mutating=False):
         for directory in (self.paths.state, self.paths.state / "instances", self.paths.instance_state(entry["name"])):
             self.check_control_directory(directory)
         path = check_path(self.paths.instance_state(entry["name"]) / "state.json", "file")
@@ -223,6 +223,10 @@ class Host:
         if os.geteuid() == 0 or self.paths.root != Path("/"):
             from release import load_configuration_intents
             state = self.validate_state(entry, load_configuration_intents(self, entry, state))
+        if mutating:
+            from state_cleanup import remove_finished_state
+            if remove_finished_state(self, entry, state):
+                self.save_state(entry, state)
         return state
 
     def validate_state(self, entry, state):
@@ -244,32 +248,17 @@ class Host:
                     validate_manifest(state[key], entry)
                 except (DeployError, TypeError):
                     raise DeployError(code, detail) from None
-        if "cutover" in state:
-            from cutover_contracts import validate_progress
-            validate_progress(state["cutover"])
-        from compatibility import validate_state
-        validate_state(state)
         if state["last_attempt"] is not None:
             validate_attempt(state["last_attempt"])
         for attempt in state["history"]:
             validate_attempt(attempt)
             require(attempt["outcome"] != "running", code, detail)
-        from compatibility import reconcile_candidate_admission
-        reconcile_candidate_admission(self, entry, state)
         return state
 
     def save_state(self, entry, state):
-        path = check_path(self.paths.instance_state(entry["name"]) / "state.json", "file")
-        if path.exists():
-            previous = read_json(path).get("queue_compatibility")
-            if previous is not None:
-                from compatibility import validate
-                validate(previous)
-                candidate = state.get("queue_compatibility")
-                require(candidate is not None, "queue_compatibility_invalid", "A persisted queue gate cannot be discarded.")
-                validate(candidate)
-                require(previous["floor"] != 3 or candidate["floor"] == 3,
-                        "queue_compatibility_invalid", "The queue layout requirement cannot be lowered.")
+        self.validate_state(entry, state)
+        from state_cleanup import remove_finished_state
+        remove_finished_state(self, entry, state)
         state["updated_at"] = now()
         self.validate_state(entry, state)
         from release import persist_configuration_intents, public_state

@@ -6,7 +6,7 @@ umask 077
 usage() {
   cat <<'EOF'
 Usage: run_acceptance.sh --ubuntu 24.04|26.04 --platform linux/arm64|linux/amd64 \
-  --archive /absolute/app.tar.gz --framework-root /absolute/Foundry-Go --foreign|--fresh [--recovery]
+  --archive /absolute/app.tar.gz --framework-root /absolute/Foundry-Go --foreign|--fresh [--upgrade --tools-root /absolute/module-cache/v0.15.3/tools/deploy]
 
 Run each OS/architecture/mode separately with a matching Linux app archive.
 The archive must declare HTTP + scheduler (worker optional), private R2 disks,
@@ -18,29 +18,29 @@ DOCKER_CONFIG and DOCKER_HOST are inherited. No host ports are published.
 Public reports must show live roles/readiness; Linux may withhold cross-UID
 executable identity, which must be reported as unverified. Root reports must
 prove every running role matches its selected release.
---recovery requires the deploy-acceptance fixture archive. It bootstraps with
-the unmodified v0.15.0 tool bundle, reproduces the stop-proof incident, upgrades
-through tools-plan/tools-apply, and runs the fast host-recovery scenarios.
+--upgrade requires the deploy-acceptance fixture archive and --tools-root pointing
+to the published v0.15.3 bundle in the Go module cache. It prepares historical state,
+then upgrades through tools-plan/tools-apply and verifies generation-6 cleanup.
 Optional: ACCEPTANCE_LOG_DIR, ACCEPTANCE_SCHEDULE_MESSAGE (see acceptance_roles.py),
 ACCEPTANCE_SECRET_CONFIG_KEYS (comma-separated keys the first deploy needs, such as
 seed passwords; each receives a random bootstrap value).
 EOF
 }
 
-ubuntu= platform= archive= framework= mode= recovery=0
+ubuntu= platform= archive= framework= mode= upgrade=0 old_tools=
 while (($#)); do
   case "$1" in
-    --ubuntu|--platform|--archive|--framework-root)
+    --ubuntu|--platform|--archive|--framework-root|--tools-root)
       (($# >= 2)) || { usage >&2; exit 2; }
       case "$1" in
         --ubuntu) ubuntu=$2 ;; --platform) platform=$2 ;;
-        --archive) archive=$2 ;; --framework-root) framework=$2 ;;
+        --archive) archive=$2 ;; --framework-root) framework=$2 ;; --tools-root) old_tools=$2 ;;
       esac
       shift 2 ;;
     --foreign|--fresh)
       [[ -z "$mode" ]] || { echo 'Select one host mode' >&2; exit 2; }
       mode=${1#--}; shift ;;
-    --recovery) recovery=1; shift ;;
+    --upgrade) upgrade=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -51,8 +51,8 @@ done
 framework=$(cd "$framework" && pwd -P)
 archive=$(cd "$(dirname "$archive")" && pwd -P)/$(basename "$archive")
 tests="$framework/tools/deploy/tests"
-if ((recovery)); then
-  [[ -f "$tests/acceptance_recovery.py" ]] || { echo 'Missing recovery acceptance driver' >&2; exit 2; }
+if ((upgrade)); then
+  [[ -f "$tests/acceptance_upgrade.py" ]] || { echo 'Missing upgrade acceptance driver' >&2; exit 2; }
 fi
 for required in host.Dockerfile acceptance.Dockerfile acceptance_host.py acceptance_nginx.py acceptance_foreign.py acceptance_roles.py acceptance_backup.py acceptance_recover.py acceptance_edge.py acceptance_support.py acceptance_http.py acceptance_diagnostics.py acceptance_phase.py; do
   [[ -f "$tests/$required" ]] || { echo "Missing integrated fixture: $required" >&2; exit 2; }
@@ -123,13 +123,11 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 old_tools_mount=()
-if ((recovery)); then
-  # Export the immutable historical tree, never patch an installed bundle.
-  mkdir -m 700 "$logs/old-tools"
-  git -C "$framework" rev-parse 'v0.15.0^{commit}' >"$logs/old-tools-commit.txt"
-  git -C "$framework" archive --format=tar --output="$logs/old-tools.tar" v0.15.0 tools/deploy
-  tar -xf "$logs/old-tools.tar" -C "$logs/old-tools"
-  old_tools_mount=(--mount "type=bind,source=$logs/old-tools/tools/deploy,target=/verification/old-deploy,readonly")
+if ((upgrade)); then
+  [[ -n "$old_tools" && -f "$old_tools/protocol.json" ]] || { echo '--upgrade requires --tools-root from published v0.15.3' >&2; exit 2; }
+  old_tools=$(cd "$old_tools" && pwd -P)
+  [[ "$old_tools" == */github.com/weiloon1234/\!foundry-\!go@v0.15.3/tools/deploy ]] || { echo 'Expected published v0.15.3 module-cache tools' >&2; exit 2; }
+  old_tools_mount=(--mount "type=bind,source=$old_tools,target=/verification/old-deploy,readonly")
 fi
 
 access=acceptance-$token
@@ -180,7 +178,7 @@ openssl x509 -req -in "$certs/s3.csr" -CA "$certs/ca.crt" -CAkey "$certs/ca.key"
   -CAcreateserial -days 2 -sha256 -extfile "$certs/s3.ext" -out "$certs/public.crt" \
   >>"$logs/tls-setup.log" 2>&1
 chmod 600 "$certs/ca.key" "$certs/private.key"
-printf 'ubuntu=%s\nplatform=%s\nmode=%s\nrecovery=%s\ns3=%s\n' "$ubuntu" "$platform" "$mode" "$recovery" "$s3_image" >"$logs/run.txt"
+printf 'ubuntu=%s\nplatform=%s\nmode=%s\nupgrade=%s\ns3=%s\n' "$ubuntu" "$platform" "$mode" "$upgrade" "$s3_image" >"$logs/run.txt"
 echo "Acceptance logs: $logs"
 if [[ "$platform" == linux/amd64 ]]; then
   echo 'linux/amd64 uses emulation on arm64 hosts; expect substantially slower startup and execution.'
@@ -274,13 +272,13 @@ docker exec "$host" apt-get update -qq >"$logs/package-index.log" 2>&1
 phase foreign-baseline /verification/deploy/tests/acceptance_foreign.py baseline --mode "$mode"
 baseline_done=1
 host_phase=()
-if ((recovery)); then
-  phase recovery-prepare /verification/deploy/tests/acceptance_host.py \
+if ((upgrade)); then
+  phase upgrade-prepare /verification/deploy/tests/acceptance_host.py \
     --archive /var/lib/foundry-acceptance-f4a/input.tar.gz \
-    --prepare-incident --tools-root /verification/old-deploy
-  phase recovery-incident /verification/deploy/tests/acceptance_recovery.py incident \
-    --archive /var/lib/foundry-acceptance-f4a/input.tar.gz --old-tools /verification/old-deploy
-  host_phase=(--after-incident)
+    --prepare-upgrade --tools-root /verification/old-deploy
+  phase upgrade /verification/deploy/tests/acceptance_upgrade.py \
+    --archive /var/lib/foundry-acceptance-f4a/input.tar.gz --tools-root /verification/old-deploy
+  host_phase=(--after-upgrade)
 fi
 phase host /verification/deploy/tests/acceptance_host.py \
   --archive /var/lib/foundry-acceptance-f4a/input.tar.gz --redis-source /verification/foundry-go \
@@ -290,10 +288,7 @@ phase capacity /verification/deploy/tests/acceptance_capacity.py
 phase backup /verification/deploy/tests/acceptance_backup.py
 phase nginx /verification/deploy/tests/acceptance_nginx.py --rounds 1
 phase edge /verification/deploy/tests/acceptance_edge.py
-if ((recovery)); then
-  phase recovery-fast /verification/deploy/tests/acceptance_recovery.py fast \
-    --archive /var/lib/foundry-acceptance-f4a/input.tar.gz
-fi
+
 # Set before invocation: a failed verify must not be repeated after it has closed
 # its Redis observation window.
 foreign_verified=1

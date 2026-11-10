@@ -13,8 +13,10 @@ from contracts import DeployError, MAX_JSON, check_path, identity, parse_env, pa
 from topology import instance_units, selected_units
 from host import Host
 
-ACTIONS = ("capacity-plan", "capacity-apply", "hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect", "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "activate", "status", "rollback", "restart", "stop",
-           "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate", "backup-configure", "backup-run", "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report", "cutover-plan", "cutover-apply", "cutover-resume", "cutover-forward-plan", "cutover-forward-apply", "cutover-abort-plan", "cutover-abort-apply", "cutover-drain-resolve", "redis-restore-plan", "redis-restore-apply", "redis-restore-resume")
+ACTIONS = ("capacity-plan", "capacity-apply", "hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect",
+           "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "activate", "status", "rollback", "restart",
+           "stop", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate", "backup-configure", "backup-run",
+           "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report")
 
 
 def execute(host, action, request):
@@ -23,19 +25,13 @@ def execute(host, action, request):
     import release
     import upgrades
 
+    require(action in ACTIONS, "invalid_action", "Unknown deployment action.")
     require(isinstance(request, dict), "invalid_request", "Request must be a JSON object.")
     if action == "hello":
         return upgrades.hello(host)
     common = {"protocol", "client", "project", "profile", "operation_id", "confirm"}
     recovery_fields = {"topology", "mode", "recovery_archive", "archive_sha256", "target_time"}
-    arguments = {"cutover-forward-plan": {"archive", "archive_sha256", "plan_token"},
-                 "cutover-abort-plan": {"archive", "archive_sha256", "plan_token", "reviewed_by", "reason"},
-                 "cutover-abort-apply": {"plan_token"}, "cutover-drain-resolve": {"reviewed_by", "reason"},
-                 "cutover-forward-apply": {"plan_token"}, "redis-restore-plan": {"snapshot_id", "secrets", "plan_token"},
-                 "redis-restore-apply": {"plan_token"}, "redis-restore-resume": {"plan_token"},
-                 "cutover-plan": {"archive", "archive_sha256", "plan_token"},
-                 "cutover-apply": {"plan_token"}, "cutover-resume": {"plan_token"},
-                 "recover-plan": recovery_fields,
+    arguments = {"recover-plan": recovery_fields,
                  "recover-apply": recovery_fields | {"archive", "plan_token", "old_server_gone"}, "bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
                  "restart": {"role"}, "stop": {"role"},
                  "activate": {"archive", "archive_sha256"}, "config-set": {"values", "secrets"},
@@ -125,7 +121,7 @@ def execute(host, action, request):
             for item in sorted(affected, key=lambda item: item["profile"]["instance_id"]):
                 locks.enter_context(host.lock(item["profile"]["instance_id"]))
             for item in affected:
-                release.require_idle(host.load_state(item))
+                release.require_idle(host.load_state(item, mutating=True))
             return rotate(host, registry, entry, private[name])
     if action in ("backup-configure", "backup-run", "restore-drill"):
         import backup
@@ -149,40 +145,6 @@ def execute(host, action, request):
                                               target_time=request.get("target_time"),
                                               target_inclusive=request.get("target_inclusive", True), retain=request.get("retain", False))
             return {**receipt, "ok": True}
-    if action == "redis-restore-plan":
-        if "plan_token" in request:
-            import cutover_contracts as contract
-            require(not {"snapshot_id", "secrets"}.intersection(request), "invalid_request", "Select stored plan or private restore intake.")
-            saved = parse_json(contract.private_path(host, entry, "restore", request.get("operation_id")).read_text())
-            require(saved["module_plan"]["plan_token"] == request["plan_token"], "operation_conflict", "Restore token differs.")
-            return saved["module_plan"]
-        private = request.get("secrets")
-        require(isinstance(private, dict) and set(private) == {"age_identity"}, "redis_restore_identity", "Supply one private age identity.")
-        return release.plan_redis_restore(host, project, profile, request.get("operation_id"), request.get("snapshot_id"), private["age_identity"])
-    if action in ("redis-restore-apply", "redis-restore-resume"):
-        require(request.get("confirm") is True, "confirmation_required", "Confirm the reviewed Redis restore and possible replay of side effects.")
-        return release.apply_redis_restore(host, project, profile, request.get("plan_token"), request.get("operation_id"),
-                                          resume=action == "redis-restore-resume")
-    if action == "cutover-drain-resolve":
-        require(request.get("confirm") is True, "confirmation_required", "Confirm the reviewed resolution of uncertain application work.")
-        return release.resolve_cutover_drain(host, project, profile, request.get("operation_id"),
-                                             request.get("reviewed_by"), request.get("reason"))
-    if action in ("cutover-plan", "cutover-forward-plan", "cutover-abort-plan"):
-        if "plan_token" in request:
-            require(not {"archive", "archive_sha256"}.intersection(request), "invalid_request", "Select a stored plan or a staged candidate.")
-            return release._cutover_public_plan(release._load_cutover_plan(host, entry, request["plan_token"]), request["plan_token"])
-        require(isinstance(request.get("archive"), str), "invalid_request", "A staged release archive is required.")
-        return release.plan_cutover(host, project, profile, request["archive"], request.get("archive_sha256"),
-                                    forward=action == "cutover-forward-plan", abort=action == "cutover-abort-plan",
-                                    reviewed_by=request.get("reviewed_by"), reason=request.get("reason"))
-    if action in ("cutover-apply", "cutover-resume", "cutover-forward-apply", "cutover-abort-apply"):
-        require(request.get("confirm") is True, "confirmation_required", "Confirm the reviewed full-downtime cutover plan.")
-        options = {"resume": action == "cutover-resume"}
-        if action == "cutover-forward-apply":
-            options["forward"] = True
-        if action == "cutover-abort-apply":
-            options["abort"] = True
-        return release.apply_cutover(host, project, profile, request.get("plan_token"), request.get("operation_id"), **options)
     if action == "activate":
         require(isinstance(request.get("archive"), str), "invalid_request", "A staged release archive is required.")
         return release.activate(host, project, profile, request["archive"], request.get("archive_sha256"),
@@ -214,24 +176,15 @@ def execute(host, action, request):
         result = host.run(["journalctl", *[arg for unit in selected for arg in ("--unit", unit)], "--lines=100", "--no-pager", "--output=short-iso"], timeout=15)
         return {"instance": entry["name"], "logs": result.stdout}
     if action == "status":
-        return {"cutover": release.cutover_status(host, entry), "instance": entry, "state": release.public_state(host.load_state(entry)), "live_version": release.current_version(host, entry), "services": release.services(host, entry)}
+        return {"instance": entry, "state": release.public_state(host.load_state(entry)), "live_version": release.current_version(host, entry), "services": release.services(host, entry)}
     if action in ("restart", "stop"):
-        if action == "stop" and host.load_state(entry).get("cutover"):
-            require(request.get("confirm") is True, "confirmation_required", "Confirm containment stop.")
-            release.stop_cutover_executor(host, entry)
         with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
             registry, entry = host.require_identity(project, profile)
             role = request.get("role", "all")
             # Naming a topology's only role selects the whole instance.
             if set(selected_units(entry, role)) == set(instance_units(entry)):
                 role = "all"
-            state = host.load_state(entry)
-            if action == "stop" and state.get("queue_compatibility"):
-                require(request.get("confirm") is True, "confirmation_required", "Confirm containment stop.")
-                return release.containment_stop(host, entry, state, role)
-            if action == "restart":
-                release.compatibility.require_mutation_idle(state)
-                release.compatibility.require_current(host, entry)
+            state = host.load_state(entry, mutating=True)
             release.validate_runtime_environment(host, entry)
             require(role == "all" or not (state.get("last_attempt") or {}).get("role_recovery_pending"),
                     "role_recovery", "Complete pending background recovery with a plain restart before selecting a role.")

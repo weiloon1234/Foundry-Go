@@ -16,7 +16,6 @@ StateDirectoryMode=0750
 UMask=0077
 RuntimeDirectory=@RUNTIME_DIRECTORY@/http
 RuntimeDirectoryMode=0750
-ExecStartPre=+/usr/bin/python3 -I /usr/local/lib/foundry/current/server/start_check.py @SERVICE@ http
 ExecStart=@APPLICATION@/current/artisan serve --config @APPLICATION@/current/config/deploy.toml --env-file @CONFIGURATION@/app.env
 Restart=on-failure
 RestartSec=5s

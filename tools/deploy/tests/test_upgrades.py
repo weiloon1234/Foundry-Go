@@ -41,13 +41,13 @@ class UpgradeTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
         self.source = self.root / "source"
-        for name in upgrades.REQUIRED_FILES:
+        for name in upgrades.REQUIRED_FILES | upgrades.BRIDGE_FILES:
             path = self.source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("# test bundle\n")
-        self.metadata = {"protocol": {"major": 2, "minor": 0}, "generation": 1,
+        self.metadata = {"protocol": {"major": 2, "minor": 0}, "generation": 5,
                          "minimum_host_generation": 1, "minimum_client_generation": 1,
-                         "framework_version": "v0.1.0"}
+                         "framework_version": "v0.15.3"}
         (self.source / "protocol.json").write_text(json.dumps(self.metadata))
         (self.source / "server/launcher.py").write_text(
             (Path(__file__).resolve().parents[1] / "server/launcher.py").read_text())
@@ -72,25 +72,6 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual("unchanged", self.install()["outcome"])
         self.assertEqual(before, self.host.read_registry())
 
-    def test_generation_two_without_recovery_upgrades_through_normal_plan_and_apply(self):
-        (self.source / "lib/recover.py").unlink()
-        self.metadata["generation"] = 2
-        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
-        previous = upgrades.tool_bundle(self.source)[2]
-        self.host.registry["tools"] = upgrades._active_record(self.source, previous, None)
-        self.install()
-        self.metadata["generation"] = 3
-        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
-        with self.assertRaises(DeployError) as error:
-            upgrades.plan_upgrade(self.host, self.source)
-        self.assertEqual(error.exception.code, "tools_incomplete")
-        (self.source / "lib/recover.py").write_text("# recovery implementation\n")
-        plan = upgrades.plan_upgrade(self.host, self.source)
-        self.assertIn("lib/recover.py", plan["upgrade"]["changed_paths"])
-        result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
-        self.assertEqual(result["outcome"], "succeeded")
-        self.assertEqual(self.host.read_registry()["tools"]["generation"], 3)
-        self.assertTrue((self.host.paths.tools / "tools" / previous).is_dir())
 
     def test_bundle_is_traversable_under_a_hardened_umask(self):
         previous = os.umask(0o077)
@@ -268,15 +249,15 @@ class UpgradeTests(unittest.TestCase):
             upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
         self.assertEqual("plan_changed", caught.exception.code)
 
-    def test_protocol_errors_allow_minimal_hello(self):
+    def test_generation_six_client_refuses_generation_five_host_but_allows_hello(self):
         self.install()
-        for generation, code in [(2, "host_upgrade_required"), (0, "client_too_old")]:
+        for generation, code in [(6, "host_upgrade_required"), (0, "client_too_old")]:
             request = {"protocol": {"major": 2, "minor": 0}, "client": {"generation": generation}}
             with self.assertRaises(DeployError) as caught:
                 upgrades.check_client(self.host, request, "activate")
             self.assertEqual(code, caught.exception.code)
             upgrades.check_client(self.host, request, "hello")
-        self.assertEqual({"minimum": 1, "maximum": 1}, upgrades.hello(self.host)["client_generation"])
+        self.assertEqual({"minimum": 1, "maximum": 5}, upgrades.hello(self.host)["client_generation"])
 
     def test_retired_bundle_cannot_be_selected_again(self):
         self.install()
@@ -287,6 +268,27 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaises(DeployError) as caught:
             self.install(allow_upgrade=True)
         self.assertEqual("tools_downgrade", caught.exception.code)
+
+    def test_upgrade_reloads_even_when_units_were_already_written(self):
+        import provision
+        import state_cleanup
+        from test_contracts import fixture
+        self.install()
+        _, profile, entry = fixture()
+        entry['client_generation'] = 3
+        entry['provisioning']['state'] = 'ready'
+        self.host.registry['instances'][profile['instance_id']] = entry
+        (self.source / 'lib/new_module.py').write_text('# candidate change\n')
+        with patch.object(state_cleanup, 'check_upgrade'), \
+                patch.object(provision, '_install_unit') as reinstall, \
+                patch.object(self.host, 'run', create=True) as run:
+            result = self.install(allow_upgrade=True)
+        self.assertEqual('succeeded', result['outcome'])
+        reinstall.assert_called_once()
+        self.assertEqual(entry, reinstall.call_args.args[2])
+        self.assertEqual(self.host.paths.tools / 'tools' / result['bundle_sha256'], reinstall.call_args.args[3])
+        run.assert_called_once_with(['systemctl', 'daemon-reload'])
+        self.assertEqual(3, self.host.read_registry()['instances'][profile['instance_id']]['client_generation'])
 
     def test_upgrade_stays_pending_until_new_bundle_rebinds_backup_commands(self):
         self.install()

@@ -18,7 +18,6 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
 import backup
 import capacity
-import compatibility
 from contracts import DeployError
 from host import Host
 import packages
@@ -95,36 +94,6 @@ def probe(mode, directory):
         (root / 'ready').touch()
     while True:
         signal.pause()
-
-
-def executor_probe(instance_id, operation_id, directory):
-    root = Path(directory)
-    host = Host()
-    entry = {'profile': {'instance_id': instance_id}}
-    release._require_executor_alone(host, entry, operation_id)
-    child = os.fork()
-    if child == 0:
-        while True:
-            signal.pause()
-    try:
-        try:
-            release._require_executor_alone(host, entry, operation_id)
-        except DeployError as error:
-            if error.code != 'cutover_executor_unknown':
-                raise
-        else:
-            raise AssertionError('A surviving executor child was accepted as quiescent')
-    finally:
-        os.kill(child, signal.SIGTERM)
-        os.waitpid(child, 0)
-    release._require_executor_alone(host, entry, operation_id)
-    stopping = []
-    def terminate(signum, frame):
-        stopping.append(time.monotonic() + 2)
-    signal.signal(signal.SIGTERM, terminate)
-    (root / 'executor-ready').touch()
-    while not (root / 'executor-exit').exists() and (not stopping or time.monotonic() < stopping[0]):
-        time.sleep(.02)
 
 
 @unittest.skipUnless(os.environ.get('FOUNDRY_REAL_SYSTEMD') == '1',
@@ -213,7 +182,8 @@ class SystemdContractTests(unittest.TestCase):
         unit = instance or name
         self.units.append(unit)
         if '@' in unit:
-            self.slices.add(compatibility.default_cgroup(unit)[0])
+            escaped = self.host.run(['systemd-escape', '--', unit.split('@')[0]]).stdout.strip()
+            self.slices.add('system-' + escaped + '.slice')
         self.host.run(['systemctl', 'daemon-reload'], timeout=10)
         return unit
 
@@ -231,10 +201,6 @@ class SystemdContractTests(unittest.TestCase):
                                '[Install]\nWantedBy=multi-user.target\n',
                                instance=unit)
 
-    def prove(self, unit, *, review=False):
-        # Bind the arbitrary probe name, never fake systemctl or kernel evidence.
-        with patch.object(compatibility, 'selected_units', return_value={'http': unit}):
-            return compatibility.prove_stopped(self.host, {}, review=review)['http']
 
     def assert_code(self, code, action):
         with self.assertRaises(DeployError) as raised:
@@ -251,37 +217,25 @@ class SystemdContractTests(unittest.TestCase):
                 self.assertEqual(('loaded', 'active', 'running', '0'),
                                  tuple(live[key] for key in ('LoadState', 'ActiveState', 'SubState', 'NRestarts')))
                 self.assertTrue(release._matches_executable(live, Path('/usr/bin/sleep')))
-                expected_slice, expected_group = compatibility.default_cgroup(unit)
+                escaped = self.host.run(['systemd-escape', '--', unit.split('@')[0]]).stdout.strip()
+                expected_slice = 'system-' + escaped + '.slice' if template else 'system.slice'
+                expected_group = '/system.slice/' + (expected_slice + '/' if template else '') + unit
                 self.assertEqual(expected_group, live['ControlGroup'])
                 self.assertEqual(expected_slice, self.show(unit)['Slice'])
                 self.assertIn(live['MainPID'], Path('/sys/fs/cgroup' + expected_group, 'cgroup.procs').read_text().split())
-                self.assert_code('cutover_stop_unproven', lambda: self.prove(unit))
-                self.assert_code('cutover_stop_unproven', lambda: compatibility._empty_cgroup(self.host, expected_group))
-                invocation = release._role_invocation(self.host, unit)
+                invocation = self.show(unit, 'InvocationID')['InvocationID']
                 self.assertRegex(invocation, r'^[a-f0-9]{32}$')
                 self.assertTrue(capacity._running_invocation(capacity._unit_state(self.host, unit)))
                 self.assertEqual(live['MainPID'], packages._service(self.host, unit)['MainPID'])
                 self.host.run(['systemctl', 'restart', unit])
-                self.assertNotEqual(invocation, release._role_invocation(self.host, unit))
+                self.assertNotEqual(invocation, self.show(unit, 'InvocationID')['InvocationID'])
                 with patch.object(release, 'selected_units', return_value={'http': unit}):
                     release.stop(self.host, {}, role='http')
-                stopped = self.prove(unit)
+                stopped = self.show(unit)
                 self.assertEqual(('inactive', 'dead', '0', '0', '', 'success'),
                                  tuple(stopped[key] for key in ('ActiveState', 'SubState', 'MainPID',
                                                                'ControlPID', 'ControlGroup', 'Result')))
                 self.assertIn(stopped['Job'], ('', '0'))
-                if template:
-                    # Mutation proof against real observed properties. v0.15.0
-                    # required system.slice when a stopped ControlGroup was empty.
-                    with patch.object(compatibility, 'default_cgroup',
-                                      return_value=('system.slice', '/system.slice/' + unit)):
-                        self.assert_code('cutover_stop_unproven', lambda: self.prove(unit))
-
-    def test_prefix_escaping_matches_systemd_escape(self):
-        for prefix in ('foundry-http', '.probe', 'a/b', 'a_b.c:9', 'caf\u00e9', r'a\x2db'):
-            with self.subTest(prefix=prefix):
-                escaped = self.host.run(['systemd-escape', '--', prefix]).stdout.strip()
-                self.assertEqual(escaped, compatibility._escape_unit_prefix(prefix))
 
     def test_loaded_fragment_dropins_reload_and_enablement(self):
         unit = self.service('metadata', template=True)
@@ -330,32 +284,6 @@ class SystemdContractTests(unittest.TestCase):
         self.host.run(['systemctl', 'daemon-reload'])
         self.assertEqual('masked', packages._service(self.host, masked)['LoadState'])
 
-    def test_prestart_refusal_never_runs_main_and_start_limit_is_visible(self):
-        unit = self.write_unit(self.prefix + '-guard@.service',
-                               '[Unit]\nStartLimitIntervalSec=60\nStartLimitBurst=2\n'
-                               '[Service]\nType=exec\nUser=nobody\nRestart=no\n'
-                               f'ExecStartPre=+/usr/bin/touch {self.root}/pre-root\n'
-                               'ExecStartPre=+/usr/bin/false\n'
-                               f'ExecStart={self.command("log")}\n',
-                               instance=self.prefix + '-guard@one.service')
-        for attempt in range(3):
-            marker = self.root / 'pre-root'
-            marker.unlink(missing_ok=True)
-            self.assertNotEqual(0, self.host.run(['systemctl', 'start', unit], check=False).returncode)
-            value = self.prove(unit, review=True)
-            self.assertEqual(('failed', 'failed'), tuple(value[key] for key in ('ActiveState', 'SubState')))
-            # A rate-limited start can retain the previous exit-code result.
-            # Prove refusal by the absence of a new pre-start execution instead.
-            self.assertIn(value['Result'], ('exit-code',) if attempt < 2 else ('exit-code', 'start-limit-hit'))
-            for key in ('MainPID', 'ControlPID', 'ExecMainPID', 'ExecMainCode',
-                        'ExecMainStatus', 'ExecMainStartTimestampMonotonic'):
-                self.assertEqual('0', value[key], key)
-            self.assertFalse((self.root / 'logged').exists())
-            self.assertEqual(attempt < 2, marker.exists())
-            self.assert_code('cutover_drain_review', lambda: self.prove(unit))
-        self.assertIn(unit, report.failed_units(self.host, [], time.monotonic() + 5))
-        self.host.run(['systemctl', 'reset-failed', unit])
-        self.assertEqual('inactive', self.show(unit)['ActiveState'])
 
     def test_pending_control_process_and_oneshot_completion(self):
         unit = self.service('pending', command='/usr/bin/true',
@@ -367,12 +295,11 @@ class SystemdContractTests(unittest.TestCase):
         self.assertGreater(int(value['ControlPID']), 0)
         self.assertNotIn(value['Job'], ('', '0'))
         self.assert_code('capacity_restart_pending', lambda: capacity._unit_state(self.host, unit))
-        self.assert_code('cutover_stop_unproven', lambda: self.prove(unit))
         (self.root / 'continue').touch()
         self.wait_for(lambda: self.show(unit)['SubState'] == 'exited')
         self.assertEqual('active', self.show(unit)['ActiveState'])
         backup._stop_drill(self.host, unit)
-        self.prove(unit)
+        self.assertEqual('inactive', self.show(unit)['ActiveState'])
         oneshot = self.write_unit(self.prefix + '-oneshot.service',
                                   '[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/usr/bin/true\n')
         self.assertEqual('static', self.show(oneshot, 'UnitFileState')['UnitFileState'])
@@ -389,19 +316,18 @@ class SystemdContractTests(unittest.TestCase):
         unit = self.service('exit', command='/usr/bin/sh -c "exit 23"')
         self.host.run(['systemctl', 'start', unit], check=False)
         self.wait_for(lambda: self.show(unit)['ActiveState'] == 'failed')
-        value = self.prove(unit, review=True)
+        value = self.show(unit)
         self.assertEqual(('exit-code', '1', '23'),
                          tuple(value[key] for key in ('Result', 'ExecMainCode', 'ExecMainStatus')))
         self.assertGreater(int(value['ExecMainPID']), 0)
         self.assertGreater(int(value['ExecMainStartTimestampMonotonic']), 0)
-        self.assert_code('cutover_drain_review', lambda: self.prove(unit))
         clean = self.service('clean', command='/usr/bin/sh -c "exit 130"', options='RemainAfterExit=yes')
         self.host.run(['systemctl', 'start', clean])
         self.wait_for(lambda: self.show(clean)['SubState'] == 'exited')
         self.assertEqual('success', self.show(clean)['Result'])
         self.assertEqual('130', self.show(clean)['ExecMainStatus'])
         self.host.run(['systemctl', 'stop', clean])
-        self.prove(clean)
+        self.assertEqual('inactive', self.show(clean)['ActiveState'])
 
     def test_automatic_restart_counter_and_invocation(self):
         unit = self.service('restart', command=self.command('restart'),
@@ -414,7 +340,7 @@ class SystemdContractTests(unittest.TestCase):
         self.assertEqual('2', (self.root / 'starts').read_text())
         self.assertTrue(capacity._running_invocation(capacity._unit_state(self.host, unit)))
         self.host.run(['systemctl', 'stop', unit])
-        self.prove(unit)
+        self.assertEqual('inactive', self.show(unit)['ActiveState'])
 
     def test_explicit_interrupt_signal(self):
         unit = self.service('interrupt', command=self.command('sigint'), options='KillSignal=SIGINT')
@@ -422,9 +348,9 @@ class SystemdContractTests(unittest.TestCase):
         self.wait_for(lambda: (self.root / 'ready').exists())
         self.host.run(['systemctl', 'stop', unit])
         self.assertTrue((self.root / 'interrupted').exists())
-        self.prove(unit)
+        self.assertEqual('inactive', self.show(unit)['ActiveState'])
 
-    def test_stop_owns_children_and_timeout_requires_review(self):
+    def test_stop_owns_children_and_reports_timeout(self):
         for mode in ('tree', 'stubborn', 'mixed'):
             with self.subTest(mode=mode):
                 for path in self.root.iterdir():
@@ -437,7 +363,7 @@ class SystemdContractTests(unittest.TestCase):
                                           for name in ('parent', 'child')))
                 pids = [int((self.root / (name + '.pid')).read_text()) for name in ('parent', 'child')]
                 self.host.run(['systemctl', 'stop', unit])
-                value = self.prove(unit, review=True)
+                value = self.show(unit)
                 self.assertTrue((self.root / 'parent.term').exists())
                 self.assertEqual(mode != 'mixed', (self.root / 'child.term').exists())
                 for pid in pids:
@@ -445,53 +371,9 @@ class SystemdContractTests(unittest.TestCase):
                 if mode == 'stubborn':
                     self.assertEqual(('timeout', '2', '9'),
                                      tuple(value[key] for key in ('Result', 'ExecMainCode', 'ExecMainStatus')))
-                    self.assert_code('cutover_drain_review', lambda: self.prove(unit))
                 if mode == 'tree':
-                    self.prove(unit)
+                    self.assertEqual('inactive', self.show(unit)['ActiveState'])
 
-    def test_transient_executor_identity_liveness_and_descendants(self):
-        entry = {'profile': {'instance_id': str(uuid.uuid4())}}
-        operation = str(uuid.uuid4())
-        unit = release.cutover_unit(entry, operation)
-        self.assertEqual('absent', release.cutover_executor(self.host, entry, operation))
-        self.units.append(unit)
-        runner = self.root / 'server/cutover_runner.py'
-        runner.parent.mkdir()
-        runner.write_text('import runpy, sys\n'
-                          f'runpy.run_path({str(SCRIPT)!r})["executor_probe"]('
-                          f'sys.argv[1], sys.argv[2], {str(self.root)!r})\n')
-        plan = {'tools_path': str(self.root)}
-        release._submit_cutover(self.host, entry, plan, operation)
-        self.wait_for(lambda: (self.root / 'executor-ready').exists())
-        self.assertEqual('running', release.cutover_executor(self.host, entry, operation))
-        invocation = release._role_invocation(self.host, unit)
-        self.assertTrue(release.cutover_executor_admits_start(self.host, entry, operation, invocation))
-        self.assertFalse(release.cutover_executor_admits_start(self.host, entry, operation, '0' * 32))
-        properties = self.show(unit, 'Transient,Description,KillMode,RemainAfterExit,ControlGroup')
-        self.assertEqual('yes', properties['Transient'])
-        self.assertEqual('control-group', properties['KillMode'])
-        self.assertEqual('yes', properties['RemainAfterExit'])
-        self.assertEqual('/system.slice/' + unit, properties['ControlGroup'])
-        release._submit_cutover(self.host, entry, plan, operation)
-        self.assertEqual(invocation, release._role_invocation(self.host, unit))
-        (self.root / 'executor-exit').touch()
-        self.wait_for(lambda: release.cutover_executor(self.host, entry, operation) == 'exited')
-        self.assertEqual('exited', self.show(unit)['SubState'])
-        self.assertFalse(release.cutover_executor_admits_start(self.host, entry, operation, invocation))
-        self.host.run(['systemctl', 'stop', unit])
-        self.host.run(['systemctl', 'reset-failed', unit], check=False)
-        (self.root / 'executor-ready').unlink()
-        (self.root / 'executor-exit').unlink()
-        release._submit_cutover(self.host, entry, plan, operation)
-        self.wait_for(lambda: (self.root / 'executor-ready').exists())
-        self.assertNotEqual(invocation, release._role_invocation(self.host, unit))
-        invocation = release._role_invocation(self.host, unit)
-        self.host.run(['systemctl', 'stop', '--no-block', unit])
-        self.wait_for(lambda: self.show(unit)['ActiveState'] == 'deactivating')
-        self.assertEqual('running', release.cutover_executor(self.host, entry, operation))
-        self.assertFalse(release.cutover_executor_admits_start(self.host, entry, operation, invocation))
-        (self.root / 'executor-exit').touch()
-        self.wait_for(lambda: release.cutover_executor(self.host, entry, operation) != 'running')
 
     def test_notify_and_forking_service_readiness(self):
         for mode in ('notify', 'forking'):
@@ -504,7 +386,7 @@ class SystemdContractTests(unittest.TestCase):
                 self.assertTrue(capacity._running_invocation(capacity._unit_state(self.host, unit)))
                 self.assertGreater(int(packages._service(self.host, unit)['MainPID']), 0)
                 self.host.run(['systemctl', 'stop', unit])
-                self.prove(unit)
+                self.assertEqual('inactive', self.show(unit)['ActiveState'])
 
     def test_timer_templates_execstart_and_journal_selection(self):
         for kind in ('backup', 'certbot-renew'):

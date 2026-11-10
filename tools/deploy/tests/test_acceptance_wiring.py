@@ -15,28 +15,28 @@ from test_contracts import fixture
 
 
 class AcceptanceWiringTests(unittest.TestCase):
-    def test_recovery_incident_precedes_ordinary_host_exercises(self):
+    def test_upgrade_precedes_ordinary_host_exercises(self):
         runner = Path(__file__).with_name('run_acceptance.sh').read_text()
         phases = runner[runner.index('phase foreign-baseline '):runner.index('# Set before invocation:')]
         ordinary = ['foreign-baseline', 'host', 'roles', 'capacity', 'backup', 'nginx', 'edge']
-        for enabled, expected in ((0, ordinary), (1, [ordinary[0], 'recovery-prepare', 'recovery-incident',
-                                                    *ordinary[1:], 'recovery-fast'])):
-            with self.subTest(recovery=enabled):
+        for enabled, expected in ((0, ordinary), (1, [ordinary[0], 'upgrade-prepare', 'upgrade',
+                                                    *ordinary[1:]])):
+            with self.subTest(upgrade=enabled):
                 result = subprocess.run(['bash', '-c',
-                    'set -eu\nphase() { echo "$*"; }\nmode=foreign\nrecovery=' + str(enabled) + '\n' + phases],
+                    'set -eu\nphase() { echo "$*"; }\nmode=foreign\nupgrade=' + str(enabled) + '\n' + phases],
                     capture_output=True, text=True, check=True, timeout=5)
                 calls = [line.split() for line in result.stdout.splitlines()]
                 self.assertEqual(expected, [call[0] for call in calls])
                 for call in calls:
                     if call[0] == 'host':
-                        self.assertEqual(bool(enabled), '--after-incident' in call)
-                    if call[0] == 'recovery-prepare':
-                        self.assertIn('--prepare-incident', call)
+                        self.assertEqual(bool(enabled), '--after-upgrade' in call)
+                    if call[0] == 'upgrade-prepare':
+                        self.assertIn('--prepare-upgrade', call)
                         self.assertIn('--tools-root', call)
                     if '/verification/old-deploy' in call:
-                        self.assertIn(call[0], ('recovery-prepare', 'recovery-incident'))
+                        self.assertIn(call[0], ('upgrade-prepare', 'upgrade'))
 
-    def test_incident_preparation_activates_only_first_instance_via_installed_launcher(self):
+    def test_upgrade_preparation_activates_only_first_instance_via_installed_launcher(self):
         import acceptance_backup
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
             root = Path(directory)
@@ -44,7 +44,7 @@ class AcceptanceWiringTests(unittest.TestCase):
             (root / 'server/manage.py').touch()
             (root / 'protocol.json').touch()
             stack.enter_context(patch.object(acceptance_host.sys, 'argv', ['acceptance_host.py',
-                '--archive', str(root / 'input.tar.gz'), '--prepare-incident', '--tools-root', str(root)]))
+                '--archive', str(root / 'input.tar.gz'), '--prepare-upgrade', '--tools-root', str(root)]))
             stack.enter_context(patch.object(acceptance_host, 'WORK', root / 'work'))
             instances = [fixture()[:2] for _ in range(3)]
             stack.enter_context(patch.object(acceptance_host, 'fixtures', return_value=instances))
@@ -64,6 +64,7 @@ class AcceptanceWiringTests(unittest.TestCase):
             action = stack.enter_context(patch.object(acceptance_host, 'action'))
             renewal = stack.enter_context(patch.object(acceptance_host, 'certificate_renewal'))
             isolation = stack.enter_context(patch.object(acceptance_host, 'isolation'))
+            stack.enter_context(patch("upgrades.protocol_metadata", return_value={"client": {"generation": 5}}))
             acceptance_host.main()
             prepare.assert_called_once()
             self.assertEqual(instances[0], prepare.call_args.args[1])
@@ -94,7 +95,8 @@ class AcceptanceWiringTests(unittest.TestCase):
         ]
         with patch.object(acceptance_host, 'fixture_topology', return_value={
                 'schema': 1, 'roles': [{'name': 'http'}]}), \
-                patch.object(acceptance_host, 'run', side_effect=replies) as run:
+                patch.object(acceptance_host, 'run', side_effect=replies) as run, \
+                patch('upgrades.protocol_metadata', return_value={'client': {'generation': 5}}):
             acceptance_host.prepare(None, (project, profile), {'configuration': {}},
                                     tools=Path('/verification/old-deploy'))
         self.assertEqual([call.args[0][2] for call in run.call_args_list],
@@ -102,6 +104,7 @@ class AcceptanceWiringTests(unittest.TestCase):
         for call in run.call_args_list:
             self.assertEqual(call.args[0][1], '/verification/old-deploy/server/manage.py')
         self.assertEqual(json.loads(run.call_args_list[1].kwargs['input'])['plan_token'], 'reviewed')
+        self.assertEqual(5, json.loads(run.call_args_list[1].kwargs['input'])['client']['generation'])
 
     def test_builder_refuses_existing_archive_path_file_before_docker(self):
         with tempfile.TemporaryDirectory() as temporary:

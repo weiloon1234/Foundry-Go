@@ -99,51 +99,7 @@ class UploadRemote:
 
 
 class LocalDeploymentTests(unittest.TestCase):
-    def test_cutover_and_restore_display_saved_plan_before_confirming_exact_operation(self):
-        project, profile = fixture()
-        operation, token = str(uuid.uuid4()), 'a' * 64
-        for action in ('cutover-apply', 'cutover-resume', 'cutover-forward-apply', 'cutover-abort-apply', 'redis-restore-apply', 'redis-restore-resume'):
-            remote = MagicMock()
-            events = []
-            remote.request.side_effect = lambda action, request: events.append((action, request)) or {'ok': True}
-            with patch.dict(os.environ, {'ACTION': action, 'PLAN_TOKEN': token, 'OPERATION': operation}, clear=True), \
-                    patch.object(cli, 'ROOT', self.root), patch.object(cli, 'SSH', return_value=remote), \
-                    patch.object(cli, 'confirm', side_effect=lambda _: events.append(('confirm', {}))), \
-                    patch.object(cli, 'display'), patch.object(cli, 'say'):
-                cli.deploy(project, profile, {})
-            planned = 'cutover-plan' if action in ('cutover-forward-apply', 'cutover-abort-apply') else action.rsplit('-', 1)[0] + '-plan'
-            self.assertEqual([planned, 'confirm', action], [item[0] for item in events])
-            sent = events[-1][1]
-            self.assertEqual(operation, sent['operation_id'])
-            self.assertEqual(token, sent['plan_token'])
-            self.assertIs(True, sent['confirm'])
-            remote.close.assert_called_once()
 
-    def test_cutover_refuses_missing_stable_operation_before_requests(self):
-        project, profile = fixture()
-        remote = MagicMock()
-        with patch.dict(os.environ, {'ACTION': 'cutover-apply', 'PLAN_TOKEN': 'a' * 64}, clear=True), \
-                patch.object(cli, 'SSH', return_value=remote):
-            with self.assertRaises(cli.LocalError):
-                cli.deploy(project, profile, {})
-        remote.request.assert_not_called()
-
-    def test_drain_resolution_displays_review_before_confirmation(self):
-        project, profile = fixture()
-        operation = str(uuid.uuid4())
-        remote, events = MagicMock(), []
-        remote.request.side_effect = lambda action, request: events.append((action, request)) or {'ok': True}
-        with patch.dict(os.environ, {'ACTION': 'cutover-drain-resolve', 'OPERATION': operation,
-                                    'REVIEWED_BY': 'owner@example.test', 'REASON': 'Reviewed failed startup'}, clear=True), \
-                patch.object(cli, 'SSH', return_value=remote), \
-                patch.object(cli, 'confirm', side_effect=lambda _: events.append(('confirm', {}))), \
-                patch.object(cli, 'display'):
-            cli.deploy(project, profile, {})
-        self.assertEqual(['status', 'confirm', 'cutover-drain-resolve'], [item[0] for item in events])
-        self.assertEqual(operation, events[-1][1]['operation_id'])
-        self.assertEqual('owner@example.test', events[-1][1]['reviewed_by'])
-        self.assertEqual('Reviewed failed startup', events[-1][1]['reason'])
-        self.assertTrue(events[-1][1]['confirm'])
 
     def test_restart_and_stop_forward_only_explicit_declared_role(self):
         project, profile = fixture()
@@ -170,7 +126,6 @@ class LocalDeploymentTests(unittest.TestCase):
                 sent = next(call.args[1] for call in remote.request.call_args_list if call.args[0] == action)
                 self.assertEqual(role, sent.get("role"))
                 self.assertEqual(role is not None, "role" in sent)
-
 
 
     def test_logs_rejects_explicit_empty_role(self):

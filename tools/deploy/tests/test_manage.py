@@ -39,76 +39,12 @@ class ManagerTests(unittest.TestCase):
                 self.assertEqual(code, error.exception.code)
             run.assert_not_called()
 
-    def test_legacy_clients_remain_upgradeable_but_cannot_mutate_a_fenced_host(self):
-        request = copy.deepcopy(self.request)
-        request["client"]["generation"] = 4
-        upgrades.check_client(self.host, request, "stop")
-        state = self.host.load_state(self.entry)
-        state["queue_compatibility"] = {"schema": 1, "floor": 3, "permission": "closed", "admitted": {}}
-        self.host.save_state(self.entry, state)
-        with self.assertRaises(DeployError) as error:
-            upgrades.check_client(self.host, request, "stop")
-        self.assertEqual("client_too_old", error.exception.code)
 
     def test_unknown_mutation_fields_are_rejected(self):
         with self.assertRaises(DeployError) as error:
             manager.execute(self.host, "stop", {**self.request, "unreviewed": True})
         self.assertEqual("invalid_request", error.exception.code)
 
-    def test_forward_recovery_has_separate_confirmation_and_artifact_plan(self):
-        import release
-        operation, token = str(uuid.uuid4()), 'a' * 64
-        with patch.object(release, 'apply_cutover', return_value={'ok': True}) as apply:
-            request = {**self.request, 'operation_id': operation, 'plan_token': token}
-            with self.assertRaises(DeployError) as error:
-                manager.execute(self.host, 'cutover-forward-apply', request)
-            self.assertEqual('confirmation_required', error.exception.code)
-            apply.assert_not_called()
-            manager.execute(self.host, 'cutover-forward-apply', {**request, 'confirm': True})
-            self.assertEqual({'resume': False, 'forward': True}, apply.call_args.kwargs)
-        with patch.object(release, 'plan_cutover', return_value={'applicable': True}) as plan:
-            manager.execute(self.host, 'cutover-forward-plan', {**self.request, 'archive': '/tmp/replacement.tar.gz', 'archive_sha256': token})
-            self.assertTrue(plan.call_args.kwargs['forward'])
-            self.assertEqual(('/tmp/replacement.tar.gz', token), plan.call_args.args[-2:])
-
-    def test_review_actions_require_confirmation_and_preserve_identity(self):
-        import release
-        operation = str(uuid.uuid4())
-        review = {'reviewed_by': 'owner@example.test', 'reason': 'Reviewed startup and external effects'}
-        with patch.object(release, 'resolve_cutover_drain') as resolve:
-            request = {**self.request, **review, 'operation_id': operation}
-            with self.assertRaises(DeployError) as error:
-                manager.execute(self.host, 'cutover-drain-resolve', request)
-            self.assertEqual('confirmation_required', error.exception.code)
-            resolve.assert_not_called()
-            manager.execute(self.host, 'cutover-drain-resolve', {**request, 'confirm': True})
-            self.assertEqual((operation, review['reviewed_by'], review['reason']), resolve.call_args.args[-3:])
-        with patch.object(release, 'apply_cutover') as apply:
-            request = {**self.request, 'operation_id': operation, 'plan_token': 'a' * 64}
-            with self.assertRaises(DeployError):
-                manager.execute(self.host, 'cutover-abort-apply', request)
-            apply.assert_not_called()
-            manager.execute(self.host, 'cutover-abort-apply', {**request, 'confirm': True})
-            self.assertEqual({'resume': False, 'abort': True}, apply.call_args.kwargs)
-
-    def test_cutover_and_restore_require_confirmation_and_forward_exact_intent(self):
-        import release
-        operation, token = str(uuid.uuid4()), 'a' * 64
-        for prefix, implementation in (("cutover", "apply_cutover"), ("redis-restore", "apply_redis_restore")):
-            for suffix in ("apply", "resume"):
-                action = prefix + "-" + suffix
-                request = {**self.request, "plan_token": token, "operation_id": operation}
-                with patch.object(release, implementation, return_value={"ok": True}) as apply:
-                    with self.assertRaises(DeployError) as error:
-                        manager.execute(self.host, action, request)
-                    self.assertEqual("confirmation_required", error.exception.code)
-                    apply.assert_not_called()
-                    manager.execute(self.host, action, {**request, "confirm": True})
-                    self.assertEqual((token, operation), apply.call_args.args[-2:])
-                    self.assertEqual({"resume": suffix == "resume"}, apply.call_args.kwargs)
-                    with self.assertRaises(DeployError) as error:
-                        manager.execute(self.host, action, {**request, "confirm": True, "role": "worker"})
-                    self.assertEqual("invalid_request", error.exception.code)
 
     def test_rotation_requires_and_dispatches_stable_operation_id(self):
         import release

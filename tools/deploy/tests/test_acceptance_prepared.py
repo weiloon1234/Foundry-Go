@@ -82,15 +82,14 @@ class PreparedHostTests(unittest.TestCase):
         host = Mock()
         host.read_registry.return_value = {'host_id': host_phase.HOST_ID, 'tools': {'bundle_sha256': 'current'}}
         host.require_identity.return_value = ({}, prepared)
-        host.load_state.return_value = {'status': 'healthy', 'current': {'version': 'recovered'},
-                                       'cutover': {'outcome': 'succeeded'}}
+        host.load_state.return_value = {'status': 'healthy', 'current': {'version': 'upgraded'}}
         host.paths.instance_config.return_value = self.root
         (self.root / 'owned').write_text('disposable acceptance fixture\n')
         (self.root / 'bootstrap-secrets.json').write_text(json.dumps({'age_recipients': ['age1owned']}))
         private = {'age_recipients': ['age1owned'], 'app_storage': {'disks': {}},
                    'configuration': {'APP_TEST': 'new-instance-only'}}
         with ExitStack() as stack:
-            stack.enter_context(patch.object(host_phase.sys, 'argv', ['acceptance_host.py', '--archive', 'input', '--after-incident']))
+            stack.enter_context(patch.object(host_phase.sys, 'argv', ['acceptance_host.py', '--archive', 'input', '--after-upgrade']))
             stack.enter_context(patch.object(host_phase, 'Host', return_value=host))
             stack.enter_context(patch.object(host_phase, 'fixtures', return_value=instances))
             for name in ('guard', 'atomic_write'):

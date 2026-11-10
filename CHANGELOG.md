@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+Planned for v0.16.0.
+
+- Deploy tools move to generation 6. Upgrade generation-5 hosts with `tools-plan`
+  and `tools-apply` before ordinary deployments. The minimum client generation
+  remains 1, so existing generation-3 instance registrations stay upgradeable.
+- Removed finished queue cutover actions, persistent startup admission, containment,
+  and Redis snapshot/restore. Role units no longer use `ExecStartPre`; ordinary
+  deploys no longer call `deploy:jobs-inspect`. Removed actions have no aliases.
+- Added temporary upgrade bridges and retryable cleanup of finished instance state,
+  private migration records, and exact failed executor unit records. Off-host
+  snapshots remain untouched; old releases follow ordinary retention.
+- Container acceptance now upgrades a published v0.15.3 host through generation 6,
+  replacing the historical incident replay and recovery matrix.
+
 ## v0.15.3 — 2026-11-10
 
 **Deploy-tool fix only; no application runtime change.** Repin applications so `go tool foundry deploy`
