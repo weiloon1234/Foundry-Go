@@ -6,6 +6,10 @@
 the new framework migration before serving, and redeploy; mount the viewer and register the
 prune command where developers need them.
 
+- Security: the framework toolchain is Go 1.27.4 for GO-2026-6859 (`net/http`), and deploy builds gain a
+  reviewed `golang:1.27.4` image pin. Applications set `go 1.27.4` in `go.mod` so production builds use it;
+  the deploy builder selects its Go image from that line.
+
 - Added: outbound capture. Inside an application with a database, every attempt of a client
   built by `httpclient.Module` (settings-named clients, application modules and the framework
   features that borrow them) is stored in `foundry_outbound_captures` with no call-site code:
