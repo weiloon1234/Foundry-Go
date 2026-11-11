@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/application"
 	dbcommand "github.com/weiloon1234/Foundry-Go/database/command"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	outboundcapture "github.com/weiloon1234/Foundry-Go/httpclient/capture"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 )
 
@@ -87,7 +88,8 @@ func TestApplicationDatabaseCommandRefusesUnknownDatabaseBeforeIO(t *testing.T) 
 			t.Error(err)
 		}
 	})
-	if targets := app.Migrations(); len(targets) != 1 || len(targets[0].Definitions) != 2 {
+	// The framework's outbound capture target precedes the application's own.
+	if targets := app.Migrations(); len(targets) != 2 || targets[0].Definitions[0].Key.Origin != outboundcapture.MigrationOrigin || len(targets[1].Definitions) != 2 {
 		t.Fatalf("application migration targets: %+v", targets)
 	}
 	// Showing a definition reads the registry only, so the unreachable pool never connects.

@@ -489,6 +489,7 @@ func TestGuardPruningRemovesExpiredSessionsAndTokens(t *testing.T) {
 	s.Services.Database.Connections = infrastructure.DatabaseConnections{"default": connection}
 	s.Features.Auth.Sessions.Enabled, s.Features.Auth.Sessions.Schema = true, schema
 	s.Features.Auth.Tokens.Enabled, s.Features.Auth.Tokens.Schema = true, schema
+	s.Features.OutboundCapture.Schema = schema
 	provider := auth.DefineProvider("fixture.operators", (reportOperator{}).FoundryReference(), func(_ context.Context, id int64) (value.Optional[reportOperator], error) {
 		return value.Set(reportOperator{ID: id}), nil
 	}, func(context.Context, reportOperator) (bool, error) { return true, nil })

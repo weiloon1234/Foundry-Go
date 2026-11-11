@@ -5,6 +5,7 @@
 
 - [Resolve a named client and bound a call](#recipe-named-http-client)
 - [Send typed JSON](#recipe-http-request)
+- [Read captured outbound calls](#recipe-outbound-capture)
 
 ## Overview
 
@@ -259,3 +260,191 @@ Denied requests match `httpclient.DestinationDenied` through `errors.Is`, includ
 wrapped transport failures. A denied URL is rejected before its body factory runs;
 DNS-policy rejection is not retried. Never attach upstream credentials to a
 general arbitrary-URL client.
+
+<a id="recipe-outbound-capture"></a>
+## Outbound capture
+
+Inside an application with a database, every attempt a client built by
+`httpclient.Module` makes is stored in `foundry_outbound_captures`, best
+effort and off the hot path, so developers can see what the application sent
+and what came back. No call site changes: settings-named clients
+(`services.http_clients`), modules an application registers itself and the
+framework features that borrow them (`webhook/outbound`, attachment imports,
+`auth/oauth`) are all covered. Capture never adds a read, changes a byte,
+replays a body or changes retry eligibility, and it never fails a call.
+
+A row is one wire attempt. Its `operation_id` groups the attempts of one `Do`,
+`Stream` or `Download`; `retried` marks an attempt the client followed with
+another. A call that never reached the wire (the client's admission was full,
+or the destination policy refused the URL) is one row with attempt `0`. Each
+row stores the time and duration (plus time to response headers), the client,
+method, scheme, host, path and query, the final request headers after defaults
+and trace propagation, the response status, protocol and headers, both bodies
+with how much was sent or read and whether the end was observed, the remote
+address and whether the connection was reused, one closed `result`, and the
+request ID, trace ID and route of the inbound request that made the call.
+
+| Path | Captured | Why |
+| --- | --- | --- |
+| `httpclient.Module` clients in an application with a database | yes | All application calls |
+| Framework features borrowing those clients | yes | They run on application clients |
+| `httpclient.New` outside assembly, tests | no | No application, no store |
+| Email providers, `storage/s3`, OTLP export, cloud credentials | no | Framework infrastructure with its own transports |
+| Applications without a database | no | Nothing to store into; `Services.OutboundCaptures()` reports missing |
+
+Mount the viewer inside an existing guarded group with the store from
+`services.OutboundCaptures()`, behind the same developer gate as the webhook
+viewer. At least one access option is required and the routes send
+`Cache-Control: no-store`.
+
+<!-- compiled-source: tests/fixtures/consumer/teamworkflow/outbound_capture.go#outbound-capture-routes -->
+```go
+func OutboundCaptureRoutes(captures *outboundcapture.Store) ([]http.RouteRegistration, error) {
+	transport, guard, err := authfixture.Authentication(ReadCaptures.Registration())
+	if err != nil {
+		return nil, err
+	}
+	binding, err := http.BindGuard(transport, guard)
+	if err != nil {
+		return nil, err
+	}
+	return outboundcapture.Routes(http.DefineScope("/developer", "developer"), captures, binding, http.Permissions(ReadCaptures))
+}
+```
+
+The group's IDs become `<group>.outbound-captures.list` and `.show`, generated
+client operations such as `developerOutboundCapturesList`. The list takes
+`from` (required), `until`, `client`, `host`, `method`, `status`, `result`,
+`problems` (not completed, or status 400 and above), `request_id` and
+`operation`, spans at most 30 days and pages newest first with 30 items by
+default and 100 at most. The detail adds headers, query values, both bodies
+(base64), connection facts, the cause and the operation's other attempts.
+
+### Results
+
+| `result` | Meaning |
+| --- | --- |
+| `completed` | Response headers arrived and the attempt ended without a failure, at any status; a retried `503` and a `Download` of a `404` are completed |
+| `consumer_failed` | The `Stream` callback or `Download` destination failed |
+| `response_body_failed` | Reading the response body failed |
+| `response_too_large` | `Content-Length` or the body exceeded the client's limit |
+| `request_body_failed` | Opening or reading the request body failed |
+| `transport_failed` | Connect, TLS, protocol or response header failure |
+| `timed_out` | The attempt or operation deadline passed |
+| `canceled` | The caller's context was canceled, including a client closed at shutdown |
+| `destination_denied` | The destination policy refused the URL (attempt `0`) or the dialed address |
+| `overloaded` | The client's admission was full; nothing was sent (attempt `0`) |
+
+A body is complete only when its end was observed, never because a prefix
+parsed. `Download` does not read a non-2xx body, so that body is stored as
+`incomplete`; a `Stream` callback that stops early leaves the rest unread too.
+
+### Privacy
+
+Redacted mode is the default for every client. Credential names are masked in
+request headers, response headers, query values and JSON, form and multipart
+fields in every mode, with one rule shared with webhook capture: the audit
+sensitive-name rule (`Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`,
+`client_secret`, `access_token` and similar), the word `auth` (`auth`,
+`X-Auth-Token`, `authToken`; `author` and `oauth_state` stay visible), a final
+word `key` after `-`, `_` or `.` (`X-RapidAPI-Key`, `?key=`;
+`Idempotency-Key` and words such as `monkey` stay visible), the joined names
+`apikey`, `accesskey`, `secretkey`, `privatekey`, `subscriptionkey` and
+`signingkey`, and in query strings the framework's `ticket` and `signature`
+parameters and the words `sig` and `signature` (`X-Amz-Signature`). Signature
+headers such as `Stripe-Signature` stay visible. Redacted mode replaces long
+values with their size, keeps multipart file names, media types and sizes but
+never file bytes, and stores only JSON, URL-encoded and multipart bodies;
+compressed and other media types, such as HTML pages and downloaded files, are
+counted but never buffered.
+
+Two Go declarations change body disclosure; deployment settings can only
+reduce it. `Builder.FullOutboundCapture(names...)` stores the complete bodies
+of those clients exactly within `config.body_bytes` (a longer or unfinished
+body becomes an exact prefix); credential headers and query values stay
+masked, `config.force_redacted` turns it off, and naming a client the
+application never constructs fails `Build`. `Request.WithoutBodyCapture()`
+keeps the call's row but stores both bodies as `declined`, for payloads that
+are secret by meaning rather than by field name:
+
+<!-- compiled-source: tests/fixtures/consumer/teamworkflow/outbound_capture.go#outbound-capture-decline -->
+```go
+func SendCode(ctx context.Context, sms *httpclient.Client, to, code string) error {
+	request := sms.Post("/messages").Form(url.Values{"To": {to}, "Body": {code}}).WithoutBodyCapture()
+	response, err := sms.Do(ctx, request)
+	if err != nil {
+		return err
+	}
+	return response.EnsureSuccess()
+}
+```
+
+Credentials inside URL paths, such as a bot token or a webhook URL secret, are
+stored; exclude those hosts. Add vendor credential names the rule misses with
+`config.mask_names`.
+
+### Settings
+
+Runtime settings live under `features.outbound_capture`.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `true` | `false` stops capturing; the viewer and retention keep working |
+| `database`, `schema` | default connection, its schema or `public` | where the table lives; an explicit unknown database fails `Build` |
+| `config.force_redacted` | `false` | store every client redacted |
+| `config.mask_names` | `[]` | extra credential names, exact and case-insensitive (at most 64) |
+| `config.exclude` | `[]` | deny-list rules (at most 64), see below |
+| `config.body_bytes` | 1 MiB (1 KiB to 8 MiB) | stored bytes per body |
+| `config.value_bytes` | 4 KiB (64 B to 1 MiB) | longer redacted values read `[omitted N bytes]` |
+| `config.rate`, `config.burst` | 20, 40 (1 to 10,000) | captures admitted per second per client per process |
+| `config.queue_rows` | 256 (1 to 256) | captures in flight, queued or being written per process; one client holds at most a quarter |
+| `config.retained_bytes` | 64 MiB (up to 1 GiB) | memory those captures hold; one client holds at most a quarter, which must fit one body |
+| `config.retention` | 30 days (1 hour to 365 days) | age after which rows are deleted and hidden |
+| `config.max_rows` | 20,000 (1,000 to 10,000,000) | newest rows kept per client |
+
+`config.exclude` is a deny-list. A rule matches when every field it sets
+matches, and a matching call is not captured; rules see only the request.
+
+```toml
+[[features.outbound_capture.config.exclude]]
+client = "crawler"                 # a rule with only a client excludes it entirely
+
+[[features.outbound_capture.config.exclude]]
+host = "*.ingest.sentry.io"        # exact host, or "*." for any subdomain (not the apex)
+
+[[features.outbound_capture.config.exclude]]
+client = "visibility"
+method = "GET"
+path_prefix = "/api/v1/models"     # decoded path, segment by segment
+```
+
+An empty rule, a duplicate, a host with a scheme, port or path, a bare `*`, a
+lower-case method or an invalid prefix fails `Build`. A client-only rule naming
+a client the application does not construct is logged once at `Build`, so one
+settings file serves environments whose conditional clients differ.
+
+### Loss, retention and operations
+
+Each client has its own admission: a token bucket, at most a quarter of the
+process queue and memory, and its own loss counter, so a crawler burst cannot
+crowd out a payment gateway's rows. Admission refusals, a full queue, failed
+writes (after two retries), a missing table and shutdown leftovers are
+counted; the client's next stored row carries the count in `dropped_before`,
+and the process logs `outbound captures were not stored` at most once a minute
+with counts by reason. A body the memory budget refuses is stored as
+`capture_memory` without losing the row. A crash loses queued captures.
+
+Every process writes, because every process constructs its clients; a process
+checks the table on its first capture, so a command that makes no call never
+queries it. Retention runs beside every kernel except CLI: rows older than
+`config.retention` are deleted, then each client keeps its newest
+`config.max_rows`, in bounded batches under an advisory lock. At shutdown
+clients drain first and the store then writes what remains within 3 seconds.
+
+Apply the framework migration
+`foundry.outbound_capture/000001_create_outbound_captures` with the ordinary
+migration command; it is registered whenever the application has a database,
+also while capture is disabled. Register `application.OutboundCaptureCommand()`
+for `outbound-captures prune`, which counts rows past retention and the
+per-client cap, and removes them with `--apply`.
+

@@ -220,13 +220,17 @@ the table; older releases leave `response_headers` empty, and
 ### Privacy
 
 Redacted mode is the default. It masks credential-named JSON, form and
-multipart fields with the shared audit sensitive-name rule, replaces long
-values with their size, keeps multipart file names, media types and sizes but
-never file bytes, and stores only JSON, URL-encoded and multipart bodies.
-Malformed, compressed or other bodies are omitted with a reason, never stored
-raw. Credential headers such as `Authorization` and `Cookie` and the `ticket`
-and signed-URL `signature` query values are masked in every mode; signature
-headers such as `Stripe-Signature` stay visible.
+multipart fields, replaces long values with their size, keeps multipart file
+names, media types and sizes but never file bytes, and stores only JSON,
+URL-encoded and multipart bodies. Malformed, compressed or other bodies are
+omitted with a reason, never stored raw. Credential request headers such as
+`Authorization` and `Cookie` and credential query values are masked in every
+mode; signature headers such as `Stripe-Signature` stay visible. Request
+headers, query values and body fields use the credential-name rule shared with
+[outbound capture](http-client.md#recipe-outbound-capture): the audit
+sensitive-name rule plus the word `auth`, a final word `key` (but not
+`Idempotency-Key`), a few joined `...key` names and, in query strings, the
+`ticket`, `signature` and `sig` parameters.
 
 `http.FullCaptureBody()` stores complete bodies within the limit exactly as
 received, which is what a signature check needs. Those bodies can hold card

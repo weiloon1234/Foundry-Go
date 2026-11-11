@@ -14,6 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/httpclient"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/logging"
@@ -40,6 +41,7 @@ type builderState struct {
 	fallbacks          []FallbackRoutes
 	spas               []spaDeclaration
 	captures           []http.CaptureDeclaration
+	fullOutbound       []httpclient.Name
 	middleware         []http.Middleware
 	observers          []http.RequestObserver
 	providers          []foundation.Provider
@@ -195,7 +197,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	b.state.built = true
 	settings, configured, routes, spas, middleware, observers, providers, plugins, buildErr := b.state.settings, b.state.options, slices.Clone(b.state.routes), slices.Clone(b.state.spas), slices.Clone(b.state.middleware), slices.Clone(b.state.observers), slices.Clone(b.state.providers), slices.Clone(b.state.plugins), b.state.err
 	jobDeclarations, eventDeclarations, schedules, realtime, features, models := slices.Clone(b.state.jobs), slices.Clone(b.state.events), slices.Clone(b.state.schedules), b.state.realtime, slices.Clone(b.state.features), slices.Clone(b.state.models)
-	fallbacks, captures := slices.Clone(b.state.fallbacks), slices.Clone(b.state.captures)
+	fallbacks, captures, fullOutbound := slices.Clone(b.state.fallbacks), slices.Clone(b.state.captures), slices.Clone(b.state.fullOutbound)
 	domainMigrations := cloneMigrations(b.state.migrations)
 	readiness := b.state.telemetryReadiness
 	b.state.mu.Unlock()
@@ -297,6 +299,10 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	outboundRecorder, err := prepareOutboundCapture(s.Features.OutboundCapture, fullOutbound)
+	if err != nil {
+		return nil, err
+	}
 	recorder, err := prepareObservation(s.Features.Observability, configured, logger, gate)
 	if err != nil {
 		return nil, err
@@ -315,6 +321,7 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 		}
 		return channels.Start(ctx)
 	}})
+	registerOutboundCapture(builder, s.Features.OutboundCapture, outboundRecorder, configured.clock, logger)
 	plan.Register(builder)
 	registerResources(builder, s.Image, logger, channels, s.Features, configured.clock, recorder, dates, calendar)
 	builder.Register(providers...).RegisterPlugin(plugins...)
@@ -342,6 +349,9 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	}
 	app, err := builder.Build(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := checkOutboundCapture(ctx, outboundRecorder, fullOutbound, s.Features.OutboundCapture.Config.Exclude, logger); err != nil {
 		return nil, err
 	}
 	resources, err := FromResolver(app.Services())

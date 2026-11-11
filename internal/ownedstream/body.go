@@ -11,6 +11,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/workscope"
 )
@@ -24,6 +25,9 @@ type Body struct {
 	readMu   sync.Mutex
 	read     int64
 	failure  error
+	exceeded bool
+	// tap observes returned bytes under readMu; nil when not captured.
+	tap      *httpcapture.Tap
 	closing  atomic.Bool
 	once     sync.Once
 	closed   chan struct{}
@@ -32,14 +36,16 @@ type Body struct {
 	watch    func() bool
 }
 
-func New(ctx context.Context, source io.ReadCloser, maximum, expected int64) (*Body, error) {
+// New owns source until Close. tap, when not nil, observes every returned
+// byte and how the stream ended; it never changes what a reader receives.
+func New(ctx context.Context, source io.ReadCloser, maximum, expected int64, tap *httpcapture.Tap) (*Body, error) {
 	if ctx == nil || Nil(source) || maximum < 0 || expected < -1 {
 		return nil, safeerror.NewFault(fault.Invalid, "invalid owned stream")
 	}
 	if expected >= 0 {
 		maximum = min(maximum, expected)
 	}
-	b := &Body{source: source, reader: workscope.Reader(ctx, source), ctx: ctx, maximum: maximum, expected: expected, closed: make(chan struct{})}
+	b := &Body{source: source, reader: workscope.Reader(ctx, source), ctx: ctx, maximum: maximum, expected: expected, closed: make(chan struct{}), tap: tap}
 	b.watchMu.Lock()
 	b.watch = context.AfterFunc(ctx, func() { _ = b.Close() })
 	b.watchMu.Unlock()
@@ -82,15 +88,20 @@ func (b *Body) Read(p []byte) (int, error) {
 	err := callback.Isolated("stream read", func() error { n, readErr = b.reader.Read(p[:allowed]); return nil })
 	if err != nil {
 		b.failure = safeerror.WrapFailure(fault.Internal, "stream read failed", err)
+		b.tap.End(httpcapture.TapFailed)
 		return 0, b.failure
 	}
 	if n < 0 || n > allowed || int64(n) > b.maximum-b.read {
 		b.failure = safeerror.NewFault(fault.Invalid, "stream exceeded its byte bound")
+		b.exceeded = true
+		b.tap.End(httpcapture.TapBound)
 		return 0, b.failure
 	}
 	b.read += int64(n)
+	b.tap.Observe(p[:n])
 	if err := b.ctx.Err(); err != nil {
 		b.failure = err
+		b.tap.End(httpcapture.TapFailed)
 		return n, err
 	}
 	if readErr == io.EOF && b.expected >= 0 && b.read != b.expected {
@@ -98,7 +109,11 @@ func (b *Body) Read(p []byte) (int, error) {
 	}
 	if readErr != nil && readErr != io.EOF {
 		b.failure = safeerror.WrapFailure(fault.Internal, "stream read failed", readErr)
+		b.tap.End(httpcapture.TapFailed)
 		return n, b.failure
+	}
+	if readErr == io.EOF {
+		b.tap.End(httpcapture.TapEOF)
 	}
 	return n, readErr
 }
@@ -137,6 +152,18 @@ func (b *Body) Err() error {
 	defer b.readMu.Unlock()
 	return b.failure
 }
+
+// Exceeded reports whether the source returned more than the byte bound.
+func (b *Body) Exceeded() bool {
+	if b == nil {
+		return false
+	}
+	b.readMu.Lock()
+	defer b.readMu.Unlock()
+	return b.exceeded
+}
+
+// BytesRead counts bytes returned to readers.
 func (b *Body) BytesRead() int64 {
 	if b == nil {
 		return 0

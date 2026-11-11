@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+**Outbound HTTP capture.** Repin applications, regenerate settings and client contracts, apply
+the new framework migration before serving, and redeploy; mount the viewer and register the
+prune command where developers need them.
+
+- Added: outbound capture. Inside an application with a database, every attempt of a client
+  built by `httpclient.Module` (settings-named clients, application modules and the framework
+  features that borrow them) is stored in `foundry_outbound_captures` with no call-site code:
+  time, client, call line, final request headers, response status and headers, both bodies,
+  connection facts, one closed `result` and the inbound request that caused the call. Rows are
+  per wire attempt and grouped by `operation_id`; calls that never reached the wire are attempt
+  `0`. Capture never adds a read, changes bytes or retries, and never fails a call.
+- Added: `httpclient/capture` with `capture.Routes(group, store, guard, access...)` for a
+  guarded, `no-store` list and detail viewer, `Services.OutboundCaptures()`, the
+  `outbound-captures prune` command through `application.OutboundCaptureCommand()`, retention
+  by age and per-client row cap, and `features.outbound_capture` settings (`enabled`,
+  `database`, `schema`, `config.*` with a deny-list in `config.exclude` and extra masked names
+  in `config.mask_names`). Settings only reduce capture. Apply the framework migration
+  `foundry.outbound_capture/000001_create_outbound_captures`.
+- Added: `Builder.FullOutboundCapture(clients...)` stores exact bodies for named clients
+  (`config.force_redacted` overrides it), and `httpclient.Request.WithoutBodyCapture()` keeps a
+  call's row but stores neither body.
+- Changed: webhook capture masks request headers, query values and body fields with the
+  credential-name rule it now shares with outbound capture, which adds the word `auth`, a final
+  word `key` (not `Idempotency-Key`) and joined names such as `subscriptionkey`. Response headers
+  stay unmasked.
+- Removed: `webhook/capture.Command`, `ParsePrune` and `PruneCommand`;
+  `application.WebhookCaptureCommand()` declares the same command. `capture.NewRecorder` and
+  `http.WithWebhookCapture` take the shared generic recorder type.
+
 ## v0.18.0 — 2026-11-11
 
 **Webhook capture stores response headers.** Repin applications, regenerate client contracts,

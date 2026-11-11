@@ -19,13 +19,14 @@ import (
 // Request is an immutable client-bound request. Builders retain errors until Do
 // or Stream, so invalid requests never invoke body factories or transports.
 type Request struct {
-	client  *Client
-	method  string
-	url     *url.URL
-	headers http.Header
-	body    Body
-	retry   RetryPolicy
-	err     error
+	client        *Client
+	method        string
+	url           *url.URL
+	headers       http.Header
+	body          Body
+	retry         RetryPolicy
+	withoutBodies bool
+	err           error
 }
 
 // Request declares a request using the client's base URL, copied default headers and
@@ -130,6 +131,21 @@ func (r Request) WithRetry(policy RetryPolicy) Request {
 		return r
 	}
 	r.retry = policy
+	return r
+}
+
+// WithoutBodyCapture keeps this request's outbound capture row (URL, headers,
+// status and timing) but stores both bodies as declined. Use it for payloads
+// that are secret by meaning rather than by field name, such as a one-time
+// code in a text message. It changes nothing that is sent or read.
+//
+// Example: client.Post("/messages").Form(values).WithoutBodyCapture()
+func (r Request) WithoutBodyCapture() Request {
+	if err := r.Validate(); err != nil {
+		r.err = err
+		return r
+	}
+	r.withoutBodies = true
 	return r
 }
 

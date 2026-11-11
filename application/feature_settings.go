@@ -166,9 +166,11 @@ type FeatureSettings struct {
 	Maintenance MaintenanceScheduleSettings
 	// WebhookCapture configures prefixes declared with Builder.CaptureWebhooks.
 	WebhookCapture WebhookCaptureSettings
+	// OutboundCapture configures capture of every httpclient.Module call.
+	OutboundCapture OutboundCaptureSettings
 }
 
 // DefaultFeatureSettings returns default settings for application features.
 func DefaultFeatureSettings() FeatureSettings {
-	return FeatureSettings{Idempotency: DefaultIdempotencySettings(), Auth: DefaultAuthSettings(), Events: EventsSettings{Config: events.DefaultConfig()}, Outbox: DefaultOutboxSettings(), Audit: AuditSettings{Schema: "public", Config: audit.DefaultConfig()}, Locales: LocaleSettings{Default: "en", Locales: []i18n.LocaleID{"en"}}, Extensions: DefaultExtensionSettings(), Notifications: DefaultNotificationSettings(), Attachments: AttachmentSettings{Config: attachments.DefaultConfig()}, Reports: ReportSettings{Config: datatable.DefaultConfig()}, Health: HealthSettings{Config: health.DefaultConfig(), ConfiguredConnections: true}, Observability: DefaultObservabilitySettings(), Maintenance: DefaultMaintenanceScheduleSettings(), WebhookCapture: DefaultWebhookCaptureSettings()}
+	return FeatureSettings{Idempotency: DefaultIdempotencySettings(), Auth: DefaultAuthSettings(), Events: EventsSettings{Config: events.DefaultConfig()}, Outbox: DefaultOutboxSettings(), Audit: AuditSettings{Schema: "public", Config: audit.DefaultConfig()}, Locales: LocaleSettings{Default: "en", Locales: []i18n.LocaleID{"en"}}, Extensions: DefaultExtensionSettings(), Notifications: DefaultNotificationSettings(), Attachments: AttachmentSettings{Config: attachments.DefaultConfig()}, Reports: ReportSettings{Config: datatable.DefaultConfig()}, Health: HealthSettings{Config: health.DefaultConfig(), ConfiguredConnections: true}, Observability: DefaultObservabilitySettings(), Maintenance: DefaultMaintenanceScheduleSettings(), WebhookCapture: DefaultWebhookCaptureSettings(), OutboundCapture: DefaultOutboundCaptureSettings()}
 }

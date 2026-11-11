@@ -75,6 +75,22 @@ type Limits struct {
 	MaxRows   int
 }
 
+// Engine is a log's operations without its row and snapshot types. Public
+// capture stores hold it through this interface, so packages that only name a
+// store never instantiate the generic engine and its table declaration.
+type Engine interface {
+	Pruner
+	Run(ctx context.Context, roles Roles) error
+	Close(ctx context.Context) error
+	Done() <-chan struct{}
+	Check(ctx context.Context)
+	Flush(ctx context.Context)
+	PrunePass(ctx context.Context) bool
+	Read(ctx context.Context, fn func(context.Context, *database.Tx) error) error
+	Transaction(ctx context.Context, readOnly bool, fn func(*database.Tx) error) error
+	Lock(ctx context.Context, tx *database.Tx) (bool, error)
+}
+
 // Redact turns one drained snapshot and the loss its lane carried into a row.
 type Redact[S, M any] func(snapshot S, droppedBefore uint64) (M, error)
 
@@ -214,11 +230,15 @@ func (l *Log[S, M]) recheck(ctx context.Context) {
 }
 
 func (l *Log[S, M]) checkLocked(ctx context.Context) {
-	l.checked = true
 	checked, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
 	var present bool
 	err := database.ScanOne(checked, l.db.Primary(), `SELECT pg_catalog.to_regclass(pg_catalog.quote_ident($1) || '.' || pg_catalog.quote_ident($2)) IS NOT NULL`, []any{l.schema, l.table.Name}, &present)
+	if err != nil && ctx.Err() != nil {
+		// The caller stopped; the table's state is still unknown.
+		return
+	}
+	l.checked = true
 	l.available = err == nil && present
 	switch {
 	case l.available && l.warned:
@@ -254,7 +274,7 @@ func (l *Log[S, M]) flush(stop, parent context.Context) {
 			return
 		}
 		if !l.checked {
-			l.checkLocked(stop)
+			l.checkLocked(parent)
 		}
 		l.write(parent, batch)
 	}
@@ -388,12 +408,6 @@ func (l *Log[S, M]) Now() (temporal.DateTime, error) { return temporal.NewDateTi
 // Cutoff is now minus retention; reads hide older rows before pruning does.
 func (l *Log[S, M]) Cutoff() (temporal.DateTime, error) {
 	return temporal.NewDateTime(l.clock.Now().Add(-l.limits.Retention))
-}
-
-// Find loads one row still inside retention, or database.NotFound.
-func (l *Log[S, M]) Find(ctx context.Context, tx *database.Tx, id model.ID[M], retained temporal.DateTime) (M, error) {
-	t := l.table
-	return orm.Require(ctx, tx, t.Query().Where(orm.KeyEq(t.ID, id), orm.TimeGte(t.At, retained)))
 }
 
 // DroppedBefore clamps a loss count into its signed column.

@@ -60,6 +60,14 @@ func Build(ctx context.Context, settings application.Settings, hooks Hooks, opti
 			return nil, err
 		}
 		viewer, err := CaptureRoutes(captures)
-		return append(routes, viewer...), err
+		if err != nil {
+			return nil, err
+		}
+		outbound, err := services.OutboundCaptures()
+		if err != nil {
+			return nil, err
+		}
+		calls, err := OutboundCaptureRoutes(outbound)
+		return append(append(routes, viewer...), calls...), err
 	}).Build(ctx)
 }

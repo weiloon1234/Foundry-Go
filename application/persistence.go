@@ -8,6 +8,7 @@ import (
 	tokenpg "github.com/weiloon1234/Foundry-Go/auth/token/postgres"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
+	outboundcapture "github.com/weiloon1234/Foundry-Go/httpclient/capture"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/metadata"
 	"github.com/weiloon1234/Foundry-Go/notifications"
@@ -40,6 +41,7 @@ func persistenceTargets(s *FeatureSettings) []persistenceTarget {
 	add(s.Telemetry.Enabled, &s.Telemetry.Database, &s.Telemetry.Schema, telemetry.Migrations)
 	add(s.Notifications.Enabled, &s.Notifications.Database, &s.Notifications.Schema, notifications.Migrations)
 	add(s.WebhookCapture.declared, &s.WebhookCapture.Database, &s.WebhookCapture.Schema, capture.Migrations)
+	add(s.OutboundCapture.present, &s.OutboundCapture.Database, &s.OutboundCapture.Schema, outboundcapture.Migrations)
 	if s.Extensions.Enabled {
 		add(true, &s.Extensions.Database, &s.Extensions.Schema, func() []migrate.Definition {
 			definitions := append(settings.Migrations(), metadata.Migrations()...)

@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	outboundcapture "github.com/weiloon1234/Foundry-Go/httpclient/capture"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 )
 
@@ -31,12 +32,13 @@ func TestBuilderMigrationsJoinApplicationTargetsAsSnapshots(t *testing.T) {
 	}
 	t.Cleanup(func() { stop(t, app) })
 	targets[0].Definitions[0].SQL[0] = "changed after registration"
+	// Framework feature targets come first; a database brings outbound capture.
 	got := app.Migrations()
-	if len(got) != 1 || got[0].Connection != "" || got[0].Definitions[0].SQL[0] != "CREATE TABLE records (id uuid PRIMARY KEY)" {
+	if len(got) != 2 || got[0].Definitions[0].Key.Origin != outboundcapture.MigrationOrigin || got[1].Connection != "" || got[1].Definitions[0].SQL[0] != "CREATE TABLE records (id uuid PRIMARY KEY)" {
 		t.Fatalf("application migrations: %+v", got)
 	}
-	got[0].Definitions[0].SQL[0] = "changed after inspection"
-	if app.Migrations()[0].Definitions[0].SQL[0] != "CREATE TABLE records (id uuid PRIMARY KEY)" {
+	got[1].Definitions[0].SQL[0] = "changed after inspection"
+	if app.Migrations()[1].Definitions[0].SQL[0] != "CREATE TABLE records (id uuid PRIMARY KEY)" {
 		t.Fatal("App.Migrations exposed owned definitions")
 	}
 }

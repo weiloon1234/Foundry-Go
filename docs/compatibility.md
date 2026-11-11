@@ -139,6 +139,47 @@ before routing, which sends `100 Continue` earlier and spends the server read
 timeout before the handler; response status and bytes are unchanged. See
 [webhook capture](guides/webhooks.md#recipe-webhook-capture).
 
+<a id="outbound-capture"></a>
+
+## Outbound capture
+
+Outbound capture is on by default for every application with a database:
+after the upgrade, every attempt of a client built by `httpclient.Module`
+(settings-named clients included) is recorded, best effort, with no call-site
+change and no change to what is sent, read or retried. `httpclient.New`
+clients and applications without a database are unaffected. Set
+`features.outbound_capture.enabled = false` to turn it off; the store, viewer
+and migration remain.
+
+The release adds the framework migration
+`foundry.outbound_capture/000001_create_outbound_captures`, registered whenever
+a database exists, in the default connection's primary schema (or `public`).
+An application that places framework tables in another schema sets
+`features.outbound_capture.schema` beside its other feature schemas. Apply it before the release serves traffic; until then the
+first capture in each process logs that the table is unavailable and captures
+are counted as lost without affecting calls. There is no legacy table or
+reader. Rolling the framework back leaves the table in place and unused;
+remove rows with `outbound-captures prune --apply` before dropping it by hand.
+
+New public API: `httpclient.Request.WithoutBodyCapture`, the
+`httpclient/capture` package (`Config`, `Exclusion`, `Store`, `Routes`,
+`Module`, `Migrations`, the `Outbound*` enums and DTOs), and in `application`
+`OutboundCaptureSettings` (`features.outbound_capture`),
+`Builder.FullOutboundCapture`, `Services.OutboundCaptures`,
+`OutboundCaptureCommand`, `OutboundCaptureProvider` and `OutboundCaptureKey`.
+Regenerate configuration key sets; mounting `capture.Routes` adds
+`<group>.outbound-captures.list` and `.show`, so regenerate the manifest,
+OpenAPI and TypeScript client under the matching framework pin.
+
+The same release tightens [webhook capture](#webhook-capture): its request
+headers, query values and body fields use the credential-name rule shared with
+outbound capture, which also masks the word `auth`, a final word `key` and a
+few joined `...key` names. Response headers stay unmasked. Rows written before
+the upgrade keep what they stored. `webhook/capture.Command`, `ParsePrune` and
+`PruneCommand` are removed; `application.WebhookCaptureCommand()` declares the
+same `webhook-captures prune` command. See
+[outbound capture](guides/http-client.md#recipe-outbound-capture).
+
 ## Persisted telemetry
 
 `telemetry`, `telemetry/sourcemap`, and `application.TelemetrySettings` are

@@ -45,6 +45,9 @@ func TestCacheDriverSwitchKeepsTypedConsumer(t *testing.T) {
 				}
 				s.Services.Cache.Stores[name] = item
 			}
+			if migrationDB != nil {
+				s.Features.OutboundCapture.Schema = schema
+			}
 			app, err := Build(t.Context(), s, quiet())
 			if err != nil {
 				t.Fatal(err)

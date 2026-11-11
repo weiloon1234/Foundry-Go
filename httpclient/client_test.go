@@ -29,8 +29,11 @@ func testConfig() httpclient.Config {
 }
 func newClient(t *testing.T, config httpclient.Config, transport http.RoundTripper) *httpclient.Client {
 	t.Helper()
-	c, err := httpclient.New(config, transport)
-	if err != nil {
+	var c *httpclient.Client
+	var err error
+	if capturingSuite() {
+		c = capturedClient(t, newCaptureSink(t, string(config.Name)), config, transport)
+	} else if c, err = httpclient.New(config, transport); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {

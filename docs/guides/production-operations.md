@@ -244,6 +244,21 @@ delete them. `--before <RFC 3339>` purges everything older than an explicit
 instant; rolling the framework back keeps the table. See
 [webhook capture](webhooks.md#recipe-webhook-capture).
 
+### Outbound capture retention and loss
+
+Applications with a database store every `httpclient.Module` call in
+`foundry_outbound_captures` (apply
+`foundry.outbound_capture/000001_create_outbound_captures`). Every process
+writes its own captures; retention runs beside every kernel except CLI and
+deletes rows older than `features.outbound_capture.config.retention`, then
+keeps the newest `config.max_rows` per client. A missing table logs `outbound
+capture table is unavailable` once, on the first capture, and calls continue.
+Captures that could not be stored are logged as `outbound captures were not
+stored` with counts by reason, at most once a minute. Register
+`application.OutboundCaptureCommand()` to run `outbound-captures prune`, and
+add a deny-list rule for chatty clients before raising `config.max_rows`. See
+[outbound capture](http-client.md#recipe-outbound-capture).
+
 ## Resource pressure
 
 | Shared resource | Default | Exhaustion/lifetime behavior |

@@ -11,7 +11,7 @@ import (
 
 func TestNonProgressingBodyFailsAndRetainsFailure(t *testing.T) {
 	calls, closes := 0, 0
-	stream, err := ownedstream.New(t.Context(), body{read: func([]byte) (int, error) { calls++; return 0, nil }, close: func() error { closes++; return nil }}, 10, -1)
+	stream, err := ownedstream.New(t.Context(), body{read: func([]byte) (int, error) { calls++; return 0, nil }, close: func() error { closes++; return nil }}, 10, -1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestBodyProgressResetsEmptyReadBudget(t *testing.T) {
 			return 1, io.EOF
 		}
 		return 1, nil
-	}, close: func() error { return nil }}, 2, 2)
+	}, close: func() error { return nil }}, 2, 2, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func BenchmarkBoundedBodyRead(b *testing.B) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(text)))
 	for b.Loop() {
-		stream, err := ownedstream.New(b.Context(), io.NopCloser(strings.NewReader(text)), int64(len(text)), int64(len(text)))
+		stream, err := ownedstream.New(b.Context(), io.NopCloser(strings.NewReader(text)), int64(len(text)), int64(len(text)), nil)
 		if err != nil {
 			b.Fatal(err)
 		}

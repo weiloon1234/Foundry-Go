@@ -45,6 +45,23 @@ func prepareFeatureSettings(s Settings, source clock.Clock) (FeatureSettings, er
 			return f, err
 		}
 	}
+	// Outbound capture exists whenever a database does, also while disabled,
+	// so the migration set and the viewer never depend on the toggle.
+	if capture := &f.OutboundCapture; capture.Database != "" || len(s.Services.Database.Connections) > 0 {
+		capture.present = true
+		if capture.Database == "" {
+			capture.Database = s.Services.Database.Default
+		}
+		if capture.Schema == "" {
+			capture.Schema = s.Services.Database.Connections[capture.Database].Primary.Schema
+			if capture.Schema == "" {
+				capture.Schema = "public"
+			}
+		}
+		if err := capture.Config.Validate(); err != nil {
+			return f, err
+		}
+	}
 	for _, target := range persistenceTargets(&f) {
 		if *target.connection == "" {
 			*target.connection = s.Services.Database.Default

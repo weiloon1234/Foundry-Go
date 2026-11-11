@@ -8,6 +8,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/internal/capturelog"
+	"github.com/weiloon1234/Foundry-Go/model"
+	"github.com/weiloon1234/Foundry-Go/temporal"
 )
 
 // Table describes foundry_webhook_captures to the shared capture engine,
@@ -78,6 +80,11 @@ func nullableNumber[V orm.NumberValue](column orm.NullableNumber[Capture, V], v 
 		return orm.NullableNumberSet(column, number)
 	}
 	return orm.NullableNumberSetNull(column)
+}
+
+// Find loads one capture still inside retention, or database.NotFound.
+func Find(ctx context.Context, tx *database.Tx, id model.ID[Capture], retained temporal.DateTime) (Capture, error) {
+	return orm.Require(ctx, tx, Captures.Query().Where(orm.KeyEq(Captures.ID, id), orm.TimeGte(Captures.ReceivedAt, retained)))
 }
 
 // Page reads one newest-first keyset page of the narrow projection. q holds

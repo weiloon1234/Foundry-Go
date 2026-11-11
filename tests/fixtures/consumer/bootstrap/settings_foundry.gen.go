@@ -16,6 +16,7 @@ import (
 	foundation "github.com/weiloon1234/Foundry-Go/foundation"
 	http "github.com/weiloon1234/Foundry-Go/http"
 	httpclient "github.com/weiloon1234/Foundry-Go/httpclient"
+	capture "github.com/weiloon1234/Foundry-Go/httpclient/capture"
 	i18n "github.com/weiloon1234/Foundry-Go/i18n"
 	imaging "github.com/weiloon1234/Foundry-Go/imaging"
 	infrastructure "github.com/weiloon1234/Foundry-Go/infrastructure"
@@ -684,6 +685,10 @@ type SettingsAppFeaturesConfigKeySet struct {
 	// WebhookCapture configures prefixes declared with Builder.CaptureWebhooks.
 	//
 	WebhookCapture SettingsAppFeaturesWebhookCaptureConfigKeySet
+	//
+	// OutboundCapture configures capture of every httpclient.Module call.
+	//
+	OutboundCapture SettingsAppFeaturesOutboundCaptureConfigKeySet
 }
 
 // SettingsAppFeaturesIdempotencyConfigKeySet exposes compiler-checked configuration overrides.
@@ -1797,6 +1802,86 @@ type SettingsAppFeaturesWebhookCaptureConfigConfigKeySet struct {
 	MaxRows config.Key[Settings, int]
 }
 
+// SettingsAppFeaturesOutboundCaptureConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesOutboundCaptureConfigKeySet struct {
+	// Enabled selects app.features.outbound_capture.enabled. Set accepts bool.
+	Enabled config.Key[Settings, bool]
+	// Database selects app.features.outbound_capture.database. Set accepts database.ConnectionName.
+	Database config.Key[Settings, database.ConnectionName]
+	// Schema selects app.features.outbound_capture.schema. Set accepts string.
+	Schema config.Key[Settings, string]
+	Config SettingsAppFeaturesOutboundCaptureConfigConfigKeySet
+}
+
+// SettingsAppFeaturesOutboundCaptureConfigConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppFeaturesOutboundCaptureConfigConfigKeySet struct {
+	// BodyBytes selects app.features.outbound_capture.config.body_bytes. Set accepts int.
+	//
+	// BodyBytes bounds each stored body (1 KiB to 8 MiB). A larger body is
+	// omitted in redacted mode and stored as an exact prefix in full mode.
+	//
+	BodyBytes config.Key[Settings, int]
+	// ValueBytes selects app.features.outbound_capture.config.value_bytes. Set accepts int.
+	//
+	// ValueBytes bounds a redacted string or field value (64 bytes to 1 MiB);
+	// longer values read "[omitted N bytes]".
+	//
+	ValueBytes config.Key[Settings, int]
+	// ForceRedacted selects app.features.outbound_capture.config.force_redacted. Set accepts bool.
+	//
+	// ForceRedacted stores every client redacted, overriding
+	// Builder.FullOutboundCapture.
+	//
+	ForceRedacted config.Key[Settings, bool]
+	// MaskNames selects app.features.outbound_capture.config.mask_names. Set accepts []string.
+	//
+	// MaskNames adds credential names for headers, query values and body
+	// fields, matched exactly and case-insensitively (at most 64, each 1 to
+	// 128 bytes).
+	//
+	MaskNames config.Key[Settings, []string]
+	// Exclude selects app.features.outbound_capture.config.exclude. Set accepts []capture.Exclusion.
+	//
+	// Exclude is the deny-list (at most 64 rules). A call matching any rule
+	// is not captured.
+	//
+	Exclude config.Key[Settings, []capture.Exclusion]
+	// Rate selects app.features.outbound_capture.config.rate. Set accepts int.
+	//
+	// Rate admits at most this many captures per second per client per
+	// process (1 to 10,000). Refused calls are made normally and counted as lost.
+	//
+	Rate config.Key[Settings, int]
+	// Burst selects app.features.outbound_capture.config.burst. Set accepts int.
+	//
+	// Burst is the per-client admission burst (1 to 10,000).
+	//
+	Burst config.Key[Settings, int]
+	// QueueRows selects app.features.outbound_capture.config.queue_rows. Set accepts int.
+	//
+	// QueueRows bounds captures in flight, queued or being written per
+	// process (1 to 256). One client may hold at most a quarter.
+	//
+	QueueRows config.Key[Settings, int]
+	// RetainedBytes selects app.features.outbound_capture.config.retained_bytes. Set accepts int64.
+	//
+	// RetainedBytes bounds memory those captures hold per process (up to
+	// 1 GiB). One client may hold at most a quarter, which must fit one body.
+	//
+	RetainedBytes config.Key[Settings, int64]
+	// Retention selects app.features.outbound_capture.config.retention. Set accepts time.Duration.
+	//
+	// Retention deletes captures older than this (1 hour to 365 days).
+	//
+	Retention config.Key[Settings, time.Duration]
+	// MaxRows selects app.features.outbound_capture.config.max_rows. Set accepts int.
+	//
+	// MaxRows keeps about this many newest captures per client (1,000 to
+	// 10,000,000). Pruning catches up every minute while over the cap.
+	//
+	MaxRows config.Key[Settings, int]
+}
+
 // SettingsAppImageConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppImageConfigKeySet struct {
 	// Enabled selects app.image.enabled. Set accepts bool.
@@ -2598,6 +2683,30 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 						MaxRows:       config.Scalar[Settings, int]("app.features.webhook_capture.config.max_rows", func(settings *Settings) *int { return &settings.App.Features.WebhookCapture.Config.MaxRows }),
 					},
 				},
+				OutboundCapture: SettingsAppFeaturesOutboundCaptureConfigKeySet{
+					Enabled: config.Scalar[Settings, bool]("app.features.outbound_capture.enabled", func(settings *Settings) *bool { return &settings.App.Features.OutboundCapture.Enabled }),
+					Database: config.Scalar[Settings, database.ConnectionName]("app.features.outbound_capture.database", func(settings *Settings) *database.ConnectionName {
+						return &settings.App.Features.OutboundCapture.Database
+					}),
+					Schema: config.Scalar[Settings, string]("app.features.outbound_capture.schema", func(settings *Settings) *string { return &settings.App.Features.OutboundCapture.Schema }),
+					Config: SettingsAppFeaturesOutboundCaptureConfigConfigKeySet{
+						BodyBytes:     config.Scalar[Settings, int]("app.features.outbound_capture.config.body_bytes", func(settings *Settings) *int { return &settings.App.Features.OutboundCapture.Config.BodyBytes }),
+						ValueBytes:    config.Scalar[Settings, int]("app.features.outbound_capture.config.value_bytes", func(settings *Settings) *int { return &settings.App.Features.OutboundCapture.Config.ValueBytes }),
+						ForceRedacted: config.Scalar[Settings, bool]("app.features.outbound_capture.config.force_redacted", func(settings *Settings) *bool { return &settings.App.Features.OutboundCapture.Config.ForceRedacted }),
+						MaskNames:     config.JSON[Settings, []string]("app.features.outbound_capture.config.mask_names", func(settings *Settings) *[]string { return &settings.App.Features.OutboundCapture.Config.MaskNames }),
+						Exclude: config.JSON[Settings, []capture.Exclusion]("app.features.outbound_capture.config.exclude", func(settings *Settings) *[]capture.Exclusion {
+							return &settings.App.Features.OutboundCapture.Config.Exclude
+						}),
+						Rate:          config.Scalar[Settings, int]("app.features.outbound_capture.config.rate", func(settings *Settings) *int { return &settings.App.Features.OutboundCapture.Config.Rate }),
+						Burst:         config.Scalar[Settings, int]("app.features.outbound_capture.config.burst", func(settings *Settings) *int { return &settings.App.Features.OutboundCapture.Config.Burst }),
+						QueueRows:     config.Scalar[Settings, int]("app.features.outbound_capture.config.queue_rows", func(settings *Settings) *int { return &settings.App.Features.OutboundCapture.Config.QueueRows }),
+						RetainedBytes: config.Scalar[Settings, int64]("app.features.outbound_capture.config.retained_bytes", func(settings *Settings) *int64 { return &settings.App.Features.OutboundCapture.Config.RetainedBytes }),
+						Retention: config.Duration[Settings]("app.features.outbound_capture.config.retention", func(settings *Settings) *time.Duration {
+							return &settings.App.Features.OutboundCapture.Config.Retention
+						}),
+						MaxRows: config.Scalar[Settings, int]("app.features.outbound_capture.config.max_rows", func(settings *Settings) *int { return &settings.App.Features.OutboundCapture.Config.MaxRows }),
+					},
+				},
 			},
 			Image: SettingsAppImageConfigKeySet{
 				Enabled: config.Scalar[Settings, bool]("app.image.enabled", func(settings *Settings) *bool { return &settings.App.Image.Enabled }),
@@ -3071,6 +3180,20 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.Features.WebhookCapture.Config.RetainedBytes,
 		keys.App.Features.WebhookCapture.Config.Retention,
 		keys.App.Features.WebhookCapture.Config.MaxRows,
+		keys.App.Features.OutboundCapture.Enabled,
+		keys.App.Features.OutboundCapture.Database,
+		keys.App.Features.OutboundCapture.Schema,
+		keys.App.Features.OutboundCapture.Config.BodyBytes,
+		keys.App.Features.OutboundCapture.Config.ValueBytes,
+		keys.App.Features.OutboundCapture.Config.ForceRedacted,
+		keys.App.Features.OutboundCapture.Config.MaskNames,
+		keys.App.Features.OutboundCapture.Config.Exclude,
+		keys.App.Features.OutboundCapture.Config.Rate,
+		keys.App.Features.OutboundCapture.Config.Burst,
+		keys.App.Features.OutboundCapture.Config.QueueRows,
+		keys.App.Features.OutboundCapture.Config.RetainedBytes,
+		keys.App.Features.OutboundCapture.Config.Retention,
+		keys.App.Features.OutboundCapture.Config.MaxRows,
 		keys.App.Image.Enabled,
 		keys.App.Image.Config.Backend,
 		keys.App.Image.Config.Limits.InputBytes,

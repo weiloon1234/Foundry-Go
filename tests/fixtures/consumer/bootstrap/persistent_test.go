@@ -64,6 +64,7 @@ func TestConfiguredPersistentActorsAndModelFeatures(t *testing.T) {
 	s.Features.Audit.Schema = schema
 	s.Features.Reports.Enabled = true
 	s.Features.Reports.Config.Schema = schema
+	s.Features.OutboundCapture.Schema = schema
 	s.Features.Health.Enabled = true
 	s.Features.Observability.Enabled = true
 	app, err := application.New(s, application.WithTables(append(Tables(), profilemodel.Tables()...)...), application.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))).Features(func(application.Services) (application.FeatureDeclarations, error) {

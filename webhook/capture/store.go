@@ -26,7 +26,9 @@ type Dependencies struct {
 // retention, and the bounded reads behind Routes. Applications hold it to
 // mount Routes; Module drives its lifecycle. Construct it with New.
 type Store struct {
-	log   *capturelog.Log[httpcapture.Snapshot, store.Capture]
+	// log is the engine behind an interface, so naming a Store never
+	// instantiates the generic engine.
+	log   capturelog.Engine
 	clock clock.Clock
 }
 

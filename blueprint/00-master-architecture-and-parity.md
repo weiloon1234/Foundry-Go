@@ -8,6 +8,18 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Outbound HTTP capture — unreleased, 2026-11-11
+
+Status: **implemented on `lane/outbound-capture`; targeted capture, httpclient (including the whole suite
+re-run on captured clients), HTTP kernel and application tests pass with race and real PostgreSQL;
+footprint budgets hold; framework CI pending**.
+- Added outbound capture: every `httpclient.Module` attempt inside an application with a database is stored
+  in `foundry_outbound_captures` with per-client admission lanes, a deny-list, redaction shared with webhook
+  capture, per-client row caps and the guarded `httpclient/capture` viewer.
+- Webhook capture moved onto the shared engine (`internal/capturelog`, `internal/capturedisclosure`) and
+  masks request-side credentials with the shared rule.
+Open: moving `email/internal/httptransport` onto `httpclient`; XML redaction.
+
 ## Webhook capture response headers — v0.18.0, 2026-11-11
 
 Status: **released; capture, HTTP kernel (race) and application capture tests with real PostgreSQL, and

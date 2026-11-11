@@ -49,7 +49,7 @@ func TestCancellationClosesOnceAndWaitsForActualReadReturn(t *testing.T) {
 		close(closed)
 		return nil
 	}}
-	stream, err := ownedstream.New(ctx, raw, 4, -1)
+	stream, err := ownedstream.New(ctx, raw, 4, -1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestReadBoundsAndFailuresRemainSticky(t *testing.T) {
 		{"long", "body", 4, 3, false}, {"short", "body", 8, 5, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			stream, err := ownedstream.New(t.Context(), io.NopCloser(strings.NewReader(test.text)), test.maximum, test.expected)
+			stream, err := ownedstream.New(t.Context(), io.NopCloser(strings.NewReader(test.text)), test.maximum, test.expected, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -128,7 +128,7 @@ func TestForeignReadAndCloseFailuresAreContained(t *testing.T) {
 					return -1, nil
 				}
 				return len(p) + 1, nil
-			}, close: func() error { closes.Add(1); return nil }}, 4, -1)
+			}, close: func() error { closes.Add(1); return nil }}, 4, -1, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -150,7 +150,7 @@ func TestForeignReadAndCloseFailuresAreContained(t *testing.T) {
 					runtime.Goexit()
 				}
 				return errors.New("private close error")
-			}}, 4, -1)
+			}}, 4, -1, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

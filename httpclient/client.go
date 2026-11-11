@@ -2,8 +2,10 @@ package httpclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sync/atomic"
@@ -13,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/contextlink"
 	"github.com/weiloon1234/Foundry-Go/internal/errorgraph"
+	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	sharedtransport "github.com/weiloon1234/Foundry-Go/internal/httptransport"
 	"github.com/weiloon1234/Foundry-Go/internal/ownedstream"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
@@ -31,11 +34,20 @@ type Client struct {
 	owned                        *http.Transport
 	operations                   *workscope.Group
 	requests, attempts, failures atomic.Uint64
+	// capture is nil when the client is not captured: built by New, capture
+	// disabled or unavailable, or excluded by a client-only rule.
+	capture *httpcapture.ClientLane
 }
 
 // New validates and snapshots config and creates a client. A supplied transport is
 // borrowed and cannot be combined with restricted destinations or custom TLS settings.
+// A client built by New is never captured; Module clients inside an
+// application are.
 func New(config Config, transport http.RoundTripper) (*Client, error) {
+	return newClient(config, transport, nil)
+}
+
+func newClient(config Config, transport http.RoundTripper, capture *httpcapture.ClientLane) (*Client, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
@@ -64,7 +76,7 @@ func New(config Config, transport http.RoundTripper) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &Client{config: config, base: base, transport: transport, operations: operations}
+	c := &Client{config: config, base: base, transport: transport, operations: operations, capture: capture}
 	if transport == nil {
 		c.owned = sharedtransport.New(sharedtransport.Config{ConnectTimeout: config.ConnectTimeout, RequestTimeout: config.AttemptTimeout, MaxIdleConnections: config.Concurrency, MaxIdlePerHost: config.Concurrency, MaxResponseHeaderBytes: int64(config.HeaderBytes)})
 		if tlsConfig != nil {
@@ -191,14 +203,21 @@ func (c *Client) execute(ctx context.Context, request Request, limit int64, cons
 		return invalid()
 	}
 	if err := request.Validate(); err != nil {
+		// Only a URL the destination policy refused is captured; Begin
+		// ignores a nil URL.
+		if request.client == c && errors.Is(err, DestinationDenied) {
+			c.capture.Begin(ctx, request.facts()).NotSent(httpcapture.ResultDestinationDenied)
+		}
 		return failure(InvalidRequest, c.Name(), request.method, 0, 0, err)
 	}
 	if request.client != c {
 		return invalid()
 	}
+	operation := c.capture.Begin(ctx, request.facts())
 	lease, err := c.operations.Begin(ctx)
 	if err != nil {
 		if errorgraph.Is(err, fault.Overloaded) {
+			operation.NotSent(httpcapture.ResultOverloaded)
 			return failure(Overloaded, c.Name(), request.method, 0, 0, err)
 		}
 		return err
@@ -207,7 +226,7 @@ func (c *Client) execute(ctx context.Context, request Request, limit int64, cons
 	c.requests.Add(1)
 	var operationErr error
 	invokeErr := callback.Isolated("outbound HTTP operation", func() error {
-		operationErr = observability.Observe(lease.Context(), observability.Operation{Kind: observability.OutboundHTTP, Name: observability.Name(c.Name())}, func(ctx context.Context) error { return c.runOperation(ctx, request, limit, consume) })
+		operationErr = observability.Observe(lease.Context(), observability.Operation{Kind: observability.OutboundHTTP, Name: observability.Name(c.Name())}, func(ctx context.Context) error { return c.runOperation(ctx, request, limit, consume, operation) })
 		return nil
 	})
 	if invokeErr != nil {
@@ -220,13 +239,13 @@ func (c *Client) execute(ctx context.Context, request Request, limit int64, cons
 	return operationErr
 }
 
-func (c *Client) runOperation(op context.Context, request Request, limit int64, consume responseConsumer) error {
+func (c *Client) runOperation(op context.Context, request Request, limit int64, consume responseConsumer, operation *httpcapture.Operation) error {
 	attempts := request.retry.attempts(request.method, request.body)
 	for attempt := 1; attempt <= attempts; attempt++ {
 		if err := op.Err(); err != nil {
 			return err
 		}
-		retry, wait, err := c.attempt(op, request, limit, attempt, attempt < attempts, consume)
+		retry, wait, err := c.attempt(op, request, limit, attempt, attempt < attempts, consume, operation.Attempt(attempt))
 		if !retry {
 			return canceled(op, err)
 		}
@@ -258,13 +277,16 @@ func waitRetry(ctx context.Context, delay time.Duration) error {
 }
 
 // attempt performs one transport attempt. A retry returns wait < 0 for the
-// policy backoff, or the server's Retry-After delay.
-func (c *Client) attempt(parent context.Context, request Request, limit int64, number int, canRetry bool, consume responseConsumer) (retry bool, wait time.Duration, err error) {
+// policy backoff, or the server's Retry-After delay. A non-nil exchange
+// records the attempt; capture never changes what is sent, read or retried.
+func (c *Client) attempt(parent context.Context, request Request, limit int64, number int, canRetry bool, consume responseConsumer, exchange *httpcapture.Attempt) (retry bool, wait time.Duration, err error) {
 	deadline, cancel := context.WithTimeout(parent, c.config.AttemptTimeout)
 	op, unlink := contextlink.Link(deadline, parent)
 	defer cancel()
 	defer unlink()
 	var requestBody, responseBody *ownedstream.Body
+	stage := stageRequestBody
+	var denied, timedOut bool
 	defer func() {
 		var cleanup error
 		if requestBody != nil {
@@ -281,6 +303,9 @@ func (c *Client) attempt(parent context.Context, request Request, limit int64, n
 			retry = false
 			err = parent.Err()
 		}
+		if exchange != nil {
+			exchange.Finish(retry, classify(stage, err, parent, op, denied, timedOut, requestBody, responseBody), requestBody.BytesRead(), responseBody.BytesRead())
+		}
 	}()
 	// An empty body is sent as http.NoBody: net/http then neither probes the
 	// body in a goroutine nor switches to chunked encoding (411 on strict
@@ -293,7 +318,7 @@ func (c *Client) attempt(parent context.Context, request Request, limit int64, n
 		var openErr error
 		invokeErr := callback.Isolated("HTTP request body open", func() error { source, openErr = request.body.reader(op); return nil })
 		if !ownedstream.Nil(source) {
-			requestBody, err = ownedstream.New(op, source, c.config.RequestBytes, request.body.length)
+			requestBody, err = ownedstream.New(op, source, c.config.RequestBytes, request.body.length, exchange.RequestTap())
 			if err != nil {
 				return false, 0, err
 			}
@@ -306,7 +331,8 @@ func (c *Client) attempt(parent context.Context, request Request, limit int64, n
 	if err := op.Err(); err != nil {
 		return false, 0, err
 	}
-	native, err := http.NewRequestWithContext(op, request.method, request.url.String(), body)
+	stage = stageTransport
+	native, err := http.NewRequestWithContext(exchange.Trace(op), request.method, request.url.String(), body)
 	if err != nil {
 		return false, 0, failure(InvalidRequest, c.Name(), request.method, number, 0, err)
 	}
@@ -331,6 +357,7 @@ func (c *Client) attempt(parent context.Context, request Request, limit int64, n
 	}
 	// No GetBody: net/http cannot replay a body behind this retry policy.
 	native.GetBody = nil
+	exchange.Sending(native)
 	c.attempts.Add(1)
 	var response *http.Response
 	var transportErr error
@@ -345,7 +372,8 @@ func (c *Client) attempt(parent context.Context, request Request, limit int64, n
 		if expected < -1 {
 			expected = -1
 		}
-		responseBody, err = ownedstream.New(op, response.Body, limit, expected)
+		exchange.Received(response, expected)
+		responseBody, err = ownedstream.New(op, response.Body, limit, expected, exchange.ResponseTap())
 		if err != nil {
 			return false, 0, err
 		}
@@ -357,9 +385,13 @@ func (c *Client) attempt(parent context.Context, request Request, limit int64, n
 		return false, 0, parent.Err()
 	}
 	if transportErr != nil || op.Err() != nil {
-		denied := false
 		complete := callback.ErrorWalk(transportErr, func(current error) bool {
 			denied = errorgraph.Matches(current, DestinationDenied)
+			if exchange != nil && !timedOut {
+				if failed, ok := errorgraph.AsShallow[net.Error](current); ok {
+					timedOut = failed.Timeout()
+				}
+			}
 			return !denied
 		})
 		return canRetry && complete && !denied, -1, failure(TransportFailed, c.Name(), request.method, number, 0, canceled(op, transportErr))
@@ -368,12 +400,14 @@ func (c *Client) attempt(parent context.Context, request Request, limit int64, n
 		return false, 0, failure(TransportFailed, c.Name(), request.method, number, 0, invalid())
 	}
 	if response.ContentLength < -1 || request.method != http.MethodHead && response.StatusCode != http.StatusNoContent && response.StatusCode != http.StatusNotModified && response.ContentLength > limit {
+		stage = stageTooLarge
 		return false, 0, failure(BodyFailed, c.Name(), request.method, number, response.StatusCode, invalid())
 	}
 	headers, err := copyHeaders(response.Header, c.config.HeaderBytes, false)
 	if err != nil {
 		return false, 0, failure(TransportFailed, c.Name(), request.method, number, response.StatusCode, err)
 	}
+	stage = stageResponse
 	delay, delayed := retryAfter(headers, time.Now())
 	if canRetry && request.retry.retryStatus(response.StatusCode) && (!delayed || delay <= request.retry.MaxBackoff) {
 		// A bounded drain allows connection reuse for small rejection bodies.
@@ -388,6 +422,7 @@ func (c *Client) attempt(parent context.Context, request Request, limit int64, n
 		return true, delay, nil
 	}
 	info := responseInfo{name: c.Name(), method: request.method, status: response.StatusCode, attempt: number, headers: headers, maximum: limit}
+	stage = stageConsume
 	var consumeErr error
 	if err := callback.Isolated("HTTP response consumer", func() error { consumeErr = consume(op, info, responseBody); return nil }); err != nil {
 		return false, 0, failure(CallbackFailed, c.Name(), request.method, number, response.StatusCode, err)

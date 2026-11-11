@@ -92,7 +92,7 @@ func (s *Store) find(ctx context.Context, request attribution.RequestID) (Captur
 	var row store.Capture
 	err = s.log.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		row, err = s.log.Find(ctx, tx, id, cutoff)
+		row, err = store.Find(ctx, tx, id, cutoff)
 		return err
 	})
 	if errors.Is(err, database.NotFound) {

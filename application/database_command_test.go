@@ -65,11 +65,13 @@ func TestRunDatabaseCommandMigratesEverySchemaOfOnlyTheSelectedDatabase(t *testi
 	if err != nil || !strings.Contains(output, "== default/"+schema+"\n") || !strings.Contains(output, "== default/"+tenant+"\n") || historyTables() != 0 {
 		t.Fatalf("read-only status: %q %v", output, err)
 	}
-	if output, err = run("migrate", "up"); err != nil || strings.Count(output, "Confirmed 1 migration(s).") != 2 {
+	// The default schema also receives the framework's outbound capture table,
+	// which every application with a database registers.
+	if output, err = run("migrate", "up"); err != nil || strings.Count(output, "Confirmed 2 migration(s).") != 1 || strings.Count(output, "Confirmed 1 migration(s).") != 1 {
 		t.Fatalf("migrate every schema of the default database: %q %v", output, err)
 	}
 	// Each schema keeps its own history beside its own unqualified objects.
-	if count(`SELECT count(*) FROM "`+schema+`".schema_migrations`)+count(`SELECT count(*) FROM "`+tenant+`".schema_migrations`) != 2 || count(`SELECT count(*) FROM "`+tenant+`".records WHERE tenant <> ''`) != 0 {
+	if count(`SELECT count(*) FROM "`+schema+`".schema_migrations`)+count(`SELECT count(*) FROM "`+tenant+`".schema_migrations`) != 3 || count(`SELECT count(*) FROM "`+tenant+`".records WHERE tenant <> ''`) != 0 {
 		t.Fatal("schema targets did not keep separate objects and history")
 	}
 	if _, err := run("migrate", "rollback"); !errors.Is(err, fault.Invalid) {
