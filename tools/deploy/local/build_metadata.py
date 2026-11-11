@@ -11,9 +11,6 @@ import sys
 import tarfile
 import tempfile
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import instance_paths
-
 
 def public_env(request, destination):
     # The browser build's public-env guard remains the authoritative allowlist.
@@ -63,21 +60,12 @@ def collect_build_inputs(request):
 def package(request, stage, output):
     stage, output = Path(stage), Path(output)
     manifest = dict(request["manifest"])
-    name = manifest["instance"]
-    paths = instance_paths(name)
-    descriptor = stage / "config/deploy-runtime.json"
-    if (descriptor.is_symlink() or descriptor.parent.is_symlink()
-            or (descriptor.exists() and not descriptor.is_file())):
-        raise ValueError("release contains a non-regular runtime descriptor path")
-    descriptor.write_text(json.dumps({"schema": 1, "instance": name, "user": name,
-                                     "env_file": paths["configuration"] + "/app.env",
-                                     "work_dir": paths["data"]}, sort_keys=True) + "\n", encoding="utf-8")
     files = {}
     for path in sorted(stage.rglob("*")):
         relative = path.relative_to(stage).as_posix()
         if path.is_symlink() or not (path.is_file() or path.is_dir()):
             raise ValueError(f"release contains a non-regular path: {relative}")
-        allowed = relative == "artisan" or relative in {"config", "config/deploy.toml", "config/deploy-runtime.json", "public", "private-source-maps"} or relative.startswith(("public/", "private-source-maps/"))
+        allowed = relative == "artisan" or relative in {"config", "config/deploy.toml", "public", "private-source-maps"} or relative.startswith(("public/", "private-source-maps/"))
         if not allowed:
             raise ValueError(f"unexpected release path: {relative}")
         if any(part.startswith(".env") or part in {".git", "node_modules"} for part in path.relative_to(stage).parts):

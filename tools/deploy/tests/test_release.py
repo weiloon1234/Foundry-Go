@@ -162,7 +162,7 @@ class ReleaseTests(unittest.TestCase):
 
     def select_fixture_release(self):
         archive, manifest = self.bundle()
-        release.unpack_archive(archive, release.release_path(self.host, self.entry, manifest["version"]), self.entry, digest(archive))
+        release.unpack_archive(self.host, archive, release.release_path(self.host, self.entry, manifest["version"]), self.entry, digest(archive))
         release.switch_to(self.host, self.entry, manifest["version"])
         state = self.host.load_state(self.entry)
         state["current"] = manifest
@@ -1256,14 +1256,14 @@ class ReleaseTests(unittest.TestCase):
         archive, _ = self.bundle(extra="../../escape")
         destination = self.root / "extract"
         with self.assertRaises(DeployError) as result:
-            release.unpack_archive(archive, destination, self.entry, digest(archive))
+            release.unpack_archive(self.host, archive, destination, self.entry, digest(archive))
         self.assertEqual("unsafe_archive", result.exception.code)
         self.assertFalse(destination.exists())
 
     def test_private_maps_private_during_extraction(self):
         archive, manifest = self.bundle()
         destination = self.root / "extract"
-        release.unpack_archive(archive, destination, self.entry, digest(archive))
+        release.unpack_archive(self.host, archive, destination, self.entry, digest(archive))
         self.assertEqual(0o700, (destination / "private-source-maps").stat().st_mode & 0o777)
         for path in manifest["files"]:
             if path.endswith(".map"):
@@ -1274,7 +1274,7 @@ class ReleaseTests(unittest.TestCase):
         destination = self.root / "extract"
         previous = os.umask(0o077)
         try:
-            release.unpack_archive(archive, destination, self.entry, digest(archive))
+            release.unpack_archive(self.host, archive, destination, self.entry, digest(archive))
         finally:
             os.umask(previous)
         for path in [destination, *destination.rglob("*")]:
@@ -1751,7 +1751,7 @@ class ReleaseTests(unittest.TestCase):
     def test_runtime_maps_copy_uses_service_uid_and_rejects_linked_destination(self):
         archive, manifest = self.bundle()
         destination = self.root / "extract"
-        release.unpack_archive(archive, destination, self.entry, digest(archive))
+        release.unpack_archive(self.host, archive, destination, self.entry, digest(archive))
         release.protect_maps(self.host, self.entry, destination)
         copies = [args for args, _ in self.host.commands if "copy-runtime-maps" in args]
         self.assertEqual(["runuser", "-u", self.entry["name"], "--", "python3", release.service_script(self.host)], copies[0][:6])
@@ -1806,23 +1806,95 @@ class ReleaseTests(unittest.TestCase):
                 app.assert_called_once_with(self.host, self.entry, path, "maintenance:status",
                                             extra=("--format", "json"), check=False)
 
-    def test_verified_release_accepts_optional_runtime_descriptor_and_checks_its_digest(self):
-        for sequence, descriptor in ((1, False), (2, True)):
-            with self.subTest(descriptor=descriptor):
-                archive, manifest = self.bundle(sequence)
-                path = self.opt / "releases" / manifest["version"]
-                release.unpack_archive(archive, path, self.entry, digest(archive))
-                if descriptor:
-                    runtime = path / "config/deploy-runtime.json"
-                    runtime.write_text('{"schema":1}')
-                    manifest["files"]["config/deploy-runtime.json"] = digest(runtime)
-                    atomic_json(path / "manifest.json", manifest)
-                self.assertEqual(path, release.verified_release(self.host, self.entry, manifest))
-                if descriptor:
-                    (path / "config/deploy-runtime.json").write_text("changed")
+    def assert_runtime_descriptor(self, path):
+        runtime = path / "config/deploy-runtime.json"
+        name = self.entry["name"]
+        expected = {"schema": 1, "instance": name, "user": name,
+                    "env_file": f"/etc/foundry/instances/{name}/app.env",
+                    "work_dir": f"/var/lib/foundry/apps/{name}"}
+        self.assertEqual(json.dumps(expected, sort_keys=True) + "\n", runtime.read_text())
+        self.assertEqual(0o644, runtime.stat().st_mode & 0o777)
+        self.assertEqual(os.geteuid(), runtime.stat().st_uid)
+        self.assertEqual(os.getegid(), runtime.stat().st_gid)
+        self.assertNotIn("config/deploy-runtime.json", json.loads((path / "manifest.json").read_text())["files"])
+
+    def test_unpack_writes_runtime_descriptor_outside_manifest(self):
+        archive, manifest = self.bundle()
+        path = self.opt / "releases" / manifest["version"]
+        release.unpack_archive(self.host, archive, path, self.entry, digest(archive))
+        self.assert_runtime_descriptor(path)
+        self.assertEqual(path, release.verified_release(self.host, self.entry, manifest))
+        (path / "config/deploy-runtime.json").unlink()
+        self.assertEqual(path, release.verified_release(self.host, self.entry, manifest))
+
+    def test_archive_runtime_descriptor_rejected_before_payload_write(self):
+        archive, _ = self.bundle(extra="config/deploy-runtime.json")
+        path = self.root / "extract"
+        with self.assertRaises(DeployError) as error:
+            release.unpack_archive(self.host, archive, path, self.entry, digest(archive))
+        self.assertEqual("unsafe_archive", error.exception.code)
+        self.assertFalse(path.exists())
+
+    def test_activation_repairs_older_release_descriptor(self):
+        archive, manifest = self.bundle()
+        path = self.opt / "releases" / manifest["version"]
+        release.unpack_archive(self.host, archive, path, self.entry, digest(archive))
+        for unchanged in (False, True):
+            with self.subTest(unchanged=unchanged):
+                (path / "config/deploy-runtime.json").unlink()
+                result = self.deploy(archive)
+                self.assertEqual(unchanged, result.get("unchanged", False))
+                self.assert_runtime_descriptor(path)
+
+    def test_rollback_writes_older_release_descriptor(self):
+        first, one = self.bundle(1)
+        second, two = self.bundle(2)
+        self.deploy(first)
+        self.deploy(second)
+        path = self.opt / "releases" / one["version"]
+        (path / "config/deploy-runtime.json").unlink()
+        release.rollback(self.host, self.project, self.profile,
+                         one["version"], two["version"], str(uuid.uuid4()))
+        self.assert_runtime_descriptor(path)
+
+    def test_activation_refuses_symlink_or_non_regular_runtime_descriptor(self):
+        archive, manifest = self.bundle()
+        self.deploy(archive)
+        path = self.opt / "releases" / manifest["version"]
+        runtime = path / "config/deploy-runtime.json"
+        runtime.unlink()
+        outside = self.root / "outside"
+        outside.write_text("untouched")
+        for kind in ("symlink", "dangling", "directory", "fifo"):
+            with self.subTest(kind=kind):
+                if kind in ("symlink", "dangling"):
+                    runtime.symlink_to(outside if kind == "symlink" else self.root / "missing")
+                elif kind == "directory":
+                    runtime.mkdir()
+                else:
+                    os.mkfifo(runtime)
+                try:
                     with self.assertRaises(DeployError) as error:
-                        release.verified_release(self.host, self.entry, manifest)
-                    self.assertEqual("release_conflict", error.exception.code)
+                        self.deploy(archive)
+                    self.assertEqual("unsafe_path", error.exception.code)
+                    self.assertEqual("untouched", outside.read_text())
+                    self.assertEqual(manifest["version"], release.current_version(self.host, self.entry))
+                finally:
+                    if kind == "directory":
+                        runtime.rmdir()
+                    else:
+                        runtime.unlink()
+
+    def test_runtime_descriptor_refuses_symlinked_config_directory(self):
+        path = self.root / "release"
+        path.mkdir()
+        outside = self.root / "outside"
+        outside.mkdir()
+        (path / "config").symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(DeployError) as error:
+            release.write_runtime_descriptor(self.host, self.entry, path)
+        self.assertEqual("unsafe_path", error.exception.code)
+        self.assertFalse((outside / "deploy-runtime.json").exists())
 
     def test_maintenance_commands_do_not_read_or_write_state_or_persist_bypass(self):
         archive, manifest = self.bundle()

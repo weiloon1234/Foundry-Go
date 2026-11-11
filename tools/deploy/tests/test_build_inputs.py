@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from test_local import DEPLOY, cli, fixture, metadata, release
+from host import Host, Paths
 
 
 class BuildInputTests(unittest.TestCase):
@@ -117,7 +118,7 @@ class BuildInputTests(unittest.TestCase):
                     "packages_sha256": hashlib.sha256(b"apt 2.0 arm64\nzlib 1.2 arm64\n").hexdigest()}
         self.assertEqual(manifest["build_inputs"], expected)
         self.assertEqual(json.loads((second.parent / "manifest.json").read_text()), manifest)
-        validated = release.unpack_archive(first, self.root / "extracted", entry, cli.digest(first))
+        validated = release.unpack_archive(Host(Paths(self.root)), first, self.root / "extracted", entry, cli.digest(first))
         self.assertEqual(validated["build_inputs"], expected)
 
     def test_each_provenance_command_failure_aborts_packaging(self):

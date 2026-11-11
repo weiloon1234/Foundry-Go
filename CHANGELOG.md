@@ -16,8 +16,9 @@ current release, where a bare `./artisan down`, `./artisan up` or
   neither `--config` nor `--env-file` is given.
 - Added: deploy-tool `ACTION=shell`, an interactive SSH session with the saved
   connection settings and strict host-key checking, landing in the current release.
-- Added: releases include a hashed `config/deploy-runtime.json` descriptor (instance,
-  user, env file, work directory). Older releases without it still verify.
+- Added: the server tool writes `config/deploy-runtime.json` (instance, user, env
+  file, work directory) into each release it unpacks or activates; the archive
+  format is unchanged.
 - Changed: deploy-tool readiness, `status` and root reports read maintenance from the
   release's `maintenance:status`, so a `down` issued from a server shell keeps deploys
   and restarts working. `down` and `up` no longer read or write host state; a
@@ -26,7 +27,8 @@ current release, where a bare `./artisan down`, `./artisan up` or
 - Upgrade: install deploy-tool generation 8 with `tools-plan` and `tools-apply`.
   Applications register the third maintenance declaration and call
   `deployment.Detect` before loading configuration; Starter shows the wiring. Deploy
-  a release built by this version to get the descriptor and the status probe.
+  a release built by this version with the updated server tool to get the descriptor
+  and the status probe.
 
 ## v0.21.0 — 2026-11-11
 

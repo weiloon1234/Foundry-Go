@@ -80,10 +80,19 @@ def safe_member(name):
 
 
 def allowed_file(name):
-    return name in ("artisan", "config/deploy.toml", "config/deploy-runtime.json") or name.startswith(("public/", "private-source-maps/"))
+    return name in ("artisan", "config/deploy.toml") or name.startswith(("public/", "private-source-maps/"))
 
 
-def unpack_archive(archive, destination, entry, checksum):
+def write_runtime_descriptor(host, entry, release_path):
+    name = entry["name"]
+    paths = instance_paths(name)
+    host.owned_write(release_path / "config/deploy-runtime.json",
+                     json.dumps({"schema": 1, "instance": name, "user": name,
+                                 "env_file": paths["configuration"] + "/app.env",
+                                 "work_dir": paths["data"]}, sort_keys=True) + "\n", mode=0o644)
+
+
+def unpack_archive(host, archive, destination, entry, checksum):
     """Inspect every header before writing; no links, devices or extraction API."""
     check_path(archive, "file")
     require(archive.stat().st_size <= MAX_ARCHIVE_BYTES and isinstance(checksum, str)
@@ -133,6 +142,7 @@ def unpack_archive(archive, destination, entry, checksum):
                 target.chmod(0o755 if name == "artisan" else 0o600 if name.startswith("private-source-maps/") else 0o644)
                 if name != "manifest.json":
                     require(digest(target) == manifest["files"][name], "release_checksum", "A release file differs from its manifest checksum.")
+            write_runtime_descriptor(host, entry, destination)
             return manifest
     except (tarfile.TarError, OSError, EOFError):
         raise DeployError("invalid_archive", "Cannot read the release archive safely.") from None
@@ -775,7 +785,8 @@ def check_live_state(host, entry, state):
 
 def restore_code(host, entry, state, current, previous, recovered_status, *, roles=None):
     """Restore verified code only; never reverse database work."""
-    verified_release(host, entry, current)
+    release = verified_release(host, entry, current)
+    write_runtime_descriptor(host, entry, release)
     if roles is not None and state["last_attempt"]["action"] == "deploy":
         stop(host, entry, roles=[name for name in instance_units(entry) if name not in roles])
     if current_version(host, entry) != current["version"]:
@@ -848,6 +859,7 @@ def publish_release(host, entry, staging, manifest):
     release = release_path(host, entry, manifest["version"])
     if release.exists():
         verified_release(host, entry, manifest)
+        write_runtime_descriptor(host, entry, release)
     else:
         os.rename(staging, release)
     return release
@@ -871,7 +883,7 @@ def activate_recovered(host, registry, entry, archive, checksum, *, http_only=Fa
     validate_runtime_environment(host, entry)
     staging = host.paths.opt(entry["name"]) / "releases" / (".stage-" + uuid.uuid4().hex)
     try:
-        manifest = unpack_archive(Path(archive), staging, entry, checksum)
+        manifest = unpack_archive(host, Path(archive), staging, entry, checksum)
         release = publish_release(host, entry, staging, manifest)
         native_runtime(host, entry)
         protect_maps(host, entry, release)
@@ -918,7 +930,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
         certificates.retry_deferred(host, registry, entry)
         staging = host.paths.opt(entry["name"]) / "releases" / (".stage-" + uuid.uuid4().hex)
         try:
-            manifest = unpack_archive(Path(archive), staging, entry, checksum)
+            manifest = unpack_archive(host, Path(archive), staging, entry, checksum)
             import upgrades
             removed_bundles = upgrades.prune_tools(host, registry["tools"]["bundle_sha256"])
             version = manifest["version"]
@@ -926,7 +938,8 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
             if state["current"] and state["current"]["version"] == version:
                 require(state["current"] == manifest, "release_conflict", "An existing release ID has different content.")
                 if state["status"] in ("healthy", "rolled_back") and set(prior_roles) == set(instance_units(entry)):
-                    verified_release(host, entry, state["current"])
+                    release = verified_release(host, entry, state["current"])
+                    write_runtime_descriptor(host, entry, release)
                     require(ready(host, entry, timeout=10), "readiness_failed", "Current release is no longer ready; inspect it before retrying.")
                     return {"ok": True, "unchanged": True, "instance": entry["name"], "version": version,
                             "removed_bundles": removed_bundles}
@@ -1059,6 +1072,7 @@ def rollback(host, project, profile, target, expected_current, operation_id):
         require(current_version(host, entry) == expected_current, "stale_current", "Current release differs from the expected release; refresh status.")
         manifest = read_json(release_path(host, entry, target) / "manifest.json")
         release = verified_release(host, entry, manifest)
+        write_runtime_descriptor(host, entry, release)
         roles = enabled_roles(host, entry)
         if target == expected_current:
             require(ready(host, entry, roles=roles), "rollback_readiness", "Selected target is not ready.")

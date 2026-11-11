@@ -31,6 +31,7 @@ def module(name, path):
 cli = module("deployment_local_cli", DEPLOY / "local" / "cli.py")
 metadata = module("deployment_build_metadata", DEPLOY / "local" / "build_metadata.py")
 release = module("deployment_release", DEPLOY / "lib" / "release.py")
+from host import Host, Paths
 
 
 def fixture():
@@ -668,15 +669,13 @@ class LocalDeploymentTests(unittest.TestCase):
         with metadata.tarfile.open(archive) as tar:
             names = set(tar.getnames())
             manifest = json.load(tar.extractfile("manifest.json"))
-            self.assertEqual(set(manifest["files"]), {"artisan", "config/deploy.toml", "config/deploy-runtime.json", "public/index.html"})
+            self.assertEqual(set(manifest["files"]), {"artisan", "config/deploy.toml", "public/index.html"})
             for name, checksum in manifest["files"].items():
                 self.assertEqual(hashlib.sha256(tar.extractfile(name).read()).hexdigest(), checksum)
             self.assertFalse(names & {".env", "app.env", "deploy", "internal", "go.mod"})
             self.assertEqual(tar.getmember("artisan").mode, 0o755)
-            self.assertEqual(tar.getmember("config/deploy-runtime.json").mode, 0o644)
-            self.assertEqual(json.load(tar.extractfile("config/deploy-runtime.json")), {
-                "schema": 1, "instance": "abc-prod", "user": "abc-prod",
-                "env_file": "/etc/foundry/instances/abc-prod/app.env", "work_dir": "/var/lib/foundry/apps/abc-prod"})
+            self.assertNotIn("config/deploy-runtime.json", names)
+        self.assertFalse((stage / "config/deploy-runtime.json").exists())
 
     def test_local_archive_roundtrips_through_server_validator(self):
         project, profile = fixture()
@@ -694,10 +693,17 @@ class LocalDeploymentTests(unittest.TestCase):
         with patch.object(metadata, "collect_build_inputs", return_value={}):
             archive = metadata.package({"manifest": manifest, "source_date_epoch": 0}, stage, self.root / "release")
         extracted = self.root / "extracted"
-        result = release.unpack_archive(archive, extracted, entry, cli.digest(archive))
+        result = release.unpack_archive(Host(Paths(self.root)), archive, extracted, entry, cli.digest(archive))
         self.assertEqual(result["version"], version)
         self.assertEqual((extracted / "artisan").read_bytes(), b"compiled-artisan-fixture")
         self.assertTrue((extracted / "private-source-maps" / version / "admin" / "manifest.json").is_file())
+
+    def test_package_rejects_runtime_descriptor(self):
+        stage = self.stage()
+        (stage / "config/deploy-runtime.json").write_text('{"schema":1}')
+        with self.assertRaisesRegex(ValueError, "unexpected release path"):
+            metadata.package({"manifest": {"instance": "abc-prod"}}, stage, self.root / "release")
+        self.assertFalse((self.root / "release" / "app.tar.gz").exists())
 
     def test_archive_rejects_symlinks_and_environment_files(self):
         stage = self.stage()

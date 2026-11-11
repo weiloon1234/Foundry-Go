@@ -210,8 +210,9 @@ no `CONFIRM`. Exit the shell to return to your local terminal.
 
 Run `./artisan down`, `./artisan up`, or `./artisan maintenance:status` there
 without flags. These commands use the release profile and run as the app user
-when the shell is root. The packaged `config/deploy-runtime.json` supplies the
-instance, user, environment file, and work directory without secrets.
+when the shell is root. The server tool writes `config/deploy-runtime.json` into
+each release it unpacks or activates, supplying the instance, user, environment
+file, and work directory without secrets. The archive format is unchanged.
 The deploy tool reads the shared maintenance record, so a down from either place
 keeps deploys and restarts working.
 
