@@ -230,7 +230,10 @@ headers, query values and body fields use the credential-name rule shared with
 [outbound capture](http-client.md#recipe-outbound-capture): the audit
 sensitive-name rule plus the word `auth`, a final word `key` (but not
 `Idempotency-Key`), a few joined `...key` names and, in query strings, the
-`ticket`, `signature` and `sig` parameters.
+`ticket`, `signature` and `sig` parameters. The same query rule masks values in
+the query or fragment of a URL-valued request header (`Location`,
+`Content-Location`, `Referer`, `Link`, `Refresh`); paths are never masked.
+Multipart value parts without a form name are masked.
 
 `http.FullCaptureBody()` stores complete bodies within the limit exactly as
 received, which is what a signature check needs. Those bodies can hold card

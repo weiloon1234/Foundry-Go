@@ -32,6 +32,7 @@ const (
 	writeTimeout    = 500 * time.Millisecond
 	writeRetries    = 2
 	retryBackoff    = 100 * time.Millisecond
+	rowsTimeout     = 2 * time.Second
 	drainTimeout    = 3 * time.Second
 	checkTimeout    = 2 * time.Second
 	recheckInterval = 30 * time.Second
@@ -148,7 +149,8 @@ type Roles struct {
 
 // Run writes captures and prunes the table until ctx ends. Database trouble
 // never stops it: an unavailable table degrades capture with one logged
-// reason, failed batches are retried twice and then counted as lost.
+// reason, a failed batch is retried twice and then row by row, and only the
+// rows that still fail are counted as lost.
 func (l *Log[S, M]) Run(ctx context.Context, roles Roles) error {
 	recheck := time.NewTicker(recheckInterval)
 	defer recheck.Stop()
@@ -308,6 +310,9 @@ func (l *Log[S, M]) take() []pending[S, M] {
 	return batch
 }
 
+// write stores one batch. A batch that still fails after its retries is
+// retried one row at a time, so a row the table rejects is the only capture
+// lost and the rest of its batch is kept.
 func (l *Log[S, M]) write(ctx context.Context, batch []pending[S, M]) {
 	if !l.available {
 		for _, item := range batch {
@@ -315,8 +320,39 @@ func (l *Log[S, M]) write(ctx context.Context, batch []pending[S, M]) {
 		}
 		return
 	}
-	rows := make([]M, len(batch))
+	if l.insert(ctx, batch, writeRetries) {
+		return
+	}
+	// One budget bounds the whole pass, so a slow database delays the writer
+	// and shutdown by at most rowsTimeout more.
+	single, cancel := context.WithTimeout(ctx, rowsTimeout)
+	defer cancel()
+	stored := false
 	for i, item := range batch {
+		if len(batch) > 1 && l.insert(single, batch[i:i+1], 0) {
+			stored = true
+			continue
+		}
+		item.record.Lose(httpcapture.DropWrite)
+	}
+	switch {
+	case stored:
+	case len(batch) > 1:
+		// Several rows that each failed alone mean the table or database is
+		// gone: stop writing until the periodic check finds it again.
+		l.available = false
+	default:
+		// A lone row cannot tell a rejected row from an outage; the
+		// availability check decides.
+		l.checkLocked(ctx)
+	}
+}
+
+// insert stores items in one transaction, retrying with backoff, and
+// releases them once stored. On failure the caller still owns them.
+func (l *Log[S, M]) insert(ctx context.Context, items []pending[S, M], retries int) bool {
+	rows := make([]M, len(items))
+	for i, item := range items {
 		rows[i] = item.row
 	}
 	backoff := retryBackoff
@@ -325,18 +361,13 @@ func (l *Log[S, M]) write(ctx context.Context, batch []pending[S, M]) {
 		err := l.Transaction(attemptCtx, false, func(tx *database.Tx) error { return l.table.Insert(attemptCtx, tx, rows) })
 		cancel()
 		if err == nil {
-			for _, item := range batch {
+			for _, item := range items {
 				item.record.Release()
 			}
-			return
+			return true
 		}
-		if attempt == writeRetries || !wait(ctx, backoff) {
-			for _, item := range batch {
-				item.record.Lose(httpcapture.DropWrite)
-			}
-			// Stop writing until the periodic check finds the table again.
-			l.available = false
-			return
+		if attempt == retries || !wait(ctx, backoff) {
+			return false
 		}
 		backoff *= 2
 	}

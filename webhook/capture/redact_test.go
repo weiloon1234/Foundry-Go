@@ -196,6 +196,24 @@ func TestRedactSensitiveHeaderNames(t *testing.T) {
 	}
 }
 
+func TestRedactMasksURLQueriesInRequestHeadersOnly(t *testing.T) {
+	s := snapshot("application/json", nil)
+	s.Metadata.Headers = []httpcapture.Field{{Name: "Referer", Values: []string{"https://pay.test/return?order=7&signature=abc"}}}
+	s.Completion.ResponseHeaders = []httpcapture.Field{{Name: "Location", Values: []string{"/done?ticket=t"}}}
+	row, err := redact(s, testPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, _ := row.Headers.Decode()
+	response, _ := row.ResponseHeaders.Decode()
+	if request[0].Values[0] != "https://pay.test/return?order=7&signature=[masked]" {
+		t.Fatal("signed query in a request Referer was stored", request[0].Values)
+	}
+	if response[0].Values[0] != "/done?ticket=t" {
+		t.Fatal("response Location was not stored whole", response[0].Values)
+	}
+}
+
 func TestRedactStoresOnlyValidText(t *testing.T) {
 	s := snapshot("application/x-www-form-urlencoded", []byte("a=%00%ff"))
 	s.Metadata.Method = "P\x00ST"

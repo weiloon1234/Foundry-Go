@@ -338,6 +338,10 @@ default and 100 at most. The detail adds headers, query values, both bodies
 A body is complete only when its end was observed, never because a prefix
 parsed. `Download` does not read a non-2xx body, so that body is stored as
 `incomplete`; a `Stream` callback that stops early leaves the rest unread too.
+An in-memory request body (`Bytes`, `Form`, `JSON`, `Multipart`) is stored as
+offered, and `request_body_complete` says whether the transport sent all of
+it: a refused connection stores the body with `request_sent_bytes` `0` and
+`request_body_complete` false.
 
 ### Privacy
 
@@ -351,12 +355,16 @@ word `key` after `-`, `_` or `.` (`X-RapidAPI-Key`, `?key=`;
 `Idempotency-Key` and words such as `monkey` stay visible), the joined names
 `apikey`, `accesskey`, `secretkey`, `privatekey`, `subscriptionkey` and
 `signingkey`, and in query strings the framework's `ticket` and `signature`
-parameters and the words `sig` and `signature` (`X-Amz-Signature`). Signature
-headers such as `Stripe-Signature` stay visible. Redacted mode replaces long
-values with their size, keeps multipart file names, media types and sizes but
-never file bytes, and stores only JSON, URL-encoded and multipart bodies;
-compressed and other media types, such as HTML pages and downloaded files, are
-counted but never buffered.
+parameters and the words `sig` and `signature` (`X-Amz-Signature`). The same
+query rule masks values in the query or fragment of URL-valued headers in both
+directions (`Location`, `Content-Location`, `Referer`, `Link`, `Refresh`), so a
+presigned redirect or a signed next-page link is not stored replayable.
+Signature headers such as `Stripe-Signature` stay visible. Redacted mode
+replaces long values with their size, keeps multipart file names, media types
+and sizes but never file bytes, masks multipart value parts without a form
+name, and stores only JSON, URL-encoded and multipart bodies; compressed and
+other media types, such as HTML pages and downloaded files, are counted but
+never buffered.
 
 Two Go declarations change body disclosure; deployment settings can only
 reduce it. `Builder.FullOutboundCapture(names...)` stores the complete bodies
@@ -379,8 +387,9 @@ func SendCode(ctx context.Context, sms *httpclient.Client, to, code string) erro
 }
 ```
 
-Credentials inside URL paths, such as a bot token or a webhook URL secret, are
-stored; exclude those hosts. Add vendor credential names the rule misses with
+Paths are never masked: credentials inside URL paths, such as a bot token or a
+webhook URL secret, are stored, in the call line and in URL-valued headers
+alike; exclude those hosts. Add vendor credential names the rule misses with
 `config.mask_names`.
 
 ### Settings

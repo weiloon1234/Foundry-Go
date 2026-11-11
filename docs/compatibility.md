@@ -174,7 +174,9 @@ OpenAPI and TypeScript client under the matching framework pin.
 The same release tightens [webhook capture](#webhook-capture): its request
 headers, query values and body fields use the credential-name rule shared with
 outbound capture, which also masks the word `auth`, a final word `key` and a
-few joined `...key` names. Response headers stay unmasked. Rows written before
+few joined `...key` names, credential query and fragment values inside
+URL-valued request headers such as `Referer`, and multipart value parts without
+a form name. Response headers stay unmasked. Rows written before
 the upgrade keep what they stored. `webhook/capture.Command`, `ParsePrune` and
 `PruneCommand` are removed; `application.WebhookCaptureCommand()` declares the
 same `webhook-captures prune` command. See

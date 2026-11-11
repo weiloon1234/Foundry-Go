@@ -54,7 +54,9 @@ var foundryOutboundCaptureBodyJSON = sync.OnceValue(func() foundrycontract.JSON[
 type OutboundCaptureBodyValidationFieldSet struct {
 	// Complete validates the declared JSON property "complete".
 	//
-	// Complete means the end of the body was observed.
+	// Complete means the end of the body was observed: the transport sent
+	// the whole request body, or the caller read the whole response. An
+	// in-memory request body is stored whole even when it is false.
 	//
 	Complete foundryvalidation.Field[OutboundCaptureBody, bool]
 	// Content validates the declared JSON property "content".

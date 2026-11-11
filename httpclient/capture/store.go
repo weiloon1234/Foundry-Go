@@ -67,7 +67,8 @@ func (*Store) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("outbound capt
 
 // Run writes captures and prunes the table until ctx ends. Database trouble
 // never stops it: an unavailable table degrades capture with one logged
-// reason, failed batches are retried twice and then counted as lost.
+// reason, a failed batch is retried twice and then row by row, and only the
+// rows that still fail are counted as lost.
 func (s *Store) Run(ctx context.Context) error {
 	return s.log.Run(ctx, capturelog.Roles{Write: true, Retain: true})
 }

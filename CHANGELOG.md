@@ -25,8 +25,12 @@ prune command where developers need them.
   call's row but stores neither body.
 - Changed: webhook capture masks request headers, query values and body fields with the
   credential-name rule it now shares with outbound capture, which adds the word `auth`, a final
-  word `key` (not `Idempotency-Key`) and joined names such as `subscriptionkey`. Response headers
-  stay unmasked.
+  word `key` (not `Idempotency-Key`) and joined names such as `subscriptionkey`. Credential
+  query and fragment values inside URL-valued request headers (`Location`, `Content-Location`,
+  `Referer`, `Link`, `Refresh`) and multipart value parts without a form name are masked too.
+  Response headers stay unmasked.
+- Changed: both capture writers retry a batch that still fails one row at a time, so a row the
+  table rejects is the only capture lost.
 - Removed: `webhook/capture.Command`, `ParsePrune` and `PruneCommand`;
   `application.WebhookCaptureCommand()` declares the same command. `capture.NewRecorder` and
   `http.WithWebhookCapture` take the shared generic recorder type.

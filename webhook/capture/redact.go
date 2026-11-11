@@ -32,7 +32,8 @@ func noCredential(string) bool           { return false }
 // redact turns one kernel snapshot into the stored row without I/O, through
 // the shared disclosure owner. Input it cannot represent safely is omitted
 // with a reason, never stored raw. Request header, query and body masking use
-// the shared credential rule in both modes; response headers stay whole.
+// the shared credential rule in both modes, including the query of a URL-valued
+// request header such as Referer; response headers stay whole.
 // The writer sets DroppedBefore from the record that carried the snapshot.
 func redact(s httpcapture.Snapshot, p policy) (store.Capture, error) {
 	m, c := s.Metadata, s.Completion
@@ -90,10 +91,10 @@ func redact(s httpcapture.Snapshot, p policy) (store.Capture, error) {
 	if status, present := c.Status.Get(); present {
 		row.ResponseStatus = value.Of(int32(status))
 	}
-	if row.Headers, err = value.NewJSON(capturedisclosure.Headers(m.Headers, requestCredential)); err != nil {
+	if row.Headers, err = value.NewJSON(capturedisclosure.Headers(m.Headers, requestCredential, queryCredential)); err != nil {
 		return store.Capture{}, err
 	}
-	if row.ResponseHeaders, err = value.NewJSON(capturedisclosure.Headers(c.ResponseHeaders, noCredential)); err != nil {
+	if row.ResponseHeaders, err = value.NewJSON(capturedisclosure.Headers(c.ResponseHeaders, noCredential, noCredential)); err != nil {
 		return store.Capture{}, err
 	}
 	if row.Query, err = value.NewJSON(capturedisclosure.NonNil(query)); err != nil {

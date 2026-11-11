@@ -12,6 +12,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -168,23 +169,69 @@ func NonNil[T any](items []T) []T {
 	return items
 }
 
-// Headers masks the values of names mask matches and makes text storable.
-// Webhook response headers pass a mask that matches nothing: they are what
-// the application sent, kept whole for debugging.
-func Headers(fields []httpcapture.Field, mask func(string) bool) []httpcapture.Field {
+// urlHeaders carry URLs whose query or fragment can hold a bearer value, such
+// as a presigned redirect in Location or a signed next page in Link.
+var urlHeaders = []string{"Location", "Content-Location", "Referer", "Link", "Refresh"}
+
+// Headers masks the values of names mask matches, masks the query and
+// fragment values of URL-valued headers whose names query matches, and makes
+// text storable. Webhook response headers pass rules that match nothing: they
+// are what the application sent, kept whole for debugging.
+func Headers(fields []httpcapture.Field, mask, query func(string) bool) []httpcapture.Field {
 	result := make([]httpcapture.Field, len(fields))
 	for i, field := range fields {
 		values := make([]string, len(field.Values))
 		masked := mask(field.Name)
+		linked := slices.ContainsFunc(urlHeaders, func(name string) bool { return strings.EqualFold(name, field.Name) })
 		for j, v := range field.Values {
-			values[j] = Text(v)
-			if masked {
+			switch {
+			case masked:
 				values[j] = Masked
+			case linked:
+				values[j] = Text(maskURLQueries(v, query))
+			default:
+				values[j] = Text(v)
 			}
 		}
 		result[i] = httpcapture.Field{Name: Text(field.Name), Values: values}
 	}
 	return result
+}
+
+// maskURLQueries masks the values of query and fragment pairs whose names
+// query matches, in every URL inside text, and keeps every other byte. A
+// query or fragment starts after '?' or '#', a pair ends at '&' or ';', and
+// both end at a byte a URL cannot hold raw ('<', '>', '"', space or tab), so
+// Link targets and a Refresh URL are covered. Paths are never masked. A name
+// that does not decode is masked.
+func maskURLQueries(text string, query func(string) bool) string {
+	if !strings.ContainsAny(text, "?#") {
+		return text
+	}
+	var out strings.Builder
+	pairs, start := false, 0
+	for i := 0; i <= len(text); i++ {
+		if i < len(text) && strings.IndexByte("?#&;<>\" \t", text[i]) < 0 {
+			continue
+		}
+		piece := text[start:i]
+		if raw, _, valued := strings.Cut(piece, "="); pairs && valued && maskedQueryName(raw, query) {
+			piece = raw + "=" + Masked
+		}
+		out.WriteString(piece)
+		if i == len(text) {
+			break
+		}
+		out.WriteByte(text[i])
+		start = i + 1
+		pairs = text[i] == '?' || text[i] == '#' || pairs && (text[i] == '&' || text[i] == ';')
+	}
+	return out.String()
+}
+
+func maskedQueryName(raw string, query func(string) bool) bool {
+	name, err := url.QueryUnescape(raw)
+	return err != nil || query(name)
 }
 
 // Fields parses URL-encoded pairs in first-appearance order, grouping
@@ -377,7 +424,8 @@ type multipartPart struct {
 }
 
 // summarizeMultipart describes each part. File parts keep their submitted
-// name, media type and measured size, never their bytes.
+// name, media type and measured size, never their bytes. A value part without
+// a form name has no name the credential rule can clear, so it is masked.
 func summarizeMultipart(raw []byte, boundary string, p Policy) ([]byte, error) {
 	if boundary == "" {
 		return nil, errMalformed
@@ -406,6 +454,8 @@ func summarizeMultipart(raw []byte, boundary string, p Policy) ([]byte, error) {
 		if filename := part.FileName(); filename != "" {
 			clipped, _ := clip(filename, maxPartText)
 			summary.Filename = value.Set(clipped)
+		} else if part.FormName() == "" {
+			summary.Value = value.Set(Masked)
 		} else {
 			summary.Value = value.Set(redactValue(part.FormName(), content.String(), p, p.credential))
 		}

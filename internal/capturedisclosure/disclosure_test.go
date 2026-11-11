@@ -104,12 +104,60 @@ func TestFieldsAndHeadersMaskAndStoreValidText(t *testing.T) {
 	if _, _, valid := Fields("a=%zz", false, p, func(string) bool { return false }); valid {
 		t.Fatal("malformed escape accepted")
 	}
-	headers := Headers([]httpcapture.Field{{Name: "X-Auth", Values: []string{"t"}}, {Name: "X-N\x00", Values: []string{"\xff"}}}, func(name string) bool { return CredentialName(name, nil) })
+	headers := Headers([]httpcapture.Field{{Name: "X-Auth", Values: []string{"t"}}, {Name: "X-N\x00", Values: []string{"\xff"}}}, func(name string) bool { return CredentialName(name, nil) }, func(string) bool { return false })
 	if headers[0].Values[0] != Masked || headers[1].Name != "X-N�" || headers[1].Values[0] != "�" {
 		t.Fatal("headers were not masked or made storable", headers)
 	}
 	if TextLimit("abé", 3) != "ab" || len(Bytes(nil)) != 0 || Bytes(nil) == nil {
 		t.Fatal("storable text or bytes changed")
+	}
+}
+
+// A presigned redirect, a signed next-page link or an OAuth callback carries
+// its bearer value in the query or fragment of a URL-valued header.
+func TestHeadersMaskURLQueriesInURLValuedHeaders(t *testing.T) {
+	credential := func(name string) bool { return CredentialName(name, nil) }
+	query := func(name string) bool { return CredentialQueryName(name, nil) }
+	for _, test := range []struct {
+		name, value, want string
+	}{
+		{"Location", "https://files.test/r.pdf?X-Amz-Expires=300&X-Amz-Signature=abc", "https://files.test/r.pdf?X-Amz-Expires=300&X-Amz-Signature=[masked]"},
+		{"Content-Location", "/reports/1?key=k1&page=2", "/reports/1?key=[masked]&page=2"},
+		{"Referer", "https://shop.test/cb?state=s#access_token=a&expires_in=60", "https://shop.test/cb?state=s#access_token=[masked]&expires_in=60"},
+		{"Link", `<https://api.test/i?page=2&sig=s2>; rel="next", <https://api.test/i?page=9&sig=s9>; rel="last"`, `<https://api.test/i?page=2&sig=[masked]>; rel="next", <https://api.test/i?page=9&sig=[masked]>; rel="last"`},
+		{"Refresh", "5; url=https://app.test/next?ticket=t&x=1", "5; url=https://app.test/next?ticket=[masked]&x=1"},
+		{"location", "https://app.test/a?a=1;signature=s&%zz=v&b", "https://app.test/a?a=1;signature=[masked]&%zz=[masked]&b"},
+		{"Location", "https://hooks.test/services/T0/B0/path-secret?", "https://hooks.test/services/T0/B0/path-secret?"},
+		{"Location", "/plain/path", "/plain/path"},
+		{"Authorization", "Bearer https://x.test/?page=1", Masked},
+	} {
+		got := Headers([]httpcapture.Field{{Name: test.name, Values: []string{test.value}}}, credential, query)
+		if got[0].Values[0] != test.want {
+			t.Errorf("%s: %q\n got %q\nwant %q", test.name, test.value, got[0].Values[0], test.want)
+		}
+	}
+	whole := Headers([]httpcapture.Field{{Name: "Location", Values: []string{"/f?sig=s"}}}, func(string) bool { return false }, func(string) bool { return false })
+	if whole[0].Values[0] != "/f?sig=s" {
+		t.Fatal("rules that match nothing changed a URL-valued header", whole)
+	}
+}
+
+func TestMultipartValuePartsWithoutAFormNameAreMasked(t *testing.T) {
+	media, _ := Inspectable("multipart/form-data; boundary=b", "")
+	p := Policy{ValueBytes: 4096, BodyBytes: 1 << 20}
+	for _, test := range []struct {
+		name, headers, want string
+	}{
+		{"form-data without name", "Content-Disposition: form-data", `[{"name":"","bytes":6,"value":"[masked]"}]`},
+		{"empty name", `Content-Disposition: form-data; name=""`, `[{"name":"","bytes":6,"value":"[masked]"}]`},
+		{"no disposition", "Content-Type: text/plain", `[{"name":"","content_type":"text/plain","bytes":6,"value":"[masked]"}]`},
+		{"not form-data", `Content-Disposition: attachment; name="note"`, `[{"name":"","bytes":6,"value":"[masked]"}]`},
+		{"named", `Content-Disposition: form-data; name="note"`, `[{"name":"note","bytes":6,"value":"secret"}]`},
+	} {
+		body := "--b\r\n" + test.headers + "\r\n\r\nsecret\r\n--b--\r\n"
+		if out, reason := Redact([]byte(body), media, p); reason != NoReason || string(out) != test.want {
+			t.Errorf("%s: got %s (%v), want %s", test.name, out, reason, test.want)
+		}
 	}
 }
 

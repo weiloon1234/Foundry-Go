@@ -220,7 +220,9 @@ type OutboundCaptureBody struct {
 	// TransferredBytes is what the transport sent (request) or the caller
 	// read (response).
 	TransferredBytes int64 `json:"transferred_bytes"`
-	// Complete means the end of the body was observed.
+	// Complete means the end of the body was observed: the transport sent
+	// the whole request body, or the caller read the whole response. An
+	// in-memory request body is stored whole even when it is false.
 	Complete bool   `json:"complete"`
 	Content  []byte `json:"content"`
 }

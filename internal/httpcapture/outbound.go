@@ -248,8 +248,12 @@ type BodyCapture struct {
 	Declared value.Nullable[int64]
 	// Transferred counts bytes the transport sent or the caller read.
 	Transferred int64
-	// Complete means the end of the body was observed.
+	// Complete means the end of the body was observed: the transport
+	// consumed the whole request body, or the caller read the whole response.
 	Complete bool
+	// Offered means Bytes is a request body the client held whole in memory,
+	// so it is the whole body even when the transport consumed less.
+	Offered bool
 	// Over means more than the capture limit passed.
 	Over            bool
 	Skip            Skip
@@ -293,14 +297,13 @@ func (o *Operation) NotSent(result Result) {
 	if a == nil {
 		return
 	}
-	a.url(o.request.URL)
-	a.snapshot.RequestHeaders, a.snapshot.RequestHeadersCut = Headers(o.request.Headers)
 	a.snapshot.Request = BodyCapture{Skip: SkipNotSent}
 	a.finish(false, result)
 }
 
 // Attempt reserves one exchange, or returns nil when the client's lane
-// refuses admission.
+// refuses admission. The exchange starts with the operation's URL and
+// headers, so an attempt that fails before Sending still stores its call.
 func (o *Operation) Attempt(number int) *Attempt {
 	if o == nil {
 		return nil
@@ -317,6 +320,8 @@ func (o *Operation) Attempt(number int) *Attempt {
 	method, _ := Clip(o.request.Method, 32)
 	a := &Attempt{reservation: reservation, operation: o, limit: o.lane.outbound.limit}
 	a.snapshot = Exchange{ID: id.Bytes(), Operation: o.id, Client: o.lane.name, Attempt: uint8(number), Full: o.lane.full, StartedAt: now, Cause: o.cause, Method: method}
+	a.url(o.request.URL)
+	a.snapshot.RequestHeaders, a.snapshot.RequestHeadersCut = Headers(o.request.Headers)
 	return a
 }
 
@@ -400,7 +405,7 @@ func (a *Attempt) skip(declined bool, contentType, encoding string) Skip {
 func (a *Attempt) keepData(data []byte, skip Skip) {
 	b := &a.snapshot.Request
 	a.data = len(data) > 0
-	b.Skip, b.Complete = skip, true
+	b.Skip, b.Offered = skip, true
 	if !a.data || skip != Kept {
 		return
 	}
@@ -486,7 +491,7 @@ func (a *Attempt) Finish(retried bool, result Result, sent, read int64) {
 	case a.request.started:
 		s.Request = a.request.settle(s.Request, sent)
 	case a.data:
-		s.Request.Transferred = sent
+		s.Request.Transferred, s.Request.Complete = sent, sent == int64(len(a.operation.request.Data))
 	case a.operation.request.Stream:
 		// The stream never opened, so its end was never observed.
 		s.Request = BodyCapture{Declared: s.Request.Declared, Transferred: sent}

@@ -342,6 +342,75 @@ func TestPostgresWriterListDetailAndSiblings(t *testing.T) {
 	}
 }
 
+// An attempt that ends before the native request exists still names its call,
+// so the table's scheme and host CHECKs accept its row.
+func TestPostgresStoresAttemptsThatFailBeforeSending(t *testing.T) {
+	h := newHarness(t, DefaultConfig(), testClientConfig("https://upstream.test/v1"), roundTrip(func(*http.Request) (*http.Response, error) {
+		t.Error("an attempt that failed before sending reached the transport")
+		return nil, errors.New("unreachable")
+	}))
+	f := newOutboundFixture(t, h.recorder, DefaultConfig())
+	unopened := httpclient.StreamBody(4, func(context.Context) (io.ReadCloser, error) { return nil, errors.New("private open failure") })
+	if _, err := h.client.Do(t.Context(), h.client.Post("upload").WithBody(unopened)); err == nil {
+		t.Fatal("unopened request stream succeeded")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	canceling := httpclient.StreamBody(4, func(context.Context) (io.ReadCloser, error) {
+		cancel()
+		return io.NopCloser(strings.NewReader("data")), nil
+	})
+	if _, err := h.client.Do(ctx, h.client.Post("upload").WithBody(canceling)); err == nil {
+		t.Fatal("call canceled before sending succeeded")
+	}
+	f.store.log.Flush(t.Context())
+	if f.count(t, ` WHERE scheme = 'https' AND host = 'upstream.test' AND path = '/v1/upload'`) != 2 || h.recorder.Recorder().Drops()[httpcapture.DropWrite] != 0 {
+		t.Fatal("an attempt that failed before sending was not stored with its call")
+	}
+	if f.count(t, ` WHERE result = 'request_body_failed'`) != 1 || f.count(t, ` WHERE result = 'canceled'`) != 1 {
+		t.Fatal("pre-send failures lost their results")
+	}
+}
+
+// A row the table rejects is lost alone: the rest of its batch is stored,
+// the loss reaches the lane's next row, and capture keeps writing.
+func TestPostgresWriterLosesOnlyTheRowTheTableRejects(t *testing.T) {
+	recorder, err := NewRecorder(DefaultConfig(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newOutboundFixture(t, recorder, DefaultConfig())
+	lane := recorder.Recorder().NewLane()
+	push := func(e httpcapture.Exchange) {
+		reservation := lane.Reserve(httpcapture.OutboundMetadataBytes)
+		if reservation == nil {
+			t.Fatal("recorder refused a test capture")
+		}
+		reservation.Complete(e, httpcapture.OutboundMetadataBytes)
+	}
+	rejected := func() httpcapture.Exchange {
+		e := exchange(t, "api", time.Now())
+		e.Scheme = ""
+		return e
+	}
+	push(exchange(t, "api", time.Now()))
+	push(rejected())
+	push(exchange(t, "api", time.Now()))
+	f.store.log.Flush(t.Context())
+	if f.count(t, "") != 2 || recorder.Recorder().Drops()[httpcapture.DropWrite] != 1 {
+		t.Fatal("one rejected row sank its batch", f.count(t, ""))
+	}
+	push(rejected())
+	f.store.log.Flush(t.Context())
+	push(exchange(t, "api", time.Now()))
+	f.store.log.Flush(t.Context())
+	if f.count(t, "") != 3 || f.count(t, ` WHERE dropped_before = 2`) != 1 || recorder.Recorder().Drops()[httpcapture.DropWrite] != 2 {
+		t.Fatal("a lone rejected row stopped capture or its loss was not carried", f.count(t, ""))
+	}
+	if active, retained := recorder.Recorder().Usage(); active != 0 || retained != 0 {
+		t.Fatal("stored or lost rows still hold recorder capacity", active, retained)
+	}
+}
+
 // The row cap applies per client: keyset iteration reaches every client,
 // however many there are, and a chatty client never evicts another's rows.
 func TestPostgresRetentionCapsEachClientAndPruneCommand(t *testing.T) {

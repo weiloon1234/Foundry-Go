@@ -120,6 +120,7 @@ func TestRowsDiscloseOnlyWhatTheSharedRuleAllows(t *testing.T) {
 		w.Header().Set("Set-Cookie", "session=abc")
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Request-Id", "upstream-1")
+		w.Header().Set("Content-Location", "/v1/receipts/1?X-Amz-Signature=presigned&part=1")
 		_, _ = io.WriteString(w, `{"auth":"eyJ.session","author":"Ann","amount":12}`)
 	}))
 	t.Cleanup(server.Close)
@@ -138,7 +139,7 @@ func TestRowsDiscloseOnlyWhatTheSharedRuleAllows(t *testing.T) {
 	ctx, _ = attribution.WithContext(ctx, origin)
 	ctx, _ = attribution.WithRoute(ctx, attribution.Route{Method: "POST", Name: "webhooks.smartpay"})
 	request := h.client.Post("merchant/auth").QueryPair("key", "google-key").QueryPair("page", "2").
-		Bearer(secret.New("sk_live_123")).Header("Idempotency-Key", "idem-1").
+		Bearer(secret.New("sk_live_123")).Header("Idempotency-Key", "idem-1").Header("Referer", "https://shop.test/checkout?member_ref=m1&step=2").
 		Form(url.Values{"api_key": {"k"}, "member_ref": {"m1"}, "amount": {"12"}})
 	if _, err := h.client.Do(ctx, request); err != nil {
 		t.Fatal(err)
@@ -152,6 +153,12 @@ func TestRowsDiscloseOnlyWhatTheSharedRuleAllows(t *testing.T) {
 	}
 	if fieldValue(t, responseHeaders, "Set-Cookie") != capturedisclosure.Masked || fieldValue(t, responseHeaders, "X-Request-Id") != "upstream-1" {
 		t.Fatal("response session cookie leaked or ordinary header hidden")
+	}
+	if fieldValue(t, responseHeaders, "Content-Location") != "/v1/receipts/1?X-Amz-Signature=[masked]&part=1" || fieldValue(t, requestHeaders, "Referer") != "https://shop.test/checkout?member_ref=[masked]&step=2" {
+		t.Fatal("signed or configured query value in a URL-valued header leaked")
+	}
+	if !row.RequestBodyComplete || row.RequestSentBytes != int64(len("amount=12&api_key=k&member_ref=m1")) {
+		t.Fatal("a sent form body was not complete", row.RequestSentBytes)
 	}
 	if fieldValue(t, query, "key") != capturedisclosure.Masked || fieldValue(t, query, "page") != "2" {
 		t.Fatal("credential query value leaked")
@@ -327,6 +334,13 @@ func TestRowShapePerCallPath(t *testing.T) {
 	}
 	if row := refused.row(t); row.Result != string(ResultTransportFailed) || omissionOf(row, false) != string(OmittedNoResponse) || row.RequestBodyState != string(BodyEmpty) {
 		t.Fatal("transport failure changed", row.Result)
+	}
+	offered := refused.client.Post("x").WithBody(httpclient.Bytes([]byte(`{"amount":1}`))).Header("Content-Type", "application/json").WithRetry(httpclient.NoRetries())
+	if _, err := refused.client.Do(t.Context(), offered); err == nil {
+		t.Fatal("refused connection succeeded")
+	}
+	if row := refused.row(t); row.RequestBodyComplete || row.RequestSentBytes != 0 || row.RequestBodyState != string(BodyJSON) || string(row.RequestBody) != `{"amount":1}` {
+		t.Fatal("an unsent in-memory body claimed completeness or lost what was offered", row.RequestBodyComplete, row.RequestSentBytes, row.RequestBodyState)
 	}
 
 	if err := c.Stream(t.Context(), c.Get("stream"), func(_ context.Context, response *httpclient.StreamResponse) error {

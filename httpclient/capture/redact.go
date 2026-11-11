@@ -84,17 +84,18 @@ func redact(e httpcapture.Exchange, dropped uint64, p capturedisclosure.Policy) 
 	}
 	row.ConnectionReused = e.Reused
 	credential := func(name string) bool { return capturedisclosure.CredentialName(name, p.Names) }
-	query, queryCut, queryValid := capturedisclosure.Fields(e.RawQuery, e.QueryCut, p, func(name string) bool { return capturedisclosure.CredentialQueryName(name, p.Names) })
+	queryCredential := func(name string) bool { return capturedisclosure.CredentialQueryName(name, p.Names) }
+	query, queryCut, queryValid := capturedisclosure.Fields(e.RawQuery, e.QueryCut, p, queryCredential)
 	if !queryValid {
 		query = nil
 	}
 	if row.Query, err = value.NewJSON(capturedisclosure.NonNil(query)); err != nil {
 		return store.Capture{}, err
 	}
-	if row.RequestHeaders, err = value.NewJSON(capturedisclosure.Headers(e.RequestHeaders, credential)); err != nil {
+	if row.RequestHeaders, err = value.NewJSON(capturedisclosure.Headers(e.RequestHeaders, credential, queryCredential)); err != nil {
 		return store.Capture{}, err
 	}
-	if row.ResponseHeaders, err = value.NewJSON(capturedisclosure.Headers(e.ResponseHeaders, credential)); err != nil {
+	if row.ResponseHeaders, err = value.NewJSON(capturedisclosure.Headers(e.ResponseHeaders, credential, queryCredential)); err != nil {
 		return store.Capture{}, err
 	}
 	var omissions []string
@@ -129,10 +130,11 @@ func nullableOmission(omission OutboundBodyOmission) value.Nullable[string] {
 	return value.Of(string(omission))
 }
 
-// storedBody decides one body's stored form. Completeness comes only from an
-// observed end of stream: a partial body is an exact prefix in full mode and
-// omitted in redacted mode, because a truncated JSON prefix that happens to
-// parse would misstate the payload.
+// storedBody decides one body's stored form. Its bytes are whole only when
+// the end of the stream was observed or the client held the request body in
+// memory: a partial body is an exact prefix in full mode and omitted in
+// redacted mode, because a truncated JSON prefix that happens to parse would
+// misstate the payload.
 func storedBody(b httpcapture.BodyCapture, full bool, p capturedisclosure.Policy) (OutboundBodyState, OutboundBodyOmission, []byte) {
 	// A body observed to end without a byte is empty whatever its media type,
 	// as with a 204 that carries no Content-Type.
@@ -143,7 +145,7 @@ func storedBody(b httpcapture.BodyCapture, full bool, p capturedisclosure.Policy
 	if b.Skip != httpcapture.Kept {
 		return BodyOmitted, skipped[b.Skip], nil
 	}
-	if b.Over || !b.Complete {
+	if b.Over || !b.Complete && !b.Offered {
 		switch {
 		case full && len(b.Bytes) > 0:
 			return BodyExactPrefix, "", b.Bytes
