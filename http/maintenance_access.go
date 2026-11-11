@@ -136,6 +136,15 @@ func (d maintenanceDecision) reject(w stdhttp.ResponseWriter, r *stdhttp.Request
 		writeRequestError(w, r, Unavailable, logger)
 		return
 	}
+	appendVary(header, "Accept")
+	if d.state.RetryAfter > 0 {
+		header.Set("Retry-After", strconv.FormatInt(int64(d.state.RetryAfter/time.Second), 10))
+	}
+	if IsHTMLNavigation(r, r.URL.Path) {
+		if err := writeMaintenancePage(w, r, d.state.Message); err == nil {
+			return
+		}
+	}
 	definition, _ := Unavailable.definition()
 	payload := ErrorResponse{Status: definition.Status, Code: definition.Code, Message: definition.Message, RequestID: RequestID(r.Context())}
 	if d.state.Message != "" {
@@ -150,9 +159,6 @@ func (d maintenanceDecision) reject(w stdhttp.ResponseWriter, r *stdhttp.Request
 	header.Set("Content-Type", "application/json")
 	header.Set("Cache-Control", "no-store")
 	header.Set("X-Content-Type-Options", "nosniff")
-	if d.state.RetryAfter > 0 {
-		header.Set("Retry-After", strconv.FormatInt(int64(d.state.RetryAfter/time.Second), 10))
-	}
 	w.WriteHeader(payload.Status)
 	if r.Method != stdhttp.MethodHead {
 		_, _ = w.Write(append(body, '\n'))

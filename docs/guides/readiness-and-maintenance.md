@@ -94,8 +94,14 @@ cancel existing work, dispose resources, create goroutines or bypass auth.
 Every application owns exactly one gate, whether or not observability is enabled;
 `foundation.WithMaintenance` supplies it, the runtime context carries it
 (`maintenance.FromContext`), and a configured recorder shares it. Managed kernels
-consult it. HTTP rejects new requests with
-503; workers wait before reserving jobs; schedules stop admitting occurrences
+consult it. HTTP rejects new requests with 503. While paused, GET and HEAD requests
+to extensionless paths whose bounded `Accept` explicitly lists `text/html` with
+`q>0` receive a built-in, brand-less HTML maintenance page with the escaped operator
+message or a default notice. API clients keep the standard JSON error envelope.
+Both representations send `Vary: Accept` and configured `Retry-After`; HTML adds a
+Content Security Policy permitting only the built-in style by its SHA-256 hash.
+HEAD sends headers only. Draining keeps the ordinary unavailable response.
+Workers wait before reserving jobs; schedules stop admitting occurrences
 without advancing their pending time, then apply their existing catch-up policy
 on resume. CLI rejects execution before constructing a command handler unless the
 command is declared with `AllowDuringMaintenance()` or invoked with the leading

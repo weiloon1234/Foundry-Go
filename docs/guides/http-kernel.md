@@ -88,7 +88,7 @@ download source, keeps that real cancellation.
 
 Every 5xx response is logged with a redacted diagnostic except admission
 rejections: capacity exhaustion (`fault.Overloaded`), a closing server
-(`fault.Closed`) and the bare unavailable response for draining and maintenance
+(`fault.Closed`) and the unavailable responses for draining and maintenance
 are counted as rejected request outcomes but are neither described nor logged per
 request, which would amplify load while the server is saturated.
 

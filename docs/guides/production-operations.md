@@ -70,8 +70,14 @@ parameters and the generation-7 tool upgrade. Both application commands accept
 secret generated with `--with-secret` adds `bypass_path`. The default text output
 is unchanged and caller-supplied secrets are never echoed.
 
-`down` publishes the record; paused responses are 503 with the standard error
-envelope, the operator `message` and `Retry-After`. Operator messages are not
+`down` publishes the record; paused responses are 503 with the operator `message`
+and configured `Retry-After`. GET and HEAD requests to extensionless paths whose
+bounded `Accept` explicitly lists `text/html` with `q>0` receive a built-in,
+brand-less HTML maintenance page. An empty message uses the page's default
+maintenance notice. API clients keep the standard JSON error envelope, including
+requests with no `Accept`, only `*/*`, or `text/html;q=0`. Both representations
+send `Vary: Accept`; HTML adds a Content Security Policy allowing only the built-in
+style by its SHA-256 hash. HEAD sends headers only. Operator messages are not
 logged as server failures. `--with-secret` prints a generated secret (or pass
 `--secret`); only its SHA-256 digest is stored. Visiting `/<secret>` sets an
 HTTP-only `foundry_maintenance` cookie (12 hours by default, `maintenance.bypass_ttl`)
