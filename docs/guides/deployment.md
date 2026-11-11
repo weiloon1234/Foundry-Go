@@ -41,6 +41,8 @@ remain in the selected module, and local state remains in the application direct
 | `ACTION=down make deploy` | Put the selected instance into maintenance mode |
 | `ACTION=up make deploy` | Leave maintenance mode and verify readiness |
 | `ACTION=shell make deploy` | Open an interactive server shell in the current release |
+| `ACTION=logs ROLE=http LINES=500 make deploy` | Read the selected role's recent journal entries |
+| `ACTION=logs ROLE=worker FOLLOW=yes make deploy` | Stream the selected role's journal until Ctrl-C |
 | `ACTION=deploy make deploy` | Select or build a release, then request activation |
 | `ACTION=config make deploy` | Submit up to 16 related configuration values together |
 | `ACTION=report make deploy` | Read the public host report without sudo |
@@ -182,7 +184,7 @@ use time zero. Packaging the same stage with the same inputs produces identical
 archive bytes. The release ID remains an input because the app embeds it.
 Byte-identical compiler output across machines is not claimed.
 
-Except for `ACTION=shell`, SSH requires noninteractive authentication. All actions
+Except for `ACTION=shell` and `ACTION=logs FOLLOW=yes`, SSH requires noninteractive authentication. All actions
 require an established host key. `make
 bootstrap` of a profile not yet bound to a server, and recovery to a replacement
 address, record an unknown host key on first contact (OpenSSH `accept-new`), which trusts whatever answers at that address. To verify
@@ -194,6 +196,34 @@ A key whose passphrase isn't in Keychain must be loaded into an SSH agent. Perso
 aliases must resolve to the hostname and port in the committed profile. Host
 mutations require root or passwordless `sudo -n`. Private configuration values
 travel through stdin, never command-line arguments.
+
+### Journal logs
+
+`ACTION=logs` reads the last 100 journal entries. `ROLE` selects a role declared in
+`deploy/topology.json`; it defaults to `http` and is prompted for in a terminal.
+`LINES` accepts an integer from 1 to 2000, inclusive, for snapshots and follow mode.
+
+```sh
+ENVIRONMENT=staging ACTION=logs ROLE=http LINES=500 make deploy
+ENVIRONMENT=staging ACTION=logs ROLE=worker LINES=200 FOLLOW=yes make deploy
+```
+
+Snapshots return JSON without a terminal and print the journal text in a terminal.
+The server rejects snapshots whose encoded JSON, including its trailing newline,
+exceeds 4 MiB. Large individual entries can reach this limit even within the
+2,000-entry maximum. Reduce `LINES` or use `FOLLOW=yes` if the snapshot is too large.
+
+`FOLLOW=yes` streams directly over SSH using your saved target and key, strict
+host-key checking, and root or passwordless `sudo -n`. It allows interactive SSH
+authentication and requests a remote terminal only when stdout is a terminal,
+so output can also be piped. Ctrl-C ends the stream quietly. SSH connection
+failures still report an error. Follow mode makes no server JSON request and
+needs no `CONFIRM`.
+
+`FOLLOW` accepts only `yes` when supplied. Other actions reject both `LINES` and
+`FOLLOW`, including empty values. These options are part of generation 8 in
+v0.22.0; install the updated bundle with `tools-plan` and `tools-apply` to use
+`LINES` for snapshots.
 
 ### Server shell
 

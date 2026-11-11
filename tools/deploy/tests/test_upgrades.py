@@ -301,7 +301,7 @@ class UpgradeTests(unittest.TestCase):
         # Modules newer than the oldest upgradable host stay out of REQUIRED_FILES,
         # which also validates previously installed bundles.
         expected = ({name for name in upgrades.REQUIRED_FILES if name.endswith('.py')}
-                    | {'lib/capacity.py', 'lib/maintenance.py'})
+                    | {'lib/capacity.py', 'lib/journal.py', 'lib/maintenance.py'})
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
     def leftover(self, digest="b" * 64):

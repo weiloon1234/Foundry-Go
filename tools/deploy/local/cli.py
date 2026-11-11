@@ -28,6 +28,7 @@ TOOLS_ROOT = Path(__file__).resolve().parents[1]
 ROOT: Path | None = None
 sys.path.insert(0, str(TOOLS_ROOT / "lib"))
 from edge import edge_findings
+import journal
 import maintenance
 
 from contracts import (BACKUP_POLICY, DeployError, PREFIX, RENEWAL_WARNING, SCHEMA, PROFILE_SCHEMA, LAYOUT_VERSION, VERSION_PATTERN, atomic_json, check_path, digest, identity, instance_name, instance_paths, now, parse_json, read_json, slug,
@@ -312,10 +313,12 @@ def save_profile(profile):
     atomic_json(ROOT / "deploy" / "environments" / (profile["environment"] + ".json"), profile)
 
 
+def privileged_command(invocation):
+    return f'if [ "$(id -u)" -eq 0 ]; then {invocation}; else sudo -n {invocation}; fi'
+
+
 class SSH:
     def __init__(self, profile, settings, *, first_contact=False, interactive=False):
-        if interactive and not (sys.stdin.isatty() and sys.stdout.isatty()):
-            raise LocalError("ACTION=shell requires a terminal on stdin and stdout.")
         host = profile["host"]
         host_key = f"{host['address']}:{host['port']}"
         personal = settings["hosts"].get(host_key)
@@ -363,14 +366,25 @@ class SSH:
     def shell(self, name):
         current = instance_paths(name)["application"] + "/current"
         command = f'cd {shlex.quote(current)} && exec "${{SHELL:-/bin/bash}}" -l'
-        result = subprocess.run(self.base[:-1] + ["-t", self.base[-1], command], check=False)
+        self.interactive_command(command)
+
+    def interactive_command(self, command):
+        terminal = ["-t"] if sys.stdout.isatty() else []
+        result = subprocess.run(self.base[:-1] + terminal + [self.base[-1], command], check=False)
         check_ssh_exit(result.returncode, mutation=False)
+
+    def follow_logs(self, entry, role, lines):
+        command = shlex.join(journal.arguments(entry, role, lines, follow=True))
+        try:
+            self.interactive_command(privileged_command(command))
+        except KeyboardInterrupt:
+            pass
 
     def request(self, action, request, tools=None):
         request = {**request, **protocol_metadata(TOOLS_ROOT)}
         invocation = (f"python3 -B {shlex.quote(tools + '/server/manage.py')} {shlex.quote(action)}"
                       if tools else f"{shlex.quote(INSTALLED)} {shlex.quote(action)}")
-        remote = f'if [ "$(id -u)" -eq 0 ]; then {invocation}; else sudo -n {invocation}; fi'
+        remote = privileged_command(invocation)
         try:
             result = subprocess.run(self.base + [remote], input=json.dumps(request).encode(),
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=7200)
@@ -1011,6 +1025,24 @@ def declared_role(role):
     return role
 
 
+def log_parameters(action):
+    if action != "logs":
+        if "LINES" in os.environ or "FOLLOW" in os.environ:
+            raise LocalError("LINES and FOLLOW are only supported for logs")
+        return {}
+    if "FOLLOW" in os.environ and os.environ["FOLLOW"] != "yes":
+        raise LocalError("FOLLOW must be yes when supplied")
+    value = os.environ.get("LINES", str(journal.DEFAULT_LINES))
+    digits = value.lstrip("0") or "0"
+    if not re.fullmatch(r"[0-9]+", value) or len(digits) > len(str(journal.MAX_LINES)):
+        raise LocalError(journal.LINES_ERROR)
+    try:
+        lines = journal.validate_lines(int(digits))
+    except DeployError as error:
+        raise LocalError(error.detail) from None
+    return {"lines": lines, "follow": "FOLLOW" in os.environ}
+
+
 def maintenance_parameters(action):
     values = {}
     for field in sorted(maintenance.FIELDS):
@@ -1044,12 +1076,23 @@ def deploy(project, profile, settings):
     action = os.environ.get("ACTION") or ask("Action (" + " / ".join(ACTIONS) + ")", "deploy")
     if action not in ACTIONS:
         raise LocalError("unsupported deployment action")
+    logs = log_parameters(action)
     if not profile["host"]["host_id"]:
         raise LocalError("environment is not bound to a bootstrapped host; run make bootstrap")
     if action == "shell":
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            raise LocalError("ACTION=shell requires a terminal on stdin and stdout.")
         with closing(SSH(profile, settings, interactive=True)) as ssh:
             ssh.shell(instance_name(project, profile))
         return
+    if action == "logs":
+        role = os.environ["ROLE"] if "ROLE" in os.environ else (ask("Role (http / scheduler / worker)", "http") if sys.stdin.isatty() else "http")
+        role = declared_role(role)
+        if logs["follow"]:
+            entry = {"name": instance_name(project, profile), "topology": load_topology(ROOT)}
+            with closing(SSH(profile, settings, interactive=True)) as ssh:
+                ssh.follow_logs(entry, role, logs["lines"])
+            return
     parameters = maintenance_parameters(action) if action in ("down", "up") else {}
     with closing(SSH(profile, settings)) as ssh:
         request = {"project": project, "profile": profile}
@@ -1204,9 +1247,7 @@ def deploy(project, profile, settings):
             display(ssh.request("rollback", {**request, **arguments, "operation_id": operation, "confirm": True}))
             remember_releases(profile, ssh.request("status", request))
         elif action == "logs":
-            role = os.environ["ROLE"] if "ROLE" in os.environ else (ask("Role (http / scheduler / worker)", "http") if sys.stdin.isatty() else "http")
-            role = declared_role(role)
-            result = ssh.request("logs", {**request, "role": role})
+            result = ssh.request("logs", {**request, "role": role, "lines": logs["lines"]})
             if sys.stdin.isatty():
                 print(result["logs"])
             else:
@@ -1235,7 +1276,7 @@ def main():
     global ROOT
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app-root", help="application directory")
-    for option in ("environment", "action", "role", "target", "expected-current", "operation"):
+    for option in ("environment", "action", "role", "lines", "follow", "target", "expected-current", "operation"):
         parser.add_argument("--" + option)
     parser.add_argument("command", choices=[*COMMANDS, "help"], nargs="?", default="help")
     arguments = parser.parse_args()
@@ -1245,12 +1286,14 @@ def main():
         print("Actions: " + ", ".join(ACTIONS))
         print("ENVIRONMENT and ACTION select the operation.")
         return
-    for option in ("environment", "action", "role", "target", "expected_current", "operation"):
+    for option in ("environment", "action", "role", "lines", "follow", "target", "expected_current", "operation"):
         value = getattr(arguments, option)
         if value is not None:
             os.environ[option.upper()] = value
     ROOT = resolve_app_root(arguments.app_root)
     mode = arguments.command
+    if mode != "deploy":
+        log_parameters(mode)
     with lock(ROOT / ".deploy" / "operation.lock"):
         settings = local_settings()
         project = project_config(mode)

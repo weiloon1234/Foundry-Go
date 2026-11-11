@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import DeployError, MAX_JSON, check_path, identity, now, parse_env, parse_json, read_json, require
 from topology import instance_units, selected_units
 from host import Host
+import journal
 import maintenance
 
 ACTIONS = ("capacity-plan", "capacity-apply", "hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect",
@@ -28,21 +29,24 @@ def execute(host, action, request):
 
     require(action in ACTIONS, "invalid_action", "Unknown deployment action.")
     require(isinstance(request, dict), "invalid_request", "Request must be a JSON object.")
+    require("follow" not in request and (action == "logs" or "lines" not in request),
+            "invalid_request", "Only logs accepts lines; follow is local-only.")
     if action == "hello":
         return upgrades.hello(host)
     common = {"protocol", "client", "project", "profile", "operation_id", "confirm"}
     recovery_fields = {"topology", "mode", "recovery_archive", "archive_sha256", "target_time"}
     arguments = {"recover-plan": recovery_fields,
                  "recover-apply": recovery_fields | {"archive", "plan_token", "old_server_gone"}, "bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
-                 "restart": {"role"}, "stop": {"role"}, "down": maintenance.FIELDS,
+                 "restart": {"role"}, "stop": {"role"}, "logs": {"role", "lines"}, "down": maintenance.FIELDS,
                  "activate": {"archive", "archive_sha256"}, "config-set": {"values", "secrets"},
                  "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current"},
                  "backup-keys-rotate": {"secrets"}, "backup-recipients-rotate": {"secrets"},
                  "dns-token-rotate": {"secrets"}, "backup-configure": {"secrets"}, "backup-run": {"kind"},
                  "restore-drill": {"backup_id", "target_time", "target_inclusive", "retain"},
                  "capacity-apply": {"plan_token"}, "tools-apply": {"plan_token"}, "upgrade-resume": {"plan_token"}}
+    if action not in upgrades.READ_ACTIONS or action == "logs":
+        require(set(request) <= common | arguments.get(action, set()), "invalid_request", "Unknown deployment request field.")
     if action not in upgrades.READ_ACTIONS:
-        require(set(request) <= common | arguments.get(action, set()), "invalid_request", "Unknown mutation request field.")
         require(os.geteuid() == 0 or host.paths.root != Path("/"), "root_required", "Host mutations require root.")
     if request.get("profile") is not None:
         registry = host.read_registry(missing=True)
@@ -173,9 +177,13 @@ def execute(host, action, request):
         return {"keys": sorted(values), "locked_keys": sorted(release.PIPELINE_KEYS), "configuration_revision": entry["configuration_revision"]}
     if action == "logs":
         # Explicit operator action. Logs are never included in the host report.
-        selected = selected_units(entry, request.get("role", "all")).values()
-        result = host.run(["journalctl", *[arg for unit in selected for arg in ("--unit", unit)], "--lines=100", "--no-pager", "--output=short-iso"], timeout=15)
-        return {"instance": entry["name"], "logs": result.stdout}
+        argv = journal.arguments(entry, request.get("role", "all"), request.get("lines", journal.DEFAULT_LINES))
+        result = host.run(argv, timeout=15)
+        response = {"instance": entry["name"], "logs": result.stdout}
+        # Count JSON escaping and main's trailing newline, including oversized single entries.
+        require(len(json.dumps(response, separators=(",", ":")).encode("utf-8")) + 1 <= MAX_JSON,
+                "logs_too_large", "Journal snapshot exceeds the JSON size limit; reduce LINES or use FOLLOW=yes.")
+        return response
     if action == "status":
         state = release.public_state(host.load_state(entry))
         version = release.current_version(host, entry)

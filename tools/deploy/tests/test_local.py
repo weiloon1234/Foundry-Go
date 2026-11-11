@@ -220,15 +220,139 @@ class LocalDeploymentTests(unittest.TestCase):
 
     def test_logs_rejects_explicit_empty_role(self):
         project, profile = fixture()
-        remote = MagicMock()
-        remote.request.return_value = {"state": {}}
-        with patch.dict(os.environ, {"ACTION": "logs", "ROLE": ""}, clear=True), \
-                patch.object(cli, "SSH", return_value=remote), \
-                patch.object(cli, "load_topology", return_value={"roles": [{"name": "http"}]}), \
-                patch.object(cli, "remember_releases"):
-            with self.assertRaises(cli.LocalError):
+        for options in ({}, {"FOLLOW": "yes"}):
+            with self.subTest(options=options), \
+                    patch.dict(os.environ, {"ACTION": "logs", "ROLE": "", **options}, clear=True), \
+                    patch.object(cli, "SSH") as ssh, \
+                    patch.object(cli, "load_topology", return_value={"roles": [{"name": "http"}]}):
+                with self.assertRaises(cli.LocalError):
+                    cli.deploy(project, profile, {})
+                ssh.assert_not_called()
+
+    def test_logs_lines_default_and_bounds_are_sent_as_integers(self):
+        project, profile = fixture()
+        for supplied, expected in ((None, 100), ("1", 1), ("2000", 2000), ("00042", 42)):
+            remote = MagicMock()
+            remote.request.side_effect = [{"state": {}}, {"logs": "fixture journal\n"}]
+            environment = {"ACTION": "logs"}
+            if supplied is not None:
+                environment["LINES"] = supplied
+            with self.subTest(lines=supplied), patch.dict(os.environ, environment, clear=True), \
+                    patch.object(cli, "SSH", return_value=remote), \
+                    patch.object(cli, "load_topology", return_value={"roles": [{"name": "http"}]}), \
+                    patch.object(cli, "remember_releases"), patch.object(cli, "display"), \
+                    patch.object(cli.sys.stdin, "isatty", return_value=False):
                 cli.deploy(project, profile, {})
-        self.assertFalse(any(call.args[0] == "logs" for call in remote.request.call_args_list))
+            self.assertEqual(["status", "logs"], [call.args[0] for call in remote.request.call_args_list])
+            self.assertEqual(("logs", {"project": project, "profile": profile, "role": "http", "lines": expected}),
+                             remote.request.call_args.args)
+
+    def test_logs_rejects_invalid_lines_and_follow_before_ssh(self):
+        project, profile = fixture()
+        invalid = [("LINES", value) for value in
+                   ("", "0", "-1", "2001", "1.0", "+1", " 1", "1\n", "true", "١", "9" * 5000)]
+        invalid += [("FOLLOW", value) for value in ("", "no", "true", "YES", "1")]
+        for name, value in invalid:
+            with self.subTest(name=name, value=value[:20]), \
+                    patch.dict(os.environ, {"ACTION": "logs", name: value}, clear=True), patch.object(cli, "SSH") as ssh:
+                with self.assertRaisesRegex(cli.LocalError, name):
+                    cli.deploy(project, profile, {})
+                ssh.assert_not_called()
+
+    def test_log_variables_are_rejected_for_every_other_deployment_action(self):
+        project, profile = fixture()
+        for action in cli.ACTIONS:
+            if action == "logs":
+                continue
+            for name in ("LINES", "FOLLOW"):
+                for value in ("", "yes"):
+                    with self.subTest(action=action, name=name, value=value), \
+                            patch.dict(os.environ, {"ACTION": action, name: value}, clear=True), \
+                            patch.object(cli, "SSH") as ssh:
+                        with self.assertRaisesRegex(cli.LocalError, "only supported for logs"):
+                            cli.deploy(project, profile, {})
+                        ssh.assert_not_called()
+
+    def test_log_variables_are_rejected_for_bootstrap_and_release(self):
+        for mode in ("bootstrap", "release"):
+            for name in ("LINES", "FOLLOW"):
+                with self.subTest(mode=mode, name=name), patch.dict(os.environ, {name: ""}, clear=True), \
+                        patch.object(cli.sys, "argv", ["cli.py", "--app-root", "/fixture", mode]), \
+                        patch.object(cli, "ROOT"), \
+                        patch.object(cli, "resolve_app_root", return_value=Path("/fixture")), \
+                        patch.object(cli, "lock") as lock:
+                    with self.assertRaisesRegex(cli.LocalError, "only supported for logs"):
+                        cli.main()
+                    lock.assert_not_called()
+
+    def test_follow_logs_uses_saved_interactive_ssh_without_server_requests(self):
+        from topology import validate_topology
+        project, profile = fixture()
+        profile["host"]["port"] = 2222
+        topology = validate_topology({"schema": 1, "roles": [{"name": "http"}, {"name": "scheduler"}]})
+        settings = {"hosts": {"example.com:2222": {"target": "work-host", "key_path": "~/.ssh/fixture"}}}
+        for stdin, stdout in ((True, True), (False, True), (True, False), (False, False)):
+            for supplied, expected in ((None, 100), ("2000", 2000)):
+                environment = {"ACTION": "logs", "ROLE": "scheduler", "FOLLOW": "yes"}
+                if supplied is not None:
+                    environment["LINES"] = supplied
+                with self.subTest(stdin=stdin, stdout=stdout, lines=supplied), \
+                        patch.dict(os.environ, environment, clear=True), \
+                        patch.object(cli.sys.stdin, "isatty", return_value=stdin), \
+                        patch.object(cli.sys.stdout, "isatty", return_value=stdout), \
+                        patch.object(cli, "load_topology", return_value=topology), \
+                        patch.object(cli, "execute", return_value="hostname example.com\nport 2222\n") as execute, \
+                        patch.object(cli.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run, \
+                        patch.object(cli.SSH, "request") as request, patch.object(cli, "protocol_metadata") as protocol, \
+                        patch.object(cli, "confirm") as confirm:
+                    cli.deploy(project, profile, settings)
+                request.assert_not_called()
+                protocol.assert_not_called()
+                confirm.assert_not_called()
+                argv = run.call_args.args[0]
+                self.assertEqual(stdout, "-t" in argv)
+                self.assertEqual(argv[-2], "work-host")
+                for option in ("StrictHostKeyChecking=yes", "UseKeychain=yes", "IdentitiesOnly=yes", "ControlMaster=auto"):
+                    self.assertIn(option, argv)
+                self.assertFalse(any(option.startswith("BatchMode=") for option in argv))
+                self.assertEqual(argv[argv.index("-p") + 1], "2222")
+                self.assertEqual(argv[argv.index("-i") + 1], str(Path("~/.ssh/fixture").expanduser()))
+                self.assertEqual({"check": False}, run.call_args.kwargs)
+                self.assertEqual(["-O", "exit", "work-host"], execute.call_args.args[0][-3:])
+                journal_argv = ["journalctl", "--unit", "foundry-scheduler@abc-prod.service",
+                                f"--lines={expected}", "--follow", "--no-pager", "--output=short-iso"]
+                # Execute the actual remote conditional with shell functions standing in for host commands.
+                for uid in (0, 1000):
+                    functions = (f'id() {{ echo {uid}; }}; '
+                                 'journalctl() { printf "%s\\n" journalctl "$@"; }; '
+                                 'sudo() { printf "%s\\n" sudo "$@"; }; ')
+                    result = subprocess.run(["/bin/sh", "-c", functions + argv[-1]],
+                                            text=True, capture_output=True, check=True)
+                    self.assertEqual(([] if uid == 0 else ["sudo", "-n"]) + journal_argv,
+                                     result.stdout.splitlines())
+
+    def test_follow_logs_interrupt_and_remote_exit_are_quiet_but_ssh_failure_is_not(self):
+        from topology import validate_topology
+        project, profile = fixture()
+        topology = validate_topology({"schema": 1, "roles": [{"name": "http"}]})
+        settings = {"hosts": {"example.com:22": {"target": "work-host", "key_path": ""}}}
+        for outcome in (KeyboardInterrupt(), 0, 1, 130, -signal.SIGINT, 255):
+            with self.subTest(outcome=outcome), \
+                    patch.dict(os.environ, {"ACTION": "logs", "ROLE": "http", "FOLLOW": "yes"}, clear=True), \
+                    patch.object(cli, "load_topology", return_value=topology), \
+                    patch.object(cli, "execute", return_value="hostname example.com\nport 22\n") as execute, \
+                    patch.object(cli.subprocess, "run") as run, patch.object(cli, "say") as say:
+                if isinstance(outcome, BaseException):
+                    run.side_effect = outcome
+                else:
+                    run.return_value = subprocess.CompletedProcess([], outcome)
+                if outcome == 255:
+                    with self.assertRaisesRegex(cli.LocalError, "SSH connection failed"):
+                        cli.deploy(project, profile, settings)
+                else:
+                    cli.deploy(project, profile, settings)
+                say.assert_not_called()
+                self.assertEqual(["-O", "exit", "work-host"], execute.call_args.args[0][-3:])
 
     def test_rotation_reuses_operation_without_recording_private_material_locally(self):
         project, profile = fixture()

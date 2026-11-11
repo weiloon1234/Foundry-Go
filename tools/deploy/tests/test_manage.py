@@ -1,7 +1,9 @@
 """Public manager boundaries using temporary files and injected process results."""
 import copy
 import importlib.util
+import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -9,7 +11,7 @@ from unittest.mock import patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import DeployError, atomic_json, read_json
+from contracts import DeployError, MAX_JSON, atomic_json, read_json
 from host import Host, Paths
 import upgrades
 from test_contracts import fixture, registry
@@ -130,6 +132,62 @@ class ManagerTests(unittest.TestCase):
                         manager.execute(self.host, action, {**self.request, "role": role})
                     self.assertEqual("invalid_role", error.exception.code)
             run.assert_not_called()
+
+    def test_logs_default_and_requested_lines_use_registered_units(self):
+        from topology import selected_units
+        for lines in (None, 1, 2000):
+            for role in (None, "http"):
+                request = {**self.request}
+                if lines is not None:
+                    request["lines"] = lines
+                if role is not None:
+                    request["role"] = role
+                with self.subTest(lines=lines, role=role), \
+                        patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, "fixture\n")) as run:
+                    result = manager.execute(self.host, "logs", request)
+                self.assertEqual({"instance": self.entry["name"], "logs": "fixture\n"}, result)
+                units = selected_units(self.entry, role or "all").values()
+                self.assertEqual(["journalctl", *[arg for unit in units for arg in ("--unit", unit)],
+                                  f"--lines={lines if lines is not None else 100}", "--no-pager", "--output=short-iso"],
+                                 run.call_args.args[0])
+                self.assertEqual({"timeout": 15}, run.call_args.kwargs)
+
+    def test_logs_rejects_non_integer_and_out_of_range_lines_before_commands(self):
+        with patch.object(self.host, "run") as run:
+            for lines in (0, -1, 2001, "100", "", None, True, False, 100.0, [], {}):
+                with self.subTest(lines=lines), self.assertRaises(DeployError) as error:
+                    manager.execute(self.host, "logs", {**self.request, "lines": lines})
+                self.assertEqual("invalid_lines", error.exception.code)
+            run.assert_not_called()
+
+    def test_logs_request_fields_and_local_only_follow_are_rejected_before_commands(self):
+        with patch.object(self.host, "run") as run:
+            for action, fields in (("logs", {"follow": True}), ("logs", {"unreviewed": 1}),
+                                   ("status", {"lines": 100}), ("stop", {"lines": 100}),
+                                   ("hello", {"follow": False})):
+                with self.subTest(action=action, fields=fields), self.assertRaises(DeployError) as error:
+                    manager.execute(self.host, action, {**self.request, **fields})
+                self.assertEqual("invalid_request", error.exception.code)
+            run.assert_not_called()
+
+    def test_logs_response_bound_counts_json_escaping_and_trailing_newline(self):
+        envelope = len(json.dumps({"instance": self.entry["name"], "logs": ""}, separators=(",", ":")).encode()) + 1
+        for character in ("a", '"', "\n", "é", "😀"):
+            escaped_size = len(json.dumps(character)) - 2
+            count = (MAX_JSON - envelope) // escaped_size
+            for size, fits in ((count, True), (count + 1, False)):
+                output = character * size
+                with self.subTest(character=character, fits=fits), \
+                        patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, output)):
+                    if fits:
+                        result = manager.execute(self.host, "logs", {**self.request, "lines": 2000})
+                        self.assertEqual(output, result["logs"])
+                        self.assertLessEqual(len(json.dumps(result, separators=(",", ":")).encode()) + 1, MAX_JSON)
+                    else:
+                        with self.assertRaises(DeployError) as error:
+                            manager.execute(self.host, "logs", {**self.request, "lines": 1})
+                        self.assertEqual("logs_too_large", error.exception.code)
+                        self.assertNotIn(output[:100], error.exception.detail)
 
     def test_maintenance_requires_confirmation_and_rejects_up_parameters(self):
         with patch.object(self.host, "run") as run:

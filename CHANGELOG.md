@@ -16,6 +16,9 @@ current release, where a bare `./artisan down`, `./artisan up` or
   neither `--config` nor `--env-file` is given.
 - Added: deploy-tool `ACTION=shell`, an interactive SSH session with the saved
   connection settings and strict host-key checking, landing in the current release.
+- Added: deploy-tool `ACTION=logs LINES=1..2000` with a default of 100 and a 4 MiB
+  snapshot response limit; `FOLLOW=yes` streams over the saved SSH connection
+  until Ctrl-C. Included in generation 8.
 - Added: the server tool writes `config/deploy-runtime.json` (instance, user, env
   file, work directory) into each release it unpacks or activates; the archive
   format is unchanged.
