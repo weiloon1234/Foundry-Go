@@ -61,14 +61,39 @@ in the CLI registry for the operator commands:
 app down --retry 60 --message "Upgrading, back soon" --with-secret \
   --allow 203.0.113.0/24 --except "POST /hooks/*"
 app up
+app maintenance:status --format json
 ```
 
 Deploy-tool users can run `ENVIRONMENT=staging ACTION=down CONFIRM=yes make deploy`
 and `ACTION=up` to resume; see the [deployment guide](deployment.md) for optional
-parameters and the generation-7 tool upgrade. Both application commands accept
+parameters and tool upgrades. The `down` and `up` commands accept
 `--format json` for automation (`{"down":true}` or `{"down":false}`); only a
 secret generated with `--with-secret` adds `bypass_path`. The default text output
 is unchanged and caller-supplied secrets are never echoed.
+
+`maintenance:status` reads the shared store on every invocation. It reports
+`{"down":true,"since":"2026-11-11T12:30:40Z"}` while down and `{"down":false}`
+while up or before a record exists. `since` is UTC in RFC3339 format and is omitted
+when zero. Default text is `Application is down since <time>` or
+`Application is up`. Both states exit successfully. All three commands require a
+configured shared store.
+
+For server-side bare `./artisan` commands in a deployed release, opt the console
+entry point into [`deployment`](../../deployment/runtime.go). When neither
+`--config` nor `--env-file` is supplied, call `deployment.Detect()`. If it returns
+an error, stop the invocation. If it returns `ok=true`, call
+`runtime.Enter(os.Args[1:])`, then load `runtime.ConfigFile` and `runtime.EnvFile`.
+Explicit flags take precedence and skip this detection entirely.
+
+The deploy tool supplies `config/deploy-runtime.json` beside the release profile.
+Detection resolves executable symlinks and accepts a regular descriptor of at most
+4 KiB, with schema 1, absolute environment and work paths, and matching instance
+and user names. Names follow `^[a-z][a-z0-9-]{0,30}$`.
+On Linux, root entry replaces the process with `runuser` as the application user.
+The restarted console detects the release again, changes to its work directory,
+and sets `WEB__PUBLIC_DIR` to the release's public directory when unset.
+Other non-root users are allowed subject to file permissions. Root entry on
+non-Linux systems fails because `runuser` is Linux-only.
 
 `down` publishes the record; paused responses are 503 with the operator `message`
 and configured `Retry-After`. GET and HEAD requests to extensionless paths whose
@@ -90,7 +115,7 @@ With a global `http.TrustedProxy` the allow list matches the client it resolves;
 without one it matches the socket peer, which behind a load balancer is the
 balancer, so allowing its subnet would admit everyone. `--except "[METHOD ]/path[/*]"` exempts exact paths or path
 prefixes for any or one method. `maintenance.exempt` and `maintenance.allow`
-configure permanent exemptions. Both commands are declared with
+configure permanent exemptions. All three commands are declared with
 `AllowDuringMaintenance()`; run any other command during maintenance, such as a
 migration, with the explicit leading flag `app --during-maintenance migrate`.
 

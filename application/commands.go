@@ -34,11 +34,12 @@ type DownArguments struct {
 	Except     []maintenance.Rule
 }
 
-type upArguments struct{ Format string }
+type maintenanceArguments struct{ Format string }
 
 type maintenanceResult struct {
 	Down       bool   `json:"down"`
 	BypassPath string `json:"bypass_path,omitempty"`
+	Since      string `json:"since,omitempty"`
 }
 
 func maintenanceFormat(format string) error {
@@ -88,28 +89,35 @@ var downCommand = cli.Define("down", "Put every instance sharing the maintenance
 	return maintenanceFormat(args.Format)
 })).AllowDuringMaintenance()
 
-var upCommand = cli.Define("up", "Bring every instance sharing the maintenance store out of maintenance mode", cli.Flags(func(flags *flag.FlagSet, args *upArguments) {
+var maintenanceFlags = cli.Flags(func(flags *flag.FlagSet, args *maintenanceArguments) {
 	flags.StringVar(&args.Format, "format", "text", "text or json")
-}, func(args upArguments) error {
+}, func(args maintenanceArguments) error {
 	return maintenanceFormat(args.Format)
-})).AllowDuringMaintenance()
+})
 
-// MaintenanceCommands returns the `down` and `up` operator commands. They run
-// while maintenance is paused and publish to the configured shared store, which
+var upCommand = cli.Define("up", "Bring every instance sharing the maintenance store out of maintenance mode", maintenanceFlags).AllowDuringMaintenance()
+var statusCommand = cli.Define("maintenance:status", "Read maintenance status from the shared store", maintenanceFlags).AllowDuringMaintenance()
+
+// MaintenanceCommands returns `down`, `up`, and `maintenance:status`, in that order.
+// They run while maintenance is paused and use the configured shared store, which
 // every instance polls; without Maintenance.Store they fail with fault.Missing.
 // Register them in the application's CLI registry and run them through the
 // ordinary CLI kernel.
 func MaintenanceCommands() ([]cli.Declaration, error) {
+	resolveStore := func(r foundation.Resolver) (maintenance.Store, error) {
+		store, err := foundation.Resolve(r, MaintenanceStoreKey)
+		if err != nil {
+			return nil, safeerror.WrapFault(fault.Missing, "maintenance commands require a configured maintenance store", err)
+		}
+		return store, nil
+	}
 	resolve := func(r foundation.Resolver) (*maintenance.Gate, maintenance.Store, error) {
 		gate, err := foundation.Resolve(r, MaintenanceKey)
 		if err != nil {
 			return nil, nil, err
 		}
-		store, err := foundation.Resolve(r, MaintenanceStoreKey)
-		if err != nil {
-			return nil, nil, safeerror.WrapFault(fault.Missing, "maintenance commands require a configured maintenance store", err)
-		}
-		return gate, store, nil
+		store, err := resolveStore(r)
+		return gate, store, err
 	}
 	down, err := downCommand.Declare(func(r foundation.Resolver) (cli.Handler[DownArguments], error) {
 		gate, store, err := resolve(r)
@@ -151,12 +159,12 @@ func MaintenanceCommands() ([]cli.Declaration, error) {
 	if err != nil {
 		return nil, err
 	}
-	up, err := upCommand.Declare(func(r foundation.Resolver) (cli.Handler[upArguments], error) {
+	up, err := upCommand.Declare(func(r foundation.Resolver) (cli.Handler[maintenanceArguments], error) {
 		gate, store, err := resolve(r)
 		if err != nil {
 			return nil, err
 		}
-		return func(ctx context.Context, args upArguments, streams cli.Streams) error {
+		return func(ctx context.Context, args maintenanceArguments, streams cli.Streams) error {
 			if err := maintenance.Publish(ctx, gate, store, maintenance.State{}); err != nil {
 				return err
 			}
@@ -170,7 +178,35 @@ func MaintenanceCommands() ([]cli.Declaration, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []cli.Declaration{down, up}, nil
+	status, err := statusCommand.Declare(func(r foundation.Resolver) (cli.Handler[maintenanceArguments], error) {
+		store, err := resolveStore(r)
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx context.Context, args maintenanceArguments, streams cli.Streams) error {
+			state, exists, err := store.Load(ctx)
+			if err != nil {
+				return err
+			}
+			result := maintenanceResult{Down: exists && state.Down}
+			if result.Down && !state.Since.IsZero() {
+				result.Since = state.Since.UTC().Format(time.RFC3339)
+			}
+			if args.Format == "json" {
+				return json.NewEncoder(streams.Out).Encode(result)
+			}
+			if result.Down {
+				_, err = fmt.Fprintf(streams.Out, "Application is down since %s\n", state.Since.UTC().Format(time.RFC3339))
+			} else {
+				_, err = fmt.Fprintln(streams.Out, "Application is up")
+			}
+			return err
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return []cli.Declaration{down, up, status}, nil
 }
 
 // About is the secret-free application summary printed by AboutCommand.

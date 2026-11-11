@@ -271,7 +271,7 @@ func TestMaintenanceCommandFormats(t *testing.T) {
 	for _, format := range []string{"", "text", "json"} {
 		t.Run(format, func(t *testing.T) {
 			s := sharedMaintenance(t, t.TempDir())
-			for _, action := range []string{"down", "up"} {
+			for _, action := range []string{"down", "up", "maintenance:status"} {
 				args := []string{action}
 				if format != "" {
 					args = append(args, "--format", format)
@@ -280,9 +280,12 @@ func TestMaintenanceCommandFormats(t *testing.T) {
 				if action == "up" {
 					want = "Maintenance mode disabled.\n"
 				}
+				if action == "maintenance:status" {
+					want = "Application is up\n"
+				}
 				if format == "json" {
 					want = "{\"down\":true}\n"
-					if action == "up" {
+					if action != "down" {
 						want = "{\"down\":false}\n"
 					}
 				}
@@ -343,10 +346,157 @@ func TestMaintenanceCommandRejectsInvalidFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, action := range []string{"down", "up"} {
+	for _, action := range []string{"down", "up", "maintenance:status"} {
 		for _, format := range []string{"yaml", "", "JSON"} {
 			if _, err := registry.Parse([]string{action, "--format", format}, io.Discard); err == nil {
 				t.Fatalf("%s accepted format %q", action, format)
+			}
+		}
+	}
+}
+
+type statusStore struct {
+	state  maintenance.State
+	exists bool
+	err    error
+	loads  int
+}
+
+func (s *statusStore) Load(context.Context) (maintenance.State, bool, error) {
+	s.loads++
+	return s.state, s.exists, s.err
+}
+
+func (*statusStore) Save(context.Context, maintenance.State) error {
+	return errors.New("status must not save maintenance state")
+}
+
+func TestMaintenanceStatusReadsSharedStore(t *testing.T) {
+	since := time.Date(2026, 11, 11, 20, 30, 40, 123, time.FixedZone("MYT", 8*60*60))
+	for _, tc := range []struct {
+		name       string
+		state      maintenance.State
+		exists     bool
+		json, text string
+	}{
+		{"absent", maintenance.State{Down: true, Since: since}, false, "{\"down\":false}\n", "Application is up\n"},
+		{"up", maintenance.State{Since: since}, true, "{\"down\":false}\n", "Application is up\n"},
+		{"down", maintenance.State{Down: true, Since: since, Message: "private", Secret: maintenance.SecretDigest{1}}, true, "{\"down\":true,\"since\":\"2026-11-11T12:30:40Z\"}\n", "Application is down since 2026-11-11T12:30:40Z\n"},
+		{"zero since", maintenance.State{Down: true}, true, "{\"down\":true}\n", "Application is down since 0001-01-01T00:00:00Z\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &statusStore{state: tc.state, exists: tc.exists}
+			app, err := foundation.NewBuilder().Register(foundation.Module{Name: "status.store", OnRegister: func(r *foundation.Registrar) error {
+				return foundation.Provide[maintenance.Store](r, application.MaintenanceStoreKey, store)
+			}}).Build(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer app.Shutdown(t.Context())
+			declarations, err := application.MaintenanceCommands()
+			if err != nil {
+				t.Fatal(err)
+			}
+			registry, err := cli.New(declarations...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, format := range []string{"text", "json"} {
+				var output strings.Builder
+				invocation, err := registry.Parse([]string{"maintenance:status", "--format", format}, &output)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = invocation.Run(t.Context(), app.Services(), cli.Streams{In: strings.NewReader(""), Out: &output, Err: &output})
+				want := tc.text
+				if format == "json" {
+					want = tc.json
+				}
+				if cli.Status(err) != cli.Success || output.String() != want {
+					t.Fatalf("status %s: output=%q want=%q err=%v", format, output.String(), want, err)
+				}
+			}
+			if store.loads != 2 {
+				t.Fatalf("loaded %d times", store.loads)
+			}
+		})
+	}
+}
+
+func TestMaintenanceStatusWhileLocalGateIsPaused(t *testing.T) {
+	s := sharedMaintenance(t, t.TempDir())
+	s.Features.Observability.Maintenance = true
+	if output := runCommand(t, s, "maintenance:status"); output != "Application is up\n" {
+		t.Fatal("status used local gate instead of absent shared record", output)
+	}
+	runCommand(t, s, "down")
+	if output := runCommand(t, s, "maintenance:status", "--format", "json"); !strings.HasPrefix(output, `{"down":true,"since":"`) {
+		t.Fatal("status blocked while down", output)
+	}
+}
+
+func TestMaintenanceStatusFailuresAndDeclarationOrder(t *testing.T) {
+	declarations, err := application.MaintenanceCommands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(declarations) != 3 {
+		t.Fatalf("got %d declarations", len(declarations))
+	}
+	for i, name := range []cli.Name{"down", "up", "maintenance:status"} {
+		registry, err := cli.New(declarations[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		description := registry.Describe()[0]
+		if description.Name != name || !description.Maintenance {
+			t.Fatal(description)
+		}
+	}
+	cause := errors.New("store unavailable")
+	store := &statusStore{err: cause}
+	for _, missing := range []bool{false, true} {
+		app, err := foundation.NewBuilder().Register(foundation.Module{Name: "status.store", OnRegister: func(r *foundation.Registrar) error {
+			gate, err := maintenance.New(maintenance.Policy{})
+			if err != nil {
+				return err
+			}
+			if err := foundation.Provide(r, application.MaintenanceKey, gate); err != nil {
+				return err
+			}
+			if missing {
+				return nil
+			}
+			return foundation.Provide[maintenance.Store](r, application.MaintenanceStoreKey, store)
+		}}).Build(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer app.Shutdown(t.Context())
+		registry, err := cli.New(declarations...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		actions := []string{"maintenance:status"}
+		if missing {
+			actions = append(actions, "down", "up")
+		}
+		for _, action := range actions {
+			var output strings.Builder
+			invocation, err := registry.Parse([]string{action}, &output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = invocation.Run(t.Context(), app.Services(), cli.Streams{In: strings.NewReader(""), Out: &output, Err: &output})
+			want := cause
+			if missing {
+				want = fault.Missing
+			}
+			if !errors.Is(err, want) || output.Len() != 0 {
+				t.Fatalf("%s failure: %v, output=%q", action, err, output.String())
+			}
+			if missing && !strings.Contains(err.Error(), "maintenance commands require a configured maintenance store") {
+				t.Fatal(err)
 			}
 		}
 	}
