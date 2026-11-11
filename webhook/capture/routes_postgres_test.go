@@ -77,9 +77,9 @@ func routeGuard(t *testing.T) (http.GuardBinding[routeActor], auth.AccessScopes[
 
 func TestPostgresCaptureRoutesAuthorizeDevelopersOnly(t *testing.T) {
 	f := newCaptureFixture(t, true)
-	f.store.check(t.Context())
+	f.store.log.Check(t.Context())
 	f.complete(t, snapshot("application/json", []byte(`{"amount":1}`)))
-	f.store.flush(t.Context(), t.Context())
+	f.store.log.Flush(t.Context())
 	binding, scopes := routeGuard(t)
 	registrations, err := Routes(http.DefineScope("/developer", "developer"), f.store, binding, http.Scopes(scopes), http.Permissions(developerRead))
 	if err != nil {

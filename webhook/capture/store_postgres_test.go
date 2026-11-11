@@ -21,6 +21,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/capturedisclosure"
+	"github.com/weiloon1234/Foundry-Go/internal/capturelog"
 	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	store "github.com/weiloon1234/Foundry-Go/internal/webhookcapturestore"
 	"github.com/weiloon1234/Foundry-Go/observability"
@@ -111,12 +113,18 @@ func TestConfigAndRoutesValidation(t *testing.T) {
 type captureFixture struct {
 	db       *database.DB
 	schema   string
-	recorder *httpcapture.Recorder
+	recorder *httpcapture.Recorder[httpcapture.Snapshot]
+	lane     *httpcapture.Lane[httpcapture.Snapshot]
 	store    *Store
 	clock    *testClock
 }
 
 func newCaptureFixture(t *testing.T, migrated bool) captureFixture {
+	t.Helper()
+	return newCaptureFixtureWith(t, migrated, DefaultConfig())
+}
+
+func newCaptureFixtureWith(t *testing.T, migrated bool, config Config) captureFixture {
 	t.Helper()
 	scope := pgtest.Isolate(t)
 	f := captureFixture{db: scope.Open(t), schema: scope.Schema(), clock: newTestClock(testInstant(30))}
@@ -124,10 +132,11 @@ func newCaptureFixture(t *testing.T, migrated bool) captureFixture {
 		f.migrate(t)
 	}
 	var err error
-	if f.recorder, err = NewRecorder(DefaultConfig()); err != nil {
+	if f.recorder, err = NewRecorder(config); err != nil {
 		t.Fatal(err)
 	}
-	if f.store, err = New(f.recorder, Dependencies{DB: f.db, Schema: f.schema, Clock: f.clock, Logger: discardLogger()}, DefaultConfig()); err != nil {
+	f.lane = f.recorder.NewLane()
+	if f.store, err = New(f.recorder, Dependencies{DB: f.db, Schema: f.schema, Clock: f.clock, Logger: discardLogger()}, config); err != nil {
 		t.Fatal(err)
 	}
 	return f
@@ -152,19 +161,19 @@ func (f captureFixture) migrate(t *testing.T) {
 
 func (f captureFixture) complete(t *testing.T, s httpcapture.Snapshot) {
 	t.Helper()
-	reservation := f.recorder.Reserve()
+	reservation := f.lane.Reserve(httpcapture.MetadataBytes)
 	if reservation == nil {
 		t.Fatal("recorder refused a test capture")
 	}
-	reservation.Complete(s)
+	reservation.Complete(s, httpcapture.MetadataBytes)
 }
 
 func (f captureFixture) count(t *testing.T) int64 {
 	t.Helper()
 	var n int64
-	if err := f.store.scope.Transaction(t.Context(), true, func(tx *database.Tx) error {
+	if err := f.store.log.Transaction(t.Context(), true, func(tx *database.Tx) error {
 		var err error
-		n, err = store.Count(t.Context(), tx)
+		n, err = orm.Count(t.Context(), tx, store.Captures.Query())
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -284,7 +293,7 @@ func TestPostgresCaptureWriterReadsAndShutdownDrain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(detail.Body) != `{"token":"[masked]","amount":12}` || detail.Headers[0].Values[0] != maskedValue || string(detail.ResponseHead) != `{"ok":true}` || detail.Request.BodyState != BodyJSON {
+	if string(detail.Body) != `{"token":"[masked]","amount":12}` || detail.Headers[0].Values[0] != capturedisclosure.Masked || string(detail.ResponseHead) != `{"ok":true}` || detail.Request.BodyState != BodyJSON {
 		t.Fatal("detail lost redacted content", string(detail.Body))
 	}
 	if want := []CapturedField{{Name: "Set-Cookie", Values: []string{"sid=abc", "theme=dark"}}, {Name: "X-Request-Id", Values: []string{string(testRequestID)}}}; !reflect.DeepEqual(detail.ResponseHeaders, want) {
@@ -311,7 +320,7 @@ func TestPostgresCaptureWriterReadsAndShutdownDrain(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-f.store.Done()
-	if f.count(t) != 3 || f.recorder.Reserve() != nil {
+	if f.count(t) != 3 || f.lane.Reserve(1) != nil {
 		t.Fatal("shutdown did not drain the queue or seal admission")
 	}
 }
@@ -348,9 +357,9 @@ func TestPostgresCaptureStoresEmptyBodiesAndResponses(t *testing.T) {
 
 func TestPostgresCaptureUnavailableTableDegradesAndCarriesLoss(t *testing.T) {
 	f := newCaptureFixture(t, false)
-	f.store.check(t.Context())
+	f.store.log.Check(t.Context())
 	f.complete(t, snapshot("application/json", []byte(`{}`)))
-	f.store.flush(t.Context(), t.Context())
+	f.store.log.Flush(t.Context())
 	if f.recorder.Drops()[httpcapture.DropWrite] != 1 {
 		t.Fatal("capture without a table was not counted as lost")
 	}
@@ -358,11 +367,11 @@ func TestPostgresCaptureUnavailableTableDegradesAndCarriesLoss(t *testing.T) {
 		t.Fatal("lost capture still holds recorder capacity", active, retained)
 	}
 	f.migrate(t)
-	f.store.check(t.Context())
+	f.store.log.Check(t.Context())
 	next := snapshot("application/json", []byte(`{}`))
 	next.Metadata.RequestID = testID(4)
 	f.complete(t, next)
-	f.store.flush(t.Context(), t.Context())
+	f.store.log.Flush(t.Context())
 	detail, err := f.store.find(t.Context(), testID(4))
 	if err != nil || detail.Request.DroppedBefore != 1 {
 		t.Fatal("next stored capture did not report the earlier loss", err)
@@ -370,20 +379,21 @@ func TestPostgresCaptureUnavailableTableDegradesAndCarriesLoss(t *testing.T) {
 }
 
 func TestPostgresCaptureRetentionByAgeThenRowCap(t *testing.T) {
-	f := newCaptureFixture(t, true)
-	f.store.config.MaxRows = 1_000
+	config := DefaultConfig()
+	config.MaxRows = 1_000
+	f := newCaptureFixtureWith(t, true, config)
 	const total = 1_010
 	rows := make([]store.Capture, 0, total)
 	for i := range total {
 		s := snapshot("application/json", []byte(`{}`))
 		s.Metadata.RequestID, s.Metadata.ReceivedAt = testID(100+i), testInstant(0).Add(-time.Duration(total-i)*time.Second)
-		row, err := redact(s, f.store.policy)
+		row, err := redact(s, testPolicy())
 		if err != nil {
 			t.Fatal(err)
 		}
 		rows = append(rows, row)
 	}
-	if err := f.store.scope.Transaction(t.Context(), false, func(tx *database.Tx) error {
+	if err := f.store.log.Transaction(t.Context(), false, func(tx *database.Tx) error {
 		if err := store.Insert(t.Context(), tx, rows[:1000]); err != nil {
 			return err
 		}
@@ -395,38 +405,38 @@ func TestPostgresCaptureRetentionByAgeThenRowCap(t *testing.T) {
 		t.Fatal("insert or replayed request ID failed", err)
 	}
 	cutoff := dateTime(t, testInstant(0).Add(-(total-5)*time.Second))
-	estimate, err := f.store.pruneEstimate(t.Context(), cutoff, false)
+	estimate, err := f.store.log.Estimate(t.Context(), cutoff, false)
 	if err != nil || estimate != 5 {
 		t.Fatal("age estimate changed", estimate, err)
 	}
-	removed, behind, err := f.store.prune(t.Context(), cutoff, false, 2, pruneBatches)
+	removed, behind, err := f.store.log.Prune(t.Context(), cutoff, false, 2, capturelog.PruneBatches)
 	if err != nil || removed != 5 || behind || f.count(t) != total-5 {
 		t.Fatal("age pruning changed", removed, behind, err)
 	}
-	estimate, err = f.store.pruneEstimate(t.Context(), cutoff, true)
+	estimate, err = f.store.log.Estimate(t.Context(), cutoff, true)
 	if err != nil || estimate != 5 {
 		t.Fatal("cap estimate changed", estimate, err)
 	}
-	removed, behind, err = f.store.prune(t.Context(), cutoff, true, 1, 3)
+	removed, behind, err = f.store.log.Prune(t.Context(), cutoff, true, 1, 3)
 	if err != nil || removed != 2 || !behind {
 		t.Fatal("bounded pass did not report it is behind", removed, behind, err)
 	}
-	f.store.prunePass(t.Context())
+	f.store.log.PrunePass(t.Context())
 	if f.count(t) != 1_000 {
 		t.Fatal("scheduled pass did not reach the row cap", f.count(t))
 	}
 	if _, err := f.store.find(t.Context(), testID(100+total-1)); err != nil {
 		t.Fatal("row cap removed the newest capture", err)
 	}
-	err = f.store.scope.Transaction(t.Context(), false, func(tx *database.Tx) error {
-		locked, err := store.Lock(t.Context(), tx, f.schema)
+	err = f.store.log.Transaction(t.Context(), false, func(tx *database.Tx) error {
+		locked, err := f.store.log.Lock(t.Context(), tx)
 		if err != nil || !locked {
 			return fmt.Errorf("lock not taken: %v", err)
 		}
-		_, _, err = f.store.prune(t.Context(), cutoff, true, 1, 1)
+		_, _, err = f.store.log.Prune(t.Context(), cutoff, true, 1, 1)
 		return err
 	})
-	if !errors.Is(err, errRetentionBusy) {
+	if !errors.Is(err, capturelog.ErrRetentionBusy) {
 		t.Fatal("concurrent retention did not yield to the lock holder", err)
 	}
 }
@@ -446,22 +456,22 @@ func TestPostgresCapturePruneCommand(t *testing.T) {
 	for i, at := range []time.Time{testInstant(0).Add(-40 * 24 * time.Hour), testInstant(0).Add(-35 * 24 * time.Hour), testInstant(0)} {
 		s := snapshot("application/json", []byte(`{}`))
 		s.Metadata.RequestID, s.Metadata.ReceivedAt = testID(500+i), at
-		row, err := redact(s, f.store.policy)
+		row, err := redact(s, testPolicy())
 		if err != nil {
 			t.Fatal(err)
 		}
 		rows = append(rows, row)
 	}
-	if err := f.store.scope.Transaction(t.Context(), false, func(tx *database.Tx) error { return store.Insert(t.Context(), tx, rows) }); err != nil {
+	if err := f.store.log.Transaction(t.Context(), false, func(tx *database.Tx) error { return store.Insert(t.Context(), tx, rows) }); err != nil {
 		t.Fatal(err)
 	}
 	run := func(args ...string) (string, error) {
-		command, err := ParsePrune(args, io.Discard)
+		command, err := capturelog.ParsePrune("webhook-captures", args, io.Discard)
 		if err != nil {
 			return "", err
 		}
 		var output strings.Builder
-		err = command.Run(t.Context(), f.store, &output)
+		err = command.Run(t.Context(), f.store.log, &output)
 		return output.String(), err
 	}
 	if out, err := run("prune"); err != nil || out != "2 webhook captures match; rerun with --apply to remove them\n" || f.count(t) != 3 {
@@ -474,7 +484,7 @@ func TestPostgresCapturePruneCommand(t *testing.T) {
 		t.Fatal("explicit cutoff did not purge", out, err)
 	}
 	for _, args := range [][]string{{"other"}, {"prune", "--batch", "0"}, {"prune", "--format", "xml"}, {"prune", "extra"}} {
-		if _, err := ParsePrune(args, io.Discard); err == nil {
+		if _, err := capturelog.ParsePrune("webhook-captures", args, io.Discard); err == nil {
 			t.Fatal("invalid prune arguments accepted", args)
 		}
 	}

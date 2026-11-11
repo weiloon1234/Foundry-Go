@@ -10,6 +10,8 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/http/pagination"
+	"github.com/weiloon1234/Foundry-Go/internal/capturedisclosure"
+	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	store "github.com/weiloon1234/Foundry-Go/internal/webhookcapturestore"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -17,25 +19,7 @@ import (
 
 var errWindow = invalid("webhook capture list requires from and a window of at most 30 days")
 
-const (
-	maxReads    = 2
-	readTimeout = 2 * time.Second
-	maxWindow   = 30 * 24 * time.Hour
-)
-
-// read admits at most maxReads concurrent viewer reads, each bounded by
-// readTimeout including the wait for a slot.
-func (s *Store) read(ctx context.Context, fn func(context.Context, *database.Tx) error) error {
-	ctx, cancel := context.WithTimeout(ctx, readTimeout)
-	defer cancel()
-	select {
-	case s.reads <- struct{}{}:
-	case <-ctx.Done():
-		return http.Unavailable.WithCause(ctx.Err())
-	}
-	defer func() { <-s.reads }()
-	return s.scope.Transaction(ctx, true, func(tx *database.Tx) error { return fn(ctx, tx) })
-}
+const maxWindow = 30 * 24 * time.Hour
 
 // list reads one newest-first page inside a bounded window. Rows past
 // retention are dropped from the page even before pruning removes them.
@@ -67,12 +51,12 @@ func (s *Store) list(ctx context.Context, filters CapturedRequestFilters, reques
 	if mode, set := filters.Mode.Get(); set {
 		q = q.Where(orm.TextEq(c.BodyMode, string(mode)))
 	}
-	cutoff, err := s.retentionCutoff()
+	cutoff, err := s.log.Cutoff()
 	if err != nil {
 		return pagination.CursorResult[store.Summary, CapturedRequest]{}, err
 	}
 	var page orm.CursorPage[store.Summary]
-	err = s.read(ctx, func(ctx context.Context, tx *database.Tx) error {
+	err = s.log.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
 		page, err = store.Page(ctx, tx, q, request)
 		return err
@@ -101,14 +85,14 @@ func (s *Store) find(ctx context.Context, request attribution.RequestID) (Captur
 	if err != nil {
 		return CapturedRequestDetail{}, http.NotFound.WithCause(err)
 	}
-	cutoff, err := s.retentionCutoff()
+	cutoff, err := s.log.Cutoff()
 	if err != nil {
 		return CapturedRequestDetail{}, err
 	}
 	var row store.Capture
-	err = s.read(ctx, func(ctx context.Context, tx *database.Tx) error {
+	err = s.log.Read(ctx, func(ctx context.Context, tx *database.Tx) error {
 		var err error
-		row, err = store.Find(ctx, tx, id, cutoff)
+		row, err = s.log.Find(ctx, tx, id, cutoff)
 		return err
 	})
 	if errors.Is(err, database.NotFound) {
@@ -176,19 +160,19 @@ func presentDetail(row store.Capture) (CapturedRequestDetail, error) {
 	}
 	return CapturedRequestDetail{
 		Request: summary, Headers: headers, Query: query, ContentType: row.ContentType, ContentEncoding: row.ContentEncoding,
-		Body: nonNil(row.Body), ResponseContentType: row.ResponseContentType, ResponseEncoding: row.ResponseEncoding,
-		ResponseBytes: row.ResponseBytes, ResponseHead: nonNil(row.ResponseHead), ResponseHeaders: responseHeaders, Omissions: omissions,
+		Body: capturedisclosure.NonNil(row.Body), ResponseContentType: row.ResponseContentType, ResponseEncoding: row.ResponseEncoding,
+		ResponseBytes: row.ResponseBytes, ResponseHead: capturedisclosure.NonNil(row.ResponseHead), ResponseHeaders: responseHeaders, Omissions: omissions,
 	}, nil
 }
 
-func fields(stored value.JSON[[]store.Field]) ([]CapturedField, error) {
+func fields(stored value.JSON[[]httpcapture.Field]) ([]CapturedField, error) {
 	decoded, err := stored.Decode()
 	if err != nil {
 		return nil, err
 	}
 	result := make([]CapturedField, len(decoded))
 	for i, field := range decoded {
-		result[i] = CapturedField{Name: field.Name, Values: nonNil(field.Values)}
+		result[i] = CapturedField{Name: field.Name, Values: capturedisclosure.NonNil(field.Values)}
 	}
 	return result, nil
 }

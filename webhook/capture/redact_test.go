@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
+	"github.com/weiloon1234/Foundry-Go/internal/capturedisclosure"
 	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	store "github.com/weiloon1234/Foundry-Go/internal/webhookcapturestore"
 	"github.com/weiloon1234/Foundry-Go/observability"
@@ -117,7 +118,7 @@ func TestRedactFullModeIsExactAndForceRedactedReducesIt(t *testing.T) {
 	}
 	headers, _ := row.Headers.Decode()
 	query, _ := row.Query.Decode()
-	if headers[0].Values[0] != maskedValue || headers[1].Values[0] != "t=1,v1=abc" || query[0].Values[0] != maskedValue || query[1].Values[0] != maskedValue || query[2].Values[0] != "1" {
+	if headers[0].Values[0] != capturedisclosure.Masked || headers[1].Values[0] != "t=1,v1=abc" || query[0].Values[0] != capturedisclosure.Masked || query[1].Values[0] != capturedisclosure.Masked || query[2].Values[0] != "1" {
 		t.Fatal("full mode bypassed header or query masking", headers, query)
 	}
 	p := testPolicy()
@@ -153,21 +154,20 @@ func TestRedactFormMultipartQueryAndMetadata(t *testing.T) {
 	s.Metadata.PathTruncated, s.Metadata.HeadersTruncated = true, true
 	s.Completion.ResponseTruncated, s.Completion.Aborted, s.Completion.Status = true, true, value.Nullable[uint16]{}
 	s.Completion.Result = observability.Result{Outcome: observability.Panicked}
-	s.DroppedBefore = 7
 	row, err := redact(s, p)
 	if err != nil {
 		t.Fatal(err)
 	}
 	omissions, _ := row.Omissions.Decode()
 	query, _ := row.Query.Decode()
-	if row.BodyState != string(BodyEmpty) || len(query) != 0 || row.ResponseState != string(ResponseAborted) || row.Outcome != observability.Panicked || !row.ResponseStatus.IsNull() || row.DroppedBefore != 7 ||
+	if row.BodyState != string(BodyEmpty) || len(query) != 0 || row.ResponseState != string(ResponseAborted) || row.Outcome != observability.Panicked || !row.ResponseStatus.IsNull() ||
 		!slices.Equal(omissions, []string{"path_truncated", "query_malformed", "headers_truncated", "response_truncated"}) {
 		t.Fatal("metadata facts changed", row.BodyState, omissions, query, row.ResponseState)
 	}
 	s.Metadata.RawQuery, s.Metadata.QueryTruncated = "a=1&token=secret&b=par", true
 	row, _ = redact(s, p)
 	query, _ = row.Query.Decode()
-	if len(query) != 2 || query[1].Values[0] != maskedValue {
+	if len(query) != 2 || query[1].Values[0] != capturedisclosure.Masked {
 		t.Fatal("truncated query kept its partial last pair or leaked a credential", query)
 	}
 	if _, err := redact(httpcapture.Snapshot{Metadata: httpcapture.Metadata{RequestID: "not-a-uuid"}}, p); err == nil {
@@ -176,7 +176,8 @@ func TestRedactFormMultipartQueryAndMetadata(t *testing.T) {
 }
 
 func TestRedactSensitiveHeaderNames(t *testing.T) {
-	for name, masked := range map[string]bool{"Authorization": true, "Proxy-Authorization": true, "Cookie": true, "X-Api-Key": true, "X-Auth-Token": true, "Stripe-Signature": false, "X-Hub-Signature-256": false, "Content-Type": false} {
+	for name, masked := range map[string]bool{"Authorization": true, "Proxy-Authorization": true, "Cookie": true, "X-Api-Key": true, "X-Auth-Token": true, "Stripe-Signature": false, "X-Hub-Signature-256": false, "Content-Type": false,
+		"X-Auth-Key": true, "X-RapidAPI-Key": true, "Ocp-Apim-Subscription-Key": true, "Idempotency-Key": false, "X-Author": false} {
 		s := snapshot("application/json", nil)
 		s.Metadata.Headers = []httpcapture.Field{{Name: name, Values: []string{"value"}}}
 		s.Completion.ResponseHeaders = []httpcapture.Field{{Name: name, Values: []string{"sent"}}}
@@ -186,7 +187,7 @@ func TestRedactSensitiveHeaderNames(t *testing.T) {
 		}
 		request, _ := row.Headers.Decode()
 		response, _ := row.ResponseHeaders.Decode()
-		if request[0].Name != name || (request[0].Values[0] == maskedValue) != masked {
+		if request[0].Name != name || (request[0].Values[0] == capturedisclosure.Masked) != masked {
 			t.Fatal("request header disclosure rule changed for", name, request[0].Values)
 		}
 		if response[0].Name != name || response[0].Values[0] != "sent" {
@@ -220,50 +221,3 @@ func TestRedactStoresOnlyValidText(t *testing.T) {
 		t.Fatal("sanitized metadata exceeded its column bound or kept an IP zone", len(row.Path), ip)
 	}
 }
-
-func FuzzRedactJSON(f *testing.F) {
-	for _, seed := range []string{`{"a":1}`, `[{"token":{"x":[1,2]}},"s"]`, `{"a":"é\ud800"}`, `"x"`, `{`, `{"a":1}{}`} {
-		f.Add([]byte(seed))
-	}
-	p := testPolicy()
-	p.valueBytes, p.bodyBytes = 16, 1<<16
-	f.Fuzz(func(t *testing.T, raw []byte) {
-		out, err := redactJSON(raw, p)
-		if err != nil {
-			if !errorsIsKnown(err) {
-				t.Fatal("unexpected redaction error", err)
-			}
-			return
-		}
-		if !json.Valid(out) || len(out) > p.bodyBytes {
-			t.Fatal("redaction produced invalid or unbounded JSON")
-		}
-		if !json.Valid(raw) {
-			t.Fatal("redaction accepted input that is not one valid JSON value")
-		}
-	})
-}
-
-func FuzzRedactFields(f *testing.F) {
-	for _, seed := range []string{"a=1&b=2", "token=x&token=y", "%zz", "a&&b=", "signature=s"} {
-		f.Add(seed, false)
-	}
-	f.Fuzz(func(t *testing.T, raw string, truncated bool) {
-		fields, _, valid := redactFields(raw, truncated, testPolicy(), sensitiveQueryName)
-		if !valid {
-			return
-		}
-		if len(fields) > maxFormFields {
-			t.Fatal("field cap exceeded")
-		}
-		for _, field := range fields {
-			for _, v := range field.Values {
-				if sensitiveQueryName(field.Name) && v != maskedValue {
-					t.Fatal("credential query value disclosed")
-				}
-			}
-		}
-	})
-}
-
-func errorsIsKnown(err error) bool { return err == errMalformed || err == errLimit }

@@ -14,7 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 )
 
-func captureSocketServer(t *testing.T, handler stdhttp.Handler, recorder *httpcapture.Recorder, readTimeout time.Duration) string {
+func captureSocketServer(t *testing.T, handler stdhttp.Handler, recorder *httpcapture.Recorder[httpcapture.Snapshot], readTimeout time.Duration) string {
 	t.Helper()
 	config := DefaultServerConfig()
 	config.Address = "127.0.0.1:0"

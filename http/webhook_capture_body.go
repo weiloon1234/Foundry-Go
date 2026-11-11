@@ -167,8 +167,8 @@ func (c *captureResponse) commit(header stdhttp.Header) {
 	}
 	c.committed = true
 	var typeCut, encodingCut, headersCut bool
-	c.contentType, typeCut = captureString(header.Get("Content-Type"), 256)
-	c.encoding, encodingCut = captureString(header.Get("Content-Encoding"), 256)
-	c.headers, headersCut = captureHeaders(header)
+	c.contentType, typeCut = httpcapture.Clip(header.Get("Content-Type"), 256)
+	c.encoding, encodingCut = httpcapture.Clip(header.Get("Content-Encoding"), 256)
+	c.headers, headersCut = httpcapture.Headers(header)
 	c.metadataTruncated = typeCut || encodingCut || headersCut
 }

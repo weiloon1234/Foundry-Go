@@ -9,11 +9,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-type Field struct {
-	Name   string
-	Values []string
-}
-
 type Metadata struct {
 	RequestID                                                       attribution.RequestID
 	ReceivedAt                                                      time.Time
@@ -73,9 +68,10 @@ type Completion struct {
 	Duration                              time.Duration
 }
 
+// Snapshot is one inbound webhook request. Its loss count travels on the
+// Record that carries it.
 type Snapshot struct {
-	Metadata      Metadata
-	Body          Body
-	Completion    Completion
-	DroppedBefore uint64
+	Metadata   Metadata
+	Body       Body
+	Completion Completion
 }

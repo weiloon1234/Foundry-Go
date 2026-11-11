@@ -6,17 +6,12 @@ package webhookcapturestore
 import (
 	"fmt"
 
+	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
-
-// Field is one header, query or form name with its retained values.
-type Field struct {
-	Name   string   `json:"name"`
-	Values []string `json:"values"`
-}
 
 // Capture is one row of foundry_webhook_captures. The writer inserts it once
 // and retention deletes it; nothing updates a row. Text columns BodyMode,
@@ -30,8 +25,8 @@ type Capture struct {
 	Path                string
 	Route               value.Nullable[string]
 	ClientIP            value.Nullable[string]
-	Headers             value.JSON[[]Field]
-	Query               value.JSON[[]Field]
+	Headers             value.JSON[[]httpcapture.Field]
+	Query               value.JSON[[]httpcapture.Field]
 	ContentType         string
 	ContentEncoding     string
 	DeclaredBytes       value.Nullable[int64]
@@ -48,7 +43,7 @@ type Capture struct {
 	ResponseEncoding    string
 	ResponseBytes       int64
 	ResponseHead        []byte
-	ResponseHeaders     value.JSON[[]Field]
+	ResponseHeaders     value.JSON[[]httpcapture.Field]
 	DurationMS          int64
 	Omissions           value.JSON[[]string]
 	DroppedBefore       int64

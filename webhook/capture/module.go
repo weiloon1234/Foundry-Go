@@ -26,7 +26,7 @@ func Module(name foundation.ProviderID, key foundation.Key[*Store], requires []f
 		if err != nil {
 			return err
 		}
-		if s == nil || s.done == nil {
+		if s == nil || s.log == nil {
 			return invalid("webhook capture factory returned an uninitialized store")
 		}
 		if err := r.OnShutdown("webhook-capture", func(ctx context.Context) error {

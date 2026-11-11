@@ -39,7 +39,8 @@ func CapturePrefix(prefix PathPrefix, options ...CaptureOption) CaptureDeclarati
 }
 
 type capturePolicy struct {
-	recorder *httpcapture.Recorder
+	recorder *httpcapture.Recorder[httpcapture.Snapshot]
+	lane     *httpcapture.Lane[httpcapture.Snapshot]
 	prefixes []CaptureDeclaration
 }
 
@@ -120,7 +121,7 @@ func ValidateCaptureDeclarations(declarations ...CaptureDeclaration) error {
 // WithWebhookCapture attaches the framework's static recorder, once, outside
 // middleware. The internal recorder cannot be constructed by applications.
 // Ordinary application assembly supplies it on behalf of Go declarations.
-func WithWebhookCapture(recorder *httpcapture.Recorder, declarations ...CaptureDeclaration) ServerOption {
+func WithWebhookCapture(recorder *httpcapture.Recorder[httpcapture.Snapshot], declarations ...CaptureDeclaration) ServerOption {
 	declarations = slices.Clone(declarations)
 	return func(o *serverOptions) error {
 		if recorder == nil || o.capture != nil {
@@ -133,13 +134,13 @@ func WithWebhookCapture(recorder *httpcapture.Recorder, declarations ...CaptureD
 		slices.SortFunc(prefixes, func(a, b CaptureDeclaration) int {
 			return cmp.Compare(len(b.prefix.normalized()), len(a.prefix.normalized()))
 		})
-		o.capture = &capturePolicy{recorder: recorder, prefixes: prefixes}
+		o.capture = &capturePolicy{recorder: recorder, lane: recorder.NewLane(), prefixes: prefixes}
 		return nil
 	}
 }
 
 type kernelCapture struct {
-	reservation *httpcapture.Reservation
+	reservation *httpcapture.Reservation[httpcapture.Snapshot]
 	snapshot    httpcapture.Snapshot
 	limit       int
 	replay      *replayCaptureBody
@@ -160,7 +161,8 @@ func (p *capturePolicy) begin(r *stdhttp.Request, proxy *proxyPolicy, started ti
 	if selected == nil {
 		return nil
 	}
-	lease := p.recorder.Reserve()
+	// The whole body allowance is reserved before the preread, which is short.
+	lease := p.lane.Reserve(int64(p.recorder.BodyBytes() + 1 + httpcapture.MetadataBytes))
 	if lease == nil {
 		return nil
 	}
@@ -168,78 +170,16 @@ func (p *capturePolicy) begin(r *stdhttp.Request, proxy *proxyPolicy, started ti
 	if proxy != nil {
 		m.ClientIP = proxy.clientIP(r)
 	}
-	m.Method, m.MethodTruncated = captureString(r.Method, 32)
-	m.EscapedPath, m.PathTruncated = captureString(r.URL.EscapedPath(), 4<<10)
-	m.RawQuery, m.QueryTruncated = captureString(r.URL.RawQuery, 16<<10)
-	m.ContentType, m.ContentTypeTruncated = captureString(r.Header.Get("Content-Type"), 256)
-	m.ContentEncoding, m.ContentEncodingTruncated = captureString(r.Header.Get("Content-Encoding"), 256)
+	m.Method, m.MethodTruncated = httpcapture.Clip(r.Method, 32)
+	m.EscapedPath, m.PathTruncated = httpcapture.Clip(r.URL.EscapedPath(), 4<<10)
+	m.RawQuery, m.QueryTruncated = httpcapture.Clip(r.URL.RawQuery, 16<<10)
+	m.ContentType, m.ContentTypeTruncated = httpcapture.Clip(r.Header.Get("Content-Type"), 256)
+	m.ContentEncoding, m.ContentEncodingTruncated = httpcapture.Clip(r.Header.Get("Content-Encoding"), 256)
 	if r.ContentLength >= 0 {
 		m.DeclaredBytes = value.Of(r.ContentLength)
 	}
-	m.Headers, m.HeadersTruncated = captureHeaders(r.Header)
+	m.Headers, m.HeadersTruncated = httpcapture.Headers(r.Header)
 	return &kernelCapture{reservation: lease, snapshot: httpcapture.Snapshot{Metadata: m}, limit: p.recorder.BodyBytes(), head: &captureResponse{suppressBody: r.Method == stdhttp.MethodHead}}
-}
-
-func captureString(text string, limit int) (string, bool) {
-	return strings.Clone(text[:min(len(text), limit)]), len(text) > limit
-}
-
-func captureHeaders(header stdhttp.Header) ([]httpcapture.Field, bool) {
-	const budget = 16 << 10
-	// Keep only the first 128 canonical names while sorting, so the snapshot
-	// and its truncation never depend on map order. An oversized native header
-	// map must not allocate an unbudgeted full key inventory.
-	type namePair struct{ canonical, original string }
-	names := make([]namePair, 0, min(len(header), 128))
-	truncated := false
-	for original := range header {
-		if len(original) > 256 {
-			truncated = true
-			continue
-		}
-		name := namePair{stdhttp.CanonicalHeaderKey(original), original}
-		index, _ := slices.BinarySearchFunc(names, name, func(a, b namePair) int {
-			if order := strings.Compare(a.canonical, b.canonical); order != 0 {
-				return order
-			}
-			return strings.Compare(a.original, b.original)
-		})
-		if len(names) == 128 {
-			truncated = true
-			if index == 128 {
-				continue
-			}
-			names = names[:127]
-		}
-		names = slices.Insert(names, index, name)
-	}
-	remaining := budget
-	fields := make([]httpcapture.Field, 0, len(names))
-	entries := 0
-	for _, pair := range names {
-		name, values := pair.canonical, header[pair.original]
-		if len(fields) == 128 || remaining == 0 {
-			truncated = true
-			break
-		}
-		key, cut := captureString(name, min(256, remaining))
-		remaining -= len(key)
-		truncated = truncated || cut
-		field := httpcapture.Field{Name: key}
-		for _, raw := range values {
-			if entries == 128 || remaining == 0 {
-				truncated = true
-				break
-			}
-			text, cut := captureString(raw, min(4<<10, remaining))
-			field.Values = append(field.Values, text)
-			entries++
-			remaining -= len(text)
-			truncated = truncated || cut
-		}
-		fields = append(fields, field)
-	}
-	return fields, truncated
 }
 
 func (c *kernelCapture) finish(observation *requestObservation, response *observedResponse) {
@@ -274,7 +214,9 @@ func (c *kernelCapture) finish(observation *requestObservation, response *observ
 	completion.ResponseEncoding = c.head.encoding
 	completion.ResponseMetadataTruncated = c.head.metadataTruncated
 	s.Completion = completion
-	c.reservation.Complete(s)
+	// Prefix capacity, rather than length, accounts for a short preread's
+	// backing allocation. Metadata has a conservative fixed allowance.
+	c.reservation.Complete(s, int64(cap(s.Body.Prefix)+httpcapture.MetadataBytes))
 	// No payload remains owned by the request while extension observers run.
 	c.snapshot = httpcapture.Snapshot{}
 	c.head.prefix, c.head.headers = nil, nil

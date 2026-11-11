@@ -7,8 +7,10 @@ import (
 	"github.com/weiloon1234/Foundry-Go/foundation"
 	"github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
+	"github.com/weiloon1234/Foundry-Go/internal/capturelog"
 	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+	"github.com/weiloon1234/Foundry-Go/internal/webhookcapturestore"
 	"github.com/weiloon1234/Foundry-Go/webhook/capture"
 )
 
@@ -69,14 +71,14 @@ func (s Services) WebhookCaptures() (*capture.Store, error) { return Resolve(s, 
 // the declaration is removed or capture is disabled, using the configured
 // features.webhook_capture database, schema and retention.
 func WebhookCaptureCommand() (cli.Declaration, error) {
-	return capture.Command(func(r foundation.Resolver) (*capture.Store, error) {
+	return capturelog.Command("webhook-captures", "Count or prune stored webhook captures in bounded batches", func(r foundation.Resolver) (capturelog.Pruner, error) {
 		services, err := FromResolver(r)
 		if err != nil {
 			return nil, err
 		}
 		settings := services.features.WebhookCapture
-		if settings.declared {
-			return foundation.Resolve(r, WebhookCaptureKey)
+		if err := settings.Config.Validate(); err != nil {
+			return nil, err
 		}
 		if services.Databases == nil {
 			return nil, safeerror.NewFault(fault.Missing, "webhook capture database is not configured")
@@ -85,13 +87,13 @@ func WebhookCaptureCommand() (cli.Declaration, error) {
 		if err != nil {
 			return nil, err
 		}
-		return capture.New(nil, capture.Dependencies{DB: db, Schema: settings.Schema, Clock: services.clock, Logger: services.Logger}, settings.Config)
+		return capturelog.New[httpcapture.Snapshot](webhookcapturestore.Table(), nil, nil, capturelog.Dependencies{DB: db, Schema: settings.Schema, Clock: services.clock, Logger: services.Logger}, capturelog.Limits{Retention: settings.Config.Retention, MaxRows: settings.Config.MaxRows})
 	})
 }
 
 // prepareWebhookCapture builds the static recorder and its server option
 // without I/O. Disabled capture has neither; the store still registers.
-func prepareWebhookCapture(settings WebhookCaptureSettings, declarations []http.CaptureDeclaration) (*httpcapture.Recorder, http.ServerOption, error) {
+func prepareWebhookCapture(settings WebhookCaptureSettings, declarations []http.CaptureDeclaration) (*httpcapture.Recorder[httpcapture.Snapshot], http.ServerOption, error) {
 	if !settings.declared || !settings.Enabled {
 		return nil, nil, nil
 	}
@@ -102,7 +104,7 @@ func prepareWebhookCapture(settings WebhookCaptureSettings, declarations []http.
 	return recorder, http.WithWebhookCapture(recorder, declarations...), nil
 }
 
-func registerWebhookCapture(builder *foundation.Builder, settings WebhookCaptureSettings, recorder *httpcapture.Recorder) {
+func registerWebhookCapture(builder *foundation.Builder, settings WebhookCaptureSettings, recorder *httpcapture.Recorder[httpcapture.Snapshot]) {
 	if !settings.declared {
 		return
 	}

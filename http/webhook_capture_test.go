@@ -3,7 +3,6 @@ package http
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	stdhttp "net/http"
@@ -22,11 +21,11 @@ import (
 	"github.com/weiloon1234/Foundry-Go/webhook"
 )
 
-func captureTestRecorder(t testing.TB) *httpcapture.Recorder {
+func captureTestRecorder(t testing.TB) *httpcapture.Recorder[httpcapture.Snapshot] {
 	t.Helper()
 	c := httpcapture.DefaultConfig()
 	c.BodyBytes, c.Rate, c.Burst = 1024, 10000, 10000
-	r, err := httpcapture.New(c)
+	r, err := httpcapture.New[httpcapture.Snapshot](c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +40,7 @@ func captureTestRecorder(t testing.TB) *httpcapture.Recorder {
 
 // This fake store only consumes the static recorder. No database, lifecycle
 // provider or application wiring participates in kernel tests.
-func captureTestTake(t *testing.T, recorder *httpcapture.Recorder) httpcapture.Snapshot {
+func captureTestTake(t *testing.T, recorder *httpcapture.Recorder[httpcapture.Snapshot]) httpcapture.Snapshot {
 	t.Helper()
 	record := recorder.Drain()
 	if record == nil {
@@ -51,7 +50,7 @@ func captureTestTake(t *testing.T, recorder *httpcapture.Recorder) httpcapture.S
 	return record.Snapshot
 }
 
-func captureTestHandler(t testing.TB, next stdhttp.Handler, config ServerConfig, recorder *httpcapture.Recorder, observers ...RequestObserver) stdhttp.Handler {
+func captureTestHandler(t testing.TB, next stdhttp.Handler, config ServerConfig, recorder *httpcapture.Recorder[httpcapture.Snapshot], observers ...RequestObserver) stdhttp.Handler {
 	t.Helper()
 	prefix, err := ParsePathPrefix("/wh")
 	if err != nil {
@@ -186,7 +185,7 @@ func TestWebhookCaptureRoutingAndPrefixSelection(t *testing.T) {
 	if captured == nil || captured.snapshot.Metadata.Full || captured.snapshot.Metadata.Prefix != "/wh/debug" {
 		t.Fatal("longest declaration did not win")
 	}
-	captured.reservation.Complete(captured.snapshot)
+	captured.reservation.Complete(captured.snapshot, httpcapture.MetadataBytes)
 }
 
 func TestWebhookCaptureUnreadKernelRejections(t *testing.T) {
@@ -413,28 +412,6 @@ func TestWebhookCaptureAdmissionProxyAndBounds(t *testing.T) {
 	s := captureTestTake(t, recorder)
 	if s.Metadata.ClientIP.String() != "203.0.113.4" || len(s.Metadata.EscapedPath) != 4096 || !s.Metadata.PathTruncated || len(s.Metadata.RawQuery) != 16384 || !s.Metadata.QueryTruncated || !s.Metadata.HeadersTruncated {
 		t.Fatal("unbounded metadata or wrong proxy IP")
-	}
-}
-
-func TestWebhookCaptureHeaderBudgetIsDeterministic(t *testing.T) {
-	header := stdhttp.Header{}
-	for i := range 200 {
-		header.Set(fmt.Sprintf("X-Field-%03d", i), strings.Repeat("v", 200))
-	}
-	want, truncated := captureHeaders(header)
-	if !truncated || len(want) == 0 || want[0].Name != "X-Field-000" {
-		t.Fatal("header snapshot did not keep the lowest canonical names first", len(want), truncated)
-	}
-	for i := 1; i < len(want); i++ {
-		if want[i-1].Name >= want[i].Name {
-			t.Fatal("header snapshot is not sorted by canonical name")
-		}
-	}
-	for range 20 {
-		got, _ := captureHeaders(header)
-		if len(got) != len(want) || got[len(got)-1].Name != want[len(want)-1].Name {
-			t.Fatal("header budget depends on map iteration order")
-		}
 	}
 }
 

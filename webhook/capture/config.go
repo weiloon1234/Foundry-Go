@@ -63,17 +63,17 @@ func (c Config) Validate() error {
 }
 
 func (c Config) recorder() httpcapture.Config {
-	return httpcapture.Config{BodyBytes: c.BodyBytes, RetainedBytes: c.RetainedBytes, QueueSize: c.QueueRows, Rate: c.Rate, Burst: c.Burst}
+	return httpcapture.Config{BodyBytes: c.BodyBytes, RetainedBytes: c.RetainedBytes, QueueSize: c.QueueRows, Rate: c.Rate, Burst: c.Burst, LaneShare: 1}
 }
 
 // NewRecorder validates config and builds the static in-memory handoff that
 // the HTTP kernel fills and the Store drains. It performs no I/O and starts no
 // goroutine. Application assembly passes it to http.WithWebhookCapture and New.
-func NewRecorder(config Config) (*httpcapture.Recorder, error) {
+func NewRecorder(config Config) (*httpcapture.Recorder[httpcapture.Snapshot], error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	return httpcapture.New(config.recorder())
+	return httpcapture.New[httpcapture.Snapshot](config.recorder())
 }
 
 func invalid(message string) error { return safeerror.NewFault(fault.Invalid, message) }

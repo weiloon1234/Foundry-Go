@@ -34,7 +34,7 @@ func BenchmarkWebhookCapture(b *testing.B) {
 			})
 			limits := httpcapture.DefaultConfig()
 			limits.BodyBytes, limits.Rate, limits.Burst = 1024, 10000, 10000
-			recorder, err := httpcapture.New(limits)
+			recorder, err := httpcapture.New[httpcapture.Snapshot](limits)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -78,11 +78,11 @@ func BenchmarkWebhookCapture(b *testing.B) {
 							}
 						}
 						recorder.Seal()
-						recorder, err = httpcapture.New(limits)
+						recorder, err = httpcapture.New[httpcapture.Snapshot](limits)
 						if err != nil {
 							b.Fatal(err)
 						}
-						owner.capture.recorder = recorder
+						owner.capture.recorder, owner.capture.lane = recorder, recorder.NewLane()
 						cohort = 0
 					}
 				}

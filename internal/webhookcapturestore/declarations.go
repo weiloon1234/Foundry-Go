@@ -4,6 +4,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
+	"github.com/weiloon1234/Foundry-Go/internal/httpcapture"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/observability"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -20,9 +21,9 @@ type CaptureTable struct {
 	Path       orm.Text[Capture, string]
 	Route      orm.NullableText[Capture, string]
 	ClientIP   orm.NullableText[Capture, string]
-	Headers    orm.JSON[Capture, []Field]
+	Headers    orm.JSON[Capture, []httpcapture.Field]
 	// QueryFields binds Capture.Query; the name avoids Table.Query.
-	QueryFields         orm.JSON[Capture, []Field]
+	QueryFields         orm.JSON[Capture, []httpcapture.Field]
 	ContentType         orm.Text[Capture, string]
 	ContentEncoding     orm.Text[Capture, string]
 	DeclaredBytes       orm.NullableNumber[Capture, int64]
@@ -39,7 +40,7 @@ type CaptureTable struct {
 	ResponseEncoding    orm.Text[Capture, string]
 	ResponseBytes       orm.Number[Capture, int64]
 	ResponseHead        orm.Column[Capture, []byte]
-	ResponseHeaders     orm.JSON[Capture, []Field]
+	ResponseHeaders     orm.JSON[Capture, []httpcapture.Field]
 	DurationMS          orm.Number[Capture, int64]
 	Omissions           orm.JSON[Capture, []string]
 	DroppedBefore       orm.Number[Capture, int64]
