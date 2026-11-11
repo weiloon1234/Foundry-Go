@@ -1782,6 +1782,197 @@ class ReleaseTests(unittest.TestCase):
             release.activate(self.host, self.project, profile, "absent", "0" * 64)
         self.assertEqual([], self.host.commands)
 
+    def maintenance(self, action, **values):
+        from test_manage import manager
+        import upgrades
+        return manager.execute(self.host, action, {**upgrades.protocol_metadata(), "project": self.project,
+                               "profile": self.profile, "confirm": True, **values})
+
+    def test_maintenance_commands_record_clear_and_never_persist_bypass(self):
+        archive, manifest = self.bundle()
+        self.deploy(archive)
+        secret = "/GENERATED_SECRET_ONCE_1234"
+        with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0,
+                          json.dumps({"down": True, "bypass_path": secret}), "private stderr")) as run:
+            result = self.maintenance("down", message="Back soon", retry=60,
+                                      allow=["203.0.113.1", "2001:db8::/32"],
+                                      **{"except": ["POST /hooks/*"], "bypass": True})
+        self.assertEqual(secret, result["bypass_path"])
+        state = self.state()
+        self.assertEqual(result["maintenance"], state["maintenance"])
+        self.assertTrue(state["maintenance"]["down"])
+        self.assertRegex(state["maintenance"]["since"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        path = self.opt / "releases" / manifest["version"]
+        self.assertEqual(["runuser", "-u", self.entry["name"], "--", str(path / "artisan"), "down",
+                          "--config", str(path / "config/deploy.toml"), "--env-file", str(self.env_file),
+                          "--format", "json", "--message", "Back soon", "--retry", "60",
+                          "--allow", "203.0.113.1", "--allow", "2001:db8::/32", "--except", "POST /hooks/*",
+                          "--with-secret"], run.call_args.args[0])
+        self.assertEqual(60, run.call_args.kwargs["timeout"])
+        self.assertFalse(run.call_args.kwargs["check"])
+        for file in self.root.rglob("*"):
+            if file.is_file():
+                self.assertNotIn(secret.encode(), file.read_bytes(), str(file))
+        from test_manage import manager
+        import upgrades
+        status = manager.execute(self.host, "status", {**upgrades.protocol_metadata(), "project": self.project, "profile": self.profile})
+        self.assertEqual(state["maintenance"], status["maintenance"])
+        with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, '{"down":false}\n', "")) as run:
+            result = self.maintenance("up")
+        self.assertEqual({"maintenance": {"down": False}}, result)
+        self.assertNotIn("maintenance", self.state())
+        self.assertEqual(["up", "--config", str(path / "config/deploy.toml"), "--env-file", str(self.env_file),
+                          "--format", "json"], run.call_args.args[0][5:])
+
+    def test_maintenance_unavailable_is_redacted_and_preserves_state(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        before = self.state()
+        outputs = [(1, '{"down":true}'), (0, "private-secret"), (0, '{"down":true} {}'),
+                   (0, '{"down":1}'), (0, '{"down":false}'), (0, '{"down":true,"extra":"private"}'),
+                   (0, '{"down":true,"down":true}'), (0, " " * 4097), (0, '[]'),
+                   (0, '{"down":true,"bypass_path":"/short"}'),
+                   (0, '{"down":true,"bypass_path":"/has-invalid-dot.12345"}')]
+        for status, output in outputs:
+            with self.subTest(status=status, output=output), patch.object(self.host, "run", return_value=
+                    subprocess.CompletedProcess([], status, output, "private stderr")):
+                with self.assertRaises(DeployError) as error:
+                    self.maintenance("down", bypass=True)
+                self.assertEqual("maintenance_unavailable", error.exception.code)
+                self.assertEqual("The active release could not run `artisan down --format json`; deploy a release built on "
+                                 "Foundry-Go v0.20.0 or later that registers application.MaintenanceCommands() and sets maintenance.store.",
+                                 error.exception.detail)
+                self.assertEqual(before, self.state())
+        for action, output in (("up", '{"down":false,"bypass_path":"/GENERATED_SECRET_1234"}'),
+                               ("down", '{"down":true,"bypass_path":"/GENERATED_SECRET_1234"}')):
+            with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, output, "")):
+                with self.assertRaises(DeployError) as error:
+                    self.maintenance(action)
+                self.assertEqual("maintenance_unavailable", error.exception.code)
+        with patch.object(self.host, "run", side_effect=DeployError("command_unavailable", "private failure")):
+            with self.assertRaises(DeployError) as error:
+                self.maintenance("down")
+            self.assertEqual("maintenance_unavailable", error.exception.code)
+            self.assertNotIn("private", error.exception.detail)
+
+    def test_up_readiness_failure_clears_record_without_rollback(self):
+        archive, _ = self.bundle()
+        self.deploy(archive)
+        state = self.state()
+        state["maintenance"] = {"down": True, "since": now()}
+        self.host.save_state(self.entry, state)
+        current = state["current"]
+        def not_ready(host, entry):
+            self.assertNotIn("maintenance", host.load_state(entry))
+            return False
+        self.health.side_effect = not_ready
+        with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, '{"down":false}', "")), \
+                patch.object(release, "restore_code") as restore, patch.object(release, "rollback") as rollback:
+            with self.assertRaises(DeployError) as error:
+                self.maintenance("up")
+            self.assertEqual("readiness_failed", error.exception.code)
+            self.assertEqual("Maintenance mode is off but the release did not become ready; inspect ACTION=logs ROLE=http.",
+                             error.exception.detail)
+            restore.assert_not_called()
+            rollback.assert_not_called()
+        self.assertNotIn("maintenance", self.state())
+        self.assertEqual(current, self.state()["current"])
+        self.assertEqual(current["version"], release.current_version(self.host, self.entry))
+
+    def test_lifecycle_operations_while_down_use_liveness(self):
+        from test_manage import manager
+        import upgrades
+        first, one = self.bundle(1)
+        second, two = self.bundle(2)
+        self.deploy(first)
+        state = self.state()
+        recorded = {"down": True, "since": now()}
+        state["maintenance"] = recorded
+        self.host.save_state(self.entry, state)
+        original_run = self.host.run
+        units = instance_units(self.entry)
+        pids = {unit: str(index) for index, unit in enumerate(units.values(), 42)}
+
+        def command(args, **kwargs):
+            if args[0] == "ss":
+                output = f'LISTEN 0 4096 127.0.0.1:8100 0.0.0.0:* users:(("artisan",pid={pids[units["http"]]},fd=5))'
+                return subprocess.CompletedProcess(args, 0, output, "")
+            return original_run(args, **kwargs)
+
+        def service(host, unit, **kwargs):
+            executable = self.opt / "releases" / release.current_version(host, self.entry) / "artisan"
+            info = executable.stat()
+            return {"LoadState": "loaded", "ActiveState": host.role_states.get(unit, "inactive"),
+                    "MainPID": pids[unit], "NRestarts": "0", "ControlGroup": "/fixture/" + unit,
+                    "process": {"exe": str(executable), "device": info.st_dev, "inode": info.st_ino,
+                                "groups": ["/fixture/" + unit], "start": 1000}}
+
+        def response(url, **kwargs):
+            value = MagicMock()
+            value.__enter__.return_value = value
+            value.status = 200 if url.endswith("/health/live") else 503
+            value.read.return_value = b'{"status":"ok"}' if value.status == 200 else b'{"ready":false}'
+            return value
+
+        def health(host, entry, **kwargs):
+            return CHECK_READY(host, entry, **{**kwargs, "timeout": 0.1})
+
+        request = {**upgrades.protocol_metadata(), "project": self.project, "profile": self.profile, "confirm": True}
+        opener = MagicMock()
+        opener.open.side_effect = response
+        self.health.side_effect = health
+        with patch.object(self.host, "run", side_effect=command), patch.object(release, "service", side_effect=service), \
+                patch.object(release.urllib.request, "build_opener", return_value=opener), \
+                patch.object(release, "STABILITY_SECONDS", 0):
+            operations = [lambda: self.deploy(second),
+                          lambda: manager.execute(self.host, "restart", request),
+                          lambda: release.config_set(self.host, self.project, self.profile, {"PROJECT__NAME": "Changed"}),
+                          lambda: release.rollback(self.host, self.project, self.profile, one["version"], two["version"], str(uuid.uuid4()))]
+            for operation in operations:
+                opener.open.reset_mock()
+                operation()
+                self.assertEqual(recorded, self.state()["maintenance"])
+                self.assertTrue(opener.open.called)
+                self.assertTrue(all(call.args[0].endswith("/health/live") for call in opener.open.call_args_list))
+            self.host.interrupt = "restart"
+            with self.assertRaises(KeyboardInterrupt):
+                manager.execute(self.host, "restart", request)
+            self.host.interrupt = None
+            opener.open.reset_mock()
+            release.reconcile(self.host, self.project, self.profile)
+            self.assertEqual(recorded, self.state()["maintenance"])
+            self.assertTrue(opener.open.called)
+            self.assertTrue(all(call.args[0].endswith("/health/live") for call in opener.open.call_args_list))
+            self.assertEqual("healthy", self.state()["status"])
+
+    def test_maintenance_readiness_requires_exact_liveness_and_process_identity(self):
+        observations = self.process_observations()
+        state = self.state()
+        state["maintenance"] = {"down": True, "since": now()}
+        self.host.save_state(self.entry, state)
+        cases = [(200, b'{"status":"ok"}', 42, True), (503, b'{"status":"ok"}', 42, False),
+                 (200, b'{"ready":true}', 42, False), (200, b'{"status":"ok","extra":1}', 42, False),
+                 (200, b'{"status":"up"}', 42, False), (200, b' ' * 4097, 42, False),
+                 (200, b'{"status":"ok"}', 99, False)]
+        for status, body, pid, expected in cases:
+            def command(args, **kwargs):
+                output = observations.get(args[2], "")
+                if args[0] == "ss":
+                    output = f'LISTEN 0 4096 127.0.0.1:8100 0.0.0.0:* users:(("artisan",pid={pid},fd=5))'
+                return subprocess.CompletedProcess(args, 0, output, "")
+            response = MagicMock()
+            response.__enter__.return_value = response
+            response.status, response.read.return_value = status, body
+            opener = MagicMock()
+            opener.open.return_value = response
+            with self.subTest(status=status, body=body, pid=pid), patch.object(self.host, "run", side_effect=command), \
+                    patch.object(release.urllib.request, "build_opener", return_value=opener), \
+                    patch.object(release, "STABILITY_SECONDS", 0):
+                self.assertEqual(expected, CHECK_READY(self.host, self.entry, timeout=30 if expected else 0.01))
+            self.assertTrue(opener.open.called)
+            self.assertTrue(all(call.args[0].endswith("/health/live") for call in opener.open.call_args_list))
+            response.read.assert_called_with(4097)
+
     def test_readiness_requires_exact_json_and_the_selected_process_listener(self):
         observations = self.process_observations()
         cases = (

@@ -1,8 +1,10 @@
 # Copy these thin entry points into the application's Makefile.
 # ENVIRONMENT selects the profile. ACTION selects prepare/inspect/recover for bootstrap,
-# build for release, and deploy/status/rollback/restart/stop/logs/config/
+# build for release, and deploy/status/rollback/restart/stop/down/up/logs/config/
 # "keys rotate"/reconcile/report/sync/capacity/tools-plan/tools-apply for deploy.
 # Credential replacement: backup-keys-rotate / backup-recipients-rotate / dns-token-rotate.
+# Maintenance: ENVIRONMENT=staging ACTION=down CONFIRM=yes make deploy (or ACTION=up).
+# down options: MESSAGE / RETRY / ALLOW / EXCEPT / BYPASS=yes; up rejects all of them.
 # Rollback: make deploy ACTION=rollback TARGET=<release> EXPECTED_CURRENT=<release>
 # Resume: add OPERATION=<UUID printed before the original request>.
 # Secrets: use the hidden prompts or FOUNDRY_SECRET_<NAME>_FILE paths.

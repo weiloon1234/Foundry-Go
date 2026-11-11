@@ -275,6 +275,30 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(self.item(result)["recorded_status"], "healthy")
         self.assertIn({"code": "instance_state_inconsistent", "instance_id": INSTANCE_ID}, result["problems"])
 
+    def test_recorded_maintenance_explains_not_ready_without_hiding_service_failure(self):
+        release_dir = self.host.paths.opt("abc-production") / "releases" / "v1"
+        release_dir.mkdir(parents=True)
+        (self.host.paths.opt("abc-production") / "current").symlink_to(release_dir)
+        self.host.states[INSTANCE_ID].update(status="healthy", current={"version": "v1"},
+                                            maintenance={"down": True, "since": "2026-11-11T00:00:00Z"})
+        self.service.return_value = {"load": "loaded", "active": "active", "substate": "running",
+                                     "main_pid": 42, "exe": str(release_dir / "artisan")}
+        self.ready.return_value = {"ready": False, "http_status": 503}
+        result = report.collect_report(self.host)
+        item = self.item(result)
+        self.assertTrue(item["metadata_consistent"])
+        self.assertEqual("maintenance", item["readiness"]["status"])
+        self.assertFalse(item["readiness"]["ready"])
+        self.assertEqual(self.host.states[INSTANCE_ID]["maintenance"], item["maintenance"])
+        self.assertNotIn("instance_state_inconsistent", [p["code"] for p in result["problems"]])
+        self.service.return_value["active"] = "failed"
+        self.assertFalse(self.item(report.collect_report(self.host))["metadata_consistent"])
+        self.service.return_value["active"] = "active"
+        self.host.states[INSTANCE_ID].pop("maintenance")
+        item = self.item(report.collect_report(self.host))
+        self.assertIsNone(item["maintenance"])
+        self.assertFalse(item["metadata_consistent"])
+
     def test_rehearsal_checks_http_only_and_normal_instances_keep_all_checks(self):
         entry = self.host.registry["instances"][INSTANCE_ID]
         release_dir = self.host.paths.opt("abc-production") / "releases" / "v1"

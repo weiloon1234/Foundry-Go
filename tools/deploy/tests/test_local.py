@@ -157,6 +157,66 @@ class LocalDeploymentTests(unittest.TestCase):
                 self.assertEqual(role is not None, "role" in sent)
 
 
+    def test_maintenance_parameters_and_confirmation(self):
+        project, profile = fixture()
+        for action, parameters, expected in (
+            ("down", {"MESSAGE": "Back soon ✓", "RETRY": "0", "ALLOW": "203.0.113.1, 2001:db8::/32",
+                      "EXCEPT": "GET /health, POST /hooks/*", "BYPASS": "yes"},
+             {"message": "Back soon ✓", "retry": 0, "allow": ["203.0.113.1", "2001:db8::/32"],
+              "except": ["GET /health", "POST /hooks/*"], "bypass": True}),
+            ("down", {}, {}), ("up", {}, {}),
+        ):
+            remote = MagicMock()
+            remote.request.return_value = {"state": {}}
+            with patch.dict(os.environ, {"ACTION": action, **parameters}, clear=True), \
+                    patch.object(cli, "SSH", return_value=remote), patch.object(cli, "confirm") as confirm, \
+                    patch.object(cli, "display"), patch.object(cli, "say"), patch.object(cli, "remember_releases"):
+                cli.deploy(project, profile, {})
+            label = (f"Put {cli.instance_name(project, profile)} into maintenance mode" if action == "down"
+                     else f"Bring {cli.instance_name(project, profile)} out of maintenance mode")
+            confirm.assert_called_once_with(label)
+            self.assertEqual(["status", action], [call.args[0] for call in remote.request.call_args_list])
+            self.assertEqual({"project": project, "profile": profile, "confirm": True, **expected},
+                             remote.request.call_args.args[1])
+
+    def test_maintenance_rejects_invalid_parameters_before_ssh(self):
+        project, profile = fixture()
+        invalid = [("MESSAGE", "é" * 257), ("MESSAGE", "bad\nmessage"), ("MESSAGE", "bad\x7f"),
+                   ("RETRY", "86401"), ("RETRY", "-1"), ("RETRY", "1.5"), ("RETRY", "true"),
+                   ("ALLOW", "invalid"), ("ALLOW", "127.0.0.1,"), ("ALLOW", ",".join(["::1"] * 65)),
+                   ("EXCEPT", "get /health"), ("EXCEPT", "/a/../b"), ("EXCEPT", "GET relative"),
+                   ("EXCEPT", ",".join(["/health"] * 65)), ("BYPASS", "no")]
+        cases = [("down", name, value) for name, value in invalid]
+        cases += [("up", name, value) for name in ("MESSAGE", "RETRY", "ALLOW", "EXCEPT", "BYPASS")
+                  for value in ("", "yes")]
+        for action, name, value in cases:
+            with self.subTest(action=action, name=name, value=value), \
+                    patch.dict(os.environ, {"ACTION": action, name: value}, clear=True), patch.object(cli, "SSH") as ssh:
+                with self.assertRaises(cli.LocalError):
+                    cli.deploy(project, profile, {})
+                ssh.assert_not_called()
+        with patch.dict(os.environ, {"RETRY": "86400", "MESSAGE": "é" * 256}, clear=True):
+            self.assertEqual({"retry": 86400, "message": "é" * 256}, cli.maintenance_parameters("down"))
+
+    def test_maintenance_bypass_is_displayed_once_and_never_saved_locally(self):
+        project, profile = fixture()
+        secret = "/GENERATED_SECRET_ONCE_1234"
+        remote = MagicMock()
+        remote.request.side_effect = [{"state": {"instance_id": profile["instance_id"], "current": None, "previous": None}},
+                                      {"maintenance": {"down": True}, "bypass_path": secret}]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            output, diagnostic = io.StringIO(), io.StringIO()
+            with patch.dict(os.environ, {"ACTION": "down", "BYPASS": "yes", "CONFIRM": "yes"}, clear=True), \
+                    patch.object(cli, "ROOT", root), patch.object(cli, "SSH", return_value=remote), \
+                    contextlib.redirect_stdout(output), contextlib.redirect_stderr(diagnostic):
+                cli.deploy(project, profile, {})
+            self.assertEqual(1, output.getvalue().count(secret))
+            self.assertNotIn(secret, diagnostic.getvalue())
+            for path in root.rglob("*"):
+                if path.is_file():
+                    self.assertNotIn(secret.encode(), path.read_bytes())
+
     def test_logs_rejects_explicit_empty_role(self):
         project, profile = fixture()
         remote = MagicMock()

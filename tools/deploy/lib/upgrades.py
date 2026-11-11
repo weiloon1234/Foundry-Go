@@ -29,6 +29,7 @@ READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "confi
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
 REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", "lib/upgrades.py",
                             "lib/provision.py", "lib/recover.py", "lib/release.py", "lib/runtime_config.py",
+                            "lib/maintenance.py",
                             "lib/topology.py", "lib/report.py", "server/manage.py",
                             "server/report.py", "server/launcher.py", "lib/packages.py",
                             "lib/postgres.py", "lib/redis_acl.py", "lib/edge.py",

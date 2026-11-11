@@ -25,6 +25,7 @@ import (
 
 // DownArguments are the parsed `down` flags.
 type DownArguments struct {
+	Format     string
 	Retry      time.Duration
 	Message    string
 	Secret     string
@@ -33,9 +34,22 @@ type DownArguments struct {
 	Except     []maintenance.Rule
 }
 
-type upArguments struct{}
+type upArguments struct{ Format string }
+
+type maintenanceResult struct {
+	Down       bool   `json:"down"`
+	BypassPath string `json:"bypass_path,omitempty"`
+}
+
+func maintenanceFormat(format string) error {
+	if format != "text" && format != "json" {
+		return clidiag.Usage("format must be text or json")
+	}
+	return nil
+}
 
 var downCommand = cli.Define("down", "Put every instance sharing the maintenance store into maintenance mode", cli.Flags(func(flags *flag.FlagSet, args *DownArguments) {
+	flags.StringVar(&args.Format, "format", "text", "text or json")
 	flags.Func("retry", "Retry-After seconds advertised to clients (0-86400)", func(value string) error {
 		seconds, err := strconv.Atoi(value)
 		if err != nil || seconds < 0 || time.Duration(seconds)*time.Second > maintenance.MaxRetryAfter {
@@ -71,10 +85,14 @@ var downCommand = cli.Define("down", "Put every instance sharing the maintenance
 	if args.Secret != "" && args.WithSecret {
 		return clidiag.Usage("use either --secret or --with-secret")
 	}
-	return nil
+	return maintenanceFormat(args.Format)
 })).AllowDuringMaintenance()
 
-var upCommand = cli.Define("up", "Bring every instance sharing the maintenance store out of maintenance mode", cli.Flags(func(*flag.FlagSet, *upArguments) {}, nil)).AllowDuringMaintenance()
+var upCommand = cli.Define("up", "Bring every instance sharing the maintenance store out of maintenance mode", cli.Flags(func(flags *flag.FlagSet, args *upArguments) {
+	flags.StringVar(&args.Format, "format", "text", "text or json")
+}, func(args upArguments) error {
+	return maintenanceFormat(args.Format)
+})).AllowDuringMaintenance()
 
 // MaintenanceCommands returns the `down` and `up` operator commands. They run
 // while maintenance is paused and publish to the configured shared store, which
@@ -114,6 +132,13 @@ func MaintenanceCommands() ([]cli.Declaration, error) {
 			if err := maintenance.Publish(ctx, gate, store, state); err != nil {
 				return err
 			}
+			if args.Format == "json" {
+				result := maintenanceResult{Down: true}
+				if args.WithSecret {
+					result.BypassPath = "/" + secret
+				}
+				return json.NewEncoder(streams.Out).Encode(result)
+			}
 			if _, err := fmt.Fprintln(streams.Out, "Maintenance mode enabled."); err != nil {
 				return err
 			}
@@ -131,9 +156,12 @@ func MaintenanceCommands() ([]cli.Declaration, error) {
 		if err != nil {
 			return nil, err
 		}
-		return func(ctx context.Context, _ upArguments, streams cli.Streams) error {
+		return func(ctx context.Context, args upArguments, streams cli.Streams) error {
 			if err := maintenance.Publish(ctx, gate, store, maintenance.State{}); err != nil {
 				return err
+			}
+			if args.Format == "json" {
+				return json.NewEncoder(streams.Out).Encode(maintenanceResult{Down: false})
 			}
 			_, err := fmt.Fprintln(streams.Out, "Maintenance mode disabled.")
 			return err

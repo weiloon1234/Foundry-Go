@@ -266,3 +266,88 @@ func TestConfiguredMaintenanceAllowsMatchTheTrustedProxyClient(t *testing.T) {
 	cancel()
 	<-done
 }
+
+func TestMaintenanceCommandFormats(t *testing.T) {
+	for _, format := range []string{"", "text", "json"} {
+		t.Run(format, func(t *testing.T) {
+			s := sharedMaintenance(t, t.TempDir())
+			for _, action := range []string{"down", "up"} {
+				args := []string{action}
+				if format != "" {
+					args = append(args, "--format", format)
+				}
+				want := "Maintenance mode enabled.\n"
+				if action == "up" {
+					want = "Maintenance mode disabled.\n"
+				}
+				if format == "json" {
+					want = "{\"down\":true}\n"
+					if action == "up" {
+						want = "{\"down\":false}\n"
+					}
+				}
+				if output := runCommand(t, s, args...); output != want {
+					t.Fatalf("%s output = %q, want %q", action, output, want)
+				}
+			}
+		})
+	}
+}
+
+func TestDownOnlyPrintsGeneratedSecret(t *testing.T) {
+	for _, format := range []string{"text", "json"} {
+		for _, generated := range []bool{false, true} {
+			s := sharedMaintenance(t, t.TempDir())
+			args := []string{"down", "--format", format}
+			if generated {
+				args = append(args, "--with-secret")
+			} else {
+				args = append(args, "--secret", "caller-supplied-secret")
+			}
+			output := runCommand(t, s, args...)
+			if strings.Contains(output, "caller-supplied-secret") {
+				t.Fatal("caller secret was printed")
+			}
+			if format == "json" {
+				var result struct {
+					Down       bool   `json:"down"`
+					BypassPath string `json:"bypass_path"`
+				}
+				if err := json.Unmarshal([]byte(output), &result); err != nil || !result.Down {
+					t.Fatalf("invalid down JSON: %q (%v)", output, err)
+				}
+				if generated != strings.HasPrefix(result.BypassPath, "/") || (generated && len(result.BypassPath) < 17) {
+					t.Fatalf("unexpected bypass path: %q", output)
+				}
+				if !generated && output != "{\"down\":true}\n" {
+					t.Fatalf("caller secret added an output field: %q", output)
+				}
+			} else if generated {
+				prefix, suffix := "Maintenance mode enabled.\nBypass: visit /", " to receive the bypass cookie.\n"
+				if !strings.HasPrefix(output, prefix) || !strings.HasSuffix(output, suffix) {
+					t.Fatalf("text output changed: %q", output)
+				}
+			} else if output != "Maintenance mode enabled.\n" {
+				t.Fatalf("text output changed: %q", output)
+			}
+		}
+	}
+}
+
+func TestMaintenanceCommandRejectsInvalidFormat(t *testing.T) {
+	declarations, err := application.MaintenanceCommands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := cli.New(declarations...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"down", "up"} {
+		for _, format := range []string{"yaml", "", "JSON"} {
+			if _, err := registry.Parse([]string{action, "--format", format}, io.Discard); err == nil {
+				t.Fatalf("%s accepted format %q", action, format)
+			}
+		}
+	}
+}

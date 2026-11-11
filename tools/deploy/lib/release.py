@@ -580,6 +580,10 @@ def readiness_body(body):
     return isinstance(body, dict) and set(body) == {"ready"} and body["ready"] is True
 
 
+def liveness_body(body):
+    return isinstance(body, dict) and set(body) == {"status"} and body["status"] == "ok"
+
+
 def ready(host, entry, timeout=90, include_background=True, *, role="all", roles=None):
     try:
         with wall_clock_budget(timeout):
@@ -600,6 +604,8 @@ def _ready(host, entry, deadline, include_background=True, role="all", roles=Non
     if not include_background:
         units = {"http": units["http"]}
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    paused = host.load_state(entry).get("maintenance", {}).get("down") is True
+    endpoint, accepts = ("/health/live", liveness_body) if paused else ("/health/ready", readiness_body)
     tokens, stable_since = None, None
     while time.monotonic() < deadline:
         live = {role: service(host, unit, timeout=_remaining(deadline)) for role, unit in units.items()}
@@ -608,10 +614,10 @@ def _ready(host, entry, deadline, include_background=True, role="all", roles=Non
         healthy = all(_matches_executable(item, path / "artisan") for item in live.values())
         if healthy and "http" in units:
             try:
-                with opener.open(f"http://127.0.0.1:{entry['allocations']['http_port']}/health/ready", timeout=_remaining(deadline, 3)) as response:
+                with opener.open(f"http://127.0.0.1:{entry['allocations']['http_port']}{endpoint}", timeout=_remaining(deadline, 3)) as response:
                     payload = response.read(4097)
                     body = parse_json(payload) if len(payload) <= 4096 else None
-                    healthy = response.status == 200 and readiness_body(body)
+                    healthy = response.status == 200 and accepts(body)
                 listeners = host.run(["ss", "-Hltpn", f"sport = :{entry['allocations']['http_port']}"],
                                      check=False, timeout=_remaining(deadline))
                 healthy = (healthy and listeners.returncode == 0

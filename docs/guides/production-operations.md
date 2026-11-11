@@ -63,6 +63,13 @@ app down --retry 60 --message "Upgrading, back soon" --with-secret \
 app up
 ```
 
+Deploy-tool users can run `ENVIRONMENT=staging ACTION=down CONFIRM=yes make deploy`
+and `ACTION=up` to resume; see the [deployment guide](deployment.md) for optional
+parameters and the generation-7 tool upgrade. Both application commands accept
+`--format json` for automation (`{"down":true}` or `{"down":false}`); only a
+secret generated with `--with-secret` adds `bypass_path`. The default text output
+is unchanged and caller-supplied secrets are never echoed.
+
 `down` publishes the record; paused responses are 503 with the standard error
 envelope, the operator `message` and `Retry-After`. Operator messages are not
 logged as server failures. `--with-secret` prints a generated secret (or pass

@@ -38,6 +38,8 @@ remain in the selected module, and local state remains in the application direct
 | `ACTION=recover make bootstrap` | Recover an existing instance onto an empty replacement server |
 | `make release` | Build a local release archive |
 | `ENVIRONMENT=production ACTION=status make deploy` | Read the selected instance status |
+| `ACTION=down make deploy` | Put the selected instance into maintenance mode |
+| `ACTION=up make deploy` | Leave maintenance mode and verify readiness |
 | `ACTION=deploy make deploy` | Select or build a release, then request activation |
 | `ACTION=config make deploy` | Submit up to 16 related configuration values together |
 | `ACTION=report make deploy` | Read the public host report without sudo |
@@ -54,6 +56,58 @@ remain in the selected module, and local state remains in the application direct
 release version, or `build`. Interactive operations request confirmation after
 showing their plan. `CONFIRM=yes` supplies that confirmation in automation.
 Tool upgrades require the reviewed `PLAN_TOKEN` and a stable UUIDv4 in `OPERATION`.
+
+Put a deployed instance into maintenance mode and resume it with:
+
+```sh
+ENVIRONMENT=staging ACTION=down CONFIRM=yes make deploy
+ENVIRONMENT=staging ACTION=up CONFIRM=yes make deploy
+```
+
+Both actions show status and require confirmation. The active application must be
+built on Foundry-Go v0.20.0 or later, register `application.MaintenanceCommands()`
+in its CLI registry, and configure a shared non-null `maintenance.store`.
+The commands publish to that store, so other applications sharing the same
+maintenance namespace also pause or resume. The deploy tool records maintenance
+for the selected instance; use the tool for each affected instance so its lifecycle
+checks have the corresponding record.
+
+`down` accepts these optional environment variables; `up` rejects all of them
+when set, including empty values:
+
+| Parameter | Meaning |
+| --- | --- |
+| `MESSAGE` | Public UTF-8 message, at most 512 bytes, without control characters |
+| `RETRY` | Whole Retry-After seconds from 0 through 86400 |
+| `ALLOW` | Comma-separated IP addresses or CIDRs, at most 64 entries |
+| `EXCEPT` | Comma-separated `[METHOD ]/path[/*]` rules, at most 64 entries; methods are uppercase |
+| `BYPASS=yes` | Generate a bypass secret; other non-empty values are rejected |
+
+For example:
+
+```sh
+ENVIRONMENT=staging ACTION=down MESSAGE="Upgrading, back soon" RETRY=60 \
+  ALLOW="203.0.113.0/24" EXCEPT="POST /hooks/*" BYPASS=yes CONFIRM=yes make deploy
+```
+
+`BYPASS=yes` prints `bypass_path` once, in the JSON response to this action.
+Keep that path private: visiting it grants the maintenance bypass cookie. The
+path is never saved in server state, operation receipts, local `.deploy` files,
+logs, journals, or error messages. It cannot be retrieved from `status` or `report`.
+
+While maintenance is recorded, deploy, restart, configuration restarts,
+reconciliation and rollback verify `/health/live` instead of `/health/ready`.
+They still verify listener PID, executable identity, stability and background
+roles. Readiness remains false while paused because it describes admission of new
+work. `up` clears the recorded pause and verifies normal readiness; a readiness
+failure reports `readiness_failed` and leaves maintenance off without rolling back.
+Inspect `ACTION=logs ROLE=http` in that case.
+
+`status` and `report` show `maintenance: {"down":true,"since":"<UTC timestamp>"}`
+or `maintenance: null` when no pause is recorded. A report labels HTTP readiness
+as `maintenance` while a pause is recorded, without treating the expected
+not-ready response as a problem. Other service failures remain problems. Direct
+`artisan down`/`up` commands do not update the deploy tool's instance record.
 
 `ACTION=restart` and `ACTION=stop` accept `ROLE=http`, `ROLE=worker`, or
 `ROLE=scheduler` when that role is declared in the instance topology. Without
@@ -269,7 +323,7 @@ match both content and metadata.
 
 ## Tool protocol and upgrades
 
-`tools/deploy/protocol.json` owns protocol 2.0 and generation 6. The stable
+`tools/deploy/protocol.json` owns protocol 2.0 and generation 7. The stable
 launcher dispatches to the active immutable bundle. `hello` reports host metadata
 without a mutation. Requests include the client's protocol, framework version,
 generation, and bundle digest. The minimum client generation remains 1, so
@@ -282,7 +336,8 @@ installation. Older hosts receive `tools_upgrade_floor`: "Upgrade to v0.16.0 or
 v0.16.1 tools first, then retry the tool upgrade." The temporary upgrade bridges
 and finished-state cleanup are no longer shipped.
 
-To upgrade a generation-6 host:
+Before the next deploy or maintenance action, upgrade a generation-6 host to
+generation 7 through `tools-plan` and `tools-apply`:
 
 1. Repin the application to the desired published framework release.
 2. Run `ENVIRONMENT=production ACTION=tools-plan make deploy` and review the plan.
@@ -331,7 +386,11 @@ readiness, and then starts the declared background roles. Readiness checks every
 role and verifies its running executable through `/proc/<pid>/exe` against the
 selected release. `ACTION=status` returns live observations per role;
 `ACTION=logs ROLE=scheduler` reads that role's journal.
-HTTP readiness requires status 200 and exactly `{"ready":true}` at `/health/ready`, within 4096 bytes; listener PID, executable identity and stability checks still apply.
+HTTP readiness requires status 200 and exactly `{"ready":true}` at `/health/ready`,
+within 4096 bytes. During recorded maintenance, `/health/live` must instead return
+status 200 and exactly `{"status":"ok"}`, within the same bound. Keep both paths
+reachable while paused through `http.server.maintenance_read_paths`. Listener PID,
+executable identity and stability checks still apply.
 
 The nonroot report can read systemd state and HTTP readiness, but Linux may deny
 access to another account's executable link. In that case it reports
@@ -1001,7 +1060,7 @@ not prove application-specific invariants, existing ciphertext decryption, or
 large-database restore times. Verify those against representative application data
 before routing production traffic.
 
-Replacement-host recovery installs generation 6 on an empty target. For existing
+Replacement-host recovery installs generation 7 on an empty target. For existing
 hosts, follow the [tool upgrade procedure](#tool-protocol-and-upgrades).
 
 ## Host report

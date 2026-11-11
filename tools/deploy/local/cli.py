@@ -28,6 +28,7 @@ TOOLS_ROOT = Path(__file__).resolve().parents[1]
 ROOT: Path | None = None
 sys.path.insert(0, str(TOOLS_ROOT / "lib"))
 from edge import edge_findings
+import maintenance
 
 from contracts import (BACKUP_POLICY, DeployError, PREFIX, RENEWAL_WARNING, SCHEMA, PROFILE_SCHEMA, LAYOUT_VERSION, VERSION_PATTERN, atomic_json, check_path, digest, identity, instance_name, now, parse_json, read_json, slug,
                        validate_profile, validate_project)
@@ -41,7 +42,7 @@ COMMANDS = {
     "deploy": "interactive deployment, status, rollback, capacity and configuration",
     "release": "build a local Docker release without contacting a server",
 }
-ACTIONS = ("capacity", "deploy", "status", "rollback", "restart", "stop", "logs", "config", "keys rotate", "reconcile",
+ACTIONS = ("capacity", "deploy", "status", "rollback", "restart", "stop", "down", "up", "logs", "config", "keys rotate", "reconcile",
            "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run",
            "restore-drill", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate")
 
@@ -1000,12 +1001,42 @@ def declared_role(role):
     return role
 
 
+def maintenance_parameters(action):
+    values = {}
+    for field in sorted(maintenance.FIELDS):
+        name = field.upper()
+        if name not in os.environ:
+            continue
+        if action == "up":
+            raise LocalError("Maintenance parameters are only supported for down")
+        value = os.environ[name]
+        if not value:
+            continue
+        if field == "retry":
+            if not re.fullmatch(r"[0-9]+", value) or len(value.lstrip("0")) > 5:
+                raise LocalError("RETRY must be whole seconds from 0 to 86400")
+            value = int(value.lstrip("0") or "0")
+        elif field in ("allow", "except"):
+            value = [item.strip() for item in value.split(",")]
+        elif field == "bypass":
+            if value != "yes":
+                raise LocalError("BYPASS must be yes when supplied")
+            value = True
+        values[field] = value
+    try:
+        maintenance.arguments(action, values)
+    except DeployError as error:
+        raise LocalError(error.detail) from None
+    return values
+
+
 def deploy(project, profile, settings):
     action = os.environ.get("ACTION") or ask("Action (" + " / ".join(ACTIONS) + ")", "deploy")
     if action not in ACTIONS:
         raise LocalError("unsupported deployment action")
     if not profile["host"]["host_id"]:
         raise LocalError("environment is not bound to a bootstrapped host; run make bootstrap")
+    parameters = maintenance_parameters(action) if action in ("down", "up") else {}
     with closing(SSH(profile, settings)) as ssh:
         request = {"project": project, "profile": profile}
         if action == "report":
@@ -1087,6 +1118,11 @@ def deploy(project, profile, settings):
         remember_releases(profile, status)
         if action == "status":
             display(status)
+        elif action in ("down", "up"):
+            say(json.dumps(status, indent=2))
+            name = instance_name(project, profile)
+            confirm(f"Put {name} into maintenance mode" if action == "down" else f"Bring {name} out of maintenance mode")
+            display(ssh.request(action, {**request, **parameters, "confirm": True}))
         elif action == "deploy":
             say(f"Build and activate {instance_name(project, profile)} on {profile['host']['address']}; pending forward migrations and seeders run during activation.")
             archive = select_archive(project, profile)

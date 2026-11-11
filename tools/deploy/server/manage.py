@@ -9,13 +9,14 @@ import sys
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import DeployError, MAX_JSON, check_path, identity, parse_env, parse_json, require
+from contracts import DeployError, MAX_JSON, check_path, identity, now, parse_env, parse_json, require
 from topology import instance_units, selected_units
 from host import Host
+import maintenance
 
 ACTIONS = ("capacity-plan", "capacity-apply", "hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect",
            "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "activate", "status", "rollback", "restart",
-           "stop", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate", "backup-configure", "backup-run",
+           "stop", "down", "up", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate", "backup-configure", "backup-run",
            "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report")
 
 
@@ -33,7 +34,7 @@ def execute(host, action, request):
     recovery_fields = {"topology", "mode", "recovery_archive", "archive_sha256", "target_time"}
     arguments = {"recover-plan": recovery_fields,
                  "recover-apply": recovery_fields | {"archive", "plan_token", "old_server_gone"}, "bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
-                 "restart": {"role"}, "stop": {"role"},
+                 "restart": {"role"}, "stop": {"role"}, "down": maintenance.FIELDS,
                  "activate": {"archive", "archive_sha256"}, "config-set": {"values", "secrets"},
                  "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current"},
                  "backup-keys-rotate": {"secrets"}, "backup-recipients-rotate": {"secrets"},
@@ -176,7 +177,30 @@ def execute(host, action, request):
         result = host.run(["journalctl", *[arg for unit in selected for arg in ("--unit", unit)], "--lines=100", "--no-pager", "--output=short-iso"], timeout=15)
         return {"instance": entry["name"], "logs": result.stdout}
     if action == "status":
-        return {"instance": entry, "state": release.public_state(host.load_state(entry)), "live_version": release.current_version(host, entry), "services": release.services(host, entry)}
+        state = release.public_state(host.load_state(entry))
+        return {"instance": entry, "state": state, "maintenance": state.get("maintenance"),
+                "live_version": release.current_version(host, entry), "services": release.services(host, entry)}
+    if action in ("down", "up"):
+        require(request.get("confirm") is True, "confirmation_required", "Confirm the maintenance change.")
+        extra = maintenance.arguments(action, {key: request[key] for key in maintenance.FIELDS if key in request})
+        with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
+            _, entry = host.require_identity(project, profile)
+            state = host.load_state(entry)
+            release.require_idle(state)
+            release.check_live_state(host, entry, state)
+            require(state["current"] is not None, "no_release", "No release has been deployed.")
+            path = release.verified_release(host, entry, state["current"])
+            result = maintenance.run(host, entry, path, action, extra)
+            if action == "down":
+                state["maintenance"] = {"down": True, "since": now()}
+            else:
+                state.pop("maintenance", None)
+            host.save_state(entry, state)
+            if action == "up":
+                require(release.ready(host, entry), "readiness_failed",
+                        "Maintenance mode is off but the release did not become ready; inspect ACTION=logs ROLE=http.")
+            return {"maintenance": state.get("maintenance", {"down": False}),
+                    **({"bypass_path": result["bypass_path"]} if "bypass_path" in result else {})}
     if action in ("restart", "stop"):
         with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
             registry, entry = host.require_identity(project, profile)

@@ -130,3 +130,36 @@ class ManagerTests(unittest.TestCase):
                         manager.execute(self.host, action, {**self.request, "role": role})
                     self.assertEqual("invalid_role", error.exception.code)
             run.assert_not_called()
+
+    def test_maintenance_requires_confirmation_and_rejects_up_parameters(self):
+        with patch.object(self.host, "run") as run:
+            for action in ("down", "up"):
+                with self.assertRaises(DeployError) as error:
+                    manager.execute(self.host, action, self.request)
+                self.assertEqual("confirmation_required", error.exception.code)
+            for field in ("message", "retry", "allow", "except", "bypass"):
+                with self.assertRaises(DeployError) as error:
+                    manager.execute(self.host, "up", {**self.request, "confirm": True, field: None})
+                self.assertEqual("invalid_request", error.exception.code)
+            for values in ({"message": "bad\n"}, {"retry": True}, {"retry": 86401},
+                           {"allow": ["not-an-ip"]}, {"except": ["get /health"]},
+                           {"except": ["GET /a/../b"]}, {"bypass": "yes"}):
+                with self.assertRaises(DeployError) as error:
+                    manager.execute(self.host, "down", {**self.request, "confirm": True, **values})
+                self.assertEqual("invalid_maintenance", error.exception.code)
+            run.assert_not_called()
+
+    def test_maintenance_requires_a_current_release(self):
+        for action in ("down", "up"):
+            with self.assertRaises(DeployError) as error:
+                manager.execute(self.host, action, {**self.request, "confirm": True})
+            self.assertEqual("no_release", error.exception.code)
+
+    def test_maintenance_record_accepts_only_down_and_timestamp(self):
+        state = self.host.load_state(self.entry)
+        for value in (None, {"down": False, "since": "2026-11-11T00:00:00Z"},
+                      {"down": True, "since": "invalid"},
+                      {"down": True, "since": "2026-11-11T00:00:00Z", "bypass_path": "/private"}):
+            with self.subTest(value=value), self.assertRaises(DeployError) as error:
+                self.host.save_state(self.entry, {**state, "maintenance": value})
+            self.assertEqual("invalid_state", error.exception.code)

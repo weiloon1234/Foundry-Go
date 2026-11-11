@@ -5,6 +5,24 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
+## Maintenance commands and deploy tool generation 7
+
+`application.MaintenanceCommands()` adds `--format text|json` to `down` and `up`.
+Default text output is unchanged. JSON emits one object and a newline, with
+`down` and, only for `down --with-secret`, a generated `bypass_path`. A supplied
+`--secret` is never echoed.
+
+Before the next deploy, run `ACTION=tools-plan`, then `ACTION=tools-apply` with the
+reviewed plan to install generation 7. Protocol 2.0, minimum host generation 6 and
+minimum client generation 1 are unchanged. The new `ACTION=down`/`up` mutations
+require a release built on Foundry-Go v0.20.0 or later registering
+`application.MaintenanceCommands()` with a shared `maintenance.store`.
+The tool records maintenance in instance state without retaining bypass secrets.
+While recorded, lifecycle checks use `/health/live` with `{"status":"ok"}`;
+`up` clears the record and requires `/health/ready` with `{"ready":true}` without
+rollback on failure. Keep both health routes reachable during maintenance.
+See the [deployment guide](guides/deployment.md) for parameters and rollout steps.
+
 <a id="unmatched-fallbacks-b10"></a>
 
 ## Unmatched fallbacks: B10 parts 1–2
