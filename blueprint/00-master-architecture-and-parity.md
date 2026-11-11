@@ -8,6 +8,15 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Server shell and server-side artisan — v0.22.0, 2026-11-11
+
+Status: **prepared for lead commit; deployment/application targeted tests, deploy-tool
+unit suite, released contract cohort provenance and docs check passed**.
+- `maintenance:status` reads the shared store. Package `deployment` detects a deployed
+  release from `config/deploy-runtime.json` and re-enters as the application user.
+- Deploy tool: `ACTION=shell`, release runtime descriptor, readiness/status/report read
+  the live maintenance status instead of host state. Tool protocol generation 8.
+
 ## Browser maintenance page — v0.21.0, 2026-11-11
 
 Status: **prepared for lead commit; HTTP formatting, vet, targeted maintenance/navigation/SPA

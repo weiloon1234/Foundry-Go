@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.22.0 — 2026-11-11
+
+**Server shell and server-side artisan.** `ACTION=shell` opens an SSH shell in the
+current release, where a bare `./artisan down`, `./artisan up` or
+`./artisan maintenance:status` works like the deploy tool's own invocation.
+
+- Added: `maintenance:status [--format text|json]`, the third declaration from
+  `application.MaintenanceCommands()`. It reads the shared store and prints
+  `{"down":true,"since":"..."}` or `{"down":false}`.
+- Added: package `deployment`. `Detect` reads the release's
+  `config/deploy-runtime.json` beside the executable; `Runtime.Enter` re-executes
+  through `runuser` as the application user when started as root, otherwise enters
+  the work directory and defaults `WEB__PUBLIC_DIR`. Applications call it only when
+  neither `--config` nor `--env-file` is given.
+- Added: deploy-tool `ACTION=shell`, an interactive SSH session with the saved
+  connection settings and strict host-key checking, landing in the current release.
+- Added: releases include a hashed `config/deploy-runtime.json` descriptor (instance,
+  user, env file, work directory). Older releases without it still verify.
+- Changed: deploy-tool readiness, `status` and root reports read maintenance from the
+  release's `maintenance:status`, so a `down` issued from a server shell keeps deploys
+  and restarts working. `down` and `up` no longer read or write host state; a
+  generation-7 maintenance record is dropped on load. Non-root reports name an
+  unavailable probe only when readiness is false.
+- Upgrade: install deploy-tool generation 8 with `tools-plan` and `tools-apply`.
+  Applications register the third maintenance declaration and call
+  `deployment.Detect` before loading configuration; Starter shows the wiring. Deploy
+  a release built by this version to get the descriptor and the status probe.
+
 ## v0.21.0 — 2026-11-11
 
 **Browser maintenance page.** Browsers receive a built-in, brand-less HTML page
