@@ -310,7 +310,8 @@ class LocalDeploymentTests(unittest.TestCase):
                 protocol.assert_not_called()
                 confirm.assert_not_called()
                 argv = run.call_args.args[0]
-                self.assertEqual(stdout, "-t" in argv)
+                # Following never allocates a remote terminal, so Ctrl-C ends the local session.
+                self.assertNotIn("-t", argv)
                 self.assertEqual(argv[-2], "work-host")
                 for option in ("StrictHostKeyChecking=yes", "UseKeychain=yes", "IdentitiesOnly=yes", "ControlMaster=auto"):
                     self.assertIn(option, argv)

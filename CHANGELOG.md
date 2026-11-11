@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.22.1 — 2026-11-11
+
+- Fixed: deploy-tool `ACTION=logs FOLLOW=yes` no longer allocates a remote terminal,
+  so Ctrl-C ends the local session quietly instead of reporting a dropped SSH
+  connection. Local CLI only; servers stay on tool generation 8.
+
 ## v0.22.0 — 2026-11-11
 
 **Server shell and server-side artisan.** `ACTION=shell` opens an SSH shell in the

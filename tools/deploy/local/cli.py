@@ -368,15 +368,17 @@ class SSH:
         command = f'cd {shlex.quote(current)} && exec "${{SHELL:-/bin/bash}}" -l'
         self.interactive_command(command)
 
-    def interactive_command(self, command):
-        terminal = ["-t"] if sys.stdout.isatty() else []
-        result = subprocess.run(self.base[:-1] + terminal + [self.base[-1], command], check=False)
+    def interactive_command(self, command, *, terminal=True):
+        options = ["-t"] if terminal and sys.stdout.isatty() else []
+        result = subprocess.run(self.base[:-1] + options + [self.base[-1], command], check=False)
         check_ssh_exit(result.returncode, mutation=False)
 
     def follow_logs(self, entry, role, lines):
         command = shlex.join(journal.arguments(entry, role, lines, follow=True))
         try:
-            self.interactive_command(privileged_command(command))
+            # Without a remote terminal, Ctrl-C stops the local session instead of
+            # killing the remote journalctl, which SSH would report as exit 255.
+            self.interactive_command(privileged_command(command), terminal=False)
         except KeyboardInterrupt:
             pass
 
