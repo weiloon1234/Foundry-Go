@@ -8,6 +8,27 @@ from contracts import DeployError, parse_json, require
 FIELDS = frozenset({"message", "retry", "allow", "except", "bypass"})
 
 
+def status(host, entry, release_path):
+    import release
+
+    result = release.app(host, entry, release_path, "maintenance:status",
+                         extra=("--format", "json"), check=False)
+    if result.returncode != 0 or not isinstance(result.stdout, (str, bytes)):
+        return None
+    try:
+        payload = result.stdout.encode("utf-8") if isinstance(result.stdout, str) else result.stdout
+        if len(payload) > 4096:
+            return None
+        value = parse_json(payload)
+        if (not isinstance(value, dict) or type(value.get("down")) is not bool
+                or not set(value) <= {"down", "since"}
+                or ("since" in value and (not isinstance(value["since"], str) or controls(value["since"])))):
+            return None
+        return value
+    except (DeployError, UnicodeError, ValueError):
+        return None
+
+
 def utf8_size(value):
     try:
         return len(value.encode("utf-8"))

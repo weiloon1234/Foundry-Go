@@ -243,10 +243,7 @@ class Host:
                 and type(state["configuration_revision"]) is int and state["configuration_revision"] >= 1
                 and isinstance(state["history"], list) and len(state["history"]) <= 50
                 and ("updated_at" not in state or valid_timestamp(state["updated_at"])), code, detail)
-        if "maintenance" in state:
-            maintenance = state["maintenance"]
-            require(isinstance(maintenance, dict) and set(maintenance) == {"down", "since"}
-                    and maintenance["down"] is True and valid_timestamp(maintenance["since"]), code, detail)
+        state.pop("maintenance", None)
         for key in ("current", "previous"):
             if state[key] is not None:
                 try:

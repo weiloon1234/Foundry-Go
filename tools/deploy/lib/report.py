@@ -12,6 +12,7 @@ import ssl
 import time
 import urllib.error
 import urllib.request
+import maintenance
 
 from contracts import BACKUP_FRESH_SECONDS, BACKUP_POLICY, DeployError, INSTANCE_STATUSES, PREFIX, SCHEMA, SLUG_PATTERN, check_path, instance_paths, now, parse_json, valid_uuid
 from topology import instance_units
@@ -398,8 +399,16 @@ def instance_report(host, entry, deadline, problems):
                 for role, unit in instance_units(entry).items() if role != "http" and not rehearsal}
     topology["http"] = {"unit": expected_unit, "state": unit_status}
     ready = None if recorded_status == "never_deployed" and not state.get("current") else checked(problems, "readiness_check_unavailable", instance_id, readiness, entry["allocations"]["http_port"], deadline)
-    maintenance = state.get("maintenance")
-    if ready is not None and maintenance and maintenance["down"]:
+    live_maintenance = None
+    if os.geteuid() == 0:
+        current_path = host.paths.opt(name) / "current"
+        if current_path.is_symlink():
+            live_maintenance = checked(problems, "maintenance_probe_unavailable", instance_id,
+                                       maintenance.status, host, entry, current_path)
+    elif ready is not None and not ready["ready"]:
+        problem(problems, "maintenance_probe_unavailable", instance_id,
+                detail="Run the report as root to distinguish maintenance from an outage.")
+    if ready is not None and live_maintenance and live_maintenance["down"]:
         ready = {**ready, "status": "maintenance"}
     cert = None
     if not rehearsal:
@@ -494,7 +503,7 @@ def instance_report(host, entry, deadline, problems):
         "status": "unknown" if recorded_status in {"healthy", "rolled_back"} and not consistent else recorded_status,
         "recorded_status": recorded_status, "metadata_consistent": consistent,
         "current_release": current, "previous_release": previous, "last_attempt": attempt(state.get("last_attempt")),
-        "service": unit_status, "services": topology, "readiness": ready, "maintenance": maintenance, "certificate": cert, "backup": backup,
+        "service": unit_status, "services": topology, "readiness": ready, "maintenance": live_maintenance, "certificate": cert, "backup": backup,
         "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),
     }
 

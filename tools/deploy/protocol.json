@@ -1,6 +1,6 @@
 {
   "protocol": {"major": 2, "minor": 0},
-  "generation": 7,
+  "generation": 8,
   "minimum_host_generation": 6,
   "minimum_client_generation": 1,
   "framework_version": "development"

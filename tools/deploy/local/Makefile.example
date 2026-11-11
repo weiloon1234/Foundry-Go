@@ -1,6 +1,6 @@
 # Copy these thin entry points into the application's Makefile.
 # ENVIRONMENT selects the profile. ACTION selects prepare/inspect/recover for bootstrap,
-# build for release, and deploy/status/rollback/restart/stop/down/up/logs/config/
+# build for release, and deploy/status/rollback/restart/stop/down/up/logs/shell/config/
 # "keys rotate"/reconcile/report/sync/capacity/tools-plan/tools-apply for deploy.
 # Credential replacement: backup-keys-rotate / backup-recipients-rotate / dns-token-rotate.
 # Maintenance: ENVIRONMENT=staging ACTION=down CONFIRM=yes make deploy (or ACTION=up).

@@ -40,6 +40,7 @@ remain in the selected module, and local state remains in the application direct
 | `ENVIRONMENT=production ACTION=status make deploy` | Read the selected instance status |
 | `ACTION=down make deploy` | Put the selected instance into maintenance mode |
 | `ACTION=up make deploy` | Leave maintenance mode and verify readiness |
+| `ACTION=shell make deploy` | Open an interactive server shell in the current release |
 | `ACTION=deploy make deploy` | Select or build a release, then request activation |
 | `ACTION=config make deploy` | Submit up to 16 related configuration values together |
 | `ACTION=report make deploy` | Read the public host report without sudo |
@@ -68,9 +69,10 @@ Both actions show status and require confirmation. The active application must b
 built on Foundry-Go v0.20.0 or later, register `application.MaintenanceCommands()`
 in its CLI registry, and configure a shared non-null `maintenance.store`.
 The commands publish to that store, so other applications sharing the same
-maintenance namespace also pause or resume. The deploy tool records maintenance
-for the selected instance; use the tool for each affected instance so its lifecycle
-checks have the corresponding record.
+maintenance namespace also pause or resume. Generation-8 tools read the live shared
+record through `maintenance:status`, including changes made directly with artisan.
+Build releases on Foundry-Go v0.22.0 or later for this probe. Older releases without
+`maintenance:status` are treated as serving.
 
 `down` accepts these optional environment variables; `up` rejects all of them
 when set, including empty values:
@@ -95,19 +97,22 @@ Keep that path private: visiting it grants the maintenance bypass cookie. The
 path is never saved in server state, operation receipts, local `.deploy` files,
 logs, journals, or error messages. It cannot be retrieved from `status` or `report`.
 
-While maintenance is recorded, deploy, restart, configuration restarts,
+While the live probe reports maintenance, deploy, restart, configuration restarts,
 reconciliation and rollback verify `/health/live` instead of `/health/ready`.
 They still verify listener PID, executable identity, stability and background
 roles. Readiness remains false while paused because it describes admission of new
-work. `up` clears the recorded pause and verifies normal readiness; a readiness
+work. `up` clears the shared pause and verifies normal readiness; a readiness
 failure reports `readiness_failed` and leaves maintenance off without rolling back.
 Inspect `ACTION=logs ROLE=http` in that case.
 
-`status` and `report` show `maintenance: {"down":true,"since":"<UTC timestamp>"}`
-or `maintenance: null` when no pause is recorded. A report labels HTTP readiness
-as `maintenance` while a pause is recorded, without treating the expected
-not-ready response as a problem. Other service failures remain problems. Direct
-`artisan down`/`up` commands do not update the deploy tool's instance record.
+`status` and root `report` show the live `maintenance: {"down":true,"since":"<UTC timestamp>"}`
+or `maintenance: {"down":false}`. The `since` field is absent when the store has no
+timestamp. An unsupported status command produces `maintenance: null`.
+A root report labels HTTP readiness as `maintenance` while the probe reports down,
+without treating the expected not-ready response as a problem. Other service
+failures remain problems. Non-root reports leave `maintenance` null and do not
+probe. When readiness is false, they add `maintenance_probe_unavailable` with an
+instruction to run the report as root to distinguish maintenance from an outage.
 
 `ACTION=restart` and `ACTION=stop` accept `ROLE=http`, `ROLE=worker`, or
 `ROLE=scheduler` when that role is declared in the instance topology. Without
@@ -177,7 +182,8 @@ use time zero. Packaging the same stage with the same inputs produces identical
 archive bytes. The release ID remains an input because the app embeds it.
 Byte-identical compiler output across machines is not claimed.
 
-SSH requires noninteractive authentication and an established host key. `make
+Except for `ACTION=shell`, SSH requires noninteractive authentication. All actions
+require an established host key. `make
 bootstrap` of a profile not yet bound to a server, and recovery to a replacement
 address, record an unknown host key on first contact (OpenSSH `accept-new`), which trusts whatever answers at that address. To verify
 it instead, add the key to `known_hosts` first. A changed key is always refused, and
@@ -188,6 +194,26 @@ A key whose passphrase isn't in Keychain must be loaded into an SSH agent. Perso
 aliases must resolve to the hostname and port in the committed profile. Host
 mutations require root or passwordless `sudo -n`. Private configuration values
 travel through stdin, never command-line arguments.
+
+### Server shell
+
+Upgrade the host to generation 8 with `ACTION=tools-plan` and `ACTION=tools-apply`
+before first use. Build and deploy a release on Foundry-Go v0.22.0 or later, then run:
+
+```sh
+ENVIRONMENT=staging ACTION=shell make deploy
+```
+
+The shell lands in `/opt/foundry/<instance>/current`. It uses your saved SSH target
+and key, requires a known host key and a terminal on stdin and stdout, and needs
+no `CONFIRM`. Exit the shell to return to your local terminal.
+
+Run `./artisan down`, `./artisan up`, or `./artisan maintenance:status` there
+without flags. These commands use the release profile and run as the app user
+when the shell is root. The packaged `config/deploy-runtime.json` supplies the
+instance, user, environment file, and work directory without secrets.
+The deploy tool reads the shared maintenance record, so a down from either place
+keeps deploys and restarts working.
 
 ## Application input and identity
 
@@ -323,7 +349,7 @@ match both content and metadata.
 
 ## Tool protocol and upgrades
 
-`tools/deploy/protocol.json` owns protocol 2.0 and generation 7. The stable
+`tools/deploy/protocol.json` owns protocol 2.0 and generation 8. The stable
 launcher dispatches to the active immutable bundle. `hello` reports host metadata
 without a mutation. Requests include the client's protocol, framework version,
 generation, and bundle digest. The minimum client generation remains 1, so
@@ -336,8 +362,8 @@ installation. Older hosts receive `tools_upgrade_floor`: "Upgrade to v0.16.0 or
 v0.16.1 tools first, then retry the tool upgrade." The temporary upgrade bridges
 and finished-state cleanup are no longer shipped.
 
-Before the next deploy or maintenance action, upgrade a generation-6 host to
-generation 7 through `tools-plan` and `tools-apply`:
+Before the next deploy or maintenance action, upgrade a generation-6 or
+generation-7 host to generation 8 through `tools-plan` and `tools-apply`:
 
 1. Repin the application to the desired published framework release.
 2. Run `ENVIRONMENT=production ACTION=tools-plan make deploy` and review the plan.
@@ -387,8 +413,8 @@ role and verifies its running executable through `/proc/<pid>/exe` against the
 selected release. `ACTION=status` returns live observations per role;
 `ACTION=logs ROLE=scheduler` reads that role's journal.
 HTTP readiness requires status 200 and exactly `{"ready":true}` at `/health/ready`,
-within 4096 bytes. During recorded maintenance, `/health/live` must instead return
-status 200 and exactly `{"status":"ok"}`, within the same bound. Keep both paths
+within 4096 bytes. When the live maintenance probe reports down, `/health/live`
+must instead return status 200 and exactly `{"status":"ok"}`, within the same bound. Keep both paths
 reachable while paused through `http.server.maintenance_read_paths`. Listener PID,
 executable identity and stability checks still apply.
 
@@ -1060,7 +1086,7 @@ not prove application-specific invariants, existing ciphertext decryption, or
 large-database restore times. Verify those against representative application data
 before routing production traffic.
 
-Replacement-host recovery installs generation 7 on an empty target. For existing
+Replacement-host recovery installs generation 8 on an empty target. For existing
 hosts, follow the [tool upgrade procedure](#tool-protocol-and-upgrades).
 
 ## Host report
@@ -1078,8 +1104,11 @@ values are `null`, never zero or false.
 | `host.resources` | Memory and disk | `memory_low` under 10% available; `disk_low` under 10% or 2 GiB available |
 | instance `certificate` | TLS handshake on 443 | `certificate_expiring` under 14 days; `certificate_invalid`, `certificate_renewal_unverified` |
 | instance `backup` | Backup receipts | `backup_stale`, `backup_failed` |
+| instance `maintenance` | Live application status, root only | `maintenance_probe_unavailable` |
 
-The root-only fields are `null` for a nonroot reader and add no problem.
+The root-only fields are `null` for a nonroot reader. Only maintenance adds a
+problem, and only when readiness is false, asking the operator to run the report
+as root to distinguish maintenance from an outage.
 
 The report runs only when someone asks for it, and nothing alerts on a failed or missing
 backup or certificate renewal. Alerts are [deferred](../../blueprint/25-deferred-extensions.md#backup-and-certificate-failure-alerts).

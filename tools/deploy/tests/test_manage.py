@@ -9,7 +9,7 @@ from unittest.mock import patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import DeployError
+from contracts import DeployError, atomic_json, read_json
 from host import Host, Paths
 import upgrades
 from test_contracts import fixture, registry
@@ -155,11 +155,13 @@ class ManagerTests(unittest.TestCase):
                 manager.execute(self.host, action, {**self.request, "confirm": True})
             self.assertEqual("no_release", error.exception.code)
 
-    def test_maintenance_record_accepts_only_down_and_timestamp(self):
+    def test_generation_seven_maintenance_record_is_dropped_on_load_and_save(self):
         state = self.host.load_state(self.entry)
-        for value in (None, {"down": False, "since": "2026-11-11T00:00:00Z"},
-                      {"down": True, "since": "invalid"},
-                      {"down": True, "since": "2026-11-11T00:00:00Z", "bypass_path": "/private"}):
-            with self.subTest(value=value), self.assertRaises(DeployError) as error:
-                self.host.save_state(self.entry, {**state, "maintenance": value})
-            self.assertEqual("invalid_state", error.exception.code)
+        path = self.host.paths.instance_state(self.entry["name"]) / "state.json"
+        for value in ({"down": True, "since": "2026-11-11T00:00:00Z"}, None, {"obsolete": True}):
+            with self.subTest(value=value):
+                atomic_json(path, {**state, "maintenance": value})
+                loaded = self.host.load_state(self.entry)
+                self.assertEqual(state, loaded)
+                self.host.save_state(self.entry, loaded)
+                self.assertNotIn("maintenance", read_json(path))

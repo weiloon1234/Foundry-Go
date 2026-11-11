@@ -30,7 +30,7 @@ sys.path.insert(0, str(TOOLS_ROOT / "lib"))
 from edge import edge_findings
 import maintenance
 
-from contracts import (BACKUP_POLICY, DeployError, PREFIX, RENEWAL_WARNING, SCHEMA, PROFILE_SCHEMA, LAYOUT_VERSION, VERSION_PATTERN, atomic_json, check_path, digest, identity, instance_name, now, parse_json, read_json, slug,
+from contracts import (BACKUP_POLICY, DeployError, PREFIX, RENEWAL_WARNING, SCHEMA, PROFILE_SCHEMA, LAYOUT_VERSION, VERSION_PATTERN, atomic_json, check_path, digest, identity, instance_name, instance_paths, now, parse_json, read_json, slug,
                        validate_profile, validate_project)
 from release import MAX_CONFIGURATION_CHANGES, validate_manifest
 from topology import load_topology
@@ -42,7 +42,7 @@ COMMANDS = {
     "deploy": "interactive deployment, status, rollback, capacity and configuration",
     "release": "build a local Docker release without contacting a server",
 }
-ACTIONS = ("capacity", "deploy", "status", "rollback", "restart", "stop", "down", "up", "logs", "config", "keys rotate", "reconcile",
+ACTIONS = ("capacity", "deploy", "status", "rollback", "restart", "stop", "down", "up", "logs", "shell", "config", "keys rotate", "reconcile",
            "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run",
            "restore-drill", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate")
 
@@ -313,7 +313,9 @@ def save_profile(profile):
 
 
 class SSH:
-    def __init__(self, profile, settings, *, first_contact=False):
+    def __init__(self, profile, settings, *, first_contact=False, interactive=False):
+        if interactive and not (sys.stdin.isatty() and sys.stdout.isatty()):
+            raise LocalError("ACTION=shell requires a terminal on stdin and stdout.")
         host = profile["host"]
         host_key = f"{host['address']}:{host['port']}"
         personal = settings["hosts"].get(host_key)
@@ -330,11 +332,13 @@ class SSH:
         control = control_directory() / uuid.uuid4().hex
         # Bootstrap and replacement-host recovery may record an unknown host key.
         # A changed key is always refused, and every other operation needs the recorded one.
-        checking = "accept-new" if first_contact else "yes"
-        self.base = ["ssh", "-o", "StrictHostKeyChecking=" + checking, "-o", "BatchMode=yes",
+        checking = "accept-new" if first_contact and not interactive else "yes"
+        self.base = ["ssh", "-o", "StrictHostKeyChecking=" + checking,
                      "-o", "ConnectTimeout=30", "-o", "ConnectionAttempts=3", "-o", "ServerAliveInterval=15",
                      "-o", "ServerAliveCountMax=8", "-o", "ControlMaster=auto",
                      "-o", "ControlPersist=120", "-o", "ControlPath=" + str(control), "-p", str(host["port"])]
+        if not interactive:
+            self.base += ["-o", "BatchMode=yes"]
         key_path = personal.get("key_path", "")
         if key_path:
             # The saved key is enough: no operator SSH config, agent or profile is needed.
@@ -355,6 +359,12 @@ class SSH:
 
     def command(self, command, *, input=None, timeout=240):
         return execute(self.base + [command], input=input, timeout=timeout)
+
+    def shell(self, name):
+        current = instance_paths(name)["application"] + "/current"
+        command = f'cd {shlex.quote(current)} && exec "${{SHELL:-/bin/bash}}" -l'
+        result = subprocess.run(self.base[:-1] + ["-t", self.base[-1], command], check=False)
+        check_ssh_exit(result.returncode, mutation=False)
 
     def request(self, action, request, tools=None):
         request = {**request, **protocol_metadata(TOOLS_ROOT)}
@@ -1036,6 +1046,10 @@ def deploy(project, profile, settings):
         raise LocalError("unsupported deployment action")
     if not profile["host"]["host_id"]:
         raise LocalError("environment is not bound to a bootstrapped host; run make bootstrap")
+    if action == "shell":
+        with closing(SSH(profile, settings, interactive=True)) as ssh:
+            ssh.shell(instance_name(project, profile))
+        return
     parameters = maintenance_parameters(action) if action in ("down", "up") else {}
     with closing(SSH(profile, settings)) as ssh:
         request = {"project": project, "profile": profile}

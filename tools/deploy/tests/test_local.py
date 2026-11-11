@@ -356,6 +356,49 @@ class LocalDeploymentTests(unittest.TestCase):
             with self.assertRaisesRegex(cli.LocalError, "different hostname"):
                 cli.SSH(profile, settings)
 
+    def test_shell_reuses_personal_options_without_protocol_or_confirmation(self):
+        project, profile = fixture()
+        profile["host"]["port"] = 2222
+        settings = {"hosts": {"example.com:2222": {"target": "work-host", "key_path": "~/.ssh/fixture"}}}
+        for returncode in (0, 1, 127, 255):
+            with self.subTest(returncode=returncode), patch.dict(os.environ, {"ACTION": "shell"}, clear=True), \
+                    patch.object(cli.sys.stdin, "isatty", return_value=True), \
+                    patch.object(cli.sys.stdout, "isatty", return_value=True), \
+                    patch.object(cli, "execute", return_value="hostname example.com\nport 2222\n") as execute, \
+                    patch.object(cli.subprocess, "run", return_value=subprocess.CompletedProcess([], returncode)) as run, \
+                    patch.object(cli.SSH, "request") as request, patch.object(cli, "protocol_metadata") as protocol, \
+                    patch.object(cli, "confirm") as confirm:
+                if returncode == 255:
+                    with self.assertRaisesRegex(cli.LocalError, "SSH connection failed"):
+                        cli.deploy(project, profile, settings)
+                else:
+                    cli.deploy(project, profile, settings)
+            request.assert_not_called()
+            protocol.assert_not_called()
+            confirm.assert_not_called()
+            argv = run.call_args.args[0]
+            self.assertEqual(argv[-3:], ["-t", "work-host", 'cd /opt/foundry/abc-prod/current && exec "${SHELL:-/bin/bash}" -l'])
+            for option in ("StrictHostKeyChecking=yes", "UseKeychain=yes", "IdentitiesOnly=yes", "ControlMaster=auto"):
+                self.assertIn(option, argv)
+            self.assertFalse(any(option.startswith("BatchMode=") for option in argv))
+            self.assertEqual(argv[argv.index("-p") + 1], "2222")
+            self.assertEqual(argv[argv.index("-i") + 1], str(Path("~/.ssh/fixture").expanduser()))
+            self.assertEqual(run.call_args.kwargs, {"check": False})
+            closed = execute.call_args.args[0]
+            self.assertEqual(closed[-3:], ["-O", "exit", "work-host"])
+            self.assertEqual(next(x for x in argv if x.startswith("ControlPath=")),
+                             next(x for x in closed if x.startswith("ControlPath=")))
+
+    def test_shell_requires_both_terminal_streams_before_connecting(self):
+        project, profile = fixture()
+        for stdin, stdout in ((False, True), (True, False), (False, False)):
+            with self.subTest(stdin=stdin, stdout=stdout), patch.dict(os.environ, {"ACTION": "shell"}, clear=True), \
+                    patch.object(cli.sys.stdin, "isatty", return_value=stdin), \
+                    patch.object(cli.sys.stdout, "isatty", return_value=stdout), patch.object(cli, "execute") as execute:
+                with self.assertRaisesRegex(cli.LocalError, "ACTION=shell requires a terminal on stdin and stdout"):
+                    cli.deploy(project, profile, {})
+                execute.assert_not_called()
+
     def test_ssh_saved_key_needs_no_operator_ssh_config(self):
         _, profile = fixture()
         settings = {"hosts": {"example.com:22": {"target": "root@example.com", "key_path": "~/.ssh/fixture"}}}
@@ -620,16 +663,20 @@ class LocalDeploymentTests(unittest.TestCase):
     def test_archive_contains_checksums_and_no_sources_or_runtime_configuration(self):
         stage = self.stage()
         with patch.object(metadata, "collect_build_inputs", return_value={}):
-            archive = metadata.package({"manifest": {"schema": 1, "version": "fixture"}, "source_date_epoch": 0},
+            archive = metadata.package({"manifest": {"schema": 1, "version": "fixture", "instance": "abc-prod"}, "source_date_epoch": 0},
                                        stage, self.root / "release")
         with metadata.tarfile.open(archive) as tar:
             names = set(tar.getnames())
             manifest = json.load(tar.extractfile("manifest.json"))
-            self.assertEqual(set(manifest["files"]), {"artisan", "config/deploy.toml", "public/index.html"})
+            self.assertEqual(set(manifest["files"]), {"artisan", "config/deploy.toml", "config/deploy-runtime.json", "public/index.html"})
             for name, checksum in manifest["files"].items():
                 self.assertEqual(hashlib.sha256(tar.extractfile(name).read()).hexdigest(), checksum)
             self.assertFalse(names & {".env", "app.env", "deploy", "internal", "go.mod"})
             self.assertEqual(tar.getmember("artisan").mode, 0o755)
+            self.assertEqual(tar.getmember("config/deploy-runtime.json").mode, 0o644)
+            self.assertEqual(json.load(tar.extractfile("config/deploy-runtime.json")), {
+                "schema": 1, "instance": "abc-prod", "user": "abc-prod",
+                "env_file": "/etc/foundry/instances/abc-prod/app.env", "work_dir": "/var/lib/foundry/apps/abc-prod"})
 
     def test_local_archive_roundtrips_through_server_validator(self):
         project, profile = fixture()
@@ -659,11 +706,11 @@ class LocalDeploymentTests(unittest.TestCase):
         bad = stage / "public" / "link"
         bad.symlink_to(secret)
         with self.assertRaisesRegex(ValueError, "non-regular"):
-            metadata.package({"manifest": {}}, stage, self.root / "release")
+            metadata.package({"manifest": {"instance": "abc-prod"}}, stage, self.root / "release")
         bad.unlink()
         (stage / "public" / ".env.production").write_text("secret-canary")
         with self.assertRaisesRegex(ValueError, "forbidden"):
-            metadata.package({"manifest": {}}, stage, self.root / "release")
+            metadata.package({"manifest": {"instance": "abc-prod"}}, stage, self.root / "release")
         self.assertFalse((self.root / "release" / "app.tar.gz").exists())
 
     def test_retention_only_removes_complete_scoped_releases(self):

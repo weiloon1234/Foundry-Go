@@ -5,23 +5,33 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
-## Maintenance commands and deploy tool generation 7
+## Maintenance commands and deploy tool generation 8
 
-`application.MaintenanceCommands()` adds `--format text|json` to `down` and `up`.
-Default text output is unchanged. JSON emits one object and a newline, with
-`down` and, only for `down --with-secret`, a generated `bypass_path`. A supplied
-`--secret` is never echoed.
+Generation-8 tools package `config/deploy-runtime.json` with each release and
+include its checksum in the manifest. Releases built by older tools without the
+descriptor still verify. `ACTION=shell` opens an interactive SSH session in the
+current release with the recorded host key and saved personal connection settings.
 
-Before the next deploy, run `ACTION=tools-plan`, then `ACTION=tools-apply` with the
-reviewed plan to install generation 7. Protocol 2.0, minimum host generation 6 and
-minimum client generation 1 are unchanged. The new `ACTION=down`/`up` mutations
-require a release built on Foundry-Go v0.20.0 or later registering
-`application.MaintenanceCommands()` with a shared `maintenance.store`.
-The tool records maintenance in instance state without retaining bypass secrets.
-While recorded, lifecycle checks use `/health/live` with `{"status":"ok"}`;
-`up` clears the record and requires `/health/ready` with `{"ready":true}` without
-rollback on failure. Keep both health routes reachable during maintenance.
-See the [deployment guide](guides/deployment.md) for parameters and rollout steps.
+Before first use, run `ACTION=tools-plan`, then `ACTION=tools-apply` with the
+reviewed plan to install generation 8. Protocol 2.0, minimum host generation 6,
+and minimum client generation 1 are unchanged. Build and deploy on Foundry-Go
+v0.22.0 or later to use bare server-side artisan commands and the live
+`maintenance:status --format json` probe. Applications must register
+`application.MaintenanceCommands()` and configure a shared `maintenance.store`.
+The `down` and `up` JSON commands remain available on v0.20.0 and later.
+
+Maintenance comes from the shared application store. The tool drops obsolete
+generation-7 host-state maintenance records and never writes new ones. A live
+down status selects `/health/live` with `{"status":"ok"}` for lifecycle checks.
+An unsupported status command is treated as serving. `up` requires normal
+`/health/ready` with `{"ready":true}` without rollback on failure.
+Keep both health routes reachable during maintenance.
+
+`status` always probes. `report` probes only as root and remains available without
+sudo. Non-root reports leave maintenance null and add `maintenance_probe_unavailable`
+only when readiness is false. Bypass paths remain visible only in the generating
+`down` response. See the [deployment guide](guides/deployment.md) for parameters
+and rollout steps.
 
 <a id="unmatched-fallbacks-b10"></a>
 

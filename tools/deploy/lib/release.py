@@ -31,6 +31,7 @@ from host import OperationTimeout, wall_clock_budget
 from redis_acl import (granted_redis_patterns, granted_redis_channels, reconcile_redis_grants,
                        redis_grant_patterns, redis_channel_patterns)
 import backup
+import maintenance
 
 MAX_ARCHIVE_BYTES = 2 * 1024**3
 MAX_EXPANDED_BYTES = 8 * 1024**3
@@ -79,7 +80,7 @@ def safe_member(name):
 
 
 def allowed_file(name):
-    return name in ("artisan", "config/deploy.toml") or name.startswith(("public/", "private-source-maps/"))
+    return name in ("artisan", "config/deploy.toml", "config/deploy-runtime.json") or name.startswith(("public/", "private-source-maps/"))
 
 
 def unpack_archive(archive, destination, entry, checksum):
@@ -604,7 +605,7 @@ def _ready(host, entry, deadline, include_background=True, role="all", roles=Non
     if not include_background:
         units = {"http": units["http"]}
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-    paused = host.load_state(entry).get("maintenance", {}).get("down") is True
+    paused = (maintenance.status(host, entry, path) or {}).get("down") is True
     endpoint, accepts = ("/health/live", liveness_body) if paused else ("/health/ready", readiness_body)
     tokens, stable_since = None, None
     while time.monotonic() < deadline:

@@ -261,10 +261,10 @@ class UpgradeTests(unittest.TestCase):
             upgrades.check_client(self.host, request, "hello")
         self.assertEqual({"minimum": 1, "maximum": 7}, upgrades.hello(self.host)["client_generation"])
 
-    def test_generation_seven_upgrades_six_and_includes_maintenance_module(self):
+    def test_generation_eight_upgrades_six_and_includes_maintenance_module(self):
         actual = Path(__file__).resolve().parents[1]
         metadata = upgrades.protocol(actual)
-        self.assertEqual(7, metadata["generation"])
+        self.assertEqual(8, metadata["generation"])
         self.assertEqual(6, metadata["minimum_host_generation"])
         self.assertEqual(1, metadata["minimum_client_generation"])
         _, files, _ = upgrades.tool_bundle(actual)
@@ -274,14 +274,14 @@ class UpgradeTests(unittest.TestCase):
         self.digest = upgrades.tool_bundle(self.source)[2]
         self.host.registry["tools"] = upgrades._active_record(self.source, self.digest, None)
         self.install()
-        self.metadata["generation"] = 7
+        self.metadata["generation"] = 8
         (self.source / "protocol.json").write_text(json.dumps(self.metadata))
-        (self.source / "lib/maintenance.py").write_text("# new generation seven module\n")
+        (self.source / "lib/maintenance.py").write_text("# new generation eight module\n")
         plan = upgrades.plan_upgrade(self.host, self.source)
         result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
         self.assertEqual("succeeded", result["outcome"])
-        self.assertEqual(7, self.host.read_registry()["tools"]["generation"])
-        self.assertEqual({"minimum": 1, "maximum": 7}, upgrades.hello(self.host)["client_generation"])
+        self.assertEqual(8, self.host.read_registry()["tools"]["generation"])
+        self.assertEqual({"minimum": 1, "maximum": 8}, upgrades.hello(self.host)["client_generation"])
 
     def test_generation_five_refuses_planning_and_installation_before_writes(self):
         self.install()
