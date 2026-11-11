@@ -8,6 +8,16 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Maintenance mode deploy actions — v0.20.0, 2026-11-11
+
+Status: **released; application maintenance command tests, the deploy-tool suite (571 tests), docs
+check and framework CI**.
+- Added deploy-tool `ACTION=down`/`ACTION=up` (generation 7) over `artisan down|up --format json`.
+  The bypass path is returned once and never stored. Deploy, restart, configuration restart,
+  reconciliation and rollback check `/health/live` while maintenance is recorded, because
+  readiness stays false while paused by design. `up` verifies readiness without rolling back.
+- `down`/`up` gained `--format text|json`; text output is unchanged.
+
 ## Outbound HTTP capture — v0.19.0, 2026-11-11
 
 Status: **released; targeted capture, httpclient (including the whole suite re-run on captured clients), HTTP

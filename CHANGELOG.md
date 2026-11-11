@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.20.0 — 2026-11-11
+
+**Maintenance mode through the deploy tool.** Repin applications, register
+`application.MaintenanceCommands()` with a shared `maintenance.store`, upgrade each
+server with `tools-plan`/`tools-apply`, then redeploy.
+
+- Added: deploy-tool `ACTION=down` and `ACTION=up` maintenance actions with confirmed,
+  validated parameters and a bypass path returned only once. Deploy, restart,
+  configuration restart, reconciliation and rollback use liveness while maintenance
+  is recorded; `up` verifies readiness without rolling back on failure.
+- Added: `--format text|json` for `application.MaintenanceCommands()`. Text remains
+  the default; JSON reports `down` and includes `bypass_path` only for a generated secret.
+- Upgrade: deploy tool generation 7. Run `ACTION=tools-plan`, then `ACTION=tools-apply`
+  with the reviewed plan before the next deploy. Apps must register
+  `application.MaintenanceCommands()` with a shared `maintenance.store` and be built
+  on Foundry-Go v0.20.0 or later for these actions. The host upgrade floor stays at
+  generation 6; minimum client generation remains 1.
+
 ## v0.19.0 — 2026-11-11
 
 **Outbound HTTP capture.** Repin applications, regenerate settings and client contracts, apply
