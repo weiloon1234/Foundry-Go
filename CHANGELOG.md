@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.21.0 — 2026-11-11
+
+**Browser maintenance page.** Browsers receive a built-in, brand-less HTML page
+while HTTP maintenance is paused. API clients keep the standard JSON error envelope.
+
+- Added: 503 HTML maintenance responses for GET/HEAD requests to an extensionless
+  path whose bounded `Accept` explicitly lists `text/html` with `q>0`. The page
+  escapes the operator message and uses a default notice when it is empty.
+- Added: `Vary: Accept` on both paused representations and a Content Security Policy
+  on HTML allowing only the built-in style by its SHA-256 hash. Both preserve
+  configured `Retry-After`; HEAD sends headers only.
+- Upgrade: no code change. Repin applications and redeploy; browsers now see HTML
+  instead of JSON while down. Bypass exchange, exemptions and draining are unchanged.
+
 ## v0.20.0 — 2026-11-11
 
 **Maintenance mode through the deploy tool.** Repin applications, register

@@ -8,6 +8,16 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Browser maintenance page — v0.21.0, 2026-11-11
+
+Status: **prepared for lead commit; HTTP formatting, vet, targeted maintenance/navigation/SPA
+tests, released contract cohort provenance and docs check passed**.
+- Paused HTTP admission serves a built-in, brand-less 503 HTML page for GET/HEAD
+  requests to extensionless paths whose bounded `Accept` explicitly lists
+  `text/html` with `q>0`. Operator messages are escaped; empty messages use a default notice.
+- API clients keep the JSON envelope. Both representations send `Vary: Accept`;
+  HTML adds a CSP with the built-in style's SHA-256 hash. Bypass and draining are unchanged.
+
 ## Maintenance mode deploy actions — v0.20.0, 2026-11-11
 
 Status: **released; application maintenance command tests, the deploy-tool suite (571 tests), docs
