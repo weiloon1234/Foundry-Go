@@ -298,7 +298,10 @@ class UpgradeTests(unittest.TestCase):
     def test_candidate_python_inventory_contains_only_runtime_modules(self):
         source = Path(__file__).resolve().parents[1]
         _, files, _ = upgrades.tool_bundle(source)
-        expected = {name for name in upgrades.REQUIRED_FILES if name.endswith('.py')} | {'lib/capacity.py'}
+        # Modules newer than the oldest upgradable host stay out of REQUIRED_FILES,
+        # which also validates previously installed bundles.
+        expected = ({name for name in upgrades.REQUIRED_FILES if name.endswith('.py')}
+                    | {'lib/capacity.py', 'lib/maintenance.py'})
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
     def leftover(self, digest="b" * 64):
