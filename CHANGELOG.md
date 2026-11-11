@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.19.0 — 2026-11-11
 
 **Outbound HTTP capture.** Repin applications, regenerate settings and client contracts, apply
 the new framework migration before serving, and redeploy; mount the viewer and register the
