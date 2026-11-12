@@ -3,7 +3,6 @@ package rediscleanup
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"strings"
 	"sync"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	driver "github.com/redis/go-redis/v9"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/keyaddress"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/testcleanup"
@@ -29,7 +29,7 @@ func Prefixes(namespace keyspace.Namespace, features ...keyspace.Feature) ([]str
 	prefixes := make([]string, 0, len(features))
 	for _, feature := range features {
 		if !keyspace.ValidName(string(feature)) {
-			return nil, errors.New("invalid Redis cleanup feature")
+			return nil, safeerror.NewFault(fault.Invalid, "invalid Redis cleanup feature")
 		}
 		prefixes = append(prefixes, keyaddress.Prefix(feature, namespace))
 	}
@@ -114,7 +114,7 @@ func remove(ctx context.Context, client keyClient, prefix string) error {
 		for batch := range slices.Chunk(keys, batchSize) {
 			for _, key := range batch {
 				if !strings.HasPrefix(key, prefix) {
-					return errors.New("Redis scan returned a foreign key")
+					return safeerror.NewFault(fault.Internal, "Redis scan returned a foreign key")
 				}
 			}
 			if err := client.Unlink(ctx, batch...).Err(); err != nil {
