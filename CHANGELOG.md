@@ -11,10 +11,14 @@
   unreachable generator, adapter and test helpers.
 - Changed: deploy acceptance packages the candidate checkout through a private module
   proxy and tests a published generation-9 baseline, including equal-bundle no-ops.
-  The host upgrade floor is 9; the client floor remains 1.
+  Tool generation is 10, preventing older generation-9 tools from bypassing retired
+  bundle history. The host upgrade floor is 9; the client floor remains 1, and
+  generation-9 clients remain supported for ordinary deployments.
 - Changed: tool pruning removes completed journals for retired bundles after atomically
   recording retirement history in a validated ledger. Active journals retain replay
-  idempotence; retired bundles remain forbidden after cleanup.
+  idempotence; retired bundles remain forbidden after cleanup. Obsolete journals
+  move atomically into a private deletion area before removal, so retries recover
+  after rename or partial deletion, including a removed intent file.
 - Changed: corrected current generation, lifecycle, deployment, jobs, storage,
   manifest, dependency and milestone documentation; dated evidence is retained.
 

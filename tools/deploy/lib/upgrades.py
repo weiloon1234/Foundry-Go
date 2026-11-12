@@ -180,13 +180,58 @@ def _retired_bundles(host) -> list[str]:
     return value["digests"]
 
 
+def _sync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _check_upgrade_directory(host, operation: Path) -> None:
+    require(valid_uuid(operation.name), "unsafe_path", "Unexpected upgrade journal entry; administrator review required.")
+    host.check_control_directory(check_path(operation, "directory"))
+    require(operation.stat().st_dev == operation.parent.stat().st_dev, "unsafe_path",
+            "Upgrade journals must remain on their parent's filesystem.")
+    for path in operation.rglob("*"):
+        check_path(path, "directory" if path.is_dir() else "file")
+        if path.is_dir():
+            host.check_control_directory(path)
+        else:
+            require(path.stat().st_nlink == 1, "unsafe_path", "Upgrade journal files must not be hardlinked.")
+
+
+def _deletion_directory(host, *, create=False) -> Path:
+    directory = host.check_control_directory(host.paths.p(HOST_PATHS["upgrade_deletions"]))
+    host.check_control_directory(directory.parent)
+    if create and not directory.exists():
+        directory.mkdir(mode=0o700)
+        _sync_directory(directory.parent)
+    if directory.exists():
+        require(stat.S_IMODE(directory.stat().st_mode) == 0o700, "unsafe_path",
+                "The upgrade deletion area must have mode 0700.")
+        upgrades = host.check_control_directory(host.paths.p(HOST_PATHS["upgrades"]))
+        require(directory.stat().st_dev == upgrades.stat().st_dev, "unsafe_path",
+                "The upgrade deletion area must share the journals' filesystem.")
+    return directory
+
+
+def _deleting_upgrade_journals(host) -> list[Path]:
+    directory = _deletion_directory(host)
+    operations = sorted(directory.iterdir()) if directory.exists() else []
+    for operation in operations:
+        # Rename into this private area records deletion ownership. An interrupted
+        # rmtree need not leave intent.json or any other journal file behind.
+        _check_upgrade_directory(host, operation)
+    return operations
+
+
 def _obsolete_upgrade_journals(host, active_digest: str) -> list[tuple[Path, dict]]:
     directory = host.check_control_directory(host.paths.p(HOST_PATHS["upgrades"]))
     obsolete = []
     if directory.exists():
         for operation in sorted(directory.iterdir()):
-            require(valid_uuid(operation.name), "unsafe_path", "Unexpected upgrade journal entry; administrator review required.")
-            host.check_control_directory(check_path(operation, "directory"))
+            _check_upgrade_directory(host, operation)
             intent = check_path(operation / "intent.json", "file")
             require(intent.exists(), "tools_upgrade_pending", "An upgrade journal has no intent; administrator review required.")
             journal = read_json(intent)
@@ -197,12 +242,6 @@ def _obsolete_upgrade_journals(host, active_digest: str) -> list[tuple[Path, dic
                     and all(isinstance(item, str) and re.fullmatch(r"[a-f0-9]{64}", item)
                             for item in (journal.get("bundle_sha256"), journal["previous_tools"].get("bundle_sha256"))),
                     "invalid_tools", "Invalid completed upgrade journal; administrator review required.")
-            for path in operation.rglob("*"):
-                check_path(path, "directory" if path.is_dir() else "file")
-                if path.is_dir():
-                    host.check_control_directory(path)
-                else:
-                    require(path.stat().st_nlink == 1, "unsafe_path", "Upgrade journal files must not be hardlinked.")
             if journal["bundle_sha256"] != active_digest:
                 obsolete.append((operation, journal))
     return obsolete
@@ -221,7 +260,21 @@ def _prune_bundles(host) -> dict:
             "tools_pointer_conflict", "The selected tool pointer differs from the registry.")
     obsolete = _obsolete_bundles(host, active.name)
     journals = _obsolete_upgrade_journals(host, active.name)
+    deleting = _deleting_upgrade_journals(host)
+    require(not {path.name for path in deleting} & {path.name for path, _ in journals},
+            "unsafe_path", "An upgrade operation appears in both journal areas; administrator review required.")
     retired = set(_retired_bundles(host))
+    require(not deleting or host.paths.p(HOST_PATHS["retired_tools"]).exists(), "invalid_retired_tools",
+            "The retired tool ledger is missing for queued journal deletions.")
+    removed = {"removed_bundles": [], "removed_upgrade_journals": []}
+    if deleting:
+        # Finish both sides of an interrupted rename before removing its contents.
+        _sync_directory(host.paths.p(HOST_PATHS["upgrades"]))
+        _sync_directory(deleting[0].parent)
+        for operation in deleting:
+            shutil.rmtree(operation)
+            _sync_directory(operation.parent)
+            removed["removed_upgrade_journals"].append(operation.name)
     for _, journal in journals:
         retired.update((journal["bundle_sha256"], journal["previous_tools"]["bundle_sha256"]))
     retired.discard(active.name)
@@ -234,18 +287,20 @@ def _prune_bundles(host) -> dict:
         if not host.owned_write(ledger, payload, mode=0o600):
             # A prior process may have renamed these same bytes before dying
             # during the directory sync. Finish that barrier before deletion.
-            descriptor = os.open(ledger.parent, os.O_RDONLY)
-            try:
-                os.fsync(descriptor)
-            finally:
-                os.close(descriptor)
-    removed = {"removed_bundles": [], "removed_upgrade_journals": []}
+            _sync_directory(ledger.parent)
+    deletion_directory = _deletion_directory(host, create=bool(journals))
     for bundle in obsolete:
         shutil.rmtree(bundle)
         removed["removed_bundles"].append(bundle.name)
     for operation, _ in journals:
-        shutil.rmtree(operation)
+        destination = deletion_directory / operation.name
+        os.rename(operation, destination)
+        _sync_directory(operation.parent)
+        _sync_directory(deletion_directory)
+        shutil.rmtree(destination)
+        _sync_directory(deletion_directory)
         removed["removed_upgrade_journals"].append(operation.name)
+    removed["removed_upgrade_journals"].sort()
     return removed
 
 
@@ -399,7 +454,8 @@ def plan_upgrade(host, tools_dir: Path) -> dict:
             "prune_bundles": ([] if _upgrade_pending(host, registry) else
                               [path.name for path in _obsolete_bundles(host, tool_bundle(tools_dir)[2])]),
             "prune_upgrade_journals": ([] if _upgrade_pending(host, registry) else
-                                      [path.name for path, _ in _obsolete_upgrade_journals(host, tool_bundle(tools_dir)[2])])}
+                                      sorted([path.name for path, _ in _obsolete_upgrade_journals(host, tool_bundle(tools_dir)[2])]
+                                             + [path.name for path in _deleting_upgrade_journals(host)]))}
     plan["plan_token"] = _hash(plan)
     return plan
 

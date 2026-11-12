@@ -383,8 +383,11 @@ match both content and metadata.
 [`tools/deploy/protocol.json`](../../tools/deploy/protocol.json) owns the current protocol and tool generation. The stable
 launcher dispatches to the active immutable bundle. `hello` reports host metadata
 without a mutation. Requests include the client's protocol, framework version,
-generation, and bundle digest. The minimum client generation remains 1, so
-instances registered with generation 3 remain supported.
+generation, and bundle digest. The current tool generation is 10. The minimum
+client generation remains 1, so existing registrations and generation-9 clients
+remain supported for ordinary deployment actions. Generation-9 tools reject
+planning or applying an upgrade against a generation-10 host; they cannot bypass
+the retired-bundle ledger by selecting an older bundle.
 
 Tool upgrades require an installed host generation of at least 9. `tools-plan` checks the installed host's generation through `hello` before
 staging anything. The candidate also enforces this floor before planning or
@@ -440,7 +443,13 @@ atomically before any deletion. A missing ledger means empty history; an invalid
 ledger fails closed with `invalid_retired_tools`. The ledger and remaining complete
 journals both reject retired bundles. Active-bundle journals remain unchanged so
 replaying the latest `OPERATION` stays idempotent. A retry finishes interrupted
-cleanup without losing retirement history.
+cleanup without losing retirement history. Once the ledger is durable, each
+obsolete journal is atomically renamed into the root-owned mode-0700 deletion area
+at `HOST_PATHS["upgrade_deletions"]`, on the same filesystem. Both parents are synced
+before files are removed. Every prune first finishes queued deletions, validating
+paths and links even when `intent.json` has already been removed. The deletion area
+is outside normal upgrade-journal iteration, so partial deletions do not block
+planning, application or resume.
 
 ## Release lifecycle and configuration
 

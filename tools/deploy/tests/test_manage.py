@@ -11,7 +11,7 @@ from unittest.mock import patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import DeployError, MAX_JSON, atomic_json, read_json
+from contracts import DeployError, HOST_PATHS, MAX_JSON, atomic_json, read_json
 from host import Host, Paths
 import upgrades
 from test_contracts import fixture, registry
@@ -41,6 +41,19 @@ class ManagerTests(unittest.TestCase):
                 self.assertEqual(code, error.exception.code)
             run.assert_not_called()
 
+
+    def test_generation_nine_client_can_deploy_on_generation_ten_host(self):
+        import release
+        value = self.host.read_registry()
+        value['tools'] = upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)
+        self.assertEqual(10, value['tools']['generation'])
+        self.host.write_registry(value)
+        request = {**self.request, 'client': {**self.request['client'], 'generation': 9},
+                   'archive': '/staged/app.tar.gz', 'archive_sha256': 'a' * 64}
+        with patch.object(release, 'activate', return_value={'ok': True}) as activate:
+            self.assertEqual({'ok': True}, manager.execute(self.host, 'activate', request))
+        activate.assert_called_once()
+        self.assertEqual('/staged/app.tar.gz', activate.call_args.args[3])
 
     def test_unknown_mutation_fields_are_rejected(self):
         with self.assertRaises(DeployError) as error:
@@ -85,6 +98,31 @@ class ManagerTests(unittest.TestCase):
         self.assertEqual({"major": 2, "minor": 0}, response["protocol"])
         self.assertEqual({"minimum": upgrades.protocol()["minimum_client_generation"], "maximum": upgrades.protocol()["generation"]}, response["client_generation"])
         self.assertEqual(loaded["tools"]["bundle_sha256"], response["tools"]["bundle_sha256"])
+
+    def test_plan_apply_and_resume_finish_deletions_without_intent_in_real_child(self):
+        from provision import new_registry
+        self.host.paths.registry.unlink()
+        value = new_registry(self.entry["host_id"], TOOLS)
+        with self.host.lock('host'):
+            installed = upgrades.install_tools(self.host, value, TOOLS)
+        area = self.host.paths.p(HOST_PATHS['upgrade_deletions'])
+        area.mkdir(mode=0o700)
+        atomic_json(self.host.paths.p(HOST_PATHS['retired_tools']),
+                    {'schema': 1, 'digests': ['a' * 64]}, 0o600)
+        for action in ('tools-apply', 'upgrade-resume'):
+            with self.subTest(action=action):
+                queued = area / str(uuid.uuid4())
+                queued.mkdir(mode=0o700)
+                # A prior rmtree already removed intent.json; only deletion
+                # ownership (the private directory) needs to survive.
+                (queued / 'registry-before.json').write_text('{}')
+                plan = manager.execute(self.host, 'tools-plan', self.request)
+                self.assertEqual([queued.name], plan['prune_upgrade_journals'])
+                result = manager.execute(self.host, action, {**self.request,
+                    'operation_id': installed['operation_id'], 'plan_token': plan['plan_token']})
+                self.assertEqual('unchanged', result['outcome'])
+                self.assertEqual([queued.name], result['removed_upgrade_journals'])
+                self.assertFalse(queued.exists())
 
     def test_selected_bundle_prunes_in_a_real_child_with_inherited_lock(self):
         from provision import new_registry

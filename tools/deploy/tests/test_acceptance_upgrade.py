@@ -32,10 +32,10 @@ class UpgradeHarnessTests(unittest.TestCase):
                 active.mkdir()
                 old_tools = Path('/baseline')
                 old_digest = 'a' * 64 if changed else active.name
-                baseline = {'tools': {'generation': 9, 'bundle_sha256': old_digest,
+                baseline = {'tools': {'generation': 9 if changed else 10, 'bundle_sha256': old_digest,
                                       'active_path': str(active)},
                             'instances': {'instance': {'client_generation': 1}}}
-                installed = {**baseline, 'tools': {**baseline['tools'], 'bundle_sha256': active.name}}
+                installed = {**baseline, 'tools': {**baseline['tools'], 'generation': 10, 'bundle_sha256': active.name}}
                 host = Mock()
                 host.read_registry.side_effect = [baseline, installed]
                 host.paths.p.return_value = active
@@ -44,7 +44,8 @@ class UpgradeHarnessTests(unittest.TestCase):
                 stack.enter_context(patch.object(upgrade, 'fixture', return_value=(host, {}, {'instance_id': 'instance'}, {})))
                 for name in ('prove_running', 'check_report'):
                     stack.enter_context(patch.object(upgrade, name))
-                stack.enter_context(patch.object(upgrade, 'protocol', return_value={'generation': 9}))
+                stack.enter_context(patch.object(upgrade, 'protocol', side_effect=lambda path:
+                    {'generation': baseline['tools']['generation'] if path == old_tools else 10}))
                 stack.enter_context(patch.object(upgrade, 'tool_bundle', side_effect=lambda path:
                     (None, None, old_digest if path == old_tools else active.name)))
                 stack.enter_context(patch.object(upgrade, 'request', return_value={}))
@@ -57,7 +58,7 @@ class UpgradeHarnessTests(unittest.TestCase):
                     if action == 'tools-plan':
                         if len(calls) == 1:
                             return {'plan_token': 'token', 'upgrade': ({'from_digest': old_digest,
-                                'generation': 9, 'removed_paths': []} if changed else None),
+                                'generation': 10, 'removed_paths': []} if changed else None),
                                 'prune_bundles': [old_digest] if changed else [], 'prune_upgrade_journals': []}
                         return {'upgrade': None, 'prune_bundles': []}
                     if action == 'tools-apply':

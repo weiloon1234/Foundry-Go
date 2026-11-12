@@ -261,21 +261,23 @@ class UpgradeTests(unittest.TestCase):
             upgrades.check_client(self.host, request, "hello")
         self.assertEqual({"minimum": 1, "maximum": 9}, upgrades.hello(self.host)["client_generation"])
 
-    def test_generation_nine_replaces_bundle_and_includes_maintenance_module(self):
+    def test_generation_nine_upgrades_to_ten_and_includes_maintenance_module(self):
         actual = Path(__file__).resolve().parents[1]
         metadata = upgrades.protocol(actual)
-        self.assertEqual(9, metadata["generation"])
+        self.assertEqual(10, metadata["generation"])
         self.assertEqual(9, metadata["minimum_host_generation"])
         self.assertEqual(1, metadata["minimum_client_generation"])
         _, files, _ = upgrades.tool_bundle(actual)
         self.assertIn(actual / "lib/maintenance.py", files)
         self.install()
-        (self.source / "lib/maintenance.py").write_text("# new generation nine module\n")
+        self.metadata['generation'] = 10
+        (self.source / 'protocol.json').write_text(json.dumps(self.metadata))
+        (self.source / "lib/maintenance.py").write_text("# generation ten module\n")
         plan = upgrades.plan_upgrade(self.host, self.source)
         result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
         self.assertEqual("succeeded", result["outcome"])
-        self.assertEqual(9, self.host.read_registry()["tools"]["generation"])
-        self.assertEqual({"minimum": 1, "maximum": 9}, upgrades.hello(self.host)["client_generation"])
+        self.assertEqual(10, self.host.read_registry()["tools"]["generation"])
+        self.assertEqual({"minimum": 1, "maximum": 10}, upgrades.hello(self.host)["client_generation"])
 
     def test_generation_eight_refuses_planning_and_installation_before_writes(self):
         self.install()
@@ -571,6 +573,118 @@ class UpgradeTests(unittest.TestCase):
             upgrades._prune_bundles(self.host)
         self.assertEqual('unsafe_path', caught.exception.code)
         self.assertTrue(leftover.exists())
+
+    def test_journal_deletion_resumes_after_rename_or_partial_rmtree(self):
+        first = self.install()
+        source = self.source / 'lib/change.py'
+        for failure in ('rename', 'rmtree'):
+            with self.subTest(failure=failure):
+                previous = first
+                source.write_text('# ' + failure + '\n')
+                operation = str(uuid.uuid4())
+                plan = upgrades.plan_upgrade(self.host, self.source)
+                area = self.host.paths.p(HOST_PATHS['upgrade_deletions'])
+                original_rename, original_remove = os.rename, upgrades.shutil.rmtree
+                def rename(old, new):
+                    original_rename(old, new)
+                    if Path(new).parent == area:
+                        raise OSError('crash after rename before parent sync')
+                def remove(path):
+                    if path.parent == area:
+                        (path / 'intent.json').unlink()
+                        raise OSError('crash inside rmtree after intent removal')
+                    return original_remove(path)
+                with patch.object(upgrades.os, 'rename', side_effect=rename if failure == 'rename' else original_rename), \
+                        patch.object(upgrades.shutil, 'rmtree', side_effect=remove if failure == 'rmtree' else original_remove), \
+                        self.assertRaises(OSError):
+                    upgrades.apply_upgrade(self.host, self.source, plan['plan_token'], operation)
+                queued = area / previous['operation_id']
+                self.assertTrue(queued.is_dir())
+                self.assertEqual(failure == 'rename', (queued / 'intent.json').exists())
+                self.assertEqual(0o700, area.stat().st_mode & 0o777)
+                self.assertEqual(os.geteuid(), area.stat().st_uid)
+                self.assertFalse((self.host.paths.p(HOST_PATHS['upgrades']) / queued.name).exists())
+                reviewed = upgrades.plan_upgrade(self.host, self.source)
+                self.assertIsNone(reviewed['upgrade'])
+                self.assertEqual([queued.name], reviewed['prune_upgrade_journals'])
+                self.assertFalse(upgrades._upgrade_pending(self.host, self.host.read_registry()))
+                # Apply and upgrade-resume share this owner. Keep the original
+                # operation/token to prove replay does not require a new plan.
+                first = upgrades.apply_upgrade(self.host, self.source, plan['plan_token'], operation)
+                self.assertEqual('unchanged', first['outcome'])
+                self.assertEqual([queued.name], first['removed_upgrade_journals'])
+                self.assertEqual([], list(area.iterdir()))
+                self.assertEqual([operation], [p.name for p in self.host.paths.p(HOST_PATHS['upgrades']).iterdir()])
+                self.assertEqual([], upgrades.plan_upgrade(self.host, self.source)['prune_upgrade_journals'])
+                self.assertEqual([], self.install()['removed_upgrade_journals'])
+
+    def test_deletion_area_rejects_unsafe_entries_before_removing_anything(self):
+        self.install()
+        leftover = self.leftover()
+        area = self.host.paths.p(HOST_PATHS['upgrade_deletions'])
+        area.mkdir(mode=0o700)
+        upgrades.atomic_json(self.host.paths.p(HOST_PATHS['retired_tools']), {'schema': 1, 'digests': []}, 0o600)
+        outside = self.root / 'outside'
+        outside.mkdir()
+        marker = outside / 'keep'
+        marker.write_text('keep')
+        for kind in ('name', 'file', 'symlink', 'nested_symlink', 'hardlink', 'permissions'):
+            path = area / ('unexpected' if kind == 'name' else str(uuid.uuid4()))
+            with self.subTest(kind=kind):
+                if kind == 'file':
+                    path.write_text('unexpected')
+                elif kind == 'symlink':
+                    path.symlink_to(outside, target_is_directory=True)
+                else:
+                    path.mkdir()
+                    if kind == 'nested_symlink':
+                        (path / 'link').symlink_to(marker)
+                    if kind == 'hardlink':
+                        os.link(marker, path / 'link')
+                    if kind == 'permissions':
+                        area.chmod(0o755)
+                try:
+                    for action in (lambda: upgrades.plan_upgrade(self.host, self.source), self.install):
+                        with self.assertRaises(DeployError) as caught:
+                            action()
+                        self.assertEqual('unsafe_path', caught.exception.code)
+                    self.assertTrue(leftover.exists())
+                    self.assertEqual('keep', marker.read_text())
+                finally:
+                    area.chmod(0o700)
+                    if path.is_file() or path.is_symlink():
+                        path.unlink()
+                    else:
+                        for child in path.iterdir():
+                            child.unlink()
+                        path.rmdir()
+
+    def test_generation_nine_candidate_cannot_reselect_a_after_a_b_c_pruning(self):
+        first = self.install()
+        baseline = self.root / 'baseline'
+        import shutil
+        shutil.copytree(self.source, baseline)
+        self.metadata['generation'] = 10
+        (self.source / 'protocol.json').write_text(json.dumps(self.metadata))
+        second = self.install(allow_upgrade=True)
+        (self.source / 'lib/change.py').write_text('# C\n')
+        third = self.install(allow_upgrade=True)
+        self.assertEqual([third['operation_id']], [path.name for path in self.host.paths.p(HOST_PATHS['upgrades']).iterdir()])
+        self.assertIn(first['bundle_sha256'], upgrades._retired_bundles(self.host))
+        self.assertIn(second['bundle_sha256'], upgrades._retired_bundles(self.host))
+        before = self.host.read_registry()
+        # Generation-9 tools lack the ledger reader. The shared generation guard
+        # must refuse planning/apply before either history mechanism is consulted.
+        with patch.object(upgrades, '_retired_bundles', side_effect=AssertionError('history read')), \
+                patch.object(upgrades, '_upgrade_journals', side_effect=AssertionError('history read')):
+            for action in (lambda: upgrades.plan_upgrade(self.host, baseline),
+                           lambda: upgrades.apply_upgrade(self.host, baseline, 'old-plan', str(uuid.uuid4()))):
+                with self.assertRaises(DeployError) as caught:
+                    action()
+                self.assertEqual('tools_downgrade', caught.exception.code)
+        self.assertEqual(before, self.host.read_registry())
+        for action in ('activate', 'restart', 'down', 'up'):
+            upgrades.check_client(self.host, {'protocol': self.metadata['protocol'], 'client': {'generation': 9}}, action)
 
     def test_upgrade_reloads_even_when_units_were_already_written(self):
         import provision

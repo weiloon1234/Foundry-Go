@@ -13,14 +13,17 @@ confirmation rules, host prerequisites, and recovery procedures.
 | `lib/backup.py` | PostgreSQL and encrypted key/config backups |
 | `protocol.json` | Wire protocol and tool generation |
 
-The bundle uses protocol 2.0 and generation 9. Tool upgrades require an installed
+The bundle uses protocol 2.0 and generation 10. Tool upgrades require an installed
 host generation of at least 9. The local command checks the installed host's
 `hello` response before staging any bundle; the candidate checks again before
 planning or installation. Older hosts receive `tools_upgrade_floor`: the host
 must already run generation 9 tools before this upgrade. The minimum client
-generation remains 1, preserving existing registrations.
+generation remains 1, preserving existing registrations. Generation-9 clients can
+still deploy ordinary application releases to generation-10 hosts. Older generation-9
+tools reject plans and applies against these hosts, preventing them from bypassing
+the retired-bundle ledger.
 
-Generation 9 rejects deployment attempts containing `result` metadata and backup
+The bundle rejects deployment attempts containing `result` metadata and backup
 receipts without `fresh_at` or journals without `configuration_revision`.
 Configuration failures continue to use `outcome: failed_applied`. The release
 archive format and protocol 2.0 are unchanged, so the published generation-9
@@ -45,7 +48,13 @@ schema-validated, sorted, de-duplicated list. A missing ledger means no recorded
 retirements; invalid content fails closed with `invalid_retired_tools`.
 The ledger and remaining completed journals prevent retired bundles from being
 selected again. Active-bundle journals remain unchanged for operation replay.
-Retries repeat the ledger write before finishing interrupted deletions.
+After the ledger is durable, pruning atomically renames each obsolete journal into
+the root-owned mode-0700 `upgrade_deletions` area declared in `HOST_PATHS`, on the
+same filesystem and outside the upgrades directory. It syncs both parents before
+removing the journal's files. Every prune first finishes already queued deletions,
+including directories whose intent has been removed. Plans include those operation
+IDs; apply and resume do not mistake them for unfinished upgrades. Names, paths and
+links are validated before deletion.
 
 Deployment actions include `deploy`, `status`, `rollback`, `restart`, `stop`,
 `down`, `up`, `logs`, `shell`, `config`, `keys rotate`, `reconcile`, `report`, `sync`,

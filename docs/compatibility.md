@@ -23,11 +23,16 @@ current release with the recorded host key and saved personal connection setting
 
 Before first use, run `ACTION=tools-plan`, then `ACTION=tools-apply` with the
 reviewed plan to install the current generation declared in
-[`tools/deploy/protocol.json`](../tools/deploy/protocol.json). The minimum host generation
-is 9; protocol 2.0 and minimum client generation 1 are unchanged. Hosts below the
+[`tools/deploy/protocol.json`](../tools/deploy/protocol.json). Tool generation 10
+prevents generation-9 planners from reselecting retired bundles after journal
+pruning. Generation-9 clients can still run ordinary deployments. The minimum host
+generation is 9; protocol 2.0 and minimum client generation 1 are unchanged. Hosts below the
 floor receive `tools_upgrade_floor` before candidate staging or installation.
 Completed upgrade journals for other bundles are pruned after their target and
 previous digests are atomically recorded in the root-owned retired-bundle ledger.
+Pruning then atomically moves those journals into a private deletion area and syncs
+both parents before removing their contents. Retries finish queued deletions even
+without an intent file; planning and resume ignore them as upgrade journals.
 Retired bundles remain forbidden, and active-bundle journals preserve operation replay.
 A missing ledger is empty; invalid ledger content fails closed with
 `invalid_retired_tools`. See [tool upgrades](guides/deployment.md#tool-protocol-and-upgrades).
@@ -572,7 +577,8 @@ and additive; see [assets and SPA routing](guides/http-assets.md).
 | Job payload `Version` | Keep handlers for retained producer versions until queued, delayed, retried and workflow work has drained or been deliberately migrated. |
 | Job envelope transport version | Format 3 (`jobs.CurrentEnvelopeVersion`) is the only accepted and emitted format; trace is optional. Convert v0.22.x format-1/2 data in queues, workflows, outbox rows and failed-job archives before activating v0.23.0. See [envelope activation requirements](guides/job-trace-rollout.md). |
 | WebSocket cluster policy | The namespace policy fingerprint includes cluster limits such as `MaxConnections` (default now 65,536). During a rolling upgrade, pin the previous value on new processes or deploy the new release under a new realtime namespace; mixed fingerprints are rejected as `PolicyConflict`. Fan-out envelopes stay readable by earlier releases: excluding the sender (`RelayToOthers`, `ExceptConnection` of a local connection) adds no envelope field. Excluding a connection on another instance does, and earlier releases stop their hub on such an envelope, so `ClusterConfig.ExcludeRemoteConnections` stays off (such publications fail with `fault.Invalid`) until every instance runs this release; alternatively deploy under a new namespace. This release drops a single envelope it cannot read instead of stopping. |
-| Redis cache entries and rate-limit windows | Tagged cache payloads store their snapshot fingerprint and fixed rate-limit windows start at a per-key phase. Entries written by an earlier release are misses that the next write replaces; for an error-free rolling upgrade shared by old and new processes, deploy the new release under a new cache/rate-limit namespace. |
+| Redis cache entries | Tagged cache payloads store their snapshot fingerprint. Entries written by an earlier release are misses that the next write replaces; for a rolling upgrade shared by old and new processes, deploy the new release under a new cache namespace. |
+| Redis rate-limit buckets | Fixed windows start at a per-key phase. Retired version-1 buckets are rejected without writes or automatic replacement. Use a new rate-limit namespace when old and new processes overlap; `Clear` is the explicit repair path for an owned address. See [Redis bucket validation and repair](guides/rate-limiting.md#redis-authority) and [typed namespaces](guides/rate-limiting.md). |
 | Redis job queue storage layout | Layout 3 only; unsupported layouts fail closed without writes. Embedded envelopes, terminal workflow members in the independent finished index, and groups without string catch/finally fields are invalid. Quarantine and current sparse-field defaults remain. See [storage layout](guides/jobs-operations.md#redis-queue-storage-layout). |
 | Job layout migration API | v0.16.0 removes `jobs.LayoutMigrator`, `jobs.ErrLegacyLayout`, `jobs.Dispatcher.MigrateLayout`, `redis.JobBackend.JobMigrateLayout`, and `jobs migrate-layout`. Remove consumer routing and calls. There are no aliases or replacement migration APIs. |
 | Queue storage inspection | v0.17.0 removes the remaining read-only Redis queue layout inspection API and its result types. Remove custom consumer calls. Runtime layout-3 enforcement is unchanged. |

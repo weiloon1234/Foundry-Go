@@ -21,14 +21,25 @@ OpenAPI regression, deploy-tool unit suite and docs check passed; CI pending at 
   dated acceptance evidence.
 - Deploy acceptance builds a privately packaged candidate checkout and tests a
   published generation-9 baseline, asserting either replacement or an equal-bundle
-  no-op. The host floor is 9; the client floor remains 1.
+  no-op. Tool generation 10 rejects rollback through older generation-9 planners;
+  generation-9 clients still deploy normally. The host floor is 9; the client floor
+  remains 1.
 - Tool pruning records retired target/previous bundle digests atomically before
   removing completed journals for other bundles. Active journals remain replayable;
-  a validated host ledger preserves rejection of every retired bundle.
+  a validated host ledger preserves rejection of every retired bundle. Obsolete
+  journals move atomically into a private deletion area; retries finish deletions
+  even after the intent file is gone, without blocking plan/apply/resume.
 - Milestone 2: deploy-tool unit suite, shell syntax and documentation checks passed.
   Both the local fixture and a private-proxy candidate snapshot built natively;
   the arm64 Docker acceptance build produced its archive. The real host scenarios
   and real-systemd opt-in contracts remain CI-only; CI pending at commit.
+
+- Milestone 3 review fixes: crash-safe journal deletion, generation-10 downgrade
+  protection and corrected rate-limit rollout guidance passed deploy-tool tests,
+  shell syntax and documentation checks. The private-proxy snapshot and local
+  fixture built natively; the arm64 Docker build produced its archive. Published
+  generation-9 tools rejected plan/apply after isolated A→B→C pruning. Host
+  scenarios remain CI-only; CI pending at commit.
 
 ## Dependency updates — v0.23.2, 2026-11-12
 
