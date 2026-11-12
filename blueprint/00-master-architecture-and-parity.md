@@ -8,10 +8,18 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Dependency updates — v0.23.2, 2026-11-12
+
+Status: **build, vet and race tests for every package importing an AWS module passed;
+CI pending at commit**. aws-sdk-go-v2 1.48.0 with S3 1.114.10 and credentials 1.21.0:
+the SDK's standard retryer now uses Retry Behavior 2.1. Foundry-Go's S3 mutations stay
+single-attempt (`aws.NopRetryer`); only replayable reads use the standard retryer, and
+no deprecated retry option is set. Supersedes dependabot PRs #25 and #26.
+
 ## Dependency updates — v0.23.1, 2026-11-12
 
 Status: **build, vet and race tests for every package importing an updated module
-passed; CI pending at commit**. pgx 5.12.0 (two security fixes, not reachable from
+passed; framework CI passed on 8446f5a3**. pgx 5.12.0 (two security fixes, not reachable from
 Foundry-Go), aws-sdk-go-v2, phonenumbers, brotli, and TypeScript tooling jsdom/vue.
 Supersedes dependabot PRs #20-#27.
 

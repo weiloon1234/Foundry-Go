@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.23.2 — 2026-11-12
+
+- Dependencies: aws-sdk-go-v2 1.48.0, S3 1.114.10 and credentials 1.21.0. The SDK's
+  standard retryer now uses AWS Retry Behavior 2.1 (50 ms backoff base, 1 s for
+  throttling, honors `x-amz-retry-after`). S3 mutations remain single-attempt; replayable
+  S3 reads keep their configured attempt count with the new backoff. No API changes.
+
 ## v0.23.1 — 2026-11-12
 
 - Dependencies: `github.com/jackc/pgx/v5` 5.12.0, which fixes GHSA-j38q-h3ph-jjpq
