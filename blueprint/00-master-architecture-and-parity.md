@@ -8,6 +8,13 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Dependency updates — v0.23.1, 2026-11-12
+
+Status: **build, vet and race tests for every package importing an updated module
+passed; CI pending at commit**. pgx 5.12.0 (two security fixes, not reachable from
+Foundry-Go), aws-sdk-go-v2, phonenumbers, brotli, and TypeScript tooling jsdom/vue.
+Supersedes dependabot PRs #20-#27.
+
 ## Proven compatibility readers removed — v0.23.0, 2026-11-12
 
 Status: **jobs/redis/attachments race and integration tests, deploy-tool unit suite and

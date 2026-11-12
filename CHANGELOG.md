@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.23.1 — 2026-11-12
+
+- Dependencies: `github.com/jackc/pgx/v5` 5.12.0, which fixes GHSA-j38q-h3ph-jjpq
+  (SQL injection in simple-protocol batches) and GHSA-95fj-3fxw-g62g
+  (`require_auth`/`channel_binding` bypass without full TLS verification). Foundry-Go
+  sends no batches and deployments use `verify-full`, so neither was reachable here;
+  the update still removes the vulnerable versions from consumers' module graphs.
+- Dependencies: aws-sdk-go-v2 credentials 1.20.15 and S3 1.114.8, phonenumbers 2.0.16,
+  brotli 1.2.8; TypeScript tooling jsdom 31.0.0 and vue 3.5.45. No API changes.
+
 ## v0.23.0 — 2026-11-12
 
 - Changed: every job envelope writes format 3 with optional trace. Readers reject
