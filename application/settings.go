@@ -48,7 +48,10 @@ type HTTPSettings struct {
 	Enabled           bool
 	Server            http.ServerConfig
 	SecurityHeaders   bool
-	Probes            ProbeSettings
+	// CSPAllowlist supplies opt-in hosts for http.ApplyCSPAllowlist. It does not
+	// install a policy; applications retain their explicit CSP middleware.
+	CSPAllowlist http.CSPAllowlist
+	Probes       ProbeSettings
 }
 
 // ImageSettings configures the image processing engine.

@@ -105,9 +105,9 @@ func compileCSPPolicy(p CSPPolicy, reportOnly bool) (compiledCSP, error) {
 			}
 			if source.kind == cspNonce {
 				switch directive.name {
-				case "default-src", "script-src", "script-src-elem", "style-src", "style-src-elem":
+				case "default-src", "script-src", "script-src-elem", "style-src", "style-src-elem", "worker-src":
 				default:
-					return compiledCSP{}, safeerror.NewFault(fault.Invalid, "CSP nonce requires a script or style element source directive")
+					return compiledCSP{}, safeerror.NewFault(fault.Invalid, "CSP nonce requires a script, style element or worker source directive")
 				}
 				result.nonce = true
 			}

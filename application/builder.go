@@ -63,7 +63,9 @@ func New(settings Settings, opts ...Option) *Builder {
 	b := &Builder{state: &builderState{options: options{clock: clock.System{}}}}
 	schema, err := SettingsConfigSchema()
 	if err == nil {
-		b.state.settings, _, err = schema.Load(settings, config.Inputs[Settings]{})
+		b.state.settings, _, err = schema.Load(settings, config.Inputs[Settings]{Validate: func(s Settings) error {
+			return s.HTTP.CSPAllowlist.Validate()
+		}})
 	}
 	b.state.err = err
 	for _, option := range opts {

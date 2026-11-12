@@ -222,7 +222,12 @@ type SettingsHTTPConfigKeySet struct {
 	Server  SettingsHTTPServerConfigKeySet
 	// SecurityHeaders selects http.security_headers. Set accepts bool.
 	SecurityHeaders config.Key[Settings, bool]
-	Probes          SettingsHTTPProbesConfigKeySet
+	//
+	// CSPAllowlist supplies opt-in hosts for http.ApplyCSPAllowlist. It does not
+	// install a policy; applications retain their explicit CSP middleware.
+	//
+	CSPAllowlist SettingsHTTPCSPAllowlistConfigKeySet
+	Probes       SettingsHTTPProbesConfigKeySet
 }
 
 // SettingsHTTPStatementDetectorConfigKeySet exposes compiler-checked configuration overrides.
@@ -333,6 +338,20 @@ type SettingsHTTPServerConfigKeySet struct {
 	// AccessLog emits one metadata-only completion event to the server logger.
 	//
 	AccessLog config.Key[Settings, bool]
+}
+
+// SettingsHTTPCSPAllowlistConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsHTTPCSPAllowlistConfigKeySet struct {
+	// Presets selects http.csp_allowlist.presets. Set accepts []http.CSPPreset.
+	Presets config.Key[Settings, []http.CSPPreset]
+	// ScriptOrigins selects http.csp_allowlist.script_origins. Set accepts []http.Origin.
+	ScriptOrigins config.Key[Settings, []http.Origin]
+	// ConnectOrigins selects http.csp_allowlist.connect_origins. Set accepts []http.Origin.
+	ConnectOrigins config.Key[Settings, []http.Origin]
+	// ImageOrigins selects http.csp_allowlist.image_origins. Set accepts []http.Origin.
+	ImageOrigins config.Key[Settings, []http.Origin]
+	// FrameOrigins selects http.csp_allowlist.frame_origins. Set accepts []http.Origin.
+	FrameOrigins config.Key[Settings, []http.Origin]
 }
 
 // SettingsHTTPProbesConfigKeySet exposes compiler-checked configuration overrides.
@@ -2035,6 +2054,13 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 				AccessLog:             config.Scalar[Settings, bool]("http.server.access_log", func(settings *Settings) *bool { return &settings.HTTP.Server.AccessLog }),
 			},
 			SecurityHeaders: config.Scalar[Settings, bool]("http.security_headers", func(settings *Settings) *bool { return &settings.HTTP.SecurityHeaders }),
+			CSPAllowlist: SettingsHTTPCSPAllowlistConfigKeySet{
+				Presets:        config.JSON[Settings, []http.CSPPreset]("http.csp_allowlist.presets", func(settings *Settings) *[]http.CSPPreset { return &settings.HTTP.CSPAllowlist.Presets }),
+				ScriptOrigins:  config.JSON[Settings, []http.Origin]("http.csp_allowlist.script_origins", func(settings *Settings) *[]http.Origin { return &settings.HTTP.CSPAllowlist.ScriptOrigins }),
+				ConnectOrigins: config.JSON[Settings, []http.Origin]("http.csp_allowlist.connect_origins", func(settings *Settings) *[]http.Origin { return &settings.HTTP.CSPAllowlist.ConnectOrigins }),
+				ImageOrigins:   config.JSON[Settings, []http.Origin]("http.csp_allowlist.image_origins", func(settings *Settings) *[]http.Origin { return &settings.HTTP.CSPAllowlist.ImageOrigins }),
+				FrameOrigins:   config.JSON[Settings, []http.Origin]("http.csp_allowlist.frame_origins", func(settings *Settings) *[]http.Origin { return &settings.HTTP.CSPAllowlist.FrameOrigins }),
+			},
 			Probes: SettingsHTTPProbesConfigKeySet{
 				Liveness:       config.Scalar[Settings, bool]("http.probes.liveness", func(settings *Settings) *bool { return &settings.HTTP.Probes.Liveness }),
 				LivenessPath:   config.Scalar[Settings, string]("http.probes.liveness_path", func(settings *Settings) *string { return &settings.HTTP.Probes.LivenessPath }),
@@ -2713,6 +2739,11 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.HTTP.Server.MaintenanceReadPaths,
 		keys.HTTP.Server.AccessLog,
 		keys.HTTP.SecurityHeaders,
+		keys.HTTP.CSPAllowlist.Presets,
+		keys.HTTP.CSPAllowlist.ScriptOrigins,
+		keys.HTTP.CSPAllowlist.ConnectOrigins,
+		keys.HTTP.CSPAllowlist.ImageOrigins,
+		keys.HTTP.CSPAllowlist.FrameOrigins,
 		keys.HTTP.Probes.Liveness,
 		keys.HTTP.Probes.LivenessPath,
 		keys.HTTP.Probes.Readiness,

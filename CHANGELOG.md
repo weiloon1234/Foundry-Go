@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.27.0 — 2026-11-13
+
+- Added: typed `http.CSPAllowlist`, `CSPPresetCloudflareWebAnalytics`, and
+  `ApplyCSPAllowlist`, configured through `application.HTTPSettings.CSPAllowlist`.
+  Defaults remain empty. Exact HTTPS origins extend explicit script, connect,
+  image, and frame directives without mutating callers or repeating hosts.
+  Script additions pin an inherited worker policy to the original script sources.
+  Invalid settings fail before resources open; maintenance pages keep their strict CSP.
+
 ## v0.26.0 — 2026-11-13
 
 - Fixed: generated portal sessions cancel timed-out Web Lock and in-tab renewal

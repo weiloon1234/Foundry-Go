@@ -233,7 +233,12 @@ type SettingsAppHTTPConfigKeySet struct {
 	Server  SettingsAppHTTPServerConfigKeySet
 	// SecurityHeaders selects app.http.security_headers. Set accepts bool.
 	SecurityHeaders config.Key[Settings, bool]
-	Probes          SettingsAppHTTPProbesConfigKeySet
+	//
+	// CSPAllowlist supplies opt-in hosts for http.ApplyCSPAllowlist. It does not
+	// install a policy; applications retain their explicit CSP middleware.
+	//
+	CSPAllowlist SettingsAppHTTPCSPAllowlistConfigKeySet
+	Probes       SettingsAppHTTPProbesConfigKeySet
 }
 
 // SettingsAppHTTPStatementDetectorConfigKeySet exposes compiler-checked configuration overrides.
@@ -344,6 +349,20 @@ type SettingsAppHTTPServerConfigKeySet struct {
 	// AccessLog emits one metadata-only completion event to the server logger.
 	//
 	AccessLog config.Key[Settings, bool]
+}
+
+// SettingsAppHTTPCSPAllowlistConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsAppHTTPCSPAllowlistConfigKeySet struct {
+	// Presets selects app.http.csp_allowlist.presets. Set accepts []http.CSPPreset.
+	Presets config.Key[Settings, []http.CSPPreset]
+	// ScriptOrigins selects app.http.csp_allowlist.script_origins. Set accepts []http.Origin.
+	ScriptOrigins config.Key[Settings, []http.Origin]
+	// ConnectOrigins selects app.http.csp_allowlist.connect_origins. Set accepts []http.Origin.
+	ConnectOrigins config.Key[Settings, []http.Origin]
+	// ImageOrigins selects app.http.csp_allowlist.image_origins. Set accepts []http.Origin.
+	ImageOrigins config.Key[Settings, []http.Origin]
+	// FrameOrigins selects app.http.csp_allowlist.frame_origins. Set accepts []http.Origin.
+	FrameOrigins config.Key[Settings, []http.Origin]
 }
 
 // SettingsAppHTTPProbesConfigKeySet exposes compiler-checked configuration overrides.
@@ -2095,6 +2114,13 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 					AccessLog:             config.Scalar[Settings, bool]("app.http.server.access_log", func(settings *Settings) *bool { return &settings.App.HTTP.Server.AccessLog }),
 				},
 				SecurityHeaders: config.Scalar[Settings, bool]("app.http.security_headers", func(settings *Settings) *bool { return &settings.App.HTTP.SecurityHeaders }),
+				CSPAllowlist: SettingsAppHTTPCSPAllowlistConfigKeySet{
+					Presets:        config.JSON[Settings, []http.CSPPreset]("app.http.csp_allowlist.presets", func(settings *Settings) *[]http.CSPPreset { return &settings.App.HTTP.CSPAllowlist.Presets }),
+					ScriptOrigins:  config.JSON[Settings, []http.Origin]("app.http.csp_allowlist.script_origins", func(settings *Settings) *[]http.Origin { return &settings.App.HTTP.CSPAllowlist.ScriptOrigins }),
+					ConnectOrigins: config.JSON[Settings, []http.Origin]("app.http.csp_allowlist.connect_origins", func(settings *Settings) *[]http.Origin { return &settings.App.HTTP.CSPAllowlist.ConnectOrigins }),
+					ImageOrigins:   config.JSON[Settings, []http.Origin]("app.http.csp_allowlist.image_origins", func(settings *Settings) *[]http.Origin { return &settings.App.HTTP.CSPAllowlist.ImageOrigins }),
+					FrameOrigins:   config.JSON[Settings, []http.Origin]("app.http.csp_allowlist.frame_origins", func(settings *Settings) *[]http.Origin { return &settings.App.HTTP.CSPAllowlist.FrameOrigins }),
+				},
 				Probes: SettingsAppHTTPProbesConfigKeySet{
 					Liveness:       config.Scalar[Settings, bool]("app.http.probes.liveness", func(settings *Settings) *bool { return &settings.App.HTTP.Probes.Liveness }),
 					LivenessPath:   config.Scalar[Settings, string]("app.http.probes.liveness_path", func(settings *Settings) *string { return &settings.App.HTTP.Probes.LivenessPath }),
@@ -2854,6 +2880,11 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.HTTP.Server.MaintenanceReadPaths,
 		keys.App.HTTP.Server.AccessLog,
 		keys.App.HTTP.SecurityHeaders,
+		keys.App.HTTP.CSPAllowlist.Presets,
+		keys.App.HTTP.CSPAllowlist.ScriptOrigins,
+		keys.App.HTTP.CSPAllowlist.ConnectOrigins,
+		keys.App.HTTP.CSPAllowlist.ImageOrigins,
+		keys.App.HTTP.CSPAllowlist.FrameOrigins,
 		keys.App.HTTP.Probes.Liveness,
 		keys.App.HTTP.Probes.LivenessPath,
 		keys.App.HTTP.Probes.Readiness,
