@@ -16,6 +16,23 @@ runs:
           verify|backends|security) ;;
           *) echo 'Unknown Foundry setup profile' >&2; exit 1 ;;
         esac
+    - name: Free runner disk for race builds
+      # A core-package change rebuilds every race-instrumented test binary on top
+      # of the restored cache, which can exhaust the macOS runner's disk.
+      if: ${{ runner.os == 'macOS' && inputs.profile == 'backends' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        df -h / | tail -1
+        sudo rm -rf "$HOME/Library/Android" /Users/runner/hostedtoolcache/CodeQL /Users/runner/hostedtoolcache/Ruby /Users/runner/hostedtoolcache/PyPy
+        current="$(cd "$(xcode-select -p)/../.." && pwd -P)"
+        for app in /Applications/Xcode*.app; do
+          [ -L "$app" ] && continue
+          [ "$(cd "$app" && pwd -P)" = "$current" ] && continue
+          sudo rm -rf "$app"
+        done
+        xcrun --find clang >/dev/null
+        df -h / | tail -1
     - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       env:
         GOTOOLCHAIN: auto
