@@ -131,7 +131,10 @@ blocked checks honestly; historical acceptance does not verify a new revision.
   Use `testkit/postgres` to remove a test's own generated schema after it passes;
   retain it on failure or panic, or with `FOUNDRY_TEST_KEEP_SCHEMAS=1`. A test that
   creates an object outside its schema must clean up only that exact object on
-  success, using the same retention rule. Never wipe/reset/drop databases, remove
+  success, using the same retention rule. Use `testkit/redis` to register exact
+  test-owned key prefixes before application/client startup; passing tests remove
+  those keys after shutdown, while failure, panic or `FOUNDRY_TEST_KEEP_REDIS_KEYS=1`
+  retains them. Never wipe/reset/drop databases, remove
   unrelated schemas or data, flush shared stores, or start duplicate database servers.
 - Never overwrite working credentials or put them in source, logs, fixtures or chat.
 - Never run `git commit`, `git push` or `git merge`. Leave version control to the user.

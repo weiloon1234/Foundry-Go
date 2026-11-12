@@ -89,6 +89,18 @@ func redisSettings(t testing.TB) infrastructure.RedisSettings {
 
 // doc-example:end redis-test-settings
 
+// doc-example:begin redis-test-cleanup
+func prepareRedisCleanup(t testing.TB, builder *application.Builder) {
+	t.Helper()
+	inventory, err := builder.RedisKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	redistest.Cleanup(t, inventory)
+}
+
+// doc-example:end redis-test-cleanup
+
 // doc-example:begin missing-attachment-object
 func removeOriginal(t testing.TB, manager *attachments.Manager, file attachments.File[models.User]) {
 	t.Helper()

@@ -1,6 +1,7 @@
-// Package redis provides opt-in, non-destructive Redis acceptance helpers.
-// Callers scope their keys to their own namespace; no helper flushes or deletes
-// shared data.
+// Package redis provides opt-in Redis acceptance helpers. Passing tests remove
+// only their own registered key prefixes after application shutdown. Failed or
+// panicking tests retain them, as does FOUNDRY_TEST_KEEP_REDIS_KEYS=1. No helper
+// flushes a shared store. Callers must use unique test-owned namespaces.
 package redis
 
 import (

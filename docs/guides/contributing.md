@@ -102,6 +102,13 @@ credentials. Keep connection files private and URL-encode credentials correctly.
 
 Tests create unique `foundry_test_…` schemas through `testkit/postgres` and apply ordinary migrations inside them. A test may remove only what it created. Passing tests drop their own schemas after pool and application cleanup. Failed or panicking tests retain them for inspection. A failed subtest also retains its parent's shared schema. Set `FOUNDRY_TEST_KEEP_SCHEMAS=1` to retain schemas from passing tests while debugging. The `PostgreSQL test namespace: <name>` log states that the schema is dropped after a passing test and kept on failure or with that variable; cleanup behavior is unchanged.
 
+Redis tests also use unique namespaces. Register `testkit/redis.Cleanup(t, inventory)`
+from `builder.RedisKeys()` or `plan.RedisKeys()` before building or starting clients.
+For direct feature assembly, use `CleanupNamespace(t, namespace, features...)`.
+Passing tests remove only their exact registered key prefixes after shutdown;
+failed or panicking tests retain them, as does `FOUNDRY_TEST_KEEP_REDIS_KEYS=1`.
+See [Redis test connections](isolated-http-tests.md#recipe-redis-test-config).
+
 Schema cleanup uses an independent pool, a five-second context and a 100 ms lock timeout. A failed drop is logged and leaves the schema behind without failing the test. Tests that create an object outside their schema, such as a public-schema fixture table, clean up only that exact object themselves and use `testkit/postgres.KeepSchemas(t)` for the same retention rule. Never wipe/reset/drop databases, remove unrelated schemas or data, flush shared stores or start duplicate database servers.
 
 Missing configuration fails this required gate; ordinary `make test` skips PostgreSQL acceptance when no URL is supplied. An unavailable or incorrect database fails rather than silently skipping.

@@ -3,6 +3,7 @@ package configuredprofile
 import (
 	"context"
 	"crypto/rand"
+	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/cloud/credentials"
 	"github.com/weiloon1234/Foundry-Go/database"
@@ -47,6 +48,14 @@ func TestCacheDriverSwitchKeepsTypedConsumer(t *testing.T) {
 			}
 			if migrationDB != nil {
 				s.Features.OutboundCapture.Schema = schema
+			}
+
+			if driver == infrastructure.RedisCache {
+				inventory, err := application.New(s).RedisKeys()
+				if err != nil {
+					t.Fatal(err)
+				}
+				redistest.Cleanup(t, inventory)
 			}
 			app, err := Build(t.Context(), s, quiet())
 			if err != nil {
@@ -108,13 +117,7 @@ func TestCacheDriverSwitchKeepsTypedConsumer(t *testing.T) {
 			if err != nil || !hit || got != "primary" {
 				t.Fatal("typed read failed", err)
 			}
-			// Remove only the two values created by this test, never shared backend data.
-			if _, err := first.Forget(t.Context(), "message"); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := second.Forget(t.Context(), "message"); err != nil {
-				t.Fatal(err)
-			}
+
 		})
 	}
 }

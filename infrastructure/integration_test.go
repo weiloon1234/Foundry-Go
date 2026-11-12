@@ -43,6 +43,7 @@ func TestNativeNamedDatabaseAndSharedRedisIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	redistest.Cleanup(t, plan.RedisKeys())
 	app := built(t, plan)
 	if err = app.Start(t.Context()); err != nil {
 		t.Fatal(err)
@@ -134,13 +135,6 @@ func TestNativeNamedDatabaseAndSharedRedisIsolation(t *testing.T) {
 		}
 	}
 	if _, err := resolved.Leases(); err != nil {
-		t.Fatal(err)
-	}
-	// Remove only this test's declared entry; retain unrelated backend data.
-	if _, err := a.Forget(t.Context(), "same-key"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := b.Forget(t.Context(), "same-key"); err != nil {
 		t.Fatal(err)
 	}
 }

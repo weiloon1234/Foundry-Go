@@ -379,3 +379,13 @@ Use [typed Redis hashes and sets](redis-data.md) for resource field maps and
 membership. `redis/data` declarations preserve keys, fields and values while the
 existing client supplies their focused adapter capabilities. Cache invalidation
 does not affect these separate data addresses. Full native acceptance passed.
+
+## Test-owned keys
+
+Use a unique namespace for each integration test and register
+`testkit/redis.Cleanup(t, inventory)` before application or client startup, with the
+inventory from `application.Builder.RedisKeys()` or `infrastructure.Plan.RedisKeys()`.
+All connections must use the testkit endpoint. Direct features use
+`CleanupNamespace(t, namespace, features...)`. Passing tests remove only those
+exact prefixes after shutdown; failed or panicking tests retain them, as does
+`FOUNDRY_TEST_KEEP_REDIS_KEYS=1`. See [Redis test connections](isolated-http-tests.md#recipe-redis-test-config).

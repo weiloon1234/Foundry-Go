@@ -43,6 +43,7 @@ func TestRedisInventoryRuntimePrefixesAndACL(t *testing.T) {
 	plan, err := infrastructure.Configure(settings, infrastructure.WithRedisStores(declarations...))
 	inventoryOK(t, err)
 	inventory := plan.RedisKeys()
+	redistest.Cleanup(t, inventory)
 	admin := driver.NewClient(&driver.Options{Addr: net.JoinHostPort(config.Host, strconv.Itoa(int(config.Port))), DB: config.Database, MaxRetries: -1})
 	t.Cleanup(func() { inventoryOK(t, admin.Close()) })
 	info, err := admin.Info(t.Context(), "server").Result()
@@ -80,20 +81,7 @@ func TestRedisInventoryRuntimePrefixesAndACL(t *testing.T) {
 		}
 		return all, nil
 	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		keys, err := scan(ctx)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		for _, key := range keys {
-			if err := admin.Del(ctx, key).Err(); err != nil {
-				t.Error(err)
-			}
-		}
-	})
+
 	observed := make(map[string]bool)
 	observe := func(ctx context.Context) error {
 		keys, err := scan(ctx)
@@ -260,8 +248,7 @@ func TestRedisInventoryRuntimePrefixesAndACL(t *testing.T) {
 						t.Fatalf("foreign key was not denied: %v", err)
 					}
 					if err := scoped.Set(t.Context(), denied, "denied", time.Minute).Err(); err == nil || !strings.Contains(err.Error(), "NOPERM") {
-						// Clean up even if a regression allowed the deliberately forbidden write.
-						inventoryOK(t, admin.Del(t.Context(), denied).Err())
+						// A regression-created foreign key is retained with this failing test.
 						t.Fatalf("foreign write was not denied: %v", err)
 					}
 				}

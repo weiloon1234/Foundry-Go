@@ -46,7 +46,9 @@ See the [consumer guide](consumer/README.md) for existing scenario families.
   A test may remove only what it created. Use `testkit/postgres` to remove its own
   generated schema after it passes. Retain it on failure or panic, or with
   `FOUNDRY_TEST_KEEP_SCHEMAS=1`. Clean up any exact test-created object outside that
-  schema in the test itself, using the same retention rule. Never reset/drop
+  schema in the test itself, using the same retention rule. Register `testkit/redis`
+  cleanup before application/client startup for exact test-owned key prefixes;
+  failure, panic or `FOUNDRY_TEST_KEEP_REDIS_KEYS=1` retains the keys. Never reset/drop
   databases, remove unrelated schemas or data, flush shared stores or start
   duplicate services to get a clean test.
 - Register cleanup before fallible startup; close clients before their providers.

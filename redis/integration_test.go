@@ -9,13 +9,15 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	driver "github.com/redis/go-redis/v9"
 	"github.com/weiloon1234/Foundry-Go/cache"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/cachetest"
+	"github.com/weiloon1234/Foundry-Go/internal/rediscleanup"
+	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -59,31 +61,29 @@ func integrationTracked(t *testing.T, configure func(*Config)) (*Client, func(st
 		return key
 	}, track
 }
-func integrationAddresses(t *testing.T, configure func(*Config)) (*Client, cache.Namespace, func(string)) {
+func integrationAddresses(t *testing.T, configure func(*Config), features ...keyspace.Feature) (*Client, cache.Namespace, func(string)) {
 	t.Helper()
 	c := integrationConfig(t)
 	if configure != nil {
 		configure(&c)
 	}
+
+	var random [16]byte
+	rand.Read(random[:])
+	namespace := cache.Namespace{Application: "foundry-go", Environment: "redis-test-" + hex.EncodeToString(random[:])}
+	prefixes, err := rediscleanup.Prefixes(namespace, append([]keyspace.Feature{cache.KeyFeature, cache.NamespaceKeyFeature}, features...)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	track := rediscleanup.Register(t, func() *driver.Client { return driver.NewClient(c.options()) }, prefixes)
 	client, err := Open(t.Context(), c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var random [16]byte
-	rand.Read(random[:])
-	namespace := cache.Namespace{Application: "foundry-go", Environment: "redis-test-" + hex.EncodeToString(random[:])}
-	var keys []string
-	var keyMu sync.Mutex
-	track := func(key string) { keyMu.Lock(); defer keyMu.Unlock(); keys = append(keys, key) }
+
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		// Exact owned addresses only; never enumerate or reset a shared Redis database.
-		if len(keys) > 0 {
-			if err := client.raw.Del(ctx, keys...).Err(); err != nil {
-				t.Error("owned Redis key cleanup failed")
-			}
-		}
 		if err := client.Close(ctx); err != nil {
 			t.Error(err)
 		}

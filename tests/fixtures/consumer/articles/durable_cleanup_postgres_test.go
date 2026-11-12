@@ -30,7 +30,7 @@ import (
 
 // durableCleanup runs cleanup jobs through a Redis job connection, the
 // outbox in the fixture's schema and a worker.
-func durableCleanup(connection infrastructure.RedisConnectionSettings) func(*application.Settings) {
+func durableCleanup(t *testing.T, connection infrastructure.RedisConnectionSettings) func(*application.Settings) {
 	return func(s *application.Settings) {
 		s.Services.Namespace.Application = "articles-" + strings.ToLower(rand.Text())
 		s.Services.Redis.Connections = infrastructure.RedisConnections{"default": connection}
@@ -44,13 +44,18 @@ func durableCleanup(connection infrastructure.RedisConnectionSettings) func(*app
 		s.Features.Outbox.PollInterval = 5 * time.Millisecond
 		s.Features.Outbox.Jobs = map[jobs.ConnectionName]outbox.Destination{"default": "extensions"}
 		s.Features.ExtensionCleanup.Jobs = "default"
+		inventory, err := application.New(*s).RedisKeys()
+		if err != nil {
+			t.Fatal(err)
+		}
+		redistest.Cleanup(t, inventory)
 	}
 }
 
 // A connection to another database could not deliver the cleanup rows it
 // writes, so startup refuses it before any deletion runs.
 func TestDurableCleanupRefusesAConnectionToAnotherDatabase(t *testing.T) {
-	s, _, _ := articleSettings(t, durableCleanup(infrastructure.RedisSettingsFromConfig(redistest.Config(t))), func(s *application.Settings) {
+	s, _, _ := articleSettings(t, durableCleanup(t, infrastructure.RedisSettingsFromConfig(redistest.Config(t))), func(s *application.Settings) {
 		elsewhere := s.Services.Database.Connections["default"]
 		if elsewhere.Primary.Database == "postgres" {
 			elsewhere.Primary.Database = "template1"
@@ -123,7 +128,7 @@ func TestDurableCleanupRequiresTheOutbox(t *testing.T) {
 // outbox: a rollback leaves no job, and a committed deletion's job waits in the
 // outbox, surviving the process, until a worker delivers it.
 func TestDurableCleanupAfterDeletionThroughAnotherPool(t *testing.T) {
-	f := startApplication(t, durableCleanup(infrastructure.RedisSettingsFromConfig(redistest.Config(t))), withWriter)
+	f := startApplication(t, durableCleanup(t, infrastructure.RedisSettingsFromConfig(redistest.Config(t))), withWriter)
 	runtime, err := f.services.ModelExtensions()
 	if err != nil {
 		t.Fatal(err)

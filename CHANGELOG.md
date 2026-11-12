@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.25.0 — 2026-11-12
+
+- Added: `testkit/redis.Cleanup` and `CleanupNamespace` remove only a passing test's
+  exact Redis key prefixes after shutdown. Failed or panicking tests retain keys,
+  as does `FOUNDRY_TEST_KEEP_REDIS_KEYS=1`. Cleanup uses bounded SCAN/UNLINK batches
+  and reports failures. Framework and consumer Redis tests register scoped cleanup.
+
 ## v0.24.0 — 2026-11-12
 
 - Removed: `--field-docs` from generation and scaffold commands, the managed-note

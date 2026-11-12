@@ -214,6 +214,35 @@ func redisSettings(t testing.TB) infrastructure.RedisSettings {
 }
 ```
 
+Register key cleanup from the configured builder before `Build` or client startup,
+so application shutdown runs first. Every connection in this inventory must use
+`Config(t)`'s test endpoint. Inventory cleanup includes derived job, lease and
+cache-generation namespaces and ignores pub/sub channels.
+
+<!-- compiled-source: tests/fixtures/consumer/tooling/guide_recipes_test.go#redis-test-cleanup -->
+```go
+func prepareRedisCleanup(t testing.TB, builder *application.Builder) {
+	t.Helper()
+	inventory, err := builder.RedisKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	redistest.Cleanup(t, inventory)
+}
+```
+
+Passing tests remove only their registered exact key prefixes. Failure, panic or
+`FOUNDRY_TEST_KEEP_REDIS_KEYS=1` retains them and logs the prefixes for inspection.
+Cleanup uses an independent client, a 30-second timeout, `SCAN COUNT 128` and
+`UNLINK` batches of at most 128 keys. Cleanup errors fail the test. A failure in a
+cleanup registered before Redis cleanup runs too late to retain keys.
+
+For features built directly, call
+`redistest.CleanupNamespace(t, namespace, cache.KeyFeature, cache.NamespaceKeyFeature)`
+before opening clients, supplying the features that write keys. Include the
+namespace-generation feature when using cache stores. Cleanup appends `*` only
+after each exact feature/application/environment prefix; it never flushes a store.
+
 <a id="recipe-missing-attachment"></a>
 ## Simulate a missing attachment object
 

@@ -41,7 +41,13 @@ func TestConfiguredOutboxKeepsTransactionSchemaAndNamedQueue(t *testing.T) {
 	construct := func(application.Services) (jobs.Handler[assemblyPayload], error) {
 		return func(_ context.Context, p assemblyPayload) error { received <- p.Value; return nil }, nil
 	}
-	app, err := application.New(s, quiet()).Jobs(application.Job(definition, construct), application.Job(definition, construct).On("second")).Build(t.Context())
+	builder := application.New(s, quiet()).Jobs(application.Job(definition, construct), application.Job(definition, construct).On("second"))
+	inventory, err := builder.RedisKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	redistest.Cleanup(t, inventory)
+	app, err := builder.Build(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

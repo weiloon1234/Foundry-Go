@@ -19,9 +19,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/redis/raw"
 )
 
-func rawFixture(t *testing.T) (*Client, *raw.Store, func(string) raw.Key) {
+func rawFixture(t *testing.T) (*Client, *raw.Store, func(string) raw.Key, func(string)) {
 	t.Helper()
-	client, ns, track := integrationAddresses(t, nil)
+	client, ns, track := integrationAddresses(t, nil, "raw")
 	store, err := raw.NewStore(client, raw.DefaultConfig(ns))
 	if err != nil {
 		t.Fatal(err)
@@ -34,10 +34,10 @@ func rawFixture(t *testing.T) (*Client, *raw.Store, func(string) raw.Key) {
 		track(k.String())
 		return k
 	}
-	return client, store, key
+	return client, store, key, track
 }
 func TestRedisRawRustParityAndNativeEntryOperations(t *testing.T) {
-	c, store, key := rawFixture(t)
+	c, store, key, _ := rawFixture(t)
 	ctx := t.Context()
 	leaderboard, counter, stream := key("leaderboard"), key("counter"), key("stream")
 	for i, name := range []string{"alice", "bob"} {
@@ -106,7 +106,7 @@ func TestRedisRawRustParityAndNativeEntryOperations(t *testing.T) {
 	}
 }
 func TestRedisRawExtendsTypedDataWithoutReconstructingItsKey(t *testing.T) {
-	c, store, key := rawFixture(t)
+	c, store, key, track := rawFixture(t)
 	ctx := t.Context()
 	ns := key("unused").Namespace()
 	ds, err := data.NewStore(c, data.DefaultConfig(ns))
@@ -121,13 +121,7 @@ func TestRedisRawExtendsTypedDataWithoutReconstructingItsKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		if _, err := h.Delete(ctx, "member"); err != nil {
-			t.Error(err)
-		}
-	})
+	track(address.String())
 	if _, err := h.Set(ctx, "member", "one", 1); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +144,7 @@ func TestRedisRawExtendsTypedDataWithoutReconstructingItsKey(t *testing.T) {
 func TestRedisRawPipelineServerErrorsDoNotClaimRollbackOrPublishResults(t *testing.T) {
 	for _, mode := range []raw.Mode{raw.Pipelined, raw.Transaction} {
 		t.Run(map[raw.Mode]string{raw.Pipelined: "pipeline", raw.Transaction: "transaction"}[mode], func(t *testing.T) {
-			c, store, key := rawFixture(t)
+			c, store, key, _ := rawFixture(t)
 			ctx := t.Context()
 			first, last := key("first"), key("last")
 			p, _ := raw.NewPipeline(mode)
@@ -211,7 +205,7 @@ func (h lostRawAcknowledgement) ProcessPipelineHook(next driver.ProcessPipelineH
 func TestRedisRawUnknownAcknowledgementHasOneAttempt(t *testing.T) {
 	for _, mode := range []string{"command", "script", "pipeline", "transaction", "expiry"} {
 		t.Run(mode, func(t *testing.T) {
-			c, store, key := rawFixture(t)
+			c, store, key, _ := rawFixture(t)
 			ctx := t.Context()
 			k := key("ack")
 			failure := errors.New("acknowledgement lost")
@@ -305,7 +299,7 @@ func TestRedisRawTransportRepliesAndServerErrorPrivacy(t *testing.T) {
 	}
 }
 func TestRedisRawNilPipelineReplyDoesNotMaskALaterError(t *testing.T) {
-	_, store, key := rawFixture(t)
+	_, store, key, _ := rawFixture(t)
 	p, _ := raw.NewPipeline(raw.Pipelined)
 	receipt, err := raw.Queue(p, raw.NewCommand("GET", raw.DecodeNullable(raw.DecodeString())).Key(key("missing")))
 	if err != nil {
@@ -322,14 +316,14 @@ func TestRedisRawNilPipelineReplyDoesNotMaskALaterError(t *testing.T) {
 	}
 }
 func TestRedisRawNamespaceValidationPreservesOtherOwnedNamespace(t *testing.T) {
-	c, store, key := rawFixture(t)
+	c, store, key, track := rawFixture(t)
 	ctx := t.Context()
 	inside := key("inside")
 	outside, err := raw.NewKey(keyspace.Namespace{Application: inside.Namespace().Application, Environment: inside.Namespace().Environment + "-other"}, "values", 1, "outside")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { c.raw.Del(context.Background(), outside.String()) })
+	track(outside.String())
 	if err := c.raw.Set(ctx, outside.String(), "preserved", time.Minute).Err(); err != nil {
 		t.Fatal(err)
 	}

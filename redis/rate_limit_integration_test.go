@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-func rateFixture(t *testing.T) (*Client, func(string) ratelimit.Key) {
+func rateFixture(t *testing.T) (*Client, func(string) ratelimit.Key, func(string)) {
 	t.Helper()
 	c, namespace, track := integrationAddresses(t, nil)
 	return c, func(logical string) ratelimit.Key {
@@ -27,13 +27,16 @@ func rateFixture(t *testing.T) (*Client, func(string) ratelimit.Key) {
 		}
 		track(k.String())
 		return k
-	}
+	}, track
 }
 func TestRateLimitSharedContract(t *testing.T) {
-	ratelimittest.Run(t, func(t *testing.T) (ratelimit.Backend, func(string) ratelimit.Key) { return rateFixture(t) })
+	ratelimittest.Run(t, func(t *testing.T) (ratelimit.Backend, func(string) ratelimit.Key) {
+		c, key, _ := rateFixture(t)
+		return c, key
+	})
 }
 func TestRateLimitTwoClientsAndServerClock(t *testing.T) {
-	c, key := rateFixture(t)
+	c, key, track := rateFixture(t)
 	other, err := Open(t.Context(), integrationConfig(t))
 	if err != nil {
 		t.Fatal(err)
@@ -72,13 +75,13 @@ func TestRateLimitTwoClientsAndServerClock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { c.raw.Del(context.Background(), isolated.String()) })
+	track(isolated.String())
 	if d, err := c.RateLimit(t.Context(), isolated, limit, 15); err != nil || !d.Allowed {
 		t.Fatal(d, err)
 	}
 }
 func TestRateLimitCorruptMetadataIsPreserved(t *testing.T) {
-	c, key := rateFixture(t)
+	c, key, _ := rateFixture(t)
 	for _, wire := range []string{"1:2:1000:2000:1", "private", strings.Repeat("x", rateLimitMetadataBytes+1), "1:0:1000:2000:1", "1:1:1000:2000:2", "1:01:1000:2000:1", "1:1:1000:2001:1", "1:1:1000:9007199254740992:1", "1:1:1000:2000:0",
 		"2:1:1000:1000:3000:1", "2:1:1000:5:3000:1", "2:1:1000:05:3005:1", "2:1:1000:5:3005", "3:1:1000:0:3000:1"} {
 		k := key(fmt.Sprintf("corrupt-%d", len(wire)) + wire[:1])
@@ -136,7 +139,7 @@ func (h *rateClockHook) ProcessHook(next driver.ProcessHook) driver.ProcessHook 
 	}
 }
 func TestRateLimitBoundaryDenialAndPolicyReplacement(t *testing.T) {
-	c, key := rateFixture(t)
+	c, key, _ := rateFixture(t)
 	k := key("boundary")
 	limit := ratelimit.PerSecond(2)
 	now := c.raw.Time(t.Context()).Val().UnixMilli()
@@ -194,7 +197,7 @@ func TestRateLimitBoundaryDenialAndPolicyReplacement(t *testing.T) {
 	}
 }
 func TestRateLimitClearRemovesUnreadableState(t *testing.T) {
-	c, key := rateFixture(t)
+	c, key, _ := rateFixture(t)
 	k := key("clear-corrupt")
 	if err := c.raw.Set(t.Context(), k.String(), "private", time.Minute).Err(); err != nil {
 		t.Fatal(err)
@@ -235,7 +238,7 @@ func (h *lostRateAcknowledgement) ProcessHook(next driver.ProcessHook) driver.Pr
 	}
 }
 func TestRateLimitAppliedButUnacknowledgedConsumption(t *testing.T) {
-	c, key := rateFixture(t)
+	c, key, _ := rateFixture(t)
 	other, err := Open(t.Context(), integrationConfig(t))
 	if err != nil {
 		t.Fatal(err)
@@ -258,7 +261,7 @@ func TestRateLimitAppliedButUnacknowledgedConsumption(t *testing.T) {
 // Tightening 10 per minute to 10 per hour after the quota is spent keeps the
 // key limited for the hour: the denied request persists the longer conversion.
 func TestRateLimitDeniedPolicyConversionKeepsLaterExpiry(t *testing.T) {
-	c, key := rateFixture(t)
+	c, key, _ := rateFixture(t)
 	k := key("tightened")
 	now := c.raw.Time(t.Context()).Val().UnixMilli()
 	// A future hour keeps real Redis expiry from racing the controlled clock. The

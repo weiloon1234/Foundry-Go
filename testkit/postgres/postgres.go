@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/postgres"
 	"github.com/weiloon1234/Foundry-Go/internal/sqlname"
+	"github.com/weiloon1234/Foundry-Go/internal/testcleanup"
 	"github.com/weiloon1234/Foundry-Go/secret"
 )
 
@@ -38,27 +38,7 @@ const dropLockKey int64 = 0x466f756e64727944
 // A cleanup registered before the namespace runs after its drop and cannot retain it.
 func KeepSchemas(t testing.TB) bool {
 	t.Helper()
-	if t.Failed() || os.Getenv(KeepSchemasVariable) == "1" {
-		return true
-	}
-	// testing runs cleanups while unwinding a panic, before marking the test
-	// failed. Inspect function names only; never recover or format its payload.
-	// An incomplete stack cannot establish success, so retain conservatively.
-	var pcs [128]uintptr
-	n := runtime.Callers(2, pcs[:])
-	if n == len(pcs) {
-		return true
-	}
-	frames := runtime.CallersFrames(pcs[:n])
-	for {
-		frame, more := frames.Next()
-		if frame.Function == "runtime.gopanic" || frame.Function == "runtime.Goexit" {
-			return true
-		}
-		if !more {
-			return false
-		}
-	}
+	return testcleanup.Keep(t, KeepSchemasVariable)
 }
 
 // Config reads the explicitly opted-in URL. Ordinary test runs skip without it;

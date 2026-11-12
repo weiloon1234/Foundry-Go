@@ -85,7 +85,7 @@ enabled = true
 	inline, queued, attempts := 0, 0, 0
 	var retryIDs []outbox.ID[eventqueries.RecordCreated]
 	var handledID model.ID[observerqueries.Plain]
-	app, err := eventqueries.ConfigurePublications(application.New(s, application.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))))).Events(
+	builder := eventqueries.ConfigurePublications(application.New(s, application.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))))).Events(
 		application.EventOutbox(secondary, "consumer.secondary"),
 		application.Listen(handled, "inline", func(application.Services) (events.Handler[eventqueries.RecordCreated], error) {
 			return func(ctx context.Context, p eventqueries.RecordCreated) error {
@@ -128,7 +128,13 @@ enabled = true
 				return nil
 			}, nil
 		}),
-	).Build(t.Context())
+	)
+	inventory, err := builder.RedisKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	redistest.Cleanup(t, inventory)
+	app, err := builder.Build(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -204,9 +204,15 @@ func TestManagedPublisherShutdownWaitsForItsOperations(t *testing.T) {
 	connection.Cluster.Namespace = keyspace.Namespace{Application: "publisher-" + rand.Text()[:8], Environment: "test"}
 	s.Services.Realtime.Connections = infrastructure.RealtimeConnections{"default": connection}
 	channel := websocket.Public[struct{}]("publisher", websocket.DefineRooms(http.StringPath[string]()))
-	app, err := application.New(s, quiet()).Realtime(func(application.Services) (application.RealtimeDeclarations, error) {
+	builder := application.New(s, quiet()).Realtime(func(application.Services) (application.RealtimeDeclarations, error) {
 		return application.RealtimeDeclarations{Channels: []websocket.Registration{websocket.Register(channel)}}, nil
-	}).Build(t.Context())
+	})
+	inventory, err := builder.RedisKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	redistest.Cleanup(t, inventory)
+	app, err := builder.Build(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
