@@ -58,9 +58,20 @@ func TestQueryObserverFrameworkPoolsAndApplicationIsolation(t *testing.T) {
 		}
 		apps[i] = app
 	}
+	const probe = "SELECT $1::text"
+	// Each app's capture logs prune in the background after Start, and those
+	// statements reach its own observer at any time. Only the probe proves a leak.
+	probes := func(events []database.QueryEvent) (n int) {
+		for _, event := range events {
+			if event.Statement == probe {
+				n++
+			}
+		}
+		return n
+	}
 	for i, app := range apps {
 		mu.Lock()
-		beforeOther := len(events[1-i])
+		beforeOther := probes(events[1-i])
 		mu.Unlock()
 		for _, name := range []database.ConnectionName{"default", "other"} {
 			db, err := app.Resources().Databases.Connection(name)
@@ -68,7 +79,7 @@ func TestQueryObserverFrameworkPoolsAndApplicationIsolation(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, query := range []func(context.Context, string, ...any) (*database.Rows, error){db.Query, db.QueryRead} {
-				result, err := query(t.Context(), "SELECT $1::text", "argument-private-sentinel")
+				result, err := query(t.Context(), probe, "argument-private-sentinel")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -90,12 +101,12 @@ func TestQueryObserverFrameworkPoolsAndApplicationIsolation(t *testing.T) {
 			}
 		}
 		mu.Lock()
-		if len(events[1-i]) != beforeOther {
+		if probes(events[1-i]) != beforeOther {
 			t.Error("observer leaked across applications")
 		}
 		matched := map[database.PoolRole]int{}
 		for _, event := range events[i] {
-			if event.Statement == "SELECT $1::text" {
+			if event.Statement == probe {
 				matched[event.Role]++
 			}
 			if strings.Contains(fmt.Sprintf("%+v", event), "argument-private-sentinel") {

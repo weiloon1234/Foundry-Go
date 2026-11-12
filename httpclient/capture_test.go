@@ -67,11 +67,13 @@ func newCaptureSink(t testing.TB, full ...string) *captureSink {
 	return sink
 }
 
+// drain holds mu from Drain to append. Otherwise Exchanges could find the
+// queue empty while the background goroutine still holds a taken record.
 func (s *captureSink) drain() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for record := s.recorder.Recorder().Drain(); record != nil; record = s.recorder.Recorder().Drain() {
-		s.mu.Lock()
 		s.records = append(s.records, record.Snapshot)
-		s.mu.Unlock()
 		record.Release()
 	}
 }
