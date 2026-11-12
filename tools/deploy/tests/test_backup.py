@@ -555,6 +555,34 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(receipt["fresh_at"], old)
         self.assertEqual(self.host.load_state(self.entry)["backup"]["last_complete_at"], old)
 
+    def test_receipt_without_freshness_is_rejected_on_replay(self):
+        operation = str(uuid.uuid4())
+        path = backup._receipt_path(self.host, self.entry, operation)
+        receipt = {"backup_id": operation, "kind": "full", "status": "complete", "completed_at": now()}
+        backup._write_private(self.host, path, receipt)
+        before = self.host.load_state(self.entry)
+        with self.assertRaises(DeployError) as caught:
+            backup.run_backup(self.host, self.entry, operation)
+        self.assertEqual(caught.exception.code, "invalid_backup_receipt")
+        self.assertEqual(self.host.load_state(self.entry), before)
+        self.assertEqual(read_json(path), receipt)
+        self.assertEqual(self.commands, [])
+
+    def test_completion_requires_journal_configuration_revision(self):
+        operation = str(uuid.uuid4())
+        path = backup._operation_path(self.host, self.entry, operation)
+        journal = {"operation_id": operation, "components": {}}
+        backup._write_private(self.host, path, journal)
+        before = self.host.load_state(self.entry)
+        point = {"status": "complete", "pgbackrest_label": LABEL, "completed_at": now()}
+        with self.assertRaises(DeployError) as caught:
+            backup._complete(self.host, self.entry, operation, point)
+        self.assertEqual(caught.exception.code, "backup_operation_conflict")
+        self.assertEqual(read_json(path), journal)
+        self.assertEqual(self.host.load_state(self.entry), before)
+        self.assertFalse(backup._receipt_path(self.host, self.entry, operation).exists())
+        self.assertEqual(self.commands, [])
+
     def test_timer_rebinding_checks_loaded_commands_even_when_files_match(self):
         backup._install_timers(self.host, self.registry)
         def command(args, **kwargs):

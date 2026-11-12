@@ -477,14 +477,10 @@ func TestRedisQuarantineProofBudgetsAndCatalogIntegrity(t *testing.T) {
 			bad := f.enqueue(t)
 			f.at(t, bad.ID(), 1)
 			f.put(t, bad.ID(), "corrupt")
-			_, err = f.backend.JobReserve(t.Context(), f.key, f.owner, time.Minute)
-			if damage == "missing-callbacks" {
-				if err != nil {
-					t.Fatal(err)
-				}
-			} else if !errors.Is(err, fault.Invalid) {
-				t.Fatal("invalid catalog proved independence", err)
-			}
+			f.unchanged(t, func() error {
+				_, err := f.backend.JobReserve(t.Context(), f.key, f.owner, time.Minute)
+				return err
+			})
 		})
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
 	"github.com/weiloon1234/Foundry-Go/internal/extensiontest"
 	"github.com/weiloon1234/Foundry-Go/model"
@@ -494,58 +495,22 @@ func TestPostgresAttachmentRequiresCreateAndReadAndKeepsPinnedDelete(t *testing.
 	}
 }
 
-func TestPostgresAttachmentLegacyVariantKeysRemainReadableAndCleanable(t *testing.T) {
+func TestPostgresAttachmentRejectsOldVariantPrefix(t *testing.T) {
 	f := openAttachments(t, testPhotos.Registration())
 	result, err := testPhotos.Add(t.Context(), f.manager, member(t, 1), pngUpload(t, 16, 8))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var legacy []storage.ObjectKey
 	for _, row := range variantRows(t, f, result.Operation) {
-		key, _ := storage.ParseKey(row.ObjectKey)
-		body, _, err := f.disk.ReadBytes(t.Context(), key, MaxUploadBytes, storage.ReadOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		oldKey, _ := storage.ParseKey(legacyVariantPrefix + extensiontest.Members.Scope() + "/" + row.ID.String())
-		stored, err := f.disk.PutBytes(t.Context(), oldKey, body, storage.PutOptions{ContentType: storage.MediaType(row.ContentType), Condition: storage.IfAbsent()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		// Reconstruct the persisted layout from before the scope-prefix change.
+		oldKey := "foundry-attachment-variants/" + extensiontest.Members.Scope() + "/" + row.ID.String()
 		if err := f.Store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
-			_, err := tx.Exec(ctx, `UPDATE foundry_attachment_variants SET object_key=$1, etag=$2 WHERE id=$3`, oldKey.String(), string(stored.Object.ETag), row.ID.String())
+			_, err := tx.Exec(ctx, `UPDATE foundry_attachment_variants SET object_key=$1 WHERE id=$2`, oldKey, row.ID.String())
 			return err
 		}); err != nil {
 			t.Fatal(err)
 		}
-		if err := f.disk.Delete(t.Context(), key, pinnedDelete(row.ObjectVersion, row.ETag)); err != nil {
-			t.Fatal(err)
-		}
-		legacy = append(legacy, oldKey)
 	}
-	files, err := testPhotos.List(t.Context(), f.manager, member(t, 1))
-	if err != nil || len(files) != 1 || len(files[0].variants) != len(legacy) {
-		t.Fatal("legacy variants did not load", err)
-	}
-	for _, variant := range files[0].variants {
-		if !strings.HasPrefix(variant.key.String(), legacyVariantPrefix) {
-			t.Fatal("legacy key changed on read")
-		}
-		if _, _, err := f.disk.ReadBytes(t.Context(), variant.key, MaxUploadBytes, storage.ReadOptions{IfMatch: variant.etag}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	page, err := testPhotos.RegenerateVariants(t.Context(), f.manager, RegenerationOptions{Limit: 10})
-	if err != nil || len(page.Regenerated) != 1 || len(page.Failed) != 0 {
-		t.Fatal("legacy regeneration failed", err)
-	}
-	for _, key := range legacy {
-		assertObjectAbsent(t, f.disk, key)
-	}
-	for _, row := range variantRows(t, f, result.Operation) {
-		if row.State == string(VariantReady) && !strings.HasPrefix(row.ObjectKey, objectPrefix+extensiontest.Members.Scope()+"/variants/") {
-			t.Fatal("regeneration retained legacy prefix")
-		}
+	if _, err := testPhotos.List(t.Context(), f.manager, member(t, 1)); !errors.Is(err, fault.Invalid) {
+		t.Fatal("old variant prefix accepted", err)
 	}
 }

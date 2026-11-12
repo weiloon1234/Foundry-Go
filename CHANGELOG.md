@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.23.0 — 2026-11-12
+
+- Changed: every job envelope writes format 3 with optional trace. Readers reject
+  omitted versions and formats 1/2. `jobs.ExtendedEnvelope` is renamed to
+  `jobs.CurrentEnvelopeVersion`; `EnvelopeV1` and `TracedEnvelope` are removed.
+- Removed: Redis embedded-envelope reads, terminal workflow-member detachment
+  from independent finished indexes, and missing catch/finally normalization.
+  Layout-3 enforcement, quarantine and current sparse-field defaults remain.
+- Removed: old `foundry-attachment-variants/<scope>/<id>` key support.
+- Removed: deploy `result` metadata normalization, backup receipt freshness
+  fallback and missing journal configuration-revision fallback. Deploy tool
+  generation increases from 8 to 9; protocol, upgrade floors and release archive
+  format stay unchanged. `outcome: failed_applied` remains a current outcome.
+- Operator action: v0.22.x and earlier still wrote envelope formats 1/2. Before
+  activating this release, convert retained envelopes in queues, workflows, outbox
+  rows and failed-job archives to format 3 while publishers and workers are
+  stopped. Format 3 is a superset, so conversion only sets `envelope_version` to 3.
+  No migration command is provided. Rolling back to v0.17.0 or later stays safe:
+  those readers accept format 3.
+
 ## v0.22.1 — 2026-11-11
 
 - Fixed: deploy-tool `ACTION=logs FOLLOW=yes` no longer allocates a remote terminal,

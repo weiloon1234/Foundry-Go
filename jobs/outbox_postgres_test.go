@@ -126,7 +126,7 @@ func TestJobOutboxRollbackAndAmbiguousPublication(t *testing.T) {
 	}
 	record, _ := found.Get()
 	propagated, present := record.Envelope.Trace().Get()
-	if !present || propagated.TraceParent() != trace.TraceParent() || record.Envelope.WireVersion() != jobs.TracedEnvelope {
+	if !present || propagated.TraceParent() != trace.TraceParent() || record.Envelope.WireVersion() != jobs.CurrentEnvelopeVersion {
 		t.Fatal("outbox retry lost captured trace envelope")
 	}
 	third, err := publisher.PublishOne(t.Context())

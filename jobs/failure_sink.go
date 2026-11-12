@@ -101,13 +101,6 @@ func (d *Dispatcher) Redispatch(ctx context.Context, envelope Envelope) (Executi
 	copied.wire.Policy = envelope.wire.Policy.snapshot()
 	// An operator re-dispatch starts a fresh retry budget and deadline.
 	copied.wire.Policy.RetryUntil = time.Time{}
-	copied.wire.EnvelopeVersion = envelope.wire.EnvelopeVersion
-	if copied.wire.EnvelopeVersion == ExtendedEnvelope && !copied.wire.extended() {
-		copied.wire.EnvelopeVersion = 0
-		if copied.wire.Trace.IsSet() {
-			copied.wire.EnvelopeVersion = TracedEnvelope
-		}
-	}
 	key, inserted, err := func() (Key, bool, error) {
 		release, err := d.begin(ctx)
 		if err != nil {

@@ -1,8 +1,7 @@
 -- One queue authority, layout 3. Envelopes stay opaque JSON strings: cjson must
 -- never round application integers, decimals, IDs or payload timestamps. The
 -- immutable envelope lives in its own hash (KEYS[10]) so heartbeats and state
--- transitions decode only the small mutable record. Records migrated from
--- layout 1 through v0.13.0 may still embed envelopes until their next write.
+-- transitions decode only the small mutable record.
 -- Layout 3 fences writers that do not understand independent quarantine.
 local config = ARGV[1]
 local limits = cjson.decode(ARGV[2])
@@ -57,7 +56,7 @@ if not integer(live, 0, max_count) or not integer(live_bytes, 0, max_bytes) or n
 local loaded, dirty, removed = {}, {}, {}
 local groups, dirty_groups, removed_groups = {}, {}, {}
 local quarantined = {}
-local detached_finished = {}
+local envelope_writes = {}
 local advance
 local corrupt = false
 local states = {blocked=true, waiting=true, reserved=true, running=true, succeeded=true, failed=true, cancelled=true}
@@ -91,7 +90,7 @@ local function dense_array(items, maximum)
     end
     return count == #items
 end
-local record_fields = {id=true, envelope=true, state=true, maximum=true, attempts=true,
+local record_fields = {id=true, state=true, maximum=true, attempts=true,
     available=true, expiry=true, created=true, finished=true, owner=true, cancelled=true,
     bytes=true, history=true, name=true, version=true, abandoned=true, exceptions=true,
     unique=true, unique_until=true, position=true, workflow=true, retries=true, last_retry=true}
@@ -114,7 +113,7 @@ local function validate_history(history)
     return true
 end
 local function has_envelope(record)
-    if record.envelope ~= nil then return type(record.envelope) == 'string' and #record.envelope > 0 end
+    if envelope_writes[record.id] then return true end
     return redis.call('HSTRLEN', KEYS[10], record.id) > 0
 end
 local invalid_records, workflow_observed = {}, {}
@@ -131,7 +130,6 @@ local function read_record(id)
     workflow_observed[id] = workflow
     invalid_records[id] = true
     if not ok or not canonical_fields(record, record_fields) or not identifier(id) or record.id ~= id
-        or (record.envelope ~= nil and type(record.envelope) ~= 'string')
         or type(record.state) ~= 'string' or not states[record.state]
         or not integer(record.maximum, 1, limits.attempts) or not integer(record.attempts, 0, record.maximum)
         or not integer(record.available, 0, max_time) or not integer(record.expiry, 0, max_time)
@@ -171,7 +169,7 @@ local function load(id)
     return record
 end
 local function envelope_of(r)
-    if r.envelope then return r.envelope end
+    if envelope_writes[r.id] then return envelope_writes[r.id] end
     local text = redis.call('HGET', KEYS[10], r.id)
     if not text or #text == 0 then corrupt = true; return '' end
     return text
@@ -194,8 +192,7 @@ local function validate_group(group, id)
         or type(group.completion) ~= 'string' or type(group.fingerprint) ~= 'string'
         or #group.fingerprint ~= 64 or not string.match(group.fingerprint, '^[0-9a-f]+$')
         or (group.kind ~= 'chain' and group.kind ~= 'batch') or not integer(group.bytes, 1, limits.bytes)
-        or (group.catch ~= nil and type(group.catch) ~= 'string') or (group.finally ~= nil and type(group.finally) ~= 'string') then return false end
-    group.catch = group.catch or ''; group.finally = group.finally or ''
+        or type(group.catch) ~= 'string' or type(group.finally) ~= 'string' then return false end
     local positions = {}
     for i, member in ipairs(group_ids(group)) do
         if not identifier(member) or positions[member] ~= nil then return false end
@@ -282,14 +279,7 @@ local function load_indexed(id, index, score)
         if prove_independent(id, workflow) then stage_quarantine(id) else corrupt = true end
         return nil
     end
-    if index == 4 and record.workflow then
-        local group = load_group(record.workflow)
-        if not group or not load_member(group, id) then corrupt = true; return nil end
-        -- Layout-2 terminal members (and pre-release layout-3 entries) detach
-        -- in bounded staged batches. Only their group may delete them.
-        detached_finished[id] = true
-        return nil
-    end
+    if index == 4 and record.workflow then corrupt = true; return nil end
     return record
 end
 if request.op == 'quarantined' then
@@ -496,14 +486,15 @@ if op == 'workflow' then
         local active_groups = redis.call('HLEN', KEYS[7]) - redis.call('ZCARD', KEYS[8])
         if live + #request.steps > limits.entries or total > limits.bytes - live_bytes or active_groups >= limits.entries then return {-8} end
         local group = {id=request.id, kind=request.workflow_kind, members={}, completion=request.completion,
-            catch=request.catch or '', finally=request.finally or '',
+            catch=request.catch, finally=request.finally,
             remaining=0, finished=0, failed=false, cancelling=false, fingerprint=request.fingerprint, bytes=request.group_bytes}
         live = live + #request.steps; live_bytes = live_bytes + total
         for i, step in ipairs(request.steps) do
             local available = step.available; if available == 0 then available = now end
-            local item = {id=step.id, envelope=step.envelope, name=step.name, version=step.version,
+            local item = {id=step.id, name=step.name, version=step.version,
                 maximum=step.maximum, attempts=0, available=available, expiry=0, created=now, finished=0,
                 owner='', cancelled=false, bytes=step.bytes, history={}, workflow=group.id, position=i-1}
+            envelope_writes[item.id] = step.envelope
             loaded[item.id] = item; removed[item.id] = nil
             -- Steps come first; the completion and callbacks wait for them.
             local special = item.id == group.completion or item.id == group.catch or item.id == group.finally
@@ -546,7 +537,8 @@ elseif op == 'enqueue' then
         local available = request.available
         if available == 0 then available = now end
         if available > now + limits.max_delay then return {-2} end
-        r = {id=request.id, envelope=request.envelope, name=request.name, version=request.version,
+        envelope_writes[request.id] = request.envelope
+        r = {id=request.id, name=request.name, version=request.version,
              maximum=request.maximum, attempts=0, available=available, expiry=0, created=now,
              finished=0, owner='', cancelled=false, bytes=request.bytes, history={}}
         if add_unique and request.unique_release then r.unique = request.unique; r.unique_until = now + request.unique_for end
@@ -718,12 +710,11 @@ if corrupt or not integer(live, 0, max_count) or not integer(live_bytes, 0, max_
 if add_unique and not integer(now + request.unique_for, 0, max_time) then return {-2} end
 -- Encode before the first write. Corrupt records and incompatible live config
 -- fail without changing the queue; Redis scripts do not provide rollback.
-local writes, envelope_writes = {}, {}
+local writes = {}
 for id, _ in pairs(dirty) do
     if not removed[id] then
         local item = loaded[id]
         if not valid_numbers(item) then return {-2} end
-        if item.envelope then envelope_writes[id] = item.envelope; item.envelope = nil end
         writes[id] = cjson.encode(item)
     end
 end
@@ -774,8 +765,7 @@ if not valid_numbers(result) then return {-2} end
 local response = cjson.encode(result)
 -- A reservation or read that changed nothing writes nothing, not even metadata.
 local changed = not previous or add_unique or #expired_unique > 0 or next(dirty) ~= nil or next(removed) ~= nil
-    or next(dirty_groups) ~= nil or next(removed_groups) ~= nil or next(quarantined) ~= nil or next(detached_finished) ~= nil
-for id, _ in pairs(detached_finished) do redis.call('ZREM', KEYS[4], id) end
+    or next(dirty_groups) ~= nil or next(removed_groups) ~= nil or next(quarantined) ~= nil
 for id, _ in pairs(removed) do
     redis.call('HDEL', KEYS[1], id)
     redis.call('HDEL', KEYS[10], id)

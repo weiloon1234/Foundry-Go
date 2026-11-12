@@ -30,8 +30,7 @@ const MaxPayloadBytes = MaxEnvelopeBytes - (64 << 10)
 // report Reservation.Exceptions makes only MaxExceptions 1 effective.
 // RetryUntil is an absolute deadline: once it passes the job is not started
 // again and a failed attempt is final. Declared policies normally leave it zero
-// and dispatches set it with Options.RetryUntil. Either field requires
-// ExtendedEnvelope; upgrade every worker and publisher before using them.
+// and dispatches set it with Options.RetryUntil.
 type Policy struct {
 	Queue         Queue           `json:"queue"`
 	Attempts      uint32          `json:"attempts"`
@@ -67,8 +66,6 @@ func (p Policy) Validate() error {
 	return nil
 }
 
-// extended reports fields that older envelope readers cannot decode.
-func (p Policy) extended() bool   { return p.MaxExceptions != 0 || !p.RetryUntil.IsZero() }
 func (p Policy) snapshot() Policy { p.Backoff = slices.Clone(p.Backoff); return p }
 func (p Policy) same(other Policy) bool {
 	return p.Queue == other.Queue && p.Attempts == other.Attempts && p.Timeout == other.Timeout && p.Jitter == other.Jitter && slices.Equal(p.Backoff, other.Backoff) &&

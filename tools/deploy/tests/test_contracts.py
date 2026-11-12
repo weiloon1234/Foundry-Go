@@ -235,6 +235,34 @@ class DeploymentContractTests(unittest.TestCase):
                 self.host.save_state(self.entry, changed)
         self.assertEqual(path.read_bytes(), before)
 
+    def test_result_metadata_is_rejected_in_current_attempt_and_history(self):
+        version = "20261013T000000Z-0123456789abcdef"
+        attempt = {"id": version, "action": "config", "release": version, "started_at": "2026-10-13T00:00:00Z",
+                   "finished_at": "2026-10-13T00:00:01Z", "outcome": "failed_applied", "phase": "configuration", "error": None,
+                   "configuration_revision": 2, "configuration_sha256": "a" * 64,
+                   "previous_configuration_sha256": "b" * 64, "configuration_applied": True}
+        state = {**self.host.load_state(self.entry), "status": "failed_applied", "last_attempt": attempt, "history": [attempt]}
+        self.host.save_state(self.entry, state)
+        self.assertEqual(self.host.load_state(self.entry), state)
+        path = self.host.paths.instance_state(self.entry["name"]) / "state.json"
+        for location in ("last_attempt", "history"):
+            for result in ("failed_applied", "PRIVATE_CANARY", None):
+                changed = copy.deepcopy(state)
+                target = changed[location] if location == "last_attempt" else changed[location][0]
+                target["result"] = result
+                atomic_json(path, changed)
+                before = path.read_bytes()
+                with self.subTest(location=location, result=result), patch.object(self.host, "run") as run:
+                    with self.assertRaises(DeployError) as caught:
+                        self.host.load_state(self.entry)
+                    self.assertEqual(caught.exception.code, "invalid_state")
+                    self.assertNotIn("PRIVATE_CANARY", str(caught.exception))
+                    self.assertEqual(path.read_bytes(), before)
+                    run.assert_not_called()
+                    with self.assertRaises(DeployError):
+                        self.host.save_state(self.entry, changed)
+                    self.assertEqual(path.read_bytes(), before)
+
     def test_atomic_write_is_idempotent_and_modes_are_explicit(self):
         path = self.root / "control" / "registry.json"
         value = registry(self.entry)

@@ -320,48 +320,29 @@ Do not reset layout markers or delete quarantine markers to bypass a rejection.
 Layout 3 reserves `:finished` for independent terminal maintenance. Terminal
 workflow members retain their records, envelopes, identities, and charges until
 their group owns cleanup through `:workflows` and `:workflow_finished`.
-There is no additional group-member index. New writes exclude members from
-`:finished`. Legacy entries detach after strict member/group validation in the
-existing bounded retention (128) and capacity-eviction (512) scans. Detachment
-changes no accounting and commits with the rest of the call. Several calls may
-be needed to reach a later independent entry. Corrupt or partially retired groups
-fail closed and require investigation.
+There is no additional group-member index. A terminal member found in
+`:finished` fails closed without detaching or rewriting it. Workflow groups must
+contain both `catch` and `finally` as strings; an empty string means no callback.
 
-Embedded envelopes left by an earlier upgrade remain readable and move to the
-separate envelope hash on their next normal write. These records have no automatic
-Redis TTL. Terminal retention runs during queue operations; unfinished jobs and
-members of unfinished workflows can remain indefinitely. Elapsed time alone does
-not prove that legacy-shaped records are gone.
+Envelopes live only in the separate envelope hash. Mutable records with an
+embedded `envelope` field are invalid. Independent malformed records can be
+quarantined after the existing bounded ownership proof; malformed workflow
+members fail closed. Quarantine preserves raw evidence until operator resolution.
+Neither old layout handling nor an automatic conversion path is provided.
 
-The [queue policy](../../jobs/queue_config.go) and
-[Redis transitions](../../redis/jobs.lua) impose these bounds:
-
-| Record state | Time before an embedded envelope must disappear |
-| --- | --- |
-| Waiting or delayed | Admission allows a delay of up to `jobs.MaxDelay` (365 days). Becoming due does not write the record. Without a successful reservation or other mutation, it can remain indefinitely. |
-| Reserved or running | A lease lasts at most 24 hours. The next successful heartbeat, transition or expired-lease maintenance writes the record and separates its envelope. Without queue operations, lease expiry alone does not write it. |
-| Blocked workflow member or callback | No age limit. It waits for its dependency or group to advance. |
-| Independent succeeded, failed or cancelled record | Eligible for removal at `finished + Retention`, with a default of seven days and a maximum of 365 days. Capacity eviction can remove it sooner. Bounded maintenance needs queue operations, so eligibility is not a wall-clock deletion deadline. |
-| Terminal workflow member | Retained until the whole workflow and its callbacks finish, then eligible for group retention or eviction. An unfinished group has no age limit. Detaching a legacy terminal index entry does not rewrite its record. |
-| Quarantined record | No automatic expiry or normal retention eviction. Quarantine preserves the raw record, including any embedded envelope, until explicit operator resolution. |
-
-A read or no-op does not normalize an unchanged record. Maintenance can still
-rewrite or delete expired work.
-Before removing this reader, stop old writers and prove that every configured
-Redis queue's `:records` hash has zero records with an embedded `envelope` field.
-Use a complete, bounded `HSCAN` under quiesced queue activity, including quarantined
-records and workflow members. Count undecodable records as blockers and expose
-only counts and safe identities, never payloads. Public list or stats output is
-insufficient because it can omit hidden or quarantined records. Keep the reader
-until this proof succeeds, and prevent old writers or snapshot restores from
-reintroducing the old shape.
+These records have no automatic Redis TTL. Terminal retention runs during queue
+operations; unfinished jobs and members of unfinished workflows can remain
+indefinitely. Prevent old writers or snapshot restores from reintroducing removed
+shapes. See the [queue policy](../../jobs/queue_config.go) and
+[Redis transitions](../../redis/jobs.lua) for retention and capacity bounds.
 
 ## Rollout and limits
 
-The envelope format is unchanged unless a job opts into the format-3 fields.
-Queue policy identities remain unchanged. Readers treat older records without
-retry metadata as cycle zero. Lua validates history array elements before any mutation, and every
-record read requires its stored or staged envelope.
+Every envelope uses format 3. Convert retained formats 1/2 before activating
+v0.23.0 as described in [job trace envelopes](job-trace-rollout.md).
+Queue policy identities remain unchanged. Current sparse records without retry
+metadata use cycle zero. Lua validates history array elements before any mutation,
+and every record read requires its stored or staged envelope.
 
 Mutable records and history entries accept only their exact canonical field
 names. Unknown fields and case variants such as `At` reject before mutation;

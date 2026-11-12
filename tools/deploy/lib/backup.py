@@ -186,11 +186,14 @@ def _private_root(host, entry):
 
 
 def _record(host, entry, kind, receipt):
+    if kind == "database":
+        require(isinstance(receipt.get("fresh_at"), str) and bool(receipt["fresh_at"]),
+                "invalid_backup_receipt", "The backup receipt requires an explicit freshness timestamp.")
     state = host.load_state(entry)
     value = state.setdefault("backup", dict(entry.get("backup", {})))
     value[kind] = receipt
     if kind == "database":
-        value.update(last_complete_id=receipt["backup_id"], last_complete_at=receipt.get("fresh_at", receipt["completed_at"]),
+        value.update(last_complete_id=receipt["backup_id"], last_complete_at=receipt["fresh_at"],
                      last_attempt_outcome="complete")
     elif kind == "restore_drill":
         value.update(restore_drill_outcome=receipt["status"], last_restore_drill_at=receipt.get("completed_at"))
@@ -436,9 +439,8 @@ def _complete(host, entry, backup_id, database, *, restore_point=None, reconcile
     journal = read_json(_private(host, path)) if path.exists() else {
         "operation_id": backup_id, "configuration_revision": entry["configuration_revision"], "components": {}}
     require(not journal.get("abandoned_at"), "backup_abandoned", "This bundle was abandoned; select a new operation UUID.")
-    require(journal.get("configuration_revision", entry["configuration_revision"]) == entry["configuration_revision"],
+    require(journal.get("configuration_revision") == entry["configuration_revision"],
             "backup_operation_conflict", "The runtime revision changed; start a new bundle and retain this operation's evidence.")
-    journal.setdefault("configuration_revision", entry["configuration_revision"])
     journal["components"]["database"] = database
     _write_private(host, path, journal)
     keys = _component(host, path, journal, "keys", lambda: archive_keys(host, entry), reconcile=reconcile)

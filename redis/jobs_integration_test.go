@@ -5,6 +5,7 @@ import (
 	"errors"
 	driver "github.com/redis/go-redis/v9"
 	"maps"
+	"strconv"
 	"testing"
 	"time"
 
@@ -322,50 +323,31 @@ func TestRedisJobStorageSeparatesEnvelopeAndSkipsNoopWrites(t *testing.T) {
 	}
 }
 
-func TestRedisJobStorageThreeReadsEmbeddedEnvelope(t *testing.T) {
-	client, backend, key := jobFixture(t)
-	d := jobs.Define[jobtest.Payload]("legacy.work", 1, jobs.DefaultPolicy(key.Queue()))
-	pending, err := d.Capture(t.Context(), jobtest.Payload{Text: "legacy"}, jobs.Options[jobtest.Payload]{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := backend.JobEnqueue(t.Context(), key, pending.Envelope()); err != nil {
-		t.Fatal(err)
-	}
-	// Seed an embedded envelope left by a completed layout upgrade.
-	keys := jobKeys(key)
-	id := pending.Envelope().ID().String()
-	envelope := client.raw.HGet(t.Context(), keys[9], id).Val()
-	var row map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(client.raw.HGet(t.Context(), keys[0], id).Val()), &row); err != nil {
-		t.Fatal(err)
-	}
-	encoded, err := json.Marshal(envelope)
-	if err != nil {
-		t.Fatal(err)
-	}
-	row["envelope"] = encoded
-	data, err := json.Marshal(row)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pipe := client.raw.TxPipeline()
-	pipe.HSet(t.Context(), keys[0], id, data)
-	pipe.HDel(t.Context(), keys[9], id)
-	if _, err := pipe.Exec(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	owner, err := lease.NewOwner()
-	if err != nil {
-		t.Fatal(err)
-	}
-	found, err := backend.JobReserve(t.Context(), key, owner, time.Minute)
-	reservation, ok := found.Get()
-	if err != nil || !ok || reservation.Envelope.PayloadJSON() != pending.Envelope().PayloadJSON() || reservation.Envelope.ID() != pending.Envelope().ID() {
-		t.Fatal("migrated record was not preserved", err)
-	}
-	if !client.raw.HExists(t.Context(), keys[9], id).Val() {
-		t.Fatal("record did not move its envelope on its next write")
+func TestRedisJobStorageQuarantinesEmbeddedEnvelope(t *testing.T) {
+	for _, separate := range []bool{false, true} {
+		t.Run(strconv.FormatBool(separate), func(t *testing.T) {
+			f := newQuarantineFixture(t)
+			envelope := f.enqueue(t)
+			raw := f.stored(t, 9, envelope.ID())
+			f.edit(t, envelope.ID(), map[string]any{"envelope": raw})
+			if !separate {
+				if err := f.client.raw.HDel(t.Context(), f.keys[9], envelope.ID().String()).Err(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := f.stored(t, 0, envelope.ID())
+			f.assertUnavailable(t, envelope)
+			if found, err := f.backend.JobReserve(t.Context(), f.key, f.owner, time.Minute); err != nil || found.IsSet() {
+				t.Fatal("embedded envelope reserved", err)
+			}
+			quarantined := f.quarantine(t)
+			if len(quarantined.Records) != 1 || quarantined.Records[0].ID != envelope.ID() {
+				t.Fatal("embedded envelope not quarantined")
+			}
+			if before != f.stored(t, 0, envelope.ID()) {
+				t.Fatal("quarantine rewrote raw evidence")
+			}
+		})
 	}
 }
 

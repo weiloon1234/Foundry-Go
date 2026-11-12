@@ -198,17 +198,17 @@ func TestMaxExceptionsAndRetryUntilEndRetries(t *testing.T) {
 	})
 }
 
-func TestExtendedEnvelopeVersionIsSelectedOnlyForNewFields(t *testing.T) {
+func TestCurrentEnvelopeVersionSupportsExecutionPolicies(t *testing.T) {
 	plain := jobs.Define[payload]("plain", 1, jobs.DefaultPolicy("default"))
 	pending, err := plain.Capture(t.Context(), payload{Labels: map[string]string{}}, jobs.Options[payload]{})
-	if err != nil || pending.Envelope().WireVersion() != jobs.EnvelopeV1 {
+	if err != nil || pending.Envelope().WireVersion() != jobs.CurrentEnvelopeVersion {
 		t.Fatal("plain envelope changed format", err)
 	}
 	policy := jobs.DefaultPolicy("default")
 	policy.MaxExceptions = 2
 	extended := jobs.Define[payload]("extended", 1, policy)
 	pending, err = extended.Capture(t.Context(), payload{Labels: map[string]string{}}, jobs.Options[payload]{})
-	if err != nil || pending.Envelope().WireVersion() != jobs.ExtendedEnvelope {
+	if err != nil || pending.Envelope().WireVersion() != jobs.CurrentEnvelopeVersion {
 		t.Fatal("extended policy did not select format 3", err)
 	}
 	data, err := pending.Envelope().MarshalJSON()
@@ -237,7 +237,7 @@ func TestExtendedEnvelopeVersionIsSelectedOnlyForNewFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	pending, err = plain.Capture(t.Context(), payload{Labels: map[string]string{}}, jobs.Options[payload]{Unique: jobs.Unique[payload]{Key: key, For: time.Hour, UntilProcessing: true}})
-	if err != nil || pending.Envelope().WireVersion() != jobs.ExtendedEnvelope || !pending.Envelope().Uniqueness().UntilProcessing {
+	if err != nil || pending.Envelope().WireVersion() != jobs.CurrentEnvelopeVersion || !pending.Envelope().Uniqueness().UntilProcessing {
 		t.Fatal("until-processing uniqueness did not select format 3", err)
 	}
 }

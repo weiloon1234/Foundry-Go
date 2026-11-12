@@ -13,12 +13,18 @@ confirmation rules, host prerequisites, and recovery procedures.
 | `lib/backup.py` | PostgreSQL and encrypted key/config backups |
 | `protocol.json` | Wire protocol and tool generation |
 
-The bundle uses protocol 2.0 and generation 8. Tool upgrades require an installed
+The bundle uses protocol 2.0 and generation 9. Tool upgrades require an installed
 host generation of at least 6. The local command checks the installed host's
 `hello` response before staging any bundle; the candidate checks again before
 planning or installation. Older hosts receive `tools_upgrade_floor`: upgrade to
 v0.16.0 or v0.16.1 tools first, then retry the tool upgrade. The minimum client
 generation remains 1, preserving existing registrations.
+
+Generation 9 rejects deployment attempts containing `result` metadata and backup
+receipts without `fresh_at` or journals without `configuration_revision`.
+Configuration failures continue to use `outcome: failed_applied`. The release
+archive format, protocol 2.0 and upgrade floors are unchanged, so the previous
+server generation can activate the candidate archive during foreign-upgrade acceptance.
 
 Use `tools-plan`, confirmed `tools-apply`, then an ordinary deploy. Ready instances
 receive current unit templates followed by a daemon reload; enablement is preserved

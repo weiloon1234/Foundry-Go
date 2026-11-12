@@ -65,8 +65,6 @@ def attempt(value):
     if not isinstance(value, dict):
         return None
     result = {key: string(value.get(key)) for key in ("id", "action", "release", "started_at", "finished_at", "outcome", "phase")}
-    if value.get("result") == "failed_applied":
-        result["outcome"] = "failed_applied"
     # Failure details may contain command diagnostics; publish only the machine code.
     error = value.get("error")
     code = error

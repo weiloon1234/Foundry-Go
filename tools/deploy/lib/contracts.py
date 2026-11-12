@@ -145,7 +145,7 @@ def validate_attempt(value):
     else:
         require(not ((configuration | {"configuration_applied", "configuration_redacted"}) & value.keys()), code, detail)
     require(value["outcome"] != "failed_applied" or value["action"] == "config" and value.get("configuration_applied") is True, code, detail)
-    require("result" not in value or value["result"] == "failed_applied" and value["action"] == "config" and value.get("configuration_applied") is True, code, detail)
+    require("result" not in value, code, detail)
     return value
 
 

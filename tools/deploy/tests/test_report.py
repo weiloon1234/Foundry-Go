@@ -637,7 +637,7 @@ class ReportTests(unittest.TestCase):
             self.assertEqual(report.readiness(8100, report.time.monotonic() + 1), {"ready": False, "http_status": 503})
 
     def test_applied_config_failure_preserves_public_outcome(self):
-        result = report.attempt({"outcome": "failed", "result": "failed_applied", "secret": SECRET})
+        result = report.attempt({"outcome": "failed_applied", "secret": SECRET})
         self.assertEqual("failed_applied", result["outcome"])
         self.assertNotIn(SECRET, json.dumps(result))
 

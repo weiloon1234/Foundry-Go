@@ -11,7 +11,7 @@
 ## Overview
 
 Workers support shared observations, maintenance admission and optional
-versioned trace snapshots. Default envelopes retain their legacy wire shape.
+optional trace snapshots. Every envelope uses format 3 (`jobs.CurrentEnvelopeVersion`).
 Read the [workers-first rollout](job-trace-rollout.md) before enabling propagation.
 The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) records
 acceptance and verification evidence. The [independent consumer](../../tests/fixtures/consumer/background/)
@@ -276,11 +276,9 @@ uniqueness window when the job's first attempt starts, so another job with the
 same key can be queued while it runs; the window still bounds a job that never
 starts.
 
-These fields travel in envelope format 3 (`jobs.ExtendedEnvelope`), selected
-automatically only when an envelope uses one of them; other envelopes keep the
-legacy or traced format. Roll out by upgrading every worker, outbox publisher
-and inspection tool first, then start dispatching with the new fields. Older
-readers reject format-3 envelopes instead of ignoring the fields.
+These fields travel in the same format 3 (`jobs.CurrentEnvelopeVersion`) used
+by every envelope. Trace remains optional. See the
+[envelope activation requirements](job-trace-rollout.md) before upgrading retained work.
 
 `HandlerOptions.Skip` runs after admission; `true` completes the attempt
 successfully without running middleware or the handler, for work that became

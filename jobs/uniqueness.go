@@ -31,8 +31,7 @@ func (UniqueKey[P]) Format(s fmt.State, _ rune) { _, _ = s.Write([]byte("job uni
 // that window. It is admission deduplication, not exactly-once execution.
 // UntilProcessing releases the window as soon as the job's first attempt
 // starts, so a new job with the same key can be queued while this one runs; the
-// window still bounds how long a job that never starts suppresses others. It
-// requires ExtendedEnvelope readers.
+// window still bounds how long a job that never starts suppresses others.
 type Unique[P any] struct {
 	Key             UniqueKey[P]
 	For             time.Duration

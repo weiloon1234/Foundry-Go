@@ -97,12 +97,11 @@ type Options[P any] struct {
 	At     time.Time
 	Queue  Queue
 	Unique Unique[P]
-	// PropagateTrace captures the current immutable trace in envelope format 2.
-	// Upgrade every worker/outbox reader before enabling it. False preserves
-	// the legacy wire shape; an absent trace also keeps the legacy shape.
+	// PropagateTrace captures the current immutable trace when present.
+	// Trace is optional within the current envelope format.
 	PropagateTrace bool
-	// RetryUntil overrides the policy's absolute retry deadline for this job
-	// (ExtendedEnvelope). Zero keeps the declared policy.
+	// RetryUntil overrides the policy's absolute retry deadline for this job.
+	// Zero keeps the declared policy.
 	RetryUntil time.Time
 }
 
@@ -184,13 +183,9 @@ func (d Definition[P]) Capture(ctx context.Context, input P, options Options[P])
 			return Pending[P]{}, err
 		}
 	}
-	envelope := Envelope{wire: envelopeWire{ID: model.IDFromBytes[Execution](id.Bytes()), Name: d.name, Version: d.version, Policy: policy, AvailableAt: options.At.UTC(), Origin: origin, Unique: unique, Encrypted: encrypted}, payload: payload}
+	envelope := Envelope{wire: envelopeWire{EnvelopeVersion: CurrentEnvelopeVersion, ID: model.IDFromBytes[Execution](id.Bytes()), Name: d.name, Version: d.version, Policy: policy, AvailableAt: options.At.UTC(), Origin: origin, Unique: unique, Encrypted: encrypted}, payload: payload}
 	if trace := tracing.FromContext(ctx); options.PropagateTrace && !trace.IsZero() {
-		envelope.wire.EnvelopeVersion = TracedEnvelope
 		envelope.wire.Trace = value.Set(trace)
-	}
-	if envelope.wire.extended() {
-		envelope.wire.EnvelopeVersion = ExtendedEnvelope
 	}
 	if _, err := envelope.MarshalJSON(); err != nil {
 		return Pending[P]{}, err

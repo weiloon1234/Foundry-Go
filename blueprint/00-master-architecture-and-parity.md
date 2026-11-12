@@ -8,6 +8,19 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Proven compatibility readers removed — v0.23.0, 2026-11-12
+
+Status: **jobs/redis/attachments race and integration tests, deploy-tool unit suite and
+docs check passed; CI and deploy acceptance pending at commit**.
+- A read-only production audit (Boss Club staging/production, Semaklah production)
+  proved the old shapes absent except job envelope format 1, which Semaklah's data
+  still held because v0.22.x wrote it. That data is converted to format 3 before
+  activation (`proposals/v017-cleanup-and-webhook-capture-20261111`).
+- Job envelopes: one format (3, `jobs.CurrentEnvelopeVersion`), trace optional.
+- Removed: Redis layout-1 embedded envelopes, layout-2 terminal detachment, workflow
+  catch/finally normalization, old attachment variant prefix, deploy `result`
+  metadata and backup receipt/journal fallbacks. Tool protocol generation 9.
+
 ## Server shell and server-side artisan — v0.22.0, 2026-11-11
 
 Status: **prepared for lead commit; deployment/application targeted tests, deploy-tool

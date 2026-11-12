@@ -754,8 +754,6 @@ def public_state(state):
                 item.pop("configuration_sha256", None)
                 item.pop("previous_configuration_sha256", None)
                 item["configuration_redacted"] = True
-            if item.get("result") == "failed_applied":
-                item["outcome"] = "failed_applied"
     return value
 
 

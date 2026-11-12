@@ -18,8 +18,8 @@ const payloadPurpose encryption.Purpose = "foundry.jobs.payload.v1"
 // Encrypted returns this definition with payload encryption: Capture seals the
 // payload JSON with keyring's active key (authenticated to the job name and
 // version) and workers decrypt it before decoding, so queues, outbox rows,
-// archives and inspection store only ciphertext. Encrypted envelopes use
-// ExtendedEnvelope. Producers and workers need the same keyring (rotation keeps
+// archives and inspection store only ciphertext.
+// Producers and workers need the same keyring (rotation keeps
 // old keys for decryption); a worker without it retries the job. Envelopes
 // captured before encryption was enabled still decode as plaintext.
 func (d Definition[P]) Encrypted(keyring *encryption.Keyring) Definition[P] {

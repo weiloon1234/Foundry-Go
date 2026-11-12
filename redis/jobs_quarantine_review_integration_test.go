@@ -200,77 +200,59 @@ func TestRedisQuarantineRecreatedGroupUnderRetainedPressure(t *testing.T) {
 // Release F4: group-owned terminal members never occupy an independent scan window.
 func TestRedisQuarantineTerminalMembersDoNotPinMaintenance(t *testing.T) {
 	for _, path := range []string{"retention", "eviction"} {
-		for _, legacy := range []bool{false, true} {
-			t.Run(path+"/legacy-"+strconv.FormatBool(legacy), func(t *testing.T) {
-				f := newQuarantineFixture(t)
-				count, batches := 128, 1
-				if path == "eviction" {
-					count, batches = 256, 2
-					config := f.backend.config
-					config.MaxRetained = 1
-					var err error
-					f.backend, err = NewJobBackend(f.client, config)
-					if err != nil {
-						t.Fatal(err)
-					}
+		t.Run(path, func(t *testing.T) {
+			f := newQuarantineFixture(t)
+			count, batches := 128, 1
+			if path == "eviction" {
+				count, batches = 256, 2
+				config := f.backend.config
+				config.MaxRetained = 1
+				var err error
+				f.backend, err = NewJobBackend(f.client, config)
+				if err != nil {
+					t.Fatal(err)
 				}
-				var members []jobs.Envelope
-				for range batches {
-					group := f.workflow(t, true, count, true)
-					completion, _ := group.Envelope().Completion().Get()
-					f.edit(t, completion.ID(), map[string]any{"available": maxJobInteger})
-					claims := make([]jobs.Reservation, count)
-					for i := range claims {
-						claims[i] = f.reserve(t)
-					}
-					for _, claim := range claims {
-						f.finish(t, claim, jobs.Succeeded)
-						members = append(members, claim.Envelope)
-					}
+			}
+			var members []jobs.Envelope
+			for range batches {
+				group := f.workflow(t, true, count, true)
+				completion, _ := group.Envelope().Completion().Get()
+				f.edit(t, completion.ID(), map[string]any{"available": maxJobInteger})
+				claims := make([]jobs.Reservation, count)
+				for i := range claims {
+					claims[i] = f.reserve(t)
 				}
-				if n := f.client.raw.ZCard(t.Context(), f.keys[3]).Val(); n != 0 {
-					t.Fatal("workflow members in independent index", n)
+				for _, claim := range claims {
+					f.finish(t, claim, jobs.Succeeded)
+					members = append(members, claim.Envelope)
 				}
-				independent := f.enqueue(t)
-				f.finish(t, f.reserve(t), jobs.Succeeded)
-				if legacy {
-					// Simulate layout-2 placement after the metadata-only migration.
-					for _, member := range members {
-						var row jobStoredRecord
-						if err := json.Unmarshal([]byte(f.stored(t, 0, member.ID())), &row); err != nil {
-							t.Fatal(err)
-						}
-						if err := f.client.raw.ZAdd(t.Context(), f.keys[3], driver.Z{Score: float64(row.Finished), Member: member.ID().String()}).Err(); err != nil {
-							t.Fatal(err)
-						}
-					}
+			}
+			if n := f.client.raw.ZCard(t.Context(), f.keys[3]).Val(); n != 0 {
+				t.Fatal("workflow members in independent index", n)
+			}
+			independent := f.enqueue(t)
+			f.finish(t, f.reserve(t), jobs.Succeeded)
+			if path == "retention" {
+				f.advance(t, f.backend.config.Retention+time.Second)
+			}
+			if _, err := f.backend.JobStats(t.Context(), f.key); err != nil {
+				t.Fatal(err)
+			}
+			if f.client.raw.HExists(t.Context(), f.keys[0], independent.ID().String()).Val() {
+				t.Fatal("independent retention pinned")
+			}
+			if f.client.raw.ZCard(t.Context(), f.keys[3]).Val() != 0 {
+				t.Fatal("workflow members entered independent index")
+			}
+			for _, member := range members {
+				if !f.client.raw.HExists(t.Context(), f.keys[0], member.ID().String()).Val() {
+					t.Fatal("group member deleted")
 				}
-				if path == "retention" {
-					f.advance(t, f.backend.config.Retention+time.Second)
-				}
-				// A legacy full window may need one detachment call before the
-				// later independent entry fits. Every call makes bounded progress.
-				for range 2 {
-					if _, err := f.backend.JobStats(t.Context(), f.key); err != nil {
-						t.Fatal(err)
-					}
-				}
-				if f.client.raw.HExists(t.Context(), f.keys[0], independent.ID().String()).Val() {
-					t.Fatal("independent retention pinned")
-				}
-				if f.client.raw.ZCard(t.Context(), f.keys[3]).Val() != 0 {
-					t.Fatal("legacy members not detached")
-				}
-				for _, member := range members {
-					if !f.client.raw.HExists(t.Context(), f.keys[0], member.ID().String()).Val() {
-						t.Fatal("group member deleted")
-					}
-				}
-				if got := f.counters(t)["retained"]; got != strconv.Itoa(count*batches) {
-					t.Fatal("group member charges changed", got)
-				}
-			})
-		}
+			}
+			if got := f.counters(t)["retained"]; got != strconv.Itoa(count*batches) {
+				t.Fatal("group member charges changed", got)
+			}
+		})
 	}
 }
 

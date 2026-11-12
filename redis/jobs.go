@@ -118,8 +118,8 @@ type jobRequest struct {
 	WorkflowKind     jobs.WorkflowKind `json:"workflow_kind,omitempty"`
 	Steps            []jobRequest      `json:"steps,omitempty"`
 	Completion       string            `json:"completion"`
-	Catch            string            `json:"catch,omitempty"`
-	Finally          string            `json:"finally,omitempty"`
+	Catch            string            `json:"catch"`
+	Finally          string            `json:"finally"`
 	Fingerprint      string            `json:"fingerprint,omitempty"`
 	GroupBytes       int64             `json:"group_bytes,omitempty"`
 	Op               string            `json:"op"`

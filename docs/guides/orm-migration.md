@@ -135,7 +135,7 @@ expr.JSONPath.IsJSONNull | expr.JSONTypeNullable(path.JSON()) compared with data
 expr.JSONPath.Contains | expr.JSONContainsNullable(path.JSON(), operand)
 datatable.Config.DownloadTimeout | datatable.Manager.DownloadTimeout (including a nil manager)
 model.NewID | model.NewIDAt
-jobs.LegacyEnvelope | jobs.EnvelopeV1; version-1 bytes and default decoding unchanged
+jobs.LegacyEnvelope | jobs.CurrentEnvelopeVersion; format 3 only (convert retained formats 1/2 before activation)
 database/query (all builders and execution) | database/orm declarations and reads; orm/expr expressions; orm/rows projections, sets and CTEs
 query.PageRequest | orm.PageRequest
 query.Page | orm.PageResult

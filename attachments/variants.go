@@ -25,9 +25,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// Legacy variant keys remain readable and eligible for journal cleanup.
-const legacyVariantPrefix = "foundry-attachment-variants/"
-
 const (
 	// MaxVariants bounds declared variants per collection.
 	MaxVariants = 8
@@ -161,12 +158,9 @@ func variantKey(scope string, id model.ID[store.Variant]) (storage.ObjectKey, er
 	return storage.ParseKey(objectPrefix + scope + "/variants/" + id.String())
 }
 
-// Older persisted variants keep their exact key and normal journal cleanup.
-// New generations live inside the scope prefix so orphan recovery never needs
-// a bucket-wide or legacy-prefix listing.
 func validVariantKey(scope string, id model.ID[store.Variant], key string) bool {
 	expected, err := variantKey(scope, id)
-	return err == nil && (expected.String() == key || key == legacyVariantPrefix+scope+"/"+id.String())
+	return err == nil && expected.String() == key
 }
 
 // validateVariant treats a variant row as a checked persistence boundary

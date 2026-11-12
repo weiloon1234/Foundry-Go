@@ -405,10 +405,9 @@ variants without a ready file.
 
 Each variant has its own journal row (`foundry_attachment_variants`, migration
 `000002_create_variants`) and a generation-specific object key under
-`foundry-attachments/<scope>/variants/`. Existing keys under
-`foundry-attachment-variants/<scope>/` remain readable and use normal journal
-cleanup; the orphan sweep never lists that legacy prefix. Regeneration moves
-variants to the new prefix without changing the database schema.
+`foundry-attachments/<scope>/variants/`. Keys under the former
+`foundry-attachment-variants/<scope>/` prefix are invalid and are not read or
+cleaned by the framework. The orphan sweep lists only the current scope prefix.
 It is written with an absence condition and becomes ready only while its
 original is still ready, replacing the previous ready variant of that name.
 Variants follow the original: replace, detach, clear, owner deletion and orphan
