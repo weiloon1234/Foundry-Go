@@ -12,7 +12,7 @@ declare const transport: HTTPTransport;
 declare const clientOptions: ClientOptions;
 
 export function portalConsumer(): void {
-  const portal = createPortalSession(transport, { clientOptions, channel: null });
+  const portal = createPortalSession(transport, { clientOptions: { ...clientOptions, requestTimeoutMs: 15_000 }, channel: null });
   const credentials: PasswordCredentials = { login_id: "member@example.test", password: "fixture-password" };
   const identifier: keyof PasswordCredentials = signInIdentifier;
   const session: TokenSession = portal.session;

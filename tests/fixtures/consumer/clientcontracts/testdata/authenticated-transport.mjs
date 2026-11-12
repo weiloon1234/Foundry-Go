@@ -3,6 +3,7 @@ import { describe, it, mock } from "node:test";
 import { pathToFileURL } from "node:url";
 
 const { authenticatedTransport, createTokenSession, SessionCoordinationError } = await import(pathToFileURL(process.argv[2]).href);
+const { fetchTransport } = await import(pathToFileURL(process.argv[3]).href);
 
 function request(overrides = {}) {
   return {
@@ -60,6 +61,25 @@ function session(...tokens) {
 const authorization = (sent) => sent.headers["authorization"];
 
 describe("authenticatedTransport", () => {
+  for (const afterRenewal of [false, true]) it(`never retries a timed-out mutation (after renewal=${afterRenewal})`, async t => {
+    const tokens = session("a1", "a2");
+    let calls = 0;
+    const fetchCall = t.mock.method(globalThis, "fetch", async (_url, { signal }) => {
+      calls++;
+      if (afterRenewal && calls === 1) return new Response(null, { status: 401 });
+      return new Promise((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
+    });
+    await assert.rejects(authenticatedTransport(fetchTransport, tokens.value)(request({ requestTimeoutMs: 10 })), error => {
+      assert.ok(error instanceof DOMException);
+      assert.equal(error.name, "TimeoutError");
+      assert.match(error.message, /outcome is unknown/);
+      return true;
+    });
+    assert.equal(fetchCall.mock.callCount(), afterRenewal ? 2 : 1);
+    assert.equal(tokens.value.accessToken.mock.callCount(), afterRenewal ? 2 : 1);
+    assert.deepEqual(tokens.rejected, afterRenewal ? ["a1"] : []);
+  });
+
   it("N1 never sends the previous bearer after a failed identity publication", async () => {
     let transition = null;
     let fail = false;

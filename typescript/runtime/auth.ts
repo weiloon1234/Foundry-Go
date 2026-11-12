@@ -16,7 +16,8 @@ export type RefreshOutcome =
 
 /** Runs work exclusively across the portal's tabs (the Web Locks API). */
 export interface TabLock {
-  run<T>(name: string, work: () => Promise<T>): Promise<T>;
+  /** Cancellation before acquisition rejects the wait and never runs work. */
+  run<T>(name: string, work: () => Promise<T>, signal?: AbortSignal): Promise<T>;
 }
 
 /** Credential metadata shared under the portal's lock; never contains tokens. */
@@ -283,7 +284,7 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
       }
       publish({ type: "token", token: outcome.token });
       return outcome.token.value;
-    });
+    }, controller.signal);
 
   return {
     status: () => current,
@@ -322,7 +323,8 @@ export function createTokenSession(options: TokenSessionOptions): TokenSession {
           renewing = null;
           refreshController = null;
         });
-        // Ending the wait does not release the lock or admit another renewal.
+        // Ending a queued wait cancels acquisition; granted work keeps the
+        // lock and blocks renewal until it exits, even after our caller leaves.
         renewing = waitForToken(work, controller.signal).catch(error => {
           if (controller.signal.aborted) return null;
           throw error;
@@ -399,19 +401,41 @@ function webLock(): TabLock {
   const locks = globalThis.navigator?.locks;
   if (locks === undefined) {
     // Without Web Locks, serialize within this tab only.
-    let tail: Promise<unknown> = Promise.resolve();
+    const queue = new Set<() => void>();
+    let active = false;
+    const next = () => {
+      if (active) return;
+      queue.values().next().value?.();
+    };
     return {
-      run(_name, work) {
-        const result = tail.then(work);
-        tail = result.catch(() => undefined);
-        return result;
+      run<T>(_name: string, work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+        return new Promise((resolve, reject) => {
+          if (signal?.aborted) { reject(signal.reason); return; }
+          const abort = () => {
+            queue.delete(start);
+            signal?.removeEventListener("abort", abort);
+            reject(signal?.reason);
+          };
+          const start = () => {
+            queue.delete(start);
+            signal?.removeEventListener("abort", abort);
+            active = true;
+            Promise.resolve().then(work).then(resolve, reject).finally(() => {
+              active = false;
+              next();
+            });
+          };
+          signal?.addEventListener("abort", abort, { once: true });
+          queue.add(start);
+          next();
+        });
       },
     };
   }
   return {
-    run<T>(name: string, work: () => Promise<T>): Promise<T> {
+    run<T>(name: string, work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
       // The DOM typing nests the callback's promise; the runtime flattens it.
-      return locks.request(name, work) as Promise<T>;
+      return locks.request(name, signal === undefined ? {} : { signal }, work) as Promise<T>;
     },
   };
 }

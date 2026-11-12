@@ -39,9 +39,10 @@ assert.equal("cookieName" in portal.authDescriptor, false);
 // Generated descriptor functions call the actual typed client operations.
 {
   const api = backend();
-  const instance = portal.createPortalSession(api.transport, { channel: null, now: () => 0, clientOptions: { baseURL: "https://fixture.test" } });
+  const instance = portal.createPortalSession(api.transport, { channel: null, now: () => 0, clientOptions: { baseURL: "https://fixture.test", requestTimeoutMs: 1250 } });
   assert.deepEqual({ ...(await instance.signInWithPassword({ login_id: "member@example.test", password: "fixture-password" })) }, { display: "Visible member" });
   assert.equal(instance.identifier, "login_id");
+  assert.ok(api.sent.every(request => request.requestTimeoutMs === 1250));
   assert.deepEqual(JSON.parse(api.sent[0].body), { login_id: "member@example.test", password: "fixture-password" });
   assert.equal(api.sent[0].headers.authorization, undefined);
   assert.equal(api.sent[1].headers.authorization, "Bearer access");

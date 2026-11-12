@@ -209,21 +209,90 @@ describe("createTokenSession", () => {
     two.dispose();
   });
 
-  it("M5 bounds time queued for the credential lock without starting refresh", async () => {
-    const lock = sharedLock();
+  for (const webLocks of [true, false]) it(`cancels queued renewal and permits the next renewal (Web Locks=${webLocks})`, async t => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    const queue = [];
+    const signals = [];
+    let active = false;
+    const next = () => { if (!active) queue[0]?.(); };
+    const locks = {
+      request(_name, options, work) {
+        if (options.signal) signals.push(options.signal);
+        return new Promise((resolve, reject) => {
+          const remove = () => {
+            queue.splice(queue.indexOf(start), 1);
+            options.signal?.removeEventListener("abort", abort);
+          };
+          const abort = () => { remove(); reject(options.signal.reason); };
+          const start = () => {
+            remove();
+            active = true;
+            Promise.resolve().then(work).then(resolve, reject).finally(() => { active = false; next(); });
+          };
+          if (options.signal?.aborted) { reject(options.signal.reason); return; }
+          options.signal?.addEventListener("abort", abort, { once: true });
+          queue.push(start);
+          next();
+        });
+      },
+    };
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: webLocks ? { locks } : {} });
+    t.after(() => {
+      if (previous) Object.defineProperty(globalThis, "navigator", previous);
+      else delete globalThis.navigator;
+    });
     const release = Promise.withResolvers();
-    const holder = lock.run("test", () => release.promise);
-    const refresh = mock.fn(async () => renewed(at("unused", 60_000)));
-    const session = createTokenSession({ name: "queued", channel: null, lock, refresh, refreshTimeoutMs: 10 });
+    const entered = Promise.withResolvers();
+    const writes = [];
+    const refresh = mock.fn(async () => renewed(at("renewed", 60_000)));
+    const session = createTokenSession({
+      name: "queued", channel: null, refresh, refreshTimeoutMs: 10, now: () => 0,
+      coordination: { read: () => writes.at(-1) ?? null, write: next => writes.push(next) },
+    });
+    const holder = session.runCredentials(async () => {
+      session.signIn(at("expired", 0));
+      entered.resolve();
+      await release.promise;
+    });
+    await entered.promise;
+    const before = [...writes];
     try {
-      const pending = session.accessToken();
-      assert.equal(await Promise.race([pending.then(() => "settled"), new Promise(resolve => setTimeout(() => resolve("pending"), 100))]), "settled");
-      assert.equal(refresh.mock.callCount(), 0);
-    } finally {
-      session.dispose();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        assert.equal(await session.accessToken(), null);
+        assert.equal(refresh.mock.callCount(), 0);
+        assert.deepEqual(writes, before, "queued abort must not publish uncertainty");
+        if (webLocks) {
+          assert.equal(signals.length, attempt + 1, "each wait gets a fresh renewal controller");
+          assert.equal(signals.at(-1).aborted, true);
+          assert.equal(queue.length, 0, "aborted waiter leaves the native queue");
+        }
+      }
       release.resolve();
       await holder;
+      assert.equal(await session.accessToken(), "renewed");
+      assert.equal(refresh.mock.callCount(), 1, "aborted work never runs after the holder exits");
+    } finally {
+      release.resolve();
+      await holder;
+      session.dispose();
     }
+  });
+
+  it("a granted refresh abort persists uncertainty and invalidates the session", async () => {
+    const lock = sharedLock();
+    const refresh = mock.fn(signal => new Promise((_, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    }));
+    const session = createTokenSession({ name: "holder", lock, coordination: lock.coordination, channel: null, refresh, refreshTimeoutMs: 10 });
+    try {
+      assert.equal(await session.accessToken(), null);
+      // The caller can settle before the granted callback's invalidation completes.
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(session.status(), "signed-out");
+      assert.equal(lock.coordination.read().status, "uncertain");
+      assert.equal(await session.accessToken(), null);
+      assert.equal(refresh.mock.callCount(), 1);
+    } finally { session.dispose(); }
   });
 
   it("M5 bounds refresh waits without releasing an uncooperative credential writer", async () => {

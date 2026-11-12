@@ -52,6 +52,8 @@ export interface HTTPRequest {
   readonly redirect: "follow" | "manual"; readonly duplex?: "half";
   /** Includes the framework-owned multipart framing. */
   readonly maxBodyBytes: number;
+  /** Maximum wait for response headers for absent/string bodies; 0 disables (default 30 seconds). */
+  readonly requestTimeoutMs?: number;
 }
 export type ResponseBody = string | Uint8Array | AsyncIterable<Uint8Array>;
 export interface HTTPResponse { readonly status: number; readonly headers: Readonly<Record<string, string>>; readonly body: ResponseBody; close(): void | Promise<void> }
@@ -61,7 +63,7 @@ export type HTTPTransport = (request: HTTPRequest) => Promise<HTTPResponse>;
  * enum values become UnknownEnumValue, so additive server changes reach deployed
  * clients. Set strictResponses to reject them. Requests are always strict.
  */
-export interface ClientOptions extends CodecOptions { readonly validationMessages?: ValidationMessages; readonly baseURL?: string; readonly credentials?: RequestCredentials; readonly headers?: Readonly<Record<string, string>>; readonly strictResponses?: boolean }
+export interface ClientOptions extends CodecOptions { readonly validationMessages?: ValidationMessages; readonly baseURL?: string; readonly credentials?: RequestCredentials; readonly headers?: Readonly<Record<string, string>>; readonly strictResponses?: boolean; readonly requestTimeoutMs?: number }
 export interface FileResult { readonly status: number; readonly headers: Readonly<Record<string, string>>; readonly body: AsyncIterable<Uint8Array>; close(): Promise<void> }
 /** A response whose operation declares several success statuses. */
 export interface StatusResult<S extends number, T> { readonly status: S; readonly body: T }
@@ -129,6 +131,11 @@ function beforeSending<T>(run: () => T): T {
   catch (error) { if (error !== null && typeof error === "object") unsentFailures.add(error); throw error; }
 }
 function checkAbort(signal?: AbortSignal): void { if (signal?.aborted) throw signal.reason ?? new DOMException("Request aborted", "AbortError"); }
+function requestTimeout(value = 30_000): number {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 2_147_483_647)
+    throw new TypeError("invalid request timeout");
+  return value;
+}
 function mergeHeaders(...sources: readonly (Readonly<Record<string, string>> | undefined)[]): Record<string, string> {
   const result: Record<string, string> = Object.create(null);
   for (const source of sources) if (source) for (const [name, value] of Object.entries(object(source))) {
@@ -313,6 +320,7 @@ function redirectLocation(value: string | undefined): string {
   return value;
 }
 function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, options: ClientOptions) {
+  const requestTimeoutMs = requestTimeout(options.requestTimeoutMs);
   const codec = new WireCodec(document.types), operations = new Map(document.http.map(operation => [operation.name, operation])), tolerant = options.strictResponses !== true;
   let base = options.baseURL ?? "";
   if (base) { const parsed = new URL(base); if (!/^https?:$/.test(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) reject("", "base_url"); base = parsed.href.replace(/\/$/, ""); }
@@ -364,7 +372,7 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
     let target = base + url + (search ? "?" + search : "");
     if (operation.route.signed_url) target = signedTarget(input.signedURL, target, operation.route.signed_url, base);
     const maxBodyBytes = operation.body?.media_type === "application/x-www-form-urlencoded" ? operation.limits.Form.Bytes : operation.body?.parts ? operation.limits.Multipart.Bytes : operation.body?.raw ? operation.limits.Raw?.Bytes ?? 0 : operation.limits.Body.Bytes;
-    return { operation, validation, request: { method: operation.route.method, url: target, headers, ...(body === undefined ? {} : { body }), ...(streamed ? { duplex: "half" as const } : {}), ...(call.signal ? { signal: call.signal } : {}), credentials: options.credentials ?? "same-origin", redirect: operation.redirect ? "manual" as const : "follow" as const, maxBodyBytes } satisfies HTTPRequest };
+    return { operation, validation, request: { method: operation.route.method, url: target, headers, ...(body === undefined ? {} : { body }), ...(streamed ? { duplex: "half" as const } : {}), ...(call.signal ? { signal: call.signal } : {}), credentials: options.credentials ?? "same-origin", redirect: operation.redirect ? "manual" as const : "follow" as const, maxBodyBytes, requestTimeoutMs } satisfies HTTPRequest };
   };
   return {
     validate(name: string, request: unknown): ValidationReport { return prepare(name, request, {}).validation; },

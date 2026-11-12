@@ -8,8 +8,8 @@
     "contracts_members_foundry.gen.ts": "8da44c66a9e6da6574c19a98dc07777d9ff8ed11ef55eee00969c5e5b67bec50",
     "contracts_openapi_foundry.gen.json": "d82aa635eb1c96dccc7be1d311fea5226cf6822b48142bfd19dca0c0bf681ff0",
     "contracts_react_foundry.gen.ts": "5381e2b076a7f4fdd980708b2e512c3a55198a51bcac5db341667185811c6b23",
-    "contracts_runtime_auth_foundry.gen.ts": "43ca0a78a1369f13c31c9a2cd2f99410191410cc34953122612947694003e422",
-    "contracts_runtime_foundry.gen.ts": "020ae66871b46e1242c8ca91cd3cd1f85ad2814b77f5be880a2ebbcdb4ec5ed0",
+    "contracts_runtime_auth_foundry.gen.ts": "76e555ce4e7281120e46720f71d4993688a998187852ef1c393b28bb4035e460",
+    "contracts_runtime_foundry.gen.ts": "c884a40c7ea30e591fee3337843fd42af79501b8d56114d2c975d8277e92705b",
     "contracts_runtime_realtime_foundry.gen.ts": "9ae67cab99361d96ffbcd10a597406c1ecb98ae548a10477c2d38ed8b8a21834",
     "contracts_vue_foundry.gen.ts": "90772adf054a6c6ebd6c8e681f5e07139ed457cbcf1b1dd62d918693f7adce40"
   }

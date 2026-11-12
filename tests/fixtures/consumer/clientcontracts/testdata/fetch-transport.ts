@@ -7,8 +7,8 @@ export function fetchClients(): void {
   const transport: HTTPTransport = fetchTransport;
   createClient(transport, { credentials: "include" });
 // doc-example:end fetch-client
-  createClient(surfaceTransport);
-  createClient(standaloneTransport);
+  createClient(surfaceTransport, { requestTimeoutMs: 15_000 });
+  createClient(standaloneTransport, { requestTimeoutMs: 0 });
   // Custom transport injection keeps the same request and response contract.
   createClient(async request => transport(request));
 }

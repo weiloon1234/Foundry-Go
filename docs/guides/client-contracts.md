@@ -717,6 +717,28 @@ reader and releases its lock on exit. `close()` cancels an active reader, or an
 unlocked response body before iteration; the iterator releases an active reader's
 lock when it exits. A response without a body yields no chunks.
 
+`ClientOptions.requestTimeoutMs` sets the Fetch time limit from sending a request
+to receiving response headers. The default is 30,000 milliseconds; `0` disables
+it. Values must be whole milliseconds from 0 through 2,147,483,647. Configure a
+portal through `createPortalSession(fetchTransport, { clientOptions: {
+requestTimeoutMs: 15_000 } })`, or pass the option directly to `createClient`.
+The limit applies only when the request body is absent or a string. Blob uploads
+and ReadableStream request bodies are exempt. The timer clears when headers
+arrive; response body streaming still uses the existing byte limits. Caller
+`signal` cancellation works both before headers and during response streaming.
+
+A timeout aborts Fetch and rejects with a native `DOMException` whose `name` is
+`"TimeoutError"`. For GET/HEAD its message is `"Request timed out before response
+headers"`; other methods add `"; outcome is unknown"`. This is a transport failure,
+not an `APIError` or proof that a mutation was rolled back. Reconcile an unknown
+outcome before retrying. The runtime never retries a timeout: authentication retry
+requires an actual 401 response. Other Fetch failures and caller abort reasons
+retain their identity.
+
+Custom transports receive `HTTPRequest.requestTimeoutMs` and must implement this
+header deadline and the same body exemptions themselves. Direct `fetchTransport`
+calls use the same default when the field is absent.
+
 The adapter forwards `HTTPRequest.redirect` and falls back to `"error"` when it
 is absent. Generated clients currently declare `"follow"` for ordinary operations
 and `"manual"` for redirect operations, so those values override the fallback.
@@ -1140,6 +1162,12 @@ serialize renewal and login/logout cookie writes across tabs of its guard, and
 shares access-token transitions over BroadcastChannel. Without Web Locks,
 serialization covers only the current tab. An unknown refresh outcome signs that
 tab out and is never resent.
+
+Renewal's `refreshTimeoutMs` includes lock acquisition. An aborted queued wait
+sends nothing and leaves no uncertain transition; a later call can renew again.
+Once refresh starts, an abort still records uncertainty and signs out. See
+[portal renewal waits](browser-sessions.md#generated-portal-renewal-waits) for
+custom lock obligations and granted-work ownership.
 
 The authenticated transport renews after a 401 and retries once for replayable
 bodies. Streams are never retried. Explicit Authorization headers pass through.

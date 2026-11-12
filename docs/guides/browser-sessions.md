@@ -177,3 +177,21 @@ request ownership and publication checks as login/rotation. See the
 [MFA guide](mfa.md#http-delivery) and its consumer routes. A response failure after
 database commit may leave the challenge consumed; restart login rather than
 replaying completion.
+
+## Generated portal renewal waits
+
+The generated TypeScript [portal session](client-contracts.md#recipe-session-coordination)
+serializes refresh-cookie rotation with login/logout across tabs. Its
+`refreshTimeoutMs` (default 30 seconds) includes time queued for the Web Lock.
+Timeout or disposal cancels a queued renewal before it acquires the lock: no
+refresh is sent, no uncertain transition is written, and the next `accessToken()`
+can start a new renewal. The in-tab fallback also removes aborted waiters.
+Custom `TabLock.run(name, work, signal?)` implementations must honor cancellation
+before acquisition and never run canceled work later.
+
+Once the lock is granted and refresh starts, abort still leaves the rotation
+outcome unknown. The session records uncertainty and signs out; it never retries
+the refresh cookie. Granted work retains the lock until it exits, even when the
+caller's wait has ended. `runCredentials` has no cancellation signal and keeps
+serializing cookie writes until their work exits. Server refresh-family reuse
+protection is unchanged.

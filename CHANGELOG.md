@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.26.0 — 2026-11-13
+
+- Fixed: generated portal sessions cancel timed-out Web Lock and in-tab renewal
+  waits, allowing the next call to renew without sending a refresh or marking an
+  unsent rotation uncertain. Granted refresh aborts still invalidate the session.
+- Added: generated Fetch requests with absent/string bodies default to a 30-second
+  response-header deadline. `ClientOptions.requestTimeoutMs` changes it; 0 disables
+  it. Blob/stream uploads and response body streaming are exempt. Native
+  `TimeoutError` failures identify unknown mutation outcomes and never trigger
+  automatic retries.
+
 ## v0.25.0 — 2026-11-12
 
 - Added: `testkit/redis.Cleanup` and `CleanupNamespace` remove only a passing test's
