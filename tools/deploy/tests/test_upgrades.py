@@ -618,6 +618,63 @@ class UpgradeTests(unittest.TestCase):
                 self.assertEqual([], upgrades.plan_upgrade(self.host, self.source)['prune_upgrade_journals'])
                 self.assertEqual([], self.install()['removed_upgrade_journals'])
 
+    def test_plan_rejects_separate_deletion_filesystem_without_mutation(self):
+        self.install()
+        (self.source / 'lib/change.py').write_text('# candidate\n')
+        area = self.host.paths.p(HOST_PATHS['upgrade_deletions'])
+        journals = self.host.paths.p(HOST_PATHS['upgrades'])
+        original_stat = Path.stat
+        def separate_filesystem(path, *args, **kwargs):
+            info = original_stat(path, *args, **kwargs)
+            if path == journals or journals in path.parents:
+                fields = list(info)
+                fields[2] = info.st_dev + 1
+                return os.stat_result(fields)
+            return info
+        def files():
+            return {path.relative_to(self.host.paths.root):
+                    (path.lstat().st_mode, os.readlink(path) if path.is_symlink()
+                     else path.read_bytes() if path.is_file() else None)
+                    for path in self.host.paths.root.rglob('*')}
+        for exists in (False, True):
+            with self.subTest(deletion_area_exists=exists):
+                if exists:
+                    area.mkdir(mode=0o700)
+                before, registry = files(), self.host.read_registry()
+                reviewed = upgrades.plan_upgrade(self.host, self.source)
+                with patch.object(Path, 'stat', separate_filesystem), \
+                        patch.object(upgrades, '_select') as select:
+                    for action in (lambda: upgrades.plan_upgrade(self.host, self.source),
+                                   lambda: upgrades.tools_upgrade(self.host, registry, self.source),
+                                   lambda: upgrades.apply_upgrade(self.host, self.source, reviewed['plan_token'], str(uuid.uuid4()))):
+                        with self.assertRaises(DeployError) as caught:
+                            action()
+                        self.assertEqual('unsafe_path', caught.exception.code)
+                        self.assertIn("share the journals' filesystem", caught.exception.detail)
+                    select.assert_not_called()
+                self.assertEqual(before, files())
+                self.assertEqual(registry, self.host.read_registry())
+
+    def test_plan_keeps_normal_layout_read_only_before_and_after_first_use(self):
+        installed = self.install()
+        area = self.host.paths.p(HOST_PATHS['upgrade_deletions'])
+        before = self.host.read_registry()
+        unchanged = upgrades.plan_upgrade(self.host, self.source)
+        self.assertIsNone(unchanged['upgrade'])
+        self.assertFalse(area.exists())
+        (self.source / 'lib/change.py').write_text('# candidate\n')
+        plan = upgrades.plan_upgrade(self.host, self.source)
+        self.assertEqual(installed['bundle_sha256'], plan['upgrade']['from_digest'])
+        self.assertEqual([installed['operation_id']], plan['prune_upgrade_journals'])
+        self.assertFalse(area.exists())
+        area.mkdir(mode=0o700)
+        self.assertEqual(plan, upgrades.plan_upgrade(self.host, self.source))
+        self.assertEqual([], list(area.iterdir()))
+        self.assertEqual(before, self.host.read_registry())
+        result = upgrades.apply_upgrade(self.host, self.source, plan['plan_token'], str(uuid.uuid4()))
+        self.assertEqual('succeeded', result['outcome'])
+        self.assertEqual([installed['operation_id']], result['removed_upgrade_journals'])
+
     def test_deletion_area_rejects_unsafe_entries_before_removing_anything(self):
         self.install()
         leftover = self.leftover()

@@ -445,7 +445,10 @@ journals both reject retired bundles. Active-bundle journals remain unchanged so
 replaying the latest `OPERATION` stays idempotent. A retry finishes interrupted
 cleanup without losing retirement history. Once the ledger is durable, each
 obsolete journal is atomically renamed into the root-owned mode-0700 deletion area
-at `HOST_PATHS["upgrade_deletions"]`, on the same filesystem. Both parents are synced
+at `HOST_PATHS["upgrade_deletions"]`, on the same filesystem. Read-only planning
+compares the existing deletion area's device, or its parent's device when absent,
+with the upgrades directory and rejects incompatible layouts before selection.
+Pruning checks again. Both parents are synced
 before files are removed. Every prune first finishes queued deletions, validating
 paths and links even when `intent.json` has already been removed. The deletion area
 is outside normal upgrade-journal iteration, so partial deletions do not block

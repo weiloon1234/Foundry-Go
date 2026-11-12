@@ -210,8 +210,10 @@ def _deletion_directory(host, *, create=False) -> Path:
     if directory.exists():
         require(stat.S_IMODE(directory.stat().st_mode) == 0o700, "unsafe_path",
                 "The upgrade deletion area must have mode 0700.")
-        upgrades = host.check_control_directory(host.paths.p(HOST_PATHS["upgrades"]))
-        require(directory.stat().st_dev == upgrades.stat().st_dev, "unsafe_path",
+    upgrades = host.check_control_directory(host.paths.p(HOST_PATHS["upgrades"]))
+    if upgrades.exists():
+        destination = directory if directory.exists() else directory.parent
+        require(destination.stat().st_dev == upgrades.stat().st_dev, "unsafe_path",
                 "The upgrade deletion area must share the journals' filesystem.")
     return directory
 
@@ -396,6 +398,7 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
     source, _, digest = tool_bundle(tools_dir)
     target = protocol(source)
     require(target["generation"] >= current["generation"], "tools_downgrade", "Host tool generations cannot be downgraded.")
+    _deletion_directory(host)
     retained_releases = []
     for instance_id, entry in registry["instances"].items():
         require(target["minimum_client_generation"] <= entry["client_generation"] <= target["generation"],

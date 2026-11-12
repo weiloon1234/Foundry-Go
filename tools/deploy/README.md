@@ -50,7 +50,10 @@ The ledger and remaining completed journals prevent retired bundles from being
 selected again. Active-bundle journals remain unchanged for operation replay.
 After the ledger is durable, pruning atomically renames each obsolete journal into
 the root-owned mode-0700 `upgrade_deletions` area declared in `HOST_PATHS`, on the
-same filesystem and outside the upgrades directory. It syncs both parents before
+same filesystem and outside the upgrades directory. Read-only planning checks the
+existing deletion area's device, or its parent's device before first use, against
+the upgrades directory and rejects incompatible layouts before selection. Pruning
+rechecks the requirement. It syncs both parents before
 removing the journal's files. Every prune first finishes already queued deletions,
 including directories whose intent has been removed. Plans include those operation
 IDs; apply and resume do not mistake them for unfinished upgrades. Names, paths and
