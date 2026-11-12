@@ -41,11 +41,7 @@ type packageGraph struct {
 	fset                  *token.FileSet
 	// framework is the Foundry-Go module selected by the consumer's build list.
 	framework *listedModule
-	// fieldDocumentation opts into cleanup of historical managed field notes.
-	fieldDocumentation bool
-	// overlay adds proposed handwritten files, by absolute path, to their
-	// package for a validation-only generation that publishes nothing.
-	overlay map[string][]byte
+	overlay   map[string][]byte
 	// exports locates compiled export data by import path.
 	exports map[string]string
 	// persistenceDependents holds listed import paths whose transitive
@@ -268,7 +264,7 @@ func (g *packageGraph) exportImporter() types.Importer {
 // export data that adds proposed handwritten files, by absolute path, for a
 // validation-only generation. It has its own importer and type-check results.
 func (g *packageGraph) withOverlay(files map[string][]byte) *packageGraph {
-	clone := &packageGraph{root: g.root, scope: g.scope, recursive: g.recursive, packages: g.packages, documentationPackages: g.documentationPackages, order: g.order, snapshot: g.snapshot, moduleFiles: g.moduleFiles, fset: g.fset, framework: g.framework, fieldDocumentation: g.fieldDocumentation, overlay: files, exports: g.exports, persistenceDependents: g.persistenceDependents, checked: make(map[string]*types.Package)}
+	clone := &packageGraph{root: g.root, scope: g.scope, recursive: g.recursive, packages: g.packages, documentationPackages: g.documentationPackages, order: g.order, snapshot: g.snapshot, moduleFiles: g.moduleFiles, fset: g.fset, framework: g.framework, overlay: files, exports: g.exports, persistenceDependents: g.persistenceDependents, checked: make(map[string]*types.Package)}
 	clone.compiled = clone.exportImporter()
 	return clone
 }
@@ -681,13 +677,6 @@ func (g *packageGraph) preparePackage(ctx context.Context, path string, result *
 	if err != nil {
 		return &discoveryFailure{input: p, metadata: metadata, err: err}
 	}
-	var notes map[string][]byte
-	if g.fieldDocumentation {
-		notes, err = planFieldDocumentation(p, &metadata)
-		if err != nil {
-			return err
-		}
-	}
 	outputs, origins, err := emit(p, metadata)
 	if err != nil {
 		return err
@@ -700,9 +689,6 @@ func (g *packageGraph) preparePackage(ctx context.Context, path string, result *
 	g.checkedMu.Unlock()
 	plan, err := planWrite(p, outputs)
 	if err != nil {
-		return err
-	}
-	if err := addFieldDocumentation(p, &plan, notes); err != nil {
 		return err
 	}
 	result.input, result.metadata, result.plan = p, metadata, plan

@@ -10,49 +10,47 @@ Rust references: `src/database/model.rs`, `query.rs`, `src/events/mod.rs`, `src/
 
 ## Typed public contracts
 
-Generate model-specific create/patch drafts with field-aware getters, setters and assignment state. Hooks receive the concrete model/draft and a transaction-bound context. Observers receive typed before/after snapshots. Do not expose generic database records as the ordinary lifecycle interface.
+Native writes use typed `orm.Assignment[M]` values and `orm.Write[M]` drafts.
+Attach a factory returning `orm.Hooks[M]` with `orm.WithHooks` on the handwritten
+table declaration. Hooks receive the concrete draft or stored model and the
+transaction; post-write hooks receive `orm.Changes[M]`. Provider observers use
+`orm.NewObserver` and `orm.RegisterObserver` for the same typed database pool.
 
-Generated draft getters/setters already exist from milestones 03/05. Preserve their immutable `Set`, nullable `Clear`, and omission-preserving `Unset` behavior when integrating hooks. Regular model structs retain exported Go fields; domain computed getters may be ordinary typed Go methods. Field reads and in-memory assignment must not perform hidden database I/O.
+`orm.WriteSet` supplies an assignment, nullable assignment constructors supply
+explicit NULL, and `orm.WriteUnset` restores omission. Regular model structs retain
+exported Go fields. Domain getters are ordinary typed methods; field reads and
+in-memory assignment do not perform hidden database I/O.
 
 Change sets must distinguish assigned fields from changed stored values. Compare the locked pre-write snapshot with the fully hydrated write result after mutators and database defaults/triggers; assigning an email that normalizes to its existing value is assigned but unchanged. A missing model snapshot on creation/deletion is distinct from a present model's NULL field. Keep stored snapshots separate from read-accessor output. Reuse codec canonical representations for comparison, preserving interval months, days and elapsed components instead of reusing the SQL-equivalence key used by relation grouping. Cover equivalent JSON/decimal/instant representations, interval component changes, omitted defaults and explicit zero/NULL in the change-tracking consumer tests.
 
-Deliver Laravel-style read accessors and write mutators with concrete field input/output types and ordinary errors. Custom read accessors are explicit typed getter methods: fetching a model preserves its stored fields, and evaluating a getter does not replace them. This is the user's agreed choice and matches Rust Foundry's explicit accessed-value methods. Preserve stored IDs, relation keys, pagination keys, credential hashes and lifecycle snapshots. Write mutators run once in the normal write pipeline, followed by final value validation. Generated field-aware discovery must reject an incompatible model or field value type. Neither accessor/mutator dispatch nor hook drafts should require field-name strings or `any` in normal application code. The public guides document the concrete generated signatures alongside compiling consumer examples.
+Read accessors are explicit typed getter methods. Hydration preserves stored fields;
+DTO mapping chooses whether to call a getter. Stored IDs, relation keys, pagination
+keys, credential hashes and lifecycle snapshots never become accessor results.
 
-This includes Laravel's `setEmailAttribute` behavior, not only generated draft setters. The first implementation increment supplies the following automatic method convention; its public guide and verification status are linked below:
-
-```go
-func (User) MutateEmail(email string) (string, error) {
-    return strings.ToLower(strings.TrimSpace(email)), nil
-}
-```
-
-Normal `Create` and `Update` must invoke a registered field mutator automatically; consumers must not call it manually in handlers. A draft retains its supplied value until persistence: transformation runs once after the before-write hooks and before SQL, with validation of the transformed value. Run field mutators only for assigned fields, including assignments added by a hook; an omitted patch field remains unchanged. Nullable fields preserve explicit NULL rather than replacing it with a scalar zero value. A mutator error aborts the write transaction. Explicit set-based bulk operations retain the separate lifecycle semantics defined below.
-
-Example inside a user-creating hook receiving `draft *UserDraft`. Existing generated setters return a new value, so hooks must assign it back:
-
-```go
-if !draft.IntroducerID().IsSet() {
-    *draft = draft.SetIntroducerID(defaultIntroducer.ID)
-}
-```
+Input-column declarations bind concrete mutation input and stored types. An explicit
+transform or a matching `Mutate<Field>` method runs once for each assigned input
+after before-write hooks and before SQL. Omitted fields skip transformation; nullable
+NULL assignments retain NULL. Startup validation rejects incompatible declarations.
+Neither normal writes nor hooks need string field dispatch or untyped records.
+See [mutators](../docs/guides/model-mutators.md) and [hooks](../docs/guides/model-hooks.md)
+for compiling examples, including typed default assignments inside a creation hook.
 
 Typed event descriptors retain payload type through registration and dispatch. Event keys are declared once and carry a schema version for durable serialization. Audit and origin contracts live below auth integration so events/database do not import the auth implementation.
 
-## Automatic field documentation for getters and setters
+<a id="automatic-field-documentation-for-getters-and-setters"></a>
+## Handwritten field documentation
 
-The [explicit getter guide](../docs/guides/model-accessors.md) and independent consumer now implement this contract. When a developer or LLM discovers a model field, its documentation must automatically identify any custom getter and write mutator so the caller can decide which value or write path to use. Consumers must not maintain a casts map, duplicate field configuration, accessor flags or handwritten reminder comments.
+Applications document stored fields, explicit getters and input mutators in ordinary
+Go comments. The [getter guide](../docs/guides/model-accessors.md) describes choosing
+stored or accessed values when mapping DTOs. Comments must make that choice clear;
+a getter is not automatically suitable for every DTO. Write documentation states
+that assignments retain inputs until persistence and preserves omission/NULL semantics.
 
-Use the same type-checked method discovery that generates the APIs as the source for these notices. During ordinary generation, maintain clearly owned documentation comments beside the affected handwritten field declarations, with matching documentation on generated query descriptors and draft methods. Field documentation is a native Go mechanism understood by source readers and language tooling; an unrelated generated file alone does not attach a comment to a handwritten field. See [Go field documentation](https://go.dev/doc/comment#types). Keep handwritten structs and business behavior as the source of truth; only the managed notices are generated in those source files.
-
-Each affected field's notice identifies its model/column, concrete getter and/or mutator method, and the relevant generated entry point. Explain that the exported field is the stored value, the getter is explicit, and DTO mapping must choose deliberately between them. A getter is not automatically the appropriate value for every DTO. Explain that a custom setter/mutator runs for assigned values during persistence; ordinary struct assignment and draft construction do not invoke it immediately. Preserve omission and NULL semantics in the relevant method documentation. These notices do not change Go field access or JSON encoding, intercept assignment, or guarantee that an LLM reads the documentation.
-
-Generation updates or removes notices when methods or fields are added, renamed or removed. It must be deterministic on fresh checkouts and repeated runs, preserve user comments and executable source, and include notice freshness in `generate --check`. Extend existing input-change detection, staging, rollback and interrupted-publication recovery to cover managed source documentation. Do not mark the entire handwritten model file as generator-owned or introduce a separate publication path. Preserve correct generated source locations when inserting comments shifts declarations.
-
-Acceptance must inspect the actual independent consumer's raw field through gopls hover, completion documentation and definition lookup, and verify notices for getter-only, mutator-only and combined behavior. Include fields with existing documentation, nullable fields, renamed columns, same-named fields on different models, method removal and fresh/repeated/current generation. Foundry's readable and JSON agent output must retain the behavior notice; a readable completion format that discards documentation does not meet this requirement. DTO examples must compile with an explicit getter result while persistence, relation keys and captured change sets continue to use stored fields.
-
-The concrete getter convention is `Access<Field>() (Result, error)` on the actual model value receiver. It is an ordinary typed Go method, without a duplicate generated getter wrapper. Discovery validates the field name, receiver and signature; the result may differ from storage, such as a model-owned ID presented as a string. Nullable getters explicitly handle NULL and declare their result wrapper. Pointer receivers, extra arguments, missing errors and interface results fail generation. Getter bodies remain handwritten, pure, read-only domain behavior.
-
-Generation maintains clearly prefixed field comments, derives existing trailing field help where required by gopls's leading-comment precedence, and emits matching descriptor/draft documentation from the same metadata. Handwritten files are classified separately in version 4 publication journals and never become whole-file manifest-owned outputs. Source-token/user-comment preservation, concurrent edits, rollback, complete/incomplete recovery and actual forced process termination have coverage. Current-output checks and PostgreSQL getter-to-DTO behavior passed, including retained stored IDs, fields and NULL. Real gopls checks passed for raw fields with getter-only, setter-only and combined behavior, existing field help, descriptors and draft setters; a separate probe verifies the getter's concrete return type and handwritten definition. The complete repository verification and full generator race suite subsequently passed. The master records the exact evidence and compiler-resource limitations.
+Generation leaves handwritten model files unchanged. Retained DTO and transport
+emitters reuse source help for their generated symbols. Editor probes cover native
+model comments and declarations. The former automatic managed notices and their
+source-edit recovery are retired; old source-edit journals fail explicitly and retain
+staging for reconciliation with their creating generator.
 
 ## Lifecycle order and transactions
 
@@ -68,7 +66,7 @@ After-commit observers run only after the outer transaction commits. Savepoint r
 
 ## Observer registration integration
 
-The `hooks=Factory` contract supplies one model-owned factory. Generated provider observers now compose concrete `<Model>Hooks` values by stage and construct the typed draft/change set once for an operation. Composing individual complete write pipelines would produce the wrong callback order.
+`orm.WithHooks` supplies the model-local factory. Registered provider observers compose concrete `orm.Hooks[M]` values by stage and construct the typed draft/change set once for an operation. Composing individual complete write pipelines would produce the wrong callback order.
 
 Preserve these boundaries when adding retrieval and soft-delete events:
 
@@ -79,7 +77,17 @@ Preserve these boundaries when adding retrieval and soft-delete events:
 - Preserve the same typed mutation draft across each before stage and the same captured stored changes across each after stage. Effective assignment information is produced by the write pipeline, not recomputed independently by every observer. No additional SQL compiler, metadata declaration or codec-selection path is introduced.
 - Query metadata construction and reads must not instantiate write observers. Ordinary unannotated models may still have registered observers; the execution pipeline must resolve that case without bypassing registration. Custom `Transactor` wrappers must preserve the supplied child transaction's observer ownership, not be mistaken for proof that no observers exist.
 
-Acceptance must compile an independent consumer with contributions from two providers, injected observer dependencies and a model-local hook. Verify complete stage ordering, duplicate identifiers, incompatible models/factories, registration after freeze, missing/cyclic constructor dependencies, separate applications without shared observer state, concurrent writes, nested/savepoint inheritance, wrapper transactors, one factory invocation per operation, bulk skipping, rollback and after-commit behavior. The generated `<Model>Observer`, `New<Model>Observer` and `Register<Model>Observer` helpers now make the typed declaration boundary concrete.
+Acceptance must compile an independent consumer with contributions from two providers, injected observer dependencies and a model-local hook. Verify complete stage ordering, duplicate identifiers, incompatible models/factories, registration after freeze, missing/cyclic constructor dependencies, separate applications without shared observer state, concurrent writes, nested/savepoint inheritance, wrapper transactors, one factory invocation per operation, bulk skipping, rollback and after-commit behavior. `orm.NewObserver[M]` and `orm.RegisterObserver` provide that typed declaration boundary.
+
+## Historical milestone 07 implementation evidence
+
+The following records describe the original generated-model implementation and its
+acceptance before Go-way Stage 8. Their generated names and directives are historical.
+Current [hooks](../docs/guides/model-hooks.md), [retrieval](../docs/guides/model-retrieval.md),
+[changes](../docs/guides/model-changes.md), [timestamps](../docs/guides/model-timestamps.md),
+[soft deletion](../docs/guides/model-soft-deletes.md) and [audit](../docs/guides/audit.md)
+guides own the native APIs. The lifecycle order and observer ownership above remain
+current contracts.
 
 The foundation increment adds `foundation.ResolveAll[T]` to collect exactly typed service contributions through the existing constructor graph. It retains provider/registration order, individual constructor caching, cycle/failure checks and resolver expiry. Its isolated prototype and canonical foundation/testkit/consumer checks passed with race detection, followed by vet, compiler rejection, real gopls and documentation checks. Review also reproduced and fixed constructor `Goexit` escaping `Build` and leaving a retained resolver usable; constructors now use the existing isolation helper and always seal their resolver.
 

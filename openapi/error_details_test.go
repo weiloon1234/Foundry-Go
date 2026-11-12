@@ -331,40 +331,42 @@ func TestOpenAPIErrorDetailsProjection(t *testing.T) {
 	}
 }
 
+// The fixture retains the pre-details failure route, its reachable schemas and
+// exact OpenAPI bytes. It covers builtin errors, a custom code sharing status 409,
+// validation errors and the closed base envelope without a release-cohort reader.
 func TestOpenAPIDetailFreeGoldenBytesOnlyChangeVersion(t *testing.T) {
-	for _, name := range []string{"client", "reporting"} {
-		t.Run(name, func(t *testing.T) {
-			dir := filepath.Join("..", "tests", "fixtures", "consumer", "clientcontracts", "testdata", "contracts-v0.6.0", name)
-			old, err := os.ReadFile(filepath.Join(dir, "contracts_manifest_foundry.gen.json"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			current := bytes.Replace(old, []byte(`"version": 8`), []byte(`"version": `+strconv.Itoa(manifest.Version)), 1)
-			source, err := manifest.Decode(current)
-			if err != nil {
-				t.Fatal(err)
-			}
-			snapshot, err := source.Snapshot()
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, definition := range snapshot.Errors {
-				if definition.DetailsType != "" {
-					t.Fatal("baseline must remain detail-free")
-				}
-			}
-			data, err := openapi.Render(source, openapi.Options{Title: "Consumer", APIVersion: "1"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			golden, err := os.ReadFile(filepath.Join(dir, "contracts_openapi_foundry.gen.json"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			expected := bytes.Replace(golden, []byte(`"x-foundry-manifest-version": 8`), []byte(`"x-foundry-manifest-version": `+strconv.Itoa(manifest.Version)), 1)
-			if !bytes.Equal(data, expected) {
-				t.Fatal("detail-free OpenAPI changed beyond its manifest version")
-			}
-		})
+	old, err := os.ReadFile(filepath.Join("testdata", "detail_free_manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := bytes.Replace(old, []byte(`"version": 8`), []byte(`"version": `+strconv.Itoa(manifest.Version)), 1)
+	source, err := manifest.Decode(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := source.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range snapshot.Errors {
+		if definition.DetailsType != "" {
+			t.Fatal("baseline must remain detail-free")
+		}
+	}
+	data, err := openapi.Render(source, openapi.Options{Title: "Consumer", APIVersion: "1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden, err := os.ReadFile(filepath.Join("testdata", "detail_free_openapi.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := bytes.Replace(golden, []byte(`"x-foundry-manifest-version": 8`), []byte(`"x-foundry-manifest-version": `+strconv.Itoa(manifest.Version)), 1)
+	if !bytes.Equal(data, expected) {
+		offset := 0
+		for offset < min(len(data), len(expected)) && data[offset] == expected[offset] {
+			offset++
+		}
+		t.Fatalf("detail-free OpenAPI changed at byte %d: got %.160q; want %.160q", offset, data[offset:], expected[offset:])
 	}
 }

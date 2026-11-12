@@ -727,11 +727,12 @@ table is held in memory; rows are never buffered beyond one chunk.
 
 `make datatable-contracts` compares the generated manifest, OpenAPI, full and
 surface TypeScript entries, shared runtime modules and React/Vue adapters byte
-for byte with the pre-cutover baseline. It checks both the existing client
+for byte with `testdata/current-contracts`. It checks both the existing client
 fixture and a reporting fixture containing Members, Orders, Totals and the
 actual guarded query/download routes. Baseline provenance lives beside the
-[frozen artifacts](../../tests/fixtures/consumer/clientcontracts/testdata/datatable-baseline/README.md).
-The gate never updates those artifacts automatically.
+[current artifacts](../../tests/fixtures/consumer/clientcontracts/README.md).
+The gate never updates those artifacts automatically; use `make publish-client-contracts`
+after reviewing an intentional contract change.
 
 `make typescript-check` also runs reporting codec, type and anonymous HTTP checks.
 `make agent-smoke` covers handwritten ORM declarations and row mappings through

@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.24.0 — 2026-11-12
+
+- Removed: `--field-docs` from generation and scaffold commands, the managed-note
+  retirement bridge and its recovery paths. Retired source-edit journals now fail
+  with a typed error and retain staging for reconciliation.
+- Removed: per-release client contract cohorts and their historical integrity sweeps.
+  Current-output drift checks and `make publish-client-contracts` remain.
+- Removed: the one-off cursor contract publisher and its baseline fallback, plus
+  unreachable generator, adapter and test helpers.
+- Changed: deploy acceptance packages the candidate checkout through a private module
+  proxy and tests a published generation-9 baseline, including equal-bundle no-ops.
+  The host upgrade floor is 9; the client floor remains 1.
+- Changed: tool pruning removes completed journals for retired bundles after atomically
+  recording retirement history in a validated ledger. Active journals retain replay
+  idempotence; retired bundles remain forbidden after cleanup.
+- Changed: corrected current generation, lifecycle, deployment, jobs, storage,
+  manifest, dependency and milestone documentation; dated evidence is retained.
+
 ## v0.23.2 — 2026-11-12
 
 - Dependencies: aws-sdk-go-v2 1.48.0, S3 1.114.10 and credentials 1.21.0. The SDK's

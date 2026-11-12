@@ -44,7 +44,7 @@ class PlanningHost(Host):
     def run(self, args, **kwargs):
         self.commands.append(list(args))
         if len(args) > 3 and args[3] == "prune":
-            return subprocess.CompletedProcess(args, 0, "[]", "")
+            return subprocess.CompletedProcess(args, 0, '{"removed_bundles":[],"removed_upgrade_journals":[]}', "")
         if args == ["dpkg", "--print-architecture"]:
             return subprocess.CompletedProcess(args, 0, "arm64\n", "")
         if args == ["ss", "-Hltn"]:
@@ -290,7 +290,7 @@ class FoundationProvisionTests(unittest.TestCase):
         credentials = {"database_password": "fixture", "redis_password": "fixture"}
         with ExitStack() as stack:
             stack.enter_context(patch.object(provision, "bootstrap_plan", return_value=plan))
-            stack.enter_context(patch.object(provision.upgrades, "install_tools", return_value={"removed_bundles": []}))
+            stack.enter_context(patch.object(provision.upgrades, "install_tools", return_value={"removed_bundles": [], "removed_upgrade_journals": []}))
             stack.enter_context(patch.object(provision, "_journal"))
             stack.enter_context(patch.object(provision, "_prepare_instance"))
             initialize = stack.enter_context(patch.object(provision, "initialize_bootstrap_secrets", return_value=credentials))

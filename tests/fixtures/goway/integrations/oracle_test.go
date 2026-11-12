@@ -9,11 +9,6 @@ import (
 var frozenOracle = oracle.NewReplay("goway/integrations")
 
 func TestMain(m *testing.M) { os.Exit(frozenOracle.Main(m)) }
-func oracleEqual(t *testing.T, site, current string) bool {
-	t.Helper()
-	return frozenOracle.Equal(t, site, current)
-}
-
 func oracleMatch(t *testing.T, site, current string) bool {
 	t.Helper()
 	return frozenOracle.Match(t, site, current)

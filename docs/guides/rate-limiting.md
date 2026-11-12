@@ -177,9 +177,10 @@ usage and expiry together; there is no separate increment/expiry step that can
 leave persistent unbounded counters. `PEXPIRETIME` verifies the stored expiry
 matches metadata. Wrong types, oversized values and malformed state fail without
 replacement; `Clear` is the explicit repair path for such an address. Buckets
-written by earlier releases (version 1, epoch-aligned) remain valid: they keep
-their usage and expiry and are rewritten in the current format on the next
-admission. A backward server clock step inside a live bucket is clamped to that
+written in the retired version-1 format are rejected without replacement. Only
+the current shape defined in [`redis/rate_limit.lua`](../../redis/rate_limit.lua)
+is accepted. Valid current buckets retain the documented policy-conversion semantics.
+A backward server clock step inside a live bucket is clamped to that
 bucket's start: it neither fails nor reopens earlier quota. Peek runs the same
 script without writing.
 

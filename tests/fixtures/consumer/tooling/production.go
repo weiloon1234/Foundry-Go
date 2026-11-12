@@ -56,7 +56,8 @@ func ObservedTask(ctx context.Context, recorder *observability.Recorder, name ob
 	return observability.Observe(observability.WithContext(ctx, recorder), observability.Operation{Kind: observability.Resource, Name: name}, run)
 }
 
-// TracedPending is enabled only after all worker/outbox readers support format 2.
+// TracedPending captures the current envelope format with optional trace propagation.
+// It requires a nonzero trace context and format-3 activation across retained work and readers.
 func TracedPending[P any](ctx context.Context, definition jobs.Definition[P], input P) (jobs.Pending[P], error) {
 	return definition.Capture(ctx, input, jobs.Options[P]{PropagateTrace: true})
 }

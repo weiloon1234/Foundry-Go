@@ -54,6 +54,7 @@ HOST_PATHS = {
     "state": f"/var/lib/{PREFIX}",
     "private": f"/var/lib/{PREFIX}/private",
     "upgrades": f"/var/lib/{PREFIX}/upgrades",
+    "retired_tools": f"/var/lib/{PREFIX}/retired-tools.json",
     "reports": f"/var/lib/{PREFIX}/reports/host-v2.json",
     "locks": f"/run/lock/{PREFIX}",
     "tools": f"/usr/local/lib/{PREFIX}",

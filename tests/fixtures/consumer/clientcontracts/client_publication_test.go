@@ -2,6 +2,7 @@ package clientcontracts_test
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -55,16 +56,9 @@ func TestPublishClientContracts(t *testing.T) {
 		checkOwnershipHashes(t, cohortDir, manifestData)
 	}
 
-	baseCohort := currentContractCohort
-	if _, err := os.Stat(currentContractCohort); os.IsNotExist(err) {
-		baseCohort = nativeCursorCohort
-	} else if err != nil {
-		t.Fatal(err)
-	}
-
 	artifacts := map[string]contractHashChange{}
 	for _, name := range []string{"client", "reporting"} {
-		oldDir := filepath.Join(baseCohort, name)
+		oldDir := filepath.Join(currentContractCohort, name)
 		newDir := filepath.Join(pending, name)
 
 		nameSet := map[string]bool{}
@@ -102,7 +96,7 @@ func TestPublishClientContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	evidence := cursorPublication{
+	evidence := contractPublication{
 		Commit:    strings.TrimSpace(string(commit)),
 		Command:   "make publish-client-contracts",
 		Sources:   map[string]string{},
@@ -145,31 +139,17 @@ func TestPublishClientContracts(t *testing.T) {
 	}
 }
 
-func TestReleasedContractCohorts(t *testing.T) {
-	t.Run("ProvenanceVerificationHarness", func(t *testing.T) {
-		testVerifyCohortProvenanceHarness(t)
-	})
-	cohorts, err := filepath.Glob(filepath.Join("testdata", "contracts-*"))
-	if err != nil {
+func TestCurrentContractProvenance(t *testing.T) {
+	if err := verifyCohortProvenance(currentContractCohort); err != nil {
 		t.Fatal(err)
 	}
-	for _, cohort := range cohorts {
-		info, err := os.Stat(cohort)
-		if err != nil || !info.IsDir() {
-			continue
-		}
-		t.Run(filepath.Base(cohort), func(t *testing.T) {
-			if err := verifyCohortProvenance(cohort); err != nil {
-				t.Errorf("%s: %v", cohort, err)
-			}
-		})
-	}
+	t.Run("ProvenanceVerificationHarness", testVerifyCohortProvenanceHarness)
 }
 
 func testVerifyCohortProvenanceHarness(t *testing.T) {
 	t.Helper()
 	tempDir := t.TempDir()
-	cohortDir := filepath.Join(tempDir, "contracts-v1.0.0")
+	cohortDir := filepath.Join(tempDir, "current-contracts")
 	if err := os.MkdirAll(filepath.Join(cohortDir, "client"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +168,7 @@ func testVerifyCohortProvenanceHarness(t *testing.T) {
 	}
 	manifestHash := artifactHash(manifestData)
 
-	evidence := cursorPublication{
+	evidence := contractPublication{
 		Commit:  "abcdef123456",
 		Command: "make publish-client-contracts",
 		Sources: map[string]string{"foo.go": "bar"},
@@ -311,9 +291,9 @@ func verifyCohortProvenance(cohort string) error {
 	provenancePath := filepath.Join(cohort, "provenance.json")
 	data, err := os.ReadFile(provenancePath)
 	if err != nil {
-		return fmt.Errorf("missing provenance for released cohort %s: %w", cohort, err)
+		return fmt.Errorf("missing provenance for contract baseline %s: %w", cohort, err)
 	}
-	var evidence cursorPublication
+	var evidence contractPublication
 	if err := json.Unmarshal(data, &evidence); err != nil {
 		return fmt.Errorf("invalid provenance JSON in %s: %w", cohort, err)
 	}
@@ -403,3 +383,45 @@ func validateOwnershipHashes(dir string, data []byte) error {
 	}
 	return nil
 }
+
+type contractHashChange struct {
+	Old string `json:"old_sha256"`
+	New string `json:"new_sha256"`
+}
+
+type contractPublication struct {
+	Commit    string                        `json:"base_commit"`
+	Command   string                        `json:"command"`
+	Sources   map[string]string             `json:"source_sha256"`
+	Artifacts map[string]contractHashChange `json:"artifacts"`
+}
+
+func checkOwnershipHashes(t *testing.T, dir string, data []byte) {
+	t.Helper()
+	if err := validateOwnershipHashes(dir, data); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func artifactNames(t *testing.T, dir string) []string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(dir, "*_foundry.gen.*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := []string{".foundry-gen.json"}
+	for _, file := range files {
+		names = append(names, filepath.Base(file))
+	}
+	slices.Sort(names)
+	return names
+}
+func readArtifact(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+func artifactHash(data []byte) string { return fmt.Sprintf("%x", sha256.Sum256(data)) }

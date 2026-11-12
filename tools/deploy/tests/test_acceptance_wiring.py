@@ -64,7 +64,7 @@ class AcceptanceWiringTests(unittest.TestCase):
             action = stack.enter_context(patch.object(acceptance_host, 'action'))
             renewal = stack.enter_context(patch.object(acceptance_host, 'certificate_renewal'))
             isolation = stack.enter_context(patch.object(acceptance_host, 'isolation'))
-            stack.enter_context(patch("upgrades.protocol_metadata", return_value={"client": {"generation": 6}}))
+            stack.enter_context(patch("upgrades.protocol_metadata", return_value={"client": {"generation": 9}}))
             acceptance_host.main()
             prepare.assert_called_once()
             self.assertEqual(instances[0], prepare.call_args.args[1])
@@ -96,7 +96,7 @@ class AcceptanceWiringTests(unittest.TestCase):
         with patch.object(acceptance_host, 'fixture_topology', return_value={
                 'schema': 1, 'roles': [{'name': 'http'}]}), \
                 patch.object(acceptance_host, 'run', side_effect=replies) as run, \
-                patch('upgrades.protocol_metadata', return_value={'client': {'generation': 6}}):
+                patch('upgrades.protocol_metadata', return_value={'client': {'generation': 9}}):
             acceptance_host.prepare(None, (project, profile), {'configuration': {}},
                                     tools=Path('/verification/old-deploy'))
         self.assertEqual([call.args[0][2] for call in run.call_args_list],
@@ -104,7 +104,26 @@ class AcceptanceWiringTests(unittest.TestCase):
         for call in run.call_args_list:
             self.assertEqual(call.args[0][1], '/verification/old-deploy/server/manage.py')
         self.assertEqual(json.loads(run.call_args_list[1].kwargs['input'])['plan_token'], 'reviewed')
-        self.assertEqual(6, json.loads(run.call_args_list[1].kwargs['input'])['client']['generation'])
+        self.assertEqual(9, json.loads(run.call_args_list[1].kwargs['input'])['client']['generation'])
+
+    def test_private_proxy_is_scoped_to_acceptance_builder_only(self):
+        execute = Mock(return_value='ok')
+        snapshot, proxy = Path('/snapshot'), Path('/private/proxy')
+        run = build_acceptance.acceptance_execute(execute, snapshot, proxy)
+        run(['git', '-C', str(snapshot), 'status', '--porcelain'])
+        self.assertEqual(['git', '-C', str(build_acceptance.FIXTURE), 'status', '--porcelain'],
+                         execute.call_args.args[0])
+        for args in (['docker', 'info'], ['docker', 'run', 'image', 'bash', '-c', 'cleanup'],
+                     ['git', '-C', '/other', 'status']):
+            run(args)
+            self.assertEqual(args, execute.call_args.args[0])
+        run(['docker', 'run', '--rm', 'image', 'bash', '/foundry-deploy/local/build.sh'], capture=False)
+        args = execute.call_args.args[0]
+        self.assertIn('type=bind,src=/private/proxy,dst=/acceptance-proxy,readonly', args)
+        self.assertIn('GONOSUMDB=' + build_acceptance.MODULE, args)
+        self.assertIn('GOSUMDB=sum.golang.org', args)
+        self.assertEqual(['image', 'bash', '/foundry-deploy/local/build.sh'], args[-3:])
+        self.assertEqual({'capture': False}, execute.call_args.kwargs)
 
     def test_builder_refuses_existing_archive_path_file_before_docker(self):
         with tempfile.TemporaryDirectory() as temporary:

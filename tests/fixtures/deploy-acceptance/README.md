@@ -1,9 +1,11 @@
 # Deploy acceptance consumer
 
 This independent application supplies the archive for the deploy tool's systemd
-container acceptance. Its module pins Foundry-Go v0.16.0 without a local replacement
-and uses the normal deploy builder. One archive serves both the previous published
-tools and the candidate in the upgrade phase. It is not a starter application.
+container acceptance. Its module uses `v0.0.0` with a local replacement for native
+tooling. The acceptance builder packages this checkout into a private module proxy
+and rewrites only an isolated fixture copy to require that candidate without a
+replacement. One archive serves both the published generation-9 baseline tools and
+the candidate in the upgrade phase. It is not a starter application.
 
 The topology declares HTTP, one Redis worker consuming `first` and `second`, and
 a scheduler that logs `acceptance schedule completed` every ten seconds. The

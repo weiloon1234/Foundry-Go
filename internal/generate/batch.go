@@ -11,11 +11,11 @@ import (
 )
 
 func combineWrites(root string, writes []packageWrite) (writePlan, error) {
-	plan := writePlan{changes: make(map[string][]byte), before: make(map[string]oldFile), fieldNotes: make(map[string]bool)}
+	plan := writePlan{changes: make(map[string][]byte), before: make(map[string]oldFile)}
 	dirs := map[string]bool{".": true}
 	for _, write := range writes {
 		if write.plan.distribution != nil {
-			if len(writes) != 1 || write.input.dir != root || write.plan.scaffold || write.plan.artifacts || len(write.plan.fieldNotes) != 0 {
+			if len(writes) != 1 || write.input.dir != root || write.plan.scaffold || write.plan.artifacts {
 				return plan, fmt.Errorf("plugin distributions require one isolated publication root")
 			}
 			if err := write.plan.distribution.Validate(); err != nil {
@@ -34,7 +34,7 @@ func combineWrites(root string, writes []packageWrite) (writePlan, error) {
 			}
 		}
 		if write.plan.artifacts {
-			if len(writes) != 1 || write.input.dir != root || write.plan.scaffold || len(write.plan.fieldNotes) != 0 {
+			if len(writes) != 1 || write.input.dir != root || write.plan.scaffold {
 				return plan, fmt.Errorf("client artifacts require one isolated publication directory")
 			}
 			for name := range write.plan.changes {
@@ -43,9 +43,6 @@ func combineWrites(root string, writes []packageWrite) (writePlan, error) {
 				}
 			}
 			plan.artifacts = true
-		}
-		if err := validateFieldDocumentationPlan(write.plan); err != nil {
-			return plan, err
 		}
 		if write.plan.scaffold {
 			if len(writes) != 1 || len(write.plan.changes) != 1 || write.input.dir != root {
@@ -70,9 +67,6 @@ func combineWrites(root string, writes []packageWrite) (writePlan, error) {
 		}
 		for name, data := range write.plan.changes {
 			plan.changes[filepath.ToSlash(filepath.Join(relative, name))] = data
-		}
-		for name := range write.plan.fieldNotes {
-			plan.fieldNotes[filepath.ToSlash(filepath.Join(relative, name))] = true
 		}
 	}
 	plan.guards = sortedNames(dirs)

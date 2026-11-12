@@ -19,8 +19,8 @@ page, err := usersTable.Query(ctx, manager, authority, request)
 The table's row type is fixed by its descriptor. Joined/computed display columns point to explicit typed expressions; their filter source is declared once. Column labels use translation keys and feed the shared contract manifest.
 
 The [implementation guide](../docs/guides/datatable.md) records concrete contracts
-and resource ownership. `projection dto=true` reuses generated JSON metadata and
-typed validation selectors alongside SQL projection mapping. The manager borrows
+and resource ownership. Handwritten `rows.Define` projections own SQL mapping;
+separate DTO generation owns JSON metadata and typed validation selectors. The manager borrows
 the database and locale catalog; exact declaration registration is required.
 `i18n.MessageKey` supplies the minimum label identity for this prerequisite of
 milestone 20. `Description` supplies the manifest contribution consumed by
@@ -54,7 +54,7 @@ Compile-test wrong row/projection/column ownership. Test malicious sort/filter i
 
 ## Delivered behavior and verification
 
-Typed declarations, generated report DTO projections, strict bounded requests,
+Typed declarations, handwritten row projections with separate generated DTO contracts, strict bounded requests,
 scoped pages/counts/exports, WHERE/HAVING and relation filters, joined/grouped
 reports, CSV/XLSX artifacts and existing HTTP/jobs/storage adapters passed native
 milestone 19 verification. The [recorded evidence](00-master-architecture-and-parity.md#milestone-19-verification-and-consumer-review)

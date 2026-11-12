@@ -20,7 +20,7 @@ go run ./cmd/foundry generate --recursive --dir tests/fixtures/consumer
 go run ./cmd/foundry generate --recursive --check --dir tests/fixtures/consumer
 ```
 
-`make generate` and `make generate-check` run these commands for every generation directory, adding `--field-docs` to clean obsolete managed field notices. An installed `foundry` command accepts the same arguments from a consumer workspace. Omit `--recursive` to target one existing Go package; include it to select the Go packages matched by `./...` below `--dir`. Nested modules, vendor, testdata, `node_modules`, hidden/underscore directories and go.mod `ignore` directories remain separate scopes. Module resolution is read-only and honors the consumer's module/workspace selection; a module with `vendor/modules.txt`, or an explicit `-mod` in `GOFLAGS`, keeps Go's own module mode instead of `-mod=readonly`.
+`make generate` and `make generate-check` run these commands for every generation directory. An installed `foundry` command accepts the same arguments from a consumer workspace. Omit `--recursive` to target one existing Go package; include it to select the Go packages matched by `./...` below `--dir`. Nested modules, vendor, testdata, `node_modules`, hidden/underscore directories and go.mod `ignore` directories remain separate scopes. Module resolution is read-only and honors the consumer's module/workspace selection; a module with `vendor/modules.txt`, or an explicit `-mod` in `GOFLAGS`, keeps Go's own module mode instead of `-mod=readonly`.
 
 Packages that use cgo or are excluded by this platform's build constraints are skipped when they contain no Foundry declarations. A Foundry declaration in a cgo file, or in a file excluded by build constraints, fails with that file's path instead of treating its owned output as obsolete: generated output has no build constraints, so declarations must live in unconstrained files of pure Go packages.
 
@@ -45,18 +45,11 @@ Commit the generated `*_foundry.gen.go` files and `.foundry-gen.json` alongside 
 
 Publication rechecks source/target state, stages synced output and backups, records a recovery journal, replaces individual files by atomic rename, and writes ownership last. Ordinary failures and cancellation roll back applied changes. File permissions are preserved. If an editor changes a published file during failure handling, rollback retains the journal and refuses to overwrite that edit.
 
-By default generation never edits handwritten files. `--field-docs` removes
-obsolete managed getter/mutator notices left by the retired persistence generator.
-It does not generate persistence methods or new field notices. Managed notice
-cleanup shares publication, code-preservation checks and recovery with generated
-outputs; ordinary handwritten comments remain owned by the author.
-
-Field-notice publication retains an immutable new-source proof, so recovery can
-survive another interruption after restoring an old handwritten file. Older
-version 4 journals remain readable: recovery preserves validated new bytes before
-restoration, or leaves an already-restored exact old target untouched when an old
-writer consumed the new bytes. Changed targets and invalid proofs remain errors.
-
+Generation never edits handwritten files. Field comments belong to the author.
+Retired source-edit journals fail with `generate.RetiredJournalError` and retain
+staging. Reconcile such a journal with the generator that created it before using
+the current generator. Supported journal formats are defined in
+[`internal/generate/recover.go`](../../internal/generate/recover.go).
 
 On the implemented Unix advisory-lock platforms, the next ordinary generation automatically recovers an interrupted publication. `foundry generate --recover --dir generation-root` performs recovery alone, using the scope recorded in the journal; omit `--recursive` for this command. Recovery keeps a completely published set or restores an incomplete set, including deleted and newly created outputs. It verifies hashes, file types, permissions and backups before restoration, and refuses to run while another publisher holds the process guard. `--check` never performs recovery or creates staging/guards.
 

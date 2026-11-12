@@ -416,7 +416,7 @@ def main():
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--redis-source", type=Path, help="Read lease Lua directly from this mounted pinned Foundry-Go module root")
     parser.add_argument("--tools-root", type=Path, default=TOOLS,
-                        help="Unmodified staged bundle used for bootstrap; upgrade acceptance selects the previous published release")
+                        help="Unmodified staged bundle used for bootstrap; upgrade acceptance selects the published generation-9 baseline")
     stage = parser.add_mutually_exclusive_group()
     stage.add_argument("--prepare-upgrade", action="store_true",
                         help="Bootstrap and activate only the first instance, then return for the tool upgrade")

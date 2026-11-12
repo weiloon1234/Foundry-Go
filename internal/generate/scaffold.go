@@ -73,21 +73,13 @@ type ScaffoldOptions struct {
 	Attachments []string
 	Metadata    []string
 	Disk        string
-	// FieldDocumentation and Framework apply to the generation a scaffold runs
-	// (a model with slots, an endpoint or a notification), as they do to
-	// foundry generate.
-	FieldDocumentation bool
-	Framework          frameworkinfo.Build
-}
-
-// generates reports whether the scaffold runs generation for its package.
-func (o ScaffoldOptions) generates() bool {
-	return o.Kind == EndpointScaffold || o.Kind == NotificationScaffold || o.Kind == ModelScaffold && o.hasSlots()
+	// Framework identifies the release used by scaffold generation.
+	Framework frameworkinfo.Build
 }
 
 // generation is the generation the scaffold runs for its package.
 func (o ScaffoldOptions) generation() Options {
-	return Options{Dir: o.Dir, FieldDocumentation: o.FieldDocumentation, Framework: o.Framework}
+	return Options{Dir: o.Dir, Framework: o.Framework}
 }
 
 // scaffoldName also admits the dots and hyphens of a migration ID, which leads
@@ -214,9 +206,6 @@ func scaffoldImports(options ScaffoldOptions) ([]string, error) {
 	}
 	if options.Kind != ModelScaffold && (options.hasSlots() || options.Disk != "") {
 		return nil, fmt.Errorf("extension slot flags and --disk are only valid for a model")
-	}
-	if options.FieldDocumentation && !options.generates() {
-		return nil, fmt.Errorf("--field-docs applies only to scaffolds that run generation: a model with slots, an endpoint or a notification")
 	}
 	if err := validateComponentOptions(options); err != nil {
 		return nil, err

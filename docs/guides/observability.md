@@ -250,7 +250,9 @@ The old HTTP deadline is not treated as failure after a successful hijack; the
 socket owner controls its own timeout and shutdown.
 
 For persistent job parent propagation, use `jobs.Options[P]{PropagateTrace:true}`
-after the [workers-first envelope rollout](job-trace-rollout.md). No live context
+with a nonzero trace context after meeting the
+[envelope activation requirements](job-trace-rollout.md). Every capture uses the
+current envelope format, whether propagation is enabled or disabled. No live context
 or exporter is retained in a queued message. See the
 [independent consumer](../../tests/fixtures/consumer/tooling/production.go) and
 [protected diagnostics](production-diagnostics.md).

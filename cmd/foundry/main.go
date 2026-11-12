@@ -75,7 +75,6 @@ func runGenerate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	check := flags.Bool("check", false, "fail on stale output without rewriting files")
 	recursive := flags.Bool("recursive", false, "generate all Go packages below --dir, in dependency order")
 	recover := flags.Bool("recover", false, "recover an interrupted publication in this package")
-	fieldDocs := flags.Bool("field-docs", false, "remove obsolete managed field behavior notes from handwritten model files")
 	if err := cli.ParseFlags(flags, args); err != nil {
 		return err
 	}
@@ -86,8 +85,8 @@ func runGenerate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 		if *check {
 			return clidiag.Usage("--recover and --check cannot be combined")
 		}
-		if *recursive || *fieldDocs {
-			return clidiag.Usage("--recover uses the journal's recorded package scope; omit --recursive and --field-docs")
+		if *recursive {
+			return clidiag.Usage("--recover uses the journal's recorded package scope; omit --recursive")
 		}
 		report, err := generate.Recover(ctx, *dir)
 		if err != nil {
@@ -104,7 +103,7 @@ func runGenerate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 		}
 		return err
 	}
-	report, err := generate.Generate(ctx, generate.Options{Dir: *dir, Check: *check, Recursive: *recursive, FieldDocumentation: *fieldDocs, Framework: frameworkinfo.CurrentBuild()})
+	report, err := generate.Generate(ctx, generate.Options{Dir: *dir, Check: *check, Recursive: *recursive, Framework: frameworkinfo.CurrentBuild()})
 	if err != nil {
 		return err
 	}

@@ -146,7 +146,7 @@ Test collection ownership/type mismatch, cardinality, simultaneous replacements,
 
 Delivered packages include `imaging`, `attachments`, `extensions`, `metadata`,
 `translations`, `settings`, `countries` and the shared `i18n` locale contract.
-Framework tables use ordinary generated model declarations and explicit
+Framework tables use handwritten ORM table declarations and explicit
 versioned migrations. [Image details](../docs/guides/imaging.md),
 [attachment recovery](../docs/guides/attachments.md) and
 [model extension ownership](../docs/guides/model-extensions.md) describe the

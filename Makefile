@@ -31,10 +31,9 @@ endef
 
 # Framework-owned DTO and configuration outputs precede consumer generation so
 # a fresh checkout can bootstrap metadata without relying on existing output.
-# The repository opts into managed field notes, which its editor tests inspect.
 define generate_packages
 set -eu; for task_generate_dir in $(GENERATION_DIRS); do \
-	$(GO) run ./cmd/foundry generate --recursive --field-docs $(1) --dir "$$task_generate_dir"; \
+	$(GO) run ./cmd/foundry generate --recursive $(1) --dir "$$task_generate_dir"; \
 done
 endef
 
@@ -106,11 +105,7 @@ deploy-container-acceptance-amd64:
 	GO="$(GO)" PYTHONDONTWRITEBYTECODE=1 bash tools/deploy/tests/run_ci_acceptance.sh "$(DEPLOY_ACCEPTANCE_UBUNTU)" "$(DEPLOY_ACCEPTANCE_MODE)"
 
 datatable-contracts:
-	cd tests/fixtures/consumer && $(GO) test -timeout=$(TEST_TIMEOUT) -v ./clientcontracts -run '^(TestDatatableContractBytes|TestReportingContractCoverage|TestCursorContractPublication|TestReleasedContractCohorts)$$'
-
-.PHONY: publish-cursor-contracts
-publish-cursor-contracts:
-	cd tests/fixtures/consumer && FOUNDRY_PUBLISH_CURSOR_CONTRACTS=1 $(GO) test -timeout=$(TEST_TIMEOUT) -count=1 -v ./clientcontracts -run '^TestPublishCursorContracts$$'
+	cd tests/fixtures/consumer && $(GO) test -timeout=$(TEST_TIMEOUT) -v ./clientcontracts -run '^(TestDatatableContractBytes|TestReportingContractCoverage|TestCurrentContractProvenance)$$'
 
 .PHONY: publish-client-contracts
 publish-client-contracts:

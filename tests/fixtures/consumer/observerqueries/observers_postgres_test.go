@@ -21,12 +21,6 @@ import (
 )
 
 func observerApp(t *testing.T) (*database.DB, *observerqueries.Stats, string) {
-	return observerAppWith(t, false)
-}
-func observerORMApp(t *testing.T) (*database.DB, *observerqueries.Stats, string) {
-	return observerAppWith(t, true)
-}
-func observerAppWith(t *testing.T, useORM bool) (*database.DB, *observerqueries.Stats, string) {
 	t.Helper()
 	pool := foundation.NewKey[*database.DB]("observer.pool")
 	statsKey := foundation.NewKey[*observerqueries.Stats]("observer.stats")

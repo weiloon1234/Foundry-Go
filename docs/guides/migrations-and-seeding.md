@@ -196,7 +196,7 @@ Scaffolds are ordinary Go functions returning typed definitions, with typed ID c
 
 The generator checks the complete proposed package in memory before publication and refuses stale generated declarations, name conflicts, path traversal, symlink targets, and existing files. The current command requires an existing Go package; creating a new package directory is outside this scaffold slice. It uses the shared guards, source/module checks, staged writes, and recovery path. A new file is published without replacing a file created concurrently. Existing declarations and package imports are not rewritten.
 
-Once created, a scaffold belongs to the consumer. Edit it normally; it has no generated-file marker and never enters `.foundry-gen.json`. `foundry generate` leaves the implementation alone. Interrupted creation uses a version 3 creation-only journal and the ordinary `foundry generate --recover --dir package` command. Recovery preserves a fully published scaffold, clears an unpublished creation, and refuses to overwrite subsequent edits. There is no `--force` overwrite option.
+Once created, a scaffold belongs to the consumer. Edit it normally; it has no generated-file marker and never enters `.foundry-gen.json`. `foundry generate` leaves the implementation alone. Interrupted creation uses the creation-only journal defined in [`internal/generate/recover.go`](../../internal/generate/recover.go) and the ordinary `foundry generate --recover --dir package` command. Recovery preserves a fully published scaffold, clears an unpublished creation, and refuses to overwrite subsequent edits. There is no `--force` overwrite option.
 
 ## Verification limits
 

@@ -111,13 +111,13 @@ The scanner follows the [Go vulnerability workflow](https://go.dev/doc/security/
 No dependency is automatically upgraded or scanner installed by the harness.
 Record any approved upgrade, its reason, compatibility impact and validation.
 
-## Client contract cohort freeze
+## Current client contracts
 
-At release tag time, freeze the client contract cohort: copy
-`tests/fixtures/consumer/clientcontracts/testdata/current-contracts` to an
-immutable `testdata/contracts-<version>/` (for example `testdata/contracts-v1.0.0/`).
-Each released cohort remains immutable, and `TestReleasedContractCohorts` verifies
-that its recorded provenance hashes match its files and ownership manifests.
+Run `make publish-client-contracts` to refresh
+`tests/fixtures/consumer/clientcontracts/testdata/current-contracts` after a reviewed
+contract change. Review its artifacts, ownership manifests and provenance together.
+`make datatable-contracts` compares current generation with this baseline and checks
+its recorded hashes. Git tags retain release history; releases do not copy the baseline.
 
 ## Final acceptance and handoff
 

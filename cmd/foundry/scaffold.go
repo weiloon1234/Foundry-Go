@@ -52,9 +52,6 @@ func runMake(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		flags.StringVar(&metadata, "metadata", "", "comma-separated metadata.Value slot field names, each with a new DTO")
 		flags.StringVar(&options.Disk, "disk", "", "storage disk ID of the attachment slots")
 	}
-	if options.Kind == generate.ModelScaffold || options.Kind == generate.EndpointScaffold || options.Kind == generate.NotificationScaffold {
-		flags.BoolVar(&options.FieldDocumentation, "field-docs", false, "remove obsolete managed field behavior notes during scaffold generation, as foundry generate --field-docs does")
-	}
 	if options.Kind == generate.JobScaffold {
 		flags.StringVar(&options.Queue, "queue", "default", "typed job routing queue")
 	}

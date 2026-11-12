@@ -8,6 +8,28 @@ Only `Foundry-Go` is being built. User direction on 2026-09-18 makes its source,
 
 This document is the single source of truth for milestone status. Subsystem blueprints own their detailed contracts. Dated acceptance entries retain the results for their recorded source; the current status table, public implementation and consumer guides describe delivered APIs.
 
+## Retirement cleanup and documentation — v0.24.0, 2026-11-12
+
+Status: **build, changed-package vet, targeted root/consumer/Go-way tests,
+OpenAPI regression, deploy-tool unit suite and docs check passed; CI pending at commit**.
+- Removes the managed-field-documentation CLI option, its retirement bridge and
+  source-edit recovery. Retired journals fail with a typed error and retain staging.
+- Keeps one current client contract baseline and its publisher/drift checks; removes
+  per-release copies, historical sweeps and the one-off cursor publisher. The
+  detail-free OpenAPI regression uses a package-local fixture.
+- Removes audited dead helpers and corrects current documentation while retaining
+  dated acceptance evidence.
+- Deploy acceptance builds a privately packaged candidate checkout and tests a
+  published generation-9 baseline, asserting either replacement or an equal-bundle
+  no-op. The host floor is 9; the client floor remains 1.
+- Tool pruning records retired target/previous bundle digests atomically before
+  removing completed journals for other bundles. Active journals remain replayable;
+  a validated host ledger preserves rejection of every retired bundle.
+- Milestone 2: deploy-tool unit suite, shell syntax and documentation checks passed.
+  Both the local fixture and a private-proxy candidate snapshot built natively;
+  the arm64 Docker acceptance build produced its archive. The real host scenarios
+  and real-systemd opt-in contracts remain CI-only; CI pending at commit.
+
 ## Dependency updates — v0.23.2, 2026-11-12
 
 Status: **build, vet and race tests for every package importing an AWS module passed;
@@ -823,7 +845,7 @@ See [acceptance evidence](../docs/evidence/validation-messages-20260926.json).
 
 - Latest stable Go, initially 1.27.1, verified against [official downloads](https://go.dev/dl/) on 2026-09-11. The delivered `go.mod` owns the actual toolchain requirement; do not duplicate it in scripts or CI.
 - One Go framework module with public feature packages, private implementation under `internal`, and development commands under `cmd`. Nested modules are permitted for independent consumer/plugin tests.
-- Foundry-owned model generation and one shared query AST; PostgreSQL is the only database adapter currently in scope.
+- Handwritten models and ORM tables with one shared query AST; PostgreSQL is the only database adapter currently in scope.
 - Typed model APIs are the normal application boundary: CRUD, filters, relations, joins and advanced queries must not require raw SQL when Foundry can express the operation. Missing typed coverage is framework work. Parameterized SQL remains an explicit escape hatch for unsupported database capabilities; it does not carry the model API's compile-time guarantees.
 - Model-first authentication. Authentication strategies and providers are separate; one model can use multiple guards.
 - Local, AWS S3, and Cloudflare R2 are required storage targets.
@@ -1065,7 +1087,7 @@ The [program blueprint](goway-data-layer/README.md) owns design and guardrails.
 | G01 | [Prototype gate](goway-data-layer/README.md#stages-and-evidence) | Approved plan | Complete — historical Stage 1 gate: 56 equivalent statements, 20 compiler negatives; models 7,808 / 22,973 functions (33.99%), one-query 901 / 4,186 (21.52%) |
 | G02 | [Branch and guardrails](goway-data-layer/README.md) | G01 | COMPLETE — branch guardrails, catalogue, emitter/release audit and synthetic measurement harness delivered; the old API was subsequently retired in Stage 8. |
 | G03.0 | [Column footprint](goway-data-layer/README.md#stage-30-column-footprint) | G02 | Direct methods, method-free private bridges and value-owned codec state implemented; N=10/N=20 measured. Repository checks pass. 70-model gate: `models` 90,922 functions / 377 MB pass; compiler RSS 5.14 GB median misses the 5 GB target by 2.7%, accepted and tracked. No API trim or Stage 3.1 work. |
-| G03.1 | [Core declarations, reads, writes and raw hydration](goway-data-layer/README.md#stages-and-evidence) | G03.0 | Done on the branch. JSON/interval/encrypted/password kinds, write outcomes, cursor pagination, key chunking, locked keyed reads and typed raw hydration; 81 of 1,026 compile-fail catalogue rows ported. Stage 3 gate passed 2026-10-23: `make verify`, `make test-postgres` (race), `make typescript-check`. No consumer migration accepted yet. |
+| G03.1 | [Core declarations, reads, writes and raw hydration](goway-data-layer/README.md#stages-and-evidence) | G03.0 | Done on the branch. JSON/interval/encrypted/password kinds, write outcomes, cursor pagination, key chunking, locked keyed reads and typed raw hydration; 81 of 1,026 compile-fail catalogue rows ported. Stage 3 gate passed 2026-10-23: `make verify`, `make test-postgres` (race), `make typescript-check`. Consumer migration was outside that Stage 3 gate; G09 records its subsequent completion with zero pending cases. |
 | G04 | [Relations, existence and aggregate slots](goway-data-layer/README.md#stage-4d-typed-relation-aggregate-slots) | G03.1 | Stage 4 complete. 4a–4d committed through `80546f4`. Typed ValueOf/expr.Related slots retain per-slot grouped batches, exact aggregate result families, shared limits and cardinality checks. Current integration acceptance is recorded in slice evidence; live PostgreSQL remains for the lead. |
 | G05 | [Lifecycle, audit and relation writes](goway-data-layer/README.md#integration-batch-4-relation-writes-ctes-and-upserts) | G04 | COMPLETE on the branch. B5a–B5d committed through `638dc34`; 5b committed at `5cbe31d`. Typed pivot operations retain scoped endpoint locks, B5b lifecycle or hook-free set writes, atomic limits and reconciliation outcomes. Extension slots remain Stage 7. Current integration checks are recorded in slice evidence. |
 | G06 | [Expressions, composition and advanced writes](goway-data-layer/README.md#integration-batch-6c-part-1-terminal-writes-datatables-and-shared-owners) | G05 | All approved Stage 6 slices done; 6e COMPLETE (57/57 rows). Final paired measurements are recorded in Stage 11, including the remaining footprint and ChainBuild limitations. |
@@ -1096,9 +1118,9 @@ Numbering is the default implementation order. A prerequisite is a gate, not per
 | 02 | [Foundation and application lifecycle](02-foundation-and-application-lifecycle.md) | 01 | Complete — core and approved TOML adapter verified; consumer experience reviewed |
 | 03 | [Generation and language tooling](03-generation-and-language-tooling.md) | 02 | Complete — package graph, typed generation, recovery and real-gopls acceptance verified; consumer experience reviewed |
 | 04 | [Database runtime and migrations](04-database-runtime-and-migrations.md) | 02, 03 | Complete — approved PostgreSQL adapter, runtime, migrations and tooling verified against real PostgreSQL; consumer experience reviewed |
-| 05 | [Typed models and queries](05-typed-model-and-query-core.md) | 04 | Complete — typed codecs, generated CRUD, numbered/cursor pagination and transaction outcomes verified; consumer experience reviewed |
+| 05 | [Typed models and queries](05-typed-model-and-query-core.md) | 04 | Complete — typed codecs, native ORM CRUD, numbered/cursor pagination and transaction outcomes verified; consumer experience reviewed |
 | 06 | [Relations and advanced queries](06-relations-and-advanced-queries.md) | 05 | Complete — typed relations, advanced queries, projections, pagination, upserts and transaction-preserving lock composition verified; consumer experience reviewed. Lifecycle/bulk-mutation integration is delivered in 07, with database tooling and operational parity delivered in 23/24 |
-| 07 | [Model lifecycle, events, and audit](07-model-lifecycle-events-and-audit.md) | 05, 06 | Complete — typed hooks/observers, getters/mutators with automatic field notices, stored changes, soft deletion, events, transactional outbox and audit verified; consumer experience reviewed |
+| 07 | [Model lifecycle, events, and audit](07-model-lifecycle-events-and-audit.md) | 05, 06 | Complete — typed hooks/observers, explicit getters and typed input mutators with handwritten field documentation, stored changes, soft deletion, events, transactional outbox and audit verified; consumer experience reviewed |
 | 08 | [HTTP, validation, and responses](08-http-validation-and-responses.md) | 02, 03, 05, 07 | Complete — typed HTTP transport, validation, pagination/model binding, files/static/SPA, middleware and gzip/Brotli compression verified; consumer experience reviewed. Cross-feature integration contracts are documented in their owning milestones. |
 | 09 | [Redis, cache, and coordination](09-redis-cache-and-coordination.md) | 02 | Complete — typed cache, tags/namespace invalidation, local/distributed Remember, counters, leases, rate limiting, pub/sub, typed Redis hashes/sets and scoped commands/pipelines/scripts verified with native local services; source parity and consumer experience reviewed. |
 | 10 | [Model-first authentication](10-model-first-authentication-and-authorization.md) | 07, 08, 09 | Complete — typed guards/permissions, sessions/tokens, passwords/lockout/recovery, MFA, attribution, HTTP composition, security events and retirement passed native acceptance; source parity and consumer experience reviewed. Integration contracts are documented in their owning milestones. |

@@ -15,6 +15,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/jsonshape"
 )
 
+// Retired managed notices are excluded from source help copied into generated contracts.
+const fieldNotePrefix = "// Foundry field behavior (generated): "
+
 type fieldHelp string
 
 type sourceDocumentation struct {
@@ -228,28 +231,6 @@ func (d *sourceDocumentation) structure(typ types.Type) (documentedType, error) 
 		d.types[typ] = source
 	}
 	return source, err
-}
-
-func (d *sourceDocumentation) jsonSource(typ types.Type) (documentedType, error) {
-	for {
-		if _, alias := typ.(*types.Alias); alias {
-			source, err := d.structure(typ)
-			if err != nil || source.file == nil {
-				return source, err
-			}
-			inner, wrapped := jsonInner(typ)
-			if !wrapped {
-				return source, nil
-			}
-			typ = inner
-			continue
-		}
-		inner, wrapped := jsonInner(typ)
-		if !wrapped {
-			return d.structure(typ)
-		}
-		typ = inner
-	}
 }
 
 func (d *sourceDocumentation) rememberStruct(typ types.Type, source documentedType) {
@@ -680,4 +661,22 @@ func checkDocumentationInput(input documentationInput) error {
 		}
 	}
 	return nil
+}
+
+type sourceEdit struct {
+	start, end int
+	text       string
+}
+
+func applySourceEdits(data []byte, edits []sourceEdit) []byte {
+	result := slices.Clone(data)
+	slices.SortFunc(edits, func(a, b sourceEdit) int { return b.start - a.start })
+	for _, edit := range edits {
+		next := make([]byte, 0, len(result)-(edit.end-edit.start)+len(edit.text))
+		next = append(next, result[:edit.start]...)
+		next = append(next, edit.text...)
+		next = append(next, result[edit.end:]...)
+		result = next
+	}
+	return result
 }

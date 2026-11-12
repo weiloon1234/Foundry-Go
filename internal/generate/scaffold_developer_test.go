@@ -205,11 +205,9 @@ func TestDeveloperScaffoldOptionsAndRecoveryAuthority(t *testing.T) {
 	}
 }
 
-// FieldDocumentation still applies to generation of other contracts in the package;
-// ORM slot documentation is handwritten and needs no managed model notices.
-func TestModelScaffoldGeneratesFieldDocumentation(t *testing.T) {
+func TestModelScaffoldDocumentsSlots(t *testing.T) {
 	dir := fixture(t, "package sample\n")
-	path, err := Scaffold(t.Context(), ScaffoldOptions{Dir: dir, Kind: ModelScaffold, Name: "Note", Table: "notes", Translated: []string{"Title"}, FieldDocumentation: true})
+	path, err := Scaffold(t.Context(), ScaffoldOptions{Dir: dir, Kind: ModelScaffold, Name: "Note", Table: "notes", Translated: []string{"Title"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,10 +215,7 @@ func TestModelScaffoldGeneratesFieldDocumentation(t *testing.T) {
 	if err != nil || !strings.Contains(string(data), "translated text stored in foundry_model_translations") || strings.Contains(string(data), "//foundry:model") {
 		t.Fatal("the scaffolded model lacks handwritten slot documentation", err)
 	}
-	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true, FieldDocumentation: true}); err != nil {
-		t.Fatal("field-docs generation is stale after the scaffold", err)
-	}
-	if err := ValidateScaffold(ScaffoldOptions{Kind: ModelScaffold, Name: "Plain", Table: "plains", FieldDocumentation: true}); err == nil {
-		t.Fatal("field docs accepted for a scaffold that runs no generation")
+	if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
+		t.Fatal("generation is stale after the scaffold", err)
 	}
 }

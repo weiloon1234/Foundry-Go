@@ -215,8 +215,8 @@ exceeds 4 MiB. Large individual entries can reach this limit even within the
 
 `FOLLOW=yes` streams directly over SSH using your saved target and key, strict
 host-key checking, and root or passwordless `sudo -n`. It allows interactive SSH
-authentication and requests a remote terminal only when stdout is a terminal,
-so output can also be piped. Ctrl-C ends the stream quietly. SSH connection
+authentication without requesting a remote terminal, so output can also be piped.
+Ctrl-C ends the stream quietly. SSH connection
 failures still report an error. Follow mode makes no server JSON request and
 needs no `CONFIRM`.
 
@@ -227,7 +227,7 @@ v0.22.0; install the updated bundle with `tools-plan` and `tools-apply` to use
 
 ### Server shell
 
-Upgrade the host to generation 8 with `ACTION=tools-plan` and `ACTION=tools-apply`
+Upgrade the host to the current tool generation with `ACTION=tools-plan` and `ACTION=tools-apply`
 before first use. Build and deploy a release on Foundry-Go v0.22.0 or later, then run:
 
 ```sh
@@ -380,21 +380,20 @@ match both content and metadata.
 
 ## Tool protocol and upgrades
 
-`tools/deploy/protocol.json` owns protocol 2.0 and generation 8. The stable
+[`tools/deploy/protocol.json`](../../tools/deploy/protocol.json) owns the current protocol and tool generation. The stable
 launcher dispatches to the active immutable bundle. `hello` reports host metadata
 without a mutation. Requests include the client's protocol, framework version,
 generation, and bundle digest. The minimum client generation remains 1, so
 instances registered with generation 3 remain supported.
 
-Starting with v0.16.1, tool upgrades require an installed host generation of at
-least 6. `tools-plan` checks the installed host's generation through `hello` before
+Tool upgrades require an installed host generation of at least 9. `tools-plan` checks the installed host's generation through `hello` before
 staging anything. The candidate also enforces this floor before planning or
-installation. Older hosts receive `tools_upgrade_floor`: "Upgrade to v0.16.0 or
-v0.16.1 tools first, then retry the tool upgrade." The temporary upgrade bridges
-and finished-state cleanup are no longer shipped.
+installation. Older hosts receive `tools_upgrade_floor`: "The host must already
+run generation 9 tools before this upgrade." Temporary upgrade bridges are no
+longer shipped.
 
-Before the next deploy or maintenance action, upgrade a generation-6 or
-generation-7 host to generation 8 through `tools-plan` and `tools-apply`:
+Before the next deploy or maintenance action, upgrade a supported older host
+to the current generation through `tools-plan` and `tools-apply`:
 
 1. Repin the application to the desired published framework release.
 2. Run `ENVIRONMENT=production ACTION=tools-plan make deploy` and review the plan.
@@ -425,14 +424,23 @@ Python bytecode and preserves the manifest's ownership of installed files.
 `tools-plan` lists the bundle digests to remove in `prune_bundles`. The first
 `tools-apply` of this release removes superseded bundles after saving the active
 selection and completing its upgrade journal. `tools-apply`, bootstrap and ordinary
-deploy report removed digests in `removed_bundles`. Unchanged installs and deploys
-also finish leftover cleanup.
+deploy report removed digests in `removed_bundles` and removed operation IDs in
+`removed_upgrade_journals`. Plans list the latter in `prune_upgrade_journals`.
+Unchanged installs and deploys also finish leftover cleanup.
 
 Pruning runs from the selected bundle under the host lock. Any pending upgrade
 journal blocks pruning. Only directories with canonical 64-character lowercase
 hex digests are eligible; symlinks and unexpected entries require administrator
-review. The active bundle and completed upgrade journals remain. A retry finishes
-an interrupted removal without selecting an older bundle.
+review. Completed journals for other bundles are removed only after their target
+and previous bundle digests have been recorded durably, excluding the active digest.
+The single retired-bundle ledger lives outside the operation directories at
+`HOST_PATHS["retired_tools"]` in [`contracts.py`](../../tools/deploy/lib/contracts.py).
+It is root-owned, mode 0600, schema-validated, sorted and de-duplicated, and written
+atomically before any deletion. A missing ledger means empty history; an invalid
+ledger fails closed with `invalid_retired_tools`. The ledger and remaining complete
+journals both reject retired bundles. Active-bundle journals remain unchanged so
+replaying the latest `OPERATION` stays idempotent. A retry finishes interrupted
+cleanup without losing retirement history.
 
 ## Release lifecycle and configuration
 
@@ -1117,7 +1125,7 @@ not prove application-specific invariants, existing ciphertext decryption, or
 large-database restore times. Verify those against representative application data
 before routing production traffic.
 
-Replacement-host recovery installs generation 8 on an empty target. For existing
+Replacement-host recovery installs the current tool generation on an empty target. For existing
 hosts, follow the [tool upgrade procedure](#tool-protocol-and-upgrades).
 
 ## Host report
@@ -1175,7 +1183,7 @@ runner cleanup still removes disposable containers, volumes, and private materia
 The runner accepts an application release archive and the integrated framework
 root, with Ubuntu 24.04 or 26.04, arm64 or amd64, and `--foreign` or `--fresh`.
 The dedicated `tests/fixtures/deploy-acceptance` app supplies all existing phases
-and the opt-in previous-release upgrade phase. From the framework checkout, build one Linux
+and the opt-in generation-9 baseline upgrade phase. From the framework checkout, build one Linux
 archive through the normal deploy builder and run both arm64 cells:
 
 ```sh
@@ -1190,39 +1198,37 @@ for ubuntu in 24.04 26.04; do
 done
 ```
 
-The fixture pins the published framework with no local module replacement. The
-builder uses its acceptance profile and writes the completed archive path to a
-new file.
+The checked-in fixture uses `v0.0.0` and a local replacement so native tooling sees
+this checkout. The acceptance builder uses the existing release packager to create
+a private candidate proxy, then drops the replacement and requires that candidate
+only in an isolated fixture copy. It exposes the proxy through a read-only mount
+and environment variables only for the acceptance build. Only the framework module
+bypasses the checksum database. The production builder still rejects local
+replacements. The helper uses the acceptance profile and writes the completed
+archive path to a new file. See the [deploy tests](../../tools/deploy/README.md)
+for the packaging and workspace details.
 
-The fixture's framework pin defines "the previous published release" for the
-opt-in upgrade phase. The phase uses the same archive built above. Resolve the
-unmodified published tools through the fixture after downloading its modules:
-
-```sh
-baseline=$(cd tests/fixtures/deploy-acceptance && go mod download && \
-  go list -m -f '{{.Dir}}' github.com/weiloon1234/Foundry-Go)
-old_tools="$baseline/tools/deploy"
-for ubuntu in 24.04 26.04; do
-  tools/deploy/tests/run_acceptance.sh --ubuntu "$ubuntu" --platform linux/arm64 \
-    --archive "$archive" --framework-root "$framework" \
-    --foreign --upgrade --tools-root "$old_tools"
-done
-```
-
-The fixture has no local replacement. CI resolves the baseline with the same
-commands. `--tools-root` must point to the fixture pin's tools in the module cache.
+For `foreign-upgrade`, the CI entry point resolves the single `baseline_version`
+variable in `tools/deploy/tests/run_ci_acceptance.sh` independently of the candidate
+fixture. It supplies the published generation-9 tools through `--tools-root`.
+The same candidate application archive serves both sets of tools.
 The runner mounts that bundle read-only. It bootstraps and deploys with those tools,
 then upgrades through the candidate's `tools-plan` and `tools-apply` and deploys
-normally. Assertions cover the exact active candidate bundle, absence of removed
+normally. Equal bundle digests must produce an unchanged result and registry;
+different digests must replace the bundle. Assertions cover the exact active
+candidate bundle, absence of removed
 files from that bundle, role files and loaded units without `ExecStartPre`, healthy
 roles, preserved client registration, and a clean report. The report tolerates
-only the same container-only failed units as the ordinary host phase. Retired
-immutable bundles remain on disk; they are never patched or selected again.
+only the same container-only failed units as the ordinary host phase. Superseded
+bundles and completed journals for other bundles are pruned. The retired-bundle
+ledger preserves rejection of older bundles, while active journals preserve replay.
+Pre-existing PostgreSQL, Redis and nginx data, configuration and processes remain
+covered by the foreign-service isolation assertions.
 
 The runner prints its private log directory and retains phase logs on success or
 failure. Use `FOUNDRY_ACCEPTANCE_KEEP=1` to retain a failed host for inspection.
-CI runs the amd64 matrix and the lead runs arm64 acceptance. The Python suite
-does not execute either matrix.
+CI runs the amd64 matrix. Arm64 host scenarios can run separately on a native
+Docker host; the Python unit suite does not execute either matrix.
 
 Run each platform on a native Docker host of that architecture. QEMU user
 emulation of amd64 on arm64 cannot complete it: Ubuntu 24.04's `rclone`

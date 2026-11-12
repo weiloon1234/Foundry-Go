@@ -19,10 +19,6 @@ type Options struct {
 	Dir       string
 	Check     bool
 	Recursive bool
-	// FieldDocumentation removes obsolete managed "Foundry field behavior"
-	// notes from handwritten model files. Without this option, generation leaves
-	// handwritten files and existing notes unchanged.
-	FieldDocumentation bool
 	// Framework identifies the framework release rendering output, normally the
 	// running tool's build. A known version that differs from the consumer's
 	// selected framework fails before any file is written. Leave it empty in
@@ -43,7 +39,7 @@ type StaleFile struct {
 }
 
 // StaleReason distinguishes absent/obsolete output from content, comment and
-// layout-only differences, managed field notes and ownership manifests.
+// layout-only differences and ownership manifests.
 type StaleReason string
 
 const (
@@ -52,7 +48,6 @@ const (
 	StaleContent    StaleReason = "content differs"
 	StaleComments   StaleReason = "comments differ"
 	StaleFormatting StaleReason = "formatting differs"
-	StaleFieldNotes StaleReason = "managed field notes differ"
 	StaleManifest   StaleReason = "ownership manifest differs"
 )
 
@@ -79,7 +74,6 @@ func Generate(ctx context.Context, options Options) (Report, error) {
 	if err := graph.checkFramework(options.Framework); err != nil {
 		return report, err
 	}
-	graph.fieldDocumentation = options.FieldDocumentation
 	writes, err := graph.prepare(ctx)
 	if err != nil {
 		return report, err
@@ -161,8 +155,6 @@ func staleReason(name string, plan writePlan) StaleReason {
 	switch {
 	case filepath.Base(name) == manifestName:
 		return StaleManifest
-	case plan.fieldNotes[name]:
-		return StaleFieldNotes
 	case after == nil:
 		return StaleObsolete
 	case !before.exists:

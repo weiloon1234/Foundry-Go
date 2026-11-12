@@ -187,7 +187,7 @@ class RecoveryTests(unittest.TestCase):
             with self.assertRaises(KeyboardInterrupt):
                 recover._resources(self.host, journal, plan["_recovered"], self.files, TOOLS)
         self.assertEqual(self.plan()["phase"], "resources")
-        with self.host.lock("host"), patch.object(recover.upgrades, "prune_tools", return_value=[]), \
+        with self.host.lock("host"), patch.object(recover.upgrades, "prune_tools", return_value={"removed_bundles": [], "removed_upgrade_journals": []}), \
                 patch.object(recover.packages, "install_missing"), \
                 patch.object(recover.provision, "_prepare_instance"), patch.object(recover, "select_runtime_storage"):
             recover._resources(self.host, journal, plan["_recovered"], self.files, TOOLS)

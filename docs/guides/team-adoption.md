@@ -83,7 +83,7 @@ printf '%s\n' '// Package transport owns public request and response contracts.'
 go tool foundry make model Widget --table widgets --dir ./models
 go tool foundry make dto WidgetResponse --dir ./transport
 # Add domain fields and handler behavior to the handwritten files.
-go tool foundry generate --recursive --field-docs --dir .
+go tool foundry generate --recursive --dir .
 go mod tidy
 go test ./...
 ```
@@ -103,11 +103,11 @@ are required. Select persistent session/token services for production authentica
 
 Keep generated output and `.foundry-gen.json` ownership manifests alongside their
 declarations. Regenerate after declaration or framework changes. A failed
-generation check lists each stale file and whether its content, comments, formatting or ownership manifest differ. This workflow opts into `--field-docs`, so it also removes obsolete managed notices from handwritten models and checks that removal. Without that flag, handwritten notices are left untouched. Add these checks
+generation check lists each stale file and whether its content, comments, formatting or ownership manifest differ. Handwritten model comments remain author-owned. Add these checks
 to the boilerplate's own CI, together with its configured integration/client tests:
 
 ```sh
-go tool foundry generate --recursive --field-docs --check --dir .
+go tool foundry generate --recursive --check --dir .
 go vet ./...
 go test ./...
 go test -race ./...

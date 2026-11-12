@@ -930,7 +930,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
         try:
             manifest = unpack_archive(host, Path(archive), staging, entry, checksum)
             import upgrades
-            removed_bundles = upgrades.prune_tools(host, registry["tools"]["bundle_sha256"])
+            pruned_tools = upgrades.prune_tools(host, registry["tools"]["bundle_sha256"])
             version = manifest["version"]
             prior_roles = enabled_roles(host, entry)
             if state["current"] and state["current"]["version"] == version:
@@ -940,7 +940,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                     write_runtime_descriptor(host, entry, release)
                     require(ready(host, entry, timeout=10), "readiness_failed", "Current release is no longer ready; inspect it before retrying.")
                     return {"ok": True, "unchanged": True, "instance": entry["name"], "version": version,
-                            "removed_bundles": removed_bundles}
+                            **pruned_tools}
             release = publish_release(host, entry, staging, manifest)
             attempt = begin(host, entry, state, "deploy", version,
                             metadata={"recovery_operation_id": operation_id or str(uuid.uuid4()), "roles": prior_roles})
@@ -1024,7 +1024,7 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
                 # A probe report holds no secrets, and naming the bad disk is what the operator needs.
                 raise DeployError(code, error.detail if code.startswith("storage_probe_") else
                                   "Deployment failed; status records the phase and recovery outcome. Inspect the instance before retrying.") from None
-            result = {"ok": True, "instance": entry["name"], "version": version, "removed_bundles": removed_bundles}
+            result = {"ok": True, "instance": entry["name"], "version": version, **pruned_tools}
             warnings = narrow_redis_grants(host, registry, entry, redis_patterns, state)
             try:
                 prune(host, entry, state)

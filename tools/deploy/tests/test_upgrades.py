@@ -45,9 +45,9 @@ class UpgradeTests(unittest.TestCase):
             path = self.source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("# test bundle\n")
-        self.metadata = {"protocol": {"major": 2, "minor": 0}, "generation": 7,
-                         "minimum_host_generation": 6, "minimum_client_generation": 1,
-                         "framework_version": "v0.16.0"}
+        self.metadata = {"protocol": {"major": 2, "minor": 0}, "generation": 9,
+                         "minimum_host_generation": 9, "minimum_client_generation": 1,
+                         "framework_version": "v0.23.2"}
         (self.source / "protocol.json").write_text(json.dumps(self.metadata))
         (self.source / "server/launcher.py").write_text(
             (Path(__file__).resolve().parents[1] / "server/launcher.py").read_text())
@@ -253,29 +253,23 @@ class UpgradeTests(unittest.TestCase):
 
     def test_newer_client_refuses_host_but_allows_hello(self):
         self.install()
-        for generation, code in [(8, "host_upgrade_required"), (0, "client_too_old")]:
+        for generation, code in [(10, "host_upgrade_required"), (0, "client_too_old")]:
             request = {"protocol": {"major": 2, "minor": 0}, "client": {"generation": generation}}
             with self.assertRaises(DeployError) as caught:
                 upgrades.check_client(self.host, request, "activate")
             self.assertEqual(code, caught.exception.code)
             upgrades.check_client(self.host, request, "hello")
-        self.assertEqual({"minimum": 1, "maximum": 7}, upgrades.hello(self.host)["client_generation"])
+        self.assertEqual({"minimum": 1, "maximum": 9}, upgrades.hello(self.host)["client_generation"])
 
-    def test_generation_nine_upgrades_six_and_includes_maintenance_module(self):
+    def test_generation_nine_replaces_bundle_and_includes_maintenance_module(self):
         actual = Path(__file__).resolve().parents[1]
         metadata = upgrades.protocol(actual)
         self.assertEqual(9, metadata["generation"])
-        self.assertEqual(6, metadata["minimum_host_generation"])
+        self.assertEqual(9, metadata["minimum_host_generation"])
         self.assertEqual(1, metadata["minimum_client_generation"])
         _, files, _ = upgrades.tool_bundle(actual)
         self.assertIn(actual / "lib/maintenance.py", files)
-        self.metadata["generation"] = 6
-        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
-        self.digest = upgrades.tool_bundle(self.source)[2]
-        self.host.registry["tools"] = upgrades._active_record(self.source, self.digest, None)
         self.install()
-        self.metadata["generation"] = 9
-        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
         (self.source / "lib/maintenance.py").write_text("# new generation nine module\n")
         plan = upgrades.plan_upgrade(self.host, self.source)
         result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
@@ -283,25 +277,22 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(9, self.host.read_registry()["tools"]["generation"])
         self.assertEqual({"minimum": 1, "maximum": 9}, upgrades.hello(self.host)["client_generation"])
 
-    def test_generation_five_refuses_planning_and_installation_before_writes(self):
+    def test_generation_eight_refuses_planning_and_installation_before_writes(self):
         self.install()
-        self.host.registry['tools']['generation'] = 5
+        self.host.registry['tools']['generation'] = 8
         before = self.host.read_registry()
         for action in (lambda: upgrades.plan_upgrade(self.host, self.source),
                        lambda: self.install(allow_upgrade=True)):
             with self.assertRaises(DeployError) as caught:
                 action()
             self.assertEqual('tools_upgrade_floor', caught.exception.code)
-            self.assertIn('v0.16.0 or v0.16.1 tools first', caught.exception.detail)
+            self.assertIn('must already run generation 9 tools', caught.exception.detail)
             self.assertEqual(before, self.host.read_registry())
 
     def test_candidate_python_inventory_contains_only_runtime_modules(self):
         source = Path(__file__).resolve().parents[1]
         _, files, _ = upgrades.tool_bundle(source)
-        # Modules newer than the oldest upgradable host stay out of REQUIRED_FILES,
-        # which also validates previously installed bundles.
-        expected = ({name for name in upgrades.REQUIRED_FILES if name.endswith('.py')}
-                    | {'lib/capacity.py', 'lib/journal.py', 'lib/maintenance.py'})
+        expected = {name for name in upgrades.REQUIRED_FILES if name.endswith('.py')}
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
     def leftover(self, digest="b" * 64):
@@ -447,6 +438,139 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaises(DeployError) as caught:
             self.install(allow_upgrade=True)
         self.assertEqual("tools_downgrade", caught.exception.code)
+
+    def test_pruned_history_rejects_every_retired_bundle_and_replays_active(self):
+        first = self.install()
+        source = self.source / 'lib/change.py'
+        source.write_text('# B\n')
+        second = self.install(allow_upgrade=True)
+        source.write_text('# C\n')
+        operation = str(uuid.uuid4())
+        plan = upgrades.plan_upgrade(self.host, self.source)
+        third = upgrades.apply_upgrade(self.host, self.source, plan['plan_token'], operation)
+        journals = self.host.paths.p(HOST_PATHS['upgrades'])
+        self.assertEqual([operation], [path.name for path in journals.iterdir()])
+        self.assertEqual([second['operation_id']], third['removed_upgrade_journals'])
+        ledger = self.host.paths.p(HOST_PATHS['retired_tools'])
+        self.assertEqual({'schema': 1, 'digests': sorted([first['bundle_sha256'], second['bundle_sha256']])},
+                         upgrades.read_json(ledger))
+        self.assertEqual(0o600, ledger.stat().st_mode & 0o777)
+        self.assertEqual(os.geteuid(), ledger.stat().st_uid)
+        for content in (None, '# B\n'):
+            if content is None:
+                source.unlink()
+            else:
+                source.write_text(content)
+            with self.assertRaises(DeployError) as caught:
+                self.install(allow_upgrade=True)
+            self.assertEqual('tools_downgrade', caught.exception.code)
+        source.write_text('# C\n')
+        before = self.host.read_registry()
+        intent = (journals / operation / 'intent.json').read_bytes()
+        replay = upgrades.apply_upgrade(self.host, self.source, plan['plan_token'], operation)
+        self.assertEqual('unchanged', replay['outcome'])
+        self.assertEqual([], replay['removed_upgrade_journals'])
+        self.assertEqual(before, self.host.read_registry())
+        self.assertEqual(intent, (journals / operation / 'intent.json').read_bytes())
+
+    def test_ledger_write_precedes_deletion_and_interruption_converges(self):
+        first = self.install()
+        journals = self.host.paths.p(HOST_PATHS['upgrades'])
+        intent = journals / first['operation_id'] / 'intent.json'
+        original_intent = intent.read_bytes()
+        (self.source / 'lib/change.py').write_text('# B\n')
+        operation = str(uuid.uuid4())
+        plan = upgrades.plan_upgrade(self.host, self.source)
+        def crash(path):
+            self.assertIn(first['bundle_sha256'], upgrades._retired_bundles(self.host))
+            self.assertEqual(original_intent, intent.read_bytes())
+            raise OSError('crash after durable ledger write')
+        with patch.object(upgrades.shutil, 'rmtree', side_effect=crash), self.assertRaises(OSError):
+            upgrades.apply_upgrade(self.host, self.source, plan['plan_token'], operation)
+        result = upgrades.apply_upgrade(self.host, self.source, plan['plan_token'], operation)
+        self.assertEqual('unchanged', result['outcome'])
+        self.assertEqual([first['operation_id']], result['removed_upgrade_journals'])
+        self.assertEqual([operation], [path.name for path in journals.iterdir()])
+        self.assertEqual([first['bundle_sha256']], upgrades._retired_bundles(self.host))
+
+    def test_retry_syncs_identical_ledger_after_interrupted_directory_sync(self):
+        first = self.install()
+        (self.source / 'lib/change.py').write_text('# B\n')
+        operation = str(uuid.uuid4())
+        plan = upgrades.plan_upgrade(self.host, self.source)
+        ledger = self.host.paths.p(HOST_PATHS['retired_tools'])
+        parent = ledger.parent.stat()
+        fsync = os.fsync
+        synced = []
+        def sync(descriptor, fail=False):
+            info = os.fstat(descriptor)
+            if (info.st_dev, info.st_ino) == (parent.st_dev, parent.st_ino):
+                if fail:
+                    raise OSError('crash after ledger rename before directory sync')
+                synced.append(True)
+            return fsync(descriptor)
+        with patch.object(upgrades.os, 'fsync', side_effect=lambda fd: sync(fd, fail=True)), self.assertRaises(OSError):
+            upgrades.apply_upgrade(self.host, self.source, plan['plan_token'], operation)
+        self.assertEqual([first['bundle_sha256']], upgrades._retired_bundles(self.host))
+        remove = upgrades.shutil.rmtree
+        def delete(path):
+            self.assertTrue(synced, 'identical ledger must be durable before deletion')
+            return remove(path)
+        with patch.object(upgrades.os, 'fsync', side_effect=sync), \
+                patch.object(upgrades.shutil, 'rmtree', side_effect=delete):
+            result = upgrades.apply_upgrade(self.host, self.source, plan['plan_token'], operation)
+        self.assertEqual([first['operation_id']], result['removed_upgrade_journals'])
+        self.assertEqual('unchanged', result['outcome'])
+
+    def test_invalid_retirement_ledger_fails_closed_before_pruning(self):
+        self.install()
+        leftover = self.leftover()
+        ledger = self.host.paths.p(HOST_PATHS['retired_tools'])
+        for value in ('{', '{}', '{"schema":true,"digests":[]}',
+                      json.dumps({'schema': 1, 'digests': ['B' * 64]}),
+                      json.dumps({'schema': 1, 'digests': ['b' * 64, 'a' * 64]}),
+                      json.dumps({'schema': 1, 'digests': ['a' * 64] * 2})):
+            with self.subTest(value=value):
+                upgrades.atomic_write(ledger, value, 0o600)
+                for action in (lambda: upgrades.plan_upgrade(self.host, self.source), self.install):
+                    with self.assertRaises(DeployError) as caught:
+                        action()
+                    self.assertEqual('invalid_retired_tools', caught.exception.code)
+                for prune in (lambda: upgrades._prune_bundles(self.host),
+                              lambda: upgrades.prune_tools(self.host, self.digest)):
+                    with self.host.lock('host'), self.assertRaises(DeployError) as caught:
+                        prune()
+                    self.assertEqual('invalid_retired_tools', caught.exception.code)
+                self.assertTrue(leftover.exists())
+        upgrades.atomic_json(ledger, {'schema': 1, 'digests': []}, 0o644)
+        with self.assertRaises(DeployError) as caught:
+            self.install()
+        self.assertEqual('invalid_retired_tools', caught.exception.code)
+
+    def test_unsafe_journal_paths_refuse_before_ledger_write_or_bundle_removal(self):
+        installed = self.install()
+        leftover = self.leftover()
+        directory = self.host.paths.p(HOST_PATHS['upgrades'])
+        journal = directory / installed['operation_id']
+        outside = self.root / 'outside'
+        outside.mkdir()
+        for name, target in (('escape', outside), ('intent-link.json', journal / 'intent.json')):
+            path = journal / name
+            path.symlink_to(target)
+            try:
+                with self.host.lock('host'), self.assertRaises(DeployError) as caught:
+                    upgrades._prune_bundles(self.host)
+                self.assertEqual('unsafe_path', caught.exception.code)
+                self.assertTrue(leftover.exists())
+                self.assertFalse(self.host.paths.p(HOST_PATHS['retired_tools']).exists())
+            finally:
+                path.unlink()
+        bad = directory / 'not-an-operation'
+        bad.mkdir()
+        with self.host.lock('host'), self.assertRaises(DeployError) as caught:
+            upgrades._prune_bundles(self.host)
+        self.assertEqual('unsafe_path', caught.exception.code)
+        self.assertTrue(leftover.exists())
 
     def test_upgrade_reloads_even_when_units_were_already_written(self):
         import provision

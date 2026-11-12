@@ -7,8 +7,8 @@ The inventory retained 73 license, notice, copying and patent file hashes, with
 MIT/BSD/Apache/ISC-style texts and the separate Go/AOM patent grants classified.
 
 Root [go.mod](../go.mod) and [go.sum](../go.sum) own runtime versions/checksums.
-They currently declare 20 direct and 22 indirect module requirements. Keep that
-source authoritative rather than maintaining a second version table in prose.
+Use those files for the current direct and indirect requirements rather than
+maintaining a second dependency count or version table in prose.
 The candidate harness records the selected graph and hashes of its license,
 copying, notice and patent files for the actual build.
 
@@ -19,11 +19,11 @@ copying, notice and patent files for the actual build.
 | go-redis and its indirect helpers | Redis-backed cache, queues, coordination and realtime. Keep script/atomicity, transport and failover acceptance together. |
 | coder/websocket | Native WebSocket transport; its cached license is ISC-style. Preserve transport limits, close ownership and origin policy. |
 | x/crypto, x/net, x/sys, x/sync, x/text | Existing cryptographic, network, system, concurrency and text primitives. HTTP connection limits reuse x/net's LimitListener instead of adding another implementation. |
-| brotli, nativewebp, gift, gav1d, x/image | Compression/image decoding and transforms. Malformed media, input dimensions, intermediate size, cancellation and codec-specific limits remain the framework boundary. |
+| brotli, gen2brain/vpx (WebP), gift, gav1d, x/image | Compression/image decoding and transforms. Malformed media, input dimensions, intermediate size, cancellation and codec-specific limits remain the framework boundary. |
 | bluemonday/douceur/css | Existing HTML sanitization; retain the established library rather than introducing a second sanitizer. |
 | TOML, semver, cron | Configuration parsing, plugin requirements and schedule parsing. Review malformed input bounds and compatibility, not only successful examples. |
 
-All 42 pinned root modules had cached top-level license/copying/notice files in
+At the milestone 24 review, all 42 pinned root modules had cached top-level license/copying/notice files in
 the source inventory. MIT, BSD-style and Apache-2.0 texts predominate; this
 inventory preserves actual files and does not replace their terms. The gav1d
 source identifies a pure-Go AV1/AVIF implementation with architecture-specific

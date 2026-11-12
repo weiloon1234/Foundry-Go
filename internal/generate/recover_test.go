@@ -110,9 +110,6 @@ func TestPublicationCrashHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Field-note publications share this crash path; fixtures without notes
-	// publish only generated outputs.
-	g.fieldDocumentation = true
 	writes, err := g.prepare(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -265,5 +262,47 @@ func TestRollbackPreservesConcurrentEdits(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(dir, "user_foundry.gen.go"))
 	if err != nil || string(data) != "concurrent edit" {
 		t.Fatal("rollback overwrote an edit")
+	}
+}
+
+func TestRecoveryRejectsRetiredSourceJournal(t *testing.T) {
+	if !automaticRecovery {
+		t.Skip("recovery adapter unavailable")
+	}
+	for _, version := range []int{4, 2} {
+		t.Run(strconv.Itoa(version), func(t *testing.T) {
+			dir := fixture(t, "package sample\ntype User struct{ Email string }\n")
+			before := snapshotFile(t, dir, "models.go")
+			if err := os.Mkdir(filepath.Join(dir, lockName), 0700); err != nil {
+				t.Fatal(err)
+			}
+			data := []byte(fmt.Sprintf(`{"version":%d,"guards":["."],"field_notes":["models.go"],"files":{"models.go":{}}}`, version))
+			path := filepath.Join(dir, lockName, journalName)
+			if err := os.WriteFile(path, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			for _, run := range []struct {
+				name string
+				call func() error
+			}{
+				{"recover", func() error { _, err := Recover(t.Context(), dir); return err }},
+				{"generate", func() error { _, err := Generate(t.Context(), Options{Dir: dir}); return err }},
+			} {
+				t.Run(run.name, func(t *testing.T) {
+					err := run.call()
+					var retired *RetiredJournalError
+					if !errors.As(err, &retired) || retired.Version != version || !strings.Contains(err.Error(), "staging retained") {
+						t.Fatalf("expected typed retired journal error, got %v", err)
+					}
+					if state(snapshotFile(t, dir, "models.go")) != state(before) {
+						t.Fatal("rejected journal changed handwritten source")
+					}
+					retained, err := os.ReadFile(path)
+					if err != nil || string(retained) != string(data) {
+						t.Fatalf("rejected journal was not retained: %v", err)
+					}
+				})
+			}
+		})
 	}
 }

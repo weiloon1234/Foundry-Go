@@ -22,13 +22,14 @@ if __name__ == "__main__":
     sys.dont_write_bytecode = True
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from contracts import (HOST_PATHS, DeployError, atomic_json, atomic_write, check_path,
+from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
 REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", "lib/upgrades.py",
                             "lib/provision.py", "lib/recover.py", "lib/release.py", "lib/runtime_config.py",
+                            "lib/capacity.py", "lib/journal.py", "lib/maintenance.py",
                             "lib/topology.py", "lib/report.py", "server/manage.py",
                             "server/report.py", "server/launcher.py", "lib/packages.py",
                             "lib/postgres.py", "lib/redis_acl.py", "lib/edge.py",
@@ -157,7 +158,57 @@ def _obsolete_bundles(host, active_digest: str) -> list[Path]:
     return obsolete
 
 
-def _prune_bundles(host) -> list[str]:
+def _retired_bundles(host) -> list[str]:
+    path = check_path(host.paths.p(HOST_PATHS["retired_tools"]), "file")
+    host.check_control_directory(path.parent)
+    if not path.exists():
+        return []
+    info = path.stat()
+    require(stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1
+            and (info.st_uid == 0 or host.paths.root != Path("/")),
+            "invalid_retired_tools", "The retired tool ledger must be root-owned with mode 0600.")
+    try:
+        value = read_json(path)
+    except DeployError:
+        raise DeployError("invalid_retired_tools", "The retired tool ledger is invalid; administrator review required.") from None
+    require(isinstance(value, dict) and set(value) == {"schema", "digests"}
+            and type(value["schema"]) is int and value["schema"] == 1
+            and isinstance(value["digests"], list)
+            and all(isinstance(item, str) and re.fullmatch(r"[a-f0-9]{64}", item) for item in value["digests"])
+            and value["digests"] == sorted(set(value["digests"])),
+            "invalid_retired_tools", "The retired tool ledger is invalid; administrator review required.")
+    return value["digests"]
+
+
+def _obsolete_upgrade_journals(host, active_digest: str) -> list[tuple[Path, dict]]:
+    directory = host.check_control_directory(host.paths.p(HOST_PATHS["upgrades"]))
+    obsolete = []
+    if directory.exists():
+        for operation in sorted(directory.iterdir()):
+            require(valid_uuid(operation.name), "unsafe_path", "Unexpected upgrade journal entry; administrator review required.")
+            host.check_control_directory(check_path(operation, "directory"))
+            intent = check_path(operation / "intent.json", "file")
+            require(intent.exists(), "tools_upgrade_pending", "An upgrade journal has no intent; administrator review required.")
+            journal = read_json(intent)
+            require(isinstance(journal, dict) and journal.get("phase") == "complete",
+                    "tools_upgrade_pending", "Complete the pending tool upgrade before pruning journals.")
+            require(journal.get("schema") == 1 and journal.get("operation_id") == operation.name
+                    and isinstance(journal.get("previous_tools"), dict)
+                    and all(isinstance(item, str) and re.fullmatch(r"[a-f0-9]{64}", item)
+                            for item in (journal.get("bundle_sha256"), journal["previous_tools"].get("bundle_sha256"))),
+                    "invalid_tools", "Invalid completed upgrade journal; administrator review required.")
+            for path in operation.rglob("*"):
+                check_path(path, "directory" if path.is_dir() else "file")
+                if path.is_dir():
+                    host.check_control_directory(path)
+                else:
+                    require(path.stat().st_nlink == 1, "unsafe_path", "Upgrade journal files must not be hardlinked.")
+            if journal["bundle_sha256"] != active_digest:
+                obsolete.append((operation, journal))
+    return obsolete
+
+
+def _prune_bundles(host) -> dict:
     """Run only in the selected bundle with the caller's inherited host lock."""
     require(host.host_lock_fd is not None, "tools_lock_required", "Tool pruning requires the host lock.")
     registry = host.read_registry()
@@ -169,23 +220,50 @@ def _prune_bundles(host) -> list[str]:
     require(pointer.is_symlink() and os.readlink(pointer) == "tools/" + active.name,
             "tools_pointer_conflict", "The selected tool pointer differs from the registry.")
     obsolete = _obsolete_bundles(host, active.name)
-    removed = []
+    journals = _obsolete_upgrade_journals(host, active.name)
+    retired = set(_retired_bundles(host))
+    for _, journal in journals:
+        retired.update((journal["bundle_sha256"], journal["previous_tools"]["bundle_sha256"]))
+    retired.discard(active.name)
+    if journals:
+        # Durable rejection history precedes every deletion; retries can repeat it.
+        payload = json.dumps({"schema": 1, "digests": sorted(retired)}, sort_keys=True) + "\n"
+        require(len(payload.encode("utf-8")) <= MAX_JSON, "invalid_retired_tools",
+                "The retired tool ledger exceeds its size limit; administrator review required.")
+        ledger = host.paths.p(HOST_PATHS["retired_tools"])
+        if not host.owned_write(ledger, payload, mode=0o600):
+            # A prior process may have renamed these same bytes before dying
+            # during the directory sync. Finish that barrier before deletion.
+            descriptor = os.open(ledger.parent, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+    removed = {"removed_bundles": [], "removed_upgrade_journals": []}
     for bundle in obsolete:
         shutil.rmtree(bundle)
-        removed.append(bundle.name)
+        removed["removed_bundles"].append(bundle.name)
+    for operation, _ in journals:
+        shutil.rmtree(operation)
+        removed["removed_upgrade_journals"].append(operation.name)
     return removed
 
 
-def prune_tools(host, digest: str) -> list[str]:
+def prune_tools(host, digest: str) -> dict:
     """Run selected-bundle cleanup while retaining the caller's host lock."""
     require(host.host_lock_fd is not None, "tools_lock_required", "Tool pruning requires the host lock.")
     selected = _bundle_path(host, digest)
+    # Preserve the ledger diagnostic at the caller boundary; child failures are redacted.
+    _retired_bundles(host)
     result = host.run(["/usr/bin/python3", "-I", str(selected / "lib/upgrades.py"), "prune",
                        str(host.paths.root), str(host.host_lock_fd)],
                       pass_fds=(host.host_lock_fd,), timeout=1800)
     removed = parse_json(result.stdout)
-    require(isinstance(removed, list) and all(isinstance(item, str) and re.fullmatch(r"[a-f0-9]{64}", item)
-                                            and item != digest for item in removed),
+    require(isinstance(removed, dict) and set(removed) == {"removed_bundles", "removed_upgrade_journals"}
+            and isinstance(removed["removed_bundles"], list) and isinstance(removed["removed_upgrade_journals"], list)
+            and all(isinstance(item, str) and re.fullmatch(r"[a-f0-9]{64}", item) and item != digest
+                    for item in removed["removed_bundles"])
+            and all(valid_uuid(item) for item in removed["removed_upgrade_journals"]),
             "invalid_tools", "Invalid tool pruning result.")
     return removed
 
@@ -253,7 +331,7 @@ def check_upgrade_generation(installed: dict, tools_dir: Path | None = None) -> 
     """Reject unsupported installed hosts before uploading or installing a candidate."""
     generation = installed.get("generation") if isinstance(installed, dict) else None
     require(type(generation) is int and generation >= protocol(tools_dir)["minimum_host_generation"],
-            "tools_upgrade_floor", "Upgrade to v0.16.0 or v0.16.1 tools first, then retry the tool upgrade.")
+            "tools_upgrade_floor", "The host must already run generation 9 tools before this upgrade.")
 
 
 def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
@@ -276,7 +354,7 @@ def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
                 retained_releases.append({"instance_id": instance_id, "release": manifest["version"], "schema": manifest["schema"]})
     installed = _bundle_path(host, current["bundle_sha256"])
     fresh = not installed.exists() and not registry["instances"] and not current["upgrade_operation"]
-    retired = any(journal.get("phase") == "complete" and digest in
+    retired = digest in _retired_bundles(host) or any(journal.get("phase") == "complete" and digest in
                   (journal["bundle_sha256"], journal["previous_tools"]["bundle_sha256"])
                   for journal in _upgrade_journals(host))
     require(digest == current["bundle_sha256"] or current["upgrade_operation"]
@@ -319,7 +397,9 @@ def plan_upgrade(host, tools_dir: Path) -> dict:
     plan = {"schema": 1, "host_id": registry["host_id"], "revision": registry["revision"],
             "upgrade": tools_upgrade(host, registry, tools_dir),
             "prune_bundles": ([] if _upgrade_pending(host, registry) else
-                              [path.name for path in _obsolete_bundles(host, tool_bundle(tools_dir)[2])])}
+                              [path.name for path in _obsolete_bundles(host, tool_bundle(tools_dir)[2])]),
+            "prune_upgrade_journals": ([] if _upgrade_pending(host, registry) else
+                                      [path.name for path, _ in _obsolete_upgrade_journals(host, tool_bundle(tools_dir)[2])])}
     plan["plan_token"] = _hash(plan)
     return plan
 
@@ -378,7 +458,7 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
         if current["bundle_sha256"] == digest and _bundle_path(host, digest).exists():
             _installed(host, current)
             return {"outcome": "unchanged", "bundle_sha256": digest,
-                    "removed_bundles": prune_tools(host, digest)}
+                    **prune_tools(host, digest)}
         journal_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(journal_dir, 0o700)
         journal = {"schema": 1, "operation_id": operation, "host_id": registry["host_id"],
@@ -393,7 +473,7 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
             registry["tools"]["upgrade_operation"] = None
             _save_registry(host, registry)
         return {"outcome": "unchanged", "operation_id": operation, "bundle_sha256": digest,
-                "removed_bundles": prune_tools(host, digest)}
+                **prune_tools(host, digest)}
     if not pending:
         current["upgrade_operation"] = operation
         _save_registry(host, registry)
@@ -455,7 +535,7 @@ def install_tools(host, registry: dict, tools_dir: Path, allow_upgrade: bool = F
     registry["tools"]["upgrade_operation"] = None
     _save_registry(host, registry)
     return {"outcome": "succeeded", "operation_id": operation, "bundle_sha256": digest,
-            "removed_bundles": prune_tools(host, digest)}
+            **prune_tools(host, digest)}
 
 
 def apply_upgrade(host, tools_dir: Path, plan_token: str, operation_id: str) -> dict:

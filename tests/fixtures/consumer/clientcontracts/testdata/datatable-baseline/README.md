@@ -1,5 +1,9 @@
 # Datatable pre-cutover contract baseline
 
+This is a historical capture. The current gate and publisher use
+[`current-contracts`](../current-contracts); see the [consumer guide](../../README.md).
+The descriptions below record the capture-time comparison.
+
 These artifacts were emitted by `make datatable-contracts` from a read-only
 archive of `f3cfffd71999` (the full commit and artifact hashes are in
 [provenance.json](provenance.json)). The archive retains the old datatable

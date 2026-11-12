@@ -25,11 +25,12 @@ build_info=$(mktemp -d)
 trap 'rm -rf "$build_info"' EXIT
 
 if [[ "$mode" == foreign-upgrade ]]; then
-  baseline=$(cd "$framework/tests/fixtures/deploy-acceptance" &&
-    "${GO:-go}" mod download &&
-    "${GO:-go}" list -m -f '{{.Dir}}' github.com/weiloon1234/Foundry-Go)
+  baseline_version=v0.23.2
+  baseline=$(cd "$framework" &&
+    GOWORK=off "${GO:-go}" mod download -json "github.com/weiloon1234/Foundry-Go@$baseline_version" |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["Dir"])')
   [[ -n "$baseline" && -f "$baseline/tools/deploy/protocol.json" ]] || {
-    echo 'Fixture pin did not resolve to a published deploy tools bundle' >&2; exit 1;
+    echo 'Baseline tag did not resolve to a published deploy tools bundle' >&2; exit 1;
   }
   flags+=(--tools-root "$baseline/tools/deploy")
 fi

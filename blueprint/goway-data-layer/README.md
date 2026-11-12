@@ -41,7 +41,7 @@ intermediate coexistence notes below are historical, not supported alternatives.
 | --- | --- | --- |
 | 0 | Review design and decisions | Done; approved planning record |
 | 1 | Scratch prototype and go/no-go gate | Done; historical evidence below |
-| 2 | Branch, permanent consumer, catalogue, emitter/release audit, synthetic harness | In progress. Core and permanent fixture ported at `686c6f2`; guardrails are this increment. |
+| 2 | Branch, permanent consumer, catalogue, emitter/release audit, synthetic harness | Complete. Branch guardrails, permanent fixture, catalogue, emitter/release audit and synthetic harness delivered; see master G02. |
 | 3.0 | Column footprint: flatten column types (R9), then measure receiver form and codec sharing; method-set trims only with approval | Done. 70-model gate: functions and bytes pass; compiler RSS 5.14 GB median against a 5 GB target, accepted as a recorded miss (2026-10-23) |
 | 3.1a | Declarations/codecs: JSON, interval, natural keys, binary ownership and IContains | Implemented; local acceptance passes (segmented fixes); PostgreSQL sources compile/vet, execution belongs to the lead |
 | 3.1b | Writes, encrypted fields and password hashes | Implemented; local acceptance passes in segments; live PostgreSQL belongs to the lead |
@@ -115,7 +115,7 @@ intermediate coexistence notes below are historical, not supported alternatives.
 | 9 D loaders | Root direct, joined and aggregate relation tests; editor probes | Done pending the lead’s commit; LoadFrom/LoadMissingFrom preserve query-owned budgets and all existing assertions. |
 | 9 | Migrate consumer fixtures and compiler catalogue | COMPLETE. 587 ported, 445 unaffected, zero pending; frozen oracles retained. Generator/API retirement is complete in Stage 8. |
 | 10 | Guides, examples and editor coverage | Done for the integrated guide/editor coverage; compiled examples, excerpt guards and relocated editor anchors. Current acceptance is recorded in batch 10 evidence. |
-| 11 | Full acceptance and whole-app performance evidence | Measurement runbook and tooling prepared. Final paired runtime, Stage 6 timing, footprint and whole-app gates remain pending quiet-host execution. |
+| 11 | Full acceptance and whole-app performance evidence | Complete. Final paired measurements are recorded in master G11 and the [Stage 11 RC report](../../docs/evidence/goway-stage11-measurements.md#final-release-candidate-30578f82). Archive footprint and compiler RSS miss their goals; the strict ChainBuild no-slower target remains unestablished. |
 | 12 | Consumer application migration, separately authorized | Later |
 
 Stage 1d used Go 1.27.1 on darwin/arm64. The matched four-model package emitted
@@ -555,7 +555,7 @@ name contains `query`, `path` or `union`.
 | Emitter source | Current output | Disposition / replacement | Contract preservation |
 | --- | --- | --- | --- |
 | [scaffold_developer.go](../../internal/generate/scaffold_developer.go) | `ModelScaffold` / `renderSlotModel` emit `//foundry:model` structs and slot instructions | Replace with one-time `orm.Define` declarations in existing `foundry make`, Stage 8; migrate scaffold consumers Stage 9 | Preserve DTO/enum scaffolding; model scaffolds do not directly emit TS/OpenAPI/manifest output |
-| [field_documentation.go](../../internal/generate/field_documentation.go) | Generated field behavior comments for ownership, encryption, timestamps, soft deletion, accessors and mutator input types | Replace model notices with handwritten model/field and accessor/mutator comments, typed declaration symbol docs and `database/orm` package recipes (R7); retire notices Stage 8, editor/docs coverage Stage 10 | Preserve shared non-model documentation paths and behavior facts; comments are not a separate wire schema |
+| `internal/generate/field_documentation.go` (retired in v0.24.0) | Generated field behavior comments for ownership, encryption, timestamps, soft deletion, accessors and mutator input types | Replace model notices with handwritten model/field and accessor/mutator comments, typed declaration symbol docs and `database/orm` package recipes (R7); retire notices Stage 8, editor/docs coverage Stage 10 | Preserve shared non-model documentation paths and behavior facts; comments are not a separate wire schema |
 | [emit.go](../../internal/generate/emit.go), model body | Optional-valued draft, getters/setters/unset/clear, formatting; dispatches fields, query, hooks, changes and audit | Retire model branch; assignments Stage 3 and write state Stage 5 | Redacted diagnostics and omitted/null/value behavior remain |
 | `internal/generate/emit_model_query.go` (retired in Stage 8c) | Codecs, field metadata, hydration, query/ref wrappers, typed Find/RequireFind and fluent forwarding | `Define`, `Table[M,K]`, thin query and non-generic metadata, Stage 3 | `FoundryModel` is an integration adapter; replace its consumers in Stage 7 |
 | `internal/generate/emit_model_fields.go` (retired in Stage 8c) | Ordinary/aliased/nullable field sets, capability operators, JSON/input field wrappers and hover notes | Column constructors Stage 3, scope binding Stage 6b, paths Stage 6d | Calls shared JSON-path emitter; do not delete that shared owner |
@@ -1969,9 +1969,9 @@ mutators and lifecycle outcomes; advanced queries, aggregates and row compositio
 identity, extension adapters, authentication, pagination, validation and scaffolds.
 Guide and excerpt guards tie examples to compiled consumers. Editor probes retain
 completion, hover and definition coverage with handwritten field comments and
-separate example anchors. The model scaffolding/tooling guides no longer recommend
-`--field-docs`; retiring that generator flag remains Stage 8c. Cross-cutting legacy
-references outside these guide sets remain listed in the lane reports for retirement.
+separate example anchors. At this checkpoint, the model scaffolding/tooling guides stopped recommending
+managed-notice cleanup; flag retirement remained with Stage 8c. The cleanup flag
+is removed in v0.24.0. The lane reports retain the other historical retirement findings.
 
 Bounded per-model adjustments now return `database.NotFound` for a missing or hidden
 key, and `orm.ErrBoundExceeded` for a visible row rejected by the assignment bound.

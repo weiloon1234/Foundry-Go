@@ -189,7 +189,8 @@ server-only rules remain incomplete on the client even when `issues` is empty.
 No implicit transforms, parsing into floating point, mutation retries or state
 management are added.
 
-Manifest **version 7** carries presentation metadata. Regenerate saved manifests,
+Presentation metadata was introduced in manifest **version 7**. The current version
+is owned by [`contract/manifest/document.go`](../../contract/manifest/document.go). Regenerate saved manifests,
 OpenAPI and TypeScript together using the same framework/tool revision. Older
 formats are rejected explicitly. Existing direct client calls remain available.
 The [form controller continuation](client-forms.md) implements state and optional
@@ -198,7 +199,7 @@ frontend adapters separately; consult the master for its acceptance status.
 ## Starter adoption
 
 After a reviewed framework revision is published, pin that same revision for the
-runtime and generator. Regenerate Go output, manifest version 7, OpenAPI and the
+runtime and generator. Regenerate Go output, the current manifest, OpenAPI and the
 TypeScript client together, then rebuild the existing ESM package. A package that
 exports the generated module directly also exports these new descriptor APIs.
 Review explicit schema-type imports if a name collides with a new SDK declaration.

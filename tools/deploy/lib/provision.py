@@ -487,9 +487,9 @@ def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topol
                 if not unchanged:
                     entry["provisioning"]["state"] = "ready"
                     _journal(host, registry, entry)
-                removed_bundles = upgrades.prune_tools(host, registry["tools"]["bundle_sha256"])
+                pruned_tools = upgrades.prune_tools(host, registry["tools"]["bundle_sha256"])
                 return {"ok": True, "unchanged": unchanged, "host_id": registry["host_id"],
-                        "instance": entry["name"], "provisioning": "ready", "removed_bundles": removed_bundles}
+                        "instance": entry["name"], "provisioning": "ready", **pruned_tools}
             tools = upgrades.install_tools(host, registry, tools_dir)
             registry["projects"].setdefault(project["id"], {"slug": project["slug"], "created_at": now()})
             _journal(host, registry, entry)
@@ -516,7 +516,8 @@ def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topol
                 entry["provisioning"]["state"] = "ready"
                 _journal(host, registry, entry)
                 return {"ok": True, "host_id": registry["host_id"], "instance": entry["name"],
-                        "provisioning": "ready", "removed_bundles": tools["removed_bundles"]}
+                        "provisioning": "ready", "removed_bundles": tools["removed_bundles"],
+                        "removed_upgrade_journals": tools["removed_upgrade_journals"]}
             except (DeployError, OSError, ValueError):
                 entry["provisioning"]["state"] = "failed"
                 _journal(host, registry, entry)

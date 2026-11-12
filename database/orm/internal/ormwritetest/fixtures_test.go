@@ -18,7 +18,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/decimal"
 	"github.com/weiloon1234/Foundry-Go/encryption"
 	"github.com/weiloon1234/Foundry-Go/model"
-	"github.com/weiloon1234/Foundry-Go/temporal"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -47,25 +46,6 @@ func records() recordTable {
 		t := orm.TableOf(b, &r.ID)
 		return recordTable{Table: t, ID: t.Key(), Name: orm.TextOf(b, &r.Name), Note: orm.NullableTextOf(b, &r.Note), Amount: orm.NumberOf(b, &r.Amount)}
 	})
-}
-
-type timed struct {
-	ID        int
-	CreatedAt temporal.DateTime
-	UpdatedAt temporal.DateTime
-	DeletedAt value.Nullable[temporal.DateTime]
-}
-type timedTable struct {
-	orm.Table[timed, int]
-	CreatedAt orm.CreatedAt[timed, temporal.DateTime]
-	UpdatedAt orm.UpdatedAt[timed, temporal.DateTime]
-	DeletedAt orm.SoftDelete[timed, temporal.DateTime]
-}
-
-func timedRecords(opts ...orm.Option) timedTable {
-	return orm.Define("timed", func(b orm.Builder[timed], m *timed) timedTable {
-		return timedTable{orm.TableOf(b, &m.ID), orm.CreatedAtOf(b, &m.CreatedAt), orm.UpdatedAtOf(b, &m.UpdatedAt), orm.SoftDeleteOf(b, &m.DeletedAt)}
-	}, opts...)
 }
 
 type testConnector struct {

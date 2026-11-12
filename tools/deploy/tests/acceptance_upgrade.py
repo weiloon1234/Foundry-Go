@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lead-only upgrade from the previous published tools on the disposable host."""
+"""Upgrade from the published generation-9 baseline tools on the disposable host."""
 import argparse
 import json
 from pathlib import Path
@@ -45,11 +45,17 @@ def upgrade(archive, old_tools):
     prove_running(host, entry)
     current = request(project, profile)
     plan = invoke('tools-plan', current, tools=TOOLS)
-    assert plan['upgrade']['from_digest'] == baseline['tools']['bundle_sha256']
-    assert plan['upgrade']['generation'] == protocol(TOOLS)['generation']
-    assert baseline['tools']['bundle_sha256'] in plan['prune_bundles']
+    changed = baseline['tools']['bundle_sha256'] != tool_bundle(TOOLS)[2]
+    if changed:
+        assert plan['upgrade']['from_digest'] == baseline['tools']['bundle_sha256']
+        assert plan['upgrade']['generation'] == protocol(TOOLS)['generation']
+        assert baseline['tools']['bundle_sha256'] in plan['prune_bundles']
+    else:
+        assert plan['upgrade'] is None and plan['prune_bundles'] == []
     applied = invoke('tools-apply', {**current, 'plan_token': plan['plan_token']}, tools=TOOLS)
+    assert applied['outcome'] == ('succeeded' if changed else 'unchanged')
     assert applied['removed_bundles'] == plan['prune_bundles']
+    assert applied['removed_upgrade_journals'] == plan['prune_upgrade_journals']
     installed = host.read_registry()
     assert installed['tools']['bundle_sha256'] == tool_bundle(TOOLS)[2]
     assert installed['instances'][profile['instance_id']]['client_generation'] == registration
@@ -58,7 +64,10 @@ def upgrade(archive, old_tools):
     repeated = invoke('tools-plan', current, tools=TOOLS)
     assert repeated['upgrade'] is None and repeated['prune_bundles'] == []
     assert tool_bundle(active)[2] == tool_bundle(TOOLS)[2]
-    assert all(not (active / name).exists() for name in plan['upgrade']['removed_paths'])
+    if changed:
+        assert all(not (active / name).exists() for name in plan['upgrade']['removed_paths'])
+    else:
+        assert installed == baseline
     for unit in instance_units(entry).values():
         assert 'ExecStartPre=' not in Path('/etc/systemd/system', unit).read_text()
         loaded = host.run(['systemctl', 'show', unit, '--property=ExecStartPre,NeedDaemonReload', '--all']).stdout

@@ -74,10 +74,11 @@ Generated native codecs also enforce the shared maximum bounds for direct
 OpenAPI uses `oneOf`, required literal discriminators and explicit mappings to
 derived tagged components. TypeScript emits a closed discriminated union, preserves
 wide numbers and exact optional properties, and validates both requests and responses.
-Tagged unions were introduced in manifest format **2**. Current format **3** also
-records forms and request preparation; older readers reject newer formats and
-format-2 readers require regeneration of older manifests. Existing wire routes need
-not change merely because their generated manifest is updated.
+Tagged unions were introduced in manifest format **2**. The current version is owned
+by [`contract/manifest/document.go`](../../contract/manifest/document.go).
+Normalization accepts only that version. Regenerate manifests, OpenAPI and TypeScript
+together with the matching framework/tool revision. Existing wire routes need not
+change merely because their generated manifest is updated.
 
 A new variant is a compatibility event for exhaustive clients. Release consumers
 that understand the new tag before producing it for those clients, or version the

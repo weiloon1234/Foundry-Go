@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"strings"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/auth/session"
@@ -172,5 +171,3 @@ func uuids(ids []model.ID[sessionstore.Entry]) []string {
 	}
 	return result
 }
-
-func joinSQL(parts ...string) string { return strings.Join(parts, " ") }

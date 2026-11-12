@@ -1078,12 +1078,6 @@ def configure(host: Host, registry: dict, entry: dict) -> None:
         host.journal(registry, entry)
 
 
-def _wal_pattern(cluster):
-    # Accept only PostgreSQL WAL, timeline and backup-history filenames.
-    return (r"(pg_wal/|" + cluster["data_path"] + r"/pg_wal/)"
-            r"([0-9A-F]{24}|[0-9A-F]{8}[.]history|[0-9A-F]{24}[.][0-9A-F]{8}[.]backup)")
-
-
 def _schedule_path(host, operation):
     require(valid_uuid(operation), "backup_id_invalid", "Select a scheduled operation UUID.")
     return host.paths.p("/etc/foundry/backup/operations/" + operation + ".json")

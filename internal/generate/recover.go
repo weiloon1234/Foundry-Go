@@ -158,9 +158,6 @@ func recoverLocked(ctx context.Context, dir string) (Recovery, error) {
 		current[name] = file
 		allAfter = allAfter && entry.After.matches(file)
 	}
-	if err := validateRecoveryFieldDocumentation(dir, log, current); err != nil {
-		return result, err
-	}
 	if err := validateRecoveryDistribution(dir, log); err != nil {
 		return result, err
 	}
@@ -233,12 +230,23 @@ func recoverLocked(ctx context.Context, dir string) (Recovery, error) {
 	return result, discardStaging(dir)
 }
 
+// RetiredJournalError identifies a source-edit journal that this generator cannot recover.
+// Its staging must be reconciled with the matching older generator before retrying.
+type RetiredJournalError struct{ Version int }
+
+func (e *RetiredJournalError) Error() string {
+	return fmt.Sprintf("generation journal version %d uses retired field documentation recovery; staging retained; reconcile with the generator that created it before retrying", e.Version)
+}
+
 func decodeJournal(data []byte) (journal, error) {
 	var log journal
 	if err := decodePublicationJSON(data, &log); err != nil {
 		return log, fmt.Errorf("invalid generation journal: %w", err)
 	}
-	if (log.Version != 2 && log.Version != 4 && log.Version != 5 && log.Version != 6 && log.Version != 7) || len(log.Files) == 0 {
+	if log.Version == 4 || len(log.FieldNotes) != 0 {
+		return log, &RetiredJournalError{Version: log.Version}
+	}
+	if (log.Version != 2 && log.Version != 5 && log.Version != 6 && log.Version != 7) || len(log.Files) == 0 {
 		return log, fmt.Errorf("unsupported generation journal")
 	}
 	if (log.Version == 6) != (log.Distribution != nil) || (log.Version != 6 && len(log.NewDirs) != 0) {
@@ -254,18 +262,6 @@ func decodeJournal(data []byte) (journal, error) {
 		if entry, ok := log.Files[manifestName]; !ok || !entry.After.Exists {
 			return log, fmt.Errorf("plugin journal requires its ownership manifest")
 		}
-	}
-	notes := make(map[string]bool)
-	if (log.Version == 4) != (len(log.FieldNotes) > 0) {
-		return log, fmt.Errorf("field documentation requires a version 4 journal")
-	}
-	for _, name := range log.FieldNotes {
-		entry, exists := log.Files[name]
-		if !exists || notes[name] || !fieldDocumentationName(filepath.Base(name)) ||
-			!entry.Before.Exists || !entry.After.Exists || entry.Before.Mode != entry.After.Mode {
-			return log, fmt.Errorf("invalid field documentation journal entry")
-		}
-		notes[name] = true
 	}
 	dirs := make(map[string]bool)
 	for _, dir := range log.Guards {
@@ -290,7 +286,7 @@ func decodeJournal(data []byte) (journal, error) {
 	}
 	for name, entry := range log.Files {
 		base := filepath.Base(name)
-		validTarget := base == manifestName || outputName.MatchString(base) || notes[name]
+		validTarget := base == manifestName || outputName.MatchString(base)
 		if log.Version == 5 {
 			validTarget = len(log.Guards) == 1 && log.Guards[0] == "." && name == base && (base == manifestName || artifactName.MatchString(base))
 		}
@@ -327,10 +323,6 @@ func prepareStaging(dir string, plan writePlan) error {
 	if plan.scaffold {
 		log.Version = 7
 	}
-	if len(plan.fieldNotes) > 0 {
-		log.Version = 4
-		log.FieldNotes = sortedNames(plan.fieldNotes)
-	}
 	if plan.artifacts {
 		log.Version = 5
 	}
@@ -360,11 +352,6 @@ func prepareStaging(dir string, plan writePlan) error {
 			}
 			if err := writeSynced(filepath.Join(lock, stageName("new", name)), data, mode); err != nil {
 				return err
-			}
-			if plan.fieldNotes[name] {
-				if err := writeSynced(filepath.Join(lock, fieldDocumentationProof(name)), data, mode); err != nil {
-					return err
-				}
 			}
 			entry.After = state(oldFile{true, data, mode})
 		}

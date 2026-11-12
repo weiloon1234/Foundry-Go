@@ -37,7 +37,7 @@ def bootstrap_without_secrets(host, project, profile, *, backup_stage=None, cert
                               (provision.redis_acl, ("prepare", "provision"))):
             for name in names:
                 stack.enter_context(patch.object(module, name))
-        stack.enter_context(patch.object(upgrades, "install_tools", return_value={"removed_bundles": []}))
+        stack.enter_context(patch.object(upgrades, "install_tools", return_value={"removed_bundles": [], "removed_upgrade_journals": []}))
         stack.enter_context(patch.object(backup, "configure", side_effect=backup_stage))
         stack.enter_context(patch.object(provision, "_install_site",
             side_effect=lambda host, registry, entry, *args, **kwargs: certificate_stage(host, registry, entry)

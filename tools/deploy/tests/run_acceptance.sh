@@ -18,8 +18,8 @@ DOCKER_CONFIG and DOCKER_HOST are inherited. No host ports are published.
 Public reports must show live roles/readiness; Linux may withhold cross-UID
 executable identity, which must be reported as unverified. Root reports must
 prove every running role matches its selected release.
---upgrade uses the same deploy-acceptance archive for the previous published tools
-and the candidate. Supply the previous release's Go module-cache bundle through
+--upgrade uses the same deploy-acceptance archive for the published generation-9 baseline tools
+and the candidate. Supply the baseline tag's Go module-cache bundle through
 --tools-root. It bootstraps and deploys with that bundle, then upgrades through
 tools-plan/tools-apply and proves the candidate deployment and installed units.
 Optional: ACCEPTANCE_LOG_DIR, ACCEPTANCE_SCHEDULE_MESSAGE (see acceptance_roles.py),
@@ -125,7 +125,7 @@ trap 'exit 143' TERM
 
 old_tools_mount=()
 if ((upgrade)); then
-  [[ -n "$old_tools" && -f "$old_tools/protocol.json" ]] || { echo '--upgrade requires --tools-root from the previous published release' >&2; exit 2; }
+  [[ -n "$old_tools" && -f "$old_tools/protocol.json" ]] || { echo '--upgrade requires --tools-root from the published generation-9 baseline' >&2; exit 2; }
   old_tools=$(cd "$old_tools" && pwd -P)
   [[ "$old_tools" =~ /github.com/weiloon1234/!foundry-!go@v[0-9]+\.[0-9]+\.[0-9]+/tools/deploy$ ]] || { echo 'Expected published release module-cache tools' >&2; exit 2; }
   old_tools_mount=(--mount "type=bind,source=$old_tools,target=/verification/old-deploy,readonly")

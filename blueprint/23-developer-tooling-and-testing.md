@@ -35,7 +35,8 @@ Database inspection includes typed query-plan helpers corresponding to Rust's `e
 
 Use production application assembly in test harnesses. Fakes replace explicit external capabilities; they must not bypass authorization or transaction semantics accidentally. `ActingAs`-style helpers skip credential issuance but still run the real guard/policy restrictions relevant to the test.
 
-Factories use generated mutation APIs and model hooks. Parallel tests get distinct application state, cache namespaces and database identities/records. A test database name does not authorize `DROP`, `TRUNCATE`, or reset helpers.
+`factory.Define` binds an ORM table and a typed assignment builder. Factories use
+the ordinary ORM write lifecycle and model hooks. Parallel tests get distinct application state, cache namespaces and database identities/records. A test database name does not authorize `DROP`, `TRUNCATE`, or reset helpers.
 
 CLI generation and doctor must not read/log secrets unnecessarily or silently install tools. Missing prerequisites produce actionable diagnostics and nonzero status where checks are required.
 
@@ -48,7 +49,7 @@ Test scaffold collisions/path traversal, fresh-project generation, installed-ver
 The [tooling guide](../docs/guides/developer-tooling-and-testing.md) and
 [query-plan guide](../docs/guides/query-plans.md) document the delivered APIs.
 Typed command/bootstrap and pure inspection, create-only artifact scaffolds,
-offline doctor, owned test clients/fakes, generated-model factories, typed
+offline doctor, owned test clients/fakes, ORM table factories, typed
 PostgreSQL plans, and the `devserver` development supervision loop (`devserver.Run`)
 passed native verification and independent consumer review.
 All implementation, test sources and documentation preceded compilation/tests.

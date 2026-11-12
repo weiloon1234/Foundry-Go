@@ -10,7 +10,7 @@ Rust references: `src/database/runtime.rs`, `lifecycle.rs`, `scaffold.rs`, `src/
 
 `database` owns Foundry execution, transaction, result, and error contracts. The PostgreSQL driver adapts an approved upstream client; Foundry consumers do not need driver-specific row types for ordinary operations. Pool and transaction implement the same execution capability used by the query layer. Driver-specific operations are explicit escape hatches.
 
-The implementation uses standard `database/sql` pooling and connector contracts underneath Foundry-owned database, row, and transaction APIs. The delivered `database/postgres` adapter uses [pgx v5.11.0](https://github.com/jackc/pgx/releases/tag/v5.11.0), verified as the latest upstream release on 2026-09-11 and installed after explicit user approval. Its `stdlib` adapter supports Go 1.27's direct PostgreSQL column scanning while preserving standard scalar and `sql.Scanner` behavior. Root `go.mod` owns the installed version.
+The implementation uses standard `database/sql` pooling and connector contracts underneath Foundry-owned database, row, and transaction APIs. The delivered `database/postgres` adapter uses pgx at the version selected by root [go.mod](../go.mod). Its `stdlib` adapter supports Go 1.27's direct PostgreSQL column scanning while preserving standard scalar and `sql.Scanner` behavior. Root `go.mod` owns the installed version.
 
 Concrete runtime decisions:
 

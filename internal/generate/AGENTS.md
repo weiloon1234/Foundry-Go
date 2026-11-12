@@ -30,8 +30,8 @@ Read the closest discovery/emitter/tests and the corresponding runtime descripto
 - Preserve ownership manifests, checksums, locking, guarded atomic publication and
   recovery behavior. Never overwrite unknown/user-owned files or infer permission
   from a filename alone. Keep declaration/source and generated output lifetimes distinct.
-- Remove obsolete managed model notes through source-edit publication, preserving
-  handwritten comments and recovery for pre-upgrade journals. Follow the
+- Generation leaves handwritten model comments unchanged. Reject retired source-edit
+  journals without changing their staging. Follow the
   [fixture evidence rules](../../tests/fixtures/AGENTS.md) for frozen legacy outputs.
   Persistence uses handwritten ORM declarations; transport generation remains independent.
 

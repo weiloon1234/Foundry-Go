@@ -13,7 +13,6 @@ import (
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go/logging"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
-	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -235,12 +234,6 @@ func failureIf(op storage.Operation, state storage.Outcome, err error) error {
 		return nil
 	}
 	return failure(op, state, err)
-}
-func joinClose(op storage.Operation, state storage.Outcome, primary, cleanup error) error {
-	if primary == nil && cleanup == nil {
-		return nil
-	}
-	return failure(op, state, safeerror.Join("operation failed", primary, cleanup))
 }
 
 var _ storage.Backend = (*Backend)(nil)

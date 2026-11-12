@@ -336,8 +336,9 @@ trace export, not authentication. Keep `httpclient.PropagateTrace` disabled for
 destinations that should not receive trace metadata; enabled propagation may send
 vendor state. Logs, error reports and recent entries omit that vendor state.
 
-Queued propagation is a separate opt-in transport upgrade. Deploy compatible
-workers/outbox/workflow readers first and follow [job trace rollout](job-trace-rollout.md).
+Queued trace propagation is optional; all captures use the current envelope format.
+Follow the [envelope activation requirements](job-trace-rollout.md): stop old writers
+and convert retained older formats before activating current readers.
 Retain old application payload handlers while old work remains. Do not regenerate
 an ambiguous outbox operation under the same ID with different captured trace or
 payload bytes; reconcile and retry the original captured operation.

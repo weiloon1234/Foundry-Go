@@ -325,7 +325,8 @@ in the current database. Unknown keys are reported with per-page counts and
 key samples by `InspectStorage`, never deleted, even when disks or databases
 share a namespace. Retired objects and stale-writer tombstones also wait the
 configured attachment `CleanupGrace` before physical deletion.
-The [attachment recovery contract](attachments.md#publication-and-recovery) describes grace periods, retained files, and legacy variant keys. This does not
+The [attachment recovery contract](attachments.md#publication-and-recovery) describes grace periods and retained files. Former variant keys are invalid;
+validation accepts only the current key derived from the variant ID. This does not
 add conditional delete to R2 or change the requirements of `MoveTo`.
 
 R2's upload-generation response header is also not a retained-version selector:

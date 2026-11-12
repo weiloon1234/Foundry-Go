@@ -171,14 +171,14 @@ func (User) MutateEmail(v string)(string,error) { return v,nil }
 			t.Fatalf("%s lost nullable field help: %q", symbol, docs[symbol])
 		}
 	}
-	for _, managed := range []bool{true, false, true} {
-		if _, err := Generate(t.Context(), Options{Dir: dir, FieldDocumentation: managed}); err != nil {
+	for range 2 {
+		if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
 			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(first, generatedSnapshot(t, dir)) {
-			t.Fatal("managed source notes changed original generated help")
+			t.Fatal("repeat generation changed original generated help")
 		}
-		if _, err := Generate(t.Context(), Options{Dir: dir, Check: true, FieldDocumentation: managed}); err != nil {
+		if _, err := Generate(t.Context(), Options{Dir: dir, Check: true}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -5,16 +5,34 @@ This policy accompanies the first complete Foundry-Go implementation and its
 reference; Go source names and diagnostics schemas are native contracts, not
 byte-for-byte Rust API compatibility. Public releases follow the rollout rules below.
 
-## Maintenance commands and deploy tool generation 8
+## CLI retirement — v0.24.0, 2026-11-12
 
-Generation-8 tools package `config/deploy-runtime.json` with each release and
-include its checksum in the manifest. Releases built by older tools without the
-descriptor still verify. `ACTION=shell` opens an interactive SSH session in the
+The `--field-docs` option is removed from `foundry generate`
+and scaffold commands. Remove that option from scripts and Makefile recipes.
+Generation leaves handwritten comments unchanged. Retired source-edit journals
+fail with a typed `generate.RetiredJournalError` and retain staging; reconcile them
+with the generator that created them before upgrading.
+
+## Maintenance commands and deploy tools
+
+The server writes `config/deploy-runtime.json` into each unpacked release.
+This server-owned runtime descriptor is excluded from the client archive and its
+checksummed manifest. Release verification permits the server-written descriptor.
+`ACTION=shell` opens an interactive SSH session in the
 current release with the recorded host key and saved personal connection settings.
 
 Before first use, run `ACTION=tools-plan`, then `ACTION=tools-apply` with the
-reviewed plan to install generation 8. Protocol 2.0, minimum host generation 6,
-and minimum client generation 1 are unchanged. Build and deploy on Foundry-Go
+reviewed plan to install the current generation declared in
+[`tools/deploy/protocol.json`](../tools/deploy/protocol.json). The minimum host generation
+is 9; protocol 2.0 and minimum client generation 1 are unchanged. Hosts below the
+floor receive `tools_upgrade_floor` before candidate staging or installation.
+Completed upgrade journals for other bundles are pruned after their target and
+previous digests are atomically recorded in the root-owned retired-bundle ledger.
+Retired bundles remain forbidden, and active-bundle journals preserve operation replay.
+A missing ledger is empty; invalid ledger content fails closed with
+`invalid_retired_tools`. See [tool upgrades](guides/deployment.md#tool-protocol-and-upgrades).
+
+Build and deploy on Foundry-Go
 v0.22.0 or later to use bare server-side artisan commands and the live
 `maintenance:status --format json` probe. Applications must register
 `application.MaintenanceCommands()` and configure a shared `maintenance.store`.
@@ -557,7 +575,7 @@ and additive; see [assets and SPA routing](guides/http-assets.md).
 | Redis cache entries and rate-limit windows | Tagged cache payloads store their snapshot fingerprint and fixed rate-limit windows start at a per-key phase. Entries written by an earlier release are misses that the next write replaces; for an error-free rolling upgrade shared by old and new processes, deploy the new release under a new cache/rate-limit namespace. |
 | Redis job queue storage layout | Layout 3 only; unsupported layouts fail closed without writes. Embedded envelopes, terminal workflow members in the independent finished index, and groups without string catch/finally fields are invalid. Quarantine and current sparse-field defaults remain. See [storage layout](guides/jobs-operations.md#redis-queue-storage-layout). |
 | Job layout migration API | v0.16.0 removes `jobs.LayoutMigrator`, `jobs.ErrLegacyLayout`, `jobs.Dispatcher.MigrateLayout`, `redis.JobBackend.JobMigrateLayout`, and `jobs migrate-layout`. Remove consumer routing and calls. There are no aliases or replacement migration APIs. |
-| Queue storage inspection | Unreleased removes the remaining read-only Redis queue layout inspection API and its result types. Remove custom consumer calls. Runtime layout-3 enforcement is unchanged. |
+| Queue storage inspection | v0.17.0 removes the remaining read-only Redis queue layout inspection API and its result types. Remove custom consumer calls. Runtime layout-3 enforcement is unchanged. |
 | Deployment queue admission inventory | v0.16.0 removes `deploy:jobs-inspect`, `application.Builder.JobQueues`, `InspectJobQueues`, `WriteJobQueues`, `ProbeJobQueues`, and `JobQueuesCommand`; `JobQueueReport`, `JobQueueInventory`, `JobConnectionInventory`, `JobInventoryNamespace`, `JobQueueCoverage`, `JobQueueBlockerCode`, `JobQueueBlocker`, and their constants, including `JobQueueInventorySchema`, `JobQueueBlockerLayout1RequiresUpgrade`, and all `MaxJobQueue*` inventory limits. Remove inventory consumers. `application.DeployJobCommands`, `JobCommand`, and `RunJobCommand` are also removed. Register `jobs/command.Declaration` through the normal application CLI and resolve `services.Jobs`. Deploy-tool generation 6 is required because generation 5 calls the removed command. |
 | Infrastructure queue inventory API | v0.16.0 removes `infrastructure.ConfigureJobs`, `Plan.Jobs`, `Plan.RedisStorageID`, `JobConnectionLayoutResult`, `redis.Config.StorageID`, and `redis.JobPolicyID`, which served deployment admission. Ordinary `Plan.RedisKeys` ACL inventory and `redis.JobKeys` exact-key enumeration are unchanged. |
 | Outbox records | Preserve captured bytes, IDs and destinations across retries. An ambiguous publish is reconciled using the same captured pending operation. |

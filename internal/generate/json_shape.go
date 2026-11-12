@@ -46,42 +46,6 @@ func jsonWrapper(t types.Type, name string) (types.Type, bool) {
 	return nil, false
 }
 
-func jsonPayload(t types.Type) types.Type {
-	// Optional describes property presence. Once selected, the payload is T.
-	for {
-		if _, pointer := types.Unalias(t).(*types.Pointer); pointer {
-			return t
-		}
-		inner, ok := jsonWrapper(t, "Optional")
-		if !ok {
-			return t
-		}
-		t = inner
-	}
-}
-
-func jsonBase(t types.Type) types.Type {
-	for {
-		inner, ok := jsonInner(t)
-		if !ok {
-			return types.Unalias(t)
-		}
-		t = inner
-	}
-}
-
-func jsonInner(t types.Type) (types.Type, bool) {
-	if pointer, ok := types.Unalias(t).(*types.Pointer); ok {
-		return pointer.Elem(), true
-	}
-	for _, name := range []string{"Nullable", "Optional", "JSON"} {
-		if inner, ok := jsonWrapper(t, name); ok {
-			return inner, true
-		}
-	}
-	return t, false
-}
-
 func customJSONShape(t types.Type) bool {
 	for _, candidate := range []types.Type{t, types.NewPointer(t)} {
 		methods := types.NewMethodSet(candidate)

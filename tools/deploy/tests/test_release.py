@@ -56,7 +56,7 @@ class ProcessHost(Host):
             raise KeyboardInterrupt()
         if self.fail and self.fail in args:
             raise DeployError("injected_failure", "Synthetic failure")
-        output = "[]" if len(args) > 3 and args[3] == "prune" else ""
+        output = '{"removed_bundles":[],"removed_upgrade_journals":[]}' if len(args) > 3 and args[3] == "prune" else ""
         if args[:2] == ["systemctl", "is-enabled"]:
             enabled = args[2] in self.enabled_roles
             return subprocess.CompletedProcess(args, 0 if enabled else 1, "enabled\n" if enabled else "disabled\n", "")
