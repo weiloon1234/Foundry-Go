@@ -70,6 +70,24 @@ func TestNamespaceCleanup(t *testing.T) {
 				t.Fatal(err)
 			}
 			schema := string(data)
+			if test.retained {
+				// The child keeps this schema on purpose; the parent owns it once the
+				// retention is checked. Its cascade also drops the outside_* fixtures.
+				t.Cleanup(func() {
+					if t.Failed() {
+						return
+					}
+					if !strings.HasPrefix(schema, "foundry_test_") || strings.ContainsAny(schema, "\"\\ ;") {
+						t.Errorf("refusing to drop unexpected retained schema %q", schema)
+						return
+					}
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cancel()
+					if _, err := admin.Exec(ctx, `DROP SCHEMA IF EXISTS "`+schema+`" CASCADE`); err != nil {
+						t.Errorf("clean up retained child schema: %v", err)
+					}
+				})
+			}
 			if !strings.Contains(string(output), "PostgreSQL test namespace: "+schema+" (dropped after a passing test") {
 				t.Fatalf("namespace inspection log missing:\n%s", output)
 			}
@@ -202,9 +220,26 @@ func TestNamespaceBorrowedPool(t *testing.T) {
 					t.Errorf("earlier cleanup cannot use parent pool: %v", err)
 				}
 			})
+			var kept []string
+			if keep == "1" {
+				// Retention is this case's input, not its result; drop what it kept.
+				t.Cleanup(func() {
+					if t.Failed() {
+						return
+					}
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cancel()
+					for _, schema := range kept {
+						if _, err := db.Exec(ctx, `DROP SCHEMA IF EXISTS "`+schema+`" CASCADE`); err != nil {
+							t.Errorf("clean up kept schema: %v", err)
+						}
+					}
+				})
+			}
 			for _, name := range []string{"first", "second"} {
 				t.Run(name, func(t *testing.T) {
 					schema := pgtest.Namespace(t, db)
+					kept = append(kept, schema)
 					if _, err := db.Exec(t.Context(), `CREATE TABLE "`+schema+`".records(id bigint)`); err != nil {
 						t.Fatal(err)
 					}
