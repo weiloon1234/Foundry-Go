@@ -62,10 +62,11 @@ type uploadRoute struct {
 }
 type uploadReservationKey struct{}
 type requestUpload struct {
-	route           uploadRoute
-	reservation     *upload.Reservation
-	readTimeout     *connectionReadTimeout
-	timeoutResponse atomic.Bool
+	route              uploadRoute
+	reservation        *upload.Reservation
+	readTimeout        *connectionReadTimeout
+	observeBodyTimeout bool
+	timeoutResponse    atomic.Bool
 }
 type uploadSelector func(*stdhttp.Request) uploadRoute
 

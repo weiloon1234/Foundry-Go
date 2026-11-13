@@ -28,13 +28,17 @@ type multipartInput struct {
 // multipartSource observes the framework-owned body ceiling directly, without
 // walking or formatting arbitrary error chains supplied by an incoming reader.
 type multipartSource struct {
-	source   io.Reader
-	tooLarge bool
+	source      io.Reader
+	tooLarge    bool
+	readTimeout *connectionReadTimeout
 }
 
 // Read forwards source data and records whether the HTTP body limit was exceeded.
 func (r *multipartSource) Read(p []byte) (int, error) {
 	n, err := r.source.Read(p)
+	if r.readTimeout != nil {
+		r.readTimeout.observe(err)
+	}
 	if _, ok := err.(*stdhttp.MaxBytesError); ok {
 		r.tooLarge = true
 	}
@@ -88,6 +92,11 @@ func multipartRead[B any](d Multipart[B], w stdhttp.ResponseWriter, r *stdhttp.R
 	}
 	close := batch.Close
 	source := &multipartSource{source: stdhttp.MaxBytesReader(w, r.Body, limits.Multipart.Bytes)}
+	if admitted != nil && admitted.observeBodyTimeout {
+		// Native servers without our connection wrapper can still preserve the
+		// direct socket error. Never infer timeout from a framing error's text.
+		source.readTimeout = admitted.readTimeout
+	}
 	input := multipartInput{text: make(url.Values), values: make(map[string][]multipartValue), counts: make([]int, len(d.parts))}
 	var returned error
 	owned := callback.Isolated("read multipart form", func() error {

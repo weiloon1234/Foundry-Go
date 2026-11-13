@@ -25,8 +25,6 @@ func uploadDeadlineServer(t *testing.T, handler stdhttp.Handler, kernel time.Dur
 	if kernel == 0 {
 		server := httptest.NewUnstartedServer(handler)
 		server.Config.ReadTimeout, server.Config.WriteTimeout = 5*time.Second, 5*time.Second
-		server.Listener = requestDeadlineListener{server.Listener}
-		server.Config.ConnContext = requestDeadlineContext
 		server.Start()
 		t.Cleanup(server.Close)
 		client := server.Client()

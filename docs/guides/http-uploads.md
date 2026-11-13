@@ -360,6 +360,10 @@ timeout at the installed deadline; ordinary client disconnects still abort deliv
 The server retains that evidence before HTTP framing can replace the read error,
 including while waiting for the final blank line of chunked trailers. Trailer error
 text alone never grants the timeout-response exception.
+Under a standard `net/http.Server`, including direct TLS hosting, ordinary body
+reads retain the same timeout response through native socket-error detection.
+This fallback is used only without connection-level evidence; it cannot recover
+a socket cause that HTTP framing has discarded.
 
 Use the framework's Router and `ApplyMiddleware` chain for this guarantee.
 An external native wrapper that reads a body before entering that chain cannot

@@ -133,8 +133,9 @@ func (b routeBudget) body(w stdhttp.ResponseWriter, r *stdhttp.Request, kernel *
 		if deadline, ok := r.Context().Deadline(); ok {
 			if conn, ok := r.Context().Value(requestDeadlineConnKey{}).(*requestDeadlineConn); ok && r.ProtoMajor == 1 {
 				admitted.readTimeout, _ = conn.uploadReadDeadline(deadline)
-			} else {
-				_ = stdhttp.NewResponseController(w).SetReadDeadline(deadline)
+			} else if err := stdhttp.NewResponseController(w).SetReadDeadline(deadline); err == nil {
+				admitted.readTimeout = &connectionReadTimeout{deadline: deadline}
+				admitted.observeBodyTimeout = true
 			}
 		}
 	}

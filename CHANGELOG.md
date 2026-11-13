@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed: native HTTP and direct TLS upload hosting retain ordinary body-read 408
+  responses through Compression and ETags when connection-level timeout evidence
+  is unavailable. Ordinary connection deadline resets now invalidate upload
+  tracking atomically without acquiring its mutex. Added native hosting and
+  deadline-reset regression sources for the lead's Go gate.
+
 - Fixed: trickle acceptance measures server-side upload-slot release, separately
   from nginx's post-response body draining. Upload locations now explicitly bound
   lingering by the declared total budget, capped at five seconds, with an idle wait

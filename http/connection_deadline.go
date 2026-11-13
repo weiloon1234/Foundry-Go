@@ -11,7 +11,14 @@ import (
 
 type connectionReadTimeout struct {
 	deadline time.Time
+	armed    atomic.Bool
 	observed atomic.Bool
+}
+
+func (r *connectionReadTimeout) observe(err error) {
+	if native, ok := err.(*net.OpError); ok && native.Op == "read" && native.Err == os.ErrDeadlineExceeded && !time.Now().Before(r.deadline) {
+		r.observed.Store(true)
+	}
 }
 
 // requestDeadlineConn retains timeout evidence before HTTP framing can replace
@@ -19,17 +26,17 @@ type connectionReadTimeout struct {
 type requestDeadlineConn struct {
 	net.Conn
 	mu     sync.Mutex
-	upload *connectionReadTimeout
+	upload atomic.Pointer[connectionReadTimeout]
 }
 
 func (c *requestDeadlineConn) Read(p []byte) (int, error) {
+	record := c.upload.Load()
+	if record != nil && !record.armed.Load() {
+		record = nil
+	}
 	n, err := c.Conn.Read(p)
-	if native, ok := err.(*net.OpError); ok && native.Op == "read" && native.Err == os.ErrDeadlineExceeded {
-		c.mu.Lock()
-		if c.upload != nil && !time.Now().Before(c.upload.deadline) {
-			c.upload.observed.Store(true)
-		}
-		c.mu.Unlock()
+	if record != nil && c.upload.Load() == record {
+		record.observe(err)
 	}
 	return n, err
 }
@@ -37,33 +44,34 @@ func (c *requestDeadlineConn) Read(p []byte) (int, error) {
 func (c *requestDeadlineConn) uploadReadDeadline(deadline time.Time) (*connectionReadTimeout, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	record := &connectionReadTimeout{deadline: deadline}
+	// Publish before the syscall so a concurrent reset can invalidate this
+	// installation. Never restore a record that a reset has withdrawn.
+	c.upload.Store(record)
 	if err := c.Conn.SetReadDeadline(deadline); err != nil {
+		c.upload.CompareAndSwap(record, nil)
 		return nil, err
 	}
-	c.upload = &connectionReadTimeout{deadline: deadline}
-	return c.upload, nil
+	record.armed.Store(true)
+	return record, nil
 }
 
 // Native header, keep-alive, body and hijack deadline changes invalidate the
 // upload association. They must not attribute a later timeout to an old request.
+// Invalidating on both sides also retires overlapping installations without
+// taking the upload mutex on ordinary connections.
 func (c *requestDeadlineConn) SetReadDeadline(deadline time.Time) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.Conn.SetReadDeadline(deadline); err != nil {
-		return err
-	}
-	c.upload = nil
-	return nil
+	c.upload.Store(nil)
+	err := c.Conn.SetReadDeadline(deadline)
+	c.upload.Store(nil)
+	return err
 }
 
 func (c *requestDeadlineConn) SetDeadline(deadline time.Time) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.Conn.SetDeadline(deadline); err != nil {
-		return err
-	}
-	c.upload = nil
-	return nil
+	c.upload.Store(nil)
+	err := c.Conn.SetDeadline(deadline)
+	c.upload.Store(nil)
+	return err
 }
 
 type requestDeadlineListener struct{ net.Listener }
