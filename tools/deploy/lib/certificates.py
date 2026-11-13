@@ -603,26 +603,35 @@ def _network_status_path(host, entry):
     return check_path(host.paths.p(instance_paths(entry["name"])["configuration"]) / "certificate-network-status.json", "file")
 
 
-def ensure_hostnames(host, registry, entry, profiles):
-    """Extend the existing lineage with active, retained and pending profile names.
+def ensure_hostnames(host, registry, entry, profiles, *, topologies):
+    """Extend the lineage with TLS names from paired profiles and topologies.
 
     Call before opening TCP. Existing SANs are never removed, including on rollback.
     A durable intent survives an uncertain issuance and is retried with the same
     superset. This issues DNS-01 certificates; it never writes application A/AAAA.
     """
+    from listeners import public_policies
+    profiles, topologies = tuple(profiles), tuple(topologies)
+    require(len(profiles) == len(topologies), "listener_topology_required", "Supply a topology for every certificate profile.")
+    tls_bindings = []
+    for profile, topology in zip(profiles, topologies):
+        require(profile.instance_id == entry["profile"]["instance_id"], "certificate_ownership", REMEDIATION)
+        policies = public_policies(profile, topology)
+        tls_bindings.extend((name, binding, profile.projection()["listeners"][name])
+                            for name, binding in profile.listeners if policies[name].tls == "edge")
+    if not tls_bindings:
+        return
     domain = entry["profile"]["domain"]
     _identity_ready(host, entry, hostnames=(domain,))
     _renewal_ready(host, entry, allow_legacy_hook=True)
     prior = _network_claim(host, entry)
     names = set(prior["hostnames"] if prior else (domain,))
     listeners = dict(prior["listeners"] if prior else {})
-    for profile in profiles:
-        require(profile.instance_id == entry["profile"]["instance_id"], "certificate_ownership", REMEDIATION)
-        for name, binding in profile.listeners:
-            names.add(binding.hostname)
-            # Retain different address generations too; only currently selected files are probed.
-            key = name + ":" + hashlib.sha256(json.dumps(profile.projection()["listeners"][name], sort_keys=True).encode()).hexdigest()
-            listeners[key] = profile.projection()["listeners"][name]
+    for name, binding, raw in tls_bindings:
+        names.add(binding.hostname)
+        # Retain different address generations too; only currently selected TLS files are probed.
+        key = name + ":" + hashlib.sha256(json.dumps(raw, sort_keys=True).encode()).hexdigest()
+        listeners[key] = raw
     live = host.paths.p(CONFIG_DIR + "/live/" + _lineage(entry))
     sans = host.run(["openssl", "x509", "-in", str(live / "cert.pem"), "-noout", "-ext", "subjectAltName"], timeout=10).stdout
     for name in re.findall(r"DNS:([^,\s]+)", sans):

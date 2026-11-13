@@ -236,8 +236,8 @@ class Listener:
         require(value["transport"] == "tcp", "unsupported_capability", "UDP listeners require a later capability.")
         require(value["bind"] in ("loopback", "public"), "invalid_topology", "Invalid listener intent.")
         if value["bind"] == "public":
-            require(value.get("tls") == "edge" and value.get("authentication") is True,
-                    "unsupported_capability", "Public TCP requires edge TLS and explicit application authentication acknowledgement.")
+            require(value.get("tls") in ("edge", "none") and value.get("authentication") is True,
+                    "unsupported_capability", "Public TCP requires tls edge or none and explicit application authentication acknowledgement.")
         else:
             require("tls" not in value and "authentication" not in value,
                     "invalid_topology", "Private listeners do not declare public edge policy.")

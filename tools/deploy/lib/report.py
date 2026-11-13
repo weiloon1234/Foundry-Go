@@ -519,6 +519,7 @@ def instance_report(host, entry, deadline, problems, *, host_claims=()):
         from topology import parse_profile, parse_topology
         result["network"] = checked(problems, "declared_network_unavailable", instance_id,
                                     lambda: declared_network(host, parse_profile(profile, parse_topology(entry["topology"], registered=True)),
+                                                             topology=parse_topology(entry["topology"], registered=True),
                                                              entry=entry, host_claims=host_claims))
         if result["network"]:
             for finding in result["network"]["findings"]:
@@ -547,7 +548,7 @@ def claim_inventory(registry):
     return tuple(claims)
 
 
-def declared_network(host, profile, *, entry=None, resolution=None, closure=None, dns_observations=(), host_claims=None):
+def declared_network(host, profile, *, topology, entry=None, resolution=None, closure=None, dns_observations=(), host_claims=None):
     """Lane A may supply its selected resolution/closure; never read private envs.
 
     Without that selection a declared port is not silently accepted as owned.
@@ -557,9 +558,11 @@ def declared_network(host, profile, *, entry=None, resolution=None, closure=None
     import edge
     import firewall
     import listeners
+    policies = listeners.public_policies(profile, topology)
     claims = listeners.public_claims(profile)
     observed = listeners.observe_sockets(host)
-    findings, owners = [], {}
+    findings = [finding for finding in edge.listener_findings(profile, topology=topology) if finding["kind"] == "warning"]
+    owners = {}
     if host_claims is None:
         try:
             host_claims = claim_inventory(host.read_registry())
@@ -575,7 +578,8 @@ def declared_network(host, profile, *, entry=None, resolution=None, closure=None
     edge_verified = False
     if resolution is not None and entry is not None:
         try:
-            expected = edge.stream_projection(profile, resolution, entry["certificate"]["lineage"])
+            lineage = entry["certificate"]["lineage"] if any(policy.tls == "edge" for policy in policies.values()) else None
+            expected = edge.stream_projection(profile, resolution, lineage, topology=topology)
             directory = host.paths.p(edge.RUNTIME + "/" + profile.instance_id)
             selected = {name: content for name, content in expected.items() if (directory / name).exists()}
             if (directory / "http-open.conf").exists():
@@ -623,7 +627,7 @@ def declared_network(host, profile, *, entry=None, resolution=None, closure=None
             findings.append({"code": "listener_broad_sources", "listener": name})
         findings.append({"code": "listener_origin_disclosed", "listener": name})
     tls = None
-    if entry is not None:
+    if entry is not None and any(policy.tls == "edge" for policy in policies.values()):
         tls = certificates.inspect(host, entry)
         if tls["state"] != "ready":
             findings.append({"code": "listener_tls_unverified"})
@@ -646,7 +650,9 @@ def declared_network(host, profile, *, entry=None, resolution=None, closure=None
             findings.append({"code": "application_admission_unverified"})
     return {"listeners": [{"role": c.role, "listener": c.listener, "ordinal": c.ordinal,
                             "transport": c.socket.transport, "family": c.socket.family, "address": c.socket.address,
-                            "port": c.socket.port, "expected_owner": c.owner} for c in claims],
+                            "port": c.socket.port, "expected_owner": c.owner,
+                            "tls": policies[c.role + "." + c.listener].tls,
+                            "authentication": policies[c.role + "." + c.listener].authentication} for c in claims],
             "firewall": policy, "dns": dns, "tls": tls, "admission": admission, "findings": findings,
             "unexpected_exposure": unexpected}
 

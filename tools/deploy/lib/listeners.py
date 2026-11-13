@@ -58,6 +58,16 @@ def conflicts(left, right):
     return a.version == b.version and (a == b or a.is_unspecified or b.is_unspecified)
 
 
+def public_policies(profile, topology):
+    """Resolve modes from the matching topology, never from an address binding."""
+    from topology import ExecutableRole, parse_profile
+    parse_profile(profile.projection(), topology)
+    declarations = {role.common.name + "." + name: listener
+                    for role in topology.roles if isinstance(role, ExecutableRole)
+                    for name, listener in role.listeners}
+    return {name: declarations[name] for name, _ in profile.listeners}
+
+
 def public_claims(profile):
     return tuple(ListenerClaim(profile.instance_id, *name.split("."), 1,
                                SocketIdentity("tcp", ipaddress.ip_address(address).version, address, port), "nginx")

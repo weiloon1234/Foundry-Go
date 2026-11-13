@@ -21,6 +21,12 @@ from test_contracts import fixture
 from test_host_capabilities import BOOT, CURRENT, DIGEST, INSTANCE, OLD, OPERATION, OTHER, declaration, profile, resolution
 
 
+def network_topology(mode="edge"):
+    value = declaration()
+    value["roles"][1]["listeners"]["ingress"]["tls"] = mode
+    return t.parse_topology(value)
+
+
 def network_profile():
     value = profile()
     value["instance_id"] = INSTANCE
@@ -260,7 +266,7 @@ class NetworkHostTests(unittest.TestCase):
 
 class ProjectionTests(unittest.TestCase):
     def test_stream_is_top_level_tls_only_dual_family_and_uses_resolved_backends(self):
-        text = edge.stream_projection(network_profile(), runtime(), "web.example.org")["stream-relay.ingress.conf"]
+        text = edge.stream_projection(network_profile(), runtime(), "web.example.org", topology=network_topology())["stream-relay.ingress.conf"]
         self.assertIn("listen [2001:db8::10]:9443 ssl ipv6only=on;", text)
         self.assertIn("proxy_pass 127.0.0.1:18001;", text)
         self.assertIn("ssl_protocols TLSv1.2 TLSv1.3;", text)
@@ -291,7 +297,7 @@ class ProjectionTests(unittest.TestCase):
                 patch.object(listeners, "process_members", return_value=frozenset()), \
                 patch.object(listeners, "observe_dns", side_effect=OSError), \
                 patch.object(firewall, "observe"):
-            result = report.declared_network(Mock(), network_profile(), closure=evidence)
+            result = report.declared_network(Mock(), network_profile(), topology=network_topology(), closure=evidence)
         self.assertEqual(result["admission"]["recorded_stage"], "ingress_withdrawn")
         self.assertFalse(result["admission"]["current_proof"])
         self.assertIn({"code": "application_admission_unverified"}, result["findings"])
@@ -327,14 +333,14 @@ class NetworkCertificateTests(unittest.TestCase):
                 patch.object(certificates, "_resolve_zone", return_value="example.org"), \
                 patch.object(certificates, "_renewal_dry_run"), \
                 patch.object(certificates, "verify_network_consumers", return_value={"state": "effective", "consumers": 2}):
-            certificates.ensure_hostnames(self.host, {}, self.entry, (network_profile(),))
+            certificates.ensure_hostnames(self.host, {}, self.entry, (network_profile(),), topologies=(network_topology(),))
             claim = certificates._network_claim(self.host, self.entry)
             self.assertEqual(set(claim["hostnames"]), {self.entry["profile"]["domain"], "retained.example.org", "relay.example.org"})
             issued = [args for args in self.calls if args[0] == "certbot"]
             self.assertEqual(len(issued), 1)
             self.assertIn(certificates.NETWORK_RELOAD_HOOK, issued[0])
             self.assertEqual(certificates._reload_hook(self.host, self.entry), certificates.NETWORK_RELOAD_HOOK)
-            certificates.ensure_hostnames(self.host, {}, self.entry, (network_profile(),))
+            certificates.ensure_hostnames(self.host, {}, self.entry, (network_profile(),), topologies=(network_topology(),))
             self.assertEqual(len([args for args in self.calls if args[0] == "certbot"]), 1)
         self.assertEqual(certificates.RELOAD_HOOK, original_hook)
 
@@ -346,7 +352,7 @@ class NetworkCertificateTests(unittest.TestCase):
                 patch.object(certificates, "_credentials", return_value=credential), \
                 patch.object(certificates, "_resolve_zone", return_value="other-zone"):
             with self.assertRaises(c.DeployError):
-                certificates.ensure_hostnames(self.host, {}, self.entry, (network_profile(),))
+                certificates.ensure_hostnames(self.host, {}, self.entry, (network_profile(),), topologies=(network_topology(),))
         self.assertFalse(certificates._network_claim_path(self.host, self.entry).exists())
         self.assertFalse(any(args[0] == "certbot" for args in self.calls))
 

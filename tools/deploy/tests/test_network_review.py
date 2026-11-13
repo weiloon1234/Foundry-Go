@@ -206,7 +206,7 @@ class RenewalReviewTests(unittest.TestCase):
                 patch.object(certificates, "verify_network_consumers", side_effect=c.DeployError("certificate_effective_renewal", "wrong leaf")), \
                 patch.object(certificates, "_renewal_verified") as verified:
             with self.assertRaises(c.DeployError):
-                certificates.ensure_hostnames(case.host, {}, case.entry, (fixture.network_profile(),))
+                certificates.ensure_hostnames(case.host, {}, case.entry, (fixture.network_profile(),), topologies=(fixture.network_topology(),))
             verified.assert_not_called()
         self.assertEqual(certificates.network_renewal_status(case.host, case.entry)["state"], "failed")
 
@@ -302,7 +302,7 @@ class ReportReviewTests(unittest.TestCase):
         with patch.object(listeners, "observe_sockets", return_value=observed), \
                 patch.object(listeners, "process_members", return_value=frozenset({9})), \
                 patch.object(listeners, "observe_dns", side_effect=OSError), patch.object(firewall, "observe"):
-            value = report.declared_network(host, first)
+            value = report.declared_network(host, first, topology=fixture.network_topology())
         self.assertFalse(any(f["code"] == "unexpected_public_listener" for f in value["findings"]))
         self.assertEqual(value["unexpected_exposure"], [])
         self.assertTrue(all(f.get("instance_id", first.instance_id) == first.instance_id for f in value["findings"]))
@@ -319,5 +319,5 @@ class ReportReviewTests(unittest.TestCase):
         with patch.object(listeners, "observe_sockets", return_value=(unknown, udp)), \
                 patch.object(listeners, "process_members", return_value=frozenset({9})), \
                 patch.object(listeners, "observe_dns", side_effect=OSError), patch.object(firewall, "observe"):
-            value = report.declared_network(Mock(), first, host_claims=claims)
+            value = report.declared_network(Mock(), first, topology=fixture.network_topology(), host_claims=claims)
         self.assertEqual({v["transport"] for v in value["unexpected_exposure"]}, {"tcp", "udp"})

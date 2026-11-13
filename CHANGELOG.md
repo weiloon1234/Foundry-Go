@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added: public TCP listeners accept `tls: none` beside `tls: edge`, with mandatory
+  service authentication in both modes. Plain listeners use the same nginx stream,
+  firewall and closure path, are labelled unencrypted in network plans/reports,
+  and do not request certificates or TLS renewal probes. HTTP edge behaviour is
+  unchanged; lane A integrates the topology-aware network interfaces.
 - Added: multipart upload pools reserve a slot and the declared encoded-body bytes
   before middleware or capture. Large requests use separate handler capacity,
   retain reservations through actual cleanup, and keep failed cleanup charged

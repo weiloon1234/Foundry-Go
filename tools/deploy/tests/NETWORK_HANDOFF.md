@@ -1,8 +1,9 @@
 # B24 milestone 4: lane C handoff
 
-The implementation and review fixes use the frozen generation-12 records without modifying
-`contracts.py`, `topology.py`, `protocol.json`, lifecycle/provisioning writers or
-B26 upload declarations/templates. The fix-round request explicitly authorizes the targeted unit tests and deploy-tools gate.
+The implementation uses the frozen generation-12 records. The authorized plain TCP
+extension changes only the public-listener topology check: `tls` accepts `edge` or
+`none`, both with `authentication: true`. `contracts.py`, `protocol.json`,
+lifecycle/provisioning writers and B26 upload declarations/templates are unchanged.
 This file describes integration work for lane A; it is not real-host acceptance evidence.
 
 ## Lane A call order
@@ -11,7 +12,10 @@ Hold the existing host lock, then the instance lock. Persist operation intent an
 the exact affected units/addresses before effects. All returned observations are
 evidence, never permission to start a process or commit admission.
 
-1. Parse the frozen `DeploymentProfile` and `RuntimeResolution` records.
+1. Parse the `Topology`, `DeploymentProfile` and `RuntimeResolution` records.
+   Keep each selected/retained/pending profile paired with its own topology.
+   `listeners.public_policies(profile, topology)` validates that pairing and resolves
+   public modes from the declaration; address bindings never imply a TLS mode.
    `listeners.public_claims(profile)` and `private_claims(instance_id, resolution)`
    produce concrete TCP/family/address/role/copy claims. Check new claims with
    `require_available`; allocate private `(role, listener)` pairs with
@@ -29,6 +33,11 @@ evidence, never permission to start a process or commit admission.
    other feature instances' runtime allows; reopening them requires their own
    fresh admission/health evidence. Do not restore saved runtime rules.
 3. Plan `libnginx-mod-stream` through the package owner. Use
+   `edge.edge_findings(profile.projection(), directory, topology=topology)` for the
+   combined HTTP edge and listener plan findings, or `edge.listener_findings(profile,
+   topology=topology)` for just TCP. Plans explicitly label plain listeners
+   **unencrypted** and state that the service must authenticate every client.
+   Use
    `edge.install_stream_include(host, reviewed_nginx_sha256=...)` only with the
    reviewed digest of `/etc/nginx/nginx.conf`. It requires the existing top-level
    `/etc/nginx/modules-enabled/*.conf` include. It does not rewrite nginx.conf.
@@ -58,27 +67,55 @@ evidence, never permission to start a process or commit admission.
    closure ID and validates started candidates against those permits. No candidate
    may start between steps 4 and 5. Reboot discards live proofs and requires a new
    whole-instance scope; selective live proofs do not become boot authority.
-7. `certificates.ensure_hostnames(host, registry, entry, profiles)` extends the
-   existing lineage using active, retained and pending profiles. It retains old
+7. `certificates.ensure_hostnames(host, registry, entry, profiles, topologies=topologies)`
+   extends the existing lineage using only `tls: edge` listeners in the active,
+   retained and pending profiles. Supply the matching topologies in the same order;
+   mismatched counts are rejected. An all-plain set performs no certificate work.
+   It retains old
    SANs, stays in the existing explicitly scoped DNS-01 zone and records its SAN
    intent privately. It performs no application A/AAAA writes. Use
    `listeners.observe_dns` / `external_dns` for exact external A/AAAA instructions
    and observations. Resolver agreement is neither DNS-only provider proof nor
    global cutover. Keep external operator confirmation in the reviewed operation.
-8. After candidate health and fresh authority, call `edge.open_runtime`, verify
-   `certificates.verify_network_consumers`, then `firewall.open_runtime` last.
+8. After candidate health and fresh authority, call `edge.open_runtime(...,
+   topology=topology, authorize=...)`, verify `certificates.verify_network_consumers`
+   for TLS consumers, then `firewall.open_runtime` last. An instance that has never
+   adopted TCP TLS has no network certificate claim to verify. Its existing HTTP
+   certificate checks remain owned by the HTTP lifecycle.
    Supply the closed firewall digest and a synchronous `authorize` callback that
    re-observes lane A's committed admission or live finalization authority, permitted
    process identities, exact resolution and health. Both opening functions invoke
    it before and after effects. Journal/observe completion separately. Any exception
    or lost result remains pending; cleanup withdraws both owners. Certificate checks
    use fresh TLS connections and compare the served leaf to the owned lineage.
-9. `report.declared_network(host, profile, entry=..., resolution=..., closure=...,
+9. `report.declared_network(host, profile, topology=topology, entry=..., resolution=..., closure=...,
    dns_observations=...)` returns safe listener, firewall, DNS, TLS and closure-scope
    findings. Without a supplied resolution it reports nginx ownership as unverified.
    Recorded closure is explicitly historical, never a fresh permit. Existing
    `instance_report` exposes basic declaration findings for profile 3; lane A should
    supply its selected records for the richer report during lifecycle integration.
+
+## Plain public TCP
+
+`edge.stream_projection(profile, resolution, lineage, topology=topology)` and
+`open_runtime` use one stream rendering path for both modes. Plain listeners omit
+`ssl` and every `ssl_*` directive; `lineage` may be `None` when all listeners are
+plain. nginx still owns the public IPv4/IPv6 sockets and proxies to allocated
+loopback endpoints. CIDR access rules, default deny, runtime-only exposure,
+per-instance boot closure, stale-worker reference retention and closure evidence
+are identical. The service must never bind directly to the public address.
+
+Plain TCP carries application traffic unencrypted, including any credentials the
+application sends. `authentication: true` acknowledges the service's responsibility
+to authenticate clients; it does not enable nginx authentication. No protocol-specific
+handling is added. Reports include each listener's `tls` and `authentication` policy
+and the same unencrypted/service-authentication warning as plans.
+
+Plain listener hostnames never enter new certificate claims, SAN requests or TLS
+consumer probes. Retained TLS generations still retain their SANs for rollback;
+switching a selected listener to plain does not delete a previously owned SAN.
+Renewal probes skip its plain runtime projection. Ordinary HTTP certificates and
+TLS listeners retain their existing issuance and effective-renewal checks.
 
 ## Boot and retention
 

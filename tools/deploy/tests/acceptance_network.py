@@ -110,7 +110,8 @@ class NetworkAcceptance(unittest.TestCase):
         self.assertTrue(Path("/.dockerenv").is_file())
         self.assertEqual(c.check_path(WORK / "owned", "file").read_text(), "disposable network acceptance fixture\n")
         self.case = c.read_json(c.check_path(WORK / "case.json", "file"))[self._testMethodName]
-        self.profile = t.parse_profile(self.case["profile"], t.parse_topology(self.case["topology"]))
+        self.topology = t.parse_topology(self.case["topology"])
+        self.profile = t.parse_profile(self.case["profile"], self.topology)
         self.assertTrue(self.case["profile"]["environment"].startswith("acceptance"))
         self.assertEqual(self.case["profile"]["runtime_environment"], "testing")
         self.assertTrue(all(b.hostname.endswith(".acceptance.invalid") for _, b in self.profile.listeners))
@@ -144,7 +145,7 @@ class NetworkAcceptance(unittest.TestCase):
     def expose(self, resolution):
         closed = firewall.observe(self.host, self.profile.instance_id, self.claims)
         edge.open_runtime(self.host, self.profile, resolution, self.entry["certificate"]["lineage"],
-                          (self.role,), authorize=lambda: True)
+                          (self.role,), topology=self.topology, authorize=lambda: True)
         return firewall.open_runtime(self.host, self.profile.instance_id, self.claims, self.profile.listeners,
                                      closed_sha256=closed.sha256, authorize=lambda: True)
 

@@ -31,11 +31,16 @@ def cloudflare_ranges(directory: Path) -> tuple[date, list[str]]:
     return retrieved, ranges
 
 
-def edge_findings(profile: dict, directory: Path) -> list[dict]:
+def edge_findings(profile: dict, directory: Path, *, topology=None) -> list[dict]:
     """Describe mandatory real-IP rendering and the age of its trust data."""
+    network_findings = []
+    if profile.get("schema") == 3:
+        from topology import parse_profile
+        require(topology is not None, "listener_topology_required", "Plan public TCP with its validated topology.")
+        network_findings = listener_findings(parse_profile(profile, topology), topology=topology)
     retrieved, ranges = cloudflare_ranges(directory)
     checksum = hashlib.sha256("\n".join(ranges).encode()).hexdigest()
-    findings = [{"kind": "change", "code": "nginx_edge_configuration", "detail":
+    findings = [*network_findings, {"kind": "change", "code": "nginx_edge_configuration", "detail":
                  f"Cloudflare real IP; origin lockdown {profile.get('edge_origin_lockdown', False)}; ranges sha256 {checksum}"}]
     if (date.today() - retrieved).days > 90:
         findings.append({"kind": "warning", "code": "cloudflare_ranges_stale", "detail":
@@ -385,13 +390,29 @@ def gate_http(instance_id, rendered_http):
     return prefix + rendered_http.replace("server {\n", "server {\n    if ($" + variable + " = 0) { return 503; }\n")
 
 
-def stream_projection(profile, resolution, lineage):
+def listener_findings(profile, *, topology):
+    """Plan/report messages share the same validated listener policy."""
+    from listeners import public_policies
+    return [{"kind": "warning" if policy.tls == "none" else "change",
+             "code": "listener_unencrypted" if policy.tls == "none" else "listener_edge_tls",
+             "listener": name,
+             "detail": name + (": unencrypted public TCP through nginx; " if policy.tls == "none"
+                                else ": public TCP with TLS terminated at nginx; ")
+                       + "the service must authenticate every client."}
+            for name, policy in public_policies(profile, topology).items()]
+
+
+def stream_projection(profile, resolution, lineage, *, topology):
     """One runtime file per role; no certificate material enters application custody."""
     from certificates import CONFIG_DIR
-    dns_hostname(lineage)
+    from listeners import public_policies
+    policies = public_policies(profile, topology)
+    if any(policy.tls == "edge" for policy in policies.values()):
+        dns_hostname(lineage)
     endpoints = {(e.role, e.listener): e for e in resolution.endpoints}
     result = {}
     for name, binding in profile.listeners:
+        tls = policies[name].tls == "edge"
         role, listener = name.split(".")
         require((role, listener) in endpoints, "nginx_backend_missing", "Resolve every public listener's private backend first.")
         endpoint = endpoints[role, listener]
@@ -400,10 +421,15 @@ def stream_projection(profile, resolution, lineage):
         for address in binding.public_addresses:
             for port in binding.ports:
                 bind = ("[" + address + "]" if ":" in address else address) + ":" + str(port)
-                lines.append("    listen " + bind + " ssl" + (" ipv6only=on" if ":" in address else "") + ";")
+                lines.append("    listen " + bind + (" ssl" if tls else "") + (" ipv6only=on" if ":" in address else "") + ";")
         content = (TEMPLATES / "nginx-tcp-tls.conf").read_text()
+        tls_content = ("    ssl_certificate " + CONFIG_DIR + "/live/" + lineage + "/fullchain.pem;\n"
+                       "    ssl_certificate_key " + CONFIG_DIR + "/live/" + lineage + "/privkey.pem;\n"
+                       "    ssl_protocols TLSv1.2 TLSv1.3;\n"
+                       "    ssl_session_cache off;\n"
+                       "    ssl_session_tickets off;\n") if tls else ""
         replacements = {"@INSTANCE@": profile.instance_id, "@LISTENER@": name, "@LISTEN@": "\n".join(lines),
-                        "@LINEAGE@": lineage, "@BACKEND@": backend, "@CERTIFICATE_ROOT@": CONFIG_DIR,
+                        "@TLS@": tls_content, "@BACKEND@": backend,
                         "@SOURCES@": "\n".join("    allow " + cidr + ";" for cidr in binding.source_cidrs)}
         for token, value in replacements.items():
             content = content.replace(token, value)
@@ -498,7 +524,7 @@ def withdraw(host, instance_id, roles):
     return observe_projection(host, instance_id, roles)
 
 
-def open_runtime(host, profile, resolution, lineage, roles, *, authorize):
+def open_runtime(host, profile, resolution, lineage, roles, *, topology, authorize):
     """Lane A journals intent and revalidates health/authority through authorize.
 
     Firewall remains closed during this operation. Lane A opens it last and keeps
@@ -509,7 +535,7 @@ def open_runtime(host, profile, resolution, lineage, roles, *, authorize):
     retain_global_references(host)
     roles = tuple(roles)
     require(set(roles) <= set(resolution.roles), "nginx_projection_scope", "Opening roles must belong to the resolution.")
-    projection = {name: value for name, value in stream_projection(profile, resolution, lineage).items()
+    projection = {name: value for name, value in stream_projection(profile, resolution, lineage, topology=topology).items()
                   if any(name.startswith("stream-" + role + ".") for role in roles)}
     if "http" in roles:
         projection["http-open.conf"] = '"" 1;\n'
