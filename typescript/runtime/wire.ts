@@ -136,7 +136,7 @@ interface WireType {
 /** Custom URL syntax must be provided explicitly. Payload schema validation still runs. */
 export interface URLCodec { format(value: unknown): string }
 export interface CodecOptions { readonly urlCodecs?: Readonly<Record<string, URLCodec>> }
-interface RuntimePolicy { readonly maxDepth: number; readonly decimalDigits: number; readonly metadataBytes: number; readonly messageBytes: number; readonly maxMessages: number; readonly semanticBytes: number }
+interface RuntimePolicy { readonly maxDepth: number; readonly decimalDigits: number; readonly metadataBytes: number; readonly messageBytes: number; readonly maxMessages: number; readonly semanticBytes: number; readonly requestHeaderBytes: string }
 // runtimePolicy is emitted from Go-owned constants beside the manifest.
 
 class WireCodec {

@@ -34,7 +34,7 @@ type Surface struct {
 // SurfaceAuth explicitly declares the routes and credentials of a portal's
 // session guard. Every referenced route must be a valid registered endpoint.
 // Identifier must exactly match a non-secret JSON property in the login body.
-// Helpers supply only the login body: routes cannot require path/query inputs,
+// Helpers supply only the login body: routes cannot require path/query/header inputs,
 // signed URLs, idempotency keys, or bodies on refresh, logout and profile.
 type SurfaceAuth struct {
 	Guard      auth.GuardName

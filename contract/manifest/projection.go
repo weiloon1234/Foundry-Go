@@ -161,7 +161,7 @@ func (m *Manifest) Project(selection Selection) (*Manifest, error) {
 		reach(definition.DetailsType)
 	}
 	for _, op := range result.HTTP {
-		for _, parameter := range append(append([]Parameter(nil), op.Path...), op.Query...) {
+		for _, parameter := range slices.Concat(op.Path, op.Query, op.Headers) {
 			reach(parameter.Type)
 		}
 		for _, payload := range []*Payload{op.Body, op.Response} {

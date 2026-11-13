@@ -12,7 +12,7 @@ func (r *renderer) descriptors() {
 			name    string
 			present bool
 		}{
-			{"path", len(op.Path) > 0}, {"query", len(op.Query) > 0}, {"body", op.Body != nil && op.Body.Raw == nil},
+			{"path", len(op.Path) > 0}, {"query", len(op.Query) > 0}, {"headers", len(op.Headers) > 0}, {"body", op.Body != nil && op.Body.Raw == nil},
 		} {
 			if location.present {
 				fmt.Fprintf(&r.out, " readonly %s: NonNullable<Operations[%s][\"request\"][%s]>;", location.name, quote(op.Name), quote(location.name))

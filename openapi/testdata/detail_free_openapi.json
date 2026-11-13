@@ -579,6 +579,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 0,
+            "Bytes": 0,
+            "Fields": 0,
+            "Values": 0,
+            "Issues": 0
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -611,5 +618,5 @@
       }
     }
   },
-  "x-foundry-manifest-version": 8
+  "x-foundry-manifest-version": 11
 }

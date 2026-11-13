@@ -332,9 +332,9 @@ func TestOpenAPIErrorDetailsProjection(t *testing.T) {
 }
 
 // The fixture retains the pre-details failure route, its reachable schemas and
-// exact OpenAPI bytes. It covers builtin errors, a custom code sharing status 409,
+// current OpenAPI bytes, including inactive header limits. It covers builtin errors, a custom code sharing status 409,
 // validation errors and the closed base envelope without a release-cohort reader.
-func TestOpenAPIDetailFreeGoldenBytesOnlyChangeVersion(t *testing.T) {
+func TestOpenAPIDetailFreeGoldenBytes(t *testing.T) {
 	old, err := os.ReadFile(filepath.Join("testdata", "detail_free_manifest.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -361,7 +361,7 @@ func TestOpenAPIDetailFreeGoldenBytesOnlyChangeVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := bytes.Replace(golden, []byte(`"x-foundry-manifest-version": 8`), []byte(`"x-foundry-manifest-version": `+strconv.Itoa(manifest.Version)), 1)
+	expected := golden
 	if !bytes.Equal(data, expected) {
 		offset := 0
 		for offset < min(len(data), len(expected)) && data[offset] == expected[offset] {

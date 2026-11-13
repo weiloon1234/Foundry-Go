@@ -27,6 +27,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/internal/contractname"
 	"github.com/weiloon1234/Foundry-Go/internal/generate"
+	"github.com/weiloon1234/Foundry-Go/internal/httpheader"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/websocket"
@@ -155,7 +156,7 @@ func newNaming(document manifest.Document) (naming, error) {
 func preamble(module bool) string {
 	var out strings.Builder
 	fmt.Fprintf(&out, "export const manifestVersion = %d as const;\n", manifest.Version)
-	fmt.Fprintf(&out, "const runtimePolicy: RuntimePolicy = { maxDepth: %d, decimalDigits: %d, metadataBytes: %d, messageBytes: %d, maxMessages: %d, semanticBytes: %d };\n", contract.MaxJSONDepth, decimal.MaxDigits, manifest.MaxBytes, i18n.MaxTextBytes, i18n.MaxMessages, identifier.MaxSemanticBytes)
+	fmt.Fprintf(&out, "const runtimePolicy: RuntimePolicy = { maxDepth: %d, decimalDigits: %d, metadataBytes: %d, messageBytes: %d, maxMessages: %d, semanticBytes: %d, requestHeaderBytes: %s };\n", contract.MaxJSONDepth, decimal.MaxDigits, manifest.MaxBytes, i18n.MaxTextBytes, i18n.MaxMessages, identifier.MaxSemanticBytes, quote(requestHeaderBytes()))
 	fmt.Fprintf(&out, "const semanticPattern = /* @__PURE__ */ new RegExp(%s);\n", quote(identifier.SemanticPattern))
 	fmt.Fprintf(&out, "const idempotencyKeyPattern = %s;\n", quote(idempotency.KeyPattern(idempotency.MaxKeyBytes)))
 	defaults, _ := json.Marshal(foundryhttp.DefaultEndpointLimits().Response)
@@ -977,15 +978,21 @@ func (r *renderer) request(op manifest.Operation) string {
 	if len(op.Path) > 0 {
 		fields = append(fields, "readonly path: "+r.parameters(op.Path))
 	}
-	if len(op.Query) > 0 {
+	for _, source := range []struct {
+		name       string
+		parameters []manifest.Parameter
+	}{{"query", op.Query}, {"headers", op.Headers}} {
+		if len(source.parameters) == 0 {
+			continue
+		}
 		optional := "?"
-		for _, parameter := range op.Query {
+		for _, parameter := range source.parameters {
 			if parameter.Required {
 				optional = ""
 				break
 			}
 		}
-		fields = append(fields, "readonly query"+optional+": "+r.parameters(op.Query))
+		fields = append(fields, "readonly "+source.name+optional+": "+r.parameters(source.parameters))
 	}
 	if op.Body != nil {
 		body := r.typeName(op.Body.Type)
@@ -1241,4 +1248,15 @@ func documentationComment(documentation *foundryhttp.RouteDocumentation) string 
 	}
 	result.WriteString("   */\n")
 	return result.String()
+}
+
+// requestHeaderBytes derives the portable byte alphabet from the HTTP owner.
+func requestHeaderBytes() string {
+	var allowed strings.Builder
+	for b := 0; b < 256; b++ {
+		if httpheader.ValidateRequestValue(string([]byte{byte(b)})) == nil {
+			allowed.WriteByte(byte(b))
+		}
+	}
+	return allowed.String()
 }

@@ -1,40 +1,41 @@
 {
-  "base_commit": "e5678780134e938b0b04eb430fc62a3b96754c9f",
+  "base_commit": "f151f0c35339bf0e161a5fb0dc6a216e7c64ec68",
   "command": "make publish-client-contracts",
   "source_sha256": {
-    "client_publication_test.go": "a82db4845edad5cf950c40c8397a8c011bedd2da670e8eb39664efab3afb94c0",
-    "contracts.go": "4a8160a15be396c0f6ba22a39a2ae55688150aa3b8a5fe6fda81a6ad4ccdd024",
+    "client_publication_test.go": "42c4fc8a090e4ef1847093ac83e0cd27e0f572c4d1d79faff8b7ba29f21e4d14",
+    "contracts.go": "eee707b29cfea9395fc25c909c7234494e431415ce07b083feb26df6f925e21f",
     "member_create.go": "336cd39b8ec902fac66df0548c0191ec68d3932c24dbd7593dd6d4cca0ff5152",
-    "reporting_contracts_test.go": "9da1ce4de3f97a861078c5dbb64b98b5171d3e49834e9ca9d0b5ea5cdde84c3f"
+    "reporting_contracts_test.go": "9da1ce4de3f97a861078c5dbb64b98b5171d3e49834e9ca9d0b5ea5cdde84c3f",
+    "request_headers.go": "c22d4cd93cfb94d88e80c3f8a9693a6a48c5996944f95f1fd51eaa7438cf8e84"
   },
   "artifacts": {
     "client/.foundry-gen.json": {
-      "old_sha256": "fa7dcc3a0ba72e62c558cb5d8aedbe952c5d7465f0d24fcfcb95464194ed5dbd",
-      "new_sha256": "4785cce5bb91a751663fdea152527fcd4b3b4909c99b64ad252b060735687446"
+      "old_sha256": "4785cce5bb91a751663fdea152527fcd4b3b4909c99b64ad252b060735687446",
+      "new_sha256": "5157169e7099b97aea8c255543293221c1e890a640a1bab11e71b0633151e9da"
     },
     "client/contracts_browser_foundry.gen.ts": {
       "old_sha256": "20bc45e6cb7f1f36dbdf155ff15ab45239d076afcfefdfe52fbdff7a136ca7f8",
-      "new_sha256": "20bc45e6cb7f1f36dbdf155ff15ab45239d076afcfefdfe52fbdff7a136ca7f8"
+      "new_sha256": "287dd47ba351ea1262149d88379dc28b38270a4e7e1931462e7bcf14c61ea89d"
     },
     "client/contracts_foundry.gen.ts": {
       "old_sha256": "7b184888309f9e9ea56af9c7ef60984ffb2965b4fc43d4c1b1838b6f39e4e261",
-      "new_sha256": "7b184888309f9e9ea56af9c7ef60984ffb2965b4fc43d4c1b1838b6f39e4e261"
+      "new_sha256": "7e5df28cb9d64406c71c0eb9528f1ca83a4bd6715af0f8d41a80d805c0d405f9"
     },
     "client/contracts_live_foundry.gen.ts": {
       "old_sha256": "6b27d75968b10a4ae29ab785686140b6ce72d675b82a595b04a63509ce7f2a66",
-      "new_sha256": "6b27d75968b10a4ae29ab785686140b6ce72d675b82a595b04a63509ce7f2a66"
+      "new_sha256": "d7b42ccc2668e1f0cf4eac0ae47802c1bad3ec43d75c3d1218fb6e8c4554f01f"
     },
     "client/contracts_manifest_foundry.gen.json": {
       "old_sha256": "5012af5ab385163ede084f44b7a65c2906f2b5756086a95c050b3bd340f53876",
-      "new_sha256": "5012af5ab385163ede084f44b7a65c2906f2b5756086a95c050b3bd340f53876"
+      "new_sha256": "5092768ba8a0e0d783cf179cf405eb538769edb6d4f361629a807c483a0bfbb3"
     },
     "client/contracts_members_foundry.gen.ts": {
       "old_sha256": "8da44c66a9e6da6574c19a98dc07777d9ff8ed11ef55eee00969c5e5b67bec50",
-      "new_sha256": "8da44c66a9e6da6574c19a98dc07777d9ff8ed11ef55eee00969c5e5b67bec50"
+      "new_sha256": "c921319b0a233230a5b962baadd383984f51c74f052023ffeabd1de980dccd28"
     },
     "client/contracts_openapi_foundry.gen.json": {
       "old_sha256": "d82aa635eb1c96dccc7be1d311fea5226cf6822b48142bfd19dca0c0bf681ff0",
-      "new_sha256": "d82aa635eb1c96dccc7be1d311fea5226cf6822b48142bfd19dca0c0bf681ff0"
+      "new_sha256": "de1064d00ace5a9fac478df882d33dea9b8e75374fe642ca307cb3fbfe7d0550"
     },
     "client/contracts_react_foundry.gen.ts": {
       "old_sha256": "5381e2b076a7f4fdd980708b2e512c3a55198a51bcac5db341667185811c6b23",
@@ -45,8 +46,8 @@
       "new_sha256": "76e555ce4e7281120e46720f71d4993688a998187852ef1c393b28bb4035e460"
     },
     "client/contracts_runtime_foundry.gen.ts": {
-      "old_sha256": "8434a97dab7c08d46bf18c2e745e862e307537be48a3b38ecca8afef7a6305da",
-      "new_sha256": "c884a40c7ea30e591fee3337843fd42af79501b8d56114d2c975d8277e92705b"
+      "old_sha256": "c884a40c7ea30e591fee3337843fd42af79501b8d56114d2c975d8277e92705b",
+      "new_sha256": "8d6c10ecba0a3caaa4b089cd962d55c5aa10972d9b918b387d300514571dbb32"
     },
     "client/contracts_runtime_realtime_foundry.gen.ts": {
       "old_sha256": "9ae67cab99361d96ffbcd10a597406c1ecb98ae548a10477c2d38ed8b8a21834",
@@ -57,24 +58,24 @@
       "new_sha256": "90772adf054a6c6ebd6c8e681f5e07139ed457cbcf1b1dd62d918693f7adce40"
     },
     "reporting/.foundry-gen.json": {
-      "old_sha256": "112768403fa4f2b80b7044b778f4242a0a0b34247afb876ffedc9c4ff35ded09",
-      "new_sha256": "234a276ae92b4f3eed8cfbf01ad727b83a44bf5f2a5fb764a562e36088acbaac"
+      "old_sha256": "234a276ae92b4f3eed8cfbf01ad727b83a44bf5f2a5fb764a562e36088acbaac",
+      "new_sha256": "8167470b6f67f6517a67fb7979268f1c60f267a5c7694fb6bc8a837d8a348161"
     },
     "reporting/contracts_exports_foundry.gen.ts": {
       "old_sha256": "8ea83929c6b75056874183b08d2fc0b6776f3acc5bc06e4356993a365675b09b",
-      "new_sha256": "8ea83929c6b75056874183b08d2fc0b6776f3acc5bc06e4356993a365675b09b"
+      "new_sha256": "d0ab1beef65e0ddbcefd520305c5ee058237a168f05859077d54eb8f80b2ede9"
     },
     "reporting/contracts_foundry.gen.ts": {
       "old_sha256": "01ed83700f72db716a8f9037d316dd541f2f5a94aab94713f8990fec03690228",
-      "new_sha256": "01ed83700f72db716a8f9037d316dd541f2f5a94aab94713f8990fec03690228"
+      "new_sha256": "404ac9d099ac9fa4785faf245dc2d7bd590929dcb4795952096935fba0b6b438"
     },
     "reporting/contracts_manifest_foundry.gen.json": {
       "old_sha256": "5757b39c2b469ed7f3e95f13ff9ac34c8767edc7f4416ab8c55c31ccf050a8ed",
-      "new_sha256": "5757b39c2b469ed7f3e95f13ff9ac34c8767edc7f4416ab8c55c31ccf050a8ed"
+      "new_sha256": "b96e343d218fa47fd45453c61290b8098dcb74e0d5cad28b8dc7f9fc387dea69"
     },
     "reporting/contracts_openapi_foundry.gen.json": {
       "old_sha256": "66573cf988a82fdc64a7e7b159b139c1c2445a6fb938693b884cacd8c4a16fde",
-      "new_sha256": "66573cf988a82fdc64a7e7b159b139c1c2445a6fb938693b884cacd8c4a16fde"
+      "new_sha256": "d14208d828b98b76b355b92ae87f0223191f4a61ecd2d1e4447af4a359b43eba"
     },
     "reporting/contracts_react_foundry.gen.ts": {
       "old_sha256": "5381e2b076a7f4fdd980708b2e512c3a55198a51bcac5db341667185811c6b23",
@@ -82,11 +83,11 @@
     },
     "reporting/contracts_reports_foundry.gen.ts": {
       "old_sha256": "e1125a9f5a9bdc2e2adf4d3a39cc3377dc7260a621e64adc96eaeea798c8a46d",
-      "new_sha256": "e1125a9f5a9bdc2e2adf4d3a39cc3377dc7260a621e64adc96eaeea798c8a46d"
+      "new_sha256": "00af3c98cae852890d44c276af826d2a11c1805ecd2aa12ea63b2ed0d588abcd"
     },
     "reporting/contracts_runtime_foundry.gen.ts": {
-      "old_sha256": "8434a97dab7c08d46bf18c2e745e862e307537be48a3b38ecca8afef7a6305da",
-      "new_sha256": "c884a40c7ea30e591fee3337843fd42af79501b8d56114d2c975d8277e92705b"
+      "old_sha256": "c884a40c7ea30e591fee3337843fd42af79501b8d56114d2c975d8277e92705b",
+      "new_sha256": "8d6c10ecba0a3caaa4b089cd962d55c5aa10972d9b918b387d300514571dbb32"
     },
     "reporting/contracts_runtime_realtime_foundry.gen.ts": {
       "old_sha256": "9ae67cab99361d96ffbcd10a597406c1ecb98ae548a10477c2d38ed8b8a21834",
