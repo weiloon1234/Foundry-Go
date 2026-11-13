@@ -408,6 +408,13 @@ the order for every text column sort in that application's manager. For example,
 text_collation = "und-x-icu"
 ```
 
+The datatable module checks a configured collation during boot, using the report
+schema's search path and `Config.Timeout` within the boot context. An unavailable
+collation fails boot with `fault.Invalid`: "report text collation is not available
+in the database". Direct managers should call `manager.CheckCollation(ctx)` before
+serving requests. An empty setting performs no check; dynamic per-expression
+`expr.Collate` names remain unchecked until execution.
+
 For native PostgreSQL enums, declare the column with
 `orm.TextOf(b, &m.Status, orm.Codec(codec.String[Status]().WithoutCollation()))`.
 

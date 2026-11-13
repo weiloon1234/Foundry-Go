@@ -43,6 +43,6 @@ func Module(name foundation.ProviderID, key foundation.Key[*Manager], requires [
 		}); err != nil {
 			return safeerror.Join("operation failed", err, manager.Close(ctx))
 		}
-		return nil
+		return manager.CheckCollation(ctx)
 	}}
 }

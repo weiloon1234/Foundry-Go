@@ -17,6 +17,8 @@
   Applications can set `features.reports.config.text_collation` once for text
   column sorts and exports. Empty keeps database ordering; explicit expression
   collations take precedence, and stable tie-breaker orders stay unchanged.
+  The datatable module verifies its configured collation at boot; direct managers
+  can call `CheckCollation(ctx)` before serving requests.
 
 ## v0.27.0 — 2026-11-13
 

@@ -61,6 +61,7 @@ type Config struct {
 	// TextCollation applies to text column sorts unless their expression has an
 	// explicit collation. Empty keeps the database default. Stable orders are unchanged.
 	// Outer DISTINCT sources retain their selected-expression ordering without this default.
+	// Module verifies availability at boot; direct managers should call CheckCollation.
 	TextCollation expr.Collation
 	Schema        string
 	MaxActive     int

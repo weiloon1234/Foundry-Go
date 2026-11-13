@@ -76,7 +76,7 @@ query := expr.OrderBy(f.Query(), expr.Asc(name))
 
 Collated expressions compose with `Asc`/`Desc`, `AscValue`/`DescValue`, `OrderValue`, text filters, and `datatable.SortBy(expr.AsSelected(name))`. They render as `(<expression> COLLATE "<name>")`. Names are double-quoted identifiers resolved through `search_path`; embedded quotes are escaped, and a dot is part of the name rather than a schema separator. Comparison and pattern behavior follows the chosen PostgreSQL collation; collation does not itself make equality case-insensitive.
 
-Names must be non-empty valid UTF-8, at most 63 bytes, with no NUL or control characters. ICU tags allow only ASCII letters, digits and hyphens; an empty or invalid tag produces an invalid collation. Invalid collations fail query build with `fault.Invalid`, before database access. There is no existence check at startup: a valid name unavailable on the server returns an ordinary database error at execution. Column-level `COLLATE` and `CREATE COLLATION` remain ordinary SQL migration statements.
+Names must be non-empty valid UTF-8, at most 63 bytes, with no NUL or control characters. ICU tags allow only ASCII letters, digits and hyphens; an empty or invalid tag produces an invalid collation. Invalid collations fail query build with `fault.Invalid`, before database access. Per-expression collation names have no existence check at startup: a valid name unavailable on the server returns an ordinary database error at execution. The [datatable manager's configured default](datatable.md#requests-filtering-and-deterministic-pages) is checked during module boot. Column-level `COLLATE` and `CREATE COLLATION` remain ordinary SQL migration statements.
 
 ## Selected values and comparisons
 
