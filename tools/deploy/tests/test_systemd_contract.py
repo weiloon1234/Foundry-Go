@@ -45,6 +45,41 @@ class ProbeHost(Host):
 def probe(mode, directory):
     """Small real processes with file barriers instead of timing-dependent sleeps."""
     root = Path(directory)
+    if mode in ('admission', 'preparation'):
+        import admission
+        from contracts import HelperInvocation, ProcessIdentity, UnitIdentity, read_json
+        from host import Paths
+        state = read_json(root / 'probe-identity.json')
+        host = Host(Paths(root))
+        store = admission.AdmissionStore(host, state['instance'])
+        permit = (root / 'permit-id').read_text() if (root / 'permit-id').exists() else None
+        invocation = os.environ['INVOCATION_ID']
+        if mode == 'admission':
+            process = release._process(Host(), str(os.getpid()))
+            record = HelperInvocation(admission.boot_id(host), UnitIdentity(state['instance'], 'http', 1),
+                                      ProcessIdentity(os.getpid(), int(process['start']), invocation),
+                                      state['bundle'], state['spec'], state['resolution'], 1, None)
+            try:
+                store.admit(record, permit_id=permit)
+            except DeployError:
+                raise SystemExit(1) from None
+        else:
+            record = HelperInvocation.parse(read_json(store.runtime / 'admitted/http' / (invocation + '.json')))
+            with store.preparation(record, permit_id=permit):
+                (root / ('prepared-' + invocation)).touch()
+        return
+    if mode == 'bundle-readonly':
+        plugin = root / 'view/plugin'
+        assert (plugin / 'module.so').read_bytes() == b'module'
+        assert (plugin / 'data.txt').read_bytes() == b'companion'
+        for path in (plugin / 'module.so', plugin / 'data.txt', plugin / 'new-file'):
+            try:
+                path.write_bytes(b'forbidden')
+            except OSError:
+                continue
+            raise SystemExit(25)
+        (root / 'bundle-checked').touch()
+        return
     if mode == 'restart':
         counter = root / 'starts'
         count = int(counter.read_text()) + 1 if counter.exists() else 1
@@ -206,6 +241,81 @@ class SystemdContractTests(unittest.TestCase):
         with self.assertRaises(DeployError) as raised:
             action()
         self.assertEqual(code, raised.exception.code)
+
+    def admission_fixture(self):
+        # Only fixture-owned state; the helper reads the real kernel boot/PID IDs.
+        from dataclasses import replace
+        import admission
+        from contracts import (ClosureEvidence, DeploymentSelection, RuntimeResolution, atomic_json)
+        from host import Paths
+        from test_admission import attempt
+        from test_host_capabilities import INSTANCE, DIGEST, OTHER, CURRENT, selection, resolution, closure
+        (self.root / 'proc').symlink_to('/proc')
+        host = Host(Paths(self.root))
+        store = admission.AdmissionStore(host, INSTANCE)
+        store.record_operation(attempt())
+        store.begin(DeploymentSelection.parse(selection()), RuntimeResolution.parse(resolution()))
+        evidence = replace(ClosureEvidence.parse(closure()), boot_id=admission.boot_id(host))
+        store.record_boot_closure(evidence)
+        atomic_json(self.root / 'probe-identity.json', {'instance': INSTANCE, 'bundle': OTHER,
+                                                      'spec': DIGEST, 'resolution': CURRENT})
+        return store, evidence
+
+    def test_pending_gate_prevents_preparation_and_committed_restart_admits_new_invocation(self):
+        from test_admission import attempt
+        store, _ = self.admission_fixture()
+        unit = self.service('admission', command=self.command('restart'), options=
+                            f'ExecCondition={self.command("admission")}\nExecStartPre={self.command("preparation")}\n'
+                            'Restart=on-failure\nRestartSec=50ms')
+        self.host.run(['systemctl', 'start', unit])
+        self.assertFalse((self.root / 'starts').exists())
+        self.assertFalse(list(self.root.glob('prepared-*')))
+        store.record_operation(attempt('succeeded'))
+        store.commit()
+        self.host.run(['systemctl', 'start', unit])
+        self.wait_for(lambda: (self.root / 'starts').exists() and (self.root / 'starts').read_text() == '2')
+        self.assertEqual(2, len(list(self.root.glob('prepared-*'))))
+        self.host.run(['systemctl', 'stop', unit])
+        (store.runtime / 'boot.json').unlink()
+        self.host.run(['systemctl', 'start', unit])
+        self.assertEqual('2', (self.root / 'starts').read_text())
+
+    def test_pending_validation_allowance_cannot_restart_candidate_automatically(self):
+        import admission
+        from contracts import ProcessIdentity, ValidationPermit
+        from test_host_capabilities import PERMIT, OPERATION, CURRENT
+        store, evidence = self.admission_fixture()
+        owner = self.service('operation-owner')
+        self.host.run(['systemctl', 'start', owner])
+        observed = self.show(owner, 'MainPID,InvocationID')
+        process = release._process(Host(), observed['MainPID'])
+        permit = ValidationPermit(PERMIT, OPERATION, admission.boot_id(store.host), CURRENT, evidence.id,
+                                  ProcessIdentity(int(observed['MainPID']), int(process['start']), observed['InvocationID']), evidence.units)
+        store.issue_permit(permit, evidence)
+        (self.root / 'permit-id').write_text(PERMIT)
+        unit = self.service('single-start', command=self.command('restart'), options=
+                            f'ExecCondition={self.command("admission")}\nExecStartPre={self.command("preparation")}\n'
+                            'Restart=on-failure\nRestartSec=50ms')
+        self.host.run(['systemctl', 'start', unit])
+        self.wait_for(lambda: (self.root / 'starts').exists())
+        self.wait_for(lambda: self.show(unit)['ActiveState'] == 'inactive')
+        self.assertEqual('1', (self.root / 'starts').read_text())
+        self.assertEqual(1, len(list(self.root.glob('prepared-*'))))
+
+    def test_bundle_namespace_keeps_module_and_companion_data_read_only(self):
+        source, target = self.root / 'artifact', self.root / 'view/plugin'
+        source.mkdir()
+        target.mkdir(parents=True)
+        (source / 'module.so').write_bytes(b'module')
+        (source / 'data.txt').write_bytes(b'companion')
+        unit = self.service('bundle', command=self.command('bundle-readonly'), options=
+                            f'BindReadOnlyPaths={source}:{target}\nNoNewPrivileges=yes\n'
+                            'PrivateDevices=yes\nProtectSystem=strict\n'
+                            f'ReadWritePaths={self.root}\nRemainAfterExit=yes')
+        self.host.run(['systemctl', 'start', unit])
+        self.wait_for(lambda: self.show(unit)['SubState'] == 'exited')
+        self.assertTrue((self.root / 'bundle-checked').exists())
+        self.assertEqual(b'module', (source / 'module.so').read_bytes())
 
     def test_template_and_plain_cgroups_running_and_stopped(self):
         self.assertGreater(capacity.memory_mib(self.host), 0)

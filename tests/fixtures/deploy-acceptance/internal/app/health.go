@@ -26,6 +26,10 @@ func healthRoutes(services application.Services) ([]http.RouteRegistration, erro
 	if err != nil {
 		return nil, err
 	}
+	bindingProbe, err := featureBindingProbe()
+	if err != nil {
+		return nil, err
+	}
 	noCache := http.DefineMiddleware("health.no-cache", func(next stdhttp.Handler) (stdhttp.Handler, error) {
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			w.Header().Set("Cache-Control", "no-store")
@@ -45,6 +49,9 @@ func healthRoutes(services application.Services) ([]http.RouteRegistration, erro
 			return HealthLive{Status: "ok"}, nil
 		}),
 		ready.Handle(func(ctx context.Context, _ healthInput) (HealthReady, error) {
+			if err := bindingProbe(ctx); err != nil {
+				return HealthReady{}, http.Unavailable.WithCause(err)
+			}
 			report, err := runtime.Readiness(ctx)
 			if err != nil || !report.Ready {
 				return HealthReady{}, http.Unavailable.WithCause(err)

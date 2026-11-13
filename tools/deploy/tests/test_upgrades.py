@@ -119,6 +119,23 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual("unchanged", self.install()["outcome"])
         self.assertEqual(before, self.host.read_registry())
 
+    def test_unresolved_operation_staging_is_outside_upgrade_release_inventory(self):
+        import operations
+        from test_contracts import fixture
+        self.install()
+        _, profile, entry = fixture()
+        entry["client_generation"] = 9
+        self.host.registry["instances"][profile["instance_id"]] = entry
+        releases = self.host.paths.opt(entry["name"]) / "releases"
+        releases.mkdir(parents=True)
+        staging = operations.staging(self.host, entry, str(uuid.uuid4()))
+        (staging / "artifacts").mkdir(parents=True)
+        (staging / "artifacts/incomplete").write_bytes(b"unfinished")
+        with self.host.lock("host"):
+            self.assertIsNone(upgrades.tools_upgrade(self.host, self.host.read_registry(), self.source))
+        self.assertTrue((staging / "artifacts/incomplete").exists())
+        self.assertEqual(list(releases.iterdir()), [])
+
 
     def test_bundle_is_traversable_under_a_hardened_umask(self):
         previous = os.umask(0o077)
@@ -307,10 +324,25 @@ class UpgradeTests(unittest.TestCase):
             upgrades.check_client(self.host, request, "hello")
         self.assertEqual({"minimum": 1, "maximum": 9}, upgrades.hello(self.host)["client_generation"])
 
-    def test_generation_nine_upgrades_to_current_and_includes_upload_module(self):
+    def test_generation_nine_upgrades_to_current(self):
+        self.assert_upgrade_to_current()
+
+    def test_generation_ten_upgrades_to_current(self):
+        self.metadata["generation"] = 10
+        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+        self.host.registry["tools"] = upgrades._active_record(self.source, upgrades.tool_bundle(self.source)[2], None)
+        self.assert_upgrade_to_current()
+
+    def test_generation_eleven_upgrades_to_current(self):
+        self.metadata["generation"] = 11
+        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+        self.host.registry["tools"] = upgrades._active_record(self.source, upgrades.tool_bundle(self.source)[2], None)
+        self.assert_upgrade_to_current()
+
+    def assert_upgrade_to_current(self):
         actual = Path(__file__).resolve().parents[1]
         metadata = upgrades.protocol(actual)
-        self.assertEqual(11, metadata["generation"])
+        self.assertGreater(metadata["generation"], 11)
         self.assertEqual(9, metadata["minimum_host_generation"])
         self.assertEqual(1, metadata["minimum_client_generation"])
         _, files, _ = upgrades.tool_bundle(actual)
@@ -320,12 +352,18 @@ class UpgradeTests(unittest.TestCase):
         self.install()
         self.metadata['generation'] = metadata['generation']
         (self.source / 'protocol.json').write_text(json.dumps(self.metadata))
-        (self.source / "lib/maintenance.py").write_text("# current generation module\n")
+        (self.source / "lib/maintenance.py").write_text("# current module\n")
         plan = upgrades.plan_upgrade(self.host, self.source)
         result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
         self.assertEqual("succeeded", result["outcome"])
-        self.assertEqual(11, self.host.read_registry()["tools"]["generation"])
-        self.assertEqual({"minimum": 1, "maximum": 11}, upgrades.hello(self.host)["client_generation"])
+        self.assertEqual(metadata["generation"], self.host.read_registry()["tools"]["generation"])
+        self.assertEqual({"minimum": 1, "maximum": metadata["generation"]}, upgrades.hello(self.host)["client_generation"])
+        for old_generation in (9, 10, 11):
+            self.metadata["generation"] = old_generation
+            (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+            with self.assertRaises(DeployError) as caught:
+                upgrades.plan_upgrade(self.host, self.source)
+            self.assertEqual(caught.exception.code, "tools_downgrade")
 
     def pre11_installed(self, generation):
         # Build an already installed legacy bundle without calling the candidate
@@ -351,7 +389,7 @@ class UpgradeTests(unittest.TestCase):
         (host.paths.tools / "current").symlink_to("tools/" + digest)
         return host, installed
 
-    def test_pre11_installed_inventory_plans_and_applies_generation_eleven(self):
+    def test_pre11_installed_inventory_plans_and_applies_current_generation(self):
         candidate = Path(__file__).resolve().parents[1]
         for generation in (9, 10):
             with self.subTest(generation=generation):
@@ -359,12 +397,12 @@ class UpgradeTests(unittest.TestCase):
                 for name in ("lib/uploads.py", "server/templates/nginx-upload.conf"):
                     self.assertFalse((installed / name).exists())
                 plan = upgrades.plan_upgrade(host, candidate)
-                self.assertEqual(11, plan["upgrade"]["generation"])
+                self.assertEqual(upgrades.protocol(candidate)["generation"], plan["upgrade"]["generation"])
                 self.assertIn("lib/uploads.py", plan["upgrade"]["changed_paths"])
                 self.assertIn("server/templates/nginx-upload.conf", plan["upgrade"]["changed_paths"])
                 result = upgrades.apply_upgrade(host, candidate, plan["plan_token"], str(uuid.uuid4()))
                 self.assertEqual("succeeded", result["outcome"])
-                self.assertEqual(11, host.read_registry()["tools"]["generation"])
+                self.assertEqual(upgrades.protocol(candidate)["generation"], host.read_registry()["tools"]["generation"])
                 upgrades._installed(host, host.read_registry()["tools"])
 
     def test_pre11_installed_integrity_checks_remain_required(self):
@@ -414,6 +452,32 @@ class UpgradeTests(unittest.TestCase):
         _, files, _ = upgrades.tool_bundle(source)
         expected = {name for name in upgrades.REQUIRED_FILES if name.endswith('.py')}
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
+
+    def test_old_bundle_generations_do_not_require_artifacts(self):
+        (self.source / "lib/artifacts.py").unlink()
+        for generation in (9, 10, 11):
+            with self.subTest(generation=generation):
+                (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": generation}))
+                upgrades.tool_bundle(self.source)
+
+    def test_inventory_requirements_are_cumulative_by_inspected_bundle_generation(self):
+        additions = upgrades.GENERATION_11_FILES | upgrades.GENERATION_12_FILES
+        for generation in (9, 10, 11, 12):
+            with self.subTest(generation=generation):
+                for name in additions:
+                    (self.source / name).unlink(missing_ok=True)
+                required = upgrades.required_files(generation)
+                for name in required - upgrades.BASE_REQUIRED_FILES:
+                    (self.source / name).write_text("# generation-specific file\n")
+                (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": generation}))
+                _, files, _ = upgrades.tool_bundle(self.source)
+                self.assertEqual({p.relative_to(self.source).as_posix() for p in files}, required)
+                for name in required - upgrades.BASE_REQUIRED_FILES:
+                    (self.source / name).unlink()
+                    with self.assertRaises(DeployError) as error:
+                        upgrades.tool_bundle(self.source)
+                    self.assertEqual(error.exception.code, "tools_incomplete")
+                    (self.source / name).write_text("# restored generation-specific file\n")
 
     def leftover(self, digest="b" * 64):
         path = self.host.paths.tools / "tools" / digest

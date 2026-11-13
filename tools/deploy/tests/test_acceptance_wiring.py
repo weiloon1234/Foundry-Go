@@ -23,7 +23,7 @@ class AcceptanceWiringTests(unittest.TestCase):
                                                     *ordinary[1:]])):
             with self.subTest(upgrade=enabled):
                 result = subprocess.run(['bash', '-c',
-                    'set -eu\nphase() { echo "$*"; }\nmode=foreign\nupgrade=' + str(enabled) + '\n' + phases],
+                    'set -eu\nphase() { echo "$*"; }\nmode=foreign\nfeature_preview=0\nupgrade=' + str(enabled) + '\n' + phases],
                     capture_output=True, text=True, check=True, timeout=5)
                 calls = [line.split() for line in result.stdout.splitlines()]
                 self.assertEqual(expected, [call[0] for call in calls])

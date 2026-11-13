@@ -8,14 +8,17 @@ from __future__ import annotations
 import configparser
 import errno
 import json
+import hashlib
 from http.client import HTTPException
 import os
 from pathlib import Path
 import re
 import socket
+import ssl
 import stat
 import sys
 import tempfile
+import time
 import uuid
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener, urlopen
@@ -23,7 +26,8 @@ from urllib.request import ProxyHandler, Request, build_opener, urlopen
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from contracts import DeployError, HOST_PATHS, RENEWAL_WARNING, check_path, now, read_json, require, valid_uuid
+from contracts import (DeployError, HOST_PATHS, RENEWAL_WARNING, check_path, contract_digest,
+                       contract_name, dns_hostname, instance_paths, now, read_json, require, valid_uuid)
 from host import Host, wall_clock_budget
 import packages
 
@@ -35,6 +39,7 @@ LOGS_DIR = "/var/log/foundry/letsencrypt"
 TEMPLATES = Path(__file__).resolve().parents[1] / "server/templates"
 RELOAD_COMMANDS = (["/usr/sbin/nginx", "-t", "-q"], ["/usr/bin/systemctl", "reload", "nginx"])
 RELOAD_HOOK = " && ".join(" ".join(command) for command in RELOAD_COMMANDS)
+NETWORK_RELOAD_HOOK = RELOAD_HOOK + f" && /usr/bin/python3 -I {HOST_PATHS['current']}/lib/certificates.py verify-network-renewal"
 REMEDIATION = ("Repair the owned lineage's DNS-01 credentials, renewal configuration and "
                "Foundry renewal timer, then retry; foreign lineages require explicit adoption or reissue.")
 
@@ -70,7 +75,7 @@ def _synthetic_issue(host, entry):
         host.run(["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes",
                   "-subj", "/CN=" + lineage, "-keyout", str(staging / "privkey.pem"),
                   "-out", str(staging / "request.pem")], timeout=30)
-        host.owned_write(staging / "extensions", "subjectAltName=DNS:" + lineage + "\n"
+        host.owned_write(staging / "extensions", "subjectAltName=" + ",".join("DNS:" + name for name in _hostnames(host, entry)) + "\n"
                          "basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\n"
                          "extendedKeyUsage=serverAuth\n"
                          # Strict X.509 verifiers (Python 3.13+ on Ubuntu 26.04) require key identifiers.
@@ -91,11 +96,13 @@ def _synthetic_issue(host, entry):
     renewal = "\n".join(f"{name} = {live / filename}" for name, filename in (
         ("cert", "cert.pem"), ("privkey", "privkey.pem"), ("chain", "chain.pem"), ("fullchain", "fullchain.pem")))
     host.owned_write(_renewal_path(host, entry), renewal + "\n[renewalparams]\nauthenticator = acceptance-synthetic\n"
-                     + "renew_hook = " + RELOAD_HOOK + "\n", mode=0o600)
+                     + "renew_hook = " + _reload_hook(host, entry) + "\n", mode=0o600)
     _identity_ready(host, entry)
     _renewal_ready(host, entry)
     for command in RELOAD_COMMANDS:
         host.run(command)
+    if _network_claim_path(host, entry).exists():
+        verify_network_postcondition(host, entry)
 
 
 def _lineage(entry):
@@ -165,6 +172,8 @@ def _validate_token(token):
 def _renewal_dry_run(host, entry):
     host.run(["certbot", "renew", "--cert-name", _lineage(entry), "--dry-run", "--run-deploy-hooks",
               "--no-random-sleep-on-renew"] + _options(), timeout=900)
+    if _network_claim_path(host, entry).exists():
+        verify_network_postcondition(host, entry)
 
 
 def _staging_unreachable():
@@ -313,7 +322,7 @@ def _timer(entry):
     return "foundry-certbot-renew"
 
 
-def _units(entry):
+def _units(entry, *, network=False):
     name = _timer(entry)
     command = "/usr/bin/certbot renew --quiet " + " ".join(_options())
     fixture_environment = ""
@@ -323,14 +332,18 @@ def _units(entry):
     result = {}
     for suffix in ("service", "timer"):
         content = (TEMPLATES / ("foundry-certbot-renew." + suffix)).read_text()
-        result[name + "." + suffix] = content.replace("@COMMAND@", command).replace("@ENVIRONMENT@", fixture_environment)
+        postcondition = (f"ExecStartPost=/usr/bin/python3 -I {HOST_PATHS['current']}/lib/certificates.py verify-network-renewal\n"
+                         if network else "")
+        result[name + "." + suffix] = content.replace("@COMMAND@", command).replace("@ENVIRONMENT@", fixture_environment).replace("@POSTCONDITION@", postcondition)
     return result
 
 
-def _timer_ready(host, entry):
-    for name, content in _units(entry).items():
+def _timer_ready(host, entry, *, allow_legacy=False):
+    required = _network_claim_path(host, entry).exists() and not allow_legacy
+    for name, content in _units(entry, network=True).items():
         path = check_path(host.paths.p("/etc/systemd/system/" + name), "file")
-        require(path.exists() and path.read_text() == content and not path.stat().st_mode & 0o022
+        accepted = (content,) if required else (content, _units(entry)[name])
+        require(path.exists() and path.read_text() in accepted and not path.stat().st_mode & 0o022
                 and (path.stat().st_uid == 0 or host.paths.root != Path("/")),
                 "certificate_renewal_invalid", REMEDIATION)
     timer = _timer(entry) + ".timer"
@@ -338,7 +351,7 @@ def _timer_ready(host, entry):
         require(host.run(command, check=False).returncode == 0, "certificate_renewal_invalid", REMEDIATION)
 
 
-def _renewal_ready(host, entry):
+def _renewal_ready(host, entry, *, allow_legacy_hook=False):
     synthetic = _synthetic(host, entry)
     _directories(host)
     credentials = None if synthetic else _credentials(host, entry)
@@ -353,7 +366,8 @@ def _renewal_ready(host, entry):
                           and params.get("dns_cloudflare_credentials") == str(credentials)
                           and params.get("dns_cloudflare_propagation_seconds") == "60")
         # Certbot persists --deploy-hook under the name renew_hook.
-        require(provider_ready and params.get("renew_hook") == RELOAD_HOOK
+        require(provider_ready and (params.get("renew_hook") == _reload_hook(host, entry)
+                                    or allow_legacy_hook and params.get("renew_hook") == RELOAD_HOOK)
                 and not params.get("pre_hook") and not params.get("post_hook"),
                 "certificate_renewal_invalid", REMEDIATION)
         live = host.paths.p(CONFIG_DIR + "/live/" + _lineage(entry))
@@ -362,17 +376,17 @@ def _renewal_ready(host, entry):
             require(parser["lineage"].get(key) == str(live / name), "certificate_renewal_invalid", REMEDIATION)
     except (configparser.Error, KeyError, UnicodeError):
         raise DeployError("certificate_renewal_invalid", REMEDIATION) from None
-    _timer_ready(host, entry)
+    _timer_ready(host, entry, allow_legacy=allow_legacy_hook)
 
 
-def certificate_ready(host: Host, entry: dict) -> bool:
+def certificate_ready(host: Host, entry: dict, *, hostnames=None) -> bool:
     """Check expiry and hostname separately (openssl otherwise drops a check)."""
     domain = entry["profile"]["domain"]
     certificate = host.paths.p(f"{CONFIG_DIR}/live/{domain}/fullchain.pem")
     if not certificate.exists():
         return False
     command = ["openssl", "x509", "-noout", "-in", str(certificate)]
-    for arguments in (["-checkend", "0"], ["-checkhost", domain]):
+    for arguments in (["-checkend", "0"], *(["-checkhost", name] for name in (hostnames or _hostnames(host, entry)))):
         try:
             result = host.run(command + arguments, check=False, timeout=10)
         except (OSError, DeployError):
@@ -382,7 +396,7 @@ def certificate_ready(host: Host, entry: dict) -> bool:
     return True
 
 
-def _identity_ready(host, entry):
+def _identity_ready(host, entry, *, hostnames=None):
     require(read_json(_private(host, _claim_path(host, entry))) == _claim(entry),
             "certificate_ownership", REMEDIATION)
     lineage = _lineage(entry)
@@ -394,7 +408,7 @@ def _identity_ready(host, entry):
         path = live / name
         require(path.is_symlink() and path.resolve().parent == archive and path.resolve().is_file(),
                 "certificate_ownership", REMEDIATION)
-    require(certificate_ready(host, entry), "certificate_invalid", REMEDIATION)
+    require(certificate_ready(host, entry, hostnames=hostnames), "certificate_invalid", REMEDIATION)
     certificate = host.run(["openssl", "x509", "-in", str(live / "cert.pem"), "-pubkey", "-noout"])
     key = host.run(["openssl", "pkey", "-in", str(live / "privkey.pem"), "-pubout"])
     require(bool(certificate.stdout.strip()) and certificate.stdout == key.stdout,
@@ -415,6 +429,10 @@ def inspect(host: Host, entry: dict) -> dict:
         _renewal_ready(host, entry)
     except (DeployError, OSError, ValueError):
         return {"state": "conflict", "lineage": lineage, "remediation": REMEDIATION}
+    if _network_claim_path(host, entry).exists():
+        status = network_renewal_status(host, entry)
+        if status["state"] != "verified":
+            return {"state": "conflict", "lineage": lineage, "effective_renewal": status, "remediation": REMEDIATION}
     return {"state": "ready", "lineage": lineage, "zone_ref": _zone(entry)}
 
 
@@ -436,8 +454,11 @@ def provision(host: Host, registry: dict, entry: dict) -> None:
             host.owned_write(claim, json.dumps(_claim(entry)) + "\n", mode=0o600)
         for name, content in _units(entry).items():
             path = host.paths.p("/etc/systemd/system/" + name)
-            require(not path.exists() or check_path(path).read_text() == content,
+            enforced = _units(entry, network=True)[name]
+            require(not path.exists() or check_path(path).read_text() in (content, enforced),
                     "certificate_ownership", REMEDIATION)
+            if path.exists() and path.read_text() == enforced:
+                content = enforced
             host.owned_write(path, content)
         host.run(["systemctl", "daemon-reload"])
         host.run(["systemctl", "enable", "--now", _timer(entry) + ".timer"])
@@ -469,6 +490,21 @@ def provision(host: Host, registry: dict, entry: dict) -> None:
 
 
 def _main(arguments):
+    if arguments == ["verify-network-renewal"]:
+        require(os.geteuid() == 0, "certificate_ownership", REMEDIATION)
+        host = Host()
+        # Certbot may run under the caller's lock. Write only lineage observation
+        # receipts here, not registry/admission state or a second locking protocol.
+        registry = host.read_registry()
+        failed = False
+        for entry in registry["instances"].values():
+            if _network_claim_path(host, entry).exists():
+                try:
+                    verify_network_postcondition(host, entry)
+                except DeployError:
+                    failed = True
+        require(not failed, "certificate_effective_renewal", "A selected TLS consumer failed effective renewal verification.")
+        return
     require(os.geteuid() == 0 and len(arguments) == 2 and arguments[0] == "synthetic-renew"
             and valid_uuid(arguments[1]),
             "certificate_fixture_forbidden", "Unknown certificate fixture operation.")
@@ -485,9 +521,218 @@ def _main(arguments):
         host.journal(registry, entry)
 
 
+def _network_claim_path(host, entry):
+    return check_path(host.paths.p(instance_paths(entry["name"])["configuration"]) / "certificate-network.json", "file")
+
+
+def _network_claim(host, entry):
+    path = _network_claim_path(host, entry)
+    if not path.exists():
+        return None
+    value = read_json(_private(host, path))
+    require(set(value) == {"instance_id", "hostnames", "listeners"}
+            and value["instance_id"] == entry["profile"]["instance_id"], "certificate_ownership", REMEDIATION)
+    require(isinstance(value["hostnames"], list) and 1 <= len(value["hostnames"]) <= 100,
+            "certificate_names", "The owned SAN inventory exceeds the certificate limit.")
+    for name in value["hostnames"]:
+        dns_hostname(name)
+    from topology import PublicListenerBinding
+    require(isinstance(value["listeners"], dict) and len(value["listeners"]) <= 256,
+            "certificate_ownership", REMEDIATION)
+    for binding in value["listeners"].values():
+        require(PublicListenerBinding.parse(binding).hostname in value["hostnames"], "certificate_ownership", REMEDIATION)
+    for key in value["listeners"]:
+        name, separator, checksum = key.partition(":")
+        require(separator and len(name.split(".")) == 2, "certificate_ownership", REMEDIATION)
+        for part in name.split("."):
+            contract_name(part)
+        contract_digest(checksum)
+    return value
+
+
+def _hostnames(host, entry):
+    claim = _network_claim(host, entry)
+    return tuple(claim["hostnames"]) if claim else (entry["profile"]["domain"],)
+
+
+def _reload_hook(host, entry):
+    return NETWORK_RELOAD_HOOK if _network_claim_path(host, entry).exists() else RELOAD_HOOK
+
+
+def _install_network_postcondition(host, entry):
+    """Upgrade only the two known owned unit projections, preserving legacy sites."""
+    changed = False
+    for name, content in _units(entry, network=True).items():
+        path = check_path(host.paths.p("/etc/systemd/system/" + name), "file")
+        require(path.exists() and path.read_text() in (_units(entry)[name], content), "certificate_ownership", REMEDIATION)
+        changed = host.owned_write(path, content) or changed
+    if changed:
+        host.run(["systemctl", "daemon-reload"])
+
+
+def network_renewal_status(host, entry):
+    if not _network_claim_path(host, entry).exists():
+        return None
+    path = _network_status_path(host, entry)
+    if not path.exists():
+        return {"state": "unverified", "checked_at": None}
+    value = read_json(_private(host, path))
+    require(set(value) == {"state", "checked_at"} and value["state"] in ("pending", "failed", "verified"),
+            "certificate_ownership", REMEDIATION)
+    from contracts import valid_timestamp
+    require(valid_timestamp(value["checked_at"]), "certificate_ownership", REMEDIATION)
+    return value
+
+
+def verify_network_postcondition(host, entry):
+    """Certbot exit 0 and hook success are insufficient: persist an independent result."""
+    path = _network_status_path(host, entry)
+    def record(state):
+        host.owned_write(path, json.dumps({"state": state, "checked_at": now()}) + "\n", mode=0o600)
+    record("pending")
+    try:
+        result = verify_network_consumers(host, entry)
+    except (DeployError, OSError, ValueError):
+        record("failed")
+        raise DeployError("certificate_effective_renewal", "A selected TLS endpoint did not complete a handshake with the current leaf.") from None
+    record("verified")
+    return result
+
+
+def _network_status_path(host, entry):
+    return check_path(host.paths.p(instance_paths(entry["name"])["configuration"]) / "certificate-network-status.json", "file")
+
+
+def ensure_hostnames(host, registry, entry, profiles, *, topologies):
+    """Extend the lineage with TLS names from paired profiles and topologies.
+
+    Call before opening TCP. Existing SANs are never removed, including on rollback.
+    A durable intent survives an uncertain issuance and is retried with the same
+    superset. This issues DNS-01 certificates; it never writes application A/AAAA.
+    """
+    from listeners import public_policies
+    profiles, topologies = tuple(profiles), tuple(topologies)
+    require(len(profiles) == len(topologies), "listener_topology_required", "Supply a topology for every certificate profile.")
+    tls_bindings = []
+    for profile, topology in zip(profiles, topologies):
+        require(profile.instance_id == entry["profile"]["instance_id"], "certificate_ownership", REMEDIATION)
+        policies = public_policies(profile, topology)
+        tls_bindings.extend((name, binding, profile.projection()["listeners"][name])
+                            for name, binding in profile.listeners if policies[name].tls == "edge")
+    if not tls_bindings:
+        return
+    domain = entry["profile"]["domain"]
+    _identity_ready(host, entry, hostnames=(domain,))
+    _renewal_ready(host, entry, allow_legacy_hook=True)
+    prior = _network_claim(host, entry)
+    names = set(prior["hostnames"] if prior else (domain,))
+    listeners = dict(prior["listeners"] if prior else {})
+    for name, binding, raw in tls_bindings:
+        names.add(binding.hostname)
+        # Retain different address generations too; only currently selected TLS files are probed.
+        key = name + ":" + hashlib.sha256(json.dumps(raw, sort_keys=True).encode()).hexdigest()
+        listeners[key] = raw
+    live = host.paths.p(CONFIG_DIR + "/live/" + _lineage(entry))
+    sans = host.run(["openssl", "x509", "-in", str(live / "cert.pem"), "-noout", "-ext", "subjectAltName"], timeout=10).stdout
+    for name in re.findall(r"DNS:([^,\s]+)", sans):
+        names.add(dns_hostname(name))
+    require(len(names) <= 100 and len(listeners) <= 256, "certificate_names", "The retained certificate inventory exceeds its bound.")
+    if prior and set(prior["hostnames"]) == names and prior["listeners"] == listeners:
+        try:
+            _identity_ready(host, entry)
+            _renewal_ready(host, entry)
+        except DeployError:
+            pass  # Resume an interrupted issuance with the same durable SAN intent.
+        else:
+            verify_network_postcondition(host, entry)
+            return
+    synthetic = _synthetic(host, entry)
+    if synthetic:
+        require(all(name.endswith(".acceptance.invalid") for name in names), "certificate_fixture_forbidden", REMEDIATION)
+    else:
+        token = _credentials(host, entry).read_text().strip().split(" = ", 1)[1]
+        require(all(_resolve_zone(token, name) == _zone(entry) for name in names),
+                "certificate_zone_invalid", "Every TCP hostname must belong to the lineage's explicitly scoped zone.")
+    _install_network_postcondition(host, entry)
+    host.owned_write(_network_claim_path(host, entry), json.dumps({"instance_id": entry["profile"]["instance_id"],
+                     "hostnames": sorted(names), "listeners": listeners}, sort_keys=True) + "\n", mode=0o600)
+    if synthetic:
+        _synthetic_issue(host, entry)
+    else:
+        arguments = ["certbot", "certonly", "--non-interactive", "--agree-tos", "--dns-cloudflare",
+                     "--dns-cloudflare-credentials", str(_credentials(host, entry)), "--dns-cloudflare-propagation-seconds", "60",
+                     "--cert-name", _lineage(entry), "--email", entry["profile"]["certbot_email"],
+                     "--renew-with-new-domains", "--deploy-hook", NETWORK_RELOAD_HOOK]
+        if prior is None:
+            arguments.append("--force-renewal")
+        for name in sorted(names):
+            arguments.extend(("--domain", name))
+        host.run(arguments + _options(), timeout=900)
+    _identity_ready(host, entry)
+    _renewal_ready(host, entry)
+    if not synthetic:
+        _renewal_dry_run(host, entry)
+    # A failed deploy hook does not necessarily make Certbot exit nonzero.
+    verify_network_postcondition(host, entry)
+    _renewal_verified(entry)
+    host.journal(registry, entry)
+
+
+def verify_network_consumers(host, entry):
+    """Fresh TLS handshakes must serve the actual renewed leaf on HTTP and TCP.
+
+    Probe only selected runtime projections. Closed/pending routes stay closed and
+    are checked on opening instead. Loopback source is explicitly allowed by the
+    owned stream template; public CIDRs are not widened for this health check.
+    """
+    from topology import PublicListenerBinding
+    from edge import RUNTIME
+    claim = _network_claim(host, entry)
+    require(claim is not None, "certificate_ownership", REMEDIATION)
+    _identity_ready(host, entry)
+    _renewal_ready(host, entry)
+    live = host.paths.p(CONFIG_DIR + "/live/" + _lineage(entry) + "/cert.pem")
+    expected = hashlib.sha256(ssl.PEM_cert_to_DER_cert(live.read_text())).digest()
+    runtime = host.paths.p(RUNTIME + "/" + entry["profile"]["instance_id"])
+    targets = set()
+    if (runtime / "http-open.conf").exists():
+        targets.add((entry["profile"]["domain"], "127.0.0.1", 443))
+    for key, raw in claim["listeners"].items():
+        name = key.split(":", 1)[0]
+        path = check_path(runtime / ("stream-" + name + ".conf"), "file")
+        if not path.exists():
+            continue
+        binding = PublicListenerBinding.parse(raw)
+        selected = path.read_text()
+        for address in binding.public_addresses:
+            for port in binding.ports:
+                literal = ("[" + address + "]" if ":" in address else address) + ":" + str(port)
+                if "    listen " + literal + " ssl" in selected:
+                    targets.add((binding.hostname, address, port))
+    context = ssl.create_default_context()
+    budget = time.monotonic() + 30
+    for hostname, address, port in sorted(targets):
+        source = "::1" if ":" in address else "127.0.0.1"
+        matched = False
+        # Reload is graceful/asynchronous: require a new connection using the new leaf.
+        deadline = min(budget, time.monotonic() + 10)
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection((address, port), timeout=1, source_address=(source, 0)) as connection:
+                    with context.wrap_socket(connection, server_hostname=hostname) as secured:
+                        matched = hashlib.sha256(secured.getpeercert(binary_form=True)).digest() == expected
+            except (OSError, ssl.SSLError):
+                matched = False
+            if matched:
+                break
+            time.sleep(0.1)
+        require(matched, "certificate_effective_renewal", "A selected HTTP/TCP TLS consumer did not serve the renewed certificate.")
+    return {"state": "effective" if targets else "closed", "consumers": len(targets)}
+
+
 if __name__ == "__main__":
     try:
         _main(sys.argv[1:])
     except (DeployError, OSError, ValueError, KeyError):
-        sys.stderr.write("Foundry certificate fixture failed; inspect the private host configuration.\n")
+        sys.stderr.write("Foundry certificate operation failed; inspect the private host configuration.\n")
         sys.exit(1)

@@ -46,7 +46,7 @@ class ManagerTests(unittest.TestCase):
         import release
         value = self.host.read_registry()
         value['tools'] = upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)
-        self.assertEqual(11, value['tools']['generation'])
+        self.assertEqual(upgrades.protocol()['generation'], value['tools']['generation'])
         self.host.write_registry(value)
         request = {**self.request, 'client': {**self.request['client'], 'generation': 9},
                    'archive': '/staged/app.tar.gz', 'archive_sha256': 'a' * 64}
@@ -54,6 +54,30 @@ class ManagerTests(unittest.TestCase):
             self.assertEqual({'ok': True}, manager.execute(self.host, 'activate', request))
         activate.assert_called_once()
         self.assertEqual('/staged/app.tar.gz', activate.call_args.args[3])
+
+    def test_feature_gate_is_target_local_and_precedes_lifecycle_dispatch(self):
+        import release
+        from test_host_capabilities import selection
+        _, _, feature = fixture(project_slug="feature", host_id=self.entry["host_id"], port=8101)
+        feature["deployment_selection"] = selection(feature["profile"]["instance_id"])
+        value = registry(self.entry, feature)
+        value["tools"] = upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)
+        self.host.write_registry(value)
+        request = {**self.request, "client": {**self.request["client"], "generation": 9},
+                   "archive": "/staged/app.tar.gz", "archive_sha256": "a" * 64}
+        for generation in (9, 10, 11):
+            request["client"]["generation"] = generation
+            with patch.object(release, "activate", return_value={"ok": True}) as activate:
+                self.assertEqual({"ok": True}, manager.execute(self.host, "activate", request))
+                activate.assert_called_once()
+            feature_request = {**self.request, "profile": feature["profile"],
+                               "client": {**self.request["client"], "generation": generation}}
+            with patch.object(self.host, "run") as run:
+                for action in ("status", "activate", "config-set", "restart", "rollback"):
+                    with self.subTest(generation=generation, action=action), self.assertRaises(DeployError) as caught:
+                        manager.execute(self.host, action, feature_request)
+                    self.assertEqual(caught.exception.code, "instance_capability_required")
+                run.assert_not_called()
 
     def test_unknown_mutation_fields_are_rejected(self):
         with self.assertRaises(DeployError) as error:
@@ -226,6 +250,24 @@ class ManagerTests(unittest.TestCase):
                             manager.execute(self.host, "logs", {**self.request, "lines": 1})
                         self.assertEqual("logs_too_large", error.exception.code)
                         self.assertNotIn(output[:100], error.exception.detail)
+
+    def test_feature_maintenance_refuses_both_directions_without_mutation(self):
+        from test_host_capabilities import declaration, profile
+        from topology import validate_topology
+        value = profile()
+        self.profile.update(schema=3, placement=value["placement"], listeners=value["listeners"])
+        self.entry["topology"] = validate_topology(declaration())
+        self.host.write_registry(registry(self.entry))
+        before = self.host.paths.registry.read_bytes()
+        for action in ("down", "up"):
+            with self.subTest(action=action), patch.object(self.host, "run") as run, \
+                    patch.object(self.host, "save_state") as save, self.assertRaises(DeployError) as raised:
+                manager.execute(self.host, action, {**self.request, "confirm": True})
+            self.assertEqual(raised.exception.code, "capability_unavailable")
+            self.assertIn("post-preview", raised.exception.detail)
+            run.assert_not_called()
+            save.assert_not_called()
+            self.assertEqual(self.host.paths.registry.read_bytes(), before)
 
     def test_maintenance_requires_confirmation_and_rejects_up_parameters(self):
         with patch.object(self.host, "run") as run:

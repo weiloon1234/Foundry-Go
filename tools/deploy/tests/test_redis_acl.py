@@ -293,9 +293,9 @@ class RedisServiceHost(MemoryRedisHost):
         self.active = False
         self.occupied = False
         self.fail_start = False
-        self.paths.etc.mkdir(parents=True)
+        self.paths.etc.mkdir(parents=True, exist_ok=True)
         meminfo = self.paths.p("/proc/meminfo")
-        meminfo.parent.mkdir(parents=True)
+        meminfo.parent.mkdir(parents=True, exist_ok=True)
         meminfo.write_text("MemTotal:       8388608 kB\n")
         for binary in ("redis-server", "redis-cli"):
             path = self.paths.p("/usr/bin/" + binary)
@@ -308,6 +308,11 @@ class RedisServiceHost(MemoryRedisHost):
         output, code = "", 0
         if args[:2] == ["systemctl", "show"]:
             exists = self.paths.p(redis_acl.REDIS_UNIT_PATH).exists()
+            template = self.paths.p("/etc/systemd/system/redis-server@.service")
+            if not exists and template.is_symlink():
+                return SimpleNamespace(returncode=0, stdout="LoadState=masked\nActiveState=inactive\nMainPID=0\nFragmentPath=/dev/null\nUnitFileState=masked\nDropInPaths=\n", stderr="")
+            if not exists and self.paths.p("/usr/lib/systemd/system/redis-server@.service").exists():
+                return SimpleNamespace(returncode=0, stdout="LoadState=loaded\nActiveState=inactive\nMainPID=0\nFragmentPath=/usr/lib/systemd/system/redis-server@.service\nUnitFileState=disabled\nDropInPaths=\n", stderr="")
             output = ("LoadState=" + ("loaded" if exists else "not-found") + "\nActiveState="
                       + ("active" if self.active else "inactive") + "\nFragmentPath="
                       + (redis_acl.REDIS_UNIT_PATH if exists else "") + "\n")
@@ -369,6 +374,29 @@ class RedisServicePreparationTests(unittest.TestCase):
         self.assertNotIn("redis_password", json.dumps(shared))
         self.trust.assert_called_once_with(self.host, self.registry, "redis")
         self.assertEqual("ready", redis_acl.inspect(self.host, self.registry)["state"])
+
+    def test_unjournaled_template_mask_remains_a_conflict(self):
+        self.registry["tools"] = {"generation": 12}
+        mask = self.host.paths.p("/etc/systemd/system/redis-server@.service")
+        mask.parent.mkdir(parents=True)
+        mask.symlink_to("/dev/null")
+        with self.assertRaisesRegex(DeployError, "occupied or unclaimed"):
+            redis_acl.prepare(self.host, self.registry)
+        self.assertEqual(self.registry["shared"], {})
+        self.assertTrue(mask.is_symlink())
+
+    def test_old_generations_do_not_request_package_handoffs(self):
+        for generation in (9, 10, 11):
+            with self.subTest(generation=generation), patch("packages.default_activation_pending", side_effect=AssertionError("legacy handoff")):
+                self.registry["tools"] = {"generation": generation}
+                redis_acl.prepare(self.host, self.registry)
+
+    def test_generation_12_without_package_mask_needs_no_handoff(self):
+        self.registry["tools"] = {"generation": 12}
+        with patch("packages.authorize_default_activation") as authorize:
+            redis_acl.prepare(self.host, self.registry)
+        authorize.assert_not_called()
+        self.assertTrue(self.host.active)
 
     def test_ready_retry_reverifies_trust_without_service_restart(self):
         redis_acl.prepare(self.host, self.registry)

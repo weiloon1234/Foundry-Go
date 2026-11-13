@@ -6,9 +6,15 @@ The bundle implements layout v2, dedicated shared services, role lifecycle,
 Cloudflare certificates, and off-host recovery. Container acceptance remains a
 release requirement; unit tests do not establish live package or provider behavior.
 
+For topology schema 2 and profile schema 3, follow the
+[host capabilities preview guide](host-capabilities.md). Its feature lifecycle
+refusals supersede the legacy maintenance, rollback, configuration and recovery
+operations described below.
+
 <a id="agent-entry"></a>
 ## Agent entry
 
+- [Declare preview host capabilities](host-capabilities.md#recipe-declarations)
 - [Invoke pinned deployment tools](#recipe-deploy)
 - [Probe release storage](#recipe-storage-probe)
 - [Prepare readiness](production-operations.md#recipe-startup-readiness)
@@ -383,7 +389,7 @@ match both content and metadata.
 [`tools/deploy/protocol.json`](../../tools/deploy/protocol.json) owns the current protocol and tool generation. The stable
 launcher dispatches to the active immutable bundle. `hello` reports host metadata
 without a mutation. Requests include the client's protocol, framework version,
-generation, and bundle digest. The current tool generation is 11. The minimum
+generation, and bundle digest. The current tool generation is 12. The minimum
 client generation remains 1, so existing registrations and generation-9 clients
 remain supported for ordinary deployment actions. Generation-9 tools reject
 planning or applying an upgrade against a generation-11 host; they cannot bypass

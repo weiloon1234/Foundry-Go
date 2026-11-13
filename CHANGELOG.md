@@ -1,5 +1,66 @@
 # Changelog
 
+## v0.31.0 — 2026-11-14
+
+- Added: generation-12 host capabilities preview with topology schema 2 and
+  environment profile schema 3. Applications declare distribution packages,
+  SHA-256-pinned platform artifacts and bundles, single-instance custom services,
+  typed argv, resource limits, state policy and readiness dependencies. Package
+  defaults stay masked until explicitly handed to a framework service owner;
+  declaring an executable dependency does not start a daemon. Service-local bundle
+  views remain protected, and configuration is prepared per start with immutable,
+  rendered JSON, recreate and seed-once modes.
+- Added: `deployment.LoadBindings` supplies immutable, typed endpoint, executable
+  and bundle bindings from the invocation's role descriptor. Missing names and
+  invalid explicit descriptors return errors. Journaled effective environments
+  keep the application's private HTTP allocation aligned with its bindings.
+  Persistent boot admission, dependency-ordered startup and whole-set readiness
+  checks precede public opening. Incomplete operations close exposure and stop
+  workloads through independently pinned cleanup; unresolved cleanup blocks
+  subsequent starts. Whole-instance restart and stop, role logs and per-instance
+  listener reports are supported.
+- Added: public TCP through nginx stream with `tls: edge` termination or explicit
+  unencrypted `tls: none`. Both require `authentication: true`: the service must
+  authenticate and authorize clients itself. Profile bindings select public ports,
+  source CIDRs and external DNS-only hostnames. Active default-deny UFW enforces
+  closure before activation and after stop on supported nft and legacy backends,
+  for IPv4 and IPv6. Bootstrap does not enable/reset UFW or adopt foreign allows.
+  Docker DNS and outbound masquerade NAT rules can coexist; inbound DNAT/REDIRECT
+  that can match a claimed port, ambiguous rules and unknown hooks refuse.
+  Proven-disjoint NAT rules are accepted. Foundry does not publish Docker ports
+  or configure upstream NAT; declared addresses must belong to the host namespace.
+- Changed: feature operations outside the preview fail with explicit capability
+  errors naming the post-preview B24 lifecycle release. Refusals cover rollback
+  to previous feature or legacy releases (including reactivation of a previously
+  selected noncurrent release), configuration changes/holds, key rotation, both
+  maintenance `down` and `up`, named lifecycle operations, interrupted-operation
+  reconciliation/recovery, custom-service secret intake, and bundles without
+  matching package-version ABI evidence. Changed reprovisioning of selected
+  profiles, package requirements or owned network/boot files also refuses, as do
+  missing package requirements at activation, feature release/artifact pruning,
+  host capacity changes involving features, and feature backup configuration/run
+  and restore drills. Helper pruning retains every feature helper bundle and
+  upgrade journal with a capability diagnostic; invocation/view bounds still
+  apply. Neither direction of maintenance mutates a feature instance.
+- Changed: wrappers, counts above one, ordinals other than one, PROXY protocol and
+  managed application DNS remain B24 release-2 capabilities. UDP listeners and
+  artifact formats other than `file` and `tar.gz` are unsupported, with no numbered
+  release promise. Existing applications and generation 9–11 hosts retain their
+  behavior, including upload provisioning. On an existing bound host, run
+  `ACTION=tools-plan make deploy`, then `ACTION=tools-apply make deploy` with the
+  reviewed `PLAN_TOKEN` and stable `OPERATION` UUID using its legacy profile before
+  adopting schema 3. Fresh bootstrap installs the pinned generation-12 tools.
+  See the [host capabilities consumer guide](docs/guides/host-capabilities.md)
+  for declarations, authentication responsibilities, prerequisites and commands.
+- Fixed: unchanged public TCP re-bootstrap validates owned runtime exposure;
+  shared boot coordinators retain verified bundle pins across tool upgrades.
+  Bootstrap checks ownership before network mutation and safely hands off the
+  framework Redis template while retaining masks on stock defaults. Custom units
+  use valid absolute working directories, and privileged preparation assigns
+  explicit traversal modes and ownership under restrictive umasks. The feature
+  acceptance scenario uses the package-owned `/usr/bin/jq` executable, avoiding
+  Ubuntu 26.04's changed ownership of `sha256sum`.
+
 ## v0.30.0 — 2026-11-14
 
 - Added: application-declared large opaque attachments through `Policy.MaxBytes`

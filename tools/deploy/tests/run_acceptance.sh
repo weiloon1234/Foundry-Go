@@ -22,13 +22,15 @@ prove every running role matches its selected release.
 and the candidate. Supply the baseline tag's Go module-cache bundle through
 --tools-root. It bootstraps and deploys with that bundle, then upgrades through
 tools-plan/tools-apply and proves the candidate deployment and installed units.
+--feature-preview runs only the generation-12 feature scenario on --fresh.
+It requires lane C preview integration and a newly built deploy-acceptance archive.
 Optional: ACCEPTANCE_LOG_DIR, ACCEPTANCE_SCHEDULE_MESSAGE (see acceptance_roles.py),
 ACCEPTANCE_SECRET_CONFIG_KEYS (comma-separated keys the first deploy needs, such as
 seed passwords; each receives a random bootstrap value).
 EOF
 }
 
-ubuntu= platform= archive= framework= mode= upgrade=0 old_tools=
+ubuntu= platform= archive= framework= mode= upgrade=0 feature_preview=0 old_tools=
 while (($#)); do
   case "$1" in
     --ubuntu|--platform|--archive|--framework-root|--tools-root)
@@ -42,6 +44,7 @@ while (($#)); do
       [[ -z "$mode" ]] || { echo 'Select one host mode' >&2; exit 2; }
       mode=${1#--}; shift ;;
     --upgrade) upgrade=1; shift ;;
+    --feature-preview) feature_preview=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -49,6 +52,9 @@ done
 [[ "$ubuntu" == 24.04 || "$ubuntu" == 26.04 ]] || { usage >&2; exit 2; }
 [[ "$platform" == linux/arm64 || "$platform" == linux/amd64 ]] || { usage >&2; exit 2; }
 [[ -n "$mode" && -f "$archive" && -d "$framework" ]] || { usage >&2; exit 2; }
+if ((feature_preview)); then
+  [[ "$mode" == fresh && "$upgrade" == 0 ]] || { echo '--feature-preview requires --fresh and excludes --upgrade' >&2; exit 2; }
+fi
 framework=$(cd "$framework" && pwd -P)
 archive=$(cd "$(dirname "$archive")" && pwd -P)/$(basename "$archive")
 tests="$framework/tools/deploy/tests"
@@ -273,6 +279,12 @@ phase() {
 docker exec "$host" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade' >"$logs/package-index.log" 2>&1
 phase foreign-baseline /verification/deploy/tests/acceptance_foreign.py baseline --mode "$mode"
 baseline_done=1
+if ((feature_preview)); then
+  phase feature-preview /verification/deploy/tests/acceptance_feature.py --archive /var/lib/foundry-acceptance-f4a/input.tar.gz
+  phase foreign-verify /verification/deploy/tests/acceptance_foreign.py verify
+  echo 'PASS feature preview scenario'
+  exit 0
+fi
 host_phase=()
 if ((upgrade)); then
   phase upgrade-prepare /verification/deploy/tests/acceptance_host.py \

@@ -13,7 +13,7 @@ confirmation rules, host prerequisites, and recovery procedures.
 | `lib/backup.py` | PostgreSQL and encrypted key/config backups |
 | `protocol.json` | Wire protocol and tool generation |
 
-The bundle uses protocol 2.0 and generation 11. Tool upgrades require an installed
+The bundle uses protocol 2.0 and generation 12. Tool upgrades require an installed
 host generation of at least 9. The local command checks the installed host's
 `hello` response before staging any bundle; the candidate checks again before
 planning or installation. Older hosts receive `tools_upgrade_floor`: the host
@@ -84,6 +84,32 @@ remote terminal, including when stdout is a terminal. Ctrl-C ends the stream qui
 connection failures still fail. `FOLLOW` accepts only `yes` when supplied, and
 other actions reject both variables. These options are included in generation 8
 for v0.22.0; install the updated bundle for snapshot `LINES` support.
+
+## Public TCP listeners
+
+Executable roles may declare a public TCP listener with either edge TLS or plain
+transport. Both require the service to authenticate every client:
+
+```json
+{"transport": "tcp", "bind": "public", "tls": "none", "authentication": true}
+```
+
+Use `"tls": "edge"` for TLS termination at nginx. With `"tls": "none"`, traffic
+is **unencrypted**, including application credentials sent over the connection.
+`authentication: true` is an acknowledgement of service authentication, not an
+nginx authentication mechanism. Plans and reports state these responsibilities.
+
+Both modes use nginx stream forwarding to the service's allocated loopback
+endpoint. Profile listener bindings select public ports, IPv4/IPv6 addresses,
+source CIDRs and external DNS instructions. The service never binds directly to
+the public address. Firewall proof, runtime-only opening, boot closure and stale
+nginx session handling are shared. Plain listeners need no certificate issuance,
+renewal or TLS probe; HTTP and edge-TLS certificates keep their existing lifecycle.
+Previously retained TLS SANs remain available for rollback.
+
+See the [network integration handoff](tests/NETWORK_HANDOFF.md) for lane A's
+topology-aware planning, rendering, certificate and report interfaces. This module
+support does not itself wire the lifecycle/provisioning calls owned by lane A.
 
 Run the local tests and documentation checks from the worktree root:
 
@@ -167,6 +193,137 @@ sized upload volumes, creates private service directories, and renders the
 runtime values, service write paths, and HTTP/HTTPS upload locations together.
 Existing profiles without `uploads` keep their proxy behavior. See
 [large-upload ingress](../../docs/guides/deployment.md#large-upload-ingress).
+
+### Generation-12 feature preview
+
+Shared registry/profile/topology readers dispatch through the frozen feature
+parsers. Provisioning and lifecycle calls use the integrated package, artifact and
+network owners without changing app declarations.
+
+The preview uses the frozen topology-2, profile-3 and archive-2 contracts. Single
+instance custom services receive typed argv, hardened units, local probes,
+per-start configuration and protected bundle views. Wrappers, counts above one
+and ordinals other than one remain release-2 capability refusals. Legacy apps and
+generation 9, 10 and 11 hosts retain their existing paths.
+
+`feature_lifecycle.py` owns provision/deploy/restart/stop orchestration. Provision
+passes declared package requirements to lane B's reviewed transaction. Deploy
+verifies and publishes lane B artifacts before building frozen `Deployment`,
+`UnitSpec` and `RuntimeResolution` records. Pending admission precedes stops,
+migrations and selection. Validation starts run in dependency/readiness order with
+one allowance per unit and a live operation executor. Immediately before public
+opening, the entire enabled set must pass identity, probe and stability checks
+together under the original shared deadline. Boot uses the same final check.
+Completion commits admission.
+A failed transition remains pending for reconciliation; it never rolls back code
+or credentials automatically.
+
+Bootstrap also plans `libnginx-mod-stream`, the owned top-level stream include,
+the persistent closed HTTP site and the pre-nginx boot coordinator. Public TCP
+plans show the exact UFW before-file projections and bind installation to the
+reviewed observation digest. An existing nginx configuration is digest-bound;
+a fresh one must match the pristine conffile from the reviewed nginx-common
+package. Reopening other instances after UFW adoption requires fresh health and
+admission through their own restart. Unchanged selected instances instead validate
+runtime exposure against their committed listener bindings without reloading UFW.
+The shared boot coordinator retains its original verified bundle pin across tool
+upgrades; preview retains that bundle. Bootstrap checks the pinned bundle, fixed
+runtime, coordinator files and edge ownership before network mutations.
+
+Package default masks remain in place until an owned service takes responsibility.
+Nginx receives its existing handoff after configuration validation. Redis releases
+only the journal-owned `redis-server@.service` mask after its shared allocation is
+durable, before preparing and starting `redis-server@foundry.service`. The stock
+`redis-server.service` stays masked. PostgreSQL uses a concrete Foundry unit and
+`pg_ctlcluster --skip-systemctl-redirect`, so its distro service/template stay
+masked. Certbot's defaults also stay masked; Foundry's renewal timer invokes the
+certbot executable directly. Hosts without journaled masks need no Redis handoff.
+
+Each unit's privileged `ExecStartPost` verifies the selected executable and
+invocation before transferring its admission receipt from the preparation helper
+to the running MainPID. Workloads retain their service account and sandbox.
+Reports use selected UnitSpecs and network resolution/closure records, so custom
+artifact executables are not mistaken for a different application release.
+
+HTTP allocation is a journaled runtime selection. Every role gets an immutable,
+root-owned mode-0640 effective environment derived from current private values.
+Units, console commands and runtime descriptors select that same resolution.
+Environment hashes stay private. Automatic restart reuses the exact selected
+resolution; it never reallocates a port. The boot coordinator proves closure and
+starts the enabled selection in readiness order before requesting public opening.
+
+Application code calls `deployment.LoadBindings()` once at assembly. Its result
+is an immutable snapshot with typed `Executable(name)`, `Endpoint(name)` and
+`Bundle(name)` lookups; missing names return `fault.Missing`. The explicit
+`FOUNDRY_DEPLOY_RUNTIME_FILE` selects a schema-2 role descriptor containing the
+frozen schema-1 `RoleBindings`. An invalid explicit descriptor is an error, never
+an empty/default binding set. `deployment.Detect()` uses that same descriptor.
+The app-facing declarations and loader do not change when later tool hardening ships.
+
+The preview explicitly refuses with `capability_unavailable` naming the later
+release:
+
+- Feature rollback, including feature-to-legacy rollback and `activate` of any
+  previously selected, noncurrent release. Selection history survives retention.
+- Configuration changes, key rotation, configuration holds and both `down`/`up`.
+- Reprovisioning a selected feature instance when its profile, package requirements
+  or owned network/boot files have changed; unchanged bootstrap remains inspectable.
+- Named lifecycle operations and interrupted-operation reconciliation/recovery.
+- Custom-service secret intake and bundle ABIs without package-version evidence.
+- Helper-bundle pruning: automatic retention returns a capability diagnostic and
+  retains every bundle and upgrade journal. Invocation/view bounds still apply;
+  reaching a bound refuses further starts until proven-exit cleanup ships.
+- Host capacity changes involving features until their owner integrates.
+
+Feature `down` and `up` both refuse before mutation. The current whole-instance
+transition cannot preserve `maintenance: serve` roles while proving partial closure
+and safely resuming only stopped roles. Policy-aware maintenance must implement
+both directions before either is enabled; legacy maintenance is unchanged.
+Public opening requires all three adapters in `listeners.py`, reached through
+`lib/feature_network.py`:
+
+| Function | Handoff |
+| --- | --- |
+| `feature_allocate(host, entry, topology, profile, operation_id)` | No effects; returns allocated endpoints and nginx projection SHA-256 |
+| `feature_close(host, entry, transition, resolution, units)` | Idempotently withdraws ingress, then returns observed, complete `ClosureEvidence` covering exact units and endpoints; cleanup may first call it while units are still running, then again after proven exit |
+| `feature_open(host, entry, resolution, evidence)` | Opens only the validated selection and returns `True` after verification |
+
+No caller fabricates closure when that integration is missing. The fixed
+`runtime-v1` entry point pins an invocation to an immutable tool bundle before
+importing its helper. The operation executor runs independently of its SSH
+observer. Its `ExecStopPost` uses that same invocation pin to run independent
+cleanup even after executor death. Activation verifies the loaded cleanup owner
+before effects. Without a durable success receipt matching committed admission,
+the selected registry record and the operation journal, cleanup withdraws exposure,
+stops every transition workload and proves exit and closure. Its durable unresolved
+record blocks subsequent starts, including validation starts; reconciliation stays
+refused in preview. An ingress-only observation never counts as complete closure.
+
+Artifact/release staging lives in `/opt/foundry/<instance>/operations/<operation>`
+outside the release inventory. Verified completion removes only that operation's
+staging. Interrupted operations retain staging under their cleanup owner. Selective
+helper retention remains later work; all feature tool bundles are still retained.
+
+The opt-in real-systemd scenario uses a newly built ordinary deploy-acceptance
+archive. It adds one artifact-backed relay and a declared package, verifies the
+HTTP app reaches the relay through the Go binding loader, restarts the instance,
+and verifies that both maintenance operations refuse without stopping it.
+The relay declares a plain public TCP listener on port 8554. A separate dual-family
+network namespace receives the fixture's HTTP readiness bytes through nginx stream;
+this tests plain TCP forwarding, not RTSP protocol handling. Real UFW and nginx
+observations verify closure before activation and after stop, and the host report
+must list the listener. The acceptance image includes UFW, iptables and nftables;
+bootstrap installs nginx and its stream module through the normal package owner.
+Run:
+
+```sh
+python3 tools/deploy/tests/build_acceptance.py --architecture arm64 --archive-file /tmp/b24-archive-path
+bash tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
+  --archive "$(cat /tmp/b24-archive-path)" --framework-root "$PWD" --fresh --feature-preview
+```
+
+Use matching `amd64`/`linux/amd64` arguments for that architecture. This is a
+container-only acceptance scenario; ordinary Python tests never invoke it.
 
 The integrated runner also executes `tests/acceptance_uploads.py` after edge
 acceptance. It uses the existing fixture, rendered nginx and service sandbox,

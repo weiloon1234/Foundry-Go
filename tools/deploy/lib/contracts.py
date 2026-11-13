@@ -5,6 +5,9 @@ belong to Go; these contracts describe deployment resources, not application DTO
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum
+import ipaddress
 import grp
 import pwd
 import hashlib
@@ -174,6 +177,10 @@ def validate_project(value):
 
 def validate_profile(value, project=None):
     require(isinstance(value, dict), "invalid_profile", "Invalid environment profile.")
+    if value.get("schema") == FEATURE_PROFILE_SCHEMA:
+        from topology import validate_feature_profile
+        validate_feature_profile(value, project)
+        return value
     optional = {"backup_policy", "uploads"}
     fields({k: v for k, v in value.items() if k not in optional}, "schema environment instance_id host runtime_environment domain certbot_email architecture public_env retention edge_origin_lockdown", "environment")
     require(type(value["edge_origin_lockdown"]) is bool, "invalid_profile", "edge_origin_lockdown must be a boolean; Cloudflare is mandatory.")
@@ -414,7 +421,10 @@ def validate_registry(value):
         fields(allocations, "account uid gid http_port database database_role redis_user namespace paths", "allocations")
         require(entry.get("host_id") == value["host_id"] == entry["profile"]["host"]["host_id"], "invalid_registry", "Instance host binding mismatch.")
         port = allocations["http_port"]
-        require(type(port) is int and PORT_FIRST <= port <= PORT_LAST, "invalid_registry", "Invalid HTTP allocation.")
+        if "deployment_selection" in entry:
+            AllocatedEndpoint.parse({"role": "http", "listener": "http", "address": "127.0.0.1", "port": port})
+        else:
+            require(type(port) is int and PORT_FIRST <= port <= PORT_LAST, "invalid_registry", "Invalid HTTP allocation.")
         for resource, seen in ((port,ports), (entry["profile"]["domain"],domains), (entry["name"],accounts),
                                (allocations["database"],databases), (allocations["redis_user"],redis_users)):
             require(resource not in seen, "registry_collision", "Duplicate instance allocation.")
@@ -424,7 +434,13 @@ def validate_registry(value):
             require(allocated is None or type(allocated) is int and allocated > 0 and allocated not in seen, "registry_collision", "Invalid or duplicate account allocation.")
             if allocated is not None:
                 seen.add(allocated)
-        validate_topology(entry.get("topology"), registered=True)
+        if "deployment_selection" in entry:
+            selection = DeploymentSelection.parse(entry["deployment_selection"])
+            require(selection.instance_id == instance_id, "invalid_registry", "Deployment selection belongs to another instance.")
+        topology = validate_topology(entry.get("topology"), registered=True)
+        if topology["schema"] == TOPOLOGY_SCHEMA or entry["profile"]["schema"] == FEATURE_PROFILE_SCHEMA:
+            from topology import parse_profile, parse_topology
+            parse_profile(entry["profile"], parse_topology(topology, registered=True), project)
         require(type(entry.get("client_generation")) is int and entry["client_generation"] >= 1
                 and isinstance(entry.get("framework_version"), str), "invalid_registry", "Invalid client pin.")
         require(isinstance(entry.get("provisioning"), dict) and entry["provisioning"].get("state") in ("preparing", "ready", "failed", "rehearsal")
@@ -558,4 +574,793 @@ def parse_env(data):
         except ValueError:
             raise DeployError("invalid_configuration", "Invalid quoted runtime setting.") from None
     dump_env(result)
+    return result
+
+
+# Shared readers reuse the frozen feature parsers. Runtime execution has its own
+# capability gates, independent of declaration and registry validation.
+TOPOLOGY_SCHEMA = 2
+FEATURE_PROFILE_SCHEMA = 3
+ARCHIVE_SCHEMA = 2
+RECORD_SCHEMA = 1
+FEATURE_CAPABILITIES = frozenset({"topology-v2", "profile-v3", "release-v2"})
+# Historical capability floor, independent of the currently selected tool generation.
+FEATURE_INTRODUCTION_GENERATION = 12
+MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
+
+
+def contract_object(value, required, optional=()):
+    require(isinstance(value, dict) and set(required) <= value.keys()
+            and value.keys() <= set(required) | set(optional),
+            "invalid_contract", "Unknown or missing deployment contract fields.")
+    return value
+
+
+def contract_text(value, *, limit=1024):
+    require(isinstance(value, str) and 0 < len(value.encode("utf-8", errors="surrogatepass")) <= limit
+            and not any(0xD800 <= ord(c) <= 0xDFFF for c in value)
+            and not any(ord(c) < 32 or ord(c) == 127 for c in value),
+            "invalid_contract", "Invalid deployment contract text.")
+    return value
+
+
+def contract_name(value):
+    require(isinstance(value, str) and re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", value),
+            "invalid_contract", "Invalid deployment identifier.")
+    return value
+
+
+def contract_int(value, lower=1, upper=2**63 - 1):
+    require(type(value) is int and lower <= value <= upper,
+            "invalid_contract", "Deployment integer is outside its bounds.")
+    return value
+
+
+def contract_digest(value):
+    require(isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value),
+            "invalid_contract", "Invalid deployment digest.")
+    return value
+
+
+def contract_uuid(value):
+    require(valid_uuid(value), "invalid_contract", "Invalid deployment UUID.")
+    return value
+
+
+def contract_path(value, *, absolute=False):
+    contract_text(value)
+    require(value.startswith("/") == absolute and "\\" not in value
+            and all(part not in ("", ".", "..") for part in value.lstrip("/").split("/")),
+            "invalid_contract", "Deployment paths must be canonical and confined.")
+    return value
+
+
+def contract_list(value, parser, *, maximum=256, minimum=0):
+    require(isinstance(value, list) and minimum <= len(value) <= maximum,
+            "invalid_contract", "Deployment collection is outside its bounds.")
+    return tuple(parser(item) for item in value)
+
+
+def contract_names(value, *, maximum=MAX_ROLES):
+    result = contract_list(value, contract_name, maximum=maximum)
+    require(len(result) == len(set(result)), "invalid_contract", "Duplicate deployment identifiers.")
+    return result
+
+
+def contract_map(value, parser, *, maximum=256):
+    require(isinstance(value, dict) and len(value) <= maximum,
+            "invalid_contract", "Invalid deployment mapping.")
+    return tuple((contract_name(key), parser(item)) for key, item in sorted(value.items()))
+
+
+def contract_document(value):
+    """Apply the JSON boundary to in-memory callers too; never retain their containers."""
+    if isinstance(value, (str, bytes)):
+        return parse_json(value)
+    try:
+        return parse_json(json.dumps(value, allow_nan=False).encode())
+    except (TypeError, ValueError, RecursionError, UnicodeError):
+        raise DeployError("invalid_contract", "Invalid deployment document.") from None
+
+
+def canonical_digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode()).hexdigest()
+
+
+def _record(value, names):
+    value = contract_document(value)
+    contract_object(value, ("schema", *names))
+    require(type(value["schema"]) is int and value["schema"] == RECORD_SCHEMA,
+            "unsupported_schema", "Unsupported deployment record schema.")
+    return value
+
+
+@dataclass(frozen=True)
+class UnitIdentity:
+    instance_id: str
+    role: str
+    ordinal: int
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("instance_id", "role", "ordinal"))
+        ordinal = contract_int(value["ordinal"])
+        require(ordinal == 1, "unsupported_capability", "Numbered services require a later capability.")
+        return cls(contract_uuid(value["instance_id"]), contract_name(value["role"]), ordinal)
+
+
+@dataclass(frozen=True)
+class AllocatedEndpoint:
+    role: str
+    listener: str
+    address: str
+    port: int
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("role", "listener", "address", "port"))
+        require(value["address"] in ("127.0.0.1", "::1"), "invalid_contract", "Private backends require loopback.")
+        return cls(contract_name(value["role"]), contract_name(value["listener"]),
+                   value["address"], contract_int(value["port"], 1024, 65535))
+
+
+@dataclass(frozen=True)
+class EffectiveEnvironment:
+    role: str
+    path: str
+    sha256: str
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("role", "path", "sha256"))
+        path = contract_path(value["path"])
+        require(path.startswith("runtime/") and path.endswith("/app.env"),
+                "invalid_contract", "Effective environments belong to the private runtime tree.")
+        return cls(contract_name(value["role"]), path, contract_digest(value["sha256"]))
+
+
+@dataclass(frozen=True)
+class RuntimeResolution:
+    """Private record. Environment digests must never enter public reports.
+
+    M3 projects this selection into runtime_config, readiness and edge; none may
+    independently change the locked HTTP address or restore a historical keyring.
+    """
+    id: str
+    deployment_sha256: str
+    private_revision: int
+    roles: tuple[str, ...]
+    endpoints: tuple[AllocatedEndpoint, ...]
+    environments: tuple[EffectiveEnvironment, ...]
+    bindings_sha256: str
+    readiness_sha256: str
+    nginx_sha256: str
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("id", "deployment_sha256", "private_revision", "roles", "endpoints",
+                            "environments", "bindings_sha256", "readiness_sha256", "nginx_sha256"))
+        roles = contract_names(v["roles"])
+        require("http" in roles, "invalid_contract", "HTTP remains required.")
+        endpoints = contract_list(v["endpoints"], AllocatedEndpoint.parse, maximum=MAX_LISTENERS)
+        envs = contract_list(v["environments"], EffectiveEnvironment.parse, maximum=MAX_ROLES)
+        require(all(e.role in roles for e in endpoints) and {e.role for e in envs} == set(roles)
+                and len(envs) == len(roles) and len({e.path for e in envs}) == len(envs)
+                and len({(e.role, e.listener) for e in endpoints}) == len(endpoints)
+                and len({(e.address, e.port) for e in endpoints}) == len(endpoints)
+                and any(e.role == "http" and e.listener == "http" for e in endpoints),
+                "invalid_contract", "Resolution endpoints/environments must cover unique selected roles.")
+        identity = contract_uuid(v["id"])
+        require(all(e.path.startswith("runtime/" + identity + "/") for e in envs),
+                "invalid_contract", "Environment path belongs to another resolution.")
+        return cls(identity, contract_digest(v["deployment_sha256"]), contract_int(v["private_revision"]),
+                   roles, endpoints, envs, *(contract_digest(v[k]) for k in
+                                            ("bindings_sha256", "readiness_sha256", "nginx_sha256")))
+
+
+def require_current_private_configuration(target: RuntimeResolution, current_revision: int):
+    """Ordinary rollback/restart keeps current private inputs, including all keys."""
+    require(target.private_revision == contract_int(current_revision), "private_revision_conflict",
+            "Resolve the target against current private configuration; secret restore is a separate operation.")
+
+
+class AdmissionDisposition(str, Enum):
+    PENDING = "pending"
+    COMMITTED = "committed"
+
+
+@dataclass(frozen=True)
+class AdmissionRecord:
+    instance_id: str
+    resolution_id: str
+    deployment_sha256: str
+    private_revision: int
+    operation_id: str
+    disposition: AdmissionDisposition
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("instance_id", "resolution_id", "deployment_sha256", "private_revision",
+                            "operation_id", "disposition"))
+        require(v["disposition"] in ("pending", "committed"), "invalid_contract", "Invalid admission disposition.")
+        return cls(contract_uuid(v["instance_id"]), contract_uuid(v["resolution_id"]),
+                   contract_digest(v["deployment_sha256"]), contract_int(v["private_revision"]),
+                   contract_uuid(v["operation_id"]), AdmissionDisposition(v["disposition"]))
+
+
+class ClosureStage(str, Enum):
+    INGRESS_WITHDRAWN = "ingress_withdrawn"
+    APPLICATION_CLOSED = "application_admission_closed"
+
+
+@dataclass(frozen=True)
+class ClosureEvidence:
+    """An observation record, never authority to perform a start by itself."""
+    id: str
+    operation_id: str
+    boot_id: str
+    old_resolution_id: str
+    candidate_resolution_id: str
+    units: tuple[UnitIdentity, ...]
+    endpoints: tuple[AllocatedEndpoint, ...]
+    retained_units_sha256: str
+    ingress_sha256: str
+    backend_exit_sha256: str | None
+    old_reference_isolation_sha256: str | None
+    observed_at: str
+    stage: ClosureStage
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("id", "operation_id", "boot_id", "old_resolution_id", "candidate_resolution_id",
+                            "units", "endpoints", "retained_units_sha256", "ingress_sha256",
+                            "backend_exit_sha256", "old_reference_isolation_sha256", "observed_at", "stage"))
+        require(v["stage"] in tuple(s.value for s in ClosureStage) and valid_timestamp(v["observed_at"]),
+                "invalid_contract", "Invalid closure observation.")
+        units = contract_list(v["units"], UnitIdentity.parse, maximum=MAX_ROLES, minimum=1)
+        endpoints = contract_list(v["endpoints"], AllocatedEndpoint.parse)
+        require(len(set(units)) == len(units) and len({u.instance_id for u in units}) == 1
+                and all(e.role in {u.role for u in units} for e in endpoints),
+                "invalid_contract", "Invalid closure scope.")
+        proofs = tuple(None if v[k] is None else contract_digest(v[k]) for k in
+                       ("backend_exit_sha256", "old_reference_isolation_sha256"))
+        require(v["stage"] != ClosureStage.APPLICATION_CLOSED.value or all(proofs),
+                "invalid_contract", "Complete closure requires backend exit and old-reference isolation.")
+        return cls(*(contract_uuid(v[k]) for k in ("id", "operation_id", "boot_id", "old_resolution_id",
+                                                  "candidate_resolution_id")), units, endpoints,
+                   contract_digest(v["retained_units_sha256"]), contract_digest(v["ingress_sha256"]),
+                   *proofs, v["observed_at"], ClosureStage(v["stage"]))
+
+
+@dataclass(frozen=True)
+class ProcessIdentity:
+    pid: int
+    start_ticks: int
+    invocation_id: str
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("pid", "start_ticks", "invocation_id"))
+        # systemd INVOCATION_ID is a compact 128-bit identifier, not a UUIDv4.
+        invocation = value["invocation_id"]
+        require(isinstance(invocation, str) and re.fullmatch(r"[a-f0-9]{32}", invocation),
+                "invalid_contract", "Invalid systemd invocation identity.")
+        return cls(contract_int(value["pid"], upper=2**31 - 1), contract_int(value["start_ticks"]), invocation)
+
+
+@dataclass(frozen=True)
+class ValidationPermit:
+    id: str
+    operation_id: str
+    boot_id: str
+    resolution_id: str
+    closure_id: str
+    executor: ProcessIdentity
+    units: tuple[UnitIdentity, ...]
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("id", "operation_id", "boot_id", "resolution_id", "closure_id", "executor", "units"))
+        units = contract_list(v["units"], UnitIdentity.parse, minimum=1, maximum=MAX_ROLES)
+        require(len(set(units)) == len(units), "invalid_contract", "Duplicate permit allowances.")
+        return cls(*(contract_uuid(v[k]) for k in ("id", "operation_id", "boot_id", "resolution_id", "closure_id")),
+                   ProcessIdentity.parse(v["executor"]), units)
+
+    def require_closure(self, evidence: ClosureEvidence, resolution: RuntimeResolution):
+        require(evidence.stage is ClosureStage.APPLICATION_CLOSED and self.closure_id == evidence.id
+                and self.operation_id == evidence.operation_id and self.boot_id == evidence.boot_id
+                and self.resolution_id == evidence.candidate_resolution_id
+                and set(self.units) <= set(evidence.units)
+                and resolution.id == self.resolution_id
+                and {u.role for u in self.units} <= set(resolution.roles)
+                and {e for e in resolution.endpoints if e.role in {u.role for u in self.units}} <= set(evidence.endpoints),
+                "admission_closed_required",
+                "Validation requires complete closure for the exact operation, boot, resolution and unit set.")
+
+
+@dataclass(frozen=True)
+class HelperInvocation:
+    boot_id: str
+    unit: UnitIdentity
+    process: ProcessIdentity
+    bundle_sha256: str
+    unit_spec_sha256: str
+    resolution_id: str
+    helper_format: int
+    cleanup_id: str | None
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("boot_id", "unit", "process", "bundle_sha256", "unit_spec_sha256",
+                            "resolution_id", "helper_format", "cleanup_id"))
+        require(type(v["helper_format"]) is int and v["helper_format"] == 1,
+                "unsupported_capability", "Unsupported helper state format; retain its reader.")
+        return cls(contract_uuid(v["boot_id"]), UnitIdentity.parse(v["unit"]), ProcessIdentity.parse(v["process"]),
+                   contract_digest(v["bundle_sha256"]), contract_digest(v["unit_spec_sha256"]),
+                   contract_uuid(v["resolution_id"]), v["helper_format"],
+                   None if v["cleanup_id"] is None else contract_uuid(v["cleanup_id"]))
+
+
+@dataclass(frozen=True)
+class BundleReferences:
+    """Snapshot under the M3 lifetime lock; unknown observations retain the bundle."""
+    bundle_sha256: str
+    selected: bool
+    unit_generations: tuple[str, ...]
+    invocations: tuple[str, ...]
+    operations: tuple[str, ...]
+    cleanup: tuple[str, ...]
+    observations_complete: bool
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("bundle_sha256", "selected", "unit_generations", "invocations",
+                            "operations", "cleanup", "observations_complete"))
+        require(type(v["selected"]) is bool and type(v["observations_complete"]) is bool,
+                "invalid_contract", "Invalid bundle lifetime observation.")
+        invocation = lambda item: ProcessIdentity.parse({"pid": 1, "start_ticks": 1, "invocation_id": item}).invocation_id
+        groups = tuple(contract_list(v[k], parser, maximum=4096) for k, parser in
+                       (("unit_generations", contract_digest), ("invocations", invocation),
+                        ("operations", contract_uuid), ("cleanup", contract_uuid)))
+        require(all(len(g) == len(set(g)) for g in groups), "invalid_contract", "Duplicate bundle references.")
+        return cls(contract_digest(v["bundle_sha256"]), v["selected"], *groups, v["observations_complete"])
+
+    @property
+    def deletable(self):
+        return (self.observations_complete and not self.selected and not self.unit_generations
+                and not self.invocations and not self.operations and not self.cleanup)
+
+
+@dataclass(frozen=True)
+class DeploymentSelection:
+    """Sticky capability state; legacy rollback never removes this record."""
+    instance_id: str
+    minimum_generation: int
+    required_capabilities: tuple[str, ...]
+    selected_resolution_id: str
+    previous_resolution_id: str | None
+    admission: AdmissionRecord
+    enabled_roles: tuple[str, ...]
+    maintenance_holds: tuple[str, ...]
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("instance_id", "minimum_generation", "required_capabilities", "selected_resolution_id",
+                            "previous_resolution_id", "admission", "enabled_roles", "maintenance_holds"))
+        capabilities = contract_names(v["required_capabilities"])
+        require(set(capabilities) == FEATURE_CAPABILITIES, "unsupported_capability", "Unknown or incomplete deployment capabilities.")
+        admission = AdmissionRecord.parse(v["admission"])
+        instance, resolution = contract_uuid(v["instance_id"]), contract_uuid(v["selected_resolution_id"])
+        require(admission.instance_id == instance and admission.resolution_id == resolution,
+                "invalid_contract", "Selection and admission identities differ.")
+        return cls(instance, contract_int(v["minimum_generation"], FEATURE_INTRODUCTION_GENERATION), capabilities, resolution,
+                   None if v["previous_resolution_id"] is None else contract_uuid(v["previous_resolution_id"]),
+                   admission, contract_names(v["enabled_roles"]), contract_names(v["maintenance_holds"]))
+
+
+def public_address(value):
+    try:
+        address = ipaddress.ip_address(value) if isinstance(value, str) else None
+    except ValueError:
+        address = None
+    require(address is not None and str(address) == value and not address.is_unspecified
+            and not address.is_loopback and not address.is_link_local and not address.is_multicast
+            and "%" not in value and not getattr(address, "ipv4_mapped", None), "invalid_contract", "Invalid explicit public address.")
+    return value
+
+
+@dataclass(frozen=True)
+class RecoveryListenerBinding:
+    name: str
+    hostname: str
+    ports: tuple[int, ...]
+    old_addresses: tuple[str, ...]
+    replacement_addresses: tuple[str, ...]
+    source_binding_sha256: str
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("name", "hostname", "transport", "ports", "dns_mode", "old_addresses",
+                                "replacement_addresses", "source_binding_sha256"))
+        require(value["transport"] == "tcp" and value["dns_mode"] == "external",
+                "unsupported_capability", "Release 1 recovery supports external DNS for TCP listeners only.")
+        require(isinstance(value["name"], str) and len(value["name"].split(".")) == 2,
+                "invalid_contract", "Recovery requires a qualified listener name.")
+        name = ".".join(contract_name(n) for n in value["name"].split("."))
+        ports = contract_list(value["ports"], lambda p: contract_int(p, 1, 65535), maximum=1, minimum=1)
+        old = contract_list(value["old_addresses"], public_address, maximum=16, minimum=1)
+        new = contract_list(value["replacement_addresses"], public_address, maximum=16, minimum=1)
+        require(len(set(old)) == len(old) and len(set(new)) == len(new)
+                and {ipaddress.ip_address(a).version for a in old} == {ipaddress.ip_address(a).version for a in new},
+                "invalid_contract", "Recovery must preserve address families without duplicate addresses.")
+        return cls(name, dns_hostname(value["hostname"]), ports, old, new, contract_digest(value["source_binding_sha256"]))
+
+
+def dns_hostname(value):
+    require(isinstance(value, str) and len(value) <= 253 and len(value.split(".")) >= 2
+            and all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", p) for p in value.split(".")),
+            "invalid_contract", "Invalid DNS hostname.")
+    return value
+
+
+@dataclass(frozen=True)
+class DNSObservation:
+    hostname: str
+    addresses: tuple[str, ...]
+    observed_at: str
+    source: str
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("hostname", "addresses", "observed_at", "source"))
+        require(valid_timestamp(value["observed_at"]) and value["source"] in ("authoritative", "recursive"),
+                "invalid_contract", "Invalid external DNS observation; it is not provider ownership evidence.")
+        addresses = contract_list(value["addresses"], public_address, maximum=16)
+        require(len(set(addresses)) == len(addresses), "invalid_contract", "Duplicate DNS answers.")
+        return cls(dns_hostname(value["hostname"]), addresses, value["observed_at"], value["source"])
+
+
+@dataclass(frozen=True)
+class RecoveryPublicBinding:
+    operation_id: str
+    source_instance_id: str
+    source_host_id: str
+    target_host_id: str
+    deployment_sha256: str
+    listeners: tuple[RecoveryListenerBinding, ...]
+    dns_cutover: str
+    observations: tuple[DNSObservation, ...]
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("operation_id", "source_instance_id", "source_host_id", "target_host_id",
+                            "deployment_sha256", "listeners", "dns_cutover", "observations"))
+        require(v["dns_cutover"] in ("external_pending", "external_observed"),
+                "unsupported_capability", "Managed DNS cutover requires a later capability.")
+        listeners = contract_list(v["listeners"], RecoveryListenerBinding.parse, minimum=1)
+        require(len({l.name for l in listeners}) == len(listeners)
+                and v["source_host_id"] != v["target_host_id"], "invalid_contract", "Invalid recovery binding identity.")
+        observations = contract_list(v["observations"], DNSObservation.parse)
+        require(all(o.hostname in {l.hostname for l in listeners} for o in observations),
+                "invalid_contract", "DNS observation belongs to an undeclared listener hostname.")
+        require(v["dns_cutover"] != "external_observed" or all(
+            any(o.hostname == l.hostname and set(o.addresses) == set(l.replacement_addresses) for o in observations)
+            for l in listeners), "invalid_contract", "External DNS has not been observed at the replacement addresses.")
+        return cls(*(contract_uuid(v[k]) for k in ("operation_id", "source_instance_id", "source_host_id", "target_host_id")),
+                   contract_digest(v["deployment_sha256"]), listeners, v["dns_cutover"], observations)
+
+
+@dataclass(frozen=True)
+class ResolvedExecutableBinding:
+    name: str
+    path: str
+    source_sha256: str
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("name", "path", "source_sha256"))
+        return cls(contract_name(value["name"]), contract_path(value["path"], absolute=True),
+                   contract_digest(value["source_sha256"]))
+
+
+@dataclass(frozen=True)
+class ResolvedEndpointBinding:
+    name: str
+    endpoint: AllocatedEndpoint
+    scheme: str
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("name", "endpoint", "scheme"))
+        require(value["scheme"] in ("http", "tcp"), "invalid_contract", "Invalid endpoint scheme.")
+        return cls(contract_name(value["name"]), AllocatedEndpoint.parse(value["endpoint"]), value["scheme"])
+
+
+@dataclass(frozen=True)
+class ResolvedBundleBinding:
+    name: str
+    path: str
+    artifact_sha256: str
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("name", "path", "artifact_sha256"))
+        return cls(contract_name(value["name"]), contract_path(value["path"], absolute=True),
+                   contract_digest(value["artifact_sha256"]))
+
+
+@dataclass(frozen=True)
+class RoleBindings:
+    role: str
+    executables: tuple[ResolvedExecutableBinding, ...]
+    endpoints: tuple[ResolvedEndpointBinding, ...]
+    bundles: tuple[ResolvedBundleBinding, ...]
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("role", "executables", "endpoints", "bundles"))
+        executables = contract_list(v["executables"], ResolvedExecutableBinding.parse, maximum=128)
+        endpoints = contract_list(v["endpoints"], ResolvedEndpointBinding.parse, maximum=128)
+        bundles = contract_list(v["bundles"], ResolvedBundleBinding.parse, maximum=64)
+        names = [b.name for b in (*executables, *endpoints, *bundles)]
+        require(len(set(names)) == len(names), "invalid_contract", "Binding names must be unique across kinds.")
+        return cls(contract_name(v["role"]), executables, endpoints, bundles)
+
+
+@dataclass(frozen=True)
+class UnitSpec:
+    """Resolved immutable identity; runtime owners verify files before execution.
+
+    Renderer policy is framework-owned, not arbitrary systemd directives. Digest
+    references bind the typed role's policies and prepared mounts/configs.
+    """
+    identity: UnitIdentity
+    executable: str
+    executable_sha256: str
+    arguments: tuple[str, ...]
+    declaration_sha256: str
+    bindings: RoleBindings
+    configuration_sha256: str
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("identity", "executable", "executable_sha256", "arguments",
+                            "declaration_sha256", "bindings", "configuration_sha256"))
+        identity = UnitIdentity.parse(v["identity"])
+        bindings = RoleBindings.parse(v["bindings"])
+        require(identity.role == bindings.role, "invalid_contract", "Unit bindings belong to another role.")
+        def argument(item):
+            return "" if item == "" else contract_text(item, limit=4096)
+        arguments = contract_list(v["arguments"], argument, maximum=128)
+        require(sum(len(a.encode()) for a in arguments) <= 32768, "invalid_contract", "Resolved argv is too large.")
+        return cls(identity, contract_path(v["executable"], absolute=True), contract_digest(v["executable_sha256"]),
+                   arguments, contract_digest(v["declaration_sha256"]), bindings, contract_digest(v["configuration_sha256"]))
+
+
+@dataclass(frozen=True)
+class PayloadMember:
+    path: str
+    sha256: str
+    size: int
+    kind: str
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("path", "sha256", "size", "kind"))
+        require(value["kind"] in ("application", "config", "artifact", "module", "data", "asset", "source-map"),
+                "invalid_contract", "Unknown inventory member kind.")
+        return cls(contract_path(value["path"]), contract_digest(value["sha256"]),
+                   contract_int(value["size"], 0), value["kind"])
+
+
+@dataclass(frozen=True)
+class ArtifactPayload:
+    artifact: str
+    platform: str
+    path: str
+    sha256: str
+    members: tuple[PayloadMember, ...]
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("artifact", "platform", "path", "sha256", "members"))
+        require(value["platform"] in ("linux-amd64", "linux-arm64"), "invalid_contract", "Unsupported artifact architecture.")
+        path = contract_path(value["path"])
+        require(path.startswith("deploy/artifacts/"), "invalid_contract", "Artifact payload is outside its owned inventory area.")
+        members = contract_list(value["members"], PayloadMember.parse, maximum=10000, minimum=1)
+        require(len({m.path for m in members}) == len(members) and all(m.kind != "artifact" for m in members),
+                "invalid_contract", "Artifact members must be unique; nested extraction is forbidden.")
+        return cls(contract_name(value["artifact"]), value["platform"], path, contract_digest(value["sha256"]), members)
+
+
+@dataclass(frozen=True)
+class ReleaseDeclaration:
+    """Schema-2 archive extension, alongside the existing manifest provenance.
+
+    M2's builder/host envelope must carry this as `deployment`; legacy schema-1
+    manifests omit it. This parser checks declarations, not file bytes or ABI.
+    """
+    topology_json: str
+    profile_json: str
+    topology_sha256: str
+    inventory: tuple[PayloadMember, ...]
+    artifacts: tuple[ArtifactPayload, ...]
+    application_executables: tuple[tuple[str, str], ...]
+
+    @classmethod
+    def parse(cls, value):
+        from topology import parse_topology, parse_profile, ExecutableRole
+        v = contract_document(value)
+        contract_object(v, ("schema", "topology", "profile", "topology_sha256", "inventory", "artifacts", "application_executables"))
+        require(type(v["schema"]) is int and v["schema"] == ARCHIVE_SCHEMA, "unsupported_schema", "Unsupported archive declaration.")
+        topology = parse_topology(v["topology"])
+        require(topology.schema == TOPOLOGY_SCHEMA and topology.sha256 == contract_digest(v["topology_sha256"]),
+                "invalid_contract", "Archive topology digest mismatch.")
+        profile = parse_profile(v["profile"], topology)
+        inventory = contract_list(v["inventory"], PayloadMember.parse, minimum=1, maximum=10000)
+        artifacts = contract_list(v["artifacts"], ArtifactPayload.parse, maximum=MAX_ARTIFACTS)
+        application_executables = contract_map(v["application_executables"], contract_path, maximum=64)
+        files = {m.path: m for m in inventory}
+        require({n for n, _ in application_executables} == {n for n, _ in topology.application_executables}
+                and all(p.startswith("deploy/bin/") and p in files and files[p].kind == "application"
+                        for _, p in application_executables), "invalid_contract", "Archive must inventory each application executable export.")
+        exports = dict(application_executables)
+        platform = "linux-" + profile.architecture
+        require(all(binary.go_package is not None or exports[name] == dict(binary.platforms)[platform]
+                    for name, binary in topology.application_executables),
+                "invalid_contract", "Prebuilt executable export differs from its declared target architecture path.")
+        require(len(files) == len(inventory) and len({a.artifact for a in artifacts}) == len(artifacts)
+                and {a.artifact for a in artifacts} == {n for n, _ in topology.artifacts},
+                "invalid_contract", "Archive inventories must be unique and cover all declared artifacts.")
+        for role in topology.roles:
+            if isinstance(role, ExecutableRole):
+                require(all(c.source in files and files[c.source].kind == "config" for _, c in role.configs),
+                        "invalid_contract", "Archive lacks a declared configuration file.")
+        for payload in artifacts:
+            artifact = dict(topology.artifacts)[payload.artifact]
+            require(payload.platform == "linux-" + profile.architecture
+                    and dict(artifact.platforms)[payload.platform].sha256 == payload.sha256
+                    and payload.path in files and files[payload.path].sha256 == payload.sha256
+                    and files[payload.path].kind == "artifact", "invalid_contract", "Artifact payload differs from its architecture pin.")
+            members = {m.path: m for m in payload.members}
+            require({p for p, m in members.items() if m.kind == "application"} == {p for _, p in artifact.executables}
+                    and {p for p, m in members.items() if m.kind == "module"} == set(artifact.modules)
+                    and all(any(p.startswith(directory + "/") for p in members) for _, directory in artifact.bundles),
+                    "invalid_contract", "Artifact inventory lacks declared exports/modules.")
+        return cls(topology.canonical_json, profile.canonical_json, topology.sha256, inventory, artifacts, application_executables)
+
+    def projection(self):
+        from dataclasses import asdict
+        result = {"schema": ARCHIVE_SCHEMA, "topology": json.loads(self.topology_json), "profile": json.loads(self.profile_json),
+                  "topology_sha256": self.topology_sha256, "inventory": [asdict(m) for m in self.inventory],
+                  "artifacts": [asdict(a) for a in self.artifacts], "application_executables": dict(self.application_executables)}
+        result = contract_document(result)
+        type(self).parse(result)
+        return result
+
+
+@dataclass(frozen=True)
+class HostTransition:
+    operation_id: str
+    instance_id: str
+    old_resolution_id: str
+    candidate_resolution_id: str
+    current_private_revision: int
+    affected_units: tuple[UnitIdentity, ...]
+    plan_sha256: str
+    closure_id: str | None
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("operation_id", "instance_id", "old_resolution_id", "candidate_resolution_id",
+                            "current_private_revision", "affected_units", "plan_sha256", "closure_id"))
+        instance = contract_uuid(v["instance_id"])
+        units = contract_list(v["affected_units"], UnitIdentity.parse, maximum=MAX_ROLES, minimum=1)
+        require(len(set(units)) == len(units) and all(u.instance_id == instance for u in units),
+                "invalid_contract", "Transition units belong to one instance.")
+        return cls(contract_uuid(v["operation_id"]), instance, contract_uuid(v["old_resolution_id"]),
+                   contract_uuid(v["candidate_resolution_id"]), contract_int(v["current_private_revision"]), units,
+                   contract_digest(v["plan_sha256"]), None if v["closure_id"] is None else contract_uuid(v["closure_id"]))
+
+
+@dataclass(frozen=True)
+class Deployment:
+    instance_id: str
+    release: str
+    archive_schema: int
+    topology_sha256: str
+    profile_sha256: str
+    units: tuple[UnitSpec, ...]
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("instance_id", "release", "archive_schema", "topology_sha256", "profile_sha256", "units"))
+        require(isinstance(v["release"], str) and VERSION_PATTERN.fullmatch(v["release"])
+                and type(v["archive_schema"]) is int and v["archive_schema"] in (1, ARCHIVE_SCHEMA),
+                "invalid_contract", "Invalid selected release identity/schema.")
+        instance = contract_uuid(v["instance_id"])
+        units = contract_list(v["units"], UnitSpec.parse, maximum=MAX_ROLES, minimum=1)
+        require(len({u.identity for u in units}) == len(units)
+                and all(u.identity.instance_id == instance for u in units)
+                and any(u.identity.role == "http" for u in units), "invalid_contract", "Invalid deployment unit inventory.")
+        return cls(instance, v["release"], v["archive_schema"], contract_digest(v["topology_sha256"]),
+                   contract_digest(v["profile_sha256"]), units)
+
+
+@dataclass(frozen=True)
+class UnitGenerationReference:
+    id: str
+    unit: UnitIdentity
+    bundle_sha256: str
+    unit_spec_sha256: str
+    resolution_id: str
+    state: str
+    queued_jobs: tuple[int, ...]
+    control_processes: tuple[ProcessIdentity, ...]
+    observations_complete: bool
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("id", "unit", "bundle_sha256", "unit_spec_sha256", "resolution_id",
+                            "state", "queued_jobs", "control_processes", "observations_complete"))
+        require(v["state"] in ("staged", "loaded", "retiring") and type(v["observations_complete"]) is bool,
+                "invalid_contract", "Unknown loaded-unit generation state.")
+        jobs = contract_list(v["queued_jobs"], contract_int)
+        processes = contract_list(v["control_processes"], ProcessIdentity.parse)
+        require(len(jobs) == len(set(jobs)) and len(processes) == len(set(processes)),
+                "invalid_contract", "Duplicate manager observations.")
+        return cls(contract_digest(v["id"]), UnitIdentity.parse(v["unit"]), contract_digest(v["bundle_sha256"]),
+                   contract_digest(v["unit_spec_sha256"]), contract_uuid(v["resolution_id"]), v["state"],
+                   jobs, processes, v["observations_complete"])
+
+
+@dataclass(frozen=True)
+class CleanupObligation:
+    id: str
+    operation_id: str
+    instance_id: str
+    resolution_id: str
+    bundle_sha256: str
+    helper_format: int
+    state: str
+
+    @classmethod
+    def parse(cls, value):
+        v = _record(value, ("id", "operation_id", "instance_id", "resolution_id", "bundle_sha256", "helper_format", "state"))
+        require(v["state"] in ("pending", "complete") and type(v["helper_format"]) is int and v["helper_format"] == 1,
+                "unsupported_capability", "Unknown cleanup reader/state; retain its bundle.")
+        return cls(*(contract_uuid(v[k]) for k in ("id", "operation_id", "instance_id", "resolution_id")),
+                   contract_digest(v["bundle_sha256"]), v["helper_format"], v["state"])
+
+
+def record_document(record):
+    """Encode only the frozen record family, then revalidate at the write boundary.
+
+    Declarations use Topology/DeploymentProfile.projection(). This serializer owns
+    nested record versions so individual lifecycle writers cannot omit them.
+    """
+    from dataclasses import fields as dataclass_fields
+    versioned = (RuntimeResolution, AdmissionRecord, ClosureEvidence, ValidationPermit, HelperInvocation,
+                 BundleReferences, DeploymentSelection, RecoveryPublicBinding, RoleBindings, UnitSpec,
+                 HostTransition, Deployment, UnitGenerationReference, CleanupObligation)
+    nested = (UnitIdentity, AllocatedEndpoint, EffectiveEnvironment, ProcessIdentity, RecoveryListenerBinding, DNSObservation,
+              ResolvedExecutableBinding, ResolvedEndpointBinding, ResolvedBundleBinding)
+    def encode(value):
+        if type(value) in versioned + nested:
+            result = {f.name: encode(getattr(value, f.name)) for f in dataclass_fields(value)}
+            if type(value) in versioned:
+                result = {"schema": RECORD_SCHEMA, **result}
+            if isinstance(value, RecoveryListenerBinding):
+                result.update(transport="tcp", dns_mode="external")
+            return result
+        if isinstance(value, Enum):
+            return value.value
+        if isinstance(value, tuple):
+            return [encode(item) for item in value]
+        require(value is None or type(value) in (str, int, bool), "invalid_contract", "Unsupported record member.")
+        return value
+    require(type(record) in versioned, "invalid_contract", "Unsupported record type.")
+    result = encode(record)
+    type(record).parse(result)
     return result

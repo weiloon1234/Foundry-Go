@@ -34,6 +34,7 @@ REDIS_DATA = "/var/lib/foundry/redis"
 REDIS_CERT = "/etc/foundry/redis/server.crt"
 REDIS_KEY = "/etc/foundry/redis/server.key"
 REDIS_UNIT_PATH = "/etc/systemd/system/" + REDIS_UNIT
+REDIS_TEMPLATE = "redis-server@.service"
 REDIS_COMMANDS = frozenset("""
 ping hello auth quit select client|setname multi exec discard
 get set mget mset del unlink exists type strlen getdel getex
@@ -88,6 +89,27 @@ def _unused_template(unit: dict) -> bool:
             and not unit.get("DropInPaths"))
 
 
+def _package_template_pending(host: Host, registry: dict) -> bool:
+    if registry.get("tools", {}).get("generation", 0) < 12:
+        return False
+    from packages import default_activation_pending
+    return default_activation_pending(host, REDIS_TEMPLATE)
+
+
+def _reserved_template(host: Host, registry: dict, unit: dict) -> bool:
+    if (unit.get("LoadState") != "masked" or unit.get("ActiveState") != "inactive"
+            or unit.get("MainPID") != "0" or unit.get("DropInPaths")):
+        return False
+    # A concrete/runtime override is never covered by the distro template claim.
+    for directory, names in (("/etc/systemd/system", (REDIS_UNIT, REDIS_UNIT + ".d", REDIS_TEMPLATE + ".d")),
+                             ("/run/systemd/system", (REDIS_UNIT, REDIS_TEMPLATE, REDIS_UNIT + ".d", REDIS_TEMPLATE + ".d"))):
+        for name in names:
+            path = host.paths.p(directory) / name
+            if path.exists() or path.is_symlink():
+                return False
+    return _package_template_pending(host, registry)
+
+
 def _port_busy(host: Host) -> bool:
     result = host.run(["ss", "-H", "-ltn", "sport", "=", str(REDIS_PORT)])
     return bool(result.stdout.strip())
@@ -120,19 +142,20 @@ def inspect(host: Host, registry: dict, *, capacity_target=None) -> dict:
     """Inspect dedicated metadata only; no requests ever reach foreign Redis."""
     shared, claim = _service_claim(host, registry)
     unit = _unit(host)
+    unused = _unused_template(unit) or _reserved_template(host, registry, unit)
     paths = ("/etc/foundry/redis", REDIS_DATA, REDIS_UNIT_PATH)
     present = any(check_path(host.paths.p(path)).exists() for path in paths)
     if not shared and not claim:
         account = host.run(["getent", "passwd", REDIS_ACCOUNT], check=False)
         require(account.returncode in (0, 2), "redis_inspection", "Cannot inspect the Redis service account.")
-        return {"state": "conflict" if present or (unit.get("LoadState") != "not-found" and not _unused_template(unit)) or account.returncode == 0 or _port_busy(host) else "absent",
+        return {"state": "conflict" if present or (unit.get("LoadState") != "not-found" and not unused) or account.returncode == 0 or _port_busy(host) else "absent",
                 "owner": None, "unit": REDIS_UNIT, "port": REDIS_PORT, "aclfile": REDIS_ACLFILE}
     shared = shared or claim.get("allocation")
     _owned_service(shared, claim)
     _claimed_files(host, claim, complete=shared.get("state") == "ready", capacity_target=capacity_target)
     active = unit.get("ActiveState") == "active"
     require(not unit.get("DropInPaths") and (unit.get("LoadState") == "not-found"
-            or unit.get("FragmentPath") == REDIS_UNIT_PATH or (claim["phase"] != "ready" and _unused_template(unit))),
+            or unit.get("FragmentPath") == REDIS_UNIT_PATH or (claim["phase"] != "ready" and unused)),
             "redis_ownership", "The dedicated Redis unit resolves to an unowned fragment.")
     return {"state": "ready" if shared.get("state") == "ready" and active else "resume",
             "owner": "foundry", "unit": REDIS_UNIT, "port": REDIS_PORT, "aclfile": REDIS_ACLFILE,
@@ -255,7 +278,7 @@ def _verify_runtime(host: Host, limits: dict) -> None:
 
 def prepare(host: Host, registry: dict) -> None:
     """Create/resume the reserved Redis service without changing any foreign unit."""
-    from packages import install_missing
+    from packages import install_missing, authorize_default_activation
     from postgres import prepare_tls, record_trust_probe
 
     observation = inspect(host, registry)
@@ -283,6 +306,10 @@ def prepare(host: Host, registry: dict) -> None:
               if not host.paths.p("/usr/bin/" + binary).is_file()]
     if needed:
         install_missing(host, needed)
+    if _package_template_pending(host, registry):
+        authorize_default_activation(host, REDIS_TEMPLATE,
+                                     {**shared, "installed_by_foundry": True, "unit": REDIS_TEMPLATE})
+        inspect(host, registry)
     version = host.run(["/usr/bin/redis-server", "--version"]).stdout
     found = re.search(r"\bv=(\d+)\.(\d+)\.(\d+)\b", version)
     require(found and int(found[1]) >= 7, "redis_version", "Foundry requires Redis 7 or newer with TLS and ACL DRYRUN support.")

@@ -57,6 +57,9 @@ func Run(ctx context.Context, arguments []string, streams cli.Streams) error {
 	if len(args) == 0 {
 		return fmt.Errorf("fixture command is required")
 	}
+	if args[0] == "feature:relay" {
+		return featureRelay(ctx, args[1:])
+	}
 	settings, report, err := fixtureconfig.Load(path, env)
 	if err != nil {
 		return err

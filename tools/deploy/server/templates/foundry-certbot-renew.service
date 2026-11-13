@@ -6,4 +6,4 @@ Description=Foundry certificate renewal
 Type=oneshot
 UMask=0077
 @ENVIRONMENT@ExecStart=@COMMAND@
-TimeoutStartSec=1800
+@POSTCONDITION@TimeoutStartSec=1800

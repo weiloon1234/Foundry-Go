@@ -23,7 +23,8 @@ if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
-                       now, parse_json, read_json, require, valid_uuid)
+                       now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
+                       FEATURE_CAPABILITIES, TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
@@ -44,10 +45,25 @@ BASE_REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.
                             "server/templates/nginx-proxy.conf", "server/templates/nginx-upgrade.conf"})
 
 
-# Generations 9 and 10 share the base inventory. New files become mandatory
-# only for bundles whose own digest-bound protocol declares their generation.
+# Cumulative requirements are selected from the inspected bundle's protocol,
+# never from the running tools' generation or the host's selected generation.
 GENERATION_11_FILES = frozenset({"lib/uploads.py", "server/templates/nginx-upload.conf"})
-REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES
+GENERATION_12_FILES = frozenset({"lib/feature_lifecycle.py", "lib/feature_network.py", "lib/feature_runtime.py",
+    "lib/operations.py", "server/templates/admission.service", "lib/artifacts.py", "lib/admission.py", "lib/services.py",
+                               "server/runtime_v1.py", "server/templates/custom.service",
+                               "lib/firewall.py", "lib/listeners.py", "server/templates/firewall-runtime.rules",
+                               "server/templates/foundry-edge-boot.conf", "server/templates/nginx-http-admission.conf",
+                               "server/templates/nginx-stream.conf", "server/templates/nginx-tcp-tls.conf"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES
+
+
+def required_files(generation: int) -> frozenset[str]:
+    required = BASE_REQUIRED_FILES
+    if generation >= 11:
+        required |= GENERATION_11_FILES
+    if generation >= 12:
+        required |= GENERATION_12_FILES
+    return required
 
 
 def _hash(value: object) -> str:
@@ -85,8 +101,8 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
                 "tools_too_large", "The tool bundle exceeds its size limit.")
         inventory.append({"path": path.relative_to(source).as_posix(), "size": size, "mode": 0o644,
                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    required = REQUIRED_FILES if protocol(source)["generation"] >= 11 else BASE_REQUIRED_FILES
-    require(required <= {item["path"] for item in inventory}, "tools_incomplete", "The tool bundle is incomplete.")
+    require(required_files(protocol(source)["generation"]) <= {item["path"] for item in inventory},
+            "tools_incomplete", "The tool bundle is incomplete.")
     return source, files, inventory
 
 
@@ -260,6 +276,10 @@ def _prune_bundles(host) -> dict:
     """Run only in the selected bundle with the caller's inherited host lock."""
     require(host.host_lock_fd is not None, "tools_lock_required", "Tool pruning requires the host lock.")
     registry = host.read_registry()
+    for entry in registry["instances"].values():
+        if entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry:
+            from feature_lifecycle import refuse
+            refuse("helper bundle pruning")
     require(not _upgrade_pending(host, registry), "tools_upgrade_pending",
             "Complete the pending tool upgrade before pruning bundles.")
     active = _installed(host, registry["tools"])
@@ -316,6 +336,11 @@ def _prune_bundles(host) -> dict:
 def prune_tools(host, digest: str) -> dict:
     """Run selected-bundle cleanup while retaining the caller's host lock."""
     require(host.host_lock_fd is not None, "tools_lock_required", "Tool pruning requires the host lock.")
+    registry = host.read_registry()
+    if any(e.get("topology", {}).get("schema") == 2 or "deployment_selection" in e for e in registry["instances"].values()):
+        from feature_lifecycle import LATER
+        return {"removed_bundles": [], "removed_upgrade_journals": [],
+                "pruning_error": {"code": "capability_unavailable", "detail": f"Feature helper pruning requires {LATER}; all bundles retained."}}
     selected = _bundle_path(host, digest)
     # Preserve the ledger diagnostic at the caller boundary; child failures are redacted.
     _retired_bundles(host)
@@ -361,11 +386,54 @@ def hello(host) -> dict:
             "capabilities": ["topology-v1", "registry-v2", "digest-bound-tool-upgrade"]}
 
 
+def contract_versions() -> dict:
+    """Parser support, not advertised runtime support. Generation has one owner."""
+    return {"generation": protocol()["generation"], "topology": (1, TOPOLOGY_SCHEMA),
+            "profile": (2, FEATURE_PROFILE_SCHEMA), "archive": (1, ARCHIVE_SCHEMA),
+            "capabilities": tuple(sorted(FEATURE_CAPABILITIES))}
+
+
+def check_instance_capabilities(entry: dict, client_generation: int) -> None:
+    """Target-local sticky admission; rolling back application code cannot clear it."""
+    if "deployment_selection" not in entry:
+        return
+    selection = DeploymentSelection.parse(entry["deployment_selection"])
+    require(type(client_generation) is int and client_generation >= selection.minimum_generation,
+            "instance_capability_required", "This instance requires a host-capability-aware client.")
+
+
+def _check_feature_request(registry, request, action):
+    profile = request.get("profile")
+    topology = request.get("topology")
+    requested = (isinstance(profile, dict) and profile.get("schema") == FEATURE_PROFILE_SCHEMA
+                 or isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA)
+    supported = {"bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "status", "logs", "sync", "config-keys", "report"}
+    if requested and action not in supported:
+        from feature_lifecycle import refuse
+        refuse(action)
+    if not registry:
+        return
+    instance_id = profile.get("instance_id") if isinstance(profile, dict) else None
+    entries = registry["instances"]
+    # Global writers/collectors cannot safely partially interpret a feature host.
+    # Instance operations against an untouched legacy neighbor remain unchanged.
+    host_wide = action in UPGRADE_ACTIONS | {"tools-plan", "capacity-plan", "capacity-apply", "report"}
+    selected = entries.values() if host_wide or instance_id is None else [entries.get(instance_id, {})]
+    client = request.get("client")
+    generation = client.get("generation") if isinstance(client, dict) else None
+    for entry in selected:
+        check_instance_capabilities(entry, generation)
+        if (entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry) and action not in supported | UPGRADE_ACTIONS | {"tools-plan"}:
+            from feature_lifecycle import refuse
+            refuse(action)
+
+
 def check_client(host, request: dict, action: str) -> None:
     """Gate ordinary mutations on negotiated protocol and pending upgrade ownership."""
+    registry = host.read_registry(missing=True)
+    _check_feature_request(registry, request, action)
     if action in READ_ACTIONS:
         return
-    registry = host.read_registry(missing=True)
     if registry and action != "capacity-apply":
         import capacity
         capacity.require_idle(host)
@@ -400,6 +468,8 @@ def check_upgrade_generation(installed: dict, tools_dir: Path | None = None) -> 
 
 def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
     """Describe changed/removed paths and compatibility impact without mutating the host."""
+    for entry in registry["instances"].values():
+        check_instance_capabilities(entry, protocol(tools_dir)["generation"])
     current = registry["tools"]
     check_upgrade_generation(current, tools_dir)
     source, _, digest = tool_bundle(tools_dir)

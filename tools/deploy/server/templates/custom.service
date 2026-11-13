@@ -1,0 +1,47 @@
+# @MARKER@
+[Unit]
+Description=Foundry-Go @ACCOUNT@ @ROLE@
+After=network-online.target @AFTER@
+StartLimitIntervalSec=@WINDOW@
+StartLimitBurst=@BURST@
+
+[Service]
+Type=exec
+User=@ACCOUNT@
+Group=@ACCOUNT@
+WorkingDirectory=@BASE@
+UMask=0077
+ExecCondition=+@ADMIT@
+ExecStartPre=+@PREPARE@
+ExecStart=@DISPATCH@
+ExecStartPost=+@RUNNING@
+ExecStopPost=+@CLEANUP@
+Restart=@RESTART@
+RestartSec=@DELAY@s
+TimeoutStopSec=@STOP@s
+KillMode=control-group
+KillSignal=SIGTERM
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryMax=@MEMORY@
+CPUQuota=@CPU@%
+TasksMax=@TASKS@
+LimitNOFILE=@FILES@
+ReadWritePaths=@WRITABLE@
+@ENVIRONMENT@
+@MOUNTS@
+
+[Install]
+WantedBy=multi-user.target

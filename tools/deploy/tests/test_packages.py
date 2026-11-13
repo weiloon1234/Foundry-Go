@@ -1,10 +1,17 @@
 """Offline package transaction and interruption regressions; no host mutation."""
 from pathlib import Path
 import subprocess
+import copy
+import contextlib
+import hashlib
+import io
+import json
 import sys
 import tempfile
+import tarfile
+import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
@@ -101,7 +108,7 @@ class PackageHost(Host):
         if args[0] == "dpkg-query":
             output = "\n".join(f"{name}\t{value['status']}\t{value['version']}" for name, value in self.inventory.items())
         elif args[0] == "systemctl":
-            if args[1] == "disable":
+            if args[1] in ("disable", "daemon-reload"):
                 pass
             else:
                 exists = self.paths.p("/etc/postgresql/16/main").exists() and args[2] == "postgresql@16-main.service"
@@ -132,6 +139,14 @@ class PackageTransactionTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.host = PackageHost(Path(temporary.name))
+        for name, kwargs in (
+                ("_candidate_evidence", {"side_effect": lambda host, transaction: {
+                    name: {"version": version, "sha256": "a" * 64} for name, version in transaction.items()}}),
+                ("_prepare_payloads", {"return_value": ({}, {})}),
+                ("_activation_snapshot", {"return_value": {}})):
+            patcher = patch.object(packages, name, **kwargs)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_missing_install_is_pinned_guarded_and_restores_policy(self):
         packages.install_missing(self.host, ["new", "foreign"])
@@ -300,6 +315,617 @@ class PackageTransactionTests(unittest.TestCase):
         path.symlink_to("../usr/lib/os-release")
         target.write_text('ID=ubuntu\nVERSION_ID="26.04"\n')
         self.assertEqual(18, packages.ubuntu_major(self.host))
+
+    def test_reviewed_hash_or_activation_drift_refuses_before_install(self):
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        for key in ("transaction", "evidence", "activation", "installed"):
+            changed = copy.deepcopy(plan)
+            changed[key] = {"unexpected": {}}
+            with self.subTest(key=key), self.assertRaises(DeployError) as error:
+                packages.install_missing(self.host, ["new"], reviewed=changed)
+            self.assertEqual(error.exception.code, "package_plan_changed")
+            self.assertFalse(packages._journal_path(self.host).exists())
+        packages.install_missing(self.host, ["new"], reviewed=plan)
+        self.assertEqual(packages._load(self.host)["state"], "complete")
+
+    def test_dependency_hash_drift_blocks_resume_before_configuration(self):
+        self.host.interrupt = True
+        with self.assertRaises(DeployError):
+            packages.install_missing(self.host, ["new"])
+        self.host.commands.clear()
+        with patch.object(packages, "_candidate_evidence", return_value={"new": {"version": "1", "sha256": "b" * 64}}):
+            with self.assertRaises(DeployError) as error:
+                packages.install_missing(self.host, [])
+        self.assertEqual(error.exception.code, "package_plan_changed")
+        self.assertFalse(any(args[0] in ("apt-get", "dpkg") for args, _ in self.host.commands))
+
+
+class RolePackageTests(unittest.TestCase):
+    def test_only_placed_roles_request_packages_and_removed_requirements_are_retained(self):
+        from test_host_capabilities import profile
+        from topology import parse_profile, parse_topology
+        topology = parse_topology({"schema": 2, "roles": [
+            {"name": "http", "kind": "builtin", "packages": ["shared", "cli"]},
+            {"name": "worker", "kind": "builtin", "packages": ["shared", "worker-cli"]},
+            {"name": "scheduler", "kind": "builtin", "packages": ["unused"]}]})
+        placement = parse_profile({**profile(), "placement": {"http": 1, "worker": 1, "scheduler": 0}, "listeners": {}}, topology)
+        self.assertEqual(packages.role_requirements(topology, placement),
+                         {"cli": ["http"], "shared": ["http", "worker"], "worker-cli": ["worker"]})
+        with tempfile.TemporaryDirectory() as root:
+            host = PackageHost(Path(root))
+            host.inventory = {name: installed() for name in ("shared", "cli", "worker-cli", "old")}
+            with patch.object(packages, "_required", return_value=[]), patch.object(packages, "_activation_snapshot", return_value={}):
+                plan = packages.inspect(host, topology, placement, previous_requirements=["old", "shared"])
+            self.assertEqual(plan["missing"], [])
+            self.assertEqual(plan["retained_requirements"], ["old"])
+            self.assertFalse(any(args[0] in ("apt-get", "dpkg") for args, _ in host.commands))
+
+    def evidence(self):
+        return {"new": {"version": "1", "architecture": "amd64", "sha256": "a" * 64, "size": 100,
+                        "uris": ["https://archive.ubuntu.com/ubuntu/pool/new.deb"],
+                        "origins": [{"trusted": True, "origin": "Ubuntu", "label": "Ubuntu",
+                                     "codename": "noble", "archive": "noble-updates", "site": "archive.ubuntu.com"}]}}
+
+    def test_all_dependency_origins_must_be_signed_distro_records(self):
+        evidence = self.evidence()
+        packages._validate_evidence(evidence, {"new": "1"}, "noble")
+        for key, value in (("trusted", False), ("origin", "foreign"), ("codename", "other"), ("archive", "noble-proposed")):
+            bad = copy.deepcopy(evidence)
+            bad["new"]["origins"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(DeployError):
+                packages._validate_evidence(bad, {"new": "1"}, "noble")
+        for uri in ("https://user:password@example.org/p.deb", "file:///tmp/p.deb", "https://archive.ubuntu.com/p?token=x"):
+            bad = copy.deepcopy(evidence)
+            bad["new"]["uris"] = [uri]
+            with self.subTest(uri=uri), self.assertRaises(DeployError):
+                packages._validate_evidence(bad, {"new": "1"}, "noble")
+        mirrored = copy.deepcopy(evidence)
+        mirrored["new"]["uris"] = ["https://mirror.example.org/ubuntu/pool/new.deb"]
+        packages._validate_evidence(mirrored, {"new": "1"}, "noble")
+        with self.assertRaises(DeployError):
+            packages._validate_evidence(evidence, {"new": "1", "dependency": "2"}, "noble")
+
+    def test_package_executable_requires_exact_owner_and_safe_ancestry(self):
+        from topology import PackageExecutable
+        with tempfile.TemporaryDirectory() as root:
+            host = PackageHost(Path(root).resolve())
+            path = host.paths.p("/usr/bin/cli")
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"executable")
+            path.chmod(0o755)
+            reference = PackageExecutable("new", "/usr/bin/cli")
+            with patch.object(host, "run", return_value=subprocess.CompletedProcess([], 0, "new: /usr/bin/cli\n")):
+                result = packages.executable_evidence(host, reference, {"new": installed("2")})
+                self.assertEqual(result["version"], "2")
+                self.assertEqual(result["path"], "/usr/bin/cli")
+            with patch.object(host, "run", return_value=subprocess.CompletedProcess([], 0, "foreign: /usr/bin/cli\n")):
+                with self.assertRaises(DeployError):
+                    packages.executable_evidence(host, reference, {"new": installed()})
+            path.chmod(0o777)
+            with self.assertRaises(DeployError):
+                packages.executable_evidence(host, reference, {"new": installed()})
+
+
+class SignedIndexTests(unittest.TestCase):
+    def evidence(self, *, altered_index=False, signature_failure=False):
+        index = ("Package: new\nVersion: 1\nArchitecture: amd64\nFilename: pool/main/n/new.deb\n"
+                 "SHA256: " + "a" * 64 + "\nSize: 100\n\n").encode()
+        checksum = hashlib.sha256(index).hexdigest()
+        cleartext = ("Origin: Ubuntu\nLabel: Ubuntu\nSuite: noble-updates\nCodename: noble\nSHA256:\n "
+                     + checksum + " " + str(len(index)) + " main/binary-amd64/Packages\n").encode()
+        target = ("Identifier: Packages\nMetaKey: main/binary-amd64/Packages\nTrusted: yes\n"
+                  "Filename: /var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_main_binary-amd64_Packages.lz4\n"
+                  "URI: https://archive.ubuntu.com/ubuntu/dists/noble-updates/main/binary-amd64/Packages\n\n").encode()
+        calls = []
+        def command(args, **kwargs):
+            calls.append(args)
+            if args[0] == "dpkg":
+                self.assertEqual(args, ["dpkg", "--print-architecture"])
+                output = b"amd64\n"
+            elif args[0] == "apt-get":
+                self.assertEqual(args, ["apt-get", "indextargets"])
+                output = target
+            else:
+                self.assertEqual(args[:5], ["gpgv", "--keyring", "/usr/share/keyrings/ubuntu-archive-keyring.gpg", "--output", "-"])
+                if signature_failure:
+                    raise subprocess.CalledProcessError(1, args)
+                output = cleartext
+            kwargs["stdout"].write(output)
+            return subprocess.CompletedProcess(args, 0)
+        process = Mock()
+        process.stdout = io.BytesIO(index.replace(b"Size: 100", b"Size: 200") if altered_index else index)
+        process.wait.return_value = process.poll.return_value = 0
+        output = io.StringIO()
+        with patch.object(subprocess, "run", side_effect=command), patch.object(subprocess, "Popen", return_value=process), \
+                patch.object(sys, "argv", ["supply", '{"new":"1"}']), contextlib.redirect_stdout(output):
+            exec(packages._APT_EVIDENCE, {"__name__": "__main__"})
+        return json.loads(output.getvalue()), calls
+
+    def test_metadata_is_bound_to_index_digest_and_distro_signature_without_python_apt(self):
+        records, commands = self.evidence()
+        packages._validate_evidence(records, {"new": "1"}, "noble")
+        self.assertEqual(records["new"]["sha256"], "a" * 64)
+        self.assertEqual(records["new"]["uris"], ["https://archive.ubuntu.com/ubuntu/pool/main/n/new.deb"])
+        self.assertEqual(len(commands), 3)
+
+    def test_unsigned_or_changed_index_cannot_supply_reviewed_package_hashes(self):
+        with self.assertRaises(ValueError):
+            self.evidence(altered_index=True)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.evidence(signature_failure=True)
+
+
+class DefaultActivationTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.host = PackageHost(Path(temporary.name))
+        self.saved = patch.object(packages, "_save")
+        self.saved.start()
+        self.addCleanup(self.saved.stop)
+
+    def record(self, active="inactive", enabled="disabled"):
+        return {"LoadState": "loaded", "ActiveState": active, "SubState": "dead",
+                "UnitFileState": enabled, "MainPID": "0"}
+
+    def test_masks_only_proven_new_defaults_including_sockets_and_timers(self):
+        journal = {"operation_id": "test-operation", "activation_before": {"foreign.service": self.record("active", "enabled")},
+                   "activation_units": {name: ["new"] for name in ("new.service", "new.socket", "new.timer", "foreign.service")}}
+        packages._mask_defaults(self.host, journal)
+        for name in ("new.service", "new.socket", "new.timer"):
+            self.assertEqual(self.host.paths.p("/etc/systemd/system/" + name).readlink(), Path("/dev/null"))
+        self.assertFalse(self.host.paths.p("/etc/systemd/system/foreign.service").exists())
+        packages._mask_defaults(self.host, journal)
+        self.assertEqual(len(journal["masked_defaults"]), 3)
+
+    def test_foreign_mask_and_preexisting_template_instances_refuse(self):
+        directory = self.host.paths.p("/etc/systemd/system")
+        directory.mkdir(parents=True)
+        (directory / "new.service").symlink_to("/dev/null")
+        for before, units in (({}, {"new.service": ["new"]}),
+                              ({"new@foreign.service": self.record()}, {"new@.service": ["new"]})):
+            with self.assertRaises(DeployError):
+                packages._mask_defaults(self.host, {"operation_id": "test-operation", "activation_before": before, "activation_units": units})
+
+    def test_unexpected_or_active_defaults_remain_unresolved_without_stopping_foreign_units(self):
+        journal = {"activation_before": {"foreign.service": self.record("active", "enabled")},
+                   "activation_units": {"new.socket": ["new"]}}
+        for change in ({"new.socket": self.record("active")}, {"surprise.timer": self.record()},
+                       {"foreign.service": self.record("inactive")}):
+            with patch.object(packages, "_activation_snapshot", return_value={**journal["activation_before"], **change}):
+                with self.assertRaises(DeployError):
+                    packages._finish_activation(self.host, journal)
+        self.assertFalse(any("stop" in args or "disable" in args for args, _ in self.host.commands))
+
+    def test_inactive_new_default_disabled_while_foreign_activation_is_preserved(self):
+        before = {"foreign.service": self.record("active", "enabled")}
+        journal = {"activation_before": before, "activation_units": {"new.timer": ["new"]}}
+        with patch.object(packages, "_activation_snapshot", return_value={**before, "new.timer": self.record()}):
+            packages._finish_activation(self.host, journal)
+        self.assertEqual([args for args, _ in self.host.commands], [["systemctl", "disable", "new.timer"]])
+
+
+CERTBOT_CRON = b"0 */12 * * * root test -x /usr/bin/certbot -a ! -d /run/systemd/system && certbot -q renew\n"
+
+
+class PayloadPackageHost(PackageHost):
+    """Run the package planner/inspector/journal; fake only OS command boundaries."""
+    def __init__(self, root, payloads):
+        super().__init__(root)
+        self.payloads = payloads
+        self.conffiles = {path for files in payloads.values() for path in files if path.startswith("/etc/cron.")}
+        self.candidates = {name: "1" for name in payloads}
+        self.active = set()
+        self.paths.p("/etc/os-release").write_text('ID=ubuntu\nVERSION_ID="24.04"\nVERSION_CODENAME=noble\n')
+        cache = self.paths.p("/var/cache/apt/archives")
+        cache.mkdir(parents=True)
+        self.evidence = {}
+        for name, files in payloads.items():
+            output = io.BytesIO()
+            with tarfile.open(fileobj=output, mode="w") as archive:
+                for path, content in files.items():
+                    item = tarfile.TarInfo("./" + path.lstrip("/"))
+                    item.size, item.mode = len(content), 0o644
+                    archive.addfile(item, io.BytesIO(content))
+            content = output.getvalue()
+            (cache / (name + ".deb")).write_bytes(content)
+            self.evidence[name] = {"version": "1", "architecture": "amd64", "sha256": hashlib.sha256(content).hexdigest(),
+                "size": len(content), "uris": ["https://archive.ubuntu.com/ubuntu/pool/" + name + ".deb"],
+                "origins": [{"trusted": True, "origin": "Ubuntu", "label": "Ubuntu", "codename": "noble", "archive": "noble"}]}
+
+    def units(self):
+        return {path.name for directory in ("/etc/systemd/system", "/usr/lib/systemd/system")
+                for path in self.paths.p(directory).glob("*") if packages.UNIT.fullmatch(path.name)}
+
+    def run(self, args, **kwargs):
+        output = ""
+        if args[:3] == ["/usr/bin/python3", "-c", packages._APT_EVIDENCE]:
+            output = json.dumps({name: self.evidence[name] for name in json.loads(args[3])})
+        elif args[:3] == ["/usr/bin/python3", "-c", packages._DEB_UNITS]:
+            process = Mock(stdout=io.BytesIO(Path(args[3]).read_bytes()))
+            process.wait.return_value = process.poll.return_value = 0
+            captured = io.StringIO()
+            def control(command, **options):
+                assert command == ["dpkg-deb", "--ctrl-tarfile", args[3]]
+                with tarfile.open(fileobj=options["stdout"], mode="w") as archive:
+                    data = ("\n".join(sorted(self.conffiles)) + "\n").encode()
+                    item = tarfile.TarInfo("conffiles")
+                    item.size = len(data)
+                    archive.addfile(item, io.BytesIO(data))
+                return subprocess.CompletedProcess(command, 0)
+            with patch.object(subprocess, "Popen", return_value=process), patch.object(sys, "argv", ["inspector", *args[3:]]), \
+                    patch.object(subprocess, "run", side_effect=control), contextlib.redirect_stdout(captured):
+                exec(packages._DEB_UNITS, {"__name__": "__main__"})
+            output = captured.getvalue()
+        elif args[0] == "apt-get" and "--download-only" in args:
+            pass
+        elif args[0] == "apt-get" and "-y" in args:
+            assert self.paths.p(packages.POLICY).read_text().endswith("exit 101\n")
+            for location in packages._load(self)["cron_defaults"]:
+                assert all(line.startswith("#") for line in self.paths.p(location).read_text().splitlines())
+            for name, files in self.payloads.items():
+                for path, content in files.items():
+                    destination = self.paths.p(path)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    if path.startswith("/etc/cron.") and destination.exists() and "Dpkg::Options::=--force-confold" in args:
+                        destination = destination.with_name(destination.name + ".dpkg-dist")
+                    destination.write_bytes(content)
+                self.inventory[name] = installed()
+        elif args[0] == "systemctl" and args[1] in ("list-unit-files", "list-units"):
+            output = "\n".join(name + " disabled" for name in sorted(self.units()))
+        elif args[0] == "systemctl" and args[1] == "show" and "Id" in args:
+            records = []
+            for name in args[2:args.index("--no-pager")]:
+                masked = self.paths.p("/etc/systemd/system/" + name).is_symlink()
+                records.append(f"Id={name}\nLoadState={'masked' if masked else 'loaded'}\nActiveState=inactive\n"
+                               f"SubState=dead\nMainPID=0\nUnitFileState={'masked' if masked else 'disabled'}\nFragmentPath=\n")
+            output = "\n".join(records)
+        elif args[:3] == ["systemctl", "enable", "--now"]:
+            unit = args[3] if args[3].endswith(".service") else args[3] + ".service"
+            if self.paths.p("/etc/systemd/system/" + unit).is_symlink():
+                raise DeployError("masked", "Cannot enable a masked service.")
+            self.active.add(unit)
+        else:
+            return super().run(args, **kwargs)
+        self.commands.append((list(args), kwargs))
+        return subprocess.CompletedProcess(args, 0, output, "")
+
+
+class BuiltinPayloadTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+
+    def host(self, *, cron=True, root=None):
+        payloads = {"nginx": {"/usr/lib/systemd/system/nginx.service": b"[Service]\nExecStart=/usr/sbin/nginx\n"}}
+        if cron:
+            payloads["certbot"] = {"/etc/cron.d/certbot": CERTBOT_CRON,
+                "/usr/lib/systemd/system/certbot.timer": b"[Timer]\nOnCalendar=daily\n"}
+        return PayloadPackageHost(root or self.root, payloads)
+
+    def test_builtin_certbot_cron_is_inert_before_and_after_installation(self):
+        host = self.host()
+        packages.install_missing(host, list(host.candidates))
+        cron = host.paths.p("/etc/cron.d/certbot")
+        self.assertTrue(all(not line.strip() or line.startswith("#") for line in cron.read_text().splitlines()))
+        self.assertEqual(cron.with_name("certbot.dpkg-dist").read_bytes(), CERTBOT_CRON)
+        self.assertEqual(packages._load(host)["state"], "complete")
+
+    def interrupt_mask_publication(self, host, *, point="published"):
+        mask = host.paths.p("/etc/systemd/system/nginx.service")
+        sync = packages._sync_directory
+
+        def crash_after_publication(directory):
+            sync(directory)
+            if directory != mask.parent:
+                return
+            staged = any(directory.glob(".foundry-mask-*"))
+            if ((point == "staged" and staged and not mask.is_symlink())
+                    or (point == "published" and mask.is_symlink())):
+                raise SystemExit("crash during mask publication: " + point)
+
+        with patch.object(packages, "_sync_directory", side_effect=crash_after_publication), self.assertRaises(SystemExit):
+            packages.install_missing(host, ["nginx"])
+        return mask
+
+    def test_mask_publication_crash_recovers_journal_owned_inode(self):
+        host = self.host(cron=False)
+        mask = self.interrupt_mask_publication(host)
+        inode = mask.lstat().st_ino
+        journal = packages._load(host)
+        self.assertEqual(journal["state"], "installing")
+        self.assertEqual(journal["default_activation"]["nginx.service"]["state"], "publishing")
+        self.assertEqual(journal["default_activation"]["nginx.service"]["identity"]["inode"], inode)
+        packages.install_missing(host, ["nginx"])
+        self.assertEqual(mask.lstat().st_ino, inode)
+        self.assertEqual(packages._load(host)["state"], "complete")
+        anchor = next(mask.parent.glob(".foundry-mask-*"))
+        self.assertEqual(anchor.lstat().st_ino, inode)
+        self.assertEqual(mask.lstat().st_nlink, 2)
+        packages.authorize_default_activation(host, "nginx.service",
+                                             {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"})
+        self.assertFalse(mask.is_symlink())
+        self.assertFalse(anchor.is_symlink())
+        self.assertFalse(list(mask.parent.glob(".foundry-mask-*")))
+
+    def test_mask_staging_crash_recovers(self):
+        host = self.host(cron=False)
+        mask = self.interrupt_mask_publication(host, point="staged")
+        packages.install_missing(host, ["nginx"])
+        self.assertEqual(os.readlink(mask), "/dev/null")
+        self.assertEqual(packages._load(host)["state"], "complete")
+        self.assertEqual(next(mask.parent.glob(".foundry-mask-*")).lstat().st_ino, mask.lstat().st_ino)
+
+    def test_mask_record_crash_recovers_with_durable_anchor(self):
+        host = self.host(cron=False)
+        save = packages._save
+
+        def crash_after_masked_record(host, journal):
+            save(host, journal)
+            if journal.get("default_activation", {}).get("nginx.service", {}).get("state") == "masked":
+                raise SystemExit("crash after saving masked identity")
+
+        with patch.object(packages, "_save", side_effect=crash_after_masked_record), self.assertRaises(SystemExit):
+            packages.install_missing(host, ["nginx"])
+        mask = host.paths.p("/etc/systemd/system/nginx.service")
+        anchor = next(mask.parent.glob(".foundry-mask-*"))
+        self.assertEqual(anchor.lstat().st_ino, mask.lstat().st_ino)
+        identity = packages._mask_identity(mask)
+        self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["identity"], identity)
+        packages.install_missing(host, ["nginx"])
+        self.assertEqual(packages._mask_identity(mask), identity)
+        self.assertEqual(packages._load(host)["state"], "complete")
+
+    def test_mask_publication_recovery_refuses_foreign_replacement(self):
+        host = self.host(cron=False)
+        mask = self.interrupt_mask_publication(host)
+        replacement = mask.with_name("foreign")
+        replacement.symlink_to("/dev/null")
+        os.replace(replacement, mask)
+        identity = packages._mask_identity(mask)
+        with self.assertRaises(DeployError):
+            packages.install_missing(host, ["nginx"])
+        self.assertEqual(packages._mask_identity(mask), identity)
+        self.assertNotIn("nginx", host.inventory)
+        self.assertEqual(packages._load(host)["state"], "installing")
+
+    def test_mask_cleanup_crash_refuses_replacement_with_reused_inode(self):
+        host = self.host(cron=False)
+        mask = self.interrupt_mask_publication(host)
+        journal = packages._load(host)
+        original = journal["default_activation"]["nginx.service"]["identity"]
+        # Reproduce the old cleanup crash: the anchor is gone but the durable
+        # record is still publishing. Then replace the remaining mask.
+        next(mask.parent.glob(".foundry-mask-*")).unlink()
+        packages._sync_directory(mask.parent)
+        mask.unlink()
+        mask.symlink_to("/dev/null")
+        replacement = packages._mask_identity(mask)
+        self.assertNotEqual(replacement["ctime_ns"], original["ctime_ns"])
+        identity = packages._mask_identity
+
+        def reused_inode(path):
+            observed = identity(path)
+            if path == mask:
+                # Filesystem inode allocation is nondeterministic; simulate only
+                # reuse of the number, retaining the replacement's real ctime.
+                observed["inode"] = original["inode"]
+            return observed
+
+        with patch.object(packages, "_mask_identity", side_effect=reused_inode), self.assertRaises(DeployError):
+            packages.install_missing(host, ["nginx"])
+        self.assertEqual(packages._mask_identity(mask), replacement)
+        self.assertNotIn("nginx", host.inventory)
+        self.assertEqual(packages._load(host)["state"], "installing")
+
+    def interrupt_cron_publication(self, host):
+        cron = host.paths.p("/etc/cron.d/certbot")
+        unlink = Path.unlink
+
+        def crash_before_stage_unlink(path, *args, **kwargs):
+            if path.name.startswith(".foundry-cron-") and cron.exists():
+                raise SystemExit("crash before unlinking cron stage")
+            return unlink(path, *args, **kwargs)
+
+        with patch.object(Path, "unlink", new=crash_before_stage_unlink), self.assertRaises(SystemExit):
+            packages.install_missing(host, list(host.candidates))
+        journal = packages._load(host)
+        stage = cron.parent / (".foundry-cron-" + journal["operation_id"])
+        self.assertEqual(cron.stat().st_nlink, 2)
+        self.assertEqual(cron.stat().st_ino, stage.stat().st_ino)
+        return cron, stage, journal
+
+    def test_cron_publication_crash_reconciles_staging_hardlink(self):
+        host = self.host()
+        cron, stage, journal = self.interrupt_cron_publication(host)
+        packages.install_missing(host, list(host.candidates))
+        self.assertFalse(stage.exists())
+        self.assertEqual(cron.stat().st_nlink, 1)
+        self.assertEqual(cron.read_text(), packages._cron_stub(journal))
+        self.assertEqual(cron.with_name("certbot.dpkg-dist").read_bytes(), CERTBOT_CRON)
+        self.assertEqual(packages._load(host)["state"], "complete")
+
+    def test_cron_recovery_refuses_foreign_staging_inode(self):
+        host = self.host()
+        cron, stage, journal = self.interrupt_cron_publication(host)
+        stage.unlink()
+        stage.write_text(packages._cron_stub(journal))
+        stage.chmod(0o644)
+        os.link(stage, stage.with_name("foreign-stage"))
+        os.link(cron, cron.with_name("foreign-cron"))
+        # Even matching content, mode and link counts cannot authorize a
+        # staging inode unrelated to the published suppression file.
+        with self.assertRaises(DeployError):
+            packages.install_missing(host, list(host.candidates))
+        self.assertTrue(stage.exists())
+        self.assertNotEqual(cron.stat().st_ino, stage.stat().st_ino)
+        self.assertNotIn("certbot", host.inventory)
+
+    def test_pending_default_activation_is_read_only_and_checks_exact_mask(self):
+        host = self.host(cron=False)
+        self.assertFalse(packages.default_activation_pending(host, "nginx.service"))
+        packages.install_missing(host, ["nginx"])
+        mask = host.paths.p("/etc/systemd/system/nginx.service")
+        before = mask.lstat()
+        self.assertTrue(packages.default_activation_pending(host, "nginx.service"))
+        self.assertEqual(mask.lstat().st_ino, before.st_ino)
+        self.assertEqual(os.readlink(mask), "/dev/null")
+        replacement = mask.with_name("replacement.service")
+        replacement.symlink_to("/dev/null")
+        os.replace(replacement, mask)
+        with self.assertRaises(DeployError):
+            packages.default_activation_pending(host, "nginx.service")
+        self.assertEqual(os.readlink(mask), "/dev/null")
+
+    def test_nginx_owner_handoff_allows_enable_and_preserves_other_masks(self):
+        host = self.host()
+        packages.install_missing(host, list(host.candidates))
+        mask = host.paths.p("/etc/systemd/system/nginx.service")
+        self.assertTrue(mask.is_symlink())
+        claim = {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"}
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        host.run(["systemctl", "enable", "--now", "nginx"])
+        self.assertIn("nginx.service", host.active)
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertTrue(host.paths.p("/etc/systemd/system/certbot.timer").is_symlink())
+        self.assertTrue(host.paths.p("/etc/cron.d/certbot").read_text().startswith("#"))
+
+    def test_preexisting_cron_file_is_not_replaced_or_claimed(self):
+        host = self.host()
+        cron = host.paths.p("/etc/cron.d/certbot")
+        cron.parent.mkdir(parents=True)
+        cron.write_text("# foreign cron configuration\n")
+        with self.assertRaises(DeployError):
+            packages.install_missing(host, list(host.candidates))
+        self.assertEqual(cron.read_text(), "# foreign cron configuration\n")
+        self.assertFalse(packages._journal_path(host).exists())
+
+    def test_handoff_refuses_external_claim_pending_install_and_replaced_mask(self):
+        host = self.host(cron=False)
+        packages.install_missing(host, ["nginx"])
+        claim = {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"}
+        mask = host.paths.p("/etc/systemd/system/nginx.service")
+        for change in ({"owner": "external"}, {"installed_by_foundry": False}, {"unit": "foreign.service"}):
+            with self.subTest(change=change), self.assertRaises(DeployError):
+                packages.authorize_default_activation(host, "nginx.service", {**claim, **change})
+            self.assertTrue(mask.is_symlink())
+        journal = packages._load(host)
+        journal["state"] = "installing"
+        packages._save(host, journal)
+        with self.assertRaises(DeployError):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        journal["state"] = "complete"
+        packages._save(host, journal)
+        replacement = mask.with_name("replacement.service")
+        replacement.symlink_to("/dev/null")
+        os.replace(replacement, mask)
+        with self.assertRaises(DeployError):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertEqual(os.readlink(mask), "/dev/null")
+
+    def test_handoff_recovers_after_unlink_before_daemon_reload(self):
+        host = self.host(cron=False)
+        packages.install_missing(host, ["nginx"])
+        claim = {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"}
+        with patch.object(host, "run", side_effect=DeployError("interrupted", "reload interrupted")), self.assertRaises(DeployError):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertFalse(host.paths.p("/etc/systemd/system/nginx.service").is_symlink())
+        self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["state"], "releasing")
+        self.assertTrue(packages.default_activation_pending(host, "nginx.service"))
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["state"], "released")
+        self.assertFalse(packages.default_activation_pending(host, "nginx.service"))
+
+    def interrupt_handoff_after_release(self, host):
+        packages.install_missing(host, ["nginx"])
+        claim = {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"}
+        directory = host.paths.p("/etc/systemd/system")
+        anchor = next(directory.glob(".foundry-mask-*"))
+        save = packages._save
+
+        def crash_after_release(host, journal):
+            save(host, journal)
+            if journal["default_activation"]["nginx.service"]["state"] == "released":
+                raise SystemExit("crash after durable release before anchor cleanup")
+
+        with patch.object(packages, "_save", side_effect=crash_after_release), self.assertRaises(SystemExit):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertTrue(anchor.is_symlink())
+        self.assertFalse((directory / "nginx.service").is_symlink())
+        self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["state"], "released")
+        return claim, directory, anchor
+
+    def test_handoff_retry_cleans_anchor_after_durable_release(self):
+        host = self.host(cron=False)
+        claim, directory, anchor = self.interrupt_handoff_after_release(host)
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertFalse(list(directory.glob(".foundry-mask-*")))
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertFalse(list(directory.glob(".foundry-mask-*")))
+
+    def test_handoff_cleanup_refuses_replaced_anchor_even_with_reused_inode(self):
+        host = self.host(cron=False)
+        claim, directory, anchor = self.interrupt_handoff_after_release(host)
+        original = packages._mask_identity(anchor)
+        anchor.unlink()
+        anchor.symlink_to("/dev/null")
+        replacement = packages._mask_identity(anchor)
+        self.assertNotEqual(original["ctime_ns"], replacement["ctime_ns"])
+        identity = packages._mask_identity
+
+        def reused_inode(path):
+            observed = identity(path)
+            if path == anchor:
+                observed["inode"] = original["inode"]
+            return observed
+
+        with patch.object(packages, "_mask_identity", side_effect=reused_inode), self.assertRaises(DeployError):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertEqual(packages._mask_identity(anchor), replacement)
+
+    def test_handoff_cleanup_retry_after_anchor_unlink(self):
+        host = self.host(cron=False)
+        claim, directory, anchor = self.interrupt_handoff_after_release(host)
+        sync = packages._sync_directory
+
+        def crash_after_cleanup(path):
+            if path == directory and not anchor.is_symlink():
+                raise SystemExit("crash after anchor unlink before directory sync")
+            sync(path)
+
+        with patch.object(packages, "_sync_directory", side_effect=crash_after_cleanup), self.assertRaises(SystemExit):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertFalse(list(directory.glob(".foundry-mask-*")))
+
+    def test_additional_package_transaction_retains_prior_mask_ownership(self):
+        host = self.host()
+        host.candidates = {"nginx": "1"}
+        # The fake package manager installs only its requested transaction.
+        pending_certbot = host.payloads.pop("certbot")
+        packages.install_missing(host, ["nginx"])
+        host.payloads = {"certbot": pending_certbot}
+        host.candidates = {"certbot": "1"}
+        packages.install_missing(host, ["certbot"])
+        packages.authorize_default_activation(host, "nginx.service",
+                                             {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"})
+        self.assertFalse(host.paths.p("/etc/systemd/system/nginx.service").is_symlink())
+
+    def test_unknown_application_cron_payload_is_refused_before_install(self):
+        host = PayloadPackageHost(self.root, {"application-daemon": {"/etc/cron.d/application-daemon": CERTBOT_CRON}})
+        with self.assertRaises((DeployError, ValueError)):
+            packages.install_missing(host, ["application-daemon"])
+        self.assertFalse(host.paths.p("/etc/cron.d/application-daemon").exists())
+        self.assertFalse(packages._journal_path(host).exists())
+
+    def test_builtin_cron_must_be_a_dpkg_conffile_to_preserve_suppression(self):
+        host = self.host()
+        host.conffiles.clear()
+        with self.assertRaises((DeployError, ValueError)):
+            packages.install_missing(host, list(host.candidates))
+        self.assertFalse(packages._journal_path(host).exists())
 
 
 if __name__ == "__main__":
