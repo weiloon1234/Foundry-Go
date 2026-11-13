@@ -9,6 +9,38 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
+func TestDistinctSkipsOnlyDefaultCollation(t *testing.T) {
+	c := NewCompiler([]Column{{Name: "name"}})
+	c.Sources = map[string]map[string]Column{"names": c.Columns}
+	field := FieldRef{Table: "names", Column: "name"}
+	plan, err := c.PlanValue(field)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var distinct DistinctOrder
+	distinct.Add(plan, 1)
+	node := OperationNode{Kind: CollateOperation, Result: codec.TypeText, Collation: "C", DefaultCollation: true, Arguments: []OperationArgument{{Value: field, Kind: codec.TypeText}}}
+	if sql, err := distinct.Compile(&c, OrderNode{Expression: node}, nil, false); err != nil || sql != "1" {
+		t.Fatal("DISTINCT rejected a default collation", sql, err)
+	}
+	node.DefaultCollation = false
+	if _, err := distinct.Compile(&c, OrderNode{Expression: node}, nil, false); !errors.Is(err, fault.Invalid) {
+		t.Fatal("DISTINCT silently removed explicit collation", err)
+	}
+	plan, err = c.PlanValue(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	distinct.Add(plan, 2)
+	if sql, err := distinct.Compile(&c, OrderNode{Expression: node}, nil, false); err != nil || sql != "2" {
+		t.Fatal("DISTINCT lost matching explicit collation", sql, err)
+	}
+	node.DefaultCollation, node.Collation = true, "bad\x00name"
+	if _, err := distinct.Compile(&c, OrderNode{Expression: node}, nil, false); !errors.Is(err, fault.Invalid) {
+		t.Fatal("DISTINCT bypassed collation validation", err)
+	}
+}
+
 func TestCollationValidation(t *testing.T) {
 	operand := OperationArgument{Kind: codec.TypeText, Value: FieldRef{Table: "names", Column: "name"}}
 	for _, name := range []string{"", strings.Repeat("a", 64), strings.Repeat("é", 32), "bad\x00name", "bad\nname", "bad\x7fname", "bad\u0085name", "bad\xffname"} {

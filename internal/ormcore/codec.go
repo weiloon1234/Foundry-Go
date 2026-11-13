@@ -106,7 +106,7 @@ func EnumCodec[E interface {
 		}
 		return nil
 	})
-	c := codec.FoundryPrimitive[E](sqlowner.Metadata()).Validated(func(v E) error {
+	c := codec.FoundryPrimitive[E](sqlowner.Metadata()).WithoutCollation().Validated(func(v E) error {
 		if err := check(); err != nil {
 			return err
 		}

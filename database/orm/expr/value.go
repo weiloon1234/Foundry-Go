@@ -101,7 +101,7 @@ func parameterData[V any](scope reflect.Type, exemplar rowData[V], v V) rowData[
 }
 
 func columnCodec[V any](c codec.Codec[V]) ormcore.Column[V] {
-	return ormcore.Column[V]{Text: c.ParameterType() == codec.TypeText, Sensitive: c.SensitiveValues(), Kind: c.ParameterType(), Nullable: value.IsNullableType[V](), Bind: c.Bind, Clone: c.Clone, Scan: func(v *V) any { return c.Scan(v) }, Err: c.Validate()}
+	return ormcore.Column[V]{Text: c.ParameterType() == codec.TypeText, Collatable: c.Collatable(), Sensitive: c.SensitiveValues(), Kind: c.ParameterType(), Nullable: value.IsNullableType[V](), Bind: c.Bind, Clone: c.Clone, Scan: func(v *V) any { return c.Scan(v) }, Err: c.Validate()}
 }
 
 // NullableRow explicitly widens a row value by one nullable layer.
@@ -120,7 +120,7 @@ func Nullable[S, V any](e Selected[S, V]) Selected[S, value.Nullable[V]] {
 
 func nullableData[V any](e rowData[V]) rowData[value.Nullable[V]] {
 	c := e.column
-	out := ormcore.Column[value.Nullable[V]]{AggregateInput: c.AggregateInput, Text: c.Text, Sensitive: c.Sensitive, Kind: c.Kind, Nullable: true, Err: c.Err}
+	out := ormcore.Column[value.Nullable[V]]{AggregateInput: c.AggregateInput, Text: c.Text, Collatable: c.Collatable, Sensitive: c.Sensitive, Kind: c.Kind, Nullable: true, Err: c.Err}
 	out.Scan = func(v *value.Nullable[V]) any { return ormcore.NullableScan(c.Scan, v) }
 	out.Bind = func(v value.Nullable[V]) (driver.Value, error) {
 		x, ok := v.Get()

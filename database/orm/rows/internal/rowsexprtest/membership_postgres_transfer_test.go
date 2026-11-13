@@ -51,7 +51,7 @@ type membershipTable struct {
 
 func membershipFields() membershipTable {
 	return orm.Define("members", func(b orm.Builder[membershipRow], m *membershipRow) membershipTable {
-		return membershipTable{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.Rank), orm.TextOf(b, &m.Label), orm.BoolOf(b, &m.OK), orm.NumberOf(b, &m.Amount), orm.TimeOf(b, &m.Day), orm.TimeOf(b, &m.At), orm.ColumnOf(b, &m.UID, orm.Codec(codec.ID[membershipRow]())), orm.TextOf(b, &m.Mood), orm.JSONOf(b, &m.Doc)}
+		return membershipTable{orm.TableOf(b, &m.ID), orm.NumberOf(b, &m.Rank), orm.TextOf(b, &m.Label), orm.BoolOf(b, &m.OK), orm.NumberOf(b, &m.Amount), orm.TimeOf(b, &m.Day), orm.TimeOf(b, &m.At), orm.ColumnOf(b, &m.UID, orm.Codec(codec.ID[membershipRow]())), orm.TextOf(b, &m.Mood, orm.Codec(codec.String[string]().WithoutCollation())), orm.JSONOf(b, &m.Doc)}
 	})
 }
 func membershipIDs(t *testing.T, ctx context.Context, ex database.Executor, q orm.Query[membershipRow], d membershipTable) []int64 {

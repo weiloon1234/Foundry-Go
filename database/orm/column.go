@@ -102,6 +102,7 @@ func bindTyped[V any](d *declaration, ptr *V, c codec.Codec[V], nullable bool, o
 	}
 
 	core.sensitive = c.SensitiveValues()
+	core.collatable = c.Collatable()
 	core.bindMutator = func(fn any) error {
 		mutate, ok := fn.(func(V) (V, error))
 		if !ok {

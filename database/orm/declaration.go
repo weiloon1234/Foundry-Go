@@ -68,6 +68,7 @@ type columnCore struct {
 	automatic        func(any) (querycore.AssignmentValue, error)
 	storedAssignment func(any) (querycore.AssignmentValue, error)
 	kind             codec.ParameterType
+	collatable       bool
 	role             string
 	uuid             bool
 	open             func(database.Row, func() (driver.Value, error), unsafe.Pointer) error

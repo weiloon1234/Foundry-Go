@@ -164,7 +164,7 @@ func CountDistinctRow[S, V any](input RowExpression[S, V]) OrderedAggregate[S, i
 
 // Preserve a nullable input's custom codec for MIN/MAX and present fallback Params.
 func presentAggregateColumn[V any](c ormcore.Column[value.Nullable[V]]) ormcore.Column[V] {
-	out := ormcore.Column[V]{Text: c.Text, Kind: c.Kind, Sensitive: c.Sensitive, Err: c.Err}
+	out := ormcore.Column[V]{Text: c.Text, Collatable: c.Collatable, Kind: c.Kind, Sensitive: c.Sensitive, Err: c.Err}
 	out.Bind = func(v V) (driver.Value, error) {
 		if c.Bind == nil {
 			return nil, ormcore.Invalid("uninitialized aggregate codec")

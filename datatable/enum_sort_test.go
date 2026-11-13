@@ -139,6 +139,7 @@ func TestEnumRowSortAndShortStableSpelling(t *testing.T) {
 	}
 
 	config := DefaultConfig()
+	config.TextCollation = expr.CollationUnicode
 	actor := enumSortActor{Allowed: true}
 
 	cases := []struct {
@@ -187,7 +188,7 @@ func TestEnumRowSortAndShortStableSpelling(t *testing.T) {
 			if err != nil {
 				t.Fatalf("compile failed: %v", err)
 			}
-			if !strings.Contains(statement.SQL(), tc.wantSQL) {
+			if !strings.Contains(statement.SQL(), tc.wantSQL) || strings.Contains(statement.SQL(), "COLLATE") {
 				t.Fatalf("expected SQL containing %q, got: %s", tc.wantSQL, statement.SQL())
 			}
 		})

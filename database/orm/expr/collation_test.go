@@ -10,10 +10,78 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
 type collatedLabel string
+
+func TestNonCollatableTextDeclarationsRejectExplicitCollation(t *testing.T) {
+	type fields struct {
+		orm.Table[textLiftRecord, int64]
+		State    orm.Text[textLiftRecord, textLiftState]
+		Nullable orm.NullableText[textLiftRecord, textLiftState]
+	}
+	table := orm.Define("native_enum_records", func(b orm.Builder[textLiftRecord], m *textLiftRecord) fields {
+		c := orm.Codec(codec.String[textLiftState]().WithoutCollation())
+		return fields{orm.TableOf(b, &m.ID), orm.TextOf(b, &m.State, c), orm.NullableTextOf(b, &m.Nullable, c)}
+	})
+	state := expr.TextRow(orm.TextExpr(table.State))
+	nullable := expr.TextNullableRow(orm.NullableTextExpr(table.Nullable))
+	for _, order := range []expr.Order[textLiftRecord]{expr.Asc(expr.Collate(state, expr.CollationC)), expr.Asc(expr.CollateNullable(nullable, expr.CollationC))} {
+		if _, err := rows.CompileRead(rows.Read(rows.FromModel(expr.OrderBy(table.Query(), order)))); !errors.Is(err, fault.Invalid) {
+			t.Fatal("non-collatable text declaration accepted COLLATE", err)
+		}
+	}
+	for _, order := range []expr.ProjectionOrder[textLiftRecord]{
+		expr.AscValue(expr.FoundryDefaultCollation(expr.AsSelected(state), expr.CollationUnicode, sqlowner.Expressions())),
+		expr.AscValue(expr.FoundryDefaultCollation(expr.AsSelected(nullable), expr.CollationUnicode, sqlowner.Expressions())),
+	} {
+		statement, err := rows.CompileRead(rows.Read(rows.OrderBy(rows.FromModel(table.Query()), order)))
+		if err != nil || strings.Contains(statement.SQL(), "COLLATE") {
+			t.Fatal("default collated a non-collatable text declaration", statement.SQL(), err)
+		}
+	}
+}
+
+type collatedProjection struct{}
+
+func TestEnumProjectionRetainsNonCollatableCapability(t *testing.T) {
+	type fields struct {
+		rows.Row[textLiftRecord]
+		ID       rows.Field[textLiftRecord, int64]
+		State    rows.Field[textLiftRecord, textLiftState]
+		Nullable rows.Field[textLiftRecord, value.Nullable[textLiftState]]
+	}
+	f := rows.Define(func(b rows.Builder[textLiftRecord], m *textLiftRecord) fields {
+		return fields{b.Row(), rows.NumberOf(b, &m.ID), rows.EnumOf(b, &m.State), rows.NullableEnumOf(b, &m.Nullable)}
+	})
+	selected := rows.Select(rows.From(textLiftTable.Query()), f,
+		rows.Map(f.ID, expr.Value(orm.KeyExpr(textLiftTable.Key()))),
+		rows.Map(f.State, expr.Value(orm.EnumExpr(textLiftTable.State))),
+		rows.Map(f.Nullable, expr.Value(orm.NullableEnumExpr(textLiftTable.Nullable))))
+	source := rows.AsRecord[collatedProjection](rows.RecordOf(selected), "enum_values")
+	state := expr.AsSelected(rows.At(rows.Scope(source), f.State))
+	nullable := expr.AsSelected(rows.At(rows.Scope(source), f.Nullable))
+	for _, order := range []expr.ProjectionOrder[rows.Alias[collatedProjection, textLiftRecord]]{
+		expr.AscValue(expr.CollateValue(state, expr.CollationC)),
+		expr.AscValue(expr.CollateNullableValue(nullable, expr.CollationC)),
+	} {
+		q := rows.OrderScalar(rows.SelectScalar(source, state), order)
+		if _, err := rows.CompileRead(rows.ReadScalar(q)); !errors.Is(err, fault.Invalid) {
+			t.Fatal("enum projection accepted explicit collation", err)
+		}
+	}
+	for _, order := range []expr.ProjectionOrder[rows.Alias[collatedProjection, textLiftRecord]]{
+		expr.AscValue(expr.FoundryDefaultCollation(state, expr.CollationUnicode, sqlowner.Expressions())),
+		expr.AscValue(expr.FoundryDefaultCollation(nullable, expr.CollationUnicode, sqlowner.Expressions())),
+	} {
+		statement, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(rows.SelectScalar(source, state), order)))
+		if err != nil || strings.Contains(statement.SQL(), "COLLATE") {
+			t.Fatal("enum projection acquired default collation", statement.SQL(), err)
+		}
+	}
+}
 
 func TestCollationBuildValidation(t *testing.T) {
 	input := expr.Constant[textLiftRecord](codec.String[collatedLabel](), "adam")

@@ -41,6 +41,7 @@ type Column[V any] struct {
 	// AggregateInput is issued by a declared ordered result field, never a promoted marker.
 	AggregateInput bool
 	Text           bool
+	Collatable     bool
 	Sensitive      bool
 	Reference
 	Field    querycore.FieldRef

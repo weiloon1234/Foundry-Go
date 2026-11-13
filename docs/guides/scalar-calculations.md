@@ -53,6 +53,14 @@ Negative literal substring counts fail query compilation before executor access,
 
 `Collate(input, collation)` chooses the PostgreSQL language order for a text expression. It preserves the input's named string type and codec because the value itself does not change. `CollateNullable` also preserves SQL NULL. `CollateValue` and `CollateNullableValue` accept selected expressions, including aggregate and window results.
 
+Collation requires a collatable SQL value, not merely a text parameter representation.
+Enum declarations do not grant collation capability, and explicit `Collate` on them
+fails query build with `fault.Invalid`. `codec.String` declares collatable text;
+when using it for a native PostgreSQL enum or another non-collatable SQL type,
+declare `orm.Codec(codec.String[YourString]().WithoutCollation())` on the column.
+Custom codecs do not gain this capability from `WithParameterType(codec.TypeText)`.
+Nullable, validated and adapted codecs retain the original capability.
+
 [Compiled example](../../tests/fixtures/consumer/scalarqueries/collation_test.go):
 
 <!-- compiled-source: tests/fixtures/consumer/scalarqueries/collation_test.go#collated-ordering -->

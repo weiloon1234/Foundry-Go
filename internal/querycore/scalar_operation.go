@@ -166,7 +166,9 @@ type OperationNode struct {
 	Arguments []OperationArgument
 	Result    codec.ParameterType
 	Collation string
-	Err       error
+	// DefaultCollation marks an optional sort preference, never an explicit COLLATE.
+	DefaultCollation bool
+	Err              error
 }
 
 func (OperationNode) ValueNode() {}

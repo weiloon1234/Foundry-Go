@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed: datatable text collation leaves enum and other non-collatable sorts
+  unchanged and rejects explicit collation on those values before execution.
+  DISTINCT report sources skip the manager collation default, preserving valid
+  requested/default sorts, exports and duplicate elimination.
+
 - Added: typed per-expression text collation with `expr.Collation`, `CollationC`,
   `CollationUnicode`, `ICUCollation`, and the four `Collate` variants, preserving
   named string types and codecs in ordering, comparisons and text filters.

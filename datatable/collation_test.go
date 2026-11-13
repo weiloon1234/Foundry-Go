@@ -1,6 +1,7 @@
 package datatable
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -11,6 +12,43 @@ import (
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
+
+func TestDistinctTextCollationSortsAndExports(t *testing.T) {
+	spec := reportSpec()
+	spec.Source = func(_ context.Context, actor reportActor) (rows.Query[reportRecord, ReportRow], error) {
+		return rows.Distinct(reportSource(actor.Tenant)), nil
+	}
+	table := Define(spec)
+	if err := table.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, request := range []Request{{}, {Sort: []Sort{{Column: "name", Direction: Descending}}}} {
+		for _, action := range []Action{QueryAction, ExportAction} {
+			var baseline string
+			for _, collation := range []expr.Collation{"", expr.CollationUnicode} {
+				config := DefaultConfig()
+				config.TextCollation = collation
+				prepared, err := table.definition.prepare(request, config)
+				if err != nil {
+					t.Fatal(err)
+				}
+				source, err := table.definition.scoped(t.Context(), reportActor{Tenant: 7, Allowed: true}, action, prepared)
+				if err != nil {
+					t.Fatal("DISTINCT report rejected its sort default", err)
+				}
+				statement, err := rows.CompileRead(rows.Read(source.rows))
+				if err != nil || !strings.Contains(statement.SQL(), "SELECT DISTINCT ") || strings.Contains(statement.SQL(), "COLLATE") {
+					t.Fatal("DISTINCT semantics changed", statement.SQL(), err)
+				}
+				if collation == "" {
+					baseline = statement.SQL()
+				} else if statement.SQL() != baseline {
+					t.Fatal("manager default changed DISTINCT ordering", statement.SQL(), baseline)
+				}
+			}
+		}
+	}
+}
 
 func TestTextCollationConfiguration(t *testing.T) {
 	for _, name := range []expr.Collation{"", expr.CollationC, expr.CollationUnicode, `app"name`, expr.Collation(strings.Repeat("é", 31) + "a")} {

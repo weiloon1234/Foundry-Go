@@ -43,7 +43,7 @@ func String[T ~string]() Codec[T] {
 			return *new(T), invalid()
 		}
 		return T(v), nil
-	})
+	}).withCollation(true)
 }
 
 // Bool accepts native driver booleans, with no truthiness or numeric conversion.

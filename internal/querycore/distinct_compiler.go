@@ -87,6 +87,11 @@ func (d *DistinctOrder) Compile(c *Compiler, order OrderNode, grouped map[FieldR
 	if err := c.ValidateSelectedExpression(order.Expression, grouped, grouping); err != nil {
 		return "", err
 	}
+	// A manager sort preference must not change DISTINCT's selected values or
+	// invalidate their ordering. Explicit collations still require an exact match.
+	if operation, ok := order.Expression.(OperationNode); ok && operation.Kind == CollateOperation && operation.DefaultCollation {
+		order.Expression = operation.Arguments[0].Value
+	}
 	plan, err := c.PlanValue(order.Expression)
 	if err != nil {
 		return "", err

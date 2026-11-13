@@ -14,7 +14,7 @@ func Adapt[V, U any](base Codec[U], to func(V) U, from func(U) V) Codec[V] {
 			return *new(V), err
 		}
 		return from(u), nil
-	}).WithParameterType(base.ParameterType()).withClone(func(v V) V { return from(base.Clone(to(v))) }).withSensitivity(base.SensitiveValues())
+	}).WithParameterType(base.ParameterType()).withCollation(base.Collatable()).withClone(func(v V) V { return from(base.Clone(to(v))) }).withSensitivity(base.SensitiveValues())
 	if base.ComparesValues() {
 		result = result.WithEquality(func(a, b V) bool { equal, _ := base.Equal(to(a), to(b)); return equal })
 	}

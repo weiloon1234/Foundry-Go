@@ -52,7 +52,7 @@ func Collate[S any, V ~string](input RowValue[S, V], collation Collation) TextRo
 //
 // Example: expr.CollateValue(input, expr.ICUCollation("en-US"))
 func CollateValue[S any, V ~string](input Selected[S, V], collation Collation) Selected[S, V] {
-	return Selected[S, V]{data: collateData(checkedTextColumn(input.data), collation)}
+	return Selected[S, V]{data: collateData(checkedTextColumn(input.data), collation, false)}
 }
 
 // CollateNullable chooses a nullable text row value's collation, preserving NULL and its codec.
@@ -66,13 +66,17 @@ func CollateNullable[S any, V ~string](input RowValue[S, value.Nullable[V]], col
 //
 // Example: expr.CollateNullableValue(input, expr.CollationC)
 func CollateNullableValue[S any, V ~string](input Selected[S, value.Nullable[V]], collation Collation) Selected[S, value.Nullable[V]] {
-	return Selected[S, value.Nullable[V]]{data: collateData(checkedTextColumn(input.data), collation)}
+	return Selected[S, value.Nullable[V]]{data: collateData(checkedTextColumn(input.data), collation, false)}
 }
 
-func collateData[V any](input rowData[V], collation Collation) rowData[V] {
+func collateData[V any](input rowData[V], collation Collation, defaultCollation bool) rowData[V] {
+	if !input.column.Collatable {
+		input.core.Err = safeerror.Join("operation failed", input.core.Err, ormcore.Invalid("collation requires a collatable expression"))
+	}
 	input.core.Node = querycore.OperationNode{
 		Kind: querycore.CollateOperation, Result: input.column.Kind, Collation: string(collation),
-		Arguments: []querycore.OperationArgument{{Value: input.core.Node, Kind: input.column.Kind}},
+		DefaultCollation: defaultCollation,
+		Arguments:        []querycore.OperationArgument{{Value: input.core.Node, Kind: input.column.Kind}},
 	}
 	return input
 }
@@ -86,13 +90,13 @@ func FoundryDefaultCollation[S, V any](input Selected[S, V], collation Collation
 		input.data.core.Err = ormcore.Invalid("invalid SQL owner capability")
 		return input
 	}
-	if collation == "" || input.data.column.Kind != codec.TypeText {
+	if collation == "" || !input.data.column.Collatable {
 		return input
 	}
 	explicit, err := explicitCollation(input.data.core.Node)
 	input.data.core.Err = safeerror.Join("operation failed", input.data.core.Err, err)
 	if !explicit && err == nil {
-		input.data = collateData(input.data, collation)
+		input.data = collateData(input.data, collation, true)
 	}
 	return input
 }

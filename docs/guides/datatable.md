@@ -410,12 +410,18 @@ text_collation = "und-x-icu"
 
 The default is empty, preserving database ordering. The manager applies this
 setting to requested column sorts, `DefaultSort`, and exports using each sort
-expression's database type metadata. Numeric expressions remain numeric even
+expression's declared collation capability. Enum columns and other non-collatable
+values are left unchanged even when their bound parameters use text. Numeric expressions remain numeric even
 when the DTO encodes them as JSON strings. An explicit
 `SortBy(expr.AsSelected(expr.Collate(name, expr.CollationC)))` takes precedence;
 the manager does not wrap that value with its default. `Spec.Stable` orders remain
 unchanged. There is no per-table override; use an explicit collation on the sort
-expression when needed. See [per-expression collation](scalar-calculations.md#per-expression-collation)
+expression when needed. Outer `rows.Distinct` sources skip the manager default for
+requested sorts, `DefaultSort`, and exports: their orders must match the selected
+expressions, and duplicate elimination remains unchanged. The report pipeline
+does not automatically rebind these expressions into an outer derived-table scope.
+Explicit collations retain the existing DISTINCT selection-matching requirement.
+See [per-expression collation](scalar-calculations.md#per-expression-collation)
 for supported names, validation and database availability.
 
 The source must be unpaginated. `ReorderUnwindowed` replaces outer ordering and
