@@ -30,6 +30,7 @@ type EndpointInfo struct {
 	Path           []PathParameterInfo             `json:"path"`
 	Route          RouteInfo                       `json:"route"`
 	Query          []QueryParameterInfo            `json:"query"`
+	Headers        []QueryParameterInfo            `json:"headers"`
 	Body           *PayloadInfo                    `json:"body,omitempty"`
 	Response       *PayloadInfo                    `json:"response,omitempty"`
 	Status         int                             `json:"status"`
@@ -62,8 +63,9 @@ func InspectEndpoint[P, Q, B, R any](e Endpoint[P, Q, B, R]) (EndpointInfo, erro
 // or schema inference lives in HTTP.
 func endpointSnapshot[P, Q, B, R any](e Endpoint[P, Q, B, R], route RouteInfo) EndpointInfo {
 	query, _ := QueryParameters(e.query)
+	headers, _ := RequestHeaderParameters(e.query)
 	path, _ := PathParameters(e.route.path)
-	info := EndpointInfo{Path: path, Route: route.clone(), Query: query, Status: e.response.status, Statuses: slices.Clone(e.response.statuses), Redirect: e.response.kind == payloadRedirect, Limits: e.limits}
+	info := EndpointInfo{Path: path, Route: route.clone(), Query: query, Headers: headers, Status: e.response.status, Statuses: slices.Clone(e.response.statuses), Redirect: e.response.kind == payloadRedirect, Limits: e.limits}
 	if e.hasTableOperation {
 		binding := e.tableOperation
 		info.TableOperation = &binding

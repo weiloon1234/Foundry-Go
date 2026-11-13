@@ -11,6 +11,7 @@ type EndpointLimits struct {
 	Multipart  MultipartLimits
 	Files      FileResponseLimits
 	Query      QueryLimits
+	Headers    RequestHeaderLimits
 	Form       QueryLimits
 	Body       contract.JSONLimits
 	Response   contract.JSONLimits
@@ -34,12 +35,17 @@ const (
 func DefaultEndpointLimits() EndpointLimits {
 	json := contract.JSONLimits{Bytes: int(DefaultServerConfig().MaxBodyBytes), Depth: 32, Nodes: 65536, Steps: 262144, Issues: 16}
 	response := contract.JSONLimits{Bytes: DefaultResponseBytes, Depth: 32, Nodes: DefaultResponseNodes, Steps: 4 * DefaultResponseNodes, Issues: 16}
-	return EndpointLimits{Form: QueryLimits{Bytes: json.Bytes, Pairs: 1024, Issues: json.Issues}, Files: DefaultFileResponseLimits(), Multipart: DefaultMultipartLimits(), Query: QueryLimits{Bytes: 16 << 10, Pairs: 128, Issues: 16}, Body: json, Response: response, Validation: validation.DefaultLimits(), Raw: RawBodyLimits{Bytes: DefaultServerConfig().MaxBodyBytes}}
+	return EndpointLimits{Form: QueryLimits{Bytes: json.Bytes, Pairs: 1024, Issues: json.Issues}, Files: DefaultFileResponseLimits(), Multipart: DefaultMultipartLimits(), Query: QueryLimits{Bytes: 16 << 10, Pairs: 128, Issues: 16}, Headers: RequestHeaderLimits{FieldBytes: MaxHeaderValueBytes, Bytes: 16 << 10, Fields: 32, Values: 64, Issues: 16}, Body: json, Response: response, Validation: validation.DefaultLimits(), Raw: RawBodyLimits{Bytes: DefaultServerConfig().MaxBodyBytes}}
 }
 
-// Validate checks endpoint budgets; zero form and raw budgets are inactive here, with
-// body-specific requirements enforced at registration.
+// Validate checks endpoint budgets; zero form, header and raw budgets are inactive
+// here, with declaration-specific requirements enforced at registration.
 func (l EndpointLimits) Validate() error {
+	if l.Headers != (RequestHeaderLimits{}) {
+		if err := l.Headers.Validate(); err != nil {
+			return err
+		}
+	}
 	// An inactive zero form budget preserves existing explicit limit literals.
 	// Form endpoints additionally require a positive form budget at registration.
 	if l.Form != (QueryLimits{}) {

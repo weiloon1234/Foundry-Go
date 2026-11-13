@@ -8,7 +8,7 @@ import (
 )
 
 // MergeQueries combines descriptors for the same concrete query type. It
-// reuses their field bindings and metadata, rejects duplicate wire names, and
+// reuses both sources' bindings and metadata, rejects duplicate names per source, and
 // preserves the ordinary strict query parser. No precedence is assigned to an
 // overlapping parameter. An empty list defines a query with no parameters.
 func MergeQueries[Q any](queries ...Query[Q]) Query[Q] {
@@ -37,7 +37,7 @@ func EmbedQuery[Outer, Inner any](query Query[Inner], field func(*Outer) *Inner)
 	}
 	parameters := make([]QueryParameter[Outer], 0, len(query.parameters))
 	for _, parameter := range query.parameters {
-		parameters = append(parameters, QueryParameter[Outer]{info: parameter.info, scalar: parameter.scalar,
+		parameters = append(parameters, QueryParameter[Outer]{info: parameter.info, source: parameter.source, scalar: parameter.scalar,
 			decode: func(ctx context.Context, outer *Outer, values []string) *queryBindingFailure {
 				inner := field(outer)
 				if inner == nil {

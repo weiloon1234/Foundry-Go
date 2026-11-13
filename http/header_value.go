@@ -1,28 +1,17 @@
 package http
 
-import (
-	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
-)
+import "github.com/weiloon1234/Foundry-Go/internal/httpheader"
 
 // HeaderValue is an HTTP field value, distinct from a field name or method.
 // Validation checks its byte bound and rejects control bytes except horizontal
 // tab. A header-specific grammar, such as cookies or CSP, is a separate contract.
 type HeaderValue string
 
-const MaxHeaderValueBytes = 8192
+const MaxHeaderValueBytes = httpheader.MaxValueBytes
 
 // Validate checks the byte bound and rejects control bytes other than horizontal tabs.
 func (v HeaderValue) Validate() error {
-	if len(v) > MaxHeaderValueBytes {
-		return safeerror.NewFault(fault.Invalid, "HTTP header value exceeds its byte bound")
-	}
-	for i := range len(v) {
-		if v[i] != '\t' && (v[i] < 0x20 || v[i] == 0x7f) {
-			return safeerror.NewFault(fault.Invalid, "HTTP header value contains an invalid control byte")
-		}
-	}
-	return nil
+	return httpheader.ValidateValue(string(v))
 }
 
 // ResponseHeader is one explicit, typed native response-header declaration.

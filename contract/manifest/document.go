@@ -19,9 +19,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/websocket"
 )
 
-// Version 10 adds grouped any-of route guard requirements. Earlier
+// Version 11 adds typed request headers. Earlier
 // formats must be regenerated; older readers reject unsupported versions.
-const Version = 10
+const Version = 11
 const MaxBytes = 16 << 20
 const MaxOperations = 4096
 
@@ -68,6 +68,7 @@ type Operation struct {
 	Name              string                          `json:"name"`
 	Path              []Parameter                     `json:"path"`
 	Query             []Parameter                     `json:"query"`
+	Headers           []Parameter                     `json:"headers"`
 	Body              *Payload                        `json:"body,omitempty"`
 	Response          *Payload                        `json:"response,omitempty"`
 	Status            int                             `json:"status"`
@@ -84,7 +85,7 @@ type Operation struct {
 	RefreshCookie *foundryhttp.RefreshCookieInfo `json:"refresh_cookie,omitempty"`
 }
 
-// Parameter describes a typed URL parameter and its encoding requirements.
+// Parameter describes a typed transport parameter and its encoding requirements.
 type Parameter struct {
 	Presentation contract.Presentation  `json:"presentation,omitzero"`
 	Name         string                 `json:"name"`

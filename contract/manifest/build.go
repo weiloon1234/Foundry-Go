@@ -168,6 +168,9 @@ func Build(ctx context.Context, sources Sources) (*Manifest, error) {
 			for _, query := range endpoint.Query {
 				operation.Query = append(operation.Query, g.parameter(query))
 			}
+			for _, header := range endpoint.Headers {
+				operation.Headers = append(operation.Headers, g.parameter(header))
+			}
 			for _, definition := range foundryhttp.ErrorDefinitions() {
 				operation.Errors = append(operation.Errors, definition.Code)
 			}

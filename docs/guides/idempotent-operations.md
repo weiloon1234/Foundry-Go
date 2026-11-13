@@ -122,13 +122,28 @@ uses the reusable production adapter. A signed URL by itself does not authentica
 webhook body. Authentication, request policy and bound-resource policy run again
 before a stored protected result can be returned. Their decisions are not cached.
 
-The fingerprint covers prepared path, query and body values through the same
+The fingerprint covers prepared path, query, declared headers and body values through the same
 runtime codecs. Object order, whitespace and exact decimal spellings normalize;
 array order and omitted/null/zero distinctions remain significant. Path/query/form
 values use their existing typed URL codecs. Credentials, request IDs and trace
 headers are excluded. Operation-relevant inputs must be declared in those typed
 sources; use the core's explicit typed input codec for a non-HTTP adapter with
 additional semantic inputs. Do not capture undeclared request state in a callback.
+
+Header-bearing endpoints use `prepared-path-query-headers-body-v2`. Their input
+identity includes the sorted header declarations; their fingerprint includes
+canonical names, presence bits and formatted prepared values. An absent optional
+header differs from an empty value. Different raw inputs that prepare to the same
+typed value replay together. Header-free endpoints retain the exact v1 input
+identity and bytes (`prepared-path-query-body-v1`). Adding or changing header
+declarations changes the input contract: plan an operation-version transition
+with the same care as other fingerprint changes. A new version can execute an
+old key again.
+
+Replay recomputes additive `Vary` from the current declared request headers,
+including absent optional fields. It does not persist `Vary` as a replayable
+application response header. See [typed request headers](http-endpoints.md#typed-request-headers)
+for CORS configuration and unsigned-header behavior on signed URLs.
 
 JSON/empty success responses on POST, PUT, PATCH and DELETE are supported.
 Inputs may be JSON, URL-encoded forms or empty. Multipart/files/streams, credential

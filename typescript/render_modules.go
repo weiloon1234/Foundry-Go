@@ -277,7 +277,7 @@ func renderSurfaceAuth(prefix string, surface Surface, fullDoc manifest.Document
 
 	for _, op := range []*manifest.Operation{loginOp, refreshOp, logoutOp, profileOp} {
 		unsupplied := len(op.Path) > 0 || op.Idempotency != nil || op.Route.SignedURL != nil || op.Body != nil && op.Route.ID != surfaceAuth.Login
-		for _, parameter := range op.Query {
+		for _, parameter := range slices.Concat(op.Query, op.Headers) {
 			unsupplied = unsupplied || parameter.Required
 		}
 		if unsupplied {

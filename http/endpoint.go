@@ -100,6 +100,9 @@ func ValidateEndpoint[P, Q, B, R any](e Endpoint[P, Q, B, R]) error {
 			return err
 		}
 	}
+	if err := validateRequestHeaderDeclarations(e.query, e.limits.Headers); err != nil {
+		return err
+	}
 	if err := queryUrlPresentation(e.query); err != nil {
 		return err
 	}
@@ -275,6 +278,9 @@ type requestEndpoint[P, Q, B any] struct {
 }
 
 func endpointServe[P, Q, B any](e requestEndpoint[P, Q, B], w stdhttp.ResponseWriter, r *stdhttp.Request, path P, stage preparedStage[P, Q, B], handler func(context.Context, Input[P, Q, B]) (preparedResponse, error), transport endpointTransport) {
+	for _, field := range e.query.headerFields {
+		appendVary(w.Header(), field.name)
+	}
 	var ready bool
 	w, r, ready = transport.preflight(w, r)
 	if !ready {
@@ -285,10 +291,22 @@ func endpointServe[P, Q, B any](e requestEndpoint[P, Q, B], w stdhttp.ResponseWr
 	if verified, ok := ctx.Value(signedEndpointQueryKey{}).(string); ok {
 		rawQuery = verified
 	}
+	headerValues, err := readRequestHeaders(ctx, r.Header, e.query.headerIndexes, e.query.headerFields, e.limits.Headers)
+	if err != nil {
+		writeRoutingError(w, r, endpointInputError(ctx, "headers", err))
+		return
+	}
 	query, err := DecodeQuery(e.query, ctx, queryWithoutConsumed(e.query, ctx, rawQuery), e.limits.Query)
 	if err != nil {
 		writeRoutingError(w, r, endpointInputError(ctx, "query", err))
 		return
+	}
+	if len(e.query.headerFields) != 0 {
+		query, err = decodeRequestHeaders(e.query, ctx, headerValues, query)
+		if err != nil {
+			writeRoutingError(w, r, endpointInputError(ctx, "headers", err))
+			return
+		}
 	}
 	body, cleanup, err := bodyReadOwned(e.body, w, r, e.limits)
 	defer cleanupEndpointResource(r, "body", cleanup)
@@ -380,6 +398,8 @@ func endpointInputError(ctx context.Context, source string, err error) error {
 	var issues []contract.Issue
 	switch failure := safeerror.UnwrapOwned(err).(type) {
 	case *QueryError:
+		issues = failure.Issues()
+	case *RequestHeaderError:
 		issues = failure.Issues()
 	case *MultipartError:
 		issues = failure.Issues()

@@ -179,6 +179,7 @@ function describeOperation(name: string): unknown {
       switch (location) {
         case "path": parameters = op.path; break;
         case "query": parameters = op.query; break;
+        case "headers": parameters = op.headers; break;
         case "body":
           if (op.body?.type) return bodyRoot().field(name);
           parameters = op.body?.parts ?? op.body?.fields; break;

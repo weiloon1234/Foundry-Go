@@ -52,6 +52,9 @@ func ValidateSigned[P, Q, B, R any](e SignedEndpoint[P, Q, B, R]) error {
 		return err
 	}
 	for _, parameter := range e.endpoint.query.parameters {
+		if parameter.source != queryParameterSource {
+			continue
+		}
 		if parameter.info.Name == signedURLExpires || parameter.info.Name == signedURLSignature {
 			return safeerror.NewFault(fault.Invalid, "signed endpoint query uses a reserved signing parameter")
 		}

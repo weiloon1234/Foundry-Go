@@ -172,12 +172,17 @@ func Render(source *manifest.Manifest, options Options) ([]byte, error) {
 		if op.FileTransferBytes != 0 {
 			operation["x-foundry-file-transfer-bytes"] = op.FileTransferBytes
 		}
-		parameters := make([]any, 0, len(op.Path)+len(op.Query))
+		parameters := make([]any, 0, len(op.Path)+len(op.Query)+len(op.Headers))
 		for _, p := range op.Path {
 			parameters = append(parameters, r.parameter(p, "path"))
 		}
 		for _, p := range op.Query {
 			parameters = append(parameters, r.parameter(p, "query"))
+		}
+		for _, p := range op.Headers {
+			parameter := r.parameter(p, "header")
+			parameter["description"] = "One ASCII field value, with interior HTAB allowed and no outer whitespace. Duplicate field lines are rejected. Declared name and value bytes count toward the operation's header limits."
+			parameters = append(parameters, parameter)
 		}
 		if policy := op.Idempotency; policy != nil {
 			operation["x-foundry-idempotency"] = policy

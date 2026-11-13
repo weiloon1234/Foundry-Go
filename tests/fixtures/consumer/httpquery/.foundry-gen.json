@@ -6,6 +6,8 @@
     "priority_path_foundry.gen.go": "fc912569594e8671b1d12e36c0bb1d65d95c1b19088c207a7f3b0b856b829139",
     "priority_query_foundry.gen.go": "25c1456e7cac036fc8a8f83ac6e5f869bd9eff421257b14b364fe28051d04eac",
     "priority_response_foundry.gen.go": "28c660837c3bfb6f200eb3fe0419ba004ebe644619d3511dc0f1028a6535c1da",
+    "request_headers_response_foundry.gen.go": "4e4c7900e016b7e80bd8d662d25ffba1af949459ffc0c2394e09bf11c167f361",
+    "request_parameters_foundry.gen.go": "0ce3a062bc3b6e595c647663224eed878eaf1748757145679896ecfda5afe0ed",
     "search_input_foundry.gen.go": "96c68caa16bbe436326c313307929af6433fa86f6ca6cb483b4abff1d3dda1a1"
   }
 }

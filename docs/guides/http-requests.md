@@ -27,6 +27,45 @@ checks. Outside an attributed operation, `RequestID` returns the empty ID. Backg
 can retain request provenance through the existing
 [attribution contracts](model-references.md).
 
+## Declared request header limits
+
+Typed endpoints bind declared headers into their existing parameter type before
+body decoding, preparation, authorization, resource binding and semantic
+validation. Header cardinality, text and byte checks run before query/header
+scalar codecs. Header conversion preserves decoded query fields; failed decoding
+publishes no partially hydrated parameter value. Prohibited-input checks still
+see supplied headers before preparation can change them.
+
+`EndpointLimits.Headers` is a `RequestHeaderLimits` value configured with the
+ordinary endpoint `Limits` option:
+
+| Field | Default | Bound |
+| --- | ---: | --- |
+| `FieldBytes` | 8192 | Sum of raw value bytes for one declared name |
+| `Bytes` | 16384 | Name plus raw value bytes per supplied declared field line |
+| `Fields` | 32 | Declared names, checked at registration |
+| `Values` | 64 | Supplied declared field lines before duplicate rejection |
+| `Issues` | 16 | Returned framing diagnostics |
+
+Bytes are charged before trimming spaces or tabs; splitting values across lines
+does not evade a bound. Names alone must fit the registration budget. Bounds must
+be positive, `FieldBytes <= Bytes`, `FieldBytes <= 8192` and `Fields <= Values`.
+All-zero header limits are allowed only for endpoints without header declarations.
+Undeclared headers are ignored. Trailers and `Request.Host` are not inputs here.
+
+`RequestHeaderError` retains safe issues and an inspectable cause without exposing
+raw values or codec messages. Endpoints return 400 with `RequiredIssue` for an
+absent required header, `LengthIssue` for duplicates/size/count violations, and
+`ValueIssue` for invalid text or scalar conversion. Field paths are escaped JSON
+Pointers under `/headers`, using canonical names; aggregate limits use `/headers`.
+`ValidateHeaders` supplies the same location for ordinary 422 semantic errors.
+
+These are application-input budgets. `ServerConfig.MaxHeaderBytes` (32 KiB by
+default) and the read-header timeout separately bound the entire network header
+section, including cookies and undeclared fields. Native HTTP may reject that
+section with 431 before routing. The typed encoder applies the endpoint budgets
+as well; custom scalar formatters remain responsible for their own bounded work.
+
 ## Streaming body limits
 
 `ServerConfig.MaxBodyBytes` is a positive global ceiling; its default is 2 MiB.

@@ -109,6 +109,8 @@ func (types typeIndex) operationPresentation(op Operation, passwords map[contrac
 					fields = op.Path
 				case "query":
 					fields = op.Query
+				case "headers":
+					fields = op.Headers
 				case "body":
 					if op.Body != nil {
 						id, fields = op.Body.Type, op.Body.Fields

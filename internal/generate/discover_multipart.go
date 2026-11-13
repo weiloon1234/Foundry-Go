@@ -33,7 +33,7 @@ func discoverMultipart(p *packageInput, spec *ast.TypeSpec, named *types.Named, 
 	if !ok {
 		return declaration, p.diagnostic(spec.Pos(), "multipart declaration must be a struct")
 	}
-	fields, err := discoverTransportFields(p, structure, "form", map[string]bool{"json": true, "repeat": true}, []string{"foundry", "query", "path", "json"})
+	fields, err := discoverTransportFields(p, structure, "form", map[string]bool{"json": true, "repeat": true}, []string{"foundry", "query", "path", "json", "header"})
 	if err != nil {
 		return declaration, err
 	}

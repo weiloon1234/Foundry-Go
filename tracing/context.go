@@ -14,12 +14,13 @@ import (
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/httpheader"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-const ParentHeader = "traceparent"
-const StateHeader = "tracestate"
+const ParentHeader = httpheader.TraceParent
+const StateHeader = httpheader.TraceState
 const MaxParentBytes = 512
 const MaxStateBytes = 512
 

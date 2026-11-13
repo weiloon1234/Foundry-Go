@@ -76,7 +76,7 @@ func MultipartBody[B any](descriptor Multipart[B]) Body[B] {
 // request body. Query parameters never satisfy these body fields. Reuse generated
 // form/query descriptors and MergeQueries/EmbedQuery for explicit composition.
 func FormBody[B any](fields Query[B]) Body[B] {
-	b := Body[B]{kind: payloadForm, form: fields, validate: func() error { return ValidateQueryDescriptor(fields) }, describe: func() *PayloadInfo {
+	b := Body[B]{kind: payloadForm, form: fields, validate: func() error { return validateBodyQuery(fields) }, describe: func() *PayloadInfo {
 		form, _ := QueryParameters(fields)
 		return &PayloadInfo{MediaType: "application/x-www-form-urlencoded", Form: form}
 	}}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/internal/httpheader"
 	"github.com/weiloon1234/Foundry-Go/internal/httppath"
 	"github.com/weiloon1234/Foundry-Go/internal/httpquery"
 	"github.com/weiloon1234/Foundry-Go/internal/identifier"
@@ -97,6 +98,9 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 		if op.Query == nil {
 			op.Query = []Parameter{}
 		}
+		if op.Headers == nil {
+			op.Headers = []Parameter{}
+		}
 		if err := validateRoute(op.Route); err != nil {
 			return err
 		}
@@ -148,6 +152,33 @@ func normalizeHTTP(d *Document, types typeIndex) error {
 				return err
 			}
 		}
+		if len(op.Headers) > 0 {
+			if err := op.Limits.Headers.Validate(); err != nil {
+				return err
+			}
+			if len(op.Headers) > op.Limits.Headers.Fields {
+				return invalid("request header declarations exceed field limit")
+			}
+		}
+		headerNames := make(map[string]bool, len(op.Headers))
+		remaining := op.Limits.Headers.Bytes
+		for i := range op.Headers {
+			p := &op.Headers[i]
+			name, err := httpheader.CanonicalName(p.Name)
+			if err != nil || httpheader.ReservedRequestName(name) || headerNames[name] || p.Repeated || p.CatchAll || p.DefaultURL.IsSet() {
+				return invalid("invalid, reserved or duplicate request header")
+			}
+			p.Name = name
+			headerNames[name] = true
+			if len(name) > remaining {
+				return invalid("request header declarations exceed byte limit")
+			}
+			remaining -= len(name)
+			if err := types.parameter(*p); err != nil {
+				return err
+			}
+		}
+		slices.SortFunc(op.Headers, func(a, b Parameter) int { return cmp.Compare(a.Name, b.Name) })
 		if op.Body != nil && op.Body.MediaType == "application/x-www-form-urlencoded" {
 			if err := op.Limits.Form.Validate(); err != nil {
 				return err

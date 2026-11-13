@@ -3,11 +3,12 @@ interface MultipartPart extends URLParameter { readonly kind: string; readonly c
 interface Payload { readonly type?: string; readonly media_type?: string; readonly fields?: readonly URLParameter[]; readonly parts?: readonly MultipartPart[]; readonly file?: { readonly media_types: readonly string[]; readonly seekable: boolean }; readonly raw?: { readonly media_types: readonly string[] } }
 interface SignedURLPolicy { readonly version: string; readonly algorithm: string; readonly expires_parameter: string; readonly signature_parameter: string; readonly relative: boolean; readonly permanent?: boolean; readonly ignored_parameters?: readonly string[] }
 interface IdempotencyPolicy { readonly operation: string; readonly version: number; readonly header: string; readonly key_pattern: string; readonly max_key_bytes: number; readonly min_key_bytes: number; readonly fingerprint: string; readonly success_only: boolean; readonly duplicate_wait_ms: number; readonly retention_seconds: number; readonly application_headers: readonly string[] }
+interface RequestHeaderLimits { readonly FieldBytes: number; readonly Bytes: number; readonly Fields: number; readonly Values: number; readonly Issues: number }
 interface Operation {
   readonly name: string; readonly route: { readonly id: string; readonly method: string; readonly path: string; readonly access: "public" | "guarded"; readonly parameters: readonly string[]; readonly middlewares?: readonly string[]; readonly documentation?: { readonly summary?: string; readonly description?: string; readonly tags?: readonly string[]; readonly deprecated?: boolean }; readonly authentication?: { readonly guard: string; readonly provider: string; readonly optional: boolean; readonly credential: { readonly source: string; readonly kind: string; readonly name: string; readonly origin_protection?: boolean } } & ({ readonly required_scopes?: readonly string[]; readonly required_permissions?: readonly string[]; readonly any_of?: never } | { readonly required_scopes?: never; readonly required_permissions?: never; readonly any_of: readonly { readonly required_scopes?: readonly string[]; readonly required_permissions?: readonly string[] }[] }); readonly signed_url?: SignedURLPolicy };
-  readonly path: readonly URLParameter[]; readonly query: readonly URLParameter[]; readonly body?: Payload; readonly response?: Payload;
+  readonly path: readonly URLParameter[]; readonly query: readonly URLParameter[]; readonly headers: readonly URLParameter[]; readonly body?: Payload; readonly response?: Payload;
   readonly idempotency?: IdempotencyPolicy; readonly status: number; readonly statuses?: readonly number[]; readonly redirect?: boolean; readonly file_transfer_bytes?: number; readonly preparation?: boolean; readonly validation?: RuleDescription; readonly errors: readonly string[];
-  readonly limits: { readonly Body: JSONLimits; readonly Response: JSONLimits; readonly Query: { readonly Bytes: number; readonly Pairs: number; readonly Issues: number }; readonly Form: { readonly Bytes: number; readonly Pairs: number; readonly Issues: number }; readonly Validation: ValidationLimits;
+  readonly limits: { readonly Headers: RequestHeaderLimits; readonly Body: JSONLimits; readonly Response: JSONLimits; readonly Query: { readonly Bytes: number; readonly Pairs: number; readonly Issues: number }; readonly Form: { readonly Bytes: number; readonly Pairs: number; readonly Issues: number }; readonly Validation: ValidationLimits;
     readonly Multipart: { readonly Bytes: number; readonly FileBytes: number; readonly Parts: number; readonly Files: number; readonly Readers: number; readonly HeaderBytes: number; readonly FieldBytes: number; readonly FieldsBytes: number; readonly Issues: number };
     readonly Files: { readonly Bytes: number; readonly Ranges: number; readonly RangeBytes: number }; readonly Raw?: { readonly Bytes: number } };
 }
@@ -185,6 +186,35 @@ function urlValue(codec: WireCodec, parameter: URLParameter, value: unknown, lim
 function urlLimits(budget: { readonly Bytes: number; readonly Issues: number }): JSONLimits {
   return { Bytes: Math.min(Number.MAX_SAFE_INTEGER, budget.Bytes * 6 + 2), Depth: 0, Nodes: 1, Steps: 8, Issues: budget.Issues };
 }
+function requestHeaders(codec: WireCodec, operation: Operation, value: unknown, raw: Record<string, string>, options: CodecOptions): { headers: Record<string, string>; values: Record<string, unknown> } {
+  const input = ownInput(value === undefined ? {} : value, operation.headers.map(p => p.name), "/headers");
+  const headers = raw, values: Record<string, unknown> = Object.create(null), budget = operation.limits.Headers;
+  const limits = urlLimits({ Bytes: budget.FieldBytes, Issues: budget.Issues });
+  let bytes = 0, fields = 0;
+  for (const parameter of operation.headers) {
+    const path = pointer("/headers", parameter.name), name = parameter.name.toLowerCase();
+    if (Object.hasOwn(headers, name)) reject(path, "header_owned_by_client");
+    if (!Object.hasOwn(input, parameter.name)) {
+      if (parameter.required) reject(path, "required");
+      continue;
+    }
+    if (++fields > budget.Fields || fields > budget.Values) reject("/headers", "limit");
+    try {
+      const value = input[parameter.name];
+      const text = urlValue(codec, parameter, value, limits, options);
+      if (text.length > budget.FieldBytes || text.length + parameter.name.length > budget.Bytes - bytes) reject("", "limit");
+      for (const byte of text) if (!runtimePolicy.requestHeaderBytes.includes(byte)) reject("", "header");
+      if (text.startsWith(" ") || text.startsWith("\t") || text.endsWith(" ") || text.endsWith("\t")) reject("", "header");
+      bytes += text.length + parameter.name.length;
+      headers[name] = text;
+      values[parameter.name] = codec.semantic(parameter.type, value, limits);
+    } catch (error) {
+      if (error instanceof ContractError) throw new ContractError(error.issues.map(issue => ({ ...issue, path: path + issue.path })));
+      throw error;
+    }
+  }
+  return { headers, values };
+}
 function queryValues(codec: WireCodec, parameters: readonly URLParameter[], value: unknown, limits: JSONLimits, options: CodecOptions, budget: { readonly Bytes: number; readonly Pairs: number }, source = "/query"): { pairs: [string, string][]; values: Record<string, unknown> } {
   const input = ownInput(value ?? {}, parameters.map(p => p.name), source), pairs: [string, string][] = [], values: Record<string, unknown> = Object.create(null);
   let wireBytes = 0;
@@ -326,7 +356,7 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
   if (base) { const parsed = new URL(base); if (!/^https?:$/.test(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) reject("", "base_url"); base = parsed.href.replace(/\/$/, ""); }
   const prepare = (name: string, request: unknown, call: CallOptions) => {
     checkAbort(call.signal); const operation = operations.get(name); if (!operation) reject("", "operation");
-    const input = ownInput(request, ["path", "query", "body", ...(operation.route.signed_url ? ["signedURL"] : []), ...(operation.idempotency ? ["idempotencyKey"] : [])], ""), path = ownInput(input.path ?? {}, operation.path.map(p => p.name), "/path");
+    const input = ownInput(request, ["path", "query", "body", ...(operation.headers.length ? ["headers"] : []), ...(operation.route.signed_url ? ["signedURL"] : []), ...(operation.idempotency ? ["idempotencyKey"] : [])], ""), path = ownInput(input.path ?? {}, operation.path.map(p => p.name), "/path");
     let url = operation.route.path.split("/").map(segment => segment === "" || segment.startsWith("{") ? segment : escapedPath(segment)).join("/");
     for (const parameter of operation.path) {
       if (!Object.hasOwn(path, parameter.name)) reject(pointer("/path", parameter.name), "required");
@@ -336,7 +366,7 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
     }
     const query = queryValues(codec, operation.query, input.query, urlLimits(operation.limits.Query), options, operation.limits.Query), search = new URLSearchParams(query.pairs).toString();
     if (query.pairs.length > operation.limits.Query.Pairs || textBytes(search) > operation.limits.Query.Bytes) reject("/query", "limit");
-    const headers = mergeHeaders(options.headers, call.headers);
+    const declared = requestHeaders(codec, operation, input.headers, mergeHeaders(options.headers, call.headers), options), headers = declared.headers;
     if (operation.idempotency) {
       const policy = operation.idempotency, name = policy.header.toLowerCase();
       if (headers[name] !== undefined) reject("/idempotencyKey", "idempotency_header_owned_by_client");
@@ -368,7 +398,7 @@ function createHTTPInvoker(document: RuntimeDocument, transport: HTTPTransport, 
     const semanticBody = operation.validation && operation.body?.type ? codec.semantic(operation.body.type, input.body, operation.limits.Body) : formValues ?? input.body;
     // A raw body is opaque to client validation; the server checks it.
     const rawSkipped = operation.body?.raw !== undefined && operation.validation !== undefined;
-    const validation = operation.preparation ? { issues: [], complete: false, skipped: ["request_preparation"] } satisfies ValidationReport : rawSkipped ? { issues: [], complete: false, skipped: ["raw_body"] } satisfies ValidationReport : validateRules(operation.validation, { ...input, path: semanticPath, query: query.values, body: semanticBody }, operation.limits.Validation, options.validationMessages);
+    const validation = operation.preparation ? { issues: [], complete: false, skipped: ["request_preparation"] } satisfies ValidationReport : rawSkipped ? { issues: [], complete: false, skipped: ["raw_body"] } satisfies ValidationReport : validateRules(operation.validation, { ...input, path: semanticPath, query: query.values, headers: declared.values, body: semanticBody }, operation.limits.Validation, options.validationMessages);
     let target = base + url + (search ? "?" + search : "");
     if (operation.route.signed_url) target = signedTarget(input.signedURL, target, operation.route.signed_url, base);
     const maxBodyBytes = operation.body?.media_type === "application/x-www-form-urlencoded" ? operation.limits.Form.Bytes : operation.body?.parts ? operation.limits.Multipart.Bytes : operation.body?.raw ? operation.limits.Raw?.Bytes ?? 0 : operation.limits.Body.Bytes;

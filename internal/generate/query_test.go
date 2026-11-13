@@ -163,6 +163,28 @@ func TestInvalidQueryDeclarationsDoNotPublish(t *testing.T) {
 	}
 }
 
+func TestQueryFormTagsPreserveGeneratedOutput(t *testing.T) {
+	source := "package sample\n//foundry:query\ntype Input struct { Search string `query:\"q\"`; Inferred string; Ignored map[string]any `query:\"-\"` }\n"
+	dir := fixture(t, source)
+	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	want := generatedSnapshot(t, dir)["input_foundry.gen.go"]
+	for _, tags := range []string{"form:\"search\"", "form:\"-\""} {
+		t.Run(tags, func(t *testing.T) {
+			tagged := strings.ReplaceAll(source, "`query:", "`"+tags+" query:")
+			tagged = strings.Replace(tagged, "Inferred string", "Inferred string `"+tags+"`", 1)
+			write(t, dir, "models.go", tagged)
+			if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {
+				t.Fatal(err)
+			}
+			if got := generatedSnapshot(t, dir)["input_foundry.gen.go"]; got != want {
+				t.Fatalf("form tags changed query output:\n%s", got)
+			}
+		})
+	}
+}
+
 func TestQueryFieldChangesProduceStaleOutput(t *testing.T) {
 	dir := fixture(t, "package sample\n//foundry:query\ntype Input struct{ Field string }")
 	if _, err := Generate(t.Context(), Options{Dir: dir}); err != nil {

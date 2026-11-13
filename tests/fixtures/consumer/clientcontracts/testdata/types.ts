@@ -20,6 +20,27 @@ declare const continued: Continued;
 type MemberEvents = sdk.Operations["membersEvents"]["response"];
 declare const memberEvents: MemberEvents;
 export function typedConsumer(): void {
+  void api.headersInspect({ headers: { "X-App-Version": "2", "X-Sequence": "9223372036854775807" } });
+  void api.headersInspect({ headers: { "X-App-Version": "" }, query: { q: "active" } });
+  // @ts-expect-error Required headers require the request member.
+  void api.headersInspect({});
+  // @ts-expect-error Required headers cannot be omitted inside the member.
+  void api.headersInspect({ headers: {} });
+  // @ts-expect-error Wire names use canonical casing.
+  void api.headersInspect({ headers: { "x-app-version": "2" } });
+  // @ts-expect-error Wide header integers use lossless strings.
+  void api.headersInspect({ headers: { "X-App-Version": "2", "X-Sequence": 2 } });
+  // @ts-expect-error Optional headers do not accept null.
+  void api.headersInspect({ headers: { "X-App-Version": "2", "X-Sequence": null } });
+  // @ts-expect-error Headers stay out of the URL query.
+  void api.headersInspect({ query: { "X-App-Version": "2" } });
+  const header = sdk.operation("headersInspect").field("headers", "X-App-Version");
+  // @ts-expect-error Header descriptors retain exact names.
+  sdk.operation("headersInspect").field("headers", "x-app-version");
+  // @ts-expect-error A header-free operation has no headers input.
+  void api.empty({ headers: {} });
+  void header;
+
   const upsertStatus: 200 | 201 = upserted.status;
   const upsertDisplay: string = upserted.body.display;
   // @ts-expect-error Only declared success statuses can be received.

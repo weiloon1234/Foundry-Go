@@ -60,7 +60,7 @@ func TestConsumerClientManifestKeepsRealFeatureBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if document.Version != manifest.Version || len(document.HTTP) != 28 || document.Realtime == nil || len(document.Realtime.Channels) != 2 || document.Locales == nil || len(document.Enums) != 1 || len(document.Permissions) != 1 {
+	if document.Version != manifest.Version || len(document.HTTP) != 29 || document.Realtime == nil || len(document.Realtime.Channels) != 2 || document.Locales == nil || len(document.Enums) != 1 || len(document.Permissions) != 1 {
 		t.Fatal("registered metadata missing")
 	}
 	if len(document.Tables) != 2 || document.Tables[0].ID != "reports.members" || !document.Tables[0].Exports || document.Tables[1].ID != "reports.numeric_levels" || !document.Tables[1].Exports || len(document.Notifications) != 1 || len(document.Notifications[0].Channels) != 1 || document.Notifications[0].Channels[0].Payload != "foundry.test/consumer/clientcontracts.Member" {
@@ -243,7 +243,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 			t.Fatalf("invalid TypeScript compiler input %q", name)
 		}
 	}
-	for _, name := range append(compilerInputs, "error-details.mjs", "runtime.mjs", "forms.mjs", "surfaces.mjs", "messages.mjs", "portal-session.mjs", "token-session.mjs", "browser-storage.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs", "fetch-transport.mjs") {
+	for _, name := range append(compilerInputs, "request-headers.mjs", "error-details.mjs", "runtime.mjs", "forms.mjs", "surfaces.mjs", "messages.mjs", "portal-session.mjs", "token-session.mjs", "browser-storage.mjs", "cookie-refresh.mjs", "authenticated-transport.mjs", "fetch-transport.mjs") {
 		data, err := os.ReadFile(filepath.Join("testdata", name))
 		if err != nil {
 			t.Fatal(err)
@@ -319,6 +319,7 @@ func TestTypeScriptClientAgainstRealHTTPAndWebSocket(t *testing.T) {
 		server.Close()
 	})
 	run("real HTTP/WebSocket and adversarial codec contracts", filepath.Join(dir, "runtime.mjs"), filepath.Join(dir, "dist", "contracts_foundry.gen.js"), server.URL, filepath.Join(dir, "dist", "legacy.js"), string(signed))
+	run("typed request headers", filepath.Join(dir, "request-headers.mjs"), filepath.Join(dir, "dist", "contracts_foundry.gen.js"), server.URL)
 	entries := make([]string, 0, 3)
 	for _, name := range []string{"contracts", "contracts_members", "contracts_live"} {
 		entries = append(entries, filepath.Join(dir, "dist", name+"_foundry.gen.js"))

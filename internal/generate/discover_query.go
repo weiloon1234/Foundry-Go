@@ -32,7 +32,11 @@ func discoverQuery(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 	if !ok {
 		return declaration, p.diagnostic(spec.Pos(), source+" declaration must be a struct")
 	}
-	fields, err := discoverTransportFields(p, structure, source, nil, []string{"foundry", "path"})
+	forbidden := []string{"foundry", "path"}
+	if source != "query" {
+		forbidden = append(forbidden, "header")
+	}
+	fields, err := discoverTransportFields(p, structure, source, nil, forbidden)
 	if err != nil {
 		return declaration, err
 	}
@@ -52,8 +56,11 @@ func resolveQueryCodecs(p *packageInput, declaration *queryDeclaration) error {
 }
 
 // resolveQueryField shares scalar, omission, repetition and custom codec
-// precedence between URL queries and multipart text parts.
+// precedence between URL queries, request headers and multipart text parts.
 func resolveQueryField(p *packageInput, field *queryField, source string) error {
+	if field.source == "header" {
+		source = "header"
+	}
 	if _, pointer := types.Unalias(field.typ).(*types.Pointer); pointer {
 		return p.diagnostic(field.position, source+" fields require concrete values, not pointers")
 	}
@@ -70,6 +77,9 @@ func resolveQueryField(p *packageInput, field *queryField, source string) error 
 		// A declared slice's own text protocol takes precedence over list
 		// inference. Partial/invalid codecs fail in the shared resolver.
 		if !marshal && !unmarshal && !invalid {
+			if source == "header" {
+				return p.diagnostic(field.position, "header fields require one scalar; slice repetition is unsupported")
+			}
 			if field.binding == "OptionalQueryParam" {
 				return p.diagnostic(field.position, "optional "+source+" text fields require one scalar; use a slice directly for repeated parts")
 			}
@@ -81,6 +91,13 @@ func resolveQueryField(p *packageInput, field *queryField, source string) error 
 		return err
 	}
 	field.scalar = scalar
+	if source == "header" {
+		if field.binding == "OptionalQueryParam" {
+			field.binding = "OptionalHeaderParam"
+		} else {
+			field.binding = "HeaderParam"
+		}
+	}
 	return nil
 }
 

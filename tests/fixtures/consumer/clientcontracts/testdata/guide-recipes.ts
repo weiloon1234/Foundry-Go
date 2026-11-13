@@ -173,3 +173,12 @@ export async function submitForm(form: sdk.FormController<"itemsEcho">, api: sdk
   }
 }
 // doc-example:end form-outcomes
+
+// doc-example:begin request-headers
+export async function requestHeaders(api: sdk.API) {
+  await api.headersInspect({
+    query: { q: "active" },
+    headers: { "X-App-Version": "2.4.0", "X-Sequence": "9223372036854775807" },
+  });
+}
+// doc-example:end request-headers

@@ -70,7 +70,7 @@ func ValidateMultipart[B any](d Multipart[B]) error {
 	if strings.IndexByte(d.directory, 0) >= 0 || d.directory != "" && !filepath.IsAbs(d.directory) {
 		return safeerror.NewFault(fault.Invalid, "upload temporary directory must be an absolute server path")
 	}
-	return ValidateQueryDescriptor(d.text)
+	return validateBodyQuery(d.text)
 }
 
 // InspectMultipart returns owned metadata from the codecs used for actual decoding.

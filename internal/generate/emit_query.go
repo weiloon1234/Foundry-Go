@@ -11,13 +11,22 @@ func emitQuery(p *packageInput, declaration queryDeclaration) ([]byte, error) {
 		}
 	}
 	variable := e.localName("query")
+	hasHeaders := false
+	for _, field := range declaration.fields {
+		hasHeaders = hasHeaders || field.source == "header"
+	}
 	if declaration.source == "form" {
 		e.line("// %sDescriptor binds URL-encoded form fields to concrete %s values.", declaration.name, declaration.name)
 		e.line("// Pass these shared URL bindings to FormBody; body and query remain independent.")
+	} else if hasHeaders {
+		e.line("// %sDescriptor binds query parameters and request headers to concrete %s fields.", declaration.name, declaration.name)
 	} else {
 		e.line("// %sDescriptor binds query parameters to concrete %s fields.", declaration.name, declaration.name)
 	}
 	e.line("// Reuse this descriptor for request decoding and query URL encoding.")
+	if hasHeaders {
+		e.line("// Header fields are excluded from query URLs; Optional headers preserve omission.")
+	}
 	e.line("// Optional fields preserve omission; repeated fields retain slice order.")
 	e.line("//")
 	e.line("// Example: %sDescriptor()", declaration.name)

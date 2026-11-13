@@ -85,6 +85,8 @@ var typedDiagnosticOwners = map[string]int{
 	// Concrete diagnostic captured by Owned/Retain at this owner.
 	"http/rate_limit.go#RateLimitExceeded#rateLimitRejection": 1,
 	// Concrete diagnostic captured by Owned/Retain at this owner.
+	"http/request_header_error.go#requestHeaderFailure#RequestHeaderError": 1,
+	// Concrete diagnostic captured by Owned/Retain at this owner.
 	"httpclient/error.go#failure#Error": 1,
 	// Concrete diagnostic captured by Owned/Retain at this owner.
 	"idempotency/errors.go#failure#Error": 1,

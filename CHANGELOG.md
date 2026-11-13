@@ -1,24 +1,37 @@
 # Changelog
 
-## Unreleased
-
-- Fixed: datatable text collation leaves enum and other non-collatable sorts
-  unchanged and rejects explicit collation on those values before execution.
-  DISTINCT report sources skip the manager collation default, preserving valid
-  requested/default sorts, exports and duplicate elimination. Custom text codecs
-  are collatable by default; projection rebinding preserves non-collatable marks,
-  while JSON text extraction derives capability from its SQL result type.
-  Conditional and set composition conservatively retain every input's
-  non-collatable mark; text-cast parameters and constants remain collatable.
+## v0.28.0 — 2026-11-13
 
 - Added: typed per-expression text collation with `expr.Collation`, `CollationC`,
   `CollationUnicode`, `ICUCollation`, and the four `Collate` variants, preserving
   named string types and codecs in ordering, comparisons and text filters.
-  Applications can set `features.reports.config.text_collation` once for text
-  column sorts and exports. Empty keeps database ordering; explicit expression
-  collations take precedence, and stable tie-breaker orders stay unchanged.
-  The datatable module verifies its configured collation at boot; direct managers
-  can call `CheckCollation(ctx)` before serving requests.
+  Names are validated at query build and rendered as quoted identifiers.
+- Added: `features.reports.config.text_collation` applies one collation to every
+  collatable text sort, default sort and export of an application's data tables.
+  Empty keeps database ordering; explicit expression collations win; stable
+  tie-breakers and DISTINCT report sources are unchanged. The datatable module
+  verifies the collation at boot (`Manager.CheckCollation`), so a missing one
+  fails startup instead of every sorted request.
+- Added: `codec.WithoutCollation` marks text codecs for native PostgreSQL enums
+  and other non-collatable types. Projections keep the mark, and any composed
+  result with a marked input is non-collatable, so the framework never emits
+  `COLLATE` that PostgreSQL rejects.
+- Added: typed endpoint request headers through `HeaderParam` and
+  `OptionalHeaderParam` in the existing parameter type, and `header:"Name"` tags
+  on `//foundry:query` DTOs. Binding preserves presence and source separation,
+  validates ASCII single values with bounded `/headers/...` diagnostics, and adds
+  declared names to `Vary`. Framework-owned names are reserved. `ValidateHeaders`
+  adds semantic rules; `EncodeRequestHeaders` creates owned outbound headers.
+  Header inputs use idempotency fingerprint v2; header-free operations keep v1.
+  CORS stays explicitly configured.
+- Changed: manifest version 11 adds a `headers` collection per operation,
+  exported as OpenAPI `in: header` parameters and a typed `headers` member on
+  generated TypeScript requests. The runtime validates header values, rejects raw
+  headers that collide with declared ones, and session helpers refuse required
+  headers. Regenerate clients with the matching framework; TypeScript now
+  reserves `Headers`, `Fields`, `Values` and `RequestHeaderLimits` as module names.
+- Fixed: test-owned PostgreSQL namespaces and Redis keys are released when a test
+  skips; previously a skip after setup leaked them.
 
 ## v0.27.0 — 2026-11-13
 

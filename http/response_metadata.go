@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/httpheader"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
@@ -21,14 +22,6 @@ type ResponseHeaders[R any] func(context.Context, R) ([]ResponseHeader, error)
 var endpointHeaderNames = map[HeaderName]bool{
 	"Location": true, "Content-Location": true, "Content-Language": true,
 	"Cache-Control": true, "Expires": true, "Last-Modified": true, "Link": true, "Vary": true,
-}
-
-// reservedApplicationHeaders are X-* headers that proxies, browsers or the
-// framework interpret; an application result never chooses them.
-var reservedApplicationHeaders = []string{
-	"X-Accel-", "X-Sendfile", "X-Lighttpd-", "X-Forwarded-", "X-Real-Ip",
-	"X-Content-Type-Options", "X-Frame-Options", "X-Xss-Protection", "X-Request-Id",
-	"X-Csrf-", "X-Xsrf-", "X-Permitted-Cross-Domain-Policies", "X-Dns-Prefetch-Control",
 }
 
 // EndpointHeaders derives response headers from the handler's successful result,
@@ -114,13 +107,7 @@ func applicationHeader(name HeaderName) bool {
 	if !strings.HasPrefix(text, "x-") || len(text) == 2 {
 		return false
 	}
-	for _, reserved := range reservedApplicationHeaders {
-		reserved = strings.ToLower(reserved)
-		if text == reserved || strings.HasSuffix(reserved, "-") && strings.HasPrefix(text, reserved) {
-			return false
-		}
-	}
-	return true
+	return !httpheader.ReservedApplicationName(text)
 }
 
 // applyResponseHeaders publishes prepared headers before the status is
