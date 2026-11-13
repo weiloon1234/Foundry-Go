@@ -162,7 +162,7 @@ def _load(host: Host) -> dict | None:
                 "package_journal", "Package supply or activation intent changed.")
     require(isinstance(value.get("default_activation", {}), dict)
             and all(UNIT.fullmatch(unit) and isinstance(record, dict)
-                    and record.get("state") in ("masked", "releasing", "released")
+                    and record.get("state") in ("publishing", "masked", "releasing", "released")
                     and isinstance(record.get("identity"), dict)
                     and set(record["identity"]) == {"device", "inode", "uid", "ctime_ns"}
                     and all(type(n) is int and n >= 0 for n in record["identity"].values())
@@ -635,12 +635,12 @@ def _cron_stub(journal):
     return "# Foundry package cron suppressed: " + journal["operation_id"] + "\n"
 
 
-def _check_cron_stub(host, path, journal):
+def _check_cron_stub(host, path, journal, *, links=1):
     check_path(path, "file")
     require(path.exists(), "package_activation", "Package cron suppression disappeared.")
     info = path.stat()
     require(path.read_text() == _cron_stub(journal) and stat.S_IMODE(info.st_mode) == 0o644
-            and info.st_nlink == 1 and (info.st_uid == 0 or host.paths.root != Path("/")),
+            and info.st_nlink == links and (info.st_uid == 0 or host.paths.root != Path("/")),
             "package_activation", "Package cron suppression changed; refusing to replace it.")
 
 
@@ -651,16 +651,19 @@ def _suppress_cron(host, journal):
         path = check_path(host.paths.p(location), "file")
         host.check_control_directory(path.parent)
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+        stage = check_path(path.parent / (".foundry-cron-" + journal["operation_id"]), "file")
         if not path.exists():
-            stage = check_path(path.parent / (".foundry-cron-" + journal["operation_id"]), "file")
-            require(not stage.exists() or stage.read_text() == _cron_stub(journal),
-                    "package_activation", "Cron suppression staging is foreign.")
-            host.owned_write(stage, _cron_stub(journal), mode=0o644)
-            try:
-                os.link(stage, path, follow_symlinks=False)
-                _sync_directory(path.parent)
-            finally:
-                stage.unlink()
+            if not stage.exists():
+                host.owned_write(stage, _cron_stub(journal), mode=0o644)
+            _check_cron_stub(host, stage, journal)
+            os.link(stage, path, follow_symlinks=False)
+            _sync_directory(path.parent)
+        if stage.exists():
+            _check_cron_stub(host, stage, journal, links=2)
+            _check_cron_stub(host, path, journal, links=2)
+            require(stage.samefile(path), "package_activation", "Cron suppression staging is foreign.")
+            stage.unlink()
+            _sync_directory(path.parent)
         _check_cron_stub(host, path, journal)
 
 
@@ -679,6 +682,55 @@ def _mask_identity(path):
             "ctime_ns": info.st_ctime_ns}
 
 
+def _publish_default_mask(host, journal, unit, path):
+    stage = path.parent / (".foundry-mask-" + journal["operation_id"] + "-" + _digest(unit))
+    record = journal.setdefault("default_activation", {}).get(unit)
+    if record is None:
+        require(not path.exists() and not path.is_symlink(),
+                "package_activation", "A foreign default-unit mask or file appeared.")
+        if unit not in journal.setdefault("masked_defaults", []):
+            journal["masked_defaults"].append(unit)
+            _save(host, journal)
+        if not stage.exists() and not stage.is_symlink():
+            stage.symlink_to("/dev/null")
+        require(stage.is_symlink() and os.readlink(stage) == "/dev/null"
+                and stage.lstat().st_nlink == 1
+                and (stage.lstat().st_uid == 0 or host.paths.root != Path("/")),
+                "package_activation", "Default-unit mask staging is foreign.")
+        _sync_directory(path.parent)
+        record = {"operation_id": journal["operation_id"], "identity": _mask_identity(stage), "state": "publishing"}
+        journal["default_activation"][unit] = record
+        _save(host, journal)
+    require(unit in journal.get("masked_defaults", []),
+            "package_activation", "Default-unit mask has no journaled intent.")
+    if record["state"] == "publishing":
+        require(record["operation_id"] == journal["operation_id"],
+                "package_activation", "Default-unit mask belongs to another transaction.")
+        # Linking/unlinking changes ctime. During publication the durable inode
+        # identity proves ownership; completed masks also require the final ctime.
+        links = int(stage.is_symlink()) + int(path.is_symlink())
+        for candidate in (stage, path):
+            if candidate.exists() or candidate.is_symlink():
+                identity = _mask_identity(candidate)
+                require(candidate.is_symlink() and os.readlink(candidate) == "/dev/null"
+                        and all(identity[key] == record["identity"][key]
+                                for key in ("device", "inode", "uid"))
+                        and candidate.lstat().st_nlink == links,
+                        "package_activation", "A foreign default-unit mask appeared.")
+        if not path.is_symlink():
+            require(stage.is_symlink(), "package_activation", "Default-unit mask staging disappeared.")
+            os.link(stage, path, follow_symlinks=False)
+        _sync_directory(path.parent)
+        if stage.is_symlink():
+            stage.unlink()
+            _sync_directory(path.parent)
+        record.update(identity=_mask_identity(path), state="masked")
+        _save(host, journal)
+    require(record["state"] == "masked" and path.is_symlink() and os.readlink(path) == "/dev/null"
+            and record["identity"] == _mask_identity(path),
+            "package_activation", "A foreign default-unit mask appeared.")
+
+
 def _mask_defaults(host, journal):
     before, units = journal["activation_before"], journal["activation_units"]
     directory = host.check_control_directory(host.paths.p("/etc/systemd/system"))
@@ -690,24 +742,7 @@ def _mask_defaults(host, journal):
             prefix, suffix = unit.split("@.", 1)
             require(not any(n.startswith(prefix + "@") and n.endswith("." + suffix) for n in before),
                     "package_activation", "A new template would mask preexisting foreign instances.")
-        path = directory / unit
-        if path.is_symlink():
-            record = journal.get("default_activation", {}).get(unit)
-            require(os.readlink(path) == "/dev/null" and unit in journal.get("masked_defaults", [])
-                    and record is not None and record["identity"] == _mask_identity(path),
-                    "package_activation", "A foreign default-unit mask appeared.")
-        else:
-            require(not path.exists(), "package_activation", "A foreign default-unit file appeared.")
-            # Record ownership before creating the mask; recovery recognizes only
-            # this exact intent and never overwrites a foreign service.
-            if unit not in journal.setdefault("masked_defaults", []):
-                journal["masked_defaults"].append(unit)
-                _save(host, journal)
-            path.symlink_to("/dev/null")
-            _sync_directory(directory)
-            journal.setdefault("default_activation", {})[unit] = {
-                "operation_id": journal["operation_id"], "identity": _mask_identity(path), "state": "masked"}
-            _save(host, journal)
+        _publish_default_mask(host, journal, unit, directory / unit)
     host.run(["systemctl", "daemon-reload"])
 
 
@@ -739,6 +774,9 @@ def authorize_default_activation(host: Host, unit: str, claim: dict) -> None:
     Pass registry['shared']['nginx'] after its owner/installed_by_foundry checks
     and nginx configuration validation. This only releases the exact journaled
     mask; it does not enable/start services or release cron/timer suppression.
+    Installation must be complete with policy restored and no package process or
+    lock remaining. Repeated calls and retries after removal/reload are safe;
+    missing or replaced masks without a recorded handoff are refused.
     """
     require(UNIT.fullmatch(unit) and claim.get("owner") == "foundry"
             and claim.get("installed_by_foundry") is True and claim.get("unit") == unit,

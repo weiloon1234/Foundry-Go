@@ -598,12 +598,12 @@ class BuiltinPayloadTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
 
-    def host(self, *, cron=True):
+    def host(self, *, cron=True, root=None):
         payloads = {"nginx": {"/usr/lib/systemd/system/nginx.service": b"[Service]\nExecStart=/usr/sbin/nginx\n"}}
         if cron:
             payloads["certbot"] = {"/etc/cron.d/certbot": CERTBOT_CRON,
                 "/usr/lib/systemd/system/certbot.timer": b"[Timer]\nOnCalendar=daily\n"}
-        return PayloadPackageHost(self.root, payloads)
+        return PayloadPackageHost(root or self.root, payloads)
 
     def test_builtin_certbot_cron_is_inert_before_and_after_installation(self):
         host = self.host()
@@ -612,6 +612,106 @@ class BuiltinPayloadTests(unittest.TestCase):
         self.assertTrue(all(not line.strip() or line.startswith("#") for line in cron.read_text().splitlines()))
         self.assertEqual(cron.with_name("certbot.dpkg-dist").read_bytes(), CERTBOT_CRON)
         self.assertEqual(packages._load(host)["state"], "complete")
+
+    def interrupt_mask_publication(self, host, *, point="published"):
+        mask = host.paths.p("/etc/systemd/system/nginx.service")
+        sync = packages._sync_directory
+
+        def crash_after_publication(directory):
+            sync(directory)
+            if directory != mask.parent:
+                return
+            staged = any(directory.glob(".foundry-mask-*"))
+            if ((point == "staged" and staged and not mask.is_symlink())
+                    or (point == "published" and mask.is_symlink())
+                    or (point == "cleaned" and mask.is_symlink() and not staged)):
+                raise SystemExit("crash during mask publication: " + point)
+
+        with patch.object(packages, "_sync_directory", side_effect=crash_after_publication), self.assertRaises(SystemExit):
+            packages.install_missing(host, ["nginx"])
+        return mask
+
+    def test_mask_publication_crash_recovers_journal_owned_inode(self):
+        host = self.host(cron=False)
+        mask = self.interrupt_mask_publication(host)
+        inode = mask.lstat().st_ino
+        journal = packages._load(host)
+        self.assertEqual(journal["state"], "installing")
+        self.assertEqual(journal["default_activation"]["nginx.service"]["state"], "publishing")
+        self.assertEqual(journal["default_activation"]["nginx.service"]["identity"]["inode"], inode)
+        packages.install_missing(host, ["nginx"])
+        self.assertEqual(mask.lstat().st_ino, inode)
+        self.assertEqual(packages._load(host)["state"], "complete")
+        self.assertFalse(list(mask.parent.glob(".foundry-mask-*")))
+        packages.authorize_default_activation(host, "nginx.service",
+                                             {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"})
+        self.assertFalse(mask.is_symlink())
+
+    def test_mask_staging_and_cleanup_crashes_recover(self):
+        for point in ("staged", "cleaned"):
+            with self.subTest(point=point):
+                host = self.host(cron=False, root=self.root / point)
+                mask = self.interrupt_mask_publication(host, point=point)
+                packages.install_missing(host, ["nginx"])
+                self.assertEqual(os.readlink(mask), "/dev/null")
+                self.assertEqual(packages._load(host)["state"], "complete")
+                self.assertFalse(list(mask.parent.glob(".foundry-mask-*")))
+
+    def test_mask_publication_recovery_refuses_foreign_replacement(self):
+        host = self.host(cron=False)
+        mask = self.interrupt_mask_publication(host)
+        replacement = mask.with_name("foreign")
+        replacement.symlink_to("/dev/null")
+        os.replace(replacement, mask)
+        identity = packages._mask_identity(mask)
+        with self.assertRaises(DeployError):
+            packages.install_missing(host, ["nginx"])
+        self.assertEqual(packages._mask_identity(mask), identity)
+        self.assertNotIn("nginx", host.inventory)
+        self.assertEqual(packages._load(host)["state"], "installing")
+
+    def interrupt_cron_publication(self, host):
+        cron = host.paths.p("/etc/cron.d/certbot")
+        unlink = Path.unlink
+
+        def crash_before_stage_unlink(path, *args, **kwargs):
+            if path.name.startswith(".foundry-cron-") and cron.exists():
+                raise SystemExit("crash before unlinking cron stage")
+            return unlink(path, *args, **kwargs)
+
+        with patch.object(Path, "unlink", new=crash_before_stage_unlink), self.assertRaises(SystemExit):
+            packages.install_missing(host, list(host.candidates))
+        journal = packages._load(host)
+        stage = cron.parent / (".foundry-cron-" + journal["operation_id"])
+        self.assertEqual(cron.stat().st_nlink, 2)
+        self.assertEqual(cron.stat().st_ino, stage.stat().st_ino)
+        return cron, stage, journal
+
+    def test_cron_publication_crash_reconciles_staging_hardlink(self):
+        host = self.host()
+        cron, stage, journal = self.interrupt_cron_publication(host)
+        packages.install_missing(host, list(host.candidates))
+        self.assertFalse(stage.exists())
+        self.assertEqual(cron.stat().st_nlink, 1)
+        self.assertEqual(cron.read_text(), packages._cron_stub(journal))
+        self.assertEqual(cron.with_name("certbot.dpkg-dist").read_bytes(), CERTBOT_CRON)
+        self.assertEqual(packages._load(host)["state"], "complete")
+
+    def test_cron_recovery_refuses_foreign_staging_inode(self):
+        host = self.host()
+        cron, stage, journal = self.interrupt_cron_publication(host)
+        stage.unlink()
+        stage.write_text(packages._cron_stub(journal))
+        stage.chmod(0o644)
+        os.link(stage, stage.with_name("foreign-stage"))
+        os.link(cron, cron.with_name("foreign-cron"))
+        # Even matching content, mode and link counts cannot authorize a
+        # staging inode unrelated to the published suppression file.
+        with self.assertRaises(DeployError):
+            packages.install_missing(host, list(host.candidates))
+        self.assertTrue(stage.exists())
+        self.assertNotEqual(cron.stat().st_ino, stage.stat().st_ino)
+        self.assertNotIn("certbot", host.inventory)
 
     def test_nginx_owner_handoff_allows_enable_and_preserves_other_masks(self):
         host = self.host()
