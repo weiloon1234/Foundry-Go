@@ -383,7 +383,7 @@ match both content and metadata.
 [`tools/deploy/protocol.json`](../../tools/deploy/protocol.json) owns the current protocol and tool generation. The stable
 launcher dispatches to the active immutable bundle. `hello` reports host metadata
 without a mutation. Requests include the client's protocol, framework version,
-generation, and bundle digest. The current tool generation is 11. The minimum
+generation, and bundle digest. The current tool generation is 12. The minimum
 client generation remains 1, so existing registrations and generation-9 clients
 remain supported for ordinary deployment actions. Generation-9 tools reject
 planning or applying an upgrade against a generation-11 host; they cannot bypass

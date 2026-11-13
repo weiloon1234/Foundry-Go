@@ -13,7 +13,7 @@ confirmation rules, host prerequisites, and recovery procedures.
 | `lib/backup.py` | PostgreSQL and encrypted key/config backups |
 | `protocol.json` | Wire protocol and tool generation |
 
-The bundle uses protocol 2.0 and generation 11. Tool upgrades require an installed
+The bundle uses protocol 2.0 and generation 12. Tool upgrades require an installed
 host generation of at least 9. The local command checks the installed host's
 `hello` response before staging any bundle; the candidate checks again before
 planning or installation. Older hosts receive `tools_upgrade_floor`: the host
