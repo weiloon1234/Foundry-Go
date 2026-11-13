@@ -362,6 +362,36 @@ class PublicationTests(unittest.TestCase):
     setUp = PayloadTests.setUp
     inspect = PayloadTests.inspect
 
+    def test_publication_completes_seal_after_interrupted_rename(self):
+        artifact, content = bundle_fixture()
+        members = self.inspect(artifact, content)
+        payload = ArtifactPayload("extension", "linux-amd64", "deploy/artifacts/extension.tar.gz", checksum(content), members)
+        host = Host(Paths(self.root))
+        host.paths.opt("sample-test").mkdir(parents=True)
+        prepared = a.prepare_payload(artifact, payload, self.payload, a.ExpansionBudget(), self.destination)
+        tree = a.publish(host, "sample-test", prepared, history=(), observed_service_abi="service-1")
+        self.addCleanup(lambda: a._remove_staging(tree))
+        tree.chmod(0o755)
+        self.assertEqual(a.publish(host, "sample-test", prepared,
+                                  history=(), observed_service_abi="service-1"), tree)
+        self.assertEqual(tree.stat().st_mode & 0o7777, 0o555)
+        a.verify_tree(tree, members, uid=os.geteuid())
+
+    def test_publication_refuses_unsafe_target_root_mode_without_sealing(self):
+        artifact, content = bundle_fixture()
+        members = self.inspect(artifact, content)
+        payload = ArtifactPayload("extension", "linux-amd64", "deploy/artifacts/extension.tar.gz", checksum(content), members)
+        host = Host(Paths(self.root))
+        host.paths.opt("sample-test").mkdir(parents=True)
+        prepared = a.prepare_payload(artifact, payload, self.payload, a.ExpansionBudget(), self.destination)
+        tree = a.publish(host, "sample-test", prepared, history=(), observed_service_abi="service-1")
+        self.addCleanup(lambda: a._remove_staging(tree))
+        tree.chmod(0o775)
+        with self.assertRaises(DeployError) as error:
+            a.publish(host, "sample-test", prepared, history=(), observed_service_abi="service-1")
+        self.assertEqual(error.exception.code, "artifact_ownership")
+        self.assertEqual(tree.stat().st_mode & 0o7777, 0o775)
+
     def test_immutable_publication_bundle_mapping_and_tampered_existing_tree(self):
         artifact, content = bundle_fixture()
         members = self.inspect(artifact, content)
