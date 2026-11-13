@@ -7,10 +7,11 @@ import (
 	stdhttp "net/http"
 
 	"github.com/weiloon1234/Foundry-Go/attribution"
+	"github.com/weiloon1234/Foundry-Go/internal/httpheader"
 	"github.com/weiloon1234/Foundry-Go/model"
 )
 
-const RequestIDHeader = "X-Request-ID"
+const RequestIDHeader = httpheader.RequestID
 
 // RequestID returns the request's typed correlation ID from shared attribution.
 // Outside a request/attributed operation it returns the empty ID. HTTP generates

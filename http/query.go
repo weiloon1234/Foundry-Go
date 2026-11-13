@@ -10,37 +10,55 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/httpheader"
 	"github.com/weiloon1234/Foundry-Go/internal/httpquery"
 	"github.com/weiloon1234/Foundry-Go/internal/jsonpointer"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-// Query binds a query string to a concrete value without an untyped parameter
-// map at the consumer boundary. DefineQuery snapshots its field declarations;
+// Query declares query and request header bindings on one concrete value without
+// an untyped map at the consumer boundary. DefineQuery snapshots its declarations;
 // the zero descriptor is invalid. Generated declarations use these same bindings.
 type Query[Q any] struct {
-	parameters []QueryParameter[Q]
-	indexes    map[string]int
-	err        error
+	parameters    []QueryParameter[Q]
+	indexes       map[string]int
+	headerIndexes map[string]int
+	err           error
 }
 
-// DefineQuery declares exact, case-sensitive names. Brackets and dots in a name
-// are literal characters, not implicit nesting. Declaration order does not
+// DefineQuery declares case-sensitive query names and case-insensitive header
+// names in separate namespaces. Brackets and dots in query names are literal
+// characters, not implicit nesting. Declaration order does not
 // affect encoding or field diagnostics. Call Validate during route registration.
 func DefineQuery[Q any](parameters ...QueryParameter[Q]) Query[Q] {
-	d := Query[Q]{parameters: slices.Clone(parameters), indexes: make(map[string]int, len(parameters))}
-	slices.SortFunc(d.parameters, func(a, b QueryParameter[Q]) int { return strings.Compare(a.info.Name, b.info.Name) })
+	d := Query[Q]{parameters: slices.Clone(parameters), indexes: make(map[string]int), headerIndexes: make(map[string]int)}
+	slices.SortFunc(d.parameters, func(a, b QueryParameter[Q]) int {
+		if a.source != b.source {
+			return int(a.source) - int(b.source)
+		}
+		return strings.Compare(a.info.Name, b.info.Name)
+	})
 	for i, parameter := range d.parameters {
 		if parameter.err != nil {
 			d.err = parameter.err
 			break
 		}
-		_, duplicate := d.indexes[parameter.info.Name]
-		if !httpquery.ValidName(parameter.info.Name) || duplicate || parameter.decode == nil || parameter.encode == nil {
+		indexes, name := d.indexes, parameter.info.Name
+		valid := httpquery.ValidName(name)
+		switch parameter.source {
+		case queryParameterSource:
+		case headerParameterSource:
+			valid = httpheader.ValidateRequestName(name) == nil && !parameter.info.Repeated && !parameter.info.DefaultURL.IsSet()
+			indexes, name = d.headerIndexes, strings.ToLower(name)
+		default:
+			valid = false
+		}
+		_, duplicate := indexes[name]
+		if !valid || duplicate || parameter.decode == nil || parameter.encode == nil {
 			d.err = safeerror.NewFault(fault.Invalid, "query parameter requires a unique name, codec and field selector")
 			break
 		}
-		d.indexes[parameter.info.Name] = i
+		indexes[name] = i
 	}
 	return d
 }
@@ -50,29 +68,48 @@ func ValidateQueryDescriptor[Q any](d Query[Q]) error {
 	if d.err != nil {
 		return d.err
 	}
-	if d.indexes == nil {
+	if d.indexes == nil || d.headerIndexes == nil {
 		return safeerror.NewFault(fault.Invalid, "query descriptor is not defined")
 	}
 	return nil
 }
 
-// QueryParameters returns an owned, deterministic snapshot of cardinality and scalar metadata.
+// QueryParameters returns owned, sorted cardinality and scalar metadata for
+// query bindings only. Use RequestHeaderParameters to inspect header bindings.
 func QueryParameters[Q any](d Query[Q]) ([]QueryParameterInfo, error) {
+	return queryParameterMetadata(d, queryParameterSource)
+}
+
+func queryParameterMetadata[Q any](d Query[Q], source parameterSource) ([]QueryParameterInfo, error) {
 	if err := ValidateQueryDescriptor(d); err != nil {
 		return nil, err
 	}
-	parameters := make([]QueryParameterInfo, len(d.parameters))
-	for i, parameter := range d.parameters {
-		parameters[i] = parameter.info
+	parameters := make([]QueryParameterInfo, 0)
+	for _, parameter := range d.parameters {
+		if parameter.source != source {
+			continue
+		}
+		info := parameter.info
 		if parameter.scalar != nil {
 			scalar, err := parameter.scalar()
 			if err != nil {
 				return nil, err
 			}
-			parameters[i].Scalar = &scalar
+			info.Scalar = &scalar
 		}
+		parameters = append(parameters, info)
 	}
 	return parameters, nil
+}
+
+func validateBodyQuery[Q any](d Query[Q]) error {
+	if err := ValidateQueryDescriptor(d); err != nil {
+		return err
+	}
+	if len(d.headerIndexes) != 0 {
+		return safeerror.NewFault(fault.Invalid, "body fields cannot declare request header bindings")
+	}
+	return nil
 }
 
 // QueryLimits bounds encoded bytes, parameter slots and returned diagnostics.
@@ -137,7 +174,8 @@ func queryPrepare[Q any](d Query[Q], ctx context.Context, limits QueryLimits) er
 
 // DecodeQuery rejects unknown names, duplicate scalar values, missing required fields
 // and malformed wire input before invoking any codec. Repeated values retain
-// their order. No body or path values are merged into the query.
+// their order. No body or path values are merged into the query. Header bindings
+// are excluded: this function returns only the URL query projection of Q.
 //
 // Codec and field-selector execution is owned until it returns, even after
 // cancellation. It runs on the caller's goroutine: panics become internal
@@ -174,6 +212,9 @@ func queryDecodeValues[Q any](d Query[Q], ctx context.Context, values url.Values
 		}
 	}
 	for _, parameter := range d.parameters {
+		if parameter.source != queryParameterSource {
+			continue
+		}
 		count := len(values[parameter.info.Name])
 		if code := parameterCardinalityIssue(parameter.info, count); code != "" {
 			add(queryIssuePath(parameter.info.Name), code)
@@ -190,6 +231,9 @@ func queryDecodeValues[Q any](d Query[Q], ctx context.Context, values url.Values
 	var info QueryParameterInfo
 	err := callback.Invoke("decode query parameters", func() error {
 		for _, parameter := range d.parameters {
+			if parameter.source != queryParameterSource {
+				continue
+			}
 			if ctx.Err() != nil {
 				break
 			}
@@ -211,7 +255,8 @@ func queryDecodeValues[Q any](d Query[Q], ctx context.Context, values url.Values
 // slices are omitted; Optional zero values are omitted. Parameter and value
 // types remain concrete at the call site. Query escaping is applied exactly
 // once by the shared wire layer. The caller must keep input unchanged until
-// return; custom formatters own their internal work and allocation.
+// return; custom formatters own their internal work and allocation. Header
+// bindings are never encoded into the query or required for URL generation.
 func EncodeQuery[Q any](d Query[Q], ctx context.Context, input Q, limits QueryLimits) (string, error) {
 	if err := queryPrepare(d, ctx, limits); err != nil {
 		return "", err
@@ -222,6 +267,9 @@ func EncodeQuery[Q any](d Query[Q], ctx context.Context, input Q, limits QueryLi
 	var info QueryParameterInfo
 	err := callback.Invoke("encode query parameters", func() error {
 		for _, parameter := range d.parameters {
+			if parameter.source != queryParameterSource {
+				continue
+			}
 			if ctx.Err() != nil {
 				break
 			}

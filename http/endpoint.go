@@ -100,6 +100,9 @@ func ValidateEndpoint[P, Q, B, R any](e Endpoint[P, Q, B, R]) error {
 			return err
 		}
 	}
+	if err := validateRequestHeaderDeclarations(e.query, e.limits.Headers); err != nil {
+		return err
+	}
 	if err := queryUrlPresentation(e.query); err != nil {
 		return err
 	}

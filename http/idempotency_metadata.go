@@ -7,10 +7,11 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
+	"github.com/weiloon1234/Foundry-Go/internal/httpheader"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-const IdempotencyKeyHeader HeaderName = "Idempotency-Key"
+const IdempotencyKeyHeader HeaderName = httpheader.IdempotencyKey
 
 // IdempotencyInfo is the replay policy used by the handler and generated client.
 // Retention is a minimum until explicit pruning, not automatic callback expiry.

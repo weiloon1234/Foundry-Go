@@ -9,20 +9,29 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// QueryParameter binds one declared query name to a concrete field. Construct
-// it with QueryParam, OptionalQueryParam or RepeatedQueryParam. Field selectors
+// QueryParameter binds one declared query or request header name to a concrete
+// field. Use the QueryParam or HeaderParam constructors for its source. Field selectors
 // must select a field on the supplied argument and be safe for concurrent calls
 // on independent arguments. They must not mutate any other field or retain it.
 type QueryParameter[Q any] struct {
 	info   QueryParameterInfo
+	source parameterSource
 	err    error
 	scalar func() (URLScalarInfo, error)
 	decode func(context.Context, *Q, []string) *queryBindingFailure
 	encode func(context.Context, *Q, *queryBudget) ([]string, *queryBindingFailure)
 }
 
+type parameterSource uint8
+
+const (
+	queryParameterSource parameterSource = iota
+	headerParameterSource
+)
+
 // QueryParameterInfo describes cardinality and codec metadata without inspecting values.
-// Repeated fields use repeated keys, never implicit comma or bracket expansion.
+// Repeated query fields use repeated keys, never implicit comma or bracket
+// expansion. Request headers are single-valued and have no DefaultURL.
 type QueryParameterInfo struct {
 	Presentation contract.Presentation `json:"presentation,omitzero"`
 	Scalar       *URLScalarInfo        `json:"scalar,omitempty"`

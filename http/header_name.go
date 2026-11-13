@@ -4,9 +4,8 @@ import (
 	stdhttp "net/http"
 	"strings"
 
-	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/httpheader"
 	"github.com/weiloon1234/Foundry-Go/internal/httptoken"
-	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // HeaderName is a declared HTTP field name, distinct from routes and values.
@@ -15,16 +14,7 @@ type HeaderName string
 
 // Validate requires a nonempty HTTP token no longer than 256 bytes.
 func (n HeaderName) Validate() error {
-	if len(n) == 0 || len(n) > 256 {
-		return safeerror.NewFault(fault.Invalid, "HTTP header name is empty or too long")
-	}
-	for i := range n {
-		if httpTokenByte(n[i]) {
-			continue
-		}
-		return safeerror.NewFault(fault.Invalid, "HTTP header name contains an invalid byte")
-	}
-	return nil
+	return httpheader.ValidateName(string(n))
 }
 
 func httpTokenByte(c byte) bool {
@@ -33,10 +23,8 @@ func httpTokenByte(c byte) bool {
 
 // Canonical returns Go's conventional casing after validating the field name.
 func (n HeaderName) Canonical() (HeaderName, error) {
-	if err := n.Validate(); err != nil {
-		return "", err
-	}
-	return HeaderName(stdhttp.CanonicalHeaderKey(string(n))), nil
+	name, err := httpheader.CanonicalName(string(n))
+	return HeaderName(name), err
 }
 
 func appendVary(header stdhttp.Header, names ...string) {
