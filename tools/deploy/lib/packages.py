@@ -682,8 +682,12 @@ def _mask_identity(path):
             "ctime_ns": info.st_ctime_ns}
 
 
+def _mask_anchor(path, operation):
+    return path.parent / (".foundry-mask-" + operation + "-" + _digest(path.name))
+
+
 def _publish_default_mask(host, journal, unit, path):
-    stage = path.parent / (".foundry-mask-" + journal["operation_id"] + "-" + _digest(unit))
+    stage = _mask_anchor(path, journal["operation_id"])
     record = journal.setdefault("default_activation", {}).get(unit)
     if record is None:
         require(not path.exists() and not path.is_symlink(),
@@ -706,8 +710,11 @@ def _publish_default_mask(host, journal, unit, path):
     if record["state"] == "publishing":
         require(record["operation_id"] == journal["operation_id"],
                 "package_activation", "Default-unit mask belongs to another transaction.")
-        # Linking/unlinking changes ctime. During publication the durable inode
-        # identity proves ownership; completed masks also require the final ctime.
+        # The operation's staging link is a durable ownership anchor. Keep it
+        # until release is durable so its inode cannot be recycled while mask
+        # recovery relies on it. Linking changes ctime; masked records also check
+        # the final ctime.
+        require(stage.is_symlink(), "package_activation", "Default-unit mask ownership anchor disappeared.")
         links = int(stage.is_symlink()) + int(path.is_symlink())
         for candidate in (stage, path):
             if candidate.exists() or candidate.is_symlink():
@@ -721,9 +728,6 @@ def _publish_default_mask(host, journal, unit, path):
             require(stage.is_symlink(), "package_activation", "Default-unit mask staging disappeared.")
             os.link(stage, path, follow_symlinks=False)
         _sync_directory(path.parent)
-        if stage.is_symlink():
-            stage.unlink()
-            _sync_directory(path.parent)
         record.update(identity=_mask_identity(path), state="masked")
         _save(host, journal)
     require(record["state"] == "masked" and path.is_symlink() and os.readlink(path) == "/dev/null"
@@ -792,6 +796,7 @@ def authorize_default_activation(host: Host, unit: str, claim: dict) -> None:
         require(not path.is_symlink() or os.readlink(path) != "/dev/null",
                 "package_activation_owner", "Cannot remove a foreign default-service mask.")
         return
+    anchor = _mask_anchor(path, record["operation_id"])
     if path.exists() or path.is_symlink():
         require(record["state"] in ("masked", "releasing") and path.is_symlink()
                 and os.readlink(path) == "/dev/null" and _mask_identity(path) == record["identity"],
@@ -803,9 +808,26 @@ def authorize_default_activation(host: Host, unit: str, claim: dict) -> None:
     else:
         require(record["state"] in ("releasing", "released"),
                 "package_activation_owner", "Default-service mask disappeared without an owned handoff.")
+    if record["state"] != "released" and (anchor.exists() or anchor.is_symlink()):
+        # Removing the mask changes the retained anchor's ctime. Its inode is
+        # still pinned until released is durable; record its full identity now
+        # so cleanup retries cannot adopt a replacement after inode reuse.
+        identity = _mask_identity(anchor)
+        require(anchor.is_symlink() and os.readlink(anchor) == "/dev/null"
+                and anchor.lstat().st_nlink == 1
+                and all(identity[key] == record["identity"][key] for key in ("device", "inode", "uid")),
+                "package_activation_owner", "Default-service ownership anchor changed.")
+        record["anchor_identity"] = identity
     host.run(["systemctl", "daemon-reload"])
     record["state"] = "released"
     _save(host, journal)
+    if anchor.exists() or anchor.is_symlink():
+        require(anchor.is_symlink() and os.readlink(anchor) == "/dev/null"
+                and anchor.lstat().st_nlink == 1
+                and _mask_identity(anchor) == record.get("anchor_identity"),
+                "package_activation_owner", "Default-service ownership anchor changed; refusing cleanup.")
+        anchor.unlink()
+    _sync_directory(path.parent)
 
 
 def _clean_inventory(inventory: dict) -> None:

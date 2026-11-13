@@ -623,8 +623,7 @@ class BuiltinPayloadTests(unittest.TestCase):
                 return
             staged = any(directory.glob(".foundry-mask-*"))
             if ((point == "staged" and staged and not mask.is_symlink())
-                    or (point == "published" and mask.is_symlink())
-                    or (point == "cleaned" and mask.is_symlink() and not staged)):
+                    or (point == "published" and mask.is_symlink())):
                 raise SystemExit("crash during mask publication: " + point)
 
         with patch.object(packages, "_sync_directory", side_effect=crash_after_publication), self.assertRaises(SystemExit):
@@ -642,20 +641,42 @@ class BuiltinPayloadTests(unittest.TestCase):
         packages.install_missing(host, ["nginx"])
         self.assertEqual(mask.lstat().st_ino, inode)
         self.assertEqual(packages._load(host)["state"], "complete")
-        self.assertFalse(list(mask.parent.glob(".foundry-mask-*")))
+        anchor = next(mask.parent.glob(".foundry-mask-*"))
+        self.assertEqual(anchor.lstat().st_ino, inode)
+        self.assertEqual(mask.lstat().st_nlink, 2)
         packages.authorize_default_activation(host, "nginx.service",
                                              {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"})
         self.assertFalse(mask.is_symlink())
+        self.assertFalse(anchor.is_symlink())
+        self.assertFalse(list(mask.parent.glob(".foundry-mask-*")))
 
-    def test_mask_staging_and_cleanup_crashes_recover(self):
-        for point in ("staged", "cleaned"):
-            with self.subTest(point=point):
-                host = self.host(cron=False, root=self.root / point)
-                mask = self.interrupt_mask_publication(host, point=point)
-                packages.install_missing(host, ["nginx"])
-                self.assertEqual(os.readlink(mask), "/dev/null")
-                self.assertEqual(packages._load(host)["state"], "complete")
-                self.assertFalse(list(mask.parent.glob(".foundry-mask-*")))
+    def test_mask_staging_crash_recovers(self):
+        host = self.host(cron=False)
+        mask = self.interrupt_mask_publication(host, point="staged")
+        packages.install_missing(host, ["nginx"])
+        self.assertEqual(os.readlink(mask), "/dev/null")
+        self.assertEqual(packages._load(host)["state"], "complete")
+        self.assertEqual(next(mask.parent.glob(".foundry-mask-*")).lstat().st_ino, mask.lstat().st_ino)
+
+    def test_mask_record_crash_recovers_with_durable_anchor(self):
+        host = self.host(cron=False)
+        save = packages._save
+
+        def crash_after_masked_record(host, journal):
+            save(host, journal)
+            if journal.get("default_activation", {}).get("nginx.service", {}).get("state") == "masked":
+                raise SystemExit("crash after saving masked identity")
+
+        with patch.object(packages, "_save", side_effect=crash_after_masked_record), self.assertRaises(SystemExit):
+            packages.install_missing(host, ["nginx"])
+        mask = host.paths.p("/etc/systemd/system/nginx.service")
+        anchor = next(mask.parent.glob(".foundry-mask-*"))
+        self.assertEqual(anchor.lstat().st_ino, mask.lstat().st_ino)
+        identity = packages._mask_identity(mask)
+        self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["identity"], identity)
+        packages.install_missing(host, ["nginx"])
+        self.assertEqual(packages._mask_identity(mask), identity)
+        self.assertEqual(packages._load(host)["state"], "complete")
 
     def test_mask_publication_recovery_refuses_foreign_replacement(self):
         host = self.host(cron=False)
@@ -667,6 +688,35 @@ class BuiltinPayloadTests(unittest.TestCase):
         with self.assertRaises(DeployError):
             packages.install_missing(host, ["nginx"])
         self.assertEqual(packages._mask_identity(mask), identity)
+        self.assertNotIn("nginx", host.inventory)
+        self.assertEqual(packages._load(host)["state"], "installing")
+
+    def test_mask_cleanup_crash_refuses_replacement_with_reused_inode(self):
+        host = self.host(cron=False)
+        mask = self.interrupt_mask_publication(host)
+        journal = packages._load(host)
+        original = journal["default_activation"]["nginx.service"]["identity"]
+        # Reproduce the old cleanup crash: the anchor is gone but the durable
+        # record is still publishing. Then replace the remaining mask.
+        next(mask.parent.glob(".foundry-mask-*")).unlink()
+        packages._sync_directory(mask.parent)
+        mask.unlink()
+        mask.symlink_to("/dev/null")
+        replacement = packages._mask_identity(mask)
+        self.assertNotEqual(replacement["ctime_ns"], original["ctime_ns"])
+        identity = packages._mask_identity
+
+        def reused_inode(path):
+            observed = identity(path)
+            if path == mask:
+                # Filesystem inode allocation is nondeterministic; simulate only
+                # reuse of the number, retaining the replacement's real ctime.
+                observed["inode"] = original["inode"]
+            return observed
+
+        with patch.object(packages, "_mask_identity", side_effect=reused_inode), self.assertRaises(DeployError):
+            packages.install_missing(host, ["nginx"])
+        self.assertEqual(packages._mask_identity(mask), replacement)
         self.assertNotIn("nginx", host.inventory)
         self.assertEqual(packages._load(host)["state"], "installing")
 
@@ -769,6 +819,68 @@ class BuiltinPayloadTests(unittest.TestCase):
         self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["state"], "releasing")
         packages.authorize_default_activation(host, "nginx.service", claim)
         self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["state"], "released")
+
+    def interrupt_handoff_after_release(self, host):
+        packages.install_missing(host, ["nginx"])
+        claim = {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"}
+        directory = host.paths.p("/etc/systemd/system")
+        anchor = next(directory.glob(".foundry-mask-*"))
+        save = packages._save
+
+        def crash_after_release(host, journal):
+            save(host, journal)
+            if journal["default_activation"]["nginx.service"]["state"] == "released":
+                raise SystemExit("crash after durable release before anchor cleanup")
+
+        with patch.object(packages, "_save", side_effect=crash_after_release), self.assertRaises(SystemExit):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertTrue(anchor.is_symlink())
+        self.assertFalse((directory / "nginx.service").is_symlink())
+        self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["state"], "released")
+        return claim, directory, anchor
+
+    def test_handoff_retry_cleans_anchor_after_durable_release(self):
+        host = self.host(cron=False)
+        claim, directory, anchor = self.interrupt_handoff_after_release(host)
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertFalse(list(directory.glob(".foundry-mask-*")))
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertFalse(list(directory.glob(".foundry-mask-*")))
+
+    def test_handoff_cleanup_refuses_replaced_anchor_even_with_reused_inode(self):
+        host = self.host(cron=False)
+        claim, directory, anchor = self.interrupt_handoff_after_release(host)
+        original = packages._mask_identity(anchor)
+        anchor.unlink()
+        anchor.symlink_to("/dev/null")
+        replacement = packages._mask_identity(anchor)
+        self.assertNotEqual(original["ctime_ns"], replacement["ctime_ns"])
+        identity = packages._mask_identity
+
+        def reused_inode(path):
+            observed = identity(path)
+            if path == anchor:
+                observed["inode"] = original["inode"]
+            return observed
+
+        with patch.object(packages, "_mask_identity", side_effect=reused_inode), self.assertRaises(DeployError):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertEqual(packages._mask_identity(anchor), replacement)
+
+    def test_handoff_cleanup_retry_after_anchor_unlink(self):
+        host = self.host(cron=False)
+        claim, directory, anchor = self.interrupt_handoff_after_release(host)
+        sync = packages._sync_directory
+
+        def crash_after_cleanup(path):
+            if path == directory and not anchor.is_symlink():
+                raise SystemExit("crash after anchor unlink before directory sync")
+            sync(path)
+
+        with patch.object(packages, "_sync_directory", side_effect=crash_after_cleanup), self.assertRaises(SystemExit):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertFalse(list(directory.glob(".foundry-mask-*")))
 
     def test_additional_package_transaction_retains_prior_mask_ownership(self):
         host = self.host()
