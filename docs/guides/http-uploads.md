@@ -354,6 +354,9 @@ An admitted upload's effective route deadline also bounds native body reads,
 including a chunked body that keeps making progress. The deadline does not reset
 with each chunk. An expired multipart capture returns 408 and rejects the unread
 body before publication. Cleanup completes before its admission slot is released.
+Compression and ETags deliver that terminal 408 even when the native read timeout
+cancels HTTP/1's request context. This exception requires an observed socket read
+timeout at the installed deadline; ordinary client disconnects still abort delivery.
 
 Use the framework's Router and `ApplyMiddleware` chain for this guarantee.
 An external native wrapper that reads a body before entering that chain cannot

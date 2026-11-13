@@ -41,6 +41,8 @@ func (s StagingLimits) validate(maximum int64) error {
 
 const stagingDirectory = ".foundry-staging"
 const stagingLockName = ".foundry-admission"
+const stagingMigrationLock = ".foundry-migration-lock"
+const stagingMigrated = ".foundry-migrated"
 
 // Recovery runs once before readiness, independently of the listing ceiling.
 // Old abandoned files move into the same accounting directory as new writes.
@@ -65,11 +67,46 @@ func (b *Backend) startStaging(ctx context.Context) (err error) {
 			b.staging = nil
 		}
 	}()
+	if err := b.migrateStaging(ctx); err != nil {
+		return err
+	}
 	unlock, err := filelock.Acquire(ctx, b.staging, stagingLockName)
 	if err != nil {
 		return err
 	}
 	defer unlock()
+	_, _, err = b.stagingUsage(ctx)
+	return err
+}
+
+func (b *Backend) stagingMigrationComplete() (bool, error) {
+	info, err := b.staging.Lstat(stagingMigrated)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !info.Mode().IsRegular() || info.Size() != 0 {
+		return false, fs.ErrInvalid
+	}
+	return true, nil
+}
+
+func (b *Backend) migrateStaging(ctx context.Context) error {
+	if done, err := b.stagingMigrationComplete(); done || err != nil {
+		return err
+	}
+	// Only first-time migration waits here. Published-object enumeration never
+	// holds the admission lock used by healthy peers.
+	unlock, err := filelock.Acquire(ctx, b.staging, stagingMigrationLock)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if done, err := b.stagingMigrationComplete(); done || err != nil {
+		return err
+	}
 	err = b.walkEntries(ctx, 0, func(parent *os.Root, directory, name string) error {
 		if !stagingName(name) {
 			return nil
@@ -87,11 +124,13 @@ func (b *Backend) startStaging(ctx context.Context) (err error) {
 			return err
 		}
 		if !locked {
-			if b.config.Staging.MaxActive == 0 {
-				return nil
-			}
-			return safeerror.NewFault(fault.Conflict, "legacy staging writers must drain before enabling staging admission")
+			return safeerror.NewFault(fault.Conflict, "legacy staging writers must drain before migration")
 		}
+		unlock, err := filelock.Acquire(ctx, b.staging, stagingLockName)
+		if err != nil {
+			return err
+		}
+		defer unlock()
 		info, err := file.Stat()
 		if err != nil {
 			return err
@@ -115,18 +154,18 @@ func (b *Backend) startStaging(ctx context.Context) (err error) {
 		if err := b.root.Rename(directory+"/"+name, stagingDirectory+"/"+name); err != nil {
 			return err
 		}
-		if b.config.Sync {
-			return safeerror.Join("staging recovery sync failed", syncDirectory(b.staging), syncDirectory(parent))
-		}
-		return nil
+		// The completion marker must never outlive an unsynced migration, even
+		// when ordinary object writes opt out of durability.
+		return safeerror.Join("staging recovery sync failed", syncDirectory(b.staging), syncDirectory(parent))
 	})
 	if err != nil {
 		return err
 	}
-	if b.config.Sync {
-		return safeerror.Join("staging startup sync failed", syncDirectory(b.staging), syncDirectory(b.root))
+	marker, err := b.staging.OpenFile(stagingMigrated, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return err
 	}
-	return nil
+	return safeerror.Join("staging migration completion failed", marker.Sync(), marker.Close(), syncDirectory(b.staging), syncDirectory(b.root))
 }
 
 // The caller holds the staging directory's admission lock. Published objects and

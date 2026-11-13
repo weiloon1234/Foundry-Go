@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed: completed local staging migration is recorded durably so backend restarts
+  scan only staging, without holding peer admission behind published-object scans.
+  Admitted upload timeouts retain their terminal 408 through Compression and ETags
+  when HTTP/1 cancels the native context on read timeout. Added startup, migration
+  completion and compressed socket regression sources for the lead's Go gate.
+
 - Fixed: admitted multipart uploads enforce the effective route deadline during
   socket reads and reject unfinished bodies on timeout, allowing capture cleanup
   and capacity recovery without waiting for a trickling client to finish. Added

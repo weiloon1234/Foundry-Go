@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/filelock"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -155,5 +156,73 @@ func TestStagingSolitaryWriteIgnoresPublishedNamespace(t *testing.T) {
 	closeErr := reader.Close()
 	if err != nil || closeErr != nil || string(data) != "next" {
 		t.Fatal("cross-directory publication changed bytes", err, closeErr)
+	}
+}
+
+func TestStagingMigratedPeerStartupDoesNotBlockWrites(t *testing.T) {
+	config := sharedStagingConfig(t.TempDir())
+	config.MaxScan, config.Sync = 1, false
+	writer, err := Open(t.Context(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Close()
+	small, large := stagingKey(t, "peer-small"), stagingKey(t, "peer-large")
+	smallDirectory, _ := address(small)
+	largeDirectory, _ := address(large)
+	protected := ""
+	for i := range 512 {
+		key := stagingKey(t, fmt.Sprintf("published-%d", i))
+		if _, err := writer.Put(t.Context(), key, strings.NewReader("ok"), storage.PutOptions{Size: value.Set[int64](2)}); err != nil {
+			t.Fatal(err)
+		}
+		directory, _ := address(key)
+		if directory != smallDirectory && directory != largeDirectory {
+			protected = filepath.Join(config.Root, directory)
+		}
+	}
+	if os.Geteuid() != 0 {
+		// Any repeated enumeration fails deterministically, independently of
+		// machine speed and the number of directory entries cached by the OS.
+		if err := os.Chmod(protected, 0100); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Chmod(protected, 0700)
+	}
+	// A completed root must not wait for a legacy migration lock either.
+	unlock, err := filelock.Acquire(t.Context(), writer.staging, stagingMigrationLock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	peer, err := Prepare(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- peer.Start(ctx) }()
+	joined := false
+	defer func() {
+		cancel()
+		if !joined {
+			<-done
+		}
+		peer.Close()
+	}()
+	for _, key := range []storage.ObjectKey{small, large} {
+		size := int64(2)
+		if key == large {
+			size = 4
+		}
+		if _, err := writer.Put(ctx, key, strings.NewReader(strings.Repeat("x", int(size))), storage.PutOptions{Size: value.Set(size)}); err != nil {
+			t.Fatal("peer startup blocked a healthy writer", err)
+		}
+	}
+	err = <-done
+	joined = true
+	if err != nil {
+		t.Fatal("migrated startup revisited the published namespace", err)
 	}
 }

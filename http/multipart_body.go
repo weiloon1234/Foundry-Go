@@ -6,8 +6,10 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"net"
 	stdhttp "net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -28,13 +30,18 @@ type multipartInput struct {
 // multipartSource observes the framework-owned body ceiling directly, without
 // walking or formatting arbitrary error chains supplied by an incoming reader.
 type multipartSource struct {
-	source   io.Reader
-	tooLarge bool
+	source       io.Reader
+	tooLarge     bool
+	readDeadline time.Time
+	readTimedOut bool
 }
 
 // Read forwards source data and records whether the HTTP body limit was exceeded.
 func (r *multipartSource) Read(p []byte) (int, error) {
 	n, err := r.source.Read(p)
+	if native, ok := err.(*net.OpError); ok && native.Op == "read" && native.Err == os.ErrDeadlineExceeded && !r.readDeadline.IsZero() && !time.Now().Before(r.readDeadline) {
+		r.readTimedOut = true
+	}
 	if _, ok := err.(*stdhttp.MaxBytesError); ok {
 		r.tooLarge = true
 	}
@@ -88,6 +95,9 @@ func multipartRead[B any](d Multipart[B], w stdhttp.ResponseWriter, r *stdhttp.R
 	}
 	close := batch.Close
 	source := &multipartSource{source: stdhttp.MaxBytesReader(w, r.Body, limits.Multipart.Bytes)}
+	if admitted != nil {
+		source.readDeadline = admitted.readDeadline
+	}
 	input := multipartInput{text: make(url.Values), values: make(map[string][]multipartValue), counts: make([]int, len(d.parts))}
 	var returned error
 	owned := callback.Isolated("read multipart form", func() error {
@@ -106,6 +116,9 @@ func multipartRead[B any](d Multipart[B], w stdhttp.ResponseWriter, r *stdhttp.R
 		contextErr = context.DeadlineExceeded
 	}
 	if contextErr != nil {
+		if admitted != nil && source.readTimedOut {
+			admitted.timeoutResponse.Store(true)
+		}
 		rejectUnreadBody(w, r)
 		return *new(B), close, RequestTimeout.WithCause(contextErr)
 	}
