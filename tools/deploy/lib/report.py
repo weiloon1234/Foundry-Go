@@ -489,7 +489,7 @@ def instance_report(host, entry, deadline, problems):
         **(registered_backup if isinstance(registered_backup, dict) else {}),
         **(recorded_backup if isinstance(recorded_backup, dict) else {}),
     }}, problems, instance_id)
-    return {
+    result = {
         "instance_id": instance_id, "name": name, "environment": string(entry.get("environment")),
         "runtime_environment": string(profile.get("runtime_environment")), "domain": string(profile.get("domain")),
         "architecture": string(profile.get("architecture")), "port": integer(entry["allocations"]["http_port"]),
@@ -504,6 +504,105 @@ def instance_report(host, entry, deadline, problems):
         "service": unit_status, "services": topology, "readiness": ready, "maintenance": live_maintenance, "certificate": cert, "backup": backup,
         "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),
     }
+    if profile.get("schema") == 3:
+        from topology import parse_profile, parse_topology
+        result["network"] = checked(problems, "declared_network_unavailable", instance_id,
+                                    lambda: declared_network(host, parse_profile(profile, parse_topology(entry["topology"], registered=True)),
+                                                             entry=entry))
+        if result["network"]:
+            for finding in result["network"]["findings"]:
+                problem(problems, finding["code"], instance_id)
+    return result
+
+
+def declared_network(host, profile, *, entry=None, resolution=None, closure=None, dns_observations=()):
+    """Lane A may supply its selected resolution/closure; never read private envs.
+
+    Without that selection a declared port is not silently accepted as owned.
+    Historical closure records are labelled recorded, not a fresh start permit.
+    """
+    import certificates
+    import edge
+    import firewall
+    import listeners
+    claims = listeners.public_claims(profile)
+    observed = listeners.observe_sockets(host)
+    findings, owners = [], {}
+    try:
+        owners["nginx"] = listeners.process_members(host, "nginx.service")
+    except (DeployError, OSError, ValueError):
+        findings.append({"code": "listener_owner_unverified"})
+    edge_verified = False
+    if resolution is not None and entry is not None:
+        try:
+            expected = edge.stream_projection(profile, resolution, entry["certificate"]["lineage"])
+            directory = host.paths.p(edge.RUNTIME + "/" + profile.instance_id)
+            selected = {name: content for name, content in expected.items() if (directory / name).exists()}
+            if (directory / "http-open.conf").exists():
+                selected["http-open.conf"] = '"" 1;\n'
+            edge.observe_projection(host, profile.instance_id, resolution.roles, expected=selected)
+            edge_verified = True
+        except (DeployError, OSError, ValueError):
+            findings.append({"code": "nginx_projection_unverified"})
+    else:
+        findings.append({"code": "nginx_projection_unverified"})
+    for finding in listeners.ownership_findings(claims, observed, owners, edge_verified=edge_verified):
+        if finding["code"] == "unexpected_public_listener" and finding["transport"] == "tcp" and finding["port"] in PUBLIC_PORTS:
+            continue
+        findings.append(finding)
+    policy = "unverified"
+    if claims:
+        try:
+            firewall.observe(host, profile.instance_id, claims)
+            policy = "closed"
+        except (DeployError, OSError, ValueError):
+            try:
+                firewall.observe(host, profile.instance_id, claims, bindings=profile.listeners, opened=True)
+                policy = "runtime_exposure"
+            except (DeployError, OSError, ValueError):
+                findings.append({"code": "firewall_policy_unverified"})
+    answers = {o.hostname: o for o in dns_observations}
+    for _, binding in profile.listeners:
+        if binding.hostname not in answers:
+            try:
+                answers[binding.hostname] = listeners.observe_dns(binding)
+            except ReportBudgetExceeded:
+                raise
+            except (DeployError, OSError, ValueError):
+                findings.append({"code": "external_dns_observation_unavailable", "hostname": binding.hostname})
+    dns = [listeners.external_dns(binding, answers.get(binding.hostname)) for _, binding in profile.listeners]
+    for value in dns:
+        findings.append({"code": "external_dns_proxy_mode_unverified", "hostname": value["hostname"]})
+        if value["addresses_match"] is False:
+            findings.append({"code": "external_dns_drift", "hostname": value["hostname"]})
+    for name, binding in profile.listeners:
+        if any(ipaddress.ip_network(cidr).prefixlen == 0 for cidr in binding.source_cidrs):
+            findings.append({"code": "listener_broad_sources", "listener": name})
+        findings.append({"code": "listener_origin_disclosed", "listener": name})
+    tls = None
+    if entry is not None:
+        tls = certificates.inspect(host, entry)
+        if tls["state"] != "ready":
+            findings.append({"code": "listener_tls_unverified"})
+        elif resolution is not None:
+            try:
+                tls = {**tls, "effective": certificates.verify_network_consumers(host, entry)}
+            except (DeployError, OSError, ValueError):
+                findings.append({"code": "certificate_effective_renewal_unverified"})
+    admission = {"recorded_stage": None, "scope": [], "observed_at": None, "current_proof": False}
+    if closure is not None:
+        from contracts import record_document
+        record_document(closure)
+        if {u.instance_id for u in closure.units} != {profile.instance_id}:
+            raise ValueError("closure scope mismatch")
+        admission.update(recorded_stage=closure.stage.value, observed_at=closure.observed_at,
+                         scope=[{"role": u.role, "ordinal": u.ordinal} for u in closure.units])
+        if closure.stage.value == "ingress_withdrawn":
+            findings.append({"code": "application_admission_unverified"})
+    return {"listeners": [{"role": c.role, "listener": c.listener, "ordinal": c.ordinal,
+                            "transport": c.socket.transport, "family": c.socket.family, "address": c.socket.address,
+                            "port": c.socket.port, "expected_owner": c.owner} for c in claims],
+            "firewall": policy, "dns": dns, "tls": tls, "admission": admission, "findings": findings}
 
 
 def collect_report(host):
