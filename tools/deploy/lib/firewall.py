@@ -286,6 +286,32 @@ def _ports(claims):
     return ports
 
 
+def _network_policy(routes, addresses):
+    """Bind network configuration, not iproute2's traffic/age/link observations.
+
+    Route destinations, gateways, devices, tables, metrics and address assignments
+    remain covered. Countdown values and counters describe an observation instant,
+    not a different policy. Expiry still changes the digest when an entry vanishes.
+    """
+    def ordered(values):
+        return sorted(values, key=lambda value: json.dumps(value, sort_keys=True))
+    route_observations = {"expires", "cache", "used", "lastuse", "users", "refcnt", "age"}
+    interface_observations = {"stats", "stats64", "operstate", "carrier", "carrier_changes",
+                              "carrier_up_count", "carrier_down_count"}
+    address_observations = {"valid_life_time", "preferred_life_time", "tentative", "dadfailed", "deprecated", "optimistic"}
+    interfaces = []
+    for interface in addresses:
+        value = {k: v for k, v in interface.items() if k not in interface_observations}
+        if "flags" in value:
+            value["flags"] = sorted(set(value["flags"]) - {"LOWER_UP", "RUNNING", "DORMANT"})
+        value["addr_info"] = ordered({k: sorted(set(v) - address_observations) if k == "flags" else v for k, v in address.items()
+                                      if k not in address_observations} for address in interface.get("addr_info", []))
+        interfaces.append(value)
+    return {"routes": {family: ordered({k: v for k, v in route.items() if k not in route_observations}
+                                      for route in entries) for family, entries in routes.items()},
+            "addresses": ordered(interfaces)}
+
+
 def observe(host, instance_id, claims, *, bindings=(), opened=False, integrated=True, retained_claims=()):
     """Read live policy, reload policy, interfaces/routes and other firewall owners."""
     chain = chain_name(instance_id)
@@ -358,7 +384,8 @@ def observe(host, instance_id, claims, *, bindings=(), opened=False, integrated=
     return FirewallObservation(instance_id, boot_id(host), not opened,
                                canonical_digest({"instance_id": instance_id,
                                    "scope": sorted((asdict(c.socket) for c in claims), key=lambda v: (v["family"], v["address"], v["port"])),
-                                   "live": live, "backends": backends, "persistent": files, "routes": routes, "addresses": addresses}),
+                                   "live": live, "backends": backends, "persistent": files,
+                                   **_network_policy(routes, addresses)}),
                                ports, tuple(c.socket for c in claims))
 
 

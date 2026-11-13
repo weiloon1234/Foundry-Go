@@ -131,6 +131,37 @@ class FeatureAdapterTests(unittest.TestCase):
             self.seam.close(self.host, self.entry, self.transition, self.current.resolution, {"http": "foreign.service"})
         self.withdraw.assert_not_called()
 
+    def test_pre_stop_withdrawal_then_repeated_closure_rechecks_exit_without_effects(self):
+        self.running = True
+        with self.assertRaises(c.DeployError) as alive:
+            self.close()
+        self.assertEqual(alive.exception.code, "network_backend_alive")
+        self.running = False
+        with patch.object(self.host, "owned_write", side_effect=AssertionError("repeat write")), \
+                patch.object(firewall, "withdraw", side_effect=AssertionError("repeat firewall mutation")), \
+                patch.object(edge, "withdraw", side_effect=AssertionError("repeat nginx reload")), \
+                patch.object(edge, "retain_global_references", side_effect=AssertionError("repeat reference mutation")):
+            first = self.close()
+            before = self.host.run.call_count
+            # Lane A can now have persisted closure_id on this same transition.
+            self.transition = replace(self.transition, closure_id=first.id)
+            second = self.close()
+            self.assertGreater(self.host.run.call_count, before)
+            self.assertEqual(replace(first, id=second.id, observed_at=second.observed_at), second)
+            self.running = True
+            with self.assertRaises(c.DeployError) as restarted:
+                self.close()
+            self.assertEqual(restarted.exception.code, "network_backend_alive")
+
+    def test_reopened_http_invalidates_the_withdrawal_observation(self):
+        self.close()
+        self.host.owned_write(self.site, listeners._feature_projection(self.entry, self.current.topology,
+                             self.current.profile, self.current.resolution.endpoints)["http"])
+        self.withdraw.reset_mock()
+        self.close()
+        self.withdraw.assert_called_once()
+        self.assertNotIn("proxy_pass", self.site.read_text())
+
     def test_jobs_control_processes_and_cgroup_descendants_refuse_closure(self):
         for override in ({"Job": "17"}, {"ControlPID": "8"}, {"MainPID": "9"}, {"LoadState": "not-found"}, {"ActiveState": "activating"}):
             self.manager_override = override

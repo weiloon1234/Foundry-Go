@@ -1,7 +1,9 @@
 """Replay unedited Ubuntu captures; commands never reach the host firewall."""
 from collections import Counter
+import copy
 import json
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -68,6 +70,67 @@ class CapturedUFWTests(unittest.TestCase):
                 before = {p: host.paths.p(p).read_bytes() for p in firewall.FILES}
                 self.assertTrue(firewall.observe(host, fixture.INSTANCE, claims, integrated=False).closed)
                 self.assertEqual(before, {p: host.paths.p(p).read_bytes() for p in firewall.FILES})
+
+    def test_capture_counter_changes_do_not_change_policy_digest(self):
+        for variant in VARIANTS:
+            with self.subTest(variant=variant):
+                host, claims, live = self.load_capture(variant)
+                command = host.run
+                generation = [1]
+                def observed(args, **kwargs):
+                    result = command(args, **kwargs)
+                    if args[0] == "nft":
+                        value = json.loads(result.stdout)
+                        for index, item in enumerate(value["nftables"]):
+                            for kind, obj in item.items():
+                                obj["handle"] = index + generation[0] * 1000
+                                if kind == "rule":
+                                    for expression in obj["expr"]:
+                                        if "counter" in expression:
+                                            expression["counter"] = {"packets": generation[0], "bytes": 64 * generation[0]}
+                        value["nftables"].insert(0, {"metainfo": {"generation": generation[0]}})
+                        result.stdout = json.dumps(value)
+                    return result
+                host.run = observed
+                before = firewall.observe(host, fixture.INSTANCE, claims, integrated=False)
+                generation[0] = 99
+                for family in live:
+                    live[family] = re.sub(r"\[[0-9]+:[0-9]+\]", "[999:64000]", live[family])
+                self.assertEqual(before.sha256, firewall.observe(host, fixture.INSTANCE, claims, integrated=False).sha256)
+
+    def test_traffic_age_and_link_status_are_not_policy_but_routes_and_addresses_are(self):
+        for variant in VARIANTS:
+            with self.subTest(variant=variant):
+                host, claims, _ = self.load_capture(variant)
+                command = host.run
+                routes = [{"dst": "default", "gateway": "203.0.113.1", "dev": "eth0", "table": "main",
+                           "metric": 100, "expires": 3600, "cache": [{"used": 1, "lastuse": 0, "refcnt": 1}]}]
+                addresses = [{"ifindex": 2, "ifname": "eth0", "flags": ["UP", "LOWER_UP"], "operstate": "UP",
+                              "stats64": {"rx": {"packets": 1, "bytes": 64}},
+                              "addr_info": [{"local": claim.socket.address, "prefixlen": 32 if claim.socket.family == 4 else 128,
+                                             "valid_life_time": 3600, "preferred_life_time": 1800, "tentative": True}
+                                            for claim in claims]}]
+                def observed(args, **kwargs):
+                    result = command(args, **kwargs)
+                    if args == ["ip", "-j", "address", "show"]:
+                        result.stdout = json.dumps(addresses)
+                    elif args[:2] == ["ip", "-j"]:
+                        result.stdout = json.dumps(routes)
+                    return result
+                host.run = observed
+                before = firewall.observe(host, fixture.INSTANCE, claims, integrated=False).sha256
+                routes[0].update(expires=3500, cache=[{"used": 19, "lastuse": 15, "refcnt": 2}])
+                addresses[0].update(operstate="DOWN", flags=["UP"], stats64={"rx": {"packets": 19, "bytes": 1200}})
+                for address in addresses[0]["addr_info"]:
+                    address.update(valid_life_time=3500, preferred_life_time=1700, tentative=False)
+                self.assertEqual(before, firewall.observe(host, fixture.INSTANCE, claims, integrated=False).sha256)
+                baseline = copy.deepcopy(routes[0])
+                for field, value in (("gateway", "203.0.113.2"), ("dev", "eth1"), ("metric", 200), ("table", 100)):
+                    routes[0][field] = value
+                    self.assertNotEqual(before, firewall.observe(host, fixture.INSTANCE, claims, integrated=False).sha256)
+                    routes[0] = copy.deepcopy(baseline)
+                addresses[0]["addr_info"][0]["prefixlen"] -= 1
+                self.assertNotEqual(before, firewall.observe(host, fixture.INSTANCE, claims, integrated=False).sha256)
 
     def test_generated_logging_inserts_match_both_saved_family_orders(self):
         for variant in VARIANTS:

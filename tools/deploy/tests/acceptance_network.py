@@ -282,8 +282,11 @@ with stream:
     print("READY", flush=True)
     with stream.makefile("rb") as reader:
         for line in sys.stdin.buffer:
-            stream.sendall(line)
-            result = reader.readline(4096)
+            try:
+                stream.sendall(line)
+                result = reader.readline(4096)
+            except (BrokenPipeError, ConnectionResetError, ssl.SSLEOFError):
+                sys.exit(3)
             if not result:
                 sys.exit(3)
             sys.stdout.buffer.write(result)
@@ -425,6 +428,9 @@ class NetworkPreviewAcceptance(unittest.TestCase):
                           authorize=lambda: self.authority(resolution))
         self.assertTrue({claim.socket for claim in self.claims} <= {s.socket for s in listeners.observe_sockets(self.host)})
         self.reachable(False)  # nginx is now listening; UFW must still deny new TCP.
+        # These peer SYNs increment real counters and populate route caches.
+        self.assertEqual(closed.sha256, firewall.observe(self.host, self.instance_id, self.claims).sha256,
+                         "Traffic changed the closed policy digest")
         opened = firewall.open_runtime(self.host, self.instance_id, self.claims, self.profile.listeners,
                                        closed_sha256=closed.sha256, authorize=lambda: self.authority(resolution))
         self.selected = resolution
@@ -502,8 +508,12 @@ class NetworkPreviewAcceptance(unittest.TestCase):
             listeners.complete_closure(evidence, self.candidate, backend_exit_sha256=None,
                                        reserved=self.candidate.endpoints, old_references=references)
         old.close()
+        # The helper is waiting on stdin, not the network. Make it read the
+        # terminated session instead of mistaking its idle stdin wait for life.
+        process.stdin.write("after-backend-exit\n")
+        process.stdin.flush()
         process.wait(timeout=5)
-        self.assertNotEqual(process.returncode, 0)
+        self.assertEqual(process.returncode, 3)
         # Network-only fixture restart; no fabricated application-admission record.
         self.backend(self.candidate)
         self.expose(self.candidate)
@@ -627,6 +637,11 @@ class NetworkPreviewAcceptance(unittest.TestCase):
             self.assertTrue(set(candidate.resolution.endpoints) <= set(evidence.endpoints))
             self.assertIsNotNone(evidence.backend_exit_sha256)
             self.assertIsNotNone(evidence.old_reference_isolation_sha256)
+            workers = edge._worker_identities(host)
+            repeated = seam.close(host, entry, transition, candidate.resolution, candidate.units)
+            self.assertEqual(workers, edge._worker_identities(host))
+            for field in ("stage", "units", "endpoints", "ingress_sha256", "backend_exit_sha256", "old_reference_isolation_sha256"):
+                self.assertEqual(getattr(evidence, field), getattr(repeated, field))
             self.reachable(False)
             host.owned_write(PREVIEW / "adapter-closure.json", json.dumps(c.record_document(evidence), sort_keys=True) + "\n")
 
