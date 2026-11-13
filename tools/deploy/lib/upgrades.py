@@ -45,10 +45,20 @@ BASE_REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.
                             "server/templates/nginx-proxy.conf", "server/templates/nginx-upgrade.conf"})
 
 
-# Generations 9 and 10 share the base inventory. New files become mandatory
-# only for bundles whose own digest-bound protocol declares their generation.
+# Cumulative requirements are selected from the inspected bundle's protocol,
+# never from the running tools' generation or the host's selected generation.
 GENERATION_11_FILES = frozenset({"lib/uploads.py", "server/templates/nginx-upload.conf"})
-REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES
+GENERATION_12_FILES = frozenset({"lib/artifacts.py"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES
+
+
+def required_files(generation: int) -> frozenset[str]:
+    required = BASE_REQUIRED_FILES
+    if generation >= 11:
+        required |= GENERATION_11_FILES
+    if generation >= 12:
+        required |= GENERATION_12_FILES
+    return required
 
 
 def _hash(value: object) -> str:
@@ -86,8 +96,8 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
                 "tools_too_large", "The tool bundle exceeds its size limit.")
         inventory.append({"path": path.relative_to(source).as_posix(), "size": size, "mode": 0o644,
                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    required = REQUIRED_FILES if protocol(source)["generation"] >= 11 else BASE_REQUIRED_FILES
-    require(required <= {item["path"] for item in inventory}, "tools_incomplete", "The tool bundle is incomplete.")
+    require(required_files(protocol(source)["generation"]) <= {item["path"] for item in inventory},
+            "tools_incomplete", "The tool bundle is incomplete.")
     return source, files, inventory
 
 

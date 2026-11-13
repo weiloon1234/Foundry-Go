@@ -439,6 +439,32 @@ class UpgradeTests(unittest.TestCase):
         expected.update({'lib/admission.py', 'lib/services.py', 'server/runtime_v1.py'})
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
+    def test_old_bundle_generations_do_not_require_artifacts(self):
+        (self.source / "lib/artifacts.py").unlink()
+        for generation in (9, 10, 11):
+            with self.subTest(generation=generation):
+                (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": generation}))
+                upgrades.tool_bundle(self.source)
+
+    def test_inventory_requirements_are_cumulative_by_inspected_bundle_generation(self):
+        additions = upgrades.GENERATION_11_FILES | upgrades.GENERATION_12_FILES
+        for generation in (9, 10, 11, 12):
+            with self.subTest(generation=generation):
+                for name in additions:
+                    (self.source / name).unlink(missing_ok=True)
+                required = upgrades.required_files(generation)
+                for name in required - upgrades.BASE_REQUIRED_FILES:
+                    (self.source / name).write_text("# generation-specific file\n")
+                (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": generation}))
+                _, files, _ = upgrades.tool_bundle(self.source)
+                self.assertEqual({p.relative_to(self.source).as_posix() for p in files}, required)
+                for name in required - upgrades.BASE_REQUIRED_FILES:
+                    (self.source / name).unlink()
+                    with self.assertRaises(DeployError) as error:
+                        upgrades.tool_bundle(self.source)
+                    self.assertEqual(error.exception.code, "tools_incomplete")
+                    (self.source / name).write_text("# restored generation-specific file\n")
+
     def leftover(self, digest="b" * 64):
         path = self.host.paths.tools / "tools" / digest
         path.mkdir()
