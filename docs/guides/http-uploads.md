@@ -326,11 +326,28 @@ or reduces its reservation. Each request reserves one slot and the full
 `EndpointLimits.Multipart.Bytes` allowance, including chunked requests.
 `BodyLimit` must equal that encoded allowance, or endpoint registration fails.
 
-`NewUploadPool` performs startup filesystem I/O. Call it before constructing
-routes, retain the pool for the server's lifetime, and close it after HTTP drain.
+`NewUploadPool` validates the absolute path, capacities, and existing private
+directory without creating files or claiming ownership. Construct pools and
+routes in every command, including `route:list`, `config:check`, and `queue:work`.
+These commands leave the directory unchanged. Reservations are unavailable until
+the framework HTTP server starts.
+
+Before accepting connections, the server claims every distinct pool referenced
+by its router's `MultipartAdmission` routes. `ApplyMiddleware` preserves this
+inventory. Each framework server requires exclusive ownership, including within
+one process. After HTTP drain or startup failure, it closes only the pools it
+acquired.
+Existing application `pool.Close()` calls in `OnShutdown` remain valid because
+close is idempotent. No application wiring change is required.
+
 `MultipartAdmission` applies `MultipartDirectory` with the pool's directory.
 Changing that directory afterward fails validation. Existing descriptors without
-admission retain their behavior.
+admission retain their behavior. Direct `Router.ServeHTTP` or standard `net/http`
+hosting does not claim pools automatically: call `pool.Claim()` for each pool
+before that server accepts requests, and `pool.Close()` after it drains. Claim is
+idempotent for the same pool. A framework server and a manual `Claim` must not
+share a pool; framework startup refuses an already claimed pool with
+`fault.Conflict`. Use one lifecycle owner for each pool.
 
 The [independent upload consumer](../../tests/fixtures/consumer/httpuploads/large.go)
 uses `http.UploadSettings`, available as `application.Settings.HTTP.Uploads`.
@@ -362,10 +379,11 @@ including reads awakened before the reset finishes.
 The server retains that evidence before HTTP framing can replace the read error,
 including while waiting for the final blank line of chunked trailers. Trailer error
 text alone never grants the timeout-response exception.
-Under a standard `net/http.Server`, including direct TLS hosting, ordinary body
-reads retain the same timeout response through native socket-error detection.
-This fallback is used only without connection-level evidence; it cannot recover
-a socket cause that HTTP framing has discarded.
+For multipart routes without `MultipartAdmission`, a standard `net/http.Server`,
+including direct TLS hosting, retains the timeout response for ordinary body reads
+through native socket-error detection. This fallback is used only without
+connection-level evidence; it cannot recover a socket cause that HTTP framing
+has discarded.
 
 Use the framework's Router and `ApplyMiddleware` chain for this guarantee.
 An external native wrapper that reads a body before entering that chain cannot
@@ -389,10 +407,24 @@ byte budget, bind a separate `UploadPool` on their independent volume. Reserve
 small attachment and adapter capacity in those owners too. HTTP isolation alone
 does not reserve downstream publication capacity.
 
-A pool directory must be empty on startup. Its ownership marker prevents another
-pool from treating active or retained files as free capacity. After a crash,
-verify that every old borrower is dead before reconciling that exact directory.
-Never remove a marker merely because a timeout elapsed. A second process or
+Serving takes a non-blocking exclusive kernel lock on `.foundry-upload-owner`
+and records `foundry-upload-owner 2` followed by a newline. A live holder of this
+lock causes startup to fail with `fault.Conflict`. After a crash, the kernel
+releases the lock. The next server reconciles retained `foundry-upload-*` capture
+directories only when the marker has this current format and the lock is free,
+or when no marker exists. Unknown marker formats, unknown directory entries, or
+a capture that cannot be deleted refuse startup without admitting work.
+
+An empty v0.30.0 ownership marker has no kernel lock and cannot prove whether its
+owner is still alive. Claim refuses it with `fault.Conflict` and leaves the marker
+and all captures unchanged. For this one-time upgrade step, stop every v0.30.0
+server using the directory, then remove that directory's `.foundry-upload-owner`
+marker. The next startup writes the current format and reconciles the captures.
+Do not remove the marker before those servers have stopped. Current-format stale
+markers need no manual reconciliation.
+
+After requests drain and retained cleanup succeeds, close removes the marker and
+releases the lock. Never remove the marker of a live server. A second process or
 rolling generation needs its own explicitly budgeted directory and capacity.
 Do not share one request directory between live HTTP processes.
 

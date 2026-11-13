@@ -173,6 +173,7 @@ func routeBodyCeiling(handler stdhttp.Handler) int64 {
 
 // routedHandler retains a router's body ceiling across ApplyMiddleware.
 type routedHandler struct {
+	pools   []*UploadPool
 	uploads uploadSelector
 	stdhttp.Handler
 	ceiling          int64

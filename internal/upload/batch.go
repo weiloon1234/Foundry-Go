@@ -68,7 +68,7 @@ func (b *Batch) create(ctx context.Context) (*os.File, string, error) {
 		if b.dir != "" {
 			return nil, "", safeerror.NewFault(fault.Conflict, "upload initialization cleanup is pending")
 		}
-		dir, err := os.MkdirTemp(b.config.TempDirectory, "foundry-upload-")
+		dir, err := os.MkdirTemp(b.config.TempDirectory, captureDirectoryPrefix)
 		if err != nil {
 			return nil, "", err
 		}

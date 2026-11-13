@@ -25,6 +25,11 @@ import (
 func uploadDeadlineServer(t *testing.T, handler stdhttp.Handler, kernel time.Duration) (string, *stdhttp.Client) {
 	t.Helper()
 	if kernel == 0 {
+		for _, pool := range uploadPools(handler) {
+			if err := pool.pool.Claim(); err != nil {
+				t.Fatal(err)
+			}
+		}
 		server := httptest.NewUnstartedServer(handler)
 		server.Config.ReadTimeout, server.Config.WriteTimeout = 5*time.Second, 5*time.Second
 		server.Start()

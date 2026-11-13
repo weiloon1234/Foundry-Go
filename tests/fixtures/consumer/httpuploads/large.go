@@ -15,8 +15,9 @@ type VideoService interface {
 }
 
 // doc-example:begin admitted-upload
-// LargeRouter performs startup I/O to claim the configured request directory.
-// Close the returned pool after the server drains, including on startup failure.
+// LargeRouter validates the request directory without claiming it.
+// The framework server owns the claim and close. An application shutdown hook
+// may also close the returned pool after HTTP drain.
 func LargeRouter(settings foundryhttp.UploadSettings, service VideoService) (*foundryhttp.Router, *foundryhttp.UploadPool, error) {
 	if err := settings.Validate(); err != nil {
 		return nil, nil, err

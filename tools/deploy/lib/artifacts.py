@@ -695,6 +695,11 @@ def publish(host, instance: str, prepared: PreparedArtifact, *, history: tuple[A
     transfer = None
     try:
         if target.exists():
+            info = target.lstat()
+            # Finish a publication interrupted between its rename and final seal.
+            if info.st_uid == uid and stat.S_IMODE(info.st_mode) == 0o755:
+                target.chmod(0o555)
+                _sync(target)
             verify_tree(target, payload.members, uid=uid)
         else:
             verify_tree(staging, payload.members, uid=uid)
@@ -703,14 +708,15 @@ def publish(host, instance: str, prepared: PreparedArtifact, *, history: tuple[A
             host.check_control_directory(staging.parent)
             transfer = Path(tempfile.mkdtemp(prefix=".artifact-", dir=target.parent))
             transfer.rmdir()
-            # Moving a directory between parents updates '..' on macOS and
-            # requires owner write permission. Restore its immutable mode in
-            # private staging before the final same-parent publication rename.
+            # Some macOS releases refuse renaming a directory without owner write
+            # permission, even within one parent. Rename the root-owned tree while
+            # writable and seal it afterwards; its contents stay immutable.
             staging.chmod(0o755)
             os.rename(staging, transfer)
-            transfer.chmod(0o555)
             _sync(transfer)
             os.rename(transfer, target)
+            target.chmod(0o555)
+            _sync(target)
             _sync(target.parent)
         return target
     finally:

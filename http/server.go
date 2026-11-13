@@ -98,13 +98,14 @@ func (s *Server) Ready(ctx context.Context) (string, error) {
 // server that has never run is not done. A shutdown deadline cannot kill Go code.
 func (s *Server) Done() <-chan struct{} { return s.done }
 
-// Run binds and serves once until cancellation or a listener failure. Normal
+// Run claims the router's upload pools, then binds and serves once until
+// cancellation or a listener failure. Normal
 // cancellation stops admission, then allows active requests the configured
 // shutdown grace. Expiry cancels their contexts and closes ordinary connections,
 // but Run still waits for actual handler exit before releasing ownership.
 func (s *Server) Run(ctx context.Context) error { return s.run(ctx, nil, false) }
 
-func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) error {
+func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) (result error) {
 	if s == nil || s.ready == nil || ctx == nil {
 		return safeerror.NewFault(fault.Invalid, "HTTP startup requires a prepared server and context")
 	}
@@ -126,6 +127,13 @@ func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) err
 	if err := ctx.Err(); err != nil {
 		s.completeStart("", err)
 		return err
+	}
+	for _, pool := range uploadPools(s.handler) {
+		if err := pool.pool.ClaimExclusive(); err != nil {
+			s.completeStart("", err)
+			return err
+		}
+		defer func() { result = safeerror.Join("HTTP upload pool shutdown failed", result, pool.Close()) }()
 	}
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.config.Address)
 	if err != nil {

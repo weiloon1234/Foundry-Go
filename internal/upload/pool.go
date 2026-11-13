@@ -2,18 +2,20 @@ package upload
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/admission"
+	"github.com/weiloon1234/Foundry-Go/internal/filelock"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
 // PoolConfig reserves capture slots and bytes independently of downstream work.
-// Directory must be an empty, private, writable directory on a quota-controlled
-// volume. A retained ownership marker refuses reuse after an unclean shutdown.
+// Directory must be a private, writable directory on a quota-controlled volume.
+// Claim reconciles captures left by a dead owner before enabling reservations.
 type PoolConfig struct {
 	Directory string
 	MaxActive int
@@ -37,33 +39,133 @@ type Pool struct {
 	bytes    int64
 	retained map[*Reservation]struct{}
 	closed   bool
-	marker   string
+	root     *os.Root
+	owner    *os.File
 }
 
 func NewPool(config PoolConfig) (*Pool, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	info, err := os.Lstat(config.Directory)
+	if _, err := poolDirectory(config.Directory); err != nil {
+		return nil, err
+	}
+	return &Pool{config: config, slots: admission.New(config.MaxActive), retained: make(map[*Reservation]struct{})}, nil
+}
+
+const (
+	ownerMarker = ".foundry-upload-owner"
+	ownerFormat = "foundry-upload-owner 2\n"
+)
+
+func poolDirectory(directory string) (os.FileInfo, error) {
+	info, err := os.Lstat(directory)
 	if err != nil || !info.IsDir() || info.Mode()&0022 != 0 {
 		return nil, safeerror.NewFault(fault.Invalid, "upload pool requires a private directory without symlink ownership")
 	}
-	entries, err := os.ReadDir(config.Directory)
+	return info, nil
+}
+
+// Claim enables reservations for a manually managed lifetime. Repeated calls
+// on the same pool are idempotent; they do not transfer ownership.
+func (p *Pool) Claim() error { return p.claim(true) }
+
+// ClaimExclusive acquires a new server lifetime or refuses an existing owner,
+// including another server or manual Claim on this same pool object.
+func (p *Pool) ClaimExclusive() error { return p.claim(false) }
+
+func (p *Pool) claim(idempotent bool) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return safeerror.NewFault(fault.Closed, "upload pool is closed")
+	}
+	if p.owner != nil {
+		if idempotent {
+			return nil
+		}
+		return safeerror.NewFault(fault.Conflict, "upload pool already has a serving owner; framework servers and manual Claim must not share a pool")
+	}
+	info, err := poolDirectory(p.config.Directory)
 	if err != nil {
-		return nil, safeerror.WrapFailure(fault.Invalid, "upload pool directory is unavailable", err)
+		return err
 	}
-	if len(entries) != 0 {
-		return nil, safeerror.NewFault(fault.Invalid, "upload pool directory contains retained or active ownership; reconcile it before reuse")
-	}
-	marker := filepath.Join(config.Directory, ".foundry-upload-owner")
-	file, err := os.OpenFile(marker, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	root, err := os.OpenRoot(p.config.Directory)
 	if err != nil {
-		return nil, safeerror.WrapFailure(fault.Invalid, "upload pool directory is not exclusively writable", err)
+		return safeerror.WrapFailure(fault.Invalid, "upload pool directory is unavailable", err)
 	}
-	if err := file.Close(); err != nil {
-		return nil, safeerror.WrapFailure(fault.Internal, "upload pool ownership close failed", err)
+	claimed := false
+	defer func() {
+		if !claimed {
+			_ = root.Close()
+		}
+	}()
+	opened, err := root.Stat(".")
+	if err != nil || !os.SameFile(info, opened) {
+		return safeerror.NewFault(fault.Conflict, "upload pool directory changed during claim")
 	}
-	return &Pool{config: config, slots: admission.New(config.MaxActive), retained: make(map[*Reservation]struct{}), marker: marker}, nil
+	if marker, err := root.Lstat(ownerMarker); err == nil {
+		if !marker.Mode().IsRegular() {
+			return safeerror.NewFault(fault.Invalid, "invalid upload pool ownership marker")
+		}
+	} else if !os.IsNotExist(err) {
+		return safeerror.WrapFailure(fault.Invalid, "upload pool ownership marker is unavailable", err)
+	}
+	owner, err := root.OpenFile(ownerMarker, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	created := err == nil
+	if os.IsExist(err) {
+		owner, err = root.OpenFile(ownerMarker, os.O_RDWR, 0600)
+	}
+	if err != nil {
+		return safeerror.WrapFailure(fault.Invalid, "upload pool ownership marker is unavailable", err)
+	}
+	defer func() {
+		if !claimed {
+			_ = owner.Close()
+		}
+	}()
+	identity, err := owner.Stat()
+	if err != nil || !identity.Mode().IsRegular() {
+		return safeerror.NewFault(fault.Invalid, "invalid upload pool ownership marker")
+	}
+	locked, err := filelock.Try(owner)
+	if err != nil {
+		return safeerror.WrapFailure(fault.Invalid, "upload pool ownership lock failed", err)
+	}
+	if !locked {
+		return safeerror.NewFault(fault.Conflict, "upload pool directory has a live owner")
+	}
+	// Close unlinks while locked. An opener of the old inode must never admit
+	// work after a different owner has created and locked the replacement.
+	current, err := root.Lstat(ownerMarker)
+	if err != nil || !current.Mode().IsRegular() || !os.SameFile(identity, current) {
+		return safeerror.NewFault(fault.Conflict, "upload pool ownership marker changed during claim; retry startup")
+	}
+	if created {
+		if _, err := owner.WriteString(ownerFormat); err != nil {
+			return safeerror.WrapFailure(fault.Internal, "upload pool ownership marker write failed", err)
+		}
+		if err := owner.Sync(); err != nil {
+			return safeerror.WrapFailure(fault.Internal, "upload pool ownership marker sync failed", err)
+		}
+	} else {
+		contents, err := io.ReadAll(io.LimitReader(owner, int64(len(ownerFormat)+1)))
+		if err != nil {
+			return safeerror.WrapFailure(fault.Invalid, "upload pool ownership marker could not be read", err)
+		}
+		if len(contents) == 0 {
+			return safeerror.NewFault(fault.Conflict, "a v0.30.0 ownership marker was found; stop every v0.30.0 server using this directory, then remove the marker")
+		}
+		if string(contents) != ownerFormat {
+			return safeerror.NewFault(fault.Invalid, "unrecognized upload pool ownership marker format; serving refused without reconciling captures")
+		}
+	}
+	if err := reconcileCaptures(root); err != nil {
+		return err
+	}
+	p.root, p.owner = root, owner
+	claimed = true
+	return nil
 }
 
 // Reservation is held until its owner exits, even after cancellation. Attach
@@ -86,8 +188,8 @@ func (p *Pool) Reserve(ctx context.Context, bytes int64) (*Reservation, error) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.closed {
-		return nil, safeerror.NewFault(fault.Closed, "upload pool is closed")
+	if p.closed || p.owner == nil {
+		return nil, safeerror.NewFault(fault.Closed, "upload pool is not serving")
 	}
 	if bytes <= 0 || bytes > p.config.MaxBytes {
 		return nil, safeerror.NewFault(fault.Invalid, "upload reservation exceeds pool capacity")
@@ -176,12 +278,21 @@ func (p *Pool) Close() error {
 	if p.slots.Active() != 0 || len(p.retained) != 0 {
 		return safeerror.NewFault(fault.Conflict, "upload pool still owns active or retained captures")
 	}
-	if p.marker == "" {
+	if p.owner == nil {
 		return nil
 	}
-	if err := os.Remove(p.marker); err != nil && !os.IsNotExist(err) {
+	identity, err := p.owner.Stat()
+	if err != nil {
+		return safeerror.WrapFailure(fault.Internal, "upload pool ownership inspection failed", err)
+	}
+	current, err := p.root.Lstat(ownerMarker)
+	if err != nil || !os.SameFile(identity, current) {
+		return safeerror.NewFault(fault.Conflict, "upload pool ownership marker changed before close")
+	}
+	if err := p.root.Remove(ownerMarker); err != nil && !os.IsNotExist(err) {
 		return safeerror.WrapFailure(fault.Internal, "upload pool ownership cleanup failed", err)
 	}
-	p.marker = ""
-	return nil
+	err = safeerror.Join("upload pool ownership close failed", p.owner.Close(), p.root.Close())
+	p.owner, p.root = nil, nil
+	return err
 }

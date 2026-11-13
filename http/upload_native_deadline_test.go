@@ -23,7 +23,7 @@ func TestNativeUploadBodyTimeoutThroughCompressionAndETags(t *testing.T) {
 			name = "tls"
 		}
 		t.Run(name, func(t *testing.T) {
-			pool := uploadTestPool(t, 1, DefaultEndpointLimits().Multipart.Bytes)
+			pool := claimedUploadTestPool(t, 1, DefaultEndpointLimits().Multipart.Bytes)
 			endpoint := admittedEndpoint(t, pool)
 			endpoint.route = ConfigureRoute(endpoint.route, Timeout(300*time.Millisecond))
 			var publications atomic.Int32

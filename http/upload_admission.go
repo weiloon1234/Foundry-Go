@@ -12,7 +12,7 @@ import (
 )
 
 // UploadPoolConfig bounds one independently provisioned multipart capture pool.
-// Directory must be empty, private and writable. Use distinct quota-controlled
+// Directory must be private and writable. Use distinct quota-controlled
 // volumes for large and small work; limits apply to this process only.
 type UploadPoolConfig struct {
 	Directory string
@@ -21,12 +21,13 @@ type UploadPoolConfig struct {
 }
 
 // UploadPool reserves slots and complete encoded-body budgets before middleware
-// or capture. It must not be copied. Its owner closes it after HTTP drain.
+// or capture. It must not be copied. The framework server claims it before
+// serving and closes it after HTTP drain.
 type UploadPool struct{ pool *upload.Pool }
 
-// NewUploadPool validates exclusive writable storage and claims it. Unlike route
-// assembly this performs filesystem I/O. A crash marker or leftover capture
-// refuses startup until an operator reconciles the dead owner's exact directory.
+// NewUploadPool validates configuration and inspects the private directory without
+// writing or claiming it. The framework server claims it before serving and
+// reconciles captures left by a dead owner under an exclusive filesystem lock.
 func NewUploadPool(config UploadPoolConfig) (*UploadPool, error) {
 	pool, err := upload.NewPool(upload.PoolConfig{Directory: config.Directory, MaxActive: config.MaxActive, MaxBytes: config.MaxBytes})
 	if err != nil {
@@ -40,6 +41,15 @@ func (p *UploadPool) Usage() (active int, bytes int64) { return p.pool.Usage() }
 
 // RetryCleanup retries only known owned files; failed cleanup stays charged.
 func (p *UploadPool) RetryCleanup() error { return p.pool.RetryCleanup() }
+
+// Claim takes this process's exclusive ownership of the pool directory and
+// enables reservations; ownership ends at Close or process exit. The framework
+// Server claims its router's pools before accepting connections, so call Claim
+// only when hosting the Router on another server, before it accepts requests.
+// Claim is idempotent for the same pool. A framework server and a manual Claim
+// must not share a pool. A live kernel lock or a legacy unversioned marker
+// refuses the claim; legacy markers require the documented one-time migration.
+func (p *UploadPool) Claim() error { return p.pool.Claim() }
 
 // Close seals admission and releases directory ownership only after requests
 // drain and retained cleanup succeeds. It never cancels active work.
@@ -70,6 +80,16 @@ type requestUpload struct {
 	timeoutResponse    atomic.Bool
 }
 type uploadSelector func(*stdhttp.Request) uploadRoute
+
+func uploadPools(handler stdhttp.Handler) []*UploadPool {
+	if source, ok := handler.(interface{ uploadPools() []*UploadPool }); ok {
+		return source.uploadPools()
+	}
+	return nil
+}
+
+func (r *Router) uploadPools() []*UploadPool       { return r.pools }
+func (h routedHandler) uploadPools() []*UploadPool { return h.pools }
 
 func selectUpload(handler stdhttp.Handler) uploadSelector {
 	if source, ok := handler.(interface {
