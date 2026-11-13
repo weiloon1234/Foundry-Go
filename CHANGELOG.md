@@ -1,24 +1,5 @@
 # Changelog
 
-## v0.31.1 — 2026-11-14
-
-- Fixed: constructing an HTTP upload pool no longer claims its directory or leaves
-  an ownership marker after inspection commands such as `route:list` and
-  `config:check`. The HTTP server claims each referenced pool before serving with
-  an exclusive kernel lock and a versioned ownership marker. It reconciles
-  captures only with a free lock and a current-format marker, or no marker, and
-  releases ownership after drain. A live lock holder or another server using the
-  same pool object refuses startup; servers close only pools they acquired.
-  Framework-hosted applications need no wiring changes, and existing
-  `pool.Close()` shutdown hooks remain valid. Public `pool.Claim()` stays
-  idempotent for native hosting; a manual claim and a framework server must not
-  share a pool.
-- Upgrade: empty v0.30.0 ownership markers refuse startup without changing the
-  marker or captures because those owners held no kernel lock. Stop every
-  v0.30.0 server using the directory, then remove its `.foundry-upload-owner`
-  marker once. The next startup writes the current format and reconciles the
-  captures. Current-format stale markers recover automatically.
-
 ## v0.31.0 — 2026-11-14
 
 - Added: generation-12 host capabilities preview with topology schema 2 and
@@ -79,6 +60,26 @@
   explicit traversal modes and ownership under restrictive umasks. The feature
   acceptance scenario uses the package-owned `/usr/bin/jq` executable, avoiding
   Ubuntu 26.04's changed ownership of `sha256sum`.
+- Fixed (v0.30.0 regression): constructing an HTTP upload pool no longer claims its directory or leaves
+  an ownership marker after inspection commands such as `route:list` and
+  `config:check`. The HTTP server claims each referenced pool before serving with
+  an exclusive kernel lock and a versioned ownership marker. It reconciles
+  captures only with a free lock and a current-format marker, or no marker, and
+  releases ownership after drain. A live lock holder or another server using the
+  same pool object refuses startup; servers close only pools they acquired.
+  Framework-hosted applications need no wiring changes, and existing
+  `pool.Close()` shutdown hooks remain valid. Public `pool.Claim()` stays
+  idempotent for native hosting; a manual claim and a framework server must not
+  share a pool.
+- Upgrade: empty v0.30.0 ownership markers refuse startup without changing the
+  marker or captures because those owners held no kernel lock. Stop every
+  v0.30.0 server using the directory, then remove its `.foundry-upload-owner`
+  marker once. The next startup writes the current format and reconciles the
+  captures. Current-format stale markers recover automatically.
+- Fixed: artifact publication renames an unpacked tree while it is still
+  owner-writable and seals it read-only afterwards. Some macOS releases refused
+  renaming a read-only directory. An interrupted publication completes its seal on
+  the next attempt; the tree contents stay immutable and are reverified.
 
 ## v0.30.0 — 2026-11-14
 
