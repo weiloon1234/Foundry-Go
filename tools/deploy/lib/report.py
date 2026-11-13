@@ -130,11 +130,11 @@ def loopback(address):
     return parsed.is_loopback
 
 
-def network(host, problems, deadline):
+def network(host, problems, deadline, *, claims=()):
     response = probe(host, ["ss", "-H", "-ltn"], deadline, problems, "network_unavailable")
     listeners = None
     if response is not None:
-        ports = set()
+        ports, unexpected = set(), False
         for line in response.stdout.splitlines():
             columns = line.split()
             if len(columns) < 4:
@@ -146,8 +146,11 @@ def network(host, problems, deadline):
             if loopback(address):
                 continue
             ports.add(port)
+            if port not in PUBLIC_PORTS and not any(c.socket.transport == "tcp" and c.socket.address == address
+                                                    and c.socket.port == port for c in claims):
+                unexpected = True
         listeners = sorted(ports)
-        if any(port not in PUBLIC_PORTS for port in listeners):
+        if unexpected:
             problem(problems, "unexpected_public_listener")
     firewall = None
     if os.geteuid() == 0:
@@ -367,7 +370,7 @@ def backup_freshness(entry, problems, instance_id):
             "restore_drill_outcome": drill_outcome}
 
 
-def instance_report(host, entry, deadline, problems):
+def instance_report(host, entry, deadline, problems, *, host_claims=()):
     name = entry.get("name")
     instance_id = identifier(entry.get("profile", {}).get("instance_id"))
     if not isinstance(name, str) or len(name) > 31 or not SLUG_PATTERN.fullmatch(name) or not instance_id:
@@ -418,6 +421,14 @@ def instance_report(host, entry, deadline, problems):
             if cert is not None:
                 cert["renewal_deferred"] = {"checked_at": string(deferred.get("checked_at")),
                                             "detail": string(deferred.get("detail"), 1024)}
+        import certificates
+        effective = checked(problems, "certificate_effective_renewal_unverified", instance_id,
+                            certificates.network_renewal_status, host, entry)
+        if effective is not None:
+            if cert is not None:
+                cert["effective_renewal"] = effective
+            if effective["state"] != "verified":
+                problem(problems, "certificate_effective_renewal_unverified", instance_id)
     if recorded_status in {"stopped", "degraded"}:
         enabled = checked(problems, "service_enablement_unavailable", instance_id,
                           enabled_roles, host, entry, remaining(deadline))
@@ -508,14 +519,35 @@ def instance_report(host, entry, deadline, problems):
         from topology import parse_profile, parse_topology
         result["network"] = checked(problems, "declared_network_unavailable", instance_id,
                                     lambda: declared_network(host, parse_profile(profile, parse_topology(entry["topology"], registered=True)),
-                                                             entry=entry))
+                                                             entry=entry, host_claims=host_claims))
         if result["network"]:
             for finding in result["network"]["findings"]:
                 problem(problems, finding["code"], instance_id)
+            if result["network"]["unexpected_exposure"]:
+                problem(problems, "unexpected_public_listener")
     return result
 
 
-def declared_network(host, profile, *, entry=None, resolution=None, closure=None, dns_observations=()):
+def claim_inventory(registry):
+    """Validate the whole host's declarations before using any as exposure claims."""
+    import listeners
+    from contracts import require
+    from topology import parse_profile, parse_topology
+    require(isinstance(registry, dict) and isinstance(registry.get("instances"), dict),
+            "invalid_registry", "Host listener inventory requires a complete registry.")
+    claims = []
+    for instance_id, entry in registry["instances"].items():
+        if entry["profile"].get("schema") != 3:
+            continue
+        profile = parse_profile(entry["profile"], parse_topology(entry["topology"], registered=True))
+        require(profile.instance_id == instance_id, "invalid_registry", "Listener claims belong to another instance.")
+        selected = listeners.public_claims(profile)
+        listeners.require_available(selected, claims, ())
+        claims.extend(selected)
+    return tuple(claims)
+
+
+def declared_network(host, profile, *, entry=None, resolution=None, closure=None, dns_observations=(), host_claims=None):
     """Lane A may supply its selected resolution/closure; never read private envs.
 
     Without that selection a declared port is not silently accepted as owned.
@@ -528,6 +560,14 @@ def declared_network(host, profile, *, entry=None, resolution=None, closure=None
     claims = listeners.public_claims(profile)
     observed = listeners.observe_sockets(host)
     findings, owners = [], {}
+    if host_claims is None:
+        try:
+            host_claims = claim_inventory(host.read_registry())
+        except (DeployError, OSError, ValueError, KeyError, TypeError):
+            host_claims = ()
+            findings.append({"code": "host_listener_inventory_unverified"})
+    inventory = tuple(dict.fromkeys((*host_claims, *claims)))
+    unexpected = []
     try:
         owners["nginx"] = listeners.process_members(host, "nginx.service")
     except (DeployError, OSError, ValueError):
@@ -546,10 +586,13 @@ def declared_network(host, profile, *, entry=None, resolution=None, closure=None
             findings.append({"code": "nginx_projection_unverified"})
     else:
         findings.append({"code": "nginx_projection_unverified"})
-    for finding in listeners.ownership_findings(claims, observed, owners, edge_verified=edge_verified):
-        if finding["code"] == "unexpected_public_listener" and finding["transport"] == "tcp" and finding["port"] in PUBLIC_PORTS:
-            continue
-        findings.append(finding)
+    for finding in listeners.ownership_findings(inventory, observed, owners, edge_verified=edge_verified):
+        # Unclaimed exposure belongs to the host scanner. Other instances' socket
+        # ownership is assessed with their own selected projection, not this one.
+        if finding.get("instance_id") == profile.instance_id:
+            findings.append(finding)
+        elif finding["code"] == "unexpected_public_listener" and not (finding["transport"] == "tcp" and finding["port"] in PUBLIC_PORTS):
+            unexpected.append(finding)
     policy = "unverified"
     if claims:
         try:
@@ -584,6 +627,8 @@ def declared_network(host, profile, *, entry=None, resolution=None, closure=None
         tls = certificates.inspect(host, entry)
         if tls["state"] != "ready":
             findings.append({"code": "listener_tls_unverified"})
+            if tls.get("effective_renewal", {}).get("state") != "verified" and "effective_renewal" in tls:
+                findings.append({"code": "certificate_effective_renewal_unverified"})
         elif resolution is not None:
             try:
                 tls = {**tls, "effective": certificates.verify_network_consumers(host, entry)}
@@ -602,7 +647,8 @@ def declared_network(host, profile, *, entry=None, resolution=None, closure=None
     return {"listeners": [{"role": c.role, "listener": c.listener, "ordinal": c.ordinal,
                             "transport": c.socket.transport, "family": c.socket.family, "address": c.socket.address,
                             "port": c.socket.port, "expected_owner": c.owner} for c in claims],
-            "firewall": policy, "dns": dns, "tls": tls, "admission": admission, "findings": findings}
+            "firewall": policy, "dns": dns, "tls": tls, "admission": admission, "findings": findings,
+            "unexpected_exposure": unexpected}
 
 
 def collect_report(host):
@@ -634,7 +680,6 @@ def collect_inventory(host, result, deadline):
     result["host"]["hostname"] = string(checked(problems, "hostname_unavailable", None, socket.gethostname))
     resources(host, problems, result["host"]["resources"])
     result["host"]["failed_units"] = failed_units(host, problems, deadline)
-    result["host"]["network"] = network(host, problems, deadline)
     result["host"]["ssh"] = ssh(host, problems, deadline)
     try:
         registry = host.read_registry(missing=False)
@@ -644,7 +689,10 @@ def collect_inventory(host, result, deadline):
         raise
     except Exception:
         problem(problems, "registry_unavailable")
+        result["host"]["network"] = network(host, problems, deadline)
         return
+    claims = checked(problems, "host_listener_inventory_unverified", None, claim_inventory, registry) or ()
+    result["host"]["network"] = network(host, problems, deadline, claims=claims)
     result["host"].update({"host_id": registry["host_id"], "layout_version": registry["layout_version"], "registry_updated_at": string(registry.get("updated_at"))})
     for name in ("postgresql", "redis", "nginx"):
         unit = registry["shared"].get(name, {}).get("unit")
@@ -659,7 +707,7 @@ def collect_inventory(host, result, deadline):
         if not isinstance(entry, dict) or not identifier(entry.get("project_id")) or entry.get("host_id") != registry["host_id"]:
             problem(problems, "instance_identity_invalid")
             continue
-        item = instance_report(host, entry, deadline, problems)
+        item = instance_report(host, entry, deadline, problems, host_claims=claims)
         if item is None:
             continue
         project = projects.get(entry["project_id"])

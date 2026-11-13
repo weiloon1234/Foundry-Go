@@ -40,36 +40,15 @@ def runtime(identity=CURRENT, port=18000):
     return c.RuntimeResolution.parse(value)
 
 
-def rule_file(stem, chain=None):
-    names = [f"ufw-{stem}-input", f"ufw-{stem}-forward", f"ufw-{stem}-output"]
-    text = "*filter\n" + "".join(":" + name + " - [0:0]\n" for name in names)
-    if stem == "before":
-        text += "-A ufw-before-input -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT\n"
-        text += "-A ufw-before-input -i lo -j ACCEPT\n"
-    if stem == "user":
-        text += "-A ufw-user-input -p tcp -m tcp --dport 22 -j ACCEPT\n"
-    text += "COMMIT\n"
-    return firewall.persistent_projection(text, INSTANCE) if chain and stem == "before" else text
+from network_firewall_fixture import ROOT as UFW_FIXTURES, rule_file as standard_rules, live_rules as standard_live
 
 
-def live_rules(open_rules=()):
-    chain = firewall.chain_name(INSTANCE)
-    parts = [firewall.parse_rules(rule_file(stem, chain))[0] for stem in ("before", "user", "after")]
-    chains = {name: rules for part in parts for name, rules in part.items()}
-    chains[chain] = list(open_rules)
-    chains["INPUT"] = [("-j", "ufw-" + stem + "-input") for stem in ("before", "user", "after")]
-    chains["FORWARD"] = [("-j", "ufw-" + stem + "-forward") for stem in ("before", "user", "after")]
-    chains["OUTPUT"] = []
-    chains["ufw-skip-to-policy-input"] = [("-j", "DROP")]
-    chains["ufw-skip-to-policy-forward"] = [("-j", "DROP")]
-    text = "*filter\n"
-    for name in chains:
-        policy = "DROP" if name in ("INPUT", "FORWARD") else "ACCEPT" if name == "OUTPUT" else "-"
-        text += f":{name} {policy} [0:0]\n"
-    for name, rules in chains.items():
-        for rule in rules:
-            text += "-A " + name + " " + " ".join(rule) + "\n"
-    return text + "COMMIT\n"
+def rule_file(stem, chain=None, family=4):
+    return standard_rules(stem, INSTANCE if chain else None, family)
+
+
+def live_rules(open_rules=(), family=4):
+    return standard_live(INSTANCE, family, open_rules)
 
 
 class SocketTests(unittest.TestCase):
@@ -141,14 +120,17 @@ class NetworkHostTests(unittest.TestCase):
         self.profile = network_profile()
         self.claims = listeners.public_claims(self.profile)
         self.calls = []
-        self.live = {4: live_rules(), 6: live_rules()}
+        self.live = {4: live_rules(), 6: live_rules(family=6)}
         self.host.run = self.command
         self.host.owned_write(self.host.paths.p("/proc/sys/kernel/random/boot_id"), BOOT)
-        self.host.owned_write(self.host.paths.p("/etc/default/ufw"), 'IPV6=yes\nDEFAULT_INPUT_POLICY="DROP"\nDEFAULT_FORWARD_POLICY="DROP"\n')
+        self.host.owned_write(self.host.paths.p("/etc/default/ufw"), 'IPV6=yes\nDEFAULT_INPUT_POLICY="DROP"\nDEFAULT_FORWARD_POLICY="DROP"\nDEFAULT_OUTPUT_POLICY="ACCEPT"\nMANAGE_BUILTINS=no\n')
         self.host.owned_write(self.host.paths.p("/etc/ufw/ufw.conf"), "ENABLED=yes\n")
         for suffix in ("", "6"):
             for stem in ("before", "user", "after"):
-                self.host.owned_write(self.host.paths.p(f"/etc/ufw/{stem}{suffix}.rules"), rule_file(stem, True))
+                self.host.owned_write(self.host.paths.p(f"/etc/ufw/{stem}{suffix}.rules"), rule_file(stem, True, 6 if suffix else 4))
+
+        for name in ("ufw-init", "ufw-init-functions"):
+            self.host.owned_write(self.host.paths.p("/usr/lib/ufw/" + name), (UFW_FIXTURES / name).read_text())
 
     def command(self, args, **kwargs):
         self.calls.append((args, kwargs))
@@ -167,7 +149,7 @@ class NetworkHostTests(unittest.TestCase):
         elif args[0].endswith("-restore"):
             body = kwargs["input"]
             rules = [tuple(line.split()[2:]) for line in body.splitlines() if line.startswith("-A ")]
-            self.live[6 if args[0].startswith("ip6") else 4] = live_rules(rules)
+            self.live[6 if args[0].startswith("ip6") else 4] = live_rules(rules, 6 if args[0].startswith("ip6") else 4)
             output = ""
         else:
             raise AssertionError(args)
@@ -203,7 +185,7 @@ class NetworkHostTests(unittest.TestCase):
 
     def test_persistent_foreign_allow_and_missing_ipv6_fail_before_open(self):
         path = self.host.paths.p("/etc/ufw/user6.rules")
-        path.write_text(path.read_text().replace("COMMIT", "-A ufw-user-input -j ACCEPT\nCOMMIT"))
+        path.write_text(path.read_text().replace("COMMIT", "-A ufw6-user-input -j ACCEPT\nCOMMIT"))
         with self.assertRaises(c.DeployError):
             firewall.observe(self.host, INSTANCE, self.claims)
         path.unlink()
@@ -244,7 +226,7 @@ class NetworkHostTests(unittest.TestCase):
         bindings = (*self.profile.listeners, ("retained.ingress", binding))
         for family in (4, 6):
             _, rules = firewall.exposure_rules(INSTANCE, (*self.claims, *retained), bindings, family)
-            self.live[family] = live_rules(rules)
+            self.live[family] = live_rules(rules, family)
         closed = firewall.withdraw(self.host, INSTANCE, self.claims, retained_claims=retained, bindings=bindings)
         self.assertTrue(closed.closed)
         for family in (4, 6):
@@ -326,6 +308,8 @@ class NetworkCertificateTests(unittest.TestCase):
         self.entry["profile"]["instance_id"] = INSTANCE
         self.entry["certificate"]["zone_ref"] = "example.org"
         self.host.journal = Mock()
+        for name, content in certificates._units(self.entry).items():
+            self.host.owned_write(self.host.paths.p("/etc/systemd/system/" + name), content)
         self.calls = []
         def command(args, **kwargs):
             self.calls.append(args)
@@ -341,7 +325,8 @@ class NetworkCertificateTests(unittest.TestCase):
                 patch.object(certificates, "_synthetic", return_value=False), \
                 patch.object(certificates, "_credentials", return_value=credential), \
                 patch.object(certificates, "_resolve_zone", return_value="example.org"), \
-                patch.object(certificates, "_renewal_dry_run"):
+                patch.object(certificates, "_renewal_dry_run"), \
+                patch.object(certificates, "verify_network_consumers", return_value={"state": "effective", "consumers": 2}):
             certificates.ensure_hostnames(self.host, {}, self.entry, (network_profile(),))
             claim = certificates._network_claim(self.host, self.entry)
             self.assertEqual(set(claim["hostnames"]), {self.entry["profile"]["domain"], "retained.example.org", "relay.example.org"})

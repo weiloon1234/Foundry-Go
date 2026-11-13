@@ -1,9 +1,9 @@
 # B24 milestone 4: lane C handoff
 
-The implementation uses the frozen generation-12 records without modifying
+The implementation and review fixes use the frozen generation-12 records without modifying
 `contracts.py`, `topology.py`, `protocol.json`, lifecycle/provisioning writers or
-B26 upload declarations/templates. The lead owns execution of the commands below.
-This file describes integration work for lane A; it is not acceptance evidence.
+B26 upload declarations/templates. The fix-round request explicitly authorizes the targeted unit tests and deploy-tools gate.
+This file describes integration work for lane A; it is not real-host acceptance evidence.
 
 ## Lane A call order
 
@@ -102,22 +102,45 @@ upstreams and an undrained initial generation refuse address-isolation proof.
 
 ## Supported firewall layout
 
-This release's concrete backend supports active UFW with IPv4 and IPv6
-iptables-legacy, DROP input/forward policies, empty concurrent nftables policy,
-inspectable filter-only rules, standard UFW reload files and no custom UFW init
-hooks. Foreign broader/interface/routed allows refuse; NAT/raw/mangle rules and
-iptables-nft refuse. Operators must arrange the supported layout separately;
-these functions never switch alternatives, enable/reset UFW or remove foreign
-rules. `nft`, `ip`, `ss`, UFW and both iptables families must be available for
-observation. No claim of support for arbitrary UFW/nftables installations is made.
+The backend supports active UFW on both iptables-nft (Ubuntu's default) and
+iptables-legacy, without switching alternatives. It validates the complete IPv4
+and IPv6 kernel views, family-specific `ufw-*`/`ufw6-*` chains, DROP input/forward
+policies, literal settings and reviewed Ubuntu UFW reload machinery. It reconstructs
+all standard helpers and applies the before/after/user chain-reset order, then
+appends UFW's user hooks. See `network_fixtures/ufw/README.md` for source provenance.
 
-## Lead-owned commands and M6 fixture
+For nft, every table, chain, hook, policy and per-chain rule count must agree with
+the iptables compatibility views. Decoder diagnostics, unrelated native tables,
+extra hooks/objects, incompatible expressions and unstable observations refuse.
+Legacy accepts no concurrent native nft policy. Both backends refuse foreign
+broader/interface/routed allows, NAT/raw/mangle rules and custom UFW init hooks.
+They never enable/reset UFW, switch alternatives, or remove foreign rules.
 
-Not executed in this lane under the tech-lead orchestration rule:
+Nginx reference capture tokenizes complete directives and expands dumped includes
+in their actual contexts. Multiline/quoted targets, repeated included upstream
+fragments, and separate HTTP/stream namespaces are handled. Missing dump members,
+dynamic or DNS references, programmable handlers and ambiguous syntax refuse the
+whole observation. No partial inventory can become closure evidence.
+
+TCP adoption upgrades the known owned renewal service with an independent
+`ExecStartPost` check. Legacy consumers accept that strengthened shared service,
+and provisioning another legacy instance preserves it. Issuance separately checks
+effective consumers after Certbot, even if its deploy hook failed while Certbot
+returned zero. Safe per-lineage observation receipts retain pending/failed/verified
+status. Reports expose failures, including after feature-to-legacy rollback.
+
+Reporting first validates one host-wide public claim inventory. The host scanner
+exempts exact claimed TCP addresses/ports, not every socket with the same port.
+Per-instance findings identify that instance's ownership problems; unclaimed
+TCP/UDP exposure remains a host-level finding.
+
+## Unit commands and M6 fixture
+
+The fix-round acceptance commands (run from the indicated directories):
 
 ```sh
 cd tools/deploy/tests
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest test_network test_edge test_certificates test_report test_uploads
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest test_network_review test_network test_edge test_certificates test_report test_uploads
 # From repository root:
 make deploy-tools-check
 ```
@@ -137,3 +160,32 @@ The M6 lifecycle harness still owns cgroup/permit/executor faults, actual reboot
 mixed-instance continuity, deployment/configuration rollback and generation-9/10
 upgrade sequences. The standalone echo backends do not substitute for systemd
 exit/invocation acceptance.
+
+## Review fix-round results
+
+All six findings have regression coverage in `test_network_review.py`:
+
+| Finding | Implementation | Primary regression |
+| --- | --- | --- |
+| Default iptables-nft rejected | `lib/firewall.py`: validate nft objects against complete compatibility views; preserve legacy support | `test_default_ubuntu_nft_layout_is_observed_closed` |
+| Partial nginx reference inventory | `lib/edge.py`: complete tokenization, include-context expansion and whole-observation refusal | `test_multiline_quoted_and_included_upstreams_are_reserved`; `test_unresolved_multiline_reference_refuses_instead_of_partial_inventory` |
+| Wrong IPv6 namespace | `lib/firewall.py`: carry family through projection, observation and ownership checks | `test_standard_ipv6_projection_targets_ufw6` |
+| Missing UFW helper graph | `lib/firewall.py`: validate reload machinery and reconstruct its full helper/restore graph | `test_standard_reload_helper_graph_is_observed_closed` |
+| Certbot zero masks failed TLS hook | `lib/certificates.py`, renewal service template: independent issuance and `ExecStartPost` checks with failure receipts | `test_certbot_zero_after_failed_hook_does_not_verify_issuance`; `test_renewal_service_enforces_postcondition_after_certbot_zero` |
+| Cross-instance report misclassification | `lib/report.py`: validated host claim inventory, exact socket matching and scoped ownership findings | `test_other_instances_claim_is_not_unexpected_and_host_scanner_uses_inventory` |
+
+Seven core regressions replayed against `34cd3be3` all failed (four assertion
+failures and three refusals/API errors), reproducing all six findings. The targeted
+command above then passed all **116 tests** on the fix-round source.
+
+`make deploy-tools-check` ran **681 tests: 671 passed, nine skipped, one failed**.
+The failure is
+`test_upgrades.UpgradeTests.test_candidate_python_inventory_contains_only_runtime_modules`:
+lane A's `lib/upgrades.py` `REQUIRED_FILES` inventory omits `lib/firewall.py` and
+`lib/listeners.py`. Both files already exist in `34cd3be3`. Replaying that check with
+the unchanged `34cd3be3` upgrade module reproduces the identical failure. The
+inventory and its test were not modified because they are outside lane C.
+
+`git diff --check` passed. No live firewall/nginx, DNS, provider, alternatives,
+package-installation or commit actions were performed. Public Ubuntu package files
+were downloaded into task-owned temporary paths solely as source references.

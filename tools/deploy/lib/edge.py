@@ -5,6 +5,9 @@ import ipaddress
 from pathlib import Path
 from dataclasses import dataclass
 import json
+import fnmatch
+import posixpath
+from urllib.parse import urlsplit
 import re
 import time
 
@@ -111,48 +114,177 @@ def _worker_identities(host):
     return tuple(identities)
 
 
-def upstream_references(host):
-    """Reserve literal upstreams in *all* sites, including foreign HTTP/stream sites.
+def _directives(text):
+    """Tokenize nginx's complete statements, preserving quoted delimiters."""
+    tokens, word, started, quote, index = [], [], False, None, 0
+    while index < len(text):
+        char = text[index]
+        if char == "\\":
+            require(index + 1 < len(text), "nginx_reference_unverified", "Incomplete nginx escape.")
+            escaped = text[index + 1]
+            require(escaped in "nrt\\\"'", "nginx_reference_unverified", "Unsupported nginx escape; reference inventory cannot be completed.")
+            word.append({"n": "\n", "r": "\r", "t": "\t"}.get(escaped, escaped))
+            started, index = True, index + 2
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+            else:
+                word.append(char)
+        elif char in ("'", '"'):
+            quote, started = char, True
+        elif char == "$" and text[index:index + 2] == "${":
+            end = text.find("}", index + 2)
+            require(end != -1, "nginx_reference_unverified", "Incomplete nginx variable.")
+            word.append(text[index:end + 1])
+            started, index = True, end + 1
+            continue
+        elif char == "#":
+            end = text.find("\n", index)
+            index = len(text) if end == -1 else end
+            continue
+        elif char.isspace() or char in "{};":
+            if started:
+                tokens.append(("".join(word), False))
+                word, started = [], False
+            if char in "{};":
+                tokens.append((char, True))
+        else:
+            word.append(char)
+            started = True
+        index += 1
+    require(not quote, "nginx_reference_unverified", "Unterminated nginx string.")
+    if started:
+        tokens.append(("".join(word), False))
+    require(len(tokens) <= 262144, "nginx_reference_unverified", "Nginx token inventory exceeds its bound.")
+    position = 0
+    def block(depth=0):
+        nonlocal position
+        require(depth <= 64, "nginx_reference_unverified", "Nginx block nesting exceeds its bound.")
+        nodes, words = [], []
+        while position < len(tokens):
+            value, delimiter = tokens[position]
+            position += 1
+            if not delimiter:
+                words.append(value)
+                continue
+            if value == "}":
+                require(depth and not words, "nginx_reference_unverified", "Unexpected nginx block end.")
+                return nodes
+            require(words, "nginx_reference_unverified", "Empty nginx directive.")
+            nodes.append((tuple(words), block(depth + 1) if value == "{" else None))
+            words = []
+        require(not depth and not words, "nginx_reference_unverified", "Incomplete nginx directive or block.")
+        return nodes
+    return block()
 
-    Dynamic/DNS upstreams cannot establish address isolation on this backend. They
-    refuse feature admission rather than assuming only Foundry routes matter.
-    """
+
+def _expanded_configuration(text):
+    """nginx -T emits each file once, not necessarily in its include context."""
+    headers = list(re.finditer(r"^# configuration file (/[^\n]+):\s*$", text, re.M))
+    require(headers and not text[:headers[0].start()].strip(), "nginx_reference_unverified", "Nginx dump lacks a complete file inventory.")
+    files = {}
+    for index, header in enumerate(headers):
+        name = posixpath.normpath(header[1])
+        require(name not in files, "nginx_reference_unverified", "Ambiguous nginx file inventory.")
+        end = headers[index + 1].start() if index + 1 < len(headers) else len(text)
+        files[name] = _directives(text[header.end():end])
+    root = posixpath.normpath(headers[0][1])
+    prefix, visited, count = posixpath.dirname(root), set(), 0
+    def expand(nodes, stack):
+        nonlocal count
+        require(len(stack) <= 64, "nginx_reference_unverified", "Nginx include nesting exceeds its bound.")
+        result = []
+        for words, children in nodes:
+            require(not (words[0].startswith(("js_", "lua_", "perl")) or "_by_lua" in words[0]),
+                    "nginx_reference_unverified", "Programmable nginx handlers prevent exhaustive upstream inventory.")
+            count += 1
+            require(count <= 65536, "nginx_reference_unverified", "Expanded nginx inventory exceeds its bound.")
+            if words[0] == "include":
+                require(len(words) == 2 and children is None and "$" not in words[1],
+                        "nginx_reference_unverified", "Unresolved nginx include.")
+                pattern = posixpath.normpath(posixpath.join(prefix, words[1]))
+                parts = pattern.split("/")
+                matches = sorted(name for name in files if len(name.split("/")) == len(parts)
+                                 and all(fnmatch.fnmatchcase(v, p) for v, p in zip(name.split("/"), parts)))
+                require(matches or any(c in pattern for c in "*?["), "nginx_reference_unverified", "Included nginx file is missing from the dump.")
+                for name in matches:
+                    require(name not in stack, "nginx_reference_unverified", "Recursive nginx include.")
+                    visited.add(name)
+                    result.extend(expand(files[name], (*stack, name)))
+            else:
+                result.append((words, expand(children, stack) if children is not None else None))
+        return result
+    visited.add(root)
+    result = expand(files[root], (root,))
+    require(visited == set(files), "nginx_reference_unverified", "Some dumped nginx files have unresolved include contexts.")
+    return result
+
+
+def upstream_references(host):
+    """Exhaustively reserve literal upstreams across all dumped include contexts."""
     from listeners import SocketIdentity
     text = host.run(["nginx", "-T"], timeout=10).stdout
     require(len(text) <= 4 * 1024 * 1024, "nginx_observation", "Nginx configuration exceeds its bound.")
+    nodes = _expanded_configuration(text)
+    groups, passes, targets = {}, [], []
+    def visit(nodes, context=()):
+        for words, children in nodes:
+            if words[0] == "upstream":
+                require(len(words) == 2 and children is not None and context in (("http",), ("stream",)),
+                        "nginx_reference_unverified", "Unresolved nginx upstream context.")
+                key = (context, words[1])
+                require(key not in groups, "nginx_reference_unverified", "Duplicate nginx upstream group.")
+                groups[key] = []
+                for arguments, nested in children:
+                    if arguments[0] == "server":
+                        require(nested is None and len(arguments) >= 2 and not any(a == "resolve" or a.startswith("service=") for a in arguments[2:]),
+                                "nginx_reference_unverified", "Dynamic upstream server cannot prove isolation.")
+                        groups[key].append(arguments[1])
+                        targets.append((arguments[1], 80))
+                require(groups[key], "nginx_reference_unverified", "Upstream group has no inspectable servers.")
+            elif words[0].endswith("_pass"):
+                require(len(words) == 2 and children is None, "nginx_reference_unverified", "Unresolved nginx pass directive.")
+                passes.append((context[:1], words[1]))
+            elif words[0] in ("auth_http", "zone_sync_server"):
+                require(len(words) >= 2 and children is None, "nginx_reference_unverified", "Unresolved nginx peer.")
+                targets.append((words[1], 80))
+            elif words[0] == "resolver":
+                require(children is None and len(words) >= 2, "nginx_reference_unverified", "Unresolved nginx resolver.")
+                for argument in words[1:]:
+                    if not argument.startswith(("valid=", "ipv4=", "ipv6=", "status_zone=")):
+                        targets.append((argument, 53))
+            elif children is not None:
+                visit(children, (*context, words[0]))
+    visit(nodes)
     references = set()
-    in_upstream, depth = False, 0
-    for raw in text.splitlines():
-        line = raw.split("#", 1)[0].strip()
-        if re.match(r"upstream\s+\S+\s*\{", line):
-            in_upstream = True
-            depth = 0
-        matches = re.findall(r"(?:proxy_pass|grpc_pass|fastcgi_pass|uwsgi_pass|scgi_pass)\s+([^;\s]+)", line)
-        if in_upstream:
-            matches += re.findall(r"\bserver\s+([^;\s]+)", line)
-        for target in matches:
-            if target.startswith("unix:"):
-                continue
-            target = re.sub(r"^[a-z]+://", "", target).split("/", 1)[0]
-            address, separator, port = target.rpartition(":")
-            # Named upstream groups are covered by their server declarations.
-            if not separator and re.search(r"\bupstream\s+" + re.escape(target) + r"\s*\{", text):
-                continue
-            require(separator and port.isdigit() and "$" not in target,
-                    "nginx_reference_unverified", "Dynamic or nonliteral nginx upstreams prevent backend isolation.")
-            address = address.strip("[]")
-            if address == "localhost":
-                addresses = ("127.0.0.1", "::1")
-            else:
-                try:
-                    addresses = (str(ipaddress.ip_address(address)),)
-                except ValueError:
-                    require(False, "nginx_reference_unverified", "DNS upstreams cannot prove private-address isolation.")
-            references.update(SocketIdentity("tcp", ipaddress.ip_address(a).version, a, int(port)) for a in addresses)
-        if in_upstream:
-            depth += line.count("{") - line.count("}")
-            if depth == 0:
-                in_upstream = False
+    def endpoint(target, default_port, context=None):
+        require("$" not in target, "nginx_reference_unverified", "Dynamic nginx upstream cannot prove isolation.")
+        raw = re.sub(r"^[a-z]+://", "", target)
+        if raw.startswith("unix:"):
+            require(len(raw) > 5, "nginx_reference_unverified", "Empty Unix upstream.")
+            return
+        try:
+            parsed = urlsplit(target if "://" in target else "//" + target)
+            address, port = parsed.hostname, parsed.port
+        except ValueError:
+            require(False, "nginx_reference_unverified", "Invalid nginx upstream address.")
+        require(address and not parsed.username and not parsed.password, "nginx_reference_unverified", "Invalid nginx upstream authority.")
+        if context is not None and (context, address) in groups and port is None:
+            return  # Every server in the named group is already reserved below.
+        if address == "localhost":
+            addresses = ("127.0.0.1", "::1")
+        else:
+            try:
+                addresses = (str(ipaddress.ip_address(address)),)
+            except ValueError:
+                require(False, "nginx_reference_unverified", "DNS upstream cannot prove private-address isolation.")
+        for address in addresses:
+            references.add(SocketIdentity("tcp", ipaddress.ip_address(address).version, address, port if port is not None else default_port))
+    for target, default in targets:
+        endpoint(target, default)
+    for context, target in passes:
+        endpoint(target, 443 if target.startswith(("https://", "grpcs://")) else 80, context)
     return tuple(sorted(references, key=lambda s: (s.family, s.address, s.port)))
 
 

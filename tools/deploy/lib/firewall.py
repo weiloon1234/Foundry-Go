@@ -1,4 +1,4 @@
-"""Narrow UFW/iptables-legacy integration; runtime permits are never persisted.
+"""Narrow UFW integration for iptables legacy/nft; permits are never persisted.
 
 Only an already active dual-family default-deny host is supported. Unknown packet
 paths, other netfilter owners and foreign allows refuse without modifying them.
@@ -11,12 +11,123 @@ import json
 from pathlib import Path
 import re
 import shlex
+from collections import Counter
 
 from contracts import POSTGRES_PORT, REDIS_PORT, canonical_digest, check_path, contract_uuid, require
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "server/templates"
 FILES = ("/etc/default/ufw", "/etc/ufw/ufw.conf", "/etc/ufw/before.rules", "/etc/ufw/user.rules",
          "/etc/ufw/after.rules", "/etc/ufw/before6.rules", "/etc/ufw/user6.rules", "/etc/ufw/after6.rules")
+# Ubuntu ufw 0.36.2-{6,9build1,10}; see tests/network_fixtures/ufw/README.md.
+# Unknown reload code cannot substantiate our reconstruction of its effects.
+RELOAD_FILES = {
+    "/usr/lib/ufw/ufw-init": "c98f19dd0a68e94f729acdcba34fe48244dbfacdfa8943f257215d2ae351f80a",
+    "/usr/lib/ufw/ufw-init-functions": "5865fbffc0c644d97e5fc6906c648ce6e4f23710ea0ff57c573ed680999d2cc4",
+}
+
+
+def _namespace(family):
+    require(family in (4, 6), "firewall_unsupported", "Unknown firewall address family.")
+    return "ufw6" if family == 6 else "ufw"
+
+
+def _settings(text):
+    """UFW sources these files as shell; only literal assignments are supported."""
+    result = {}
+    allowed = {"IPV6", "DEFAULT_INPUT_POLICY", "DEFAULT_OUTPUT_POLICY", "DEFAULT_FORWARD_POLICY",
+               "DEFAULT_APPLICATION_POLICY", "MANAGE_BUILTINS", "IPT_SYSCTL", "IPT_MODULES", "ENABLED", "LOGLEVEL"}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        fields = shlex.split(line, comments=True)
+        require(len(fields) == 1 and "=" in fields[0], "firewall_unsupported", "UFW settings must be literal assignments.")
+        name, value = fields[0].split("=", 1)
+        require(name in allowed and name not in result and not any(c in value for c in "$`\\;\n"),
+                "firewall_unsupported", "Unsupported or duplicate UFW setting.")
+        result[name] = value
+    return result
+
+
+def reload_graph(files, family, settings):
+    """Replay the validated ufw-init-functions graph without executing shell code.
+
+    Restore declarations reset chains; user.rules may redefine logging helpers.
+    UFW appends the user hooks after before/after/user restore, in that order.
+    """
+    prefix, suffix = _namespace(family), "6" if family == 6 else ""
+    chains = {prefix + "-logging-" + kind: [] for kind in ("deny", "allow")}
+    stages = ("before-logging", "before", "after", "after-logging", "reject", "track")
+    for direction in ("input", "output", "forward"):
+        for stage in (*stages, "user", "user-logging"):
+            chains[f"{prefix}-{stage}-{direction}"] = []
+        policy = settings["DEFAULT_" + direction.upper() + "_POLICY"]
+        chains[f"{prefix}-skip-to-policy-{direction}"] = [("-j", policy)]
+        if policy == "ACCEPT":
+            chains[f"{prefix}-track-{direction}"] = [("-p", p, "-m", "conntrack", "--ctstate", "NEW", "-j", "ACCEPT") for p in ("tcp", "udp")]
+        chains[direction.upper()] = [("-j", f"{prefix}-{stage}-{direction}") for stage in stages]
+    for name in ("user-limit", "user-limit-accept"):
+        chains[prefix + "-" + name] = []
+    for stem in ("before", "after", "user"):
+        part, policies = parse_rules(files[f"/etc/ufw/{stem}{suffix}.rules"])
+        require(all(p == "-" for p in policies.values()) and not {"INPUT", "OUTPUT", "FORWARD"} & part.keys(),
+                "firewall_unsupported", "Persistent UFW files cannot override built-in policies.")
+        require(all(f"{prefix}-{stem}-{direction}" in part for direction in ("input", "output", "forward")),
+                "firewall_unsupported", "UFW reload paths have the wrong family or are incomplete.")
+        chains.update(part)
+    for direction in ("input", "output", "forward"):
+        chains[prefix + "-before-" + direction].append(("-j", prefix + "-user-" + direction))
+    return chains
+
+
+def require_nft_layout(document, live, backends):
+    """Account for every nft object against the complete iptables-save views.
+
+    iptables-nft's compatibility decoder is the rule semantics authority. Reject
+    diagnostics, missing rules, alternate hooks and native objects it cannot expose.
+    Counts are per chain, not a global count that could conceal an omitted rule.
+    """
+    require(isinstance(document, dict) and isinstance(document.get("nftables"), list),
+            "firewall_unsupported", "Nftables inventory is incomplete.")
+    tables, chains, counts = set(), {}, Counter()
+    for item in document["nftables"]:
+        require(isinstance(item, dict) and len(item) == 1, "firewall_unsupported", "Unknown nftables object.")
+        kind, obj = next(iter(item.items()))
+        if kind == "metainfo":
+            continue
+        require(kind in ("table", "chain", "rule") and isinstance(obj, dict),
+                "firewall_unsupported", "Native nftables objects are outside the supported UFW layout.")
+        family = {"ip": 4, "ip6": 6}.get(obj.get("family"))
+        require(family in live and backends[family] == "nf_tables" and obj.get("table", obj.get("name")) == "filter",
+                "firewall_unsupported", "Unrelated native nftables tables or conflicting backends are present.")
+        if kind == "table":
+            require(family not in tables and not obj.get("flags"), "firewall_unsupported", "Unexpected nftables table flags.")
+            tables.add(family)
+        elif kind == "chain":
+            name = obj.get("name")
+            require(name in live[family]["chains"] and (family, name) not in chains,
+                    "firewall_unsupported", "Nftables chain is absent from the iptables view.")
+            if name in ("INPUT", "OUTPUT", "FORWARD"):
+                require(obj.get("type") == "filter" and obj.get("hook") == name.lower()
+                        and obj.get("prio") == 0 and obj.get("policy", "").upper() == live[family]["policies"][name],
+                        "firewall_unsupported", "Nftables base-chain policy or ordering differs from iptables.")
+            else:
+                require(name.startswith((_namespace(family) + "-", "fdy-"))
+                        and not {"type", "hook", "prio", "policy", "dev", "flags"} & obj.keys(),
+                        "firewall_unsupported", "A native or separately hooked chain conflicts with UFW.")
+            chains[family, name] = obj
+        else:
+            name, expressions = obj.get("chain"), obj.get("expr")
+            require(name in live[family]["chains"] and isinstance(expressions, list) and expressions,
+                    "firewall_unsupported", "Nftables rule is absent from the iptables view.")
+            require(all(isinstance(e, dict) and len(e) == 1 and next(iter(e)) in
+                        {"match", "counter", "jump", "goto", "accept", "drop", "reject", "return", "log", "limit", "xt"}
+                        for e in expressions), "firewall_unsupported", "Unsupported native nftables rule expression.")
+            counts[family, name] += 1
+    expected_families = {f for f, backend in backends.items() if backend == "nf_tables"}
+    require(tables == expected_families and set(chains) == {(f, n) for f in expected_families for n in live[f]["chains"]}
+            and all(counts[f, n] == len(rules) for f in expected_families for n, rules in live[f]["chains"].items()),
+            "firewall_unsupported", "Nftables and iptables do not expose the same complete rule inventory.")
 
 
 @dataclass(frozen=True)
@@ -179,47 +290,49 @@ def observe(host, instance_id, claims, *, bindings=(), opened=False, integrated=
     require(status.splitlines()[:1] == ["Status: active"], "firewall_inactive", "Configure and activate default-deny UFW explicitly.")
     files = {path: _read(host, path) for path in FILES}
     if integrated:
-        for path in ("/etc/ufw/before.rules", "/etc/ufw/before6.rules"):
-            _require_owned_chain(files[path], instance_id)
-    for key, value in (("IPV6", "yes"), ("DEFAULT_INPUT_POLICY", "DROP"), ("DEFAULT_FORWARD_POLICY", "DROP")):
-        require(re.findall(r"^" + key + r'=[\"\']?([^\"\'\n]+)[\"\']?$', files[FILES[0]], re.M) == [value],
-                "firewall_default_deny", "UFW must persist default-deny IPv4 and IPv6 input and routing.")
-    require(re.findall(r"^ENABLED=(\w+)$", files[FILES[1]], re.M) == ["yes"],
-            "firewall_inactive", "UFW must restore its closed policy at boot.")
-    nft = json.loads(host.run(["nft", "-j", "list", "ruleset"], timeout=5).stdout)
-    require(isinstance(nft, dict) and isinstance(nft.get("nftables"), list)
-            and not [v for v in nft["nftables"] if set(v) != {"metainfo"}],
-            "firewall_unsupported", "This backend requires iptables-legacy with no concurrent nftables policy.")
+        for family, path in ((4, "/etc/ufw/before.rules"), (6, "/etc/ufw/before6.rules")):
+            _require_owned_chain(files[path], instance_id, family=family)
+    settings = _settings(files[FILES[0]])
+    control = _settings(files[FILES[1]])
+    require(settings.get("IPV6", "").lower() == "yes"
+            and settings.get("DEFAULT_INPUT_POLICY") == settings.get("DEFAULT_FORWARD_POLICY") == "DROP"
+            and settings.get("DEFAULT_OUTPUT_POLICY") in ("ACCEPT", "DROP")
+            and settings.get("MANAGE_BUILTINS", "no") == "no"
+            and settings.get("IPT_MODULES", "") == ""
+            and settings.get("IPT_SYSCTL", "/etc/ufw/sysctl.conf") == "/etc/ufw/sysctl.conf",
+            "firewall_default_deny", "UFW must persist dual-family default-deny without changing foreign built-ins.")
+    require(control.get("ENABLED", "").lower() == "yes", "firewall_inactive", "UFW must restore its closed policy at boot.")
+    for path, checksum in RELOAD_FILES.items():
+        content = _read(host, path)
+        require(hashlib.sha256(content.encode()).hexdigest() == checksum,
+                "firewall_unsupported", "UFW reload machinery differs from the reviewed Ubuntu layout.")
+        files[path] = content
     for path in ("/etc/ufw/before.init", "/etc/ufw/after.init"):
         require(not host.paths.p(path).exists(), "firewall_unsupported", "Custom UFW reload hooks require a separately supported layout.")
-    live = {}
-    for family, binary, suffix in ((4, "iptables", ""), (6, "ip6tables", "6")):
-        require("(legacy)" in host.run([binary, "--version"], timeout=5).stdout,
-                "firewall_unsupported", "The reviewed UFW backend is iptables-legacy for both families.")
-        text = host.run([binary + "-save"], timeout=5).stdout
-        chains, policies = parse_rules(text)
+    live, backends = {}, {}
+    for family, binary in ((4, "iptables"), (6, "ip6tables")):
+        version = host.run([binary, "--version"], timeout=5).stdout
+        backend = re.search(r"\((legacy|nf_tables)\)", version)
+        require(backend is not None, "firewall_unsupported", "Unknown iptables backend.")
+        backends[family] = backend.group(1)
+        response = host.run([binary + "-save"], timeout=5)
+        require(not response.stderr.strip() and not re.search(r"warning|incompatible|unsupported", response.stdout, re.I),
+                "firewall_unsupported", "The iptables compatibility decoder could not expose a complete ruleset.")
+        chains, policies = parse_rules(response.stdout)
         require(policies.get("INPUT") == policies.get("FORWARD") == "DROP",
                 "firewall_default_deny", "Live input and routed policies must both default to DROP.")
         _, expected = exposure_rules(instance_id, (*retained_claims, *(claims if opened else ())), bindings, family)
         require_denied(chains, ("INPUT", "FORWARD"), ports, owned=chain if integrated else None, allowed=expected)
-        persisted = {}
-        for stem in ("before", "user", "after"):
-            part, _ = parse_rules(files[f"/etc/ufw/{stem}{suffix}.rules"])
-            require(not persisted.keys() & part.keys(), "firewall_unsupported", "Ambiguous persistent chain ownership.")
-            persisted.update(part)
-        roots = tuple(n for n in persisted if n in ("ufw-before-input", "ufw-user-input", "ufw-after-input",
-                                                    "ufw-before-forward", "ufw-user-forward", "ufw-after-forward"))
-        require(len(roots) == 6, "firewall_unsupported", "UFW reload paths are incomplete.")
-        require(not {"INPUT", "OUTPUT", "FORWARD"} & persisted.keys(),
-                "firewall_unsupported", "Persistent UFW files cannot override built-in chain policy.")
-        for name in ("ufw-skip-to-policy-input", "ufw-skip-to-policy-forward"):
-            require(chains.get(name) == [("-j", "DROP")], "firewall_default_deny",
-                    "UFW policy helper chains must implement the configured DROP policy.")
-            if name not in persisted:
-                persisted[name] = [("-j", "DROP")]
-        require_denied(persisted, roots, ports, owned=chain if integrated else None)
-        # Counters are mutable and never part of a permit's policy fingerprint.
-        live[str(family)] = {"chains": chains, "policies": policies}
+        persisted = reload_graph(files, family, settings)
+        require_denied(persisted, ("INPUT", "FORWARD"), ports, owned=chain if integrated else None)
+        live[family] = {"chains": chains, "policies": policies}
+    nft = json.loads(host.run(["nft", "-j", "list", "ruleset"], timeout=5).stdout)
+    require_nft_layout(nft, live, backends)
+    for family, binary in ((4, "iptables"), (6, "ip6tables")):
+        again = host.run([binary + "-save"], timeout=5)
+        require(not again.stderr.strip() and not re.search(r"warning|incompatible|unsupported", again.stdout, re.I)
+                and parse_rules(again.stdout) == (live[family]["chains"], live[family]["policies"]),
+                "firewall_drift", "Kernel rules changed during the cross-backend observation.")
     routes = {}
     for family in (4, 6):
         routes[str(family)] = json.loads(host.run(["ip", "-j", "-" + str(family), "route", "show", "table", "all"], timeout=5).stdout)
@@ -229,30 +342,32 @@ def observe(host, instance_id, claims, *, bindings=(), opened=False, integrated=
     return FirewallObservation(instance_id, boot_id(host), not opened,
                                canonical_digest({"instance_id": instance_id,
                                    "scope": sorted((asdict(c.socket) for c in claims), key=lambda v: (v["family"], v["address"], v["port"])),
-                                   "live": live, "persistent": files, "routes": routes, "addresses": addresses}),
+                                   "live": live, "backends": backends, "persistent": files, "routes": routes, "addresses": addresses}),
                                ports, tuple(c.socket for c in claims))
 
 
-def persistent_projection(text, instance_id):
+def persistent_projection(text, instance_id, *, family=4):
     """Add only owned chain/jump lines; preserve every existing byte and order."""
     chain = chain_name(instance_id)
     marker = "# Foundry network " + instance_id
+    before_input = _namespace(family) + "-before-input"
     if marker in text:
         require(text.count(marker + " chain") == text.count(marker + " jump") == 1
-                and f":{chain} - [0:0]\n" in text and f"-A ufw-before-input -j {chain}\n" in text,
+                and f":{chain} - [0:0]\n" in text and f"-A {before_input} -j {chain}\n" in text,
                 "firewall_ownership", "Owned UFW integration has drifted.")
         return text
-    require(chain not in text and text.count("*filter\n") == 1 and "-A ufw-before-input " in text,
+    require(chain not in text and text.count("*filter\n") == 1 and "-A " + before_input + " " in text,
             "firewall_unsupported", "UFW has no suitable explicit before-input integration.")
     text = text.replace("*filter\n", "*filter\n" + marker + " chain\n:" + chain + " - [0:0]\n", 1)
-    position = text.index("-A ufw-before-input ")
-    return text[:position] + marker + " jump\n-A ufw-before-input -j " + chain + "\n" + text[position:]
+    position = text.index("-A " + before_input + " ")
+    return text[:position] + marker + " jump\n-A " + before_input + " -j " + chain + "\n" + text[position:]
 
 
-def _require_owned_chain(text, instance_id):
+def _require_owned_chain(text, instance_id, *, family=4):
     marker, chain = "# Foundry network " + instance_id, chain_name(instance_id)
+    before_input = _namespace(family) + "-before-input"
     require(text.count(marker + " chain\n:" + chain + " - [0:0]\n") == 1
-            and text.count(marker + " jump\n-A ufw-before-input -j " + chain + "\n") == 1,
+            and text.count(marker + " jump\n-A " + before_input + " -j " + chain + "\n") == 1,
             "firewall_ownership", "Only the exact instance-owned chain may be changed.")
 
 
@@ -260,8 +375,8 @@ def install_closed(host, instance_id, claims, *, reviewed_sha256):
     before = observe(host, instance_id, claims, integrated=False)
     require(before.sha256 == reviewed_sha256, "firewall_plan_stale", "Firewall state changed after review.")
     # Both projections are validated before the first write. A partial write contains no allows.
-    updates = [(path, persistent_projection(_read(host, path), instance_id))
-               for path in ("/etc/ufw/before.rules", "/etc/ufw/before6.rules")]
+    updates = [(path, persistent_projection(_read(host, path), instance_id, family=family))
+               for family, path in ((4, "/etc/ufw/before.rules"), (6, "/etc/ufw/before6.rules"))]
     for path, content in updates:
         host.owned_write(host.paths.p(path), content, mode=0o640)
     host.run(["ufw", "reload"], timeout=30)
@@ -272,8 +387,8 @@ def withdraw(host, instance_id, claims, *, retained_claims=(), bindings=()):
     """Attempt both families even if one fails; no partial-success evidence."""
     if not claims:
         return observe(host, instance_id, claims)
-    for path in ("/etc/ufw/before.rules", "/etc/ufw/before6.rules"):
-        _require_owned_chain(_read(host, path), instance_id)
+    for family, path in ((4, "/etc/ufw/before.rules"), (6, "/etc/ufw/before6.rules")):
+        _require_owned_chain(_read(host, path), instance_id, family=family)
     failure = None
     for family, binary in ((4, "iptables"), (6, "ip6tables")):
         try:

@@ -2,7 +2,7 @@
 """Opt-in M6 network scenarios for a prepared, disposable systemd container.
 
 The harness provides /run/foundry-network-acceptance/{owned,case.json}, active
-dual-family UFW/iptables-legacy, the stream module, an owned SAN certificate and
+dual-family UFW (iptables-nft or iptables-legacy), the stream module, an owned SAN certificate and
 the feature HTTP gate. case.json maps test method names to frozen
 topology/profile/old/candidate documents, entry, permitted_namespace and
 denied_namespace. Each case reserves fresh backend addresses. Both namespaces
