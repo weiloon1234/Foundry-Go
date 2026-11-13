@@ -309,6 +309,17 @@ def resources(host, problems, result):
     return result
 
 
+def _effective_renewal(host, entry, profile):
+    """Unprivileged readers cannot see private network claims; legacy reports stay unchanged."""
+    import certificates
+    try:
+        return certificates.network_renewal_status(host, entry)
+    except PermissionError:
+        if profile.get("listeners"):
+            raise
+        return None
+
+
 def checked(problems, code, instance_id, function, *args):
     try:
         return function(*args)
@@ -421,9 +432,8 @@ def instance_report(host, entry, deadline, problems, *, host_claims=()):
             if cert is not None:
                 cert["renewal_deferred"] = {"checked_at": string(deferred.get("checked_at")),
                                             "detail": string(deferred.get("detail"), 1024)}
-        import certificates
         effective = checked(problems, "certificate_effective_renewal_unverified", instance_id,
-                            certificates.network_renewal_status, host, entry)
+                            _effective_renewal, host, entry, profile)
         if effective is not None:
             if cert is not None:
                 cert["effective_renewal"] = effective
