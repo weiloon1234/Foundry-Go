@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.31.1 — 2026-11-14
+
+- Fixed: constructing an HTTP upload pool no longer claims its directory or leaves
+  an ownership marker after inspection commands such as `route:list` and
+  `config:check`. The HTTP server claims each referenced pool before serving with
+  an exclusive kernel lock, reconciles captures left by a crashed owner, and
+  releases ownership after drain. Concurrent live owners still refuse startup.
+  Applications need no wiring changes; existing `pool.Close()` shutdown hooks
+  remain valid.
+
 ## v0.31.0 — 2026-11-14
 
 - Added: generation-12 host capabilities preview with topology schema 2 and

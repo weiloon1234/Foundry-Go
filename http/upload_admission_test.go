@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	stdhttp "net/http"
@@ -13,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
 )
 
 func admittedEndpoint(t *testing.T, pool *UploadPool) Endpoint[NoPath, NoQuery, multipartRequest, NoContent] {
@@ -37,6 +40,16 @@ func uploadTestPool(t *testing.T, slots int, bytes int64) *UploadPool {
 	return p
 }
 
+// Direct-handler tests provide the serving owner that Server.Run normally owns.
+func claimedUploadTestPool(t *testing.T, slots int, bytes int64) *UploadPool {
+	t.Helper()
+	pool := uploadTestPool(t, slots, bytes)
+	if err := pool.pool.Claim(); err != nil {
+		t.Fatal(err)
+	}
+	return pool
+}
+
 type uploadUnreadBody struct{ reads atomic.Int32 }
 
 func (b *uploadUnreadBody) Read([]byte) (int, error) { b.reads.Add(1); return 0, io.EOF }
@@ -46,7 +59,7 @@ func TestUploadAdmissionBeforeMiddlewareAndSmallRequestIsolation(t *testing.T) {
 	budget := DefaultEndpointLimits().Multipart.Bytes
 	for _, chunked := range []bool{false, true} {
 		t.Run(map[bool]string{false: "known", true: "chunked"}[chunked], func(t *testing.T) {
-			pool := uploadTestPool(t, 1, budget)
+			pool := claimedUploadTestPool(t, 1, budget)
 			entered, release := make(chan struct{}), make(chan struct{})
 			e := admittedEndpoint(t, pool)
 			var middlewareCalls atomic.Int32
@@ -116,7 +129,7 @@ func TestUploadAdmissionRetainsCanceledHandlerAndCleansFailures(t *testing.T) {
 	for _, failure := range []string{"cancel", "panic", "goexit", "decode"} {
 		t.Run(failure, func(t *testing.T) {
 			budget := DefaultEndpointLimits().Multipart.Bytes
-			pool := uploadTestPool(t, 1, budget)
+			pool := claimedUploadTestPool(t, 1, budget)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			e := admittedEndpoint(t, pool)
@@ -155,7 +168,7 @@ func TestUploadAdmissionRetainsCanceledHandlerAndCleansFailures(t *testing.T) {
 }
 
 func TestUploadAdmissionValidationAndExclusiveDirectory(t *testing.T) {
-	pool := uploadTestPool(t, 1, DefaultEndpointLimits().Multipart.Bytes)
+	pool := claimedUploadTestPool(t, 1, DefaultEndpointLimits().Multipart.Bytes)
 	e := admittedEndpoint(t, pool)
 	e.route = ConfigureRoute(e.route, BodyLimit(1))
 	if _, err := NewRouter(e.Handle(func(context.Context, multipartRequestInput) (NoContent, error) { return NoContent{}, nil })); err == nil {
@@ -164,20 +177,28 @@ func TestUploadAdmissionValidationAndExclusiveDirectory(t *testing.T) {
 	if err := ValidateMultipart(MultipartDirectory(MultipartAdmission(multipartForm(""), pool), t.TempDir())); err == nil {
 		t.Fatal("directory drift accepted")
 	}
-	if _, err := NewUploadPool(UploadPoolConfig{Directory: pool.pool.Directory(), MaxActive: 1, MaxBytes: 1}); err == nil {
-		t.Fatal("active owner reused")
+	contender, err := NewUploadPool(UploadPoolConfig{Directory: pool.pool.Directory(), MaxActive: 1, MaxBytes: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := contender.pool.Claim(); !errors.Is(err, fault.Conflict) {
+		t.Fatal("active owner reused", err)
 	}
 	orphan := t.TempDir()
 	if err := os.WriteFile(filepath.Join(orphan, "retained"), []byte("owned"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewUploadPool(UploadPoolConfig{Directory: orphan, MaxActive: 1, MaxBytes: 1}); err == nil {
-		t.Fatal("restart ignored retained files")
+	unrecognized, err := NewUploadPool(UploadPoolConfig{Directory: orphan, MaxActive: 1, MaxBytes: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := unrecognized.pool.Claim(); !errors.Is(err, fault.Invalid) {
+		t.Fatal("restart ignored unknown files", err)
 	}
 }
 
 func TestUploadAdmissionAppliesWithoutKernel(t *testing.T) {
-	pool := uploadTestPool(t, 2, DefaultEndpointLimits().Multipart.Bytes)
+	pool := claimedUploadTestPool(t, 2, DefaultEndpointLimits().Multipart.Bytes)
 	e := admittedEndpoint(t, pool)
 	router, err := NewRouter(e.Handle(func(context.Context, multipartRequestInput) (NoContent, error) { return NoContent{}, nil }))
 	if err != nil {
@@ -208,7 +229,7 @@ func TestUploadAdmissionAppliesWithoutKernel(t *testing.T) {
 }
 
 func TestUploadAdmissionRejectsPrereadCapturePolicy(t *testing.T) {
-	pool := uploadTestPool(t, 1, DefaultEndpointLimits().Multipart.Bytes)
+	pool := claimedUploadTestPool(t, 1, DefaultEndpointLimits().Multipart.Bytes)
 	router, err := NewRouter(admittedEndpoint(t, pool).Handle(func(context.Context, multipartRequestInput) (NoContent, error) { return NoContent{}, nil }))
 	if err != nil {
 		t.Fatal(err)
@@ -227,7 +248,7 @@ func TestUploadAdmissionRejectsPrereadCapturePolicy(t *testing.T) {
 }
 
 func TestUploadAdmissionRefusesHiddenKernelMetadata(t *testing.T) {
-	pool := uploadTestPool(t, 1, DefaultEndpointLimits().Multipart.Bytes)
+	pool := claimedUploadTestPool(t, 1, DefaultEndpointLimits().Multipart.Bytes)
 	router, err := NewRouter(admittedEndpoint(t, pool).Handle(func(context.Context, multipartRequestInput) (NoContent, error) {
 		t.Error("hidden route was served")
 		return NoContent{}, nil

@@ -20,6 +20,7 @@ import (
 // into a shared/global ServeMux. Registration order does not resolve ambiguity.
 type Router struct {
 	uploads        map[string]uploadRoute
+	pools          []*UploadPool
 	spas           []*spaFallback
 	fallbacks      []*routeFallback
 	mux            *stdhttp.ServeMux
@@ -147,6 +148,9 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 		}
 		if registration.upload.pool != nil {
 			router.uploads[registration.pattern] = registration.upload
+			if !slices.Contains(router.pools, registration.upload.pool) {
+				router.pools = append(router.pools, registration.upload.pool)
+			}
 		}
 		if info.Authentication != nil && info.Authentication.Credential.Kind == TicketCredentialKind {
 			router.ticketPatterns[registration.pattern] = true

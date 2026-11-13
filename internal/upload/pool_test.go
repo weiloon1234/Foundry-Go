@@ -18,6 +18,9 @@ func TestPoolRetainsFailedCleanupAndRecoversExactFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := pool.Claim(); err != nil {
+		t.Fatal(err)
+	}
 	lease, err := pool.Reserve(t.Context(), 128)
 	if err != nil {
 		t.Fatal(err)
@@ -83,11 +86,18 @@ func TestPoolRetainsFailedCleanupAndRecoversExactFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := fresh.Claim(); err != nil {
+		t.Fatal(err)
+	}
 	if err := pool.Close(); err != nil {
 		t.Fatal(err)
 	} // Must not remove the new owner's marker.
-	if _, err := NewPool(PoolConfig{Directory: directory, MaxActive: 1, MaxBytes: 128}); err == nil {
-		t.Fatal("old close removed new ownership")
+	contender, err := NewPool(PoolConfig{Directory: directory, MaxActive: 1, MaxBytes: 128})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := contender.Claim(); !errors.Is(err, fault.Conflict) {
+		t.Fatal("old close removed new ownership", err)
 	}
 	if err := fresh.Close(); err != nil {
 		t.Fatal(err)
@@ -100,6 +110,9 @@ func TestPoolCancellationRetainsActualCaptureOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
+	if err := pool.Claim(); err != nil {
+		t.Fatal(err)
+	}
 	lease, err := pool.Reserve(ctx, 128)
 	if err != nil {
 		t.Fatal(err)
@@ -131,6 +144,9 @@ func TestPoolWaitsForActualCaptureExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
+	if err := pool.Claim(); err != nil {
+		t.Fatal(err)
+	}
 	reservation, err := pool.Reserve(ctx, 128)
 	if err != nil {
 		t.Fatal(err)
@@ -171,6 +187,9 @@ func TestPoolWaitsForActualCaptureExit(t *testing.T) {
 func TestPoolCleanupRefusesReplacedDirectory(t *testing.T) {
 	pool, err := NewPool(PoolConfig{Directory: t.TempDir(), MaxActive: 1, MaxBytes: 128})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.Claim(); err != nil {
 		t.Fatal(err)
 	}
 	reservation, err := pool.Reserve(t.Context(), 128)

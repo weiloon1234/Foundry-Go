@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net/http/httptest"
+	"log/slog"
+	stdhttp "net/http"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -79,18 +80,51 @@ func TestUploadRoutesReleaseCaptureAfterInvalidIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest("GET", "/acceptance/uploads/usage", nil))
-	if response.Code != 200 || !strings.Contains(response.Body.String(), `"reserved":0`) {
-		t.Fatal(response.Code, response.Body.String())
+	config := http.DefaultServerConfig()
+	config.Address = "127.0.0.1:0"
+	server, err := http.Prepare(router, config, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- server.Run(ctx) }()
+	defer func() {
+		cancel()
+		if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	ready, cancelReady := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancelReady()
+	address, err := server.Ready(ready)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &stdhttp.Client{Timeout: 3 * time.Second}
+	response, err := client.Get("http://" + address + "/acceptance/uploads/usage")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil || response.StatusCode != 200 || !strings.Contains(string(body), `"reserved":0`) {
+		t.Fatal(response.StatusCode, string(body), err)
 	}
 	for _, kind := range []string{"large", "short", "small", "multipart"} {
-		response := httptest.NewRecorder()
-		request := httptest.NewRequest("POST", "/acceptance/uploads/"+kind+"?id=invalid", strings.NewReader("--test\r\nContent-Disposition: form-data; name=\"file\"; filename=\"x.txt\"\r\n\r\nx\r\n--test--\r\n"))
+		request, err := stdhttp.NewRequestWithContext(t.Context(), "POST", "http://"+address+"/acceptance/uploads/"+kind+"?id=invalid", strings.NewReader("--test\r\nContent-Disposition: form-data; name=\"file\"; filename=\"x.txt\"\r\n\r\nx\r\n--test--\r\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
 		request.Header.Set("Content-Type", "multipart/form-data; boundary=test")
-		router.ServeHTTP(response, request)
-		if response.Code != 400 {
-			t.Fatal("invalid controller identity reached handler dependencies", kind, response.Code)
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, response.Body)
+		_ = response.Body.Close()
+		if response.StatusCode != 400 {
+			t.Fatal("invalid controller identity reached handler dependencies", kind, response.StatusCode)
 		}
 		if active, reserved := pool.Usage(); active != 0 || reserved != 0 {
 			t.Fatal("capture retained after rejection")
