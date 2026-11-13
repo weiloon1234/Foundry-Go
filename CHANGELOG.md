@@ -11,6 +11,9 @@
   select upload types. Non-ISO detection, including generic ZIP/Office and
   text/XML types with charset parameters, and exact extension/type matching are
   unchanged; attachment-only container/text specialization remains separate.
+  Behaviour change: broad rules such as `image/*` now accept AVIF and HEIC/HEIF
+  uploads that were rejected as generic binary before, matching attachments;
+  narrow a rule if its image pipeline cannot decode them.
 
 ## v0.28.1 — 2026-11-13
 
