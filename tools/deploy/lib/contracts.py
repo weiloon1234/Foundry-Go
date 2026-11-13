@@ -573,6 +573,8 @@ FEATURE_PROFILE_SCHEMA = 3
 ARCHIVE_SCHEMA = 2
 RECORD_SCHEMA = 1
 FEATURE_CAPABILITIES = frozenset({"topology-v2", "profile-v3", "release-v2"})
+# Historical capability floor, independent of the currently selected tool generation.
+FEATURE_INTRODUCTION_GENERATION = 11
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
 
 
@@ -941,7 +943,7 @@ class DeploymentSelection:
         instance, resolution = contract_uuid(v["instance_id"]), contract_uuid(v["selected_resolution_id"])
         require(admission.instance_id == instance and admission.resolution_id == resolution,
                 "invalid_contract", "Selection and admission identities differ.")
-        return cls(instance, contract_int(v["minimum_generation"]), capabilities, resolution,
+        return cls(instance, contract_int(v["minimum_generation"], FEATURE_INTRODUCTION_GENERATION), capabilities, resolution,
                    None if v["previous_resolution_id"] is None else contract_uuid(v["previous_resolution_id"]),
                    admission, contract_names(v["enabled_roles"]), contract_names(v["maintenance_holds"]))
 
@@ -1192,6 +1194,11 @@ class ReleaseDeclaration:
         require({n for n, _ in application_executables} == {n for n, _ in topology.application_executables}
                 and all(p.startswith("deploy/bin/") and p in files and files[p].kind == "application"
                         for _, p in application_executables), "invalid_contract", "Archive must inventory each application executable export.")
+        exports = dict(application_executables)
+        platform = "linux-" + profile.architecture
+        require(all(binary.go_package is not None or exports[name] == dict(binary.platforms)[platform]
+                    for name, binary in topology.application_executables),
+                "invalid_contract", "Prebuilt executable export differs from its declared target architecture path.")
         require(len(files) == len(inventory) and len({a.artifact for a in artifacts}) == len(artifacts)
                 and {a.artifact for a in artifacts} == {n for n, _ in topology.artifacts},
                 "invalid_contract", "Archive inventories must be unique and cover all declared artifacts.")

@@ -123,6 +123,13 @@ class ArgumentKind(str, Enum):
     DATA_ROOT = "data_root"
 
 
+def _secret_file_name(value):
+    """Secret argv references name the same environment key as secret_files."""
+    require(isinstance(value, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{0,119}_FILE", value),
+            "invalid_topology", "Secret environment references require _FILE names.")
+    return value
+
+
 @dataclass(frozen=True)
 class Argument:
     kind: ArgumentKind
@@ -142,6 +149,8 @@ class Argument:
             require(item == "self", "invalid_topology", "Copy ordinal reference must select self.")
         elif tag in ("state_path", "runtime_path"):
             contract_path(item)
+        elif tag == "secret_file":
+            _secret_file_name(item)
         else:
             contract_name(item)
         return cls(ArgumentKind(tag), item)
@@ -476,8 +485,7 @@ def _role(value):
     args = contract_list(value.get("arguments", []), Argument.parse, maximum=128)
     require(sum(len(a.value.encode()) for a in args) <= 32768, "invalid_topology", "Argument vector is too large.")
     secrets = value.get("secret_files", {})
-    require(isinstance(secrets, dict) and len(secrets) <= 64
-            and all(isinstance(k, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{0,119}_FILE", k) for k in secrets),
+    require(isinstance(secrets, dict) and len(secrets) <= 64,
             "invalid_topology", "Secret environment references require _FILE names.")
     environment = value.get("environment", {})
     require(isinstance(environment, dict) and len(environment) <= 64
@@ -489,7 +497,7 @@ def _role(value):
     require(all(a.kind is not ArgumentKind.SECRET_FILE for _, a in env),
             "invalid_topology", "Secret paths require the secret_files owner.")
     return ExecutableRole(shared, parse_executable(value["executable"]), args, configs,
-                          tuple((k, contract_name(v)) for k, v in sorted(secrets.items())), listeners,
+                          tuple((_secret_file_name(k), contract_name(v)) for k, v in sorted(secrets.items())), listeners,
                           Probe.parse(value["readiness"]), RestartPolicy.parse(value["restart"]),
                           ResourceLimits.parse(value["limits"]), StatePolicy.parse(value["state"]),
                           env)
@@ -660,8 +668,6 @@ def parse_profile(document, topology: Topology, project=None) -> DeploymentProfi
         require(set(counts) == {r.common.name for r in topology.roles} and counts.get("http") == 1,
                 "invalid_profile", "Placement must explicitly cover every role and place HTTP.")
         for role in topology.roles:
-            require(not isinstance(role, BuiltinRole) or counts[role.common.name] == 1,
-                    "invalid_profile", "Declared built-in roles remain single-copy.")
             require(not counts[role.common.name] or all(counts[d] for d in role.common.requires),
                     "invalid_profile", "Placed role prerequisites must be placed.")
             require(not counts[role.common.name] or all(not isinstance(b, EndpointBinding) or counts[b.role]

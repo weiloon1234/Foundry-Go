@@ -88,6 +88,39 @@ def closure():
 
 
 class CapabilityTopologyTests(unittest.TestCase):
+    def test_secret_file_arguments_use_declared_environment_keys(self):
+        raw = declaration()
+        raw["secrets"] = {"token": {"prompt": "Service token"}}
+        raw["roles"][1]["secret_files"] = {"TOKEN_FILE": "token"}
+        raw["roles"][1]["arguments"] = [{"secret_file": "TOKEN_FILE"}]
+        role = t.parse_topology(raw).roles[1]
+        self.assertEqual(role.arguments, (t.Argument(t.ArgumentKind.SECRET_FILE, "TOKEN_FILE"),))
+        self.assertEqual(dict(role.secret_files)[role.arguments[0].value], "token")
+        for reference in ("token", "token_file", "TOKEN", "MISSING_FILE", "../TOKEN_FILE", 1):
+            bad = copy.deepcopy(raw)
+            bad["roles"][1]["arguments"] = [{"secret_file": reference}]
+            with self.subTest(reference=reference), self.assertRaises(c.DeployError):
+                t.parse_topology(bad)
+        for key in ("token_file", "TOKEN"):
+            bad = copy.deepcopy(raw)
+            bad["roles"][1]["arguments"] = []
+            bad["roles"][1]["secret_files"] = {key: "token"}
+            with self.subTest(key=key), self.assertRaises(c.DeployError):
+                t.parse_topology(bad)
+
+    def test_non_http_builtin_can_be_unplaced_without_weakening_dependencies(self):
+        raw = {"schema": 2, "roles": [{"name": "http", "kind": "builtin"},
+                                      {"name": "worker", "kind": "builtin"}]}
+        placed = {**profile(), "placement": {"http": 1, "worker": 0}, "listeners": {}}
+        self.assertEqual(dict(t.parse_profile(placed, t.parse_topology(raw)).placement),
+                         {"http": 1, "worker": 0})
+        with self.assertRaises(c.DeployError):
+            t.parse_profile({**placed, "placement": {"http": 0, "worker": 0}}, t.parse_topology(raw))
+        raw["roles"].append({"name": "scheduler", "kind": "builtin", "requires": ["worker"]})
+        placed["placement"]["scheduler"] = 1
+        with self.assertRaises(c.DeployError):
+            t.parse_profile(placed, t.parse_topology(raw))
+
     def test_legacy_reader_and_unit_map_are_unchanged(self):
         _, p, entry = fixture()
         raw = {"schema": 1, "roles": [{"name": "http"}, {"name": "worker"}]}
@@ -241,6 +274,33 @@ class CapabilityTopologyTests(unittest.TestCase):
 
 
 class CapabilityRecordTests(unittest.TestCase):
+    def test_selection_floor_cannot_predate_its_capabilities(self):
+        for floor in range(11):
+            with self.subTest(floor=floor), self.assertRaises(c.DeployError):
+                c.DeploymentSelection.parse({**selection(), "minimum_generation": floor})
+        for floor in (11, 12):
+            self.assertEqual(c.DeploymentSelection.parse({**selection(), "minimum_generation": floor}).minimum_generation,
+                             floor)
+
+    def test_prebuilt_executable_export_matches_selected_architecture(self):
+        raw = declaration()
+        platforms = {"linux-amd64": "deploy/bin/relay-amd64", "linux-arm64": "deploy/bin/relay-arm64"}
+        raw["application_executables"]["relay-server"] = {"platforms": platforms}
+        parsed = t.parse_topology(raw)
+        value = {"schema": 2, "topology": raw, "profile": profile(), "topology_sha256": parsed.sha256,
+                 "inventory": [{"path": "deploy/files/relay.json", "sha256": DIGEST, "size": 42, "kind": "config"},
+                               *[{"path": path, "sha256": OTHER, "size": 1024, "kind": "application"}
+                                 for path in platforms.values()]],
+                 "artifacts": [], "application_executables": {}}
+        for architecture, other in (("amd64", "arm64"), ("arm64", "amd64")):
+            value["profile"]["architecture"] = architecture
+            expected = platforms["linux-" + architecture]
+            value["application_executables"]["relay-server"] = expected
+            self.assertEqual(dict(c.ReleaseDeclaration.parse(value).application_executables)["relay-server"], expected)
+            value["application_executables"]["relay-server"] = platforms["linux-" + other]
+            with self.subTest(architecture=architecture), self.assertRaises(c.DeployError):
+                c.ReleaseDeclaration.parse(value)
+
     def test_resolution_preserves_private_revision_and_owns_environment(self):
         raw = resolution()
         target = c.RuntimeResolution.parse(raw)
