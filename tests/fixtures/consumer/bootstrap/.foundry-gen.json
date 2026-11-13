@@ -2,7 +2,7 @@
   "version": 1,
   "files": {
     "profile_foundry.gen.go": "8c794ac2697f7f2d3bec94d4fa53c0cce094800580f697f0ec6e166c79767fd7",
-    "settings_foundry.gen.go": "8cf01dcc4e159d6146b5b5dde843582768d6a10149bdfcc260c09cf7a00e2d00",
+    "settings_foundry.gen.go": "c212d35656df717a0fe9bd0d610e834e041940fc24a55ff6f1b1f4976153f7cc",
     "upload_input_foundry.gen.go": "cf8395863139ad2bf2deb485044a3033c2c920627a27678dfdb51db583926ad2",
     "upload_result_foundry.gen.go": "ca26016e60ed03babe325d2823bdd6daf30149b037daa75a4ee14032f4c08581"
   }

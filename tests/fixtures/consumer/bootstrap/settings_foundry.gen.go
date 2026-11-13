@@ -10,6 +10,7 @@ import (
 	cache "github.com/weiloon1234/Foundry-Go/cache"
 	config "github.com/weiloon1234/Foundry-Go/config"
 	database "github.com/weiloon1234/Foundry-Go/database"
+	expr "github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	email "github.com/weiloon1234/Foundry-Go/email"
 	encryption "github.com/weiloon1234/Foundry-Go/encryption"
 	foundryfault "github.com/weiloon1234/Foundry-Go/fault"
@@ -1123,6 +1124,14 @@ type SettingsAppFeaturesReportsConfigConfigKeySet struct {
 	// direct manager, or inherits the application timezone during assembly.
 	//
 	TimeZone config.Key[Settings, temporal.ZoneName]
+	// TextCollation selects app.features.reports.config.text_collation. Set accepts expr.Collation.
+	//
+	// TextCollation applies to text column sorts unless their expression has an
+	// explicit collation. Empty keeps the database default. Stable orders are unchanged.
+	// Outer DISTINCT sources retain their selected-expression ordering without this default.
+	// Module verifies availability at boot; direct managers should call CheckCollation.
+	//
+	TextCollation config.Key[Settings, expr.Collation]
 	// Schema selects app.features.reports.config.schema. Set accepts string.
 	Schema config.Key[Settings, string]
 	// MaxActive selects app.features.reports.config.max_active. Set accepts int.
@@ -2441,6 +2450,7 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 					Database: config.Scalar[Settings, database.ConnectionName]("app.features.reports.database", func(settings *Settings) *database.ConnectionName { return &settings.App.Features.Reports.Database }),
 					Config: SettingsAppFeaturesReportsConfigConfigKeySet{
 						TimeZone:       config.Scalar[Settings, temporal.ZoneName]("app.features.reports.config.time_zone", func(settings *Settings) *temporal.ZoneName { return &settings.App.Features.Reports.Config.TimeZone }),
+						TextCollation:  config.Scalar[Settings, expr.Collation]("app.features.reports.config.text_collation", func(settings *Settings) *expr.Collation { return &settings.App.Features.Reports.Config.TextCollation }),
 						Schema:         config.Scalar[Settings, string]("app.features.reports.config.schema", func(settings *Settings) *string { return &settings.App.Features.Reports.Config.Schema }),
 						MaxActive:      config.Scalar[Settings, int]("app.features.reports.config.max_active", func(settings *Settings) *int { return &settings.App.Features.Reports.Config.MaxActive }),
 						Timeout:        config.Duration[Settings]("app.features.reports.config.timeout", func(settings *Settings) *time.Duration { return &settings.App.Features.Reports.Config.Timeout }),
@@ -3049,6 +3059,7 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.Features.Reports.Enabled,
 		keys.App.Features.Reports.Database,
 		keys.App.Features.Reports.Config.TimeZone,
+		keys.App.Features.Reports.Config.TextCollation,
 		keys.App.Features.Reports.Config.Schema,
 		keys.App.Features.Reports.Config.MaxActive,
 		keys.App.Features.Reports.Config.Timeout,
