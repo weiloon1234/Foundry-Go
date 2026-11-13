@@ -4,6 +4,9 @@
 
 ### Deployment feature preview
 
+- Added a consumer guide for topology 2/profile 3, with a generic authenticated
+  media relay, typed Go binding intake, preview refusals, and UFW/NAT/DNS operation.
+
 - Added public plain TCP coverage to the feature acceptance scenario: IPv4/IPv6
   peer-namespace probes verify relay bytes through nginx stream on port 8554,
   closure before activation and after stop, restart continuity, and report entries.
