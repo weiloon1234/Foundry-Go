@@ -256,7 +256,11 @@ built-in declarations retain prior rules, declared user chains reset, and
 undeclared chains survive. Appends and indexed inserts operate on the accumulated
 chains in every table and both address families. Reconstruction starts from the
 live inventory and applies the reviewed UFW helper cleanup, so a persistent jump
-cannot conceal a surviving live auxiliary rule. Persistent digests retain source
+cannot conceal a surviving live auxiliary rule. Observation also requires a
+separate fresh-boot reconstruction to pass: an empty kernel plus standard UFW
+hooks and the same ordered persistent-file replay. A missing live hook cannot
+hide a persistent allow that becomes reachable after reboot. Both views validate
+filter and auxiliary policy for each address family. Persistent digests retain source
 operation order without chain counters. `parse_rules` is the filter projection for existing callers;
 `parse_tables` and `observe` retain and validate the complete table inventory.
 
@@ -273,6 +277,12 @@ NAT acceptance command (from `tools/deploy/tests`):
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest test_network test_network_nat test_network_real test_network_review test_network_preview test_feature_network_adapters test_plain_tcp test_edge test_certificates test_report test_uploads
 ```
+
+Fresh-boot follow-up: 176 lane C tests passed. The exact missing-live-hook
+regression in `test_boot_hooks_reach_persistent_allow_missing_from_live_reload`
+failed before the fix in all four IPv4/IPv6 and legacy/nft combinations, and now
+refuses the persistent allow. `make deploy-tools-check` ran 742 tests: 732 passed,
+9 skipped, with only the known firewall/listeners inventory failure.
 
 Current noflush fix result: 175 lane C tests passed; the final targeted NAT
 rerun passed all 17 tests. Five added tests cover the exact before.rules redirect

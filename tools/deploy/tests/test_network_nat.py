@@ -194,6 +194,28 @@ class NATObservationTests(unittest.TestCase):
         with self.assertRaises(c.DeployError):
             self.observe()
 
+    def test_boot_hooks_reach_persistent_allow_missing_from_live_reload(self):
+        for family in (4, 6):
+            prefix, suffix = ("ufw6", "6") if family == 6 else ("ufw", "")
+            after = self.host.paths.p(f"/etc/ufw/after{suffix}.rules")
+            original = after.read_text()
+            hook = f"-A INPUT -j {prefix}-after-input\n"
+            self.assertIn(hook, self.original[family])
+            self.live[family] = self.original[family].replace(hook, "")
+            try:
+                for backend in ("legacy", "nf_tables"):
+                    with self.subTest(family=family, backend=backend):
+                        self.backend = backend
+                        after.write_text(original)
+                        self.assertTrue(self.observe().closed)
+                        after.write_text(original.replace("\nCOMMIT", f"\n-A {prefix}-after-input -p tcp --dport 8554 -j ACCEPT\nCOMMIT"))
+                        with self.assertRaises(c.DeployError) as caught:
+                            self.observe()
+                        self.assertEqual(caught.exception.code, "firewall_foreign_allow")
+            finally:
+                after.write_text(original)
+                self.live[family] = self.original[family]
+
     def test_review_redirect_survives_later_empty_builtin_declaration(self):
         for family in (4, 6):
             suffix = "6" if family == 6 else ""

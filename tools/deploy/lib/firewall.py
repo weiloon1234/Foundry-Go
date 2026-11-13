@@ -519,9 +519,12 @@ def observe(host, instance_id, claims, *, bindings=(), opened=False, integrated=
                 "firewall_default_deny", "Live input and routed policies must both default to DROP.")
         _, expected = exposure_rules(instance_id, (*retained_claims, *(claims if opened else ())), bindings, family)
         require_denied(chains, ("INPUT", "FORWARD"), ports, owned=chain if integrated else None, allowed=expected)
-        persisted = _reload_tables(files, family, settings, initial=tables)
-        require_auxiliary_policy(persisted, ports)
-        require_denied(persisted["filter"]["chains"], ("INPUT", "FORWARD"), ports, owned=chain if integrated else None)
+        # Reload retains live hooks; boot recreates the standard hooks. Neither
+        # view alone proves persistent closure when a live hook is missing.
+        for initial in (tables, None):
+            persisted = _reload_tables(files, family, settings, initial=initial)
+            require_auxiliary_policy(persisted, ports)
+            require_denied(persisted["filter"]["chains"], ("INPUT", "FORWARD"), ports, owned=chain if integrated else None)
         live[family] = tables
     nft = json.loads(host.run(["nft", "-j", "list", "ruleset"], timeout=5).stdout)
     require_nft_layout(nft, live, backends)
