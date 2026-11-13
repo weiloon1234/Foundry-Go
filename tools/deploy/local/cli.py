@@ -1091,7 +1091,7 @@ def deploy(project, profile, settings):
         role = os.environ["ROLE"] if "ROLE" in os.environ else (ask("Role (http / scheduler / worker)", "http") if sys.stdin.isatty() else "http")
         role = declared_role(role)
         if logs["follow"]:
-            entry = {"name": instance_name(project, profile), "topology": load_topology(ROOT)}
+            entry = {"name": instance_name(project, profile), "topology": load_topology(ROOT), "profile": profile}
             with closing(SSH(profile, settings, interactive=True)) as ssh:
                 ssh.follow_logs(entry, role, logs["lines"])
             return

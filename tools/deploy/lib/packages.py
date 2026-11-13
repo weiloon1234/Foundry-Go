@@ -355,8 +355,9 @@ def command(args):
 def paragraphs(stream):
     record, key, size = {}, None, 0
     while True:
-        line = stream.readline(65537)
-        if len(line) > 65536:
+        # Real Ubuntu indexes carry Provides lines far above 64 KiB; the record bound applies.
+        line = stream.readline(2*1024**2 + 1)
+        if len(line) > 2*1024**2:
             raise ValueError("metadata line too large")
         if not line or line in (b"\n", b"\r\n"):
             if record:
@@ -507,10 +508,11 @@ def _candidate_evidence(host, transaction):
 
 
 UNIT = re.compile(r"[A-Za-z0-9_:,.@\\-]+\.(?:service|socket|timer|path|target)")
+TEMPLATE_UNIT = re.compile(r"@\.(?:service|socket|timer|path|target)$")
 
 
 def _activation_snapshot(host):
-    names = set()
+    names, templates = set(), {}
     for args in (["list-unit-files", "--no-legend", "--no-pager"],
                  ["list-units", "--all", "--plain", "--no-legend", "--no-pager"]):
         result = host.run(["systemctl", *args])
@@ -518,12 +520,16 @@ def _activation_snapshot(host):
             parts = line.split()
             if parts and UNIT.fullmatch(parts[0]):
                 names.add(parts[0])
+                # `systemctl show` rejects template names such as autovt@.service.
+                if TEMPLATE_UNIT.search(parts[0]) and args[0] == "list-unit-files" and len(parts) > 1:
+                    templates[parts[0]] = parts[1]
     require(len(names) <= 4096, "package_activation", "Host activation inventory is too large.")
-    if not names:
-        return {}
-    result = host.run(["systemctl", "show", *sorted(names), "--no-pager", "-p", "Id", "-p", "LoadState",
+    records = {name: {"template_state": state} for name, state in templates.items()}
+    shown = sorted(names - templates.keys())
+    if not shown:
+        return dict(sorted(records.items()))
+    result = host.run(["systemctl", "show", *shown, "--no-pager", "-p", "Id", "-p", "LoadState",
                        "-p", "ActiveState", "-p", "SubState", "-p", "MainPID", "-p", "UnitFileState", "-p", "FragmentPath"])
-    records = {}
     for block in result.stdout.strip().split("\n\n"):
         record = dict(line.split("=", 1) for line in block.splitlines() if "=" in line)
         name = record.pop("Id", None)

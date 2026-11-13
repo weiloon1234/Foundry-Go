@@ -85,6 +85,10 @@ func (policy sourcePolicy) sourceName(path string) bool {
 	if strings.HasPrefix(relative, "tests/oracle/testdata/stage8d/sources/") || strings.HasPrefix(relative, "tests/oracle/testdata/stage8d-matching/sources/") {
 		return strings.HasSuffix(relative, ".go.txt")
 	}
+	// Unedited UFW and nginx captures from real Ubuntu hosts; data, never executed.
+	if strings.HasPrefix(relative, "tools/deploy/tests/network_fixtures/") {
+		return true
+	}
 	// Retired compiler inputs remain digest-checked evidence in the consumer.
 	if strings.HasPrefix(relative, "testdata/compilefail/") && name == "invalid.go.txt" {
 		return true
@@ -110,6 +114,14 @@ func (policy sourcePolicy) sourceName(path string) bool {
 		"tools/deploy/server/templates/nginx-proxy.conf",
 		"tools/deploy/server/templates/nginx-upgrade.conf",
 		"tools/deploy/server/templates/nginx-upload.conf",
+		"tools/deploy/server/templates/admission.service",
+		"tools/deploy/server/templates/custom.service",
+		"tools/deploy/server/templates/firewall-runtime.rules",
+		"tools/deploy/server/templates/foundry-edge-boot.conf",
+		"tools/deploy/server/templates/nginx-http-admission.conf",
+		"tools/deploy/server/templates/nginx-stream.conf",
+		"tools/deploy/server/templates/nginx-tcp-tls.conf",
+		"tools/deploy/tests/network-preview.Dockerfile",
 		"tools/deploy/server/templates/scheduler.service",
 		"tools/deploy/server/templates/worker.service",
 		"tools/deploy/docker/builder.Dockerfile",
