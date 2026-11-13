@@ -396,6 +396,16 @@
         "title": "go:874612457cdc8d7319303305c10492405e8dd6f1b85c024df63dbfb73046fa1e",
         "x-foundry-type-id": "go:874612457cdc8d7319303305c10492405e8dd6f1b85c024df63dbfb73046fa1e"
       },
+      "HeaderSequence": {
+        "format": "int64",
+        "maximum": 9223372036854775807,
+        "minimum": -9223372036854775808,
+        "title": "foundry.test/consumer/clientcontracts.HeaderSequence",
+        "type": "integer",
+        "x-foundry-integer-bits": 64,
+        "x-foundry-integer-signed": true,
+        "x-foundry-type-id": "foundry.test/consumer/clientcontracts.HeaderSequence"
+      },
       "Int": {
         "format": "int64",
         "maximum": 9223372036854775807,
@@ -2170,6 +2180,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -2673,6 +2690,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -3179,6 +3203,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -3689,6 +3720,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -4197,6 +4235,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -4690,6 +4735,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -5201,6 +5253,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -5679,6 +5738,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -6167,6 +6233,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -6716,6 +6789,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -7518,6 +7598,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -8003,6 +8090,537 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
+          "Form": {
+            "Bytes": 2097152,
+            "Pairs": 1024,
+            "Issues": 16
+          },
+          "Body": {
+            "Bytes": 2097152,
+            "Depth": 32,
+            "Nodes": 65536,
+            "Steps": 262144,
+            "Issues": 16
+          },
+          "Response": {
+            "Bytes": 33554432,
+            "Depth": 32,
+            "Nodes": 1048576,
+            "Steps": 4194304,
+            "Issues": 16
+          },
+          "Validation": {
+            "Checks": 65536,
+            "Issues": 32,
+            "Depth": 32,
+            "ValueBytes": 1048576
+          },
+          "Raw": {
+            "Bytes": 2097152
+          }
+        }
+      }
+    },
+    "/headers": {
+      "get": {
+        "operationId": "headers.inspect",
+        "parameters": [
+          {
+            "explode": true,
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/String"
+            },
+            "style": "form",
+            "x-foundry-url-syntax": "text"
+          },
+          {
+            "description": "One ASCII field value, with interior HTAB allowed and no outer whitespace. Duplicate field lines are rejected. Declared name and value bytes count toward the operation's header limits.",
+            "explode": false,
+            "in": "header",
+            "name": "X-App-Version",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/String"
+            },
+            "style": "simple",
+            "x-foundry-url-syntax": "text"
+          },
+          {
+            "description": "One ASCII field value, with interior HTAB allowed and no outer whitespace. Duplicate field lines are rejected. Declared name and value bytes count toward the operation's header limits.",
+            "explode": false,
+            "in": "header",
+            "name": "X-Sequence",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/HeaderSequence"
+            },
+            "style": "simple",
+            "x-foundry-url-syntax": "integer"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "bad_request"
+                          ]
+                        },
+                        "status": {
+                          "const": 400
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "bad_request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "unauthenticated"
+                          ]
+                        },
+                        "status": {
+                          "const": 401
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "forbidden",
+                            "mfa_required"
+                          ]
+                        },
+                        "status": {
+                          "const": 403
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "forbidden, mfa_required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "not_found"
+                          ]
+                        },
+                        "status": {
+                          "const": 404
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "method_not_allowed"
+                          ]
+                        },
+                        "status": {
+                          "const": 405
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "method_not_allowed"
+          },
+          "406": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "not_acceptable"
+                          ]
+                        },
+                        "status": {
+                          "const": 406
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "not_acceptable"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "request_timeout"
+                          ]
+                        },
+                        "status": {
+                          "const": 408
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "request_timeout"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "conflict"
+                          ]
+                        },
+                        "status": {
+                          "const": 409
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "precondition_failed"
+                          ]
+                        },
+                        "status": {
+                          "const": 412
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "precondition_failed"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "payload_too_large"
+                          ]
+                        },
+                        "status": {
+                          "const": 413
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "payload_too_large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "unsupported_media_type"
+                          ]
+                        },
+                        "status": {
+                          "const": 415
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "unsupported_media_type"
+          },
+          "416": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "range_not_satisfiable"
+                          ]
+                        },
+                        "status": {
+                          "const": 416
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "range_not_satisfiable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "validation_failed"
+                          ]
+                        },
+                        "status": {
+                          "const": 422
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "validation_failed"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "rate_limited"
+                          ]
+                        },
+                        "status": {
+                          "const": 429
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "internal_error"
+                          ]
+                        },
+                        "status": {
+                          "const": 500
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "internal_error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "properties": {
+                        "error_code": {
+                          "enum": [
+                            "unavailable"
+                          ]
+                        },
+                        "status": {
+                          "const": 503
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "unavailable"
+          }
+        },
+        "x-foundry-access": "public",
+        "x-foundry-client-name": "headersInspect",
+        "x-foundry-limits": {
+          "Multipart": {
+            "Bytes": 2097152,
+            "FileBytes": 2097152,
+            "Parts": 128,
+            "Files": 16,
+            "Readers": 16,
+            "HeaderBytes": 32768,
+            "FieldBytes": 65536,
+            "FieldsBytes": 262144,
+            "Issues": 16
+          },
+          "Files": {
+            "Bytes": 1073741824,
+            "Ranges": 16,
+            "RangeBytes": 4096
+          },
+          "Query": {
+            "Bytes": 16384,
+            "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -8542,6 +9160,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -9215,6 +9840,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -9989,6 +10621,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -10477,6 +11116,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -11025,6 +11671,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -11825,6 +12478,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -12509,6 +13169,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -13255,6 +13922,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -13773,6 +14447,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -14268,6 +14949,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -14823,6 +15511,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -15374,6 +16069,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -15936,6 +16638,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -16433,6 +17142,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -16928,6 +17644,13 @@
           "Query": {
             "Bytes": 16384,
             "Pairs": 128,
+            "Issues": 16
+          },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
             "Issues": 16
           },
           "Form": {
@@ -17481,6 +18204,13 @@
             "Pairs": 128,
             "Issues": 16
           },
+          "Headers": {
+            "FieldBytes": 8192,
+            "Bytes": 16384,
+            "Fields": 32,
+            "Values": 64,
+            "Issues": 16
+          },
           "Form": {
             "Bytes": 2097152,
             "Pairs": 1024,
@@ -17513,5 +18243,5 @@
       }
     }
   },
-  "x-foundry-manifest-version": 10
+  "x-foundry-manifest-version": 11
 }

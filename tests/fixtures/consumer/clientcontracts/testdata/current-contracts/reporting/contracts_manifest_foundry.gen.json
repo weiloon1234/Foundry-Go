@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "types": [
     {
       "id": "[]contract.Issue",
@@ -691,6 +691,7 @@
       "name": "reportsMembersCsv",
       "path": [],
       "query": [],
+      "headers": [],
       "response": {
         "media_type": "text/csv; charset=utf-8",
         "file": {
@@ -722,6 +723,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -802,6 +810,7 @@
       "name": "reportsMembersQuery",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "github.com/weiloon1234/Foundry-Go/datatable.Request"
@@ -831,6 +840,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -933,6 +949,7 @@
           "repeated": false
         }
       ],
+      "headers": [],
       "response": {
         "file": {
           "media_types": [
@@ -964,6 +981,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -1047,6 +1071,7 @@
       "name": "reportsTablesReportsNumericLevelsExport",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "github.com/weiloon1234/Foundry-Go/datatable.ExportRequest"
@@ -1076,6 +1101,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -1156,6 +1188,7 @@
       "name": "reportsTablesReportsNumericLevelsQuery",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "github.com/weiloon1234/Foundry-Go/datatable.Request"
@@ -1185,6 +1218,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {

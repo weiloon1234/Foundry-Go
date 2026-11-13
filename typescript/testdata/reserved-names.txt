@@ -108,6 +108,7 @@ Failures
 FieldBytes
 FieldDescriptor
 FieldValue
+Fields
 FieldsBytes
 FileBytes
 FileResult
@@ -144,6 +145,7 @@ HTTPRequest
 HTTPResponse
 HTTPTransport
 HeaderBytes
+Headers
 Honor
 IANA
 ID
@@ -287,6 +289,7 @@ Replacing
 Reports
 Request
 RequestCredentials
+RequestHeaderLimits
 Requests
 Reset
 Resolves
@@ -407,6 +410,7 @@ ValidationReport
 ValidationTemplate
 Value
 ValueBytes
+Values
 W
 WeakMap
 WeakSet

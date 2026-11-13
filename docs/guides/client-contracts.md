@@ -13,7 +13,7 @@
 - Coordinate credentials: [Session locks and failures](#recipe-session-coordination)
 - Inspect fields: [Descriptors](client-descriptors.md#recipe-field-descriptors)
 - Consume: [Portal entries](#recipe-portal-entries)
-- Encode: [Precision, presence and locales](#recipe-wire-values)
+- Encode: [Typed request headers](#recipe-request-headers), [Precision, presence and locales](#recipe-wire-values)
 - Connect: [Fetch transport](#recipe-fetch-transport), [Realtime lifetime](#recipe-realtime-lifecycle)
 - Sign in: [Auth declarations](#recipe-declare-portal-session), [Portal sessions](#recipe-portal-session)
 - Query tables: [Generated bindings](#recipe-table-bindings)
@@ -50,8 +50,14 @@ operation names and feature metadata. Conflicting definitions or ambiguous
 camel-cased names are errors. `Snapshot()` and `JSON()` return owned copies.
 `manifest.Decode(data)` validates a saved manifest without loading application
 code. The decoder rejects unknown versions, duplicate JSON keys, unknown fields,
-broken references and oversized/deep documents. Manifest version 10 adds grouped guard alternatives to the existing operation,
-presentation and typed-error contracts. Regenerate saved manifests and clients
+broken references and oversized/deep documents. Manifest version 11 adds typed
+request headers to the existing operation, guard, presentation and typed-error
+contracts. Every operation has a `headers` array; header-free operations use `[]`.
+The v11 TypeScript runtime also reserves `Headers`, `Fields`, `Values` and
+`RequestHeaderLimits`; public schemas with those names receive qualified generated
+names.
+Names are canonical and sorted, with case-insensitive duplicates and reserved
+transport names rejected. Header values are scalar, without repetition or defaults. Regenerate saved manifests and clients
 together. [Typed descriptors](client-descriptors.md) expose operation/field lookup
 and explicit semantic hints through the same contract.
 
@@ -61,7 +67,7 @@ and explicit semantic hints through the same contract.
 `AuthenticationInfo.AnyOf` exports a nonempty `any_of` array. Each branch contains
 `required_scopes`, `required_permissions`, or both. Every name within a branch is
 required; one complete branch admits the request. Legacy declarations retain
-their flat fields, and a declaration cannot contain both forms. Manifest 10 rejects
+their flat fields, and a declaration cannot contain both forms. The manifest rejects
 invalid names, duplicates, empty branches and excessive requirement totals.
 Projections and raw-route inspection preserve the same grouped metadata.
 
@@ -87,7 +93,8 @@ prove that a browser may perform an operation. The server still evaluates curren
 permissions and resource policies.
 
 Regenerate saved manifests, OpenAPI and TypeScript with the same framework pin.
-Version 9 and version 10 readers reject each other's formats. See the
+The current reader accepts only version 11; v10 manifests must be regenerated.
+For the earlier guard metadata change, see the
 [upgrade note](../compatibility.md#any-of-route-guards-manifest-10).
 
 ## Generate the client
@@ -689,9 +696,61 @@ Applications upgrading from v0.2 to v0.3 should update TypeScript imports and ty
 3. Replace handwritten datatable metadata parsers with the generated `tables` registry.
 4. Regenerate all client contracts using `foundry contracts` or the application's exported command.
 
+<a id="recipe-request-headers"></a>
+## Typed request headers
+
+Declared application headers appear in the generated operation's `headers`
+member, using canonical wire names. The member is required when any header is
+required; optional fields preserve omission. Operations without declared headers
+keep their existing request signature. For the
+[consumer declaration](../../tests/fixtures/consumer/clientcontracts/request_headers.go),
+the generated request accepts:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#request-headers -->
+```typescript
+export async function requestHeaders(api: sdk.API) {
+  await api.headersInspect({
+    query: { q: "active" },
+    headers: { "X-App-Version": "2.4.0", "X-Sequence": "9223372036854775807" },
+  });
+}
+```
+
+Scalar types remain concrete: wide integers use lossless strings, identifiers
+retain their owner brands, and enums retain their cases. Empty string, zero and
+false are supplied values. Omission is distinct from null or explicit undefined;
+invalid supplied values fail before transport. Keys are exact and case-sensitive
+in this typed object, so `x-app-version` is rejected rather than treated as an alias.
+
+The client uses scalar formatting without URL escaping. Values must contain
+ASCII text, with HTAB allowed inside the value. Leading/trailing spaces or tabs,
+controls and non-ASCII text are rejected; custom formatters are never silently
+trimmed. `limits.Headers` bounds each value and the aggregate canonical-name plus
+value bytes, as well as fields and values. Raw transport headers do not count
+against this declared subset.
+
+`ClientOptions.headers` and `CallOptions.headers` still carry raw credentials and
+other transport headers. A raw name matching any declared header is rejected
+case-insensitively, even if the optional typed field was omitted. Typed values
+cannot override authentication, Content-Type or Idempotency-Key. The transport
+receives an owned lowercase header map; caller objects are unchanged.
+
+Validation uses semantic values under `headers`, alongside `path`, `query` and
+`body`. `operation("headersInspect").field("headers", "X-App-Version")` exposes the
+same field and `/headers/X-App-Version` issue path. Preparation and custom rules
+retain incomplete-validation reports. Projected clients retain types used only
+by headers.
+
+OpenAPI emits each application header with `in: header`, its scalar schema and
+requiredness, `style: simple`, and `explode: false`. The parameter description
+records ASCII framing, duplicate-line rejection and the declared budgets.
+Authentication schemes and Idempotency-Key remain separately owned. Configured
+proxy and third-party middleware inputs must not be declared as application
+headers; the static reserved-name policy does not infer those application choices.
+
 ## Injected HTTP transport
 
-`createClient(transport, options)` owns endpoint paths, query defaults/cardinality,
+`createClient(transport, options)` owns endpoint paths, query defaults/cardinality, typed request headers,
 JSON, URL-encoded form and multipart encoding, declared status checks, payload limits and errors.
 The transport owns network I/O, credentials and cancellation. Use the optional
 `fetchTransport` exported by every generated client entry when Fetch and Web
@@ -1063,9 +1122,9 @@ or Go-field-name conversion. The emitted `signInIdentifier` and
 The login body must declare exactly one password field with `client:"kind=password"`.
 
 Session helpers supply the login body and empty requests for refresh, logout,
-and profile. Generation rejects path inputs, required query parameters, signed
+and profile. Generation rejects path inputs, required query parameters, required headers, signed
 URLs, idempotency keys, and additional bodies these helpers cannot supply.
-Optional query parameters remain available through direct client calls.
+Optional query parameters and headers remain available through direct client calls.
 
 The profile route must use the declared guard. Login uses `TokenCookieResponse`;
 refresh pairs `RefreshTokenCookie` with `TokenCookieResponse`; logout pairs

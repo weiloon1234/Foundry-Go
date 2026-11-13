@@ -12,7 +12,7 @@ import (
 )
 
 func TestReservedNamesPreserveConsumerTypeNames(t *testing.T) {
-	// Frozen from renderedNames and runtime sources at fefe9551, before fetch.ts.
+	// Generated from renderedNames and runtime sources; v11 adds header limit names.
 	baseline, err := os.ReadFile("testdata/reserved-names.txt")
 	if err != nil {
 		t.Fatal(err)

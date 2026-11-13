@@ -29,7 +29,7 @@ func TestSurfaceAuthRequiresHostCookie(t *testing.T) {
 
 func TestSurfaceAuthRejectsUnsuppliedInputs(t *testing.T) {
 	for _, route := range []foundryhttp.RouteID{"login", "refresh", "logout", "profile"} {
-		for _, input := range []string{"path", "query", "body", "idempotency", "signedURL"} {
+		for _, input := range []string{"path", "query", "headers", "body", "idempotency", "signedURL"} {
 			if route == "login" && input == "body" {
 				continue
 			}
@@ -51,6 +51,8 @@ func TestSurfaceAuthRejectsUnsuppliedInputs(t *testing.T) {
 						op.Path = []manifest.Parameter{{Name: "tenant", Required: true}}
 					case "query":
 						op.Query = []manifest.Parameter{{Name: "tenant", Required: true}}
+					case "headers":
+						op.Headers = []manifest.Parameter{{Name: "X-Tenant", Required: true}}
 					case "body":
 						op.Body = &manifest.Payload{Type: "LoginBody"}
 					case "idempotency":

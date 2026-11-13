@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "types": [
     {
       "id": "[]contract.Issue",
@@ -68,6 +68,13 @@
       "kind": "map",
       "nullable": true,
       "element": "string"
+    },
+    {
+      "id": "foundry.test/consumer/clientcontracts.HeaderSequence",
+      "kind": "integer",
+      "nullable": false,
+      "bits": 64,
+      "signed": true
     },
     {
       "id": "foundry.test/consumer/clientcontracts.Member",
@@ -1423,6 +1430,7 @@
       "name": "accountShow",
       "path": [],
       "query": [],
+      "headers": [],
       "response": {
         "media_type": "application/json",
         "type": "foundry.test/consumer/clientcontracts.Member"
@@ -1448,6 +1456,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -1511,6 +1526,7 @@
       "name": "browserLogin",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "foundry.test/consumer/clientcontracts.BrowserLogin"
@@ -1540,6 +1556,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -1607,6 +1630,7 @@
       "name": "browserLogout",
       "path": [],
       "query": [],
+      "headers": [],
       "status": 204,
       "limits": {
         "Multipart": {
@@ -1628,6 +1652,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -1710,6 +1741,7 @@
       "name": "browserProfile",
       "path": [],
       "query": [],
+      "headers": [],
       "response": {
         "media_type": "application/json",
         "type": "foundry.test/consumer/clientcontracts.Member"
@@ -1735,6 +1767,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -1798,6 +1837,7 @@
       "name": "browserRefresh",
       "path": [],
       "query": [],
+      "headers": [],
       "response": {
         "media_type": "application/json",
         "type": "github.com/weiloon1234/Foundry-Go/internal/authtransport.AccessTokenResponse"
@@ -1823,6 +1863,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -1891,6 +1938,7 @@
       "name": "download",
       "path": [],
       "query": [],
+      "headers": [],
       "response": {
         "media_type": "text/plain",
         "file": {
@@ -1922,6 +1970,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -1985,6 +2040,7 @@
       "name": "empty",
       "path": [],
       "query": [],
+      "headers": [],
       "status": 204,
       "limits": {
         "Multipart": {
@@ -2006,6 +2062,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -2069,6 +2132,7 @@
       "name": "failure",
       "path": [],
       "query": [],
+      "headers": [],
       "response": {
         "media_type": "application/json",
         "type": "string"
@@ -2094,6 +2158,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -2158,6 +2229,7 @@
       "name": "filesRaw",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "raw": {
           "media_types": [
@@ -2191,6 +2263,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -2262,6 +2341,7 @@
           "repeated": false
         }
       ],
+      "headers": [],
       "body": {
         "media_type": "application/x-www-form-urlencoded",
         "fields": [
@@ -2320,6 +2400,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -2686,6 +2773,7 @@
       "name": "genericEcho",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "foundry.test/consumer/genericdto.UserDTO"
@@ -2715,6 +2803,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -2778,6 +2873,7 @@
       "name": "genericProject",
       "path": [],
       "query": [],
+      "headers": [],
       "response": {
         "media_type": "application/json",
         "type": "foundry.test/consumer/genericdto.Envelope[foundry.test/consumer/genericdto.ProjectDTO]"
@@ -2803,6 +2899,128 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
+          "Issues": 16
+        },
+        "Form": {
+          "Bytes": 2097152,
+          "Pairs": 1024,
+          "Issues": 16
+        },
+        "Body": {
+          "Bytes": 2097152,
+          "Depth": 32,
+          "Nodes": 65536,
+          "Steps": 262144,
+          "Issues": 16
+        },
+        "Response": {
+          "Bytes": 33554432,
+          "Depth": 32,
+          "Nodes": 1048576,
+          "Steps": 4194304,
+          "Issues": 16
+        },
+        "Validation": {
+          "Checks": 65536,
+          "Issues": 32,
+          "Depth": 32,
+          "ValueBytes": 1048576
+        },
+        "Raw": {
+          "Bytes": 2097152
+        }
+      },
+      "errors": [
+        "bad_request",
+        "conflict",
+        "forbidden",
+        "internal_error",
+        "method_not_allowed",
+        "mfa_required",
+        "not_acceptable",
+        "not_found",
+        "payload_too_large",
+        "precondition_failed",
+        "range_not_satisfiable",
+        "rate_limited",
+        "request_timeout",
+        "unauthenticated",
+        "unavailable",
+        "unsupported_media_type",
+        "validation_failed"
+      ]
+    },
+    {
+      "route": {
+        "id": "headers.inspect",
+        "method": "GET",
+        "path": "/headers",
+        "parameters": [],
+        "access": "public",
+        "raw": false
+      },
+      "name": "headersInspect",
+      "path": [],
+      "query": [
+        {
+          "name": "q",
+          "type": "string",
+          "syntax": "text",
+          "required": false,
+          "repeated": false
+        }
+      ],
+      "headers": [
+        {
+          "name": "X-App-Version",
+          "type": "string",
+          "syntax": "text",
+          "required": true,
+          "repeated": false
+        },
+        {
+          "name": "X-Sequence",
+          "type": "foundry.test/consumer/clientcontracts.HeaderSequence",
+          "syntax": "integer",
+          "required": false,
+          "repeated": false
+        }
+      ],
+      "status": 204,
+      "limits": {
+        "Multipart": {
+          "Bytes": 2097152,
+          "FileBytes": 2097152,
+          "Parts": 128,
+          "Files": 16,
+          "Readers": 16,
+          "HeaderBytes": 32768,
+          "FieldBytes": 65536,
+          "FieldsBytes": 262144,
+          "Issues": 16
+        },
+        "Files": {
+          "Bytes": 1073741824,
+          "Ranges": 16,
+          "RangeBytes": 4096
+        },
+        "Query": {
+          "Bytes": 16384,
+          "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -2895,6 +3113,7 @@
           "repeated": true
         }
       ],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "foundry.test/consumer/clientcontracts.Payload"
@@ -2924,6 +3143,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -3130,6 +3356,7 @@
       "name": "membersCreate",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "foundry.test/consumer/clientcontracts.CreateMember"
@@ -3159,6 +3386,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -3224,6 +3458,7 @@
       "name": "membersEvents",
       "path": [],
       "query": [],
+      "headers": [],
       "response": {
         "media_type": "text/event-stream",
         "type": "foundry.test/consumer/clientcontracts.Member"
@@ -3249,6 +3484,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -3342,6 +3584,7 @@
           "default_url": "20"
         }
       ],
+      "headers": [],
       "response": {
         "media_type": "application/json",
         "type": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/httppagination.MemberResponse]"
@@ -3367,6 +3610,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -3713,6 +3963,7 @@
           "default_url": "20"
         }
       ],
+      "headers": [],
       "response": {
         "media_type": "application/json",
         "type": "github.com/weiloon1234/Foundry-Go/http/pagination.NumberedResponse[foundry.test/consumer/httppagination.MemberResponse]"
@@ -3738,6 +3989,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -4087,6 +4345,7 @@
           "default_url": "20"
         }
       ],
+      "headers": [],
       "response": {
         "media_type": "application/json",
         "type": "github.com/weiloon1234/Foundry-Go/http/pagination.CursorResponse[foundry.test/consumer/httppagination.MemberResponse]"
@@ -4112,6 +4371,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -4359,6 +4625,7 @@
           "default_url": "20"
         }
       ],
+      "headers": [],
       "response": {
         "media_type": "application/json",
         "type": "github.com/weiloon1234/Foundry-Go/http/pagination.SimpleResponse[foundry.test/consumer/httppagination.MemberResponse]"
@@ -4384,6 +4651,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -4695,6 +4969,7 @@
       "name": "membersSigned",
       "path": [],
       "query": [],
+      "headers": [],
       "response": {
         "media_type": "application/json",
         "type": "foundry.test/consumer/clientcontracts.Member"
@@ -4720,6 +4995,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -4783,6 +5065,7 @@
       "name": "membersUpsert",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "foundry.test/consumer/clientcontracts.Member"
@@ -4816,6 +5099,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -4879,6 +5169,7 @@
       "name": "pluralBoundary",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "string"
@@ -4908,6 +5199,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -5027,6 +5325,7 @@
       "name": "pluralNegative",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "string"
@@ -5056,6 +5355,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -5175,6 +5481,7 @@
       "name": "pluralTiny",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "string"
@@ -5204,6 +5511,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -5323,6 +5637,7 @@
       "name": "sessionContinue",
       "path": [],
       "query": [],
+      "headers": [],
       "status": 303,
       "redirect": true,
       "limits": {
@@ -5345,6 +5660,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -5408,6 +5730,7 @@
       "name": "unionsEcho",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "foundry.test/consumer/unions.PaymentRequest"
@@ -5437,6 +5760,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -5500,6 +5830,7 @@
       "name": "unionsMethod",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "application/json",
         "type": "foundry.test/consumer/unions.PaymentMethod"
@@ -5529,6 +5860,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {
@@ -5592,6 +5930,7 @@
       "name": "uploadsProfile",
       "path": [],
       "query": [],
+      "headers": [],
       "body": {
         "media_type": "multipart/form-data",
         "parts": [
@@ -5659,6 +5998,13 @@
         "Query": {
           "Bytes": 16384,
           "Pairs": 128,
+          "Issues": 16
+        },
+        "Headers": {
+          "FieldBytes": 8192,
+          "Bytes": 16384,
+          "Fields": 32,
+          "Values": 64,
           "Issues": 16
         },
         "Form": {

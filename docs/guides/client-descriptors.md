@@ -62,6 +62,13 @@ method, accepting a declared schema identity string or a typed `schemas.<Name>` 
 (such as `schema(schemas.Payload)`). `operation(name).metadata` exposes route identity, access, media types,
 statuses and declared endpoint limits. These are the exported endpoint limits;
 inherited server/proxy limits and file MIME detection remain server policy.
+Declared request headers are available through
+`operation("headersInspect").field("headers", "X-App-Version")`, with canonical
+wire keys and paths such as `/headers/X-App-Version`. Their scalar types,
+presentation and validation rules come from the same manifest as the generated
+request's `headers` member. See [typed request headers](client-contracts.md#recipe-request-headers)
+for requiredness, framing and raw-header collision rules.
+
 Upload field descriptors (`part.kind === "file"`) expose `accept` (MIME media types
 and dot-prefixed extensions formatted for HTML file inputs) and `maxBytes` (maximum file byte size),
 composed from the endpoint's validation rules and multipart limits.
