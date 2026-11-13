@@ -33,6 +33,7 @@ type NoContent struct{}
 
 // Body is a typed request payload contract. Its zero value is invalid.
 type Body[B any] struct {
+	uploadPool *UploadPool
 	validate   func() error
 	read       func(stdhttp.ResponseWriter, *stdhttp.Request, EndpointLimits) (B, func() error, error)
 	describe   func() *PayloadInfo
@@ -64,7 +65,7 @@ func JSONBody[B any](descriptor contract.JSON[B]) Body[B] {
 
 // MultipartBody declares a generated or handwritten typed multipart form.
 func MultipartBody[B any](descriptor Multipart[B]) Body[B] {
-	return Body[B]{kind: payloadMultipart, validate: func() error { return ValidateMultipart(descriptor) }, read: func(w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (B, func() error, error) {
+	return Body[B]{uploadPool: descriptor.pool, kind: payloadMultipart, validate: func() error { return ValidateMultipart(descriptor) }, read: func(w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (B, func() error, error) {
 		return multipartRead(descriptor, w, r, limits)
 	}, describe: func() *PayloadInfo {
 		form, _ := InspectMultipart(descriptor)

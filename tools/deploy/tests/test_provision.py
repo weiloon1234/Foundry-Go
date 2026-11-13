@@ -119,6 +119,24 @@ class FoundationProvisionTests(unittest.TestCase):
             self.plan(topology={"schema": 1, "roles": [{"name": "http"}]})
         self.assertEqual("topology_change_required", error.exception.code)
 
+    def test_upload_mount_evidence_is_reviewed_and_configured_allocations_are_fixed(self):
+        from test_uploads import profile as upload_profile
+        self.profile["uploads"] = upload_profile()
+        with patch.object(provision.uploads, "inspect", return_value={"request": {"device": "8:1"}}) as inspect:
+            first = self.plan()
+            self.assertEqual({"request": {"device": "8:1"}}, first["observations"]["uploads"])
+            self.register(first)
+            stable = self.plan()
+            inspect.return_value = {"request": {"device": "8:2"}}
+            changed = self.plan()
+            self.assertNotEqual(stable["plan_token"], changed["plan_token"])
+            entry = self.host.registry_value["instances"][self.profile["instance_id"]]
+            entry["provisioning"]["completed_steps"].append("configuration")
+            self.profile["uploads"]["request_slots"] = 3
+            with self.assertRaises(DeployError) as error:
+                self.plan()
+            self.assertEqual("upload_profile_change", error.exception.code)
+
     def test_host_identity_mismatch_refuses_before_service_inspection(self):
         self.register(self.plan())
         self.profile["host"]["host_id"] = str(uuid.uuid4())

@@ -44,7 +44,9 @@ type ServerConfig struct {
 	// A matched route declared with WithBodyLimit replaces it for that route only.
 	MaxBodyBytes int64
 	// MaxConcurrentRequests bounds handlers that have actually entered the
-	// server. Zero uses DefaultServerConfig's limit. A request waits briefly for
+	// server, excluding routes with their own MultipartAdmission pool. Those
+	// pools reserve independent slots before middleware or capture.
+	// Zero uses DefaultServerConfig's limit. A request waits briefly for
 	// a slot in arrival order (at most min(RequestTimeout, 5s)); exhaustion then
 	// returns 503 with Retry-After. Cancelled handlers retain their slot until
 	// they really return.

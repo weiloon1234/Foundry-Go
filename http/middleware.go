@@ -130,7 +130,7 @@ func ApplyMiddleware(handler stdhttp.Handler, middlewares ...Middleware) (stdhtt
 		current = idempotentHTTPHandler{current}
 	}
 	if ceiling, inventory := routeBodyCeiling(handler), captureRouteInventory(handler); ceiling > 0 || len(inventory) > 0 {
-		current = routedHandler{Handler: current, ceiling: ceiling, captureInventory: inventory}
+		current = routedHandler{uploads: selectUpload(handler), Handler: wrapUploadAdmission(current, selectUpload(handler)), ceiling: ceiling, captureInventory: inventory}
 	}
 	return current, nil
 }

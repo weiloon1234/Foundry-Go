@@ -32,6 +32,18 @@
 - Fixed: variant generation rejects historical originals above the smaller of
   the image input and in-memory limits before opening or buffering storage.
 
+- Added: multipart upload pools reserve a slot and the declared encoded-body bytes
+  before middleware or capture. Large requests use separate handler capacity,
+  retain reservations through actual cleanup, and keep failed cleanup charged
+  until exact-file retry succeeds. Pool startup refuses active or retained owners.
+- Added: typed `HTTP.Uploads` deployment settings and an independent upload consumer.
+  Deploy tool generation 11 adds opt-in upload locations, aggregate nginx admission,
+  request buffering off, explicit HTTP/1.1 upstream proxying, no proxy replay, and
+  separate total and idle budgets. Planning validates independent sized volumes;
+  provisioning connects private writable paths to runtime settings and service sandboxes.
+  Existing ordinary-route limits remain unchanged. Attachment and local-staging
+  owners consume the documented directory/admission seam in their implementation lane.
+
 ## v0.29.0 — 2026-11-13
 
 - Fixed: multipart upload detection shares the framework media detector's ISO

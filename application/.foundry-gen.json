@@ -3,6 +3,6 @@
   "files": {
     "browser_guard_settings_foundry.gen.go": "00d83c504ccde3bd8c0f7aa9f65231c07dfaecb632b65ca53a042c52cd027ca1",
     "encryption_key_settings_foundry.gen.go": "c72070f0fdb60495ea17f14707f112b928dcf1b98d4d7848e18e4deedd63fc99",
-    "settings_foundry.gen.go": "a0f927dbf14460f8cd88b5b3979d684a57412dd90fffbefc653823a8dad3067f"
+    "settings_foundry.gen.go": "ea896bf594565e8f2f6db472fc814a9644c743142dba53a31a65f05824f668e8"
   }
 }

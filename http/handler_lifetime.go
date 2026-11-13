@@ -140,16 +140,26 @@ func (o *handlerLifetime) wrap(handler stdhttp.Handler, logger *slog.Logger, con
 			decision.reject(w, r, scope.log())
 			return
 		}
-		// Capacity waits briefly in arrival order instead of failing a burst
-		// immediately. Exhaustion, cancellation and shutdown return 503.
-		if err := capacity.Acquire(r.Context(), wait, o.closing); err != nil {
-			if observation != nil {
-				observation.outcome = observability.Rejected
-			}
-			writeRequestError(w, r, capacityError(err), scope.log())
+		uploadRequest, releaseUpload, uploadErr := beginUpload(r, selectUpload(handler))
+		if uploadErr != nil {
+			rejectUpload(w, r, uploadErr)
 			return
 		}
-		admitted = true
+		defer releaseUpload()
+		r = uploadRequest
+		_, largeUpload := r.Context().Value(uploadReservationKey{}).(*requestUpload)
+		// Capacity waits briefly in arrival order instead of failing a burst
+		// immediately. Exhaustion, cancellation and shutdown return 503.
+		if !largeUpload {
+			if err := capacity.Acquire(r.Context(), wait, o.closing); err != nil {
+				if observation != nil {
+					observation.outcome = observability.Rejected
+				}
+				writeRequestError(w, r, capacityError(err), scope.log())
+				return
+			}
+			admitted = true
+		}
 		parent := r.Context()
 		scope.kernel = requestBudget{
 			parent: parent, started: time.Now(), timeout: config.RequestTimeout,
