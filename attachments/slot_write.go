@@ -25,7 +25,9 @@ type FileSource = upload.Source
 // Result.Publication when an error is returned. To publish inside a
 // transaction, PrepareFile before it begins and ReplaceIn inside it.
 func (s slotDefinition[M, K, S]) replaceFile(ctx context.Context, owner M, file FileSource) (Result[M, K], error) {
-	return withFile(ctx, file, func(upload Upload) (Result[M, K], error) { return s.replace(ctx, owner, upload) })
+	return withAdmittedFile(ctx, s, file, func(ctx context.Context, m *Manager, input Upload, result *Result[M, K]) error {
+		return s.collection.writeAdmitted(ctx, m, s.binding.Reference(owner), input, true, result)
+	})
 }
 
 // replace replaces owner's collection with one upload.
@@ -42,7 +44,9 @@ func (s slotDefinition[M, K, S]) replace(ctx context.Context, owner M, upload Up
 // own connection. Call it before that transaction begins; owner may be a model
 // the transaction creates, with its key chosen first. See Collection.Prepare.
 func (s slotDefinition[M, K, S]) prepareFile(ctx context.Context, owner M, file FileSource) (Prepared[M, K], error) {
-	return withFile(ctx, file, func(upload Upload) (Prepared[M, K], error) { return s.prepare(ctx, owner, upload) })
+	return withAdmittedFile(ctx, s, file, func(ctx context.Context, m *Manager, input Upload, result *Prepared[M, K]) error {
+		return s.collection.prepareAdmitted(ctx, m, s.binding.Reference(owner), input, result)
+	})
 }
 
 // prepare is PrepareFile for one upload.
@@ -151,7 +155,9 @@ func (s slotDefinition[M, K, S]) accepts(ctx context.Context, file FileSource) (
 
 // addFile appends file to owner's multiple-file collection.
 func (s manySlot[M, K]) addFile(ctx context.Context, owner M, file FileSource) (Result[M, K], error) {
-	return withFile(ctx, file, func(upload Upload) (Result[M, K], error) { return s.add(ctx, owner, upload) })
+	return withAdmittedFile(ctx, s.slotDefinition, file, func(ctx context.Context, m *Manager, input Upload, result *Result[M, K]) error {
+		return s.collection.writeAdmitted(ctx, m, s.binding.Reference(owner), input, false, result)
+	})
 }
 
 // add appends one upload to owner's multiple-file collection.
@@ -205,6 +211,25 @@ func addFiles[F FileSource, R any](ctx context.Context, files []F, validate func
 		}
 	}
 	return results, nil
+}
+
+// withAdmittedFile retains both admission pools across source Open and Close.
+// Its callback uses admitted helpers, never a second public upload operation.
+func withAdmittedFile[M any, K comparable, S, R any](ctx context.Context, slot slotDefinition[M, K, S], file FileSource, run func(context.Context, *Manager, Upload, *R) error) (result R, err error) {
+	m, err := slot.bound()
+	if err != nil {
+		return result, err
+	}
+	if err := slot.collection.check(m); err != nil {
+		return result, err
+	}
+	err = m.runUpload(ctx, slot.collection.definition.policy, "attachment file upload", func(ctx context.Context) error {
+		_, err := withFile(ctx, file, func(input Upload) (struct{}, error) {
+			return struct{}{}, run(ctx, m, input, &result)
+		})
+		return err
+	})
+	return result, err
 }
 
 // withFile opens file for one operation and closes it after the operation

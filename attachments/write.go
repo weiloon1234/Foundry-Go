@@ -37,17 +37,22 @@ func (c Collection[M, K]) write(ctx context.Context, m *Manager, owner model.Ref
 	}
 	var result Result[M, K]
 	err := m.runUpload(ctx, c.definition.policy, "attachment upload", func(ctx context.Context) error {
-		locale, err := c.localeName(ctx, m)
-		if err != nil {
-			return err
-		}
-		candidate, err := prepare(ctx, m, c.definition.policy, upload)
-		if err != nil {
-			return err
-		}
-		return c.writePrepared(ctx, m, owner, locale, candidate, replace, &result)
+		return c.writeAdmitted(ctx, m, owner, upload, replace, &result)
 	})
 	return result, err
+}
+
+// writeAdmitted runs inside the caller's complete upload/source lifetime.
+func (c Collection[M, K]) writeAdmitted(ctx context.Context, m *Manager, owner model.Reference[M, K], upload Upload, replace bool, result *Result[M, K]) error {
+	locale, err := c.localeName(ctx, m)
+	if err != nil {
+		return err
+	}
+	candidate, err := prepare(ctx, m, c.definition.policy, upload)
+	if err != nil {
+		return err
+	}
+	return c.writePrepared(ctx, m, owner, locale, candidate, replace, result)
 }
 
 // writePrepared shares storage, publication and recovery for an admitted upload.
@@ -216,20 +221,24 @@ func (c Collection[M, K]) Prepare(ctx context.Context, m *Manager, owner model.R
 	}
 	var prepared Prepared[M, K]
 	err := m.runUpload(ctx, c.definition.policy, "attachment upload", func(ctx context.Context) error {
-		locale, err := c.localeName(ctx, m)
-		if err != nil {
-			return err
-		}
-		id, release, err := c.storeUpload(ctx, m, owner, upload, false)
-		if release != nil {
-			defer release()
-		}
-		if !id.IsZero() {
-			prepared = Prepared[M, K]{operation: operationID(id), collection: c.Name(), locale: locale}
-		}
-		return err
+		return c.prepareAdmitted(ctx, m, owner, upload, &prepared)
 	})
 	return prepared, err
+}
+
+func (c Collection[M, K]) prepareAdmitted(ctx context.Context, m *Manager, owner model.Reference[M, K], upload Upload, prepared *Prepared[M, K]) error {
+	locale, err := c.localeName(ctx, m)
+	if err != nil {
+		return err
+	}
+	id, release, err := c.storeUpload(ctx, m, owner, upload, false)
+	if release != nil {
+		defer release()
+	}
+	if !id.IsZero() {
+		*prepared = Prepared[M, K]{operation: operationID(id), collection: c.Name(), locale: locale}
+	}
+	return err
 }
 
 // AddIn publishes a prepared upload into owner's collection inside tx, a

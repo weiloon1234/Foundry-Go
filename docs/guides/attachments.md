@@ -185,7 +185,9 @@ Set `Config.MaxLargeActive` below `MaxActive` to reserve mutation slots for smal
 policies. Zero preserves the previous shared admission. Large policies acquire
 this sublimit before shared admission, source capture or remote download, even
 when a particular input is small. `Prepare`, `Add`, `Replace`, `Accepts` and URL
-imports hold it through actual callback exit and cleanup. Configured application
+imports hold it through actual callback exit and cleanup. `PrepareFile`,
+`ReplaceFile` and `AddFile` include source `Open` and `Close` in that same
+admission, and manager shutdown drains both callbacks. Configured application
 assembly consumes `HTTP.Uploads.AttachmentMaxActive` when uploads are enabled.
 
 The capture sink counts and hashes bytes once as it writes them, retaining the

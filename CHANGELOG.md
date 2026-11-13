@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed: local staging recovery no longer inherits the published-object listing
+  ceiling and reconciles foreign file removal/replacement by identity without
+  double-charging live writers. File-based attachment writes now retain admission
+  from source open through close, including shutdown drain. Regression tests are
+  added; execution remains part of the lead's Go gate.
+
 - Fixed: attachment large-policy admission now reserves small mutation capacity;
   local staging bounds large/unknown-size puts and copies, retains failed-cleanup
   byte charges, and accounts for interrupted staging on restart. Deployment

@@ -207,8 +207,11 @@ this managed root. `SmallObjectBytes` reserves admission for known small inputs;
 unknown lengths reserve `MaxObjectBytes`. Both puts and server-side copies use
 this owner before staging. Keep the disk's `MaxActive` greater than the staging
 slot cap. Failed cleanup retains its byte reservation until `Prune` removes the
-file; startup conservatively accounts for interrupted staging records. Zero
-staging limits preserve existing behavior. Named disks expose the same policy as
+file. Startup completes a batched recovery scan independent of the listing
+`MaxScan` ceiling. Recovered entries retain their path and file identity; admission
+and pruning reconcile foreign publication, deletion and replacement. Live writers
+keep their own reservations and writer locks, without a second recovery charge.
+Zero staging limits preserve existing behavior. Named disks expose the same policy as
 `infrastructure.LocalDiskSettings.Staging`.
 
 Staging and atomic publication stay on the same managed filesystem. Provision

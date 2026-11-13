@@ -188,3 +188,161 @@ func TestStagingRestartAccountsForInterruptedRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestStagingRecoveryIgnoresPublishedListingCeiling(t *testing.T) {
+	for _, orphan := range []bool{false, true} {
+		name := "healthy"
+		if orphan {
+			name = "with-orphan"
+		}
+		t.Run(name, func(t *testing.T) {
+			config := DefaultConfig(t.TempDir())
+			config.MaxScan, config.MaxObjectBytes = 1, 8
+			config.Staging = StagingLimits{MaxActive: 1, MaxBytes: 8, SmallObjectBytes: 2}
+			backend, err := Open(t.Context(), config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"one", "two", "three"} {
+				if _, err := backend.Put(t.Context(), stagingKey(t, name), strings.NewReader("ok"), storage.PutOptions{Size: value.Set[int64](2)}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := backend.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if orphan {
+				directory := filepath.Join(config.Root, "objects", "ff")
+				if err := os.MkdirAll(directory, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(directory, tempPrefix+strings.Repeat("b", 32)), []byte("orphaned"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			backend, err = Open(t.Context(), config)
+			if err != nil {
+				t.Fatal("published objects exceeded listing ceiling during recovery", err)
+			}
+			defer backend.Close()
+			_, err = backend.Put(t.Context(), stagingKey(t, "after-restart"), strings.NewReader("next"), storage.PutOptions{})
+			if orphan {
+				if !errors.Is(err, fault.Overloaded) {
+					t.Fatal("recovery stopped before accounting for the final shard", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestStagingRecoveryReconcilesOtherOwners(t *testing.T) {
+	for _, outcome := range []string{"publish", "abort", "prune", "replace"} {
+		t.Run(outcome, func(t *testing.T) {
+			config := DefaultConfig(t.TempDir())
+			config.MaxObjectBytes = 8
+			config.Staging = StagingLimits{MaxActive: 1, MaxBytes: 8, SmallObjectBytes: 2}
+			writer, err := Open(t.Context(), config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer writer.Close()
+			var release func()
+			if outcome == "publish" || outcome == "abort" {
+				entered, resume, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+				var once sync.Once
+				release = func() { once.Do(func() { close(resume) }) }
+				joined := false
+				defer func() {
+					release()
+					if !joined {
+						<-done
+					}
+				}()
+				key := stagingKey(t, "live-writer")
+				go func() {
+					tail := stagingReaderFunc(func([]byte) (int, error) {
+						close(entered)
+						<-resume
+						if outcome == "abort" {
+							return 0, io.ErrUnexpectedEOF
+						}
+						return 0, io.EOF
+					})
+					_, err := writer.Put(context.Background(), key, io.MultiReader(strings.NewReader("payload"), tail), storage.PutOptions{})
+					done <- err
+				}()
+				select {
+				case <-entered:
+				case <-time.After(5 * time.Second):
+					t.Fatal("writer did not enter")
+				}
+				peer, err := Open(t.Context(), config)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer peer.Close()
+				// The live writer retains its own reservation; a restarting peer must not
+				// charge the same live file again or prune it while its lock is held.
+				if _, err := writer.Put(t.Context(), stagingKey(t, "writer-full"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
+					t.Fatal("live reservation released early", err)
+				}
+				if _, err := peer.Put(t.Context(), stagingKey(t, "peer-live"), strings.NewReader("next"), storage.PutOptions{}); err != nil {
+					t.Fatal("live writer was charged twice", err)
+				}
+				if n, err := peer.Prune(t.Context(), time.Now(), MaxPrune); err != nil || n != 0 {
+					t.Fatal("live writer pruned", n, err)
+				}
+				release()
+				err = <-done
+				joined = true
+				if (err != nil) != (outcome == "abort") {
+					t.Fatal("unexpected writer outcome", err)
+				}
+				if _, err := peer.Put(t.Context(), stagingKey(t, "peer-after"), strings.NewReader("next"), storage.PutOptions{}); err != nil {
+					t.Fatal("foreign writer left a stale charge", err)
+				}
+				return
+			}
+			directory, _ := address(stagingKey(t, "orphan"))
+			directory = filepath.Join(config.Root, directory)
+			if err := os.MkdirAll(directory, 0700); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(directory, tempPrefix+strings.Repeat("a", 32))
+			if err := os.WriteFile(path, []byte("orphaned"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			peer, err := Open(t.Context(), config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer peer.Close()
+			if _, err := peer.Put(t.Context(), stagingKey(t, "blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
+				t.Fatal("recovery did not account before admission", err)
+			}
+			if outcome == "prune" {
+				if n, err := writer.Prune(t.Context(), time.Now(), MaxPrune); err != nil || n != 1 {
+					t.Fatal(n, err)
+				}
+			} else {
+				replacement := path + "-replacement"
+				if err := os.WriteFile(replacement, []byte("new"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Rename(replacement, path); err != nil {
+					t.Fatal(err)
+				}
+				// The new inode still consumes three bytes, but must not inherit the old
+				// inode's eight-byte charge or disappear merely because its name is reused.
+				if _, err := peer.Put(t.Context(), stagingKey(t, "still-blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
+					t.Fatal("replacement was not charged", err)
+				}
+			}
+			if _, err := peer.Put(t.Context(), stagingKey(t, "recovered"), strings.NewReader("next"), storage.PutOptions{Size: value.Set[int64](4)}); err != nil {
+				t.Fatal("foreign removal/replacement retained stale bytes", err)
+			}
+		})
+	}
+}
