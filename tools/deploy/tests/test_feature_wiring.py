@@ -41,9 +41,14 @@ from test_artifacts import elf
 from test_contracts import fixture
 from test_manage import manager
 from test_packages import installed, simulation
+from test_redis_acl import RedisServiceHost
+import redis_acl
 
 TOOLS = Path(__file__).resolve().parents[1]
 BOOT = "00000000-0000-4000-8000-000000000001"
+DEFAULT_UNITS = {"nginx.service": ["nginx"], "redis-server.service": ["redis-server"],
+                 "redis-server@.service": ["redis-server"], "postgresql.service": ["postgresql-common"],
+                 "postgresql@.service": ["postgresql-common"], "certbot.service": ["certbot"], "certbot.timer": ["certbot"]}
 
 
 class WiringHost(Host):
@@ -56,8 +61,9 @@ class WiringHost(Host):
         self.running = {}
         self.starting = None
         self.package_inventory = {name: installed() for name in (*packages.REQUIREMENTS, "postgresql-16",
-                                  "postgresql-client-16", "postgresql-common", "coreutils") if name != "nginx"}
-        self.candidates = {"nginx": "1", "nginx-common": "1", "libnginx-mod-stream": "1"}
+                                  "postgresql-client-16", "postgresql-common", "coreutils") if name not in {"nginx", "redis-server", "postgresql-common", "certbot"}}
+        self.candidates = {name: "1" for name in ("nginx", "nginx-common", "libnginx-mod-stream", "redis-server", "postgresql-common", "certbot")}
+        self.redis_host = RedisServiceHost(root)
         self.owned_write(self.paths.p("/etc/os-release"), 'ID=ubuntu\nVERSION_ID="24.04"\n')
         self.owned_write(self.paths.p("/proc/sys/kernel/random/boot_id"), BOOT)
         self.owned_write(self.paths.p("/usr/bin/sha256sum"), elf("linux-arm64"), 0o755)
@@ -113,6 +119,12 @@ class WiringHost(Host):
         args = list(map(str, args))
         self.commands.append(args)
         output, code = "", 0
+        if (args[:3] == ["systemctl", "show", redis_acl.REDIS_UNIT]
+                or args == ["systemctl", "enable", "--now", redis_acl.REDIS_UNIT]
+                or args[0] in ("/usr/bin/redis-server", "redis-cli", "install")
+                or args[0] in ("getent", "useradd") and args[-1] == "foundry-redis"
+                or args[:4] == ["ss", "-H", "-ltn", "sport"]):
+            return self.redis_host.run(args, **kwargs)
         if args[0] == "dpkg-query":
             if args[1] == "-S":
                 output = "coreutils: " + args[2]
@@ -131,6 +143,7 @@ class WiringHost(Host):
             self.package_inventory.update({n: installed(v) for n, v in self.candidates.items()})
             self.owned_write(self.paths.p("/etc/nginx/nginx.conf"), "include /etc/nginx/modules-enabled/*.conf;\nhttp { include /etc/nginx/sites-enabled/*; }\n")
             self.owned_write(self.paths.p("/usr/sbin/nginx"), b"fixture", 0o755)
+            self.owned_write(self.paths.p("/usr/lib/systemd/system/redis-server@.service"), "# distro template\n")
         elif args[:2] == ["getent", "passwd"]:
             output, code = (self.account, 0) if self.account else ("", 2)
         elif args[0] == "useradd":
@@ -219,13 +232,14 @@ class FeatureWiringTests(unittest.TestCase):
         for module, name, options in (
             (packages, "_locks", {"return_value": []}),
             (packages, "_candidate_evidence", {"side_effect": lambda h, txn: {n: {"version": v, "sha256": "a" * 64} for n, v in txn.items()}}),
-            (packages, "_prepare_payloads", {"return_value": ({"nginx.service": ["nginx"]}, {})}),
+            (packages, "_prepare_payloads", {"return_value": (DEFAULT_UNITS, {})}),
             (packages, "_activation_snapshot", {"return_value": {}}),
             (provision.postgres, "inspect", {"return_value": {"state": "ready"}}),
-            (provision.redis_acl, "inspect", {"return_value": {"state": "ready"}}),
             (certificates, "inspect", {"return_value": {"state": "planned"}}),
             (provision.postgres, "prepare", {"side_effect": self.prepare_postgres}),
-            (provision.redis_acl, "prepare", {}),
+            (provision.postgres, "prepare_tls", {"return_value": {"ca": self.archive, "cert": self.host.paths.p("/etc/os-release"), "key": self.host.paths.p("/etc/os-release")}}),
+            (provision.postgres, "record_trust_probe", {}),
+            (redis_acl, "_verify_runtime", {}),
             (provision.postgres, "provision", {}),
             (provision.redis_acl, "provision", {}),
             (provision.backup, "configure", {}),
@@ -304,6 +318,12 @@ class FeatureWiringTests(unittest.TestCase):
         self.assertNotIn("proxy_pass", site.read_text())
         provision._site_checks(self.host, entry)
         self.assertEqual(packages._load(self.host)["default_activation"]["nginx.service"]["state"], "released")
+        self.assertTrue(self.host.redis_host.active)
+        masks = packages._load(self.host)["default_activation"]
+        self.assertEqual(masks["redis-server@.service"]["state"], "released")
+        for unit in set(DEFAULT_UNITS) - {"nginx.service", "redis-server@.service"}:
+            self.assertEqual(masks[unit]["state"], "masked")
+            self.assertEqual(os.readlink(self.host.paths.p("/etc/systemd/system/" + unit)), "/dev/null")
         with patch.object(certificates, "ensure_hostnames", wraps=certificates.ensure_hostnames) as names:
             self.assertTrue(self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive), operation_id=str(uuid.uuid4()))["ok"])
         names.assert_called_once()
@@ -354,6 +374,33 @@ class FeatureWiringTests(unittest.TestCase):
         (store.durable / "selection.json").unlink()
         feature_network.prepare_boot(self.host)
         self.assertFalse(list(self.host.paths.p(edge.RUNTIME + "/" + self.profile["instance_id"]).glob("*.conf")))
+
+    def test_bootstrap_resumes_reserved_redis_template_handoff(self):
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        authorize = packages.authorize_default_activation
+        token = None
+
+        def interrupt(host, unit, claim):
+            nonlocal token
+            if unit == redis_acl.REDIS_TEMPLATE:
+                self.assertIsNotNone(host.host_lock_fd)
+                registry = host.read_registry()
+                shared, private = redis_acl._service_claim(host, registry)
+                redis_acl._owned_service(shared, private)
+                token = shared["ownership_token"]
+                self.assertEqual(claim, {**shared, "unit": unit, "installed_by_foundry": True})
+                raise c.DeployError("interrupted", "Before Redis template handoff")
+            return authorize(host, unit, claim)
+
+        with patch.object(packages, "authorize_default_activation", side_effect=interrupt), self.assertRaisesRegex(c.DeployError, "Before Redis"):
+            self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.assertTrue(packages.default_activation_pending(self.host, redis_acl.REDIS_TEMPLATE))
+        self.assertFalse(self.host.redis_host.active)
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.assertTrue(self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)["ok"])
+        self.assertEqual(self.host.read_registry()["shared"]["redis"]["ownership_token"], token)
+        self.assertTrue(self.host.redis_host.active)
+        self.assertFalse(packages.default_activation_pending(self.host, redis_acl.REDIS_TEMPLATE))
 
     def test_public_listener_plan_reviews_literal_firewall_projection_and_binds_apply(self):
         from test_host_capabilities import declaration, profile

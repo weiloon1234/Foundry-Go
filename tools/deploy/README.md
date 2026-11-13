@@ -226,6 +226,15 @@ a fresh one must match the pristine conffile from the reviewed nginx-common
 package. Reopening other instances after UFW adoption requires fresh health and
 admission through their own restart.
 
+Package default masks remain in place until an owned service takes responsibility.
+Nginx receives its existing handoff after configuration validation. Redis releases
+only the journal-owned `redis-server@.service` mask after its shared allocation is
+durable, before preparing and starting `redis-server@foundry.service`. The stock
+`redis-server.service` stays masked. PostgreSQL uses a concrete Foundry unit and
+`pg_ctlcluster --skip-systemctl-redirect`, so its distro service/template stay
+masked. Certbot's defaults also stay masked; Foundry's renewal timer invokes the
+certbot executable directly. Hosts without journaled masks need no Redis handoff.
+
 Each unit's privileged `ExecStartPost` verifies the selected executable and
 invocation before transferring its admission receipt from the preparation helper
 to the running MainPID. Workloads retain their service account and sandbox.

@@ -780,12 +780,40 @@ def _finish_activation(host, journal):
                 "package_activation", "Package replaced an owned default mask.")
 
 
-def authorize_default_activation(host: Host, unit: str, claim: dict) -> None:
-    """Lane A calls under the host lock immediately before enable --now nginx.
+def _owned_default_mask(path, record):
+    return (path.is_symlink() and os.readlink(path) == "/dev/null"
+            and _mask_identity(path) == record["identity"])
 
-    Pass registry['shared']['nginx'] after its owner/installed_by_foundry checks
-    and nginx configuration validation. This only releases the exact journaled
-    mask; it does not enable/start services or release cron/timer suppression.
+
+def default_activation_pending(host: Host, unit: str) -> bool:
+    """Observe an exact owned mask without releasing the package activation fence.
+
+    Service allocation may reserve its own instance behind this mask, then use
+    authorize_default_activation with its durable claim before preparing/starting.
+    A partially completed handoff remains pending until its reload is durable.
+    """
+    require(UNIT.fullmatch(unit), "package_activation_owner", "Invalid default unit.")
+    journal = _load(host)
+    record = (journal or {}).get("default_activation", {}).get(unit)
+    if record is None or record["state"] == "released":
+        return False
+    path = host.paths.p("/etc/systemd/system") / unit
+    host.check_control_directory(path.parent)
+    if path.exists() or path.is_symlink():
+        require(record["state"] in ("masked", "releasing") and _owned_default_mask(path, record),
+                "package_activation_owner", "Default-service mask no longer matches the journal-owned inode.")
+    else:
+        require(record["state"] == "releasing", "package_activation_owner",
+                "Default-service mask disappeared without an owned handoff.")
+    return True
+
+
+def authorize_default_activation(host: Host, unit: str, claim: dict) -> None:
+    """Service owners call under the host lock after reserving their allocation.
+
+    Pass a claim derived from the registry's owned shared service record, naming
+    the exact default unit (or template) being released. This releases only its
+    journaled mask; it does not enable/start services or release cron/timer suppression.
     Installation must be complete with policy restored and no package process or
     lock remaining. Repeated calls and retries after removal/reload are safe;
     missing or replaced masks without a recorded handoff are refused.
@@ -806,8 +834,7 @@ def authorize_default_activation(host: Host, unit: str, claim: dict) -> None:
         return
     anchor = _mask_anchor(path, record["operation_id"])
     if path.exists() or path.is_symlink():
-        require(record["state"] in ("masked", "releasing") and path.is_symlink()
-                and os.readlink(path) == "/dev/null" and _mask_identity(path) == record["identity"],
+        require(record["state"] in ("masked", "releasing") and _owned_default_mask(path, record),
                 "package_activation_owner", "Default-service mask no longer matches the journal-owned inode.")
         record["state"] = "releasing"
         _save(host, journal)

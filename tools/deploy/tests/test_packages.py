@@ -763,6 +763,22 @@ class BuiltinPayloadTests(unittest.TestCase):
         self.assertNotEqual(cron.stat().st_ino, stage.stat().st_ino)
         self.assertNotIn("certbot", host.inventory)
 
+    def test_pending_default_activation_is_read_only_and_checks_exact_mask(self):
+        host = self.host(cron=False)
+        self.assertFalse(packages.default_activation_pending(host, "nginx.service"))
+        packages.install_missing(host, ["nginx"])
+        mask = host.paths.p("/etc/systemd/system/nginx.service")
+        before = mask.lstat()
+        self.assertTrue(packages.default_activation_pending(host, "nginx.service"))
+        self.assertEqual(mask.lstat().st_ino, before.st_ino)
+        self.assertEqual(os.readlink(mask), "/dev/null")
+        replacement = mask.with_name("replacement.service")
+        replacement.symlink_to("/dev/null")
+        os.replace(replacement, mask)
+        with self.assertRaises(DeployError):
+            packages.default_activation_pending(host, "nginx.service")
+        self.assertEqual(os.readlink(mask), "/dev/null")
+
     def test_nginx_owner_handoff_allows_enable_and_preserves_other_masks(self):
         host = self.host()
         packages.install_missing(host, list(host.candidates))
@@ -817,8 +833,10 @@ class BuiltinPayloadTests(unittest.TestCase):
             packages.authorize_default_activation(host, "nginx.service", claim)
         self.assertFalse(host.paths.p("/etc/systemd/system/nginx.service").is_symlink())
         self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["state"], "releasing")
+        self.assertTrue(packages.default_activation_pending(host, "nginx.service"))
         packages.authorize_default_activation(host, "nginx.service", claim)
         self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["state"], "released")
+        self.assertFalse(packages.default_activation_pending(host, "nginx.service"))
 
     def interrupt_handoff_after_release(self, host):
         packages.install_missing(host, ["nginx"])

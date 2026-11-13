@@ -4,6 +4,11 @@
 
 ### Deployment feature preview
 
+- Fixed: Redis bootstrap recognizes an exact journal-owned package template mask
+  without releasing it during planning, then hands it off after reserving the
+  shared Redis service. Stock Redis, PostgreSQL and certbot defaults stay masked;
+  fake-host bootstrap now exercises real Redis preparation behind package masks.
+
 - Fixed: bootstrap and local planning pass validated feature topologies to network
   findings; bootstrap plans the stream module, reviewed network prerequisites,
   closed HTTP site and pre-nginx coordinator. Selected HTTP ports use the frozen

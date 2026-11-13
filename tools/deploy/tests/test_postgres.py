@@ -128,6 +128,34 @@ class PostgreSQLTests(unittest.TestCase):
             postgres.prepare(self.host, self.registry)
         self.assertEqual(self.registry["shared"]["postgresql"]["capacity"], capacity.postgres(1950))
 
+    def test_concrete_cluster_unit_starts_without_releasing_distro_masks(self):
+        masks = [self.host.paths.p("/etc/systemd/system/" + unit)
+                 for unit in ("postgresql.service", "postgresql@.service")]
+        for mask in masks:
+            mask.parent.mkdir(parents=True, exist_ok=True)
+            mask.symlink_to("/dev/null")
+        tls = {}
+        for name in ("cert", "key"):
+            tls[name] = self.host.paths.root / (name + ".fixture")
+            tls[name].write_text(name)
+        with patch.object(postgres.packages, "install_missing"), \
+                patch.object(postgres, "prepare_tls", return_value=tls), \
+                patch.object(postgres, "_verify_settings"), patch.object(postgres, "_publish_hba"):
+            postgres.prepare(self.host, self.registry)
+        unit = self.registry["shared"]["postgresql"]["unit"]
+        concrete = self.host.paths.p("/etc/systemd/system/" + unit)
+        self.assertTrue(concrete.is_file())
+        self.assertFalse(concrete.is_symlink())
+        content = concrete.read_text()
+        self.assertIn("pg_ctlcluster --skip-systemctl-redirect 16 foundry start", content)
+        self.assertNotIn("postgresql.service", content)
+        self.assertNotIn("postgresql@.service", content)
+        commands = [args for args, _ in self.host.calls]
+        self.assertIn(["systemctl", "enable", unit], commands)
+        self.assertIn(["systemctl", "start", unit], commands)
+        for mask in masks:
+            self.assertEqual(os.readlink(mask), "/dev/null")
+
     def test_mixed_host_inspection_only_reads_foreign_cluster_metadata(self):
         self.host.clusters = "16 main 5432 online postgres /var/lib/postgresql/16/main /var/log/postgresql/main.log\n"
         self.host.listeners = "LISTEN 0 128 [::]:55432 [::]:*\nLISTEN 0 128 127.0.0.1:55433 0.0.0.0:*\n"
