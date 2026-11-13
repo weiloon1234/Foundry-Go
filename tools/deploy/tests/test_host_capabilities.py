@@ -275,10 +275,10 @@ class CapabilityTopologyTests(unittest.TestCase):
 
 class CapabilityRecordTests(unittest.TestCase):
     def test_selection_floor_cannot_predate_its_capabilities(self):
-        for floor in range(11):
+        for floor in range(12):
             with self.subTest(floor=floor), self.assertRaises(c.DeployError):
                 c.DeploymentSelection.parse({**selection(), "minimum_generation": floor})
-        for floor in (11, 12):
+        for floor in (12, 13):
             self.assertEqual(c.DeploymentSelection.parse({**selection(), "minimum_generation": floor}).minimum_generation,
                              floor)
 
@@ -440,7 +440,7 @@ class CapabilityCompatibilityTests(unittest.TestCase):
         mixed = registry(legacy, feature)
         mixed["tools"]["generation"] = upgrades.protocol()["generation"]
         c.validate_registry(mixed)
-        for generation in (1, 9, 10):
+        for generation in (1, 9, 10, 11):
             upgrades.check_instance_capabilities(legacy, generation)
             with self.assertRaises(c.DeployError) as caught:
                 upgrades.check_instance_capabilities(feature, generation)
@@ -459,9 +459,9 @@ class CapabilityCompatibilityTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "capability_unavailable")
 
     def test_source_protocol_fixtures_preserve_upgrade_floors(self):
-        # Captured 2.0 envelope shape of both supported source generations. These
+        # Captured 2.0 envelope shape of all supported source generations. These
         # are contract fixtures; installed source-bundle acceptance belongs to M6.
-        for source_generation in (9, 10):
+        for source_generation in (9, 10, 11):
             source = {"protocol": {"major": 2, "minor": 0}, "generation": source_generation,
                       "minimum_host_generation": 9, "minimum_client_generation": 1, "framework_version": "development"}
             upgrades.check_upgrade_generation(source)

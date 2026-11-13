@@ -49,7 +49,7 @@ func (p *capturePolicy) validateRoutes(handler stdhttp.Handler) error {
 		return nil
 	}
 	for _, route := range captureRouteInventory(handler) {
-		if route.Authentication == nil {
+		if route.Authentication == nil && !route.uploadAdmission {
 			continue
 		}
 		segments, err := httppath.Parse(route.Path)
@@ -58,7 +58,7 @@ func (p *capturePolicy) validateRoutes(handler stdhttp.Handler) error {
 		}
 		for _, declaration := range p.prefixes {
 			if captureRouteOverlap(segments, declaration.prefix.normalized()) {
-				return safeerror.NewFault(fault.Invalid, "authenticated route lies under an HTTP capture prefix")
+				return safeerror.NewFault(fault.Invalid, "authenticated or admitted upload route lies under an HTTP capture prefix")
 			}
 		}
 	}

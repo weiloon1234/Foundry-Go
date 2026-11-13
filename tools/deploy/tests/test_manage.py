@@ -65,17 +65,19 @@ class ManagerTests(unittest.TestCase):
         self.host.write_registry(value)
         request = {**self.request, "client": {**self.request["client"], "generation": 9},
                    "archive": "/staged/app.tar.gz", "archive_sha256": "a" * 64}
-        with patch.object(release, "activate", return_value={"ok": True}) as activate:
-            self.assertEqual({"ok": True}, manager.execute(self.host, "activate", request))
-            activate.assert_called_once()
-        feature_request = {**self.request, "profile": feature["profile"],
-                           "client": {**self.request["client"], "generation": 9}}
-        with patch.object(self.host, "run") as run:
-            for action in ("status", "activate", "config-set", "restart", "rollback"):
-                with self.subTest(action=action), self.assertRaises(DeployError) as caught:
-                    manager.execute(self.host, action, feature_request)
-                self.assertEqual(caught.exception.code, "instance_capability_required")
-            run.assert_not_called()
+        for generation in (9, 10, 11):
+            request["client"]["generation"] = generation
+            with patch.object(release, "activate", return_value={"ok": True}) as activate:
+                self.assertEqual({"ok": True}, manager.execute(self.host, "activate", request))
+                activate.assert_called_once()
+            feature_request = {**self.request, "profile": feature["profile"],
+                               "client": {**self.request["client"], "generation": generation}}
+            with patch.object(self.host, "run") as run:
+                for action in ("status", "activate", "config-set", "restart", "rollback"):
+                    with self.subTest(generation=generation, action=action), self.assertRaises(DeployError) as caught:
+                        manager.execute(self.host, action, feature_request)
+                    self.assertEqual(caught.exception.code, "instance_capability_required")
+                run.assert_not_called()
 
     def test_unknown_mutation_fields_are_rejected(self):
         with self.assertRaises(DeployError) as error:

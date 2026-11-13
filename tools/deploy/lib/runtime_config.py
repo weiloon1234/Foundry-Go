@@ -12,6 +12,7 @@ import re
 import secrets
 import stat
 import uuid
+import uploads
 
 from contracts import (CLEANUP_GRACE_KEY, DEFAULT_CLEANUP_GRACE, DeployError, POSTGRES_PORT, REDIS_PORT, check_path,
                        dump_env, instance_paths, normalize_backup_repository, normalize_storage_disks, parse_env,
@@ -70,7 +71,7 @@ _FIELDS = {
     "DEVELOPER__LOG_DIRECTORY": lambda e, c: instance_paths(e["name"])["data"] + "/logs",
     "DEVELOPER__SOURCE_MAP_DIRECTORY": lambda e, c: instance_paths(e["name"])["data"] + "/private-source-maps",
 }
-PIPELINE_KEYS = frozenset(_FIELDS) - {"PROJECT__NAME"} | {"DEVELOPER__RELEASE"}
+PIPELINE_KEYS = frozenset(_FIELDS) - {"PROJECT__NAME"} | {"DEVELOPER__RELEASE"} | (uploads.RUNTIME_KEYS - {"APP__FEATURES__ATTACHMENTS__CONFIG__TIMEOUT"})
 
 
 # Settings that validate only together (a key ring's ID and material) change in
@@ -78,14 +79,18 @@ PIPELINE_KEYS = frozenset(_FIELDS) - {"PROJECT__NAME"} | {"DEVELOPER__RELEASE"}
 MAX_CONFIGURATION_CHANGES = 16
 
 
-def validate_configuration_changes(changes):
+def pipeline_keys(entry=None):
+    return PIPELINE_KEYS | (uploads.RUNTIME_KEYS if entry and "uploads" in entry["profile"] else frozenset())
+
+
+def validate_configuration_changes(changes, entry=None):
     require(isinstance(changes, dict) and 0 < len(changes) <= MAX_CONFIGURATION_CHANGES,
             "invalid_configuration", "Name between one and sixteen configuration keys to change together.")
     for key in changes:
         require(isinstance(key, str) and re.fullmatch(r"[A-Z][A-Z0-9_]*", key),
                 "invalid_configuration", "Configuration key name is invalid.")
         logical = key.removesuffix("_FILE")
-        require(not any(logical == owned or logical.startswith(owned + "__") for owned in PIPELINE_KEYS)
+        require(not any(logical == owned or logical.startswith(owned + "__") for owned in pipeline_keys(entry))
                 and not key.startswith(("DEPLOY_", "FOUNDRY_", "VITE_")),
                 "owned_configuration", "Identity, infrastructure and seed credentials cannot be edited by generic configuration commands.")
     dump_env({key: value for key, value in changes.items() if value is not None})
@@ -96,6 +101,7 @@ def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
             "postgres_identity", "Invalid allocated Foundry PostgreSQL port.")
     credentials = {**credentials, "postgres_port": postgres_port}
     values = {key: resolve(entry, credentials) for key, resolve in _FIELDS.items()}
+    values.update(uploads.runtime_values(entry))
     encryption = credentials.get("encryption")
     if encryption:
         values[ENCRYPTION_KEYS[0]] = encryption["key_id"]
@@ -216,7 +222,7 @@ def initialize_bootstrap_secrets(host, entry, private_secrets=None):
         supplied["app_storage"] = storage
     if "configuration" in supplied:
         configuration = supplied["configuration"]
-        validate_configuration_changes(configuration)
+        validate_configuration_changes(configuration, entry)
         require(all(isinstance(value, str) for value in configuration.values())
                 and not any(key.removesuffix("_FILE") in BOOTSTRAP_OWNED_KEYS for key in configuration),
                 "owned_configuration", "Encryption and storage are supplied through their own bootstrap inputs.")
@@ -390,6 +396,7 @@ def _instance_group(host, entry, account=None):
 
 
 def validate_runtime_environment(host, entry):
+    uploads.inspect(host, entry, runtime=True)
     credentials = read_credentials(host, entry)
     path = check_path(host.paths.instance_config(entry["name"]) / "app.env", "file")
     if not path.exists():
@@ -406,11 +413,12 @@ def validate_runtime_environment(host, entry):
     require(host.paths.root != Path("/") or "postgresql" in registry["shared"],
             "postgres_identity", "The Foundry PostgreSQL allocation is missing.")
     expected = runtime_environment(entry, credentials, postgres_port=postgres_port)
-    if any(values.get(key) != value for key, value in expected.items() if key in PIPELINE_KEYS):
+    owned_keys = pipeline_keys(entry)
+    if any(values.get(key) != value for key, value in expected.items() if key in owned_keys):
         raise DeployError("configuration_identity", "Pipeline-owned runtime configuration differs from registered identity/credentials.")
     for key in values:
         logical = key.removesuffix("_FILE")
-        if (logical in PIPELINE_KEYS and (logical not in expected or key != logical)
-                or any(logical.startswith(owner + "__") for owner in PIPELINE_KEYS)):
+        if (logical in owned_keys and (logical not in expected or key != logical)
+                or any(logical.startswith(owner + "__") for owner in owned_keys)):
             raise DeployError("configuration_identity", "Pipeline-owned runtime configuration contains an overriding alias or collection field.")
     return values
