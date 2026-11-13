@@ -261,23 +261,38 @@ class UpgradeTests(unittest.TestCase):
             upgrades.check_client(self.host, request, "hello")
         self.assertEqual({"minimum": 1, "maximum": 9}, upgrades.hello(self.host)["client_generation"])
 
-    def test_generation_nine_upgrades_to_ten_and_includes_maintenance_module(self):
+    def test_generation_nine_upgrades_to_current(self):
+        self.assert_upgrade_to_current()
+
+    def test_generation_ten_upgrades_to_current(self):
+        self.metadata["generation"] = 10
+        (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+        self.host.registry["tools"] = upgrades._active_record(self.source, upgrades.tool_bundle(self.source)[2], None)
+        self.assert_upgrade_to_current()
+
+    def assert_upgrade_to_current(self):
         actual = Path(__file__).resolve().parents[1]
         metadata = upgrades.protocol(actual)
-        self.assertEqual(10, metadata["generation"])
+        self.assertGreater(metadata["generation"], 10)
         self.assertEqual(9, metadata["minimum_host_generation"])
         self.assertEqual(1, metadata["minimum_client_generation"])
         _, files, _ = upgrades.tool_bundle(actual)
         self.assertIn(actual / "lib/maintenance.py", files)
         self.install()
-        self.metadata['generation'] = 10
+        self.metadata['generation'] = metadata['generation']
         (self.source / 'protocol.json').write_text(json.dumps(self.metadata))
-        (self.source / "lib/maintenance.py").write_text("# generation ten module\n")
+        (self.source / "lib/maintenance.py").write_text("# current module\n")
         plan = upgrades.plan_upgrade(self.host, self.source)
         result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
         self.assertEqual("succeeded", result["outcome"])
-        self.assertEqual(10, self.host.read_registry()["tools"]["generation"])
-        self.assertEqual({"minimum": 1, "maximum": 10}, upgrades.hello(self.host)["client_generation"])
+        self.assertEqual(metadata["generation"], self.host.read_registry()["tools"]["generation"])
+        self.assertEqual({"minimum": 1, "maximum": metadata["generation"]}, upgrades.hello(self.host)["client_generation"])
+        for old_generation in (9, 10):
+            self.metadata["generation"] = old_generation
+            (self.source / "protocol.json").write_text(json.dumps(self.metadata))
+            with self.assertRaises(DeployError) as caught:
+                upgrades.plan_upgrade(self.host, self.source)
+            self.assertEqual(caught.exception.code, "tools_downgrade")
 
     def test_generation_eight_refuses_planning_and_installation_before_writes(self):
         self.install()

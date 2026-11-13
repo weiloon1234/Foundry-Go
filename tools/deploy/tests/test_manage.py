@@ -42,11 +42,11 @@ class ManagerTests(unittest.TestCase):
             run.assert_not_called()
 
 
-    def test_generation_nine_client_can_deploy_on_generation_ten_host(self):
+    def test_generation_nine_client_can_deploy_on_current_host(self):
         import release
         value = self.host.read_registry()
         value['tools'] = upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)
-        self.assertEqual(10, value['tools']['generation'])
+        self.assertEqual(upgrades.protocol()['generation'], value['tools']['generation'])
         self.host.write_registry(value)
         request = {**self.request, 'client': {**self.request['client'], 'generation': 9},
                    'archive': '/staged/app.tar.gz', 'archive_sha256': 'a' * 64}
@@ -54,6 +54,28 @@ class ManagerTests(unittest.TestCase):
             self.assertEqual({'ok': True}, manager.execute(self.host, 'activate', request))
         activate.assert_called_once()
         self.assertEqual('/staged/app.tar.gz', activate.call_args.args[3])
+
+    def test_feature_gate_is_target_local_and_precedes_lifecycle_dispatch(self):
+        import release
+        from test_host_capabilities import selection
+        _, _, feature = fixture(project_slug="feature", host_id=self.entry["host_id"], port=8101)
+        feature["deployment_selection"] = selection(feature["profile"]["instance_id"])
+        value = registry(self.entry, feature)
+        value["tools"] = upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)
+        self.host.write_registry(value)
+        request = {**self.request, "client": {**self.request["client"], "generation": 9},
+                   "archive": "/staged/app.tar.gz", "archive_sha256": "a" * 64}
+        with patch.object(release, "activate", return_value={"ok": True}) as activate:
+            self.assertEqual({"ok": True}, manager.execute(self.host, "activate", request))
+            activate.assert_called_once()
+        feature_request = {**self.request, "profile": feature["profile"],
+                           "client": {**self.request["client"], "generation": 9}}
+        with patch.object(self.host, "run") as run:
+            for action in ("status", "activate", "config-set", "restart", "rollback"):
+                with self.subTest(action=action), self.assertRaises(DeployError) as caught:
+                    manager.execute(self.host, action, feature_request)
+                self.assertEqual(caught.exception.code, "instance_capability_required")
+            run.assert_not_called()
 
     def test_unknown_mutation_fields_are_rejected(self):
         with self.assertRaises(DeployError) as error:

@@ -23,7 +23,8 @@ if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
-                       now, parse_json, read_json, require, valid_uuid)
+                       now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
+                       FEATURE_CAPABILITIES, TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
@@ -253,6 +254,8 @@ def _prune_bundles(host) -> dict:
     """Run only in the selected bundle with the caller's inherited host lock."""
     require(host.host_lock_fd is not None, "tools_lock_required", "Tool pruning requires the host lock.")
     registry = host.read_registry()
+    for entry in registry["instances"].values():
+        check_instance_capabilities(entry, registry["tools"]["generation"])
     require(not _upgrade_pending(host, registry), "tools_upgrade_pending",
             "Complete the pending tool upgrade before pruning bundles.")
     active = _installed(host, registry["tools"])
@@ -354,11 +357,51 @@ def hello(host) -> dict:
             "capabilities": ["topology-v1", "registry-v2", "digest-bound-tool-upgrade"]}
 
 
+def contract_versions() -> dict:
+    """Parser support, not advertised runtime support. Generation has one owner."""
+    return {"generation": protocol()["generation"], "topology": (1, TOPOLOGY_SCHEMA),
+            "profile": (2, FEATURE_PROFILE_SCHEMA), "archive": (1, ARCHIVE_SCHEMA),
+            "capabilities": tuple(sorted(FEATURE_CAPABILITIES))}
+
+
+def check_instance_capabilities(entry: dict, client_generation: int) -> None:
+    """Target-local sticky admission; rolling back application code cannot clear it."""
+    if "deployment_selection" not in entry:
+        return
+    selection = DeploymentSelection.parse(entry["deployment_selection"])
+    require(type(client_generation) is int and client_generation >= selection.minimum_generation,
+            "instance_capability_required", "This instance requires a host-capability-aware client.")
+    # M1 supplies readers and types only. M3 replaces this refusal after the
+    # common lifecycle inventory, boot guard and helper lifetime owner are wired.
+    raise DeployError("capability_unavailable", "Host-capability lifecycle support is not installed in this bundle.")
+
+
+def _check_feature_request(registry, request, action):
+    profile = request.get("profile")
+    topology = request.get("topology")
+    require(not (isinstance(profile, dict) and profile.get("schema") == FEATURE_PROFILE_SCHEMA
+                 or isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA),
+            "capability_unavailable", "Feature declarations are inspectable contracts; activation requires the later lifecycle milestone.")
+    if not registry:
+        return
+    instance_id = profile.get("instance_id") if isinstance(profile, dict) else None
+    entries = registry["instances"]
+    # Global writers/collectors cannot safely partially interpret a feature host.
+    # Instance operations against an untouched legacy neighbor remain unchanged.
+    host_wide = action in UPGRADE_ACTIONS | {"tools-plan", "capacity-plan", "capacity-apply", "report"}
+    selected = entries.values() if host_wide or instance_id is None else [entries.get(instance_id, {})]
+    client = request.get("client")
+    generation = client.get("generation") if isinstance(client, dict) else None
+    for entry in selected:
+        check_instance_capabilities(entry, generation)
+
+
 def check_client(host, request: dict, action: str) -> None:
     """Gate ordinary mutations on negotiated protocol and pending upgrade ownership."""
+    registry = host.read_registry(missing=True)
+    _check_feature_request(registry, request, action)
     if action in READ_ACTIONS:
         return
-    registry = host.read_registry(missing=True)
     if registry and action != "capacity-apply":
         import capacity
         capacity.require_idle(host)
@@ -393,6 +436,8 @@ def check_upgrade_generation(installed: dict, tools_dir: Path | None = None) -> 
 
 def tools_upgrade(host, registry: dict, tools_dir: Path) -> dict | None:
     """Describe changed/removed paths and compatibility impact without mutating the host."""
+    for entry in registry["instances"].values():
+        check_instance_capabilities(entry, protocol(tools_dir)["generation"])
     current = registry["tools"]
     check_upgrade_generation(current, tools_dir)
     source, _, digest = tool_bundle(tools_dir)
