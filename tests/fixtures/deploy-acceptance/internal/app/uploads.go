@@ -25,8 +25,7 @@ import (
 )
 
 type uploadOwner struct {
-	Name  string
-	Value string
+	Name string
 }
 
 var uploadOwners = orm.Define("acceptance_fixture", func(b orm.Builder[uploadOwner], m *uploadOwner) orm.Table[uploadOwner, string] {

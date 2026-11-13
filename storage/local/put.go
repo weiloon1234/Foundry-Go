@@ -2,7 +2,6 @@ package local
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -54,12 +53,6 @@ func (b *Backend) Put(ctx context.Context, key storage.ObjectKey, source io.Read
 // conditional one holds it through that sync. Success is reported only after
 // the sync.
 func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentType storage.MediaType, options storage.PutOptions, op storage.Operation, fill func(*os.File) (int64, storage.SHA256, error)) (result storage.ObjectInfo, err error) {
-	release, err := b.reserveStaging(ctx, options, op)
-	if err != nil {
-		return result, err
-	}
-	var retained *stagingFile
-	defer func() { release(retained) }()
 	directory, name := address(key)
 	shard, _ := hex.DecodeString(name[:2])
 	if err = b.ensureShard(directory, shard[0]); err != nil {
@@ -70,33 +63,19 @@ func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentTyp
 		return result, failure(storage.Unavailable, op, storage.Unchanged, err)
 	}
 	defer parent.Close()
-	random := make([]byte, 16)
-	if _, err = rand.Read(random); err != nil {
-		return result, failure(storage.Unavailable, op, storage.Unchanged, err)
-	}
-	temporary := tempPrefix + hex.EncodeToString(random)
-	file, err := parent.OpenFile(temporary, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	file, temporary, random, err := b.createStaging(ctx, parent, directory, options, op)
 	if err != nil {
-		return result, failure(storage.Unavailable, op, storage.Unchanged, err)
+		return result, err
 	}
 	state := storage.Unchanged
 	closed := false
 	published := false
 	var unlock func()
 	defer func() {
-		if b.staging != nil {
-			b.staging.cleanup.Lock()
-			defer b.staging.cleanup.Unlock()
-			defer func() { release(retained) }()
-		}
 		if unlock != nil {
 			unlock()
 		}
 		var closeErr, removeErr error
-		var info os.FileInfo
-		if !published {
-			info, _ = file.Stat()
-		}
 		if !closed {
 			closeErr = file.Close()
 		}
@@ -110,18 +89,12 @@ func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentTyp
 			result = storage.ObjectInfo{}
 			err = failure(storage.Unavailable, op, state, safeerror.Join("operation failed", err, closeErr, removeErr))
 			if removeErr != nil {
-				retained = &stagingFile{path: directory + "/" + temporary, info: info}
 				var detail *storage.Error
 				errors.As(err, &detail)
 				err = safeerror.Retain(err, detail.WithCleanup(storage.NewCleanupID(directory+"/"+temporary)))
 			}
 		}
 	}()
-	// A process crash releases this lock. Cleanup skips every live staging file,
-	// regardless of its age; it never guesses that a slow source has finished.
-	if locked, e := tryLock(file); e != nil || !locked {
-		return result, failure(storage.Unavailable, op, storage.Unchanged, e)
-	}
 	modified, err := temporal.NewDateTime(b.config.Clock.Now())
 	if err != nil {
 		return result, err

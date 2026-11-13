@@ -70,7 +70,6 @@ func (c Config) Validate() error {
 // close it after its disks drain.
 type Backend struct {
 	root      *os.Root
-	staging   *stagingPool
 	config    Config
 	storeID   string
 	lifecycle sync.Mutex
@@ -84,6 +83,8 @@ type Backend struct {
 	// beforeSync, when set by package tests, observes the moment before a
 	// publication's or removal's directory sync. It is nil in production.
 	beforeSync func(storage.ObjectKey)
+	// beforeStagingVerify is a test-only barrier after reservation creation.
+	beforeStagingVerify func()
 }
 
 // Prepare validates configuration without filesystem I/O. Start initializes or
@@ -124,7 +125,7 @@ func (b *Backend) Start(ctx context.Context) error {
 	b.root, b.storeID = opened.root, opened.storeID
 	if err := b.startStaging(ctx); err != nil {
 		err = safeerror.Join("local staging startup failed", err, b.root.Close())
-		b.root, b.staging = nil, nil
+		b.root = nil
 		return failure(storage.Unavailable, storage.OpenOperation, storage.Unchanged, err)
 	}
 	b.started = true

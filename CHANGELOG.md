@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed: local staging reservations now live in filesystem entries and enforce
+  one managed-root budget across processes. Competing admissions withdraw and
+  retry before reading input; crashed and failed-cleanup entries remain charged
+  until pruning. Added live-peer, simultaneous-admission and process-crash tests
+  for the lead's Go gate.
+
 - Fixed: local staging recovery no longer inherits the published-object listing
   ceiling and reconciles foreign file removal/replacement by identity without
   double-charging live writers. File-based attachment writes now retain admission

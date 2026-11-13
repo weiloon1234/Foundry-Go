@@ -80,13 +80,13 @@ func TestStagingAdmissionPreservesSmallWritesAndActualLifetime(t *testing.T) {
 			cancel()
 			var reads atomic.Int64
 			reject := stagingReaderFunc(func([]byte) (int, error) { reads.Add(1); return 0, io.EOF })
-			if _, err := backend.Put(t.Context(), stagingKey(t, "excess"), reject, size); !errors.Is(err, fault.Overloaded) {
+			if _, err := backend.Put(stagingBusyContext(t), stagingKey(t, "excess"), reject, size); !errors.Is(err, fault.Overloaded) {
 				t.Fatal("large write admitted", err)
 			}
 			if reads.Load() != 0 {
 				t.Fatal("overloaded write consumed its source")
 			}
-			if _, err := backend.Copy(t.Context(), source, stagingKey(t, "copy-target"), storage.CopyOptions{}, 8); !errors.Is(err, fault.Overloaded) {
+			if _, err := backend.Copy(stagingBusyContext(t), source, stagingKey(t, "copy-target"), storage.CopyOptions{}, 8); !errors.Is(err, fault.Overloaded) {
 				t.Fatal("copy bypassed staging limits", err)
 			}
 			if _, err := backend.Put(t.Context(), stagingKey(t, "small"), strings.NewReader("ok"), storage.PutOptions{Size: value.Set[int64](2)}); err != nil {
@@ -142,7 +142,7 @@ func TestStagingFailedCleanupRetainsBytesUntilPrune(t *testing.T) {
 	if err == nil || !errors.As(err, &detail) || !detail.Cleanup().IsSet() {
 		t.Fatal("missing cleanup failure", err)
 	}
-	if _, err := backend.Put(t.Context(), stagingKey(t, "blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
+	if _, err := backend.Put(stagingBusyContext(t), stagingKey(t, "blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
 		t.Fatal("failed cleanup released its bytes", err)
 	}
 	if n, err := backend.Prune(t.Context(), time.Now(), MaxPrune); err != nil || n != 1 {
@@ -178,7 +178,7 @@ func TestStagingRestartAccountsForInterruptedRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer backend.Close()
-	if _, err := backend.Put(t.Context(), stagingKey(t, "blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
+	if _, err := backend.Put(stagingBusyContext(t), stagingKey(t, "blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
 		t.Fatal("restart forgot interrupted staging", err)
 	}
 	if n, err := backend.Prune(t.Context(), time.Now(), MaxPrune); err != nil || n != 1 {
@@ -225,7 +225,11 @@ func TestStagingRecoveryIgnoresPublishedListingCeiling(t *testing.T) {
 				t.Fatal("published objects exceeded listing ceiling during recovery", err)
 			}
 			defer backend.Close()
-			_, err = backend.Put(t.Context(), stagingKey(t, "after-restart"), strings.NewReader("next"), storage.PutOptions{})
+			ctx := t.Context()
+			if orphan {
+				ctx = stagingBusyContext(t)
+			}
+			_, err = backend.Put(ctx, stagingKey(t, "after-restart"), strings.NewReader("next"), storage.PutOptions{})
 			if orphan {
 				if !errors.Is(err, fault.Overloaded) {
 					t.Fatal("recovery stopped before accounting for the final shard", err)
@@ -283,13 +287,13 @@ func TestStagingRecoveryReconcilesOtherOwners(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer peer.Close()
-				// The live writer retains its own reservation; a restarting peer must not
-				// charge the same live file again or prune it while its lock is held.
-				if _, err := writer.Put(t.Context(), stagingKey(t, "writer-full"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
+				// Both backends must see the same root reservation. Restart cannot
+				// create extra capacity, and Prune must respect the writer lock.
+				if _, err := writer.Put(stagingBusyContext(t), stagingKey(t, "writer-full"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
 					t.Fatal("live reservation released early", err)
 				}
-				if _, err := peer.Put(t.Context(), stagingKey(t, "peer-live"), strings.NewReader("next"), storage.PutOptions{}); err != nil {
-					t.Fatal("live writer was charged twice", err)
+				if _, err := peer.Put(stagingBusyContext(t), stagingKey(t, "peer-live"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
+					t.Fatal("foreign live writer was omitted from the root budget", err)
 				}
 				if n, err := peer.Prune(t.Context(), time.Now(), MaxPrune); err != nil || n != 0 {
 					t.Fatal("live writer pruned", n, err)
@@ -319,7 +323,7 @@ func TestStagingRecoveryReconcilesOtherOwners(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer peer.Close()
-			if _, err := peer.Put(t.Context(), stagingKey(t, "blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
+			if _, err := peer.Put(stagingBusyContext(t), stagingKey(t, "blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
 				t.Fatal("recovery did not account before admission", err)
 			}
 			if outcome == "prune" {
@@ -336,7 +340,7 @@ func TestStagingRecoveryReconcilesOtherOwners(t *testing.T) {
 				}
 				// The new inode still consumes three bytes, but must not inherit the old
 				// inode's eight-byte charge or disappear merely because its name is reused.
-				if _, err := peer.Put(t.Context(), stagingKey(t, "still-blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
+				if _, err := peer.Put(stagingBusyContext(t), stagingKey(t, "still-blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
 					t.Fatal("replacement was not charged", err)
 				}
 			}
@@ -345,4 +349,11 @@ func TestStagingRecoveryReconcilesOtherOwners(t *testing.T) {
 			}
 		})
 	}
+}
+
+func stagingBusyContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	t.Cleanup(cancel)
+	return ctx
 }

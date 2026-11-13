@@ -22,18 +22,11 @@ func (b *Backend) Prune(ctx context.Context, olderThan time.Time, limit int) (ui
 	if limit < 1 || limit > MaxPrune || olderThan.IsZero() || olderThan.After(b.config.Clock.Now()) {
 		return 0, failure(storage.Invalid, storage.DeleteOperation, storage.Unchanged, nil)
 	}
-	if err := b.reconcileStaging(ctx); err != nil {
-		return 0, failure(storage.Unavailable, storage.DeleteOperation, storage.NotApplicable, err)
-	}
 	var removed uint64
 	finished := safeerror.New("staging cleanup batch complete")
-	err := b.walkEntries(ctx, b.config.MaxScan, func(parent *os.Root, directory, name string) error {
+	err := b.walkEntries(ctx, b.config.MaxScan, func(parent *os.Root, _ string, name string) error {
 		if !stagingName(name) {
 			return nil
-		}
-		if b.staging != nil {
-			b.staging.cleanup.Lock()
-			defer b.staging.cleanup.Unlock()
 		}
 		file, err := parent.OpenFile(name, os.O_RDWR, 0)
 		if errors.Is(err, fs.ErrNotExist) {
@@ -73,7 +66,6 @@ func (b *Backend) Prune(ctx context.Context, olderThan time.Time, limit int) (ui
 		if err = parent.Remove(name); err != nil {
 			return err
 		}
-		b.releasedStaging(directory+"/"+name, info)
 		removed++
 		if b.config.Sync {
 			if err = syncDirectory(parent); err != nil {

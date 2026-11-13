@@ -202,17 +202,25 @@ waits for actual callback exit rather than closing infrastructure beneath it.
 <a id="recipe-local-disk"></a>
 ## Local managed store
 
-`local.Config.Staging` optionally bounds large-write slots and payload bytes inside
-this managed root. `SmallObjectBytes` reserves admission for known small inputs;
-unknown lengths reserve `MaxObjectBytes`. Both puts and server-side copies use
-this owner before staging. Keep the disk's `MaxActive` greater than the staging
-slot cap. Failed cleanup retains its byte reservation until `Prune` removes the
-file. Startup completes a batched recovery scan independent of the listing
-`MaxScan` ceiling. Recovered entries retain their path and file identity; admission
-and pruning reconcile foreign publication, deletion and replacement. Live writers
-keep their own reservations and writer locks, without a second recovery charge.
-Zero staging limits preserve existing behavior. Named disks expose the same policy as
-`infrastructure.LocalDiskSettings.Staging`.
+`local.Config.Staging` bounds large-write slots and payload reservations for the
+**managed root across processes**, including HTTP and worker roles. All processes
+sharing a root must use the same staging limits. `SmallObjectBytes` reserves
+admission for known small inputs; unknown lengths reserve `MaxObjectBytes`. Both
+puts and server-side copies publish the reserved byte count in their staging
+entry name and hold the existing writer lock before reading input. Admission sums
+its own and foreign reservations directly from the root. Concurrent contenders
+create their records first, verify the combined budget, and withdraw and retry
+within the admission timeout if it is exceeded. No in-memory counter grants extra
+capacity to another process.
+
+Publication renames the entry into its final object; successful cleanup removes
+it. A crash releases the writer lock, but its abandoned entry keeps its byte
+reservation until `Prune` removes it under the existing age, identity and lock
+checks. Failed cleanup likewise stays charged. Recovery and admission stream the
+root in fixed-size directory batches independently of the listing `MaxScan`
+ceiling. Keep each disk's `MaxActive` greater than the root's staging slot cap.
+Zero staging limits preserve existing behavior. Named disks expose the same
+policy as `infrastructure.LocalDiskSettings.Staging`.
 
 Staging and atomic publication stay on the same managed filesystem. Provision
 record/filesystem overhead and persistent object capacity beyond payload
