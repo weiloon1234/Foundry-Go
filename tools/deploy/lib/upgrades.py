@@ -28,11 +28,11 @@ from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_wr
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
-REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", "lib/upgrades.py",
+BASE_REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", "lib/upgrades.py",
                             "lib/provision.py", "lib/recover.py", "lib/release.py", "lib/runtime_config.py",
                             "lib/capacity.py", "lib/journal.py", "lib/maintenance.py",
                             "lib/topology.py", "lib/report.py", "server/manage.py",
-                            "server/report.py", "server/launcher.py", "lib/packages.py", "lib/artifacts.py",
+                            "server/report.py", "server/launcher.py", "lib/packages.py",
                             "lib/postgres.py", "lib/redis_acl.py", "lib/edge.py",
                             "lib/certificates.py", "lib/backup.py", "lib/cloudflare-ranges.json",
                             "server/templates/foundry-http@.service",
@@ -43,6 +43,22 @@ REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", 
                             "server/templates/foundry-backup.timer",
                             "server/templates/nginx-http.conf", "server/templates/nginx-https.conf",
                             "server/templates/nginx-proxy.conf", "server/templates/nginx-upgrade.conf"})
+
+
+# Cumulative requirements are selected from the inspected bundle's protocol,
+# never from the running tools' generation or the host's selected generation.
+GENERATION_11_FILES = frozenset({"lib/uploads.py", "server/templates/nginx-upload.conf"})
+GENERATION_12_FILES = frozenset({"lib/artifacts.py"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES
+
+
+def required_files(generation: int) -> frozenset[str]:
+    required = BASE_REQUIRED_FILES
+    if generation >= 11:
+        required |= GENERATION_11_FILES
+    if generation >= 12:
+        required |= GENERATION_12_FILES
+    return required
 
 
 def _hash(value: object) -> str:
@@ -80,7 +96,8 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
                 "tools_too_large", "The tool bundle exceeds its size limit.")
         inventory.append({"path": path.relative_to(source).as_posix(), "size": size, "mode": 0o644,
                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    require(REQUIRED_FILES <= {item["path"] for item in inventory}, "tools_incomplete", "The tool bundle is incomplete.")
+    require(required_files(protocol(source)["generation"]) <= {item["path"] for item in inventory},
+            "tools_incomplete", "The tool bundle is incomplete.")
     return source, files, inventory
 
 

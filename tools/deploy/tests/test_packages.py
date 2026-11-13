@@ -8,6 +8,8 @@ import io
 import json
 import sys
 import tempfile
+import tarfile
+import os
 import unittest
 from unittest.mock import Mock, patch
 
@@ -140,7 +142,7 @@ class PackageTransactionTests(unittest.TestCase):
         for name, kwargs in (
                 ("_candidate_evidence", {"side_effect": lambda host, transaction: {
                     name: {"version": version, "sha256": "a" * 64} for name, version in transaction.items()}}),
-                ("_prepare_payloads", {"return_value": {}}),
+                ("_prepare_payloads", {"return_value": ({}, {})}),
                 ("_activation_snapshot", {"return_value": {}})):
             patcher = patch.object(packages, name, **kwargs)
             patcher.start()
@@ -468,7 +470,7 @@ class DefaultActivationTests(unittest.TestCase):
                 "UnitFileState": enabled, "MainPID": "0"}
 
     def test_masks_only_proven_new_defaults_including_sockets_and_timers(self):
-        journal = {"activation_before": {"foreign.service": self.record("active", "enabled")},
+        journal = {"operation_id": "test-operation", "activation_before": {"foreign.service": self.record("active", "enabled")},
                    "activation_units": {name: ["new"] for name in ("new.service", "new.socket", "new.timer", "foreign.service")}}
         packages._mask_defaults(self.host, journal)
         for name in ("new.service", "new.socket", "new.timer"):
@@ -484,7 +486,7 @@ class DefaultActivationTests(unittest.TestCase):
         for before, units in (({}, {"new.service": ["new"]}),
                               ({"new@foreign.service": self.record()}, {"new@.service": ["new"]})):
             with self.assertRaises(DeployError):
-                packages._mask_defaults(self.host, {"activation_before": before, "activation_units": units})
+                packages._mask_defaults(self.host, {"operation_id": "test-operation", "activation_before": before, "activation_units": units})
 
     def test_unexpected_or_active_defaults_remain_unresolved_without_stopping_foreign_units(self):
         journal = {"activation_before": {"foreign.service": self.record("active", "enabled")},
@@ -502,6 +504,198 @@ class DefaultActivationTests(unittest.TestCase):
         with patch.object(packages, "_activation_snapshot", return_value={**before, "new.timer": self.record()}):
             packages._finish_activation(self.host, journal)
         self.assertEqual([args for args, _ in self.host.commands], [["systemctl", "disable", "new.timer"]])
+
+
+CERTBOT_CRON = b"0 */12 * * * root test -x /usr/bin/certbot -a ! -d /run/systemd/system && certbot -q renew\n"
+
+
+class PayloadPackageHost(PackageHost):
+    """Run the package planner/inspector/journal; fake only OS command boundaries."""
+    def __init__(self, root, payloads):
+        super().__init__(root)
+        self.payloads = payloads
+        self.conffiles = {path for files in payloads.values() for path in files if path.startswith("/etc/cron.")}
+        self.candidates = {name: "1" for name in payloads}
+        self.active = set()
+        self.paths.p("/etc/os-release").write_text('ID=ubuntu\nVERSION_ID="24.04"\nVERSION_CODENAME=noble\n')
+        cache = self.paths.p("/var/cache/apt/archives")
+        cache.mkdir(parents=True)
+        self.evidence = {}
+        for name, files in payloads.items():
+            output = io.BytesIO()
+            with tarfile.open(fileobj=output, mode="w") as archive:
+                for path, content in files.items():
+                    item = tarfile.TarInfo("./" + path.lstrip("/"))
+                    item.size, item.mode = len(content), 0o644
+                    archive.addfile(item, io.BytesIO(content))
+            content = output.getvalue()
+            (cache / (name + ".deb")).write_bytes(content)
+            self.evidence[name] = {"version": "1", "architecture": "amd64", "sha256": hashlib.sha256(content).hexdigest(),
+                "size": len(content), "uris": ["https://archive.ubuntu.com/ubuntu/pool/" + name + ".deb"],
+                "origins": [{"trusted": True, "origin": "Ubuntu", "label": "Ubuntu", "codename": "noble", "archive": "noble"}]}
+
+    def units(self):
+        return {path.name for directory in ("/etc/systemd/system", "/usr/lib/systemd/system")
+                for path in self.paths.p(directory).glob("*") if packages.UNIT.fullmatch(path.name)}
+
+    def run(self, args, **kwargs):
+        output = ""
+        if args[:3] == ["/usr/bin/python3", "-c", packages._APT_EVIDENCE]:
+            output = json.dumps({name: self.evidence[name] for name in json.loads(args[3])})
+        elif args[:3] == ["/usr/bin/python3", "-c", packages._DEB_UNITS]:
+            process = Mock(stdout=io.BytesIO(Path(args[3]).read_bytes()))
+            process.wait.return_value = process.poll.return_value = 0
+            captured = io.StringIO()
+            def control(command, **options):
+                assert command == ["dpkg-deb", "--ctrl-tarfile", args[3]]
+                with tarfile.open(fileobj=options["stdout"], mode="w") as archive:
+                    data = ("\n".join(sorted(self.conffiles)) + "\n").encode()
+                    item = tarfile.TarInfo("conffiles")
+                    item.size = len(data)
+                    archive.addfile(item, io.BytesIO(data))
+                return subprocess.CompletedProcess(command, 0)
+            with patch.object(subprocess, "Popen", return_value=process), patch.object(sys, "argv", ["inspector", *args[3:]]), \
+                    patch.object(subprocess, "run", side_effect=control), contextlib.redirect_stdout(captured):
+                exec(packages._DEB_UNITS, {"__name__": "__main__"})
+            output = captured.getvalue()
+        elif args[0] == "apt-get" and "--download-only" in args:
+            pass
+        elif args[0] == "apt-get" and "-y" in args:
+            assert self.paths.p(packages.POLICY).read_text().endswith("exit 101\n")
+            for location in packages._load(self)["cron_defaults"]:
+                assert all(line.startswith("#") for line in self.paths.p(location).read_text().splitlines())
+            for name, files in self.payloads.items():
+                for path, content in files.items():
+                    destination = self.paths.p(path)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    if path.startswith("/etc/cron.") and destination.exists() and "Dpkg::Options::=--force-confold" in args:
+                        destination = destination.with_name(destination.name + ".dpkg-dist")
+                    destination.write_bytes(content)
+                self.inventory[name] = installed()
+        elif args[0] == "systemctl" and args[1] in ("list-unit-files", "list-units"):
+            output = "\n".join(name + " disabled" for name in sorted(self.units()))
+        elif args[0] == "systemctl" and args[1] == "show" and "Id" in args:
+            records = []
+            for name in args[2:args.index("--no-pager")]:
+                masked = self.paths.p("/etc/systemd/system/" + name).is_symlink()
+                records.append(f"Id={name}\nLoadState={'masked' if masked else 'loaded'}\nActiveState=inactive\n"
+                               f"SubState=dead\nMainPID=0\nUnitFileState={'masked' if masked else 'disabled'}\nFragmentPath=\n")
+            output = "\n".join(records)
+        elif args[:3] == ["systemctl", "enable", "--now"]:
+            unit = args[3] if args[3].endswith(".service") else args[3] + ".service"
+            if self.paths.p("/etc/systemd/system/" + unit).is_symlink():
+                raise DeployError("masked", "Cannot enable a masked service.")
+            self.active.add(unit)
+        else:
+            return super().run(args, **kwargs)
+        self.commands.append((list(args), kwargs))
+        return subprocess.CompletedProcess(args, 0, output, "")
+
+
+class BuiltinPayloadTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+
+    def host(self, *, cron=True):
+        payloads = {"nginx": {"/usr/lib/systemd/system/nginx.service": b"[Service]\nExecStart=/usr/sbin/nginx\n"}}
+        if cron:
+            payloads["certbot"] = {"/etc/cron.d/certbot": CERTBOT_CRON,
+                "/usr/lib/systemd/system/certbot.timer": b"[Timer]\nOnCalendar=daily\n"}
+        return PayloadPackageHost(self.root, payloads)
+
+    def test_builtin_certbot_cron_is_inert_before_and_after_installation(self):
+        host = self.host()
+        packages.install_missing(host, list(host.candidates))
+        cron = host.paths.p("/etc/cron.d/certbot")
+        self.assertTrue(all(not line.strip() or line.startswith("#") for line in cron.read_text().splitlines()))
+        self.assertEqual(cron.with_name("certbot.dpkg-dist").read_bytes(), CERTBOT_CRON)
+        self.assertEqual(packages._load(host)["state"], "complete")
+
+    def test_nginx_owner_handoff_allows_enable_and_preserves_other_masks(self):
+        host = self.host()
+        packages.install_missing(host, list(host.candidates))
+        mask = host.paths.p("/etc/systemd/system/nginx.service")
+        self.assertTrue(mask.is_symlink())
+        claim = {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"}
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        host.run(["systemctl", "enable", "--now", "nginx"])
+        self.assertIn("nginx.service", host.active)
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertTrue(host.paths.p("/etc/systemd/system/certbot.timer").is_symlink())
+        self.assertTrue(host.paths.p("/etc/cron.d/certbot").read_text().startswith("#"))
+
+    def test_preexisting_cron_file_is_not_replaced_or_claimed(self):
+        host = self.host()
+        cron = host.paths.p("/etc/cron.d/certbot")
+        cron.parent.mkdir(parents=True)
+        cron.write_text("# foreign cron configuration\n")
+        with self.assertRaises(DeployError):
+            packages.install_missing(host, list(host.candidates))
+        self.assertEqual(cron.read_text(), "# foreign cron configuration\n")
+        self.assertFalse(packages._journal_path(host).exists())
+
+    def test_handoff_refuses_external_claim_pending_install_and_replaced_mask(self):
+        host = self.host(cron=False)
+        packages.install_missing(host, ["nginx"])
+        claim = {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"}
+        mask = host.paths.p("/etc/systemd/system/nginx.service")
+        for change in ({"owner": "external"}, {"installed_by_foundry": False}, {"unit": "foreign.service"}):
+            with self.subTest(change=change), self.assertRaises(DeployError):
+                packages.authorize_default_activation(host, "nginx.service", {**claim, **change})
+            self.assertTrue(mask.is_symlink())
+        journal = packages._load(host)
+        journal["state"] = "installing"
+        packages._save(host, journal)
+        with self.assertRaises(DeployError):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        journal["state"] = "complete"
+        packages._save(host, journal)
+        replacement = mask.with_name("replacement.service")
+        replacement.symlink_to("/dev/null")
+        os.replace(replacement, mask)
+        with self.assertRaises(DeployError):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertEqual(os.readlink(mask), "/dev/null")
+
+    def test_handoff_recovers_after_unlink_before_daemon_reload(self):
+        host = self.host(cron=False)
+        packages.install_missing(host, ["nginx"])
+        claim = {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"}
+        with patch.object(host, "run", side_effect=DeployError("interrupted", "reload interrupted")), self.assertRaises(DeployError):
+            packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertFalse(host.paths.p("/etc/systemd/system/nginx.service").is_symlink())
+        self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["state"], "releasing")
+        packages.authorize_default_activation(host, "nginx.service", claim)
+        self.assertEqual(packages._load(host)["default_activation"]["nginx.service"]["state"], "released")
+
+    def test_additional_package_transaction_retains_prior_mask_ownership(self):
+        host = self.host()
+        host.candidates = {"nginx": "1"}
+        # The fake package manager installs only its requested transaction.
+        pending_certbot = host.payloads.pop("certbot")
+        packages.install_missing(host, ["nginx"])
+        host.payloads = {"certbot": pending_certbot}
+        host.candidates = {"certbot": "1"}
+        packages.install_missing(host, ["certbot"])
+        packages.authorize_default_activation(host, "nginx.service",
+                                             {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"})
+        self.assertFalse(host.paths.p("/etc/systemd/system/nginx.service").is_symlink())
+
+    def test_unknown_application_cron_payload_is_refused_before_install(self):
+        host = PayloadPackageHost(self.root, {"application-daemon": {"/etc/cron.d/application-daemon": CERTBOT_CRON}})
+        with self.assertRaises((DeployError, ValueError)):
+            packages.install_missing(host, ["application-daemon"])
+        self.assertFalse(host.paths.p("/etc/cron.d/application-daemon").exists())
+        self.assertFalse(packages._journal_path(host).exists())
+
+    def test_builtin_cron_must_be_a_dpkg_conffile_to_preserve_suppression(self):
+        host = self.host()
+        host.conffiles.clear()
+        with self.assertRaises((DeployError, ValueError)):
+            packages.install_missing(host, list(host.candidates))
+        self.assertFalse(packages._journal_path(host).exists())
 
 
 if __name__ == "__main__":

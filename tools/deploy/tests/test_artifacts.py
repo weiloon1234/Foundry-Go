@@ -368,23 +368,38 @@ class PublicationTests(unittest.TestCase):
         payload = ArtifactPayload("extension", "linux-amd64", "deploy/artifacts/extension.tar.gz", checksum(content), members)
         host = Host(Paths(self.root))
         host.paths.opt("sample-test").mkdir(parents=True)
-        tree = a.publish(host, "sample-test", artifact, payload, self.payload, a.ExpansionBudget(), history=(), observed_service_abi="service-1")
+        prepared = a.prepare_payload(artifact, payload, self.payload, a.ExpansionBudget(), self.destination)
+        tree = a.publish(host, "sample-test", prepared, history=(), observed_service_abi="service-1")
         self.addCleanup(lambda: a._remove_staging(tree))
         reference = a.ArtifactReference("extension", artifact.version, payload.platform, payload.sha256)
         self.assertEqual(tree, host.paths.opt("sample-test") / "artifacts" / reference.relative_path())
         export = a.bundle_export(reference, artifact, tree, "plugin", members, observed_service_abi="service-1", uid=os.geteuid())
         self.assertEqual(export.source, tree / "plugin")
         self.assertTrue(export.read_only)
-        self.assertEqual(a.publish(host, "sample-test", artifact, payload, self.payload, a.ExpansionBudget(),
+        self.assertEqual(a.publish(host, "sample-test", prepared,
                                   history=(reference,), observed_service_abi="service-1"), tree)
         data = tree / "plugin/data.dat"
         data.chmod(0o644)
         data.write_bytes(b"tampered")
         data.chmod(0o444)
         with self.assertRaises(DeployError):
-            a.publish(host, "sample-test", artifact, payload, self.payload, a.ExpansionBudget(), history=(reference,), observed_service_abi="service-1")
+            a.publish(host, "sample-test", prepared, history=(reference,), observed_service_abi="service-1")
         self.assertEqual(data.read_bytes(), b"tampered")
         self.assertFalse(list(tree.parent.glob(".artifact-*")))
+
+    def test_publication_rechecks_prepared_tree_tampering_without_reextraction(self):
+        artifact, content = bundle_fixture()
+        members = self.inspect(artifact, content)
+        payload = ArtifactPayload("extension", "linux-amd64", "deploy/artifacts/extension.tar.gz", checksum(content), members)
+        prepared = a.prepare_payload(artifact, payload, self.payload, a.ExpansionBudget(), self.destination)
+        data = self.destination / "plugin/data.dat"
+        data.chmod(0o644)
+        data.write_bytes(b"changed")
+        data.chmod(0o444)
+        host = Host(Paths(self.root))
+        host.paths.opt("sample-test").mkdir(parents=True)
+        with patch.object(a, "inspect_payload", side_effect=AssertionError("must not reextract")), self.assertRaises(DeployError):
+            a.publish(host, "sample-test", prepared, history=(), observed_service_abi="service-1")
 
     def test_abi_unknown_or_different_refuses_and_version_history_survives_pruning(self):
         artifact, _ = bundle_fixture()

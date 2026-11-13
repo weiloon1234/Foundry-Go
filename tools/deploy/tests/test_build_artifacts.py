@@ -15,11 +15,17 @@ from test_artifacts import bundle_fixture, elf, PUBLIC, URL
 import artifacts
 from contracts import DeployError, ReleaseDeclaration
 from topology import parse_topology
+from host import Host, Paths
 
 
 class FeatureBuildTests(unittest.TestCase):
     setUp = BuildInputTests.setUp
     request_and_stage = BuildInputTests.request_and_stage
+
+    def verify(self, declaration, stage, budget):
+        staging = self.root / "prepared"
+        self.addCleanup(lambda: artifacts._remove_staging(staging))
+        return artifacts.verify_release_tree(declaration, stage, budget, artifact_staging=staging)
 
     def feature(self):
         request, stage, entry = self.request_and_stage()
@@ -71,10 +77,10 @@ class FeatureBuildTests(unittest.TestCase):
             self.assertEqual(tar.extractfile(payload.path).read(), content)
             self.assertEqual(tar.getmember("deploy/bin/relay-server").mode, 0o755)
             self.assertEqual({m.name for m in tar if m.isfile()}, set(manifest["files"]) | {"manifest.json"})
-        artifacts.verify_release_tree(deployment, stage, artifacts.ExpansionBudget())
+        self.verify(deployment, stage, artifacts.ExpansionBudget())
         (stage / payload.path).write_bytes(content + b"tampered")
         with self.assertRaises(DeployError):
-            artifacts.verify_release_tree(deployment, stage, artifacts.ExpansionBudget())
+            self.verify(deployment, stage, artifacts.ExpansionBudget())
 
     def test_unrequested_deploy_files_never_enter_archive(self):
         request, stage, content = self.feature()
@@ -105,7 +111,7 @@ class FeatureBuildTests(unittest.TestCase):
         raw = json.loads((archive.parent / "manifest.json").read_text())["deployment"]
         raw["artifacts"][0]["members"][0]["sha256"] = "b" * 64
         with self.assertRaises(DeployError):
-            artifacts.verify_release_tree(ReleaseDeclaration.parse(raw), stage, artifacts.ExpansionBudget())
+            self.verify(ReleaseDeclaration.parse(raw), stage, artifacts.ExpansionBudget())
 
     def test_host_shared_budget_includes_outer_and_all_nested_payloads(self):
         request, stage, content = self.feature()
@@ -113,7 +119,41 @@ class FeatureBuildTests(unittest.TestCase):
         declaration = ReleaseDeclaration.parse(json.loads((archive.parent / "manifest.json").read_text())["deployment"])
         outer = sum(p.stat().st_size for p in stage.rglob("*") if p.is_file())
         with self.assertRaises(DeployError):
-            artifacts.verify_release_tree(declaration, stage, artifacts.ExpansionBudget(max_bytes=outer))
+            self.verify(declaration, stage, artifacts.ExpansionBudget(max_bytes=outer, max_disk_bytes=1024**2))
+
+    def test_verification_and_publication_share_one_expansion(self):
+        request, stage, content = self.feature()
+        archive = self.package(request, stage, content, self.root / "output")
+        declaration = ReleaseDeclaration.parse(json.loads((archive.parent / "manifest.json").read_text())["deployment"])
+        payload = declaration.artifacts[0]
+        limit = sum(p.stat().st_size for p in stage.rglob("*") if p.is_file()) + sum(m.size for m in payload.members)
+        budget = artifacts.ExpansionBudget(max_bytes=limit, max_disk_bytes=1024**2)
+        prepared, = self.verify(declaration, stage, budget)
+        host = Host(Paths(self.root / "host"))
+        host.paths.opt("sample-test").mkdir(parents=True)
+        before = asdict(budget)
+        with patch.object(artifacts, "inspect_payload", side_effect=AssertionError("must not reextract")):
+            tree = artifacts.publish(host, "sample-test", prepared, history=(), observed_service_abi="service-1")
+        self.addCleanup(lambda: artifacts._remove_staging(tree))
+        self.assertEqual(budget.bytes, limit)
+        self.assertEqual(asdict(budget), before)
+
+    def test_distinct_payloads_with_same_digest_share_aggregate_budget(self):
+        request, stage, content = self.feature()
+        request["topology"]["artifacts"]["second-extension"] = request["topology"]["artifacts"]["extension"]
+        archive = self.package(request, stage, content, self.root / "output")
+        declaration = ReleaseDeclaration.parse(json.loads((archive.parent / "manifest.json").read_text())["deployment"])
+        outer = sum(p.stat().st_size for p in stage.rglob("*") if p.is_file())
+        inner = sum(m.size for m in declaration.artifacts[0].members)
+        budget = artifacts.ExpansionBudget(max_bytes=outer + inner, max_disk_bytes=1024**2)
+        with self.assertRaises(DeployError) as error:
+            self.verify(declaration, stage, budget)
+        self.assertEqual(error.exception.code, "artifact_expansion")
+        self.assertFalse((self.root / "prepared").exists())
+        budget = artifacts.ExpansionBudget(max_bytes=outer + 2 * inner, max_disk_bytes=1024**2)
+        prepared = self.verify(declaration, stage, budget)
+        self.assertEqual(len(prepared), 2)
+        self.assertEqual(budget.bytes, outer + 2 * inner)
 
     def test_prepare_builds_declared_go_commands_and_copies_only_named_sources(self):
         request, stage, _ = self.feature()

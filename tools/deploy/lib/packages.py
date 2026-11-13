@@ -38,6 +38,10 @@ REQUIREMENTS = {
     "redis-server": ("/usr/bin/redis-server",), "redis-tools": ("/usr/bin/redis-cli",),
 }
 
+# Exact distro conffiles whose activation is owned by framework renewal instead.
+# Unknown cron payloads, including other paths in these packages, remain refused.
+BUILTIN_CRON = {"certbot": ("/etc/cron.d/certbot",)}
+
 
 def binary_available(host: Host, package: str) -> bool:
     """Use the same accepted binary paths for planning and service inspection."""
@@ -149,11 +153,21 @@ def _load(host: Host) -> dict | None:
                     for name, version in value["transaction"].items()),
             "package_journal", "Invalid package recovery intent.")
     if "evidence" in value:
-        require(value.get("supply_sha256") == _digest({key: value[key] for key in
-                    ("evidence", "activation_before", "activation_units")})
+        supply_fields = ["evidence", "activation_before", "activation_units"]
+        if "cron_defaults" in value:
+            supply_fields.append("cron_defaults")
+        require(value.get("supply_sha256") == _digest({key: value[key] for key in supply_fields})
                 and all(UNIT.fullmatch(unit) for unit in value["activation_units"])
                 and set(value.get("masked_defaults", [])) <= value["activation_units"].keys(),
                 "package_journal", "Package supply or activation intent changed.")
+    require(isinstance(value.get("default_activation", {}), dict)
+            and all(UNIT.fullmatch(unit) and isinstance(record, dict)
+                    and record.get("state") in ("masked", "releasing", "released")
+                    and isinstance(record.get("identity"), dict)
+                    and set(record["identity"]) == {"device", "inode", "uid", "ctime_ns"}
+                    and all(type(n) is int and n >= 0 for n in record["identity"].values())
+                    for unit, record in value.get("default_activation", {}).items()),
+            "package_journal", "Invalid default activation ownership record.")
     return value
 
 
@@ -527,10 +541,25 @@ def _activation_snapshot(host):
 
 
 _DEB_UNITS = r'''
-import json,pathlib,subprocess,sys,tarfile
+import hashlib,json,pathlib,subprocess,sys,tarfile,tempfile
 process = subprocess.Popen(["dpkg-deb", "--fsys-tarfile", sys.argv[1]], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-units, total, count = set(), 0, 0
+allowed_cron = set(json.loads(sys.argv[2]))
+units, cron, total, count = set(), {}, 0, 0
 try:
+    conffiles = set()
+    if allowed_cron:
+        with tempfile.TemporaryFile() as control:
+            subprocess.run(["dpkg-deb", "--ctrl-tarfile", sys.argv[1]], stdout=control,
+                           stderr=subprocess.DEVNULL, check=True, timeout=30)
+            if control.tell() > 4*1024**2:
+                raise ValueError("oversized package control archive")
+            control.seek(0)
+            with tarfile.open(fileobj=control, mode="r:") as metadata:
+                for item in metadata:
+                    if item.name.removeprefix("./") == "conffiles":
+                        if not item.isfile() or item.size > 65536:
+                            raise ValueError("invalid conffile inventory")
+                        conffiles.update(metadata.extractfile(item).read().decode("utf-8").splitlines())
     with tarfile.open(fileobj=process.stdout, mode="r|") as archive:
         for item in archive:
             count += 1
@@ -546,12 +575,17 @@ try:
                 units.add(path.name)
             if name.startswith("etc/init.d/") and not item.isdir():
                 units.add(path.name + ".service")
-            if name.startswith(("usr/share/dbus-1/system-services/", "etc/cron.", "etc/cron.d/")) and not item.isdir():
+            if name.startswith("etc/cron.") and not item.isdir():
+                if ("/" + name not in allowed_cron or "/" + name not in conffiles
+                        or not item.isfile() or item.size > 65536 or "/" + name in cron):
+                    raise ValueError("unsupported cron activation")
+                cron["/" + name] = hashlib.sha256(archive.extractfile(item).read()).hexdigest()
+            if name.startswith("usr/share/dbus-1/system-services/") and not item.isdir():
                 raise ValueError("unsupported activation")
     process.stdout.close()
     if process.wait(timeout=30):
         raise ValueError("cannot read package")
-    print(json.dumps(sorted(units)))
+    print(json.dumps({"units": sorted(units), "cron": cron}))
 finally:
     if process.poll() is None:
         process.kill()
@@ -567,7 +601,7 @@ def _prepare_payloads(host, transaction, evidence):
     cache = host.paths.p("/var/cache/apt/archives")
     wanted = {record["sha256"]: name for name, record in evidence.items()}
     require(len(wanted) == len(evidence), "package_payload", "Ambiguous package hashes.")
-    found, units = set(), {}
+    found, units, cron = set(), {}, {}
     for path in sorted(cache.glob("*.deb")):
         check_path(path, "file")
         if path.stat().st_size not in {record["size"] for record in evidence.values()}:
@@ -577,14 +611,72 @@ def _prepare_payloads(host, transaction, evidence):
             continue
         name = wanted[checksum]
         found.add(name)
-        result = host.run(["/usr/bin/python3", "-c", _DEB_UNITS, str(path)], timeout=120)
-        names = parse_json(result.stdout)
+        allowed_cron = BUILTIN_CRON.get(name, ()) if name in REQUIREMENTS else ()
+        result = host.run(["/usr/bin/python3", "-c", _DEB_UNITS, str(path), json.dumps(allowed_cron)], timeout=120)
+        inspected = parse_json(result.stdout)
+        require(isinstance(inspected, dict) and set(inspected) == {"units", "cron"},
+                "package_activation", "Invalid package activation inventory.")
+        names = inspected["units"]
         require(isinstance(names, list) and len(names) <= 4096 and all(isinstance(unit, str) and UNIT.fullmatch(unit) for unit in names),
                 "package_activation", "Package has unclassifiable activation payloads.")
         for unit in names:
             units.setdefault(unit, []).append(name)
+        require(isinstance(inspected["cron"], dict) and set(inspected["cron"]) <= set(allowed_cron),
+                "package_activation", "Package has an unclassified cron payload.")
+        for location, checksum in inspected["cron"].items():
+            require(location not in cron and isinstance(checksum, str) and re.fullmatch(r"[a-f0-9]{64}", checksum),
+                    "package_activation", "Invalid or overlapping cron payload.")
+            cron[location] = {"package": name, "sha256": checksum}
     require(found == set(transaction), "package_payload", "Downloaded packages differ from the reviewed transaction hashes.")
-    return {unit: sorted(owners) for unit, owners in sorted(units.items())}
+    return {unit: sorted(owners) for unit, owners in sorted(units.items())}, cron
+
+
+def _cron_stub(journal):
+    return "# Foundry package cron suppressed: " + journal["operation_id"] + "\n"
+
+
+def _check_cron_stub(host, path, journal):
+    check_path(path, "file")
+    require(path.exists(), "package_activation", "Package cron suppression disappeared.")
+    info = path.stat()
+    require(path.read_text() == _cron_stub(journal) and stat.S_IMODE(info.st_mode) == 0o644
+            and info.st_nlink == 1 and (info.st_uid == 0 or host.paths.root != Path("/")),
+            "package_activation", "Package cron suppression changed; refusing to replace it.")
+
+
+def _suppress_cron(host, journal):
+    # The prior absence is recorded before this runs. --force-confold preserves
+    # this inert local conffile during unpack; the distro version is .dpkg-dist.
+    for location in journal.get("cron_defaults", {}):
+        path = check_path(host.paths.p(location), "file")
+        host.check_control_directory(path.parent)
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+        if not path.exists():
+            stage = check_path(path.parent / (".foundry-cron-" + journal["operation_id"]), "file")
+            require(not stage.exists() or stage.read_text() == _cron_stub(journal),
+                    "package_activation", "Cron suppression staging is foreign.")
+            host.owned_write(stage, _cron_stub(journal), mode=0o644)
+            try:
+                os.link(stage, path, follow_symlinks=False)
+                _sync_directory(path.parent)
+            finally:
+                stage.unlink()
+        _check_cron_stub(host, path, journal)
+
+
+def _finish_cron(host, journal):
+    for location, record in journal.get("cron_defaults", {}).items():
+        path = check_path(host.paths.p(location), "file")
+        _check_cron_stub(host, path, journal)
+        preserved = check_path(path.with_name(path.name + ".dpkg-dist"), "file")
+        require(preserved.is_file() and digest(preserved) == record["sha256"],
+                "package_activation", "Preserved distro cron payload differs from its verified package.")
+
+
+def _mask_identity(path):
+    info = path.lstat()
+    return {"device": info.st_dev, "inode": info.st_ino, "uid": info.st_uid,
+            "ctime_ns": info.st_ctime_ns}
 
 
 def _mask_defaults(host, journal):
@@ -600,7 +692,9 @@ def _mask_defaults(host, journal):
                     "package_activation", "A new template would mask preexisting foreign instances.")
         path = directory / unit
         if path.is_symlink():
-            require(os.readlink(path) == "/dev/null" and unit in journal.get("masked_defaults", []),
+            record = journal.get("default_activation", {}).get(unit)
+            require(os.readlink(path) == "/dev/null" and unit in journal.get("masked_defaults", [])
+                    and record is not None and record["identity"] == _mask_identity(path),
                     "package_activation", "A foreign default-unit mask appeared.")
         else:
             require(not path.exists(), "package_activation", "A foreign default-unit file appeared.")
@@ -611,6 +705,9 @@ def _mask_defaults(host, journal):
                 _save(host, journal)
             path.symlink_to("/dev/null")
             _sync_directory(directory)
+            journal.setdefault("default_activation", {})[unit] = {
+                "operation_id": journal["operation_id"], "identity": _mask_identity(path), "state": "masked"}
+            _save(host, journal)
     host.run(["systemctl", "daemon-reload"])
 
 
@@ -631,7 +728,46 @@ def _finish_activation(host, journal):
     # dependency/manual activation after a reboot or interrupted installation.
     for unit in journal.get("masked_defaults", []):
         path = host.paths.p("/etc/systemd/system") / unit
-        require(path.is_symlink() and os.readlink(path) == "/dev/null", "package_activation", "Package replaced an owned default mask.")
+        require(path.is_symlink() and os.readlink(path) == "/dev/null"
+                and _mask_identity(path) == journal["default_activation"][unit]["identity"],
+                "package_activation", "Package replaced an owned default mask.")
+
+
+def authorize_default_activation(host: Host, unit: str, claim: dict) -> None:
+    """Lane A calls under the host lock immediately before enable --now nginx.
+
+    Pass registry['shared']['nginx'] after its owner/installed_by_foundry checks
+    and nginx configuration validation. This only releases the exact journaled
+    mask; it does not enable/start services or release cron/timer suppression.
+    """
+    require(UNIT.fullmatch(unit) and claim.get("owner") == "foundry"
+            and claim.get("installed_by_foundry") is True and claim.get("unit") == unit,
+            "package_activation_owner", "Default activation requires its framework service owner's claim.")
+    journal = _load(host)
+    require(journal is not None and journal["state"] == "complete" and journal.get("policy_state") == "restored"
+            and not _locks(host) and not _transaction_active(host, journal),
+            "package_activation_pending", "Package installation must finish before default activation handoff.")
+    path = host.paths.p("/etc/systemd/system") / unit
+    host.check_control_directory(path.parent)
+    record = journal.get("default_activation", {}).get(unit)
+    if record is None:
+        require(not path.is_symlink() or os.readlink(path) != "/dev/null",
+                "package_activation_owner", "Cannot remove a foreign default-service mask.")
+        return
+    if path.exists() or path.is_symlink():
+        require(record["state"] in ("masked", "releasing") and path.is_symlink()
+                and os.readlink(path) == "/dev/null" and _mask_identity(path) == record["identity"],
+                "package_activation_owner", "Default-service mask no longer matches the journal-owned inode.")
+        record["state"] = "releasing"
+        _save(host, journal)
+        path.unlink()
+        _sync_directory(path.parent)
+    else:
+        require(record["state"] in ("releasing", "released"),
+                "package_activation_owner", "Default-service mask disappeared without an owned handoff.")
+    host.run(["systemctl", "daemon-reload"])
+    record["state"] = "released"
+    _save(host, journal)
 
 
 def _clean_inventory(inventory: dict) -> None:
@@ -851,18 +987,25 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
             require(reviewed.get("transaction") == approved and reviewed.get("evidence") == evidence
                     and reviewed.get("installed") == inventory and reviewed.get("activation") == activation,
                     "package_plan_changed", "Package transaction, origin or activation changed after approval.")
-        units = _prepare_payloads(host, approved, evidence)
+        units, cron = _prepare_payloads(host, approved, evidence)
+        for location in cron:
+            path = check_path(host.paths.p(location), "file")
+            preserved = check_path(path.with_name(path.name + ".dpkg-dist"), "file")
+            require(not path.exists() and not preserved.exists(),
+                    "package_activation", "Preexisting cron configuration cannot be claimed by package installation.")
         require(_inventory(host) == inventory and _activation_snapshot(host) == activation,
                 "package_plan_changed", "Host changed while acquiring inert package payloads.")
         prepared = True
         operation = str(uuid.uuid4())
+        retained_activation = journal.get("default_activation", {}) if journal else {}
         journal = {"schema": 1, "operation_id": operation, "state": "installing", "requested": missing,
                    "before": inventory, "defaults": _defaults(host), "transaction": approved,
                    "evidence": evidence, "activation_before": activation, "activation_units": units,
+                   "cron_defaults": cron, "default_activation": retained_activation,
                    "transaction_sha256": _digest(approved), "policy_state": "intent",
                    "policy": f"#!/bin/sh\n# Foundry package transaction {operation}\nexit 101\n"}
         journal["supply_sha256"] = _digest({key: journal[key] for key in
-                                          ("evidence", "activation_before", "activation_units")})
+                                          ("evidence", "activation_before", "activation_units", "cron_defaults")})
         _save(host, journal)
     _check_resume(inventory, journal)
     if reviewed is not None:
@@ -874,23 +1017,28 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
         evidence = _candidate_evidence(host, pending)
         require(evidence == {name: journal["evidence"][name] for name in pending},
                 "package_plan_changed", "Package origin/hash changed during recovery.")
-        units = _prepare_payloads(host, pending, evidence)
+        units, cron = _prepare_payloads(host, pending, evidence)
         require(all(unit in journal["activation_units"] and set(owners) <= set(journal["activation_units"][unit])
                     for unit, owners in units.items()), "package_plan_changed", "Package activation payload changed during recovery.")
+        require(all(record == journal.get("cron_defaults", {}).get(path) for path, record in cron.items()),
+                "package_plan_changed", "Package cron payload changed during recovery.")
     _suppress(host, journal)
     try:
         _mask_defaults(host, journal)
+        _suppress_cron(host, journal)
         # A07: configure only unpacked packages belonging to this exact intent.
         partial = [name for name in journal["transaction"] if _record(inventory, name).get("status", "").split()[-1:]
                    in (["unpacked"], ["half-configured"], ["triggers-awaited"], ["triggers-pending"])]
         if partial:
-            _run_transaction(host, ["dpkg", "--configure", *sorted(partial)])
+            options = ["--force-confold"] if journal.get("cron_defaults") else []
+            _run_transaction(host, ["dpkg", *options, "--configure", *sorted(partial)])
             inventory = _inventory(host)
             _check_resume(inventory, journal)
         targets = [name + "=" + version for name, version in journal["transaction"].items() if not _installed(inventory, name)]
         if targets:
             _simulate(host, targets, inventory, approved=journal["transaction"])
-            _run_transaction(host, ["apt-get", "-y", "--no-download", "--no-install-recommends", "--no-remove", "--no-upgrade",
+            options = ["-o", "Dpkg::Options::=--force-confold"] if journal.get("cron_defaults") else []
+            _run_transaction(host, ["apt-get", "-y", "--no-download", "--no-install-recommends", "--no-remove", "--no-upgrade", *options,
                                     "-o", "APT::Get::AllowUnauthenticated=false", "install", *targets])
         inventory = _inventory(host)
         _check_resume(inventory, journal)
@@ -898,6 +1046,7 @@ def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None =
                 "package_incomplete", "The owned package transaction remains incomplete.")
         _finish_defaults(host, journal)
         _finish_activation(host, journal)
+        _finish_cron(host, journal)
         journal["state"] = "complete"
         _save(host, journal)
     finally:

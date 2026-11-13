@@ -6,7 +6,10 @@ payload; publication and retention never select a release or start a workload.
 
 Integration: parse manifest['deployment'] with ReleaseDeclaration; charge the
 outer upload with retain_archive and every extracted header with charge. Pass
-that budget to verify_release_tree(..., outer_charged=True) and publish. Persist
+that budget to verify_release_tree(..., artifact_staging=..., outer_charged=True).
+It verifies/extracts each payload once and returns PreparedArtifact records;
+publish consumes those trees without another expansion or budget charge. The
+caller owns the staging root and removes it after publication/abandonment. Persist
 references/history before publication. bundle_export returns only a verified
 read-only source: use the frozen ArtifactMount area/path for M3's protected view.
 RetentionInputs includes namespace mounts and incomplete observations as well as
@@ -513,13 +516,35 @@ def release_member_kind(name, declared):
     return kind
 
 
+@dataclass(frozen=True)
+class PreparedArtifact:
+    artifact: Artifact
+    payload: ArtifactPayload
+    tree: Path
+
+
+def prepare_payload(artifact: Artifact, payload: ArtifactPayload, source: Path,
+                    budget: ExpansionBudget, destination: Path) -> PreparedArtifact:
+    """Verify and extract a payload once into new caller-owned staging."""
+    members = inspect_payload(artifact, payload.platform, source, budget, destination=destination)
+    try:
+        require(payload.sha256 == dict(artifact.platforms)[payload.platform].sha256
+                and members == tuple(sorted(payload.members, key=lambda m: m.path)),
+                "artifact_inventory", "Extracted artifact differs from its release inventory.")
+        return PreparedArtifact(artifact, payload, destination)
+    except BaseException:
+        _remove_staging(destination)
+        raise
+
+
 def verify_release_tree(declaration: ReleaseDeclaration, root: Path, budget: ExpansionBudget,
-                        *, outer_charged=False):
+                        *, artifact_staging: Path, outer_charged=False) -> tuple[PreparedArtifact, ...]:
     """M3 calls after strict outer extraction, before publication/start.
 
     If its extractor already charged every outer header, pass outer_charged=True.
     manifest.json is the only file outside the explicit declaration inventory.
     The outer extractor must also call budget.retain_archive(upload.stat().st_size).
+    artifact_staging must be a new directory on the publication filesystem.
     """
     root = check_path(root, "directory")
     expected = {m.path: m for m in declaration.inventory}
@@ -554,10 +579,16 @@ def verify_release_tree(declaration: ReleaseDeclaration, root: Path, budget: Exp
                 with path.open("rb") as binary:
                     validate_binary(binary.read(64), "linux-" + profile.architecture)
     require(actual == set(expected), "artifact_inventory", "Release inventory differs from staged files.")
-    for payload in declaration.artifacts:
-        members = inspect_payload(dict(topology.artifacts)[payload.artifact], payload.platform, root / payload.path, budget)
-        require(members == tuple(sorted(payload.members, key=lambda m: m.path)),
-                "artifact_inventory", "Extracted artifact differs from its release inventory.")
+    artifact_staging = check_path(artifact_staging, "directory")
+    require(not artifact_staging.exists(), "artifact_conflict", "Artifact staging root already exists.")
+    artifact_staging.mkdir(mode=0o700)
+    try:
+        return tuple(prepare_payload(dict(topology.artifacts)[payload.artifact], payload,
+                                     root / payload.path, budget, artifact_staging / payload.artifact)
+                     for payload in declaration.artifacts)
+    except BaseException:
+        _remove_staging(artifact_staging)
+        raise
 
 
 @dataclass(frozen=True, order=True)
@@ -629,13 +660,16 @@ def verify_tree(path: Path, members: tuple[PayloadMember, ...], *, uid=0):
     require(actual == set(expected), "artifact_inventory", "Published artifact tree is incomplete.")
 
 
-def publish(host, instance: str, artifact: Artifact, payload: ArtifactPayload, source: Path,
-            budget: ExpansionBudget, *, history: tuple[ArtifactReference, ...], observed_service_abi=None) -> Path:
+def publish(host, instance: str, prepared: PreparedArtifact, *, history: tuple[ArtifactReference, ...],
+            observed_service_abi=None) -> Path:
     """Publish under M3's host/instance locks. Never repair a selected tree in place.
 
     The caller journals the reference before invoking this function and retains
-    it through unresolved outcomes. Source is the uploaded payload, never a URL.
+    it through unresolved outcomes. Preparation already verified/extracted the
+    uploaded payload. Recheck tree hashes/modes before rename, without expanding
+    or charging those members again. Never copy a tree across filesystems.
     """
+    artifact, payload, staging = prepared.artifact, prepared.payload, prepared.tree
     reference = ArtifactReference(payload.artifact, artifact.version, payload.platform, payload.sha256)
     contract_name(instance)
     validate_history((reference,), history)
@@ -645,6 +679,8 @@ def publish(host, instance: str, artifact: Artifact, payload: ArtifactPayload, s
     base = host.paths.opt(instance) / "artifacts"
     host.check_control_directory(base.parent)
     target = base / reference.relative_path()
+    require(staging != target and not staging.is_relative_to(target) and not target.is_relative_to(staging),
+            "artifact_conflict", "Artifact staging must be separate from its immutable publication tree.")
     for parent in reversed([target.parent, *target.parent.parents]):
         if parent == base or base in parent.parents:
             host.check_control_directory(parent)
@@ -655,22 +691,32 @@ def publish(host, instance: str, artifact: Artifact, payload: ArtifactPayload, s
             require(stat.S_IMODE(parent.stat().st_mode) == 0o755,
                     "artifact_ownership", "Artifact publication ancestry must be service-readable and root-writable only.")
     check_path(target, "directory")
-    staging = Path(tempfile.mkdtemp(prefix=".artifact-", dir=target.parent))
-    staging.rmdir()
+    uid = 0 if host.paths.root == Path("/") else os.geteuid()
+    transfer = None
     try:
-        members = inspect_payload(artifact, payload.platform, source, budget, destination=staging)
-        require(members == tuple(sorted(payload.members, key=lambda m: m.path)),
-                "artifact_inventory", "Artifact members differ from the release inventory.")
-        uid = 0 if host.paths.root == Path("/") else os.geteuid()
-        verify_tree(staging, members, uid=uid)
         if target.exists():
-            verify_tree(target, members, uid=uid)
+            verify_tree(target, payload.members, uid=uid)
         else:
-            os.rename(staging, target)
+            verify_tree(staging, payload.members, uid=uid)
+            require(staging.stat().st_dev == target.parent.stat().st_dev,
+                    "artifact_filesystem", "Artifact staging and publication must share a filesystem.")
+            host.check_control_directory(staging.parent)
+            transfer = Path(tempfile.mkdtemp(prefix=".artifact-", dir=target.parent))
+            transfer.rmdir()
+            # Moving a directory between parents updates '..' on macOS and
+            # requires owner write permission. Restore its immutable mode in
+            # private staging before the final same-parent publication rename.
+            staging.chmod(0o755)
+            os.rename(staging, transfer)
+            transfer.chmod(0o555)
+            _sync(transfer)
+            os.rename(transfer, target)
             _sync(target.parent)
         return target
     finally:
         _remove_staging(staging)
+        if transfer is not None:
+            _remove_staging(transfer)
 
 
 @dataclass(frozen=True)
