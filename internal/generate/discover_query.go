@@ -33,9 +33,7 @@ func discoverQuery(p *packageInput, spec *ast.TypeSpec, named *types.Named, args
 		return declaration, p.diagnostic(spec.Pos(), source+" declaration must be a struct")
 	}
 	forbidden := []string{"foundry", "path"}
-	if source == "query" {
-		forbidden = append(forbidden, "form")
-	} else {
+	if source != "query" {
 		forbidden = append(forbidden, "header")
 	}
 	fields, err := discoverTransportFields(p, structure, source, nil, forbidden)

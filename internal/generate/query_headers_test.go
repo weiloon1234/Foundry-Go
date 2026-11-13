@@ -28,7 +28,7 @@ type Input struct {
  Packed Packed ` + "`header:\"X-Packed\"`" + `
  OptionalPacked value.Optional[Packed] ` + "`header:\"X-Optional-Packed\"`" + `
  Page value.Optional[uint16]
- Ignored map[string]any ` + "`header:\"-\"`" + `
+ Ignored map[string]any ` + "`header:\"-\" form:\"ignored\"`" + `
 }
 //foundry:query
 type HeadersOnly struct { Version string ` + "`header:\"X-Version\"`" + ` }

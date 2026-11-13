@@ -56,6 +56,23 @@ func TestTransportPresentationUsesActualCodec(t *testing.T) {
 	}
 }
 
+func TestRequestHeaderPasswordPresentationRegisters(t *testing.T) {
+	type Input struct{ Token string }
+	password := contract.Presentation{Kind: contract.PasswordPresentation}
+	fields := foundryhttp.DefineQuery(foundryhttp.HeaderParam("X-Token", foundryhttp.StringQuery[string](), func(i *Input) *string { return &i.Token }).WithPresentation(password))
+	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "headers.password", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/headers"))
+	endpoint := foundryhttp.DefineEndpoint(route, fields, foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+	router, err := foundryhttp.NewRouter(endpoint.Handle(func(context.Context, foundryhttp.Input[foundryhttp.NoPath, Input, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
+		return foundryhttp.NoContent{}, nil
+	}))
+	if err != nil {
+		t.Fatal("password header rejected", err)
+	}
+	if got := router.Endpoints()[0].Headers[0].Presentation; got != password {
+		t.Fatalf("header presentation changed: %+v", got)
+	}
+}
+
 func TestPresentationKeepsCredentialsOutOfURLsAndOutputs(t *testing.T) {
 	type Input struct {
 		Token string

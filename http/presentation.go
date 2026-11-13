@@ -52,6 +52,9 @@ func urlPresentation(p contract.Presentation) error {
 // parameters remain valid urlencoded form body fields.
 func queryUrlPresentation[Q any](d Query[Q]) error {
 	for _, parameter := range d.parameters {
+		if parameter.source != queryParameterSource {
+			continue
+		}
 		if err := urlPresentation(parameter.info.Presentation); err != nil {
 			return err
 		}

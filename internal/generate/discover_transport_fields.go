@@ -50,6 +50,11 @@ func discoverTransportFields(p *packageInput, structure *types.Struct, tag strin
 		if raw == "-" {
 			continue
 		}
+		if fieldTag == "header" {
+			if _, form := tags["form"]; form {
+				return nil, p.diagnostic(field.Pos(), "query fields cannot declare form tags")
+			}
+		}
 		if field.Embedded() || !field.Exported() {
 			return nil, p.diagnostic(field.Pos(), fmt.Sprintf("%s fields must be exported and non-embedded; use %s:\"-\" to skip", fieldTag, fieldTag))
 		}

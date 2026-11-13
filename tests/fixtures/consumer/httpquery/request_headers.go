@@ -14,9 +14,16 @@ type RequestParameters struct {
 	DeviceID   value.Optional[string] `header:"X-Device-ID"`
 }
 
-func RequestHeadersEndpoint() foundryhttp.Endpoint[foundryhttp.NoPath, RequestParameters, foundryhttp.NoBody, foundryhttp.NoContent] {
+//foundry:dto
+type RequestHeadersResponse struct {
+	Search     value.Optional[string] `json:"search,omitzero"`
+	AppVersion string                 `json:"app_version"`
+	DeviceID   value.Optional[string] `json:"device_id,omitzero"`
+}
+
+func RequestHeadersEndpoint() foundryhttp.Endpoint[foundryhttp.NoPath, RequestParameters, foundryhttp.NoBody, RequestHeadersResponse] {
 	route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{
 		ID: "headers.inspect", Method: foundryhttp.GET, Access: foundryhttp.Public,
 	}, foundryhttp.StaticPath("/headers"))
-	return foundryhttp.DefineEndpoint(route, RequestParametersDescriptor(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+	return foundryhttp.DefineEndpoint(route, RequestParametersDescriptor(), foundryhttp.EmptyBody(), foundryhttp.JSONResponse(200, RequestHeadersResponseJSON()))
 }
