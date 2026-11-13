@@ -137,6 +137,7 @@ func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) err
 		connectionLimit = DefaultServerConfig().MaxConnections
 	}
 	listener = netutil.LimitListener(listener, connectionLimit)
+	listener = requestDeadlineListener{listener}
 
 	// Preserve application values but defer request cancellation until the grace
 	// expires. Cancelling the kernel should first let active work finish normally.
@@ -152,6 +153,7 @@ func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) err
 		MaxHeaderBytes: s.config.MaxHeaderBytes,
 		ErrorLog:       slog.NewLogLogger(logger.Handler(), slog.LevelError),
 		BaseContext:    func(net.Listener) context.Context { return requests },
+		ConnContext:    requestDeadlineContext,
 	}
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(listener) }()

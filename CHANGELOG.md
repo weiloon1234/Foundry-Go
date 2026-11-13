@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed: HTTP upload timeout evidence is retained at the accepted connection,
+  before chunked trailer parsing can replace the native read error. Terminal 408
+  responses survive Compression and ETags for stalled trailer termination;
+  genuine disconnects do not receive the timeout exception. Added socket and
+  deadline-reset regression sources for the lead's Go gate.
+
 - Fixed: completed local staging migration is recorded durably so backend restarts
   scan only staging, without holding peer admission behind published-object scans.
   Admitted upload timeouts retain their terminal 408 through Compression and ETags

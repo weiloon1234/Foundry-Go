@@ -131,8 +131,10 @@ func (b routeBudget) body(w stdhttp.ResponseWriter, r *stdhttp.Request, kernel *
 		// its effective total deadline to the socket too: context cancellation
 		// alone cannot interrupt a body read or net/http's subsequent drain.
 		if deadline, ok := r.Context().Deadline(); ok {
-			if err := stdhttp.NewResponseController(w).SetReadDeadline(deadline); err == nil {
-				admitted.readDeadline = deadline
+			if conn, ok := r.Context().Value(requestDeadlineConnKey{}).(*requestDeadlineConn); ok && r.ProtoMajor == 1 {
+				admitted.readTimeout, _ = conn.uploadReadDeadline(deadline)
+			} else {
+				_ = stdhttp.NewResponseController(w).SetReadDeadline(deadline)
 			}
 		}
 	}

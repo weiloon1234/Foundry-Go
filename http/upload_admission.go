@@ -4,7 +4,6 @@ import (
 	"context"
 	stdhttp "net/http"
 	"sync/atomic"
-	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
@@ -65,7 +64,7 @@ type uploadReservationKey struct{}
 type requestUpload struct {
 	route           uploadRoute
 	reservation     *upload.Reservation
-	readDeadline    time.Time
+	readTimeout     *connectionReadTimeout
 	timeoutResponse atomic.Bool
 }
 type uploadSelector func(*stdhttp.Request) uploadRoute

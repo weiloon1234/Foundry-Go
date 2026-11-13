@@ -20,18 +20,62 @@ import (
 	"time"
 )
 
+func uploadDeadlineServer(t *testing.T, handler stdhttp.Handler, kernel time.Duration) (string, *stdhttp.Client) {
+	t.Helper()
+	if kernel == 0 {
+		server := httptest.NewUnstartedServer(handler)
+		server.Config.ReadTimeout, server.Config.WriteTimeout = 5*time.Second, 5*time.Second
+		server.Listener = requestDeadlineListener{server.Listener}
+		server.Config.ConnContext = requestDeadlineContext
+		server.Start()
+		t.Cleanup(server.Close)
+		client := server.Client()
+		client.Timeout = 2 * time.Second
+		return server.Listener.Addr().String(), client
+	}
+	config := DefaultServerConfig()
+	config.Address = "127.0.0.1:0"
+	config.RequestTimeout = kernel
+	config.ReadTimeout, config.WriteTimeout = 5*time.Second, 5*time.Second
+	server, err := Prepare(handler, config, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- server.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	})
+	ready, stop := context.WithTimeout(t.Context(), 2*time.Second)
+	defer stop()
+	address, err := server.Ready(ready)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport := &stdhttp.Transport{}
+	t.Cleanup(transport.CloseIdleConnections)
+	return address, &stdhttp.Client{Transport: transport, Timeout: 2 * time.Second}
+}
+
 func TestUploadDeadlineInterruptsTricklingMultipartAndReleasesAdmission(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		kernel      time.Duration
 		compression bool
+		trailer     string
 	}{
-		{"shorter-than-kernel", 5 * time.Second, false},
-		{"longer-than-kernel", 100 * time.Millisecond, false},
-		{"without-kernel", 0, false},
-		{"compressed-shorter-than-kernel", 5 * time.Second, true},
-		{"compressed-longer-than-kernel", 100 * time.Millisecond, true},
-		{"compressed-without-kernel", 0, true},
+		{"shorter-than-kernel", 5 * time.Second, false, ""},
+		{"longer-than-kernel", 100 * time.Millisecond, false, ""},
+		{"without-kernel", 0, false, ""},
+		{"compressed-shorter-than-kernel", 5 * time.Second, true, ""},
+		{"compressed-longer-than-kernel", 100 * time.Millisecond, true, ""},
+		{"compressed-without-kernel", 0, true, ""},
+		{"compressed-trailer-stall", 5 * time.Second, true, "stall"},
+		{"compressed-trailer-disconnect", 5 * time.Second, true, "disconnect"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pool := uploadTestPool(t, 1, DefaultEndpointLimits().Multipart.Bytes)
@@ -52,17 +96,8 @@ func TestUploadDeadlineInterruptsTricklingMultipartAndReleasesAdmission(t *testi
 					t.Fatal(err)
 				}
 			}
-			if tc.kernel != 0 {
-				config := DefaultServerConfig()
-				config.RequestTimeout = tc.kernel
-				config.ReadTimeout, config.WriteTimeout = 5*time.Second, 5*time.Second
-				handler = newHandlerLifetime().wrap(handler, slog.New(slog.NewTextHandler(io.Discard, nil)), config)
-			}
-			server := httptest.NewUnstartedServer(handler)
-			server.Config.ReadTimeout, server.Config.WriteTimeout = 5*time.Second, 5*time.Second
-			server.Start()
-			defer server.Close()
-			conn, err := net.DialTimeout("tcp", server.Listener.Addr().String(), time.Second)
+			address, client := uploadDeadlineServer(t, handler, tc.kernel)
+			conn, err := net.DialTimeout("tcp", address, time.Second)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -79,6 +114,20 @@ func TestUploadDeadlineInterruptsTricklingMultipartAndReleasesAdmission(t *testi
 			var completed atomic.Bool
 			go func() {
 				defer close(sent)
+				if tc.trailer != "" {
+					// The MIME body is complete, but the terminating chunk's trailer
+					// section lacks its final blank line. net/http rewrites read errors here.
+					if _, err := fmt.Fprintf(conn, "%x\r\n%s\r\n0\r\n", len(wire), wire); err != nil {
+						t.Error(err)
+						return
+					}
+					if tc.trailer == "disconnect" {
+						if err := conn.(*net.TCPConn).CloseWrite(); err != nil {
+							t.Error(err)
+						}
+					}
+					return
+				}
 				tick := time.NewTicker(25 * time.Millisecond)
 				defer tick.Stop()
 				for offset := 0; offset < len(wire); {
@@ -99,18 +148,29 @@ func TestUploadDeadlineInterruptsTricklingMultipartAndReleasesAdmission(t *testi
 			}()
 			defer func() { close(stop); conn.Close(); <-sent }()
 			response, err := stdhttp.ReadResponse(bufio.NewReader(conn), nil)
-			if err != nil {
-				t.Fatal("upload deadline did not return a response during body progress", err)
-			}
-			var failure ErrorResponse
-			err = json.NewDecoder(response.Body).Decode(&failure)
-			response.Body.Close()
-			elapsed := time.Since(started)
-			if err != nil || response.StatusCode != 408 || failure.Code != RequestTimeout || !response.Close {
-				t.Fatal("unfinished upload did not return a closing 408", response.StatusCode, failure, err)
-			}
-			if elapsed < 200*time.Millisecond || elapsed >= 1500*time.Millisecond || completed.Load() {
-				t.Fatal("upload did not enforce its own total deadline", elapsed, completed.Load())
+			if tc.trailer == "disconnect" {
+				if err == nil {
+					response.Body.Close()
+					if response.StatusCode == 408 {
+						t.Fatal("trailer disconnect was classified as a read timeout")
+					}
+				} else if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+					t.Fatal("disconnect did not promptly close the response", err)
+				}
+			} else {
+				if err != nil {
+					t.Fatal("upload deadline did not return a response during body progress", err)
+				}
+				var failure ErrorResponse
+				err = json.NewDecoder(response.Body).Decode(&failure)
+				response.Body.Close()
+				elapsed := time.Since(started)
+				if err != nil || response.StatusCode != 408 || failure.Code != RequestTimeout || !response.Close {
+					t.Fatal("unfinished upload did not return a closing 408", response.StatusCode, failure, err)
+				}
+				if elapsed < 200*time.Millisecond || elapsed >= 1500*time.Millisecond || completed.Load() {
+					t.Fatal("upload did not enforce its own total deadline", elapsed, completed.Load())
+				}
 			}
 			if publications.Load() != 0 {
 				t.Fatal("expired upload entered publication")
@@ -133,9 +193,7 @@ func TestUploadDeadlineInterruptsTricklingMultipartAndReleasesAdmission(t *testi
 				t.Fatal("expired upload retained capture files", err)
 			}
 			healthy, media := multipartWire(t, primaryUpload("healthy"))
-			client := server.Client()
-			client.Timeout = 2 * time.Second
-			response, err = client.Post(server.URL+"/uploads", media, bytes.NewReader(healthy))
+			response, err = client.Post("http://"+address+"/uploads", media, bytes.NewReader(healthy))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -167,18 +225,61 @@ func TestUploadTerminalTimeoutDoesNotMaskDisconnect(t *testing.T) {
 			cancel()
 			admitted := &requestUpload{}
 			request := httptest.NewRequestWithContext(context.WithValue(ctx, uploadReservationKey{}, admitted), "POST", "/uploads", nil)
-			source := &multipartSource{source: iotest.ErrReader(tc.err), readDeadline: tc.deadline}
-			_, _ = source.Read(make([]byte, 1))
-			if source.readTimedOut != tc.terminal {
-				t.Fatal("read failure was misclassified", source.readTimedOut)
+			conn := &requestDeadlineConn{Conn: deadlineErrorConn{reader: iotest.ErrReader(tc.err)}}
+			if !tc.deadline.IsZero() {
+				admitted.readTimeout, _ = conn.uploadReadDeadline(tc.deadline)
+			}
+			_, _ = conn.Read(make([]byte, 1))
+			observed := admitted.readTimeout != nil && admitted.readTimeout.observed.Load()
+			if observed != tc.terminal {
+				t.Fatal("read failure was misclassified", observed)
 			}
 			if !errors.Is(transportErr(request), context.Canceled) {
 				t.Fatal("cancellation was suppressed before selecting the terminal response")
 			}
-			admitted.timeoutResponse.Store(source.readTimedOut)
+			admitted.timeoutResponse.Store(observed)
 			if err := transportErr(request); (err == nil) != tc.terminal {
 				t.Fatal("terminal timeout exception masked a disconnect or rejected the timeout", err)
 			}
 		})
+	}
+}
+
+type deadlineErrorConn struct {
+	net.Conn
+	reader io.Reader
+}
+
+func (c deadlineErrorConn) Read(p []byte) (int, error)    { return c.reader.Read(p) }
+func (deadlineErrorConn) SetReadDeadline(time.Time) error { return nil }
+func (deadlineErrorConn) SetDeadline(time.Time) error     { return nil }
+
+func TestConnectionDeadlineChangesDoNotReuseUploadEvidence(t *testing.T) {
+	for _, all := range []bool{false, true} {
+		conn := &requestDeadlineConn{Conn: deadlineErrorConn{reader: iotest.ErrReader(&net.OpError{Op: "read", Err: os.ErrDeadlineExceeded})}}
+		first, err := conn.uploadReadDeadline(time.Now().Add(-time.Second))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if all {
+			err = conn.SetDeadline(time.Time{})
+		} else {
+			err = conn.SetReadDeadline(time.Time{})
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = conn.Read(make([]byte, 1))
+		if first.observed.Load() {
+			t.Fatal("replaced deadline was attributed to the upload")
+		}
+		second, err := conn.uploadReadDeadline(time.Now().Add(-time.Second))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = conn.Read(make([]byte, 1))
+		if !second.observed.Load() || first.observed.Load() {
+			t.Fatal("new request reused old timeout evidence")
+		}
 	}
 }
