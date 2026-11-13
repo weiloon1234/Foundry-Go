@@ -251,6 +251,9 @@ func (b *Builder) Build(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := prepareUploadSettings(&s); err != nil {
+		return nil, err
+	}
 	s.Features, err = prepareFeatureSettings(s, configured.clock)
 	if err != nil {
 		return nil, err

@@ -81,8 +81,30 @@ class UploadPolicyTests(unittest.TestCase):
         rendered = _template(TOOLS, "nginx-http.conf", self.entry)
         self.assertNotIn("limit_conn", rendered)
         self.assertNotIn("proxy_request_buffering off", rendered)
+        self.assertNotIn("lingering_", rendered)
         self.assertIn("proxy_read_timeout 120s;", rendered)
         self.assertEqual({}, uploads.runtime_values(self.entry))
+
+    def test_upload_lingering_is_derived_and_scoped_to_upload_locations(self):
+        for total, idle, lingering, timeout in ((1, 60, 1, 1), (3, 2, 3, 2),
+                                                (6, 60, 5, 5), (1800, 60, 5, 5)):
+            with self.subTest(total=total, idle=idle):
+                value = self.profile['uploads']
+                value['request_total_seconds'] = total
+                value['attachment_total_seconds'] = min(total, 1200)
+                value['storage_total_seconds'] = min(total, 900)
+                value['proxy_read_idle_seconds'] = total + 60
+                value['client_body_idle_seconds'] = idle
+                uploads.validate(value)
+                for template in ('nginx-http.conf', 'nginx-https.conf'):
+                    rendered = _template(TOOLS, template, self.entry)
+                    ordinary = rendered
+                    for route in value['routes']:
+                        policy = rendered.split('location = ' + route + ' {', 1)[1].split('\n    }', 1)[0]
+                        self.assertIn(f'lingering_time {lingering}s;', policy)
+                        self.assertIn(f'lingering_timeout {timeout}s;', policy)
+                        ordinary = ordinary.replace(policy, '')
+                    self.assertNotIn('lingering_', ordinary)
 
     def test_runtime_paths_and_sandbox_are_shared_owners(self):
         values = runtime_environment(self.entry, {"database_password": "fixture", "redis_password": "fixture"})

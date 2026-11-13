@@ -186,9 +186,13 @@ def nginx(entry, proxy, template):
     key, zone = nginx_variable(entry, "upload"), nginx_variable(entry, "uploads")
     admission = (f'map $server_name ${key} {{ default "{entry["profile"]["instance_id"]}"; }}\n'
                  f'limit_conn_zone ${key} zone={zone}:1m;')
+    # Post-response discard must not inherit nginx's 30-second lingering default.
+    lingering = min(5, value["request_total_seconds"])
     replacements = {"@UPLOAD_ZONE@": zone, "@UPLOAD_SLOTS@": str(value["proxy_slots"]),
                     "@UPLOAD_BYTES@": str(value["body_bytes"]),
                     "@UPLOAD_TEMP@": str(volume_paths(entry)["proxy"] / "data"),
+                    "@UPLOAD_LINGERING_TIME@": str(lingering) + "s",
+                    "@UPLOAD_LINGERING_TIMEOUT@": str(min(lingering, value["client_body_idle_seconds"])) + "s",
                     "@PORT@": str(entry["allocations"]["http_port"]),
                     "@UPLOAD_PROXY@": proxy.replace("@PROXY_READ_TIMEOUT@", str(value["proxy_read_idle_seconds"]) + "s")}
     for token, field in (("CLIENT_BODY", "client_body_idle_seconds"), ("PROXY_SEND", "proxy_send_idle_seconds"),

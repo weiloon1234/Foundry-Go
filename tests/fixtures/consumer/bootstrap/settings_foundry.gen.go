@@ -1147,8 +1147,20 @@ type SettingsAppFeaturesAttachmentsConfigKeySet struct {
 
 // SettingsAppFeaturesAttachmentsConfigConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsAppFeaturesAttachmentsConfigConfigKeySet struct {
+	// TempDirectory selects app.features.attachments.config.temp_directory. Set accepts string.
+	//
+	// TempDirectory owns operation spools; empty uses the OS temporary directory.
+	// Provision a private capacity-limited volume for large policies.
+	//
+	TempDirectory config.Key[Settings, string]
 	// MaxActive selects app.features.attachments.config.max_active. Set accepts int.
 	MaxActive config.Key[Settings, int]
+	// MaxLargeActive selects app.features.attachments.config.max_large_active. Set accepts int.
+	//
+	// MaxLargeActive limits policies above MaxBufferedBytes before shared admission.
+	// Zero disables the sublimit; a positive value must leave small-work capacity.
+	//
+	MaxLargeActive config.Key[Settings, int]
 	// MaxReads selects app.features.attachments.config.max_reads. Set accepts int.
 	MaxReads config.Key[Settings, int]
 	// Timeout selects app.features.attachments.config.timeout. Set accepts time.Duration.
@@ -2509,9 +2521,11 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 				Attachments: SettingsAppFeaturesAttachmentsConfigKeySet{
 					Enabled: config.Scalar[Settings, bool]("app.features.attachments.enabled", func(settings *Settings) *bool { return &settings.App.Features.Attachments.Enabled }),
 					Config: SettingsAppFeaturesAttachmentsConfigConfigKeySet{
-						MaxActive: config.Scalar[Settings, int]("app.features.attachments.config.max_active", func(settings *Settings) *int { return &settings.App.Features.Attachments.Config.MaxActive }),
-						MaxReads:  config.Scalar[Settings, int]("app.features.attachments.config.max_reads", func(settings *Settings) *int { return &settings.App.Features.Attachments.Config.MaxReads }),
-						Timeout:   config.Duration[Settings]("app.features.attachments.config.timeout", func(settings *Settings) *time.Duration { return &settings.App.Features.Attachments.Config.Timeout }),
+						TempDirectory:  config.Scalar[Settings, string]("app.features.attachments.config.temp_directory", func(settings *Settings) *string { return &settings.App.Features.Attachments.Config.TempDirectory }),
+						MaxActive:      config.Scalar[Settings, int]("app.features.attachments.config.max_active", func(settings *Settings) *int { return &settings.App.Features.Attachments.Config.MaxActive }),
+						MaxLargeActive: config.Scalar[Settings, int]("app.features.attachments.config.max_large_active", func(settings *Settings) *int { return &settings.App.Features.Attachments.Config.MaxLargeActive }),
+						MaxReads:       config.Scalar[Settings, int]("app.features.attachments.config.max_reads", func(settings *Settings) *int { return &settings.App.Features.Attachments.Config.MaxReads }),
+						Timeout:        config.Duration[Settings]("app.features.attachments.config.timeout", func(settings *Settings) *time.Duration { return &settings.App.Features.Attachments.Config.Timeout }),
 						CleanupTimeout: config.Duration[Settings]("app.features.attachments.config.cleanup_timeout", func(settings *Settings) *time.Duration {
 							return &settings.App.Features.Attachments.Config.CleanupTimeout
 						}),
@@ -3137,7 +3151,9 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.App.Features.Notifications.MaxActive,
 		keys.App.Features.Notifications.Timeout,
 		keys.App.Features.Attachments.Enabled,
+		keys.App.Features.Attachments.Config.TempDirectory,
 		keys.App.Features.Attachments.Config.MaxActive,
+		keys.App.Features.Attachments.Config.MaxLargeActive,
 		keys.App.Features.Attachments.Config.MaxReads,
 		keys.App.Features.Attachments.Config.Timeout,
 		keys.App.Features.Attachments.Config.CleanupTimeout,

@@ -63,17 +63,89 @@
   firewall and closure path, are labelled unencrypted in network plans/reports,
   and do not request certificates or TLS renewal probes. HTTP edge behaviour is
   unchanged; lane A integrates the topology-aware network interfaces.
-- Added: multipart upload pools reserve a slot and the declared encoded-body bytes
-  before middleware or capture. Large requests use separate handler capacity,
-  retain reservations through actual cleanup, and keep failed cleanup charged
-  until exact-file retry succeeds. Pool startup refuses active or retained owners.
-- Added: typed `HTTP.Uploads` deployment settings and an independent upload consumer.
-  Deploy tool generation 11 adds opt-in upload locations, aggregate nginx admission,
-  request buffering off, explicit HTTP/1.1 upstream proxying, no proxy replay, and
-  separate total and idle budgets. Planning validates independent sized volumes;
-  provisioning connects private writable paths to runtime settings and service sandboxes.
-  Existing ordinary-route limits remain unchanged. Attachment and local-staging
-  owners consume the documented directory/admission seam in their implementation lane.
+
+## v0.30.0 — 2026-11-14
+
+- Added: application-declared large opaque attachments through `Policy.MaxBytes`
+  and `MaxStoredBytes`, including 512 MiB collections. Large-policy preparation,
+  slot acceptance and URL imports share a one-pass spool that counts bytes,
+  computes SHA-256 and captures the media-detection prefix. Configure
+  `attachments.Config.TempDirectory` through
+  `features.attachments.config.temp_directory` and provision a private writable
+  volume with enough capacity. Empty retains the OS temporary-directory default.
+  Small policies keep their bounded in-memory path; image/variant processing and
+  byte-returning APIs retain the 64 MiB `MaxBufferedBytes` ceiling.
+  `MaxUploadBytes` remains its compatibility alias. Above 64 MiB, detection uses
+  the bounded prefix: JSON/text hints do not specialize content and ZIP stays
+  generic ZIP. Declare matching generic media rules for large files.
+- Added: typed `Collection.OpenSeek` for pinned, lazy ranged reads and HTTP
+  downloads. Full `Open` reads stream and verify persisted size and SHA-256 at
+  EOF; early close and partial ranges do not establish whole-object integrity.
+  Checksum-fallback reconciliation and explicit settlement stream historical
+  originals even after an upload policy is lowered. Cancellation or incomplete
+  verification leaves intents unresolved. Variant generation rejects oversized
+  historical originals before opening storage; streaming reads and retirement
+  remain available.
+- Added: `attachments.Config.MaxLargeActive` limits large policies before shared
+  mutation admission, reserving capacity for small policies when set below
+  `MaxActive`. Zero retains shared admission. Reservations cover source open,
+  capture, publication, source close and cleanup; shutdown drains admitted work.
+  Large policies validate disk object-size and conditional-create capabilities
+  during manager construction. Align policy, disk, request and timeout limits
+  before enabling them.
+- Changed: attachment migration `000003_expand_original_size` permits nonnegative
+  original sizes without rewriting historical migrations or variant limits.
+  Behaviour change: apply this migration to every attachment store and deploy
+  capable readers and reconcilers everywhere before enabling large policies.
+  Old runtimes cannot read large rows, including cleaned tombstones; retiring
+  attachments does not make a runtime downgrade safe.
+- Added: multipart upload pools and typed `application.Settings.HTTP.Uploads`
+  settings. Admission reserves a slot and the declared encoded-body bytes before
+  middleware, authentication or capture, with separate large-request handler
+  capacity. Exhaustion returns 503 with `Retry-After: 1`, without an admission
+  queue. Reservations last through actual cleanup; failed cleanup stays charged.
+  Configure independent request, attachment, staging and small-request capacity;
+  configured application assembly forwards attachment and local-staging sublimits
+  to their existing owners. Existing routes without upload admission retain
+  their limits and behavior.
+- Fixed: admitted multipart uploads enforce the total route deadline while
+  reading progressing or trickling bodies. Idle deadlines limit inactivity;
+  progress does not restart the total budget. Behaviour change: a body still
+  arriving at that deadline is rejected with 408 before publication, and capacity
+  is released after cleanup. Compression and ETags preserve the terminal timeout
+  response. The framework server also retains timeout evidence across chunked
+  trailer parsing; native servers, including direct TLS hosting, retain ordinary
+  body-read timeout detection. Genuine client disconnects still abort delivery.
+- Added: `local.Config.Staging` and `infrastructure.LocalDiskSettings.Staging`
+  enforce one managed-root slot and byte budget across processes. Reservations
+  live under `.foundry-staging`, with short cross-process admission locking;
+  unknown-length writes reserve `MaxObjectBytes`. Exhaustion rejects promptly,
+  while known small writes retain separate admission. Failed cleanup and crashed
+  writers remain charged until pruning. Publication remains an atomic rename;
+  published-object listing and `MaxScan` exclude the staging directory.
+  Behaviour change: first startup migrates abandoned legacy staging files before
+  admitting writes and durably records completion. Drain all writers using the
+  old layout before upgrading a shared root. Later starts scan only staging.
+  Use identical staging limits across processes, keep disk `MaxActive` above the
+  staging slot cap, and reserve space for published objects and metadata as well
+  as staging. Zero staging limits preserve unrestricted staging admission.
+- Added: deploy tool generation 11 upload locations with aggregate nginx
+  admission, request buffering disabled, HTTP/1.1 upstream proxying, no proxy
+  replay, and explicit total and idle budgets. Upload locations set
+  `lingering_time` to the smaller of five seconds and the declared request total;
+  `lingering_timeout` is also capped by client-body idle time. This bounds
+  post-response body draining even after the application releases its slot.
+  Ordinary locations are unchanged. Upgrade hosts with
+  `ACTION=tools-plan make deploy`, then apply the reviewed plan with
+  `ACTION=tools-apply` and its `PLAN_TOKEN` and `OPERATION` before using upload
+  settings. Deploying the application alone does not upgrade installed tools.
+- Changed: large conditional publication uses bounded multipart transfer on AWS
+  and explicitly capable compatible backends. R2 retains its shared
+  `ConditionalWriteMaxBytes` restriction, equal to configured `PartBytes`, until
+  live conditional create and replace certification both pass. No production
+  bypass is provided; policies exceeding that capability are rejected.
+  Local and container acceptance do not certify R2. See the
+  [resource and provider acceptance record](docs/evidence/b26-resource-provider-acceptance.md).
 
 ## v0.29.0 — 2026-11-13
 

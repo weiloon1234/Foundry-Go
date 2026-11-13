@@ -38,7 +38,7 @@ func TestCollectionSnapshotsPolicyAndRejectsAmbiguousContracts(t *testing.T) {
 		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"text/plain; charset=utf-8"}},
 		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"text/plain", "text/plain"}},
 		{Disk: testDisk, Cardinality: Single, Accepted: []storage.MediaType{"text/plain"}, AnyMedia: true},
-		{Disk: testDisk, Cardinality: Single, AnyMedia: true, MaxBytes: MaxUploadBytes + 1},
+		{Disk: testDisk, Cardinality: Single, AnyMedia: true, MaxBytes: -1},
 	} {
 		if Define(extensiontest.Members, "bad", bad).Validate() == nil {
 			t.Errorf("invalid policy accepted: %+v", bad)
@@ -64,9 +64,13 @@ func TestUploadUsesBytesAndBoundsWithoutClosingBorrowedSource(t *testing.T) {
 	if err != nil || source.closed || result.info.MediaType != "text/plain" || result.info.Size != 13 || result.digest != storage.SHA256(sha256.Sum256([]byte("plain payload"))) {
 		t.Fatal("detected upload mismatch", err)
 	}
-	first, _ := io.ReadAll(result.open())
+	reader, _ := result.body.open(t.Context())
+	first, _ := io.ReadAll(reader)
+	_ = reader.Close()
 	first[0] = 'X'
-	second, _ := io.ReadAll(result.open())
+	reader, _ = result.body.open(t.Context())
+	second, _ := io.ReadAll(reader)
+	_ = reader.Close()
 	if string(second) != "plain payload" {
 		t.Fatal("prepared reader exposed snapshot")
 	}

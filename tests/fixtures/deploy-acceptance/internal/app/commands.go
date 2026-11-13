@@ -65,6 +65,12 @@ func Run(ctx context.Context, arguments []string, streams cli.Streams) error {
 		return err
 	}
 	receipts := work.NewReceipts("hostdrill")
+	if args[0] == "serve" && settings.App.HTTP.Uploads.Enabled {
+		if len(args) != 1 {
+			return fmt.Errorf("runtime command takes no extra arguments")
+		}
+		return serveUploads(ctx, settings, receipts)
+	}
 	builder := Builder(settings, receipts)
 	switch args[0] {
 	case "config:inspect":

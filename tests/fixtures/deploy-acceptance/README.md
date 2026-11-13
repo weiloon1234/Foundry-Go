@@ -88,3 +88,26 @@ GOWORK=off go test ./...
 GOWORK=off go build -o /tmp/foundry-deploy-acceptance ./cmd/artisan
 node --test web/build.test.mjs
 ```
+
+## Large-upload acceptance
+
+An explicit `app.http.uploads.enabled` profile adds `/acceptance/uploads/large`,
+`short`, `small`, `multipart`, `usage` and `cleanup`. The existing fixture table supplies typed
+owners; attachment migrations add the framework journal. The fixture always
+declares its extension owner and extension/attachment migrations, including when
+uploads are disabled. Normal release activation applies this same migration set.
+The uploads phase only reads migration status: it requires identical history
+under both environments and checks that history is unchanged after cleanup, so
+later backup and recovery phases use the normal release's schema. The serving process
+uses a real local disk and attachment manager. Its test-only adapter can hold Put
+or local staging at an exact controller-owned release marker. Success follows
+Prepare, a committed ReplaceIn transaction and a full digest-verified read.
+The short route declares six seconds total. Ordinary deployments keep these
+routes disabled. These public test routes are for the disposable fixture only.
+
+The [B26 acceptance record](../../../docs/evidence/b26-resource-provider-acceptance.md)
+describes controller markers, all scenarios and lead-run commands. The controller
+uses production nginx and systemd renderers under the actual service identity.
+It passes the deployment sublimits to the attachment manager and local adapter,
+with no fixture semaphores. Small publications use a managed root on the reserved
+small volume. Existing consumer fixtures are otherwise unchanged.

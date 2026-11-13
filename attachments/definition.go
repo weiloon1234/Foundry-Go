@@ -31,10 +31,13 @@ const (
 	Multiple
 )
 const (
-	MaxUploadBytes     int64 = 64 << 20
-	MaxCollectionFiles       = 256
-	MaxOwnerIntents          = 4096
-	MaxPropertiesBytes       = 64 << 10
+	// MaxBufferedBytes bounds image processing and byte-returning helpers.
+	MaxBufferedBytes int64 = 64 << 20
+	// MaxUploadBytes is the legacy in-memory ceiling, not a policy ceiling.
+	MaxUploadBytes     = MaxBufferedBytes
+	MaxCollectionFiles = 256
+	MaxOwnerIntents    = 4096
+	MaxPropertiesBytes = 64 << 10
 )
 
 // Policy declares storage, cardinality, accepted media, resource bounds and image
@@ -86,7 +89,10 @@ func (p Policy) Validate() error {
 	if err := p.Disk.Validate(); err != nil {
 		return err
 	}
-	if p.Cardinality != Single && p.Cardinality != Multiple || p.MaxFiles < 1 || p.MaxFiles > MaxCollectionFiles || p.Cardinality == Single && p.MaxFiles != 1 || p.MaxBytes < 1 || p.MaxBytes > MaxUploadBytes || p.MaxStoredBytes < 1 || p.MaxStoredBytes > MaxUploadBytes || len(p.Accepted) > 32 || p.AnyMedia && len(p.Accepted) > 0 {
+	if p.Cardinality != Single && p.Cardinality != Multiple || p.MaxFiles < 1 || p.MaxFiles > MaxCollectionFiles || p.Cardinality == Single && p.MaxFiles != 1 || p.MaxBytes < 1 || p.MaxStoredBytes < 1 || len(p.Accepted) > 32 || p.AnyMedia && len(p.Accepted) > 0 {
+		return invalid()
+	}
+	if (p.Image.IsSet() || len(p.Variants) > 0) && (p.MaxBytes > MaxBufferedBytes || p.MaxStoredBytes > MaxBufferedBytes) {
 		return invalid()
 	}
 	if plan, ok := p.Image.Get(); ok {

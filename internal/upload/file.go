@@ -2,6 +2,7 @@ package upload
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"io"
 	"io/fs"
@@ -19,12 +20,16 @@ type File struct {
 	key                      string
 	name, declared, detected string
 	size                     int64
+	digest                   [sha256.Size]byte
 }
 
-func (f File) IsZero() bool      { return f.owner == nil }
-func (f File) Name() string      { return f.name }
-func (f File) Size() int64       { return f.size }
-func (f File) Extension() string { return filename.Extension(f.name) }
+func (f File) IsZero() bool { return f.owner == nil }
+func (f File) Name() string { return f.name }
+func (f File) Size() int64  { return f.size }
+
+// SHA256 returns the digest of the complete captured bytes, computed during capture.
+func (f File) SHA256() [sha256.Size]byte { return f.digest }
+func (f File) Extension() string         { return filename.Extension(f.name) }
 
 // ClientContentType is untrusted metadata supplied by the client.
 func (f File) ClientContentType() string { return f.declared }

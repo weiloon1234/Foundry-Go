@@ -27,7 +27,13 @@ import (
 // CleanupGrace is the minimum retirement age before object deletion (zero for
 // immediate development cleanup). Zero MaxReads or SettleAfter selects its default.
 type Config struct {
-	MaxActive      int
+	// TempDirectory owns operation spools; empty uses the OS temporary directory.
+	// Provision a private capacity-limited volume for large policies.
+	TempDirectory string
+	MaxActive     int
+	// MaxLargeActive limits policies above MaxBufferedBytes before shared admission.
+	// Zero disables the sublimit; a positive value must leave small-work capacity.
+	MaxLargeActive int
 	MaxReads       int
 	Timeout        time.Duration
 	CleanupTimeout time.Duration
@@ -52,7 +58,7 @@ func DefaultConfig() Config {
 // Validate checks manager capacity and timing bounds, allowing zero read capacity and
 // settlement delay to select defaults.
 func (c Config) Validate() error {
-	if c.MaxActive < 1 || c.MaxActive > 256 || c.MaxReads < 0 || c.MaxReads > 4096 || c.Timeout <= 0 || c.Timeout > 30*time.Minute || c.CleanupTimeout <= 0 || c.CleanupTimeout > time.Minute || c.CleanupGrace < 0 || c.StoredGrace < time.Minute || c.StoredGrace > 24*time.Hour || c.SettleAfter < 0 || c.SettleAfter != 0 && c.SettleAfter < time.Minute || c.SettleAfter > 7*24*time.Hour {
+	if c.MaxLargeActive < 0 || c.MaxLargeActive >= c.MaxActive || c.MaxActive < 1 || c.MaxActive > 256 || c.MaxReads < 0 || c.MaxReads > 4096 || c.Timeout <= 0 || c.Timeout > 30*time.Minute || c.CleanupTimeout <= 0 || c.CleanupTimeout > time.Minute || c.CleanupGrace < 0 || c.StoredGrace < time.Minute || c.StoredGrace > 24*time.Hour || c.SettleAfter < 0 || c.SettleAfter != 0 && c.SettleAfter < time.Minute || c.SettleAfter > 7*24*time.Hour {
 		return invalid()
 	}
 	return nil
@@ -86,6 +92,7 @@ type Manager struct {
 	config      Config
 	collections map[string]Registration
 	calls       *workscope.Group
+	largeCalls  *workscope.Group
 	reads       *workscope.Group
 	owners      *workscope.Group
 	closeOnce   sync.Once
@@ -127,6 +134,9 @@ func New(dependencies Dependencies, config Config, collections ...Registration) 
 		disk, err := collection.policy.Disk.Resolve(dependencies.Disks)
 		if err != nil {
 			return nil, err
+		}
+		if collection.policy.MaxStoredBytes > MaxBufferedBytes && collection.policy.MaxStoredBytes > disk.Config().MaxObjectBytes {
+			return nil, invalid()
 		}
 		capabilities := disk.Capabilities()
 		if !capabilities.ConditionalCreate || !capabilities.ConditionalRead {
@@ -180,6 +190,11 @@ func New(dependencies Dependencies, config Config, collections ...Registration) 
 	if m.calls, err = workscope.New(config.MaxActive, config.Timeout); err != nil {
 		return nil, err
 	}
+	if config.MaxLargeActive > 0 {
+		if m.largeCalls, err = workscope.New(config.MaxLargeActive, config.Timeout); err != nil {
+			return nil, err
+		}
+	}
 	if m.reads, err = workscope.New(config.MaxReads, config.Timeout); err != nil {
 		return nil, err
 	}
@@ -207,6 +222,9 @@ func (m *Manager) Close(ctx context.Context) error {
 		return invalid()
 	}
 	groups := []*workscope.Group{m.calls, m.reads, m.owners}
+	if m.largeCalls != nil {
+		groups = append(groups, m.largeCalls)
+	}
 	for _, group := range groups {
 		if err := group.CheckClose(ctx); err != nil {
 			return err

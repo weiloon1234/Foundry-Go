@@ -8,9 +8,11 @@ import (
 	fixtureconfig "foundry.test/deployacceptance/internal/config"
 	"foundry.test/deployacceptance/internal/work"
 	"github.com/weiloon1234/Foundry-Go/application"
+	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/database/seed"
+	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/health"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/jobs"
@@ -21,6 +23,8 @@ var First = jobs.Define[work.Payload]("acceptance.first", 1, jobs.DefaultPolicy(
 var Second = jobs.Define[work.Payload]("acceptance.second", 1, jobs.DefaultPolicy("second"))
 
 func Builder(settings fixtureconfig.Settings, receipts *work.Receipts) *application.Builder {
+	// The compiled fixture owns this schema even when upload routes are disabled.
+	settings.App.Features.Extensions.Enabled = true
 	construct := func(application.Services) (jobs.Handler[work.Payload], error) { return receipts.Handle, nil }
 	builder := application.New(settings.App).
 		HTTP(healthRoutes).
@@ -28,8 +32,8 @@ func Builder(settings fixtureconfig.Settings, receipts *work.Receipts) *applicat
 		Migrations(infrastructure.MigrationTarget{Connection: "primary", Schema: "public", Definitions: []migrate.Definition{{
 			Key: migrate.Key{Origin: "deploy-acceptance", ID: "000001_fixture"}, Version: "v1",
 			SQL: []string{`CREATE TABLE acceptance_fixture (name text PRIMARY KEY, value text NOT NULL)`},
-		}}}).Features(func(application.Services) (application.FeatureDeclarations, error) {
-		return application.FeatureDeclarations{Readiness: []health.Probe{{ID: "acceptance.readiness", Check: func(ctx context.Context) error {
+		}}}, infrastructure.MigrationTarget{Connection: "primary", Schema: "public", Definitions: attachments.Migrations()}).Features(func(application.Services) (application.FeatureDeclarations, error) {
+		return application.FeatureDeclarations{Owners: []extensions.Declaration{uploadIdentity.Registration()}, Readiness: []health.Probe{{ID: "acceptance.readiness", Check: func(ctx context.Context) error {
 			return readiness(ctx, settings.Fixture.Readiness, receipts)
 		}}}}, nil
 	})

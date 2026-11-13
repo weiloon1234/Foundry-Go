@@ -141,8 +141,16 @@ output. Image policies without an accepted list allow the supported input codecs
 See [image formats, transforms and limits](imaging.md).
 
 `Upload.Source` is borrowed until the call actually returns and is never closed.
-Input and stored-output defaults are 8 MiB, with an absolute 64 MiB ceiling.
-Image-engine limits also apply, and the tightest limit wins. Properties, reader
+Input and stored-output defaults are 8 MiB. Opaque-file policies declare positive
+`MaxBytes` and `MaxStoredBytes` ceilings; unchanged bytes must fit both. For example,
+set both to `512 << 20` for a 512 MiB video collection. Exactly the ceiling is
+accepted; the next byte is rejected. Image and variant policies retain the 64 MiB
+`MaxBufferedBytes` ceiling plus the image engine's limits. `MaxUploadBytes` remains
+an alias for that legacy in-memory bound, and `ReadBytes` still requires a maximum
+at or below it. Adding variants later cannot buffer an oversized historical
+original: generation rejects it before opening storage, using the smaller of
+`MaxBufferedBytes` and the engine's input limit. Streaming reads and retirement
+remain available. Properties, reader
 length, filename syntax and content are validated before a storage intent is
 created. A filename is display metadata only; storage uses a unique immutable
 framework key. It never becomes a filesystem path. Zero-width and bidirectional
@@ -157,12 +165,89 @@ an unrestricted client is rejected as invalid. The file is downloaded within the
 collection's `MaxBytes` inside the manager's `MaxActive` admission, which covers
 its download, validation, storage, publication and follow-up work. The manager
 timeout and shutdown cancel admitted downloads; publication cleanup retains its
-separate `CleanupTimeout`. One bounded input buffer is reused for validation and
-storage; image processing has its own engine limits. A queued import sends no
+separate `CleanupTimeout`. Downloads use the same owned spool, counting/hash sink
+and detection path as large preparation; image processing has its own engine limits. A queued import sends no
 request until admitted. Acceptance is detected from the bytes and the response
 Content-Type is only a hint. Redirects, non-2xx responses, truncated and oversized
 bodies fail without adding a file. `OriginalName` defaults to the URL's last path
 segment.
+
+Large-policy preparation uses `Config.TempDirectory`
+(`features.attachments.config.temp_directory`); empty selects the OS temporary
+directory for compatibility. Provision a private writable capacity-limited volume
+for production. Admission retains the spool through actual storage completion,
+then removes it on success, error, cancellation or a contained panic. Sources
+remain borrowed. `Prepare` returns a durable token, never a temporary-file handle.
+`Accepts` uses the same preparation and cleanup without image transformation or
+storage publication. Small policies retain the existing bounded byte path.
+
+Set `Config.MaxLargeActive` below `MaxActive` to reserve mutation slots for small
+policies. Zero preserves the previous shared admission. Large policies acquire
+this sublimit before shared admission, source capture or remote download, even
+when a particular input is small. `Prepare`, `Add`, `Replace`, `Accepts` and URL
+imports hold it through actual callback exit and cleanup. `PrepareFile`,
+`ReplaceFile` and `AddFile` include source `Open` and `Close` in that same
+admission, and manager shutdown drains both callbacks. Configured application
+assembly consumes `HTTP.Uploads.AttachmentMaxActive` when uploads are enabled.
+
+The capture sink counts and hashes bytes once as it writes them, retaining the
+shared 512-byte `mediatype.DetectUpload` probe. Files above 64 MiB use that bounded
+classification: client JSON/text hints cannot specialize them, and ZIP containers
+remain generic ZIP. Declare generic text/ZIP acceptance if required. Smaller files
+under large policies retain complete-content detection with one exact-sized buffer.
+
+Budget preparation separately from request capture, proxy buffering and local
+storage staging. A manager can retain up to `MaxActive` spools, each bounded by
+the effective policy ceiling. A directory does not itself enforce a quota. The
+HTTP/deployment owner must admit large requests before multipart capture and wire
+both request and attachment directories to provisioned capacity, with small-request
+reserves. Align request/body and multipart limits, proxy body limits, total upload
+and storage timeouts, and idle deadlines; changing this policy alone changes none
+of those limits. Newly supported large policies fail manager construction when
+`MaxStoredBytes` exceeds the disk's `MaxObjectBytes` or conditional-create capability.
+Legacy small-policy startup behavior remains unchanged.
+
+Apply attachment migration `000003_expand_original_size` through the normal
+migrator on every attachment store. It checks the framework-owned original size
+constraint before replacing it with `size >= 0`; historical migration SQL and
+variant constraints stay unchanged. Deploy capable readers/reconcilers everywhere
+before enabling large policies. Old binaries reject large rows, including cleaned
+tombstones, so retirement does not make a runtime downgrade safe. Lowering an
+upload policy does not invalidate old rows; lowering disk infrastructure limits
+can still prevent historical reads and settlement.
+
+B26 policy and preparation use the existing storage and transaction lifecycle for
+large objects. AWS and explicitly capable compatible backends publish through
+conditional multipart completion with the declared size and whole SHA-256. Default
+parts are 8 MiB with one part in flight. Failure/cancellation drains part workers
+before attempting abort under the separate cleanup deadline. A lost completion
+acknowledgement remains unknown even when staging abort succeeds.
+
+Call `Prepare` before opening the caller transaction; then `AddIn`/`ReplaceIn`
+publishes membership in that transaction. A confirmed rollback leaves a tracked
+`Stored` intent and preserves prior membership. `Discard` can retire it explicitly;
+a fresh manager's scheduled `ReconcilePending` reclaims it after `StoredGrace`
+and `CleanupGrace`. Unknown outer commits require inspection of durable state,
+never blind deletion or replay. Storage staging and attachment objects have
+separate cleanup owners; retain and inspect adapter cleanup references when abort
+fails or an upload ID is lost. The transactional outbox remains the durable owner
+of required queued cleanup/variant work; after-commit callbacks only prompt it.
+
+Large SDK wire coverage and env-gated PostgreSQL regression sources exercise this
+path. Live R2 create **and** replace certification is still required before its
+shared conditional-write size restriction can be removed. No production override
+is added. Checksum-fallback reconciliation and explicit settlement stream the
+pinned object through the shared fixed-buffer count/hash sink, using its persisted
+size even after the upload policy is lowered. Explicit settlement reads to EOF
+regardless of checksum metadata; automatic settlement retains the metadata
+shortcut. Both close their readers on every exit. Incomplete verification,
+cancellation, changed pins, or a close failure preserves the unresolved intent.
+The existing writer exclusion, settlement delay, and cleanup grace still apply.
+
+Configure the manager `Timeout` to cover one maximum-sized verification plus its
+database work. Verification uses that operation budget; `CleanupTimeout` remains
+the shorter detached cleanup budget. Ingress/deployment and live-provider
+acceptance remain required before production rollout.
 
 Before hooks run in declaration order with detected metadata and the typed
 owner. AfterStored hooks run after storage acknowledgement inside the ownership
@@ -370,9 +455,9 @@ are older than the longest registered disk `Timeout` (after which the writer's
 request context has ended) plus `Config.SettleAfter` (15 minutes by default, the
 bound for a provider to finish a request it already received). It fences the
 writer, then settles only unambiguous storage: an absent object, or a present
-object whose size and full SHA-256 (provider checksum metadata, otherwise the
-pinned bytes) exactly match the intent. Anything else stays `uncertain` with the
-failure category `settlement_ambiguous` for an operator; it is never deleted.
+object whose size and full SHA-256 (provider checksum metadata, otherwise a
+streaming hash of pinned bytes) exactly match the intent. Anything else stays
+`uncertain` with the failure category `settlement_ambiguous` for an operator; it is never deleted.
 Locally active writers are excluded.
 
 ## Image variants
@@ -497,9 +582,57 @@ For slots, use `attachments.OneCollection(handle).FirstIn` or
 `ReadBytes` rechecks ready membership, conditionally reads pinned storage, and
 verifies the complete checksum and length (a disk-verified full read whose
 stored checksum equals the pin is not hashed again). `Image` applies an explicit
-plan to those bytes. `Open` streams an attachment of any size up to the policy
-bound, pinned to its ETag/version and verified at EOF; only the lookup uses
-manager read admission, and the reader holds one disk stream slot until closed.
+plan to those bytes. `ReadBytes` and `Image` retain their in-memory limits even
+under a large policy. `Open` streams using the persisted size, pinned to its
+ETag/version and verified at EOF. Lowering the current upload policy does not
+change that historical read bound. Early Close makes no complete-digest claim.
+Only the lookup uses manager read admission; the returned reader uses the caller
+context and holds one disk stream slot until closed.
+
+`OpenSeek` returns `(io.ReadSeekCloser, Attachment[M, K], error)` after the same
+ready-owner/collection/locale lookup. It validates the stored size and pins before
+returning. Storage opens payloads lazily and pins every reopened range to that
+snapshot. A concurrent replacement fails instead of mixing representations.
+Always close the handle before closing the disk. A range verifies only its pinned
+span, not the attachment's whole SHA-256; use `Open` through EOF for that proof.
+
+For an authorized video download handler, return a deferred source with the
+existing HTTP download response contract (for example,
+`foundryhttp.DownloadResponse("video/mp4", "video/quicktime")`):
+
+<!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#pinned-video-download -->
+```go
+// VideoDownload defers opening until after the handler authorizes article/id.
+func VideoDownload(videos attachments.Collection[Article, model.ID[Article]], manager *attachments.Manager, article Article, id attachments.ID[Article]) foundryhttp.Download {
+	owner := ArticleIdentity.ReferenceOf(article)
+	return foundryhttp.DownloadFrom(func(ctx context.Context) (foundryhttp.DownloadContent, error) {
+		body, file, err := videos.OpenSeek(ctx, manager, owner, id)
+		if err != nil {
+			if errors.Is(err, database.NotFound) {
+				return foundryhttp.DownloadContent{}, foundryhttp.NotFound.WithCause(err)
+			}
+			return foundryhttp.DownloadContent{}, storagehttp.ResponseError(err)
+		}
+		return foundryhttp.DownloadContent{
+			Body:      body,
+			Name:      file.Info().OriginalName,
+			MediaType: foundryhttp.MediaType(file.Info().MediaType),
+			Modified:  file.CreatedAt().UTC(),
+			EntityTag: foundryhttp.EntityTag(`"` + file.ID().String() + `"`),
+		}, nil
+	})
+}
+```
+
+Here `foundryhttp` is the framework HTTP package and `storagehttp` is
+`github.com/weiloon1234/Foundry-Go/storage/http`. The attachment ID is a strong
+HTTP validator because each upload has immutable bytes and a new ID. Storage
+reads still use the private persisted ETag/version. The HTTP owner handles HEAD,
+206/416, suffix/open-ended ranges, If-Range, validators, and closure after success,
+error, or cancellation. Keep the default attachment disposition for untrusted
+content; inline playback needs the application's explicit media policy. The
+[executable regression](../../attachments/large_reads_postgres_test.go) uses this
+pattern with an above-64-MiB original.
 
 `PublicURL` and `TemporaryURL` recheck ready membership and derive the link from
 the stored key and version; keys are immutable per upload, so no storage request
@@ -652,3 +785,24 @@ For application reads inside deferred HTTP sources, use the
 
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.
+
+## Large-attachment acceptance
+
+For a 512 MiB opaque collection, set both policy ceilings, provision the private
+spool volume, and keep Prepare outside the caller transaction. Use AddIn or
+ReplaceIn with that prepared value inside the domain transaction. Apply the
+forward original-size migration before enabling the policy. Historical large
+rows, including cleaned tombstones, prevent rollback to an older runtime.
+
+Full Open verifies size and SHA-256 only after EOF. Closing early makes no whole-
+content integrity claim. OpenSeek pins object identity across range reopens and
+is suitable for HTTP HEAD, 206, 416 and If-Range handling. ReadBytes and image/
+variant processing retain their bounded in-memory limits. Fallback reconciliation
+and explicit settlement stream the original; cancellation or incomplete evidence
+must leave the intent unresolved.
+
+R2's shared conditional-write size cap remains in place until live certification
+passes for both create and replace. Large policies that exceed that capability
+fail validation. The local adapter and explicitly capable S3-compatible adapters
+do not establish R2 support. See the [resource and provider acceptance commands](../evidence/b26-resource-provider-acceptance.md)
+for required measurements, deployment gaps and live-provider evidence.

@@ -2,17 +2,20 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"mime"
 	"mime/multipart"
 	stdhttp "net/http"
 	"net/url"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/httpdeadline"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/upload"
 )
@@ -26,13 +29,17 @@ type multipartInput struct {
 // multipartSource observes the framework-owned body ceiling directly, without
 // walking or formatting arbitrary error chains supplied by an incoming reader.
 type multipartSource struct {
-	source   io.Reader
-	tooLarge bool
+	source      io.Reader
+	tooLarge    bool
+	readTimeout *httpdeadline.ReadTimeout
 }
 
 // Read forwards source data and records whether the HTTP body limit was exceeded.
 func (r *multipartSource) Read(p []byte) (int, error) {
 	n, err := r.source.Read(p)
+	if r.readTimeout != nil {
+		r.readTimeout.Observe(err)
+	}
 	if _, ok := err.(*stdhttp.MaxBytesError); ok {
 		r.tooLarge = true
 	}
@@ -48,6 +55,7 @@ func (r *multipartSource) failure(err error) error {
 func multipartRead[B any](d Multipart[B], w stdhttp.ResponseWriter, r *stdhttp.Request, limits EndpointLimits) (B, func() error, error) {
 	ctx := r.Context()
 	if err := ctx.Err(); err != nil {
+		rejectUnreadBody(w, r)
 		return *new(B), nil, RequestTimeout.WithCause(err)
 	}
 	if r.ContentLength > limits.Multipart.Bytes {
@@ -85,6 +93,11 @@ func multipartRead[B any](d Multipart[B], w stdhttp.ResponseWriter, r *stdhttp.R
 	}
 	close := batch.Close
 	source := &multipartSource{source: stdhttp.MaxBytesReader(w, r.Body, limits.Multipart.Bytes)}
+	if admitted != nil && admitted.observeBodyTimeout {
+		// Native servers without our connection wrapper can still preserve the
+		// direct socket error. Never infer timeout from a framing error's text.
+		source.readTimeout = admitted.readTimeout
+	}
 	input := multipartInput{text: make(url.Values), values: make(map[string][]multipartValue), counts: make([]int, len(d.parts))}
 	var returned error
 	owned := callback.Isolated("read multipart form", func() error {
@@ -96,8 +109,18 @@ func multipartRead[B any](d Multipart[B], w stdhttp.ResponseWriter, r *stdhttp.R
 		logRouteFailure(r, "HTTP multipart reader failed", owned)
 		return *new(B), close, InternalError.WithCause(owned)
 	}
-	if err := ctx.Err(); err != nil {
-		return *new(B), close, RequestTimeout.WithCause(err)
+	contextErr := ctx.Err()
+	// The socket deadline can wake its reader before the context timer runs.
+	// Both enforce the same bound and must produce the same timeout response.
+	if deadline, ok := ctx.Deadline(); contextErr == nil && ok && !time.Now().Before(deadline) {
+		contextErr = context.DeadlineExceeded
+	}
+	if contextErr != nil {
+		if admitted != nil && admitted.readTimeout != nil && admitted.readTimeout.Observed() {
+			admitted.timeoutResponse.Store(true)
+		}
+		rejectUnreadBody(w, r)
+		return *new(B), close, RequestTimeout.WithCause(contextErr)
 	}
 	if returned != nil {
 		rejectUnreadBody(w, r)

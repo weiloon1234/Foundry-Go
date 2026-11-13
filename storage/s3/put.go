@@ -52,6 +52,12 @@ func (b *Backend) Put(ctx context.Context, key storage.ObjectKey, source io.Read
 	if err := b.validateMetadata(options.Metadata); err != nil {
 		return storage.ObjectInfo{}, err
 	}
+	return b.put(ctx, key, full, source, options)
+}
+
+// put owns the validated publication protocol, including admission, part draining,
+// outcome classification and abort. Public Put validates provider capabilities first.
+func (b *Backend) put(ctx context.Context, key storage.ObjectKey, full string, source io.Reader, options storage.PutOptions) (storage.ObjectInfo, error) {
 	if err := b.admitUpload(ctx); err != nil {
 		return storage.ObjectInfo{}, err
 	}
@@ -63,7 +69,7 @@ func (b *Backend) Put(ctx context.Context, key storage.ObjectKey, source io.Read
 	b.trackWrite(key, true)
 	defer b.trackWrite(key, false)
 	var info storage.ObjectInfo
-	err = callback.Invoke("S3 object publication", func() error { var err error; info, err = writer.publish(source); return err })
+	err := callback.Invoke("S3 object publication", func() error { var err error; info, err = writer.publish(source); return err })
 	// Every part request has exited before the outcome is classified, any
 	// abort starts or a pooled buffer is reused.
 	if drained := writer.drain(); err != nil && drained != nil {

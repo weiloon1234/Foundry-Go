@@ -338,7 +338,10 @@ Load those settings through the generated configuration schema. The deployment
 pipeline owns their values. Pass `settings.App.HTTP.Uploads` to `LargeRouter` in
 that example. Its service receives an ordinary request-owned `UploadedFile`.
 Production applications use their existing guarded endpoint adapter for the same
-multipart declaration.
+multipart declaration. Attachment and local-storage work use their own sublimits;
+see the [deployment owner wiring](deployment.md#large-upload-ingress). Reserve
+a separate small-publication disk when large-volume exhaustion must leave small
+attachment writes available.
 
 Admission precedes route middleware, authentication, decoding, and capture.
 `ApplyMiddleware` preserves this ordering around a Router. The server performs
@@ -346,6 +349,23 @@ admission before global middleware and excludes admitted upload requests from
 its general handler-slot pool. Exhaustion returns 503 with `Retry-After: 1` and
 uses unread-body rejection. There is no upload admission queue. Direct requests
 that bypass nginx encounter the same reservation.
+
+An admitted upload's effective route deadline also bounds native body reads,
+including a chunked body that keeps making progress. The deadline does not reset
+with each chunk. An expired multipart capture returns 408 and rejects the unread
+body before publication. Cleanup completes before its admission slot is released.
+With the framework's `Server`, Compression and ETags deliver that terminal 408 even when the native read timeout
+cancels HTTP/1's request context. This exception requires an observed socket read
+timeout at the installed deadline; ordinary client disconnects still abort delivery.
+Concurrent connection deadline resets invalidate overlapping upload evidence,
+including reads awakened before the reset finishes.
+The server retains that evidence before HTTP framing can replace the read error,
+including while waiting for the final blank line of chunked trailers. Trailer error
+text alone never grants the timeout-response exception.
+Under a standard `net/http.Server`, including direct TLS hosting, ordinary body
+reads retain the same timeout response through native socket-error detection.
+This fallback is used only without connection-level evidence; it cannot recover
+a socket cause that HTTP framing has discarded.
 
 Use the framework's Router and `ApplyMiddleware` chain for this guarantee.
 An external native wrapper that reads a body before entering that chain cannot
@@ -388,3 +408,10 @@ publication, and response work, and extends native connection deadlines for a
 longer route. Nginx idle timers measure gaps in progress, not total duration.
 Use the [upload deployment profile](deployment.md#large-upload-ingress) to keep
 those settings and the writable sandbox paths consistent.
+
+The [B26 acceptance scenarios](../evidence/b26-resource-provider-acceptance.md)
+exercise actual rendered nginx, silent publication, known-length and chunked
+input, idle and total deadlines, disconnects and quota exhaustion. HTTP pool
+checks do not certify attachment or local-storage admission. Those owners must
+consume their declared large-work limits and preserve small-publication capacity
+before the complete deployment can be accepted.

@@ -2,11 +2,14 @@ package articles
 
 import (
 	"context"
+	"errors"
 
 	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/model"
+	storagehttp "github.com/weiloon1234/Foundry-Go/storage/http"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
@@ -112,3 +115,27 @@ func ReconcileFiles(ctx context.Context, manager *attachments.Manager) ([]attach
 }
 
 // doc-example:end reconcile-files
+
+// doc-example:begin pinned-video-download
+// VideoDownload defers opening until after the handler authorizes article/id.
+func VideoDownload(videos attachments.Collection[Article, model.ID[Article]], manager *attachments.Manager, article Article, id attachments.ID[Article]) foundryhttp.Download {
+	owner := ArticleIdentity.ReferenceOf(article)
+	return foundryhttp.DownloadFrom(func(ctx context.Context) (foundryhttp.DownloadContent, error) {
+		body, file, err := videos.OpenSeek(ctx, manager, owner, id)
+		if err != nil {
+			if errors.Is(err, database.NotFound) {
+				return foundryhttp.DownloadContent{}, foundryhttp.NotFound.WithCause(err)
+			}
+			return foundryhttp.DownloadContent{}, storagehttp.ResponseError(err)
+		}
+		return foundryhttp.DownloadContent{
+			Body:      body,
+			Name:      file.Info().OriginalName,
+			MediaType: foundryhttp.MediaType(file.Info().MediaType),
+			Modified:  file.CreatedAt().UTC(),
+			EntityTag: foundryhttp.EntityTag(`"` + file.ID().String() + `"`),
+		}, nil
+	})
+}
+
+// doc-example:end pinned-video-download
