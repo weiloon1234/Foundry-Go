@@ -64,9 +64,13 @@ func TestStagingRootBudgetAcrossBackends(t *testing.T) {
 			}
 			defer b.Close()
 			var reads atomic.Int64
-			busy, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+			busy, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 			_, err = b.Put(busy, stagingKey(t, "second"), stagingReaderFunc(func([]byte) (int, error) { reads.Add(1); return 0, io.EOF }), storage.PutOptions{Size: value.Set[int64](8)})
+			ended := busy.Err()
 			cancel()
+			if ended != nil {
+				t.Fatal("capacity rejection waited for the caller deadline", ended)
+			}
 			if !errors.Is(err, fault.Overloaded) || reads.Load() != 0 {
 				t.Fatal("foreign live reservation was ignored", err, reads.Load())
 			}
@@ -97,30 +101,25 @@ func TestStagingRootBudgetSimultaneousAdmission(t *testing.T) {
 		}
 		defer peers[i].Close()
 	}
-	created := make(chan struct{}, 2)
-	verify := make(chan struct{})
+	start := make(chan struct{})
 	entered := make(chan int, 2)
 	release := make(chan struct{})
-	var verifyOnce, releaseOnce sync.Once
-	defer verifyOnce.Do(func() { close(verify) })
-	defer releaseOnce.Do(func() { close(release) })
-	var cancels [2]context.CancelFunc
+	var releaseOnce sync.Once
 	var results [2]chan error
+	var cancels [2]context.CancelFunc
 	var joined [2]bool
 	for i, peer := range peers {
-		var once sync.Once
-		peer.beforeStagingVerify = func() { once.Do(func() { created <- struct{}{}; <-verify }) }
 		ctx, cancel := context.WithCancel(t.Context())
 		cancels[i] = cancel
 		results[i] = make(chan error, 1)
 		key := stagingKey(t, []string{"race-a", "race-b"}[i])
 		go func() {
+			<-start
 			_, err := peer.Put(ctx, key, stagingReaderFunc(func([]byte) (int, error) { entered <- i; <-release; return 0, io.EOF }), storage.PutOptions{})
 			results[i] <- err
 		}()
 	}
 	defer func() {
-		verifyOnce.Do(func() { close(verify) })
 		releaseOnce.Do(func() { close(release) })
 		for i := range peers {
 			cancels[i]()
@@ -129,38 +128,25 @@ func TestStagingRootBudgetSimultaneousAdmission(t *testing.T) {
 			}
 		}
 	}()
-	for range peers {
-		select {
-		case <-created:
-		case <-time.After(5 * time.Second):
-			t.Fatal("both reservations were not created")
-		}
-	}
-	verifyOnce.Do(func() { close(verify) })
+	close(start)
 	var winner int
 	select {
 	case winner = <-entered:
-	case <-time.After(5 * time.Second):
-		t.Fatal("admission did not converge")
+	case <-time.After(time.Second):
+		t.Fatal("serialized admission did not select a winner promptly")
 	}
 	loser := 1 - winner
-	cancels[loser]()
 	var err error
 	select {
 	case err = <-results[loser]:
 		joined[loser] = true
 	case <-entered:
 		t.Fatal("both contenders consumed input under one root budget")
-	case <-time.After(5 * time.Second):
-		t.Fatal("canceled contender did not withdraw")
+	case <-time.After(time.Second):
+		t.Fatal("excess contender waited for capacity")
 	}
 	if !errors.Is(err, fault.Overloaded) {
-		t.Fatal("contender bypassed the shared budget", err)
-	}
-	select {
-	case <-entered:
-		t.Fatal("both writers consumed input under one byte budget")
-	default:
+		t.Fatal("unexpected rejection", err)
 	}
 	releaseOnce.Do(func() { close(release) })
 	err = <-results[winner]
@@ -169,7 +155,7 @@ func TestStagingRootBudgetSimultaneousAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := peers[loser].Put(t.Context(), stagingKey(t, "race-recovered"), strings.NewReader("next"), storage.PutOptions{}); err != nil {
-		t.Fatal("withdrawn reservation leaked", err)
+		t.Fatal("completed reservation retained capacity", err)
 	}
 }
 
@@ -201,9 +187,13 @@ func TestStagingRootBudgetSurvivesProcessCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	busy, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	busy, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	_, err = b.Put(busy, stagingKey(t, "blocked"), strings.NewReader("next"), storage.PutOptions{})
+	ended := busy.Err()
 	cancel()
+	if ended != nil {
+		t.Fatal("capacity rejection waited for the caller deadline", ended)
+	}
 	if !errors.Is(err, fault.Overloaded) {
 		t.Fatal("crashed staging disappeared from the root budget", err)
 	}
@@ -218,6 +208,7 @@ func TestStagingRootBudgetSurvivesProcessCrash(t *testing.T) {
 func TestStagingRootBudgetCountsTwoLiveWriters(t *testing.T) {
 	config := sharedStagingConfig(t.TempDir())
 	config.Staging.MaxActive, config.Staging.MaxBytes = 3, 16
+	config.MaxScan = 1
 	var peers [2]*Backend
 	var release [2]chan struct{}
 	var done [2]chan error
@@ -256,9 +247,18 @@ func TestStagingRootBudgetCountsTwoLiveWriters(t *testing.T) {
 		}
 	}
 
-	busy, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
-	_, err := peers[0].Put(busy, stagingKey(t, "third"), strings.NewReader("next"), storage.PutOptions{})
+	page, err := peers[0].List(t.Context(), storage.ListOptions{Limit: 10})
+	if err != nil || len(page.Objects) != 0 {
+		t.Fatal("staging consumed the published-object scan ceiling", err)
+	}
+
+	busy, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	_, err = peers[0].Put(busy, stagingKey(t, "third"), strings.NewReader("next"), storage.PutOptions{})
+	ended := busy.Err()
 	cancel()
+	if ended != nil {
+		t.Fatal("capacity rejection waited for the caller deadline", ended)
+	}
 	if !errors.Is(err, fault.Overloaded) {
 		t.Fatal("combined live reservations exceeded the root budget", err)
 	}

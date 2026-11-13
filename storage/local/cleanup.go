@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/weiloon1234/Foundry-Go/internal/filelock"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
@@ -14,7 +15,8 @@ import (
 // Prune removes only recognized, old staging files whose live-writer lock can
 // be acquired. A slow upload is never removed merely because it is old. A crash
 // releases its file lock. Published objects and marker/lock files are untouched.
-// limit bounds deletion; Config.MaxScan independently bounds scanning work.
+// limit bounds deletion; Config.MaxScan bounds the legacy object-shard scan.
+// The dedicated staging directory is scanned separately in bounded batches.
 func (b *Backend) Prune(ctx context.Context, olderThan time.Time, limit int) (uint64, error) {
 	if err := b.ready(ctx, storage.DeleteOperation); err != nil {
 		return 0, err
@@ -24,7 +26,7 @@ func (b *Backend) Prune(ctx context.Context, olderThan time.Time, limit int) (ui
 	}
 	var removed uint64
 	finished := safeerror.New("staging cleanup batch complete")
-	err := b.walkEntries(ctx, b.config.MaxScan, func(parent *os.Root, _ string, name string) error {
+	visit := func(parent *os.Root, name string) error {
 		if !stagingName(name) {
 			return nil
 		}
@@ -76,7 +78,20 @@ func (b *Backend) Prune(ctx context.Context, olderThan time.Time, limit int) (ui
 			return finished
 		}
 		return nil
-	})
+	}
+	// Serialize staging cleanup with entry creation, never with an admitted writer.
+	unlock, err := filelock.Acquire(ctx, b.staging, stagingLockName)
+	if err != nil {
+		return 0, failure(storage.Unavailable, storage.DeleteOperation, storage.NotApplicable, err)
+	}
+	err = b.walkStaging(ctx, visit)
+	unlock()
+	if err == nil {
+		// Older runs may have left staging in object shards. That legacy pass keeps
+		// its existing MaxScan bound; the dedicated directory never consumes it.
+		err = b.walkEntries(ctx, b.config.MaxScan, func(parent *os.Root, _ string, name string) error { return visit(parent, name) })
+	}
+
 	if errors.Is(err, finished) {
 		err = nil
 	}

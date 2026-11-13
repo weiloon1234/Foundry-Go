@@ -207,18 +207,24 @@ waits for actual callback exit rather than closing infrastructure beneath it.
 sharing a root must use the same staging limits. `SmallObjectBytes` reserves
 admission for known small inputs; unknown lengths reserve `MaxObjectBytes`. Both
 puts and server-side copies publish the reserved byte count in their staging
-entry name and hold the existing writer lock before reading input. Admission sums
-its own and foreign reservations directly from the root. Concurrent contenders
-create their records first, verify the combined budget, and withdraw and retry
-within the admission timeout if it is exceeded. No in-memory counter grants extra
-capacity to another process.
+entry name and hold the existing writer lock before reading input. Entries live
+in the private `.foundry-staging` directory inside the managed root. A short
+cross-process `flock` on its admission lock file serializes scanning reservations,
+checking the combined budget and creating the new entry. Exhaustion returns the
+typed capacity error immediately, without waiting for another upload to finish.
+The admission lock is released before input is read. No in-memory counter grants
+extra capacity to another process.
 
 Publication renames the entry into its final object; successful cleanup removes
 it. A crash releases the writer lock, but its abandoned entry keeps its byte
 reservation until `Prune` removes it under the existing age, identity and lock
-checks. Failed cleanup likewise stays charged. Recovery and admission stream the
-root in fixed-size directory batches independently of the listing `MaxScan`
-ceiling. Keep each disk's `MaxActive` greater than the root's staging slot cap.
+checks. Failed cleanup likewise stays charged. Admission scans only the staging
+directory in fixed-size batches; published-object listing, walking and `MaxScan`
+exclude that directory. Startup recovery moves abandoned staging from older
+object-shard locations into it before admitting writes, independently of the
+listing ceiling. Drain writers using the old layout before opening the root with
+staging limits enabled. `Prune` also checks those legacy locations under its
+existing scan bound. Keep each disk's `MaxActive` greater than the root's staging slot cap.
 Zero staging limits preserve existing behavior. Named disks expose the same
 policy as `infrastructure.LocalDiskSettings.Staging`.
 
@@ -255,9 +261,9 @@ its shard lock only across the rename or removal; a conditional one (`IfAbsent`,
 durable, so no other conditional writer acts on a change that a crash could
 still undo.
 `Sync` defaults on and syncs files/directories for crash durability: the staging
-file before publication and the shard directory after the rename, before success
-is reported; parent directories are synced only when a shard directory is first
-created by the process. This is an
+file before publication and both the staging and shard directories after the
+rename, before success is reported; parent directories are synced when their
+managed subdirectories are created. This is an
 operator-controlled object store, **not a directory of plain uploaded files**.
 Back it up as a complete store. Use the HTTP storage bridge to serve content.
 

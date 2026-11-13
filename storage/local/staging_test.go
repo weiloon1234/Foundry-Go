@@ -105,7 +105,7 @@ func TestStagingAdmissionPreservesSmallWritesAndActualLifetime(t *testing.T) {
 			if _, err := backend.Put(t.Context(), stagingKey(t, "recovered"), strings.NewReader("next"), size); err != nil {
 				t.Fatal("capacity did not recover", err)
 			}
-			files, _ := filepath.Glob(filepath.Join(config.Root, "objects", "*", tempPrefix+"*"))
+			files, _ := filepath.Glob(filepath.Join(config.Root, stagingDirectory, tempPrefix+"*"))
 			if len(files) != 0 {
 				t.Fatal("staging survived cleanup", files)
 			}
@@ -126,8 +126,7 @@ func TestStagingFailedCleanupRetainsBytesUntilPrune(t *testing.T) {
 	}
 	defer backend.Close()
 	key := stagingKey(t, "failed-cleanup")
-	directory, _ := address(key)
-	path := filepath.Join(config.Root, directory)
+	path := filepath.Join(config.Root, stagingDirectory)
 	defer os.Chmod(path, 0700)
 	_, err = backend.Put(t.Context(), key, stagingReaderFunc(func([]byte) (int, error) {
 		if err := os.Chmod(path, 0500); err != nil {
@@ -323,6 +322,10 @@ func TestStagingRecoveryReconcilesOtherOwners(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer peer.Close()
+			if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("legacy staging was not migrated", err)
+			}
+			path = filepath.Join(config.Root, stagingDirectory, filepath.Base(path))
 			if _, err := peer.Put(stagingBusyContext(t), stagingKey(t, "blocked"), strings.NewReader("next"), storage.PutOptions{}); !errors.Is(err, fault.Overloaded) {
 				t.Fatal("recovery did not account before admission", err)
 			}

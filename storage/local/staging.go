@@ -10,10 +10,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
-	"github.com/weiloon1234/Foundry-Go/internal/admission"
+	"github.com/weiloon1234/Foundry-Go/internal/filelock"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
@@ -40,19 +39,109 @@ func (s StagingLimits) validate(maximum int64) error {
 	return nil
 }
 
-// Reservation bytes are encoded in the staging entry itself. The file's writer
-// lock protects the entry from Prune from admission through publication/cleanup.
-// No process-local counter participates in the managed root's capacity decision.
-func (b *Backend) startStaging(ctx context.Context) error {
-	if b.config.Staging.MaxActive == 0 {
-		return nil
+const stagingDirectory = ".foundry-staging"
+const stagingLockName = ".foundry-admission"
+
+// Recovery runs once before readiness, independently of the listing ceiling.
+// Old abandoned files move into the same accounting directory as new writes.
+func (b *Backend) startStaging(ctx context.Context) (err error) {
+	if err = b.root.Mkdir(stagingDirectory, 0700); err != nil && !errors.Is(err, fs.ErrExist) {
+		return err
 	}
-	_, _, err := b.stagingUsage(ctx)
-	return err
+	info, err := b.root.Lstat(stagingDirectory)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return fs.ErrInvalid
+	}
+	b.staging, err = b.root.OpenRoot(stagingDirectory)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			err = safeerror.Join("staging startup failed", err, b.staging.Close())
+			b.staging = nil
+		}
+	}()
+	unlock, err := filelock.Acquire(ctx, b.staging, stagingLockName)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	err = b.walkEntries(ctx, 0, func(parent *os.Root, directory, name string) error {
+		if !stagingName(name) {
+			return nil
+		}
+		file, err := parent.OpenFile(name, os.O_RDWR, 0)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		locked, err := tryLock(file)
+		if err != nil {
+			return err
+		}
+		if !locked {
+			if b.config.Staging.MaxActive == 0 {
+				return nil
+			}
+			return safeerror.NewFault(fault.Conflict, "legacy staging writers must drain before enabling staging admission")
+		}
+		info, err := file.Stat()
+		if err != nil {
+			return err
+		}
+		current, err := parent.Lstat(name)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() || !os.SameFile(info, current) {
+			return fs.ErrInvalid
+		}
+		if _, err := b.staging.Lstat(name); !errors.Is(err, fs.ErrNotExist) {
+			if err != nil {
+				return err
+			}
+			return fs.ErrExist
+		}
+		if err := b.root.Rename(directory+"/"+name, stagingDirectory+"/"+name); err != nil {
+			return err
+		}
+		if b.config.Sync {
+			return safeerror.Join("staging recovery sync failed", syncDirectory(b.staging), syncDirectory(parent))
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if b.config.Sync {
+		return safeerror.Join("staging startup sync failed", syncDirectory(b.staging), syncDirectory(b.root))
+	}
+	return nil
+}
+
+// The caller holds the staging directory's admission lock. Published objects and
+// the listing/legacy-prune MaxScan budget never participate in this traversal.
+func (b *Backend) walkStaging(ctx context.Context, visit func(*os.Root, string) error) error {
+	return readDirectory(ctx, b.staging, func(name string) error {
+		if !stagingName(name) {
+			return nil
+		}
+		return visit(b.staging, name)
+	})
 }
 
 func (b *Backend) stagingUsage(ctx context.Context) (bytes int64, active int, err error) {
-	err = b.walkEntries(ctx, 0, func(parent *os.Root, _ string, name string) error {
+	err = b.walkStaging(ctx, func(parent *os.Root, name string) error {
 		reserved, recognized := stagingReservation(name)
 		if !recognized {
 			return nil
@@ -109,11 +198,10 @@ func (b *Backend) stagingUsage(ctx context.Context) (bytes int64, active int, er
 	return bytes, active, err
 }
 
-// createStaging publishes a complete reservation before checking the root. All
-// contenders include their own entry and every foreign reservation in that
-// check. A writer that starts later must see earlier writers' still-live entries;
-// an oversubscribed contender withdraws before retrying and never reads its input.
-func (b *Backend) createStaging(ctx context.Context, parent *os.Root, directory string, options storage.PutOptions, op storage.Operation) (*os.File, string, []byte, error) {
+// Admission is one short cross-process critical section: inspect staging only,
+// reject exhaustion immediately, otherwise create and lock one reservation.
+// No input or publication callback runs under the directory lock.
+func (b *Backend) createStaging(ctx context.Context, options storage.PutOptions, op storage.Operation) (*os.File, string, []byte, error) {
 	reserved := int64(-1)
 	if b.config.Staging.MaxActive != 0 {
 		reserved = b.config.MaxObjectBytes
@@ -124,71 +212,41 @@ func (b *Backend) createStaging(ctx context.Context, parent *os.Root, directory 
 			reserved = 0
 		}
 	}
-	wait, cancel := context.WithTimeout(ctx, admission.DefaultWait)
-	defer cancel()
-	for {
-		if err := wait.Err(); err != nil {
-			return nil, "", nil, stagingOverload(op, err)
-		}
-		tag := make([]byte, 16)
-		if _, err := rand.Read(tag); err != nil {
-			return nil, "", nil, failure(storage.Unavailable, op, storage.Unchanged, err)
-		}
-		name := tempPrefix + hex.EncodeToString(tag)
-		if reserved >= 0 {
-			name += "-" + strconv.FormatInt(reserved, 10)
-		}
-		file, err := parent.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	unlock, err := filelock.Acquire(ctx, b.staging, stagingLockName)
+	if err != nil {
+		return nil, "", nil, failure(storage.Unavailable, op, storage.Unchanged, err)
+	}
+	defer unlock()
+	if reserved > 0 {
+		bytes, active, err := b.stagingUsage(ctx)
 		if err != nil {
 			return nil, "", nil, failure(storage.Unavailable, op, storage.Unchanged, err)
 		}
-		locked, err := tryLock(file)
-		if err != nil || !locked {
-			// A concurrent pruning/inspection owner may have reached this new entry
-			// before its creator acquired the lock. It has no payload yet.
-			cleanupErr := withdrawStaging(parent, directory, name, file, op)
-			if err != nil || cleanupErr != nil {
-				return nil, "", nil, failure(storage.Unavailable, op, storage.Unchanged, safeerror.Join("staging lock failed", err, cleanupErr))
-			}
-		} else {
-			if reserved > 0 && b.beforeStagingVerify != nil {
-				b.beforeStagingVerify()
-			}
-			bytes, active := int64(0), 0
-			if reserved > 0 {
-				bytes, active, err = b.stagingUsage(wait)
-			}
-			// A pruning owner that won the pre-lock race may already have removed the
-			// name. Verify our locked descriptor still names our reservation before I/O.
-			info, statErr := file.Stat()
-			current, pathErr := parent.Lstat(name)
-			err = safeerror.Join("staging verification failed", err, statErr, pathErr)
-			if err == nil && !os.SameFile(info, current) {
-				err = fs.ErrInvalid
-			}
-			if err == nil && (reserved <= 0 || bytes <= b.config.Staging.MaxBytes && active <= b.config.Staging.MaxActive) {
-				return file, name, tag, nil
-			}
-			cleanupErr := withdrawStaging(parent, directory, name, file, op)
-			if cleanupErr != nil {
-				return nil, "", nil, cleanupErr
-			}
-			if err != nil {
-				if wait.Err() != nil {
-					return nil, "", nil, stagingOverload(op, wait.Err())
-				}
-				return nil, "", nil, failure(storage.Unavailable, op, storage.Unchanged, err)
-			}
-		}
-		// Per-attempt entropy keeps simultaneous contenders from retrying in lockstep.
-		timer := time.NewTimer(time.Duration(1+int(tag[0])%16) * time.Millisecond)
-		select {
-		case <-wait.Done():
-			timer.Stop()
-			return nil, "", nil, stagingOverload(op, wait.Err())
-		case <-timer.C:
+		if reserved > b.config.Staging.MaxBytes-bytes || active >= b.config.Staging.MaxActive {
+			return nil, "", nil, stagingOverload(op, nil)
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, "", nil, failure(storage.Unavailable, op, storage.Unchanged, err)
+	}
+	tag := make([]byte, 16)
+	if _, err := rand.Read(tag); err != nil {
+		return nil, "", nil, failure(storage.Unavailable, op, storage.Unchanged, err)
+	}
+	name := tempPrefix + hex.EncodeToString(tag)
+	if reserved >= 0 {
+		name += "-" + strconv.FormatInt(reserved, 10)
+	}
+	file, err := b.staging.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return nil, "", nil, failure(storage.Unavailable, op, storage.Unchanged, err)
+	}
+	locked, err := tryLock(file)
+	if err != nil || !locked {
+		cleanupErr := withdrawStaging(b.staging, stagingDirectory, name, file, op)
+		return nil, "", nil, failure(storage.Unavailable, op, storage.Unchanged, safeerror.Join("staging lock failed", err, cleanupErr))
+	}
+	return file, name, tag, nil
 }
 
 func withdrawStaging(parent *os.Root, directory, name string, file *os.File, op storage.Operation) error {

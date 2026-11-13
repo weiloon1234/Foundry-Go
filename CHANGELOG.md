@@ -3,9 +3,11 @@
 ## Unreleased
 
 - Fixed: local staging reservations now live in filesystem entries and enforce
-  one managed-root budget across processes. Competing admissions withdraw and
-  retry before reading input; crashed and failed-cleanup entries remain charged
-  until pruning. Added live-peer, simultaneous-admission and process-crash tests
+  one managed-root budget across processes. A dedicated staging directory and
+  short cross-process lock serialize admission independently of published-object
+  count. Exhausted writes reject promptly, preserving small-request disk slots;
+  crashed and failed-cleanup entries remain charged until pruning. Added live-peer,
+  process-crash, small-write, populated-root and concurrent-process regressions
   for the lead's Go gate.
 
 - Fixed: local staging recovery no longer inherits the published-object listing

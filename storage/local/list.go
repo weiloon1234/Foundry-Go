@@ -45,43 +45,50 @@ func (b *Backend) walkEntries(ctx context.Context, maximum int, visit func(*os.R
 		}
 		err = func() error {
 			defer parent.Close()
-			reader, err := parent.Open(".")
-			if err != nil {
-				return err
-			}
-			defer reader.Close()
-			for {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				entries, readErr := reader.ReadDir(directoryBatch)
-				for _, entry := range entries {
-					if maximum > 0 {
-						scanned++
-					}
-					if maximum > 0 && scanned > maximum {
+			return readDirectory(ctx, parent, func(name string) error {
+				if maximum > 0 {
+					scanned++
+					if scanned > maximum {
 						return newFailure(storage.LimitExceeded, storage.ListOperation, storage.NotApplicable, nil)
 					}
-					if err := ctx.Err(); err != nil {
-						return err
-					}
-					if err := visit(parent, directory, entry.Name()); err != nil {
-						return err
-					}
 				}
-				if readErr != nil {
-					if errors.Is(readErr, io.EOF) {
-						return nil
-					}
-					return readErr
-				}
-			}
+				return visit(parent, directory, name)
+			})
 		}()
 		if err != nil {
 			return err
 		}
 	}
 	return ctx.Err()
+}
+
+// readDirectory streams a single directory with bounded memory and cancellation.
+func readDirectory(ctx context.Context, parent *os.Root, visit func(string) error) error {
+	reader, err := parent.Open(".")
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		entries, readErr := reader.ReadDir(directoryBatch)
+		for _, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := visit(entry.Name()); err != nil {
+				return err
+			}
+		}
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return nil
+			}
+			return readErr
+		}
+	}
 }
 
 type listCursor struct {
