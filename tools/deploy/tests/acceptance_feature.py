@@ -34,6 +34,8 @@ def feature_archive(source, destination, host_id):
     profile = read_json(Path("/verification/foundry-go/tests/fixtures/deploy-acceptance/deploy/environments/acceptance.json"))
     profile.update(schema=3, architecture=manifest["architecture"], instance_id=manifest["instance_id"],
                    placement={"http": 1, "relay": 1}, listeners={})
+    # Synthetic certificates are issued only for the disposable acceptance zone.
+    profile["domain"] = f"{project['slug']}-{profile['environment']}.acceptance.invalid"
     profile["host"]["host_id"] = host_id
     checksum = hashlib.sha256(files["artisan"]).hexdigest()
     platform = "linux-" + profile["architecture"]
