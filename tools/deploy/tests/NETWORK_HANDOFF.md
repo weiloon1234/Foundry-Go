@@ -251,8 +251,17 @@ the existing filter-table restrictions for Docker or any other owner.
 The same proof applies to both address families and both iptables backends. Live
 and persistent auxiliary rules enter the digest without counters; all live tables
 are re-read after nft accounting to detect drift. Persistent before/after/user
-tables are merged before walking, so later files cannot hide rules behind an
-earlier empty chain. `parse_rules` is the filter projection for existing callers;
+tables are replayed in order using [iptables-restore --noflush semantics](https://man7.org/linux/man-pages/man8/iptables-restore.8.html):
+built-in declarations retain prior rules, declared user chains reset, and
+undeclared chains survive. Appends and indexed inserts operate on the accumulated
+chains in every table and both address families. Reconstruction starts from the
+live inventory and applies the reviewed UFW helper cleanup, so a persistent jump
+cannot conceal a surviving live auxiliary rule. Observation also requires a
+separate fresh-boot reconstruction to pass: an empty kernel plus standard UFW
+hooks and the same ordered persistent-file replay. A missing live hook cannot
+hide a persistent allow that becomes reachable after reboot. Both views validate
+filter and auxiliary policy for each address family. Persistent digests retain source
+operation order without chain counters. `parse_rules` is the filter projection for existing callers;
 `parse_tables` and `observe` retain and validate the complete table inventory.
 
 `test_network_nat.py` replays the four unedited operator files under
@@ -269,11 +278,20 @@ NAT acceptance command (from `tools/deploy/tests`):
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest test_network test_network_nat test_network_real test_network_review test_network_preview test_feature_network_adapters test_plain_tcp test_edge test_certificates test_report test_uploads
 ```
 
-Result: 170 tests passed, including 12 new NAT tests. The unedited Docker DNS
-observation test reproduces the original parser refusal against `1288713f`.
-`make deploy-tools-check` ran 736 tests: 726 passed, 9 skipped, with only the known
-`lib/firewall.py`/`lib/listeners.py` inventory failure. All 79 capture checksums
-and `git diff --check` passed. No Go tests, commits or host/container actions ran;
+Fresh-boot follow-up: 176 lane C tests passed. The exact missing-live-hook
+regression in `test_boot_hooks_reach_persistent_allow_missing_from_live_reload`
+failed before the fix in all four IPv4/IPv6 and legacy/nft combinations, and now
+refuses the persistent allow. `make deploy-tools-check` ran 742 tests: 732 passed,
+9 skipped, with only the known firewall/listeners inventory failure.
+
+Current noflush fix result: 175 lane C tests passed; the final targeted NAT
+rerun passed all 17 tests. Five added tests cover the exact before.rules redirect
+and after.rules empty PREROUTING declaration, all four tables, both address
+families/backends, cross-file insertion positions, user-chain resets and retained
+live chains. The exact review regression fails against the preceding HEAD in all
+four family/backend combinations. Existing captured fixtures remain unchanged.
+`make deploy-tools-check` ran 741 tests: 731 passed, 9 skipped, with only the known
+`lib/firewall.py`/`lib/listeners.py` inventory failure. `git diff --check` passed. No Go tests, commits or host/container actions ran;
 live preview and lane A's end-to-end reruns remain operator verification.
 
 Nginx reference capture tokenizes complete directives and expands dumped includes

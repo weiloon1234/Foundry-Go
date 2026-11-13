@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import shlex
 from collections import Counter
+from copy import deepcopy
 
 from contracts import POSTGRES_PORT, REDIS_PORT, canonical_digest, check_path, contract_uuid, require
 
@@ -60,10 +61,10 @@ def _settings(text):
     return result
 
 
-def reload_graph(files, family, settings):
+def _reload_tables(files, family, settings, initial=None):
     """Replay the validated ufw-init-functions graph without executing shell code.
 
-    Restore declarations reset chains; user.rules may redefine logging helpers.
+    Noflush restores reset declared user chains but retain built-in contents.
     UFW appends the user hooks after before/after/user restore, in that order.
     """
     prefix, suffix = _namespace(family), "6" if family == 6 else ""
@@ -79,16 +80,34 @@ def reload_graph(files, family, settings):
         chains[direction.upper()] = [("-j", f"{prefix}-{stage}-{direction}") for stage in stages]
     for name in ("user-limit", "user-limit-accept"):
         chains[prefix + "-" + name] = []
+    tables = deepcopy(initial or {})
+    if "filter" in tables:
+        existing = tables["filter"]["chains"]
+        initialized = prefix + "-before-logging-input" in existing
+        for name in TABLE_HOOKS["filter"]:
+            chains[name] = existing.get(name, []) + ([] if initialized else chains[name])
+        # The reviewed UFW machinery flushes its helpers, not foreign chains or
+        # built-ins. Foreign references must survive into the reload proof.
+        chains = {**{name: rules for name, rules in existing.items()
+                     if name not in TABLE_HOOKS["filter"] and not name.startswith(prefix + "-")}, **chains}
+    tables["filter"] = {"chains": chains, "policies": {
+        name: settings["DEFAULT_" + name + "_POLICY"] if name in TABLE_HOOKS["filter"] else "-" for name in chains}}
     for stem in ("before", "after", "user"):
-        part, policies = parse_rules(files[f"/etc/ufw/{stem}{suffix}.rules"])
-        require(all(p == "-" for p in policies.values()) and not {"INPUT", "OUTPUT", "FORWARD"} & part.keys(),
+        tables, declared = _restore_tables(files[f"/etc/ufw/{stem}{suffix}.rules"], tables)
+        policy = tables["filter"]
+        require(all(policy["policies"][name] == settings["DEFAULT_" + name + "_POLICY"]
+                    for name in TABLE_HOOKS["filter"]),
                 "firewall_unsupported", "Persistent UFW files cannot override built-in policies.")
-        require(all(f"{prefix}-{stem}-{direction}" in part for direction in ("input", "output", "forward")),
+        require(all(("filter", f"{prefix}-{stem}-{direction}") in declared for direction in ("input", "output", "forward")),
                 "firewall_unsupported", "UFW reload paths have the wrong family or are incomplete.")
-        chains.update(part)
+    chains = tables["filter"]["chains"]
     for direction in ("input", "output", "forward"):
         chains[prefix + "-before-" + direction].append(("-j", prefix + "-user-" + direction))
-    return chains
+    return tables
+
+
+def reload_graph(files, family, settings):
+    return _reload_tables(files, family, settings)["filter"]["chains"]
 
 
 def require_nft_layout(document, live, backends):
@@ -185,31 +204,38 @@ def boot_id(host):
     return contract_uuid(host.paths.p("/proc/sys/kernel/random/boot_id").read_text().strip())
 
 
-def parse_tables(text):
-    """Inventory every supported table, retaining rule order without counters."""
+def _restore_tables(text, previous=None):
+    """Replay supported iptables-restore -n syntax against an owned snapshot."""
     require(len(text) <= 4 * 1024 * 1024, "firewall_unsupported", "Kernel rules exceed their bound.")
-    tables, table = {}, None
+    tables, table = deepcopy(previous or {}), None
+    seen_tables, declared = set(), set()
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
         if line.startswith("*"):
-            require(table is None and line[1:] in TABLE_HOOKS and line[1:] not in tables,
+            require(table is None and line[1:] in TABLE_HOOKS and line[1:] not in seen_tables,
                     "firewall_unsupported", "Unknown, duplicate or nested firewall table.")
             table = line[1:]
-            chains, policies = {}, {}
-            tables[table] = {"chains": chains, "policies": policies}
+            seen_tables.add(table)
+            policy = tables.setdefault(table, {"chains": {}, "policies": {}})
+            chains, policies = policy["chains"], policy["policies"]
         elif line == "COMMIT":
             require(table is not None, "firewall_unsupported", "Unscoped firewall commit.")
             table = None
         elif line.startswith(":"):
             name, policy, counter = line[1:].split()
             require(table is not None, "firewall_unsupported", "Unscoped firewall chain.")
-            require(name not in chains and policy in ("ACCEPT", "DROP", "-")
-                    and (policy == "-" or name in TABLE_HOOKS[table])
+            require((table, name) not in declared and policy in ("ACCEPT", "DROP", "-")
+                    and ((policy != "-") == (name in TABLE_HOOKS[table]))
                     and re.fullmatch(r"\[[0-9]+:[0-9]+\]", counter),
                     "firewall_unsupported", "Invalid firewall chain declaration.")
-            chains[name], policies[name] = [], policy
+            declared.add((table, name))
+            if policy == "-":
+                chains[name] = []
+            else:
+                chains.setdefault(name, [])
+            policies[name] = policy
         else:
             fields = tuple(shlex.split(line))
             require(table is not None and len(fields) >= 4 and fields[0] in ("-A", "-I") and fields[1] in chains,
@@ -226,8 +252,13 @@ def parse_tables(text):
                 require(1 <= position <= len(rules) + 1 and len(body) >= 2 and body[0].startswith("-"),
                         "firewall_unsupported", "Unsupported firewall insertion.")
                 rules.insert(position - 1, body)
-    require(table is None and tables, "firewall_unsupported", "Incomplete firewall rules.")
-    return tables
+    require(table is None and seen_tables, "firewall_unsupported", "Incomplete firewall rules.")
+    return tables, declared
+
+
+def parse_tables(text):
+    """Inventory a standalone saved ruleset, without counters."""
+    return _restore_tables(text)[0]
 
 
 def parse_rules(text):
@@ -488,17 +519,12 @@ def observe(host, instance_id, claims, *, bindings=(), opened=False, integrated=
                 "firewall_default_deny", "Live input and routed policies must both default to DROP.")
         _, expected = exposure_rules(instance_id, (*retained_claims, *(claims if opened else ())), bindings, family)
         require_denied(chains, ("INPUT", "FORWARD"), ports, owned=chain if integrated else None, allowed=expected)
-        persisted = reload_graph(files, family, settings)
-        suffix = "6" if family == 6 else ""
-        auxiliary = {}
-        for stem in ("before", "after", "user"):
-            for table, policy in parse_tables(files[f"/etc/ufw/{stem}{suffix}.rules"]).items():
-                if table != "filter":
-                    combined = auxiliary.setdefault(table, {"chains": {}, "policies": {}})
-                    combined["chains"].update(policy["chains"])
-                    combined["policies"].update(policy["policies"])
-        require_auxiliary_policy(auxiliary, ports)
-        require_denied(persisted, ("INPUT", "FORWARD"), ports, owned=chain if integrated else None)
+        # Reload retains live hooks; boot recreates the standard hooks. Neither
+        # view alone proves persistent closure when a live hook is missing.
+        for initial in (tables, None):
+            persisted = _reload_tables(files, family, settings, initial=initial)
+            require_auxiliary_policy(persisted, ports)
+            require_denied(persisted["filter"]["chains"], ("INPUT", "FORWARD"), ports, owned=chain if integrated else None)
         live[family] = tables
     nft = json.loads(host.run(["nft", "-j", "list", "ruleset"], timeout=5).stdout)
     require_nft_layout(nft, live, backends)
@@ -513,7 +539,11 @@ def observe(host, instance_id, claims, *, bindings=(), opened=False, integrated=
     addresses = json.loads(host.run(["ip", "-j", "address", "show"], timeout=5).stdout)
     local = {a["local"] for interface in addresses for a in interface.get("addr_info", [])}
     require(all(c.socket.address in local for c in claims), "firewall_address_missing", "Bind only explicit addresses present on this host.")
-    persistent = {name: parse_tables(content) if name.endswith(".rules") else content for name, content in files.items()}
+    # Retain source operation order: an insertion index may only be valid against
+    # earlier files, so these cannot be parsed as independent empty rulesets.
+    persistent = {name: [shlex.split(line)[:2] if line.startswith(":") else shlex.split(line)
+                         for raw in content.splitlines() if (line := raw.strip()) and not line.startswith("#")]
+                  if name.endswith(".rules") else content for name, content in files.items()}
     return FirewallObservation(instance_id, boot_id(host), not opened,
                                canonical_digest({"instance_id": instance_id,
                                    "scope": sorted((asdict(c.socket) for c in claims), key=lambda v: (v["family"], v["address"], v["port"])),
