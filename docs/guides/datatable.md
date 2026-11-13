@@ -408,6 +408,14 @@ the order for every text column sort in that application's manager. For example,
 text_collation = "und-x-icu"
 ```
 
+For native PostgreSQL enums, declare the column with
+`orm.TextOf(b, &m.Status, orm.Codec(codec.String[Status]().WithoutCollation()))`.
+
+The Go declaration cannot see the SQL type created by a migration. Mark native
+enums and other non-collatable text-kind columns with `WithoutCollation()`;
+nullable codecs and projection rebinding preserve that mark. Custom codecs with
+`WithParameterType(codec.TypeText)` otherwise support collation by default.
+
 The default is empty, preserving database ordering. The manager applies this
 setting to requested column sorts, `DefaultSort`, and exports using each sort
 expression's declared collation capability. Enum columns and other non-collatable

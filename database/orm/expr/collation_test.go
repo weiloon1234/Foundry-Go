@@ -1,6 +1,7 @@
 package expr_test
 
 import (
+	"database/sql/driver"
 	"errors"
 	"strings"
 	"testing"
@@ -15,6 +16,60 @@ import (
 )
 
 type collatedLabel string
+
+func TestCustomTextCodecSupportsCollationByDefault(t *testing.T) {
+	c := codec.New(func(v collatedLabel) (driver.Value, error) { return string(v), nil }, func(raw any) (collatedLabel, error) { return collatedLabel(raw.(string)), nil }).WithParameterType(codec.TypeText)
+	input := expr.AsSelected(expr.Constant[textLiftRecord](c, "adam"))
+	for _, selected := range []expr.Selected[textLiftRecord, collatedLabel]{
+		expr.CollateValue(input, expr.CollationUnicode),
+		expr.FoundryDefaultCollation(input, expr.CollationUnicode, sqlowner.Expressions()),
+	} {
+		q := rows.OrderScalar(rows.SelectScalar(rows.From(textLiftTable.Query()), input), expr.AscValue(selected))
+		statement, err := rows.CompileRead(rows.ReadScalar(q))
+		if err != nil || !strings.Contains(statement.SQL(), `COLLATE "und-x-icu"`) {
+			t.Fatal("custom text codec rejected collation", statement.SQL(), err)
+		}
+	}
+}
+
+func TestJSONTextExtractionUsesSQLCollationCapability(t *testing.T) {
+	rejected := errors.New("invalid status")
+	c := codec.String[collatedLabel]().WithoutCollation().Validated(func(v collatedLabel) error {
+		if v == "invalid" {
+			return rejected
+		}
+		return nil
+	})
+	document, err := value.NewJSON(collatedLabel("adam"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := expr.JSONRoot(expr.Constant[textLiftRecord](codec.JSON[collatedLabel](), document))
+	for _, input := range []expr.Selected[textLiftRecord, value.Nullable[collatedLabel]]{
+		expr.AsSelected(expr.JSONScalar(path, c)),
+		expr.AsSelected(expr.JSONTextScalar(path, c)),
+	} {
+		for _, selected := range []expr.Selected[textLiftRecord, value.Nullable[collatedLabel]]{
+			expr.CollateNullableValue(input, expr.CollationUnicode),
+			expr.FoundryDefaultCollation(input, expr.CollationUnicode, sqlowner.Expressions()),
+		} {
+			q := rows.OrderScalar(rows.SelectScalar(rows.From(textLiftTable.Query()), input), expr.AscValue(selected))
+			statement, err := rows.CompileRead(rows.ReadScalar(q))
+			if err != nil || !strings.Contains(statement.SQL(), `COLLATE "und-x-icu"`) || !strings.Contains(statement.SQL(), "text") {
+				t.Fatal("JSON text extraction lost collation", statement.SQL(), err)
+			}
+			parameter := expr.ParamOf(selected, value.Of(collatedLabel("invalid")))
+			if _, err := rows.CompileRead(rows.ReadScalar(rows.SelectScalar(rows.From(textLiftTable.Query()), expr.AsSelected(parameter)))); !errors.Is(err, rejected) {
+				t.Fatal("JSON text extraction lost codec validation", err)
+			}
+			column := expr.FoundrySelectedColumn(selected, sqlowner.Expressions())
+			var decoded value.Nullable[collatedLabel]
+			if err := column.Scan(&decoded).(interface{ Scan(any) error }).Scan("invalid"); !errors.Is(err, rejected) {
+				t.Fatal("JSON text extraction lost decoder validation", err)
+			}
+		}
+	}
+}
 
 func TestNonCollatableTextDeclarationsRejectExplicitCollation(t *testing.T) {
 	type fields struct {

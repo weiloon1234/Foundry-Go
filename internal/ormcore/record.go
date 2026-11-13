@@ -75,6 +75,12 @@ func SelectRecord(source Source, scope Scope, record Record, typ reflect.Type) R
 	if scope.Owner != record.Owner {
 		source.Err = safeerror.Join("operation failed", source.Err, Invalid("record scope belongs to another declaration"))
 	}
+	record.Columns = slices.Clone(record.Columns)
+	for i, column := range record.Columns {
+		if i < len(scope.Columns) && scope.Columns[i].Name == column.Name {
+			record.Columns[i].NonCollatable = scope.Columns[i].NonCollatable
+		}
+	}
 	node, err := querycore.SelectRecordNode(source.Node, scope.Table, record.Columns, record.Scan != nil)
 	source.Node = node
 	source.Err = safeerror.Join("operation failed", source.Err, err)

@@ -171,7 +171,9 @@ func FoundryExpression[S, V, P any](e Expression[S, V, P], seal sqlowner.Express
 	}
 
 	if e.projection != nil {
-		e.core.Sensitive = e.core.Sensitive || e.projection().Sensitive
+		column := e.projection()
+		e.core.Sensitive = e.core.Sensitive || column.Sensitive
+		e.core.NonCollatable = !column.Collatable
 	}
 	return e.core
 }

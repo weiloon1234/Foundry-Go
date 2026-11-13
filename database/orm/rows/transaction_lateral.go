@@ -26,7 +26,7 @@ func AsTransactionLateral[A any, O, I TransactionScopeType, R any](record Transa
 
 // TransactionLateralScope exposes the named complete record for ON and result mapping. Example: expr.At(rows.TransactionLateralScope(latest), orm.KeyExpr(Orders.ID)).
 func TransactionLateralScope[A any, O TransactionScopeType, R any](source TransactionLateralSource[A, O, R]) expr.Scope[TransactionAlias[A, R], R] {
-	return expr.FoundryScope[TransactionAlias[A, R], R](ormcore.Scope{Reference: ormcore.Reference{Table: source.source.Node.Source.Name(), Owner: source.source.Owners[source.source.Node.Source.Name()]}, Err: source.source.Err}, sqlowner.Expressions())
+	return expr.FoundryScope[TransactionAlias[A, R], R](ormcore.Scope{Reference: ormcore.Reference{Table: source.source.Node.Source.Name(), Owner: source.source.Owners[source.source.Node.Source.Name()]}, Columns: source.source.Node.Source.Columns, Err: source.source.Err}, sqlowner.Expressions())
 }
 
 // TransactionCrossJoinLateral evaluates right for each preceding left row. Example: rows.TransactionCrossJoinLateral(parent,latest).

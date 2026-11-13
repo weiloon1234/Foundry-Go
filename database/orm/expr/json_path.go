@@ -96,7 +96,11 @@ func jsonPathOperation[S, P any](kind querycore.ScalarOperation, args ...ormcore
 //
 // Example: expr.JSONScalar(path, c)
 func JSONScalar[S, P any](path JSONPath[S, P], c codec.Codec[P]) RowExpression[S, value.Nullable[P]] {
-	return RowExpression[S, value.Nullable[P]]{data: operationValue[S](querycore.JsonScalarOperation, columnCodec(codec.Nullable(c)), jsonPathArg(path)).data}
+	column := columnCodec(codec.Nullable(c))
+	// JSON scalar extraction casts to the SQL parameter type, independently of
+	// the codec's original column declaration.
+	column.Collatable = column.Kind == codec.TypeText
+	return RowExpression[S, value.Nullable[P]]{data: operationValue[S](querycore.JsonScalarOperation, column, jsonPathArg(path)).data}
 }
 
 // JSONTextScalar adds pattern predicates only for string payloads.

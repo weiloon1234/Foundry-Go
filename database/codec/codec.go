@@ -23,7 +23,7 @@ type Codec[T any] struct {
 	decode        func(any) (T, error)
 	clone         func(T) T
 	parameterType ParameterType
-	collatable    bool
+	nonCollatable bool
 	sensitive     bool
 	// Only typed, the private framework constructor, issues this capability.
 	trusted bool
@@ -130,7 +130,7 @@ func (c Codec[T]) Validated(validate func(T) error) Codec[T] {
 			return *new(T), err
 		}
 		return v, validate(v)
-	}).WithParameterType(c.parameterType).withCollation(c.collatable).withSensitivity(c.sensitive).withClone(c.clone).withEquality(c.equal)
+	}).WithParameterType(c.parameterType).withNonCollation(c.nonCollatable).withSensitivity(c.sensitive).withClone(c.clone).withEquality(c.equal)
 }
 
 // Nullable adds explicit SQL NULL without conflating it with T's zero value.
@@ -157,7 +157,7 @@ func Nullable[T any](base Codec[T]) Codec[value.Nullable[T]] {
 			return value.Null[T](), err
 		}
 		return value.Of(item), nil
-	}).withCollation(base.collatable).withSensitivity(base.sensitive).withClone(func(v value.Nullable[T]) value.Nullable[T] {
+	}).withNonCollation(base.nonCollatable).withSensitivity(base.sensitive).withClone(func(v value.Nullable[T]) value.Nullable[T] {
 		item, present := v.Get()
 		if !present {
 			return value.Null[T]()

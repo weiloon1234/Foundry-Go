@@ -3,6 +3,7 @@ package rows
 import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
+	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
@@ -23,6 +24,12 @@ func At[S, R, V any](scope expr.Scope[S, R], field Field[R, V]) expr.RowExpressi
 			err = safeerror.Join("operation failed", err, ormcore.Invalid("record field belongs to a different declaration"))
 		}
 		column.Field = querycore.FieldRef{Table: metadata.Table, Column: field.core.column.Name}
+		for _, output := range metadata.Columns {
+			if output.Name == field.core.column.Name {
+				column.Collatable = column.Kind == codec.TypeText && !output.NonCollatable
+				break
+			}
+		}
 	}
 	column.Reference = metadata.Reference
 	return expr.FoundryRowExpression[S](ormcore.Expression{Node: column.Field, Refs: []ormcore.Reference{column.Reference}, Err: safeerror.Join("operation failed", err, column.Err)}, column, sqlowner.Expressions())

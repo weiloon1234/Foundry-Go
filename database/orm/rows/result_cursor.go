@@ -57,7 +57,7 @@ func (q ValueCursorQuery[V]) Value() expr.RowExpression[CursorScope[V], V] {
 // Scope exposes completed output fields. Example: expr.At(c.Scope(), orm.KeyExpr(Users.ID)).
 func (q CursorQuery[R]) Scope() expr.Scope[CursorScope[R], R] {
 	r := q.core.Record
-	return expr.FoundryScope[CursorScope[R], R](ormcore.Scope{Reference: ormcore.Reference{Table: r.Source.Node.Source.Name(), Owner: r.Record.Owner}, Err: r.Source.Err}, sqlowner.Expressions())
+	return expr.FoundryScope[CursorScope[R], R](ormcore.Scope{Reference: ormcore.Reference{Table: r.Source.Node.Source.Name(), Owner: r.Record.Owner}, Columns: r.Record.Columns, Err: r.Source.Err}, sqlowner.Expressions())
 }
 
 // Where filters completed rows. Example: c.Where(expr.Ne(id, zero)).
@@ -88,7 +88,7 @@ func (q CursorQuery[R]) Paginate(ctx context.Context, ex database.Executor, r or
 // Scope exposes completed output fields. Example: expr.At(c.Scope(), orm.KeyExpr(Users.ID)).
 func (q ValueCursorQuery[V]) Scope() expr.Scope[CursorScope[V], V] {
 	r := q.core.Record
-	return expr.FoundryScope[CursorScope[V], V](ormcore.Scope{Reference: ormcore.Reference{Table: r.Source.Node.Source.Name(), Owner: r.Record.Owner}, Err: r.Source.Err}, sqlowner.Expressions())
+	return expr.FoundryScope[CursorScope[V], V](ormcore.Scope{Reference: ormcore.Reference{Table: r.Source.Node.Source.Name(), Owner: r.Record.Owner}, Columns: r.Record.Columns, Err: r.Source.Err}, sqlowner.Expressions())
 }
 
 // Where filters completed rows. Example: c.Where(expr.Ne(id, zero)).

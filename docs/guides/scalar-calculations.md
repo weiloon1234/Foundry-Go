@@ -58,7 +58,8 @@ Enum declarations do not grant collation capability, and explicit `Collate` on t
 fails query build with `fault.Invalid`. `codec.String` declares collatable text;
 when using it for a native PostgreSQL enum or another non-collatable SQL type,
 declare `orm.Codec(codec.String[YourString]().WithoutCollation())` on the column.
-Custom codecs do not gain this capability from `WithParameterType(codec.TypeText)`.
+Custom codecs with `WithParameterType(codec.TypeText)` are collatable by default;
+use `WithoutCollation()` when their SQL type does not support collation.
 Nullable, validated and adapted codecs retain the original capability.
 
 [Compiled example](../../tests/fixtures/consumer/scalarqueries/collation_test.go):

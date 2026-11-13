@@ -12,15 +12,16 @@ func (FieldRef) ValueNode() {}
 func (AggregateNode) ValueNode() {}
 
 type SelectItem struct {
-	Sensitive  bool // Explicit result-codec sensitivity, independent of its SQL expression.
-	Expression ValueExpression
-	Alias      string
+	NonCollatable bool // SQL result capability, independent of its destination codec.
+	Sensitive     bool // Explicit result-codec sensitivity, independent of its SQL expression.
+	Expression    ValueExpression
+	Alias         string
 }
 
 func ColumnSelections(table string, columns []Column) []SelectItem {
 	result := make([]SelectItem, len(columns))
 	for i, c := range columns {
-		result[i] = SelectItem{Expression: FieldRef{table, c.Name}}
+		result[i] = SelectItem{Expression: FieldRef{table, c.Name}, NonCollatable: c.NonCollatable}
 	}
 	return result
 }

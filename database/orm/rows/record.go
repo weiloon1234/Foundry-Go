@@ -34,6 +34,13 @@ func (r Record[R]) recordData(*R) ormcore.RecordSource { return r.core }
 // Example: rows.RecordOf(rows.Select(source,Summary,mappings...)).
 func RecordOf[S, R any](q Query[S, R]) Record[R] {
 	core := ormcore.RecordSource{Source: q.source, Record: recordDefinition[R](q.recordOwner)}
+	if _, projected := q.recordOwner.(*rowCore); projected {
+		for i := range core.Record.Columns {
+			if i < len(q.source.Node.Selections) {
+				core.Record.Columns[i].NonCollatable = q.source.Node.Selections[i].NonCollatable
+			}
+		}
+	}
 	core.Source.Err = ormcore.ValidateRecordSource(core, reflect.TypeFor[R](), false)
 	return Record[R]{core: core}
 }
@@ -79,7 +86,7 @@ func recordOf[R any](source RecordSource[R]) ormcore.RecordSource {
 // Example: rows.AsRecord[summaryTag](rows.RecordOf(report),"summary").
 func AsRecord[A, R any](source RecordSource[R], alias string) Aliased[A, R] {
 	s := ormcore.AliasRecord(recordOf(source), alias, reflect.TypeFor[R](), reflect.TypeFor[Alias[A, R]](), false)
-	return Aliased[A, R]{source: s, scope: ormcore.Scope{Reference: ormcore.Reference{Table: alias, Owner: s.Owners[alias]}, Err: s.Err}}
+	return Aliased[A, R]{source: s, scope: ormcore.Scope{Reference: ormcore.Reference{Table: alias, Owner: s.Owners[alias]}, Columns: s.Node.Source.Columns, Err: s.Err}}
 }
 
 // RecordRead retains the input scope and complete record decoder without model writes.

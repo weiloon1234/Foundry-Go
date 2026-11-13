@@ -18,9 +18,10 @@ type ProjectionColumn struct {
 }
 
 type ProjectionMapping struct {
-	Sensitive  bool
-	Column     ProjectionColumn
-	Expression ValueExpression
+	NonCollatable bool
+	Sensitive     bool
+	Column        ProjectionColumn
+	Expression    ValueExpression
 }
 
 func ValidateProjectionColumns(columns []ProjectionColumn, hasDecoder bool) error {
@@ -56,7 +57,7 @@ func SelectProjection(source SelectNode, columns []ProjectionColumn, mappings []
 		if !exists || mapping.Column.Typ != column.Typ {
 			return SelectNode{}, safeerror.NewFault(fault.Invalid, "projection mapping does not match its declared field")
 		}
-		node.Selections[i] = SelectItem{Expression: mapping.Expression, Alias: column.Name, Sensitive: column.Sensitive || mapping.Sensitive}
+		node.Selections[i] = SelectItem{Expression: mapping.Expression, Alias: column.Name, Sensitive: column.Sensitive || mapping.Sensitive, NonCollatable: mapping.NonCollatable}
 	}
 	return node, nil
 }

@@ -34,7 +34,7 @@ func combineRecords[R any](a, b RecordSource[R], op querycore.SetOperator) SetQu
 // Scope exposes only the combined record's fields. Example: expr.At(combined.Scope(), orm.KeyExpr(Users.ID)).
 func (q SetQuery[R]) Scope() expr.Scope[Set[R], R] {
 	r := ormcore.SetRecord(q.core)
-	return expr.FoundryScope[Set[R], R](ormcore.Scope{Reference: ormcore.Reference{Table: querycore.SetAlias, Owner: r.Record.Owner}, Err: r.Source.Err}, sqlowner.Expressions())
+	return expr.FoundryScope[Set[R], R](ormcore.Scope{Reference: ormcore.Reference{Table: querycore.SetAlias, Owner: r.Record.Owner}, Columns: r.Record.Columns, Err: r.Source.Err}, sqlowner.Expressions())
 }
 
 // Where filters combined rows. Example: combined.Where(expr.Ne(expr.At(combined.Scope(), orm.KeyExpr(Users.ID)), id)).

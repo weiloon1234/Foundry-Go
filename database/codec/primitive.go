@@ -193,5 +193,5 @@ func FoundryPrimitive[V any](seal sqlowner.MetadataSeal) Codec[V] {
 	if parameter == 0 {
 		return Codec[V]{}
 	}
-	return typed(parameter, func(v V) (driver.Value, error) { return bindPrimitive(kind, unsafe.Pointer(&v)) }, func(raw any) (v V, err error) { err = decodePrimitive(kind, raw, unsafe.Pointer(&v)); return }).withCollation(kind == reflect.String)
+	return typed(parameter, func(v V) (driver.Value, error) { return bindPrimitive(kind, unsafe.Pointer(&v)) }, func(raw any) (v V, err error) { err = decodePrimitive(kind, raw, unsafe.Pointer(&v)); return })
 }

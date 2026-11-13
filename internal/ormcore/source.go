@@ -33,7 +33,9 @@ type Reference struct {
 // Scope identifies one preserved model inside a query source.
 type Scope struct {
 	Reference
-	Err error
+	// Columns retains SQL output capabilities independently of the decoder declaration.
+	Columns []querycore.Column
+	Err     error
 }
 
 // Column retains typed closures without a heavy codec field.
@@ -55,9 +57,10 @@ type Column[V any] struct {
 
 // Expression carries SQL and the referenced declarations for ownership checks.
 type Expression struct {
-	Sensitive bool
-	Node      querycore.ValueExpression
-	Refs      []Reference
+	NonCollatable bool
+	Sensitive     bool
+	Node          querycore.ValueExpression
+	Refs          []Reference
 	// ReferenceFree marks a constructed expression with no SQL column dependencies.
 	ReferenceFree bool
 	Err           error

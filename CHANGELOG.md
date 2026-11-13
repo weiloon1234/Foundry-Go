@@ -5,7 +5,9 @@
 - Fixed: datatable text collation leaves enum and other non-collatable sorts
   unchanged and rejects explicit collation on those values before execution.
   DISTINCT report sources skip the manager collation default, preserving valid
-  requested/default sorts, exports and duplicate elimination.
+  requested/default sorts, exports and duplicate elimination. Custom text codecs
+  are collatable by default; projection rebinding preserves non-collatable marks,
+  while JSON text extraction derives capability from its SQL result type.
 
 - Added: typed per-expression text collation with `expr.Collation`, `CollationC`,
   `CollationUnicode`, `ICUCollation`, and the four `Collate` variants, preserving

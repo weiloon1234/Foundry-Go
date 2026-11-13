@@ -158,5 +158,6 @@ func FoundrySelected[S, V any](e Selected[S, V], seal sqlowner.ExpressionSeal) o
 	}
 
 	e.data.core.Sensitive = e.data.core.Sensitive || e.data.column.Sensitive
+	e.data.core.NonCollatable = !e.data.column.Collatable
 	return e.data.core
 }

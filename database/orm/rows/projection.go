@@ -64,7 +64,7 @@ func Select[S, R any](source SelectionSource[S], schema Schema[R], mappings ...M
 			continue
 		}
 		q.source.Err = safeerror.Join("operation failed", q.source.Err, m.expression.Err, ormcore.CheckReferenceSet(q.source, m.expression.Refs, m.expression.ReferenceFree))
-		lowered[i] = querycore.ProjectionMapping{Column: m.field.column, Expression: m.expression.Node, Sensitive: m.expression.Sensitive}
+		lowered[i] = querycore.ProjectionMapping{Column: m.field.column, Expression: m.expression.Node, Sensitive: m.expression.Sensitive, NonCollatable: m.expression.NonCollatable}
 	}
 	node, err := querycore.SelectProjection(q.source.Node, core.columns, lowered)
 	q.source.Node = node

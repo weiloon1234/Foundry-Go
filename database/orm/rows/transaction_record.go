@@ -99,7 +99,7 @@ func AsTransaction[A, R any](source TransactionRecordSource[R], alias string) Tr
 // Example: expr.At(rows.TransactionScope(source), orm.KeyExpr(Orders.ID)).
 func TransactionScope[A, R any](source TransactionAliased[A, R]) expr.Scope[TransactionAlias[A, R], R] {
 	s := source.core.Source
-	return expr.FoundryScope[TransactionAlias[A, R], R](ormcore.Scope{Reference: ormcore.Reference{Table: s.Node.Source.Name(), Owner: s.Owners[s.Node.Source.Name()]}, Err: s.Err}, sqlowner.Expressions())
+	return expr.FoundryScope[TransactionAlias[A, R], R](ormcore.Scope{Reference: ormcore.Reference{Table: s.Node.Source.Name(), Owner: s.Owners[s.Node.Source.Name()]}, Columns: s.Node.Source.Columns, Err: s.Err}, sqlowner.Expressions())
 }
 
 // TransactionRead returns a complete result only through a transaction executor.

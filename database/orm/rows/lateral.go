@@ -25,7 +25,7 @@ func AsLateral[A, O, I, R any](record CorrelatedRecord[O, I, R], alias string) L
 
 // LateralScope exposes the named complete record for ON and result mapping. Example: expr.At(rows.LateralScope(latest), orm.KeyExpr(Orders.ID)).
 func LateralScope[A, O, R any](source LateralSource[A, O, R]) expr.Scope[Alias[A, R], R] {
-	return expr.FoundryScope[Alias[A, R], R](ormcore.Scope{Reference: ormcore.Reference{Table: source.source.Node.Source.Name(), Owner: source.source.Owners[source.source.Node.Source.Name()]}, Err: source.source.Err}, sqlowner.Expressions())
+	return expr.FoundryScope[Alias[A, R], R](ormcore.Scope{Reference: ormcore.Reference{Table: source.source.Node.Source.Name(), Owner: source.source.Owners[source.source.Node.Source.Name()]}, Columns: source.source.Node.Source.Columns, Err: source.source.Err}, sqlowner.Expressions())
 }
 
 // CrossJoinLateral evaluates right for each preceding left row. Example: rows.CrossJoinLateral(parent,latest).

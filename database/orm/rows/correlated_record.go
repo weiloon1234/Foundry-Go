@@ -68,6 +68,9 @@ func projectCorrelation[S, R any](c ormcore.Correlation, schema Schema[R], mappi
 			r.Columns = make([]querycore.Column, len(core.columns))
 			for i, column := range core.columns {
 				r.Columns[i] = querycore.Column{Name: column.Name, Nullable: column.Nullable}
+				if i < len(q.source.Node.Selections) {
+					r.Columns[i].NonCollatable = q.source.Node.Selections[i].NonCollatable
+				}
 			}
 		}
 	}
