@@ -11,6 +11,8 @@ import (
 
 // Collation is an unqualified PostgreSQL collation name, resolved through search_path.
 // Names are validated at query build and rendered as one double-quoted identifier.
+//
+// Example: expr.Asc(expr.Collate(name, expr.ICUCollation("zh")))
 type Collation string
 
 // Validate checks a non-empty collation name without checking database availability.
