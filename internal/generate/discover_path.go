@@ -48,6 +48,9 @@ func discoverPath(p *packageInput, spec *ast.TypeSpec, named *types.Named, args 
 		if _, exists := tags["foundry"]; exists {
 			return declaration, p.diagnostic(field.Pos(), "path fields do not declare persistence tags")
 		}
+		if _, exists := tags["header"]; exists {
+			return declaration, p.diagnostic(field.Pos(), "path fields cannot declare header tags")
+		}
 		parameter, explicit := tags["path"]
 		if parameter == "-" {
 			continue

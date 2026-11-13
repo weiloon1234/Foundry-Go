@@ -84,6 +84,53 @@ stale-output checks. Enums reuse their generated descriptors. Explicit
 request-validation fields. Generic DTO descriptors are constructed per concrete
 instantiation.
 
+### Request headers on query declarations
+
+Use `header:"Explicit-Name"` on a `//foundry:query` field to declare a request
+header alongside URL query parameters:
+
+```go
+//foundry:query
+type RequestParameters struct {
+    Search     value.Optional[string] `query:"q"`
+    AppVersion string                 `header:"X-App-Version"`
+    DeviceID   value.Optional[string] `header:"X-Device-ID"`
+}
+```
+
+`RequestParametersDescriptor()` returns `http.Query[RequestParameters]` and emits
+`http.HeaderParam` for required headers and `http.OptionalHeaderParam` for
+`value.Optional[T]`. Header fields do not become query parameters. Untagged
+fields keep the usual snake-case query inference. Inspect the two sources with
+`http.QueryParameters` and `http.RequestHeaderParameters`; `http.EndpointInfo`
+keeps separate `Query` and `Headers` collections. The
+[independent consumer](../../tests/fixtures/consumer/httpquery/request_headers.go)
+declares this input and an endpoint using it.
+
+Header names must be explicit, nonempty HTTP field names. Generated names use
+canonical header casing, and duplicates are rejected ignoring case. A URL query
+parameter may have the same spelling as a header. `header:"-"` skips a field;
+combining `header` and `query` tags is an error even when either tag is `"-"`.
+Header tags accept no comma options. Bound fields must be exported and
+non-embedded.
+
+Headers reuse the [scalar codec discovery](http-url-scalars.md) used by query
+parameters. Pointers, `value.Nullable`, `Optional[Nullable[T]]`, repeated slices,
+unsupported scalar types and incomplete or incorrectly typed text codecs fail
+generation. A named slice with complete `MarshalText` and `UnmarshalText`
+methods is one scalar, including inside `value.Optional`.
+
+The shared header owner rejects reserved framework and transport names, including
+credentials, content metadata, conditionals, tracing and idempotency headers.
+Applications must also avoid configured proxy headers and third-party middleware
+inputs; the static policy does not infer those conflicts. Header tags on form,
+multipart, path or ordinary DTO declarations fail at their source position,
+including fields otherwise skipped by their transport tag.
+
+These descriptors retain the existing ownership manifest and `sync.OnceValue`
+cache. Regenerate with the matching framework generator after changing tags.
+Generated `ValidationFields` helpers for mixed query/header inputs are deferred.
+
 Persistence models are never implicitly public responses. A row projection may
 hydrate a separate DTO whose transport declaration is generated independently;
 its SQL mapping remains handwritten. [Typed JSON payloads](json-models.md) retain

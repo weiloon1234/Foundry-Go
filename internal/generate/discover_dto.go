@@ -235,6 +235,9 @@ func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, positio
 				return fail("unsupported DTO scalar")
 			}
 		case *types.Struct:
+			if err := rejectDTOHeaderTags(p, typ); err != nil {
+				return err
+			}
 			embeddedModel, err := dtoEmbedsModel(typ, hasDTOModelIdentity)
 			if err != nil {
 				return fail(err.Error())
@@ -356,6 +359,43 @@ func resolveJSONGraph(p *packageInput, graph *dtoGraph, root types.Type, positio
 		return p.diagnostic(position, err.Error())
 	}
 	return validateUnionGraph(graph)
+}
+
+// Inspect embedded declarations before JSON promotion hides their source tags.
+func rejectDTOHeaderTags(p *packageInput, root types.Type) error {
+	queue := []types.Type{root}
+	seen := make(map[types.Type]bool)
+	for i := 0; i < len(queue); i++ {
+		typ := types.Unalias(queue[i])
+		if pointer, ok := typ.(*types.Pointer); ok {
+			typ = types.Unalias(pointer.Elem())
+		}
+		if seen[typ] {
+			continue
+		}
+		seen[typ] = true
+		structure, ok := typ.Underlying().(*types.Struct)
+		if !ok {
+			continue
+		}
+		for index := 0; index < structure.NumFields(); index++ {
+			field := structure.Field(index)
+			tags, err := parseTags(structure.Tag(index))
+			if err != nil {
+				return p.diagnostic(field.Pos(), err.Error())
+			}
+			if _, present := tags["header"]; present {
+				return p.diagnostic(field.Pos(), "DTO fields cannot declare header tags; use a query declaration")
+			}
+			if field.Embedded() && tags["json"] != "-" {
+				if len(queue) >= jsonwire.MaxNodes {
+					return p.diagnostic(field.Pos(), "DTO embedding graph exceeds its resource bound")
+				}
+				queue = append(queue, field.Type())
+			}
+		}
+	}
+	return nil
 }
 
 // Check embedded declarations before jsonshape promotes their fields, since
