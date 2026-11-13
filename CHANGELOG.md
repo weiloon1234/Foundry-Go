@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.28.1 — 2026-11-13
+
+- Docs: the migration guide states the origin convention. Framework packages use
+  `foundry.*`, plugins receive `plugin.<id>`, and applications use `app` or
+  `app.<area>`. Origins are permanent and live in one application's database, so
+  product names stay out of them. No code changes.
+
 ## v0.28.0 — 2026-11-13
 
 - Added: typed per-expression text collation with `expr.Collation`, `CollationC`,
