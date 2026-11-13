@@ -360,6 +360,25 @@ class LocalDeploymentTests(unittest.TestCase):
                     stream.assert_called_once_with(cli.privileged_command(command), terminal=False)
                 request.assert_not_called()
 
+    def test_main_supplies_validated_feature_topology_to_edge_findings(self):
+        from test_host_capabilities import declaration, profile as feature_profile
+        from topology import validate_topology
+        project, _ = fixture()
+        profile = feature_profile()
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(cli.sys, "argv", ["cli.py", "deploy"]), \
+                patch.dict(os.environ, {"ACTION": "logs"}, clear=True), \
+                patch.object(cli, "resolve_app_root", return_value=Path(directory).resolve()), \
+                patch.object(cli, "ROOT", Path(directory).resolve()), \
+                patch.object(cli, "local_settings", return_value={}), \
+                patch.object(cli, "project_config", return_value=project), \
+                patch.object(cli, "select_environment", return_value=profile["environment"]), \
+                patch.object(cli, "profile_config", return_value=(profile, False)), \
+                patch.object(cli, "load_topology", return_value=validate_topology(declaration())), \
+                patch.object(cli, "deploy") as deploy, patch.object(cli, "say"):
+            cli.main()
+            deploy.assert_called_once_with(project, profile, {})
+
     def test_follow_logs_interrupt_and_remote_exit_are_quiet_but_ssh_failure_is_not(self):
         from topology import validate_topology
         project, profile = fixture()

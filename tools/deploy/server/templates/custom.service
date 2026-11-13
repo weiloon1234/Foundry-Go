@@ -14,6 +14,7 @@ UMask=0077
 ExecCondition=+@ADMIT@
 ExecStartPre=+@PREPARE@
 ExecStart=@DISPATCH@
+ExecStartPost=+@RUNNING@
 ExecStopPost=+@CLEANUP@
 Restart=@RESTART@
 RestartSec=@DELAY@s

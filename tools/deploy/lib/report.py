@@ -477,10 +477,17 @@ def instance_report(host, entry, deadline, problems, *, host_claims=()):
         raise
     except (DeployError, OSError, RuntimeError):
         consistent = False
-    for item in topology.values():
+    expected_executables = {role: expected_executable for role in topology}
+    if "deployment_selection" in entry:
+        from feature_lifecycle import load
+        selected = checked(problems, "runtime_selection_unavailable", instance_id, load, host, entry)
+        expected_executables = ({role: str(host.paths.p(spec.executable)) for role, spec in selected[2].specs.items()}
+                                if selected else {})
+    for role, item in topology.items():
         observed = item["state"]
         if not observed or observed["active"] != "active":
             continue
+        expected_executable = expected_executables.get(role)
         if not expected_executable or not integer(observed.get("main_pid")):
             code = "running_release_mismatch"
         elif observed.get("exe") is None:
@@ -516,11 +523,9 @@ def instance_report(host, entry, deadline, problems, *, host_claims=()):
         "created_at": string(entry.get("created_at")), "updated_at": string(entry.get("updated_at")),
     }
     if profile.get("schema") == 3:
-        from topology import parse_profile, parse_topology
+        from feature_lifecycle import network_report
         result["network"] = checked(problems, "declared_network_unavailable", instance_id,
-                                    lambda: declared_network(host, parse_profile(profile, parse_topology(entry["topology"], registered=True)),
-                                                             topology=parse_topology(entry["topology"], registered=True),
-                                                             entry=entry, host_claims=host_claims))
+                                    network_report, host, entry, host_claims)
         if result["network"]:
             for finding in result["network"]["findings"]:
                 problem(problems, finding["code"], instance_id)

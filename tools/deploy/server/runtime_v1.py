@@ -144,9 +144,23 @@ def run_operation(arguments):
 
 def main(arguments):
     try:
+        if len(arguments) == 2 and arguments[0] == "network-boot":
+            bundle = arguments[1]
+            if os.geteuid() != 0 or not re.fullmatch(r"[a-f0-9]{64}", bundle):
+                return 1
+            if not any(line.split(":", 2)[-1] == "/system.slice/foundry-edge-boot.service"
+                       for line in Path("/proc/self/cgroup").read_text().splitlines()):
+                return 1
+            library = owned(ROOT / "tools" / bundle / "lib")
+            owned(library / "feature_network.py")
+            sys.path.insert(0, str(library))
+            from feature_network import prepare_boot
+            from host import Host
+            prepare_boot(Host())
+            return 0
         if len(arguments) == 3 and arguments[0] in ("operation", "operation-cleanup"):
             return run_operation(arguments)
-        if len(arguments) != 7 or arguments[0] not in ("admit", "prepare", "dispatch", "cleanup", "boot", "open"):
+        if len(arguments) != 7 or arguments[0] not in ("admit", "prepare", "dispatch", "running", "cleanup", "boot", "open"):
             return 1
         action, instance, role, ordinal, resolution, bundle, spec = arguments
         if (not all(identifier(v) for v in (instance, resolution)) or ordinal != "1" or

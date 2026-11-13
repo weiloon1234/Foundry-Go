@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import pwd
+import time
 
 import admission
 from contracts import (Deployment, HelperInvocation, RuntimeResolution, canonical_digest,
@@ -38,7 +39,7 @@ def run(action, pin, launch):
     expected_unit = f"foundry-admission-{spec.identity.instance_id}.service" if action == "boot" else inventory.units[spec.identity.role]
     if action == "open":
         expected_unit = f"foundry-admission-open-{spec.identity.instance_id}.service"
-    groups = Path("/proc/self/cgroup").read_text().splitlines()
+    groups = host.paths.p("/proc/self/cgroup").read_text().splitlines()
     require(any(line.split(":", 2)[-1].endswith("/" + expected_unit) for line in groups),
             "feature_runtime_identity", "Runtime helper is outside the declared systemd unit.")
     if action == "dispatch":
@@ -67,6 +68,21 @@ def run(action, pin, launch):
     if action == "admit":
         store.admit(invocation, permit_id=permit_id)
         return 0
+    if action == "running":
+        from contracts import ProcessIdentity
+        from release import service, _matches_executable
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            observed = service(host, inventory.units[spec.identity.role], timeout=min(5, deadline - time.monotonic()))
+            if (observed["ActiveState"] in ("active", "activating") and
+                    _matches_executable({**observed, "ActiveState": "active"}, host.paths.p(spec.executable))):
+                process = ProcessIdentity(int(observed["MainPID"]), int(observed["process"]["start"]),
+                                          invocation.process.invocation_id)
+                require(admission.executor_alive(host, process), "feature_runtime_identity", "Workload invocation changed.")
+                store.bind_workload(invocation, process, permit_id=permit_id)
+                return 0
+            time.sleep(.05)
+        require(False, "feature_runtime_identity", "Selected workload did not acquire its systemd MainPID.")
     require(action == "prepare", "feature_runtime_action", "Unsupported runtime action.")
     roots = {key: tuple(value) for key, value in launch["artifact_roots"].items()}
     from contracts import ReleaseDeclaration

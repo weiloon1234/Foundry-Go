@@ -259,7 +259,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     helper = ["/usr/bin/python3", "-I", RUNTIME_ENTRY]
     identity = [spec.identity.instance_id, name, "1", inventory.resolution.id,
                 bundle_sha256, canonical_digest(record_document(spec))]
-    hooks = {action: command_line([*helper, action, *identity]) for action in ("admit", "prepare", "dispatch", "cleanup")}
+    hooks = {action: command_line([*helper, action, *identity]) for action in ("admit", "prepare", "dispatch", "running", "cleanup")}
     after = " ".join(inventory.units[n] for n in role.common.requires)
     boot = f"foundry-admission-{spec.identity.instance_id}.service"
     mounts = "\n".join("BindReadOnlyPaths=" + systemd_word(view.source + ":" + view.destination) for view in views)
@@ -274,7 +274,8 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
         # Worker connection is frozen in argv; a legacy worker.env is not an input.
         content = re.sub(r"^EnvironmentFile=.*\n", "", content, flags=re.M)
         content = content.replace("[Service]\n", "[Service]\nExecCondition=+" + hooks["admit"] +
-                                  "\nExecStartPre=+" + hooks["prepare"] + "\nExecStopPost=+" + hooks["cleanup"] + "\n")
+                                  "\nExecStartPre=+" + hooks["prepare"] + "\nExecStartPost=+" + hooks["running"] +
+                                  "\nExecStopPost=+" + hooks["cleanup"] + "\n")
         content = content.replace("[Unit]\n", f"[Unit]\nAfter={boot} {after}\n")
         if mounts:
             content = content.replace("[Service]\n", "[Service]\n" + mounts + "\n")
@@ -289,7 +290,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
                     "AFTER": f"{boot} {after}", "BASE": contract_path(paths.base, absolute=True),
                     "WRITABLE": " ".join(systemd_word(p) for p in (paths.state, paths.base + "/invocations")),
                     "ADMIT": hooks["admit"], "PREPARE": hooks["prepare"], "DISPATCH": hooks["dispatch"],
-                    "CLEANUP": hooks["cleanup"], "RESTART": role.restart.policy,
+                    "CLEANUP": hooks["cleanup"], "RUNNING": hooks["running"], "RESTART": role.restart.policy,
                     "DELAY": str(role.restart.delay_seconds), "BURST": str(role.restart.burst),
                     "WINDOW": str(role.restart.window_seconds), "STOP": str(role.restart.stop_seconds),
                     "MEMORY": str(role.limits.memory_bytes), "CPU": str(role.limits.cpu_percent),

@@ -325,6 +325,13 @@ class AdmissionStore:
     def _receipt(self, invocation):
         return self.runtime / "admitted" / invocation.unit.role / (invocation.process.invocation_id + ".json")
 
+    def bind_workload(self, invocation, process, *, permit_id=None):
+        """Transfer the admitted helper receipt to its observed systemd MainPID."""
+        require(process.invocation_id == invocation.process.invocation_id,
+                "admission_invocation", "Workload belongs to another service invocation.")
+        with self.preparation(invocation, permit_id=permit_id):
+            self._write(self._receipt(invocation), replace(invocation, process=process))
+
     @contextmanager
     def preparation(self, invocation, *, permit_id=None):
         """Recheck a granted invocation without claiming another start allowance."""

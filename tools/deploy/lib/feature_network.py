@@ -4,8 +4,130 @@ Lane C supplies feature_allocate, feature_close and feature_open in listeners.py
 No caller may invent closure or treat an intended firewall change as observation.
 """
 import importlib
+from dataclasses import replace
+import hashlib
+from pathlib import Path
+import re
 
 from contracts import AllocatedEndpoint, ClosureEvidence, ClosureStage, DeployError, contract_digest, require
+
+BOOT_UNIT = "foundry-edge-boot.service"
+
+
+def boot_files(tools_dir, bundle):
+    import services
+    command = services.command_line(["/usr/bin/python3", "-I", services.RUNTIME_ENTRY, "network-boot", bundle])
+    content = ("# Foundry feature network boot coordinator\n[Unit]\nDescription=Close feature routes before nginx\n"
+               "After=ufw.service\nBefore=nginx.service\n[Service]\nType=oneshot\nUser=root\n"
+               "RemainAfterExit=yes\nExecStart=" + command + "\nTimeoutStartSec=120\n")
+    dropin = (Path(tools_dir) / "server/templates/foundry-edge-boot.conf").read_text().replace("@BOOT_UNIT@", BOOT_UNIT)
+    return {"/etc/systemd/system/" + BOOT_UNIT: content,
+            "/etc/systemd/system/nginx.service.d/foundry-edge-boot.conf": dropin}
+
+
+def bootstrap_ready(host, entry, tools_dir, bundle):
+    import admission
+    import edge
+    from contracts import PREFIX
+    from provision import _template
+    expected = {**boot_files(tools_dir, bundle), edge.STREAM_INCLUDE: (Path(tools_dir) / "server/templates/nginx-stream.conf").read_text()}
+    for name, text in expected.items():
+        path = admission.protected_path(host, host.paths.p(name), "file")
+        if not path.exists() or path.read_text() != text:
+            return False
+    site = host.paths.p(f"/etc/nginx/sites-available/{PREFIX}-{entry['name']}.conf")
+    enabled = host.paths.p(f"/etc/nginx/sites-enabled/{site.name}")
+    rendered = _template(tools_dir, "nginx-https.conf", entry)
+    accepted = {closed_http(entry, rendered)}
+    if "deployment_selection" in entry:
+        accepted.add(edge.gate_http(entry["profile"]["instance_id"], rendered))
+    return site.is_file() and site.read_text() in accepted and enabled.is_symlink() and enabled.resolve() == site
+
+
+def package_topology(topology):
+    """The platform's stream renderer needs its module even for HTTP-only features.
+
+    Pass a typed planning copy to the package owner; app declarations stay intact.
+    """
+    return replace(topology, roles=tuple(replace(role, common=replace(role.common,
+        packages=tuple(sorted(set(role.common.packages) | {"libnginx-mod-stream"}))))
+        if role.common.name == "http" else role for role in topology.roles))
+
+
+def plan(host, topology, profile, package_plan):
+    import edge
+    import firewall
+    import listeners
+    from contracts import check_path, digest
+    listeners.public_policies(profile, topology)
+    claims = listeners.public_claims(profile)
+    result = {"firewall": None, "persistent_projection": {}}
+    if claims:
+        observation = firewall.observe(host, profile.instance_id, claims, integrated=False)
+        result["firewall"] = observation.sha256
+        for family, name in ((4, "/etc/ufw/before.rules"), (6, "/etc/ufw/before6.rules")):
+            result["persistent_projection"][name] = firewall.persistent_projection(
+                check_path(host.paths.p(name), "file").read_text(), profile.instance_id, family=family)
+    main = check_path(host.paths.p("/etc/nginx/nginx.conf"), "file")
+    if main.exists():
+        result["nginx_sha256"] = digest(main)
+        require(edge._top_level_include(main.read_text(), "/etc/nginx/modules-enabled/*.conf"),
+                "nginx_stream_integration", "Review the top-level nginx modules include before feature bootstrap.")
+    else:
+        require("nginx-common" in package_plan.get("transaction", {}), "nginx_stream_integration",
+                "Fresh nginx configuration must come from the reviewed nginx-common package transaction.")
+        result["nginx_sha256"] = None
+    return result
+
+
+def prepare(host, entry, review, tools_dir, bundle):
+    """Apply only the network prerequisites included in the confirmed bootstrap plan."""
+    import edge
+    import firewall
+    import listeners
+    import operations
+    from contracts import check_path, digest
+    from topology import parse_profile, parse_topology
+    topology = parse_topology(entry["topology"], registered=True)
+    profile = parse_profile(entry["profile"], topology)
+    claims = listeners.public_claims(profile)
+    if claims:
+        firewall.install_closed(host, profile.instance_id, claims, reviewed_sha256=review["firewall"])
+    main = check_path(host.paths.p("/etc/nginx/nginx.conf"), "file")
+    checksum = review["nginx_sha256"]
+    if checksum is None:
+        # The plan approved a new authenticated distro package, not an arbitrary
+        # config that appeared after review. Require its pristine conffile bytes.
+        output = host.run(["dpkg-query", "-W", "-f=${Conffiles}", "nginx-common"]).stdout
+        expected = re.findall(r"^ /etc/nginx/nginx\.conf ([a-f0-9]{32})$", output, re.M)
+        require(expected == [hashlib.md5(main.read_bytes()).hexdigest()], "nginx_stream_integration",
+                "New nginx configuration differs from the reviewed package's pristine conffile.")
+        checksum = digest(main)
+    edge.install_stream_include(host, reviewed_nginx_sha256=checksum)
+    edge.prepare_boot(host, profile.instance_id)
+    operations.install_runtime(host, tools_dir)
+    for name, content in boot_files(tools_dir, bundle).items():
+        path = check_path(host.paths.p(name), "file")
+        require(not path.exists() or path.read_text() == content,
+                "nginx_boot_ownership", "The feature boot coordinator differs from its reviewed owner.")
+        host.owned_write(path, content)
+    host.run(["systemctl", "daemon-reload"])
+
+
+def closed_http(entry, rendered):
+    import edge
+    # A bootstrap site carries no backend reference before its first allocation.
+    return re.sub(r"proxy_pass http://127\.0\.0\.1:[0-9]+;", "return 503;",
+                  edge.gate_http(entry["profile"]["instance_id"], rendered))
+
+
+def prepare_boot(host):
+    """Clear runtime routes before nginx without replaying pending operations."""
+    import edge
+    registry = host.read_registry()
+    for entry in registry["instances"].values():
+        if entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry:
+            edge.prepare_boot(host, entry["profile"]["instance_id"])
 
 
 def capability():

@@ -1,0 +1,386 @@
+"""Real plan/apply/lifecycle/supply/network owners with only machine I/O simulated.
+
+The fake never executes commands. apt authentication, database/certificate providers
+and HTTP responses are fixtures; all public lane B/C calls retain their signatures.
+"""
+from dataclasses import asdict
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import unittest
+from unittest.mock import Mock, patch
+import uuid
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+import admission
+import artifacts
+import certificates
+import contracts as c
+import edge
+import feature_lifecycle as lifecycle
+import feature_network
+import feature_runtime
+from host import Host, Paths
+import listeners
+import operations
+import packages
+import provision
+import release
+import report
+import services
+import upgrades
+from topology import parse_profile, parse_topology
+from test_artifacts import elf
+from test_contracts import fixture
+from test_manage import manager
+from test_packages import installed, simulation
+
+TOOLS = Path(__file__).resolve().parents[1]
+BOOT = "00000000-0000-4000-8000-000000000001"
+
+
+class WiringHost(Host):
+    def __init__(self, root):
+        super().__init__(Paths(root))
+        self.commands, self.started = [], []
+        self.account, self.nginx = None, False
+        self.worker = 90
+        self.sequence = 100
+        self.running = {}
+        self.starting = None
+        self.package_inventory = {name: installed() for name in (*packages.REQUIREMENTS, "postgresql-16",
+                                  "postgresql-client-16", "postgresql-common", "coreutils") if name != "nginx"}
+        self.candidates = {"nginx": "1", "nginx-common": "1", "libnginx-mod-stream": "1"}
+        self.owned_write(self.paths.p("/etc/os-release"), 'ID=ubuntu\nVERSION_ID="24.04"\n')
+        self.owned_write(self.paths.p("/proc/sys/kernel/random/boot_id"), BOOT)
+        self.owned_write(self.paths.p("/usr/bin/sha256sum"), elf("linux-arm64"), 0o755)
+
+    def proc(self, pid, invocation, executable=None, unit=None, alive=True):
+        root = self.paths.p(f"/proc/{pid}")
+        self.owned_write(root / "stat", f"{pid} (fixture) " + " ".join(["S" if alive else "Z"] + ["0"] * 18 + ["42"]))
+        self.owned_write(root / "environ", b"INVOCATION_ID=" + invocation.encode() + b"\0")
+        if executable:
+            (root / "exe").unlink(missing_ok=True)
+            (root / "exe").symlink_to(executable)
+            self.owned_write(root / "cgroup", "0::/system.slice/" + unit + "\n")
+            self.owned_write(self.paths.p("/sys/fs/cgroup/system.slice/" + unit + "/cgroup.procs"), str(pid))
+        return c.ProcessIdentity(pid, 42, invocation)
+
+    def start(self, unit):
+        registry = self.read_registry()
+        entry = next(iter(registry["instances"].values()))
+        _, selection, inventory, launch = lifecycle.load(self, entry)
+        role = next(role for role, name in inventory.units.items() if name == unit)
+        self.sequence += 2
+        invocation = format(self.sequence, "032x")
+        process = self.proc(self.sequence, invocation)
+        pin = c.HelperInvocation(admission.boot_id(self), inventory.specs[role].identity, process, registry["tools"]["bundle_sha256"],
+                                c.canonical_digest(c.record_document(inventory.specs[role])), inventory.resolution.id, 1, None)
+        self.owned_write(self.paths.p("/proc/self/cgroup"), "0::/system.slice/" + unit)
+        for action in ("admit", "prepare"):
+            feature_runtime.run(action, c.record_document(pin), launch)
+        self.proc(process.pid, invocation, alive=False)
+        main = self.proc(process.pid + 1, invocation, self.paths.p(inventory.specs[role].executable), unit)
+        self.running[unit] = (main, inventory, role)
+        self.starting = unit
+        feature_runtime.run("running", c.record_document(pin), launch)
+        self.starting = None
+        self.started.append(role)
+
+    def nginx_config(self):
+        paths = [self.paths.p("/etc/nginx/nginx.conf"), self.paths.p(edge.STREAM_INCLUDE)]
+        paths += list(self.paths.p("/etc/nginx/sites-available").glob("*"))
+        paths += list(self.paths.p(edge.RUNTIME).glob("*/*.conf"))
+        result = []
+        for path in paths:
+            if not path.is_file():
+                continue
+            name = "/" + path.relative_to(self.paths.root).as_posix()
+            if "/sites-available/" in name:
+                name = str(path)
+            content = path.read_text().replace("/etc/nginx/sites-enabled/*", str(self.paths.p("/etc/nginx/sites-available/*")))
+            result.append("# configuration file " + name + ":\n" + content)
+        return "\n".join(result)
+
+    def run(self, args, **kwargs):
+        args = list(map(str, args))
+        self.commands.append(args)
+        output, code = "", 0
+        if args[0] == "dpkg-query":
+            if args[1] == "-S":
+                output = "coreutils: " + args[2]
+            elif "-f=${Conffiles}" in args:
+                output = " /etc/nginx/nginx.conf " + hashlib.md5(self.paths.p("/etc/nginx/nginx.conf").read_bytes()).hexdigest()
+            elif "-f=${Status}" in args:
+                code = 0 if args[-1] in self.package_inventory else 1
+                output = "install ok installed" if code == 0 else ""
+            else:
+                output = "\n".join(f"{name}\t{value['status']}\t{value['version']}" for name, value in self.package_inventory.items())
+        elif args == ["dpkg", "--print-architecture"]:
+            output = "arm64"
+        elif args[:2] == ["apt-get", "-s"]:
+            output = simulation({n: v for n, v in self.candidates.items() if n not in self.package_inventory})
+        elif args[0] == "apt-get":
+            self.package_inventory.update({n: installed(v) for n, v in self.candidates.items()})
+            self.owned_write(self.paths.p("/etc/nginx/nginx.conf"), "include /etc/nginx/modules-enabled/*.conf;\nhttp { include /etc/nginx/sites-enabled/*; }\n")
+            self.owned_write(self.paths.p("/usr/sbin/nginx"), b"fixture", 0o755)
+        elif args[:2] == ["getent", "passwd"]:
+            output, code = (self.account, 0) if self.account else ("", 2)
+        elif args[0] == "useradd":
+            name = args[-1]
+            comment = args[args.index("--comment") + 1]
+            self.account = f"{name}:x:{os.getuid()}:{os.getgid()}:{comment}:{c.instance_paths(name)['data']}:/usr/sbin/nologin"
+        elif args[0] == "nginx":
+            if "-T" in args:
+                output = self.nginx_config()
+        elif args[0] == "systemd-run":
+            operation = args[-2]
+            owner = c.read_json(operations.directory(self, operation) / "owner.json")
+            pin = {**owner, "boot_id": BOOT, "invocation_id": uuid.uuid4().hex}
+            self.operation_pin = pin
+            self.proc(os.getpid(), pin["invocation_id"])
+            with patch.dict(os.environ, INVOCATION_ID=pin["invocation_id"]):
+                code = operations.run("operation", pin)
+                cleanup = operations.run("operation-cleanup", pin)
+            code = code or cleanup
+        elif args[0] == "systemctl":
+            action = args[1]
+            unit = args[2] if len(args) > 2 else ""
+            if action == "is-active":
+                code = 0 if self.nginx else 3
+            elif action == "enable" and "--now" in args and args[-1] == "nginx":
+                assert not self.paths.p("/etc/systemd/system/nginx.service").is_symlink()
+                self.nginx = True
+            elif action == "reload":
+                self.worker += 1
+            elif action == "start" and unit.startswith("foundry-"):
+                self.start(unit)
+            elif action == "stop":
+                record = self.running.pop(unit, None)
+                if record:
+                    self.proc(record[0].pid, record[0].invocation_id, alive=False)
+                    self.owned_write(self.paths.p("/sys/fs/cgroup/system.slice/" + unit + "/cgroup.procs"), "")
+            elif action == "show":
+                if unit.startswith("foundry-operation-"):
+                    pin = self.operation_pin
+                    values = {"Type": "exec", "KillMode": "control-group", "Restart": "no", "Transient": "yes", "DropInPaths": ""}
+                    for directive, phase in (("ExecStart", "operation"), ("ExecStopPost", "operation-cleanup")):
+                        values[directive] = "{ argv[]=" + " ".join(operations.command(phase, pin["operation_id"], pin["bundle_sha256"])) + " ; }"
+                else:
+                    current = self.running.get(unit)
+                    values = {"Id": unit, "LoadState": "loaded", "ActiveState": "active" if current else "inactive",
+                              "SubState": "running" if current else "dead", "MainPID": str(current[0].pid) if current else "0",
+                              "ControlPID": "0", "Job": "0", "ControlGroup": "/system.slice/" + unit if current else "",
+                              "NRestarts": "0", "InvocationID": current[0].invocation_id if current else ""}
+                    if unit == self.starting:
+                        values.update(ActiveState="activating", SubState="start-post")
+                output = "\n".join(k + "=" + v for k, v in values.items())
+            elif action not in ("disable", "daemon-reload", "enable", "reset-failed"):
+                raise AssertionError(args)
+        elif args[0] == "ss":
+            rows = []
+            if "-6" not in args and "-u" not in args:
+                for process, inventory, role in self.running.values():
+                    for endpoint in inventory.resolution.endpoints:
+                        if endpoint.role == role:
+                            rows.append(f'LISTEN 0 128 {endpoint.address}:{endpoint.port} 0.0.0.0:* users:(("app",pid={process.pid},fd=3))')
+            output = "\n".join(rows)
+        elif args[0] == "runuser":
+            if "redis:keys" in args:
+                output = "[]"
+            elif "migrate:status" in args:
+                output = '{"targets":[{"problems":[],"migrations":[]}]}'
+        elif args[0] == "journalctl":
+            output = "fixture service log"
+        elif len(args) > 3 and args[3] == "prune":
+            output = json.dumps(upgrades._prune_bundles(self))
+        elif args[0] not in ("chown", "chmod"):
+            raise AssertionError(args)
+        return subprocess.CompletedProcess(args, code, output, "")
+
+
+class FeatureWiringTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.host = WiringHost(Path(temporary.name))
+        self.project, self.profile, _ = fixture()
+        self.archive = self.host.paths.root / "feature.tar.gz"
+        self.build_archive()
+        self.envelope = upgrades.protocol_metadata(TOOLS)
+        # External providers and kernel-only observations, not orchestration seams.
+        for module, name, options in (
+            (packages, "_locks", {"return_value": []}),
+            (packages, "_candidate_evidence", {"side_effect": lambda h, txn: {n: {"version": v, "sha256": "a" * 64} for n, v in txn.items()}}),
+            (packages, "_prepare_payloads", {"return_value": ({"nginx.service": ["nginx"]}, {})}),
+            (packages, "_activation_snapshot", {"return_value": {}}),
+            (provision.postgres, "inspect", {"return_value": {"state": "ready"}}),
+            (provision.redis_acl, "inspect", {"return_value": {"state": "ready"}}),
+            (certificates, "inspect", {"return_value": {"state": "planned"}}),
+            (provision.postgres, "prepare", {"side_effect": self.prepare_postgres}),
+            (provision.redis_acl, "prepare", {}),
+            (provision.postgres, "provision", {}),
+            (provision.redis_acl, "provision", {}),
+            (provision.backup, "configure", {}),
+            (certificates, "provision", {"side_effect": lambda h, r, e: provision._step(h, r, e, "certificate")}),
+            (release, "reconcile_redis_grants", {}),
+            (edge, "_worker_identities", {"side_effect": lambda h: ((h.worker, 42),)}),
+            (listeners, "process_members", {"side_effect": lambda h, u: frozenset({h.worker}) if u == "nginx.service" else frozenset({h.running[u][0].pid})}),
+            (services, "probe", {"return_value": True}),
+            (operations, "Host", {"return_value": self.host}),
+            (feature_runtime, "Host", {"return_value": self.host}),
+        ):
+            self.enterContext(patch.object(module, name, autospec=True, **options))
+        self.enterContext(patch.object(release, "STABILITY_SECONDS", 0))
+        runtime_os = Mock(wraps=os)
+        runtime_os.geteuid.return_value = 0
+        self.enterContext(patch.object(feature_runtime, "os", runtime_os))
+
+    def prepare_postgres(self, host, registry, **kwargs):
+        registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
+
+    def build_archive(self):
+        binary = elf("linux-arm64")
+        checksum = hashlib.sha256(binary).hexdigest()
+        self.topology = parse_topology({"schema": 2, "roles": [
+            {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["coreutils"],
+             "bindings": {"relay": {"endpoint": {"role": "relay", "listener": "api", "scheme": "http"}},
+                          "checksum": {"executable": {"package": "coreutils", "path": "/usr/bin/sha256sum"}}}},
+            {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
+             "arguments": [{"listener_address": "api"}, {"listener_port": "api"}],
+             "listeners": {"api": {"transport": "tcp", "bind": "loopback"}},
+             "readiness": {"kind": "http", "listener": "api", "path": "/ready", "status": 200},
+             "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
+             "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64},
+             "maintenance": "stop", "state": {"kind": "disposable"}}],
+            "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
+                "platforms": {"linux-arm64": {"url": "https://example.invalid/relay", "sha256": checksum}}}}})
+        self.profile.update(schema=3, placement={"http": 1, "relay": 1}, listeners={})
+        self.profile = parse_profile(self.profile, self.topology).projection()
+        payload = self.host.paths.root / "relay.bin"
+        payload.write_bytes(binary)
+        members = artifacts.inspect_payload(dict(self.topology.artifacts)["relay"], "linux-arm64", payload, artifacts.ExpansionBudget())
+        path = "deploy/artifacts/relay.bin"
+        self.version = "20261114T000000Z-abcdef12"
+        files = {"artisan": binary, "config/deploy.toml": b"[project]\n", "public/index.html": b"fixture",
+                 "private-source-maps/" + self.version + "/a.map": b"{}", path: binary}
+        kinds = artifacts.declared_release_files(self.topology, (), (path,))
+        declaration = c.ReleaseDeclaration.parse({"schema": 2, "topology": self.topology.projection(), "profile": self.profile,
+            "topology_sha256": self.topology.sha256, "application_executables": {},
+            "inventory": [{"path": n, "sha256": hashlib.sha256(v).hexdigest(), "size": len(v),
+                           "kind": artifacts.release_member_kind(n, kinds)} for n, v in sorted(files.items())],
+            "artifacts": [{"artifact": "relay", "platform": "linux-arm64", "path": path, "sha256": checksum,
+                           "members": [asdict(m) for m in members]}]})
+        manifest = {"schema": 2, "layout_version": 2, "project_id": self.project["id"], "instance_id": self.profile["instance_id"],
+            "instance": "abc-production", "environment": "production", "architecture": "arm64", "native_imaging": False,
+            "version": self.version, "commit": "abcdef12", "tree_state": "clean", "built_at": c.now(),
+            "source_kind": "git_archive", "source_sha256": "a" * 64, "deployment": declaration.projection(),
+            "topology_sha256": self.topology.sha256, "files": {n: hashlib.sha256(v).hexdigest() for n, v in files.items()}}
+        files["manifest.json"] = json.dumps(manifest).encode()
+        with tarfile.open(self.archive, "w:gz") as stream:
+            for name, data in files.items():
+                item = tarfile.TarInfo(name)
+                item.size = len(data)
+                stream.addfile(item, io.BytesIO(data))
+
+    def request(self, action, **kwargs):
+        return manager.execute(self.host, action, {**self.envelope, "project": self.project, "profile": self.profile, **kwargs})
+
+    def test_plan_apply_activate_report_logs_restart_and_boot_use_current_owners(self):
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.assertIn("libnginx-mod-stream", plan["observations"]["packages"]["missing"])
+        self.assertNotIn("libnginx-mod-stream", self.topology.roles[0].common.packages)
+        self.assertTrue(self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)["ok"])
+        registry, entry = self.host.require_identity(self.project, self.profile)
+        site = self.host.paths.p("/etc/nginx/sites-available/foundry-" + entry["name"] + ".conf")
+        self.assertIn("# Foundry runtime admission", site.read_text())
+        self.assertNotIn("proxy_pass", site.read_text())
+        provision._site_checks(self.host, entry)
+        self.assertEqual(packages._load(self.host)["default_activation"]["nginx.service"]["state"], "released")
+        with patch.object(certificates, "ensure_hostnames", wraps=certificates.ensure_hostnames) as names:
+            self.assertTrue(self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive), operation_id=str(uuid.uuid4()))["ok"])
+        names.assert_called_once()
+        profiles, topologies = names.call_args.args[3], names.call_args.kwargs["topologies"]
+        self.assertEqual(len(profiles), len(topologies))
+        self.assertEqual(profiles[0].projection(), self.profile)
+        self.assertEqual(topologies[0], self.topology)
+        registry, entry = self.host.require_identity(self.project, self.profile)
+        store, selected, inventory, _ = lifecycle.load(self.host, entry)
+        self.assertEqual(selected.admission.disposition, c.AdmissionDisposition.COMMITTED)
+        self.assertEqual(self.host.started, ["relay", "http"])
+        self.assertTrue(provision._ready_configuration(self.host, registry, entry, TOOLS))
+        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.roles, time.monotonic() + 1))
+        network = lifecycle.network_report(self.host, entry, report.claim_inventory(registry))
+        self.assertNotIn("nginx_projection_unverified", [f["code"] for f in network["findings"]])
+        with patch.object(report, "readiness", autospec=True, return_value={"ready": True, "http_status": 200}), \
+                patch.object(report, "certificate", autospec=True, return_value={"status": "valid", "expires_at": None}):
+            result = self.request("report")
+        reported = result["projects"][0]["instances"][0]
+        self.assertEqual(reported["network"], network)
+        self.assertTrue(reported["metadata_consistent"])
+        self.assertNotIn("running_release_mismatch", [p["code"] for p in result["problems"]])
+        self.assertEqual(self.request("logs", role="relay")["logs"], "fixture service log")
+        self.assertIn(inventory.units["relay"], self.host.commands[-1])
+        descriptor = c.read_json(self.host.paths.opt(entry["name"]) / "runtime" / inventory.resolution.id / "http.json")
+        self.assertEqual(descriptor["bindings"]["endpoints"][0]["name"], "relay")
+        self.assertTrue(self.request("restart", operation_id=str(uuid.uuid4()))["ok"])
+        self.assertEqual(self.host.started, ["relay", "http", "relay", "http"])
+        registry, entry = self.host.require_identity(self.project, self.profile)
+        lifecycle.stop_units(self.host, inventory)
+        self.host.owned_write(self.host.paths.p("/proc/sys/kernel/random/boot_id"), str(uuid.uuid4()))
+        feature_network.prepare_boot(self.host)
+        lifecycle.boot(self.host, entry, inventory)
+        lifecycle.open_boot(self.host, entry, inventory)
+        self.assertEqual(self.host.started[-2:], ["relay", "http"])
+        boot_unit = self.host.paths.p("/etc/systemd/system/foundry-admission-" + self.profile["instance_id"] + ".service")
+        self.assertIn("After=network-online.target ufw.service nginx.service", boot_unit.read_text())
+        opener = boot_unit.with_name("foundry-admission-open-" + self.profile["instance_id"] + ".service")
+        self.assertIn("Requires=nginx.service " + boot_unit.name, opener.read_text())
+        dropin = self.host.paths.p("/etc/systemd/system/nginx.service.d/foundry-edge-boot.conf")
+        self.assertIn("Requires=" + feature_network.BOOT_UNIT, dropin.read_text())
+        dropin.write_text(dropin.read_text() + "# drift\n")
+        self.assertFalse(provision._ready_configuration(self.host, registry, entry, TOOLS))
+        with self.assertRaises(c.DeployError) as drift:
+            self.request("bootstrap-plan", topology=self.topology.projection())
+        self.assertEqual(drift.exception.code, "capability_unavailable")
+        # Shared pre-nginx cleanup cannot depend on one instance's valid admission.
+        (store.durable / "selection.json").unlink()
+        feature_network.prepare_boot(self.host)
+        self.assertFalse(list(self.host.paths.p(edge.RUNTIME + "/" + self.profile["instance_id"]).glob("*.conf")))
+
+    def test_public_listener_plan_reviews_literal_firewall_projection_and_binds_apply(self):
+        from test_host_capabilities import declaration, profile
+        from network_firewall_fixture import rule_file
+        import firewall
+        declared = declaration()
+        declared["roles"][1]["listeners"]["ingress"]["tls"] = "none"
+        topology = parse_topology(declared)
+        placed = profile()
+        placed["instance_id"] = self.profile["instance_id"]
+        placed = parse_profile(placed, topology)
+        for family, suffix in ((4, ""), (6, "6")):
+            self.host.owned_write(self.host.paths.p("/etc/ufw/before" + suffix + ".rules"), rule_file("before", family=family))
+        self.host.owned_write(self.host.paths.p("/etc/nginx/nginx.conf"), "include /etc/nginx/modules-enabled/*.conf;\nhttp {}\n")
+        evidence = firewall.FirewallObservation(placed.instance_id, BOOT, True, "a" * 64, (9443,),
+                                               tuple(claim.socket for claim in listeners.public_claims(placed)))
+        with patch.object(firewall, "observe", autospec=True, return_value=evidence) as observe:
+            review = feature_network.plan(self.host, topology, placed, {})
+        observe.assert_called_once_with(self.host, placed.instance_id, listeners.public_claims(placed), integrated=False)
+        self.assertEqual(review["firewall"], evidence.sha256)
+        for family, suffix in ((4, ""), (6, "6")):
+            self.assertEqual(review["persistent_projection"]["/etc/ufw/before" + suffix + ".rules"],
+                             firewall.persistent_projection(rule_file("before", family=family), placed.instance_id, family=family))
+        findings = edge.edge_findings(placed.projection(), TOOLS / "lib", topology=topology)
+        self.assertIn("listener_unencrypted", [f["code"] for f in findings])
+        entry = provision.new_entry(self.project, placed.projection(), {**topology.projection(), "sha256": topology.sha256},
+                                    8100, upgrades.protocol(TOOLS))
+        with patch.object(firewall, "install_closed", autospec=True, return_value=evidence) as install:
+            feature_network.prepare(self.host, entry, review, TOOLS, upgrades.tool_bundle(TOOLS)[2])
+        install.assert_called_once_with(self.host, placed.instance_id, listeners.public_claims(placed), reviewed_sha256=evidence.sha256)

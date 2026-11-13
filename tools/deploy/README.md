@@ -197,8 +197,8 @@ Existing profiles without `uploads` keep their proxy behavior. See
 ### Generation-12 feature preview
 
 Shared registry/profile/topology readers dispatch through the frozen feature
-parsers. Activation still requires lane C's network integration before the
-end-to-end scenario below can run; no frozen declaration changes are needed.
+parsers. Provisioning and lifecycle calls use the integrated package, artifact and
+network owners without changing app declarations.
 
 The preview uses the frozen topology-2, profile-3 and archive-2 contracts. Single
 instance custom services receive typed argv, hardened units, local probes,
@@ -217,6 +217,20 @@ together under the original shared deadline. Boot uses the same final check.
 Completion commits admission.
 A failed transition remains pending for reconciliation; it never rolls back code
 or credentials automatically.
+
+Bootstrap also plans `libnginx-mod-stream`, the owned top-level stream include,
+the persistent closed HTTP site and the pre-nginx boot coordinator. Public TCP
+plans show the exact UFW before-file projections and bind installation to the
+reviewed observation digest. An existing nginx configuration is digest-bound;
+a fresh one must match the pristine conffile from the reviewed nginx-common
+package. Reopening other instances after UFW adoption requires fresh health and
+admission through their own restart.
+
+Each unit's privileged `ExecStartPost` verifies the selected executable and
+invocation before transferring its admission receipt from the preparation helper
+to the running MainPID. Workloads retain their service account and sandbox.
+Reports use selected UnitSpecs and network resolution/closure records, so custom
+artifact executables are not mistaken for a different application release.
 
 HTTP allocation is a journaled runtime selection. Every role gets an immutable,
 root-owned mode-0640 effective environment derived from current private values.
@@ -239,19 +253,21 @@ release:
 - Feature rollback, including feature-to-legacy rollback and `activate` of any
   previously selected, noncurrent release. Selection history survives retention.
 - Configuration changes, key rotation, configuration holds and both `down`/`up`.
+- Reprovisioning a selected feature instance when its profile, package requirements
+  or owned network/boot files have changed; unchanged bootstrap remains inspectable.
 - Named lifecycle operations and interrupted-operation reconciliation/recovery.
 - Custom-service secret intake and bundle ABIs without package-version evidence.
 - Helper-bundle pruning: automatic retention returns a capability diagnostic and
   retains every bundle and upgrade journal. Invocation/view bounds still apply;
   reaching a bound refuses further starts until proven-exit cleanup ships.
-- Host reports/capacity operations involving features until their owners integrate.
+- Host capacity changes involving features until their owner integrates.
 
 Feature `down` and `up` both refuse before mutation. The current whole-instance
 transition cannot preserve `maintenance: serve` roles while proving partial closure
 and safely resuming only stopped roles. Policy-aware maintenance must implement
 both directions before either is enabled; legacy maintenance is unchanged.
-Public opening is refused before host mutation unless lane C implements all three
-functions in `listeners.py`, reached only through `lib/feature_network.py`:
+Public opening requires all three adapters in `listeners.py`, reached through
+`lib/feature_network.py`:
 
 | Function | Handoff |
 | --- | --- |

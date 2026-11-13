@@ -421,7 +421,10 @@ def validate_registry(value):
         fields(allocations, "account uid gid http_port database database_role redis_user namespace paths", "allocations")
         require(entry.get("host_id") == value["host_id"] == entry["profile"]["host"]["host_id"], "invalid_registry", "Instance host binding mismatch.")
         port = allocations["http_port"]
-        require(type(port) is int and PORT_FIRST <= port <= PORT_LAST, "invalid_registry", "Invalid HTTP allocation.")
+        if "deployment_selection" in entry:
+            AllocatedEndpoint.parse({"role": "http", "listener": "http", "address": "127.0.0.1", "port": port})
+        else:
+            require(type(port) is int and PORT_FIRST <= port <= PORT_LAST, "invalid_registry", "Invalid HTTP allocation.")
         for resource, seen in ((port,ports), (entry["profile"]["domain"],domains), (entry["name"],accounts),
                                (allocations["database"],databases), (allocations["redis_user"],redis_users)):
             require(resource not in seen, "registry_collision", "Duplicate instance allocation.")

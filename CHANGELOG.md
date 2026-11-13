@@ -4,6 +4,12 @@
 
 ### Deployment feature preview
 
+- Fixed: bootstrap and local planning pass validated feature topologies to network
+  findings; bootstrap plans the stream module, reviewed network prerequisites,
+  closed HTTP site and pre-nginx coordinator. Selected HTTP ports use the frozen
+  endpoint validator. Unit startup transfers admission to its verified MainPID;
+  reports use selected custom executables and network records. A fake-host test
+  drives the real plan/apply/activate/logs/report/restart/boot owners together.
 - Fixed: feature operation units install invocation-pinned independent
   `ExecStopPost` cleanup. Incomplete operations withdraw exposure, stop and prove
   workload exit, and retain unresolved cleanup that blocks subsequent starts.
@@ -19,8 +25,8 @@
 - Added a final typed `deployment.LoadBindings` API and schema-2 role descriptors,
   journaled HTTP effective environments, generation-12 feature lifecycle owners,
   invocation-pinned runtime dispatch, package/artifact integration and an opt-in
-  systemd acceptance scenario. Public opening remains capability-gated until lane
-  C supplies observed closure and opening integration. Shared registry readers
+  systemd acceptance scenario. Public opening uses the integrated observed closure
+  and opening owners. Shared registry readers
   now dispatch to the existing frozen feature parsers without schema changes.
 - Preview refusals cover feature rollback (including to legacy), configuration
   holds, configuration/key changes, both maintenance down/up, named lifecycle

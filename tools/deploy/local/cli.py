@@ -523,6 +523,8 @@ def bootstrap(project, profile, settings, fresh):
             plan = ssh.request("bootstrap-plan", request, remote)
             for finding in plan.get("findings", []):
                 say(f"{finding['kind']}: {finding['code']}: {finding['detail']}")
+                if finding.get("persistent_projection"):
+                    display({"persistent_projection": finding["persistent_projection"]})
             if not plan.get("ok") or any(f.get("kind") == "stop" for f in plan.get("findings", [])):
                 raise LocalError("bootstrap is blocked by the findings above")
             confirm(f"Prepare {instance_name(project, profile)} on {profile['host']['address']}")
@@ -1301,7 +1303,9 @@ def main():
         project = project_config(mode)
         environment = select_environment(mode, settings)
         profile, fresh = profile_config(environment, project)
-        for finding in edge_findings(profile, TOOLS_ROOT / "lib"):
+        from topology import parse_topology
+        topology = parse_topology(load_topology(ROOT), registered=True) if profile["schema"] == 3 else None
+        for finding in edge_findings(profile, TOOLS_ROOT / "lib", topology=topology):
             if finding["kind"] == "warning":
                 say(f"warning: {finding['code']}: {finding['detail']}")
         if mode == "bootstrap":

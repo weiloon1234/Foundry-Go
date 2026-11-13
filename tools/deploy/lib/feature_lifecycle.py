@@ -64,6 +64,22 @@ def load(host, entry):
     return store, selection, inventory, launch
 
 
+def network_report(host, entry, host_claims):
+    from contracts import ClosureEvidence
+    from report import declared_network
+    if "deployment_selection" not in entry:
+        topology = parse_topology(entry["topology"], registered=True)
+        return declared_network(host, parse_profile(entry["profile"], topology), topology=topology,
+                                entry=entry, host_claims=host_claims)
+    store, selection, inventory, _ = load(host, entry)
+    require(entry["deployment_selection"] == record_document(selection),
+            "network_selection", "Registry and private network selection differ.")
+    path = store.runtime / "boot.json"
+    closure = admission.read_owned(host, path, ClosureEvidence.parse) if path.exists() else None
+    return declared_network(host, inventory.profile, topology=inventory.topology, entry=entry,
+                            resolution=inventory.resolution, closure=closure, host_claims=host_claims)
+
+
 def selected_releases(host, entry, state):
     import release
     store = admission.AdmissionStore(host, entry["profile"]["instance_id"])
@@ -228,7 +244,8 @@ def install_units(host, registry, entry, inventory, launch, tools_dir):
     host.run(["systemctl", "daemon-reload"])
     opener = "foundry-admission-open-" + spec.identity.instance_id + ".service"
     content = content.replace("Description=", "Description=Open ").replace("RemainAfterExit=yes", "RemainAfterExit=no")
-    content = content.replace('"boot"', '"open"').replace("After=network-online.target ufw.service", "After=" + boot_unit)
+    content = content.replace('"boot"', '"open"').replace("After=network-online.target ufw.service nginx.service", "After=" + boot_unit)
+    content = content.replace("Requires=nginx.service", "Requires=nginx.service " + boot_unit)
     provision._owned_write(host, host.paths.p("/etc/systemd/system/" + opener), content)
     host.run(["systemctl", "daemon-reload"])
     host.run(["systemctl", "enable", boot_unit, opener])
@@ -409,7 +426,7 @@ def execute(host, request, *, pin=None):
                 topology = parse_topology(declaration.topology_json)
                 profile_record = parse_profile(declaration.profile_json, topology)
                 validate_preview(topology)
-                plan = packages.inspect(host, topology, profile_record)
+                plan = packages.inspect(host, feature_network.package_topology(topology), profile_record)
                 require(not plan["missing"], "capability_unavailable", f"New package requirements after bootstrap need {LATER}; rebuild this preview host.")
                 prepared = artifacts.verify_release_tree(declaration, staging, budget,
                              artifact_staging=stage_root / "artifacts", outer_charged=True)

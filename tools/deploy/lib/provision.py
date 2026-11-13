@@ -154,7 +154,10 @@ def _site_checks(host, entry):
     site = host.paths.p(f"/etc/nginx/sites-available/{PREFIX}-{name}.conf")
     enabled = host.paths.p(f"/etc/nginx/sites-enabled/{PREFIX}-{name}.conf")
     check_path(site)
-    if site.exists() and not _read(site).startswith("# " + _marker(entry) + "\n"):
+    content = _read(site) if site.exists() else ""
+    if site.exists() and not (content.startswith("# " + _marker(entry) + "\n") or
+            entry["topology"]["schema"] == 2 and content.startswith("# Foundry runtime admission " + entry["profile"]["instance_id"] + "\n")
+            and "\n# " + _marker(entry) + "\n" in content):
         raise DeployError("provision_conflict", "nginx site has foreign ownership")
     if enabled.is_symlink():
         expected = f"../sites-available/{PREFIX}-{name}.conf"
@@ -394,17 +397,28 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     from topology import parse_topology, parse_profile
     feature = topology["schema"] == 2
     if feature:
-        from feature_network import capability
+        from feature_network import capability, package_topology
         capability()
         parsed = parse_topology({k: v for k, v in topology.items() if k != "sha256"})
         placed = parse_profile(bound, parsed)
         from feature_lifecycle import validate_preview
         validate_preview(parsed)
-    observations = {"packages": packages.inspect(host, parsed, placed) if feature else packages.inspect(host), "postgresql": postgres.inspect(host, registry),
+    observations = {"packages": packages.inspect(host, package_topology(parsed), placed) if feature else packages.inspect(host), "postgresql": postgres.inspect(host, registry),
                     "redis": redis_acl.inspect(host, registry), "certificate": certificates.inspect(host, entry)}
     if "uploads" in profile:
         observations["uploads"] = uploads.inspect(host, entry)
-    findings = edge_findings(profile, tools_dir / "lib")
+    findings = edge_findings(bound, tools_dir / "lib", topology=parsed if feature else None)
+    if feature:
+        import feature_network
+        if existing and "deployment_selection" in existing:
+            from feature_lifecycle import refuse
+            if (existing["profile"] != bound or observations["packages"]["missing"] or
+                    not _ready_configuration(host, registry, entry, tools_dir)):
+                refuse("reprovisioning a selected feature instance")
+        observations["network"] = feature_network.plan(host, parsed, placed, observations["packages"])
+        findings.append({"kind": "change", "code": "feature_network_prerequisites",
+                         "detail": "Install the stream include, closed HTTP gate and pre-nginx boot coordinator; new nginx uses its pristine reviewed package configuration. Public TCP adoption reloads UFW and closes other feature runtime allows; they require their own healthy restart to reopen.",
+                         "persistent_projection": observations["network"]["persistent_projection"]})
     upgrade = upgrades.tools_upgrade(host, registry, tools_dir)
     if upgrade and upgrade["from_digest"] is not None:
         findings.append({"kind": "stop", "code": "host_upgrade_required", "detail": "Apply a separate reviewed tool upgrade first."})
@@ -420,7 +434,9 @@ def _ready_configuration(host, registry, entry, tools_dir):
     if "site" not in entry["provisioning"]["completed_steps"]:
         return False
     if entry["topology"]["schema"] == 2:
-        return "certificate" in entry["provisioning"]["completed_steps"]
+        from feature_network import bootstrap_ready
+        return "certificate" in entry["provisioning"]["completed_steps"] and bootstrap_ready(
+            host, entry, tools_dir, registry["tools"]["bundle_sha256"])
     unit = registry["shared"].get("postgresql", {}).get("unit", "")
     for role, name in instance_units(entry).items():
         path = host.paths.p(f"/etc/systemd/system/{name}")
@@ -454,9 +470,6 @@ def _install_site(host, registry, entry, tools_dir, *, certificate_ready=False):
     _ensure_nginx(host, registry)
     if not certificate_ready:
         certificates.provision(host, registry, entry)
-    if entry["topology"]["schema"] == 2:
-        # Lane C publishes only after observed closure and readiness.
-        return
     name = entry["name"]
     site = host.paths.p(f"/etc/nginx/sites-available/{PREFIX}-{name}.conf")
     enabled = host.paths.p(f"/etc/nginx/sites-enabled/{PREFIX}-{name}.conf")
@@ -468,7 +481,11 @@ def _install_site(host, registry, entry, tools_dir, *, certificate_ready=False):
         entry["provisioning"]["completed_steps"].remove("site")
     entry["provisioning"]["state"] = "preparing"
     _journal(host, registry, entry)
-    changed = _owned_write(host, site, _template(tools_dir, "nginx-https.conf", entry))
+    content = _template(tools_dir, "nginx-https.conf", entry)
+    if entry["topology"]["schema"] == 2:
+        from feature_network import closed_http
+        content = closed_http(entry, content)
+    changed = _owned_write(host, site, content)
     if not existed:
         enabled.symlink_to(f"../sites-available/{PREFIX}-{name}.conf")
     if not _ok(_probe(host, ["nginx", "-t", "-q"])):
@@ -507,6 +524,10 @@ def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topol
                 unchanged = files_ready and entry["provisioning"]["state"] == "ready"
                 if not files_ready:
                     try:
+                        if entry["topology"]["schema"] == 2:
+                            import feature_network
+                            feature_network.prepare(host, entry, plan["observations"]["network"], tools_dir,
+                                                    registry["tools"]["bundle_sha256"])
                         _install_unit(host, registry, entry, tools_dir)
                         _install_site(host, registry, entry, tools_dir, certificate_ready=True)
                         _step(host, registry, entry, "site")
@@ -545,6 +566,10 @@ def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topol
                 _step(host, registry, entry, "backup")
                 _install_unit(host, registry, entry, tools_dir)
                 _step(host, registry, entry, "unit")
+                if entry["topology"]["schema"] == 2:
+                    import feature_network
+                    feature_network.prepare(host, entry, plan["observations"]["network"], tools_dir,
+                                            registry["tools"]["bundle_sha256"])
                 _install_site(host, registry, entry, tools_dir)
                 _step(host, registry, entry, "site")
                 entry["provisioning"]["state"] = "ready"
