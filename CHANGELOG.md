@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.29.0 — 2026-11-13
 
 - Fixed: multipart upload detection shares the framework media detector's ISO
   base media brands with attachment publication, recognizing QuickTime/MOV,
