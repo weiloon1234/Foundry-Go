@@ -207,11 +207,30 @@ tombstones, so retirement does not make a runtime downgrade safe. Lowering an
 upload policy does not invalidate old rows; lowering disk infrastructure limits
 can still prevent historical reads and settlement.
 
-B26 milestone 1 supplies policy, preparation and historical-row compatibility.
-Conditional multipart publication and streaming checksum-fallback reconciliation
-are separate follow-up milestones. S3/R2 policies remain restricted by their
-existing conditional-write size capability; do not enable large production uploads
-until those capabilities and the ingress/deployment acceptance are complete.
+B26 policy and preparation use the existing storage and transaction lifecycle for
+large objects. AWS and explicitly capable compatible backends publish through
+conditional multipart completion with the declared size and whole SHA-256. Default
+parts are 8 MiB with one part in flight. Failure/cancellation drains part workers
+before attempting abort under the separate cleanup deadline. A lost completion
+acknowledgement remains unknown even when staging abort succeeds.
+
+Call `Prepare` before opening the caller transaction; then `AddIn`/`ReplaceIn`
+publishes membership in that transaction. A confirmed rollback leaves a tracked
+`Stored` intent and preserves prior membership. `Discard` can retire it explicitly;
+a fresh manager's scheduled `ReconcilePending` reclaims it after `StoredGrace`
+and `CleanupGrace`. Unknown outer commits require inspection of durable state,
+never blind deletion or replay. Storage staging and attachment objects have
+separate cleanup owners; retain and inspect adapter cleanup references when abort
+fails or an upload ID is lost. The transactional outbox remains the durable owner
+of required queued cleanup/variant work; after-commit callbacks only prompt it.
+
+Large SDK wire coverage and env-gated PostgreSQL regression sources exercise this
+path. Live R2 create **and** replace certification is still required before its
+shared conditional-write size restriction can be removed. No production override
+is added. Checksum-fallback reconciliation and explicit settlement still use the
+64 MiB byte helper; large objects require the automatic checksum-metadata path
+for now. Ingress/deployment and live-provider acceptance also remain required
+before production rollout.
 
 Before hooks run in declaration order with detected metadata and the typed
 owner. AfterStored hooks run after storage acknowledgement inside the ownership

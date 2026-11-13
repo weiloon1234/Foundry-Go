@@ -2,13 +2,21 @@
 
 ## Unreleased
 
+- Fixed: generated application configuration and the dependent consumer now load
+  `features.attachments.config.temp_directory` and expose its typed override.
+- Added: large attachment transaction/multipart regression coverage for publication,
+  rollback, restart, retirement, unknown outcomes and eventual reclamation; default
+  8 MiB serial-part publication above 64 MiB has allocation-sensitive wire coverage.
+- Added: R2 conditional create/replace wire certification matrix and an env-gated
+  live candidate test. Production R2 retains its conditional-write size restriction
+  pending live evidence for both operations; no public bypass is introduced.
+
 - Added: B26 policy and preparation support for application-declared large opaque
   attachments, an owned spool via `attachments.Config.TempDirectory`, and shared
   capture hashing for uploads, slot acceptance and URL imports. Image/variant and
   byte-returning APIs retain `MaxBufferedBytes` (64 MiB); `MaxUploadBytes` remains
   its compatibility alias. Large JSON/text hints and archive specialization are
-  conservative. Conditional multipart publication and streaming checksum-fallback
-  reconciliation remain follow-up work.
+  conservative. Streaming checksum-fallback reconciliation remains follow-up work.
 - Added: forward attachment migration `000003_expand_original_size`, preserving
   historical migrations and variant ceilings while allowing nonnegative original
   sizes. Apply it and deploy capable runtimes before enabling large policies; old

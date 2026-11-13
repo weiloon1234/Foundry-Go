@@ -96,8 +96,10 @@ func providerFactory(t *testing.T, cfg Config) (*storage.Disk, *Backend) {
 				t.Error(err)
 			}
 		}
-		if err := cleanupProvider(ctx, backend); err != nil {
-			t.Error("test-owned provider cleanup failed", failure(storage.DeleteOperation, storage.Unknown, err))
+		if !t.Failed() {
+			if err := cleanupProvider(ctx, backend); err != nil {
+				t.Error("test-owned provider cleanup failed", failure(storage.DeleteOperation, storage.Unknown, err))
+			}
 		}
 		if err := backend.Close(); err != nil {
 			t.Error(err)
