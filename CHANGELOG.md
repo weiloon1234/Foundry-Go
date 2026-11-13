@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added: inactive host-capability lifecycle foundations for persistent boot
+  admission, invocation-bound validation allowances, single-instance custom unit
+  rendering, dependency preflight and per-start configuration/bundle views.
+  Feature execution remains capability-gated pending lifecycle integration;
+  legacy deployment and upload behavior are unchanged.
+
 - Added: multipart upload pools reserve a slot and the declared encoded-body bytes
   before middleware or capture. Large requests use separate handler capacity,
   retain reservations through actual cleanup, and keep failed cleanup charged

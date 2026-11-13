@@ -422,3 +422,214 @@ def validate_runtime_environment(host, entry):
                 or any(logical.startswith(owner + "__") for owner in owned_keys)):
             raise DeployError("configuration_identity", "Pipeline-owned runtime configuration contains an overriding alias or collection field.")
     return values
+
+
+# Feature-service preparation is separate from the legacy app.env/upload owner.
+MAX_SERVICE_VIEWS = 32
+MAX_SERVICE_CONFIG_BYTES = 16 * MAX_VALUE_BYTES
+
+
+def _service_directory(host, path):
+    from admission import protected_directory
+    return protected_directory(host, path)
+
+
+def _service_source(host, root, member):
+    """Read only an inventoried, protected regular file, with bounded allocation."""
+    import hashlib
+    from admission import protected_path
+    path = protected_path(host, root / member.path, "file")
+    require(member.size <= MAX_VALUE_BYTES and path.exists(),
+            "service_config_size", "Service configuration source is missing or exceeds its bound.")
+    with path.open("rb") as stream:
+        info = os.fstat(stream.fileno())
+        require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_size == member.size,
+                "service_config_source", "Configuration source differs from its regular-file inventory.")
+        data = stream.read(MAX_VALUE_BYTES + 1)
+    require(len(data) == member.size and hashlib.sha256(data).hexdigest() == member.sha256,
+            "service_config_source", "Configuration source fingerprint differs from its inventory.")
+    return data
+
+
+def _render_service_json(data, bindings, resolve):
+    from contracts import parse_json
+    value = parse_json(data)
+    for pointer, argument in bindings:
+        tokens = [part.replace("~1", "/").replace("~0", "~") for part in pointer[1:].split("/")]
+        target = value
+        for index, token in enumerate(tokens):
+            if isinstance(target, dict):
+                require(token in target, "service_config_binding", "JSON binding target does not exist.")
+                key = token
+            else:
+                require(isinstance(target, list) and re.fullmatch(r"0|[1-9][0-9]*", token) and
+                        int(token) < len(target), "service_config_binding", "JSON binding target does not exist.")
+                key = int(token)
+            if index == len(tokens) - 1:
+                resolved = resolve(argument)
+                from topology import ArgumentKind
+                target[key] = int(resolved) if argument.kind in (ArgumentKind.LISTENER_PORT, ArgumentKind.COPY_NUMBER) else resolved
+            else:
+                target = target[key]
+    result = (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode()
+    require(len(result) <= MAX_VALUE_BYTES, "service_config_size", "Rendered service configuration exceeds its bound.")
+    return result
+
+
+def prepare_bundle_views(host, views):
+    """Before loading units, create only protected mountpoint skeletons.
+
+    Lane B verifies/retains the complete immutable artifact inventory. This step
+    verifies the exported members again at the mount seam.
+    No mount command or global plugin installation is performed here.
+    """
+    from admission import protected_path
+    from contracts import PayloadMember, digest
+    from dataclasses import asdict
+    for view in views:
+        source = protected_path(host, host.paths.p(view.source), "directory")
+        require(source.exists(), "service_bundle", "Immutable bundle source is unavailable.")
+        expected = {m.path: PayloadMember.parse(asdict(m)) for m in view.members}
+        require(expected and len(expected) == len(view.members) and len(expected) <= 10000,
+                "service_bundle", "Invalid bundle member inventory.")
+        files = set()
+        for count, path in enumerate(source.rglob("*"), 1):
+            require(count <= 20000, "service_bundle", "Bundle view exceeds its member bound.")
+            protected_path(host, path, "directory" if path.is_dir() else "file")
+            if path.is_dir():
+                continue
+            name = path.relative_to(source).as_posix()
+            member = expected.get(name)
+            require(member is not None and path.stat().st_nlink == 1 and path.stat().st_size == member.size
+                    and digest(path) == member.sha256,
+                    "service_bundle", "Bundle member differs from its immutable inventory.")
+            files.add(name)
+        require(files == set(expected), "service_bundle", "Bundle export has missing members.")
+        _service_directory(host, host.paths.p(view.destination))
+
+
+def prepare_unit_paths(host, role, spec, resolution, *, views=()):
+    """Inert staging before unit load (and boot): all namespace paths already exist."""
+    from services import ServicePaths, validate_views
+    require(role.common.name == spec.identity.role and role.common.name in resolution.roles,
+            "service_preparation", "Unit paths must belong to a selected role.")
+    paths = ServicePaths.for_unit(spec.identity, resolution.id)
+    validate_views(role, paths, views)
+    for path in (paths.base, paths.base + "/invocations", paths.base + "/view/config",
+                 paths.base + "/view/data", paths.state):
+        _service_directory(host, host.paths.p(path))
+    prepare_bundle_views(host, views)
+    return paths
+
+
+def prepare_service(host, store, invocation, role, spec, release_root, members, *,
+                    views=(), secret_paths=None, uid, gid, permit_id=None):
+    """Publish one complete invocation view after admission, never reuse failed output.
+
+    Call with the invocation-pinned UnitSpec and the selected release inventory.
+    Seed leaves are service-owned; every ancestor and mountpoint is protected.
+    Failed/retained views count toward a hard bound until proven-exit cleanup.
+    """
+    from contracts import (PayloadMember, UnitSpec, atomic_json, atomic_write,
+                           canonical_digest, record_document)
+    from admission import protected_directory, read_owned
+    from services import ServicePaths, configuration_digest, resolve_argument, validate_views
+    from topology import ExecutableRole
+    spec = UnitSpec.parse(record_document(spec))
+    require(isinstance(role, ExecutableRole) and role.common.name == spec.identity.role
+            and invocation.unit == spec.identity
+            and invocation.unit_spec_sha256 == canonical_digest(record_document(spec)),
+            "service_preparation", "Preparation must use the admitted frozen unit specification.")
+    require(type(uid) is int and type(gid) is int and uid >= 0 and gid >= 0 and
+            (host.paths.root != Path("/") or uid > 0 and gid > 0),
+            "service_account", "Service files require the unprivileged instance account.")
+    paths = ServicePaths.for_unit(spec.identity, invocation.resolution_id)
+    validate_views(role, paths, views)
+    require(spec.configuration_sha256 == configuration_digest(role, members, views, secret_paths),
+            "service_preparation", "Configuration sources differ from the admitted unit specification.")
+    inventory = {member.path: PayloadMember.parse({"path": member.path, "sha256": member.sha256,
+                 "size": member.size, "kind": member.kind}) for member in members}
+    require(len(inventory) == len(members), "service_preparation", "Duplicate configuration inventory members.")
+    with store.preparation(invocation, permit_id=permit_id) as resolution:
+        prepare_unit_paths(host, role, spec, resolution, views=views)
+        base = _service_directory(host, host.paths.p(paths.base))
+        invocations = _service_directory(host, base / "invocations")
+        view = invocations / invocation.process.invocation_id
+        complete = view / "prepared.json"
+        current = base / "current"
+        if complete.exists():
+            require(read_owned(host, complete, lambda v: v) == record_document(invocation) and
+                    current.is_symlink() and os.readlink(current) == "invocations/" + view.name,
+                    "service_preparation", "Prepared invocation is no longer selected.")
+            return view
+        require(not view.exists() and len(list(invocations.iterdir())) < MAX_SERVICE_VIEWS,
+                "service_preparation_retained", "Failed/retained views need proven-exit cleanup before another start.")
+        protected_directory(host, view)
+        configs = _service_directory(host, view / "config")
+        baselines = _service_directory(host, view / "baselines")
+        runtime = _service_directory(host, view / "runtime")
+        os.chown(runtime, uid, gid)
+        os.chmod(runtime, 0o700)
+        state = _service_directory(host, host.paths.p(paths.state))
+        seeds = _service_directory(host, state / "seeds")
+        data = check_path(state / "data", "directory")
+        if not data.exists():
+            protected_directory(host, data, 0o700)
+            os.chown(data, uid, gid)
+        # Never walk/chown existing app-writable state or follow a seed link.
+        require(data.stat().st_uid == uid, "service_account", "Persistent data has an unexpected owner.")
+        resolve = lambda argument: resolve_argument(argument, role, spec, resolution, paths, views, secret_paths or {})
+        require(tuple(resolve(a) for a in role.arguments) == spec.arguments,
+                "service_arguments", "Prepared bindings differ from frozen argv.")
+        total = 0
+        for name, config in role.configs:
+            member = inventory.get(config.source)
+            require(member is not None and member.kind == "config", "service_config_source", "Configuration is not inventoried.")
+            content = _service_source(host, release_root, member)
+            if config.mode == "rendered-json" or config.bindings:
+                content = _render_service_json(content, config.bindings, resolve)
+            total += len(content)
+            require(total <= MAX_SERVICE_CONFIG_BYTES, "service_config_size", "Service configuration view exceeds its bound.")
+            atomic_write(baselines / name, content, mode=0o444)
+            if config.mode == "seed-once":
+                directory = check_path(seeds / name, "directory")
+                if directory.exists():
+                    require(directory.stat().st_uid == uid and not directory.stat().st_mode & 0o077,
+                            "service_config_seed", "Existing seed directory has foreign ownership.")
+                    fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                    try:
+                        info = os.stat("value", dir_fd=fd, follow_symlinks=False)
+                    finally:
+                        os.close(fd)
+                    require(stat.S_ISREG(info.st_mode) and info.st_uid == uid and info.st_nlink == 1
+                            and not info.st_mode & 0o077,
+                            "service_config_seed", "Existing seed is not an owned private regular file.")
+                else:
+                    protected_directory(host, directory, 0o700)
+                    atomic_write(directory / "value", content, mode=0o600, owner=uid, group=gid)
+                    os.chown(directory, uid, gid)
+            else:
+                directory = _service_directory(host, configs / name)
+                if config.mode == "recreate":
+                    atomic_write(directory / "value", content, mode=0o600, owner=uid, group=gid)
+                    os.chmod(directory, 0o700)
+                    os.chown(directory, uid, gid)
+                else:
+                    atomic_write(directory / "value", content, mode=0o444)
+        # Only a framework-created relative link may be replaced, under this lock.
+        if current.exists() or current.is_symlink():
+            info = current.lstat()
+            require(stat.S_ISLNK(info.st_mode) and info.st_uid == os.geteuid() and
+                    re.fullmatch(r"invocations/[a-f0-9]{32}", os.readlink(current)),
+                    "service_preparation", "Prepared-view selection has foreign ownership or ancestry.")
+        atomic_json(complete, record_document(invocation), mode=0o600)
+        pending = base / (".current-" + view.name)
+        require(not pending.exists() and not pending.is_symlink(), "service_preparation", "Unresolved view publication remains.")
+        pending.symlink_to("invocations/" + view.name)
+        os.replace(pending, current)
+        directory = os.open(base, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        return view

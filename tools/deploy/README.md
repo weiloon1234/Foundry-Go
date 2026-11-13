@@ -167,3 +167,75 @@ sized upload volumes, creates private service directories, and renders the
 runtime values, service write paths, and HTTP/HTTPS upload locations together.
 Existing profiles without `uploads` keep their proxy behavior. See
 [large-upload ingress](../../docs/guides/deployment.md#large-upload-ingress).
+
+### Host-capability lifecycle foundation (not enabled)
+
+Generation 12's frozen topology/profile/archive records remain inspectable;
+feature activation still returns `capability_unavailable`. Milestone 3 checkpoint
+1 adds internal admission, service inventory and preparation owners without
+changing legacy units, upload provisioning or advertised runtime capabilities.
+Wrappers, placement counts above one and ordinals other than one remain rejected.
+
+`lib/admission.py` owns durable selection/resolution and operation evidence under
+`/var/lib/foundry/admission/<instance UUID>`. Boot closure, permits, claims and
+admitted invocations live under `/run/foundry/admission/<instance UUID>`.
+`AdmissionStore.begin` requires previously journaled running intent; starts reject
+any unresolved journal. `commit` requires durable successful/reconciled completion.
+The lifecycle owner must record completion only after its other obligations are
+proven; this foundation does not perform those obligations. Both committed and
+pending starts require whole-instance current-boot closure. Pending validation
+also requires a health-phase journal, complete scoped closure and a live executor
+PID/start/systemd invocation. A claim admits one invocation per unit and permit;
+replaying it cannot admit an automatic restart. Preparation rechecks the admitted
+invocation without consuming a second allowance. Short start locks never acquire
+the lifecycle executor's host lock.
+
+`lib/services.py` consumes frozen `Deployment`, `UnitSpec` and `RuntimeResolution`
+records, the parsed topology and profile. It owns one inventory for built-in and
+custom units, literal systemd quoting, custom hardening/limits and local probes.
+Custom units use `@1`; built-in names/policies remain unchanged. Tool starts use
+dependency order with a shared readiness deadline; stops use reverse order.
+Named preflight rejects unavailable prerequisites and enabled/running dependents
+outside the selection. Units render `After=` only for application dependencies,
+so boot and automatic restart do not silently enable or wait for another role.
+The lifecycle caller supplies bounded, current observations and retains built-in
+readiness checks; custom readiness checks executable identity, listener ownership,
+the declared probe and process stability.
+
+`runtime_config.prepare_service` takes the admitted frozen unit and inventoried
+release sources. Each invocation gets a new protected view. Immutable/rendered
+files and baselines are read-only; recreate settings live in fresh service-owned
+directories; seed-once directories preserve existing edits. Bundle exports are
+reverified against their frozen member inventory and get protected mountpoint
+skeletons before unit loading through `prepare_unit_paths`; this inert staging
+also creates every namespace write path before start. Units use read-only namespace bindings, never
+copies into mutable plugin directories. Failed preparation never selects partial
+output. At most 32 retained views per role/resolution may exist; exhaustion refuses
+another start until later proven-exit cleanup removes eligible views.
+Admission likewise bounds retained permits and invocation receipts, and refuses
+new starts when their cleanup is overdue.
+
+Integration handoffs for subsequent checkpoints:
+
+- Lane B supplies verified immutable artifact roots and frozen `ArtifactPayload`
+  inventories; `bundle_views` selects the exact architecture pin. It also supplies
+  the executable path/fingerprint used by `UnitSpec`.
+- Lane C supplies allocated endpoints in `RuntimeResolution` and complete
+  `ClosureEvidence`. Ingress withdrawal alone cannot authorize validation.
+- The lifecycle executor journals before `begin`, records boot closure, issues
+  validation permits, uses inventory preflight/order, and commits only after
+  durable completion. Preparation's configuration digest is shared with the
+  future resolution builder.
+- `server/runtime_v1.py` is the source for the fixed runtime entry point. It
+  accepts only fixed actions/identities and currently refuses all dispatch.
+  Installation, loaded-generation verification, invocation pinning, cleanup and
+  pruning are deliberately not active. The new unit renderer is not installed by
+  legacy bootstrap.
+
+Checkpoint 2 connects rendered application bindings and current-private-config
+selection to the lifecycle, including credential-preserving rollback and journaled
+HTTP effective-environment selection. Later checkpoints add helper lifetime,
+cleanup/pruning, maintenance/config holds and independent operation cleanup before
+enabling execution. The opt-in systemd suite includes pending/committed admission,
+single-start automatic-restart rejection and read-only bundle namespace contracts;
+real-manager/reboot acceptance remains the lead's container-harness gate.

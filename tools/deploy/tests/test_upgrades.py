@@ -434,6 +434,9 @@ class UpgradeTests(unittest.TestCase):
         source = Path(__file__).resolve().parents[1]
         _, files, _ = upgrades.tool_bundle(source)
         expected = {name for name in upgrades.REQUIRED_FILES if name.endswith('.py')}
+        # Inert M3 foundation modules ship without advertising lifecycle support.
+        # They become required installation inputs with the later runtime handoff.
+        expected.update({'lib/admission.py', 'lib/services.py', 'server/runtime_v1.py'})
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
     def leftover(self, digest="b" * 64):
