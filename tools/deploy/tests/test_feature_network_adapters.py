@@ -162,6 +162,90 @@ class FeatureAdapterTests(unittest.TestCase):
         self.withdraw.assert_called_once()
         self.assertNotIn("proxy_pass", self.site.read_text())
 
+    def test_interrupted_reclosure_cannot_forget_new_retiring_workers(self):
+        self.close()
+        path = self.host.paths.p(f"/var/lib/foundry/network/{self.instance}/withdrawal.json")
+        # Reopen the candidate route in the same transition. Its worker retains
+        # an upstream that disappears from nginx -T after the following reload.
+        self.host.owned_write(self.site, listeners._feature_projection(self.entry, self.current.topology,
+                             self.current.profile, self.current.resolution.endpoints)["http"])
+        retiring = (201, 301)
+        self.workers = [retiring]
+        reloaded = []
+        def withdraw(host, instance, roles):
+            reloaded.append(json.loads(path.read_text()))
+            self.workers = [retiring, (201 + len(reloaded), 301 + len(reloaded))]
+            return edge.EdgeObservation(instance, BOOT, tuple(roles), True, DIGEST, tuple(self.workers))
+        self.withdraw.side_effect = withdraw
+        write = self.host.owned_write
+        def crash_after_reload(target, content, **kwargs):
+            if target == path and reloaded:
+                raise KeyboardInterrupt("crash before withdrawal completion is persisted")
+            return write(target, content, **kwargs)
+        with patch.object(self.host, "owned_write", side_effect=crash_after_reload), self.assertRaises(KeyboardInterrupt):
+            self.close()
+        # Both projections now look closed, but the retiring worker is alive.
+        self.assertNotIn("proxy_pass", self.site.read_text())
+        self.withdraw.reset_mock()
+        with patch("time.monotonic", side_effect=(0, 11)), self.assertRaises(c.DeployError) as raised:
+            self.close()
+        self.assertEqual(raised.exception.code, "network_old_workers")
+        self.withdraw.assert_called_once()  # Incomplete attempts cannot take the fast path.
+        for before_reload in reloaded:
+            self.assertEqual(before_reload["state"], "in_progress")
+            self.assertIn(list(retiring), before_reload["workers"])
+        receipt = json.loads(path.read_text())
+        self.assertIn(list(retiring), receipt["workers"])
+        self.assertEqual(receipt["state"], "complete")
+        self.workers = [self.workers[-1]]  # Only after the retiring generation exits.
+        self.withdraw.reset_mock()
+        self.assertIs(self.close().stage, c.ClosureStage.APPLICATION_CLOSED)
+        self.withdraw.assert_not_called()
+
+    def test_withdrawal_intent_must_be_durable_before_any_effect(self):
+        path = self.host.paths.p(f"/var/lib/foundry/network/{self.instance}/withdrawal.json")
+        def failed_write(target, content, **kwargs):
+            self.assertEqual(target, path)
+            receipt = json.loads(content)
+            self.assertEqual(receipt["state"], "in_progress")
+            self.assertEqual(receipt["workers"], [list(worker) for worker in self.workers])
+            raise OSError("receipt fsync failed")
+        before = self.site.read_bytes()
+        with patch.object(self.host, "owned_write", side_effect=failed_write), \
+                patch.object(firewall, "withdraw") as fw, self.assertRaises(OSError):
+            self.close()
+        fw.assert_not_called()
+        self.retain.assert_not_called()
+        self.withdraw.assert_not_called()
+        self.assertEqual(self.site.read_bytes(), before)
+
+    def test_legacy_receipt_requires_a_new_withdrawal_attempt(self):
+        self.close()
+        path = self.host.paths.p(f"/var/lib/foundry/network/{self.instance}/withdrawal.json")
+        previous = json.loads(path.read_text())
+        previous.pop("state", None)
+        self.host.owned_write(path, json.dumps(previous), mode=0o600)
+        self.withdraw.reset_mock()
+        self.assertIs(self.close().stage, c.ClosureStage.APPLICATION_CLOSED)
+        self.withdraw.assert_called_once()
+        self.assertEqual(json.loads(path.read_text())["state"], "complete")
+
+    def test_reference_adoption_workers_are_persisted_before_route_withdrawal(self):
+        path = self.host.paths.p(f"/var/lib/foundry/network/{self.instance}/withdrawal.json")
+        original = tuple(self.workers)
+        def retain(host):
+            self.workers = [(151, 251)]
+            return ()
+        self.retain.side_effect = retain
+        withdraw = self.withdraw.side_effect
+        def observe_intent_then_withdraw(host, instance, roles):
+            receipt = json.loads(path.read_text())
+            self.assertEqual(receipt["state"], "in_progress")
+            self.assertEqual({tuple(worker) for worker in receipt["workers"]}, {*original, *self.workers})
+            return withdraw(host, instance, roles)
+        self.withdraw.side_effect = observe_intent_then_withdraw
+        self.assertIs(self.close().stage, c.ClosureStage.APPLICATION_CLOSED)
+
     def test_jobs_control_processes_and_cgroup_descendants_refuse_closure(self):
         for override in ({"Job": "17"}, {"ControlPID": "8"}, {"MainPID": "9"}, {"LoadState": "not-found"}, {"ActiveState": "activating"}):
             self.manager_override = override

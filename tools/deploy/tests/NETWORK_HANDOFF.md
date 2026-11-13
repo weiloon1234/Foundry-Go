@@ -124,14 +124,23 @@ same-resolution restart uses the fresh complete nginx reference inventory;
 allocation still quarantines historical references.
 
 Cleanup may call `feature_close` before workload stop and again afterwards. The
-first call withdraws ingress and records the pre-withdrawal nginx worker identities
-in a private, boot- and transition-bound `network/<instance>/withdrawal.json`.
+first call durably records the expanded nginx worker set and `in_progress` state
+in a private, boot- and transition-bound `network/<instance>/withdrawal.json`
+before any withdrawal effect. If reference adoption reloads nginx, its new workers
+are added durably before HTTP/stream withdrawal. Only after withdrawal succeeds is
+that same set marked `complete`.
 It still refuses complete closure while a workload is alive. On retries, fresh
-HTTP/firewall/nginx observations must confirm withdrawal before effects can be
-skipped. Each call independently proves process/cgroup exit and reference isolation;
+HTTP/firewall/nginx observations and a `complete` receipt must confirm withdrawal
+before effects can be skipped. Incomplete attempts and older receipts without a
+state redo withdrawal with the retained and freshly observed worker sets. Each
+call independently proves process/cgroup exit and reference isolation;
 the receipt never grants admission. Repeated complete closure has equivalent proof
 fields (with a fresh observation ID/time), without rewriting files, flushing rules
 or reloading nginx. Reopening invalidates the observed closed state.
+The crash-point regression reopens within one transition, interrupts after reload
+but before completion is persisted, and proves retry refuses complete closure
+while the newer retiring worker remains alive. Receipt writes use the existing
+file-and-parent-fsync atomic writer; a failed intent write prevents all effects.
 
 Reviewed UFW adoption, the stream include/module and an enabled owned HTTP site
 remain prerequisites. The adapter has no review digest with which to approve
@@ -477,3 +486,12 @@ runtime-module inventory failure remained. `git diff --check` passed. Replaying
 the new tests against `e2701922` confirmed three capture-variant failures for raw
 route/address metadata and a repeated-firewall-mutation failure for closure;
 counter-only variation passed that baseline. No Go tests or host actions ran.
+
+Delta review 3 verification: the lane C unittest command above passed all 146
+tests. The new interrupted-reclosure test fails against `95044c75` because it
+returns complete closure while the newer retiring worker is still alive. Four
+regressions cover that interruption, failed intent persistence before effects,
+legacy receipts, and worker expansion during reference adoption.
+`make deploy-tools-check` ran 724 tests: 714 passed, 9 skipped, and only the known
+runtime-module inventory failure remained. `git diff --check` passed. No Go tests,
+commits, containers or host actions were run for this fix.

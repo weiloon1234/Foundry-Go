@@ -456,29 +456,44 @@ def feature_close(host, entry, transition, resolution, units):
     previous = admission.read_owned(host, path, lambda value: value) if path.exists() else None
     workers, withdrawn = set(), False
     if previous and previous.get("context") == context and previous.get("boot_id") == boot:
-        require(set(previous) == {"context", "boot_id", "workers"} and isinstance(previous["workers"], list)
+        require(set(previous) in ({"context", "boot_id", "workers"}, {"context", "boot_id", "workers", "state"})
+                and previous.get("state", "in_progress") in ("in_progress", "complete") and isinstance(previous["workers"], list)
                 and 0 < len(previous["workers"]) <= 4096, "network_withdrawal", "Invalid withdrawal observation.")
         for worker in previous["workers"]:
             require(isinstance(worker, list) and len(worker) == 2, "network_withdrawal", "Invalid nginx worker observation.")
             workers.add((contract_int(worker[0], upper=2**31 - 1), contract_int(worker[1], upper=2**63 - 1)))
         # A receipt only identifies the workers to retire. It never substitutes
         # for fresh policy, process-exit or reference-isolation observations.
-        try:
-            _feature_http(host, entry, inventory, history, closed=True, write=False)
-            firewall.observe(host, transition.instance_id, claims)
-            edge.observe_projection(host, transition.instance_id, units)
-            withdrawn = True
-        except DeployError as error:
-            if error.code not in ("network_not_withdrawn", "firewall_drift", "nginx_projection_drift"):
-                raise
+        if previous.get("state") == "complete":
+            try:
+                _feature_http(host, entry, inventory, history, closed=True, write=False)
+                firewall.observe(host, transition.instance_id, claims)
+                edge.observe_projection(host, transition.instance_id, units)
+                withdrawn = True
+            except DeployError as error:
+                if error.code not in ("network_not_withdrawn", "firewall_drift", "nginx_projection_drift"):
+                    raise
     if not withdrawn:
+        def record_withdrawal(state):
+            require(0 < len(workers) <= 4096, "network_withdrawal", "Nginx worker observation exceeds its bound.")
+            host.owned_write(path, json.dumps({"context": context, "boot_id": boot, "workers": sorted(workers),
+                                              "state": state}) + "\n", mode=0o600)
+        # owned_write fsyncs the file and parent. Supersede any completed receipt
+        # before firewall changes or reloads can leave a newer retiring generation.
+        workers.update(edge._worker_identities(host))
+        record_withdrawal("in_progress")
         # Integration is a reviewed prerequisite; never self-approve adoption.
         firewall.withdraw(host, transition.instance_id, claims)
         edge.retain_global_references(host)
-        workers.update(edge._worker_identities(host))
+        # Initial reference adoption can itself reload nginx. Cover its new
+        # workers durably before changing the HTTP or stream projections.
+        current_workers = set(edge._worker_identities(host))
+        if not current_workers <= workers:
+            workers.update(current_workers)
+            record_withdrawal("in_progress")
         _feature_http(host, entry, inventory, history, closed=True)
         edge.withdraw(host, transition.instance_id, units)
-        host.owned_write(path, json.dumps({"context": context, "boot_id": boot, "workers": sorted(workers)}) + "\n", mode=0o600)
+        record_withdrawal("complete")
     _feature_exit(host, inventory, units)
     deadline = time.monotonic() + 10
     while workers & set(edge._worker_identities(host)) and time.monotonic() < deadline:
