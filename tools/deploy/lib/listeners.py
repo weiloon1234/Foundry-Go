@@ -240,3 +240,311 @@ def observe_dns(binding):
     addresses = tuple(sorted({str(ipaddress.ip_address(answer[4][0])) for answer in answers}))
     return DNSObservation.parse({"hostname": binding.hostname, "addresses": list(addresses),
                                  "observed_at": now(), "source": "recursive"})
+
+
+def _feature_owners():
+    import importlib
+    from contracts import DeployError
+    try:
+        admission = importlib.import_module("admission")
+        services = importlib.import_module("services")
+    except ModuleNotFoundError as error:
+        if error.name not in ("admission", "services"):
+            raise
+        raise DeployError("capability_unavailable", "Install lane A's admission and service owners before using the network seam.") from None
+    require(hasattr(services, "UnitInventory"), "capability_unavailable", "The typed service inventory is required.")
+    return admission, services
+
+
+def _feature_inventory(host, entry, resolution_id):
+    from contracts import Deployment, RuntimeResolution
+    from topology import parse_profile, parse_topology
+    admission, services = _feature_owners()
+    path = host.paths.opt(entry["name"]) / "runtime" / contract_uuid(resolution_id) / "launch.json"
+    launch = admission.read_owned(host, path, lambda value: value)
+    topology = parse_topology(launch["topology"])
+    profile = parse_profile(launch["profile"], topology)
+    resolution = RuntimeResolution.parse(launch["resolution"])
+    require(resolution.id == resolution_id and profile.instance_id == entry["profile"]["instance_id"]
+            and profile.projection()["domain"] == entry["profile"]["domain"],
+            "network_selection", "Launch identity differs from the registered instance.")
+    return services.UnitInventory(entry["name"], topology, profile, Deployment.parse(launch["deployment"]), resolution)
+
+
+def _feature_history(host):
+    """All immutable launch records remain reservations, including failed candidates."""
+    admission, _ = _feature_owners()
+    registry = host.read_registry()
+    result = []
+    for identity, entry in registry["instances"].items():
+        require(identity == entry["profile"]["instance_id"], "network_inventory", "Invalid host instance inventory.")
+        root = admission.protected_path(host, host.paths.opt(entry["name"]) / "runtime", "directory")
+        if not root.exists():
+            continue
+        paths = list(root.iterdir())
+        require(len(paths) <= 256, "network_inventory", "Retained resolution inventory exceeds its bound.")
+        for path in paths:
+            contract_uuid(path.name)
+            result.append((entry, _feature_inventory(host, entry, path.name)))
+    return registry, tuple(result)
+
+
+def _feature_projection(entry, topology, profile, endpoints):
+    """Reuse the HTTP/upload renderer with a builtin HTTP-only template view."""
+    from pathlib import Path
+    from types import SimpleNamespace
+    from provision import _template
+    from topology import validate_topology
+    import edge
+    endpoint = next(e for e in endpoints if (e.role, e.listener) == ("http", "http"))
+    require(endpoint.address == "127.0.0.1", "network_projection", "The owned HTTP renderer requires IPv4 loopback.")
+    view = {**entry, "profile": profile.projection(), "allocations": {**entry["allocations"], "http_port": endpoint.port},
+            "topology": validate_topology({"schema": 1, "roles": [{"name": "http"}]})}
+    http = _template(Path(__file__).resolve().parents[1], "nginx-https.conf", view)
+    return {"http": edge.gate_http(profile.instance_id, http),
+            **edge.stream_projection(profile, SimpleNamespace(endpoints=endpoints), entry["certificate"]["lineage"], topology=topology)}
+
+
+def _feature_http(host, entry, inventory, history, *, closed):
+    """Only exact owned renderings may be replaced. Closed HTTP has no upstream."""
+    from contracts import PREFIX
+    import edge
+    admission, _ = _feature_owners()
+    projection = _feature_projection(entry, inventory.topology, inventory.profile, inventory.resolution.endpoints)
+    def without_upstreams(text):
+        return re.sub(r"proxy_pass http://127\.0\.0\.1:[0-9]+;", "return 503;", text)
+    site = host.paths.p(f"/etc/nginx/sites-available/{PREFIX}-{entry['name']}.conf")
+    enabled = host.paths.p(f"/etc/nginx/sites-enabled/{site.name}")
+    admission.protected_path(host, enabled.parent, "directory")
+    require(enabled.is_symlink() and enabled.resolve() == site, "network_projection", "The owned HTTP site must be enabled.")
+    accepted = {projection["http"], without_upstreams(projection["http"])}
+    for owner, previous in history:
+        if owner["profile"]["instance_id"] == inventory.profile.instance_id:
+            text = _feature_projection(owner, previous.topology, previous.profile, previous.resolution.endpoints)["http"]
+            accepted.update((text, without_upstreams(text)))
+    # Initial adoption can start from the existing ungated HTTP/upload site.
+    from provision import _template
+    from pathlib import Path
+    from topology import validate_topology
+    view = {**entry, "topology": validate_topology({"schema": 1, "roles": [{"name": "http"}]})}
+    accepted.add(_template(Path(__file__).resolve().parents[1], "nginx-https.conf", view))
+    require(admission.protected_path(host, site, "file").read_text() in accepted,
+            "network_projection", "HTTP configuration is foreign or differs from retained owned projections.")
+    host.owned_write(site, without_upstreams(projection["http"]) if closed else projection["http"])
+    return projection
+
+
+def feature_allocate(host, entry, topology, profile, operation_id):
+    """Lane A checkpoint-2 seam: inspect/reserve in memory; perform no writes/reloads."""
+    import edge
+    from topology import ExecutableRole
+    contract_uuid(operation_id)
+    require(profile.instance_id == entry["profile"]["instance_id"], "network_scope", "Allocation belongs to another instance.")
+    public_policies(profile, topology)
+    registry, history = _feature_history(host)
+    from report import claim_inventory
+    observed = observe_sockets(host)
+    requested = public_claims(profile)
+    other = tuple(c for c in claim_inventory(registry) if c.instance_id != profile.instance_id)
+    other += tuple(c for _, inv in history if inv.profile.instance_id != profile.instance_id for c in public_claims(inv.profile))
+    owned = {c.socket for _, inv in history if inv.profile.instance_id == profile.instance_id for c in public_claims(inv.profile)}
+    nginx = process_members(host, "nginx.service") if owned else frozenset()
+    unknown = tuple(s for s in observed if not (s.socket in owned and s.pids and set(s.pids) <= nginx))
+    require_available(requested, other, unknown)
+    reserved = tuple(c for _, inv in history for c in private_claims(inv.profile.instance_id, inv.resolution))
+    reserved += tuple(ListenerClaim(identity, "http", "http", 1,
+                      SocketIdentity("tcp", 4, "127.0.0.1", owner["allocations"]["http_port"]), "application")
+                      for identity, owner in registry["instances"].items())
+    # Reading the effective inventory is deliberately different from retain_global_references (which reloads/writes).
+    references = edge.upstream_references(host)
+    from contracts import check_path
+    path = check_path(host.paths.p("/var/lib/foundry/network/nginx-references.json"), "file")
+    if path.exists():
+        admission, _ = _feature_owners()
+        value = admission.read_owned(host, path, lambda value: value)
+        from firewall import boot_id
+        if value["boot_id"] == boot_id(host):
+            references += tuple(SocketIdentity(**v) for v in value["sockets"])
+    for _, inv in history:
+        references += tuple(SocketIdentity("tcp", ipaddress.ip_address(e.address).version, e.address, e.port)
+                            for e in edge.retained_references(host, inv.profile.instance_id))
+    roles = [("http", "http")]
+    placed = dict(profile.placement)
+    roles.extend((role.common.name, name) for role in topology.roles if isinstance(role, ExecutableRole)
+                 and placed[role.common.name] for name, _ in role.listeners)
+    endpoints = allocate_private(profile.instance_id, roles, reserved,
+                                 (*observed, *(ObservedSocket(s, ()) for s in references)))
+    return endpoints, canonical_digest(_feature_projection(entry, topology, profile, endpoints))
+
+
+def _feature_exit(host, inventory, units):
+    """Observe systemd jobs, control processes, the full cgroup and admitted helpers."""
+    admission, _ = _feature_owners()
+    from contracts import HelperInvocation
+    def manager(unit):
+        output = host.run(["systemctl", "show", unit, "--property=Id,LoadState,ActiveState,MainPID,ControlPID,ControlGroup,Job",
+                           "--no-pager"], timeout=5).stdout
+        values = dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
+        require(values.get("Id") == unit and values.get("LoadState") == "loaded"
+                and values.get("ActiveState") in ("inactive", "failed")
+                and values.get("MainPID") == values.get("ControlPID") == "0" and values.get("Job") in ("", "0"),
+                "network_backend_alive", "Workload, control-process or queued-job exit is unproven.")
+        return values
+    observations = {}
+    for role, unit in units.items():
+        before = manager(unit)
+        group = before.get("ControlGroup")
+        require(group is not None, "network_backend_alive", "Missing cgroup observation.")
+        if group:
+            require(group.startswith("/") and group != "/" and ".." not in group.split("/"), "network_backend_alive", "Invalid service cgroup.")
+            root = admission.protected_path(host, host.paths.p("/sys/fs/cgroup" + group), "directory")
+            paths = list(root.rglob("cgroup.procs"))
+            require(root.is_dir() and paths and len(paths) <= 4096, "network_backend_alive", "Cgroup observation is incomplete.")
+            for path in paths:
+                require(not admission.protected_path(host, path, "file").read_text().strip(),
+                        "network_backend_alive", "Workload descendants remain alive.")
+        require(manager(unit) == before, "network_backend_alive", "Unit state changed during exit observation.")
+        observations[role] = before
+    store = admission.AdmissionStore(host, inventory.profile.instance_id)
+    root = admission.protected_path(host, store.runtime / "admitted", "directory")
+    receipts = list(root.glob("*/*.json")) if root.exists() else []
+    require(len(receipts) <= 4096, "network_backend_alive", "Admitted invocation inventory exceeds its bound.")
+    from firewall import boot_id
+    for path in receipts:
+        receipt = admission.read_owned(host, path, HelperInvocation.parse)
+        require(receipt.unit.instance_id == inventory.profile.instance_id, "network_scope", "Foreign admitted invocation.")
+        if receipt.unit.role in units and receipt.boot_id == boot_id(host):
+            require(not admission.executor_alive(host, receipt.process), "network_backend_alive", "An admitted helper remains alive.")
+    return observations
+
+
+def feature_close(host, entry, transition, resolution, units):
+    """Withdraw first, prove exit and drain all old nginx workers before address reuse."""
+    import edge
+    import firewall
+    import time
+    from contracts import HostTransition, RuntimeResolution
+    transition = HostTransition.parse(record_document(transition))
+    resolution = RuntimeResolution.parse(record_document(resolution))
+    inventory = _feature_inventory(host, entry, resolution.id)
+    require(transition.instance_id == inventory.profile.instance_id and transition.candidate_resolution_id == resolution.id
+            and transition.current_private_revision == resolution.private_revision == entry["configuration_revision"]
+            and transition.plan_sha256 == resolution.deployment_sha256 and inventory.resolution == resolution
+            and isinstance(units, dict) and units == inventory.units
+            and set(transition.affected_units) == {s.identity for s in inventory.specs.values()},
+            "network_scope", "Closure requires the exact whole-instance transition and unit map.")
+    admission, _ = _feature_owners()
+    store = admission.AdmissionStore(host, transition.instance_id)
+    selection, selected = store._selection()
+    require(selected == resolution and selection.selected_resolution_id == resolution.id and selection.admission.operation_id == transition.operation_id,
+            "network_selection", "Closure is not for the selected operation.")
+    _, history = _feature_history(host)
+    old = _feature_inventory(host, entry, transition.old_resolution_id)
+    require(old.units == units, "network_scope", "Retiring role changes require a broader lifecycle transition.")
+    claims = tuple(dict.fromkeys((*public_claims(old.profile), *public_claims(inventory.profile))))
+    # Integration is an explicitly reviewed prerequisite; never self-approve firewall adoption here.
+    firewall.withdraw(host, transition.instance_id, claims)
+    edge.retain_global_references(host)
+    workers = set(edge._worker_identities(host))
+    _feature_http(host, entry, inventory, history, closed=True)
+    edge.withdraw(host, transition.instance_id, units)
+    _feature_exit(host, inventory, units)
+    deadline = time.monotonic() + 10
+    while workers & set(edge._worker_identities(host)) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    require(not workers & set(edge._worker_identities(host)), "network_old_workers", "Old nginx sessions have not drained.")
+    exits = _feature_exit(host, inventory, units)
+    references = edge.upstream_references(host)
+    reserved = resolution.endpoints
+    require(not any(conflicts(c.socket, s.socket) for c in private_claims(transition.instance_id, resolution)
+                    for s in observe_sockets(host)), "network_backend_alive", "Candidate endpoint is already listening.")
+    fw = firewall.observe(host, transition.instance_id, claims)
+    ng = edge.observe_projection(host, transition.instance_id, units)
+    evidence = ingress_evidence(transition.operation_id, firewall.boot_id(host), old.resolution, resolution,
+                               transition.affected_units, canonical_digest({"retained_units": []}), fw, ng, claims=claims)
+    proof = canonical_digest({"transition": record_document(transition), "boot_id": evidence.boot_id,
+                              "units": exits, "drained_nginx_workers": sorted(workers)})
+    # Historical references remain quarantined for allocation. All old worker generations have
+    # now exited, so only the fresh, complete upstream inventory can reach this reused endpoint.
+    return complete_closure(evidence, resolution, backend_exit_sha256=proof, reserved=reserved, old_references=references)
+
+
+def feature_open(host, entry, resolution, evidence):
+    """Revalidate admission receipts and readiness before/after observed public effects."""
+    import edge
+    import firewall
+    import certificates
+    import time
+    from contracts import AdmissionDisposition, HelperInvocation, RuntimeResolution
+    from release import READINESS_SECONDS
+    resolution = RuntimeResolution.parse(record_document(resolution))
+    evidence = ClosureEvidence.parse(record_document(evidence))
+    admission, services = _feature_owners()
+    inventory = _feature_inventory(host, entry, resolution.id)
+    store = admission.AdmissionStore(host, inventory.profile.instance_id)
+    require(inventory.resolution == resolution and evidence.stage is ClosureStage.APPLICATION_CLOSED
+            and evidence.boot_id == firewall.boot_id(host) and evidence.candidate_resolution_id == resolution.id
+            and set(evidence.units) == {s.identity for s in inventory.specs.values()}
+            and set(resolution.endpoints) <= set(evidence.endpoints), "network_selection", "Opening requires current whole-instance closure.")
+    registry, history = _feature_history(host)
+    projection = _feature_projection(entry, inventory.topology, inventory.profile, resolution.endpoints)
+    require(canonical_digest(projection) == resolution.nginx_sha256, "network_projection", "Selected nginx projection digest differs.")
+    def authorize():
+        deadline = time.monotonic() + READINESS_SECONDS
+        selection, selected = store._selection()
+        require(selected == resolution and selection.selected_resolution_id == resolution.id and selection.admission.operation_id == evidence.operation_id
+                and set(selection.enabled_roles) == set(resolution.roles)
+                and admission.read_owned(host, store.runtime / "boot.json", ClosureEvidence.parse) == evidence,
+                "network_selection", "Opening authority changed.")
+        pending = selection.admission.disposition is AdmissionDisposition.PENDING
+        permit = None
+        if pending:
+            permit = contract_uuid(admission.protected_path(host, store.runtime / "active-permit", "file").read_text())
+        owners = {}
+        for role, unit in inventory.units.items():
+            output = host.run(["systemctl", "show", unit, "--property=MainPID,InvocationID", "--no-pager"], timeout=5).stdout
+            values = dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
+            invocation_id = values.get("InvocationID", "")
+            require(re.fullmatch(r"[a-f0-9]{32}", invocation_id) is not None, "network_invocation", "Missing service invocation.")
+            invocation = admission.read_owned(host, store.runtime / "admitted" / role / (invocation_id + ".json"), HelperInvocation.parse)
+            require(invocation.unit == inventory.specs[role].identity and invocation.resolution_id == resolution.id
+                    and invocation.unit_spec_sha256 == canonical_digest(record_document(inventory.specs[role]))
+                    and str(invocation.process.pid) == values.get("MainPID") and admission.executor_alive(host, invocation.process),
+                    "network_invocation", "The selected admitted process is not the running workload.")
+            with store.preparation(invocation, permit_id=permit) as authorized:
+                require(authorized == resolution and services.wait_ready(host, inventory, role, deadline),
+                        "network_readiness", "Selected workload readiness is unverified.")
+            owners[inventory.profile.instance_id, role] = process_members(host, unit)
+        private = private_claims(inventory.profile.instance_id, resolution)
+        observed = tuple(s for s in observe_sockets(host) if any(conflicts(s.socket, claim.socket) for claim in private))
+        require(not ownership_findings(private, observed, owners),
+                "network_readiness", "Selected private listener ownership is unverified.")
+        return True
+    claims = public_claims(inventory.profile)
+    try:
+        authorize()
+        retained = [inv for _, inv in history if inv.profile.instance_id == inventory.profile.instance_id]
+        certificates.ensure_hostnames(host, registry, entry, tuple(inv.profile for inv in retained),
+                                     topologies=tuple(inv.topology for inv in retained))
+        _feature_http(host, entry, inventory, history, closed=False)
+        closed = firewall.observe(host, inventory.profile.instance_id, claims)
+        edge.open_runtime(host, inventory.profile, resolution, entry["certificate"]["lineage"], resolution.roles,
+                          topology=inventory.topology, authorize=authorize)
+        if any(policy.tls == "edge" for policy in public_policies(inventory.profile, inventory.topology).values()):
+            certificates.verify_network_postcondition(host, entry)
+        firewall.open_runtime(host, inventory.profile.instance_id, claims, inventory.profile.listeners,
+                              closed_sha256=closed.sha256, authorize=authorize)
+        authorize()
+        edge.observe_projection(host, inventory.profile.instance_id, resolution.roles,
+                                expected={name: value for name, value in projection.items() if name != "http"} | {"http-open.conf": '\"\" 1;\n'})
+        observed = tuple(s for s in observe_sockets(host) if any(conflicts(s.socket, claim.socket) for claim in claims))
+        require(not ownership_findings(claims, observed, {"nginx": process_members(host, "nginx.service")}, edge_verified=True),
+                "public_opening_unverified", "Public sockets do not belong to the selected nginx projection.")
+        firewall.observe(host, inventory.profile.instance_id, claims, bindings=inventory.profile.listeners, opened=True)
+        return True
+    except Exception:
+        try:
+            firewall.withdraw(host, inventory.profile.instance_id, claims)
+        finally:
+            edge.withdraw(host, inventory.profile.instance_id, resolution.roles)
+        raise

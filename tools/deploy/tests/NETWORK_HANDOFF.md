@@ -95,6 +95,70 @@ evidence, never permission to start a process or commit admission.
    `instance_report` exposes basic declaration findings for profile 3; lane A should
    supply its selected records for the richer report during lifecycle integration.
 
+## Checkpoint-2 adapters (`3897443a`)
+
+Lane A's unchanged `feature_network.py` can call these functions in `listeners.py`:
+
+| Adapter | Existing owners and returned evidence |
+| --- | --- |
+| `feature_allocate(host, entry, topology, profile, operation_id)` | Read the host registry, immutable launch inventories, socket owners and complete nginx references; call `require_available` and `allocate_private`; return endpoints and the canonical digest of the existing HTTP/upload renderer plus `stream_projection` |
+| `feature_close(host, entry, transition, resolution, units)` | Validate the selected `HostTransition`, `RuntimeResolution` and exact role-to-unit dictionary; withdraw old/candidate firewall claims and HTTP/stream routes; observe systemd jobs, main/control PIDs, descendant cgroups and admitted helpers; drain old nginx worker identities; call `ingress_evidence` then `complete_closure` with fresh exit and reference-isolation observations |
+| `feature_open(host, entry, resolution, evidence)` | Revalidate the selected admission receipt and live permit or committed authority through `AdmissionStore.preparation`, call `services.wait_ready`, prove private socket ownership, ensure TLS names, restore the selected HTTP projection, call `edge.open_runtime` then `firewall.open_runtime`, and return `True` only after final nginx/socket/firewall observations |
+
+Callers still hold the host and instance locks. Launch records are read from lane
+A's `runtime/<resolution-id>/launch.json` through its protected-file reader and
+validated by its `UnitInventory`. Allocation writes nothing, including reference
+receipts. Legacy HTTP allocations and every retained candidate remain reserved.
+The second allocation result is a SHA256, as required by the seam, not raw nginx
+text. No frozen record fields or lane A source files change.
+
+Checkpoint 2 passes whole-instance transitions. These adapters reject partial
+scopes, changed retiring role sets, foreign units, incomplete history and stale
+selection rather than broadening a supplied scope. Closure does not stop workloads
+or kill nginx workers. It waits up to ten seconds for the old worker generations;
+remaining sessions, including those for other instances, cause refusal. This is
+conservative and can delay closure on a shared busy nginx. Closed owned HTTP
+renderings replace backend proxy targets with 503 responses; successful opening
+restores the exact renderer output, including B26 upload directives. A drained
+same-resolution restart uses the fresh complete nginx reference inventory;
+allocation still quarantines historical references.
+
+Reviewed UFW adoption, the stream include/module and an enabled owned HTTP site
+remain prerequisites. The adapter has no review digest with which to approve
+these installations itself. Fresh boot ordering/preparation still belongs to lane
+A; these functions do not replace its coordinator or start units. Any opening
+failure during effects withdraws both network owners. All-plain histories perform
+no TCP certificate work; selected TLS consumers must pass the effective leaf and
+handshake postcondition before the public firewall opens.
+
+There is also an upstream checkpoint-2 registry blocker: its `Host.read_registry`
+calls `contracts.validate_registry`, which calls `identity`/`validate_profile` and
+still rejects schema 3. Registry topology validation likewise uses the legacy
+validator. Lane A/integration must resolve that boundary; these adapters do not
+bypass it or change the frozen contracts. The tests explicitly supply a fixture
+registry reader, so passing them does not claim full registry/lifecycle acceptance.
+
+`test_feature_network_adapters.py` calls the unedited checkpoint seam and admission
+owners in [the checkpoint fixture](network_fixtures/lane_a_3897443a/README.md).
+It covers read-only reservations/projection hashing, exact scope, active jobs and
+control processes, cgroup descendants, live admitted helpers, old nginx workers,
+old references, same-resolution restart, pending and committed opening, dead
+executors, foreign socket owners, TLS postconditions and withdrawal on failure.
+
+Native verification for this seam change (no Go tests or host actions):
+
+```sh
+cd tools/deploy/tests
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest test_network test_network_real test_network_review test_network_preview test_feature_network_adapters test_edge test_certificates test_report
+```
+
+Result: 136 tests passed. From the repository root, `make deploy-tools-check`
+ran 714 tests: 704 passed, 9 skipped, and only the known
+`test_candidate_python_inventory_contains_only_runtime_modules` failure remained
+(`lib/listeners.py` and `lib/firewall.py` missing from the integration inventory).
+All three checkpoint fixture files were compared byte-for-byte with `git show
+3897443a:tools/deploy/lib/<file>`; the frozen contracts also match that checkpoint.
+
 ## Plain public TCP
 
 `edge.stream_projection(profile, resolution, lineage, topology=topology)` and
@@ -284,3 +348,85 @@ allow ports, calls `firewall.observe(..., integrated=False)` against the live
 IPv4/IPv6 and nft JSON views, and checks that persistent files/modes are unchanged.
 It never installs Foundry chains, reloads UFW or opens a listener. This scenario
 has been written but was not run as part of the no-host-actions fix round.
+
+## Live network preview before lane A integration
+
+`NetworkPreviewAcceptance` is a self-contained opt-in fixture in
+`acceptance_network.py`. It reuses the existing systemd host image, adding nginx,
+`libnginx-mod-stream`, UFW, iptables and nftables. No provider, DNS writer, Go build,
+release deployment is involved. The application-closure scenario calls the
+unedited checkpoint-2 `feature_network.py` seam; the other scenarios exercise
+lane C's network primitives. Public lane C function signatures are unchanged.
+
+The fixture creates a veth-connected peer namespace with IPv4/IPv6 addresses,
+configures default-deny UFW with only 22/80/443 allowed, and generates a self-signed
+certificate. TLS clients trust that certificate and verify the hostname; verification
+is never disabled. A private echo backend returns the exact probe bytes. This tests
+transport, not application authentication: the real service must still authenticate
+clients as acknowledged by `authentication: true`.
+
+| Scenario | Real observations and assertions |
+| --- | --- |
+| Plain and TLS opening/withdrawal | Default-deny proof before backend startup; peer TCP connection failure while nginx is listening but UFW is closed; exact bytes after runtime opening over both families; new connections denied after withdrawal |
+| Stale sessions, plain and TLS | The old session survives graceful withdrawal; evidence remains `ingress_withdrawn` with no exit/isolation proof; completion without exit proof refuses; fresh endpoints avoid retained/global references; stopping the old echo fixture terminates its session before reopening |
+| Boot cleanup primitives, plain and TLS | Stop nginx and the old fixture; reload UFW to discard runtime allows; call `edge.prepare_boot`; restart nginx and prove closed; reopen a fresh backend and prove both families reachable |
+| Reports | Validate nginx cgroup/socket ownership against the instance claim inventory; flag an undeclared public binding; exclude the declared port from unexpected exposure; attribute absent listeners after withdrawal to the instance and report historical ingress-only evidence |
+| Application closure adapter | Run real systemd echo units with checkpoint-2 launch/transition records; refuse closure while the units live; stop them, drain old nginx workers, and emit scoped `application_admission_closed` evidence from real kernel and nginx observations |
+
+One test is explicitly skipped pending lane A:
+
+- `test_boot_unit_coordination_by_lane_a`: lane A owns the actual coordinator,
+  systemd ordering and fresh permits. The primitive test calls `prepare_boot`
+  directly, without installing a substitute boot unit. A reload does not change
+  the kernel boot ID; same-boot reference reservations remain intact.
+
+The primitive opening scenarios' `authorize` callback verifies only echo backend
+health, not lane A admission. The adapter closure scenario uses a protected fixture
+registry reader and the unedited checkpoint-2 owners; it does not bootstrap a real
+application or issue start permits. Adapter opening with pending and committed
+admission is covered by native unit tests; full live lifecycle opening and boot
+coordination remain integration requirements. This harness does not claim
+end-to-end lifecycle acceptance.
+
+Run these **Bash commands from the repository root**. They reuse `host.Dockerfile`
+for systemd setup, use private network/PID/cgroup namespaces, and mount no host
+cgroup filesystem. They require privileged Linux containers, cgroup v2 and systemd,
+as does the existing deployment harness. No alternatives switch is performed.
+
+```bash
+set -e
+for version in 24.04 26.04; do
+  docker build --build-arg UBUNTU_VERSION="$version" \
+    -f tools/deploy/tests/host.Dockerfile \
+    -t "foundry-network-base:$version" tools/deploy/tests
+  docker build --build-arg BASE_IMAGE="foundry-network-base:$version" \
+    -f tools/deploy/tests/network-preview.Dockerfile \
+    -t "foundry-network-preview:$version" tools/deploy/tests
+  container="foundry-network-${version//./-}-$$"
+  docker run -d --name "$container" --privileged --cgroupns=private \
+    --memory=2g --cpus=2 --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+    --tmpfs /run --tmpfs /run/lock --tmpfs /tmp \
+    --mount "type=bind,source=$PWD/tools/deploy,target=/verification/deploy,readonly" \
+    "foundry-network-preview:$version"
+  for attempt in $(seq 60); do
+    docker exec "$container" test -S /run/systemd/private 2>/dev/null && break
+    sleep 1
+  done
+  docker exec "$container" systemctl start multi-user.target
+  docker exec -e FOUNDRY_DISPOSABLE_HOST=1 -e FOUNDRY_NETWORK_PREVIEW=1 \
+    "$container" python3 -B /verification/deploy/tests/acceptance_network.py \
+    NetworkPreviewAcceptance -v
+  docker cp "$container:/run/foundry-network-acceptance/preview" \
+    "./network-preview-$version-$$"
+  docker rm -f "$container"
+done
+```
+
+Expected live result: eight passing network scenarios and the named lane A boot
+skip. Ingress evidence, adapter closure and a report are copied out before successful containers
+are removed. A failure leaves the container intact (`$container`) for inspection;
+check `journalctl -u nginx` and copy the preview evidence before removing that exact
+container. Each rerun requires a fresh container.
+
+These commands have not been executed in this no-host-actions session. Native
+unit checks validate fixture records and opt-in guards, not live network behaviour.
