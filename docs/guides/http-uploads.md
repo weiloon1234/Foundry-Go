@@ -357,6 +357,8 @@ body before publication. Cleanup completes before its admission slot is released
 With the framework's `Server`, Compression and ETags deliver that terminal 408 even when the native read timeout
 cancels HTTP/1's request context. This exception requires an observed socket read
 timeout at the installed deadline; ordinary client disconnects still abort delivery.
+Concurrent connection deadline resets invalidate overlapping upload evidence,
+including reads awakened before the reset finishes.
 The server retains that evidence before HTTP framing can replace the read error,
 including while waiting for the final blank line of chunked trailers. Trailer error
 text alone never grants the timeout-response exception.

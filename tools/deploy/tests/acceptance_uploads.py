@@ -184,6 +184,18 @@ class Monitor:
         print("UPLOAD_DISK " + json.dumps(self.peaks, sort_keys=True), flush=True)
 
 
+def migration_report(host, entry, selected, env_file=None):
+    return json.loads(release.app(host, entry, selected, "migrate:status", env_file=env_file,
+                                  extra=("--database", "primary")).stdout)
+
+
+def require_upload_migrations(host, entry, selected, env_file):
+    assert not release.migration_status(host, entry, selected), "Normal release has pending migrations"
+    baseline = migration_report(host, entry, selected)
+    assert migration_report(host, entry, selected, env_file) == baseline, "Upload configuration migration history differs from normal release"
+    return baseline
+
+
 @contextmanager
 def configured_fixture():
     guard()
@@ -209,6 +221,7 @@ def configured_fixture():
     created_directories = []
     images = []
     changed = False
+    baseline = None
     try:
         for name, path in paths.items():
             assert not path.exists(), "Refusing an existing upload volume"
@@ -239,7 +252,9 @@ def configured_fixture():
         atomic_write(env_file, "\n".join(lines + [f"{key}={value}" for key, value in values.items()]) + "\n", mode=0o600)
         run(["chown", entry["name"] + ":" + entry["name"], str(env_file)])
         selected = host.paths.opt(entry["name"]) / "current"
-        release.app(host, entry, selected, "migrate", env_file=env_file, timeout=120)
+        # The normal release already owns the upload schema. This phase must
+        # never apply extra migrations to the shared recovery database.
+        baseline = require_upload_migrations(host, entry, selected, env_file)
         run(["systemctl", "stop", unit])
         changed = True
         rendered = _template(TOOLS, "foundry-http@.service", entry,
@@ -273,6 +288,8 @@ def configured_fixture():
         temporary.rmdir()
         assert host.paths.registry.read_bytes() == registry, "Acceptance changed the registry"
         wait_for(lambda: https_response(original, "/health/ready")[0] == 200, "Original fixture did not recover")
+        if baseline is not None:
+            assert migration_report(host, original, selected) == baseline, "Uploads phase changed the instance migration history"
 
 
 class Scenarios:

@@ -1,6 +1,7 @@
 """Pure controller checks. These never provision or contact a host."""
 from pathlib import Path
 import errno
+import json
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -10,6 +11,28 @@ import uploads
 
 
 class UploadAcceptanceTests(unittest.TestCase):
+    def test_upload_configuration_requires_identical_migration_history(self):
+        normal = {'targets': [{'migrations': [{'key': {'origin': 'fixture', 'id': 'one'}, 'state': 'applied'}]}]}
+        changed = {'targets': [{'migrations': [{'key': {'origin': 'fixture', 'id': 'extra'}, 'state': 'pending'}]}]}
+        for report in (normal, changed):
+            with self.subTest(report=report), \
+                    patch.object(acceptance.release, 'migration_status', return_value=False), \
+                    patch.object(acceptance.release, 'app', side_effect=[Mock(stdout=json.dumps(normal)), Mock(stdout=json.dumps(report))]) as app:
+                if report == normal:
+                    self.assertEqual(normal, acceptance.require_upload_migrations('host', 'entry', 'release', 'uploads.env'))
+                else:
+                    with self.assertRaisesRegex(AssertionError, 'migration history differs'):
+                        acceptance.require_upload_migrations('host', 'entry', 'release', 'uploads.env')
+                self.assertEqual([None, 'uploads.env'], [call.kwargs['env_file'] for call in app.call_args_list])
+                self.assertTrue(all(call.args[3] == 'migrate:status' for call in app.call_args_list))
+
+    def test_upload_phase_refuses_pending_normal_migrations_without_applying_them(self):
+        with patch.object(acceptance.release, 'migration_status', return_value=True), \
+                patch.object(acceptance.release, 'app') as app:
+            with self.assertRaisesRegex(AssertionError, 'pending migrations'):
+                acceptance.require_upload_migrations('host', 'entry', 'release', 'uploads.env')
+            app.assert_not_called()
+
     def run_clients(self, *, release=6, elapsed=26, status=408, admitted=True):
         """Simulate time and usage, including nginx draining after app completion."""
         with tempfile.TemporaryDirectory() as temporary:

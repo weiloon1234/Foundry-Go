@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Fixed: the deploy acceptance fixture declares extension and attachment schema
+  independently of its upload-route setting. The uploads phase no longer applies
+  extra migrations to the shared database and verifies unchanged history for
+  subsequent recovery acceptance.
+
+- Fixed: concurrent connection deadline resets cannot attribute their read
+  timeouts to an overlapping upload installation. Timeout evidence requires the
+  same stable reset generation before and after the read; ordinary resets remain
+  lock-free. Added reverse-order and overlapping-reset regression coverage.
+
 - Fixed: native HTTP and direct TLS upload hosting retain ordinary body-read 408
   responses through Compression and ETags when connection-level timeout evidence
   is unavailable. Ordinary connection deadline resets now invalidate upload

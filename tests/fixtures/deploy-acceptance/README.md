@@ -93,7 +93,12 @@ node --test web/build.test.mjs
 
 An explicit `app.http.uploads.enabled` profile adds `/acceptance/uploads/large`,
 `short`, `small`, `multipart`, `usage` and `cleanup`. The existing fixture table supplies typed
-owners; attachment migrations add the framework journal. The serving process
+owners; attachment migrations add the framework journal. The fixture always
+declares its extension owner and extension/attachment migrations, including when
+uploads are disabled. Normal release activation applies this same migration set.
+The uploads phase only reads migration status: it requires identical history
+under both environments and checks that history is unchanged after cleanup, so
+later backup and recovery phases use the normal release's schema. The serving process
 uses a real local disk and attachment manager. Its test-only adapter can hold Put
 or local staging at an exact controller-owned release marker. Success follows
 Prepare, a committed ReplaceIn transaction and a full digest-verified read.

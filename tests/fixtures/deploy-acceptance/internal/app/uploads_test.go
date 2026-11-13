@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"net/http/httptest"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -12,11 +14,52 @@ import (
 	fixtureconfig "foundry.test/deployacceptance/internal/config"
 	"foundry.test/deployacceptance/internal/work"
 	"github.com/weiloon1234/Foundry-Go/application"
+	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/http"
+	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/storage/local"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
+
+func TestUploadSettingsPreserveFixtureMigrations(t *testing.T) {
+	settings, _, err := fixtureconfig.Load(filepath.Join("..", "..", "config", "deploy.toml"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Build the real fixture declarations without starting services or requiring
+	// the cloud credentials supplied by container bootstrap.
+	settings.App.Services.Storage.Disks = nil
+	settings.App.HTTP.Uploads = http.UploadSettings{Request: http.UploadPoolConfig{Directory: t.TempDir(), MaxActive: 4, MaxBytes: 4 * (129 << 20)}, SmallDirectory: t.TempDir(), BodyBytes: 129 << 20, FileBytes: 128 << 20, Timeout: 300 * time.Second, AttachmentMaxActive: 2, StorageTimeout: 210 * time.Second, Staging: http.UploadPoolConfig{Directory: t.TempDir(), MaxActive: 2, MaxBytes: 1 << 30}}
+	var baseline []infrastructure.MigrationTarget
+	for _, enabled := range []bool{false, true, false} {
+		settings.App.HTTP.Uploads.Enabled = enabled
+		built, err := Builder(settings, work.NewReceipts(t.TempDir())).Build(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		migrations := built.Migrations()
+		if err := shutdown(built); err != nil {
+			t.Fatal(err)
+		}
+		if baseline == nil {
+			baseline = migrations
+		} else if !reflect.DeepEqual(baseline, migrations) {
+			t.Fatalf("uploads enabled=%t changed the normal release's migration targets or definitions", enabled)
+		}
+	}
+	for _, expected := range attachments.Migrations() {
+		found := false
+		for _, target := range baseline {
+			for _, definition := range target.Definitions {
+				found = found || reflect.DeepEqual(definition, expected)
+			}
+		}
+		if !found {
+			t.Fatalf("normal release omitted attachment migration %v", expected.Key)
+		}
+	}
+}
 
 func TestUploadRoutesReleaseCaptureAfterInvalidIdentity(t *testing.T) {
 	pool, err := http.NewUploadPool(http.UploadPoolConfig{Directory: t.TempDir(), MaxActive: 4, MaxBytes: 4 * (129 << 20)})
