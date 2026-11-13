@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/httpdeadline"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
@@ -131,10 +132,10 @@ func (b routeBudget) body(w stdhttp.ResponseWriter, r *stdhttp.Request, kernel *
 		// its effective total deadline to the socket too: context cancellation
 		// alone cannot interrupt a body read or net/http's subsequent drain.
 		if deadline, ok := r.Context().Deadline(); ok {
-			if conn, ok := r.Context().Value(requestDeadlineConnKey{}).(*requestDeadlineConn); ok && r.ProtoMajor == 1 {
-				admitted.readTimeout, _ = conn.uploadReadDeadline(deadline)
+			if conn, ok := r.Context().Value(requestDeadlineConnKey{}).(*httpdeadline.Conn); ok && r.ProtoMajor == 1 {
+				admitted.readTimeout, _ = conn.UploadReadDeadline(deadline)
 			} else if err := stdhttp.NewResponseController(w).SetReadDeadline(deadline); err == nil {
-				admitted.readTimeout = &connectionReadTimeout{deadline: deadline}
+				admitted.readTimeout = httpdeadline.NewReadTimeout(deadline)
 				admitted.observeBodyTimeout = true
 			}
 		}

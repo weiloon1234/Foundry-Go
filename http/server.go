@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/httpdeadline"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"golang.org/x/net/netutil"
 )
@@ -137,7 +138,7 @@ func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) err
 		connectionLimit = DefaultServerConfig().MaxConnections
 	}
 	listener = netutil.LimitListener(listener, connectionLimit)
-	listener = requestDeadlineListener{listener}
+	listener = httpdeadline.Listener{Listener: listener}
 
 	// Preserve application values but defer request cancellation until the grace
 	// expires. Cancelling the kernel should first let active work finish normally.

@@ -1,6 +1,7 @@
-package http
+package httpdeadline
 
 import (
+	"io"
 	"net"
 	"os"
 	"testing"
@@ -10,9 +11,9 @@ import (
 
 func TestInactiveConnectionDeadlineResetsDoNotLock(t *testing.T) {
 	for _, previousUpload := range []bool{false, true} {
-		conn := &requestDeadlineConn{Conn: deadlineErrorConn{}}
+		conn := &Conn{Conn: deadlineErrorConn{}}
 		if previousUpload {
-			if _, err := conn.uploadReadDeadline(time.Now().Add(time.Minute)); err != nil {
+			if _, err := conn.UploadReadDeadline(time.Now().Add(time.Minute)); err != nil {
 				t.Fatal(err)
 			}
 			if err := conn.SetReadDeadline(time.Time{}); err != nil {
@@ -59,9 +60,9 @@ func TestConnectionResetInvalidatesOverlappingUploadInstallation(t *testing.T) {
 		deadlineErrorConn: deadlineErrorConn{reader: iotest.ErrReader(&net.OpError{Op: "read", Err: os.ErrDeadlineExceeded})},
 		entered:           make(chan struct{}), release: make(chan struct{}),
 	}
-	conn := &requestDeadlineConn{Conn: underlying}
-	done := make(chan *connectionReadTimeout, 1)
-	go func() { record, _ := conn.uploadReadDeadline(time.Now().Add(-time.Second)); done <- record }()
+	conn := &Conn{Conn: underlying}
+	done := make(chan *ReadTimeout, 1)
+	go func() { record, _ := conn.UploadReadDeadline(time.Now().Add(-time.Second)); done <- record }()
 	<-underlying.entered
 	// SetDeadline forwards independently while installation is still in flight.
 	reset := make(chan error, 1)
@@ -112,7 +113,7 @@ func TestConnectionUploadDuringResetDoesNotObserveTimeout(t *testing.T) {
 				deadlineErrorConn: deadlineErrorConn{reader: iotest.ErrReader(&net.OpError{Op: "read", Err: os.ErrDeadlineExceeded})},
 				entered:           make(chan struct{}, 2), release: make(chan struct{}),
 			}
-			conn := &requestDeadlineConn{Conn: underlying}
+			conn := &Conn{Conn: underlying}
 			resetters := []func(time.Time) error{conn.SetReadDeadline}
 			if name == "all" {
 				resetters = []func(time.Time) error{conn.SetDeadline}
@@ -143,7 +144,7 @@ func TestConnectionUploadDuringResetDoesNotObserveTimeout(t *testing.T) {
 			}
 			readDuringReset := func() {
 				t.Helper()
-				record, err := conn.uploadReadDeadline(time.Now().Add(-time.Second))
+				record, err := conn.UploadReadDeadline(time.Now().Add(-time.Second))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -165,7 +166,7 @@ func TestConnectionUploadDuringResetDoesNotObserveTimeout(t *testing.T) {
 				readDuringReset()
 			}
 			finish()
-			record, err := conn.uploadReadDeadline(time.Now().Add(-time.Second))
+			record, err := conn.UploadReadDeadline(time.Now().Add(-time.Second))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -174,5 +175,44 @@ func TestConnectionUploadDuringResetDoesNotObserveTimeout(t *testing.T) {
 				t.Fatal("upload installed after all resets lost timeout evidence")
 			}
 		})
+	}
+}
+
+type deadlineErrorConn struct {
+	net.Conn
+	reader io.Reader
+}
+
+func (c deadlineErrorConn) Read(p []byte) (int, error)    { return c.reader.Read(p) }
+func (deadlineErrorConn) SetReadDeadline(time.Time) error { return nil }
+func (deadlineErrorConn) SetDeadline(time.Time) error     { return nil }
+
+func TestConnectionDeadlineChangesDoNotReuseUploadEvidence(t *testing.T) {
+	for _, all := range []bool{false, true} {
+		conn := &Conn{Conn: deadlineErrorConn{reader: iotest.ErrReader(&net.OpError{Op: "read", Err: os.ErrDeadlineExceeded})}}
+		first, err := conn.UploadReadDeadline(time.Now().Add(-time.Second))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if all {
+			err = conn.SetDeadline(time.Time{})
+		} else {
+			err = conn.SetReadDeadline(time.Time{})
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = conn.Read(make([]byte, 1))
+		if first.observed.Load() {
+			t.Fatal("replaced deadline was attributed to the upload")
+		}
+		second, err := conn.UploadReadDeadline(time.Now().Add(-time.Second))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = conn.Read(make([]byte, 1))
+		if !second.observed.Load() || first.observed.Load() {
+			t.Fatal("new request reused old timeout evidence")
+		}
 	}
 }

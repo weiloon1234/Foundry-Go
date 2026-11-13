@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/httpdeadline"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/upload"
 )
@@ -64,7 +65,7 @@ type uploadReservationKey struct{}
 type requestUpload struct {
 	route              uploadRoute
 	reservation        *upload.Reservation
-	readTimeout        *connectionReadTimeout
+	readTimeout        *httpdeadline.ReadTimeout
 	observeBodyTimeout bool
 	timeoutResponse    atomic.Bool
 }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed: upload deadline connection and listener wrappers now live in
+  `internal/httpdeadline`, preserving the HTTP public API and timeout behavior.
+
 - Fixed: the deploy acceptance fixture declares extension and attachment schema
   independently of its upload-route setting. The uploads phase no longer applies
   extra migrations to the shared database and verifies unchanged history for

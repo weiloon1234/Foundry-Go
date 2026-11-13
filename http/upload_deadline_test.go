@@ -18,6 +18,8 @@ import (
 	"testing"
 	"testing/iotest"
 	"time"
+
+	"github.com/weiloon1234/Foundry-Go/internal/httpdeadline"
 )
 
 func uploadDeadlineServer(t *testing.T, handler stdhttp.Handler, kernel time.Duration) (string, *stdhttp.Client) {
@@ -223,12 +225,12 @@ func TestUploadTerminalTimeoutDoesNotMaskDisconnect(t *testing.T) {
 			cancel()
 			admitted := &requestUpload{}
 			request := httptest.NewRequestWithContext(context.WithValue(ctx, uploadReservationKey{}, admitted), "POST", "/uploads", nil)
-			conn := &requestDeadlineConn{Conn: deadlineErrorConn{reader: iotest.ErrReader(tc.err)}}
+			conn := &httpdeadline.Conn{Conn: deadlineErrorConn{reader: iotest.ErrReader(tc.err)}}
 			if !tc.deadline.IsZero() {
-				admitted.readTimeout, _ = conn.uploadReadDeadline(tc.deadline)
+				admitted.readTimeout, _ = conn.UploadReadDeadline(tc.deadline)
 			}
 			_, _ = conn.Read(make([]byte, 1))
-			observed := admitted.readTimeout != nil && admitted.readTimeout.observed.Load()
+			observed := admitted.readTimeout != nil && admitted.readTimeout.Observed()
 			if observed != tc.terminal {
 				t.Fatal("read failure was misclassified", observed)
 			}
@@ -251,33 +253,3 @@ type deadlineErrorConn struct {
 func (c deadlineErrorConn) Read(p []byte) (int, error)    { return c.reader.Read(p) }
 func (deadlineErrorConn) SetReadDeadline(time.Time) error { return nil }
 func (deadlineErrorConn) SetDeadline(time.Time) error     { return nil }
-
-func TestConnectionDeadlineChangesDoNotReuseUploadEvidence(t *testing.T) {
-	for _, all := range []bool{false, true} {
-		conn := &requestDeadlineConn{Conn: deadlineErrorConn{reader: iotest.ErrReader(&net.OpError{Op: "read", Err: os.ErrDeadlineExceeded})}}
-		first, err := conn.uploadReadDeadline(time.Now().Add(-time.Second))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if all {
-			err = conn.SetDeadline(time.Time{})
-		} else {
-			err = conn.SetReadDeadline(time.Time{})
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, _ = conn.Read(make([]byte, 1))
-		if first.observed.Load() {
-			t.Fatal("replaced deadline was attributed to the upload")
-		}
-		second, err := conn.uploadReadDeadline(time.Now().Add(-time.Second))
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, _ = conn.Read(make([]byte, 1))
-		if !second.observed.Load() || first.observed.Load() {
-			t.Fatal("new request reused old timeout evidence")
-		}
-	}
-}

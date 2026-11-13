@@ -15,6 +15,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/httpdeadline"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/upload"
 )
@@ -30,14 +31,14 @@ type multipartInput struct {
 type multipartSource struct {
 	source      io.Reader
 	tooLarge    bool
-	readTimeout *connectionReadTimeout
+	readTimeout *httpdeadline.ReadTimeout
 }
 
 // Read forwards source data and records whether the HTTP body limit was exceeded.
 func (r *multipartSource) Read(p []byte) (int, error) {
 	n, err := r.source.Read(p)
 	if r.readTimeout != nil {
-		r.readTimeout.observe(err)
+		r.readTimeout.Observe(err)
 	}
 	if _, ok := err.(*stdhttp.MaxBytesError); ok {
 		r.tooLarge = true
@@ -115,7 +116,7 @@ func multipartRead[B any](d Multipart[B], w stdhttp.ResponseWriter, r *stdhttp.R
 		contextErr = context.DeadlineExceeded
 	}
 	if contextErr != nil {
-		if admitted != nil && admitted.readTimeout != nil && admitted.readTimeout.observed.Load() {
+		if admitted != nil && admitted.readTimeout != nil && admitted.readTimeout.Observed() {
 			admitted.timeoutResponse.Store(true)
 		}
 		rejectUnreadBody(w, r)
