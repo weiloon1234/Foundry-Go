@@ -194,6 +194,80 @@ class NATObservationTests(unittest.TestCase):
         with self.assertRaises(c.DeployError):
             self.observe()
 
+    def test_review_redirect_survives_later_empty_builtin_declaration(self):
+        for family in (4, 6):
+            suffix = "6" if family == 6 else ""
+            before = self.host.paths.p(f"/etc/ufw/before{suffix}.rules")
+            after = self.host.paths.p(f"/etc/ufw/after{suffix}.rules")
+            before_text, after_text = before.read_text(), after.read_text()
+            before.write_text(before_text + "*nat\n:PREROUTING ACCEPT [0:0]\n"
+                              "-A PREROUTING -p tcp --dport 8554 -j REDIRECT --to-ports 22\nCOMMIT\n")
+            after.write_text(after_text + "*nat\n:PREROUTING ACCEPT [0:0]\nCOMMIT\n")
+            try:
+                for backend in ("legacy", "nf_tables"):
+                    self.backend = backend
+                    with self.subTest(family=family, backend=backend):
+                        with self.assertRaises(c.DeployError) as caught:
+                            self.observe()
+                        self.assertEqual(caught.exception.code, "firewall_delivery_conflict")
+            finally:
+                before.write_text(before_text)
+                after.write_text(after_text)
+
+    def test_empty_later_builtins_do_not_hide_filter_raw_or_mangle_rules(self):
+        for family in (4, 6):
+            suffix = "6" if family == 6 else ""
+            before = self.host.paths.p(f"/etc/ufw/before{suffix}.rules")
+            after = self.host.paths.p(f"/etc/ufw/after{suffix}.rules")
+            before_text, after_text = before.read_text(), after.read_text()
+            for table in ("filter", "raw", "mangle"):
+                root, policy = ("INPUT", "DROP") if table == "filter" else ("PREROUTING", "ACCEPT")
+                declaration = f":{root} {policy} [0:0]\n"
+                action = "ACCEPT" if table == "filter" else "DROP"
+                rule = f"-I {root} 1 -p tcp --dport 8554 -j {action}\n"
+                if table == "filter":
+                    before.write_text(before_text.replace("*filter\n", "*filter\n" + declaration).replace("\nCOMMIT", "\n" + rule + "COMMIT"))
+                    after.write_text(after_text.replace("*filter\n", "*filter\n" + declaration))
+                else:
+                    before.write_text(before_text + f"*{table}\n" + declaration + rule + "COMMIT\n")
+                    after.write_text(after_text + f"*{table}\n" + declaration + "COMMIT\n")
+                try:
+                    for backend in ("legacy", "nf_tables"):
+                        self.backend = backend
+                        with self.subTest(family=family, backend=backend, table=table):
+                            with self.assertRaises(c.DeployError) as caught:
+                                self.observe()
+                            self.assertEqual(caught.exception.code, "firewall_foreign_allow" if table == "filter" else "firewall_delivery_conflict")
+                finally:
+                    before.write_text(before_text)
+                    after.write_text(after_text)
+
+    def test_later_insert_uses_prior_builtin_length_and_enters_policy_digest(self):
+        before = self.host.paths.p("/etc/ufw/before.rules")
+        after = self.host.paths.p("/etc/ufw/after.rules")
+        before.write_text(before.read_text() + "*nat\n:PREROUTING ACCEPT [0:0]\n"
+                          "-A PREROUTING -p tcp --dport 8080 -j REDIRECT --to-ports 22\n"
+                          "-A PREROUTING -p tcp --dport 8081 -j REDIRECT --to-ports 22\nCOMMIT\n")
+        original = self.observe().sha256
+        after.write_text(after.read_text() + "*nat\n:PREROUTING ACCEPT [0:0]\n"
+                         "-I PREROUTING 3 -p tcp --dport 8082 -j REDIRECT --to-ports 22\nCOMMIT\n")
+        self.assertNotEqual(original, self.observe().sha256)
+        after.write_text(after.read_text().replace("--dport 8082", "--dport 8554"))
+        with self.assertRaises(c.DeployError) as caught:
+            self.observe()
+        self.assertEqual(caught.exception.code, "firewall_delivery_conflict")
+
+    def test_noflush_retains_live_auxiliary_chains_not_redeclared_by_files(self):
+        # Dormant live policy becomes reachable only when before.rules adds a jump.
+        self.auxiliary(4, "*nat\n:PREROUTING ACCEPT [0:0]\n:DORMANT - [0:0]\n"
+                         "-A DORMANT -p tcp --dport 8554 -j REDIRECT --to-ports 22\nCOMMIT\n")
+        self.assertTrue(self.observe().closed)
+        before = self.host.paths.p("/etc/ufw/before.rules")
+        before.write_text(before.read_text() + "*nat\n-A PREROUTING -j DORMANT\nCOMMIT\n")
+        with self.assertRaises(c.DeployError) as caught:
+            self.observe()
+        self.assertEqual(caught.exception.code, "firewall_delivery_conflict")
+
     def test_nat_drift_between_compatibility_reads_refuses(self):
         original = self.host.run
         reads = []
@@ -231,6 +305,33 @@ class NATObservationTests(unittest.TestCase):
             self.host.run = command
             with self.subTest(alteration=alteration), self.assertRaises(c.DeployError):
                 self.observe()
+
+
+class RestoreReplayTests(unittest.TestCase):
+    def test_every_table_retains_builtins_resets_declared_users_and_keeps_others(self):
+        for family in (4, 6):
+            for table in ("filter", "nat", "raw", "mangle"):
+                with self.subTest(family=family, table=table):
+                    root = "INPUT" if table == "filter" else "PREROUTING"
+                    address = "203.0.113.10/32" if family == 4 else "2001:db8::10/128"
+                    def rule(chain, port, command="-A"):
+                        return f"{command} {chain} -d {address} -p tcp --dport {port} -j ACCEPT\n"
+                    first = (f"*{table}\n:{root} ACCEPT [9:99]\n:USER - [0:0]\n:OTHER - [0:0]\n"
+                             + rule(root, 100) + rule(root, 200) + rule("USER", 300) + rule("OTHER", 400) + "COMMIT\n")
+                    prior = firewall.parse_tables(first)
+                    second = (f"*{table}\n:{root} ACCEPT [0:0]\n:USER - [0:0]\n"
+                              + rule(root + " 2", 500, "-I") + rule(root, 600)
+                              + rule("USER", 700, "-I") + rule("OTHER", 800) + "COMMIT\n")
+                    restored, _ = firewall._restore_tables(second, prior)
+                    ports = lambda name: [firewall._argument(r, "--dport") for r in restored[table]["chains"][name]]
+                    self.assertEqual(ports(root), ["100", "500", "200", "600"])
+                    self.assertEqual(ports("USER"), ["700"])
+                    self.assertEqual(ports("OTHER"), ["400", "800"])
+                    self.assertEqual(len(prior[table]["chains"][root]), 2)
+                    restored, _ = firewall._restore_tables(f"*{table}\n:{root} ACCEPT [0:0]\n:USER - [0:0]\nCOMMIT\n", restored)
+                    self.assertEqual(ports(root), ["100", "500", "200", "600"])
+                    self.assertEqual(ports("USER"), [])
+                    self.assertEqual(ports("OTHER"), ["400", "800"])
 
 
 if __name__ == "__main__":
