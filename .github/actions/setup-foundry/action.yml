@@ -40,22 +40,40 @@ runs:
         go-version-file: go.mod
         cache: false
     - name: Locate Go caches
-      id: go-cache-paths
       shell: bash
+      env:
+        FOUNDRY_SETUP_PROFILE: ${{ inputs.profile }}
       run: |
         set -euo pipefail
+        prefix="go-$RUNNER_OS-$RUNNER_ARCH-$FOUNDRY_SETUP_PROFILE-"
         {
-          echo "build=$(go env GOCACHE)"
-          echo "modules=$(go env GOMODCACHE)"
-        } >> "$GITHUB_OUTPUT"
-    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          echo "FOUNDRY_GO_CACHE_STARTED=$(date +%s)"
+          echo "FOUNDRY_GO_CACHE_PREFIX=$prefix"
+          echo "FOUNDRY_GO_CACHE_KEY=$prefix$GITHUB_SHA"
+          echo "FOUNDRY_GO_BUILD_CACHE=$(go env GOCACHE)"
+          echo "FOUNDRY_GO_MODULE_CACHE=$(go env GOMODCACHE)"
+        } >> "$GITHUB_ENV"
+    - id: go-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
-          ${{ steps.go-cache-paths.outputs.build }}
-          ${{ steps.go-cache-paths.outputs.modules }}
-        key: go-${{ runner.os }}-${{ runner.arch }}-${{ inputs.profile }}-${{ hashFiles('go.mod', '**/go.sum') }}
-        restore-keys: |
-          go-${{ runner.os }}-${{ runner.arch }}-${{ inputs.profile }}-
+          ${{ env.FOUNDRY_GO_BUILD_CACHE }}
+          ${{ env.FOUNDRY_GO_MODULE_CACHE }}
+        key: ${{ env.FOUNDRY_GO_CACHE_KEY }}
+        restore-keys: ${{ env.FOUNDRY_GO_CACHE_PREFIX }}
+    - name: Decide whether this job saves the Go caches
+      # Only main saves, so pull requests and tags cannot evict its caches from
+      # the repository's 10 GB cache budget. An exact hit has nothing new to save.
+      shell: bash
+      env:
+        FOUNDRY_GO_CACHE_HIT: ${{ steps.go-cache.outputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        save=false
+        if [ "$GITHUB_REF" = refs/heads/main ] && [ "$FOUNDRY_GO_CACHE_HIT" != true ]; then
+          save=true
+        fi
+        echo "FOUNDRY_GO_CACHE_SAVE=$save" >> "$GITHUB_ENV"
     - name: Check installed Go toolchain
       shell: bash
       run: |

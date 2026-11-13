@@ -87,6 +87,7 @@ jobs:
           profile: verify
       - name: Native framework and independent consumers
         run: make verify
+      - uses: ./.github/actions/save-go-cache
 
   backends:
     runs-on: macos-15
@@ -100,6 +101,7 @@ jobs:
           profile: backends
       - name: Persistent backends and races
         run: make test-postgres test-redis
+      - uses: ./.github/actions/save-go-cache
 
   security:
     runs-on: macos-15
@@ -122,3 +124,4 @@ jobs:
           path: .cache/security-check/report.json
           if-no-files-found: error
           retention-days: 14
+      - uses: ./.github/actions/save-go-cache

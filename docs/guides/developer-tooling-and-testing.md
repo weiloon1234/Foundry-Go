@@ -656,8 +656,13 @@ jobs start isolated runner-local PostgreSQL 18 (the tested backend) and Redis;
 security needs no services.
 The shared setup action (`.github/actions/setup-foundry/action.yml`) installs the
 root `go.mod` toolchain and each job's required tools. Required backend, real gopls
-and TypeScript checks remain enabled. Each profile restores and saves its own Go
-build and module cache without waiting for the other gates. After the v0.2
+and TypeScript checks remain enabled. Each profile restores its own newest Go
+build and module cache from `main` without waiting for the other gates. A
+successful `main` run then saves a fresh copy keyed by its commit
+(`.github/actions/save-go-cache`), keeping only the build cache entries that run
+used, so the cache follows the current source instead of growing. Pull requests
+and tags only restore, so they cannot evict `main`'s caches from the repository's
+10 GB cache budget. After the v0.2
 generic-method reduction and ORM test repartitioning, every cold `go vet ./...`
 compile stays under 2 GB peak RSS (largest: `database/orm` at 1.82 GB and
 `database/orm/rows` at 1.54 GB), so the 7 GB macOS runners use default parallel

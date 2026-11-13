@@ -1,0 +1,23 @@
+name: Save Foundry Go caches
+description: Keep only the Go build cache entries this job used, then save the caches set up by setup-foundry.
+runs:
+  using: composite
+  steps:
+    - name: Drop Go build cache entries this job did not use
+      if: ${{ env.FOUNDRY_GO_CACHE_SAVE == 'true' }}
+      # Go refreshes an entry's mtime on use once the mtime is an hour old, so an
+      # entry older than an hour before this job started went unused.
+      shell: bash
+      run: |
+        set -euo pipefail
+        minutes=$(( ($(date +%s) - FOUNDRY_GO_CACHE_STARTED) / 60 + 61 ))
+        du -sh "$FOUNDRY_GO_BUILD_CACHE"
+        find "$FOUNDRY_GO_BUILD_CACHE" -mindepth 2 -type f -mmin "+$minutes" -delete
+        du -sh "$FOUNDRY_GO_BUILD_CACHE"
+    - if: ${{ env.FOUNDRY_GO_CACHE_SAVE == 'true' }}
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ${{ env.FOUNDRY_GO_BUILD_CACHE }}
+          ${{ env.FOUNDRY_GO_MODULE_CACHE }}
+        key: ${{ env.FOUNDRY_GO_CACHE_KEY }}
