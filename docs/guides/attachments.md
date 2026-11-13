@@ -141,8 +141,16 @@ output. Image policies without an accepted list allow the supported input codecs
 See [image formats, transforms and limits](imaging.md).
 
 `Upload.Source` is borrowed until the call actually returns and is never closed.
-Input and stored-output defaults are 8 MiB, with an absolute 64 MiB ceiling.
-Image-engine limits also apply, and the tightest limit wins. Properties, reader
+Input and stored-output defaults are 8 MiB. Opaque-file policies declare positive
+`MaxBytes` and `MaxStoredBytes` ceilings; unchanged bytes must fit both. For example,
+set both to `512 << 20` for a 512 MiB video collection. Exactly the ceiling is
+accepted; the next byte is rejected. Image and variant policies retain the 64 MiB
+`MaxBufferedBytes` ceiling plus the image engine's limits. `MaxUploadBytes` remains
+an alias for that legacy in-memory bound, and `ReadBytes` still requires a maximum
+at or below it. Adding variants later cannot buffer an oversized historical
+original: generation rejects it before opening storage, using the smaller of
+`MaxBufferedBytes` and the engine's input limit. Streaming reads and retirement
+remain available. Properties, reader
 length, filename syntax and content are validated before a storage intent is
 created. A filename is display metadata only; storage uses a unique immutable
 framework key. It never becomes a filesystem path. Zero-width and bidirectional
@@ -157,12 +165,53 @@ an unrestricted client is rejected as invalid. The file is downloaded within the
 collection's `MaxBytes` inside the manager's `MaxActive` admission, which covers
 its download, validation, storage, publication and follow-up work. The manager
 timeout and shutdown cancel admitted downloads; publication cleanup retains its
-separate `CleanupTimeout`. One bounded input buffer is reused for validation and
-storage; image processing has its own engine limits. A queued import sends no
+separate `CleanupTimeout`. Downloads use the same owned spool, counting/hash sink
+and detection path as large preparation; image processing has its own engine limits. A queued import sends no
 request until admitted. Acceptance is detected from the bytes and the response
 Content-Type is only a hint. Redirects, non-2xx responses, truncated and oversized
 bodies fail without adding a file. `OriginalName` defaults to the URL's last path
 segment.
+
+Large-policy preparation uses `Config.TempDirectory`
+(`features.attachments.config.temp_directory`); empty selects the OS temporary
+directory for compatibility. Provision a private writable capacity-limited volume
+for production. Admission retains the spool through actual storage completion,
+then removes it on success, error, cancellation or a contained panic. Sources
+remain borrowed. `Prepare` returns a durable token, never a temporary-file handle.
+`Accepts` uses the same preparation and cleanup without image transformation or
+storage publication. Small policies retain the existing bounded byte path.
+
+The capture sink counts and hashes bytes once as it writes them, retaining the
+shared 512-byte `mediatype.DetectUpload` probe. Files above 64 MiB use that bounded
+classification: client JSON/text hints cannot specialize them, and ZIP containers
+remain generic ZIP. Declare generic text/ZIP acceptance if required. Smaller files
+under large policies retain complete-content detection with one exact-sized buffer.
+
+Budget preparation separately from request capture, proxy buffering and local
+storage staging. A manager can retain up to `MaxActive` spools, each bounded by
+the effective policy ceiling. A directory does not itself enforce a quota. The
+HTTP/deployment owner must admit large requests before multipart capture and wire
+both request and attachment directories to provisioned capacity, with small-request
+reserves. Align request/body and multipart limits, proxy body limits, total upload
+and storage timeouts, and idle deadlines; changing this policy alone changes none
+of those limits. Newly supported large policies fail manager construction when
+`MaxStoredBytes` exceeds the disk's `MaxObjectBytes` or conditional-create capability.
+Legacy small-policy startup behavior remains unchanged.
+
+Apply attachment migration `000003_expand_original_size` through the normal
+migrator on every attachment store. It checks the framework-owned original size
+constraint before replacing it with `size >= 0`; historical migration SQL and
+variant constraints stay unchanged. Deploy capable readers/reconcilers everywhere
+before enabling large policies. Old binaries reject large rows, including cleaned
+tombstones, so retirement does not make a runtime downgrade safe. Lowering an
+upload policy does not invalidate old rows; lowering disk infrastructure limits
+can still prevent historical reads and settlement.
+
+B26 milestone 1 supplies policy, preparation and historical-row compatibility.
+Conditional multipart publication and streaming checksum-fallback reconciliation
+are separate follow-up milestones. S3/R2 policies remain restricted by their
+existing conditional-write size capability; do not enable large production uploads
+until those capabilities and the ingress/deployment acceptance are complete.
 
 Before hooks run in declaration order with detected metadata and the typed
 owner. AfterStored hooks run after storage acknowledgement inside the ownership

@@ -27,6 +27,9 @@ import (
 // CleanupGrace is the minimum retirement age before object deletion (zero for
 // immediate development cleanup). Zero MaxReads or SettleAfter selects its default.
 type Config struct {
+	// TempDirectory owns operation spools; empty uses the OS temporary directory.
+	// Provision a private capacity-limited volume for large policies.
+	TempDirectory  string
 	MaxActive      int
 	MaxReads       int
 	Timeout        time.Duration
@@ -127,6 +130,9 @@ func New(dependencies Dependencies, config Config, collections ...Registration) 
 		disk, err := collection.policy.Disk.Resolve(dependencies.Disks)
 		if err != nil {
 			return nil, err
+		}
+		if collection.policy.MaxStoredBytes > MaxBufferedBytes && collection.policy.MaxStoredBytes > disk.Config().MaxObjectBytes {
+			return nil, invalid()
 		}
 		capabilities := disk.Capabilities()
 		if !capabilities.ConditionalCreate || !capabilities.ConditionalRead {

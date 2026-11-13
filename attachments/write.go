@@ -123,8 +123,10 @@ func (c Collection[M, K]) storeUpload(ctx context.Context, m *Manager, owner mod
 	return c.storePrepared(ctx, m, owner, locale, candidate, ownerRequired)
 }
 
-// storePrepared records and stores validated bytes without reading them again.
-func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner model.Reference[M, K], locale string, candidate prepared, ownerRequired bool) (model.ID[store.File], func(), error) {
+// storePrepared takes ownership of the preparation, records and stores its bytes,
+// then closes both the reader and body before returning.
+func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner model.Reference[M, K], locale string, candidate prepared, ownerRequired bool) (resultID model.ID[store.File], resultRelease func(), resultErr error) {
+	defer func() { resultErr = joinFailures(resultErr, candidate.body.close()) }()
 	hookContext := BeforeContext[M, K]{Owner: owner, Collection: c.Name(), Locale: c.locale, Upload: candidate.info}
 	for _, hook := range c.definition.hooks {
 		if hook.Before != nil {
@@ -133,6 +135,11 @@ func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner m
 			}
 		}
 	}
+	reader, err := candidate.body.open(ctx)
+	if err != nil {
+		return model.ID[store.File]{}, nil, err
+	}
+	defer func() { resultErr = joinFailures(resultErr, reader.Close()) }()
 	id, err := model.NewIDAt[store.File](time.Now())
 	if err != nil {
 		return model.ID[store.File]{}, nil, err
@@ -150,7 +157,7 @@ func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner m
 	if err != nil {
 		return id, release, err
 	}
-	stored, putErr := disk.Put(ctx, key, candidate.open(), storage.PutOptions{ContentType: candidate.info.MediaType, Size: value.Set(candidate.info.Size), Checksum: value.Set(candidate.digest), Condition: storage.IfAbsent()})
+	stored, putErr := disk.Put(ctx, key, reader, storage.PutOptions{ContentType: candidate.info.MediaType, Size: value.Set(candidate.info.Size), Checksum: value.Set(candidate.digest), Condition: storage.IfAbsent()})
 	if putErr != nil {
 		journalErr := m.recordPutFailure(ctx, id, putErr)
 		if journalErr != nil {

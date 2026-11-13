@@ -3,14 +3,12 @@ package attachments
 import (
 	"context"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
-	"io"
 	"mime"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/filename"
 	"github.com/weiloon1234/Foundry-Go/internal/upload"
-	"github.com/weiloon1234/Foundry-Go/internal/workscope"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -123,29 +121,30 @@ func (s slotDefinition[M, K, S]) accepts(ctx context.Context, file FileSource) (
 	if !validFilename(filename.StripInvisible(file.Name())) {
 		return false, nil
 	}
-	// The upload is buffered like a write, so it shares the write admission
-	// that bounds concurrent buffers and drains on Close.
+	// Admission covers capture, inspection and actual cleanup.
 	accepted := false
 	err = m.calls.Run(ctx, "attachment acceptance", func(ctx context.Context) error {
-		reader, err := file.Open(ctx)
-		if err != nil {
-			return err
-		}
-		body, err := io.ReadAll(io.LimitReader(workscope.Reader(ctx, reader), policy.MaxBytes+1))
-		if err = joinFailures(err, reader.Close()); err != nil {
-			return err
-		}
-		if int64(len(body)) > policy.MaxBytes {
-			return nil
-		}
-		if _, err := acceptMedia(ctx, m, policy, body, hintOf(file)); err != nil {
-			if callback.ErrorIs(err, fault.Invalid) {
-				return nil
+		_, err := withFile(ctx, file, func(input Upload) (struct{}, error) {
+			candidate, err := prepareInput(ctx, m, policy, input, false)
+			if err != nil {
+				var cleanup *upload.CleanupError
+				if matched, inspectionErr := callback.ErrorAsResult(err, &cleanup); matched || inspectionErr != nil {
+					return struct{}{}, joinFailures(err, inspectionErr)
+				}
+				var readFailure *upload.ReadError
+				if matched, inspectionErr := callback.ErrorAsResult(err, &readFailure); matched || inspectionErr != nil {
+					return struct{}{}, joinFailures(err, inspectionErr)
+				}
+				if callback.ErrorIs(err, fault.Invalid) || callback.ErrorIs(err, storage.LimitExceeded) {
+					return struct{}{}, nil
+				}
+				return struct{}{}, err
 			}
-			return err
-		}
-		accepted = true
-		return nil
+			err = candidate.body.close()
+			accepted = err == nil
+			return struct{}{}, err
+		})
+		return err
 	})
 	return accepted, err
 }
@@ -210,7 +209,7 @@ func addFiles[F FileSource, R any](ctx context.Context, files []F, validate func
 
 // withFile opens file for one operation and closes it after the operation
 // returns; a close failure is reported beside the operation's result.
-func withFile[T any](ctx context.Context, file FileSource, run func(Upload) (T, error)) (T, error) {
+func withFile[T any](ctx context.Context, file FileSource, run func(Upload) (T, error)) (result T, err error) {
 	if file == nil {
 		return *new(T), invalid()
 	}
@@ -218,8 +217,8 @@ func withFile[T any](ctx context.Context, file FileSource, run func(Upload) (T, 
 	if err != nil {
 		return *new(T), err
 	}
-	result, err := run(Upload{Source: reader, OriginalName: file.Name(), ContentType: hintOf(file)})
-	return result, joinFailures(err, reader.Close())
+	defer func() { err = joinFailures(err, reader.Close()) }()
+	return run(Upload{Source: reader, OriginalName: file.Name(), ContentType: hintOf(file)})
 }
 
 // hintOf keeps a client content type only when it is a valid media type,

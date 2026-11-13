@@ -1,18 +1,15 @@
 package attachments
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"io"
-	"mime"
 	"net/url"
 	"path"
 
 	"github.com/weiloon1234/Foundry-Go/httpclient"
 	"github.com/weiloon1234/Foundry-Go/internal/filename"
+	"github.com/weiloon1234/Foundry-Go/internal/upload"
 	"github.com/weiloon1234/Foundry-Go/model"
-	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
 // RemoteSource names a remote file to import. URL is untrusted input, so
@@ -29,7 +26,7 @@ type RemoteSource struct {
 // adds it exactly like Add. Acceptance is detected from the downloaded bytes;
 // the response Content-Type is only a hint. Redirects and non-2xx responses
 // fail without adding a file. Manager admission covers the complete download,
-// validation, storage and publication, retaining one bounded input buffer. Image
+// validation, storage and publication, retaining one owned temporary file. Image
 // processing remains subject to the image engine's separate limits.
 func (c Collection[M, K]) AddFromURL(ctx context.Context, m *Manager, owner model.Reference[M, K], source RemoteSource) (Result[M, K], error) {
 	if err := c.check(m); err != nil {
@@ -56,18 +53,12 @@ func (c Collection[M, K]) AddFromURL(ctx context.Context, m *Manager, owner mode
 		if err != nil {
 			return err
 		}
-		var body bytes.Buffer
-		digest := sha256.New()
-		downloaded, err := source.Client.Download(ctx, request, io.MultiWriter(&body, digest), c.definition.policy.MaxBytes)
-		if err != nil {
-			return err
-		}
-		if media, _, err := mime.ParseMediaType(downloaded.Headers.Get("Content-Type")); err == nil && storage.MediaType(media).Validate() == nil {
-			input.ContentType = storage.MediaType(media)
-		}
-		var checksum storage.SHA256
-		copy(checksum[:], digest.Sum(nil))
-		candidate, err := prepareBytes(ctx, m, c.definition.policy, input, body.Bytes(), checksum)
+		candidate, err := prepareCaptured(ctx, m, c.definition.policy, input, true, func(batch *upload.Batch) (upload.File, error) {
+			return batch.CaptureFrom(ctx, name, func(destination io.Writer) (string, error) {
+				downloaded, err := source.Client.Download(ctx, request, destination, inputMaximum(c.definition.policy))
+				return downloaded.Headers.Get("Content-Type"), err
+			})
+		})
 		if err != nil {
 			return err
 		}

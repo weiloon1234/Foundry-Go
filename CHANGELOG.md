@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Added: B26 policy and preparation support for application-declared large opaque
+  attachments, an owned spool via `attachments.Config.TempDirectory`, and shared
+  capture hashing for uploads, slot acceptance and URL imports. Image/variant and
+  byte-returning APIs retain `MaxBufferedBytes` (64 MiB); `MaxUploadBytes` remains
+  its compatibility alias. Large JSON/text hints and archive specialization are
+  conservative. Conditional multipart publication and streaming checksum-fallback
+  reconciliation remain follow-up work.
+- Added: forward attachment migration `000003_expand_original_size`, preserving
+  historical migrations and variant ceilings while allowing nonnegative original
+  sizes. Apply it and deploy capable runtimes before enabling large policies; old
+  runtimes cannot read large rows, including retired tombstones.
+- Fixed: variant generation rejects historical originals above the smaller of
+  the image input and in-memory limits before opening or buffering storage.
+
 ## v0.29.0 — 2026-11-13
 
 - Fixed: multipart upload detection shares the framework media detector's ISO

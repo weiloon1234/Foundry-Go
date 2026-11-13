@@ -13,6 +13,10 @@ import (
 // These are explicit construction owners, not an exemption for their packages.
 // Counts pin the reviewed sites: a new literal needs a new disposition.
 var typedDiagnosticOwners = map[string]int{
+	// Borrowed-source failures and spool cleanup retain fixed upload diagnostics;
+	// their typed causes keep Accepts from normalizing I/O failure as rejection.
+	"attachments/upload.go#prepareInput#ReadError":       1,
+	"attachments/upload.go#prepareCaptured#CleanupError": 1,
 	// Documentation location diagnostics are captured before their typed cause escapes.
 	"internal/docrefs/references.go#problem#Problem": 1,
 	// Native lifecycle owner captures fixed text before retaining application causes.
@@ -121,11 +125,11 @@ var typedDiagnosticOwners = map[string]int{
 	// Typed bounded I/O outcome captured with immutable text at construction.
 	"internal/upload/batch.go#take#LimitError": 1,
 	// Typed bounded I/O outcome captured with immutable text at construction.
-	"internal/upload/capture.go#Capture#CleanupError": 1,
+	"internal/upload/capture.go#CaptureFrom#CleanupError": 1,
 	// Typed bounded I/O outcome captured with immutable text at construction.
-	"internal/upload/capture.go#Capture#LimitError": 1,
+	"internal/upload/capture.go#write#LimitError": 1,
 	// Typed bounded I/O outcome captured with immutable text at construction.
-	"internal/upload/capture.go#Capture#ReadError": 2,
+	"internal/upload/capture.go#Capture#ReadError": 1,
 	// Typed bounded I/O outcome captured with immutable text at construction.
 	"internal/upload/file.go#Open#LimitError": 1,
 	// Concrete diagnostic captured by Owned/Retain at this owner.
