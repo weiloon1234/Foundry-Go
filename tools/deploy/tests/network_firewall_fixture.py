@@ -62,39 +62,52 @@ def nft_inventory(live):
     objects = [{"metainfo": {"version": "1.0.9", "json_schema_version": 1}}]
     for version, text in live.items():
         family = "ip6" if version == 6 else "ip"
-        chains, policies = firewall.parse_rules(text)
-        objects.append({"table": {"family": family, "name": "filter", "handle": 1}})
-        for name, rules in chains.items():
-            chain = {"family": family, "table": "filter", "name": name, "handle": len(objects)}
-            if name in ("INPUT", "FORWARD", "OUTPUT"):
-                chain.update(type="filter", hook=name.lower(), prio=0, policy=policies[name].lower())
-            objects.append({"chain": chain})
-            for rule in rules:
-                expressions = []
-                def argument(name):
-                    return rule[rule.index(name) + 1] if name in rule else None
-                protocol = argument("-p")
-                if protocol:
-                    expressions.append({"match": {"op": "==", "left": {"meta": {"key": "l4proto"}}, "right": protocol}})
-                for flag, key in (("-i", "iifname"), ("-o", "oifname")):
-                    if argument(flag):
-                        expressions.append({"match": {"op": "==", "left": {"meta": {"key": key}}, "right": argument(flag)}})
-                for flag, field in (("--dport", "dport"), ("--sport", "sport")):
-                    if argument(flag):
-                        expressions.append({"match": {"op": "==", "left": {"payload": {"protocol": protocol, "field": field}}, "right": int(argument(flag))}})
-                for index, token in enumerate(rule[:-1]):
-                    if token == "-m" and rule[index + 1] not in ("tcp", "udp"):
-                        expressions.append({"xt": {"type": "match", "name": rule[index + 1]}})
-                expressions.append({"counter": {"packets": 0, "bytes": 0}})
-                target = argument("-j")
-                if target in ("ACCEPT", "DROP", "RETURN"):
-                    expressions.append({target.lower(): None})
-                elif target == "REJECT":
-                    expressions.append({"reject": {"type": "icmpx", "expr": "port-unreachable"}})
-                elif target == "LOG":
-                    expressions.append({"log": {"prefix": argument("--log-prefix") or ""}})
-                else:
-                    expressions.append({"jump": {"target": target}})
-                objects.append({"rule": {"family": family, "table": "filter", "chain": name,
-                                          "handle": len(objects), "expr": expressions}})
+        for table, policy in firewall.parse_tables(text).items():
+            chains, policies = policy["chains"], policy["policies"]
+            objects.append({"table": {"family": family, "name": table, "handle": 1}})
+            for name, rules in chains.items():
+                chain = {"family": family, "table": table, "name": name, "handle": len(objects)}
+                if policies[name] != "-":
+                    kind, priority = firewall.TABLE_HOOKS[table][name]
+                    chain.update(type=kind, hook=name.lower(), prio=priority, policy=policies[name].lower())
+                objects.append({"chain": chain})
+                for rule in rules:
+                    expressions = []
+                    def argument(name):
+                        return rule[rule.index(name) + 1] if name in rule else None
+                    protocol = argument("-p")
+                    if protocol:
+                        expressions.append({"match": {"op": "==", "left": {"meta": {"key": "l4proto"}}, "right": protocol}})
+                    for flag, key in (("-i", "iifname"), ("-o", "oifname")):
+                        if argument(flag):
+                            expressions.append({"match": {"op": "==", "left": {"meta": {"key": key}}, "right": argument(flag)}})
+                    for flag, field in (("--dport", "dport"), ("--sport", "sport")):
+                        if argument(flag):
+                            expressions.append({"match": {"op": "==", "left": {"payload": {"protocol": protocol, "field": field}}, "right": int(argument(flag)) if argument(flag).isdigit() else argument(flag)}})
+                    for index, token in enumerate(rule[:-1]):
+                        if token == "-m" and rule[index + 1] not in ("tcp", "udp"):
+                            expressions.append({"xt": {"type": "match", "name": rule[index + 1]}})
+                    expressions.append({"counter": {"packets": 0, "bytes": 0}})
+                    target = argument("-j") or argument("-g")
+                    if target in ("ACCEPT", "DROP", "RETURN"):
+                        expressions.append({target.lower(): None})
+                    elif target == "REJECT":
+                        expressions.append({"reject": {"type": "icmpx", "expr": "port-unreachable"}})
+                    elif target == "LOG":
+                        expressions.append({"log": {"prefix": argument("--log-prefix") or ""}})
+                    elif target in ("DNAT", "SNAT"):
+                        literal = argument("--to-destination" if target == "DNAT" else "--to-source")
+                        address, _, port = literal.rpartition(":")
+                        value = {"family": family, "port": int(port)}
+                        if address:
+                            value["addr"] = address.strip("[]")
+                        expressions.append({target.lower(): value})
+                    elif target in ("MASQUERADE", "REDIRECT", "NOTRACK"):
+                        expressions.append({{"MASQUERADE": "masquerade", "REDIRECT": "redirect", "NOTRACK": "notrack"}[target]: None})
+                    elif target in ("MARK", "CONNMARK"):
+                        expressions.append({"mangle": {"key": {"meta": {"key": "mark"}}, "value": 1}})
+                    else:
+                        expressions.append({"goto" if argument("-g") else "jump": {"target": target}})
+                    objects.append({"rule": {"family": family, "table": table, "chain": name,
+                                              "handle": len(objects), "expr": expressions}})
     return {"nftables": objects}
