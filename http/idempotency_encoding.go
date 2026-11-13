@@ -20,6 +20,19 @@ type fingerprintRequest struct {
 	Body  json.RawMessage `json:"body"`
 }
 
+type fingerprintHeader struct {
+	Name    string `json:"name"`
+	Present bool   `json:"present"`
+	Value   string `json:"value"`
+}
+
+type fingerprintHeaderRequest struct {
+	Path    string              `json:"path"`
+	Query   string              `json:"query"`
+	Headers []fingerprintHeader `json:"headers"`
+	Body    json.RawMessage     `json:"body"`
+}
+
 // Bytes are base64 in storage so whitespace/escapes are not rewritten by an
 // enclosing JSON marshal. The exact validated response bytes are sent on replay.
 type storedResponse struct {
@@ -63,6 +76,16 @@ func idempotentEndpointInputEncoding[P, Q, B, R any](e IdempotentEndpoint[P, Q, 
 		Body        *PayloadInfo
 		Preparation bool
 	}{info.Path, info.Query, info.Body, info.Preparation})
+	if len(info.Headers) != 0 {
+		identity = wireDigest(struct {
+			Format      string
+			Path        []PathParameterInfo
+			Query       []QueryParameterInfo
+			Headers     []QueryParameterInfo
+			Body        *PayloadInfo
+			Preparation bool
+		}{idempotencyFingerprintV2, info.Path, info.Query, info.Headers, info.Body, info.Preparation})
+	}
 	return idempotency.DefineInput(identity, func(ctx context.Context, in Input[P, Q, B], limit int) ([]byte, error) {
 		path, err := RouteURL(e.endpoint.route, in.Path)
 		if err != nil {
@@ -88,7 +111,26 @@ func idempotentEndpointInputEncoding[P, Q, B, R any](e IdempotentEndpoint[P, Q, 
 		if err != nil {
 			return nil, err
 		}
-		data, err := json.Marshal(fingerprintRequest{path, query, body})
+		var data []byte
+		if len(info.Headers) == 0 {
+			// Keep both the v1 representation and descriptor identity byte-for-byte.
+			data, err = json.Marshal(fingerprintRequest{path, query, body})
+		} else {
+			var headers []fingerprintHeader
+			encoded, encodeErr := EncodeRequestHeaders(e.endpoint.query, ctx, in.Query, e.endpoint.limits.Headers)
+			if encodeErr != nil {
+				return nil, encodeErr
+			}
+			for _, field := range info.Headers {
+				values, present := encoded[field.Name]
+				item := fingerprintHeader{Name: field.Name, Present: present}
+				if present {
+					item.Value = values[0]
+				}
+				headers = append(headers, item)
+			}
+			data, err = json.Marshal(fingerprintHeaderRequest{path, query, headers, body})
+		}
 		if err == nil && len(data) > limit {
 			return nil, PayloadTooLarge.WithCause(nil)
 		}

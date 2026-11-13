@@ -65,11 +65,83 @@ transaction boundaries. The example's public route does not establish an
 authentication policy. For a concrete authenticated model parameter, use the
 [typed authentication adapter](authentication.md) with an explicitly guarded route.
 
-`Input[P,Q,B]` preserves three distinct sources. A JSON field cannot replace a
+`Input[P,Q,B]` preserves path, parameter and body values. Parameters include
+declared URL query fields and request headers in the same concrete `Q`.
+A JSON field cannot replace a
 path field with the same name. Its concrete path ID retains its model owner;
 body optionals retain omission and explicit-null semantics. Registering a
 handler with a different path, query, body or response type fails compilation.
 Returning a persistence model does not automatically make it a response DTO.
+
+## Typed request headers
+
+Declare the headers an endpoint reads alongside its query fields. Both bind into
+`Input.Query`, so preparation, authorization, binding and validation receive the
+same concrete type without changing the handler signature.
+
+```go
+type ClientParameters struct {
+    Search string
+    Version string
+    Device value.Optional[string]
+}
+
+parameters := foundryhttp.DefineQuery(
+    foundryhttp.QueryParam("search", foundryhttp.StringQuery[string](), func(q *ClientParameters) *string { return &q.Search }),
+    foundryhttp.HeaderParam("X-App-Version", foundryhttp.StringQuery[string](), func(q *ClientParameters) *string { return &q.Version }),
+    foundryhttp.OptionalHeaderParam("X-Device-ID", foundryhttp.StringQuery[string](), func(q *ClientParameters) *value.Optional[string] { return &q.Device }),
+)
+```
+
+Pass `parameters` as the query argument to `DefineEndpoint`. Header names match
+case-insensitively; inspection uses canonical casing such as `X-Device-Id`.
+Names must be ASCII HTTP tokens. A query field and a header may have the same
+wire spelling and bind different fields. Selectors must point to distinct fields
+when the inputs are independent. `MergeQueries` and `EmbedQuery` preserve both
+sources. `QueryParameters` inspects only query fields; `RequestHeaderParameters`
+and `EndpointInfo.Headers` expose headers. Form and multipart text descriptors
+reject header bindings.
+
+`HeaderParam` requires exactly one field value; `OptionalHeaderParam` preserves
+absence separately from a supplied empty string. Repeated field lines are
+rejected, even when equal. Commas are ordinary text, not an implicit list. The
+boundary trims outer spaces and tabs, accepts ASCII plus interior tabs, and
+applies the same scalar codecs as query values without URL unescaping.
+Use a concrete text codec for an application-specific value grammar.
+
+Use `ValidateHeaders(endpoint, rules...)` for semantic rules and canonical wire
+names in handwritten `validation.DefineField` selectors. It validates `Q` under
+the `headers` location. Keep query rules in `ValidateQuery`. Missing, malformed
+or oversized headers produce 400 issues at `/headers/<Canonical-Name>`;
+semantic rules retain the usual 422 response. See
+[header limits and lifecycle](http-requests.md#declared-request-header-limits).
+
+`EncodeRequestHeaders(parameters, ctx, input, limits.Headers)` returns an owned
+`net/http.Header` map for an outbound request. It preserves optional empty values
+and applies the same budgets, rejecting controls, non-ASCII and outer whitespace
+that would change during transport. `EncodeQuery`, endpoint URLs, signed URLs
+and ticket URLs remain query-only. A URL signature does not authenticate headers;
+authorization must treat them as caller-supplied hints.
+
+Every entered endpoint adds its declared names to `Vary`, including absent
+optional headers. Existing entries and `Vary: *` are preserved. This applies to
+successes, endpoint errors, HEAD, 304 and idempotent replays. Middleware that
+rejects a request before endpoint entry has not used these dependencies.
+`Vary` does not make personalized responses safe for shared caching: set the
+appropriate private/no-store cache policy. High-cardinality device or tenant
+hints can reduce cache reuse.
+
+Header declarations do not change CORS. Browser applications must explicitly
+include permitted names in `CORSConfig.Headers`; preflight middleware retains
+its configured origin, method and header policy. Required header checks run on
+actual requests, not preflights. Browser restrictions may also prevent sending
+otherwise valid HTTP headers.
+
+Framework and transport-owned names fail registration, including credentials,
+cookies, content/framing headers, conditionals, Origin, Sec-*, proxy/tracing
+inputs and Idempotency-Key. The static policy cannot discover application
+configuration: do not declare configured `ClientIPHeader`,
+`ProxyOriginHeaders`, `ProxySchemeHeader` names or third-party middleware inputs.
 
 ## Payload contracts and URL generation
 
@@ -146,7 +218,7 @@ shares route scope naming and path-prefix behavior.
 
 ## Bounds, failure and ownership
 
-`DefaultEndpointLimits()` supplies query and JSON budgets; `Limits` returns
+`DefaultEndpointLimits()` supplies query, header and payload budgets; `Limits` returns
 an independent endpoint declaration. Query limits bound bytes, pairs and issues.
 Body and response JSON limits bound bytes, depth, wire nodes, traversal steps and
 issues. Request bodies default to the kernel's 2 MiB body size. Responses default

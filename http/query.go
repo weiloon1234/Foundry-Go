@@ -23,6 +23,7 @@ type Query[Q any] struct {
 	parameters    []QueryParameter[Q]
 	indexes       map[string]int
 	headerIndexes map[string]int
+	headerFields  []requestHeaderField
 	err           error
 }
 
@@ -59,6 +60,9 @@ func DefineQuery[Q any](parameters ...QueryParameter[Q]) Query[Q] {
 			break
 		}
 		indexes[name] = i
+		if parameter.source == headerParameterSource {
+			d.headerFields = append(d.headerFields, requestHeaderField{name: parameter.info.Name, required: parameter.info.Required, index: i})
+		}
 	}
 	return d
 }

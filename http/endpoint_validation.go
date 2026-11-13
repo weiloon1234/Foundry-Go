@@ -33,6 +33,15 @@ func ValidateQuery[P, Q, B, R any](e Endpoint[P, Q, B, R], rules ...validation.R
 	return ValidateInput(e, validation.Rules(field, rules...))
 }
 
+// ValidateHeaders applies rules to the same concrete Q under the headers
+// validation location. Field rules use canonical declared header names.
+// Preparation and authorization retain the ordinary endpoint lifecycle.
+// Example: endpoint = ValidateHeaders(endpoint, headerRules)
+func ValidateHeaders[P, Q, B, R any](e Endpoint[P, Q, B, R], rules ...validation.Rule[Q]) Endpoint[P, Q, B, R] {
+	field := validation.DefineField("headers", func(input Input[P, Q, B]) Q { return input.Query })
+	return ValidateInput(e, validation.Rules(field, rules...))
+}
+
 // ValidateBody adds rules for the decoded body. Use generated field
 // declarations and Optional/Nullable rules to retain wire names and presence.
 func ValidateBody[P, Q, B, R any](e Endpoint[P, Q, B, R], rules ...validation.Rule[B]) Endpoint[P, Q, B, R] {

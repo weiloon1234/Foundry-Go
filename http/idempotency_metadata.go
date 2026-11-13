@@ -13,6 +13,11 @@ import (
 
 const IdempotencyKeyHeader HeaderName = httpheader.IdempotencyKey
 
+const (
+	idempotencyFingerprintV1 = "prepared-path-query-body-v1"
+	idempotencyFingerprintV2 = "prepared-path-query-headers-body-v2"
+)
+
 // IdempotencyInfo is the replay policy used by the handler and generated client.
 // Retention is a minimum until explicit pruning, not automatic callback expiry.
 type IdempotencyInfo struct {
@@ -30,7 +35,7 @@ type IdempotencyInfo struct {
 }
 
 func idempotencyInfo(d idempotency.Definition, c idempotency.Config, headers bool) IdempotencyInfo {
-	i := IdempotencyInfo{Operation: d.ID, Version: d.Version, Header: IdempotencyKeyHeader, MinKeyBytes: idempotency.MinKeyBytes, MaxKeyBytes: c.MaxKeyBytes, KeyPattern: idempotencyKeyPattern(c.MaxKeyBytes), Fingerprint: "prepared-path-query-body-v1", SuccessOnly: true, DuplicateWaitMilliseconds: c.DuplicateWait.Milliseconds(), RetentionSeconds: int64(c.Retention / time.Second), ApplicationHeaders: []HeaderName{}}
+	i := IdempotencyInfo{Operation: d.ID, Version: d.Version, Header: IdempotencyKeyHeader, MinKeyBytes: idempotency.MinKeyBytes, MaxKeyBytes: c.MaxKeyBytes, KeyPattern: idempotencyKeyPattern(c.MaxKeyBytes), Fingerprint: idempotencyFingerprintV1, SuccessOnly: true, DuplicateWaitMilliseconds: c.DuplicateWait.Milliseconds(), RetentionSeconds: int64(c.Retention / time.Second), ApplicationHeaders: []HeaderName{}}
 	if headers {
 		i.ApplicationHeaders = slices.Clone(replayHeaderNames)
 	}
@@ -41,7 +46,7 @@ func idempotencyKeyPattern(maximum int) string { return idempotency.KeyPattern(m
 // Validate checks exported idempotency metadata against supported key, fingerprint,
 // replay-header, wait and retention policies.
 func (i IdempotencyInfo) Validate() error {
-	if (idempotency.Definition{ID: i.Operation, Version: i.Version}).Validate() != nil || i.Header != IdempotencyKeyHeader || i.MinKeyBytes != idempotency.MinKeyBytes || i.MaxKeyBytes < i.MinKeyBytes || i.MaxKeyBytes > idempotency.MaxKeyBytes || i.KeyPattern != idempotencyKeyPattern(i.MaxKeyBytes) || i.Fingerprint != "prepared-path-query-body-v1" || !i.SuccessOnly || i.DuplicateWaitMilliseconds < 1 || i.DuplicateWaitMilliseconds > int64(5*time.Minute/time.Millisecond) || i.RetentionSeconds < 3600 || i.RetentionSeconds > int64(365*24*time.Hour/time.Second) {
+	if (idempotency.Definition{ID: i.Operation, Version: i.Version}).Validate() != nil || i.Header != IdempotencyKeyHeader || i.MinKeyBytes != idempotency.MinKeyBytes || i.MaxKeyBytes < i.MinKeyBytes || i.MaxKeyBytes > idempotency.MaxKeyBytes || i.KeyPattern != idempotencyKeyPattern(i.MaxKeyBytes) || (i.Fingerprint != idempotencyFingerprintV1 && i.Fingerprint != idempotencyFingerprintV2) || !i.SuccessOnly || i.DuplicateWaitMilliseconds < 1 || i.DuplicateWaitMilliseconds > int64(5*time.Minute/time.Millisecond) || i.RetentionSeconds < 3600 || i.RetentionSeconds > int64(365*24*time.Hour/time.Second) {
 		return safeerror.NewFault(fault.Invalid, "invalid HTTP idempotency policy")
 	}
 	if len(i.ApplicationHeaders) != 0 && !slices.Equal(i.ApplicationHeaders, replayHeaderNames) {

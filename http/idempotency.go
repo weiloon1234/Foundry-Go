@@ -102,6 +102,9 @@ func ValidateIdempotent[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) error 
 func idempotentEndpointDescribed[P, Q, B, R any](e IdempotentEndpoint[P, Q, B, R]) Endpoint[P, Q, B, R] {
 	endpoint := e.endpoint
 	info := idempotencyInfo(e.definition, e.store.Config(), e.headers != nil)
+	if len(endpoint.query.headerFields) != 0 {
+		info.Fingerprint = idempotencyFingerprintV2
+	}
 	endpoint.idempotency = &info
 	endpoint.limits.Body.Bytes = min(endpoint.limits.Body.Bytes, e.store.Config().MaxInputBytes)
 	if endpoint.body.kind == payloadForm {

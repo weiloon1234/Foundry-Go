@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Added: B03 typed endpoint request headers through `HeaderParam` and
+  `OptionalHeaderParam` in the existing parameter type. Runtime binding preserves
+  presence and source separation, validates ASCII single values with bounded
+  header diagnostics, and adds declared names to `Vary`. `ValidateHeaders` adds
+  semantic rules; `EncodeRequestHeaders` creates owned outbound headers. Header
+  inputs participate in idempotency fingerprint v2 while header-free operations
+  retain v1 compatibility. CORS remains explicitly configured.
+
 ## v0.27.0 — 2026-11-13
 
 - Added: typed `http.CSPAllowlist`, `CSPPresetCloudflareWebAnalytics`, and

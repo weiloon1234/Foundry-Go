@@ -1,7 +1,12 @@
 package http
 
 import (
+	"context"
+	"math"
+	stdhttp "net/http"
+
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/httpheader"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -13,6 +18,91 @@ import (
 // Example: HeaderParam("X-App-Version", StringQuery[string](), func(q *Params) *string { return &q.Version })
 func HeaderParam[Q, V any](name HeaderName, codec QueryCodec[V], field func(*Q) *V) QueryParameter[Q] {
 	return requestHeaderParameter(QueryParam(string(name), codec, field))
+}
+
+// Decode into the query value already owned by the request. Failure returns zero
+// and the endpoint never exposes the partially populated value to request hooks.
+func decodeRequestHeaders[Q any](d Query[Q], ctx context.Context, values map[int][]string, query Q) (Q, error) {
+	var failed *queryBindingFailure
+	var name string
+	err := callback.Invoke("decode request headers", func() error {
+		for _, field := range d.headerFields {
+			if ctx.Err() != nil {
+				break
+			}
+			name = field.name
+			failed = d.parameters[field.index].decode(ctx, &query, values[field.index])
+			if failed != nil {
+				break
+			}
+		}
+		return nil
+	})
+	if err := requestHeaderCallbackResult(ctx, err, failed, name); err != nil {
+		return *new(Q), err
+	}
+	return query, nil
+}
+
+// EncodeRequestHeaders formats only declared headers into an owned native map.
+// Optional omission differs from a present empty value. No URL escaping applies;
+// non-ASCII, controls, outer whitespace and exceeded limits reject the output.
+// Callers keep input unchanged until return; custom formatters own their work.
+// Example: headers, err := EncodeRequestHeaders(parameters, ctx, input, limits.Headers)
+func EncodeRequestHeaders[Q any](d Query[Q], ctx context.Context, input Q, limits RequestHeaderLimits) (stdhttp.Header, error) {
+	if err := ValidateQueryDescriptor(d); err != nil {
+		return nil, err
+	}
+	if limits != (RequestHeaderLimits{}) || len(d.headerFields) != 0 {
+		if err := limits.Validate(); err != nil {
+			return nil, err
+		}
+	}
+	if err := validateRequestHeaderDeclarations(d, limits); err != nil {
+		return nil, err
+	}
+	if ctx == nil {
+		return nil, safeerror.NewFault(fault.Invalid, "request header encoding requires a context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	headers := make(stdhttp.Header, len(d.headerFields))
+	budget := requestHeaderBudget{limits: limits}
+	var failed *queryBindingFailure
+	var name string
+	var wireErr error
+	err := callback.Invoke("encode request headers", func() error {
+		for _, field := range d.headerFields {
+			if ctx.Err() != nil {
+				break
+			}
+			name = field.name
+			// Reuse the typed scalar adapter; the header budget below owns framing.
+			// As for query codecs, a custom formatter owns its allocation until return.
+			scalarBudget := queryBudget{pairs: 1, bytes: math.MaxInt}
+			var items []string
+			items, failed = d.parameters[field.index].encode(ctx, &input, &scalarBudget)
+			if failed != nil {
+				break
+			}
+			if len(items) == 0 {
+				continue
+			}
+			if wireErr = budget.take(name, items[0]); wireErr != nil {
+				break
+			}
+			headers[name] = items
+		}
+		return nil
+	})
+	if err := requestHeaderCallbackResult(ctx, err, failed, name); err != nil {
+		return nil, err
+	}
+	if wireErr != nil {
+		return nil, wireErr
+	}
+	return headers, nil
 }
 
 // OptionalHeaderParam preserves omission separately from a supplied empty value.
