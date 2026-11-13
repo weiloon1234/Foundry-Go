@@ -167,3 +167,9 @@ sized upload volumes, creates private service directories, and renders the
 runtime values, service write paths, and HTTP/HTTPS upload locations together.
 Existing profiles without `uploads` keep their proxy behavior. See
 [large-upload ingress](../../docs/guides/deployment.md#large-upload-ingress).
+
+The integrated runner also executes `tests/acceptance_uploads.py` after edge
+acceptance. It uses the existing fixture, rendered nginx and service sandbox,
+150 seconds of silent storage publication, slow clients and dedicated quota
+volumes. See the [B26 evidence requirements](../../docs/evidence/b26-resource-provider-acceptance.md).
+Resource and live R2 certification remain separate lead-run gates.

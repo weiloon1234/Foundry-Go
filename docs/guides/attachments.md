@@ -181,6 +181,13 @@ remain borrowed. `Prepare` returns a durable token, never a temporary-file handl
 `Accepts` uses the same preparation and cleanup without image transformation or
 storage publication. Small policies retain the existing bounded byte path.
 
+Set `Config.MaxLargeActive` below `MaxActive` to reserve mutation slots for small
+policies. Zero preserves the previous shared admission. Large policies acquire
+this sublimit before shared admission, source capture or remote download, even
+when a particular input is small. `Prepare`, `Add`, `Replace`, `Accepts` and URL
+imports hold it through actual callback exit and cleanup. Configured application
+assembly consumes `HTTP.Uploads.AttachmentMaxActive` when uploads are enabled.
+
 The capture sink counts and hashes bytes once as it writes them, retaining the
 shared 512-byte `mediatype.DetectUpload` probe. Files above 64 MiB use that bounded
 classification: client JSON/text hints cannot specialize them, and ZIP containers
@@ -776,3 +783,24 @@ For application reads inside deferred HTTP sources, use the
 
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.
+
+## Large-attachment acceptance
+
+For a 512 MiB opaque collection, set both policy ceilings, provision the private
+spool volume, and keep Prepare outside the caller transaction. Use AddIn or
+ReplaceIn with that prepared value inside the domain transaction. Apply the
+forward original-size migration before enabling the policy. Historical large
+rows, including cleaned tombstones, prevent rollback to an older runtime.
+
+Full Open verifies size and SHA-256 only after EOF. Closing early makes no whole-
+content integrity claim. OpenSeek pins object identity across range reopens and
+is suitable for HTTP HEAD, 206, 416 and If-Range handling. ReadBytes and image/
+variant processing retain their bounded in-memory limits. Fallback reconciliation
+and explicit settlement stream the original; cancellation or incomplete evidence
+must leave the intent unresolved.
+
+R2's shared conditional-write size cap remains in place until live certification
+passes for both create and replace. Large policies that exceed that capability
+fail validation. The local adapter and explicitly capable S3-compatible adapters
+do not establish R2 support. See the [resource and provider acceptance commands](../evidence/b26-resource-provider-acceptance.md)
+for required measurements, deployment gaps and live-provider evidence.

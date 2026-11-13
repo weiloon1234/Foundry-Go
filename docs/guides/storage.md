@@ -202,6 +202,20 @@ waits for actual callback exit rather than closing infrastructure beneath it.
 <a id="recipe-local-disk"></a>
 ## Local managed store
 
+`local.Config.Staging` optionally bounds large-write slots and payload bytes inside
+this managed root. `SmallObjectBytes` reserves admission for known small inputs;
+unknown lengths reserve `MaxObjectBytes`. Both puts and server-side copies use
+this owner before staging. Keep the disk's `MaxActive` greater than the staging
+slot cap. Failed cleanup retains its byte reservation until `Prune` removes the
+file; startup conservatively accounts for interrupted staging records. Zero
+staging limits preserve existing behavior. Named disks expose the same policy as
+`infrastructure.LocalDiskSettings.Staging`.
+
+Staging and atomic publication stay on the same managed filesystem. Provision
+record/filesystem overhead and persistent object capacity beyond payload
+reservations. To survive a completely full large volume, small publications need
+a separate managed disk on independently reserved storage.
+
 <!-- compiled-source: tests/fixtures/consumer/storing/files.go#local-disk -->
 ```go
 func LocalProviders(root string) []foundation.Provider {

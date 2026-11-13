@@ -2,11 +2,9 @@ package local
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"io/fs"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
@@ -27,12 +25,12 @@ func (b *Backend) Prune(ctx context.Context, olderThan time.Time, limit int) (ui
 	var removed uint64
 	finished := safeerror.New("staging cleanup batch complete")
 	err := b.walk(ctx, func(parent *os.Root, name string) error {
-		suffix, ok := strings.CutPrefix(name, tempPrefix)
-		if !ok || len(suffix) != 32 {
+		if !stagingName(name) {
 			return nil
 		}
-		if _, err := hex.DecodeString(suffix); err != nil {
-			return nil
+		if b.staging != nil {
+			b.staging.cleanup.Lock()
+			defer b.staging.cleanup.Unlock()
 		}
 		file, err := parent.OpenFile(name, os.O_RDWR, 0)
 		if errors.Is(err, fs.ErrNotExist) {
@@ -72,6 +70,7 @@ func (b *Backend) Prune(ctx context.Context, olderThan time.Time, limit int) (ui
 		if err = parent.Remove(name); err != nil {
 			return err
 		}
+		b.releasedStaging(name)
 		removed++
 		if b.config.Sync {
 			if err = syncDirectory(parent); err != nil {

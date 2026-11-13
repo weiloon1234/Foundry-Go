@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Fixed: attachment large-policy admission now reserves small mutation capacity;
+  local staging bounds large/unknown-size puts and copies, retains failed-cleanup
+  byte charges, and accounts for interrupted staging on restart. Deployment
+  settings reach the configured owners. Go regression sources are added; the
+  consolidated Go gate and container/provider certification remain lead-run.
+
+- Added: opt-in B26 resource acceptance across preparation, HTTP capture, slot
+  acceptance, URL import, full/ranged reads, recovery, settlement and historical
+  variant rejection, with separate-process heap/RSS and spool measurements.
+- Added: deploy-fixture acceptance for rendered-nginx uploads, 150-second silent
+  publication, slow/stalled/trickling clients, pool saturation and quota exhaustion.
+  Container and live-provider results remain pending. Attachment/staging runtime
+  sublimits and reserved small-publication capacity are not yet certified.
+- Documented: large-policy migration and rollback constraints, bounded image/read
+  APIs, streaming recovery, and generation-11 tools-plan/tools-apply before host
+  adoption. R2 retains its shared conditional-write cap until live create and
+  replace certification both pass.
+
 - Added: typed attachment `Collection.OpenSeek` with pinned, lazy ranged reads
   and an HTTP download example. Full `Open` reads verify persisted size and SHA-256
   at EOF; byte-returning APIs keep their 64 MiB ceiling.

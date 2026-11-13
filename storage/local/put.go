@@ -54,6 +54,12 @@ func (b *Backend) Put(ctx context.Context, key storage.ObjectKey, source io.Read
 // conditional one holds it through that sync. Success is reported only after
 // the sync.
 func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentType storage.MediaType, options storage.PutOptions, op storage.Operation, fill func(*os.File) (int64, storage.SHA256, error)) (result storage.ObjectInfo, err error) {
+	release, err := b.reserveStaging(options, op)
+	if err != nil {
+		return result, err
+	}
+	retained := ""
+	defer func() { release(retained) }()
 	directory, name := address(key)
 	shard, _ := hex.DecodeString(name[:2])
 	if err = b.ensureShard(directory, shard[0]); err != nil {
@@ -78,6 +84,11 @@ func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentTyp
 	published := false
 	var unlock func()
 	defer func() {
+		if b.staging != nil {
+			b.staging.cleanup.Lock()
+			defer b.staging.cleanup.Unlock()
+			defer func() { release(retained) }()
+		}
 		if unlock != nil {
 			unlock()
 		}
@@ -95,6 +106,7 @@ func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentTyp
 			result = storage.ObjectInfo{}
 			err = failure(storage.Unavailable, op, state, safeerror.Join("operation failed", err, closeErr, removeErr))
 			if removeErr != nil {
+				retained = temporary
 				var detail *storage.Error
 				errors.As(err, &detail)
 				err = safeerror.Retain(err, detail.WithCleanup(storage.NewCleanupID(directory+"/"+temporary)))

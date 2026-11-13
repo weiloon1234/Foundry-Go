@@ -8,9 +8,11 @@ import (
 	fixtureconfig "foundry.test/deployacceptance/internal/config"
 	"foundry.test/deployacceptance/internal/work"
 	"github.com/weiloon1234/Foundry-Go/application"
+	"github.com/weiloon1234/Foundry-Go/attachments"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/migrate"
 	"github.com/weiloon1234/Foundry-Go/database/seed"
+	"github.com/weiloon1234/Foundry-Go/extensions"
 	"github.com/weiloon1234/Foundry-Go/health"
 	"github.com/weiloon1234/Foundry-Go/infrastructure"
 	"github.com/weiloon1234/Foundry-Go/jobs"
@@ -21,6 +23,9 @@ var First = jobs.Define[work.Payload]("acceptance.first", 1, jobs.DefaultPolicy(
 var Second = jobs.Define[work.Payload]("acceptance.second", 1, jobs.DefaultPolicy("second"))
 
 func Builder(settings fixtureconfig.Settings, receipts *work.Receipts) *application.Builder {
+	if settings.App.HTTP.Uploads.Enabled {
+		settings.App.Features.Extensions.Enabled = true
+	}
 	construct := func(application.Services) (jobs.Handler[work.Payload], error) { return receipts.Handle, nil }
 	builder := application.New(settings.App).
 		HTTP(healthRoutes).
@@ -41,6 +46,12 @@ func Builder(settings fixtureconfig.Settings, receipts *work.Receipts) *applicat
 			})
 			return []schedule.Declaration{tick}, err
 		})
+	}
+	if settings.App.HTTP.Uploads.Enabled {
+		builder.Features(func(application.Services) (application.FeatureDeclarations, error) {
+			return application.FeatureDeclarations{Owners: []extensions.Declaration{uploadIdentity.Registration()}}, nil
+		})
+		builder.Migrations(infrastructure.MigrationTarget{Connection: "primary", Schema: "public", Definitions: attachments.Migrations()})
 	}
 	return builder
 }

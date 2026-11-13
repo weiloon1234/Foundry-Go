@@ -38,6 +38,7 @@ const MaxPrune = 256
 type Config struct {
 	Root           string
 	MaxObjectBytes int64
+	Staging        StagingLimits
 	// MaxScan bounds files examined by one lexical listing or cleanup call. No
 	// incomplete listing is returned when this budget is exhausted.
 	MaxScan int
@@ -56,6 +57,9 @@ func (c Config) Validate() error {
 	if !filepath.IsAbs(c.Root) || strings.ContainsRune(c.Root, 0) || c.MaxObjectBytes <= 0 || c.MaxObjectBytes > 1<<50 || c.MaxScan < 1 || c.Clock == nil {
 		return failure(storage.Invalid, storage.OpenOperation, storage.Unchanged, nil)
 	}
+	if err := c.Staging.validate(c.MaxObjectBytes); err != nil {
+		return err
+	}
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
 		return failure(storage.Unsupported, storage.OpenOperation, storage.Unchanged, nil)
 	}
@@ -66,6 +70,7 @@ func (c Config) Validate() error {
 // close it after its disks drain.
 type Backend struct {
 	root      *os.Root
+	staging   *stagingPool
 	config    Config
 	storeID   string
 	lifecycle sync.Mutex
@@ -116,7 +121,13 @@ func (b *Backend) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	b.root, b.storeID, b.started = opened.root, opened.storeID, true
+	b.root, b.storeID = opened.root, opened.storeID
+	if err := b.startStaging(ctx); err != nil {
+		err = safeerror.Join("local staging startup failed", err, b.root.Close())
+		b.root, b.staging = nil, nil
+		return failure(storage.Unavailable, storage.OpenOperation, storage.Unchanged, err)
+	}
+	b.started = true
 	return nil
 }
 

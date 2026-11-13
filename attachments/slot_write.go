@@ -123,7 +123,7 @@ func (s slotDefinition[M, K, S]) accepts(ctx context.Context, file FileSource) (
 	}
 	// Admission covers capture, inspection and actual cleanup.
 	accepted := false
-	err = m.calls.Run(ctx, "attachment acceptance", func(ctx context.Context) error {
+	err = m.runUpload(ctx, policy, "attachment acceptance", func(ctx context.Context) error {
 		_, err := withFile(ctx, file, func(input Upload) (struct{}, error) {
 			candidate, err := prepareInput(ctx, m, policy, input, false)
 			if err != nil {

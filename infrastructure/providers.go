@@ -142,6 +142,7 @@ func (p *Plan) disk(name storage.DiskID, settings DiskSettings) {
 		config := local.DefaultConfig(settings.Local.Root)
 		config.MaxObjectBytes = settings.Config.MaxObjectBytes
 		config.MaxScan = settings.Local.MaxScan
+		config.Staging = settings.Local.Staging
 		config.Sync = settings.Local.Sync
 		config.Clock = p.options.clock
 		key := foundation.NewKey[*local.Backend](string(owner))

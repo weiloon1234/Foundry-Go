@@ -44,7 +44,7 @@ func (c Collection[M, K]) AddFromURL(ctx context.Context, m *Manager, owner mode
 		name = remoteName(source.URL)
 	}
 	var result Result[M, K]
-	err := m.calls.Run(ctx, "attachment remote upload", func(ctx context.Context) error {
+	err := m.runUpload(ctx, c.definition.policy, "attachment remote upload", func(ctx context.Context) error {
 		locale, err := c.localeName(ctx, m)
 		if err != nil {
 			return err

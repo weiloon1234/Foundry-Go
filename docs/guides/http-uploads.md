@@ -338,7 +338,10 @@ Load those settings through the generated configuration schema. The deployment
 pipeline owns their values. Pass `settings.App.HTTP.Uploads` to `LargeRouter` in
 that example. Its service receives an ordinary request-owned `UploadedFile`.
 Production applications use their existing guarded endpoint adapter for the same
-multipart declaration.
+multipart declaration. Attachment and local-storage work use their own sublimits;
+see the [deployment owner wiring](deployment.md#large-upload-ingress). Reserve
+a separate small-publication disk when large-volume exhaustion must leave small
+attachment writes available.
 
 Admission precedes route middleware, authentication, decoding, and capture.
 `ApplyMiddleware` preserves this ordering around a Router. The server performs
@@ -388,3 +391,10 @@ publication, and response work, and extends native connection deadlines for a
 longer route. Nginx idle timers measure gaps in progress, not total duration.
 Use the [upload deployment profile](deployment.md#large-upload-ingress) to keep
 those settings and the writable sandbox paths consistent.
+
+The [B26 acceptance scenarios](../evidence/b26-resource-provider-acceptance.md)
+exercise actual rendered nginx, silent publication, known-length and chunked
+input, idle and total deadlines, disconnects and quota exhaustion. HTTP pool
+checks do not certify attachment or local-storage admission. Those owners must
+consume their declared large-work limits and preserve small-publication capacity
+before the complete deployment can be accepted.

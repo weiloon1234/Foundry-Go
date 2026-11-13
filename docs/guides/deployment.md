@@ -1404,18 +1404,29 @@ Runtime configuration comes from one derivation in
 | `APP__HTTP__UPLOADS__STAGING__DIRECTORY`, `MAX_ACTIVE`, `MAX_BYTES` | Separate local staging allocation consumed by the adapter owner |
 | `APP__HTTP__UPLOADS__STORAGE_TIMEOUT` | Total publication deadline applied to the application's explicitly selected disk |
 
-The attachment implementation must expose `Config.TempDirectory` through its
-existing generated application settings. Regenerate those settings after adding
-that field. The common internal seam is `upload.NewPool`, `Pool.Reserve`,
-`Reservation.Attach`, and `Reservation.Release`. A producer attaches its batch
-before capture and releases its reservation only after actual callback exit.
-`Pool.RetryCleanup` preserves charging until exact owned-file removal succeeds.
-Local staging keeps the adapter's cleanup references and publication outcomes.
-Neither request admission nor directory provisioning replaces the attachment
-and adapter owners' large-work sublimits and reserved small-work capacity.
-Until these owners consume their allocations, the deployment is not certified
-for large attachments. The existing shared R2 conditional-write restriction also
-remains independent of ingress configuration.
+Configured application assembly maps `AttachmentMaxActive` into
+`attachments.Config.MaxLargeActive`. It must be smaller than `MaxActive` to reserve
+small mutation capacity. For a named local disk whose managed root equals
+`Staging.Directory`, assembly applies `local.Config.Staging` through the named
+storage settings and applies `StorageTimeout`. Unselected disks keep their own
+policies. Advanced composition must pass these settings to the corresponding
+manager and selected adapter explicitly, as the deploy fixture does.
+
+The local adapter stages and atomically publishes inside its managed root; the
+staging directory is that root, not a cross-filesystem temporary directory. Its
+large-write pool reserves payload bytes and slots before reading input. Unknown
+lengths reserve `MaxObjectBytes`; known sizes at most `SmallObjectBytes` bypass
+that pool. Configured deployment assembly sets the small bound to the attachment
+buffered ceiling. Disk `MaxActive` must exceed staging `MaxActive`. Retained failed
+cleanup remains charged until prune removes it; startup accounts for interrupted
+staging. Reserve space for record overhead and published objects as well. Small
+publications need a separate disk on the reserved small volume when they must
+survive a full large volume.
+
+HTTP request reservations retain their existing `NewUploadPool` cleanup contract.
+Directory provisioning and passing unit tests do not certify resource isolation;
+the container saturation and quota scenarios remain required. The shared R2
+conditional-write restriction remains independent of ingress configuration.
 
 The shared nginx zone limits aggregate uploads across workers and aliases for
 one instance, including concurrent HTTP/2 streams. Each exact location returns
@@ -1442,3 +1453,16 @@ requests. Independently saturate every pool and fill each test-owned volume.
 Verify cleanup accounting, bounded proxy occupancy, and continued small JSON,
 small multipart, and small attachment publication. Unit rendering and filesystem
 fixtures do not establish those host or provider results.
+
+Run generation-11 `tools-plan`, review its changes, then run `tools-apply` before
+deploying a release that uses this upload profile. An application-only deploy does
+not upgrade the host tooling. Hosts below generation 9 must first reach the
+supported upgrade floor. Preserve the ordinary deploy and readiness steps after
+the tools upgrade.
+
+The [B26 acceptance record](../evidence/b26-resource-provider-acceptance.md) owns
+the resource, container and live R2 commands. It also records the implemented
+attachment/staging admission wiring and the outstanding execution evidence. Do not interpret generated paths or a
+passing nginx render test as certification of small-request isolation under full
+downstream quotas. R2's conditional-write cap remains until both live conditional
+operations are certified.

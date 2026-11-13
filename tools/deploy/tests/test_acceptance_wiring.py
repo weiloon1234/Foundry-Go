@@ -18,7 +18,7 @@ class AcceptanceWiringTests(unittest.TestCase):
     def test_upgrade_precedes_ordinary_host_exercises(self):
         runner = Path(__file__).with_name('run_acceptance.sh').read_text()
         phases = runner[runner.index('phase foreign-baseline '):runner.index('# Set before invocation:')]
-        ordinary = ['foreign-baseline', 'host', 'roles', 'capacity', 'backup', 'nginx', 'edge']
+        ordinary = ['foreign-baseline', 'host', 'roles', 'capacity', 'backup', 'nginx', 'edge', 'uploads']
         for enabled, expected in ((0, ordinary), (1, [ordinary[0], 'upgrade-prepare', 'upgrade',
                                                     *ordinary[1:]])):
             with self.subTest(upgrade=enabled):

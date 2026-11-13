@@ -24,6 +24,7 @@ const (
 // LocalDiskSettings configures local disk root, scan budget, and synchronization.
 type LocalDiskSettings struct {
 	Root    string
+	Staging local.StagingLimits
 	MaxScan int
 	Sync    bool
 }

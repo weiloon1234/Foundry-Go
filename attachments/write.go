@@ -36,7 +36,7 @@ func (c Collection[M, K]) write(ctx context.Context, m *Manager, owner model.Ref
 		return Result[M, K]{}, err
 	}
 	var result Result[M, K]
-	err := m.calls.Run(ctx, "attachment upload", func(ctx context.Context) error {
+	err := m.runUpload(ctx, c.definition.policy, "attachment upload", func(ctx context.Context) error {
 		locale, err := c.localeName(ctx, m)
 		if err != nil {
 			return err
@@ -215,7 +215,7 @@ func (c Collection[M, K]) Prepare(ctx context.Context, m *Manager, owner model.R
 		return Prepared[M, K]{}, err
 	}
 	var prepared Prepared[M, K]
-	err := m.calls.Run(ctx, "attachment upload", func(ctx context.Context) error {
+	err := m.runUpload(ctx, c.definition.policy, "attachment upload", func(ctx context.Context) error {
 		locale, err := c.localeName(ctx, m)
 		if err != nil {
 			return err
