@@ -249,7 +249,7 @@ func TestUploadPoolListenerFailureReleasesClaim(t *testing.T) {
 func TestUploadPoolClaimFailureClosesOnlyThisServersClaims(t *testing.T) {
 	firstDirectory, heldDirectory := t.TempDir(), t.TempDir()
 	heldRouter, heldPool := uploadLifecycleRouter(t, heldDirectory)
-	_, stop := runUploadLifecycleServer(t, prepareUploadLifecycleServer(t, heldRouter))
+	origin, stop := runUploadLifecycleServer(t, prepareUploadLifecycleServer(t, heldRouter))
 	defer stop()
 	_, firstPool := uploadLifecycleRouter(t, firstDirectory)
 	first := admittedEndpoint(t, firstPool)
@@ -260,8 +260,10 @@ func TestUploadPoolClaimFailureClosesOnlyThisServersClaims(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := prepareUploadLifecycleServer(t, router).Run(t.Context()); !errors.Is(err, fault.Conflict) {
-		t.Fatal("same pool was claimed by two servers", err)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	if err := prepareUploadLifecycleServer(t, router).Run(ctx); !errors.Is(err, fault.Conflict) {
+		t.Error("same pool was claimed by two servers", err)
 	}
 	if _, err := os.Stat(filepath.Join(firstDirectory, ".foundry-upload-owner")); !os.IsNotExist(err) {
 		t.Fatal("partial startup retained its first claim", err)
@@ -271,6 +273,47 @@ func TestUploadPoolClaimFailureClosesOnlyThisServersClaims(t *testing.T) {
 		t.Fatal("failed startup closed the other server's pool", err)
 	}
 	reservation.Release()
+	wire, media := multipartWire(t, primaryUpload("still serving"))
+	client := &stdhttp.Client{Timeout: 3 * time.Second}
+	response, err := client.Post(origin+"/uploads", media, bytes.NewReader(wire))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != 204 {
+		t.Fatal("first server stopped accepting uploads", response.StatusCode)
+	}
+}
+
+func TestUploadPoolManualClaimIsIdempotentAndExcludesFrameworkServer(t *testing.T) {
+	router, pool := uploadLifecycleRouter(t, t.TempDir())
+	for range 2 {
+		if err := pool.Claim(); err != nil {
+			t.Fatal("native hosting claim was not idempotent", err)
+		}
+	}
+	// A bind failure must not close the manually claimed pool either.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	server := prepareUploadLifecycleServer(t, router)
+	server.config.Address = listener.Addr().String()
+	if err := server.Run(t.Context()); !errors.Is(err, fault.Conflict) {
+		t.Error("framework server did not refuse the manual owner before binding", err)
+	}
+	reservation, err := pool.pool.Reserve(t.Context(), 1)
+	if err != nil {
+		t.Fatal("framework startup closed the manual owner's pool", err)
+	}
+	reservation.Release()
+	if err := pool.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.Claim(); !errors.Is(err, fault.Closed) {
+		t.Fatal("claim reopened a closed native pool", err)
+	}
 }
 
 func TestUploadPoolApplicationShutdownCloseIsIdempotent(t *testing.T) {

@@ -46,8 +46,9 @@ func (p *UploadPool) RetryCleanup() error { return p.pool.RetryCleanup() }
 // enables reservations; ownership ends at Close or process exit. The framework
 // Server claims its router's pools before accepting connections, so call Claim
 // only when hosting the Router on another server, before it accepts requests.
-// Claim is idempotent for the same pool and refuses a directory another live
-// process owns.
+// Claim is idempotent for the same pool. A framework server and a manual Claim
+// must not share a pool. A live kernel lock or a legacy unversioned marker
+// refuses the claim; legacy markers require the documented one-time migration.
 func (p *UploadPool) Claim() error { return p.pool.Claim() }
 
 // Close seals admission and releases directory ownership only after requests

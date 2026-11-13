@@ -334,7 +334,9 @@ the framework HTTP server starts.
 
 Before accepting connections, the server claims every distinct pool referenced
 by its router's `MultipartAdmission` routes. `ApplyMiddleware` preserves this
-inventory. The server closes its pools after HTTP drain and on startup failure.
+inventory. Each framework server requires exclusive ownership, including within
+one process. After HTTP drain or startup failure, it closes only the pools it
+acquired.
 Existing application `pool.Close()` calls in `OnShutdown` remain valid because
 close is idempotent. No application wiring change is required.
 
@@ -343,7 +345,9 @@ Changing that directory afterward fails validation. Existing descriptors without
 admission retain their behavior. Direct `Router.ServeHTTP` or standard `net/http`
 hosting does not claim pools automatically: call `pool.Claim()` for each pool
 before that server accepts requests, and `pool.Close()` after it drains. Claim is
-idempotent for the same pool and refuses a directory another live process owns.
+idempotent for the same pool. A framework server and a manual `Claim` must not
+share a pool; framework startup refuses an already claimed pool with
+`fault.Conflict`. Use one lifecycle owner for each pool.
 
 The [independent upload consumer](../../tests/fixtures/consumer/httpuploads/large.go)
 uses `http.UploadSettings`, available as `application.Settings.HTTP.Uploads`.
@@ -403,13 +407,21 @@ byte budget, bind a separate `UploadPool` on their independent volume. Reserve
 small attachment and adapter capacity in those owners too. HTTP isolation alone
 does not reserve downstream publication capacity.
 
-Serving takes a non-blocking exclusive kernel lock on `.foundry-upload-owner`.
-A live owner causes startup to fail with `fault.Conflict`. After a crash, the
-kernel releases the lock. The next server acquires it and removes retained
-`foundry-upload-*` capture directories before admitting work. Unknown entries or
-a capture that cannot be deleted refuse startup with a diagnostic. Resolve those
-filesystem problems before trying again. A stale marker alone needs no manual
-reconciliation.
+Serving takes a non-blocking exclusive kernel lock on `.foundry-upload-owner`
+and records `foundry-upload-owner 2` followed by a newline. A live holder of this
+lock causes startup to fail with `fault.Conflict`. After a crash, the kernel
+releases the lock. The next server reconciles retained `foundry-upload-*` capture
+directories only when the marker has this current format and the lock is free,
+or when no marker exists. Unknown marker formats, unknown directory entries, or
+a capture that cannot be deleted refuse startup without admitting work.
+
+An empty v0.30.0 ownership marker has no kernel lock and cannot prove whether its
+owner is still alive. Claim refuses it with `fault.Conflict` and leaves the marker
+and all captures unchanged. For this one-time upgrade step, stop every v0.30.0
+server using the directory, then remove that directory's `.foundry-upload-owner`
+marker. The next startup writes the current format and reconciles the captures.
+Do not remove the marker before those servers have stopped. Current-format stale
+markers need no manual reconciliation.
 
 After requests drain and retained cleanup succeeds, close removes the marker and
 releases the lock. Never remove the marker of a live server. A second process or

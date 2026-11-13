@@ -129,7 +129,7 @@ func (s *Server) run(ctx context.Context, logger *slog.Logger, managed bool) (re
 		return err
 	}
 	for _, pool := range uploadPools(s.handler) {
-		if err := pool.pool.Claim(); err != nil {
+		if err := pool.pool.ClaimExclusive(); err != nil {
 			s.completeStart("", err)
 			return err
 		}

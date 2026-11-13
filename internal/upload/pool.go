@@ -2,6 +2,7 @@ package upload
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -52,7 +53,10 @@ func NewPool(config PoolConfig) (*Pool, error) {
 	return &Pool{config: config, slots: admission.New(config.MaxActive), retained: make(map[*Reservation]struct{})}, nil
 }
 
-const ownerMarker = ".foundry-upload-owner"
+const (
+	ownerMarker = ".foundry-upload-owner"
+	ownerFormat = "foundry-upload-owner 2\n"
+)
 
 func poolDirectory(directory string) (os.FileInfo, error) {
 	info, err := os.Lstat(directory)
@@ -62,16 +66,25 @@ func poolDirectory(directory string) (os.FileInfo, error) {
 	return info, nil
 }
 
-// Claim enables reservations for one server lifetime. It never waits for a live
-// owner. An unclaimed pool performs no writes and owns no filesystem resources.
-func (p *Pool) Claim() error {
+// Claim enables reservations for a manually managed lifetime. Repeated calls
+// on the same pool are idempotent; they do not transfer ownership.
+func (p *Pool) Claim() error { return p.claim(true) }
+
+// ClaimExclusive acquires a new server lifetime or refuses an existing owner,
+// including another server or manual Claim on this same pool object.
+func (p *Pool) ClaimExclusive() error { return p.claim(false) }
+
+func (p *Pool) claim(idempotent bool) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
 		return safeerror.NewFault(fault.Closed, "upload pool is closed")
 	}
 	if p.owner != nil {
-		return nil
+		if idempotent {
+			return nil
+		}
+		return safeerror.NewFault(fault.Conflict, "upload pool already has a serving owner; framework servers and manual Claim must not share a pool")
 	}
 	info, err := poolDirectory(p.config.Directory)
 	if err != nil {
@@ -92,13 +105,17 @@ func (p *Pool) Claim() error {
 		return safeerror.NewFault(fault.Conflict, "upload pool directory changed during claim")
 	}
 	if marker, err := root.Lstat(ownerMarker); err == nil {
-		if !marker.Mode().IsRegular() || marker.Size() != 0 {
+		if !marker.Mode().IsRegular() {
 			return safeerror.NewFault(fault.Invalid, "invalid upload pool ownership marker")
 		}
 	} else if !os.IsNotExist(err) {
 		return safeerror.WrapFailure(fault.Invalid, "upload pool ownership marker is unavailable", err)
 	}
-	owner, err := root.OpenFile(ownerMarker, os.O_CREATE|os.O_RDWR, 0600)
+	owner, err := root.OpenFile(ownerMarker, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	created := err == nil
+	if os.IsExist(err) {
+		owner, err = root.OpenFile(ownerMarker, os.O_RDWR, 0600)
+	}
 	if err != nil {
 		return safeerror.WrapFailure(fault.Invalid, "upload pool ownership marker is unavailable", err)
 	}
@@ -108,7 +125,7 @@ func (p *Pool) Claim() error {
 		}
 	}()
 	identity, err := owner.Stat()
-	if err != nil || !identity.Mode().IsRegular() || identity.Size() != 0 {
+	if err != nil || !identity.Mode().IsRegular() {
 		return safeerror.NewFault(fault.Invalid, "invalid upload pool ownership marker")
 	}
 	locked, err := filelock.Try(owner)
@@ -123,6 +140,25 @@ func (p *Pool) Claim() error {
 	current, err := root.Lstat(ownerMarker)
 	if err != nil || !current.Mode().IsRegular() || !os.SameFile(identity, current) {
 		return safeerror.NewFault(fault.Conflict, "upload pool ownership marker changed during claim; retry startup")
+	}
+	if created {
+		if _, err := owner.WriteString(ownerFormat); err != nil {
+			return safeerror.WrapFailure(fault.Internal, "upload pool ownership marker write failed", err)
+		}
+		if err := owner.Sync(); err != nil {
+			return safeerror.WrapFailure(fault.Internal, "upload pool ownership marker sync failed", err)
+		}
+	} else {
+		contents, err := io.ReadAll(io.LimitReader(owner, int64(len(ownerFormat)+1)))
+		if err != nil {
+			return safeerror.WrapFailure(fault.Invalid, "upload pool ownership marker could not be read", err)
+		}
+		if len(contents) == 0 {
+			return safeerror.NewFault(fault.Conflict, "a v0.30.0 ownership marker was found; stop every v0.30.0 server using this directory, then remove the marker")
+		}
+		if string(contents) != ownerFormat {
+			return safeerror.NewFault(fault.Invalid, "unrecognized upload pool ownership marker format; serving refused without reconciling captures")
+		}
 	}
 	if err := reconcileCaptures(root); err != nil {
 		return err
