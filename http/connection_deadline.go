@@ -10,9 +10,10 @@ import (
 )
 
 type connectionReadTimeout struct {
-	deadline time.Time
-	armed    atomic.Bool
-	observed atomic.Bool
+	deadline   time.Time
+	generation uint64
+	armed      atomic.Bool
+	observed   atomic.Bool
 }
 
 func (r *connectionReadTimeout) observe(err error) {
@@ -25,17 +26,32 @@ func (r *connectionReadTimeout) observe(err error) {
 // the native read error. Each installed upload deadline gets its own record.
 type requestDeadlineConn struct {
 	net.Conn
-	mu     sync.Mutex
-	upload atomic.Pointer[connectionReadTimeout]
+	mu         sync.Mutex
+	upload     atomic.Pointer[connectionReadTimeout]
+	generation atomic.Uint64
+	resets     atomic.Int64
+}
+
+func (c *requestDeadlineConn) stableGeneration() (uint64, bool) {
+	generation := c.generation.Load()
+	return generation, c.resets.Load() == 0 && c.generation.Load() == generation
+}
+
+func (c *requestDeadlineConn) currentUpload(record *connectionReadTimeout) bool {
+	if record == nil || !record.armed.Load() || c.upload.Load() != record {
+		return false
+	}
+	generation, stable := c.stableGeneration()
+	return stable && generation == record.generation
 }
 
 func (c *requestDeadlineConn) Read(p []byte) (int, error) {
 	record := c.upload.Load()
-	if record != nil && !record.armed.Load() {
+	if !c.currentUpload(record) {
 		record = nil
 	}
 	n, err := c.Conn.Read(p)
-	if record != nil && c.upload.Load() == record {
+	if c.currentUpload(record) {
 		record.observe(err)
 	}
 	return n, err
@@ -44,7 +60,8 @@ func (c *requestDeadlineConn) Read(p []byte) (int, error) {
 func (c *requestDeadlineConn) uploadReadDeadline(deadline time.Time) (*connectionReadTimeout, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	record := &connectionReadTimeout{deadline: deadline}
+	generation, stable := c.stableGeneration()
+	record := &connectionReadTimeout{deadline: deadline, generation: generation}
 	// Publish before the syscall so a concurrent reset can invalidate this
 	// installation. Never restore a record that a reset has withdrawn.
 	c.upload.Store(record)
@@ -52,7 +69,12 @@ func (c *requestDeadlineConn) uploadReadDeadline(deadline time.Time) (*connectio
 		c.upload.CompareAndSwap(record, nil)
 		return nil, err
 	}
-	record.armed.Store(true)
+	current, unchanged := c.stableGeneration()
+	if stable && unchanged && generation == current {
+		record.armed.Store(true)
+	} else {
+		c.upload.CompareAndSwap(record, nil)
+	}
 	return record, nil
 }
 
@@ -60,17 +82,31 @@ func (c *requestDeadlineConn) uploadReadDeadline(deadline time.Time) (*connectio
 // upload association. They must not attribute a later timeout to an old request.
 // Invalidating on both sides also retires overlapping installations without
 // taking the upload mutex on ordinary connections.
+func (c *requestDeadlineConn) beginReset() {
+	// A count, rather than odd/even generation parity, keeps overlapping
+	// resets unstable until every underlying deadline change has returned.
+	c.resets.Add(1)
+	c.generation.Add(1)
+	c.upload.Store(nil)
+}
+
+func (c *requestDeadlineConn) endReset() {
+	c.upload.Store(nil)
+	c.generation.Add(1)
+	c.resets.Add(-1)
+}
+
 func (c *requestDeadlineConn) SetReadDeadline(deadline time.Time) error {
-	c.upload.Store(nil)
+	c.beginReset()
 	err := c.Conn.SetReadDeadline(deadline)
-	c.upload.Store(nil)
+	c.endReset()
 	return err
 }
 
 func (c *requestDeadlineConn) SetDeadline(deadline time.Time) error {
-	c.upload.Store(nil)
+	c.beginReset()
 	err := c.Conn.SetDeadline(deadline)
-	c.upload.Store(nil)
+	c.endReset()
 	return err
 }
 
