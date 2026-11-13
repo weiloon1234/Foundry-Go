@@ -9,6 +9,8 @@ FIELDS = frozenset({"message", "retry", "allow", "except", "bypass"})
 
 
 def status(host, entry, release_path):
+    if entry.get("topology", {}).get("schema") == 2:
+        return {"down": entry.get("preview_maintenance", False)}
     import release
 
     result = release.app(host, entry, release_path, "maintenance:status",

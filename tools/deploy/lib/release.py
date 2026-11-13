@@ -44,7 +44,17 @@ def valid_version(value):
 
 def validate_manifest(manifest, entry):
     require(isinstance(manifest, dict), "invalid_release", "Release manifest must be an object.")
-    expected = {"schema": SCHEMA, "layout_version": LAYOUT_VERSION, "project_id": entry["project_id"],
+    feature = manifest.get("schema") == 2
+    require(feature == (entry["profile"].get("schema") == 3), "capability_unavailable",
+            "Feature-to-legacy release selection requires the post-preview B24 lifecycle release.")
+    declaration = None
+    if feature:
+        from contracts import ReleaseDeclaration
+        declaration = ReleaseDeclaration.parse(manifest.get("deployment"))
+        require(json.loads(declaration.profile_json) == entry["profile"] and
+                ("topology" not in entry or declaration.topology_sha256 == entry["topology"]["sha256"]),
+                "release_identity", "Feature release declarations differ from the registered profile/topology.")
+    expected = {"schema": 2 if feature else SCHEMA, "layout_version": LAYOUT_VERSION, "project_id": entry["project_id"],
                 "instance_id": entry["profile"]["instance_id"], "instance": entry["name"], "environment": entry["environment"],
                 "architecture": entry["profile"]["architecture"], "native_imaging": entry["profile"].get("native_imaging", False)}
     require(all(type(manifest.get(k)) is type(v) and manifest.get(k) == v for k, v in expected.items()), "release_identity", "Release identity, architecture or runtime requirements do not match this instance.")
@@ -62,13 +72,17 @@ def validate_manifest(manifest, entry):
                 "Release topology differs from the bootstrapped role declaration.")
     files = manifest.get("files")
     require(isinstance(files, dict) and 1 <= len(files) <= MAX_FILES, "invalid_release", "Invalid release file inventory.")
+    declared_paths = {m.path for m in declaration.inventory} if feature else set()
     for path, checksum in files.items():
-        require(safe_member(path) == path and allowed_file(path) and isinstance(checksum, str)
+        require(safe_member(path) == path and (allowed_file(path) or path in declared_paths) and isinstance(checksum, str)
                 and re.fullmatch(r"[a-f0-9]{64}", checksum), "invalid_release", "Invalid release file path or checksum.")
     require({"artisan", "config/deploy.toml"}.issubset(files)
             and any(p.startswith("public/") for p in files)
             and any(p.startswith("private-source-maps/" + manifest["version"] + "/") for p in files),
             "invalid_release", "Release lacks its binary, configuration, portal assets or private source maps.")
+    if feature:
+        require(files == {m.path: m.sha256 for m in declaration.inventory},
+                "release_inventory", "Feature inventory differs from the frozen release declaration.")
     return manifest
 
 
@@ -92,7 +106,7 @@ def write_runtime_descriptor(host, entry, release_path):
                                  "work_dir": paths["data"]}, sort_keys=True) + "\n", mode=0o644)
 
 
-def unpack_archive(host, archive, destination, entry, checksum):
+def unpack_archive(host, archive, destination, entry, checksum, *, expansion_budget=None):
     """Inspect every header before writing; no links, devices or extraction API."""
     check_path(archive, "file")
     require(archive.stat().st_size <= MAX_ARCHIVE_BYTES and isinstance(checksum, str)
@@ -100,6 +114,11 @@ def unpack_archive(host, archive, destination, entry, checksum):
             "archive_checksum", "Upload is incomplete or differs from its expected checksum.")
     check_path(destination, "directory")
     require(not destination.exists(), "release_conflict", "Release staging path already exists.")
+    feature = entry.get("topology", {}).get("schema") == 2
+    if feature:
+        from artifacts import ExpansionBudget
+        expansion_budget = expansion_budget or ExpansionBudget()
+        expansion_budget.retain_archive(archive.stat().st_size)
     try:
         with tarfile.open(archive, "r:gz") as bundle:
             members, names, total = [], set(), 0
@@ -109,19 +128,24 @@ def unpack_archive(host, archive, destination, entry, checksum):
                 name = safe_member(item.name)
                 require(name not in names and (item.isfile() or item.isdir()), "unsafe_archive", "Archive has duplicate paths or unsupported entry types.")
                 names.add(name)
+                if feature and name != ".":
+                    expansion_budget.charge(name, item.size if item.isfile() else 0, directory=item.isdir())
                 total += item.size
                 require(total <= MAX_EXPANDED_BYTES, "unsafe_archive", "Archive expands beyond its size limit.")
                 if item.isfile():
-                    require(name == "manifest.json" or allowed_file(name), "unsafe_archive", "Release contains unexpected files.")
+                    require(feature or name == "manifest.json" or allowed_file(name), "unsafe_archive", "Release contains unexpected files.")
                     if name == "manifest.json":
                         require(item.size <= 4 * 1024 * 1024, "invalid_release", "Manifest exceeds size limit.")
                         manifest = parse_json(bundle.extractfile(item).read())
                 else:
-                    require(name in (".", "config", "public", "private-source-maps") or name.startswith(("public/", "private-source-maps/")), "unsafe_archive", "Unexpected release directory.")
+                    require(feature or name in (".", "config", "public", "private-source-maps") or name.startswith(("public/", "private-source-maps/")), "unsafe_archive", "Unexpected release directory.")
                 members.append((item, name))
             manifest = validate_manifest(manifest, entry)
             actual = {name for item, name in members if item.isfile() and name != "manifest.json"}
             require(actual == set(manifest["files"]), "release_inventory", "Archive files differ from the manifest.")
+            if feature:
+                require(manifest["schema"] == 2 and all(name == "." or any(file.startswith(name + "/") for file in actual)
+                        for item, name in members if item.isdir()), "release_inventory", "Feature archive has undeclared directories.")
             # Explicit modes: the service account executes the release, and a
             # hardened root umask must not make it root-only.
             destination.mkdir(mode=0o755, parents=True)
@@ -139,10 +163,11 @@ def unpack_archive(host, archive, destination, entry, checksum):
                     directory.chmod(mode)
                 with bundle.extractfile(item) as source, target.open("xb") as output:
                     shutil.copyfileobj(source, output, length=1024 * 1024)
-                target.chmod(0o755 if name == "artisan" else 0o600 if name.startswith("private-source-maps/") else 0o644)
+                target.chmod(0o755 if name == "artisan" or feature and name.startswith("deploy/bin/") else 0o600 if name.startswith("private-source-maps/") else 0o644)
                 if name != "manifest.json":
                     require(digest(target) == manifest["files"][name], "release_checksum", "A release file differs from its manifest checksum.")
-            write_runtime_descriptor(host, entry, destination)
+            if not feature:
+                write_runtime_descriptor(host, entry, destination)
             return manifest
     except (tarfile.TarError, OSError, EOFError):
         raise DeployError("invalid_archive", "Cannot read the release archive safely.") from None
@@ -193,11 +218,25 @@ def switch_to(host, entry, version):
 
 
 def app(host, entry, release, command, env_file=None, extra=(), timeout=90, check=True):
+    environment = {"WEB__PUBLIC_DIR": str(release / "public")}
+    if entry.get("topology", {}).get("schema") == 2:
+        from feature_lifecycle import load
+        from runtime_config import effective_environment_path
+        if env_file is None:
+            _, _, inventory, _ = load(host, entry)
+            env_file = effective_environment_path(host, entry, inventory.resolution)
+        relative = Path(env_file).relative_to(host.paths.instance_config(entry["name"]))
+        require(len(relative.parts) == 4 and relative.parts[0] == "runtime" and relative.parts[2:] == ("http", "app.env"),
+                "runtime_resolution", "Console calls require the selected HTTP environment.")
+        descriptor = host.paths.opt(entry["name"]) / "runtime" / relative.parts[1] / "http.json"
+        check_path(descriptor, "file")
+        require(descriptor.is_file(), "runtime_resolution", "Console binding descriptor is missing.")
+        environment["FOUNDRY_DEPLOY_RUNTIME_FILE"] = str(descriptor)
     config = env_file or host.paths.instance_config(entry["name"]) / "app.env"
     check_path(config, "file")
     return host.run(["runuser", "-u", entry["name"], "--", str(release / "artisan"), command,
                      "--config", str(release / "config/deploy.toml"), "--env-file", str(config), *extra],
-                    env={"WEB__PUBLIC_DIR": str(release / "public")}, timeout=timeout, check=check,
+                    env=environment, timeout=timeout, check=check,
                     cwd=check_path(host.paths.data(entry["name"]), "directory"))
 
 
@@ -370,8 +409,8 @@ def resume_terminal_obligations(host, registry, entry, state):
     return changed or pending
 
 
-def migration_status(host, entry, release):
-    report = parse_json(app(host, entry, release, "migrate:status", extra=("--database", "primary")).stdout)
+def migration_status(host, entry, release, env_file=None):
+    report = parse_json(app(host, entry, release, "migrate:status", env_file=env_file, extra=("--database", "primary")).stdout)
     require(isinstance(report, dict) and isinstance(report.get("targets"), list) and report["targets"], "migration_status", "Migration status did not return declared database targets.")
     pending = False
     for target in report["targets"]:
@@ -441,6 +480,9 @@ def prepare_worker(host, entry, candidate=None):
 
 def enabled_roles(host, entry, timeout=5):
     """Read the systemd enablement that owns which declared roles should run."""
+    if "deployment_selection" in entry:
+        from feature_lifecycle import load
+        return list(load(host, entry)[1].enabled_roles)
     result = []
     for role, unit in instance_units(entry).items():
         observed = host.run(["systemctl", "is-enabled", unit], check=False, timeout=timeout)
@@ -575,7 +617,13 @@ def services(host, entry):
     result = {}
     selected = current_version(host, entry)
     executable = release_path(host, entry, selected) / "artisan" if selected else None
+    inventory = None
+    if "deployment_selection" in entry:
+        from feature_lifecycle import load
+        inventory = load(host, entry)[2]
     for role, unit in instance_units(entry).items():
+        if inventory is not None:
+            executable = host.paths.p(inventory.specs[role].executable)
         try:
             observed = service(host, unit)
             observed["executable_matches"] = bool(executable and _matches_executable(observed, executable))
@@ -835,6 +883,9 @@ def prune_runtime_maps(destination, protected):
 
 
 def prune(host, entry, state):
+    from feature_lifecycle import is_feature, refuse
+    if is_feature(entry):
+        refuse("release and artifact pruning")
     keep = entry["profile"]["retention"]
     protected = {(state.get(k) or {}).get("version") for k in ("current", "previous")}
     protected.add((state.get("last_attempt") or {}).get("release"))
@@ -912,6 +963,10 @@ def activate_recovered(host, registry, entry, archive, checksum, *, http_only=Fa
 
 
 def activate(host, project, profile, archive, checksum, operation_id=None):
+    if profile.get("schema") == 3:
+        from feature_lifecycle import request_operation
+        return request_operation(host, "activate", project, profile, operation_id=operation_id,
+                                 archive=str(archive), archive_sha256=checksum)
     require(operation_id is None or valid_uuid(operation_id), "invalid_operation", "Deployment operation ID must be a UUIDv4.")
     _, entry = host.require_identity(project, profile)
     require(entry["provisioning"]["state"] == "ready", "bootstrap_incomplete", "Bootstrap must finish before deployment.")
@@ -1039,6 +1094,9 @@ def activate(host, project, profile, archive, checksum, operation_id=None):
 
 
 def rollback(host, project, profile, target, expected_current, operation_id):
+    if profile.get("schema") == 3:
+        from feature_lifecycle import refuse
+        refuse("rollback")
     require(valid_version(target) and valid_version(expected_current) and valid_uuid(operation_id),
             "invalid_rollback", "Rollback requires explicit target, expected current and an operation UUIDv4.")
     _, entry = host.require_identity(project, profile)
@@ -1115,6 +1173,9 @@ def rollback(host, project, profile, target, expected_current, operation_id):
 
 
 def reconcile(host, project, profile):
+    if profile.get("schema") == 3:
+        from feature_lifecycle import refuse
+        refuse("reconciliation")
     _, entry = host.require_identity(project, profile)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
@@ -1246,6 +1307,9 @@ def require_configuration_keys(host, entry, release, env_file, keys):
 
 
 def config_set(host, project, profile, changes):
+    if profile.get("schema") == 3:
+        from feature_lifecycle import refuse
+        refuse("configuration changes")
     _, entry = host.require_identity(project, profile)
     validate_configuration_changes(changes, entry)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
@@ -1275,6 +1339,9 @@ def rotation_result(receipt):
 
 
 def keys_rotate(host, project, profile, operation_id, encryption=None):
+    if profile.get("schema") == 3:
+        from feature_lifecycle import refuse
+        refuse("key rotation")
     require(valid_uuid(operation_id), "invalid_operation", "Key rotation requires a stable operation UUIDv4.")
     _, entry = host.require_identity(project, profile)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):

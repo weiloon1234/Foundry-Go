@@ -168,74 +168,81 @@ runtime values, service write paths, and HTTP/HTTPS upload locations together.
 Existing profiles without `uploads` keep their proxy behavior. See
 [large-upload ingress](../../docs/guides/deployment.md#large-upload-ingress).
 
-### Host-capability lifecycle foundation (not enabled)
+### Generation-12 feature preview
 
-Generation 12's frozen topology/profile/archive records remain inspectable;
-feature activation still returns `capability_unavailable`. Milestone 3 checkpoint
-1 adds internal admission, service inventory and preparation owners without
-changing legacy units, upload provisioning or advertised runtime capabilities.
-Wrappers, placement counts above one and ordinals other than one remain rejected.
+This checkout contains the preview owners but does not yet activate features:
+shared registry/profile/topology reader dispatch still rejects the feature schemas,
+and lane C's network integration is absent. Both integration gates must be filled
+before running the end-to-end scenario below; no frozen declaration changes are needed.
 
-`lib/admission.py` owns durable selection/resolution and operation evidence under
-`/var/lib/foundry/admission/<instance UUID>`. Boot closure, permits, claims and
-admitted invocations live under `/run/foundry/admission/<instance UUID>`.
-`AdmissionStore.begin` requires previously journaled running intent; starts reject
-any unresolved journal. `commit` requires durable successful/reconciled completion.
-The lifecycle owner must record completion only after its other obligations are
-proven; this foundation does not perform those obligations. Both committed and
-pending starts require whole-instance current-boot closure. Pending validation
-also requires a health-phase journal, complete scoped closure and a live executor
-PID/start/systemd invocation. A claim admits one invocation per unit and permit;
-replaying it cannot admit an automatic restart. Preparation rechecks the admitted
-invocation without consuming a second allowance. Short start locks never acquire
-the lifecycle executor's host lock.
+The preview uses the frozen topology-2, profile-3 and archive-2 contracts. Single
+instance custom services receive typed argv, hardened units, local probes,
+per-start configuration and protected bundle views. Wrappers, counts above one
+and ordinals other than one remain release-2 capability refusals. Legacy apps and
+generation 9, 10 and 11 hosts retain their existing paths.
 
-`lib/services.py` consumes frozen `Deployment`, `UnitSpec` and `RuntimeResolution`
-records, the parsed topology and profile. It owns one inventory for built-in and
-custom units, literal systemd quoting, custom hardening/limits and local probes.
-Custom units use `@1`; built-in names/policies remain unchanged. Tool starts use
-dependency order with a shared readiness deadline; stops use reverse order.
-Named preflight rejects unavailable prerequisites and enabled/running dependents
-outside the selection. Units render `After=` only for application dependencies,
-so boot and automatic restart do not silently enable or wait for another role.
-The lifecycle caller supplies bounded, current observations and retains built-in
-readiness checks; custom readiness checks executable identity, listener ownership,
-the declared probe and process stability.
+`feature_lifecycle.py` owns provision/deploy/restart/stop orchestration. Provision
+passes declared package requirements to lane B's reviewed transaction. Deploy
+verifies and publishes lane B artifacts before building frozen `Deployment`,
+`UnitSpec` and `RuntimeResolution` records. Pending admission precedes stops,
+migrations and selection. Validation starts run in dependency/readiness order with
+one allowance per unit and a live operation executor. Completion commits admission.
+A failed transition remains pending for reconciliation; it never rolls back code
+or credentials automatically.
 
-`runtime_config.prepare_service` takes the admitted frozen unit and inventoried
-release sources. Each invocation gets a new protected view. Immutable/rendered
-files and baselines are read-only; recreate settings live in fresh service-owned
-directories; seed-once directories preserve existing edits. Bundle exports are
-reverified against their frozen member inventory and get protected mountpoint
-skeletons before unit loading through `prepare_unit_paths`; this inert staging
-also creates every namespace write path before start. Units use read-only namespace bindings, never
-copies into mutable plugin directories. Failed preparation never selects partial
-output. At most 32 retained views per role/resolution may exist; exhaustion refuses
-another start until later proven-exit cleanup removes eligible views.
-Admission likewise bounds retained permits and invocation receipts, and refuses
-new starts when their cleanup is overdue.
+HTTP allocation is a journaled runtime selection. Every role gets an immutable,
+root-owned mode-0640 effective environment derived from current private values.
+Units, console commands and runtime descriptors select that same resolution.
+Environment hashes stay private. Automatic restart reuses the exact selected
+resolution; it never reallocates a port. The boot coordinator proves closure and
+starts the enabled selection in readiness order before requesting public opening.
 
-Integration handoffs for subsequent checkpoints:
+Application code calls `deployment.LoadBindings()` once at assembly. Its result
+is an immutable snapshot with typed `Executable(name)`, `Endpoint(name)` and
+`Bundle(name)` lookups; missing names return `fault.Missing`. The explicit
+`FOUNDRY_DEPLOY_RUNTIME_FILE` selects a schema-2 role descriptor containing the
+frozen schema-1 `RoleBindings`. An invalid explicit descriptor is an error, never
+an empty/default binding set. `deployment.Detect()` uses that same descriptor.
+The app-facing declarations and loader do not change when later tool hardening ships.
 
-- Lane B supplies verified immutable artifact roots and frozen `ArtifactPayload`
-  inventories; `bundle_views` selects the exact architecture pin. It also supplies
-  the executable path/fingerprint used by `UnitSpec`.
-- Lane C supplies allocated endpoints in `RuntimeResolution` and complete
-  `ClosureEvidence`. Ingress withdrawal alone cannot authorize validation.
-- The lifecycle executor journals before `begin`, records boot closure, issues
-  validation permits, uses inventory preflight/order, and commits only after
-  durable completion. Preparation's configuration digest is shared with the
-  future resolution builder.
-- `server/runtime_v1.py` is the source for the fixed runtime entry point. It
-  accepts only fixed actions/identities and currently refuses all dispatch.
-  Installation, loaded-generation verification, invocation pinning, cleanup and
-  pruning are deliberately not active. The new unit renderer is not installed by
-  legacy bootstrap.
+The preview explicitly refuses with `capability_unavailable` naming the later
+release:
 
-Checkpoint 2 connects rendered application bindings and current-private-config
-selection to the lifecycle, including credential-preserving rollback and journaled
-HTTP effective-environment selection. Later checkpoints add helper lifetime,
-cleanup/pruning, maintenance/config holds and independent operation cleanup before
-enabling execution. The opt-in systemd suite includes pending/committed admission,
-single-start automatic-restart rejection and read-only bundle namespace contracts;
-real-manager/reboot acceptance remains the lead's container-harness gate.
+- Feature rollback, including feature-to-legacy rollback.
+- Configuration changes, key rotation, configuration/maintenance holds and `up`.
+- Named lifecycle operations and interrupted-operation reconciliation/recovery.
+- Custom-service secret intake and bundle ABIs without package-version evidence.
+- Helper-bundle pruning: automatic retention returns a capability diagnostic and
+  retains every bundle and upgrade journal. Invocation/view bounds still apply;
+  reaching a bound refuses further starts until proven-exit cleanup ships.
+- Host reports/capacity operations involving features until their owners integrate.
+
+Preview `down` closes ingress and stops/disables the whole instance. It is a
+permanent stop in this preview, not a recoverable maintenance hold. Public opening
+is refused before host mutation unless lane C implements all three functions in
+`listeners.py`, reached only through `lib/feature_network.py`:
+
+| Function | Handoff |
+| --- | --- |
+| `feature_allocate(host, entry, topology, profile, operation_id)` | No effects; returns allocated endpoints and nginx projection SHA-256 |
+| `feature_close(host, entry, transition, resolution, units)` | Returns observed, complete `ClosureEvidence` covering exact units and endpoints |
+| `feature_open(host, entry, resolution, evidence)` | Opens only the validated selection and returns `True` after verification |
+
+No caller fabricates closure when that integration is missing. The fixed
+`runtime-v1` entry point pins an invocation to an immutable tool bundle before
+importing its helper. The operation executor runs independently of its SSH
+observer. Independent executor cleanup and selective retention remain later work.
+
+The opt-in real-systemd scenario uses a newly built ordinary deploy-acceptance
+archive. It adds one artifact-backed relay and a declared package, verifies the
+HTTP app reaches the relay through the Go binding loader, restarts the instance,
+and verifies maintenance stops it. After lane C is merged, run:
+
+```sh
+python3 tools/deploy/tests/build_acceptance.py --architecture arm64 --archive-file /tmp/b24-archive-path
+bash tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
+  --archive "$(cat /tmp/b24-archive-path)" --framework-root "$PWD" --fresh --feature-preview
+```
+
+Use matching `amd64`/`linux/amd64` arguments for that architecture. This is a
+container-only acceptance scenario; ordinary Python tests never invoke it.

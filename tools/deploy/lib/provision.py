@@ -287,6 +287,12 @@ def _template(tools_dir, name, entry, *, postgres_unit=""):
 
 
 def _install_unit(host, registry, entry, tools_dir, *, http_only=False):
+    from feature_lifecycle import is_feature, load, install_units
+    if is_feature(entry):
+        if "deployment_selection" in entry:
+            _, _, inventory, launch = load(host, entry)
+            install_units(host, registry, entry, inventory, launch, tools_dir)
+        return
     postgres_unit = registry["shared"]["postgresql"]["unit"]
     require(bool(re.fullmatch(r"postgresql@[0-9]+-foundry\.service", postgres_unit)), "postgres_identity", "Only the Foundry PostgreSQL cluster may be a dependency.")
     _unit_checks(host, entry)
@@ -385,7 +391,16 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
         target = check_path(host.paths.p(path), "directory")
         require(existing is not None or not target.exists(), "provision_conflict", "Unregistered instance path already exists.")
     _site_checks(host, entry)
-    observations = {"packages": packages.inspect(host), "postgresql": postgres.inspect(host, registry),
+    from topology import parse_topology, parse_profile
+    feature = topology["schema"] == 2
+    if feature:
+        from feature_network import capability
+        capability()
+        parsed = parse_topology({k: v for k, v in topology.items() if k != "sha256"})
+        placed = parse_profile(bound, parsed)
+        from feature_lifecycle import validate_preview
+        validate_preview(parsed)
+    observations = {"packages": packages.inspect(host, parsed, placed) if feature else packages.inspect(host), "postgresql": postgres.inspect(host, registry),
                     "redis": redis_acl.inspect(host, registry), "certificate": certificates.inspect(host, entry)}
     if "uploads" in profile:
         observations["uploads"] = uploads.inspect(host, entry)
@@ -404,6 +419,8 @@ def _ready_configuration(host, registry, entry, tools_dir):
     """An acknowledged bootstrap is unchanged only while its owned files match."""
     if "site" not in entry["provisioning"]["completed_steps"]:
         return False
+    if entry["topology"]["schema"] == 2:
+        return "certificate" in entry["provisioning"]["completed_steps"]
     unit = registry["shared"].get("postgresql", {}).get("unit", "")
     for role, name in instance_units(entry).items():
         path = host.paths.p(f"/etc/systemd/system/{name}")
@@ -425,6 +442,7 @@ def _ensure_nginx(host, registry):
             "nginx_inactive", "An existing inactive nginx service must be started by its administrator.")
     claim["unit"] = "nginx.service"
     host.run(["nginx", "-t", "-q"])
+    packages.authorize_default_activation(host, "nginx.service", registry["shared"]["nginx"])
     host.run(["systemctl", "enable", "--now", "nginx"])
     require(host.run(["systemctl", "is-active", "--quiet", "nginx"], check=False).returncode == 0,
             "nginx_inactive", "The newly installed nginx service did not become active.")
@@ -436,6 +454,9 @@ def _install_site(host, registry, entry, tools_dir, *, certificate_ready=False):
     _ensure_nginx(host, registry)
     if not certificate_ready:
         certificates.provision(host, registry, entry)
+    if entry["topology"]["schema"] == 2:
+        # Lane C publishes only after observed closure and readiness.
+        return
     name = entry["name"]
     site = host.paths.p(f"/etc/nginx/sites-available/{PREFIX}-{name}.conf")
     enabled = host.paths.p(f"/etc/nginx/sites-enabled/{PREFIX}-{name}.conf")
@@ -507,7 +528,10 @@ def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topol
                 if "nginx" in missing_packages and "nginx" not in registry["shared"]:
                     registry["shared"]["nginx"] = {"owner": "foundry", "installed_by_foundry": True, "unit": "nginx.service"}
                     _journal(host, registry, entry)
-                packages.install_missing(host, missing_packages)
+                if entry["topology"]["schema"] == 2:
+                    packages.install_missing(host, missing_packages, reviewed=plan["observations"]["packages"])
+                else:
+                    packages.install_missing(host, missing_packages)
                 postgres.prepare(host, registry)
                 redis_acl.prepare(host, registry)
                 _prepare_instance(host, registry, entry)

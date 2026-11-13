@@ -48,7 +48,9 @@ BASE_REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.
 # Cumulative requirements are selected from the inspected bundle's protocol,
 # never from the running tools' generation or the host's selected generation.
 GENERATION_11_FILES = frozenset({"lib/uploads.py", "server/templates/nginx-upload.conf"})
-GENERATION_12_FILES = frozenset({"lib/artifacts.py"})
+GENERATION_12_FILES = frozenset({"lib/feature_lifecycle.py", "lib/feature_network.py", "lib/feature_runtime.py",
+    "server/feature_operation.py", "server/templates/admission.service", "lib/artifacts.py", "lib/admission.py", "lib/services.py",
+                               "server/runtime_v1.py", "server/templates/custom.service"})
 REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES
 
 
@@ -272,7 +274,9 @@ def _prune_bundles(host) -> dict:
     require(host.host_lock_fd is not None, "tools_lock_required", "Tool pruning requires the host lock.")
     registry = host.read_registry()
     for entry in registry["instances"].values():
-        check_instance_capabilities(entry, registry["tools"]["generation"])
+        if entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry:
+            from feature_lifecycle import refuse
+            refuse("helper bundle pruning")
     require(not _upgrade_pending(host, registry), "tools_upgrade_pending",
             "Complete the pending tool upgrade before pruning bundles.")
     active = _installed(host, registry["tools"])
@@ -329,6 +333,11 @@ def _prune_bundles(host) -> dict:
 def prune_tools(host, digest: str) -> dict:
     """Run selected-bundle cleanup while retaining the caller's host lock."""
     require(host.host_lock_fd is not None, "tools_lock_required", "Tool pruning requires the host lock.")
+    registry = host.read_registry()
+    if any(e.get("topology", {}).get("schema") == 2 or "deployment_selection" in e for e in registry["instances"].values()):
+        from feature_lifecycle import LATER
+        return {"removed_bundles": [], "removed_upgrade_journals": [],
+                "pruning_error": {"code": "capability_unavailable", "detail": f"Feature helper pruning requires {LATER}; all bundles retained."}}
     selected = _bundle_path(host, digest)
     # Preserve the ledger diagnostic at the caller boundary; child failures are redacted.
     _retired_bundles(host)
@@ -388,17 +397,17 @@ def check_instance_capabilities(entry: dict, client_generation: int) -> None:
     selection = DeploymentSelection.parse(entry["deployment_selection"])
     require(type(client_generation) is int and client_generation >= selection.minimum_generation,
             "instance_capability_required", "This instance requires a host-capability-aware client.")
-    # M1 supplies readers and types only. M3 replaces this refusal after the
-    # common lifecycle inventory, boot guard and helper lifetime owner are wired.
-    raise DeployError("capability_unavailable", "Host-capability lifecycle support is not installed in this bundle.")
 
 
 def _check_feature_request(registry, request, action):
     profile = request.get("profile")
     topology = request.get("topology")
-    require(not (isinstance(profile, dict) and profile.get("schema") == FEATURE_PROFILE_SCHEMA
-                 or isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA),
-            "capability_unavailable", "Feature declarations are inspectable contracts; activation requires the later lifecycle milestone.")
+    requested = (isinstance(profile, dict) and profile.get("schema") == FEATURE_PROFILE_SCHEMA
+                 or isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA)
+    supported = {"bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "down", "status", "logs", "sync", "config-keys"}
+    if requested and action not in supported:
+        from feature_lifecycle import refuse
+        refuse(action)
     if not registry:
         return
     instance_id = profile.get("instance_id") if isinstance(profile, dict) else None
@@ -411,6 +420,9 @@ def _check_feature_request(registry, request, action):
     generation = client.get("generation") if isinstance(client, dict) else None
     for entry in selected:
         check_instance_capabilities(entry, generation)
+        if (entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry) and action not in supported | UPGRADE_ACTIONS | {"tools-plan"}:
+            from feature_lifecycle import refuse
+            refuse(action)
 
 
 def check_client(host, request: dict, action: str) -> None:

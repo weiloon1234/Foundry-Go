@@ -64,6 +64,15 @@ func resolvedExecutable(executable func() (string, error)) (string, error) {
 }
 
 func detect(executable func() (string, error)) (Runtime, bool, error) {
+	if selected, exists := os.LookupEnv(BindingsEnvironment); exists {
+		wire, err := readFeatureDescriptor(selected)
+		if err != nil {
+			return Runtime{}, false, err
+		}
+		return Runtime{Release: wire.Release, Instance: wire.Instance, User: wire.User,
+			ConfigFile: filepath.Join(wire.Release, "config/deploy.toml"), EnvFile: wire.EnvFile,
+			WorkDir: wire.WorkDir, PublicDir: filepath.Join(wire.Release, "public")}, true, nil
+	}
 	path, err := resolvedExecutable(executable)
 	if err != nil {
 		return Runtime{}, false, err

@@ -271,6 +271,8 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
         legacy["topology"] = validate_topology(legacy["topology"])
         content = _template(TEMPLATES.parent.parent, f"foundry-{name}@.service", legacy)
         content = re.sub(r"^ExecStart=.*$", "ExecStart=" + hooks["dispatch"], content, flags=re.M)
+        # Worker connection is frozen in argv; a legacy worker.env is not an input.
+        content = re.sub(r"^EnvironmentFile=.*\n", "", content, flags=re.M)
         content = content.replace("[Service]\n", "[Service]\nExecCondition=+" + hooks["admit"] +
                                   "\nExecStartPre=+" + hooks["prepare"] + "\nExecStopPost=+" + hooks["cleanup"] + "\n")
         content = content.replace("[Unit]\n", f"[Unit]\nAfter={boot} {after}\n")
@@ -298,9 +300,19 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     return re.sub(r"@([A-Z]+)@", lambda match: replacements[match[1]], content)
 
 
+def readiness_probe(role):
+    from topology import Probe
+    if isinstance(role, ExecutableRole):
+        return role.readiness
+    return Probe("http", "http", 90, "/health/ready", 200, None) if role.common.name == "http" else None
+
+
 def probe(role, resolution, deadline):
     from host import OperationTimeout, wall_clock_budget
-    remaining = min(role.readiness.timeout_seconds, deadline - time.monotonic())
+    contract = readiness_probe(role)
+    if contract is None:
+        return True
+    remaining = min(contract.timeout_seconds, deadline - time.monotonic())
     if remaining <= 0:
         return False
     try:
@@ -312,25 +324,35 @@ def probe(role, resolution, deadline):
 
 def _probe(role, resolution, deadline):
     """One bounded local probe. Identity/stability checks remain required around it."""
+    contract = readiness_probe(role)
     endpoint = next((e for e in resolution.endpoints if e.role == role.common.name and
-                     e.listener == role.readiness.listener), None)
+                     e.listener == contract.listener), None)
     require(endpoint is not None, "service_listener", "Readiness allocation is missing.")
-    remaining = min(role.readiness.timeout_seconds, deadline - time.monotonic())
+    remaining = min(contract.timeout_seconds, deadline - time.monotonic())
     if remaining <= 0:
         return False
     try:
-        if role.readiness.kind == "tcp":
+        if contract.kind == "tcp":
             with socket.create_connection((endpoint.address, endpoint.port), timeout=remaining):
                 return True
         connection = http.client.HTTPConnection(endpoint.address, endpoint.port, timeout=remaining)
         try:
-            connection.request("GET", role.readiness.path, headers={"Connection": "close"})
+            connection.request("GET", contract.path, headers={"Connection": "close"})
             response = connection.getresponse()
             # A literal bounded response, no redirects, proxies or remote URLs.
-            if response.status != role.readiness.status:
+            if response.status != contract.status:
                 return False
             body = response.read(65537)
-            return len(body) <= 65536 and (role.readiness.body is None or role.readiness.body.encode() in body)
+            if len(body) > 65536:
+                return False
+            if not isinstance(role, ExecutableRole):
+                from release import readiness_body
+                import json
+                try:
+                    return readiness_body(json.loads(body))
+                except (ValueError, UnicodeError):
+                    return False
+            return contract.body is None or contract.body.encode() in body
         finally:
             connection.close()
     except (OSError, http.client.HTTPException):
@@ -338,19 +360,19 @@ def _probe(role, resolution, deadline):
 
 
 def wait_ready(host, inventory, name, deadline):
-    """Custom service identity, own listener and stable probe under one deadline."""
+    """Selected executable identity, own listener and stability under one deadline."""
     from contracts import digest
     from admission import protected_path
     from host import OperationTimeout, wall_clock_budget
     from release import STABILITY_SECONDS, _matches_executable, service
     role, spec = inventory.roles[name], inventory.specs[name]
-    require(isinstance(role, ExecutableRole), "service_probe", "Built-in readiness retains its framework owner.")
+    contract = readiness_probe(role)
     executable = protected_path(host, host.paths.p(spec.executable), "file")
     require(executable.exists() and executable.stat().st_mode & 0o111 and digest(executable) == spec.executable_sha256,
             "service_executable", "Selected executable fingerprint has drifted.")
-    endpoint = next(e for e in inventory.resolution.endpoints if e.role == name and e.listener == role.readiness.listener)
-    local = f"[{endpoint.address}]:{endpoint.port}" if ":" in endpoint.address else f"{endpoint.address}:{endpoint.port}"
-    deadline = min(deadline, time.monotonic() + role.readiness.timeout_seconds)
+    endpoint = next((e for e in inventory.resolution.endpoints if e.role == name and contract and e.listener == contract.listener), None)
+    local = f"[{endpoint.address}]:{endpoint.port}" if endpoint and ":" in endpoint.address else f"{endpoint.address}:{endpoint.port}" if endpoint else None
+    deadline = min(deadline, time.monotonic() + contract.timeout_seconds) if contract else deadline
     token, stable_since = None, None
     if deadline <= time.monotonic():
         return False
@@ -364,7 +386,7 @@ def wait_ready(host, inventory, name, deadline):
                 if token is not None and current != token:
                     return False
                 healthy = _matches_executable(observed, executable)
-                if healthy:
+                if healthy and endpoint:
                     listeners = host.run(["ss", "-Hltpn", f"sport = :{endpoint.port}"], check=False,
                                          timeout=min(5, deadline - time.monotonic()))
                     healthy = listeners.returncode == 0 and any(

@@ -1,0 +1,15 @@
+# @MARKER@
+[Unit]
+Description=Foundry feature boot closure
+After=network-online.target ufw.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=@BOOT@
+TimeoutStartSec=120
+User=root
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

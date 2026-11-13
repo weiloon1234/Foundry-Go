@@ -453,9 +453,11 @@ class CapabilityCompatibilityTests(unittest.TestCase):
                 request["profile"] = feature["profile"]
                 with self.assertRaises(c.DeployError):
                     upgrades._check_feature_request(mixed, request, action)
-        # A capable client also cannot activate partial M1 runtime support.
+        # Generation 12 can inspect the sticky record; action-specific preview
+        # gates and the network owner still control feature execution.
+        upgrades.check_instance_capabilities(feature, upgrades.protocol()["generation"])
         with self.assertRaises(c.DeployError) as caught:
-            upgrades.check_instance_capabilities(feature, upgrades.protocol()["generation"])
+            upgrades._check_feature_request(mixed, {"profile": feature["profile"], "client": {"generation": 12}}, "rollback")
         self.assertEqual(caught.exception.code, "capability_unavailable")
 
     def test_source_protocol_fixtures_preserve_upgrade_floors(self):

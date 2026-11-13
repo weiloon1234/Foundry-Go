@@ -236,8 +236,11 @@ class FoundationProvisionTests(unittest.TestCase):
     def test_only_fresh_foundry_nginx_is_started_after_validation(self):
         active = subprocess.CompletedProcess([], 0, "", "")
         inactive = subprocess.CompletedProcess([], 3, "", "")
-        with patch.object(self.host, "run", side_effect=[inactive, active, active, active]) as run:
+        with patch.object(provision.packages, "authorize_default_activation") as authorize, \
+                patch.object(self.host, "run", side_effect=[inactive, active, active, active]) as run:
             provision._ensure_nginx(self.host, {"shared": {"nginx": {"owner": "foundry", "installed_by_foundry": True}}})
+        authorize.assert_called_once()
+        self.assertEqual(authorize.call_args.args[1], "nginx.service")
         self.assertEqual([["systemctl", "is-active", "--quiet", "nginx"], ["nginx", "-t", "-q"],
                           ["systemctl", "enable", "--now", "nginx"], ["systemctl", "is-active", "--quiet", "nginx"]],
                          [call.args[0] for call in run.call_args_list])

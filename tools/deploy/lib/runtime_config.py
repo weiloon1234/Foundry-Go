@@ -399,6 +399,11 @@ def validate_runtime_environment(host, entry):
     uploads.inspect(host, entry, runtime=True)
     credentials = read_credentials(host, entry)
     path = check_path(host.paths.instance_config(entry["name"]) / "app.env", "file")
+    resolution = None
+    if entry.get("topology", {}).get("schema") == 2 and "deployment_selection" in entry:
+        from admission import AdmissionStore
+        _, resolution = AdmissionStore(host, entry["profile"]["instance_id"])._selection()
+        path = effective_environment_path(host, entry, resolution)
     if not path.exists():
         raise DeployError("configuration_missing", "Server-owned runtime configuration is missing; restore it explicitly.")
     info = path.stat()
@@ -413,6 +418,11 @@ def validate_runtime_environment(host, entry):
     require(host.paths.root != Path("/") or "postgresql" in registry["shared"],
             "postgres_identity", "The Foundry PostgreSQL allocation is missing.")
     expected = runtime_environment(entry, credentials, postgres_port=postgres_port)
+    if resolution is not None:
+        http = next(e for e in resolution.endpoints if e.role == "http" and e.listener == "http")
+        require(http.port == entry["allocations"]["http_port"], "runtime_resolution_conflict",
+                "HTTP registry projection differs from the selected runtime resolution.")
+        expected["APP__HTTP__SERVER__ADDRESS"] = _http_address(http)
     owned_keys = pipeline_keys(entry)
     if any(values.get(key) != value for key, value in expected.items() if key in owned_keys):
         raise DeployError("configuration_identity", "Pipeline-owned runtime configuration differs from registered identity/credentials.")
@@ -633,3 +643,64 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
         finally:
             os.close(directory)
         return view
+
+
+def _http_address(endpoint):
+    address = "[" + endpoint.address + "]" if ":" in endpoint.address else endpoint.address
+    return f"{address}:{endpoint.port}"
+
+
+def effective_environments(host, entry, resolution_id, roles, endpoints):
+    """Snapshot current private settings; HTTP allocation changes only this projection."""
+    from admission import protected_directory
+    from contracts import EffectiveEnvironment, atomic_write, contract_uuid, digest, parse_env
+    contract_uuid(resolution_id)
+    source = host.paths.instance_config(entry["name"]) / "app.env"
+    values = parse_env(check_path(source, "file").read_text())
+    http = next((e for e in endpoints if e.role == "http" and e.listener == "http"), None)
+    require(http is not None, "runtime_resolution", "The HTTP runtime allocation is missing.")
+    values["APP__HTTP__SERVER__ADDRESS"] = _http_address(http)
+    payload = dump_env(values)
+    result = []
+    for role in roles:
+        relative = f"runtime/{resolution_id}/{role}/app.env"
+        target = host.paths.instance_config(entry["name"]) / relative
+        protected_directory(host, target.parent)
+        if target.exists():
+            require(target.read_text() == payload, "runtime_resolution_conflict", "An immutable effective environment already differs.")
+        host.owned_write(target, payload, mode=0o640, group=entry["name"])
+        result.append(EffectiveEnvironment(role, relative, digest(target)))
+    return tuple(result)
+
+
+def effective_environment_path(host, entry, resolution, role="http"):
+    from contracts import digest, require_current_private_configuration
+    require_current_private_configuration(resolution, entry["configuration_revision"])
+    selected = next((e for e in resolution.environments if e.role == role), None)
+    require(selected is not None, "runtime_resolution", "Role has no effective environment.")
+    path = check_path(host.paths.instance_config(entry["name"]) / selected.path, "file")
+    require(path.exists() and digest(path) == selected.sha256,
+            "runtime_resolution_conflict", "Selected effective environment has drifted.")
+    return path
+
+
+def write_binding_descriptor(host, entry, deployment, resolution, spec):
+    """Final app-facing descriptor: schema 2 embeds the frozen RoleBindings record."""
+    from dataclasses import asdict
+    from contracts import atomic_json, canonical_digest, record_document
+    from admission import protected_directory
+    require(spec in deployment.units and resolution.deployment_sha256 == canonical_digest(record_document(deployment)),
+            "runtime_resolution", "Bindings belong to another selected deployment.")
+    env = effective_environment_path(host, entry, resolution, spec.identity.role)
+    absolute = lambda path: "/" + path.relative_to(host.paths.root).as_posix()
+    path = host.paths.opt(entry["name"]) / "runtime" / resolution.id / (spec.identity.role + ".json")
+    protected_directory(host, path.parent)
+    descriptor = {"schema": 2, "instance": entry["name"], "user": entry["name"],
+                  "env_file": absolute(env), "work_dir": entry["allocations"]["paths"]["data"],
+                  "release": entry["allocations"]["paths"]["application"] + "/releases/" + deployment.release,
+                  "deployment_sha256": resolution.deployment_sha256, "unit": asdict(spec.identity),
+                  "bindings": record_document(spec.bindings)}
+    if path.exists():
+        require(read_json(path) == descriptor, "runtime_resolution_conflict", "An immutable role descriptor already differs.")
+    atomic_json(path, descriptor, mode=0o644)
+    return absolute(path)

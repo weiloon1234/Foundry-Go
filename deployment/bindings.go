@@ -1,0 +1,256 @@
+package deployment
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net"
+	"net/netip"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/jsonwire"
+	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
+)
+
+// BindingsEnvironment selects the root-owned descriptor for this role invocation.
+const BindingsEnvironment = "FOUNDRY_DEPLOY_RUNTIME_FILE"
+const maxBindingsBytes = 4 << 20
+
+type BindingName string
+type RoleName string
+type ListenerName string
+type InstanceID string
+type SHA256 string
+type EndpointScheme string
+
+const (
+	HTTP EndpointScheme = "http"
+	TCP  EndpointScheme = "tcp"
+)
+
+// Unit identifies a single placed service. Ordinals above one require a later capability.
+type Unit struct {
+	Instance InstanceID
+	Role     RoleName
+	Ordinal  uint16
+}
+
+// Executable is a host-verified absolute file, never a PATH search or shell command.
+type Executable struct {
+	Path   string
+	SHA256 SHA256
+}
+
+// Endpoint is an allocated private endpoint. It is immutable for this invocation.
+type Endpoint struct {
+	Role     RoleName
+	Listener ListenerName
+	Scheme   EndpointScheme
+	Address  netip.Addr
+	Port     uint16
+}
+
+func (e Endpoint) URL() url.URL {
+	return url.URL{Scheme: string(e.Scheme), Host: net.JoinHostPort(e.Address.String(), strconv.Itoa(int(e.Port)))}
+}
+
+// BundleDirectory is the protected service-local view, not the artifact's host path.
+type BundleDirectory struct {
+	Path   string
+	SHA256 SHA256
+}
+
+// Bindings is an immutable startup snapshot. Pass concrete values to business handlers.
+// Its zero value has no bindings; a missing name returns fault.Missing.
+type Bindings struct {
+	unit        Unit
+	deployment  SHA256
+	executables map[BindingName]Executable
+	endpoints   map[BindingName]Endpoint
+	bundles     map[BindingName]BundleDirectory
+}
+
+func (b Bindings) Unit() Unit               { return b.unit }
+func (b Bindings) DeploymentSHA256() SHA256 { return b.deployment }
+func (b Bindings) Executable(name BindingName) (Executable, error) {
+	value, ok := b.executables[name]
+	if !ok {
+		return Executable{}, safeerror.NewFault(fault.Missing, "deployment executable binding is missing")
+	}
+	return value, nil
+}
+func (b Bindings) Endpoint(name BindingName) (Endpoint, error) {
+	value, ok := b.endpoints[name]
+	if !ok {
+		return Endpoint{}, safeerror.NewFault(fault.Missing, "deployment endpoint binding is missing")
+	}
+	return value, nil
+}
+func (b Bindings) Bundle(name BindingName) (BundleDirectory, error) {
+	value, ok := b.bundles[name]
+	if !ok {
+		return BundleDirectory{}, safeerror.NewFault(fault.Missing, "deployment bundle binding is missing")
+	}
+	return value, nil
+}
+
+// LoadBindings reads the descriptor selected by the deployment unit. Absence is
+// reported separately from malformed configuration; an explicit bad path never falls back.
+func LoadBindings() (Bindings, bool, error) {
+	path, exists := os.LookupEnv(BindingsEnvironment)
+	if !exists {
+		return Bindings{}, false, nil
+	}
+	value, err := ReadBindings(path)
+	return value, err == nil, err
+}
+
+// ReadBindings loads a bounded, nonsecret descriptor. Host-side executable and
+// artifact verification remains the deployment owner's responsibility.
+func ReadBindings(path string) (Bindings, error) {
+	wire, err := readFeatureDescriptor(path)
+	if err != nil {
+		return Bindings{}, err
+	}
+	return wire.bindings()
+}
+
+type unitWire struct {
+	Instance string `json:"instance_id"`
+	Role     string `json:"role"`
+	Ordinal  int    `json:"ordinal"`
+}
+type executableWire struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	SHA256 string `json:"source_sha256"`
+}
+type endpointWire struct {
+	Name     string `json:"name"`
+	Endpoint struct {
+		Role     string `json:"role"`
+		Listener string `json:"listener"`
+		Address  string `json:"address"`
+		Port     int    `json:"port"`
+	} `json:"endpoint"`
+	Scheme string `json:"scheme"`
+}
+type bundleWire struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	SHA256 string `json:"artifact_sha256"`
+}
+type featureDescriptor struct {
+	Schema     int      `json:"schema"`
+	Instance   string   `json:"instance"`
+	User       string   `json:"user"`
+	EnvFile    string   `json:"env_file"`
+	WorkDir    string   `json:"work_dir"`
+	Release    string   `json:"release"`
+	Deployment string   `json:"deployment_sha256"`
+	Unit       unitWire `json:"unit"`
+	Bindings   struct {
+		Schema      int              `json:"schema"`
+		Role        string           `json:"role"`
+		Executables []executableWire `json:"executables"`
+		Endpoints   []endpointWire   `json:"endpoints"`
+		Bundles     []bundleWire     `json:"bundles"`
+	} `json:"bindings"`
+}
+
+var bindingIdentifier = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
+var digestIdentifier = regexp.MustCompile(`^[a-f0-9]{64}$`)
+var instanceIdentifier = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$`)
+
+func absolutePath(path string) bool {
+	return len(path) <= 1024 && filepath.IsAbs(path) && filepath.Clean(path) == path && path != "/" &&
+		!strings.Contains(path, "\\") && strings.IndexFunc(path, func(r rune) bool { return r < 32 || r == 127 }) < 0
+}
+
+func invalidBindings() error {
+	return safeerror.NewFault(fault.Invalid, "invalid deployment binding descriptor")
+}
+
+func readFeatureDescriptor(path string) (featureDescriptor, error) {
+	var wire featureDescriptor
+	if !absolutePath(path) {
+		return wire, invalidBindings()
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return wire, safeerror.WrapFault(fault.Internal, "cannot open deployment binding descriptor", err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return wire, invalidBindings()
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxBindingsBytes+1))
+	if err != nil {
+		return wire, safeerror.WrapFault(fault.Internal, "cannot read deployment binding descriptor", err)
+	}
+	canonical, err := jsonwire.Canonical(data, jsonwire.Limits{Bytes: maxBindingsBytes, Depth: 12, Nodes: 8192})
+	if err != nil {
+		return wire, invalidBindings()
+	}
+	decoder := json.NewDecoder(bytes.NewReader(canonical))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&wire) != nil || decoder.Decode(new(json.RawMessage)) != io.EOF {
+		return featureDescriptor{}, invalidBindings()
+	}
+	if wire.Schema != 2 || !instanceName.MatchString(wire.Instance) || wire.User != wire.Instance || wire.User == "root" ||
+		!absolutePath(wire.EnvFile) || !absolutePath(wire.WorkDir) || !absolutePath(wire.Release) {
+		return featureDescriptor{}, invalidBindings()
+	}
+	if _, err := wire.bindings(); err != nil {
+		return featureDescriptor{}, err
+	}
+	return wire, nil
+}
+
+func (w featureDescriptor) bindings() (Bindings, error) {
+	if !digestIdentifier.MatchString(w.Deployment) || !instanceIdentifier.MatchString(w.Unit.Instance) ||
+		!bindingIdentifier.MatchString(w.Unit.Role) || w.Unit.Ordinal != 1 || w.Bindings.Schema != 1 ||
+		w.Bindings.Role != w.Unit.Role || len(w.Bindings.Executables) > 128 || len(w.Bindings.Endpoints) > 128 || len(w.Bindings.Bundles) > 64 ||
+		w.Bindings.Executables == nil || w.Bindings.Endpoints == nil || w.Bindings.Bundles == nil {
+		return Bindings{}, invalidBindings()
+	}
+	b := Bindings{unit: Unit{InstanceID(w.Unit.Instance), RoleName(w.Unit.Role), 1}, deployment: SHA256(w.Deployment),
+		executables: make(map[BindingName]Executable), endpoints: make(map[BindingName]Endpoint), bundles: make(map[BindingName]BundleDirectory)}
+	names := make(map[string]bool)
+	unique := func(name string) bool {
+		if !bindingIdentifier.MatchString(name) || names[name] {
+			return false
+		}
+		names[name] = true
+		return true
+	}
+	for _, v := range w.Bindings.Executables {
+		if !unique(v.Name) || !absolutePath(v.Path) || !digestIdentifier.MatchString(v.SHA256) {
+			return Bindings{}, invalidBindings()
+		}
+		b.executables[BindingName(v.Name)] = Executable{v.Path, SHA256(v.SHA256)}
+	}
+	for _, v := range w.Bindings.Endpoints {
+		address, err := netip.ParseAddr(v.Endpoint.Address)
+		if !unique(v.Name) || err != nil || (address.String() != "127.0.0.1" && address.String() != "::1") ||
+			!bindingIdentifier.MatchString(v.Endpoint.Role) || !bindingIdentifier.MatchString(v.Endpoint.Listener) ||
+			v.Endpoint.Port < 1024 || v.Endpoint.Port > 65535 || (v.Scheme != string(HTTP) && v.Scheme != string(TCP)) {
+			return Bindings{}, invalidBindings()
+		}
+		b.endpoints[BindingName(v.Name)] = Endpoint{RoleName(v.Endpoint.Role), ListenerName(v.Endpoint.Listener), EndpointScheme(v.Scheme), address, uint16(v.Endpoint.Port)}
+	}
+	for _, v := range w.Bindings.Bundles {
+		if !unique(v.Name) || !absolutePath(v.Path) || !digestIdentifier.MatchString(v.SHA256) {
+			return Bindings{}, invalidBindings()
+		}
+		b.bundles[BindingName(v.Name)] = BundleDirectory{v.Path, SHA256(v.SHA256)}
+	}
+	return b, nil
+}

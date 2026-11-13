@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Deployment feature preview
+
+- Added a final typed `deployment.LoadBindings` API and schema-2 role descriptors,
+  journaled HTTP effective environments, generation-12 feature lifecycle owners,
+  invocation-pinned runtime dispatch, package/artifact integration and an opt-in
+  systemd acceptance scenario. Public opening remains capability-gated until lane
+  C supplies observed closure and opening integration and the shared readers
+  dispatch to the existing frozen feature parsers.
+- Preview refusals cover feature rollback (including to legacy), configuration and
+  maintenance holds, configuration/key changes, maintenance resume, named lifecycle
+  operations, recovery, unverified service bundle ABIs and custom-service secret
+  intake. Helper pruning retains all feature bundles with an explicit later-release
+  capability diagnostic. Preview maintenance entry stops the whole instance.
+  Wrappers and multiple copies remain release-2 capabilities.
+
+
 - Added: inactive host-capability lifecycle foundations for persistent boot
   admission, invocation-bound validation allowances, single-instance custom unit
   rendering, dependency preflight and per-start configuration/bundle views.

@@ -99,6 +99,15 @@ def execute(host, action, request):
         require(entry is not None and entry["project_id"] == project["id"], "identity_mismatch", "Unknown project/instance UUID.")
         return {"profile": entry["profile"], "topology": entry["topology"]}
     _, entry = host.require_identity(project, profile)
+    import feature_lifecycle
+    if feature_lifecycle.is_feature(entry) and action in ("activate", "restart", "stop", "down"):
+        if action == "down":
+            require(request.get("confirm") is True, "confirmation_required", "Confirm the maintenance change.")
+            require(not any(key in request for key in maintenance.FIELDS), "capability_unavailable",
+                    f"Feature maintenance holds require {feature_lifecycle.LATER}.")
+        arguments = {key: request[key] for key in ("archive", "archive_sha256", "role") if key in request}
+        return feature_lifecycle.request_operation(host, action, project, profile,
+                   operation_id=request.get("operation_id"), **arguments)
     if action in ("capacity-plan", "capacity-apply"):
         import capacity
         if action == "capacity-plan":
