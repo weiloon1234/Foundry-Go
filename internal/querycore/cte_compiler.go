@@ -60,7 +60,12 @@ func OrderedCTEs(root SelectNode) ([]*CteNode, error) {
 		self, selfCount, walk.RecursiveRestriction = nil, 0, ""
 		walk.SelectNode(d.Query, depth+1)
 		if r := d.Recursion; r != nil && walk.Err == nil {
-			if r.Reference == nil || r.Reference.Name != d.Name || !slices.Equal(r.Reference.Columns, d.Columns) || len(r.Step.Selections) != len(d.Columns) || r.Operator > UnionAllSet || d.Materialization == CteNotMaterialized {
+			// The completed output combines anchor and step capabilities; the
+			// working reference retains the anchor's declaration snapshot.
+			if r.Reference == nil || r.Reference.Name != d.Name || !slices.EqualFunc(r.Reference.Columns, d.Columns, func(a, b Column) bool {
+				a.NonCollatable = b.NonCollatable
+				return a == b
+			}) || len(r.Step.Selections) != len(d.Columns) || r.Operator > UnionAllSet || d.Materialization == CteNotMaterialized {
 				walk.Err = safeerror.NewFault(fault.Invalid, "invalid recursive CTE definition or materialization")
 			} else {
 				self, selfCount = r.Reference, 0

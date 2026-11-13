@@ -61,6 +61,8 @@ declare `orm.Codec(codec.String[YourString]().WithoutCollation())` on the column
 Custom codecs with `WithParameterType(codec.TypeText)` are collatable by default;
 use `WithoutCollation()` when their SQL type does not support collation.
 Nullable, validated and adapted codecs retain the original capability.
+When SQL resolves a result type from multiple inputs, any non-collatable input makes the composed result non-collatable.
+Parameters and constants explicitly cast to SQL `text` remain collatable while retaining their codec's binding and decoding.
 
 [Compiled example](../../tests/fixtures/consumer/scalarqueries/collation_test.go):
 

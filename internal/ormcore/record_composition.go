@@ -58,10 +58,12 @@ func RecursiveRecord(name string, anchor RecordSource) (RecordSource, *querycore
 
 func CompleteRecursion(c CommonTable, step RecordSource, ref *querycore.RecursiveReference, operator querycore.SetOperator) CommonTable {
 	c.Record.Source.Err = safeerror.Join("operation failed", c.Record.Source.Err, CompatibleRecordSources(c.Record, step))
+	c.Record.Record.Columns = mergeRecordColumns(c.Record.Record.Columns, step.Record.Columns)
 	c.Record.Source.Checks = AppendChecks(c.Record.Source.Checks, step.Source.Checks...)
 	c.Record.Source.Checks = AppendChecks(c.Record.Source.Checks, step.Record.Checks...)
 	if c.Definition != nil {
 		d := *c.Definition
+		d.Columns = slices.Clone(c.Record.Record.Columns)
 		d.Recursion = &querycore.RecursiveCTE{Reference: ref, Step: step.Source.Node, Operator: operator}
 		c.Definition = &d
 	}
@@ -82,9 +84,20 @@ func CombineRecords(a, b RecordSource, operator querycore.SetOperator, scope ref
 		err = safeerror.Join("operation failed", err, Invalid("invalid set operator"))
 	}
 	r := RecordSource{Record: a.Record, Transaction: a.Transaction, Direct: true}
-	r.Source = Source{Scope: scope, Node: querycore.SelectNode{Source: querycore.TableSource{Set: &querycore.SetNode{Left: a.Source.Node, Right: b.Source.Node, Operator: operator}, Alias: querycore.SetAlias, Columns: slices.Clone(a.Record.Columns)}, Selections: querycore.ColumnSelections(querycore.SetAlias, a.Record.Columns)}, Aliases: map[string]reflect.Type{querycore.SetAlias: scope}, Owners: map[string]any{querycore.SetAlias: a.Record.Owner}, Err: err, Checks: AppendChecks(a.Source.Checks, b.Source.Checks...)}
+	r.Record.Columns = mergeRecordColumns(a.Record.Columns, b.Record.Columns)
+	r.Source = Source{Scope: scope, Node: querycore.SelectNode{Source: querycore.TableSource{Set: &querycore.SetNode{Left: a.Source.Node, Right: b.Source.Node, Operator: operator}, Alias: querycore.SetAlias, Columns: slices.Clone(r.Record.Columns)}, Selections: querycore.ColumnSelections(querycore.SetAlias, r.Record.Columns)}, Aliases: map[string]reflect.Type{querycore.SetAlias: scope}, Owners: map[string]any{querycore.SetAlias: a.Record.Owner}, Err: err, Checks: AppendChecks(a.Source.Checks, b.Source.Checks...)}
 	r.Source.Checks = AppendChecks(r.Source.Checks, b.Record.Checks...)
 	return r
+}
+
+func mergeRecordColumns(first, second []querycore.Column) []querycore.Column {
+	columns := slices.Clone(first)
+	for i := range columns {
+		if i < len(second) {
+			columns[i].NonCollatable = MergeNonCollatable(columns[i].NonCollatable, second[i].NonCollatable)
+		}
+	}
+	return columns
 }
 
 func SetRecord(r RecordSource) RecordSource {

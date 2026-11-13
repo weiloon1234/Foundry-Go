@@ -8,6 +8,8 @@
   requested/default sorts, exports and duplicate elimination. Custom text codecs
   are collatable by default; projection rebinding preserves non-collatable marks,
   while JSON text extraction derives capability from its SQL result type.
+  Conditional and set composition conservatively retain every input's
+  non-collatable mark; text-cast parameters and constants remain collatable.
 
 - Added: typed per-expression text collation with `expr.Collation`, `CollationC`,
   `CollationUnicode`, `ICUCollation`, and the four `Collate` variants, preserving

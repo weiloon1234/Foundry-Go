@@ -31,6 +31,7 @@ func windowValue[S, V any](kind querycore.WindowFunction, input Selected[S, V], 
 func windowFallback[S, V any](kind querycore.WindowFunction, input Selected[S, V], n int32, fallback V, w Window[S]) Selected[S, V] {
 	captured := parameter[S](input.data, fallback)
 	parameterNode := captured.data.core.Node.(querycore.ParameterNode)
+	input.data.column.Collatable = !ormcore.MergeNonCollatable(!input.data.column.Collatable, !captured.data.column.Collatable)
 	node := querycore.WindowNode{Kind: kind, Input: input.data.core.Node, N: querycore.RetainOffset(int64(n)), HasFallback: true, Fallback: parameterNode.Value, Err: safeerror.Join("operation failed", input.data.column.Err, captured.data.core.Err)}
 	input.data.core = ormcore.WindowExpression(ownedWindow(w), node, &input.data.core)
 	return input

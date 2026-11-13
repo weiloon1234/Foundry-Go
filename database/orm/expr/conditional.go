@@ -3,6 +3,7 @@ package expr
 import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 
+	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/internal/ormcore"
 	"github.com/weiloon1234/Foundry-Go/internal/querycore"
 	"github.com/weiloon1234/Foundry-Go/value"
@@ -19,7 +20,7 @@ func Coalesce[S, V any](first RowValue[S, value.Nullable[V]], fallback RowValue[
 //
 // Example: expr.CoalesceValue(first, fallback)
 func CoalesceValue[S, V any](first Selected[S, value.Nullable[V]], fallback Selected[S, V]) Selected[S, V] {
-	out := conditionalData(querycore.CoalesceValues, fallback.data.column, first.data.core, fallback.data.core)
+	out := conditionalData(querycore.CoalesceValues, fallback.data.column, first.data.expression(), fallback.data.expression())
 	if value.IsNullableType[V]() {
 		out.core.Err = safeerror.Join("operation failed", out.core.Err, ormcore.Invalid("non-null fallback must not be nullable"))
 	}
@@ -36,9 +37,9 @@ func CoalesceNullable[S, V any](first RowValue[S, value.Nullable[V]], rest ...Ro
 		return RowExpression[S, value.Nullable[V]]{data: initial}
 	}
 	arguments := make([]ormcore.Expression, 1, len(rest)+1)
-	arguments[0] = initial.core
+	arguments[0] = initial.expression()
 	for _, item := range rest {
-		arguments = append(arguments, rowInput(item).data.core)
+		arguments = append(arguments, rowInput(item).data.expression())
 	}
 	return RowExpression[S, value.Nullable[V]]{data: conditionalData(querycore.CoalesceValues, initial.column, arguments...)}
 }
@@ -52,9 +53,9 @@ func CoalesceNullableValue[S, V any](first Selected[S, value.Nullable[V]], rest 
 		return first
 	}
 	arguments := make([]ormcore.Expression, 1, len(rest)+1)
-	arguments[0] = first.data.core
+	arguments[0] = first.data.expression()
 	for _, item := range rest {
-		arguments = append(arguments, item.data.core)
+		arguments = append(arguments, item.data.expression())
 	}
 	return Selected[S, value.Nullable[V]]{data: conditionalData(querycore.CoalesceValues, first.data.column, arguments...)}
 }
@@ -71,7 +72,7 @@ func NullIf[S, V any](first, second RowValue[S, V]) RowExpression[S, value.Nulla
 // Example: expr.NullIfValue(first, second)
 func NullIfValue[S, V any](first, second Selected[S, V]) Selected[S, value.Nullable[V]] {
 	data := nullableData(first.data)
-	return Selected[S, value.Nullable[V]]{data: conditionalData(querycore.NullIfValues, data.column, data.core, second.data.core)}
+	return Selected[S, value.Nullable[V]]{data: conditionalData(querycore.NullIfValues, data.column, data.expression(), second.data.expression())}
 }
 
 // NullIfNullable compares nullable row values while retaining one nullable layer.
@@ -85,12 +86,13 @@ func NullIfNullable[S, V any](first, second RowValue[S, value.Nullable[V]]) RowE
 //
 // Example: expr.NullIfNullableValue(first, second)
 func NullIfNullableValue[S, V any](first, second Selected[S, value.Nullable[V]]) Selected[S, value.Nullable[V]] {
-	return Selected[S, value.Nullable[V]]{data: conditionalData(querycore.NullIfValues, first.data.column, first.data.core, second.data.core)}
+	return Selected[S, value.Nullable[V]]{data: conditionalData(querycore.NullIfValues, first.data.column, first.data.expression(), second.data.expression())}
 }
 
 func conditionalData[V any](kind querycore.ConditionalKind, column ormcore.Column[V], arguments ...ormcore.Expression) rowData[V] {
 	core := ormcore.Conditional(kind, arguments...)
 	core.Err = safeerror.Join("operation failed", core.Err, column.Err)
+	column.Collatable = column.Kind == codec.TypeText && !core.NonCollatable
 	return rowData[V]{core: core, column: column}
 }
 
@@ -129,7 +131,7 @@ func (c Case[S, V]) When(condition Predicate[S], result RowValue[S, V]) Case[S, 
 	if c.builder.Empty() {
 		c.column = data.column
 	}
-	c.builder = c.builder.Append(condition.core, data.core)
+	c.builder = c.builder.Append(condition.core, data.expression())
 	return c
 }
 
@@ -138,7 +140,7 @@ func (c Case[S, V]) When(condition Predicate[S], result RowValue[S, V]) Case[S, 
 // Example: choice.Else(name)
 func (c Case[S, V]) Else(result RowValue[S, V]) RowExpression[S, V] {
 	data := rowInput(result).data
-	return RowExpression[S, V]{data: caseData(c.builder, c.column, data.core)}
+	return RowExpression[S, V]{data: caseData(c.builder, c.column, data.expression())}
 }
 
 // ElseNull finishes required-valued row CASE with one nullable result layer.
@@ -162,7 +164,7 @@ func (c ValueCase[S, V]) When(condition HavingPredicate[S], result Selected[S, V
 	if c.builder.Empty() {
 		c.column = result.data.column
 	}
-	c.builder = c.builder.Append(condition.core, result.data.core)
+	c.builder = c.builder.Append(condition.core, result.data.expression())
 	return c
 }
 
@@ -170,7 +172,7 @@ func (c ValueCase[S, V]) When(condition HavingPredicate[S], result Selected[S, V
 //
 // Example: choice.Else(expr.AsSelected(expr.ParamOf(count, 0)))
 func (c ValueCase[S, V]) Else(result Selected[S, V]) Selected[S, V] {
-	return Selected[S, V]{data: caseData(c.builder, c.column, result.data.core)}
+	return Selected[S, V]{data: caseData(c.builder, c.column, result.data.expression())}
 }
 
 // ElseNull finishes required-valued selected CASE with one nullable layer.
@@ -190,6 +192,7 @@ func Grouped[S any](condition Predicate[S]) HavingPredicate[S] {
 func caseData[V any](builder ormcore.CaseBuilder, column ormcore.Column[V], otherwise ormcore.Expression) rowData[V] {
 	core := builder.Finish(otherwise)
 	core.Err = safeerror.Join("operation failed", core.Err, column.Err)
+	column.Collatable = column.Kind == codec.TypeText && !core.NonCollatable
 	return rowData[V]{core: core, column: column}
 }
 func caseNullData[V any](builder ormcore.CaseBuilder, column ormcore.Column[V]) rowData[value.Nullable[V]] {

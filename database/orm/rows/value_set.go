@@ -57,7 +57,7 @@ func scalarRecord[V any](column ormcore.Column[V]) *valueRecordDefinition {
 			}
 			return column.Bind(v)
 		}}}
-	}, Type: reflect.TypeFor[V](), Owner: d, Columns: []querycore.Column{{Name: "value", Nullable: value.IsNullableType[V]()}}, Err: column.Err, Scan: func(row database.Row, p unsafe.Pointer) error {
+	}, Type: reflect.TypeFor[V](), Owner: d, Columns: []querycore.Column{{Name: "value", Nullable: value.IsNullableType[V](), NonCollatable: !column.Collatable}}, Err: column.Err, Scan: func(row database.Row, p unsafe.Pointer) error {
 		if column.Scan == nil {
 			return ormcore.Invalid("value source requires a decoder")
 		}
@@ -98,7 +98,11 @@ func (q ValueSetQuery[V]) rowSource(*Set[V]) ormcore.Source   { return ormcore.S
 func combineValues[V any](a, b ValueSource[V], op querycore.SetOperator) ValueSetQuery[V] {
 	left, c := valueSource(a)
 	right, _ := valueSource(b)
-	return ValueSetQuery[V]{core: ormcore.CombineRecords(left, right, op, reflect.TypeFor[Set[V]]()), column: c}
+	core := ormcore.CombineRecords(left, right, op, reflect.TypeFor[Set[V]]())
+	if len(core.Record.Columns) == 1 {
+		c.Collatable = !core.Record.Columns[0].NonCollatable
+	}
+	return ValueSetQuery[V]{core: core, column: c}
 }
 
 // Value exposes the combined scalar with its original codec and nullability.

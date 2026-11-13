@@ -64,6 +64,13 @@ func At[S, M, V, P any](scope Scope[S, M], column orm.ExpressionColumn[M, V, P])
 	c.Field.Table = scope.core.Table
 	c.Reference = scope.core.Reference
 	projected.Reference = scope.core.Reference
+	for _, output := range scope.core.Columns {
+		if output.Name == c.Field.Column {
+			c.Collatable = !ormcore.MergeNonCollatable(!c.Collatable, output.NonCollatable)
+			projected.Collatable = !ormcore.MergeNonCollatable(!projected.Collatable, output.NonCollatable)
+			break
+		}
+	}
 	return Expression[S, V, P]{column: c, projection: func() ormcore.Column[P] { return projected }, core: ormcore.Expression{Node: c.Field, Refs: []ormcore.Reference{c.Reference}, Err: err}}
 }
 
@@ -171,9 +178,7 @@ func FoundryExpression[S, V, P any](e Expression[S, V, P], seal sqlowner.Express
 	}
 
 	if e.projection != nil {
-		column := e.projection()
-		e.core.Sensitive = e.core.Sensitive || column.Sensitive
-		e.core.NonCollatable = !column.Collatable
+		return (rowData[P]{core: e.core, column: e.projection()}).expression()
 	}
 	return e.core
 }

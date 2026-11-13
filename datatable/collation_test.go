@@ -7,11 +7,48 @@ import (
 	"testing"
 
 	"github.com/weiloon1234/Foundry-Go/database"
+	"github.com/weiloon1234/Foundry-Go/database/codec"
+	"github.com/weiloon1234/Foundry-Go/database/orm"
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/validation"
+	"github.com/weiloon1234/Foundry-Go/value"
 )
+
+func TestUnionTextCollationSkipsMarkedResult(t *testing.T) {
+	type result struct {
+		Status value.Nullable[enumSortStatus]
+	}
+	type fields struct {
+		rows.Row[result]
+		Status rows.Field[result, value.Nullable[enumSortStatus]]
+	}
+	schema := rows.Define(func(b rows.Builder[result], r *result) fields {
+		return fields{b.Row(), rows.NullableTextOf(b, &r.Status)}
+	})
+	source := rows.From(enumSortModels.Query())
+	plain := rows.RecordOf(rows.Select(source, schema, rows.MapSelected(schema.Status, expr.RawWithCodec[enumSortRecord](codec.Nullable(codec.String[enumSortStatus]()), "NULL"))))
+	marked := rows.RecordOf(rows.Select(source, schema, rows.Map(schema.Status, expr.Value(orm.NullableEnumExpr(enumSortModels.OptStatus)))))
+	for _, set := range []rows.SetQuery[result]{rows.Union(plain, marked), rows.Union(marked, plain)} {
+		selected := expr.AsSelected(rows.At(set.Scope(), schema.Status))
+		query := rows.SelectScalar(set, selected)
+		if _, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(query, expr.AscValue(expr.CollateNullableValue(selected, expr.CollationC))))); !errors.Is(err, fault.Invalid) {
+			t.Fatal("UNION accepted explicit collation", err)
+		}
+		sort := SortBy(selected)
+		baseline, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(query, sort.order(Ascending, ""))))
+		if err != nil {
+			t.Fatal(err)
+		}
+		config := DefaultConfig()
+		config.TextCollation = expr.CollationUnicode
+		statement, err := rows.CompileRead(rows.ReadScalar(rows.OrderScalar(query, sort.order(Ascending, config.TextCollation))))
+		if err != nil || statement.SQL() != baseline.SQL() || strings.Contains(statement.SQL(), "COLLATE") {
+			t.Fatal("datatable default collated UNION enum result", statement.SQL(), err)
+		}
+	}
+}
 
 func TestDistinctTextCollationSortsAndExports(t *testing.T) {
 	spec := reportSpec()

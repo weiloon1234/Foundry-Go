@@ -23,6 +23,13 @@ type rowData[V any] struct {
 	column ormcore.Column[V]
 }
 
+// expression erases the codec only after retaining its SQL result capability.
+func (d rowData[V]) expression() ormcore.Expression {
+	d.core.NonCollatable = !d.column.Collatable
+	d.core.Sensitive = d.core.Sensitive || d.column.Sensitive
+	return d.core
+}
+
 // RowExpression is a computed row value with exact owner and result types.
 //
 // Example: expr.Param(orm.NumberExpr(Users.Age), 2)
@@ -94,6 +101,10 @@ func parameterData[V any](scope reflect.Type, exemplar rowData[V], v V) rowData[
 		node.Value, node.Err = querycore.RetainLiteral(bound), bindErr
 	}
 	node.Kind = c.Kind
+	// Parameters carry an explicit SQL cast, independently of the exemplar's
+	// original database type. Keep its binding and decoding closures.
+	c.Text = c.Kind == codec.TypeText
+	c.Collatable = c.Text
 	node.Sensitive = c.Sensitive
 	refs, referenceErr := ormcore.MergeReferences(exemplar.core.Refs, []ormcore.Reference{{Scope: scope}})
 	node.Err = safeerror.Join("operation failed", err, node.Err, referenceErr)
@@ -157,7 +168,5 @@ func FoundrySelected[S, V any](e Selected[S, V], seal sqlowner.ExpressionSeal) o
 		return ormcore.Expression{Err: ormcore.Invalid("invalid SQL owner capability")}
 	}
 
-	e.data.core.Sensitive = e.data.core.Sensitive || e.data.column.Sensitive
-	e.data.core.NonCollatable = !e.data.column.Collatable
-	return e.data.core
+	return e.data.expression()
 }

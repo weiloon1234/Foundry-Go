@@ -17,6 +17,7 @@ func Conditional(kind querycore.ConditionalKind, arguments ...Expression) Expres
 	nodes := make([]querycore.ValueExpression, len(arguments))
 	var refs referenceSet
 	for i, input := range arguments {
+		out.NonCollatable = MergeNonCollatable(out.NonCollatable, input.NonCollatable)
 		nodes[i] = input.Node
 		refs.add(input.Refs)
 		out.ReferenceFree = out.ReferenceFree && input.ReferenceFree
@@ -34,6 +35,7 @@ func Conditional(kind querycore.ConditionalKind, arguments ...Expression) Expres
 // CaseBuilder retains immutable branches and their complete ownership metadata.
 // Its zero value acquires its first branch through Append.
 type CaseBuilder struct {
+	nonCollatable bool
 	branches      []querycore.CaseBranch
 	refs          []Reference
 	referenceFree bool
@@ -58,6 +60,7 @@ func (c CaseBuilder) Append(condition Predicate, result Expression) CaseBuilder 
 	c.branches = append(slices.Clone(c.branches), querycore.CaseBranch{Condition: condition.Node, Result: result.Node})
 	c.refs = refs
 	c.referenceFree = referenceFree && condition.ReferenceFree && result.ReferenceFree
+	c.nonCollatable = MergeNonCollatable(c.nonCollatable, result.NonCollatable)
 	return c
 }
 
@@ -68,5 +71,5 @@ func (c CaseBuilder) Finish(otherwise Expression) Expression {
 	if c.Empty() || otherwise.Node == nil {
 		err = safeerror.Join("operation failed", err, Invalid("CASE requires a branch and an explicit ELSE"))
 	}
-	return Expression{Node: querycore.CaseNode{Branches: c.branches, Otherwise: otherwise.Node}, Refs: refs, ReferenceFree: c.referenceFree && otherwise.ReferenceFree, Err: err}
+	return Expression{Node: querycore.CaseNode{Branches: c.branches, Otherwise: otherwise.Node}, NonCollatable: MergeNonCollatable(c.nonCollatable, otherwise.NonCollatable), Refs: refs, ReferenceFree: c.referenceFree && otherwise.ReferenceFree, Err: err}
 }
