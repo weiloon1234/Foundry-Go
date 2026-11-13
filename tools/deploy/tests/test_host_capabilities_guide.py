@@ -19,6 +19,9 @@ class HostCapabilitiesGuideTests(unittest.TestCase):
         self.assertEqual(profile.projection()["placement"], {"http": 1, "relay": 1})
         roles = {role["name"]: role for role in topology.projection()["roles"]}
         self.assertEqual(roles["http"]["requires"], ["relay"])
+        self.assertEqual(roles["http"]["packages"], ["jq"])
+        self.assertEqual(roles["http"]["bindings"]["json"],
+                         {"executable": {"package": "jq", "path": "/usr/bin/jq"}})
         self.assertEqual(roles["relay"]["requires"], [])
         self.assertEqual(roles["relay"]["bindings"]["authorization"]["endpoint"],
                          {"role": "http", "listener": "http", "scheme": "http"})

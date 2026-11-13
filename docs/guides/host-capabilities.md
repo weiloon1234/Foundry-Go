@@ -107,12 +107,12 @@ callback, because the app starts after the relay.
     {
       "name": "http",
       "kind": "builtin",
-      "packages": ["coreutils"],
+      "packages": ["jq"],
       "requires": ["relay"],
       "maintenance": "serve",
       "bindings": {
         "relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
-        "checksum": {"executable": {"package": "coreutils", "path": "/usr/bin/sha256sum"}}
+        "json": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}
       }
     },
     {
@@ -219,7 +219,9 @@ paths under `deploy/bin/`.
 - **Packages:** role-local lists of literal distribution package names. There are
   no repository additions, version expressions or apt options in this field. A
   package executable binding must name a package in that consuming role's list.
-  Tool-only dependencies need no custom service role: the example's `checksum`
+  A declared package executable must resolve to a file the declared package owns
+  on the target release, so check `dpkg -S` on the resolved path.
+  Tool-only dependencies need no custom service role: the example's `json`
   binding resolves a verified executable without starting a daemon. Framework
   package defaults remain fenced unless their owner explicitly hands them off.
 - **Artifacts:** `version` is a single path component. `platforms` maps
@@ -271,7 +273,7 @@ paths under `deploy/bin/`.
   require enabled prerequisites. Executable and endpoint bindings resolve values;
   they do not implicitly start a service or add a dependency edge.
 - **Bindings:** each name selects `{"endpoint":{"role":"relay","listener":"control","scheme":"http"}}`,
-  `{"executable":{"package":"coreutils","path":"/usr/bin/sha256sum"}}`,
+  `{"executable":{"package":"jq","path":"/usr/bin/jq"}}`,
   an artifact/application executable reference under `executable`, or a bundle
   reference. Endpoint schemes are `http` and `tcp`; builtin HTTP's listener name
   is `http`. An enabled consumer cannot bind an unplaced endpoint producer.
@@ -327,8 +329,8 @@ This consumer fixture loads the two HTTP-role bindings from the worked example:
 type RelayDependencies struct {
 	// Control addresses the relay's private HTTP control listener.
 	Control deployment.Endpoint
-	// Checksum is the app's named executable binding.
-	Checksum deployment.Executable
+	// JSON is the package-owned jq executable for JSON processing.
+	JSON deployment.Executable
 }
 
 // LoadRelayDependencies runs once during application assembly.
@@ -342,18 +344,18 @@ func LoadRelayDependencies() (dependencies RelayDependencies, present bool, err 
 	if err != nil {
 		return RelayDependencies{}, true, err
 	}
-	checksum, err := bindings.Executable("checksum")
+	jsonTool, err := bindings.Executable("json")
 	if err != nil {
 		return RelayDependencies{}, true, err
 	}
-	return RelayDependencies{Control: control, Checksum: checksum}, true, nil
+	return RelayDependencies{Control: control, JSON: jsonTool}, true, nil
 }
 ```
 
 Inject `RelayDependencies` into the component that calls the relay. `Control.URL()`
 returns a `url.URL` with the allocated private host/port; append control paths with
-the URL API. `Checksum.Path` is an absolute verified path, not a PATH lookup;
-execute it with an argument vector if the application needs that tool.
+the URL API. `JSON.Path` is an absolute verified path, not a PATH lookup;
+execute it with an argument vector when the application needs jq for JSON processing.
 `Executable` also carries `SHA256`. `Bundle(name)` returns a `BundleDirectory`
 with its service-local `Path` and `SHA256`.
 

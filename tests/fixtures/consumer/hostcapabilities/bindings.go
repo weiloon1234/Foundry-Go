@@ -8,8 +8,8 @@ import "github.com/weiloon1234/Foundry-Go/deployment"
 type RelayDependencies struct {
 	// Control addresses the relay's private HTTP control listener.
 	Control deployment.Endpoint
-	// Checksum is the app's named executable binding.
-	Checksum deployment.Executable
+	// JSON is the package-owned jq executable for JSON processing.
+	JSON deployment.Executable
 }
 
 // LoadRelayDependencies runs once during application assembly.
@@ -23,11 +23,11 @@ func LoadRelayDependencies() (dependencies RelayDependencies, present bool, err 
 	if err != nil {
 		return RelayDependencies{}, true, err
 	}
-	checksum, err := bindings.Executable("checksum")
+	jsonTool, err := bindings.Executable("json")
 	if err != nil {
 		return RelayDependencies{}, true, err
 	}
-	return RelayDependencies{Control: control, Checksum: checksum}, true, nil
+	return RelayDependencies{Control: control, JSON: jsonTool}, true, nil
 }
 
 // doc-example:end host-capability-bindings
