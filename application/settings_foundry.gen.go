@@ -217,6 +217,7 @@ type SettingsServicesCoordinationConfigNamespaceConfigKeySet struct {
 
 // SettingsHTTPConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsHTTPConfigKeySet struct {
+	Uploads           SettingsHTTPUploadsConfigKeySet
 	StatementDetector SettingsHTTPStatementDetectorConfigKeySet
 	// Enabled selects http.enabled. Set accepts bool.
 	Enabled config.Key[Settings, bool]
@@ -229,6 +230,57 @@ type SettingsHTTPConfigKeySet struct {
 	//
 	CSPAllowlist SettingsHTTPCSPAllowlistConfigKeySet
 	Probes       SettingsHTTPProbesConfigKeySet
+}
+
+// SettingsHTTPUploadsConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsHTTPUploadsConfigKeySet struct {
+	// Enabled selects http.uploads.enabled. Set accepts bool.
+	Enabled config.Key[Settings, bool]
+	// SmallDirectory selects http.uploads.small_directory. Set accepts string.
+	SmallDirectory config.Key[Settings, string]
+	Request        SettingsHTTPUploadsRequestConfigKeySet
+	// BodyBytes selects http.uploads.body_bytes. Set accepts int64.
+	BodyBytes config.Key[Settings, int64]
+	// FileBytes selects http.uploads.file_bytes. Set accepts int64.
+	FileBytes config.Key[Settings, int64]
+	// Timeout selects http.uploads.timeout. Set accepts time.Duration.
+	Timeout config.Key[Settings, time.Duration]
+	// AttachmentMaxActive selects http.uploads.attachment_max_active. Set accepts int.
+	//
+	// AttachmentMaxActive is the large-policy sublimit for the attachment owner.
+	// Reserve additional capacity there for small publications.
+	//
+	AttachmentMaxActive config.Key[Settings, int]
+	// StorageTimeout selects http.uploads.storage_timeout. Set accepts time.Duration.
+	//
+	// StorageTimeout is the total publication budget of the selected disk.
+	//
+	StorageTimeout config.Key[Settings, time.Duration]
+	//
+	// Staging supplies the local adapter's independent staging allocation. The
+	// adapter owns its admission, cleanup references and persistent data budget.
+	//
+	Staging SettingsHTTPUploadsStagingConfigKeySet
+}
+
+// SettingsHTTPUploadsRequestConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsHTTPUploadsRequestConfigKeySet struct {
+	// Directory selects http.uploads.request.directory. Set accepts string.
+	Directory config.Key[Settings, string]
+	// MaxActive selects http.uploads.request.max_active. Set accepts int.
+	MaxActive config.Key[Settings, int]
+	// MaxBytes selects http.uploads.request.max_bytes. Set accepts int64.
+	MaxBytes config.Key[Settings, int64]
+}
+
+// SettingsHTTPUploadsStagingConfigKeySet exposes compiler-checked configuration overrides.
+type SettingsHTTPUploadsStagingConfigKeySet struct {
+	// Directory selects http.uploads.staging.directory. Set accepts string.
+	Directory config.Key[Settings, string]
+	// MaxActive selects http.uploads.staging.max_active. Set accepts int.
+	MaxActive config.Key[Settings, int]
+	// MaxBytes selects http.uploads.staging.max_bytes. Set accepts int64.
+	MaxBytes config.Key[Settings, int64]
 }
 
 // SettingsHTTPStatementDetectorConfigKeySet exposes compiler-checked configuration overrides.
@@ -306,7 +358,9 @@ type SettingsHTTPServerConfigKeySet struct {
 	// MaxConcurrentRequests selects http.server.max_concurrent_requests. Set accepts int.
 	//
 	// MaxConcurrentRequests bounds handlers that have actually entered the
-	// server. Zero uses DefaultServerConfig's limit. A request waits briefly for
+	// server, excluding routes with their own MultipartAdmission pool. Those
+	// pools reserve independent slots before middleware or capture.
+	// Zero uses DefaultServerConfig's limit. A request waits briefly for
 	// a slot in arrival order (at most min(RequestTimeout, 5s)); exhaustion then
 	// returns 503 with Retry-After. Cancelled handlers retain their slot until
 	// they really return.
@@ -627,7 +681,9 @@ type SettingsRealtimeHTTPConfigKeySet struct {
 	// MaxConcurrentRequests selects realtime.http.max_concurrent_requests. Set accepts int.
 	//
 	// MaxConcurrentRequests bounds handlers that have actually entered the
-	// server. Zero uses DefaultServerConfig's limit. A request waits briefly for
+	// server, excluding routes with their own MultipartAdmission pool. Those
+	// pools reserve independent slots before middleware or capture.
+	// Zero uses DefaultServerConfig's limit. A request waits briefly for
 	// a slot in arrival order (at most min(RequestTimeout, 5s)); exhaustion then
 	// returns 503 with Retry-After. Cancelled handlers retain their slot until
 	// they really return.
@@ -1072,8 +1128,20 @@ type SettingsFeaturesAttachmentsConfigKeySet struct {
 
 // SettingsFeaturesAttachmentsConfigConfigKeySet exposes compiler-checked configuration overrides.
 type SettingsFeaturesAttachmentsConfigConfigKeySet struct {
+	// TempDirectory selects features.attachments.config.temp_directory. Set accepts string.
+	//
+	// TempDirectory owns operation spools; empty uses the OS temporary directory.
+	// Provision a private capacity-limited volume for large policies.
+	//
+	TempDirectory config.Key[Settings, string]
 	// MaxActive selects features.attachments.config.max_active. Set accepts int.
 	MaxActive config.Key[Settings, int]
+	// MaxLargeActive selects features.attachments.config.max_large_active. Set accepts int.
+	//
+	// MaxLargeActive limits policies above MaxBufferedBytes before shared admission.
+	// Zero disables the sublimit; a positive value must leave small-work capacity.
+	//
+	MaxLargeActive config.Key[Settings, int]
 	// MaxReads selects features.attachments.config.max_reads. Set accepts int.
 	MaxReads config.Key[Settings, int]
 	// Timeout selects features.attachments.config.timeout. Set accepts time.Duration.
@@ -2037,6 +2105,25 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 			Credentials: config.Text[Settings, infrastructure.CredentialSources, *infrastructure.CredentialSources]("services.credentials", func(settings *Settings) *infrastructure.CredentialSources { return &settings.Services.Credentials }).Sensitive(),
 		},
 		HTTP: SettingsHTTPConfigKeySet{
+			Uploads: SettingsHTTPUploadsConfigKeySet{
+				Enabled:        config.Scalar[Settings, bool]("http.uploads.enabled", func(settings *Settings) *bool { return &settings.HTTP.Uploads.Enabled }),
+				SmallDirectory: config.Scalar[Settings, string]("http.uploads.small_directory", func(settings *Settings) *string { return &settings.HTTP.Uploads.SmallDirectory }),
+				Request: SettingsHTTPUploadsRequestConfigKeySet{
+					Directory: config.Scalar[Settings, string]("http.uploads.request.directory", func(settings *Settings) *string { return &settings.HTTP.Uploads.Request.Directory }),
+					MaxActive: config.Scalar[Settings, int]("http.uploads.request.max_active", func(settings *Settings) *int { return &settings.HTTP.Uploads.Request.MaxActive }),
+					MaxBytes:  config.Scalar[Settings, int64]("http.uploads.request.max_bytes", func(settings *Settings) *int64 { return &settings.HTTP.Uploads.Request.MaxBytes }),
+				},
+				BodyBytes:           config.Scalar[Settings, int64]("http.uploads.body_bytes", func(settings *Settings) *int64 { return &settings.HTTP.Uploads.BodyBytes }),
+				FileBytes:           config.Scalar[Settings, int64]("http.uploads.file_bytes", func(settings *Settings) *int64 { return &settings.HTTP.Uploads.FileBytes }),
+				Timeout:             config.Duration[Settings]("http.uploads.timeout", func(settings *Settings) *time.Duration { return &settings.HTTP.Uploads.Timeout }),
+				AttachmentMaxActive: config.Scalar[Settings, int]("http.uploads.attachment_max_active", func(settings *Settings) *int { return &settings.HTTP.Uploads.AttachmentMaxActive }),
+				StorageTimeout:      config.Duration[Settings]("http.uploads.storage_timeout", func(settings *Settings) *time.Duration { return &settings.HTTP.Uploads.StorageTimeout }),
+				Staging: SettingsHTTPUploadsStagingConfigKeySet{
+					Directory: config.Scalar[Settings, string]("http.uploads.staging.directory", func(settings *Settings) *string { return &settings.HTTP.Uploads.Staging.Directory }),
+					MaxActive: config.Scalar[Settings, int]("http.uploads.staging.max_active", func(settings *Settings) *int { return &settings.HTTP.Uploads.Staging.MaxActive }),
+					MaxBytes:  config.Scalar[Settings, int64]("http.uploads.staging.max_bytes", func(settings *Settings) *int64 { return &settings.HTTP.Uploads.Staging.MaxBytes }),
+				},
+			},
 			StatementDetector: SettingsHTTPStatementDetectorConfigKeySet{
 				Enabled:             config.Scalar[Settings, bool]("http.statement_detector.enabled", func(settings *Settings) *bool { return &settings.HTTP.StatementDetector.Enabled }),
 				AllowNonDevelopment: config.Scalar[Settings, bool]("http.statement_detector.allow_non_development", func(settings *Settings) *bool { return &settings.HTTP.StatementDetector.AllowNonDevelopment }),
@@ -2372,7 +2459,9 @@ var foundrySettingsConfigKeys = sync.OnceValue(func() SettingsConfigKeySet {
 			Attachments: SettingsFeaturesAttachmentsConfigKeySet{
 				Enabled: config.Scalar[Settings, bool]("features.attachments.enabled", func(settings *Settings) *bool { return &settings.Features.Attachments.Enabled }),
 				Config: SettingsFeaturesAttachmentsConfigConfigKeySet{
+					TempDirectory:  config.Scalar[Settings, string]("features.attachments.config.temp_directory", func(settings *Settings) *string { return &settings.Features.Attachments.Config.TempDirectory }),
 					MaxActive:      config.Scalar[Settings, int]("features.attachments.config.max_active", func(settings *Settings) *int { return &settings.Features.Attachments.Config.MaxActive }),
+					MaxLargeActive: config.Scalar[Settings, int]("features.attachments.config.max_large_active", func(settings *Settings) *int { return &settings.Features.Attachments.Config.MaxLargeActive }),
 					MaxReads:       config.Scalar[Settings, int]("features.attachments.config.max_reads", func(settings *Settings) *int { return &settings.Features.Attachments.Config.MaxReads }),
 					Timeout:        config.Duration[Settings]("features.attachments.config.timeout", func(settings *Settings) *time.Duration { return &settings.Features.Attachments.Config.Timeout }),
 					CleanupTimeout: config.Duration[Settings]("features.attachments.config.cleanup_timeout", func(settings *Settings) *time.Duration { return &settings.Features.Attachments.Config.CleanupTimeout }),
@@ -2729,6 +2818,19 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Services.Coordination.Config.PollInterval,
 		keys.Services.Coordination.MaxEntries,
 		keys.Services.Credentials,
+		keys.HTTP.Uploads.Enabled,
+		keys.HTTP.Uploads.SmallDirectory,
+		keys.HTTP.Uploads.Request.Directory,
+		keys.HTTP.Uploads.Request.MaxActive,
+		keys.HTTP.Uploads.Request.MaxBytes,
+		keys.HTTP.Uploads.BodyBytes,
+		keys.HTTP.Uploads.FileBytes,
+		keys.HTTP.Uploads.Timeout,
+		keys.HTTP.Uploads.AttachmentMaxActive,
+		keys.HTTP.Uploads.StorageTimeout,
+		keys.HTTP.Uploads.Staging.Directory,
+		keys.HTTP.Uploads.Staging.MaxActive,
+		keys.HTTP.Uploads.Staging.MaxBytes,
 		keys.HTTP.StatementDetector.Enabled,
 		keys.HTTP.StatementDetector.AllowNonDevelopment,
 		keys.HTTP.StatementDetector.Limits.Threshold,
@@ -2948,7 +3050,9 @@ func SettingsConfigSchema() (*config.Schema[Settings], error) {
 		keys.Features.Notifications.MaxActive,
 		keys.Features.Notifications.Timeout,
 		keys.Features.Attachments.Enabled,
+		keys.Features.Attachments.Config.TempDirectory,
 		keys.Features.Attachments.Config.MaxActive,
+		keys.Features.Attachments.Config.MaxLargeActive,
 		keys.Features.Attachments.Config.MaxReads,
 		keys.Features.Attachments.Config.Timeout,
 		keys.Features.Attachments.Config.CleanupTimeout,

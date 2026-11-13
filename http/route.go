@@ -157,16 +157,17 @@ func routeHandle[P any](r Route[P], handler RawHandler[P], raw bool) RouteRegist
 // come from the same declaration used for runtime matching and URL generation.
 // Raw marks a payload boundary without generated request/response guarantees.
 type RouteInfo struct {
-	ID             RouteID             `json:"id"`
-	Method         Method              `json:"method"`
-	Path           string              `json:"path"`
-	Parameters     []string            `json:"parameters"`
-	Access         Access              `json:"access"`
-	Raw            bool                `json:"raw"`
-	Middlewares    []MiddlewareID      `json:"middlewares,omitempty"`
-	Assets         *AssetRouteInfo     `json:"assets,omitempty"`
-	SignedURL      *SignedURLInfo      `json:"signed_url,omitempty"`
-	Authentication *AuthenticationInfo `json:"authentication,omitempty"`
+	uploadAdmission bool
+	ID              RouteID             `json:"id"`
+	Method          Method              `json:"method"`
+	Path            string              `json:"path"`
+	Parameters      []string            `json:"parameters"`
+	Access          Access              `json:"access"`
+	Raw             bool                `json:"raw"`
+	Middlewares     []MiddlewareID      `json:"middlewares,omitempty"`
+	Assets          *AssetRouteInfo     `json:"assets,omitempty"`
+	SignedURL       *SignedURLInfo      `json:"signed_url,omitempty"`
+	Authentication  *AuthenticationInfo `json:"authentication,omitempty"`
 	// Documentation is exported API documentation; see WithDocumentation.
 	Documentation *RouteDocumentation `json:"documentation,omitempty"`
 	// Timeout and MaxBodyBytes report a route's own replacement for the kernel
@@ -228,6 +229,7 @@ func MatchedRoute(ctx context.Context) (RouteInfo, bool) {
 // RouteRegistration is the heterogeneous assembly boundary. Construct it from a
 // Route descriptor; invalid declarations are rejected by NewRouter as a whole.
 type RouteRegistration struct {
+	upload         uploadRoute
 	contract       contributionContract
 	info           RouteInfo
 	middlewares    []Middleware

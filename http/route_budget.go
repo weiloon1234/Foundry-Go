@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
+	"github.com/weiloon1234/Foundry-Go/internal/httpdeadline"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
@@ -126,6 +127,19 @@ func (b routeBudget) context(ctx context.Context, w stdhttp.ResponseWriter, kern
 // body applies a declared route body ceiling after matching, before any
 // handler reads the body. It reports false after writing a 413 response.
 func (b routeBudget) body(w stdhttp.ResponseWriter, r *stdhttp.Request, kernel *requestBudget) bool {
+	if admitted, ok := r.Context().Value(uploadReservationKey{}).(*requestUpload); ok {
+		// Capture owns an admitted upload until reads and cleanup finish. Apply
+		// its effective total deadline to the socket too: context cancellation
+		// alone cannot interrupt a body read or net/http's subsequent drain.
+		if deadline, ok := r.Context().Deadline(); ok {
+			if conn, ok := r.Context().Value(requestDeadlineConnKey{}).(*httpdeadline.Conn); ok && r.ProtoMajor == 1 {
+				admitted.readTimeout, _ = conn.UploadReadDeadline(deadline)
+			} else if err := stdhttp.NewResponseController(w).SetReadDeadline(deadline); err == nil {
+				admitted.readTimeout = httpdeadline.NewReadTimeout(deadline)
+				admitted.observeBodyTimeout = true
+			}
+		}
+	}
 	limit := b.bodyBytes
 	installed := int64(0)
 	if kernel != nil {
@@ -159,6 +173,7 @@ func routeBodyCeiling(handler stdhttp.Handler) int64 {
 
 // routedHandler retains a router's body ceiling across ApplyMiddleware.
 type routedHandler struct {
+	uploads uploadSelector
 	stdhttp.Handler
 	ceiling          int64
 	captureInventory []RouteInfo
@@ -198,6 +213,12 @@ func transportParent(r *stdhttp.Request) context.Context {
 // still delivered after a deadline. Before routing, and outside the kernel,
 // the wrapper's request context applies.
 func transportErr(r *stdhttp.Request) error {
+	// HTTP/1 cancels its native context on a socket read timeout too. A
+	// witnessed timeout at our installed deadline permits only the terminal
+	// multipart 408 to reach the writer; actual socket write failures still apply.
+	if admitted, ok := r.Context().Value(uploadReservationKey{}).(*requestUpload); ok && admitted.timeoutResponse.Load() {
+		return nil
+	}
 	scope := requestScopeFrom(r.Context())
 	if scope == nil || scope.budget == nil || scope.kernel.parent == nil {
 		return r.Context().Err()

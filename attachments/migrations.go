@@ -3,10 +3,11 @@ package attachments
 import "github.com/weiloon1234/Foundry-Go/database/migrate"
 
 const (
-	MigrationOrigin   migrate.Origin  = "foundry.attachments"
-	CreateAttachments migrate.ID      = "000001_create_attachments"
-	CreateVariants    migrate.ID      = "000002_create_variants"
-	Introduced        migrate.Version = "v0.1.0"
+	MigrationOrigin    migrate.Origin  = "foundry.attachments"
+	CreateAttachments  migrate.ID      = "000001_create_attachments"
+	CreateVariants     migrate.ID      = "000002_create_variants"
+	ExpandOriginalSize migrate.ID      = "000003_expand_original_size"
+	Introduced         migrate.Version = "v0.1.0"
 )
 
 // Migrations returns fresh definitions for the attachment and variant journal schema.
@@ -69,5 +70,21 @@ UNIQUE (disk,object_key),
 CHECK (state NOT IN ('ready','cleanup') OR etag<>'')
 )`, `CREATE UNIQUE INDEX foundry_attachment_variants_ready ON foundry_attachment_variants (file_id,name) WHERE state='ready'`,
 			`CREATE INDEX foundry_attachment_variants_file ON foundry_attachment_variants (file_id,state,name)`,
-			`CREATE INDEX foundry_attachment_variants_reconcile ON foundry_attachment_variants (state,updated_at,id)`}}}
+			`CREATE INDEX foundry_attachment_variants_reconcile ON foundry_attachment_variants (state,updated_at,id)`}},
+		{Key: migrate.Key{Origin: MigrationOrigin, ID: ExpandOriginalSize}, Version: Introduced, SQL: []string{`DO $$
+DECLARE size_check text;
+BEGIN
+ LOCK TABLE foundry_attachments IN ACCESS EXCLUSIVE MODE;
+ SELECT regexp_replace(pg_get_constraintdef(c.oid, true), '[[:space:]()]', '', 'g') INTO size_check
+ FROM pg_constraint c
+ WHERE c.conrelid = 'foundry_attachments'::regclass
+ AND c.conname = 'foundry_attachments_size_check' AND c.contype = 'c'
+ AND c.convalidated AND NOT c.connoinherit
+ AND c.conkey = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = c.conrelid AND attname = 'size')]::smallint[];
+ IF size_check IS DISTINCT FROM 'CHECKsize>=0ANDsize<=67108864' THEN
+  RAISE EXCEPTION 'unexpected attachment original size constraint';
+ END IF;
+ ALTER TABLE foundry_attachments DROP CONSTRAINT foundry_attachments_size_check;
+ ALTER TABLE foundry_attachments ADD CONSTRAINT foundry_attachments_size_check CHECK (size >= 0);
+END $$`}}}
 }

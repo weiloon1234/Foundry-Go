@@ -27,7 +27,7 @@ from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_wr
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
-REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", "lib/upgrades.py",
+BASE_REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", "lib/upgrades.py",
                             "lib/provision.py", "lib/recover.py", "lib/release.py", "lib/runtime_config.py",
                             "lib/capacity.py", "lib/journal.py", "lib/maintenance.py",
                             "lib/topology.py", "lib/report.py", "server/manage.py",
@@ -42,6 +42,12 @@ REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", 
                             "server/templates/foundry-backup.timer",
                             "server/templates/nginx-http.conf", "server/templates/nginx-https.conf",
                             "server/templates/nginx-proxy.conf", "server/templates/nginx-upgrade.conf"})
+
+
+# Generations 9 and 10 share the base inventory. New files become mandatory
+# only for bundles whose own digest-bound protocol declares their generation.
+GENERATION_11_FILES = frozenset({"lib/uploads.py", "server/templates/nginx-upload.conf"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES
 
 
 def _hash(value: object) -> str:
@@ -79,7 +85,8 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
                 "tools_too_large", "The tool bundle exceeds its size limit.")
         inventory.append({"path": path.relative_to(source).as_posix(), "size": size, "mode": 0o644,
                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    require(REQUIRED_FILES <= {item["path"] for item in inventory}, "tools_incomplete", "The tool bundle is incomplete.")
+    required = REQUIRED_FILES if protocol(source)["generation"] >= 11 else BASE_REQUIRED_FILES
+    require(required <= {item["path"] for item in inventory}, "tools_incomplete", "The tool bundle is incomplete.")
     return source, files, inventory
 
 

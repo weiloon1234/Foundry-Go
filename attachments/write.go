@@ -36,18 +36,23 @@ func (c Collection[M, K]) write(ctx context.Context, m *Manager, owner model.Ref
 		return Result[M, K]{}, err
 	}
 	var result Result[M, K]
-	err := m.calls.Run(ctx, "attachment upload", func(ctx context.Context) error {
-		locale, err := c.localeName(ctx, m)
-		if err != nil {
-			return err
-		}
-		candidate, err := prepare(ctx, m, c.definition.policy, upload)
-		if err != nil {
-			return err
-		}
-		return c.writePrepared(ctx, m, owner, locale, candidate, replace, &result)
+	err := m.runUpload(ctx, c.definition.policy, "attachment upload", func(ctx context.Context) error {
+		return c.writeAdmitted(ctx, m, owner, upload, replace, &result)
 	})
 	return result, err
+}
+
+// writeAdmitted runs inside the caller's complete upload/source lifetime.
+func (c Collection[M, K]) writeAdmitted(ctx context.Context, m *Manager, owner model.Reference[M, K], upload Upload, replace bool, result *Result[M, K]) error {
+	locale, err := c.localeName(ctx, m)
+	if err != nil {
+		return err
+	}
+	candidate, err := prepare(ctx, m, c.definition.policy, upload)
+	if err != nil {
+		return err
+	}
+	return c.writePrepared(ctx, m, owner, locale, candidate, replace, result)
 }
 
 // writePrepared shares storage, publication and recovery for an admitted upload.
@@ -123,8 +128,10 @@ func (c Collection[M, K]) storeUpload(ctx context.Context, m *Manager, owner mod
 	return c.storePrepared(ctx, m, owner, locale, candidate, ownerRequired)
 }
 
-// storePrepared records and stores validated bytes without reading them again.
-func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner model.Reference[M, K], locale string, candidate prepared, ownerRequired bool) (model.ID[store.File], func(), error) {
+// storePrepared takes ownership of the preparation, records and stores its bytes,
+// then closes both the reader and body before returning.
+func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner model.Reference[M, K], locale string, candidate prepared, ownerRequired bool) (resultID model.ID[store.File], resultRelease func(), resultErr error) {
+	defer func() { resultErr = joinFailures(resultErr, candidate.body.close()) }()
 	hookContext := BeforeContext[M, K]{Owner: owner, Collection: c.Name(), Locale: c.locale, Upload: candidate.info}
 	for _, hook := range c.definition.hooks {
 		if hook.Before != nil {
@@ -133,6 +140,11 @@ func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner m
 			}
 		}
 	}
+	reader, err := candidate.body.open(ctx)
+	if err != nil {
+		return model.ID[store.File]{}, nil, err
+	}
+	defer func() { resultErr = joinFailures(resultErr, reader.Close()) }()
 	id, err := model.NewIDAt[store.File](time.Now())
 	if err != nil {
 		return model.ID[store.File]{}, nil, err
@@ -150,7 +162,7 @@ func (c Collection[M, K]) storePrepared(ctx context.Context, m *Manager, owner m
 	if err != nil {
 		return id, release, err
 	}
-	stored, putErr := disk.Put(ctx, key, candidate.open(), storage.PutOptions{ContentType: candidate.info.MediaType, Size: value.Set(candidate.info.Size), Checksum: value.Set(candidate.digest), Condition: storage.IfAbsent()})
+	stored, putErr := disk.Put(ctx, key, reader, storage.PutOptions{ContentType: candidate.info.MediaType, Size: value.Set(candidate.info.Size), Checksum: value.Set(candidate.digest), Condition: storage.IfAbsent()})
 	if putErr != nil {
 		journalErr := m.recordPutFailure(ctx, id, putErr)
 		if journalErr != nil {
@@ -208,21 +220,25 @@ func (c Collection[M, K]) Prepare(ctx context.Context, m *Manager, owner model.R
 		return Prepared[M, K]{}, err
 	}
 	var prepared Prepared[M, K]
-	err := m.calls.Run(ctx, "attachment upload", func(ctx context.Context) error {
-		locale, err := c.localeName(ctx, m)
-		if err != nil {
-			return err
-		}
-		id, release, err := c.storeUpload(ctx, m, owner, upload, false)
-		if release != nil {
-			defer release()
-		}
-		if !id.IsZero() {
-			prepared = Prepared[M, K]{operation: operationID(id), collection: c.Name(), locale: locale}
-		}
-		return err
+	err := m.runUpload(ctx, c.definition.policy, "attachment upload", func(ctx context.Context) error {
+		return c.prepareAdmitted(ctx, m, owner, upload, &prepared)
 	})
 	return prepared, err
+}
+
+func (c Collection[M, K]) prepareAdmitted(ctx context.Context, m *Manager, owner model.Reference[M, K], upload Upload, prepared *Prepared[M, K]) error {
+	locale, err := c.localeName(ctx, m)
+	if err != nil {
+		return err
+	}
+	id, release, err := c.storeUpload(ctx, m, owner, upload, false)
+	if release != nil {
+		defer release()
+	}
+	if !id.IsZero() {
+		*prepared = Prepared[M, K]{operation: operationID(id), collection: c.Name(), locale: locale}
+	}
+	return err
 }
 
 // AddIn publishes a prepared upload into owner's collection inside tx, a

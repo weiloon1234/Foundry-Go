@@ -21,6 +21,7 @@ from topology import instance_units, validate_topology
 from runtime_config import (CREDENTIAL_KEYS, read_credentials as _credentials, runtime_environment,
     validate_runtime_environment, initialize_bootstrap_secrets, _instance_group, _read_value_file)
 from edge import edge_findings, edge_template, nginx_variable
+import uploads
 import packages
 import postgres
 import redis_acl
@@ -271,8 +272,12 @@ def _template(tools_dir, name, entry, *, postgres_unit=""):
     replacements["@RUNTIME_DIRECTORY@"] = f"{PREFIX}/{entry['profile']['instance_id']}"
     replacements["@HTTP_UNIT@"] = instance_units(entry)["http"]
     replacements.update({"@" + key.upper() + "@": value for key, value in instance_paths(entry["name"]).items()})
-    if "@PROXY@" in content:
-        content = content.replace("@PROXY@", (Path(tools_dir) / "server/templates/nginx-proxy.conf").read_text().rstrip())
+    proxy = (Path(tools_dir) / "server/templates/nginx-proxy.conf").read_text().rstrip()
+    if "@UPLOAD_LOCATIONS@" in content:
+        admission, locations = uploads.nginx(entry, proxy, (Path(tools_dir) / "server/templates/nginx-upload.conf").read_text().rstrip())
+        content = content.replace("@UPLOAD_ADMISSION@", admission).replace("@UPLOAD_LOCATIONS@", locations)
+    content = content.replace("@PROXY@", proxy.replace("@PROXY_READ_TIMEOUT@", "120s"))
+    replacements["@UPLOAD_WRITE_PATHS@"] = uploads.service_paths(entry)
     if "@UPGRADE_MAP@" in content:
         content = content.replace("@UPGRADE_MAP@", (Path(tools_dir) / "server/templates/nginx-upgrade.conf").read_text().rstrip())
     replacements["@VARIABLE@"] = nginx_variable(entry, "upgrade")
@@ -359,6 +364,8 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     if existing:
         require(existing["project_id"] == project["id"] and existing["name"] == identity(project, profile)["name"], "identity_mismatch", "Instance UUID belongs to a different identity.")
         require(existing["topology"] == topology, "topology_change_required", "Topology changes require a release plan.")
+        require(existing["profile"].get("uploads") == bound.get("uploads") or "configuration" not in existing["provisioning"]["completed_steps"],
+                "upload_profile_change", "Upload allocations are fixed once configured; migrate a live instance through a separately reviewed deployment plan.")
         entry = copy.deepcopy(existing)
         entry["profile"] = bound
     else:
@@ -380,6 +387,8 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     _site_checks(host, entry)
     observations = {"packages": packages.inspect(host), "postgresql": postgres.inspect(host, registry),
                     "redis": redis_acl.inspect(host, registry), "certificate": certificates.inspect(host, entry)}
+    if "uploads" in profile:
+        observations["uploads"] = uploads.inspect(host, entry)
     findings = edge_findings(profile, tools_dir / "lib")
     upgrade = upgrades.tools_upgrade(host, registry, tools_dir)
     if upgrade and upgrade["from_digest"] is not None:
@@ -502,6 +511,7 @@ def bootstrap_apply(host, project, profile, tools_dir, plan_token=None, *, topol
                 postgres.prepare(host, registry)
                 redis_acl.prepare(host, registry)
                 _prepare_instance(host, registry, entry)
+                uploads.provision(host, entry)
                 credentials = initialize_bootstrap_secrets(host, entry, private_secrets if private_secrets is not None else getattr(host, "secrets", {}))
                 _step(host, registry, entry, "bootstrap_secrets")
                 postgres.provision(host, registry, entry, credentials)

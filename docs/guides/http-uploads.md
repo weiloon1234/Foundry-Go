@@ -135,6 +135,8 @@ unexpected filesystem failures without recursively deleting unrelated entries.
 
 ## Resource limits
 
+A larger per-request ceiling also needs [admission before capture](#admit-large-multipart-requests-before-capture) and independent disk capacity.
+
 Use DefaultEndpointLimits and modify its Multipart limits for the route. The
 HTTP kernel's `MaxBodyBytes` remains an additional ceiling; to accept files larger
 than that server-wide default on one upload route only, declare the route's own
@@ -142,8 +144,8 @@ ceiling with `BodyLimit` and a matching `Timeout` for slow transfers:
 
 ```go
 limits := foundryhttp.DefaultEndpointLimits()
-limits.Multipart.Bytes, limits.Multipart.FileBytes = 512<<20, 512<<20
-upload := foundryhttp.ConfigureEndpoint(foundryhttp.ConfigureEndpoint(foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.EmptyResponse(204)), foundryhttp.Limits(limits)), foundryhttp.BodyLimit(512 << 20)), foundryhttp.Timeout(10 * time.Minute))
+limits.Multipart.Bytes, limits.Multipart.FileBytes = 520<<20, 512<<20
+upload := foundryhttp.ConfigureEndpoint(foundryhttp.ConfigureEndpoint(foundryhttp.ConfigureEndpoint(foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.MultipartBody(form), foundryhttp.EmptyResponse(204)), foundryhttp.Limits(limits)), foundryhttp.BodyLimit(520 << 20)), foundryhttp.Timeout(10 * time.Minute))
 ```
 
 Other routes keep the kernel default. Multipart Bytes
@@ -315,3 +317,101 @@ The `foundry-files` skill should point to this guide's
 [correlated file validation](#recipe-file-kinds) and
 [single-inspection image validation](#recipe-image-kinds)
 sections.
+
+## Admit large multipart requests before capture
+
+Use `NewUploadPool` and `MultipartAdmission` for a route that accepts large files.
+The registered descriptor selects its pool. Content-Length never selects a pool
+or reduces its reservation. Each request reserves one slot and the full
+`EndpointLimits.Multipart.Bytes` allowance, including chunked requests.
+`BodyLimit` must equal that encoded allowance, or endpoint registration fails.
+
+`NewUploadPool` performs startup filesystem I/O. Call it before constructing
+routes, retain the pool for the server's lifetime, and close it after HTTP drain.
+`MultipartAdmission` applies `MultipartDirectory` with the pool's directory.
+Changing that directory afterward fails validation. Existing descriptors without
+admission retain their behavior.
+
+The [independent upload consumer](../../tests/fixtures/consumer/httpuploads/large.go)
+uses `http.UploadSettings`, available as `application.Settings.HTTP.Uploads`.
+Load those settings through the generated configuration schema. The deployment
+pipeline owns their values. Pass `settings.App.HTTP.Uploads` to `LargeRouter` in
+that example. Its service receives an ordinary request-owned `UploadedFile`.
+Production applications use their existing guarded endpoint adapter for the same
+multipart declaration. Attachment and local-storage work use their own sublimits;
+see the [deployment owner wiring](deployment.md#large-upload-ingress). Reserve
+a separate small-publication disk when large-volume exhaustion must leave small
+attachment writes available.
+
+Admission precedes route middleware, authentication, decoding, and capture.
+`ApplyMiddleware` preserves this ordering around a Router. The server performs
+admission before global middleware and excludes admitted upload requests from
+its general handler-slot pool. Exhaustion returns 503 with `Retry-After: 1` and
+uses unread-body rejection. There is no upload admission queue. Direct requests
+that bypass nginx encounter the same reservation.
+
+An admitted upload's effective route deadline also bounds native body reads,
+including a chunked body that keeps making progress. The deadline does not reset
+with each chunk. An expired multipart capture returns 408 and rejects the unread
+body before publication. Cleanup completes before its admission slot is released.
+With the framework's `Server`, Compression and ETags deliver that terminal 408 even when the native read timeout
+cancels HTTP/1's request context. This exception requires an observed socket read
+timeout at the installed deadline; ordinary client disconnects still abort delivery.
+Concurrent connection deadline resets invalidate overlapping upload evidence,
+including reads awakened before the reset finishes.
+The server retains that evidence before HTTP framing can replace the read error,
+including while waiting for the final blank line of chunked trailers. Trailer error
+text alone never grants the timeout-response exception.
+Under a standard `net/http.Server`, including direct TLS hosting, ordinary body
+reads retain the same timeout response through native socket-error detection.
+This fallback is used only without connection-level evidence; it cannot recover
+a socket cause that HTTP framing has discarded.
+
+Use the framework's Router and `ApplyMiddleware` chain for this guarantee.
+An external native wrapper that reads a body before entering that chain cannot
+be protected by downstream admission. HTTP capture prefixes overlapping an
+admitted upload route fail server preparation. Middleware cannot change an
+already admitted request to a different upload pool or body budget. If a native
+wrapper hides route metadata from the kernel, the upload route refuses late
+admission. Use `ApplyMiddleware` to preserve that metadata.
+
+Reservations survive capture, validation, response writing, and slow publication.
+Cancellation does not release a slot while a handler or capture still runs.
+The actual exit owner closes captured readers and removes exact owned files.
+A cleanup failure releases the active slot but conservatively retains the entire
+encoded-byte reservation. `Usage` includes those bytes. `RetryCleanup` retries
+only the tracked batch's owned names and releases bytes after removal succeeds.
+It never scans arbitrary files or recursively deletes unexpected entries.
+
+Give large and small capture separate writable, capacity-controlled volumes.
+Keep small requests outside the large pool. For small routes needing an explicit
+byte budget, bind a separate `UploadPool` on their independent volume. Reserve
+small attachment and adapter capacity in those owners too. HTTP isolation alone
+does not reserve downstream publication capacity.
+
+A pool directory must be empty on startup. Its ownership marker prevents another
+pool from treating active or retained files as free capacity. After a crash,
+verify that every old borrower is dead before reconciling that exact directory.
+Never remove a marker merely because a timeout elapsed. A second process or
+rolling generation needs its own explicitly budgeted directory and capacity.
+Do not share one request directory between live HTTP processes.
+
+For a 512 MiB file, the proposed encoded allowance is 520 MiB. Use it only when
+all declared fields, part headers, and framing fit within the remaining 8 MiB.
+Keep part, file, reader, and field limits small. Four reservations then hold at
+most 2,080 MiB of encoded capacity. The example deployment adds filesystem and
+cleanup headroom with a 3 GiB request volume. These are configuration examples,
+not measured capacity guarantees.
+
+`Timeout` is a total route deadline from kernel admission. It includes capture,
+publication, and response work, and extends native connection deadlines for a
+longer route. Nginx idle timers measure gaps in progress, not total duration.
+Use the [upload deployment profile](deployment.md#large-upload-ingress) to keep
+those settings and the writable sandbox paths consistent.
+
+The [B26 acceptance scenarios](../evidence/b26-resource-provider-acceptance.md)
+exercise actual rendered nginx, silent publication, known-length and chunked
+input, idle and total deadlines, disconnects and quota exhaustion. HTTP pool
+checks do not certify attachment or local-storage admission. Those owners must
+consume their declared large-work limits and preserve small-publication capacity
+before the complete deployment can be accepted.

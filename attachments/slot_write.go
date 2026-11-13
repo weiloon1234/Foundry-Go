@@ -3,14 +3,12 @@ package attachments
 import (
 	"context"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
-	"io"
 	"mime"
 
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/filename"
 	"github.com/weiloon1234/Foundry-Go/internal/upload"
-	"github.com/weiloon1234/Foundry-Go/internal/workscope"
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
@@ -27,7 +25,9 @@ type FileSource = upload.Source
 // Result.Publication when an error is returned. To publish inside a
 // transaction, PrepareFile before it begins and ReplaceIn inside it.
 func (s slotDefinition[M, K, S]) replaceFile(ctx context.Context, owner M, file FileSource) (Result[M, K], error) {
-	return withFile(ctx, file, func(upload Upload) (Result[M, K], error) { return s.replace(ctx, owner, upload) })
+	return withAdmittedFile(ctx, s, file, func(ctx context.Context, m *Manager, input Upload, result *Result[M, K]) error {
+		return s.collection.writeAdmitted(ctx, m, s.binding.Reference(owner), input, true, result)
+	})
 }
 
 // replace replaces owner's collection with one upload.
@@ -44,7 +44,9 @@ func (s slotDefinition[M, K, S]) replace(ctx context.Context, owner M, upload Up
 // own connection. Call it before that transaction begins; owner may be a model
 // the transaction creates, with its key chosen first. See Collection.Prepare.
 func (s slotDefinition[M, K, S]) prepareFile(ctx context.Context, owner M, file FileSource) (Prepared[M, K], error) {
-	return withFile(ctx, file, func(upload Upload) (Prepared[M, K], error) { return s.prepare(ctx, owner, upload) })
+	return withAdmittedFile(ctx, s, file, func(ctx context.Context, m *Manager, input Upload, result *Prepared[M, K]) error {
+		return s.collection.prepareAdmitted(ctx, m, s.binding.Reference(owner), input, result)
+	})
 }
 
 // prepare is PrepareFile for one upload.
@@ -123,36 +125,39 @@ func (s slotDefinition[M, K, S]) accepts(ctx context.Context, file FileSource) (
 	if !validFilename(filename.StripInvisible(file.Name())) {
 		return false, nil
 	}
-	// The upload is buffered like a write, so it shares the write admission
-	// that bounds concurrent buffers and drains on Close.
+	// Admission covers capture, inspection and actual cleanup.
 	accepted := false
-	err = m.calls.Run(ctx, "attachment acceptance", func(ctx context.Context) error {
-		reader, err := file.Open(ctx)
-		if err != nil {
-			return err
-		}
-		body, err := io.ReadAll(io.LimitReader(workscope.Reader(ctx, reader), policy.MaxBytes+1))
-		if err = joinFailures(err, reader.Close()); err != nil {
-			return err
-		}
-		if int64(len(body)) > policy.MaxBytes {
-			return nil
-		}
-		if _, err := acceptMedia(ctx, m, policy, body, hintOf(file)); err != nil {
-			if callback.ErrorIs(err, fault.Invalid) {
-				return nil
+	err = m.runUpload(ctx, policy, "attachment acceptance", func(ctx context.Context) error {
+		_, err := withFile(ctx, file, func(input Upload) (struct{}, error) {
+			candidate, err := prepareInput(ctx, m, policy, input, false)
+			if err != nil {
+				var cleanup *upload.CleanupError
+				if matched, inspectionErr := callback.ErrorAsResult(err, &cleanup); matched || inspectionErr != nil {
+					return struct{}{}, joinFailures(err, inspectionErr)
+				}
+				var readFailure *upload.ReadError
+				if matched, inspectionErr := callback.ErrorAsResult(err, &readFailure); matched || inspectionErr != nil {
+					return struct{}{}, joinFailures(err, inspectionErr)
+				}
+				if callback.ErrorIs(err, fault.Invalid) || callback.ErrorIs(err, storage.LimitExceeded) {
+					return struct{}{}, nil
+				}
+				return struct{}{}, err
 			}
-			return err
-		}
-		accepted = true
-		return nil
+			err = candidate.body.close()
+			accepted = err == nil
+			return struct{}{}, err
+		})
+		return err
 	})
 	return accepted, err
 }
 
 // addFile appends file to owner's multiple-file collection.
 func (s manySlot[M, K]) addFile(ctx context.Context, owner M, file FileSource) (Result[M, K], error) {
-	return withFile(ctx, file, func(upload Upload) (Result[M, K], error) { return s.add(ctx, owner, upload) })
+	return withAdmittedFile(ctx, s.slotDefinition, file, func(ctx context.Context, m *Manager, input Upload, result *Result[M, K]) error {
+		return s.collection.writeAdmitted(ctx, m, s.binding.Reference(owner), input, false, result)
+	})
 }
 
 // add appends one upload to owner's multiple-file collection.
@@ -208,9 +213,28 @@ func addFiles[F FileSource, R any](ctx context.Context, files []F, validate func
 	return results, nil
 }
 
+// withAdmittedFile retains both admission pools across source Open and Close.
+// Its callback uses admitted helpers, never a second public upload operation.
+func withAdmittedFile[M any, K comparable, S, R any](ctx context.Context, slot slotDefinition[M, K, S], file FileSource, run func(context.Context, *Manager, Upload, *R) error) (result R, err error) {
+	m, err := slot.bound()
+	if err != nil {
+		return result, err
+	}
+	if err := slot.collection.check(m); err != nil {
+		return result, err
+	}
+	err = m.runUpload(ctx, slot.collection.definition.policy, "attachment file upload", func(ctx context.Context) error {
+		_, err := withFile(ctx, file, func(input Upload) (struct{}, error) {
+			return struct{}{}, run(ctx, m, input, &result)
+		})
+		return err
+	})
+	return result, err
+}
+
 // withFile opens file for one operation and closes it after the operation
 // returns; a close failure is reported beside the operation's result.
-func withFile[T any](ctx context.Context, file FileSource, run func(Upload) (T, error)) (T, error) {
+func withFile[T any](ctx context.Context, file FileSource, run func(Upload) (T, error)) (result T, err error) {
 	if file == nil {
 		return *new(T), invalid()
 	}
@@ -218,8 +242,8 @@ func withFile[T any](ctx context.Context, file FileSource, run func(Upload) (T, 
 	if err != nil {
 		return *new(T), err
 	}
-	result, err := run(Upload{Source: reader, OriginalName: file.Name(), ContentType: hintOf(file)})
-	return result, joinFailures(err, reader.Close())
+	defer func() { err = joinFailures(err, reader.Close()) }()
+	return run(Upload{Source: reader, OriginalName: file.Name(), ContentType: hintOf(file)})
 }
 
 // hintOf keeps a client content type only when it is a valid media type,

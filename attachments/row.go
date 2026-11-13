@@ -57,7 +57,7 @@ func (m *Manager) validateRow(row store.File) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if row.WriterID.IsZero() || row.Size < 0 || row.Size > MaxUploadBytes || row.Width < 0 || row.Height < 0 || row.Width > 65535 || row.Height > 65535 || (row.Width == 0) != (row.Height == 0) || row.SortOrder < 0 || row.Properties.IsZero() {
+	if row.WriterID.IsZero() || row.Size < 0 || row.Width < 0 || row.Height < 0 || row.Width > 65535 || row.Height > 65535 || (row.Width == 0) != (row.Height == 0) || row.SortOrder < 0 || row.Properties.IsZero() {
 		return "", invalid()
 	}
 	if storage.MediaType(row.ContentType).Validate() != nil || storage.ETag(row.ETag).Validate() != nil || storage.VersionID(row.ObjectVersion).Validate() != nil {

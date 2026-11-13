@@ -44,6 +44,7 @@ type Settings struct {
 
 // HTTPSettings configures the HTTP server, security headers, probes, and statement detector.
 type HTTPSettings struct {
+	Uploads           http.UploadSettings
 	StatementDetector StatementDetectorSettings
 	Enabled           bool
 	Server            http.ServerConfig

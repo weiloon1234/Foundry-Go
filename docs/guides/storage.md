@@ -202,6 +202,40 @@ waits for actual callback exit rather than closing infrastructure beneath it.
 <a id="recipe-local-disk"></a>
 ## Local managed store
 
+`local.Config.Staging` bounds large-write slots and payload reservations for the
+**managed root across processes**, including HTTP and worker roles. All processes
+sharing a root must use the same staging limits. `SmallObjectBytes` reserves
+admission for known small inputs; unknown lengths reserve `MaxObjectBytes`. Both
+puts and server-side copies publish the reserved byte count in their staging
+entry name and hold the existing writer lock before reading input. Entries live
+in the private `.foundry-staging` directory inside the managed root. A short
+cross-process `flock` on its admission lock file serializes scanning reservations,
+checking the combined budget and creating the new entry. Exhaustion returns the
+typed capacity error immediately, without waiting for another upload to finish.
+The admission lock is released before input is read. No in-memory counter grants
+extra capacity to another process.
+
+Publication renames the entry into its final object; successful cleanup removes
+it. A crash releases the writer lock, but its abandoned entry keeps its byte
+reservation until `Prune` removes it under the existing age, identity and lock
+checks. Failed cleanup likewise stays charged. Admission scans only the staging
+directory in fixed-size batches; published-object listing, walking and `MaxScan`
+exclude that directory. Startup recovery moves abandoned staging from older
+object-shard locations into it before admitting writes, independently of the
+listing ceiling. A durable completion marker makes later starts scan only the
+staging directory. Legacy enumeration uses a separate migration lock; it does not
+hold the admission lock across published-object scans. Migration and its marker
+are synced even when ordinary object writes disable `Sync`. Drain writers using
+the old layout before migration. `Prune` also checks those legacy locations under its
+existing scan bound. Keep each disk's `MaxActive` greater than the root's staging slot cap.
+Zero staging limits preserve existing behavior. Named disks expose the same
+policy as `infrastructure.LocalDiskSettings.Staging`.
+
+Staging and atomic publication stay on the same managed filesystem. Provision
+record/filesystem overhead and persistent object capacity beyond payload
+reservations. To survive a completely full large volume, small publications need
+a separate managed disk on independently reserved storage.
+
 <!-- compiled-source: tests/fixtures/consumer/storing/files.go#local-disk -->
 ```go
 func LocalProviders(root string) []foundation.Provider {
@@ -230,9 +264,9 @@ its shard lock only across the rename or removal; a conditional one (`IfAbsent`,
 durable, so no other conditional writer acts on a change that a crash could
 still undo.
 `Sync` defaults on and syncs files/directories for crash durability: the staging
-file before publication and the shard directory after the rename, before success
-is reported; parent directories are synced only when a shard directory is first
-created by the process. This is an
+file before publication and both the staging and shard directories after the
+rename, before success is reported; parent directories are synced when their
+managed subdirectories are created. This is an
 operator-controlled object store, **not a directory of plain uploaded files**.
 Back it up as a complete store. Use the HTTP storage bridge to serve content.
 
@@ -309,7 +343,8 @@ writes. `ConditionalWriteMaxBytes` requires a declared size within `PartBytes` f
 conditional writes. `PutBytes`, `PutFile` and `CopyTo` supply their known size
 automatically. Unknown-length or larger conditional uploads fail before source
 consumption. R2 conditional multipart
-completion, conditional deletion and historical versions remain unsupported. AWS
+completion remains restricted pending live certification of both create and
+replace; conditional deletion and historical versions remain unsupported. AWS
 conditional deletion cannot be combined with historical-version selection; the
 provider evaluates its condition against the current object. S3's mutable `null`
 version is not an immutable VersionID and is rejected as an explicit selector.
@@ -515,3 +550,28 @@ its database recovery point and the last successful object copy are newer than t
 grace window; report stale or missing copies explicitly. The grace does not prove
 that a copy succeeded. See [attachment recovery](attachments.md#publication-and-recovery)
 for journal ownership and inspection behavior.
+
+
+### Large conditional publication certification
+
+The R2 profile retains `ConditionalWriteMaxBytes == PartBytes` for both creates
+and replacements. Wire tests cannot certify remote atomicity. The test-only
+candidate in `storage/s3` reaches the same validated multipart protocol without
+adding an application-facing override or changing the shipping R2 profile.
+Generic compatible providers retain their declared `SingleRequestConditions`.
+
+`TestR2ConditionalPublicationCandidateWireMatrix` covers the PutObject boundary
+and multipart completion: absent/existing creates; matching, stale and missing
+replacements; competing creates/replacements; destination changes after parts
+upload; cancellation, failed parts/abort, lost upload IDs and lost publication
+acknowledgements. Readback verifies the winning bytes. A separate 65 MiB test
+checks default 8 MiB serial parts, metadata/digest, cleanup and bounded allocations.
+
+The lead can run the same matrix as `TestRealR2ConditionalMultipartCandidate`
+using the existing `FOUNDRY_TEST_R2_*` test bucket, explicit prefix, endpoint and
+owner credentials described in [developer testing](developer-tooling-and-testing.md).
+It creates a random namespace under that test-only prefix and never provisions a
+bucket or changes access policy. Passing cases clean their namespace; failed cases
+retain evidence. The candidate test does not enable production capability, even
+when it passes. Review live evidence for both operations before removing the shared
+restriction. Without credentials, the live test skips and R2 stays restricted.

@@ -266,6 +266,10 @@ func (p *Plan) validate() error {
 			c.Clock = p.options.clock
 			c.MaxObjectBytes = disk.Config.MaxObjectBytes
 			c.MaxScan = disk.Local.MaxScan
+			c.Staging = disk.Local.Staging
+			if c.Staging.MaxActive >= disk.Config.MaxActive {
+				return safeerror.NewFault(fault.Invalid, "local staging must reserve small operation capacity")
+			}
 			c.Sync = disk.Local.Sync
 			if err := c.Validate(); err != nil {
 				return err

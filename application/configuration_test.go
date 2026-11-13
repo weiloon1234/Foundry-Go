@@ -62,3 +62,23 @@ cookie='__Host-configured'
 	}
 	t.Cleanup(func() { stop(t, app) })
 }
+
+func TestAttachmentSpoolDirectoryLoadsAndHasTypedOverride(t *testing.T) {
+	schema, err := application.SettingsConfigSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	layer, err := toml.Decode(strings.NewReader("[features.attachments.config]\ntemp_directory='/srv/attachment-spool'\n"), schema, toml.Options{Name: "attachment-spool"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings, _, err := schema.Load(application.DefaultSettings(), config.Inputs[application.Settings]{Files: []config.Values{layer}})
+	if err != nil || settings.Features.Attachments.Config.TempDirectory != "/srv/attachment-spool" {
+		t.Fatal("attachment spool directory did not load", err)
+	}
+	keys := application.SettingsConfigKeys()
+	settings, _, err = schema.Load(settings, config.Inputs[application.Settings]{Overrides: []config.Override[application.Settings]{keys.Features.Attachments.Config.TempDirectory.Set("/srv/override-spool")}})
+	if err != nil || settings.Features.Attachments.Config.TempDirectory != "/srv/override-spool" {
+		t.Fatal("typed attachment spool override missing", err)
+	}
+}

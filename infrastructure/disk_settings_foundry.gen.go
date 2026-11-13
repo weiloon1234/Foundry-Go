@@ -39,11 +39,22 @@ type DiskSettingsConfigConfigKeySet struct {
 // DiskSettingsLocalConfigKeySet exposes compiler-checked configuration overrides.
 type DiskSettingsLocalConfigKeySet struct {
 	// Root selects local.root. Set accepts string.
-	Root config.Key[DiskSettings, string]
+	Root    config.Key[DiskSettings, string]
+	Staging DiskSettingsLocalStagingConfigKeySet
 	// MaxScan selects local.max_scan. Set accepts int.
 	MaxScan config.Key[DiskSettings, int]
 	// Sync selects local.sync. Set accepts bool.
 	Sync config.Key[DiskSettings, bool]
+}
+
+// DiskSettingsLocalStagingConfigKeySet exposes compiler-checked configuration overrides.
+type DiskSettingsLocalStagingConfigKeySet struct {
+	// MaxActive selects local.staging.max_active. Set accepts int.
+	MaxActive config.Key[DiskSettings, int]
+	// MaxBytes selects local.staging.max_bytes. Set accepts int64.
+	MaxBytes config.Key[DiskSettings, int64]
+	// SmallObjectBytes selects local.staging.small_object_bytes. Set accepts int64.
+	SmallObjectBytes config.Key[DiskSettings, int64]
 }
 
 // DiskSettingsCloudConfigKeySet exposes compiler-checked configuration overrides.
@@ -121,7 +132,12 @@ var foundryDiskSettingsConfigKeys = sync.OnceValue(func() DiskSettingsConfigKeyS
 			StreamIdleTimeout: config.Duration[DiskSettings]("config.stream_idle_timeout", func(settings *DiskSettings) *time.Duration { return &settings.Config.StreamIdleTimeout }),
 		},
 		Local: DiskSettingsLocalConfigKeySet{
-			Root:    config.Scalar[DiskSettings, string]("local.root", func(settings *DiskSettings) *string { return &settings.Local.Root }),
+			Root: config.Scalar[DiskSettings, string]("local.root", func(settings *DiskSettings) *string { return &settings.Local.Root }),
+			Staging: DiskSettingsLocalStagingConfigKeySet{
+				MaxActive:        config.Scalar[DiskSettings, int]("local.staging.max_active", func(settings *DiskSettings) *int { return &settings.Local.Staging.MaxActive }),
+				MaxBytes:         config.Scalar[DiskSettings, int64]("local.staging.max_bytes", func(settings *DiskSettings) *int64 { return &settings.Local.Staging.MaxBytes }),
+				SmallObjectBytes: config.Scalar[DiskSettings, int64]("local.staging.small_object_bytes", func(settings *DiskSettings) *int64 { return &settings.Local.Staging.SmallObjectBytes }),
+			},
 			MaxScan: config.Scalar[DiskSettings, int]("local.max_scan", func(settings *DiskSettings) *int { return &settings.Local.MaxScan }),
 			Sync:    config.Scalar[DiskSettings, bool]("local.sync", func(settings *DiskSettings) *bool { return &settings.Local.Sync }),
 		},
@@ -168,6 +184,9 @@ func DiskSettingsConfigSchema() (*config.Schema[DiskSettings], error) {
 		keys1.Config.MaxStreams,
 		keys1.Config.StreamIdleTimeout,
 		keys1.Local.Root,
+		keys1.Local.Staging.MaxActive,
+		keys1.Local.Staging.MaxBytes,
+		keys1.Local.Staging.SmallObjectBytes,
 		keys1.Local.MaxScan,
 		keys1.Local.Sync,
 		keys1.Cloud.Bucket,

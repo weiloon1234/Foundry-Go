@@ -24,6 +24,12 @@ const directoryBatch = 128
 // callback owns no descriptor after return. Deleted entries may disappear during
 // scans; listings never claim snapshot isolation against concurrent mutations.
 func (b *Backend) walk(ctx context.Context, visit func(*os.Root, string) error) error {
+	return b.walkEntries(ctx, b.config.MaxScan, func(parent *os.Root, directory, name string) error { return visit(parent, name) })
+}
+
+// A zero ceiling completes recovery regardless of published-object count. Each
+// directory is streamed in fixed batches with cancellation between entries.
+func (b *Backend) walkEntries(ctx context.Context, maximum int, visit func(*os.Root, string, string) error) error {
 	scanned := 0
 	for i := 0; i < 256; i++ {
 		if err := ctx.Err(); err != nil {
@@ -39,38 +45,50 @@ func (b *Backend) walk(ctx context.Context, visit func(*os.Root, string) error) 
 		}
 		err = func() error {
 			defer parent.Close()
-			reader, err := parent.Open(".")
-			if err != nil {
-				return err
-			}
-			defer reader.Close()
-			for {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				entries, readErr := reader.ReadDir(directoryBatch)
-				for _, entry := range entries {
+			return readDirectory(ctx, parent, func(name string) error {
+				if maximum > 0 {
 					scanned++
-					if scanned > b.config.MaxScan {
+					if scanned > maximum {
 						return newFailure(storage.LimitExceeded, storage.ListOperation, storage.NotApplicable, nil)
 					}
-					if err := visit(parent, entry.Name()); err != nil {
-						return err
-					}
 				}
-				if readErr != nil {
-					if errors.Is(readErr, io.EOF) {
-						return nil
-					}
-					return readErr
-				}
-			}
+				return visit(parent, directory, name)
+			})
 		}()
 		if err != nil {
 			return err
 		}
 	}
 	return ctx.Err()
+}
+
+// readDirectory streams a single directory with bounded memory and cancellation.
+func readDirectory(ctx context.Context, parent *os.Root, visit func(string) error) error {
+	reader, err := parent.Open(".")
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		entries, readErr := reader.ReadDir(directoryBatch)
+		for _, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := visit(entry.Name()); err != nil {
+				return err
+			}
+		}
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return nil
+			}
+			return readErr
+		}
+	}
 }
 
 type listCursor struct {

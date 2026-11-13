@@ -173,7 +173,9 @@ func (b *Backend) Capabilities() storage.Capabilities {
 		capabilities.ConditionalDelete = true
 		capabilities.Versions = true
 	case R2:
-		// An exact size bound keeps conditional writes on supported PutObject calls.
+		// Keep both create and replace on PutObject until live certification of
+		// conditional multipart completion passes for both operations. Wire tests
+		// alone do not establish provider support.
 		capabilities.RequiresNFCKeys = true
 		capabilities.ConditionalCreate, capabilities.ConditionalReplace = true, true
 		capabilities.ConditionalWriteMaxBytes = b.config.PartBytes

@@ -299,6 +299,13 @@ func (m *Manager) variantSource(ctx context.Context, id model.ID[store.File], re
 
 // readOriginal reads the pinned original and verifies its length and digest.
 func (m *Manager) readOriginal(ctx context.Context, original store.File) ([]byte, error) {
+	if err := m.image.Validate(); err != nil {
+		return nil, err
+	}
+	maximum := min(MaxBufferedBytes, m.image.Limits().InputBytes)
+	if original.Size < 0 || original.Size > maximum {
+		return nil, storageFailure(storage.LimitExceeded, storage.OpenOperation, storage.NotApplicable, nil)
+	}
 	disk, err := m.disks.Disk(storage.DiskID(original.Disk))
 	if err != nil {
 		return nil, err
@@ -311,7 +318,7 @@ func (m *Manager) readOriginal(ctx context.Context, original store.File) ([]byte
 	if err != nil {
 		return nil, err
 	}
-	data, info, err := disk.ReadBytes(ctx, key, original.Size, storage.ReadOptions{IfMatch: storage.ETag(original.ETag), Version: storage.VersionID(original.ObjectVersion)})
+	data, info, err := disk.ReadBytes(ctx, key, maximum, storage.ReadOptions{IfMatch: storage.ETag(original.ETag), Version: storage.VersionID(original.ObjectVersion)})
 	if err != nil {
 		return nil, err
 	}

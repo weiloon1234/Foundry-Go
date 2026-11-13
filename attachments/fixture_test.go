@@ -64,12 +64,13 @@ func (b *controlledBackend) setDelete(fn func(context.Context, storage.ObjectKey
 
 type attachmentFixture struct {
 	extensiontest.Fixture
-	manager  *Manager
-	disk     *storage.Disk
-	backend  *controlledBackend
-	registry *storage.Registry
-	image    *imaging.Engine
-	locales  i18n.LocaleSet
+	localRoot string
+	manager   *Manager
+	disk      *storage.Disk
+	backend   *controlledBackend
+	registry  *storage.Registry
+	image     *imaging.Engine
+	locales   i18n.LocaleSet
 }
 
 func openAttachments(t *testing.T, extra ...Registration) attachmentFixture {
@@ -92,7 +93,8 @@ func openAttachmentsOn(t *testing.T, wrap func(driver.Connector) driver.Connecto
 func openAttachmentsWith(t *testing.T, migrations []migrate.Definition, wrap func(driver.Connector) driver.Connector, adapter func(storage.Backend) storage.Backend, extra ...Registration) attachmentFixture {
 	t.Helper()
 	f := attachmentFixture{Fixture: extensiontest.OpenWithConnector(t, migrations, wrap)}
-	backend, err := local.Open(t.Context(), local.DefaultConfig(t.TempDir()))
+	f.localRoot = t.TempDir()
+	backend, err := local.Open(t.Context(), local.DefaultConfig(f.localRoot))
 	if err != nil {
 		t.Fatal(err)
 	}

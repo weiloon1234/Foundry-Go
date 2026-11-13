@@ -2,7 +2,6 @@ package local
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -47,31 +46,17 @@ func (b *Backend) Put(ctx context.Context, key storage.ObjectKey, source io.Read
 	})
 }
 
-// publish writes one staging file (header, payload from fill) in the key's
-// shard, syncs it, then checks the write condition and renames it into place
-// under the key's shard lock. An unconditional publication releases the lock
+// publish writes one staging file (header, payload from fill) in the managed
+// staging directory, syncs it, then checks the write condition and renames it
+// into place under the key's shard lock. An unconditional publication releases the lock
 // before the staging descriptor closes and before the directory sync; a
 // conditional one holds it through that sync. Success is reported only after
 // the sync.
 func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentType storage.MediaType, options storage.PutOptions, op storage.Operation, fill func(*os.File) (int64, storage.SHA256, error)) (result storage.ObjectInfo, err error) {
 	directory, name := address(key)
-	shard, _ := hex.DecodeString(name[:2])
-	if err = b.ensureShard(directory, shard[0]); err != nil {
-		return result, failure(storage.Unavailable, op, storage.Unchanged, err)
-	}
-	parent, err := b.root.OpenRoot(directory)
+	file, temporary, random, err := b.createStaging(ctx, options, op)
 	if err != nil {
-		return result, failure(storage.Unavailable, op, storage.Unchanged, err)
-	}
-	defer parent.Close()
-	random := make([]byte, 16)
-	if _, err = rand.Read(random); err != nil {
-		return result, failure(storage.Unavailable, op, storage.Unchanged, err)
-	}
-	temporary := tempPrefix + hex.EncodeToString(random)
-	file, err := parent.OpenFile(temporary, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return result, failure(storage.Unavailable, op, storage.Unchanged, err)
+		return result, err
 	}
 	state := storage.Unchanged
 	closed := false
@@ -86,7 +71,7 @@ func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentTyp
 			closeErr = file.Close()
 		}
 		if !published {
-			removeErr = parent.Remove(temporary)
+			removeErr = b.staging.Remove(temporary)
 			if errors.Is(removeErr, fs.ErrNotExist) {
 				removeErr = nil
 			}
@@ -97,15 +82,19 @@ func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentTyp
 			if removeErr != nil {
 				var detail *storage.Error
 				errors.As(err, &detail)
-				err = safeerror.Retain(err, detail.WithCleanup(storage.NewCleanupID(directory+"/"+temporary)))
+				err = safeerror.Retain(err, detail.WithCleanup(storage.NewCleanupID(stagingDirectory+"/"+temporary)))
 			}
 		}
 	}()
-	// A process crash releases this lock. Cleanup skips every live staging file,
-	// regardless of its age; it never guesses that a slow source has finished.
-	if locked, e := tryLock(file); e != nil || !locked {
-		return result, failure(storage.Unavailable, op, storage.Unchanged, e)
+	shard, _ := hex.DecodeString(name[:2])
+	if err = b.ensureShard(directory, shard[0]); err != nil {
+		return result, failure(storage.Unavailable, op, storage.Unchanged, err)
 	}
+	parent, err := b.root.OpenRoot(directory)
+	if err != nil {
+		return result, failure(storage.Unavailable, op, storage.Unchanged, err)
+	}
+	defer parent.Close()
 	modified, err := temporal.NewDateTime(b.config.Clock.Now())
 	if err != nil {
 		return result, err
@@ -155,7 +144,7 @@ func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentTyp
 	}
 	// Keep the staging descriptor/lock until rename so cleanup cannot remove a
 	// completed but not-yet-published file. Readers see only immutable publications.
-	if err = parent.Rename(temporary, name); err != nil {
+	if err = b.root.Rename(stagingDirectory+"/"+temporary, directory+"/"+name); err != nil {
 		return result, err
 	}
 	published = true
@@ -176,7 +165,7 @@ func (b *Backend) publish(ctx context.Context, key storage.ObjectKey, contentTyp
 		b.beforeSync(key)
 	}
 	if b.config.Sync {
-		if err = syncDirectory(parent); err != nil {
+		if err = safeerror.Join("publication sync failed", syncDirectory(parent), syncDirectory(b.staging)); err != nil {
 			return result, err
 		}
 	}

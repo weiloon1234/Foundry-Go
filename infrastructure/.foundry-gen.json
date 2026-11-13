@@ -4,7 +4,7 @@
     "broker_settings_foundry.gen.go": "63591c8a4004e83e6aace290a693d44fb44ddf8938cd8c2da201795a5fdfeeea",
     "cache_settings_foundry.gen.go": "e246af38510b91b4afaff48b20bbfa981685f382836e680d8f3951543d60dc65",
     "connection_settings_foundry.gen.go": "a7e1f40c46c9621677927d97a9dbac9ed7e61b0a7a779365b9b9e6de78496841",
-    "disk_settings_foundry.gen.go": "a726e81ba8d9a88342620c0dd979155fc8e4051dc161ceb978158fd398c5134c",
+    "disk_settings_foundry.gen.go": "9a083acab64f3b8b2d8f83826e184be821192b3cf8f7822c18a05decfa8ea2f4",
     "http_client_settings_foundry.gen.go": "c1c652102c22382b03c5d40f0c2fff37ebcc4378ce11c4f64c9340d3a4f45c82",
     "job_connection_settings_foundry.gen.go": "aed2e27bacc787cb6f56263d1069299e23f83bd3473adcd20ebbfe1f1aaff668",
     "mailer_settings_foundry.gen.go": "d3d6d3b1613a62c0db697065e0feb48e000f7d5f3473ba087d3ccde6cbdae093",

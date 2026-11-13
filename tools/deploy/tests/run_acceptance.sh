@@ -55,7 +55,7 @@ tests="$framework/tools/deploy/tests"
 if ((upgrade)); then
   [[ -f "$tests/acceptance_upgrade.py" ]] || { echo 'Missing upgrade acceptance driver' >&2; exit 2; }
 fi
-for required in host.Dockerfile acceptance.Dockerfile acceptance_host.py acceptance_nginx.py acceptance_foreign.py acceptance_roles.py acceptance_backup.py acceptance_recover.py acceptance_edge.py acceptance_support.py acceptance_http.py acceptance_diagnostics.py acceptance_phase.py; do
+for required in host.Dockerfile acceptance.Dockerfile acceptance_host.py acceptance_nginx.py acceptance_foreign.py acceptance_roles.py acceptance_backup.py acceptance_recover.py acceptance_edge.py acceptance_support.py acceptance_http.py acceptance_diagnostics.py acceptance_phase.py acceptance_uploads.py; do
   [[ -f "$tests/$required" ]] || { echo "Missing integrated fixture: $required" >&2; exit 2; }
 done
 if [[ -n "${ACCEPTANCE_LOG_DIR:-}" ]]; then
@@ -290,6 +290,7 @@ phase capacity /verification/deploy/tests/acceptance_capacity.py
 phase backup /verification/deploy/tests/acceptance_backup.py
 phase nginx /verification/deploy/tests/acceptance_nginx.py --rounds 1
 phase edge /verification/deploy/tests/acceptance_edge.py
+phase uploads /verification/deploy/tests/acceptance_uploads.py
 
 # Set before invocation: a failed verify must not be repeated after it has closed
 # its Redis observation window.
