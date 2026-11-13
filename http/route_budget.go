@@ -126,6 +126,14 @@ func (b routeBudget) context(ctx context.Context, w stdhttp.ResponseWriter, kern
 // body applies a declared route body ceiling after matching, before any
 // handler reads the body. It reports false after writing a 413 response.
 func (b routeBudget) body(w stdhttp.ResponseWriter, r *stdhttp.Request, kernel *requestBudget) bool {
+	if _, admitted := r.Context().Value(uploadReservationKey{}).(*requestUpload); admitted {
+		// Capture owns an admitted upload until reads and cleanup finish. Apply
+		// its effective total deadline to the socket too: context cancellation
+		// alone cannot interrupt a body read or net/http's subsequent drain.
+		if deadline, ok := r.Context().Deadline(); ok {
+			_ = stdhttp.NewResponseController(w).SetReadDeadline(deadline)
+		}
+	}
 	limit := b.bodyBytes
 	installed := int64(0)
 	if kernel != nil {

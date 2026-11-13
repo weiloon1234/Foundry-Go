@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fixed: admitted multipart uploads enforce the effective route deadline during
+  socket reads and reject unfinished bodies on timeout, allowing capture cleanup
+  and capacity recovery without waiting for a trickling client to finish. Added
+  a socket regression for the lead's Go gate. Container acceptance now tolerates
+  non-JSON restart responses and exhausts quota volumes with progressively smaller
+  writes before checking the remaining block capacity.
+
 - Fixed: local staging reservations now live in filesystem entries and enforce
   one managed-root budget across processes. A dedicated staging directory and
   short cross-process lock serialize admission independently of published-object

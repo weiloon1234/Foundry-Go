@@ -350,6 +350,11 @@ its general handler-slot pool. Exhaustion returns 503 with `Retry-After: 1` and
 uses unread-body rejection. There is no upload admission queue. Direct requests
 that bypass nginx encounter the same reservation.
 
+An admitted upload's effective route deadline also bounds native body reads,
+including a chunked body that keeps making progress. The deadline does not reset
+with each chunk. An expired multipart capture returns 408 and rejects the unread
+body before publication. Cleanup completes before its admission slot is released.
+
 Use the framework's Router and `ApplyMiddleware` chain for this guarantee.
 An external native wrapper that reads a body before entering that chain cannot
 be protected by downstream admission. HTTP capture prefixes overlapping an

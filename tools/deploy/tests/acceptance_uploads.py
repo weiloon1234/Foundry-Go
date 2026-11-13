@@ -72,7 +72,11 @@ def request(entry, path, method="GET", direct=False):
         response = conn.getresponse()
         payload = response.read(65537)
         assert len(payload) <= 65536, "Unbounded fixture response"
-        return response.status, json.loads(payload) if payload else None
+        try:
+            body = json.loads(payload) if payload else None
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            body = None  # Nginx can return an HTML error while the unit restarts.
+        return response.status, body
     finally:
         conn.close()
 
@@ -120,6 +124,20 @@ def upload(entry, identifier, *, size=FILE_BYTES, chunked=False, hold="", kind="
         return {"status": 0, "elapsed": time.monotonic() - started}
     finally:
         conn.close()
+
+
+def fill_volume(stream):
+    size = len(BLOCK)
+    while True:
+        try:
+            written = stream.write(BLOCK[:size])
+            assert written is not None and written > 0, "Volume fill made no progress"
+        except OSError as error:
+            if error.errno not in (errno.ENOSPC, errno.EDQUOT):
+                raise
+            if size == 1:
+                return
+            size = max(1, size // 2)
 
 
 def occupancy(root):
@@ -459,13 +477,9 @@ class Scenarios:
         # disposable ext4 mount owned by this phase, never a shared filesystem.
         try:
             with fill.open("xb", buffering=0) as stream:
-                while True:
-                    try:
-                        stream.write(BLOCK)
-                    except OSError as error:
-                        assert error.errno in (errno.ENOSPC, errno.EDQUOT)
-                        break
-            assert os.statvfs(root).f_bavail == 0, "Volume was not exhausted"
+                fill_volume(stream)
+            stats = os.statvfs(root)
+            assert stats.f_bavail * stats.f_frsize < len(BLOCK), "Volume can still hold a write block"
             small_failure = None
             try:
                 self.small()
