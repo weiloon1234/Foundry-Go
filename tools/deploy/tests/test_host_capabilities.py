@@ -241,6 +241,30 @@ class CapabilityTopologyTests(unittest.TestCase):
                 t.parse_profile(value, t.parse_topology(declaration()))
             self.assertEqual(caught.exception.code, "unsupported_capability")
 
+    def test_public_tcp_modes_require_service_authentication(self):
+        for mode in ("edge", "none"):
+            value = declaration()
+            listener = value["roles"][1]["listeners"]["ingress"]
+            listener["tls"] = mode
+            parsed = t.parse_topology(value)
+            self.assertEqual(parsed.projection()["roles"][1]["listeners"]["ingress"], listener)
+            for authentication in (False, None, 1, "true"):
+                listener["authentication"] = authentication
+                with self.subTest(mode=mode, authentication=authentication), self.assertRaises(c.DeployError):
+                    t.parse_topology(value)
+            del listener["authentication"]
+            with self.assertRaises(c.DeployError):
+                t.parse_topology(value)
+        for mode in (None, "", "native", True):
+            value = declaration()
+            value["roles"][1]["listeners"]["ingress"]["tls"] = mode
+            with self.subTest(mode=mode), self.assertRaises(c.DeployError):
+                t.parse_topology(value)
+        value = declaration()
+        del value["roles"][1]["listeners"]["ingress"]["tls"]
+        with self.assertRaises(c.DeployError):
+            t.parse_topology(value)
+
     def test_profile_placement_and_binding_ownership(self):
         for mutate in (lambda v: v["placement"].update(http=0),
                        lambda v: v["placement"].update(relay=0),

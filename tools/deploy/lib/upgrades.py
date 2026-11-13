@@ -50,7 +50,10 @@ BASE_REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.
 GENERATION_11_FILES = frozenset({"lib/uploads.py", "server/templates/nginx-upload.conf"})
 GENERATION_12_FILES = frozenset({"lib/feature_lifecycle.py", "lib/feature_network.py", "lib/feature_runtime.py",
     "lib/operations.py", "server/templates/admission.service", "lib/artifacts.py", "lib/admission.py", "lib/services.py",
-                               "server/runtime_v1.py", "server/templates/custom.service"})
+                               "server/runtime_v1.py", "server/templates/custom.service",
+                               "lib/firewall.py", "lib/listeners.py", "server/templates/firewall-runtime.rules",
+                               "server/templates/foundry-edge-boot.conf", "server/templates/nginx-http-admission.conf",
+                               "server/templates/nginx-stream.conf", "server/templates/nginx-tcp-tls.conf"})
 REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES
 
 

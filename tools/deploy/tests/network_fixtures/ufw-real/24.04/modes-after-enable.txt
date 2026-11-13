@@ -1,0 +1,11 @@
+640 /etc/ufw/after.init
+640 /etc/ufw/after.rules
+640 /etc/ufw/after6.rules
+755 /etc/ufw/applications.d
+640 /etc/ufw/before.init
+640 /etc/ufw/before.rules
+640 /etc/ufw/before6.rules
+644 /etc/ufw/sysctl.conf
+644 /etc/ufw/ufw.conf
+640 /etc/ufw/user.rules
+640 /etc/ufw/user6.rules

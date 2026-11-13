@@ -1,0 +1,4 @@
+*filter
+-F @CHAIN@
+@RULES@
+COMMIT

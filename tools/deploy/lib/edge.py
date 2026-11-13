@@ -3,8 +3,15 @@ from datetime import date
 import hashlib
 import ipaddress
 from pathlib import Path
+from dataclasses import dataclass
+import json
+import fnmatch
+import posixpath
+from urllib.parse import urlsplit
+import re
+import time
 
-from contracts import read_json, require
+from contracts import canonical_digest, check_path, contract_uuid, dns_hostname, read_json, require
 
 
 def cloudflare_ranges(directory: Path) -> tuple[date, list[str]]:
@@ -24,11 +31,16 @@ def cloudflare_ranges(directory: Path) -> tuple[date, list[str]]:
     return retrieved, ranges
 
 
-def edge_findings(profile: dict, directory: Path) -> list[dict]:
+def edge_findings(profile: dict, directory: Path, *, topology=None) -> list[dict]:
     """Describe mandatory real-IP rendering and the age of its trust data."""
+    network_findings = []
+    if profile.get("schema") == 3:
+        from topology import parse_profile
+        require(topology is not None, "listener_topology_required", "Plan public TCP with its validated topology.")
+        network_findings = listener_findings(parse_profile(profile, topology), topology=topology)
     retrieved, ranges = cloudflare_ranges(directory)
     checksum = hashlib.sha256("\n".join(ranges).encode()).hexdigest()
-    findings = [{"kind": "change", "code": "nginx_edge_configuration", "detail":
+    findings = [*network_findings, {"kind": "change", "code": "nginx_edge_configuration", "detail":
                  f"Cloudflare real IP; origin lockdown {profile.get('edge_origin_lockdown', False)}; ranges sha256 {checksum}"}]
     if (date.today() - retrieved).days > 90:
         findings.append({"kind": "warning", "code": "cloudflare_ranges_stale", "detail":
@@ -66,3 +78,482 @@ def edge_template(entry: dict, directory: Path) -> dict[str, str]:
                                   + "\n}")
         result["@EDGE_SERVER@"] += "\n    if ($" + variable + " = 0) { return 444; }"
     return result
+
+
+TEMPLATES = Path(__file__).resolve().parents[1] / "server/templates"
+RUNTIME = "/run/foundry/edge"
+STREAM_INCLUDE = "/etc/nginx/modules-enabled/90-foundry-stream.conf"
+
+
+@dataclass(frozen=True)
+class EdgeObservation:
+    instance_id: str
+    boot_id: str
+    roles: tuple[str, ...]
+    closed: bool
+    sha256: str
+    workers: tuple[tuple[int, int], ...]
+
+
+def _runtime(host, instance_id):
+    contract_uuid(instance_id)
+    path = host.check_control_directory(host.paths.p(RUNTIME + "/" + instance_id))
+    path.mkdir(parents=True, mode=0o755, exist_ok=True)
+    return path
+
+
+def _worker_identities(host):
+    from listeners import process_members
+    identities = []
+    for pid in sorted(process_members(host, "nginx.service")):
+        path = host.paths.p(f"/proc/{pid}/stat")
+        try:
+            if b"nginx: worker process" not in host.paths.p(f"/proc/{pid}/cmdline").read_bytes():
+                continue
+            # comm may contain spaces/parentheses; fields after its last ')' start at state.
+            fields = path.read_text().rsplit(")", 1)[1].split()
+            identities.append((pid, int(fields[19])))
+        except FileNotFoundError:
+            continue
+    require(identities, "nginx_observation", "Nginx process identities are unavailable.")
+    return tuple(identities)
+
+
+def _directives(text):
+    """Tokenize nginx's complete statements, preserving quoted delimiters."""
+    tokens, word, started, quote, index = [], [], False, None, 0
+    need_space = False
+    while index < len(text):
+        char = text[index]
+        if need_space:
+            require(char in " \t\r\n;{)", "nginx_reference_unverified", "Unexpected character after nginx string.")
+            need_space = False
+        if char == "\\":
+            require(index + 1 < len(text), "nginx_reference_unverified", "Incomplete nginx escape.")
+            escaped = text[index + 1]
+            # ngx_conf_read_token decodes only these six escapes. Regex escapes
+            # and escaped delimiters retain the backslash in either quote mode.
+            word.append({"n": "\n", "r": "\r", "t": "\t", "\\": "\\", '"': '"', "'": "'"}.get(escaped, "\\" + escaped))
+            started, index = True, index + 2
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+                tokens.append(("".join(word), False))
+                word, started, need_space = [], False, True
+            else:
+                word.append(char)
+        elif char in ("'", '"') and not started:
+            quote, started = char, True
+        elif char == "$" and text[index:index + 2] == "${":
+            end = text.find("}", index + 2)
+            require(end != -1, "nginx_reference_unverified", "Incomplete nginx variable.")
+            word.append(text[index:end + 1])
+            started, index = True, end + 1
+            continue
+        elif char == "#" and not started:
+            end = text.find("\n", index)
+            index = len(text) if end == -1 else end
+            continue
+        elif char in " \t\r\n{;" or char == "}" and not started:
+            if started:
+                tokens.append(("".join(word), False))
+                word, started = [], False
+            if char in "{};":
+                tokens.append((char, True))
+        else:
+            word.append(char)
+            started = True
+        index += 1
+    require(not quote, "nginx_reference_unverified", "Unterminated nginx string.")
+    if started:
+        tokens.append(("".join(word), False))
+    require(len(tokens) <= 262144, "nginx_reference_unverified", "Nginx token inventory exceeds its bound.")
+    position = 0
+    def block(depth=0):
+        nonlocal position
+        require(depth <= 64, "nginx_reference_unverified", "Nginx block nesting exceeds its bound.")
+        nodes, words = [], []
+        while position < len(tokens):
+            value, delimiter = tokens[position]
+            position += 1
+            if not delimiter:
+                words.append(value)
+                continue
+            if value == "}":
+                require(depth and not words, "nginx_reference_unverified", "Unexpected nginx block end.")
+                return nodes
+            require(words, "nginx_reference_unverified", "Empty nginx directive.")
+            nodes.append((tuple(words), block(depth + 1) if value == "{" else None))
+            words = []
+        require(not depth and not words, "nginx_reference_unverified", "Incomplete nginx directive or block.")
+        return nodes
+    return block()
+
+
+def _expanded_configuration(text):
+    """nginx -T emits each file once, not necessarily in its include context."""
+    headers = list(re.finditer(r"^# configuration file (/[^\n]+):\s*$", text, re.M))
+    require(headers and not text[:headers[0].start()].strip(), "nginx_reference_unverified", "Nginx dump lacks a complete file inventory.")
+    files = {}
+    for index, header in enumerate(headers):
+        name = posixpath.normpath(header[1])
+        require(name not in files, "nginx_reference_unverified", "Ambiguous nginx file inventory.")
+        end = headers[index + 1].start() if index + 1 < len(headers) else len(text)
+        files[name] = _directives(text[header.end():end])
+    root = posixpath.normpath(headers[0][1])
+    prefix, visited, count = posixpath.dirname(root), set(), 0
+    def expand(nodes, stack):
+        nonlocal count
+        require(len(stack) <= 64, "nginx_reference_unverified", "Nginx include nesting exceeds its bound.")
+        result = []
+        for words, children in nodes:
+            require(not (words[0].startswith(("js_", "lua_", "perl")) or "_by_lua" in words[0]),
+                    "nginx_reference_unverified", "Programmable nginx handlers prevent exhaustive upstream inventory.")
+            count += 1
+            require(count <= 65536, "nginx_reference_unverified", "Expanded nginx inventory exceeds its bound.")
+            if words[0] == "include":
+                require(len(words) == 2 and children is None and "$" not in words[1],
+                        "nginx_reference_unverified", "Unresolved nginx include.")
+                pattern = posixpath.normpath(posixpath.join(prefix, words[1]))
+                parts = pattern.split("/")
+                matches = sorted(name for name in files if len(name.split("/")) == len(parts)
+                                 and all(fnmatch.fnmatchcase(v, p) for v, p in zip(name.split("/"), parts)))
+                require(matches or any(c in pattern for c in "*?["), "nginx_reference_unverified", "Included nginx file is missing from the dump.")
+                for name in matches:
+                    require(name not in stack, "nginx_reference_unverified", "Recursive nginx include.")
+                    visited.add(name)
+                    result.extend(expand(files[name], (*stack, name)))
+            else:
+                result.append((words, expand(children, stack) if children is not None else None))
+        return result
+    visited.add(root)
+    result = expand(files[root], (root,))
+    require(visited == set(files), "nginx_reference_unverified", "Some dumped nginx files have unresolved include contexts.")
+    return result
+
+
+def upstream_references(host):
+    """Exhaustively reserve literal upstreams across all dumped include contexts."""
+    from listeners import SocketIdentity
+    text = host.run(["nginx", "-T"], timeout=10).stdout
+    require(len(text) <= 4 * 1024 * 1024, "nginx_observation", "Nginx configuration exceeds its bound.")
+    nodes = _expanded_configuration(text)
+    groups, passes, targets = {}, [], []
+    def visit(nodes, context=()):
+        for words, children in nodes:
+            if words[0] == "upstream":
+                require(len(words) == 2 and children is not None and context in (("http",), ("stream",)),
+                        "nginx_reference_unverified", "Unresolved nginx upstream context.")
+                key = (context, words[1])
+                require(key not in groups, "nginx_reference_unverified", "Duplicate nginx upstream group.")
+                groups[key] = []
+                for arguments, nested in children:
+                    if arguments[0] == "server":
+                        require(nested is None and len(arguments) >= 2 and not any(a == "resolve" or a.startswith("service=") for a in arguments[2:]),
+                                "nginx_reference_unverified", "Dynamic upstream server cannot prove isolation.")
+                        groups[key].append(arguments[1])
+                        targets.append((arguments[1], 80))
+                require(groups[key], "nginx_reference_unverified", "Upstream group has no inspectable servers.")
+            elif words[0].endswith("_pass"):
+                require(len(words) == 2 and children is None, "nginx_reference_unverified", "Unresolved nginx pass directive.")
+                passes.append((context[:1], words[1]))
+            elif words[0] in ("auth_http", "zone_sync_server"):
+                require(len(words) >= 2 and children is None, "nginx_reference_unverified", "Unresolved nginx peer.")
+                targets.append((words[1], 80))
+            elif words[0] == "resolver":
+                require(children is None and len(words) >= 2, "nginx_reference_unverified", "Unresolved nginx resolver.")
+                for argument in words[1:]:
+                    if not argument.startswith(("valid=", "ipv4=", "ipv6=", "status_zone=")):
+                        targets.append((argument, 53))
+            elif children is not None:
+                visit(children, (*context, words[0]))
+    visit(nodes)
+    references = set()
+    def endpoint(target, default_port, context=None):
+        require("$" not in target, "nginx_reference_unverified", "Dynamic nginx upstream cannot prove isolation.")
+        raw = re.sub(r"^[a-z]+://", "", target)
+        if raw.startswith("unix:"):
+            require(len(raw) > 5, "nginx_reference_unverified", "Empty Unix upstream.")
+            return
+        try:
+            parsed = urlsplit(target if "://" in target else "//" + target)
+            address, port = parsed.hostname, parsed.port
+        except ValueError:
+            require(False, "nginx_reference_unverified", "Invalid nginx upstream address.")
+        require(address and not parsed.username and not parsed.password, "nginx_reference_unverified", "Invalid nginx upstream authority.")
+        if context is not None and (context, address) in groups and port is None:
+            return  # Every server in the named group is already reserved below.
+        if address == "localhost":
+            addresses = ("127.0.0.1", "::1")
+        else:
+            try:
+                addresses = (str(ipaddress.ip_address(address)),)
+            except ValueError:
+                require(False, "nginx_reference_unverified", "DNS upstream cannot prove private-address isolation.")
+        for address in addresses:
+            references.add(SocketIdentity("tcp", ipaddress.ip_address(address).version, address, port if port is not None else default_port))
+    for target, default in targets:
+        endpoint(target, default)
+    for context, target in passes:
+        endpoint(target, 443 if target.startswith(("https://", "grpcs://")) else 80, context)
+    return tuple(sorted(references, key=lambda s: (s.family, s.address, s.port)))
+
+
+def retain_global_references(host):
+    """Host-wide quarantine, including unaffected/foreign upstreams, until reboot.
+
+    The first adoption requires old workers to drain naturally after a validated
+    reload. Never kill foreign sessions to establish that baseline. A busy host
+    may refuse until they drain. Subsequent changes capture before route writes.
+    """
+    from dataclasses import asdict
+    from firewall import boot_id
+    from listeners import SocketIdentity
+    path = check_path(host.paths.p("/var/lib/foundry/network/nginx-references.json"), "file")
+    boot = boot_id(host)
+    references = upstream_references(host)
+    value = read_json(path) if path.exists() else None
+    if value is None or value["boot_id"] != boot:
+        previous, _ = _reload(host)
+        deadline = time.monotonic() + 10
+        while set(previous) & set(_worker_identities(host)) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        require(not set(previous) & set(_worker_identities(host)), "nginx_baseline_unverified",
+                "Pre-adoption nginx sessions have not drained; fresh backend allocation remains blocked.")
+        previous_references = ()
+    else:
+        previous_references = tuple(SocketIdentity(**v) for v in value["sockets"])
+    combined = tuple(sorted(set((*previous_references, *references)), key=lambda s: (s.family, s.address, s.port)))
+    require(len(combined) <= 65536, "nginx_reference_capacity", "Global upstream reservation capacity exhausted.")
+    host.owned_write(path, json.dumps({"boot_id": boot, "sockets": [asdict(s) for s in combined]}, sort_keys=True) + "\n", mode=0o600)
+    return combined
+
+
+def _reload(host):
+    previous = _worker_identities(host)
+    host.run(["nginx", "-t", "-q"], timeout=10)
+    host.run(["systemctl", "reload", "nginx"], timeout=10)
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        current = _worker_identities(host)
+        if set(current) - set(previous):
+            return previous, current
+        time.sleep(0.05)
+    require(False, "nginx_reload_unverified", "No new nginx worker generation was observed; keep admission pending.")
+
+
+def _top_level_include(text, name):
+    """Only accept a literal include at top level; never rewrite foreign nginx text."""
+    tokens = re.findall(r'"[^"\n]*"|\'[^\'\n]*\'|[^\s{};#]+|[{};]|#[^\n]*', text)
+    depth = 0
+    for index, token in enumerate(tokens):
+        if token == "{":
+            depth += 1
+        elif token == "}":
+            depth -= 1
+        elif depth == 0 and tokens[index:index + 3] == ["include", name, ";"]:
+            return True
+    return False
+
+
+def install_stream_include(host, *, reviewed_nginx_sha256):
+    """Use Ubuntu's existing top-level modules include, after the stream module.
+
+    Caller plans libnginx-mod-stream through the package owner. Other layouts
+    require an operator-reviewed include; no foreign config is rewritten here.
+    """
+    main = check_path(host.paths.p("/etc/nginx/nginx.conf"), "file").read_text()
+    require(hashlib.sha256(main.encode()).hexdigest() == reviewed_nginx_sha256
+            and _top_level_include(main, "/etc/nginx/modules-enabled/*.conf"),
+            "nginx_stream_integration", "Review the existing top-level modules include before stream integration.")
+    path = check_path(host.paths.p(STREAM_INCLUDE), "file")
+    content = (TEMPLATES / "nginx-stream.conf").read_text()
+    require(not path.exists() or path.read_text() == content,
+            "nginx_stream_ownership", "The stream include has foreign ownership.")
+    existed = path.exists()
+    host.owned_write(path, content)
+    try:
+        host.run(["nginx", "-t", "-q"], timeout=10)
+    except Exception:
+        if not existed:
+            path.unlink()
+        raise
+
+
+def gate_http(instance_id, rendered_http):
+    """Gate a caller-rendered owned site, preserving HTTP/upload/proxy directives.
+
+    Lane A supplies its existing renderer's output using the selected resolution's
+    HTTP endpoint. Only feature instances call this function, including rollback
+    to a legacy declaration after feature adoption. Legacy sites remain byte-identical.
+    """
+    contract_uuid(instance_id)
+    variable = "fdy_" + instance_id.replace("-", "") + "_open"
+    require("# Foundry runtime admission" not in rendered_http and "server {\n" in rendered_http,
+            "nginx_http_projection", "Supply the complete ungated owned HTTP projection.")
+    prefix = (TEMPLATES / "nginx-http-admission.conf").read_text()
+    prefix = prefix.replace("@INSTANCE@", instance_id).replace("@VARIABLE@", variable)
+    return prefix + rendered_http.replace("server {\n", "server {\n    if ($" + variable + " = 0) { return 503; }\n")
+
+
+def listener_findings(profile, *, topology):
+    """Plan/report messages share the same validated listener policy."""
+    from listeners import public_policies
+    return [{"kind": "warning" if policy.tls == "none" else "change",
+             "code": "listener_unencrypted" if policy.tls == "none" else "listener_edge_tls",
+             "listener": name,
+             "detail": name + (": unencrypted public TCP through nginx; " if policy.tls == "none"
+                                else ": public TCP with TLS terminated at nginx; ")
+                       + "the service must authenticate every client."}
+            for name, policy in public_policies(profile, topology).items()]
+
+
+def stream_projection(profile, resolution, lineage, *, topology):
+    """One runtime file per role; no certificate material enters application custody."""
+    from certificates import CONFIG_DIR
+    from listeners import public_policies
+    policies = public_policies(profile, topology)
+    if any(policy.tls == "edge" for policy in policies.values()):
+        dns_hostname(lineage)
+    endpoints = {(e.role, e.listener): e for e in resolution.endpoints}
+    result = {}
+    for name, binding in profile.listeners:
+        tls = policies[name].tls == "edge"
+        role, listener = name.split(".")
+        require((role, listener) in endpoints, "nginx_backend_missing", "Resolve every public listener's private backend first.")
+        endpoint = endpoints[role, listener]
+        backend = ("[" + endpoint.address + "]" if ":" in endpoint.address else endpoint.address) + ":" + str(endpoint.port)
+        lines = []
+        for address in binding.public_addresses:
+            for port in binding.ports:
+                bind = ("[" + address + "]" if ":" in address else address) + ":" + str(port)
+                lines.append("    listen " + bind + (" ssl" if tls else "") + (" ipv6only=on" if ":" in address else "") + ";")
+        content = (TEMPLATES / "nginx-tcp-tls.conf").read_text()
+        tls_content = ("    ssl_certificate " + CONFIG_DIR + "/live/" + lineage + "/fullchain.pem;\n"
+                       "    ssl_certificate_key " + CONFIG_DIR + "/live/" + lineage + "/privkey.pem;\n"
+                       "    ssl_protocols TLSv1.2 TLSv1.3;\n"
+                       "    ssl_session_cache off;\n"
+                       "    ssl_session_tickets off;\n") if tls else ""
+        replacements = {"@INSTANCE@": profile.instance_id, "@LISTENER@": name, "@LISTEN@": "\n".join(lines),
+                        "@TLS@": tls_content, "@BACKEND@": backend,
+                        "@SOURCES@": "\n".join("    allow " + cidr + ";" for cidr in binding.source_cidrs)}
+        for token, value in replacements.items():
+            content = content.replace(token, value)
+        result["stream-" + name + ".conf"] = content
+    return result
+
+
+def _reference_path(host, instance_id):
+    return check_path(host.paths.p("/var/lib/foundry/network/" + contract_uuid(instance_id) + "/references.json"), "file")
+
+
+def retain_references(host, instance_id, resolution):
+    """Journal before exposing nginx; interruption can only over-retain addresses.
+
+    References deliberately survive reload and A-to-B-to-A. The admission owner
+    includes these endpoints in its reservation inventory. Boot is the only
+    automatic retirement boundary; no guess about a graceful worker exit is made.
+    """
+    from dataclasses import asdict
+    from firewall import boot_id
+    path = _reference_path(host, instance_id)
+    boot = boot_id(host)
+    value = read_json(path) if path.exists() else {"boot_id": boot, "endpoints": []}
+    require(value["boot_id"] == boot, "nginx_boot_unprepared", "Prepare closed boot projections before retaining references.")
+    endpoints = value["endpoints"]
+    for endpoint in resolution.endpoints:
+        document = asdict(endpoint)
+        if document not in endpoints:
+            endpoints.append(document)
+    require(len(endpoints) <= 65536, "nginx_reference_capacity", "Retained reference capacity exhausted; reconcile before opening.")
+    host.owned_write(path, json.dumps({"boot_id": boot, "endpoints": endpoints}, sort_keys=True) + "\n", mode=0o600)
+
+
+def retained_references(host, instance_id):
+    from contracts import AllocatedEndpoint
+    from firewall import boot_id
+    path = _reference_path(host, instance_id)
+    require(path.exists(), "nginx_references_missing", "The complete nginx reference inventory is required.")
+    value = read_json(path)
+    require(value["boot_id"] == boot_id(host), "nginx_boot_unprepared", "Reference inventory belongs to another boot.")
+    return tuple(AllocatedEndpoint.parse(e) for e in value["endpoints"])
+
+
+def prepare_boot(host, instance_id):
+    """Called by lane A's boot coordinator before nginx and before any start permit.
+
+    Missing admission stays closed. This function never reads an archive to open a
+    route and never touches legacy sites. Same-boot retries retain old references.
+    """
+    from firewall import boot_id
+    directory = _runtime(host, instance_id)
+    for path in directory.glob("*.conf"):
+        check_path(path, "file").unlink()
+    path = _reference_path(host, instance_id)
+    boot = boot_id(host)
+    if not path.exists() or read_json(path)["boot_id"] != boot:
+        host.owned_write(path, json.dumps({"boot_id": boot, "endpoints": []}) + "\n", mode=0o600)
+
+
+def observe_projection(host, instance_id, roles, *, expected=None):
+    """No worker-exit assertion: the returned identities explicitly include old workers."""
+    from firewall import boot_id
+    directory = host.paths.p(RUNTIME + "/" + contract_uuid(instance_id))
+    roles = tuple(sorted(set(roles)))
+    contents = {}
+    if directory.exists():
+        for path in directory.glob("*.conf"):
+            if path.name.startswith("http-open") and "http" in roles or any(path.name.startswith("stream-" + role + ".") for role in roles):
+                contents[path.name] = check_path(path, "file").read_text()
+    require(contents == (expected or {}), "nginx_projection_drift", "Selected runtime routes differ from their expected projection.")
+    effective = host.run(["nginx", "-T"], timeout=10).stdout
+    require(len(effective) <= 4 * 1024 * 1024 and (TEMPLATES / "nginx-stream.conf").read_text().strip() in effective,
+            "nginx_stream_integration", "Effective nginx configuration lacks the owned top-level stream include.")
+    if "http" in roles:
+        require("# Foundry runtime admission " + instance_id in effective,
+                "nginx_http_projection", "The feature HTTP site must have its persistent closed gate.")
+    for content in contents.values():
+        require(content.strip() in effective, "nginx_projection_drift", "Nginx did not read the selected runtime projection.")
+    workers = _worker_identities(host)
+    return EdgeObservation(instance_id, boot_id(host), roles, not contents,
+                           canonical_digest({"instance_id": instance_id, "roles": roles,
+                                             "configuration": effective, "workers": workers, "selected": contents}), workers)
+
+
+def withdraw(host, instance_id, roles):
+    retain_global_references(host)
+    directory = _runtime(host, instance_id)
+    for path in directory.glob("*.conf"):
+        if path.name.startswith("http-open") and "http" in roles or any(path.name.startswith("stream-" + role + ".") for role in roles):
+            check_path(path, "file").unlink()
+    _reload(host)
+    return observe_projection(host, instance_id, roles)
+
+
+def open_runtime(host, profile, resolution, lineage, roles, *, topology, authorize):
+    """Lane A journals intent and revalidates health/authority through authorize.
+
+    Firewall remains closed during this operation. Lane A opens it last and keeps
+    the operation pending on any unknown result. Per-role operations retain other
+    routes and old workers; closure proof covers only the supplied scope.
+    """
+    require(authorize() is True, "admission_required", "Fresh public-opening authority is required.")
+    retain_global_references(host)
+    roles = tuple(roles)
+    require(set(roles) <= set(resolution.roles), "nginx_projection_scope", "Opening roles must belong to the resolution.")
+    projection = {name: value for name, value in stream_projection(profile, resolution, lineage, topology=topology).items()
+                  if any(name.startswith("stream-" + role + ".") for role in roles)}
+    if "http" in roles:
+        projection["http-open.conf"] = '"" 1;\n'
+    retain_references(host, profile.instance_id, resolution)
+    directory = _runtime(host, profile.instance_id)
+    try:
+        for name, content in projection.items():
+            host.owned_write(directory / name, content)
+        _reload(host)
+        require(authorize() is True, "admission_required", "Public-opening authority changed.")
+        return observe_projection(host, profile.instance_id, roles, expected=projection)
+    except Exception:
+        withdraw(host, profile.instance_id, roles)
+        raise

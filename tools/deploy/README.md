@@ -85,6 +85,32 @@ connection failures still fail. `FOLLOW` accepts only `yes` when supplied, and
 other actions reject both variables. These options are included in generation 8
 for v0.22.0; install the updated bundle for snapshot `LINES` support.
 
+## Public TCP listeners
+
+Executable roles may declare a public TCP listener with either edge TLS or plain
+transport. Both require the service to authenticate every client:
+
+```json
+{"transport": "tcp", "bind": "public", "tls": "none", "authentication": true}
+```
+
+Use `"tls": "edge"` for TLS termination at nginx. With `"tls": "none"`, traffic
+is **unencrypted**, including application credentials sent over the connection.
+`authentication: true` is an acknowledgement of service authentication, not an
+nginx authentication mechanism. Plans and reports state these responsibilities.
+
+Both modes use nginx stream forwarding to the service's allocated loopback
+endpoint. Profile listener bindings select public ports, IPv4/IPv6 addresses,
+source CIDRs and external DNS instructions. The service never binds directly to
+the public address. Firewall proof, runtime-only opening, boot closure and stale
+nginx session handling are shared. Plain listeners need no certificate issuance,
+renewal or TLS probe; HTTP and edge-TLS certificates keep their existing lifecycle.
+Previously retained TLS SANs remain available for rollback.
+
+See the [network integration handoff](tests/NETWORK_HANDOFF.md) for lane A's
+topology-aware planning, rendering, certificate and report interfaces. This module
+support does not itself wire the lifecycle/provisioning calls owned by lane A.
+
 Run the local tests and documentation checks from the worktree root:
 
 ```sh
