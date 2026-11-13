@@ -232,9 +232,49 @@ appends UFW's user hooks. See `network_fixtures/ufw/README.md` for source proven
 For nft, every table, chain, hook, policy and per-chain rule count must agree with
 the iptables compatibility views. Decoder diagnostics, unrelated native tables,
 extra hooks/objects, incompatible expressions and unstable observations refuse.
+Empty ACCEPT auxiliary base chains synthesized by iptables-save may be absent
+from nft, as in the Docker DNS capture. Every nonempty chain remains accounted for.
 Legacy accepts no concurrent native nft policy. Both backends refuse foreign
-broader/interface/routed allows, NAT/raw/mangle rules and custom UFW init hooks.
+broader/interface/routed filter allows and executable custom UFW init hooks.
 They never enable/reset UFW, switch alternatives, or remove foreign rules.
+
+The observation inventories `filter`, `nat`, `raw` and `mangle` separately. NAT
+reachable exclusively from OUTPUT/POSTROUTING is retained without claiming it is
+inbound policy. PREROUTING and nat INPUT jumps/gotos are walked transitively:
+DNAT/REDIRECT that could match a claimed TCP destination port refuses, including
+missing, negated, overlapping or unparseable port guards. Explicit non-claimed
+ports are allowed. Raw/mangle rules must be empty, harmless, or proven disjoint;
+NOTRACK, DROP, MARK and other delivery changes on claimed ports refuse. Unknown
+inbound matches, jumps, hooks and tables remain unsupported. This does not loosen
+the existing filter-table restrictions for Docker or any other owner.
+
+The same proof applies to both address families and both iptables backends. Live
+and persistent auxiliary rules enter the digest without counters; all live tables
+are re-read after nft accounting to detect drift. Persistent before/after/user
+tables are merged before walking, so later files cannot hide rules behind an
+earlier empty chain. `parse_rules` is the filter projection for existing callers;
+`parse_tables` and `observe` retain and validate the complete table inventory.
+
+`test_network_nat.py` replays the four unedited operator files under
+`network_fixtures/ufw-real/docker-acceptance-host/`. The nft text supplies hook and
+chain evidence; JSON replay uses the existing structural adapter because no JSON
+capture was supplied. Separate, explicitly authored Docker bridge published-port
+fixtures under `network_fixtures/docker-published/` cover allowed TCP 8080 and
+refused TCP 8554, with IPv6 variants. No live firewall commands are run by these
+tests and no alternatives switch is required.
+
+NAT acceptance command (from `tools/deploy/tests`):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest test_network test_network_nat test_network_real test_network_review test_network_preview test_feature_network_adapters test_plain_tcp test_edge test_certificates test_report test_uploads
+```
+
+Result: 170 tests passed, including 12 new NAT tests. The unedited Docker DNS
+observation test reproduces the original parser refusal against `1288713f`.
+`make deploy-tools-check` ran 736 tests: 726 passed, 9 skipped, with only the known
+`lib/firewall.py`/`lib/listeners.py` inventory failure. All 79 capture checksums
+and `git diff --check` passed. No Go tests, commits or host/container actions ran;
+live preview and lane A's end-to-end reruns remain operator verification.
 
 Nginx reference capture tokenizes complete directives and expands dumped includes
 in their actual contexts. Multiline/quoted targets, repeated included upstream

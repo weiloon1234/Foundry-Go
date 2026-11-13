@@ -25,6 +25,17 @@ RELOAD_FILES = {
     "/usr/lib/ufw/ufw-init-functions": "5865fbffc0c644d97e5fc6906c648ce6e4f23710ea0ff57c573ed680999d2cc4",
 }
 
+# iptables-nft base-chain layout, including synthesized empty ACCEPT chains that
+# iptables-save lists even when nft has not materialized them.
+TABLE_HOOKS = {
+    "filter": {name: ("filter", 0) for name in ("INPUT", "FORWARD", "OUTPUT")},
+    "nat": {name: ("nat", -100 if name in ("PREROUTING", "OUTPUT") else 100)
+            for name in ("PREROUTING", "INPUT", "OUTPUT", "POSTROUTING")},
+    "raw": {name: ("filter", -300) for name in ("PREROUTING", "OUTPUT")},
+    "mangle": {name: ("route" if name == "OUTPUT" else "filter", -150)
+               for name in ("PREROUTING", "INPUT", "FORWARD", "OUTPUT", "POSTROUTING")},
+}
+
 
 def _namespace(family):
     require(family in (4, 6), "firewall_unsupported", "Unknown firewall address family.")
@@ -98,35 +109,49 @@ def require_nft_layout(document, live, backends):
         require(kind in ("table", "chain", "rule") and isinstance(obj, dict),
                 "firewall_unsupported", "Native nftables objects are outside the supported UFW layout.")
         family = {"ip": 4, "ip6": 6}.get(obj.get("family"))
-        require(family in live and backends[family] == "nf_tables" and obj.get("table", obj.get("name")) == "filter",
+        table = obj.get("name") if kind == "table" else obj.get("table")
+        require(family in live and backends[family] == "nf_tables" and table in live[family],
                 "firewall_unsupported", "Unrelated native nftables tables or conflicting backends are present.")
+        policy = live[family][table]
         if kind == "table":
-            require(family not in tables and not obj.get("flags"), "firewall_unsupported", "Unexpected nftables table flags.")
-            tables.add(family)
+            require((family, table) not in tables and not obj.get("flags"), "firewall_unsupported", "Unexpected nftables table flags.")
+            tables.add((family, table))
         elif kind == "chain":
             name = obj.get("name")
-            require(name in live[family]["chains"] and (family, name) not in chains,
+            require(name in policy["chains"] and (family, table, name) not in chains,
                     "firewall_unsupported", "Nftables chain is absent from the iptables view.")
-            if name in ("INPUT", "OUTPUT", "FORWARD"):
-                require(obj.get("type") == "filter" and obj.get("hook") == name.lower()
-                        and obj.get("prio") == 0 and obj.get("policy", "").upper() == live[family]["policies"][name],
+            if policy["policies"][name] != "-":
+                chain_type, priority = TABLE_HOOKS[table][name]
+                require(obj.get("type") == chain_type and obj.get("hook") == name.lower()
+                        and obj.get("prio") == priority and obj.get("policy", "").upper() == policy["policies"][name]
+                        and not {"dev", "flags"} & obj.keys(),
                         "firewall_unsupported", "Nftables base-chain policy or ordering differs from iptables.")
             else:
-                require(name.startswith((_namespace(family) + "-", "fdy-"))
+                require((table != "filter" or name.startswith((_namespace(family) + "-", "fdy-")))
                         and not {"type", "hook", "prio", "policy", "dev", "flags"} & obj.keys(),
                         "firewall_unsupported", "A native or separately hooked chain conflicts with UFW.")
-            chains[family, name] = obj
+            chains[family, table, name] = obj
         else:
             name, expressions = obj.get("chain"), obj.get("expr")
-            require(name in live[family]["chains"] and isinstance(expressions, list) and expressions,
+            require(name in policy["chains"] and isinstance(expressions, list) and expressions,
                     "firewall_unsupported", "Nftables rule is absent from the iptables view.")
-            require(all(isinstance(e, dict) and len(e) == 1 and next(iter(e)) in
-                        {"match", "counter", "jump", "goto", "accept", "drop", "reject", "return", "log", "limit", "xt"}
+            allowed = {"match", "counter", "jump", "goto", "accept", "drop", "reject", "return", "log", "limit", "xt"}
+            if table == "nat":
+                allowed |= {"dnat", "snat", "masquerade", "redirect"}
+            elif table in ("raw", "mangle"):
+                allowed |= {"notrack", "mangle"}
+            require(all(isinstance(e, dict) and len(e) == 1 and next(iter(e)) in allowed
                         for e in expressions), "firewall_unsupported", "Unsupported native nftables rule expression.")
-            counts[family, name] += 1
+            counts[family, table, name] += 1
     expected_families = {f for f, backend in backends.items() if backend == "nf_tables"}
-    require(tables == expected_families and set(chains) == {(f, n) for f in expected_families for n in live[f]["chains"]}
-            and all(counts[f, n] == len(rules) for f in expected_families for n, rules in live[f]["chains"].items()),
+    expected_tables = {(f, table) for f in expected_families for table in live[f]}
+    expected_chains = {(f, table, name) for f, table in expected_tables for name in live[f][table]["chains"]}
+    optional_chains = {(f, table, name) for f, table, name in expected_chains if table != "filter"
+                       and name in TABLE_HOOKS[table] and not live[f][table]["chains"][name]
+                       and live[f][table]["policies"][name] == "ACCEPT"}
+    require(tables == expected_tables and expected_chains - optional_chains <= set(chains) <= expected_chains
+            and all(counts[f, table, name] == len(rules) for f, table in expected_tables
+                    for name, rules in live[f][table]["chains"].items()),
             "firewall_unsupported", "Nftables and iptables do not expose the same complete rule inventory.")
 
 
@@ -160,31 +185,35 @@ def boot_id(host):
     return contract_uuid(host.paths.p("/proc/sys/kernel/random/boot_id").read_text().strip())
 
 
-def parse_rules(text):
-    """Accept iptables-save/restore syntax, retaining chain order and exact rules."""
+def parse_tables(text):
+    """Inventory every supported table, retaining rule order without counters."""
     require(len(text) <= 4 * 1024 * 1024, "firewall_unsupported", "Kernel rules exceed their bound.")
-    chains, policies, table = {}, {}, None
+    tables, table = {}, None
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
         if line.startswith("*"):
-            require(table is None, "firewall_unsupported", "Nested firewall tables.")
+            require(table is None and line[1:] in TABLE_HOOKS and line[1:] not in tables,
+                    "firewall_unsupported", "Unknown, duplicate or nested firewall table.")
             table = line[1:]
+            chains, policies = {}, {}
+            tables[table] = {"chains": chains, "policies": policies}
         elif line == "COMMIT":
+            require(table is not None, "firewall_unsupported", "Unscoped firewall commit.")
             table = None
         elif line.startswith(":"):
             name, policy, counter = line[1:].split()
             require(table is not None, "firewall_unsupported", "Unscoped firewall chain.")
-            if table != "filter":
-                require(policy in ("ACCEPT", "-"), "firewall_unsupported", "Unsupported packet path.")
-                continue
-            require(name not in chains, "firewall_unsupported", "Duplicate firewall chain.")
+            require(name not in chains and policy in ("ACCEPT", "DROP", "-")
+                    and (policy == "-" or name in TABLE_HOOKS[table])
+                    and re.fullmatch(r"\[[0-9]+:[0-9]+\]", counter),
+                    "firewall_unsupported", "Invalid firewall chain declaration.")
             chains[name], policies[name] = [], policy
         else:
             fields = tuple(shlex.split(line))
-            require(table == "filter" and len(fields) >= 4 and fields[0] in ("-A", "-I") and fields[1] in chains,
-                    "firewall_unsupported", "Only inspectable filter rules are supported; NAT/raw/mangle rules refuse.")
+            require(table is not None and len(fields) >= 4 and fields[0] in ("-A", "-I") and fields[1] in chains,
+                    "firewall_unsupported", "Only inspectable appended/inserted rules are supported.")
             rules, body = chains[fields[1]], fields[2:]
             if fields[0] == "-A":
                 rules.append(body)
@@ -197,8 +226,99 @@ def parse_rules(text):
                 require(1 <= position <= len(rules) + 1 and len(body) >= 2 and body[0].startswith("-"),
                         "firewall_unsupported", "Unsupported firewall insertion.")
                 rules.insert(position - 1, body)
-    require(table is None and chains, "firewall_unsupported", "Incomplete firewall rules.")
-    return chains, policies
+    require(table is None and tables, "firewall_unsupported", "Incomplete firewall rules.")
+    return tables
+
+
+def parse_rules(text):
+    """Filter projection for UFW graph readers; observe validates all tables."""
+    tables = parse_tables(text)
+    require("filter" in tables, "firewall_unsupported", "Missing filter table.")
+    return tables["filter"]["chains"], tables["filter"]["policies"]
+
+
+def _auxiliary_rule(rule, ports):
+    """Parse whole arguments: quoted comments cannot masquerade as port guards."""
+    values = {"-p", "--protocol", "-m", "--match", "-s", "--source", "-d", "--destination",
+              "-i", "--in-interface", "-o", "--out-interface", "-j", "--jump", "-g", "--goto",
+              "--dport", "--destination-port", "--dports", "--sport", "--source-port", "--sports",
+              "--dst-type", "--src-type", "--ctstate", "--state", "--comment",
+              "--to-destination", "--to-source", "--to-ports", "--set-mark", "--set-xmark"}
+    switches = {"--random", "--random-fully", "--persistent", "--notrack"}
+    modules = {"tcp", "udp", "multiport", "addrtype", "conntrack", "state", "comment"}
+    protocol, dports, target, index = None, None, None, 0
+    while index < len(rule):
+        negated = rule[index] == "!"
+        index += int(negated)
+        require(index < len(rule), "firewall_unsupported", "Incomplete negated match.")
+        option = rule[index]
+        index += 1
+        if option in switches:
+            require(not negated, "firewall_unsupported", "Invalid negated target option.")
+            continue
+        require(option in values and index < len(rule), "firewall_unsupported", "Unparseable auxiliary firewall match.")
+        value = rule[index]
+        index += 1
+        if option in ("-j", "--jump", "-g", "--goto"):
+            require(target is None and not negated, "firewall_unsupported", "Ambiguous firewall target.")
+            target = value
+        elif option in ("-p", "--protocol"):
+            require(protocol is None and value in ("tcp", "6", "udp", "17", "icmp", "1", "ipv6-icmp", "icmpv6", "58", "all", "0"),
+                    "firewall_unsupported", "Unknown or ambiguous protocol match.")
+            protocol = (value, negated)
+        elif option in ("-m", "--match"):
+            require(value in modules and not negated, "firewall_unsupported", "Unknown auxiliary match module.")
+        elif option in ("--dport", "--destination-port", "--dports"):
+            require(dports is None, "firewall_unsupported", "Ambiguous destination-port match.")
+            ranges = []
+            for part in value.split(","):
+                require(re.fullmatch(r"[0-9]+(?::[0-9]+)?", part), "firewall_unsupported", "Unparseable destination port.")
+                lower, _, upper = part.partition(":")
+                lower, upper = int(lower), int(upper or lower)
+                require(0 <= lower <= upper <= 65535, "firewall_unsupported", "Invalid destination-port range.")
+                ranges.append((lower, upper))
+            dports = (ranges, negated)
+    require(target is not None, "firewall_unsupported", "Missing auxiliary firewall target.")
+    disjoint = bool(protocol and not protocol[1] and protocol[0] not in ("tcp", "6", "all", "0"))
+    if dports and not dports[1]:
+        disjoint |= not any(low <= port <= high for low, high in dports[0] for port in ports)
+    return target, disjoint
+
+
+def require_auxiliary_policy(tables, ports):
+    """Prove inbound NAT isolation and no raw/mangle delivery changes in scope."""
+    for table, policy in tables.items():
+        if table == "filter":
+            continue
+        chains, policies = policy["chains"], policy["policies"]
+        require(all(value == "-" or name in TABLE_HOOKS[table] and value == "ACCEPT"
+                    for name, value in policies.items()), "firewall_unsupported", "Auxiliary base policies must accept.")
+        terminals = {"ACCEPT", "RETURN", "LOG", "NFLOG", "DNAT", "REDIRECT", "SNAT", "MASQUERADE",
+                     "DROP", "REJECT", "MARK", "CONNMARK", "NOTRACK", "CT"}
+        require(not terminals & chains.keys(), "firewall_unsupported", "Auxiliary chain names must not shadow targets.")
+        visited = set()
+        def walk(name, ancestors=()):
+            require(name in chains and name not in ancestors, "firewall_unsupported", "Unknown or recursive auxiliary jump.")
+            if name in visited:
+                return
+            visited.add(name)
+            for rule in chains[name]:
+                target, disjoint = _auxiliary_rule(rule, ports)
+                require(target in chains or target in terminals, "firewall_unsupported", "Unknown auxiliary target.")
+                if disjoint:
+                    continue
+                if target in chains:
+                    walk(target, (*ancestors, name))
+                else:
+                    safe = {"ACCEPT", "RETURN", "LOG", "NFLOG"}
+                    if table == "nat":
+                        safe |= {"SNAT", "MASQUERADE"}
+                    require(target in safe, "firewall_delivery_conflict", "An auxiliary rule can alter delivery of a claimed TCP port.")
+        # OUTPUT/POSTROUTING-only NAT cannot alter inbound destination delivery.
+        # Still retain every rule in the digest and cross-check the full nft view.
+        for name in (("PREROUTING", "INPUT") if table == "nat" else TABLE_HOOKS[table]):
+            if name in chains:
+                walk(name)
 
 
 def _argument(rule, *names):
@@ -360,20 +480,32 @@ def observe(host, instance_id, claims, *, bindings=(), opened=False, integrated=
         response = host.run([binary + "-save"], timeout=5)
         require(not response.stderr.strip() and not re.search(r"warning|incompatible|unsupported", response.stdout, re.I),
                 "firewall_unsupported", "The iptables compatibility decoder could not expose a complete ruleset.")
-        chains, policies = parse_rules(response.stdout)
+        tables = parse_tables(response.stdout)
+        require("filter" in tables, "firewall_unsupported", "Missing filter table.")
+        require_auxiliary_policy(tables, ports)
+        chains, policies = tables["filter"]["chains"], tables["filter"]["policies"]
         require(policies.get("INPUT") == policies.get("FORWARD") == "DROP",
                 "firewall_default_deny", "Live input and routed policies must both default to DROP.")
         _, expected = exposure_rules(instance_id, (*retained_claims, *(claims if opened else ())), bindings, family)
         require_denied(chains, ("INPUT", "FORWARD"), ports, owned=chain if integrated else None, allowed=expected)
         persisted = reload_graph(files, family, settings)
+        suffix = "6" if family == 6 else ""
+        auxiliary = {}
+        for stem in ("before", "after", "user"):
+            for table, policy in parse_tables(files[f"/etc/ufw/{stem}{suffix}.rules"]).items():
+                if table != "filter":
+                    combined = auxiliary.setdefault(table, {"chains": {}, "policies": {}})
+                    combined["chains"].update(policy["chains"])
+                    combined["policies"].update(policy["policies"])
+        require_auxiliary_policy(auxiliary, ports)
         require_denied(persisted, ("INPUT", "FORWARD"), ports, owned=chain if integrated else None)
-        live[family] = {"chains": chains, "policies": policies}
+        live[family] = tables
     nft = json.loads(host.run(["nft", "-j", "list", "ruleset"], timeout=5).stdout)
     require_nft_layout(nft, live, backends)
     for family, binary in ((4, "iptables"), (6, "ip6tables")):
         again = host.run([binary + "-save"], timeout=5)
         require(not again.stderr.strip() and not re.search(r"warning|incompatible|unsupported", again.stdout, re.I)
-                and parse_rules(again.stdout) == (live[family]["chains"], live[family]["policies"]),
+                and parse_tables(again.stdout) == live[family],
                 "firewall_drift", "Kernel rules changed during the cross-backend observation.")
     routes = {}
     for family in (4, 6):
@@ -381,10 +513,11 @@ def observe(host, instance_id, claims, *, bindings=(), opened=False, integrated=
     addresses = json.loads(host.run(["ip", "-j", "address", "show"], timeout=5).stdout)
     local = {a["local"] for interface in addresses for a in interface.get("addr_info", [])}
     require(all(c.socket.address in local for c in claims), "firewall_address_missing", "Bind only explicit addresses present on this host.")
+    persistent = {name: parse_tables(content) if name.endswith(".rules") else content for name, content in files.items()}
     return FirewallObservation(instance_id, boot_id(host), not opened,
                                canonical_digest({"instance_id": instance_id,
                                    "scope": sorted((asdict(c.socket) for c in claims), key=lambda v: (v["family"], v["address"], v["port"])),
-                                   "live": live, "backends": backends, "persistent": files,
+                                   "live": live, "backends": backends, "persistent": persistent,
                                    **_network_policy(routes, addresses)}),
                                ports, tuple(c.socket for c in claims))
 

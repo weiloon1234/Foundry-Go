@@ -1,7 +1,8 @@
 # Captured Ubuntu UFW layouts
 
-These 75 files are byte-for-byte copies of the operator's `ufw-real/` captures
-supplied for the second lane C review on 2026-11-14. Capture timestamps appear in
+These 79 files are byte-for-byte copies of the operator's `ufw-real/` captures:
+75 from the second lane C review and four from the Docker feature-preview NAT
+follow-up. Capture timestamps appear in
 `iptables-save.txt` and `ip6tables-save.txt`. No rule, comment or output was edited.
 `SHA256SUMS` records the copied bytes. UFW's source files retain their original
 notices; see the package [license](../ufw/COPYING).
@@ -11,6 +12,7 @@ notices; see the package [license](../ufw/COPYING).
 | `24.04/` | nf_tables, iptables 1.8.10 | Fresh and enabled `/etc/ufw`, `/etc/default/ufw`, modes, live rules, status and enable output |
 | `26.04/` | nf_tables, iptables 1.8.11 | Fresh and enabled `/etc/ufw`, `/etc/default/ufw`, modes, live rules, status and enable output |
 | `24.04-legacy/` | legacy, iptables 1.8.10 | Enabled `/etc/ufw`, live rules, version and enable output |
+| `docker-acceptance-host/` | nf_tables, iptables 1.8.10 | Operator's feature-preview capture: both saved families, nft text and version; includes Docker embedded-DNS NAT |
 
 Enabled captures follow `ufw default deny incoming`, allows for TCP 22, 80 and
 443, logging low, then `ufw --force enable`. Both installed init hooks have mode
@@ -32,3 +34,9 @@ that command boundary; it does not claim the JSON bytes came from a live kernel.
 The opt-in `UFWObservationAcceptance` in `acceptance_network.py` exercises the
 actual JSON command and both live compatibility views without mocks. See the exact
 [container command](../../NETWORK_HANDOFF.md#live-ubuntu-ufw-observation).
+
+`test_network_nat.py` adds the Docker capture to the Ubuntu 24.04 persistent
+fixture. Its local-output/postrouting DNS DNAT/SNAT is accepted without modifying
+the capture or the host. Empty NAT PREROUTING/INPUT chains in the compatibility
+dump are absent from the captured nft text. Authored published-port examples are
+kept separately in [docker-published](../docker-published/README.md).
