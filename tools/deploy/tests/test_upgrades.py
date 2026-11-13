@@ -1,5 +1,6 @@
 """Tool upgrade fault coverage uses an isolated filesystem, never host services."""
 import copy
+import hashlib
 import json
 import os
 import subprocess
@@ -14,6 +15,51 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 from contracts import DeployError, HOST_PATHS
 from host import Host, Paths
 import upgrades
+
+
+# Frozen runtime inventory from generation 9 (72f8fbac^) and generation 10
+# (72f8fbac). Keep independent of the candidate's required-file declarations.
+PRE_11_INVENTORY = (
+    'protocol.json',
+    'lib/backup.py',
+    'lib/capacity.py',
+    'lib/certificates.py',
+    'lib/cloudflare-ranges.json',
+    'lib/contracts.py',
+    'lib/edge.py',
+    'lib/host.py',
+    'lib/journal.py',
+    'lib/maintenance.py',
+    'lib/packages.py',
+    'lib/postgres.py',
+    'lib/provision.py',
+    'lib/recover.py',
+    'lib/redis_acl.py',
+    'lib/release.py',
+    'lib/report.py',
+    'lib/runtime_config.py',
+    'lib/topology.py',
+    'lib/upgrades.py',
+    'server/launcher.py',
+    'server/manage.py',
+    'server/report.py',
+    'server/templates/app.service',
+    'server/templates/foundry-backup.service',
+    'server/templates/foundry-backup.timer',
+    'server/templates/foundry-certbot-renew.service',
+    'server/templates/foundry-certbot-renew.timer',
+    'server/templates/foundry-http@.service',
+    'server/templates/foundry-postgresql.service',
+    'server/templates/foundry-scheduler@.service',
+    'server/templates/foundry-worker@.service',
+    'server/templates/nginx-http.conf',
+    'server/templates/nginx-https.conf',
+    'server/templates/nginx-proxy.conf',
+    'server/templates/nginx-upgrade.conf',
+    'server/templates/redis-server@foundry.service',
+    'server/templates/scheduler.service',
+    'server/templates/worker.service',
+)
 
 
 class UpgradeHost(Host):
@@ -280,6 +326,76 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual("succeeded", result["outcome"])
         self.assertEqual(11, self.host.read_registry()["tools"]["generation"])
         self.assertEqual({"minimum": 1, "maximum": 11}, upgrades.hello(self.host)["client_generation"])
+
+    def pre11_installed(self, generation):
+        # Build an already installed legacy bundle without calling the candidate
+        # inventory validator or installer. Payloads are synthetic; paths and the
+        # manifest/digest format are the historical installation contract.
+        metadata = {**self.metadata, "generation": generation}
+        payloads = {name: b"# legacy bundle fixture\n" for name in PRE_11_INVENTORY}
+        payloads["protocol.json"] = json.dumps(metadata).encode()
+        manifest = {"schema": 1, "files": [
+            {"path": name, "size": len(data), "mode": 0o644,
+             "sha256": hashlib.sha256(data).hexdigest()}
+            for name, data in sorted(payloads.items())]}
+        digest = hashlib.sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        host = UpgradeHost(self.root / ("legacy-" + uuid.uuid4().hex), self.host.read_registry())
+        installed = host.paths.tools / "tools" / digest
+        for name, data in payloads.items():
+            path = installed / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+            path.chmod(0o644)
+        (installed / "manifest.json").write_text(json.dumps(manifest))
+        host.registry["tools"] = upgrades._active_record(installed, digest, None)
+        (host.paths.tools / "current").symlink_to("tools/" + digest)
+        return host, installed
+
+    def test_pre11_installed_inventory_plans_and_applies_generation_eleven(self):
+        candidate = Path(__file__).resolve().parents[1]
+        for generation in (9, 10):
+            with self.subTest(generation=generation):
+                host, installed = self.pre11_installed(generation)
+                for name in ("lib/uploads.py", "server/templates/nginx-upload.conf"):
+                    self.assertFalse((installed / name).exists())
+                plan = upgrades.plan_upgrade(host, candidate)
+                self.assertEqual(11, plan["upgrade"]["generation"])
+                self.assertIn("lib/uploads.py", plan["upgrade"]["changed_paths"])
+                self.assertIn("server/templates/nginx-upload.conf", plan["upgrade"]["changed_paths"])
+                result = upgrades.apply_upgrade(host, candidate, plan["plan_token"], str(uuid.uuid4()))
+                self.assertEqual("succeeded", result["outcome"])
+                self.assertEqual(11, host.read_registry()["tools"]["generation"])
+                upgrades._installed(host, host.read_registry()["tools"])
+
+    def test_pre11_installed_integrity_checks_remain_required(self):
+        candidate = Path(__file__).resolve().parents[1]
+        for generation in (9, 10):
+            for drift in ("content", "manifest", "missing"):
+                with self.subTest(generation=generation, drift=drift):
+                    host, installed = self.pre11_installed(generation)
+                    if drift == "content":
+                        (installed / "lib/host.py").write_text("# changed bytes\n")
+                    elif drift == "manifest":
+                        (installed / "manifest.json").write_text('{"schema":1,"files":[]}')
+                    else:
+                        (installed / "lib/host.py").unlink()
+                    with self.assertRaises(DeployError) as caught:
+                        upgrades.plan_upgrade(host, candidate)
+                    self.assertEqual("tools_incomplete" if drift == "missing" else "tools_version_conflict", caught.exception.code)
+
+    def test_generation_eleven_still_requires_upload_files(self):
+        (self.source / "protocol.json").write_text(json.dumps({**self.metadata, "generation": 11}))
+        for name in ("lib/uploads.py", "server/templates/nginx-upload.conf"):
+            with self.subTest(name=name):
+                path = self.source / name
+                data = path.read_bytes()
+                path.unlink()
+                try:
+                    with self.assertRaises(DeployError) as caught:
+                        upgrades.tool_bundle(self.source)
+                    self.assertEqual("tools_incomplete", caught.exception.code)
+                finally:
+                    path.write_bytes(data)
 
     def test_generation_eight_refuses_planning_and_installation_before_writes(self):
         self.install()
