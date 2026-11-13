@@ -7,12 +7,17 @@ import (
 	"testing"
 )
 
-// Keep reports whether a test has failed, is unwinding, or explicitly retains data.
+// Keep reports whether a test has failed, is unwinding a panic or FailNow, or
+// explicitly retains data. A skipped test that did not fail releases its data.
 // Call it during cleanup, after application and client shutdown.
 func Keep(t testing.TB, variable string) bool {
 	t.Helper()
 	if t.Failed() || os.Getenv(variable) == "1" {
 		return true
+	}
+	// SkipNow unwinds through runtime.Goexit; a skip is not a failure.
+	if t.Skipped() {
+		return false
 	}
 	// testing runs cleanups while unwinding a panic, before marking the test
 	// failed. Inspect function names only; never recover or format its payload.

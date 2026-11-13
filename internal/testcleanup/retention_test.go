@@ -13,6 +13,18 @@ func TestKeepRequiresExplicitOptIn(t *testing.T) {
 	}
 }
 
+func TestKeepReleasesSkippedTests(t *testing.T) {
+	t.Setenv("FOUNDRY_TEST_RETENTION_PROBE", "0")
+	kept := true
+	t.Run("skipped", func(t *testing.T) {
+		t.Cleanup(func() { kept = Keep(t, "FOUNDRY_TEST_RETENTION_PROBE") })
+		t.Skip("retention probe")
+	})
+	if kept {
+		t.Fatal("a skipped test retained its data")
+	}
+}
+
 func TestKeepDuringPanicUnwind(t *testing.T) {
 	t.Setenv("FOUNDRY_TEST_RETENTION_PROBE", "0")
 	kept := false
