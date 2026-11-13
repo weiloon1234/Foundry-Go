@@ -766,7 +766,9 @@ def _finish_activation(host, journal):
         template = name.split("@", 1)[0] + "@." + name.rsplit(".", 1)[1] if "@" in name else name
         require(name in journal["activation_units"] or template in journal["activation_units"],
                 "package_activation", "Unowned activation appeared during package installation.")
-        require(record.get("ActiveState") == "inactive" and record.get("MainPID", "0") == "0",
+        # A template unit file (name@.service) is never itself running; its instances are checked by name.
+        require("template_state" in record
+                or (record.get("ActiveState") == "inactive" and record.get("MainPID", "0") == "0"),
                 "package_autostart", "New package activation started unexpectedly; installation remains unresolved.")
         host.run(["systemctl", "disable", name])
     # Keep the owned persistent masks. Disabling alone cannot fence socket or
