@@ -10,6 +10,71 @@ import uploads
 
 
 class UploadAcceptanceTests(unittest.TestCase):
+    def run_clients(self, *, release=6, elapsed=26, status=408, admitted=True):
+        """Simulate time and usage, including nginx draining after app completion."""
+        with tempfile.TemporaryDirectory() as temporary:
+            host = Mock()
+            host.paths.data.return_value = Path(temporary)
+            scenario = acceptance.Scenarios(host, {'name': 'fixture'}, {})
+            scenario.small, scenario.clean, scenario.success = Mock(), Mock(), Mock()
+            clock, state = [0.0], {}
+            baseline = 2
+            def usage():
+                active = baseline
+                if admitted and state.get('kind') == 'short' and (release is None or clock[0] - state['started'] < release):
+                    active += 1
+                return {'active': active}
+            scenario.usage = usage
+            def submit(function, entry, identifier, **kwargs):
+                state.update(kind=kwargs.get('kind'), started=clock[0])
+                duration = elapsed if state['kind'] == 'short' else 0.4
+                response = status if state['kind'] == 'short' else (200 if kwargs.get('delay') else 0)
+                future = Mock()
+                future.done.side_effect = lambda: clock[0] - state['started'] >= duration
+                future.result.return_value = {'status': response, 'elapsed': duration}
+                return future
+            def sleep(seconds):
+                clock[0] += seconds
+            with patch.object(acceptance.concurrent.futures, 'ThreadPoolExecutor') as executor, \
+                    patch.object(acceptance, 'Monitor'), \
+                    patch.object(acceptance.time, 'monotonic', side_effect=lambda: clock[0]), \
+                    patch.object(acceptance.time, 'sleep', side_effect=sleep), \
+                    patch('builtins.print') as printed:
+                executor.return_value.__enter__.return_value.submit.side_effect = submit
+                scenario.clients()
+            return printed.call_args_list
+
+    def test_trickle_measures_server_release_instead_of_client_drain(self):
+        calls = self.run_clients()
+        evidence = next(call.args[1] for call in calls if call.args[0] == 'UPLOAD_TRICKLE')
+        self.assertGreaterEqual(evidence['release_seconds'], 6)
+        self.assertLess(evidence['release_seconds'], 6.3)
+        self.assertEqual(26, evidence['client_seconds'])
+
+    def test_trickle_rejects_early_late_or_missing_server_release(self):
+        for release in (4, 16, None):
+            with self.subTest(release=release), self.assertRaisesRegex(AssertionError, 'server-side'):
+                self.run_clients(release=release)
+        with self.assertRaisesRegex(AssertionError, 'server-side'):
+            self.run_clients(admitted=False)
+
+    def test_trickle_requires_timeout_or_connection_close(self):
+        for status in (499, 500, 503, 504):
+            with self.subTest(status=status), self.assertRaisesRegex(AssertionError, '408 or connection close'):
+                self.run_clients(status=status)
+        # A client can observe close just before final application cleanup.
+        self.run_clients(release=6.2, elapsed=6, status=0)
+
+    def test_upload_recognizes_tls_close_while_sending(self):
+        for error in (acceptance.ssl.SSLEOFError, acceptance.ssl.SSLZeroReturnError):
+            with self.subTest(error=error):
+                connection = Mock()
+                connection.send.side_effect = error(1, 'closed')
+                with patch.object(acceptance, 'connection', return_value=connection):
+                    result = acceptance.upload({}, 'owned', size=1024, chunked=True)
+                self.assertEqual(0, result['status'])
+                connection.close.assert_called_once()
+
     def test_request_preserves_status_for_non_json_restart_response(self):
         for body, expected in ((b'<html>502 Bad Gateway</html>', None),
                                (b'\xff', None), (b'', None), (b'{"active": 0}', {'active': 0})):

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed: trickle acceptance measures server-side upload-slot release, separately
+  from nginx's post-response body draining. Upload locations now explicitly bound
+  lingering by the declared total budget, capped at five seconds, with an idle wait
+  no longer than that bound or the client-body idle budget. Ordinary routes retain
+  their existing configuration.
+
 - Fixed: HTTP upload timeout evidence is retained at the accepted connection,
   before chunked trailer parsing can replace the native read error. Terminal 408
   responses survive Compression and ETags for stalled trailer termination;

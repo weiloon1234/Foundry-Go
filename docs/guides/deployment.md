@@ -1446,6 +1446,15 @@ has its own bound. Keep cleanup attempts on their separate contexts. Do not send
 success headers or fake progress bytes before commit to keep a proxy alive.
 Coordinate any outer CDN or load balancer with the same body and silence limits.
 
+After an upstream response, nginx can keep reading and discarding an unfinished
+client body. Upload locations set `lingering_time` to
+`min(5, request_total_seconds)` seconds and `lingering_timeout` to the smaller of
+that value and `client_body_idle_seconds`. This bounds post-response draining and
+the associated proxy-slot retention; ordinary locations keep their existing
+behavior. Trickle acceptance measures the application's upload slot returning to
+its baseline within the route deadline window, with a 408 or connection close.
+Client completion time includes nginx draining and is recorded separately.
+
 Milestone 5 acceptance must exercise the rendered proxy, including a successful
 publication silent for more than 120 seconds, progressing, stalled, and trickling
 clients, fixed-length and chunked bodies, disconnects, and direct application

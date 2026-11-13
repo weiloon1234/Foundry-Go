@@ -120,7 +120,8 @@ def upload(entry, identifier, *, size=FILE_BYTES, chunked=False, hold="", kind="
         assert len(body) <= 65536
         return {"status": response.status, "body": json.loads(body) if body and response.getheader("Content-Type", "").startswith("application/json") else None,
                 "elapsed": time.monotonic() - started}
-    except (BrokenPipeError, ConnectionResetError, http.client.RemoteDisconnected):
+    except (BrokenPipeError, ConnectionResetError, http.client.RemoteDisconnected,
+            ssl.SSLEOFError, ssl.SSLZeroReturnError):
         return {"status": 0, "elapsed": time.monotonic() - started}
     finally:
         conn.close()
@@ -369,9 +370,22 @@ class Scenarios:
                 ("trickle", {"size": 8 * MIB, "delay": 0.2, "kind": "short", "chunked": True}, False),
                 ("disconnect", {"disconnect": True}, False)):
             identifier = self.identifier()
+            baseline = self.usage()["active"] if name == "trickle" else None
+            observed_active, released = False, None
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor, Monitor(self.paths):
+                started = time.monotonic()
                 future = executor.submit(upload, self.entry, identifier, **kwargs)
-                while not future.done():
+                while True:
+                    if name == "trickle":
+                        active = self.usage()["active"]
+                        if active > baseline:
+                            observed_active = True
+                        elif active == baseline and observed_active and released is None:
+                            released = time.monotonic() - started
+                    # Cleanup can finish just after the client sees a close.
+                    # Conversely nginx may keep draining after app admission ends.
+                    if future.done() and (name != "trickle" or released is not None or time.monotonic() - started >= 15):
+                        break
                     self.small()
                     time.sleep(0.2)
                 result = future.result()
@@ -382,7 +396,10 @@ class Scenarios:
                 assert not list(self.receipts.glob(identifier + ".put-*")), name + " entered publication"
                 assert not (self.receipts / (identifier + ".committed")).exists()
                 if name == "trickle":
-                    assert 5 <= result["elapsed"] < 15, "Trickle did not hit the declared total deadline"
+                    print("UPLOAD_TRICKLE", {"release_seconds": released, "client_seconds": result["elapsed"],
+                                             "status": result["status"]}, flush=True)
+                    assert result["status"] in (0, 408), "Trickle did not return 408 or connection close"
+                    assert released is not None and 5 <= released < 15, "Trickle server-side slot did not release within the declared total deadline window"
             self.clean()
             print("PASS upload-client=" + name, flush=True)
 
