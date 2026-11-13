@@ -1,8 +1,30 @@
 # B26 resource and provider acceptance
 
-Status: acceptance sources added; container, resource-matrix and live-provider
-results are not certified by this document. The core and ingress lane's earlier
-passes do not verify these new sources. No production R2 capability is widened.
+Status: B26 accepted for v0.30.0 on 2026-11-14. The resource matrix,
+Ubuntu 24.04 arm64 fresh container acceptance, and the race packages listed below
+passed. The live R2 matrix was not run because credentials were unavailable.
+Production R2 conditional-write restrictions remain unchanged.
+
+## Recorded results (2026-11-14)
+
+These results record the completed acceptance runs reported for this release.
+They are distinct from the reproducible commands below and from documentation
+checks performed while preparing the release notes.
+
+| Acceptance | Result |
+| --- | --- |
+| Resource matrix | Passed at 128 MiB and 512 MiB with fixed concurrency 1 and 2, including the near-64-MiB detection cells and the declared allocation and spool bounds |
+| Ubuntu 24.04, linux/arm64, fresh container | Passed all phases, including all 15 upload scenarios and recovery |
+| Race tests | Passed for `attachments`, `storage/local`, `http`, `internal/httpdeadline`, `application` and `infrastructure` |
+| Live R2 matrix | Not run: no credentials. Conditional create and replace above the existing cap remain uncertified |
+
+The upload scenarios cover silent 150-second publication, known-length and chunked
+input, progressing, stalled, trickling and disconnected clients, four saturation
+scenarios, and four full-volume scenarios. The fixture's normal and upload
+configurations now declare the same migrations. The upload phase checks matching
+history without applying migrations and verifies unchanged history after cleanup.
+The recorded container result covers Ubuntu 24.04 arm64 fresh mode only; the
+additional OS, architecture and upgrade commands below are not claimed as passes.
 
 ## Resource matrix
 
@@ -43,7 +65,8 @@ A bounded complete-detection buffer at 64 MiB must fit the same envelope. Disk
 bounds allow one payload per preparation or local staging operation, plus framing
 or local metadata, and one request capture. Post-operation checks require empty
 preparation spools, released request reservations/readers, and no local staging.
-These limits are acceptance requirements, not measured results.
+The completed resource matrix passed these limits. They are acceptance ceilings,
+not the measured peak values.
 
 Run on a host with the existing isolated PostgreSQL test configuration and enough
 private temporary disk for concurrent spools and local objects. Do not run the
@@ -53,8 +76,8 @@ resource matrix with `-race`; use race tests separately. From the repository roo
 FOUNDRY_TEST_POSTGRES_REQUIRED=1 FOUNDRY_TEST_ATTACHMENT_RESOURCES=1 \
   go test -timeout=90m -count=1 -v ./attachments \
   -run '^TestB26ResourceAcceptance$'
-FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race -timeout=20m ./attachments ./storage/s3 \
-  -run 'TestPostgres(HistoricalLarge|Large|R2)|TestRecoveryRejectsIncomplete|TestFullStreamingReadRequiresCompleteDigest|TestLargeConditionalMultipart|TestR2ConditionalPublicationCandidateWireMatrix'
+FOUNDRY_TEST_POSTGRES_REQUIRED=1 go test -race -timeout=20m \
+  ./attachments ./storage/local ./http ./internal/httpdeadline ./application ./infrastructure
 ```
 
 Retain the complete command output, source revision and diff, toolchain, free
@@ -101,13 +124,12 @@ exhaustion. Local staging remains inside each managed root for atomic rename;
 published data and record overhead require capacity beyond payload reservations.
 
 Attachment slots exceed staging slots in this profile, so the local saturation
-scenario reaches the adapter's gate rather than stopping at the manager. Go
-regressions cover these owners and configuration propagation, but have not been
-run for this revision. Resource, container and live-provider certification remain
-lead-run evidence; implementation and controller unit checks do not certify them.
+scenario reaches the adapter's gate rather than stopping at the manager. The
+recorded race and container results cover these owners and configuration
+propagation. They do not establish live R2 compatibility.
 
 Build and run each supported OS/architecture cell separately. These commands
-require Docker and network access and belong to the lead:
+require Docker and network access:
 
 ```sh
 framework="$PWD"
@@ -139,7 +161,8 @@ done
 The upgrade uses the published generation-9 baseline selected in that runner,
 not a modified checkout. `uploads.log` retains per-scenario results and
 `UPLOAD_DISK` records.
-All cells must pass; rendering/unit tests cannot replace these observations.
+Each additional cell requires its own result; rendering and unit tests cannot
+replace those observations.
 
 ## Live R2 matrix
 
@@ -167,37 +190,12 @@ certification and does not authorize removal of that restriction.
 The existing plugin, consumer and Go-way fixtures are unchanged. The consumer additions are the deploy fixture's opt-in upload routes, generated
 receipt DTOs, and regeneration of its stale configuration schema to include
 `attachments.config.temp_directory`.
-Run the existing fixture gate at the lead checkpoint:
+Run the independent consumer checks separately:
 
 ```sh
 make fixture-check
 ```
 
-Fast checks and their actual outcomes are recorded in the task report. Container,
-resource and provider commands above are separate gates, not implied passes.
-
-## Local implementation checks (2026-11-14)
-
-No container, SSH, host provisioning, PostgreSQL or live-provider command was
-executed for this slice. Native Go commands used `GOPROXY=off` and
-`GOFLAGS=-trimpath`; cache access required sandbox escalation, which was granted.
-No dependency installation or Git commit/push/merge was performed.
-
-| Command and working directory | Result |
-| --- | --- |
-| Root: `go run ./cmd/foundry generate --recursive --dir tests/fixtures/deploy-acceptance` | Generated two new DTOs and refreshed the fixture configuration schema and ownership manifests |
-| Root: `go test ./attachments -run '^(TestB26ResourceAcceptance\|TestB26ResourceCell\|TestB26ResourcePeer\|TestLargePoliciesRetainImageBounds\|TestHistoricalOriginalVariantGuardPrecedesStorage\|TestLargePreparationLimitsAndFailureCleanup)$'` | Passed; resource subprocess tests deliberately skip without their opt-in environment |
-| Root: `go vet ./attachments` | Passed |
-| `tests/fixtures/deploy-acceptance`: `go test ./...` and `go vet ./...` | Passed; subsequent handler changes checked with `go test ./internal/app -run '^TestUpload'` and vet |
-| `tests/fixtures/consumer`: `FOUNDRY_TEST_POSTGRES_URL= FOUNDRY_TEST_POSTGRES_REQUIRED=0 go test ./httpuploads ./articles ./profiles` | Passed, PostgreSQL explicitly disabled; source unchanged |
-| Root: `make deploy-tools-check` | 625 tests, nine opt-in skips, one sampler-test race failure; corrected and rerun below |
-| `tools/deploy/tests`: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest test_acceptance_uploads test_acceptance_wiring` | All 13 affected tests passed after correction; unaffected results reused |
-| Root: `make docs-check generate-check` | Passed |
-| Root: `go run ./cmd/foundry generate --recursive --check --dir tests/fixtures/deploy-acceptance` | Passed; this nested module is outside the root generation list |
-| Root: `bash -n tools/deploy/tests/run_acceptance.sh` and `git diff --check` | Passed |
-
-The first attachment compile also caught a missing `ClientContentType` method in
-the generated input source; the corrected source passed the targeted test and vet.
-These checks establish source/contract consistency and local barrier behavior.
-They do not supply measured resource, full consumer-gate, container or R2 results.
-The master milestone status is unchanged.
+The recorded results above do not claim a new run of the full independent
+consumer checks or of additional container cells. The R2 restriction can be
+reconsidered only after both live conditional operations are certified.

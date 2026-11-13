@@ -1,124 +1,87 @@
 # Changelog
 
-## Unreleased
+## v0.30.0 — 2026-11-14
 
-- Fixed: upload deadline connection and listener wrappers now live in
-  `internal/httpdeadline`, preserving the HTTP public API and timeout behavior.
-
-- Fixed: the deploy acceptance fixture declares extension and attachment schema
-  independently of its upload-route setting. The uploads phase no longer applies
-  extra migrations to the shared database and verifies unchanged history for
-  subsequent recovery acceptance.
-
-- Fixed: concurrent connection deadline resets cannot attribute their read
-  timeouts to an overlapping upload installation. Timeout evidence requires the
-  same stable reset generation before and after the read; ordinary resets remain
-  lock-free. Added reverse-order and overlapping-reset regression coverage.
-
-- Fixed: native HTTP and direct TLS upload hosting retain ordinary body-read 408
-  responses through Compression and ETags when connection-level timeout evidence
-  is unavailable. Ordinary connection deadline resets now invalidate upload
-  tracking atomically without acquiring its mutex. Added native hosting and
-  deadline-reset regression sources for the lead's Go gate.
-
-- Fixed: trickle acceptance measures server-side upload-slot release, separately
-  from nginx's post-response body draining. Upload locations now explicitly bound
-  lingering by the declared total budget, capped at five seconds, with an idle wait
-  no longer than that bound or the client-body idle budget. Ordinary routes retain
-  their existing configuration.
-
-- Fixed: HTTP upload timeout evidence is retained at the accepted connection,
-  before chunked trailer parsing can replace the native read error. Terminal 408
-  responses survive Compression and ETags for stalled trailer termination;
-  genuine disconnects do not receive the timeout exception. Added socket and
-  deadline-reset regression sources for the lead's Go gate.
-
-- Fixed: completed local staging migration is recorded durably so backend restarts
-  scan only staging, without holding peer admission behind published-object scans.
-  Admitted upload timeouts retain their terminal 408 through Compression and ETags
-  when HTTP/1 cancels the native context on read timeout. Added startup, migration
-  completion and compressed socket regression sources for the lead's Go gate.
-
-- Fixed: admitted multipart uploads enforce the effective route deadline during
-  socket reads and reject unfinished bodies on timeout, allowing capture cleanup
-  and capacity recovery without waiting for a trickling client to finish. Added
-  a socket regression for the lead's Go gate. Container acceptance now tolerates
-  non-JSON restart responses and exhausts quota volumes with progressively smaller
-  writes before checking the remaining block capacity.
-
-- Fixed: local staging reservations now live in filesystem entries and enforce
-  one managed-root budget across processes. A dedicated staging directory and
-  short cross-process lock serialize admission independently of published-object
-  count. Exhausted writes reject promptly, preserving small-request disk slots;
-  crashed and failed-cleanup entries remain charged until pruning. Added live-peer,
-  process-crash, small-write, populated-root and concurrent-process regressions
-  for the lead's Go gate.
-
-- Fixed: local staging recovery no longer inherits the published-object listing
-  ceiling and reconciles foreign file removal/replacement by identity without
-  double-charging live writers. File-based attachment writes now retain admission
-  from source open through close, including shutdown drain. Regression tests are
-  added; execution remains part of the lead's Go gate.
-
-- Fixed: attachment large-policy admission now reserves small mutation capacity;
-  local staging bounds large/unknown-size puts and copies, retains failed-cleanup
-  byte charges, and accounts for interrupted staging on restart. Deployment
-  settings reach the configured owners. Go regression sources are added; the
-  consolidated Go gate and container/provider certification remain lead-run.
-
-- Added: opt-in B26 resource acceptance across preparation, HTTP capture, slot
-  acceptance, URL import, full/ranged reads, recovery, settlement and historical
-  variant rejection, with separate-process heap/RSS and spool measurements.
-- Added: deploy-fixture acceptance for rendered-nginx uploads, 150-second silent
-  publication, slow/stalled/trickling clients, pool saturation and quota exhaustion.
-  Container and live-provider results remain pending. Attachment/staging runtime
-  sublimits and reserved small-publication capacity are not yet certified.
-- Documented: large-policy migration and rollback constraints, bounded image/read
-  APIs, streaming recovery, and generation-11 tools-plan/tools-apply before host
-  adoption. R2 retains its shared conditional-write cap until live create and
-  replace certification both pass.
-
-- Added: typed attachment `Collection.OpenSeek` with pinned, lazy ranged reads
-  and an HTTP download example. Full `Open` reads verify persisted size and SHA-256
-  at EOF; byte-returning APIs keep their 64 MiB ceiling.
-- Fixed: checksum-fallback reconciliation and explicit settlement now stream
-  above-64-MiB originals with bounded buffers, including after policy changes.
-  Verification errors and cancellation retain unresolved intents. Regression
-  sources cover allocation bounds, historical reads, HTTP ranges and recovery.
-
-- Fixed: generated application configuration and the dependent consumer now load
-  `features.attachments.config.temp_directory` and expose its typed override.
-- Added: large attachment transaction/multipart regression coverage for publication,
-  rollback, restart, retirement, unknown outcomes and eventual reclamation; default
-  8 MiB serial-part publication above 64 MiB has allocation-sensitive wire coverage.
-- Added: R2 conditional create/replace wire certification matrix and an env-gated
-  live candidate test. Production R2 retains its conditional-write size restriction
-  pending live evidence for both operations; no public bypass is introduced.
-
-- Added: B26 policy and preparation support for application-declared large opaque
-  attachments, an owned spool via `attachments.Config.TempDirectory`, and shared
-  capture hashing for uploads, slot acceptance and URL imports. Image/variant and
-  byte-returning APIs retain `MaxBufferedBytes` (64 MiB); `MaxUploadBytes` remains
-  its compatibility alias. Large JSON/text hints and archive specialization are
-  conservative.
-- Added: forward attachment migration `000003_expand_original_size`, preserving
-  historical migrations and variant ceilings while allowing nonnegative original
-  sizes. Apply it and deploy capable runtimes before enabling large policies; old
-  runtimes cannot read large rows, including retired tombstones.
-- Fixed: variant generation rejects historical originals above the smaller of
-  the image input and in-memory limits before opening or buffering storage.
-
-- Added: multipart upload pools reserve a slot and the declared encoded-body bytes
-  before middleware or capture. Large requests use separate handler capacity,
-  retain reservations through actual cleanup, and keep failed cleanup charged
-  until exact-file retry succeeds. Pool startup refuses active or retained owners.
-- Added: typed `HTTP.Uploads` deployment settings and an independent upload consumer.
-  Deploy tool generation 11 adds opt-in upload locations, aggregate nginx admission,
-  request buffering off, explicit HTTP/1.1 upstream proxying, no proxy replay, and
-  separate total and idle budgets. Planning validates independent sized volumes;
-  provisioning connects private writable paths to runtime settings and service sandboxes.
-  Existing ordinary-route limits remain unchanged. Attachment and local-staging
-  owners consume the documented directory/admission seam in their implementation lane.
+- Added: application-declared large opaque attachments through `Policy.MaxBytes`
+  and `MaxStoredBytes`, including 512 MiB collections. Large-policy preparation,
+  slot acceptance and URL imports share a one-pass spool that counts bytes,
+  computes SHA-256 and captures the media-detection prefix. Configure
+  `attachments.Config.TempDirectory` through
+  `features.attachments.config.temp_directory` and provision a private writable
+  volume with enough capacity. Empty retains the OS temporary-directory default.
+  Small policies keep their bounded in-memory path; image/variant processing and
+  byte-returning APIs retain the 64 MiB `MaxBufferedBytes` ceiling.
+  `MaxUploadBytes` remains its compatibility alias. Above 64 MiB, detection uses
+  the bounded prefix: JSON/text hints do not specialize content and ZIP stays
+  generic ZIP. Declare matching generic media rules for large files.
+- Added: typed `Collection.OpenSeek` for pinned, lazy ranged reads and HTTP
+  downloads. Full `Open` reads stream and verify persisted size and SHA-256 at
+  EOF; early close and partial ranges do not establish whole-object integrity.
+  Checksum-fallback reconciliation and explicit settlement stream historical
+  originals even after an upload policy is lowered. Cancellation or incomplete
+  verification leaves intents unresolved. Variant generation rejects oversized
+  historical originals before opening storage; streaming reads and retirement
+  remain available.
+- Added: `attachments.Config.MaxLargeActive` limits large policies before shared
+  mutation admission, reserving capacity for small policies when set below
+  `MaxActive`. Zero retains shared admission. Reservations cover source open,
+  capture, publication, source close and cleanup; shutdown drains admitted work.
+  Large policies validate disk object-size and conditional-create capabilities
+  during manager construction. Align policy, disk, request and timeout limits
+  before enabling them.
+- Changed: attachment migration `000003_expand_original_size` permits nonnegative
+  original sizes without rewriting historical migrations or variant limits.
+  Behaviour change: apply this migration to every attachment store and deploy
+  capable readers and reconcilers everywhere before enabling large policies.
+  Old runtimes cannot read large rows, including cleaned tombstones; retiring
+  attachments does not make a runtime downgrade safe.
+- Added: multipart upload pools and typed `application.Settings.HTTP.Uploads`
+  settings. Admission reserves a slot and the declared encoded-body bytes before
+  middleware, authentication or capture, with separate large-request handler
+  capacity. Exhaustion returns 503 with `Retry-After: 1`, without an admission
+  queue. Reservations last through actual cleanup; failed cleanup stays charged.
+  Configure independent request, attachment, staging and small-request capacity;
+  configured application assembly forwards attachment and local-staging sublimits
+  to their existing owners. Existing routes without upload admission retain
+  their limits and behavior.
+- Fixed: admitted multipart uploads enforce the total route deadline while
+  reading progressing or trickling bodies. Idle deadlines limit inactivity;
+  progress does not restart the total budget. Behaviour change: a body still
+  arriving at that deadline is rejected with 408 before publication, and capacity
+  is released after cleanup. Compression and ETags preserve the terminal timeout
+  response. The framework server also retains timeout evidence across chunked
+  trailer parsing; native servers, including direct TLS hosting, retain ordinary
+  body-read timeout detection. Genuine client disconnects still abort delivery.
+- Added: `local.Config.Staging` and `infrastructure.LocalDiskSettings.Staging`
+  enforce one managed-root slot and byte budget across processes. Reservations
+  live under `.foundry-staging`, with short cross-process admission locking;
+  unknown-length writes reserve `MaxObjectBytes`. Exhaustion rejects promptly,
+  while known small writes retain separate admission. Failed cleanup and crashed
+  writers remain charged until pruning. Publication remains an atomic rename;
+  published-object listing and `MaxScan` exclude the staging directory.
+  Behaviour change: first startup migrates abandoned legacy staging files before
+  admitting writes and durably records completion. Drain all writers using the
+  old layout before upgrading a shared root. Later starts scan only staging.
+  Use identical staging limits across processes, keep disk `MaxActive` above the
+  staging slot cap, and reserve space for published objects and metadata as well
+  as staging. Zero staging limits preserve unrestricted staging admission.
+- Added: deploy tool generation 11 upload locations with aggregate nginx
+  admission, request buffering disabled, HTTP/1.1 upstream proxying, no proxy
+  replay, and explicit total and idle budgets. Upload locations set
+  `lingering_time` to the smaller of five seconds and the declared request total;
+  `lingering_timeout` is also capped by client-body idle time. This bounds
+  post-response body draining even after the application releases its slot.
+  Ordinary locations are unchanged. Upgrade hosts with
+  `ACTION=tools-plan make deploy`, then apply the reviewed plan with
+  `ACTION=tools-apply` and its `PLAN_TOKEN` and `OPERATION` before using upload
+  settings. Deploying the application alone does not upgrade installed tools.
+- Changed: large conditional publication uses bounded multipart transfer on AWS
+  and explicitly capable compatible backends. R2 retains its shared
+  `ConditionalWriteMaxBytes` restriction, equal to configured `PartBytes`, until
+  live conditional create and replace certification both pass. No production
+  bypass is provided; policies exceeding that capability are rejected.
+  Local and container acceptance do not certify R2. See the
+  [resource and provider acceptance record](docs/evidence/b26-resource-provider-acceptance.md).
 
 ## v0.29.0 — 2026-11-13
 
