@@ -4,6 +4,11 @@
 
 ### Deployment feature preview
 
+- Added public plain TCP coverage to the feature acceptance scenario: IPv4/IPv6
+  peer-namespace probes verify relay bytes through nginx stream on port 8554,
+  closure before activation and after stop, restart continuity, and report entries.
+  The acceptance image includes the real UFW/iptables/nftables observation tools.
+
 - Fixed: unchanged public TCP re-bootstrap validates committed runtime exposure
   without adopting it again. Shared boot coordinators retain a verified immutable
   bundle pin across tool upgrades; bootstrap checks coordinator, runtime and edge

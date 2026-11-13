@@ -327,6 +327,31 @@ def preview_resolution(topology, profile, endpoints):
     return c.RuntimeResolution.parse(value)
 
 
+def prepare_peer(host, add_cleanup):
+    """Create the disposable dual-family peer used by both preview scenarios."""
+    host.run(["ip", "netns", "add", PEER])
+    add_cleanup(host.run, ["ip", "netns", "delete", PEER])
+    host.run(["ip", "link", "add", "fdy-host", "type", "veth", "peer", "name", "fdy-peer"])
+    host.run(["ip", "link", "set", "fdy-peer", "netns", PEER])
+    host.run(["ip", "link", "set", "fdy-host", "up"])
+    host.run(["ip", "-n", PEER, "link", "set", "lo", "up"])
+    host.run(["ip", "-n", PEER, "link", "set", "fdy-peer", "up"])
+    for index, family in enumerate((4, 6)):
+        prefix = "/24" if family == 4 else "/64"
+        options = [] if family == 4 else ["nodad"]
+        host.run(["ip", "-" + str(family), "addr", "add", ADDRESSES[index] + prefix, "dev", "fdy-host", *options])
+        host.run(["ip", "-n", PEER, "-" + str(family), "addr", "add", PEER_ADDRESSES[index] + prefix, "dev", "fdy-peer", *options])
+
+
+def prepare_firewall(host):
+    """Prepare real default-deny UFW in an explicitly disposable container."""
+    host.run(["ufw", "default", "deny", "incoming"])
+    for port in (22, 80, 443):
+        host.run(["ufw", "allow", str(port) + "/tcp"])
+    host.run(["ufw", "logging", "low"])
+    host.run(["ufw", "--force", "enable"], timeout=30)
+
+
 @unittest.skipUnless(os.environ.get("FOUNDRY_NETWORK_PREVIEW") == "1", "Live network preview is opt-in")
 class NetworkPreviewAcceptance(unittest.TestCase):
     """Real kernel/nginx tests. Fixture authority is not lane A admission proof."""
@@ -339,23 +364,8 @@ class NetworkPreviewAcceptance(unittest.TestCase):
         PREVIEW.mkdir(parents=True, mode=0o700)
         cls.host = Host()
         cls.host.run(["systemctl", "start", "nginx"], timeout=30)
-        cls.host.run(["ip", "netns", "add", PEER])
-        cls.addClassCleanup(cls.host.run, ["ip", "netns", "delete", PEER])
-        cls.host.run(["ip", "link", "add", "fdy-host", "type", "veth", "peer", "name", "fdy-peer"])
-        cls.host.run(["ip", "link", "set", "fdy-peer", "netns", PEER])
-        cls.host.run(["ip", "link", "set", "fdy-host", "up"])
-        cls.host.run(["ip", "-n", PEER, "link", "set", "lo", "up"])
-        cls.host.run(["ip", "-n", PEER, "link", "set", "fdy-peer", "up"])
-        for index, family in enumerate((4, 6)):
-            prefix = "/24" if family == 4 else "/64"
-            options = [] if family == 4 else ["nodad"]
-            cls.host.run(["ip", "-" + str(family), "addr", "add", ADDRESSES[index] + prefix, "dev", "fdy-host", *options])
-            cls.host.run(["ip", "-n", PEER, "-" + str(family), "addr", "add", PEER_ADDRESSES[index] + prefix, "dev", "fdy-peer", *options])
-        cls.host.run(["ufw", "default", "deny", "incoming"])
-        for port in (22, 80, 443):
-            cls.host.run(["ufw", "allow", str(port) + "/tcp"])
-        cls.host.run(["ufw", "logging", "low"])
-        cls.host.run(["ufw", "--force", "enable"], timeout=30)
+        prepare_peer(cls.host, cls.addClassCleanup)
+        prepare_firewall(cls.host)
         edge.install_stream_include(cls.host, reviewed_nginx_sha256=hashlib.sha256(Path("/etc/nginx/nginx.conf").read_bytes()).hexdigest())
         cls.lineage = "preview.acceptance.invalid"
         cls.certificate = Path(certificates.CONFIG_DIR) / "live" / cls.lineage / "fullchain.pem"

@@ -63,6 +63,19 @@ class PreviewFixtureTests(unittest.TestCase):
                 self.assertEqual({claim.socket.family for claim in preview.listeners.public_claims(profile)}, {4, 6})
                 self.assertEqual(resolution.nginx_sha256, preview.c.canonical_digest(rendered))
 
+    def test_shared_peer_setup_registers_cleanup_and_enables_both_families(self):
+        host, cleanup = Mock(), Mock()
+        preview.prepare_peer(host, cleanup)
+        cleanup.assert_called_once_with(host.run, ["ip", "netns", "delete", preview.PEER])
+        commands = [call.args[0] for call in host.run.call_args_list]
+        for family, address in zip((4, 6), preview.ADDRESSES):
+            self.assertTrue(any(command[:4] == ["ip", "-" + str(family), "addr", "add"] and
+                                command[4].split("/")[0] == address for command in commands))
+        preview.prepare_firewall(host)
+        host.run.assert_any_call(["ufw", "default", "deny", "incoming"])
+        host.run.assert_any_call(["ufw", "--force", "enable"], timeout=30)
+        self.assertFalse(any("8554/tcp" in call.args[0] for call in host.run.call_args_list))
+
     def test_live_scenarios_are_opt_in_and_lane_a_proofs_are_explicitly_pending(self):
         self.assertTrue(preview.NetworkPreviewAcceptance.__unittest_skip__)
         self.assertFalse(getattr(preview.NetworkPreviewAcceptance.test_application_closure_proven_by_lane_a, "__unittest_skip__", False))

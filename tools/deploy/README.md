@@ -307,8 +307,14 @@ helper retention remains later work; all feature tool bundles are still retained
 The opt-in real-systemd scenario uses a newly built ordinary deploy-acceptance
 archive. It adds one artifact-backed relay and a declared package, verifies the
 HTTP app reaches the relay through the Go binding loader, restarts the instance,
-and verifies that both maintenance operations refuse without stopping it. After
-lane C is merged, run:
+and verifies that both maintenance operations refuse without stopping it.
+The relay declares a plain public TCP listener on port 8554. A separate dual-family
+network namespace receives the fixture's HTTP readiness bytes through nginx stream;
+this tests plain TCP forwarding, not RTSP protocol handling. Real UFW and nginx
+observations verify closure before activation and after stop, and the host report
+must list the listener. The acceptance image includes UFW, iptables and nftables;
+bootstrap installs nginx and its stream module through the normal package owner.
+Run:
 
 ```sh
 python3 tools/deploy/tests/build_acceptance.py --architecture arm64 --archive-file /tmp/b24-archive-path

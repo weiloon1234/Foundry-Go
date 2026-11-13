@@ -135,6 +135,66 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertEqual(placed["schema"], 3)
         self.assertEqual([p.artifact for p in declaration.artifacts], ["relay"])
         self.assertEqual(dict(topology.roles[0].common.bindings)["relay"].role, "relay")
+        from topology import parse_profile
+        import listeners
+        policy = dict(topology.roles[1].listeners)["control"]
+        self.assertEqual((policy.bind, policy.tls, policy.authentication), ("public", "none", True))
+        claims = listeners.public_claims(parse_profile(placed, topology))
+        self.assertEqual({claim.socket.family for claim in claims}, {4, 6})
+        self.assertEqual({claim.socket.port for claim in claims}, {8554})
+        self.assertEqual({claim.socket.address for claim in claims}, set(acceptance_feature.network.ADDRESSES))
+        self.assertEqual(placed["domain"], f"{project['slug']}-{profile['environment']}.acceptance.invalid")
+
+    def test_public_peer_probe_requires_relay_bytes_and_connection_failure(self):
+        import acceptance_feature as scenario
+        from types import SimpleNamespace
+        for opened, code, output, passes in ((True, 0, scenario.RELAY_BODY, True),
+                                            (True, 0, "wrong backend", False),
+                                            (False, 2, "", True), (False, 1, "", False),
+                                            (False, 0, "CONNECTED\n", False)):
+            with self.subTest(opened=opened, code=code, output=output):
+                host = Mock()
+                host.run.return_value = SimpleNamespace(returncode=code, stdout=output)
+                if passes:
+                    scenario.peer_reachable(host, opened=opened)
+                    self.assertEqual(host.run.call_count, 2)
+                else:
+                    with self.assertRaises(AssertionError):
+                        scenario.peer_reachable(host, opened=opened)
+                for call in host.run.call_args_list:
+                    self.assertEqual(call.args[0][:4], ["ip", "netns", "exec", scenario.network.PEER])
+                    self.assertIn(call.args[0][-3], scenario.network.ADDRESSES)
+
+    def test_public_probe_executes_exact_relay_response_and_distinct_connect_failure(self):
+        import acceptance_feature as scenario
+        import io
+        import socket
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+        connection = MagicMock()
+        connection.makefile.return_value = io.BytesIO(b"HTTP/1.1 200 OK\r\nContent-Length: 19\r\n\r\nfeature-relay-ready")
+        output = io.BytesIO()
+        with patch.object(socket, "create_connection", return_value=connection), \
+                patch.object(sys, "argv", ["probe", "203.0.113.10", "8554", "yes"]), \
+                patch.object(sys, "stdout", SimpleNamespace(buffer=output)):
+            exec(scenario.PEER_PROBE, {})
+        self.assertEqual(output.getvalue(), scenario.RELAY_BODY.encode())
+        self.assertIn(b"GET /ready HTTP/1.1\r\n", connection.sendall.call_args.args[0])
+        with patch.object(socket, "create_connection", side_effect=ConnectionRefusedError), \
+                patch.object(sys, "argv", ["probe", "203.0.113.10", "8554", "no"]), self.assertRaises(SystemExit) as failure:
+            exec(scenario.PEER_PROBE, {})
+        self.assertEqual(failure.exception.code, 2)
+
+    def test_public_report_assertion_uses_instance_and_both_families(self):
+        import acceptance_feature as scenario
+        value = {"projects": [{"instances": [{"name": "fixture-acceptance", "network": {
+            "listeners": [{"port": scenario.PORT, "address": address, "expected_owner": "nginx", "role": "relay",
+                           "listener": "control", "tls": "none", "authentication": True}
+                          for address in scenario.network.ADDRESSES], "findings": []}}]}]}
+        scenario.assert_listener_report(value, {"name": "fixture-acceptance"})
+        value["projects"][0]["instances"][0]["network"]["findings"] = [{"code": "nginx_projection_unverified"}]
+        with self.assertRaises(AssertionError):
+            scenario.assert_listener_report(value, {"name": "fixture-acceptance"})
 
     def test_transition_closes_before_migration_and_opens_only_after_all_readiness(self):
         from contextlib import ExitStack
