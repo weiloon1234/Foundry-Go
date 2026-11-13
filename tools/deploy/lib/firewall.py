@@ -183,9 +183,20 @@ def parse_rules(text):
             chains[name], policies[name] = [], policy
         else:
             fields = tuple(shlex.split(line))
-            require(table == "filter" and len(fields) >= 4 and fields[0] == "-A" and fields[1] in chains,
+            require(table == "filter" and len(fields) >= 4 and fields[0] in ("-A", "-I") and fields[1] in chains,
                     "firewall_unsupported", "Only inspectable filter rules are supported; NAT/raw/mangle rules refuse.")
-            chains[fields[1]].append(fields[2:])
+            rules, body = chains[fields[1]], fields[2:]
+            if fields[0] == "-A":
+                rules.append(body)
+            else:
+                position = 1
+                if body[0].lstrip("+-").isdigit():
+                    require(re.fullmatch(r"[1-9][0-9]*", body[0]) is not None,
+                            "firewall_unsupported", "Invalid firewall insertion position.")
+                    position, body = int(body[0]), body[1:]
+                require(1 <= position <= len(rules) + 1 and len(body) >= 2 and body[0].startswith("-"),
+                        "firewall_unsupported", "Unsupported firewall insertion.")
+                rules.insert(position - 1, body)
     require(table is None and chains, "firewall_unsupported", "Incomplete firewall rules.")
     return chains, policies
 
@@ -308,7 +319,12 @@ def observe(host, instance_id, claims, *, bindings=(), opened=False, integrated=
                 "firewall_unsupported", "UFW reload machinery differs from the reviewed Ubuntu layout.")
         files[path] = content
     for path in ("/etc/ufw/before.init", "/etc/ufw/after.init"):
-        require(not host.paths.p(path).exists(), "firewall_unsupported", "Custom UFW reload hooks require a separately supported layout.")
+        hook = check_path(host.paths.p(path), "file")
+        if hook.exists():
+            # The reviewed ufw-init-functions invokes hooks only with shell -x.
+            files[path] = _read(host, path)
+            require(not hook.stat().st_mode & 0o111, "firewall_unsupported",
+                    "Executable UFW reload hooks require a separately supported layout.")
     live, backends = {}, {}
     for family, binary in ((4, "iptables"), (6, "ip6tables")):
         version = host.run([binary, "--version"], timeout=5).stdout

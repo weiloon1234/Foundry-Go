@@ -19,6 +19,7 @@ import subprocess
 import sys
 import threading
 import unittest
+import uuid
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
@@ -100,6 +101,40 @@ class EchoBackend:
             thread.join(5)
         if self.thread.is_alive() or any(t.is_alive() for t in self.threads):
             raise RuntimeError("Test-owned backend did not exit")
+
+
+@unittest.skipUnless(os.environ.get("FOUNDRY_UFW_OBSERVATION_ACCEPTANCE") == "1", "Live UFW observation is opt-in")
+class UFWObservationAcceptance(unittest.TestCase):
+    """Read-only observation of the enabled UFW layout in a disposable container.
+
+    The command in NETWORK_HANDOFF.md prepares packages, UFW and fixture addresses.
+    This scenario requires neither systemd nor the M6 case.json/HTTP/TLS setup.
+    """
+    def test_enabled_ubuntu_ufw_is_closed_before_adoption(self):
+        self.assertEqual(os.environ.get("FOUNDRY_DISPOSABLE_HOST"), "1")
+        self.assertEqual(os.geteuid(), 0)
+        self.assertTrue(Path("/.dockerenv").is_file())
+        host = Host()
+        status = host.run(["ufw", "status", "verbose"], timeout=5).stdout
+        self.assertIn("Logging: on (low)", status)
+        for name in ("before.init", "after.init"):
+            self.assertEqual(Path("/etc/ufw", name).stat().st_mode & 0o777, 0o640)
+        for family, binary in ((4, "iptables-save"), (6, "ip6tables-save")):
+            rules, _ = firewall.parse_rules(host.run([binary], timeout=5).stdout)
+            namespace = "ufw6" if family == 6 else "ufw"
+            allows = {firewall._argument(rule, "--dport") for rule in rules[namespace + "-user-input"]
+                      if firewall._argument(rule, "-j") == "ACCEPT"}
+            self.assertEqual(allows, {"22", "80", "443"})
+        instance_id = str(uuid.uuid4())
+        claims = tuple(listeners.ListenerClaim(instance_id, "relay", "ingress", 1,
+                       listeners.SocketIdentity("tcp", family, address, 8554), "nginx")
+                       for family, address in ((4, "203.0.113.10"), (6, "2001:db8::10")))
+        paths = (*firewall.FILES, *firewall.RELOAD_FILES, "/etc/ufw/before.init", "/etc/ufw/after.init")
+        before = {name: (Path(name).read_bytes(), Path(name).stat().st_mode) for name in paths}
+        observation = firewall.observe(host, instance_id, claims, integrated=False)
+        self.assertTrue(observation.closed)
+        self.assertEqual(set(observation.sockets), {claim.socket for claim in claims})
+        self.assertEqual(before, {name: (Path(name).read_bytes(), Path(name).stat().st_mode) for name in paths})
 
 
 @unittest.skipUnless(os.environ.get("FOUNDRY_NETWORK_ACCEPTANCE") == "1", "M6 disposable network harness is opt-in")

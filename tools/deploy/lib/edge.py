@@ -122,21 +122,28 @@ def _worker_identities(host):
 def _directives(text):
     """Tokenize nginx's complete statements, preserving quoted delimiters."""
     tokens, word, started, quote, index = [], [], False, None, 0
+    need_space = False
     while index < len(text):
         char = text[index]
+        if need_space:
+            require(char in " \t\r\n;{)", "nginx_reference_unverified", "Unexpected character after nginx string.")
+            need_space = False
         if char == "\\":
             require(index + 1 < len(text), "nginx_reference_unverified", "Incomplete nginx escape.")
             escaped = text[index + 1]
-            require(escaped in "nrt\\\"'", "nginx_reference_unverified", "Unsupported nginx escape; reference inventory cannot be completed.")
-            word.append({"n": "\n", "r": "\r", "t": "\t"}.get(escaped, escaped))
+            # ngx_conf_read_token decodes only these six escapes. Regex escapes
+            # and escaped delimiters retain the backslash in either quote mode.
+            word.append({"n": "\n", "r": "\r", "t": "\t", "\\": "\\", '"': '"', "'": "'"}.get(escaped, "\\" + escaped))
             started, index = True, index + 2
             continue
         if quote:
             if char == quote:
                 quote = None
+                tokens.append(("".join(word), False))
+                word, started, need_space = [], False, True
             else:
                 word.append(char)
-        elif char in ("'", '"'):
+        elif char in ("'", '"') and not started:
             quote, started = char, True
         elif char == "$" and text[index:index + 2] == "${":
             end = text.find("}", index + 2)
@@ -144,11 +151,11 @@ def _directives(text):
             word.append(text[index:end + 1])
             started, index = True, end + 1
             continue
-        elif char == "#":
+        elif char == "#" and not started:
             end = text.find("\n", index)
             index = len(text) if end == -1 else end
             continue
-        elif char.isspace() or char in "{};":
+        elif char in " \t\r\n{;" or char == "}" and not started:
             if started:
                 tokens.append(("".join(word), False))
                 word, started = [], False

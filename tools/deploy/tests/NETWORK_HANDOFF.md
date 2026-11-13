@@ -177,7 +177,7 @@ The fix-round acceptance commands (run from the indicated directories):
 
 ```sh
 cd tools/deploy/tests
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest test_network_review test_network test_edge test_certificates test_report test_uploads
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest test_network_real test_network_review test_network test_plain_tcp test_edge test_certificates test_report test_uploads
 # From repository root:
 make deploy-tools-check
 ```
@@ -226,3 +226,61 @@ inventory and its test were not modified because they are outside lane C.
 `git diff --check` passed. No live firewall/nginx, DNS, provider, alternatives,
 package-installation or commit actions were performed. Public Ubuntu package files
 were downloaded into task-owned temporary paths solely as source references.
+
+## Live Ubuntu UFW observation
+
+The second review uses the operator's unedited Ubuntu 24.04 nft, 26.04 nft and
+24.04 legacy [captures](network_fixtures/ufw-real/README.md). `test_network_real.py`
+reproduces the non-executable installed hooks, generated logging inserts and a
+real-world nginx regex location before fixing them. Non-executable, owned hooks
+are inspected and included in the observation; executable, writable or symlinked
+hooks still refuse. Insert commands replay at their actual chain position,
+including an omitted position's default of 1. Foreign ACCEPT rules still refuse.
+
+nginx tokenization follows
+[`ngx_conf_read_token`](https://github.com/nginx/nginx/blob/master/src/core/ngx_conf_file.c):
+regex escapes such as `\.` remain intact in unquoted, single-quoted and
+double-quoted arguments. Only nginx's known quote, backslash and n/r/t escapes
+are decoded. Quoted token endings, embedded quotes and comment boundaries follow
+the same lexer; unresolved upstreams still refuse the entire reference inventory.
+
+Run this command **from the repository root** to prepare a new disposable container
+and run only the read-only observation scenario. It needs a Docker engine with
+privileged Linux containers and IPv6/netfilter support. It mounts the deploy bundle
+read-only, does not use the host network, and never switches iptables alternatives.
+The setup commands change only the disposable container's network namespace.
+
+```sh
+docker run --rm --privileged \
+  --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+  -e DEBIAN_FRONTEND=noninteractive \
+  -e FOUNDRY_DISPOSABLE_HOST=1 \
+  -e FOUNDRY_UFW_OBSERVATION_ACCEPTANCE=1 \
+  -v "$PWD/tools/deploy:/opt/foundry-deploy:ro" \
+  ubuntu:24.04 bash -euxc '
+    apt-get update
+    apt-get install -y --no-install-recommends python3 ufw iptables nftables iproute2
+    ip link add fdy-test type dummy
+    ip link set fdy-test up
+    ip address add 203.0.113.10/32 dev fdy-test
+    ip -6 address add 2001:db8::10/128 dev fdy-test
+    ufw default deny incoming
+    ufw allow 22/tcp
+    ufw allow 80/tcp
+    ufw allow 443/tcp
+    ufw logging low
+    ufw --force enable
+    python3 -B /opt/foundry-deploy/tests/acceptance_network.py UFWObservationAcceptance -v
+  '
+```
+
+Replace `ubuntu:24.04` with `ubuntu:26.04` to check that release. The scenario uses
+whichever supported backend the image already selects. A preconfigured legacy
+image can run the same scenario without any alternatives-switch command.
+
+Unlike the other M6 scenarios, `UFWObservationAcceptance` needs no systemd,
+case.json, certificate or external DNS. It checks installed hook modes and shared
+allow ports, calls `firewall.observe(..., integrated=False)` against the live
+IPv4/IPv6 and nft JSON views, and checks that persistent files/modes are unchanged.
+It never installs Foundry chains, reloads UFW or opens a listener. This scenario
+has been written but was not run as part of the no-host-actions fix round.

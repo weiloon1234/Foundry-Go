@@ -1,5 +1,10 @@
 # Ubuntu UFW reference fixtures
 
+Installed and enabled layouts are covered by the operator's unedited
+[live Ubuntu captures](../ufw-real/README.md) and `test_network_real.py`.
+The package-only rules below remain inputs for isolated mutation tests; they do
+not represent the complete generated configuration after `ufw enable`.
+
 The six `*.rules` files and two `ufw-init*` files are unmodified files from the
 Ubuntu package [ufw 0.36.2-6](https://archive.ubuntu.com/ubuntu/pool/main/u/ufw/ufw_0.36.2-6_all.deb).
 The rules originate in `/usr/share/ufw/iptables/`; the installed reload machinery
