@@ -360,48 +360,67 @@ def _probe(role, resolution, deadline):
 
 
 def wait_ready(host, inventory, name, deadline):
-    """Selected executable identity, own listener and stability under one deadline."""
+    return wait_ready_set(host, inventory, (name,), deadline)
+
+
+def wait_ready_set(host, inventory, names, deadline):
+    """Observe every selected identity/probe in one shared stability window."""
     from contracts import digest
     from admission import protected_path
     from host import OperationTimeout, wall_clock_budget
     from release import STABILITY_SECONDS, _matches_executable, service
-    role, spec = inventory.roles[name], inventory.specs[name]
-    contract = readiness_probe(role)
-    executable = protected_path(host, host.paths.p(spec.executable), "file")
-    require(executable.exists() and executable.stat().st_mode & 0o111 and digest(executable) == spec.executable_sha256,
-            "service_executable", "Selected executable fingerprint has drifted.")
-    endpoint = next((e for e in inventory.resolution.endpoints if e.role == name and contract and e.listener == contract.listener), None)
-    local = f"[{endpoint.address}]:{endpoint.port}" if endpoint and ":" in endpoint.address else f"{endpoint.address}:{endpoint.port}" if endpoint else None
-    deadline = min(deadline, time.monotonic() + contract.timeout_seconds) if contract else deadline
-    token, stable_since = None, None
+    names = tuple(names)
+    require(names and set(names) <= inventory.roles.keys(), "service_selection", "Select known readiness roles.")
+    checks = {}
+    for name in names:
+        role, spec = inventory.roles[name], inventory.specs[name]
+        contract = readiness_probe(role)
+        executable = protected_path(host, host.paths.p(spec.executable), "file")
+        require(executable.exists() and executable.stat().st_mode & 0o111 and digest(executable) == spec.executable_sha256,
+                "service_executable", "Selected executable fingerprint has drifted.")
+        endpoint = next((e for e in inventory.resolution.endpoints if e.role == name and contract and e.listener == contract.listener), None)
+        local = (f"[{endpoint.address}]:{endpoint.port}" if ":" in endpoint.address else f"{endpoint.address}:{endpoint.port}") if endpoint else None
+        checks[name] = (role, executable, endpoint, local)
+        if contract:
+            deadline = min(deadline, time.monotonic() + contract.timeout_seconds)
+    tokens, stable_since = {}, None
     if deadline <= time.monotonic():
         return False
     try:
         with wall_clock_budget(deadline - time.monotonic()):
             while time.monotonic() < deadline:
-                observed = service(host, inventory.units[name], timeout=min(5, deadline - time.monotonic()))
-                if observed["ActiveState"] == "failed" or observed["NRestarts"] != "0":
-                    return False
-                current = (observed["MainPID"], (observed.get("process") or {}).get("start"))
-                if token is not None and current != token:
-                    return False
-                healthy = _matches_executable(observed, executable)
-                if healthy and endpoint:
-                    listeners = host.run(["ss", "-Hltpn", f"sport = :{endpoint.port}"], check=False,
-                                         timeout=min(5, deadline - time.monotonic()))
-                    healthy = listeners.returncode == 0 and any(
-                        len(line.split()) >= 5 and line.split()[3] == local and
-                        f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
-                healthy = healthy and probe(role, inventory.resolution, deadline)
-                if healthy:
-                    after = service(host, inventory.units[name], timeout=min(5, deadline - time.monotonic()))
-                    if (not _matches_executable(after, executable) or after["NRestarts"] != "0" or
-                            (after["MainPID"], (after.get("process") or {}).get("start")) != current):
+                healthy, observed_tokens = True, {}
+                for name, (role, executable, endpoint, local) in checks.items():
+                    if time.monotonic() >= deadline:
                         return False
+                    observed = service(host, inventory.units[name], timeout=min(5, deadline - time.monotonic()))
+                    if observed["ActiveState"] == "failed" or observed["NRestarts"] != "0":
+                        return False
+                    current = (observed["MainPID"], (observed.get("process") or {}).get("start"))
+                    if name in tokens and current != tokens[name]:
+                        return False
+                    observed_tokens[name] = current
+                    ready = _matches_executable(observed, executable)
+                    if ready and endpoint:
+                        listeners = host.run(["ss", "-Hltpn", f"sport = :{endpoint.port}"], check=False,
+                                             timeout=min(5, deadline - time.monotonic()))
+                        ready = listeners.returncode == 0 and any(
+                            len(line.split()) >= 5 and line.split()[3] == local and
+                            f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
+                    healthy = ready and probe(role, inventory.resolution, deadline) and healthy
+                # Recheck the entire set after the last probe, including prerequisites
+                # observed before a slow dependent. A changed identity resets nothing.
                 if healthy:
+                    for name, (_, executable, _, _) in checks.items():
+                        if time.monotonic() >= deadline:
+                            return False
+                        after = service(host, inventory.units[name], timeout=min(5, deadline - time.monotonic()))
+                        if (not _matches_executable(after, executable) or after["NRestarts"] != "0" or
+                                (after["MainPID"], (after.get("process") or {}).get("start")) != observed_tokens[name]):
+                            return False
                     if stable_since is None:
-                        token, stable_since = current, time.monotonic()
-                    if time.monotonic() - stable_since >= STABILITY_SECONDS:
+                        tokens, stable_since = observed_tokens, time.monotonic()
+                    if time.monotonic() - stable_since >= STABILITY_SECONDS and time.monotonic() < deadline:
                         return True
                 else:
                     stable_since = None

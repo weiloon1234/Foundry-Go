@@ -1,7 +1,7 @@
 """Feature start authority. Enablement and network exposure have separate owners.
 
-This owner is callable by lifecycle tests/planners; production feature dispatch
-remains capability-gated until operation cleanup and helper lifetime integration.
+Unresolved independent operation cleanup denies validation and ordinary starts.
+Feature helper bundles remain retained until selective lifetime integration.
 No start helper acquires the host lock. Writers take the short instance lock;
 readers hold it shared, then serialize claims with a short per-unit lock.
 """
@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 import fcntl
 import os
+import re
 from pathlib import Path
 import time
 
@@ -145,6 +146,35 @@ class AdmissionStore:
             result[operation] = attempt
         return result
 
+    def cleanup_status(self, operation, invocation, status):
+        require(status in ("reserved", "armed", "pending", "closed", "complete") and
+                isinstance(invocation, str) and re.fullmatch(r"[a-f0-9]{32}", invocation),
+                "operation_cleanup", "Invalid cleanup owner state.")
+        with self._lock():
+            path = self.durable / "cleanup" / (contract_uuid(operation) + ".json")
+            protected_directory(self.host, path.parent, 0o700)
+            if path.exists():
+                prior = read_owned(self.host, path, lambda v: v)
+                require(prior["invocation_id"] == invocation or prior["status"] == "reserved" and prior["invocation_id"] == "0" * 32,
+                        "operation_cleanup", "Cleanup invocation cannot change.")
+            atomic_json(path, {"schema": 1, "operation_id": operation, "invocation_id": invocation, "status": status}, mode=0o600)
+
+    def require_cleanup_clear(self, validation_operation=None):
+        directory = protected_path(self.host, self.durable / "cleanup", "directory")
+        if not directory.exists():
+            return
+        paths = list(directory.iterdir())
+        require(len(paths) <= 1024, "operation_cleanup", "Reconcile retained cleanup owners before starting.")
+        for path in paths:
+            value = read_owned(self.host, path, lambda v: v)
+            require(path.name == contract_uuid(value["operation_id"]) + ".json" and value.get("schema") == 1 and
+                    value.get("status") in ("reserved", "armed", "pending", "closed", "complete") and
+                    isinstance(value.get("invocation_id"), str) and re.fullmatch(r"[a-f0-9]{32}", value["invocation_id"]),
+                    "operation_cleanup", "Invalid cleanup evidence.")
+            require(value["status"] == "complete" or
+                    value["status"] in ("reserved", "armed") and value["operation_id"] == validation_operation,
+                    "operation_cleanup_pending", "An independent cleanup owner remains unresolved; starts are blocked.")
+
     def _matching(self, selection, resolution):
         a = selection.admission
         require(selection.instance_id == self.instance_id and a.resolution_id == resolution.id
@@ -244,6 +274,7 @@ class AdmissionStore:
 
     def _authorize(self, invocation, permit_id):
         selection, resolution = self._selection()
+        self.require_cleanup_clear(selection.admission.operation_id if permit_id is not None else None)
         unit = invocation.unit
         require(invocation.boot_id == boot_id(self.host) and unit.instance_id == self.instance_id and
                 invocation.resolution_id == resolution.id and unit.role in resolution.roles and

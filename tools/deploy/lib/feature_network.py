@@ -42,6 +42,15 @@ def close(host, entry, transition, resolution, units):
     return evidence
 
 
+def withdraw(host, entry, transition, resolution, units):
+    """Cleanup calls the idempotent close owner before stopping live workloads.
+
+    The final close call must still prove complete closure after verified exit.
+    An ingress-only observation never authorizes a start or completed cleanup.
+    """
+    return capability().feature_close(host, entry, transition, resolution, units)
+
+
 def open_public(host, entry, resolution, evidence):
     require(capability().feature_open(host, entry, resolution, evidence) is True,
             "public_opening_unverified", "Network owner did not verify public opening for the selected resolution.")

@@ -6,6 +6,7 @@ honour these invocation pins before it can retire that conservative policy.
 """
 import fcntl
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -97,8 +98,54 @@ def publish(path, value):
             os.unlink(name)
 
 
+def operation_pin(action, operation, bundle):
+    if os.geteuid() != 0 or not identifier(operation) or not re.fullmatch(r"[a-f0-9]{64}", bundle):
+        raise ValueError("invalid operation owner")
+    invocation = os.environ.get("INVOCATION_ID", "")
+    if not re.fullmatch(r"[a-f0-9]{32}", invocation):
+        raise ValueError("invalid operation invocation")
+    unit = "foundry-operation-" + operation + ".service"
+    if not any(line.split(":", 2)[-1] == "/system.slice/" + unit for line in Path("/proc/self/cgroup").read_text().splitlines()):
+        raise ValueError("operation outside its unit")
+    boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    key = PINS / "operations" / operation / (invocation + ".json")
+    pin_directory(PINS)
+    fd = os.open(PINS / "registration.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        if not key.exists():
+            root = STATE.parent / "feature-operations" / operation
+            owner, request = read(root / "owner.json"), read(root / "request.json")
+            checksum = hashlib.sha256(json.dumps(request, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            if (owner.get("schema") != 1 or owner["operation_id"] != operation or
+                    owner["bundle_sha256"] != bundle or owner["request_sha256"] != checksum or
+                    not identifier(owner["instance_id"]) or owner["instance_id"] != request["profile"]["instance_id"]):
+                raise ValueError("operation owner differs")
+            publish(key, {**owner, "boot_id": boot, "invocation_id": invocation})
+        pin = read(key)
+    finally:
+        os.close(fd)
+    if pin["operation_id"] != operation or pin["invocation_id"] != invocation or pin["boot_id"] != boot:
+        raise ValueError("stale operation pin")
+    if not re.fullmatch(r"[a-f0-9]{64}", pin["bundle_sha256"]):
+        raise ValueError("invalid pinned bundle")
+    return pin
+
+
+def run_operation(arguments):
+    action, operation, bundle = arguments
+    pin = operation_pin(action, operation, bundle)
+    library = owned(ROOT / "tools" / pin["bundle_sha256"] / "lib")
+    owned(library / "operations.py")
+    sys.path.insert(0, str(library))
+    from operations import run
+    return run(action, pin)
+
+
 def main(arguments):
     try:
+        if len(arguments) == 3 and arguments[0] in ("operation", "operation-cleanup"):
+            return run_operation(arguments)
         if len(arguments) != 7 or arguments[0] not in ("admit", "prepare", "dispatch", "cleanup", "boot", "open"):
             return 1
         action, instance, role, ordinal, resolution, bundle, spec = arguments

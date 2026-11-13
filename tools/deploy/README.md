@@ -185,7 +185,10 @@ passes declared package requirements to lane B's reviewed transaction. Deploy
 verifies and publishes lane B artifacts before building frozen `Deployment`,
 `UnitSpec` and `RuntimeResolution` records. Pending admission precedes stops,
 migrations and selection. Validation starts run in dependency/readiness order with
-one allowance per unit and a live operation executor. Completion commits admission.
+one allowance per unit and a live operation executor. Immediately before public
+opening, the entire enabled set must pass identity, probe and stability checks
+together under the original shared deadline. Boot uses the same final check.
+Completion commits admission.
 A failed transition remains pending for reconciliation; it never rolls back code
 or credentials automatically.
 
@@ -207,7 +210,8 @@ The app-facing declarations and loader do not change when later tool hardening s
 The preview explicitly refuses with `capability_unavailable` naming the later
 release:
 
-- Feature rollback, including feature-to-legacy rollback.
+- Feature rollback, including feature-to-legacy rollback and `activate` of any
+  previously selected, noncurrent release. Selection history survives retention.
 - Configuration changes, key rotation, configuration holds and both `down`/`up`.
 - Named lifecycle operations and interrupted-operation reconciliation/recovery.
 - Custom-service secret intake and bundle ABIs without package-version evidence.
@@ -226,13 +230,24 @@ functions in `listeners.py`, reached only through `lib/feature_network.py`:
 | Function | Handoff |
 | --- | --- |
 | `feature_allocate(host, entry, topology, profile, operation_id)` | No effects; returns allocated endpoints and nginx projection SHA-256 |
-| `feature_close(host, entry, transition, resolution, units)` | Returns observed, complete `ClosureEvidence` covering exact units and endpoints |
+| `feature_close(host, entry, transition, resolution, units)` | Idempotently withdraws ingress, then returns observed, complete `ClosureEvidence` covering exact units and endpoints; cleanup may first call it while units are still running, then again after proven exit |
 | `feature_open(host, entry, resolution, evidence)` | Opens only the validated selection and returns `True` after verification |
 
 No caller fabricates closure when that integration is missing. The fixed
 `runtime-v1` entry point pins an invocation to an immutable tool bundle before
 importing its helper. The operation executor runs independently of its SSH
-observer. Independent executor cleanup and selective retention remain later work.
+observer. Its `ExecStopPost` uses that same invocation pin to run independent
+cleanup even after executor death. Activation verifies the loaded cleanup owner
+before effects. Without a durable success receipt matching committed admission,
+the selected registry record and the operation journal, cleanup withdraws exposure,
+stops every transition workload and proves exit and closure. Its durable unresolved
+record blocks subsequent starts, including validation starts; reconciliation stays
+refused in preview. An ingress-only observation never counts as complete closure.
+
+Artifact/release staging lives in `/opt/foundry/<instance>/operations/<operation>`
+outside the release inventory. Verified completion removes only that operation's
+staging. Interrupted operations retain staging under their cleanup owner. Selective
+helper retention remains later work; all feature tool bundles are still retained.
 
 The opt-in real-systemd scenario uses a newly built ordinary deploy-acceptance
 archive. It adds one artifact-backed relay and a declared package, verifies the

@@ -1260,6 +1260,19 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual("unsafe_archive", result.exception.code)
         self.assertFalse(destination.exists())
 
+    def test_archive_preflight_and_manifest_refusal_do_not_extract(self):
+        archive, manifest = self.bundle()
+        before = set(self.root.rglob("*"))
+        self.assertEqual(release.unpack_archive(self.host, archive, None, self.entry, digest(archive)), manifest)
+        self.assertEqual(set(self.root.rglob("*")), before)
+        def reject(value):
+            self.assertEqual(value, manifest)
+            raise DeployError("capability_unavailable", "Feature rollback requires the post-preview B24 lifecycle release.")
+        destination = self.root / "extract"
+        with self.assertRaises(DeployError):
+            release.unpack_archive(self.host, archive, destination, self.entry, digest(archive), manifest_check=reject)
+        self.assertFalse(destination.exists())
+
     def test_private_maps_private_during_extraction(self):
         archive, manifest = self.bundle()
         destination = self.root / "extract"

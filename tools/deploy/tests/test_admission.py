@@ -89,6 +89,27 @@ class AdmissionTests(unittest.TestCase):
         self.assert_denied(lambda: reopened.admit(helper()))
         self.assertFalse((self.store.runtime / "admitted").exists())
 
+    def test_independent_cleanup_blocks_validation_and_committed_starts_until_completed(self):
+        self.store.cleanup_status(OPERATION, "0" * 32, "reserved")
+        self.store.cleanup_status(OPERATION, INVOCATION, "armed")
+        self.store.issue_permit(self.permit, self.closure)
+        self.store.admit(helper(), permit_id=PERMIT)
+        for status in ("pending", "closed"):
+            self.store.cleanup_status(OPERATION, INVOCATION, status)
+            reopened = admission.AdmissionStore(self.host, INSTANCE)
+            self.assert_denied(lambda: reopened.admit(helper(), permit_id=PERMIT), "operation_cleanup_pending")
+        self.commit()
+        self.assert_denied(lambda: self.store.admit(helper()), "operation_cleanup_pending")
+        self.store.cleanup_status(OPERATION, INVOCATION, "complete")
+        self.assertEqual(self.resolution, self.store.admit(helper()))
+
+    def test_cleanup_reservation_denies_unrelated_operation_and_invocation_reuse(self):
+        self.store.cleanup_status(OPERATION, "0" * 32, "reserved")
+        self.store.require_cleanup_clear(OPERATION)
+        self.assert_denied(lambda: self.store.require_cleanup_clear(CURRENT), "operation_cleanup_pending")
+        self.store.cleanup_status(OPERATION, INVOCATION, "armed")
+        self.assert_denied(lambda: self.store.cleanup_status(OPERATION, "e" * 32, "complete"), "operation_cleanup")
+
     def test_role_named_selection_cannot_alias_the_selection_lock(self):
         self.assert_denied(lambda: self.store.admit(helper(role="selection")), "admission_denied")
 

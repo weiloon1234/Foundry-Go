@@ -99,9 +99,9 @@ class FeaturePreviewTests(unittest.TestCase):
 
     def test_new_runtime_owners_are_required_generation_12_files(self):
         required = upgrades.required_files(12)
-        for name in ("feature_lifecycle", "feature_network", "feature_runtime", "admission", "services", "artifacts"):
+        for name in ("feature_lifecycle", "feature_network", "feature_runtime", "admission", "services", "artifacts", "operations"):
             self.assertIn("lib/" + name + ".py", required)
-        for name in ("server/runtime_v1.py", "server/feature_operation.py", "server/templates/admission.service", "server/templates/custom.service"):
+        for name in ("server/runtime_v1.py", "server/templates/admission.service", "server/templates/custom.service"):
             self.assertIn(name, required)
             self.assertNotIn(name, upgrades.required_files(11))
 
@@ -172,9 +172,10 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(release, "switch_to", side_effect=lambda *_: events.append("switched")))
             stack.enter_context(patch.object(release, "finish", side_effect=finish))
             stack.enter_context(patch.object(lifecycle, "ready", side_effect=lambda host, entry, inventory, name, deadline: (events.append("ready:" + name), True)[1]))
+            stack.enter_context(patch.object(services, "wait_ready_set", side_effect=lambda *args: (events.append("ready-set"), True)[1]))
             lifecycle.transition(self.host, {}, self.entry, self.inventory, state, running)
         status.assert_called_once_with(self.host, self.entry, release.release_path(self.host, self.entry, self.inventory.deployment.release), env_file=Path("/effective.env"))
-        ordered = ["pending", "stopped", "closed", "migrate", "db:seed", "switched", "ready:http", "ready:relay", "ready:worker", "opened", "finished", "committed"]
+        ordered = ["pending", "stopped", "closed", "migrate", "db:seed", "switched", "ready:http", "ready:relay", "ready:worker", "ready-set", "opened", "finished", "committed"]
         self.assertEqual(ordered, [event for event in events if event in ordered])
 
     def test_feature_worker_uses_frozen_arguments_without_legacy_worker_environment(self):

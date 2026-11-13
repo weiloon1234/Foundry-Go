@@ -49,7 +49,7 @@ BASE_REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.
 # never from the running tools' generation or the host's selected generation.
 GENERATION_11_FILES = frozenset({"lib/uploads.py", "server/templates/nginx-upload.conf"})
 GENERATION_12_FILES = frozenset({"lib/feature_lifecycle.py", "lib/feature_network.py", "lib/feature_runtime.py",
-    "server/feature_operation.py", "server/templates/admission.service", "lib/artifacts.py", "lib/admission.py", "lib/services.py",
+    "lib/operations.py", "server/templates/admission.service", "lib/artifacts.py", "lib/admission.py", "lib/services.py",
                                "server/runtime_v1.py", "server/templates/custom.service"})
 REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES
 

@@ -4,6 +4,13 @@
 
 ### Deployment feature preview
 
+- Fixed: feature operation units install invocation-pinned independent
+  `ExecStopPost` cleanup. Incomplete operations withdraw exposure, stop and prove
+  workload exit, and retain unresolved cleanup that blocks subsequent starts.
+  Public opening rechecks the complete enabled set together for identity, probes
+  and stability. Activation refuses previously selected noncurrent releases as
+  preview rollback. Operation staging stays outside release inventories; durable
+  completion removes it while unresolved operations retain it.
 - Fixed: custom systemd units render an unquoted absolute `WorkingDirectory`.
   Privileged preparation and runtime-pin creation explicitly set directory modes
   and ownership despite `UMask=0077`, retaining searchable protected ancestors and

@@ -265,6 +265,41 @@ class ServiceInventoryTests(unittest.TestCase):
                 with patch.object(release, "STABILITY_SECONDS", .2):
                     self.assertFalse(wait())
 
+    def test_complete_readiness_set_rechecks_prerequisite_after_dependent_probe(self):
+        import release
+        with tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve()) as root:
+            host = Host(Paths(root))
+            for name, spec in self.inventory.specs.items():
+                path = host.paths.p(spec.executable)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"native")
+                path.chmod(0o755)
+                self.inventory.specs[name] = replace(spec, executable_sha256=c.digest(path))
+            for failure in ("identity", "probe", "restart", None):
+                with self.subTest(failure=failure):
+                    observed = {"ActiveState": "active", "NRestarts": "0", "MainPID": "20", "process": {"start": "42"}}
+                    dependent_probed = False
+                    def inspect(host, unit, **kwargs):
+                        if unit == self.inventory.units["http"] and dependent_probed:
+                            if failure == "identity":
+                                return {**observed, "MainPID": "21"}
+                            if failure == "restart":
+                                return {**observed, "NRestarts": "1"}
+                        return observed
+                    def probe(role, resolution, deadline):
+                        nonlocal dependent_probed
+                        if role.common.name == "worker":
+                            dependent_probed = True
+                        return not (failure == "probe" and dependent_probed and role.common.name == "http")
+                    with patch.object(release, "service", side_effect=inspect), \
+                            patch.object(release, "_matches_executable", return_value=True), \
+                            patch.object(release, "STABILITY_SECONDS", .02), \
+                            patch.object(services, "readiness_probe", return_value=None), \
+                            patch.object(services, "probe", side_effect=probe):
+                        result = services.wait_ready_set(host, self.inventory, self.inventory.roles, time.monotonic() + .25)
+                    self.assertEqual(result, failure is None)
+                    self.assertTrue(dependent_probed)
+
 
 class ServicePreparationTests(unittest.TestCase):
     def setUp(self):

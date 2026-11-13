@@ -119,6 +119,23 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual("unchanged", self.install()["outcome"])
         self.assertEqual(before, self.host.read_registry())
 
+    def test_unresolved_operation_staging_is_outside_upgrade_release_inventory(self):
+        import operations
+        from test_contracts import fixture
+        self.install()
+        _, profile, entry = fixture()
+        entry["client_generation"] = 9
+        self.host.registry["instances"][profile["instance_id"]] = entry
+        releases = self.host.paths.opt(entry["name"]) / "releases"
+        releases.mkdir(parents=True)
+        staging = operations.staging(self.host, entry, str(uuid.uuid4()))
+        (staging / "artifacts").mkdir(parents=True)
+        (staging / "artifacts/incomplete").write_bytes(b"unfinished")
+        with self.host.lock("host"):
+            self.assertIsNone(upgrades.tools_upgrade(self.host, self.host.read_registry(), self.source))
+        self.assertTrue((staging / "artifacts/incomplete").exists())
+        self.assertEqual(list(releases.iterdir()), [])
+
 
     def test_bundle_is_traversable_under_a_hardened_umask(self):
         previous = os.umask(0o077)

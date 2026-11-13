@@ -106,14 +106,15 @@ def write_runtime_descriptor(host, entry, release_path):
                                  "work_dir": paths["data"]}, sort_keys=True) + "\n", mode=0o644)
 
 
-def unpack_archive(host, archive, destination, entry, checksum, *, expansion_budget=None):
+def unpack_archive(host, archive, destination, entry, checksum, *, expansion_budget=None, manifest_check=None):
     """Inspect every header before writing; no links, devices or extraction API."""
     check_path(archive, "file")
     require(archive.stat().st_size <= MAX_ARCHIVE_BYTES and isinstance(checksum, str)
             and re.fullmatch(r"[a-f0-9]{64}", checksum) and digest(archive) == checksum,
             "archive_checksum", "Upload is incomplete or differs from its expected checksum.")
-    check_path(destination, "directory")
-    require(not destination.exists(), "release_conflict", "Release staging path already exists.")
+    if destination is not None:
+        check_path(destination, "directory")
+        require(not destination.exists(), "release_conflict", "Release staging path already exists.")
     feature = entry.get("topology", {}).get("schema") == 2
     if feature:
         from artifacts import ExpansionBudget
@@ -146,6 +147,10 @@ def unpack_archive(host, archive, destination, entry, checksum, *, expansion_bud
             if feature:
                 require(manifest["schema"] == 2 and all(name == "." or any(file.startswith(name + "/") for file in actual)
                         for item, name in members if item.isdir()), "release_inventory", "Feature archive has undeclared directories.")
+            if manifest_check is not None:
+                manifest_check(manifest)
+            if destination is None:
+                return manifest
             # Explicit modes: the service account executes the release, and a
             # hardened root umask must not make it root-only.
             destination.mkdir(mode=0o755, parents=True)
