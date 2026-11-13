@@ -13,12 +13,14 @@ import os
 from pathlib import Path
 import re
 import signal
+import stat
 import subprocess
 import time
 import uuid
 
-from contracts import DeployError, HOST_PATHS, check_path, read_json, require
+from contracts import DeployError, HOST_PATHS, check_path, contract_path, digest, parse_json, read_json, require
 from host import Host, LOCK_WAIT_SECONDS
+from topology import DeploymentProfile, ExecutableBinding, ExecutableRole, PackageExecutable, Topology
 
 POLICY = "/usr/sbin/policy-rc.d"
 LOCKS = ("/var/lib/dpkg/lock-frontend", "/var/lib/dpkg/lock",
@@ -146,6 +148,12 @@ def _load(host: Host) -> dict | None:
             and all(PACKAGE.fullmatch(name) and isinstance(version, str) and VERSION.fullmatch(version)
                     for name, version in value["transaction"].items()),
             "package_journal", "Invalid package recovery intent.")
+    if "evidence" in value:
+        require(value.get("supply_sha256") == _digest({key: value[key] for key in
+                    ("evidence", "activation_before", "activation_units")})
+                and all(UNIT.fullmatch(unit) for unit in value["activation_units"])
+                and set(value.get("masked_defaults", [])) <= value["activation_units"].keys(),
+                "package_journal", "Package supply or activation intent changed.")
     return value
 
 
@@ -225,11 +233,64 @@ def _simulate(host: Host, targets: Sequence[str], inventory: dict, approved=None
     return transaction
 
 
-def inspect(host: Host) -> dict:
+def role_requirements(topology: Topology, profile: DeploymentProfile) -> dict[str, list[str]]:
+    """Direct package requirements, with every placed requesting role recorded."""
+    placement = dict(profile.placement)
+    require(set(placement) == {role.common.name for role in topology.roles},
+            "package_roles", "Package placement does not cover the selected topology.")
+    result = {}
+    for role in topology.roles:
+        if placement[role.common.name]:
+            for name in role.common.packages:
+                result.setdefault(name, []).append(role.common.name)
+    return {name: sorted(roles) for name, roles in sorted(result.items())}
+
+
+def executable_evidence(host: Host, reference: PackageExecutable, inventory=None) -> dict:
+    """Resolve by explicit path and dpkg ownership, never by PATH lookup."""
+    inventory = _inventory(host) if inventory is None else inventory
+    require(_installed(inventory, reference.package), "package_executable", "Executable package is not installed.")
+    contract_path(reference.path, absolute=True)
+    # System-owned usrmerge links are accepted only via realpath followed by a
+    # package-database ownership check of the final executable, never a user link.
+    path = host.paths.p(reference.path)
+    resolved = path.resolve(strict=True)
+    require(resolved.is_relative_to(host.paths.root), "package_executable", "Package executable escapes the host root.")
+    for candidate in (path, resolved):
+        for parent in [candidate, *candidate.parents]:
+            info = parent.lstat()
+            require((info.st_uid == 0 or host.paths.root != Path("/"))
+                    and (stat.S_ISLNK(info.st_mode) or not info.st_mode & 0o022),
+                    "package_executable", "Package executable ancestry is writable or foreign-owned.")
+            if parent == host.paths.root:
+                break
+    check_path(resolved, "file")
+    info = resolved.stat()
+    require(stat.S_ISREG(info.st_mode) and info.st_mode & 0o111 and not info.st_mode & 0o6022,
+            "package_executable", "Package executable has unsafe type or permissions.")
+    name = "/" + resolved.relative_to(host.paths.root).as_posix()
+    result = host.run(["dpkg-query", "-S", name], check=False)
+    owners = []
+    for line in result.stdout.splitlines():
+        owner, separator, owned = line.partition(": ")
+        if separator and owned == name:
+            owners.extend(owner.split(", "))
+    require(result.returncode == 0 and len(owners) == 1
+            and _package_key(inventory, owners[0]) == _package_key(inventory, reference.package),
+            "package_executable", "Selected executable is not owned by its declared installed package.")
+    return {"package": reference.package, "version": _record(inventory, reference.package)["version"],
+            "path": name, "sha256": digest(resolved)}
+
+
+def inspect(host: Host, topology: Topology | None = None, profile: DeploymentProfile | None = None,
+            *, previous_requirements: Sequence[str] = ()) -> dict:
     """Read-only package plan, with owned incomplete installation considered first."""
     journal = _load(host)
     inventory, locks = _inventory(host), _locks(host)
     missing = _required(host, inventory)
+    require((topology is None) == (profile is None), "package_roles", "Topology and placement must be supplied together.")
+    roles = role_requirements(topology, profile) if topology is not None else {}
+    missing = sorted(set(missing) | {name for name in roles if not _installed(inventory, name)})
     pending = journal is not None and journal["state"] == "installing"
     active = _transaction_active(host, journal)
     if pending and not locks and not active:
@@ -239,11 +300,338 @@ def inspect(host: Host) -> dict:
     if not pending and missing and not locks and not policy.exists() and not policy.is_symlink():
         _clean_inventory(inventory)
         transaction = _simulate(host, missing, inventory)
-    return {"installed": inventory, "missing": missing, "locks": locks,
+    evidence = journal.get("evidence", {}) if pending else _candidate_evidence(host, transaction) if transaction else {}
+    executables = []
+    if topology is not None:
+        for role in topology.roles:
+            if not dict(profile.placement)[role.common.name]:
+                continue
+            refs = [binding.executable for _, binding in role.common.bindings if isinstance(binding, ExecutableBinding)]
+            if isinstance(role, ExecutableRole):
+                refs.append(role.executable)
+            for reference in refs:
+                if isinstance(reference, PackageExecutable) and _installed(inventory, reference.package):
+                    executables.append({"role": role.common.name, **executable_evidence(host, reference, inventory)})
+    return {"installed": inventory, "missing": missing, "locks": locks, "role_requirements": roles,
+            "retained_requirements": sorted(set(previous_requirements) - set(roles)),
+            "evidence": evidence, "executables": executables,
+            "activation": journal.get("activation_before", {}) if pending else _activation_snapshot(host),
             "policy_present": policy.exists() or policy.is_symlink(),
             "transaction_active": active,
             "state": "busy" if locks or active else "resume" if pending else "blocked" if policy.exists() or policy.is_symlink() else "ready",
             "transaction": transaction, "ubuntu_major": ubuntu_major(host)}
+
+
+# Read authenticated apt indexes using tools present on minimal supported hosts.
+# Do not bootstrap a Python apt binding before package authentication is available.
+# Index hashes are checked against InRelease verified with the distro keyring;
+# an arbitrary locally trusted repository cannot impersonate an Ubuntu origin.
+_APT_EVIDENCE = r'''
+import hashlib,io,json,pathlib,subprocess,sys,tempfile
+from urllib.parse import urljoin
+
+def command(args):
+    with tempfile.TemporaryFile() as output:
+        subprocess.run(args, stdout=output, stderr=subprocess.DEVNULL, check=True, timeout=60)
+        if output.tell() > 4*1024**2:
+            raise ValueError("metadata output too large")
+        output.seek(0)
+        return output.read()
+
+def paragraphs(stream):
+    record, key, size = {}, None, 0
+    while True:
+        line = stream.readline(65537)
+        if len(line) > 65536:
+            raise ValueError("metadata line too large")
+        if not line or line in (b"\n", b"\r\n"):
+            if record:
+                yield record
+            record, key, size = {}, None, 0
+            if not line:
+                return
+            continue
+        size += len(line)
+        if size > 2*1024**2:
+            raise ValueError("metadata record too large")
+        text = line.decode("utf-8").rstrip("\r\n")
+        if text.startswith((" ", "\t")) and key is not None:
+            record[key] += "\n" + text.strip()
+        else:
+            key, separator, value = text.partition(":")
+            if not separator or key in record:
+                raise ValueError("invalid metadata")
+            record[key] = value.strip()
+
+requested = json.loads(sys.argv[1])
+native_architecture = command(["dpkg", "--print-architecture"]).decode("ascii").strip()
+records, releases = {}, {}
+targets = list(paragraphs(io.BytesIO(command(["apt-get", "indextargets"]))))
+if len(targets) > 256 or len(requested) > 2048:
+    raise ValueError("too many package indexes or requirements")
+for target in targets:
+    if target.get("Identifier") != "Packages":
+        continue
+    filename = pathlib.Path(target["Filename"])
+    if filename.parent != pathlib.Path("/var/lib/apt/lists") or filename.is_symlink():
+        raise ValueError("unsafe package index")
+    process = subprocess.Popen(["/usr/lib/apt/apt-helper", "cat-file", str(filename)],
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    found, checksum, size = [], hashlib.sha256(), 0
+    class IndexReader:
+        def readline(self, limit):
+            global size
+            line = process.stdout.readline(limit)
+            checksum.update(line)
+            size += len(line)
+            if size > 512*1024**2:
+                raise ValueError("package index too large")
+            return line
+    try:
+        for record in paragraphs(IndexReader()):
+            name = record.get("Package", "")
+            architecture = record.get("Architecture", "")
+            for requested_name in (name, name + ":" + architecture):
+                if requested_name == name and architecture not in (native_architecture, "all"):
+                    continue
+                if requested_name in requested and requested[requested_name] == record.get("Version"):
+                    found.append((requested_name, record))
+                    if len(found) > 4096:
+                        raise ValueError("too many package matches")
+        if process.wait(timeout=30):
+            raise ValueError("cannot read package index")
+    finally:
+        process.stdout.close()
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+    if not found:
+        continue
+    prefix, separator, rest = filename.name.partition("_dists_")
+    if not separator:
+        raise ValueError("unsupported package index")
+    suite = rest.split("_", 1)[0]
+    signed = filename.parent / (prefix + "_dists_" + suite + "_InRelease")
+    if signed.is_symlink():
+        raise ValueError("unsafe signed release")
+    if str(signed) not in releases:
+        cleartext = command(["gpgv", "--keyring", "/usr/share/keyrings/ubuntu-archive-keyring.gpg",
+                             "--output", "-", str(signed)])
+        releases[str(signed)] = next(paragraphs(io.BytesIO(cleartext)))
+    release = releases[str(signed)]
+    hashes = {}
+    for line in release.get("SHA256", "").splitlines():
+        if line.strip():
+            value, length, name = line.split()
+            hashes[name] = (value, int(length))
+    if hashes.get(target["MetaKey"]) != (checksum.hexdigest(), size):
+        raise ValueError("package index differs from signed release")
+    origin = {"origin": release.get("Origin"), "label": release.get("Label"),
+              "archive": release.get("Suite"), "codename": release.get("Codename"),
+              "site": target.get("Site", ""), "trusted": target.get("Trusted") == "yes"}
+    base, separator, _ = target["URI"].partition("/dists/")
+    if not separator:
+        raise ValueError("unsupported package URI")
+    for name, record in found:
+        package_path = record["Filename"]
+        if not package_path.startswith("pool/") or ".." in pathlib.PurePosixPath(package_path).parts:
+            raise ValueError("unsafe package URI")
+        candidate = {"version": record["Version"], "architecture": record["Architecture"],
+                     "sha256": record["SHA256"], "size": int(record["Size"])}
+        if name in records and any(records[name][key] != value for key, value in candidate.items()):
+            raise ValueError("ambiguous package bytes")
+        entry = records.setdefault(name, {**candidate, "uris": [], "origins": [], "indexes": []})
+        for key, value in (("uris", urljoin(base + "/", package_path)), ("origins", origin), ("indexes", str(filename))):
+            if value not in entry[key]:
+                entry[key].append(value)
+print(json.dumps(records, sort_keys=True))
+'''
+
+
+def _validate_evidence(evidence, transaction, codename):
+    from urllib.parse import urlsplit
+    require(isinstance(evidence, dict) and set(evidence) == set(transaction),
+            "package_origin", "Package origin evidence does not cover the full dependency transaction.")
+    for name, record in evidence.items():
+        require(isinstance(record, dict) and record.get("version") == transaction[name]
+                and re.fullmatch(r"[a-f0-9]{64}", record.get("sha256", ""))
+                and type(record.get("size")) is int and 0 < record["size"] <= 2 * 1024**3
+                and record.get("architecture") in ("amd64", "arm64", "all"),
+                "package_origin", "Package version/hash/size evidence is invalid.")
+        origins = record.get("origins")
+        require(isinstance(origins, list) and 1 <= len(origins) <= 32,
+                "package_origin", "Package has no authenticated archive origin.")
+        for origin in origins:
+            require(origin.get("trusted") is True and origin.get("origin") == "Ubuntu" and origin.get("label") == "Ubuntu"
+                    and origin.get("codename") == codename
+                    and origin.get("archive") in {codename, codename + "-updates", codename + "-security", codename + "-backports"},
+                    "package_origin", "Every dependency must come from the supported signed Ubuntu archive.")
+        uris = record.get("uris")
+        require(isinstance(uris, list) and 1 <= len(uris) <= 32, "package_origin", "Package has no bounded archive location.")
+        for uri in uris:
+            parsed = urlsplit(uri)
+            site = parsed.hostname or ""
+            require(parsed.scheme in ("http", "https") and not parsed.username and not parsed.password
+                    and not parsed.query and not parsed.fragment and parsed.port in (None, 80, 443)
+                    and bool(site), "package_origin", "Invalid signed-archive mirror location.")
+
+
+def _candidate_evidence(host, transaction):
+    if not transaction:
+        return {}
+    ubuntu_major(host)
+    os_release = host.paths.p("/etc/os-release")
+    if os_release.is_symlink():
+        os_release = host.paths.p("/usr/lib/os-release")
+    fields = dict(line.split("=", 1) for line in os_release.read_text().splitlines() if "=" in line)
+    codename = fields.get("VERSION_CODENAME", "").strip('"')
+    require(bool(re.fullmatch(r"[a-z]+", codename)), "package_origin", "Cannot establish the supported distro archive suite.")
+    result = host.run(["/usr/bin/python3", "-c", _APT_EVIDENCE, json.dumps(transaction)], timeout=120)
+    evidence = parse_json(result.stdout)
+    _validate_evidence(evidence, transaction, codename)
+    return evidence
+
+
+UNIT = re.compile(r"[A-Za-z0-9_:,.@\\-]+\.(?:service|socket|timer|path|target)")
+
+
+def _activation_snapshot(host):
+    names = set()
+    for args in (["list-unit-files", "--no-legend", "--no-pager"],
+                 ["list-units", "--all", "--plain", "--no-legend", "--no-pager"]):
+        result = host.run(["systemctl", *args])
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if parts and UNIT.fullmatch(parts[0]):
+                names.add(parts[0])
+    require(len(names) <= 4096, "package_activation", "Host activation inventory is too large.")
+    if not names:
+        return {}
+    result = host.run(["systemctl", "show", *sorted(names), "--no-pager", "-p", "Id", "-p", "LoadState",
+                       "-p", "ActiveState", "-p", "SubState", "-p", "MainPID", "-p", "UnitFileState", "-p", "FragmentPath"])
+    records = {}
+    for block in result.stdout.strip().split("\n\n"):
+        record = dict(line.split("=", 1) for line in block.splitlines() if "=" in line)
+        name = record.pop("Id", None)
+        require(name in names and record.get("LoadState") in ("loaded", "masked", "not-found")
+                and record.get("ActiveState") and "UnitFileState" in record,
+                "package_activation", "Cannot classify existing host activation.")
+        records[name] = record
+    # Aliases may share an Id. Keep their file-state observation independently.
+    for name in names - records.keys():
+        result = host.run(["systemctl", "is-enabled", name], check=False)
+        require(result.stdout.strip() in ("alias", "enabled", "enabled-runtime", "linked", "linked-runtime", "masked", "masked-runtime", "static", "disabled", "indirect", "generated"),
+                "package_activation", "Cannot classify an activation alias.")
+        records[name] = {"alias_state": result.stdout.strip()}
+    return dict(sorted(records.items()))
+
+
+_DEB_UNITS = r'''
+import json,pathlib,subprocess,sys,tarfile
+process = subprocess.Popen(["dpkg-deb", "--fsys-tarfile", sys.argv[1]], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+units, total, count = set(), 0, 0
+try:
+    with tarfile.open(fileobj=process.stdout, mode="r|") as archive:
+        for item in archive:
+            count += 1
+            total += item.size
+            if count > 100000 or total > 8*1024**3 or item.issparse():
+                raise ValueError("oversized package")
+            name = item.name.removeprefix("./").rstrip("/")
+            path = pathlib.PurePosixPath(name)
+            if path.is_absolute() or ".." in path.parts:
+                raise ValueError("unsafe package member")
+            prefixes = ("lib/systemd/system/", "usr/lib/systemd/system/", "etc/systemd/system/")
+            if any(name.startswith(p) for p in prefixes) and not item.isdir():
+                units.add(path.name)
+            if name.startswith("etc/init.d/") and not item.isdir():
+                units.add(path.name + ".service")
+            if name.startswith(("usr/share/dbus-1/system-services/", "etc/cron.", "etc/cron.d/")) and not item.isdir():
+                raise ValueError("unsupported activation")
+    process.stdout.close()
+    if process.wait(timeout=30):
+        raise ValueError("cannot read package")
+    print(json.dumps(sorted(units)))
+finally:
+    if process.poll() is None:
+        process.kill()
+        process.wait()
+'''
+
+
+def _prepare_payloads(host, transaction, evidence):
+    """Acquire inert distro payloads, verify reviewed hashes, inspect default units."""
+    targets = [name + "=" + version for name, version in transaction.items()]
+    host.run(["apt-get", "-y", "--download-only", "--no-install-recommends", "--no-remove", "--no-upgrade",
+              "-o", "APT::Get::AllowUnauthenticated=false", "install", *targets], env=ENVIRONMENT, timeout=1200)
+    cache = host.paths.p("/var/cache/apt/archives")
+    wanted = {record["sha256"]: name for name, record in evidence.items()}
+    require(len(wanted) == len(evidence), "package_payload", "Ambiguous package hashes.")
+    found, units = set(), {}
+    for path in sorted(cache.glob("*.deb")):
+        check_path(path, "file")
+        if path.stat().st_size not in {record["size"] for record in evidence.values()}:
+            continue
+        checksum = digest(path)
+        if checksum not in wanted:
+            continue
+        name = wanted[checksum]
+        found.add(name)
+        result = host.run(["/usr/bin/python3", "-c", _DEB_UNITS, str(path)], timeout=120)
+        names = parse_json(result.stdout)
+        require(isinstance(names, list) and len(names) <= 4096 and all(isinstance(unit, str) and UNIT.fullmatch(unit) for unit in names),
+                "package_activation", "Package has unclassifiable activation payloads.")
+        for unit in names:
+            units.setdefault(unit, []).append(name)
+    require(found == set(transaction), "package_payload", "Downloaded packages differ from the reviewed transaction hashes.")
+    return {unit: sorted(owners) for unit, owners in sorted(units.items())}
+
+
+def _mask_defaults(host, journal):
+    before, units = journal["activation_before"], journal["activation_units"]
+    directory = host.check_control_directory(host.paths.p("/etc/systemd/system"))
+    directory.mkdir(parents=True, exist_ok=True)
+    for unit in units:
+        if unit in before:
+            continue
+        if "@." in unit:
+            prefix, suffix = unit.split("@.", 1)
+            require(not any(n.startswith(prefix + "@") and n.endswith("." + suffix) for n in before),
+                    "package_activation", "A new template would mask preexisting foreign instances.")
+        path = directory / unit
+        if path.is_symlink():
+            require(os.readlink(path) == "/dev/null" and unit in journal.get("masked_defaults", []),
+                    "package_activation", "A foreign default-unit mask appeared.")
+        else:
+            require(not path.exists(), "package_activation", "A foreign default-unit file appeared.")
+            # Record ownership before creating the mask; recovery recognizes only
+            # this exact intent and never overwrites a foreign service.
+            if unit not in journal.setdefault("masked_defaults", []):
+                journal["masked_defaults"].append(unit)
+                _save(host, journal)
+            path.symlink_to("/dev/null")
+            _sync_directory(directory)
+    host.run(["systemctl", "daemon-reload"])
+
+
+def _finish_activation(host, journal):
+    before, current = journal["activation_before"], _activation_snapshot(host)
+    require(all(current.get(name) == record for name, record in before.items()),
+            "package_service_changed", "Preexisting host activation changed during installation; operator review required.")
+    for name, record in current.items():
+        if name in before:
+            continue
+        template = name.split("@", 1)[0] + "@." + name.rsplit(".", 1)[1] if "@" in name else name
+        require(name in journal["activation_units"] or template in journal["activation_units"],
+                "package_activation", "Unowned activation appeared during package installation.")
+        require(record.get("ActiveState") == "inactive" and record.get("MainPID", "0") == "0",
+                "package_autostart", "New package activation started unexpectedly; installation remains unresolved.")
+        host.run(["systemctl", "disable", name])
+    # Keep the owned persistent masks. Disabling alone cannot fence socket or
+    # dependency/manual activation after a reboot or interrupted installation.
+    for unit in journal.get("masked_defaults", []):
+        path = host.paths.p("/etc/systemd/system") / unit
+        require(path.is_symlink() and os.readlink(path) == "/dev/null", "package_activation", "Package replaced an owned default mask.")
 
 
 def _clean_inventory(inventory: dict) -> None:
@@ -429,8 +817,13 @@ def _finish_defaults(host: Host, journal: dict) -> None:
         host.run(["systemctl", "disable", "redis-server.service"])
 
 
-def install_missing(host: Host, names: Sequence[str]) -> None:
-    """Resume the owned transaction before considering any new package request."""
+def install_missing(host: Host, names: Sequence[str], *, reviewed: dict | None = None) -> None:
+    """Resume owned installation before new requests; never upgrade or uninstall.
+
+    M3 passes inspect's full reviewed observation while holding its host lock.
+    After installation it calls executable_evidence for newly available package
+    executable bindings before admitting any service that consumes them.
+    """
     require(not isinstance(names, (str, bytes)) and all(isinstance(n, str) and PACKAGE.fullmatch(n) for n in names),
             "package_names", "Package names must be literal distro package identifiers.")
     journal = _load(host)
@@ -443,6 +836,7 @@ def install_missing(host: Host, names: Sequence[str]) -> None:
     if journal and (journal["state"] == "installing" or journal.get("policy_state") != "restored"):
         _restore_policy(host, journal)
     inventory = _inventory(host)
+    prepared = False
     if not journal or journal["state"] == "complete":
         _clean_inventory(inventory)
         missing = sorted(set(name for name in names if not _installed(inventory, name)))
@@ -451,15 +845,41 @@ def install_missing(host: Host, names: Sequence[str]) -> None:
         policy = host.paths.p(POLICY)
         require(not policy.exists() and not policy.is_symlink(), "package_policy_conflict", "An existing policy-rc.d blocks package installation.")
         approved = _simulate(host, missing, inventory)
+        evidence = _candidate_evidence(host, approved)
+        activation = _activation_snapshot(host)
+        if reviewed is not None:
+            require(reviewed.get("transaction") == approved and reviewed.get("evidence") == evidence
+                    and reviewed.get("installed") == inventory and reviewed.get("activation") == activation,
+                    "package_plan_changed", "Package transaction, origin or activation changed after approval.")
+        units = _prepare_payloads(host, approved, evidence)
+        require(_inventory(host) == inventory and _activation_snapshot(host) == activation,
+                "package_plan_changed", "Host changed while acquiring inert package payloads.")
+        prepared = True
         operation = str(uuid.uuid4())
         journal = {"schema": 1, "operation_id": operation, "state": "installing", "requested": missing,
                    "before": inventory, "defaults": _defaults(host), "transaction": approved,
+                   "evidence": evidence, "activation_before": activation, "activation_units": units,
                    "transaction_sha256": _digest(approved), "policy_state": "intent",
                    "policy": f"#!/bin/sh\n# Foundry package transaction {operation}\nexit 101\n"}
+        journal["supply_sha256"] = _digest({key: journal[key] for key in
+                                          ("evidence", "activation_before", "activation_units")})
         _save(host, journal)
     _check_resume(inventory, journal)
+    if reviewed is not None:
+        require(reviewed.get("transaction") == journal["transaction"] and reviewed.get("evidence") == journal.get("evidence"),
+                "package_plan_changed", "Reviewed supply transaction differs from the recovery intent.")
+    require("evidence" in journal, "package_journal", "Legacy incomplete package intent needs reconciliation before capability installation.")
+    pending = {name: version for name, version in journal["transaction"].items() if not _installed(inventory, name)}
+    if pending and not prepared:
+        evidence = _candidate_evidence(host, pending)
+        require(evidence == {name: journal["evidence"][name] for name in pending},
+                "package_plan_changed", "Package origin/hash changed during recovery.")
+        units = _prepare_payloads(host, pending, evidence)
+        require(all(unit in journal["activation_units"] and set(owners) <= set(journal["activation_units"][unit])
+                    for unit, owners in units.items()), "package_plan_changed", "Package activation payload changed during recovery.")
     _suppress(host, journal)
     try:
+        _mask_defaults(host, journal)
         # A07: configure only unpacked packages belonging to this exact intent.
         partial = [name for name in journal["transaction"] if _record(inventory, name).get("status", "").split()[-1:]
                    in (["unpacked"], ["half-configured"], ["triggers-awaited"], ["triggers-pending"])]
@@ -470,12 +890,14 @@ def install_missing(host: Host, names: Sequence[str]) -> None:
         targets = [name + "=" + version for name, version in journal["transaction"].items() if not _installed(inventory, name)]
         if targets:
             _simulate(host, targets, inventory, approved=journal["transaction"])
-            _run_transaction(host, ["apt-get", "-y", "--no-install-recommends", "--no-remove", "--no-upgrade", "install", *targets])
+            _run_transaction(host, ["apt-get", "-y", "--no-download", "--no-install-recommends", "--no-remove", "--no-upgrade",
+                                    "-o", "APT::Get::AllowUnauthenticated=false", "install", *targets])
         inventory = _inventory(host)
         _check_resume(inventory, journal)
         require(all(_installed(inventory, name) for name in journal["transaction"]),
                 "package_incomplete", "The owned package transaction remains incomplete.")
         _finish_defaults(host, journal)
+        _finish_activation(host, journal)
         journal["state"] = "complete"
         _save(host, journal)
     finally:

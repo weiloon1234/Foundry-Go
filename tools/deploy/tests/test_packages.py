@@ -1,10 +1,15 @@
 """Offline package transaction and interruption regressions; no host mutation."""
 from pathlib import Path
 import subprocess
+import copy
+import contextlib
+import hashlib
+import io
+import json
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
@@ -101,7 +106,7 @@ class PackageHost(Host):
         if args[0] == "dpkg-query":
             output = "\n".join(f"{name}\t{value['status']}\t{value['version']}" for name, value in self.inventory.items())
         elif args[0] == "systemctl":
-            if args[1] == "disable":
+            if args[1] in ("disable", "daemon-reload"):
                 pass
             else:
                 exists = self.paths.p("/etc/postgresql/16/main").exists() and args[2] == "postgresql@16-main.service"
@@ -132,6 +137,14 @@ class PackageTransactionTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.host = PackageHost(Path(temporary.name))
+        for name, kwargs in (
+                ("_candidate_evidence", {"side_effect": lambda host, transaction: {
+                    name: {"version": version, "sha256": "a" * 64} for name, version in transaction.items()}}),
+                ("_prepare_payloads", {"return_value": {}}),
+                ("_activation_snapshot", {"return_value": {}})):
+            patcher = patch.object(packages, name, **kwargs)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_missing_install_is_pinned_guarded_and_restores_policy(self):
         packages.install_missing(self.host, ["new", "foreign"])
@@ -300,6 +313,195 @@ class PackageTransactionTests(unittest.TestCase):
         path.symlink_to("../usr/lib/os-release")
         target.write_text('ID=ubuntu\nVERSION_ID="26.04"\n')
         self.assertEqual(18, packages.ubuntu_major(self.host))
+
+    def test_reviewed_hash_or_activation_drift_refuses_before_install(self):
+        with patch.object(packages, "_required", return_value=["new"]):
+            plan = packages.inspect(self.host)
+        for key in ("transaction", "evidence", "activation", "installed"):
+            changed = copy.deepcopy(plan)
+            changed[key] = {"unexpected": {}}
+            with self.subTest(key=key), self.assertRaises(DeployError) as error:
+                packages.install_missing(self.host, ["new"], reviewed=changed)
+            self.assertEqual(error.exception.code, "package_plan_changed")
+            self.assertFalse(packages._journal_path(self.host).exists())
+        packages.install_missing(self.host, ["new"], reviewed=plan)
+        self.assertEqual(packages._load(self.host)["state"], "complete")
+
+    def test_dependency_hash_drift_blocks_resume_before_configuration(self):
+        self.host.interrupt = True
+        with self.assertRaises(DeployError):
+            packages.install_missing(self.host, ["new"])
+        self.host.commands.clear()
+        with patch.object(packages, "_candidate_evidence", return_value={"new": {"version": "1", "sha256": "b" * 64}}):
+            with self.assertRaises(DeployError) as error:
+                packages.install_missing(self.host, [])
+        self.assertEqual(error.exception.code, "package_plan_changed")
+        self.assertFalse(any(args[0] in ("apt-get", "dpkg") for args, _ in self.host.commands))
+
+
+class RolePackageTests(unittest.TestCase):
+    def test_only_placed_roles_request_packages_and_removed_requirements_are_retained(self):
+        from test_host_capabilities import profile
+        from topology import parse_profile, parse_topology
+        topology = parse_topology({"schema": 2, "roles": [
+            {"name": "http", "kind": "builtin", "packages": ["shared", "cli"]},
+            {"name": "worker", "kind": "builtin", "packages": ["shared", "worker-cli"]},
+            {"name": "scheduler", "kind": "builtin", "packages": ["unused"]}]})
+        placement = parse_profile({**profile(), "placement": {"http": 1, "worker": 1, "scheduler": 0}, "listeners": {}}, topology)
+        self.assertEqual(packages.role_requirements(topology, placement),
+                         {"cli": ["http"], "shared": ["http", "worker"], "worker-cli": ["worker"]})
+        with tempfile.TemporaryDirectory() as root:
+            host = PackageHost(Path(root))
+            host.inventory = {name: installed() for name in ("shared", "cli", "worker-cli", "old")}
+            with patch.object(packages, "_required", return_value=[]), patch.object(packages, "_activation_snapshot", return_value={}):
+                plan = packages.inspect(host, topology, placement, previous_requirements=["old", "shared"])
+            self.assertEqual(plan["missing"], [])
+            self.assertEqual(plan["retained_requirements"], ["old"])
+            self.assertFalse(any(args[0] in ("apt-get", "dpkg") for args, _ in host.commands))
+
+    def evidence(self):
+        return {"new": {"version": "1", "architecture": "amd64", "sha256": "a" * 64, "size": 100,
+                        "uris": ["https://archive.ubuntu.com/ubuntu/pool/new.deb"],
+                        "origins": [{"trusted": True, "origin": "Ubuntu", "label": "Ubuntu",
+                                     "codename": "noble", "archive": "noble-updates", "site": "archive.ubuntu.com"}]}}
+
+    def test_all_dependency_origins_must_be_signed_distro_records(self):
+        evidence = self.evidence()
+        packages._validate_evidence(evidence, {"new": "1"}, "noble")
+        for key, value in (("trusted", False), ("origin", "foreign"), ("codename", "other"), ("archive", "noble-proposed")):
+            bad = copy.deepcopy(evidence)
+            bad["new"]["origins"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(DeployError):
+                packages._validate_evidence(bad, {"new": "1"}, "noble")
+        for uri in ("https://user:password@example.org/p.deb", "file:///tmp/p.deb", "https://archive.ubuntu.com/p?token=x"):
+            bad = copy.deepcopy(evidence)
+            bad["new"]["uris"] = [uri]
+            with self.subTest(uri=uri), self.assertRaises(DeployError):
+                packages._validate_evidence(bad, {"new": "1"}, "noble")
+        mirrored = copy.deepcopy(evidence)
+        mirrored["new"]["uris"] = ["https://mirror.example.org/ubuntu/pool/new.deb"]
+        packages._validate_evidence(mirrored, {"new": "1"}, "noble")
+        with self.assertRaises(DeployError):
+            packages._validate_evidence(evidence, {"new": "1", "dependency": "2"}, "noble")
+
+    def test_package_executable_requires_exact_owner_and_safe_ancestry(self):
+        from topology import PackageExecutable
+        with tempfile.TemporaryDirectory() as root:
+            host = PackageHost(Path(root).resolve())
+            path = host.paths.p("/usr/bin/cli")
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"executable")
+            path.chmod(0o755)
+            reference = PackageExecutable("new", "/usr/bin/cli")
+            with patch.object(host, "run", return_value=subprocess.CompletedProcess([], 0, "new: /usr/bin/cli\n")):
+                result = packages.executable_evidence(host, reference, {"new": installed("2")})
+                self.assertEqual(result["version"], "2")
+                self.assertEqual(result["path"], "/usr/bin/cli")
+            with patch.object(host, "run", return_value=subprocess.CompletedProcess([], 0, "foreign: /usr/bin/cli\n")):
+                with self.assertRaises(DeployError):
+                    packages.executable_evidence(host, reference, {"new": installed()})
+            path.chmod(0o777)
+            with self.assertRaises(DeployError):
+                packages.executable_evidence(host, reference, {"new": installed()})
+
+
+class SignedIndexTests(unittest.TestCase):
+    def evidence(self, *, altered_index=False, signature_failure=False):
+        index = ("Package: new\nVersion: 1\nArchitecture: amd64\nFilename: pool/main/n/new.deb\n"
+                 "SHA256: " + "a" * 64 + "\nSize: 100\n\n").encode()
+        checksum = hashlib.sha256(index).hexdigest()
+        cleartext = ("Origin: Ubuntu\nLabel: Ubuntu\nSuite: noble-updates\nCodename: noble\nSHA256:\n "
+                     + checksum + " " + str(len(index)) + " main/binary-amd64/Packages\n").encode()
+        target = ("Identifier: Packages\nMetaKey: main/binary-amd64/Packages\nTrusted: yes\n"
+                  "Filename: /var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_main_binary-amd64_Packages.lz4\n"
+                  "URI: https://archive.ubuntu.com/ubuntu/dists/noble-updates/main/binary-amd64/Packages\n\n").encode()
+        calls = []
+        def command(args, **kwargs):
+            calls.append(args)
+            if args[0] == "dpkg":
+                self.assertEqual(args, ["dpkg", "--print-architecture"])
+                output = b"amd64\n"
+            elif args[0] == "apt-get":
+                self.assertEqual(args, ["apt-get", "indextargets"])
+                output = target
+            else:
+                self.assertEqual(args[:5], ["gpgv", "--keyring", "/usr/share/keyrings/ubuntu-archive-keyring.gpg", "--output", "-"])
+                if signature_failure:
+                    raise subprocess.CalledProcessError(1, args)
+                output = cleartext
+            kwargs["stdout"].write(output)
+            return subprocess.CompletedProcess(args, 0)
+        process = Mock()
+        process.stdout = io.BytesIO(index.replace(b"Size: 100", b"Size: 200") if altered_index else index)
+        process.wait.return_value = process.poll.return_value = 0
+        output = io.StringIO()
+        with patch.object(subprocess, "run", side_effect=command), patch.object(subprocess, "Popen", return_value=process), \
+                patch.object(sys, "argv", ["supply", '{"new":"1"}']), contextlib.redirect_stdout(output):
+            exec(packages._APT_EVIDENCE, {"__name__": "__main__"})
+        return json.loads(output.getvalue()), calls
+
+    def test_metadata_is_bound_to_index_digest_and_distro_signature_without_python_apt(self):
+        records, commands = self.evidence()
+        packages._validate_evidence(records, {"new": "1"}, "noble")
+        self.assertEqual(records["new"]["sha256"], "a" * 64)
+        self.assertEqual(records["new"]["uris"], ["https://archive.ubuntu.com/ubuntu/pool/main/n/new.deb"])
+        self.assertEqual(len(commands), 3)
+
+    def test_unsigned_or_changed_index_cannot_supply_reviewed_package_hashes(self):
+        with self.assertRaises(ValueError):
+            self.evidence(altered_index=True)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.evidence(signature_failure=True)
+
+
+class DefaultActivationTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.host = PackageHost(Path(temporary.name))
+        self.saved = patch.object(packages, "_save")
+        self.saved.start()
+        self.addCleanup(self.saved.stop)
+
+    def record(self, active="inactive", enabled="disabled"):
+        return {"LoadState": "loaded", "ActiveState": active, "SubState": "dead",
+                "UnitFileState": enabled, "MainPID": "0"}
+
+    def test_masks_only_proven_new_defaults_including_sockets_and_timers(self):
+        journal = {"activation_before": {"foreign.service": self.record("active", "enabled")},
+                   "activation_units": {name: ["new"] for name in ("new.service", "new.socket", "new.timer", "foreign.service")}}
+        packages._mask_defaults(self.host, journal)
+        for name in ("new.service", "new.socket", "new.timer"):
+            self.assertEqual(self.host.paths.p("/etc/systemd/system/" + name).readlink(), Path("/dev/null"))
+        self.assertFalse(self.host.paths.p("/etc/systemd/system/foreign.service").exists())
+        packages._mask_defaults(self.host, journal)
+        self.assertEqual(len(journal["masked_defaults"]), 3)
+
+    def test_foreign_mask_and_preexisting_template_instances_refuse(self):
+        directory = self.host.paths.p("/etc/systemd/system")
+        directory.mkdir(parents=True)
+        (directory / "new.service").symlink_to("/dev/null")
+        for before, units in (({}, {"new.service": ["new"]}),
+                              ({"new@foreign.service": self.record()}, {"new@.service": ["new"]})):
+            with self.assertRaises(DeployError):
+                packages._mask_defaults(self.host, {"activation_before": before, "activation_units": units})
+
+    def test_unexpected_or_active_defaults_remain_unresolved_without_stopping_foreign_units(self):
+        journal = {"activation_before": {"foreign.service": self.record("active", "enabled")},
+                   "activation_units": {"new.socket": ["new"]}}
+        for change in ({"new.socket": self.record("active")}, {"surprise.timer": self.record()},
+                       {"foreign.service": self.record("inactive")}):
+            with patch.object(packages, "_activation_snapshot", return_value={**journal["activation_before"], **change}):
+                with self.assertRaises(DeployError):
+                    packages._finish_activation(self.host, journal)
+        self.assertFalse(any("stop" in args or "disable" in args for args, _ in self.host.commands))
+
+    def test_inactive_new_default_disabled_while_foreign_activation_is_preserved(self):
+        before = {"foreign.service": self.record("active", "enabled")}
+        journal = {"activation_before": before, "activation_units": {"new.timer": ["new"]}}
+        with patch.object(packages, "_activation_snapshot", return_value={**before, "new.timer": self.record()}):
+            packages._finish_activation(self.host, journal)
+        self.assertEqual([args for args, _ in self.host.commands], [["systemctl", "disable", "new.timer"]])
 
 
 if __name__ == "__main__":
