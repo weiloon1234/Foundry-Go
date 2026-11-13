@@ -30,13 +30,20 @@ var instanceName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}$`)
 // Runtime contains the release profile and the instance's runtime paths.
 // Use Detect to obtain it before calling Enter.
 type Runtime struct {
-	Release    string
-	Instance   string
-	User       string
+	// Release is the absolute path of the selected release.
+	Release string
+	// Instance is the deployed instance name.
+	Instance string
+	// User is the instance account used to run the application.
+	User string
+	// ConfigFile is the selected release's application configuration file.
 	ConfigFile string
-	EnvFile    string
-	WorkDir    string
-	PublicDir  string
+	// EnvFile is the selected runtime environment file.
+	EnvFile string
+	// WorkDir is the application working directory.
+	WorkDir string
+	// PublicDir is the selected release's public asset directory.
+	PublicDir string
 }
 
 type descriptor struct {
@@ -47,8 +54,10 @@ type descriptor struct {
 	WorkDir  string `json:"work_dir"`
 }
 
-// Detect reads a bounded descriptor beside the resolved executable. An absent
-// descriptor returns ok=false; an invalid or unreadable descriptor returns an error.
+// Detect reads the role descriptor selected by BindingsEnvironment, or the
+// descriptor beside the resolved executable when that variable is absent.
+// An absent legacy descriptor returns ok=false; an invalid or unreadable
+// descriptor returns an error without falling back.
 func Detect() (Runtime, bool, error) { return detect(os.Executable) }
 
 func resolvedExecutable(executable func() (string, error)) (string, error) {

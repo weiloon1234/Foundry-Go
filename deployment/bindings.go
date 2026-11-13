@@ -22,47 +22,73 @@ import (
 const BindingsEnvironment = "FOUNDRY_DEPLOY_RUNTIME_FILE"
 const maxBindingsBytes = 4 << 20
 
+// BindingName identifies a binding declared by the consuming role.
 type BindingName string
+
+// RoleName identifies a builtin or executable role in the topology.
 type RoleName string
+
+// ListenerName identifies a listener within its producing role.
 type ListenerName string
+
+// InstanceID is the UUID of the deployed environment instance.
 type InstanceID string
+
+// SHA256 is a lowercase hexadecimal SHA-256 digest.
 type SHA256 string
+
+// EndpointScheme identifies the protocol used to address a private endpoint.
 type EndpointScheme string
 
 const (
+	// HTTP addresses a private HTTP listener.
 	HTTP EndpointScheme = "http"
-	TCP  EndpointScheme = "tcp"
+	// TCP addresses a private TCP listener.
+	TCP EndpointScheme = "tcp"
 )
 
 // Unit identifies a single placed service. Ordinals above one require a later capability.
 type Unit struct {
+	// Instance identifies the deployed environment instance.
 	Instance InstanceID
-	Role     RoleName
-	Ordinal  uint16
+	// Role identifies the placed service role.
+	Role RoleName
+	// Ordinal is the service copy number; the preview supports only one.
+	Ordinal uint16
 }
 
 // Executable is a host-verified absolute file, never a PATH search or shell command.
 type Executable struct {
-	Path   string
+	// Path is the absolute path of the host-verified executable.
+	Path string
+	// SHA256 identifies the executable source recorded by the host.
 	SHA256 SHA256
 }
 
 // Endpoint is an allocated private endpoint. It is immutable for this invocation.
 type Endpoint struct {
-	Role     RoleName
+	// Role identifies the producer of this endpoint.
+	Role RoleName
+	// Listener identifies the producer's listener.
 	Listener ListenerName
-	Scheme   EndpointScheme
-	Address  netip.Addr
-	Port     uint16
+	// Scheme selects HTTP or TCP addressing.
+	Scheme EndpointScheme
+	// Address is the allocated loopback address.
+	Address netip.Addr
+	// Port is the allocated private port, not the public edge port.
+	Port uint16
 }
 
+// URL returns the endpoint scheme and host with its port, without a path.
 func (e Endpoint) URL() url.URL {
 	return url.URL{Scheme: string(e.Scheme), Host: net.JoinHostPort(e.Address.String(), strconv.Itoa(int(e.Port)))}
 }
 
 // BundleDirectory is the protected service-local view, not the artifact's host path.
 type BundleDirectory struct {
-	Path   string
+	// Path is the absolute path of the protected directory view.
+	Path string
+	// SHA256 identifies the artifact that supplies this bundle.
 	SHA256 SHA256
 }
 
@@ -76,8 +102,14 @@ type Bindings struct {
 	bundles     map[BindingName]BundleDirectory
 }
 
-func (b Bindings) Unit() Unit               { return b.unit }
+// Unit returns the identity of the role invocation that owns these bindings.
+func (b Bindings) Unit() Unit { return b.unit }
+
+// DeploymentSHA256 returns the digest of the selected deployment.
 func (b Bindings) DeploymentSHA256() SHA256 { return b.deployment }
+
+// Executable returns the named executable.
+// A missing name returns an error classified as fault.Missing.
 func (b Bindings) Executable(name BindingName) (Executable, error) {
 	value, ok := b.executables[name]
 	if !ok {
@@ -85,6 +117,9 @@ func (b Bindings) Executable(name BindingName) (Executable, error) {
 	}
 	return value, nil
 }
+
+// Endpoint returns the named private endpoint.
+// A missing name returns an error classified as fault.Missing.
 func (b Bindings) Endpoint(name BindingName) (Endpoint, error) {
 	value, ok := b.endpoints[name]
 	if !ok {
@@ -92,6 +127,9 @@ func (b Bindings) Endpoint(name BindingName) (Endpoint, error) {
 	}
 	return value, nil
 }
+
+// Bundle returns the named service-local bundle directory.
+// A missing name returns an error classified as fault.Missing.
 func (b Bindings) Bundle(name BindingName) (BundleDirectory, error) {
 	value, ok := b.bundles[name]
 	if !ok {

@@ -113,9 +113,9 @@ def feature_archive(source, destination, host_id):
     checksum = hashlib.sha256(files["artisan"]).hexdigest()
     platform = "linux-" + profile["architecture"]
     topology = parse_topology({"schema": 2, "roles": [
-        {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["coreutils"],
+        {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["jq"],
          "bindings": {"relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
-                      "checksum": {"executable": {"package": "coreutils", "path": "/usr/bin/sha256sum"}}}},
+                      "checksum": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}}},
         {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
          "arguments": [{"literal": "feature:relay"}, {"listener_address": "control"}, {"listener_port": "control"}],
          "listeners": {"control": {"transport": "tcp", "bind": "public", "tls": "none", "authentication": True}},

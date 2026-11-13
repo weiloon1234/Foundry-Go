@@ -323,8 +323,11 @@ This consumer fixture loads the two HTTP-role bindings from the worked example:
 
 <!-- compiled-source: tests/fixtures/consumer/hostcapabilities/bindings.go#host-capability-bindings -->
 ```go
+// RelayDependencies contains the private control endpoint and tool used by the app.
 type RelayDependencies struct {
-	Control  deployment.Endpoint
+	// Control addresses the relay's private HTTP control listener.
+	Control deployment.Endpoint
+	// Checksum is the app's named executable binding.
 	Checksum deployment.Executable
 }
 

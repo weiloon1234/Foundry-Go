@@ -1,71 +1,65 @@
 # Changelog
 
-## Unreleased
+## v0.31.0 — 2026-11-14
 
-### Deployment feature preview
-
-- Added a consumer guide for topology 2/profile 3, with a generic authenticated
-  media relay, typed Go binding intake, preview refusals, and UFW/NAT/DNS operation.
-
-- Added public plain TCP coverage to the feature acceptance scenario: IPv4/IPv6
-  peer-namespace probes verify relay bytes through nginx stream on port 8554,
-  closure before activation and after stop, restart continuity, and report entries.
-  The acceptance image includes the real UFW/iptables/nftables observation tools.
-
-- Fixed: unchanged public TCP re-bootstrap validates committed runtime exposure
-  without adopting it again. Shared boot coordinators retain a verified immutable
-  bundle pin across tool upgrades; bootstrap checks coordinator, runtime and edge
-  ownership before firewall reload or runtime-route cleanup.
-
-- Fixed: Redis bootstrap recognizes an exact journal-owned package template mask
-  without releasing it during planning, then hands it off after reserving the
-  shared Redis service. Stock Redis, PostgreSQL and certbot defaults stay masked;
-  fake-host bootstrap now exercises real Redis preparation behind package masks.
-
-- Fixed: bootstrap and local planning pass validated feature topologies to network
-  findings; bootstrap plans the stream module, reviewed network prerequisites,
-  closed HTTP site and pre-nginx coordinator. Selected HTTP ports use the frozen
-  endpoint validator. Unit startup transfers admission to its verified MainPID;
-  reports use selected custom executables and network records. A fake-host test
-  drives the real plan/apply/activate/logs/report/restart/boot owners together.
-- Fixed: feature operation units install invocation-pinned independent
-  `ExecStopPost` cleanup. Incomplete operations withdraw exposure, stop and prove
-  workload exit, and retain unresolved cleanup that blocks subsequent starts.
-  Public opening rechecks the complete enabled set together for identity, probes
-  and stability. Activation refuses previously selected noncurrent releases as
-  preview rollback. Operation staging stays outside release inventories; durable
-  completion removes it while unresolved operations retain it.
-- Fixed: custom systemd units render an unquoted absolute `WorkingDirectory`.
-  Privileged preparation and runtime-pin creation explicitly set directory modes
-  and ownership despite `UMask=0077`, retaining searchable protected ancestors and
-  private service-owned leaves.
-
-- Added a final typed `deployment.LoadBindings` API and schema-2 role descriptors,
-  journaled HTTP effective environments, generation-12 feature lifecycle owners,
-  invocation-pinned runtime dispatch, package/artifact integration and an opt-in
-  systemd acceptance scenario. Public opening uses the integrated observed closure
-  and opening owners. Shared registry readers
-  now dispatch to the existing frozen feature parsers without schema changes.
-- Preview refusals cover feature rollback (including to legacy), configuration
-  holds, configuration/key changes, both maintenance down/up, named lifecycle
-  operations, recovery, unverified service bundle ABIs and custom-service secret
-  intake. Helper pruning retains all feature bundles with an explicit later-release
-  capability diagnostic. Feature down and up both refuse before mutation until
-  policy-aware closure and resume are integrated; maintenance is never one-way.
-  Wrappers and multiple copies remain release-2 capabilities.
-
-
-- Added: inactive host-capability lifecycle foundations for persistent boot
-  admission, invocation-bound validation allowances, single-instance custom unit
-  rendering, dependency preflight and per-start configuration/bundle views.
-  Feature execution remains capability-gated pending lifecycle integration;
-  legacy deployment and upload behavior are unchanged.
-
-- Added: public TCP listeners accept `tls: none` beside `tls: edge`, with mandatory
-  service authentication in both modes. Plain listeners use the same nginx stream,
-  firewall and closure path, are labelled unencrypted in network plans/reports,
-  and do not request certificates or TLS renewal probes. HTTP edge behaviour is
-  unchanged; lane A integrates the topology-aware network interfaces.
+- Added: generation-12 host capabilities preview with topology schema 2 and
+  environment profile schema 3. Applications declare distribution packages,
+  SHA-256-pinned platform artifacts and bundles, single-instance custom services,
+  typed argv, resource limits, state policy and readiness dependencies. Package
+  defaults stay masked until explicitly handed to a framework service owner;
+  declaring an executable dependency does not start a daemon. Service-local bundle
+  views remain protected, and configuration is prepared per start with immutable,
+  rendered JSON, recreate and seed-once modes.
+- Added: `deployment.LoadBindings` supplies immutable, typed endpoint, executable
+  and bundle bindings from the invocation's role descriptor. Missing names and
+  invalid explicit descriptors return errors. Journaled effective environments
+  keep the application's private HTTP allocation aligned with its bindings.
+  Persistent boot admission, dependency-ordered startup and whole-set readiness
+  checks precede public opening. Incomplete operations close exposure and stop
+  workloads through independently pinned cleanup; unresolved cleanup blocks
+  subsequent starts. Whole-instance restart and stop, role logs and per-instance
+  listener reports are supported.
+- Added: public TCP through nginx stream with `tls: edge` termination or explicit
+  unencrypted `tls: none`. Both require `authentication: true`: the service must
+  authenticate and authorize clients itself. Profile bindings select public ports,
+  source CIDRs and external DNS-only hostnames. Active default-deny UFW enforces
+  closure before activation and after stop on supported nft and legacy backends,
+  for IPv4 and IPv6. Bootstrap does not enable/reset UFW or adopt foreign allows.
+  Docker DNS and outbound masquerade NAT rules can coexist; inbound DNAT/REDIRECT
+  that can match a claimed port, ambiguous rules and unknown hooks refuse.
+  Proven-disjoint NAT rules are accepted. Foundry does not publish Docker ports
+  or configure upstream NAT; declared addresses must belong to the host namespace.
+- Changed: feature operations outside the preview fail with explicit capability
+  errors naming the post-preview B24 lifecycle release. Refusals cover rollback
+  to previous feature or legacy releases (including reactivation of a previously
+  selected noncurrent release), configuration changes/holds, key rotation, both
+  maintenance `down` and `up`, named lifecycle operations, interrupted-operation
+  reconciliation/recovery, custom-service secret intake, and bundles without
+  matching package-version ABI evidence. Changed reprovisioning of selected
+  profiles, package requirements or owned network/boot files also refuses, as do
+  missing package requirements at activation, feature release/artifact pruning,
+  host capacity changes involving features, and feature backup configuration/run
+  and restore drills. Helper pruning retains every feature helper bundle and
+  upgrade journal with a capability diagnostic; invocation/view bounds still
+  apply. Neither direction of maintenance mutates a feature instance.
+- Changed: wrappers, counts above one, ordinals other than one, PROXY protocol and
+  managed application DNS remain B24 release-2 capabilities. UDP listeners and
+  artifact formats other than `file` and `tar.gz` are unsupported, with no numbered
+  release promise. Existing applications and generation 9–11 hosts retain their
+  behavior, including upload provisioning. On an existing bound host, run
+  `ACTION=tools-plan make deploy`, then `ACTION=tools-apply make deploy` with the
+  reviewed `PLAN_TOKEN` and stable `OPERATION` UUID using its legacy profile before
+  adopting schema 3. Fresh bootstrap installs the pinned generation-12 tools.
+  See the [host capabilities consumer guide](docs/guides/host-capabilities.md)
+  for declarations, authentication responsibilities, prerequisites and commands.
+- Fixed: unchanged public TCP re-bootstrap validates owned runtime exposure;
+  shared boot coordinators retain verified bundle pins across tool upgrades.
+  Bootstrap checks ownership before network mutation and safely hands off the
+  framework Redis template while retaining masks on stock defaults. Custom units
+  use valid absolute working directories, and privileged preparation assigns
+  explicit traversal modes and ownership under restrictive umasks. The feature
+  acceptance scenario uses the package-owned `/usr/bin/jq` executable, avoiding
+  Ubuntu 26.04's changed ownership of `sha256sum`.
 
 ## v0.30.0 — 2026-11-14
 

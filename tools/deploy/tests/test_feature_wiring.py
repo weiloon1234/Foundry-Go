@@ -66,12 +66,12 @@ class WiringHost(Host):
         self.firewall_live = {}
         self.starting = None
         self.package_inventory = {name: installed() for name in (*packages.REQUIREMENTS, "postgresql-16",
-                                  "postgresql-client-16", "postgresql-common", "coreutils") if name not in {"nginx", "redis-server", "postgresql-common", "certbot"}}
+                                  "postgresql-client-16", "postgresql-common", "jq") if name not in {"nginx", "redis-server", "postgresql-common", "certbot"}}
         self.candidates = {name: "1" for name in ("nginx", "nginx-common", "libnginx-mod-stream", "redis-server", "postgresql-common", "certbot")}
         self.redis_host = RedisServiceHost(root)
         self.owned_write(self.paths.p("/etc/os-release"), 'ID=ubuntu\nVERSION_ID="24.04"\n')
         self.owned_write(self.paths.p("/proc/sys/kernel/random/boot_id"), BOOT)
-        self.owned_write(self.paths.p("/usr/bin/sha256sum"), elf("linux-arm64"), 0o755)
+        self.owned_write(self.paths.p("/usr/bin/jq"), elf("linux-arm64"), 0o755)
 
     def proc(self, pid, invocation, executable=None, unit=None, alive=True):
         root = self.paths.p(f"/proc/{pid}")
@@ -153,7 +153,7 @@ class WiringHost(Host):
             return self.redis_host.run(args, **kwargs)
         if args[0] == "dpkg-query":
             if args[1] == "-S":
-                output = "coreutils: " + args[2]
+                output = "jq: " + args[2]
             elif "-f=${Conffiles}" in args:
                 output = " /etc/nginx/nginx.conf " + hashlib.md5(self.paths.p("/etc/nginx/nginx.conf").read_bytes()).hexdigest()
             elif "-f=${Status}" in args:
@@ -296,9 +296,9 @@ class FeatureWiringTests(unittest.TestCase):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
-            {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["coreutils"],
+            {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["jq"],
              "bindings": {"relay": {"endpoint": {"role": "relay", "listener": "api", "scheme": "http"}},
-                          "checksum": {"executable": {"package": "coreutils", "path": "/usr/bin/sha256sum"}}}},
+                          "checksum": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}}},
             {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
              "arguments": [{"listener_address": "api"}, {"listener_port": "api"}],
              "listeners": {"api": ({"transport": "tcp", "bind": "public", "tls": "none", "authentication": True}

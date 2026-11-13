@@ -4,8 +4,11 @@ package hostcapabilities
 import "github.com/weiloon1234/Foundry-Go/deployment"
 
 // doc-example:begin host-capability-bindings
+// RelayDependencies contains the private control endpoint and tool used by the app.
 type RelayDependencies struct {
-	Control  deployment.Endpoint
+	// Control addresses the relay's private HTTP control listener.
+	Control deployment.Endpoint
+	// Checksum is the app's named executable binding.
 	Checksum deployment.Executable
 }
 
