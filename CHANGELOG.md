@@ -4,6 +4,11 @@
 
 ### Deployment feature preview
 
+- Fixed: unchanged public TCP re-bootstrap validates committed runtime exposure
+  without adopting it again. Shared boot coordinators retain a verified immutable
+  bundle pin across tool upgrades; bootstrap checks coordinator, runtime and edge
+  ownership before firewall reload or runtime-route cleanup.
+
 - Fixed: Redis bootstrap recognizes an exact journal-owned package template mask
   without releasing it during planning, then hands it off after reserving the
   shared Redis service. Stock Redis, PostgreSQL and certbot defaults stay masked;

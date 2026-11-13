@@ -25,12 +25,43 @@ def boot_files(tools_dir, bundle):
             "/etc/systemd/system/nginx.service.d/foundry-edge-boot.conf": dropin}
 
 
+def checked_boot_files(host, tools_dir, bundle):
+    """Keep an installed coordinator's immutable pin; never adopt arbitrary bytes."""
+    import admission
+    import services
+    import upgrades
+    from contracts import HOST_PATHS
+    name = "/etc/systemd/system/" + BOOT_UNIT
+    path = admission.protected_path(host, host.paths.p(name), "file")
+    if path.exists():
+        pattern = re.escape(boot_files(tools_dir, "@BUNDLE@")[name]).replace(re.escape("@BUNDLE@"), r"([a-f0-9]{64})")
+        matched = re.fullmatch(pattern, path.read_text())
+        require(matched is not None, "nginx_boot_ownership", "The feature boot coordinator differs from its reviewed owner.")
+        bundle = matched[1]
+        pinned = upgrades._installed(host, {"bundle_sha256": bundle,
+                                    "active_path": HOST_PATHS["tools"] + "/tools/" + bundle})
+        runtime = admission.protected_path(host, host.paths.p(services.RUNTIME_ENTRY), "file")
+        require(runtime.exists() and runtime.read_bytes() == (pinned / "server/runtime_v1.py").read_bytes(),
+                "runtime_bridge_required", "The retained boot coordinator requires its compatible fixed runtime.")
+        tools_dir = pinned
+    expected = boot_files(tools_dir, bundle)
+    for name, content in expected.items():
+        path = admission.protected_path(host, host.paths.p(name), "file")
+        require(not path.exists() or path.read_text() == content,
+                "nginx_boot_ownership", "The feature boot coordinator differs from its reviewed owner.")
+    return expected
+
+
 def bootstrap_ready(host, entry, tools_dir, bundle):
     import admission
     import edge
     from contracts import PREFIX
     from provision import _template
-    expected = {**boot_files(tools_dir, bundle), edge.STREAM_INCLUDE: (Path(tools_dir) / "server/templates/nginx-stream.conf").read_text()}
+    try:
+        boot = checked_boot_files(host, tools_dir, bundle)
+    except DeployError:
+        return False
+    expected = {**boot, edge.STREAM_INCLUDE: (Path(tools_dir) / "server/templates/nginx-stream.conf").read_text()}
     for name, text in expected.items():
         path = admission.protected_path(host, host.paths.p(name), "file")
         if not path.exists() or path.read_text() != text:
@@ -54,7 +85,7 @@ def package_topology(topology):
         if role.common.name == "http" else role for role in topology.roles))
 
 
-def plan(host, topology, profile, package_plan):
+def plan(host, topology, profile, package_plan, *, entry=None):
     import edge
     import firewall
     import listeners
@@ -63,11 +94,23 @@ def plan(host, topology, profile, package_plan):
     claims = listeners.public_claims(profile)
     result = {"firewall": None, "persistent_projection": {}}
     if claims:
-        observation = firewall.observe(host, profile.instance_id, claims, integrated=False)
+        selected = entry is not None and "deployment_selection" in entry
+        if selected:
+            from feature_lifecycle import load
+            from contracts import AdmissionDisposition, record_document
+            _, selection, inventory, _ = load(host, entry)
+            require(record_document(selection) == entry["deployment_selection"]
+                    and selection.admission.disposition is AdmissionDisposition.COMMITTED
+                    and inventory.topology == topology and inventory.profile == profile,
+                    "network_selection", "Bootstrap inspection requires the committed selected declarations.")
+            observation = firewall.observe(host, profile.instance_id, claims, integrated=True,
+                                           bindings=inventory.profile.listeners, opened=bool(selection.enabled_roles))
+        else:
+            observation = firewall.observe(host, profile.instance_id, claims, integrated=False)
+            for family, name in ((4, "/etc/ufw/before.rules"), (6, "/etc/ufw/before6.rules")):
+                result["persistent_projection"][name] = firewall.persistent_projection(
+                    check_path(host.paths.p(name), "file").read_text(), profile.instance_id, family=family)
         result["firewall"] = observation.sha256
-        for family, name in ((4, "/etc/ufw/before.rules"), (6, "/etc/ufw/before6.rules")):
-            result["persistent_projection"][name] = firewall.persistent_projection(
-                check_path(host.paths.p(name), "file").read_text(), profile.instance_id, family=family)
     main = check_path(host.paths.p("/etc/nginx/nginx.conf"), "file")
     if main.exists():
         result["nginx_sha256"] = digest(main)
@@ -91,8 +134,8 @@ def prepare(host, entry, review, tools_dir, bundle):
     topology = parse_topology(entry["topology"], registered=True)
     profile = parse_profile(entry["profile"], topology)
     claims = listeners.public_claims(profile)
-    if claims:
-        firewall.install_closed(host, profile.instance_id, claims, reviewed_sha256=review["firewall"])
+    boot = checked_boot_files(host, tools_dir, bundle)
+    operations.check_runtime(host, tools_dir)
     main = check_path(host.paths.p("/etc/nginx/nginx.conf"), "file")
     checksum = review["nginx_sha256"]
     if checksum is None:
@@ -103,14 +146,15 @@ def prepare(host, entry, review, tools_dir, bundle):
         require(expected == [hashlib.md5(main.read_bytes()).hexdigest()], "nginx_stream_integration",
                 "New nginx configuration differs from the reviewed package's pristine conffile.")
         checksum = digest(main)
+    edge.check_stream_include(host, reviewed_nginx_sha256=checksum)
+    edge.check_boot(host, profile.instance_id)
+    if claims:
+        firewall.install_closed(host, profile.instance_id, claims, reviewed_sha256=review["firewall"])
     edge.install_stream_include(host, reviewed_nginx_sha256=checksum)
     edge.prepare_boot(host, profile.instance_id)
     operations.install_runtime(host, tools_dir)
-    for name, content in boot_files(tools_dir, bundle).items():
-        path = check_path(host.paths.p(name), "file")
-        require(not path.exists() or path.read_text() == content,
-                "nginx_boot_ownership", "The feature boot coordinator differs from its reviewed owner.")
-        host.owned_write(path, content)
+    for name, content in boot.items():
+        host.owned_write(host.paths.p(name), content)
     host.run(["systemctl", "daemon-reload"])
 
 

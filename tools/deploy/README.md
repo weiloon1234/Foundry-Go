@@ -224,7 +224,11 @@ plans show the exact UFW before-file projections and bind installation to the
 reviewed observation digest. An existing nginx configuration is digest-bound;
 a fresh one must match the pristine conffile from the reviewed nginx-common
 package. Reopening other instances after UFW adoption requires fresh health and
-admission through their own restart.
+admission through their own restart. Unchanged selected instances instead validate
+runtime exposure against their committed listener bindings without reloading UFW.
+The shared boot coordinator retains its original verified bundle pin across tool
+upgrades; preview retains that bundle. Bootstrap checks the pinned bundle, fixed
+runtime, coordinator files and edge ownership before network mutations.
 
 Package default masks remain in place until an owned service takes responsibility.
 Nginx receives its existing handoff after configuration validation. Redis releases

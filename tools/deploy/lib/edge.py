@@ -357,7 +357,7 @@ def _top_level_include(text, name):
     return False
 
 
-def install_stream_include(host, *, reviewed_nginx_sha256):
+def check_stream_include(host, *, reviewed_nginx_sha256):
     """Use Ubuntu's existing top-level modules include, after the stream module.
 
     Caller plans libnginx-mod-stream through the package owner. Other layouts
@@ -371,6 +371,12 @@ def install_stream_include(host, *, reviewed_nginx_sha256):
     content = (TEMPLATES / "nginx-stream.conf").read_text()
     require(not path.exists() or path.read_text() == content,
             "nginx_stream_ownership", "The stream include has foreign ownership.")
+    host.check_control_directory(path.parent)
+    return path, content
+
+
+def install_stream_include(host, *, reviewed_nginx_sha256):
+    path, content = check_stream_include(host, reviewed_nginx_sha256=reviewed_nginx_sha256)
     existed = path.exists()
     host.owned_write(path, content)
     try:
@@ -480,6 +486,18 @@ def retained_references(host, instance_id):
     return tuple(AllocatedEndpoint.parse(e) for e in value["endpoints"])
 
 
+def check_boot(host, instance_id):
+    """Validate every path before boot cleanup removes any runtime routes."""
+    contract_uuid(instance_id)
+    directory = host.check_control_directory(host.paths.p(RUNTIME + "/" + instance_id))
+    for path in directory.glob("*.conf"):
+        check_path(path, "file")
+    path = _reference_path(host, instance_id)
+    host.check_control_directory(path.parent)
+    if path.exists():
+        contract_uuid(read_json(path)["boot_id"])
+
+
 def prepare_boot(host, instance_id):
     """Called by lane A's boot coordinator before nginx and before any start permit.
 
@@ -487,6 +505,7 @@ def prepare_boot(host, instance_id):
     route and never touches legacy sites. Same-boot retries retain old references.
     """
     from firewall import boot_id
+    check_boot(host, instance_id)
     directory = _runtime(host, instance_id)
     for path in directory.glob("*.conf"):
         check_path(path, "file").unlink()

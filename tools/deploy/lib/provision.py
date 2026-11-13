@@ -415,7 +415,8 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
             if (existing["profile"] != bound or observations["packages"]["missing"] or
                     not _ready_configuration(host, registry, entry, tools_dir)):
                 refuse("reprovisioning a selected feature instance")
-        observations["network"] = feature_network.plan(host, parsed, placed, observations["packages"])
+        feature_network.checked_boot_files(host, tools_dir, registry["tools"]["bundle_sha256"])
+        observations["network"] = feature_network.plan(host, parsed, placed, observations["packages"], entry=entry)
         findings.append({"kind": "change", "code": "feature_network_prerequisites",
                          "detail": "Install the stream include, closed HTTP gate and pre-nginx boot coordinator; new nginx uses its pristine reviewed package configuration. Public TCP adoption reloads UFW and closes other feature runtime allows; they require their own healthy restart to reopen.",
                          "persistent_projection": observations["network"]["persistent_projection"]})

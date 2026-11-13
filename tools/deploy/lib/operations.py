@@ -21,13 +21,19 @@ def staging(host, entry, operation):
     return host.paths.opt(entry["name"]) / "operations" / contract_uuid(operation)
 
 
-def install_runtime(host, tools_dir):
+def check_runtime(host, tools_dir):
     destination = host.paths.p(services.RUNTIME_ENTRY)
     source = Path(tools_dir) / "server/runtime_v1.py"
+    admission.protected_path(host, destination, "file")
     if destination.exists():
-        require(admission.protected_path(host, destination, "file").read_bytes() == source.read_bytes(),
+        require(destination.read_bytes() == source.read_bytes(),
                 "runtime_bridge_required", "Replacing runtime-v1 requires an explicit bridge release.")
-    host.owned_write(destination, source.read_bytes(), mode=0o755)
+    return destination, source.read_bytes()
+
+
+def install_runtime(host, tools_dir):
+    destination, content = check_runtime(host, tools_dir)
+    host.owned_write(destination, content, mode=0o755)
 
 
 def command(action, operation, bundle):
