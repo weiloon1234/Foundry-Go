@@ -305,7 +305,7 @@ def _feature_projection(entry, topology, profile, endpoints):
             **edge.stream_projection(profile, SimpleNamespace(endpoints=endpoints), entry["certificate"]["lineage"], topology=topology)}
 
 
-def _feature_http(host, entry, inventory, history, *, closed):
+def _feature_http(host, entry, inventory, history, *, closed, write=True):
     """Only exact owned renderings may be replaced. Closed HTTP has no upstream."""
     from contracts import PREFIX
     import edge
@@ -328,9 +328,14 @@ def _feature_http(host, entry, inventory, history, *, closed):
     from topology import validate_topology
     view = {**entry, "topology": validate_topology({"schema": 1, "roles": [{"name": "http"}]})}
     accepted.add(_template(Path(__file__).resolve().parents[1], "nginx-https.conf", view))
-    require(admission.protected_path(host, site, "file").read_text() in accepted,
+    current = admission.protected_path(host, site, "file").read_text()
+    require(current in accepted,
             "network_projection", "HTTP configuration is foreign or differs from retained owned projections.")
-    host.owned_write(site, without_upstreams(projection["http"]) if closed else projection["http"])
+    target = without_upstreams(projection["http"]) if closed else projection["http"]
+    if not write:
+        require(current == target, "network_not_withdrawn", "The owned HTTP site is not withdrawn.")
+    elif current != target:
+        host.owned_write(site, target)
     return projection
 
 
@@ -423,7 +428,8 @@ def feature_close(host, entry, transition, resolution, units):
     import edge
     import firewall
     import time
-    from contracts import HostTransition, RuntimeResolution
+    import json
+    from contracts import DeployError, HostTransition, RuntimeResolution, contract_int
     transition = HostTransition.parse(record_document(transition))
     resolution = RuntimeResolution.parse(record_document(resolution))
     inventory = _feature_inventory(host, entry, resolution.id)
@@ -442,12 +448,52 @@ def feature_close(host, entry, transition, resolution, units):
     old = _feature_inventory(host, entry, transition.old_resolution_id)
     require(old.units == units, "network_scope", "Retiring role changes require a broader lifecycle transition.")
     claims = tuple(dict.fromkeys((*public_claims(old.profile), *public_claims(inventory.profile))))
-    # Integration is an explicitly reviewed prerequisite; never self-approve firewall adoption here.
-    firewall.withdraw(host, transition.instance_id, claims)
-    edge.retain_global_references(host)
-    workers = set(edge._worker_identities(host))
-    _feature_http(host, entry, inventory, history, closed=True)
-    edge.withdraw(host, transition.instance_id, units)
+    request = record_document(replace(transition, closure_id=None))
+    context = canonical_digest({"transition": request, "units": units,
+                                "old": record_document(old.resolution), "candidate": record_document(resolution)})
+    boot = firewall.boot_id(host)
+    path = admission.protected_path(host, host.paths.p(f"/var/lib/foundry/network/{transition.instance_id}/withdrawal.json"), "file")
+    previous = admission.read_owned(host, path, lambda value: value) if path.exists() else None
+    workers, withdrawn = set(), False
+    if previous and previous.get("context") == context and previous.get("boot_id") == boot:
+        require(set(previous) in ({"context", "boot_id", "workers"}, {"context", "boot_id", "workers", "state"})
+                and previous.get("state", "in_progress") in ("in_progress", "complete") and isinstance(previous["workers"], list)
+                and 0 < len(previous["workers"]) <= 4096, "network_withdrawal", "Invalid withdrawal observation.")
+        for worker in previous["workers"]:
+            require(isinstance(worker, list) and len(worker) == 2, "network_withdrawal", "Invalid nginx worker observation.")
+            workers.add((contract_int(worker[0], upper=2**31 - 1), contract_int(worker[1], upper=2**63 - 1)))
+        # A receipt only identifies the workers to retire. It never substitutes
+        # for fresh policy, process-exit or reference-isolation observations.
+        if previous.get("state") == "complete":
+            try:
+                _feature_http(host, entry, inventory, history, closed=True, write=False)
+                firewall.observe(host, transition.instance_id, claims)
+                edge.observe_projection(host, transition.instance_id, units)
+                withdrawn = True
+            except DeployError as error:
+                if error.code not in ("network_not_withdrawn", "firewall_drift", "nginx_projection_drift"):
+                    raise
+    if not withdrawn:
+        def record_withdrawal(state):
+            require(0 < len(workers) <= 4096, "network_withdrawal", "Nginx worker observation exceeds its bound.")
+            host.owned_write(path, json.dumps({"context": context, "boot_id": boot, "workers": sorted(workers),
+                                              "state": state}) + "\n", mode=0o600)
+        # owned_write fsyncs the file and parent. Supersede any completed receipt
+        # before firewall changes or reloads can leave a newer retiring generation.
+        workers.update(edge._worker_identities(host))
+        record_withdrawal("in_progress")
+        # Integration is a reviewed prerequisite; never self-approve adoption.
+        firewall.withdraw(host, transition.instance_id, claims)
+        edge.retain_global_references(host)
+        # Initial reference adoption can itself reload nginx. Cover its new
+        # workers durably before changing the HTTP or stream projections.
+        current_workers = set(edge._worker_identities(host))
+        if not current_workers <= workers:
+            workers.update(current_workers)
+            record_withdrawal("in_progress")
+        _feature_http(host, entry, inventory, history, closed=True)
+        edge.withdraw(host, transition.instance_id, units)
+        record_withdrawal("complete")
     _feature_exit(host, inventory, units)
     deadline = time.monotonic() + 10
     while workers & set(edge._worker_identities(host)) and time.monotonic() < deadline:
@@ -462,7 +508,7 @@ def feature_close(host, entry, transition, resolution, units):
     ng = edge.observe_projection(host, transition.instance_id, units)
     evidence = ingress_evidence(transition.operation_id, firewall.boot_id(host), old.resolution, resolution,
                                transition.affected_units, canonical_digest({"retained_units": []}), fw, ng, claims=claims)
-    proof = canonical_digest({"transition": record_document(transition), "boot_id": evidence.boot_id,
+    proof = canonical_digest({"transition": request, "boot_id": evidence.boot_id,
                               "units": exits, "drained_nginx_workers": sorted(workers)})
     # Historical references remain quarantined for allocation. All old worker generations have
     # now exited, so only the fresh, complete upstream inventory can reach this reused endpoint.

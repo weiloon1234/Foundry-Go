@@ -123,6 +123,25 @@ restores the exact renderer output, including B26 upload directives. A drained
 same-resolution restart uses the fresh complete nginx reference inventory;
 allocation still quarantines historical references.
 
+Cleanup may call `feature_close` before workload stop and again afterwards. The
+first call durably records the expanded nginx worker set and `in_progress` state
+in a private, boot- and transition-bound `network/<instance>/withdrawal.json`
+before any withdrawal effect. If reference adoption reloads nginx, its new workers
+are added durably before HTTP/stream withdrawal. Only after withdrawal succeeds is
+that same set marked `complete`.
+It still refuses complete closure while a workload is alive. On retries, fresh
+HTTP/firewall/nginx observations and a `complete` receipt must confirm withdrawal
+before effects can be skipped. Incomplete attempts and older receipts without a
+state redo withdrawal with the retained and freshly observed worker sets. Each
+call independently proves process/cgroup exit and reference isolation;
+the receipt never grants admission. Repeated complete closure has equivalent proof
+fields (with a fresh observation ID/time), without rewriting files, flushing rules
+or reloading nginx. Reopening invalidates the observed closed state.
+The crash-point regression reopens within one transition, interrupts after reload
+but before completion is persisted, and proves retry refuses complete closure
+while the newer retiring worker remains alive. Receipt writes use the existing
+file-and-parent-fsync atomic writer; a failed intent write prevents all effects.
+
 Reviewed UFW adoption, the stream include/module and an enabled owned HTTP site
 remain prerequisites. The adapter has no review digest with which to approve
 these installations itself. Fresh boot ordering/preparation still belongs to lane
@@ -430,3 +449,49 @@ container. Each rerun requires a fresh container.
 
 These commands have not been executed in this no-host-actions session. Native
 unit checks validate fixture records and opt-in guards, not live network behaviour.
+
+## Live-preview follow-up
+
+The supplied Ubuntu logs identify a stale closed-firewall digest on 24.04, but do
+not include the two observation payloads. Source inspection rules out the suggested
+nft counters/handles/generation as digest inputs: nft is validated against the
+iptables inventory but is not hashed. `parse_rules` already discards iptables chain
+counters. The unstable digest input was raw `ip -j` route/address output, including
+countdowns, cache/use data and transient interface/address status. The digest now
+normalizes those observations while retaining route destinations, gateways,
+devices, tables, metrics and address assignments. Removal/expiry of an assignment
+or a policy change still changes the digest or refuses observation. The exact field
+that changed in the failed container cannot be recovered from those logs alone.
+
+`test_network_real.py` replays all three unedited capture variants and changes
+counter/handle/generation values in memory. A separate regression varies route
+cache/expiry, address lifetimes and link status, while proving gateway, interface,
+metric, routing-table and address-prefix changes still affect evidence. The latter
+fails against `e2701922`; the counter-only test already passed that implementation.
+Every live `expose` now asserts equal policy digests after denied IPv4/IPv6 peer
+traffic, before opening the firewall.
+
+After stopping an old echo backend, both stale-session scenarios send one final
+line so the peer actually reads its closed connection, and require exit code 3
+for EOF/reset. Socket timeouts and other errors are not treated as closure. The
+echo backend shuts down every accepted connection and joins its worker threads.
+Native tests cover EOF/reset handling and accepted-connection shutdown. The live
+adapter closure case also repeats closure and checks unchanged nginx workers and
+equivalent proof fields. Rerun the whole class in fresh containers with the commands
+above; this follow-up did not run containers or change any host policy.
+
+Follow-up verification: the lane C unittest command above passed all 142 tests.
+`make deploy-tools-check` ran 720 tests: 710 passed, 9 skipped, and the same known
+runtime-module inventory failure remained. `git diff --check` passed. Replaying
+the new tests against `e2701922` confirmed three capture-variant failures for raw
+route/address metadata and a repeated-firewall-mutation failure for closure;
+counter-only variation passed that baseline. No Go tests or host actions ran.
+
+Delta review 3 verification: the lane C unittest command above passed all 146
+tests. The new interrupted-reclosure test fails against `95044c75` because it
+returns complete closure while the newer retiring worker is still alive. Four
+regressions cover that interruption, failed intent persistence before effects,
+legacy receipts, and worker expansion during reference adoption.
+`make deploy-tools-check` ran 724 tests: 714 passed, 9 skipped, and only the known
+runtime-module inventory failure remained. `git diff --check` passed. No Go tests,
+commits, containers or host actions were run for this fix.
