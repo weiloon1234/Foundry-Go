@@ -383,10 +383,10 @@ match both content and metadata.
 [`tools/deploy/protocol.json`](../../tools/deploy/protocol.json) owns the current protocol and tool generation. The stable
 launcher dispatches to the active immutable bundle. `hello` reports host metadata
 without a mutation. Requests include the client's protocol, framework version,
-generation, and bundle digest. The current tool generation is 10. The minimum
+generation, and bundle digest. The current tool generation is 12. The minimum
 client generation remains 1, so existing registrations and generation-9 clients
 remain supported for ordinary deployment actions. Generation-9 tools reject
-planning or applying an upgrade against a generation-10 host; they cannot bypass
+planning or applying an upgrade against a generation-11 host; they cannot bypass
 the retired-bundle ledger by selecting an older bundle.
 
 Tool upgrades require an installed host generation of at least 9. `tools-plan` checks the installed host's generation through `hello` before
@@ -1310,3 +1310,135 @@ state; private operation receipts stay beneath the private instance directory.
 Tool inventory requires every runtime module, range file, and service/nginx
 template, and the release source policy includes each exceptional asset by exact
 path. Removing a required component makes the bundle incomplete before install.
+
+<a id="large-upload-ingress"></a>
+## Large-upload ingress
+
+Tool generation 11 adds an optional `uploads` object to the environment profile.
+Install the bundle with reviewed `tools-plan` and `tools-apply` before bootstrap.
+The tool upgrade alone does not enable a route or modify an active application's
+configuration. Declare upload resources before the instance's first configuration.
+Changing an already configured instance's upload allocation requires a separate
+reviewed migration; bootstrap refuses that change with `upload_profile_change`.
+
+This one-HTTP-process example permits a 512 MiB file with 8 MiB for multipart
+framing and fields. Paths are exact decoded nginx locations. List every upload
+alias explicitly; ordinary routes retain the 25m body limit and 120s upstream
+read-idle timeout.
+
+```json
+"uploads": {
+  "schema": 1,
+  "routes": ["/attachments/video"],
+  "body_bytes": 545259520,
+  "file_bytes": 536870912,
+  "request_slots": 4,
+  "proxy_slots": 4,
+  "attachment_slots": 2,
+  "staging_slots": 2,
+  "staging_object_bytes": 1073741824,
+  "request_total_seconds": 1800,
+  "attachment_total_seconds": 1200,
+  "storage_total_seconds": 900,
+  "proxy_read_idle_seconds": 1860,
+  "client_body_idle_seconds": 60,
+  "proxy_send_idle_seconds": 60,
+  "send_idle_seconds": 60,
+  "connect_seconds": 10,
+  "pools": {
+    "proxy": 67108864,
+    "request": 3221225472,
+    "attachment": 2147483648,
+    "staging": 3221225472,
+    "small": 268435456
+  }
+}
+```
+
+The application must register matching exact paths, file limits, encoded body
+limits, and total deadlines using `MultipartAdmission`, `BodyLimit`, and `Timeout`.
+The [HTTP upload guide](http-uploads.md#admit-large-multipart-requests-before-capture)
+shows the typed assembly. Deployment cannot infer an arbitrary application's
+route declaration. Confirm the runtime route and generated nginx location together
+before advertising the upload endpoint.
+
+Provision five distinct, writable ext4 or XFS filesystems at
+`/var/lib/foundry/uploads/<instance>/{proxy,request,attachment,staging,small}`.
+Use dedicated, fully allocated block volumes with capacity reserved underneath
+the filesystem. Shared thin storage without physical reserve cannot guarantee
+small-request service under exhaustion. This version supports sized volumes;
+project-quota provisioning is not implemented. Separate directories or bind mounts
+on one filesystem do not qualify. Planning never formats, mounts, or resizes a
+volume, and it refuses missing, read-only, aliased, or oversized mounts.
+
+Each `pools` value is the maximum filesystem capacity in bytes, not its current
+free space. Mounted usable capacity must exceed the corresponding live budget
+and stay within this maximum. Include filesystem metadata and retained cleanup
+headroom. Request capacity is `request_slots × body_bytes`. Attachment capacity
+is `attachment_slots × file_bytes` per declared service process. Staging capacity
+is `staging_slots × staging_object_bytes` per declared service process. The planner
+multiplies the last two by the number of topology roles. Increase their volume
+sizes for HTTP, worker, and scheduler together. Replicas and overlapping deployment
+generations need additional independent allocations. Published local data needs
+its own capacity beyond the disposable staging budget.
+
+Mount parents remain root-controlled. Bootstrap creates a mode-0700 `data` child
+on every volume. The proxy child belongs to `www-data`; other children belong to
+the isolated instance account. All application service roles receive explicit
+`ReadWritePaths` under `ProtectSystem=strict`. Runtime validation checks mount
+identity, size, permissions, and service-identity writability before activation.
+A full large volume cannot borrow space from the small volume. Nothing sweeps
+retained files to make an unhealthy deployment pass.
+
+Runtime configuration comes from one derivation in
+[`uploads.py`](../../tools/deploy/lib/uploads.py):
+
+| Runtime setting | Owner and use |
+| --- | --- |
+| `TRANSPORT__UPLOAD_DIRECTORY` | Existing small-upload root, now the small volume's `data` child |
+| `APP__HTTP__UPLOADS__SMALL_DIRECTORY` | Typed small-request directory for `MultipartDirectory` |
+| `APP__HTTP__UPLOADS__REQUEST__DIRECTORY`, `MAX_ACTIVE`, `MAX_BYTES` | `http.UploadSettings.Request` passed to `NewUploadPool`; `MultipartAdmission` binds its directory |
+| `APP__HTTP__UPLOADS__BODY_BYTES`, `FILE_BYTES`, `TIMEOUT` | Encoded/file ceilings and total route deadline |
+| `APP__FEATURES__ATTACHMENTS__CONFIG__TEMP_DIRECTORY`, `TIMEOUT` | Attachment preparation spool root and total operation deadline |
+| `APP__HTTP__UPLOADS__ATTACHMENT_MAX_ACTIVE` | Large-policy sublimit consumed by the attachment admission owner |
+| `APP__HTTP__UPLOADS__STAGING__DIRECTORY`, `MAX_ACTIVE`, `MAX_BYTES` | Separate local staging allocation consumed by the adapter owner |
+| `APP__HTTP__UPLOADS__STORAGE_TIMEOUT` | Total publication deadline applied to the application's explicitly selected disk |
+
+The attachment implementation must expose `Config.TempDirectory` through its
+existing generated application settings. Regenerate those settings after adding
+that field. The common internal seam is `upload.NewPool`, `Pool.Reserve`,
+`Reservation.Attach`, and `Reservation.Release`. A producer attaches its batch
+before capture and releases its reservation only after actual callback exit.
+`Pool.RetryCleanup` preserves charging until exact owned-file removal succeeds.
+Local staging keeps the adapter's cleanup references and publication outcomes.
+Neither request admission nor directory provisioning replaces the attachment
+and adapter owners' large-work sublimits and reserved small-work capacity.
+Until these owners consume their allocations, the deployment is not certified
+for large attachments. The existing shared R2 conditional-write restriction also
+remains independent of ingress configuration.
+
+The shared nginx zone limits aggregate uploads across workers and aliases for
+one instance, including concurrent HTTP/2 streams. Each exact location returns
+503 with `Retry-After: 1` on admission exhaustion. It sets
+`proxy_request_buffering off`, `proxy_http_version 1.1`, `proxy_buffering off`,
+and `proxy_next_upstream off`. Chunked bodies use the same unbuffered upstream
+path. The proxy's residual `client_body_temp_path` has its own quota. Unexpected
+whole-body buffering is an acceptance failure, not a reason to expand that quota.
+
+`request_total_seconds` bounds the whole application request from admission.
+Attachment and disk totals must fit within it. `proxy_read_idle_seconds` must be
+larger than the route total to permit silent storage publication. The example
+permits 30 minutes of application work and 31 minutes between upstream reads.
+Client-body, upstream-write, and downstream-write timers each bound inactivity;
+continuous progress does not reset the application's total deadline. Connect time
+has its own bound. Keep cleanup attempts on their separate contexts. Do not send
+success headers or fake progress bytes before commit to keep a proxy alive.
+Coordinate any outer CDN or load balancer with the same body and silence limits.
+
+Milestone 5 acceptance must exercise the rendered proxy, including a successful
+publication silent for more than 120 seconds, progressing, stalled, and trickling
+clients, fixed-length and chunked bodies, disconnects, and direct application
+requests. Independently saturate every pool and fill each test-owned volume.
+Verify cleanup accounting, bounded proxy occupancy, and continued small JSON,
+small multipart, and small attachment publication. Unit rendering and filesystem
+fixtures do not establish those host or provider results.

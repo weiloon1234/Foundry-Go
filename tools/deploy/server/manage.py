@@ -174,7 +174,7 @@ def execute(host, action, request):
         return release.keys_rotate(host, project, profile, request.get("operation_id"), private.get("encryption"))
     if action == "config-keys":
         values = parse_env(check_path(host.paths.instance_config(entry["name"]) / "app.env", "file").read_text())
-        return {"keys": sorted(values), "locked_keys": sorted(release.PIPELINE_KEYS), "configuration_revision": entry["configuration_revision"]}
+        return {"keys": sorted(values), "locked_keys": sorted(release.pipeline_keys(entry)), "configuration_revision": entry["configuration_revision"]}
     if action == "logs":
         # Explicit operator action. Logs are never included in the host report.
         argv = journal.arguments(entry, request.get("role", "all"), request.get("lines", journal.DEFAULT_LINES))

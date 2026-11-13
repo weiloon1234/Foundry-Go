@@ -179,10 +179,13 @@ def validate_profile(value, project=None):
     require(isinstance(value, dict), "invalid_profile", "Invalid environment profile.")
     require(value.get("schema") != FEATURE_PROFILE_SCHEMA, "capability_unavailable",
             "Profile 3 is a contract-only format until host-capability lifecycle support is installed.")
-    optional = {"backup_policy"}
+    optional = {"backup_policy", "uploads"}
     fields({k: v for k, v in value.items() if k not in optional}, "schema environment instance_id host runtime_environment domain certbot_email architecture public_env retention edge_origin_lockdown", "environment")
     require(type(value["edge_origin_lockdown"]) is bool, "invalid_profile", "edge_origin_lockdown must be a boolean; Cloudflare is mandatory.")
     require(type(value["schema"]) is int and value["schema"] == PROFILE_SCHEMA and slug(value["environment"]) and valid_uuid(value["instance_id"]), "invalid_profile", "Invalid environment identity.")
+    if "uploads" in value:
+        from uploads import validate as validate_uploads
+        validate_uploads(value["uploads"])
     if "backup_policy" in value:
         fields(value["backup_policy"], " ".join(BACKUP_POLICY), "backup policy")
         require(all(type(v) is int and 1 <= v <= 365 for k, v in value["backup_policy"].items()), "invalid_profile", "Invalid time-based backup policy.")
@@ -574,7 +577,7 @@ ARCHIVE_SCHEMA = 2
 RECORD_SCHEMA = 1
 FEATURE_CAPABILITIES = frozenset({"topology-v2", "profile-v3", "release-v2"})
 # Historical capability floor, independent of the currently selected tool generation.
-FEATURE_INTRODUCTION_GENERATION = 11
+FEATURE_INTRODUCTION_GENERATION = 12
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
 
 

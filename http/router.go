@@ -19,6 +19,7 @@ import (
 // validation completes before it is returned; startup never partially registers
 // into a shared/global ServeMux. Registration order does not resolve ambiguity.
 type Router struct {
+	uploads        map[string]uploadRoute
 	spas           []*spaFallback
 	fallbacks      []*routeFallback
 	mux            *stdhttp.ServeMux
@@ -64,7 +65,7 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 	if !nativeRoutingAvailable() {
 		return nil, safeerror.NewFault(fault.Invalid, "Foundry routing requires modern net/http ServeMux behavior")
 	}
-	router := &Router{errorDetails: make(map[ErrorCode]*errorDetails), mux: stdhttp.NewServeMux(), endpoints: make(map[RouteID]func() EndpointInfo), ticketPatterns: make(map[string]bool)}
+	router := &Router{uploads: make(map[string]uploadRoute), errorDetails: make(map[ErrorCode]*errorDetails), mux: stdhttp.NewServeMux(), endpoints: make(map[RouteID]func() EndpointInfo), ticketPatterns: make(map[string]bool)}
 	ids := make(map[RouteID]bool, len(registrations))
 	errorCatalog := make(map[ErrorCode]ErrorDefinition)
 	for _, definition := range ErrorDefinitions() {
@@ -144,6 +145,9 @@ func NewRouter(registrations ...RouteRegistration) (*Router, error) {
 		}); err != nil {
 			return nil, safeerror.WrapFault(fault.Conflict, "route conflicts with an existing pattern: "+string(registration.info.ID), err)
 		}
+		if registration.upload.pool != nil {
+			router.uploads[registration.pattern] = registration.upload
+		}
 		if info.Authentication != nil && info.Authentication.Credential.Kind == TicketCredentialKind {
 			router.ticketPatterns[registration.pattern] = true
 		}
@@ -175,6 +179,14 @@ func (r *Router) Routes() []RouteInfo {
 // ServeHTTP dispatches registered routes, rejects ambiguous encoded paths and applies
 // framework errors and configured fallbacks to unmatched requests.
 func (r *Router) ServeHTTP(w stdhttp.ResponseWriter, request *stdhttp.Request) {
+	admitted, release, err := beginUpload(request, r.uploadRoute)
+	if err != nil {
+		rejectUpload(w, request, err)
+		return
+	}
+	defer release()
+	request = admitted
+
 	protectTicket := false
 	if r != nil && r.mux != nil && len(r.ticketPatterns) != 0 && request.URL != nil {
 		for range ticketQueryValues(request.URL.RawQuery) {

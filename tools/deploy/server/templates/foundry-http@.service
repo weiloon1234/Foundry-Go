@@ -12,6 +12,7 @@ User=@SERVICE@
 Group=@SERVICE@
 WorkingDirectory=@DATA@
 StateDirectory=@STATE_DIRECTORY@
+@UPLOAD_WRITE_PATHS@
 StateDirectoryMode=0750
 UMask=0077
 RuntimeDirectory=@RUNTIME_DIRECTORY@/http

@@ -13,13 +13,13 @@ confirmation rules, host prerequisites, and recovery procedures.
 | `lib/backup.py` | PostgreSQL and encrypted key/config backups |
 | `protocol.json` | Wire protocol and tool generation |
 
-The bundle uses protocol 2.0 and generation 10. Tool upgrades require an installed
+The bundle uses protocol 2.0 and generation 12. Tool upgrades require an installed
 host generation of at least 9. The local command checks the installed host's
 `hello` response before staging any bundle; the candidate checks again before
 planning or installation. Older hosts receive `tools_upgrade_floor`: the host
 must already run generation 9 tools before this upgrade. The minimum client
 generation remains 1, preserving existing registrations. Generation-9 clients can
-still deploy ordinary application releases to generation-10 hosts. Older generation-9
+still deploy ordinary application releases to generation-11 hosts. Older generation-9
 tools reject plans and applies against these hosts, preventing them from bypassing
 the retired-bundle ledger.
 
@@ -159,3 +159,11 @@ No failed migration, seed, restore, or other mutation is replayed.
 
 See [container acceptance](../../docs/guides/deployment.md#container-acceptance)
 for retained phase logs and the remaining external-service acceptance requirements.
+
+Generation 11 adds the opt-in upload profile in `lib/uploads.py` and
+`server/templates/nginx-upload.conf`. Install it through reviewed `tools-plan`
+and `tools-apply`. Bootstrap validates administrator-provisioned, independently
+sized upload volumes, creates private service directories, and renders the
+runtime values, service write paths, and HTTP/HTTPS upload locations together.
+Existing profiles without `uploads` keep their proxy behavior. See
+[large-upload ingress](../../docs/guides/deployment.md#large-upload-ingress).

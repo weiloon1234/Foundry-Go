@@ -79,6 +79,10 @@ func EndpointPattern[P, Q, B, R any](e Endpoint[P, Q, B, R]) string { return Rou
 // ValidateEndpoint checks declarations, lifecycle callbacks, limits, error and header
 // contracts, and method-specific body and credential restrictions.
 func ValidateEndpoint[P, Q, B, R any](e Endpoint[P, Q, B, R]) error {
+	if e.body.uploadPool != nil && (e.route.budget.bodyBytes != e.limits.Multipart.Bytes || e.limits.Multipart.Bytes > e.body.uploadPool.pool.MaxBytes()) {
+		return safeerror.NewFault(fault.Invalid, "admitted multipart endpoint requires matching route/body limits within its pool budget")
+	}
+
 	if e.body.kind == payloadForm {
 		if err := e.limits.Form.Validate(); err != nil {
 			return err
@@ -251,6 +255,8 @@ func endpointRegister[P, Q, B, R any](e Endpoint[P, Q, B, R], stage preparedStag
 	registration := routeHandle(e.route, func(w stdhttp.ResponseWriter, r *stdhttp.Request, path P) {
 		endpointServe(request, w, r, path, stage, handler, transport)
 	}, false)
+	registration.upload = uploadRoute{pool: e.body.uploadPool, bytes: e.limits.Multipart.Bytes}
+	registration.info.uploadAdmission = e.body.uploadPool != nil
 	registration.contract = endpointContributionContract(e)
 	info := registration.info.clone()
 	registration.endpoint = func() EndpointInfo { return endpointSnapshot(e, info) }

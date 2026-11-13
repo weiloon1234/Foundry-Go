@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -58,6 +59,12 @@ func sourceFixture(t *testing.T) (string, sourcePolicy) {
 
 func TestPrivateCandidateHasCanonicalIndependentModulesAndPreservesOwnership(t *testing.T) {
 	root, policy := sourceFixture(t)
+	const uploadTemplate = "tools/deploy/server/templates/nginx-upload.conf"
+	template, err := os.ReadFile(filepath.Join("../..", uploadTemplate))
+	if err != nil {
+		t.Fatal(err)
+	}
+	put(t, root, uploadTemplate, string(template))
 	var first manifest
 	for round := range 2 {
 		out := filepath.Join(t.TempDir(), "candidate")
@@ -80,16 +87,31 @@ func TestPrivateCandidateHasCanonicalIndependentModulesAndPreservesOwnership(t *
 			if err != nil {
 				t.Fatal(err)
 			}
-			var ownership, license bool
+			var ownership, license, upload bool
 			for _, file := range archive.File {
 				if strings.Contains(file.Name, ".env") || strings.Contains(file.Name, ".cache/") || strings.Contains(file.Name, "node_modules/") || strings.Contains(file.Name, "tests/fixtures/") {
 					t.Fatal("private or nested source leaked", file.Name)
 				}
 				ownership = ownership || strings.HasSuffix(file.Name, "/"+policy.generationManifest)
 				license = license || strings.HasSuffix(file.Name, "/LICENSE")
+				if strings.HasSuffix(file.Name, "/"+uploadTemplate) {
+					upload = true
+					reader, err := file.Open()
+					if err != nil {
+						t.Fatal(err)
+					}
+					data, readErr := io.ReadAll(reader)
+					closeErr := reader.Close()
+					if readErr != nil || closeErr != nil || !bytes.Equal(data, template) {
+						t.Fatal("packaged upload template differs from source", readErr, closeErr)
+					}
+				}
 			}
 			if err := archive.Close(); err != nil {
 				t.Fatal(err)
+			}
+			if upload != (i == 0) {
+				t.Fatal("upload template missing from framework or leaked into plugin")
 			}
 			if !license || (i == 0 && !ownership) || !strings.HasPrefix(item.Sum, "h1:") {
 				t.Fatal("artifact lost license, ownership, or hash")
@@ -466,6 +488,7 @@ func TestDeploymentBundleAssets(t *testing.T) {
 		"server/templates/nginx-https.conf",
 		"server/templates/nginx-proxy.conf",
 		"server/templates/nginx-upgrade.conf",
+		"server/templates/nginx-upload.conf",
 		"local/Makefile.example",
 		"lib/cloudflare-ranges.json",
 		"docker/builder.Dockerfile",

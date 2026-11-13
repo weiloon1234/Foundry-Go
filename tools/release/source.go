@@ -109,6 +109,7 @@ func (policy sourcePolicy) sourceName(path string) bool {
 		"tools/deploy/server/templates/nginx-https.conf",
 		"tools/deploy/server/templates/nginx-proxy.conf",
 		"tools/deploy/server/templates/nginx-upgrade.conf",
+		"tools/deploy/server/templates/nginx-upload.conf",
 		"tools/deploy/server/templates/scheduler.service",
 		"tools/deploy/server/templates/worker.service",
 		"tools/deploy/docker/builder.Dockerfile",
