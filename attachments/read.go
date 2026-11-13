@@ -508,7 +508,7 @@ func (c Collection[M, K]) Open(ctx context.Context, m *Manager, owner model.Refe
 	if err != nil {
 		return nil, Attachment[M, K]{}, err
 	}
-	if info.Length != file.info.Size || info.Offset != 0 {
+	if info.Length != file.info.Size || info.Offset != 0 || !matchesStoredObject(info.Object, file.info.Size, file.etag, file.version) {
 		cleanup := body.Close()
 		return nil, Attachment[M, K]{}, storageFailure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, cleanup)
 	}
@@ -516,6 +516,34 @@ func (c Collection[M, K]) Open(ctx context.Context, m *Manager, owner model.Refe
 		return body, file, nil
 	}
 	return &verifiedReader{body: body, digest: sha256.New(), expected: file.digest, remaining: file.info.Size}, file, nil
+}
+
+// OpenSeek opens a ready attachment for bounded-memory, pinned ranged reads.
+// Lookup uses manager read admission; the returned handle uses the caller context
+// and disk stream admission. The caller must Close it before closing the disk.
+// Seeking does not verify the attachment's full SHA-256; use Open through EOF
+// when full-object verification is required.
+func (c Collection[M, K]) OpenSeek(ctx context.Context, m *Manager, owner model.Reference[M, K], id ID[M]) (io.ReadSeekCloser, Attachment[M, K], error) {
+	file, err := c.Find(ctx, m, owner, id)
+	if err != nil {
+		return nil, Attachment[M, K]{}, err
+	}
+	disk, err := m.disks.Disk(file.disk)
+	if err != nil {
+		return nil, Attachment[M, K]{}, err
+	}
+	body, info, err := disk.OpenSeek(ctx, file.key, storage.ReadOptions{IfMatch: file.etag, Version: file.version})
+	if err != nil {
+		return nil, Attachment[M, K]{}, err
+	}
+	if !matchesStoredObject(info, file.info.Size, file.etag, file.version) {
+		return nil, Attachment[M, K]{}, storageFailure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, body.Close())
+	}
+	return body, file, nil
+}
+
+func matchesStoredObject(info storage.ObjectInfo, size int64, etag storage.ETag, version storage.VersionID) bool {
+	return info.Size == size && info.ETag == etag && (version == "" || info.Version == version)
 }
 
 // verifiedReader checks the pinned digest and exact length at EOF when the

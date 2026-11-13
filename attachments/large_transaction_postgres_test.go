@@ -2,6 +2,7 @@ package attachments
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql/driver"
 	"errors"
 	"io"
@@ -25,6 +26,35 @@ func TestPostgresLargePreparedUnknownOuterCommitPreservesCandidates(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
+			wantID, wantSize := old.ID().String(), int64(len("original"))
+			wantDigest := sha256.Sum256([]byte("original"))
+			if mode == 1 {
+				wantID, wantSize = candidate.Operation().String(), MaxBufferedBytes+1
+				hash := sha256.New()
+				if n, err := io.Copy(hash, io.LimitReader(repeatedByte('x'), wantSize)); err != nil || n != wantSize {
+					t.Fatal("expected survivor digest", n, err)
+				}
+				copy(wantDigest[:], hash.Sum(nil))
+			}
+			assertSurvivor := func(manager *Manager) {
+				t.Helper()
+				files, err := collection.List(t.Context(), manager, owner)
+				if err != nil || len(files) != 1 || files[0].ID().String() != wantID {
+					t.Fatal("survivor membership changed", err)
+				}
+				body, file, err := collection.Open(t.Context(), manager, owner, files[0].ID())
+				if err != nil {
+					t.Fatal("survivor could not be opened", err)
+				}
+				hash := sha256.New()
+				n, readErr := io.Copy(hash, body)
+				closeErr := body.Close()
+				var got [sha256.Size]byte
+				copy(got[:], hash.Sum(nil))
+				if readErr != nil || closeErr != nil || n != wantSize || file.Info().Size != wantSize || got != wantDigest {
+					t.Fatal("survivor bytes changed", n, readErr, closeErr)
+				}
+			}
 			err = f.Store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 				if _, err := collection.ReplaceIn(ctx, tx, f.manager, owner, candidate); err != nil {
 					return err
@@ -35,6 +65,7 @@ func TestPostgresLargePreparedUnknownOuterCommitPreservesCandidates(t *testing.T
 			if !errors.Is(err, database.CommitUnknown) {
 				t.Fatal("outer commit was reported as known", err)
 			}
+			assertSurvivor(f.manager)
 			row := journal(t, f, candidate.Operation())
 			key, err := storage.ParseKey(row.ObjectKey)
 			if err != nil {
@@ -59,19 +90,10 @@ func TestPostgresLargePreparedUnknownOuterCommitPreservesCandidates(t *testing.T
 			if _, err := restarted.ReconcilePending(t.Context(), 10); err != nil {
 				t.Fatal(err)
 			}
-			files, err := collection.List(t.Context(), restarted, owner)
-			if err != nil || len(files) != 1 {
-				t.Fatal("recovery lost ready membership", err)
-			}
+			assertSurvivor(restarted)
 			if mode == 1 {
-				if files[0].ID().String() != candidate.Operation().String() {
-					t.Fatal("committed candidate disappeared")
-				}
 				assertObjectAbsent(t, f.disk, old.key)
 			} else {
-				if files[0].ID() != old.ID() {
-					t.Fatal("rollback replaced original")
-				}
 				assertObjectAbsent(t, f.disk, key)
 			}
 		})

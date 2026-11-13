@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added: typed attachment `Collection.OpenSeek` with pinned, lazy ranged reads
+  and an HTTP download example. Full `Open` reads verify persisted size and SHA-256
+  at EOF; byte-returning APIs keep their 64 MiB ceiling.
+- Fixed: checksum-fallback reconciliation and explicit settlement now stream
+  above-64-MiB originals with bounded buffers, including after policy changes.
+  Verification errors and cancellation retain unresolved intents. Regression
+  sources cover allocation bounds, historical reads, HTTP ranges and recovery.
+
 - Fixed: generated application configuration and the dependent consumer now load
   `features.attachments.config.temp_directory` and expose its typed override.
 - Added: large attachment transaction/multipart regression coverage for publication,
@@ -16,7 +24,7 @@
   capture hashing for uploads, slot acceptance and URL imports. Image/variant and
   byte-returning APIs retain `MaxBufferedBytes` (64 MiB); `MaxUploadBytes` remains
   its compatibility alias. Large JSON/text hints and archive specialization are
-  conservative. Streaming checksum-fallback reconciliation remains follow-up work.
+  conservative.
 - Added: forward attachment migration `000003_expand_original_size`, preserving
   historical migrations and variant ceilings while allowing nonnegative original
   sizes. Apply it and deploy capable runtimes before enabling large policies; old

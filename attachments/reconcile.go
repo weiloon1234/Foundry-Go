@@ -2,8 +2,7 @@ package attachments
 
 import (
 	"context"
-	"crypto/sha256"
-	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"io"
 	"math"
 	"time"
 
@@ -12,6 +11,8 @@ import (
 	rowset "github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	store "github.com/weiloon1234/Foundry-Go/internal/attachmentstore"
+	"github.com/weiloon1234/Foundry-Go/internal/callback"
+	"github.com/weiloon1234/Foundry-Go/internal/storageio"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/storage"
 	"github.com/weiloon1234/Foundry-Go/temporal"
@@ -420,7 +421,7 @@ func (m *Manager) settle(ctx context.Context, target model.ID[store.File], polic
 // automatic path accepts the provider's full SHA-256 metadata when present and
 // otherwise reads the pinned bytes, like an operator settlement. A different
 // size or digest is ambiguous (false), never deleted.
-func (m *Manager) matchesIntent(ctx context.Context, disk *storage.Disk, key storage.ObjectKey, row store.File, info storage.ObjectInfo, automatic bool) (bool, error) {
+func (m *Manager) matchesIntent(ctx context.Context, disk *storage.Disk, key storage.ObjectKey, row store.File, info storage.ObjectInfo, automatic bool) (matched bool, err error) {
 	if info.ETag == "" || info.Size != row.Size {
 		if automatic {
 			return false, nil
@@ -430,12 +431,24 @@ func (m *Manager) matchesIntent(ctx context.Context, disk *storage.Disk, key sto
 	if checksum, ok := info.Checksum.Get(); ok && automatic {
 		return checksum.String() == row.Digest, nil
 	}
-	data, _, err := disk.ReadBytes(ctx, key, MaxUploadBytes, storage.ReadOptions{IfMatch: info.ETag, Version: info.Version})
+	body, opened, err := disk.Open(ctx, key, storage.ReadOptions{IfMatch: info.ETag, Version: info.Version})
 	if err != nil {
 		return false, err
 	}
-	sum := storage.SHA256(sha256.Sum256(data))
-	if sum.String() != row.Digest || int64(len(data)) != row.Size {
+	defer func() {
+		if closeErr := body.Close(); closeErr != nil {
+			matched = false
+			err = storageFailure(storage.Unavailable, storage.OpenOperation, storage.NotApplicable, joinFailures(err, closeErr))
+		}
+	}()
+	if opened.Offset != 0 || opened.Length != row.Size || !matchesStoredObject(opened.Object, row.Size, info.ETag, info.Version) {
+		return false, storageFailure(storage.IntegrityFailed, storage.OpenOperation, storage.NotApplicable, nil)
+	}
+	size, sum, err := storageio.Copy(ctx, io.Discard, body, row.Size)
+	if err != nil {
+		return false, err
+	}
+	if sum.String() != row.Digest || size != row.Size {
 		if automatic {
 			return false, nil
 		}

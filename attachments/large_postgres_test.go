@@ -45,22 +45,51 @@ func TestPostgresHistoricalLargeOriginalRejectsNewVariantsButStillStreamsAndReti
 	}
 	defer manager.Close(t.Context())
 	before := backend.opens.Load()
+	var beforeMemory, afterMemory runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&beforeMemory)
 	for _, replace := range []bool{false, true} {
 		if err := manager.generate(t.Context(), fileID(result.Operation), replace); !errors.Is(err, storage.LimitExceeded) {
 			t.Fatal("historical original reached variant processing", err)
 		}
 	}
+	runtime.ReadMemStats(&afterMemory)
+	if allocated := afterMemory.TotalAlloc - beforeMemory.TotalAlloc; allocated > 8<<20 {
+		t.Fatalf("historical variant rejection allocated %d bytes", allocated)
+	}
 	if backend.opens.Load() != before || len(variantRows(t, f, result.Operation)) != 0 {
 		t.Fatal("rejected variant read storage or published a variant")
 	}
+	runtime.GC()
+	runtime.ReadMemStats(&beforeMemory)
 	reader, _, err := changed.Open(t.Context(), manager, member(t, 1), file.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
-	n, err := io.Copy(io.Discard, reader)
+	n, err := io.CopyBuffer(struct{ io.Writer }{io.Discard}, reader, make([]byte, 32<<10))
 	closeErr := reader.Close()
+	runtime.ReadMemStats(&afterMemory)
+	if allocated := afterMemory.TotalAlloc - beforeMemory.TotalAlloc; allocated > 8<<20 {
+		t.Fatalf("historical full read allocated %d bytes", allocated)
+	}
 	if err != nil || closeErr != nil || n != size {
 		t.Fatal("historical streaming read stranded", err, closeErr)
+	}
+	if _, err := changed.ReadBytes(t.Context(), manager, member(t, 1), file.ID(), MaxBufferedBytes); !errors.Is(err, storage.LimitExceeded) {
+		t.Fatal("historical large original escaped ReadBytes ceiling", err)
+	}
+	seek, _, err := changed.OpenSeek(t.Context(), manager, member(t, 1), file.ID())
+	if err != nil {
+		t.Fatal("historical ranged read stranded", err)
+	}
+	if _, err := seek.Seek(-1, io.SeekEnd); err != nil {
+		t.Fatal(err)
+	}
+	var last [1]byte
+	_, err = io.ReadFull(seek, last[:])
+	closeErr = seek.Close()
+	if err != nil || closeErr != nil || last[0] != 'x' {
+		t.Fatal("historical range changed", err, closeErr)
 	}
 	if _, err := changed.Detach(t.Context(), manager, member(t, 1), file.ID()); err != nil {
 		t.Fatal("historical retirement stranded", err)

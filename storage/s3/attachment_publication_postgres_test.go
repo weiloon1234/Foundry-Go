@@ -2,6 +2,7 @@ package s3
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"io"
 	"os"
@@ -70,6 +71,26 @@ func TestPostgresLargeMultipartAttachmentTransactionLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	assertSurvivor := func(p attachments.Prepared[extensiontest.Member, int64], content byte) {
+		t.Helper()
+		files, err := collection.List(t.Context(), m, owner)
+		if err != nil || len(files) != 1 || files[0].ID().String() != p.Operation().String() {
+			t.Fatal("survivor membership changed", err)
+		}
+		body, file, err := collection.Open(t.Context(), m, owner, files[0].ID())
+		if err != nil {
+			t.Fatal("survivor could not be opened", err)
+		}
+		hash := sha256.New()
+		n, readErr := io.Copy(hash, body)
+		closeErr := body.Close()
+		want, _ := conditionalOptions(size, content, storage.WriteCondition{}).Checksum.Get()
+		var got storage.SHA256
+		copy(got[:], hash.Sum(nil))
+		if readErr != nil || closeErr != nil || n != size || file.Info().Size != size || got != want {
+			t.Fatal("survivor bytes changed", n, readErr, closeErr)
+		}
+	}
 	first := prepare('a')
 	state(first, attachments.Stored)
 	if err := f.Store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
@@ -90,22 +111,21 @@ func TestPostgresLargeMultipartAttachmentTransactionLifecycle(t *testing.T) {
 	}
 	state(first, attachments.Ready)
 	state(second, attachments.Stored)
-	files, err := collection.List(t.Context(), m, owner)
-	if err != nil || len(files) != 1 || files[0].ID().String() != first.Operation().String() {
-		t.Fatal("rollback changed membership", err)
-	}
+	assertSurvivor(first, 'a')
 	if err := m.Close(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	m = start()
 	sweep()
 	state(second, attachments.Stored) // Fresh reservation survives restart.
+	assertSurvivor(first, 'a')
 	age(second)
 	sweep()
 	state(second, attachments.CleanupPending) // StoredGrace then CleanupGrace.
 	age(second)
 	sweep()
 	state(second, attachments.Cleaned)
+	assertSurvivor(first, 'a')
 	third := prepare('c')
 	if err := f.Store.Write(t.Context(), func(ctx context.Context, tx *database.Tx) error {
 		_, err := collection.ReplaceIn(ctx, tx, m, owner, third)
@@ -115,9 +135,11 @@ func TestPostgresLargeMultipartAttachmentTransactionLifecycle(t *testing.T) {
 	}
 	state(first, attachments.CleanupPending)
 	state(third, attachments.Ready)
+	assertSurvivor(third, 'c')
 	age(first)
 	sweep()
 	state(first, attachments.Cleaned)
+	assertSurvivor(third, 'c')
 	// A lost storage acknowledgement is tracked and never published blindly.
 	gate.mu.Lock()
 	gate.lostComplete = true
@@ -136,7 +158,8 @@ func TestPostgresLargeMultipartAttachmentTransactionLifecycle(t *testing.T) {
 	age(uncertain)
 	sweep()
 	state(uncertain, attachments.Cleaned)
-	files, err = collection.List(t.Context(), m, owner)
+	assertSurvivor(third, 'c')
+	files, err := collection.List(t.Context(), m, owner)
 	if err != nil || len(files) != 1 {
 		t.Fatal("uncertain upload changed membership", err)
 	}

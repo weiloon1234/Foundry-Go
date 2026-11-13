@@ -227,10 +227,18 @@ of required queued cleanup/variant work; after-commit callbacks only prompt it.
 Large SDK wire coverage and env-gated PostgreSQL regression sources exercise this
 path. Live R2 create **and** replace certification is still required before its
 shared conditional-write size restriction can be removed. No production override
-is added. Checksum-fallback reconciliation and explicit settlement still use the
-64 MiB byte helper; large objects require the automatic checksum-metadata path
-for now. Ingress/deployment and live-provider acceptance also remain required
-before production rollout.
+is added. Checksum-fallback reconciliation and explicit settlement stream the
+pinned object through the shared fixed-buffer count/hash sink, using its persisted
+size even after the upload policy is lowered. Explicit settlement reads to EOF
+regardless of checksum metadata; automatic settlement retains the metadata
+shortcut. Both close their readers on every exit. Incomplete verification,
+cancellation, changed pins, or a close failure preserves the unresolved intent.
+The existing writer exclusion, settlement delay, and cleanup grace still apply.
+
+Configure the manager `Timeout` to cover one maximum-sized verification plus its
+database work. Verification uses that operation budget; `CleanupTimeout` remains
+the shorter detached cleanup budget. Ingress/deployment and live-provider
+acceptance remain required before production rollout.
 
 Before hooks run in declaration order with detected metadata and the typed
 owner. AfterStored hooks run after storage acknowledgement inside the ownership
@@ -438,9 +446,9 @@ are older than the longest registered disk `Timeout` (after which the writer's
 request context has ended) plus `Config.SettleAfter` (15 minutes by default, the
 bound for a provider to finish a request it already received). It fences the
 writer, then settles only unambiguous storage: an absent object, or a present
-object whose size and full SHA-256 (provider checksum metadata, otherwise the
-pinned bytes) exactly match the intent. Anything else stays `uncertain` with the
-failure category `settlement_ambiguous` for an operator; it is never deleted.
+object whose size and full SHA-256 (provider checksum metadata, otherwise a
+streaming hash of pinned bytes) exactly match the intent. Anything else stays
+`uncertain` with the failure category `settlement_ambiguous` for an operator; it is never deleted.
 Locally active writers are excluded.
 
 ## Image variants
@@ -565,9 +573,57 @@ For slots, use `attachments.OneCollection(handle).FirstIn` or
 `ReadBytes` rechecks ready membership, conditionally reads pinned storage, and
 verifies the complete checksum and length (a disk-verified full read whose
 stored checksum equals the pin is not hashed again). `Image` applies an explicit
-plan to those bytes. `Open` streams an attachment of any size up to the policy
-bound, pinned to its ETag/version and verified at EOF; only the lookup uses
-manager read admission, and the reader holds one disk stream slot until closed.
+plan to those bytes. `ReadBytes` and `Image` retain their in-memory limits even
+under a large policy. `Open` streams using the persisted size, pinned to its
+ETag/version and verified at EOF. Lowering the current upload policy does not
+change that historical read bound. Early Close makes no complete-digest claim.
+Only the lookup uses manager read admission; the returned reader uses the caller
+context and holds one disk stream slot until closed.
+
+`OpenSeek` returns `(io.ReadSeekCloser, Attachment[M, K], error)` after the same
+ready-owner/collection/locale lookup. It validates the stored size and pins before
+returning. Storage opens payloads lazily and pins every reopened range to that
+snapshot. A concurrent replacement fails instead of mixing representations.
+Always close the handle before closing the disk. A range verifies only its pinned
+span, not the attachment's whole SHA-256; use `Open` through EOF for that proof.
+
+For an authorized video download handler, return a deferred source with the
+existing HTTP download response contract (for example,
+`foundryhttp.DownloadResponse("video/mp4", "video/quicktime")`):
+
+<!-- compiled-source: tests/fixtures/consumer/articles/attachment_recipes.go#pinned-video-download -->
+```go
+// VideoDownload defers opening until after the handler authorizes article/id.
+func VideoDownload(videos attachments.Collection[Article, model.ID[Article]], manager *attachments.Manager, article Article, id attachments.ID[Article]) foundryhttp.Download {
+	owner := ArticleIdentity.ReferenceOf(article)
+	return foundryhttp.DownloadFrom(func(ctx context.Context) (foundryhttp.DownloadContent, error) {
+		body, file, err := videos.OpenSeek(ctx, manager, owner, id)
+		if err != nil {
+			if errors.Is(err, database.NotFound) {
+				return foundryhttp.DownloadContent{}, foundryhttp.NotFound.WithCause(err)
+			}
+			return foundryhttp.DownloadContent{}, storagehttp.ResponseError(err)
+		}
+		return foundryhttp.DownloadContent{
+			Body:      body,
+			Name:      file.Info().OriginalName,
+			MediaType: foundryhttp.MediaType(file.Info().MediaType),
+			Modified:  file.CreatedAt().UTC(),
+			EntityTag: foundryhttp.EntityTag(`"` + file.ID().String() + `"`),
+		}, nil
+	})
+}
+```
+
+Here `foundryhttp` is the framework HTTP package and `storagehttp` is
+`github.com/weiloon1234/Foundry-Go/storage/http`. The attachment ID is a strong
+HTTP validator because each upload has immutable bytes and a new ID. Storage
+reads still use the private persisted ETag/version. The HTTP owner handles HEAD,
+206/416, suffix/open-ended ranges, If-Range, validators, and closure after success,
+error, or cancellation. Keep the default attachment disposition for untrusted
+content; inline playback needs the application's explicit media policy. The
+[executable regression](../../attachments/large_reads_postgres_test.go) uses this
+pattern with an above-64-MiB original.
 
 `PublicURL` and `TemporaryURL` recheck ready membership and derive the link from
 the stored key and version; keys are immutable per upload, so no storage request
