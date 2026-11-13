@@ -109,3 +109,31 @@ func TestDeclaredTypeOnlySpecializesPlainText(t *testing.T) {
 		t.Fatal("client declaration overrode binary detection", got)
 	}
 }
+
+func TestDetectUploadSharesISOBrands(t *testing.T) {
+	for _, tc := range []struct {
+		brand, want string
+	}{
+		{"qt  ", "video/quicktime"},
+		{"isom", "video/mp4"},
+		{"iso6", "video/mp4"},
+		{"mp42", "video/mp4"},
+		{"avif", "image/avif"},
+		{"heic", "image/heic"},
+		{"mif1", "image/heif"},
+		{"M4A ", "audio/mp4"},
+		{"3gp6", "video/3gpp"},
+		{"3g2a", "video/3gpp2"},
+	} {
+		t.Run(tc.brand, func(t *testing.T) {
+			for _, data := range [][]byte{ftyp(tc.brand), ftyp("none", tc.brand)} {
+				if got := DetectUpload(data); got != tc.want {
+					t.Fatalf("upload = %q, want %q", got, tc.want)
+				}
+				if got := Detect(data, "image/png"); got != tc.want {
+					t.Fatalf("attachment = %q, want %q", got, tc.want)
+				}
+			}
+		})
+	}
+}

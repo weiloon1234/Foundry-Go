@@ -125,6 +125,28 @@ func TestUploadDetectsDocumentsAndOnlyAcceptedTextSpecializations(t *testing.T) 
 		t.Fatal("client-declared type accepted unaccepted bytes")
 	}
 }
+
+func TestUploadAcceptsQuickTimeAndMP4Bytes(t *testing.T) {
+	policy := testSingle.definition.policy
+	policy.Accepted = []storage.MediaType{"video/quicktime", "video/mp4"}
+	for _, tc := range []struct {
+		name, data string
+		media      storage.MediaType
+	}{
+		{"clip.mov", "\x00\x00\x00\x14ftypqt  \x00\x00\x00\x00qt  \x00\x00\x00\x08mdat", "video/quicktime"},
+		{"clip.mp4", "\x00\x00\x00\x14ftypisom\x00\x00\x00\x00iso6\x00\x00\x00\x08mdat", "video/mp4"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := prepare(t.Context(), nil, policy, Upload{Source: strings.NewReader(tc.data), OriginalName: tc.name, ContentType: "image/png"})
+			if err != nil || result.info.MediaType != tc.media {
+				t.Fatalf("detected = %q, want %q: %v", result.info.MediaType, tc.media, err)
+			}
+			if _, err := prepare(t.Context(), nil, policy, Upload{Source: strings.NewReader(tc.data[:18]), OriginalName: tc.name, ContentType: tc.media}); err == nil {
+				t.Fatal("truncated ISO box accepted via client hint")
+			}
+		})
+	}
+}
 func TestPropertiesAreExplicitBoundedObjects(t *testing.T) {
 	for _, text := range []string{`null`, `[]`, `true`, `1`, `"x"`, `{"x":"` + strings.Repeat("a", MaxPropertiesBytes) + `"}`} {
 		input, err := value.ParseJSON[json.RawMessage](text)

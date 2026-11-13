@@ -20,6 +20,16 @@ const (
 // maxZipEntries bounds central-directory inspection.
 const maxZipEntries = 65535
 
+// DetectUpload sniffs an upload prefix without trusting client metadata. It
+// extends net/http sniffing with the same ISO base media brands as Detect,
+// preserving generic ZIP/text types and charset parameters for upload rules.
+func DetectUpload(data []byte) string {
+	if kind := isoMedia(data); kind != "" {
+		return kind
+	}
+	return http.DetectContentType(data)
+}
+
 // Detect returns the media type of data. It extends net/http sniffing with
 // types whose generic signature hides the specific format: OOXML documents and
 // ODF/EPUB packages (ZIP containers), SVG (XML or text), and ISO base media
@@ -28,15 +38,12 @@ const maxZipEntries = 65535
 // subtype (CSV, TSV, Markdown, calendar, or JSON that parses); it never
 // overrides a binary detection or chooses a type for bytes alone.
 func Detect(data []byte, declared string) string {
-	if kind := isoMedia(data); kind != "" {
-		return kind
-	}
 	if bytes.HasPrefix(data, []byte("PK\x03\x04")) {
 		if kind := zipContainer(data); kind != "" {
 			return kind
 		}
 	}
-	sniffed, _, err := mime.ParseMediaType(http.DetectContentType(data))
+	sniffed, _, err := mime.ParseMediaType(DetectUpload(data))
 	if err != nil {
 		return Binary
 	}

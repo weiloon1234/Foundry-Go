@@ -160,7 +160,10 @@ change how file-content bytes stream to disk. Metadata copies avoid retaining a
 large MIME header through a short filename or declared media-type substring.
 
 Incoming Content-Type is untrusted metadata available as ClientContentType().
-ContentType() reports the bounded content sniff. Neither declares cross-system
+ContentType() reports the framework's 512-byte content sniff, sharing ISO base
+media brand detection with attachment publication. A complete leading `ftyp`
+box must fit in that prefix; truncated boxes cannot establish a media brand.
+Client MIME hints do not select the detected upload type. Neither declares cross-system
 atomicity or durable delivery; attachment/database compensation belongs to the
 storage and model-extension integration.
 
@@ -196,6 +199,18 @@ The common declarations are `PDFKind`, `TextKind`, `CSVKind`, and
 `ZIPContainerKind("pptx")` recognize ZIP signatures under those extensions.
 **They do not validate Office documents**, ZIP entries, or package structure.
 Applications choose their allowed kinds and any further document validation.
+
+For iPhone videos, declare `validation.FileKind{Extension: "mov", ContentType:
+"video/quicktime"}` alongside `validation.FileKind{Extension: "mp4", ContentType:
+"video/mp4"}` in `FileKinds`. The same ISO brand detector also recognizes
+AVIF, HEIC/HEIF, M4A and 3GPP. Recognition checks a bounded signature, not the
+validity of the complete media file.
+
+Upload detection preserves generic ZIP and text/XML types, including charset
+parameters. Attachment publication additionally specializes Office/ODF/EPUB
+containers and SVG, and may use a compatible textual client hint when its policy
+accepts that type. Those specializations do not change multipart `FileKinds`:
+Office uploads still use `ZIPContainerKind`, and CSV uploads still use `CSVKind`.
 
 <a id="recipe-image-kinds"></a>
 ## Check image kinds and dimensions with one inspection

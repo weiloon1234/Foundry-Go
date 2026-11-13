@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: multipart upload detection shares the framework media detector's ISO
+  base media brands with attachment publication, recognizing QuickTime/MOV,
+  additional MP4 brands, AVIF, HEIC/HEIF, M4A and 3GPP. Matching file-kind rules
+  can now accept these types instead of generic binary (or MP4 for overlapping
+  brands). Detection still requires a complete leading `ftyp` box within the
+  existing 512-byte sniff prefix. Client MIME hints remain untrusted and do not
+  select upload types. Non-ISO detection, including generic ZIP/Office and
+  text/XML types with charset parameters, and exact extension/type matching are
+  unchanged; attachment-only container/text specialization remains separate.
+
 ## v0.28.1 — 2026-11-13
 
 - Docs: the migration guide states the origin convention. Framework packages use

@@ -29,7 +29,7 @@ func (f File) Extension() string { return filename.Extension(f.name) }
 // ClientContentType is untrusted metadata supplied by the client.
 func (f File) ClientContentType() string { return f.declared }
 
-// ContentType is Go's bounded content sniff, not proof of a valid image/document.
+// ContentType is the framework's bounded content sniff, not proof of a valid image/document.
 func (f File) ContentType() string { return f.detected }
 func (File) String() string        { return "uploaded file" }
 func (File) GoString() string      { return "uploaded file" }

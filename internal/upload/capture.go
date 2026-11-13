@@ -5,12 +5,12 @@ import (
 	"io"
 	"io/fs"
 	"mime"
-	stdhttp "net/http"
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/filename"
+	"github.com/weiloon1234/Foundry-Go/internal/mediatype"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
@@ -112,5 +112,5 @@ func (b *Batch) Capture(ctx context.Context, source io.Reader, name, declaredTyp
 	if parseErr != nil {
 		declared = ""
 	}
-	return File{owner: b, key: key, name: filename.Normalize(name, "upload"), declared: strings.Clone(declared), detected: stdhttp.DetectContentType(prefix), size: size}, nil
+	return File{owner: b, key: key, name: filename.Normalize(name, "upload"), declared: strings.Clone(declared), detected: mediatype.DetectUpload(prefix), size: size}, nil
 }
