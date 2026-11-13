@@ -119,6 +119,40 @@ class ServiceInventoryTests(unittest.TestCase):
         self.assertNotIn("ExecStart=+", content)
         self.assertIn("User=abc-production", content)
 
+    def test_scalar_unit_paths_are_unquoted_and_word_lists_remain_quoted(self):
+        list_directives = {"Environment", "ReadWritePaths", "BindReadOnlyPaths"}
+        for role in self.inventory.roles:
+            content = services.render_unit(self.inventory, role, self.entry, DIGEST)
+            directives = dict(line.split("=", 1) for line in content.splitlines() if "=" in line and not line.startswith("#"))
+            for name, value in directives.items():
+                if name not in list_directives and not name.startswith("Exec"):
+                    self.assertFalse(value.startswith('"'), name)
+            self.assertTrue(directives["WorkingDirectory"].startswith("/"))
+            if role == "relay":
+                expected = services.ServicePaths.for_unit(self.inventory.specs[role].identity, CURRENT).base
+                self.assertEqual(directives["WorkingDirectory"], expected)
+                self.assertTrue(directives["ReadWritePaths"].startswith('"'))
+            self.assertTrue(directives["ExecStart"].startswith('"'))
+
+    def test_fixed_runtime_pin_ancestry_is_searchable_under_service_umask(self):
+        import importlib.util
+        path = Path(__file__).resolve().parents[1] / "server/runtime_v1.py"
+        spec = importlib.util.spec_from_file_location("test_runtime_pin_modes", path)
+        runtime = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runtime)
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root).resolve() / "pins/instance/role"
+            previous = os.umask(0o077)
+            try:
+                with patch.object(runtime, "owned"), patch.object(runtime.os, "fchown") as owner:
+                    runtime.pin_directory(target)
+            finally:
+                os.umask(previous)
+            for directory in (target, target.parent, target.parent.parent):
+                self.assertEqual(directory.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(owner.call_count, 3)
+            self.assertTrue(all(call.args[1:] == (0, 0) for call in owner.call_args_list))
+
     def test_builtin_guards_reuse_existing_policy(self):
         content = services.render_unit(self.inventory, "http", self.entry, DIGEST)
         self.assertIn("TimeoutStopSec=45s", content)
@@ -268,6 +302,22 @@ class ServicePreparationTests(unittest.TestCase):
         self.store.admit(invocation)
         return runtime_config.prepare_service(self.host, self.store, invocation, self.role, self.spec,
                     self.root, self.members, uid=os.geteuid(), gid=os.getegid(), **kwargs)
+
+    def test_private_unit_umask_preserves_searchable_config_ancestry(self):
+        previous = os.umask(0o077)
+        try:
+            view = self.prepare()
+        finally:
+            os.umask(previous)
+        for directory in (view, view.parent, view.parent.parent, view / "config", view / "config/fixed"):
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(directory.stat().st_uid, os.geteuid())
+        for directory in (view / "runtime", view / "config/settings",
+                          self.host.paths.p(self.paths.state) / "seeds/seed"):
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(directory.stat().st_uid, os.geteuid())
+        self.assertEqual((view / "config/fixed/value").read_bytes(), b"fixed")
+        self.assertEqual((view / "config/settings/value").stat().st_mode & 0o777, 0o600)
 
     def test_each_invocation_recreates_configuration_but_seed_once_keeps_edits(self):
         first = self.prepare()

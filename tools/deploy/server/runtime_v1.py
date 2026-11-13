@@ -49,9 +49,36 @@ def read(path):
     return json.loads(data, object_pairs_hook=pairs, parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
 
 
+def pin_directory(path):
+    # This runs before a bundle is pinned, so it cannot import admission helpers.
+    missing, parent = [], path
+    while not parent.exists():
+        missing.append(parent)
+        parent = parent.parent
+    owned(parent)
+    for directory in reversed(missing):
+        try:
+            directory.mkdir(mode=0o700)
+        except FileExistsError:
+            owned(directory)
+            continue
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fchown(fd, 0, 0)
+            os.fchmod(fd, 0o755)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        fd = os.open(directory.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    owned(path)
+
+
 def publish(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
-    owned(path.parent)
+    pin_directory(path.parent)
     fd, name = tempfile.mkstemp(dir=path.parent)
     try:
         with os.fdopen(fd, "w") as stream:
@@ -86,8 +113,7 @@ def main(arguments):
         if action == "cleanup" and not key.exists():
             return 0
         if os.geteuid() == 0:
-            PINS.mkdir(parents=True, exist_ok=True, mode=0o755)
-            owned(PINS)
+            pin_directory(PINS)
             fd = os.open(PINS / "registration.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX)

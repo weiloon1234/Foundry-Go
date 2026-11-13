@@ -56,6 +56,23 @@ class AdmissionTests(unittest.TestCase):
         self.store.begin(self.selection, self.resolution)
         self.store.record_boot_closure(self.closure)
 
+    def test_protected_directories_have_explicit_modes_despite_private_umask(self):
+        target = self.host.paths.p("/run/prepared/nested/config")
+        private = self.host.paths.p("/run/evidence/private")
+        previous = os.umask(0o077)
+        try:
+            admission.protected_directory(self.host, target)
+            admission.protected_directory(self.host, private, 0o700)
+        finally:
+            os.umask(previous)
+        for directory in (target, target.parent, target.parent.parent):
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(directory.stat().st_uid, os.geteuid())
+            self.assertEqual(directory.stat().st_gid, os.getegid())
+        self.assertEqual(private.stat().st_mode & 0o777, 0o700)
+        admission.protected_directory(self.host, private)
+        self.assertEqual(private.stat().st_mode & 0o777, 0o700)
+
     def commit(self):
         self.store.record_operation(attempt("succeeded"))
         self.store.commit()

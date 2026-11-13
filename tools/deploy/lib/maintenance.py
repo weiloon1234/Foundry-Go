@@ -9,8 +9,9 @@ FIELDS = frozenset({"message", "retry", "allow", "except", "bypass"})
 
 
 def status(host, entry, release_path):
-    if entry.get("topology", {}).get("schema") == 2:
-        return {"down": entry.get("preview_maintenance", False)}
+    from feature_lifecycle import is_feature
+    if is_feature(entry):
+        return None  # Policy-aware feature maintenance is capability-gated.
     import release
 
     result = release.app(host, entry, release_path, "maintenance:status",
@@ -105,6 +106,9 @@ def arguments(action, values):
 
 
 def run(host, entry, path, action, extra):
+    from feature_lifecycle import check_operation, is_feature
+    if is_feature(entry):
+        check_operation(action)
     import release
 
     code = "maintenance_unavailable"

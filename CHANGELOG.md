@@ -4,17 +4,23 @@
 
 ### Deployment feature preview
 
+- Fixed: custom systemd units render an unquoted absolute `WorkingDirectory`.
+  Privileged preparation and runtime-pin creation explicitly set directory modes
+  and ownership despite `UMask=0077`, retaining searchable protected ancestors and
+  private service-owned leaves.
+
 - Added a final typed `deployment.LoadBindings` API and schema-2 role descriptors,
   journaled HTTP effective environments, generation-12 feature lifecycle owners,
   invocation-pinned runtime dispatch, package/artifact integration and an opt-in
   systemd acceptance scenario. Public opening remains capability-gated until lane
-  C supplies observed closure and opening integration and the shared readers
-  dispatch to the existing frozen feature parsers.
-- Preview refusals cover feature rollback (including to legacy), configuration and
-  maintenance holds, configuration/key changes, maintenance resume, named lifecycle
+  C supplies observed closure and opening integration. Shared registry readers
+  now dispatch to the existing frozen feature parsers without schema changes.
+- Preview refusals cover feature rollback (including to legacy), configuration
+  holds, configuration/key changes, both maintenance down/up, named lifecycle
   operations, recovery, unverified service bundle ABIs and custom-service secret
   intake. Helper pruning retains all feature bundles with an explicit later-release
-  capability diagnostic. Preview maintenance entry stops the whole instance.
+  capability diagnostic. Feature down and up both refuse before mutation until
+  policy-aware closure and resume are integrated; maintenance is never one-way.
   Wrappers and multiple copies remain release-2 capabilities.
 
 

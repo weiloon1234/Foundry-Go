@@ -1,7 +1,7 @@
 """Legacy supervision and immutable host-capability declaration parsing.
 
-parse_topology/parse_profile own feature schemas. Legacy lifecycle entry points
-remain closed to those schemas until the common unit inventory ships.
+parse_topology/parse_profile own feature schemas; shared readers dispatch to
+those same parsers without changing the legacy schema projections.
 """
 from __future__ import annotations
 
@@ -20,8 +20,9 @@ from contracts import SERVICE_ROLES, fields, read_json, require, unit_name
 
 def validate_topology(value: dict, *, registered: bool = False) -> dict:
     """Validate roles; a registry projection also carries its canonical SHA-256."""
-    require(not isinstance(value, dict) or value.get("schema") != TOPOLOGY_SCHEMA,
-            "capability_unavailable", "Topology 2 requires the host-capability lifecycle; use parse_topology for contract inspection.")
+    if isinstance(value, dict) and value.get("schema") == TOPOLOGY_SCHEMA:
+        parsed = parse_topology(value, registered=registered)
+        return {**parsed.projection(), "sha256": parsed.sha256}
     fields(value, "schema roles sha256" if registered else "schema roles", "topology")
     require(type(value["schema"]) is int and value["schema"] == 1
             and isinstance(value["roles"], list), "invalid_topology", "Topology requires schema 1 and roles.")
@@ -47,7 +48,16 @@ def load_topology(app_root: Path) -> dict:
 def instance_units(entry: dict) -> dict[str, str]:
     """Map every declared role to its canonical concrete systemd unit."""
     topology = validate_topology(entry["topology"], registered=True)
+    if topology["schema"] == TOPOLOGY_SCHEMA:
+        parsed = parse_topology(topology, registered=True)
+        profile = parse_profile(entry["profile"], parsed)
+        placed = dict(profile.placement)
+        return {role.common.name: role_unit_name(entry["name"], role) for role in parsed.roles if placed[role.common.name]}
     return {role["name"]: unit_name(entry["name"], role["name"]) for role in topology["roles"]}
+
+
+def role_unit_name(name, role):
+    return unit_name(name, role.common.name) if isinstance(role, BuiltinRole) else f"foundry-app-{name}-{role.common.name}@1.service"
 
 
 def selected_units(entry: dict, role="all", *, roles=None) -> dict[str, str]:
@@ -61,8 +71,7 @@ def selected_units(entry: dict, role="all", *, roles=None) -> dict[str, str]:
     return units if role == "all" else {role: units[role]}
 
 
-# New declarations are parsed independently of legacy lifecycle dispatch. M3
-# migrates that dispatch to the resolved unit inventory before enabling execution.
+# The frozen parsers are also the validation owners for shared lifecycle readers.
 from contracts import (ARCHIVE_SCHEMA, FEATURE_PROFILE_SCHEMA, MAX_ARTIFACTS, MAX_LISTENERS, MAX_ROLES,
                        TOPOLOGY_SCHEMA, PROFILE_SCHEMA, canonical_digest, contract_digest, contract_document,
                        contract_int, contract_list, contract_map, contract_name, contract_names,
@@ -646,24 +655,37 @@ class DeploymentProfile:
         return json.loads(self.canonical_json)
 
 
+def validate_feature_profile(value, project=None):
+    """Validate topology-independent profile fields through their frozen owners."""
+    require(type(value.get("schema")) is int and value["schema"] == FEATURE_PROFILE_SCHEMA,
+            "unsupported_schema", "Feature profiles require schema 3.")
+    require("placement" in value and "listeners" in value, "invalid_profile", "Profile 3 requires placement and listener bindings.")
+    legacy = {k: v for k, v in value.items() if k not in ("placement", "listeners")}
+    legacy["schema"] = PROFILE_SCHEMA
+    validate_profile(legacy, project)
+    def count(v):
+        contract_int(v, 0, 65535)
+        require(v <= 1, "unsupported_capability", "Numbered services require a later capability.")
+        return v
+    placement = contract_map(value["placement"], count, maximum=MAX_ROLES)
+    raw = value["listeners"]
+    require(isinstance(raw, dict) and len(raw) <= MAX_LISTENERS, "invalid_profile", "Invalid public listener bindings.")
+    listeners = tuple((n, PublicListenerBinding.parse(v)) for n, v in sorted(raw.items()))
+    ports = [p for _, listener in listeners for p in listener.ports]
+    require(len(ports) == len(set(ports)) and not {22, 80, 443}.intersection(ports),
+            "invalid_profile", "Public listener ports overlap or conflict with reserved host services.")
+    return placement, listeners
+
+
 def parse_profile(document, topology: Topology, project=None) -> DeploymentProfile:
     value = contract_document(document)
     require(isinstance(value, dict), "invalid_profile", "Invalid deployment profile.")
     if topology.schema == 1:
+        require(value.get("schema") == PROFILE_SCHEMA, "unsupported_schema", "Topology 1 requires profile 2.")
         validate_profile(value, project)
         placement, listeners = tuple((r.common.name, 1) for r in topology.roles), ()
     else:
-        require(type(value.get("schema")) is int and value["schema"] == FEATURE_PROFILE_SCHEMA,
-                "unsupported_schema", "Topology 2 requires profile 3.")
-        require("placement" in value and "listeners" in value, "invalid_profile", "Profile 3 requires placement and listener bindings.")
-        legacy = {k: v for k, v in value.items() if k not in ("placement", "listeners")}
-        legacy["schema"] = PROFILE_SCHEMA
-        validate_profile(legacy, project)
-        def count(v):
-            contract_int(v, 0, 65535)
-            require(v <= 1, "unsupported_capability", "Numbered services require a later capability.")
-            return v
-        placement = contract_map(value["placement"], count, maximum=MAX_ROLES)
+        placement, listeners = validate_feature_profile(value, project)
         counts = dict(placement)
         require(set(counts) == {r.common.name for r in topology.roles} and counts.get("http") == 1,
                 "invalid_profile", "Placement must explicitly cover every role and place HTTP.")
@@ -674,14 +696,9 @@ def parse_profile(document, topology: Topology, project=None) -> DeploymentProfi
                                                        for _, b in role.common.bindings),
                     "invalid_profile", "A placed consumer cannot bind an unplaced endpoint.")
         raw = value["listeners"]
-        require(isinstance(raw, dict) and len(raw) <= MAX_LISTENERS, "invalid_profile", "Invalid public listener bindings.")
         expected = {r.common.name + "." + n for r in topology.roles if isinstance(r, ExecutableRole)
                     and counts[r.common.name] for n, l in r.listeners if l.bind == "public"}
         require(set(raw) == expected, "invalid_profile", "Bind every placed public listener exactly once.")
-        listeners = tuple((n, PublicListenerBinding.parse(v)) for n, v in sorted(raw.items()))
-        ports = [p for _, listener in listeners for p in listener.ports]
-        require(len(ports) == len(set(ports)) and not {22, 80, 443}.intersection(ports),
-                "invalid_profile", "Public listener ports overlap or conflict with reserved host services.")
         platform = "linux-" + value["architecture"]
         require(all(platform in dict(a.platforms) for _, a in topology.artifacts)
                 and all(a.go_package or platform in dict(a.platforms) for _, a in topology.application_executables),

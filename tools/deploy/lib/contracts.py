@@ -177,8 +177,10 @@ def validate_project(value):
 
 def validate_profile(value, project=None):
     require(isinstance(value, dict), "invalid_profile", "Invalid environment profile.")
-    require(value.get("schema") != FEATURE_PROFILE_SCHEMA, "capability_unavailable",
-            "Profile 3 is a contract-only format until host-capability lifecycle support is installed.")
+    if value.get("schema") == FEATURE_PROFILE_SCHEMA:
+        from topology import validate_feature_profile
+        validate_feature_profile(value, project)
+        return value
     optional = {"backup_policy", "uploads"}
     fields({k: v for k, v in value.items() if k not in optional}, "schema environment instance_id host runtime_environment domain certbot_email architecture public_env retention edge_origin_lockdown", "environment")
     require(type(value["edge_origin_lockdown"]) is bool, "invalid_profile", "edge_origin_lockdown must be a boolean; Cloudflare is mandatory.")
@@ -432,7 +434,10 @@ def validate_registry(value):
         if "deployment_selection" in entry:
             selection = DeploymentSelection.parse(entry["deployment_selection"])
             require(selection.instance_id == instance_id, "invalid_registry", "Deployment selection belongs to another instance.")
-        validate_topology(entry.get("topology"), registered=True)
+        topology = validate_topology(entry.get("topology"), registered=True)
+        if topology["schema"] == TOPOLOGY_SCHEMA or entry["profile"]["schema"] == FEATURE_PROFILE_SCHEMA:
+            from topology import parse_profile, parse_topology
+            parse_profile(entry["profile"], parse_topology(topology, registered=True), project)
         require(type(entry.get("client_generation")) is int and entry["client_generation"] >= 1
                 and isinstance(entry.get("framework_version"), str), "invalid_registry", "Invalid client pin.")
         require(isinstance(entry.get("provisioning"), dict) and entry["provisioning"].get("state") in ("preparing", "ready", "failed", "rehearsal")
@@ -569,8 +574,8 @@ def parse_env(data):
     return result
 
 
-# Host-capability contracts are parseable before their lifecycle owners ship.
-# The legacy entry points deliberately do not opt in to these records.
+# Shared readers reuse the frozen feature parsers. Runtime execution has its own
+# capability gates, independent of declaration and registry validation.
 TOPOLOGY_SCHEMA = 2
 FEATURE_PROFILE_SCHEMA = 3
 ARCHIVE_SCHEMA = 2

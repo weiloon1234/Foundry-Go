@@ -151,14 +151,40 @@ class CapabilityTopologyTests(unittest.TestCase):
             parsed.schema = 9
         self.assertEqual(t.parse_topology({**parsed.projection(), "sha256": parsed.sha256}, registered=True), parsed)
 
-    def test_feature_contracts_do_not_enable_incomplete_legacy_runtime(self):
-        with self.assertRaises(c.DeployError) as caught:
-            t.validate_topology(declaration())
-        self.assertEqual(caught.exception.code, "capability_unavailable")
-        with self.assertRaises(c.DeployError) as caught:
-            c.validate_profile(profile())
-        self.assertEqual(caught.exception.code, "capability_unavailable")
+    def test_shared_readers_dispatch_to_frozen_feature_parsers(self):
+        raw, placed = declaration(), profile()
+        original = copy.deepcopy((raw, placed))
+        registered = t.validate_topology(raw)
+        self.assertEqual(registered, {**raw, "sha256": t.parse_topology(raw).sha256})
+        self.assertEqual(t.validate_topology(registered, registered=True), registered)
+        self.assertEqual(c.validate_profile(placed), placed)
+        self.assertEqual((raw, placed), original)
+        with self.assertRaises(c.DeployError):
+            t.validate_topology({**registered, "sha256": OTHER}, registered=True)
+        with self.assertRaises(c.DeployError):
+            c.validate_profile({**placed, "placement": {**placed["placement"], "relay": 2}})
         self.assertEqual(upgrades.contract_versions()["archive"], (1, 2))
+
+    def test_registry_checks_feature_profile_against_topology_and_units(self):
+        _, _, entry = fixture()
+        fields = profile()
+        entry["profile"].update(schema=3, placement=fields["placement"], listeners=fields["listeners"])
+        entry["topology"] = t.validate_topology(declaration())
+        host_registry = registry(entry)
+        self.assertEqual(c.validate_registry(host_registry), host_registry)
+        units = t.instance_units(entry)
+        self.assertEqual(units["relay"], "foundry-app-" + entry["name"] + "-relay@1.service")
+        entry["profile"]["placement"]["worker"] = 0
+        self.assertNotIn("worker", t.instance_units(entry))
+        for placement in ({"http": 1, "relay": 1}, {"http": 1, "relay": 0, "worker": 1}):
+            candidate = copy.deepcopy(entry)
+            candidate["profile"]["placement"] = placement
+            with self.assertRaises(c.DeployError):
+                c.validate_registry(registry(candidate))
+        candidate = copy.deepcopy(entry)
+        candidate["topology"] = t.validate_topology({"schema": 1, "roles": [{"name": "http"}]})
+        with self.assertRaises(c.DeployError):
+            c.validate_registry(registry(candidate))
 
     def test_unknown_tags_dependencies_and_unsafe_references(self):
         variants = [

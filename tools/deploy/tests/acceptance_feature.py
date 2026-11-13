@@ -22,7 +22,7 @@ import artifacts
 from contracts import ReleaseDeclaration, digest, read_json
 from host import Host
 from topology import parse_topology, parse_profile
-from acceptance_support import action, guard, request, run
+from acceptance_support import LAUNCHER, action, guard, request, run
 import acceptance_host as shared
 
 
@@ -105,10 +105,13 @@ def main():
     second = run(["systemctl", "show", inventory.units["relay"], "-p", "InvocationID", "--value"]).stdout
     assert first.strip() and second.strip() and first != second
     assert services.wait_ready(host, inventory, "http", time.monotonic() + 90)
-    assert action("down", request(project, profile, operation_id=str(uuid.uuid4())))["ok"]
-    for unit in inventory.units.values():
-        assert run(["systemctl", "is-active", unit], check=False).stdout.strip() == "inactive"
-    print("PASS feature preview: package, artifact, admission, app binding, restart and maintenance stop")
+    for operation in ("down", "up"):
+        refused = run([LAUNCHER, operation], input=json.dumps(request(project, profile)), check=False)
+        assert json.loads(refused.stdout)["error"]["code"] == "capability_unavailable"
+        for unit in inventory.units.values():
+            assert run(["systemctl", "is-active", unit]).stdout.strip() == "active"
+        assert run(["systemctl", "show", inventory.units["relay"], "-p", "InvocationID", "--value"]).stdout == second
+    print("PASS feature preview: package, artifact, admission, app binding, restart and symmetric maintenance refusal")
 
 
 if __name__ == "__main__":

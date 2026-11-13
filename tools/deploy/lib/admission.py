@@ -51,7 +51,19 @@ def protected_directory(host, path, mode=0o755):
         missing.append(parent)
         parent = parent.parent
     for directory in reversed(missing):
-        directory.mkdir(mode=mode if directory == path else 0o755, exist_ok=True)
+        try:
+            directory.mkdir(mode=0o700)
+        except FileExistsError:
+            protected_path(host, directory, "directory")
+            continue
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            uid, gid = (0, 0) if host.paths.root == Path("/") else (os.geteuid(), os.getegid())
+            os.fchown(fd, uid, gid)
+            os.fchmod(fd, mode if directory == path else 0o755)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         fd = os.open(directory.parent, os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(fd)

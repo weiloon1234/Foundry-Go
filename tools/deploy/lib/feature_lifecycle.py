@@ -1,6 +1,6 @@
 """Generation-12 preview lifecycle. Declarations and app bindings are stable.
 
-Recovery/rollback, mutable configuration, maintenance resume and helper pruning
+Recovery/rollback, mutable configuration, policy-aware maintenance and helper pruning
 remain explicit capability refusals. Network effects belong exclusively to lane C.
 """
 from dataclasses import asdict, replace
@@ -34,6 +34,12 @@ def is_feature(entry):
 
 def refuse(action):
     raise DeployError("capability_unavailable", f"Feature {action} requires {LATER}.")
+
+
+def check_operation(action):
+    if action in ("down", "up"):
+        refuse("policy-aware maintenance down/up with retained-role closure and admission")
+    require(action in ("activate", "restart", "stop"), "capability_unavailable", f"Feature operation requires {LATER}.")
 
 
 def validate_preview(topology):
@@ -260,7 +266,6 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     release.switch_to(host, entry, inventory.deployment.release)
     if stop_only:
         host.run(["systemctl", "disable", *inventory.units.values()])
-        # Preview maintenance entry stops the full instance; resume is refused.
         selected = replace(selected, enabled_roles=())
         store._write(store.durable / "selection.json", selected)
     else:
@@ -284,7 +289,6 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     store.record_operation(state["last_attempt"])
     store.commit()
     entry["deployment_selection"] = record_document(store._selection()[0])
-    entry["preview_maintenance"] = stop_only and attempt.get("preview_maintenance", False)
     host.journal(registry, entry)
 
 
@@ -332,6 +336,7 @@ def execute(host, request):
     import release
     import upgrades
     action = request["action"]
+    check_operation(action)
     project, profile = request["project"], request["profile"]
     feature_network.capability()
     with host.lock("host"), host.lock(profile["instance_id"]):
@@ -346,7 +351,7 @@ def execute(host, request):
                 store, selected, inventory, launch = load(host, entry)
                 require(request.get("role", "all") == "all", "capability_unavailable", f"Named feature operations require {LATER}.")
                 attempt = release.begin(host, entry, state, "restart" if action == "restart" else "stop", inventory.deployment.release,
-                                        metadata={"operation_id": request["operation_id"], "preview_maintenance": action == "down"})
+                                        metadata={"operation_id": request["operation_id"]})
             else:
                 archive = check_path(Path(request["archive"]), "file")
                 staging = host.paths.opt(entry["name"]) / "releases" / (".stage-" + uuid.uuid4().hex)
@@ -416,7 +421,7 @@ def execute(host, request):
                 release.widen_redis_grants(host, registry, entry, patterns, state)
                 install_units(host, registry, entry, inventory, launch, Path(__file__).resolve().parents[1])
                 state["previous"], state["current"] = state["current"], manifest
-            transition(host, registry, entry, inventory, state, attempt, stop_only=action in ("stop", "down"))
+            transition(host, registry, entry, inventory, state, attempt, stop_only=action == "stop")
         except (DeployError, OSError):
             if attempt is None:
                 raise
@@ -444,9 +449,9 @@ def execute(host, request):
 
 
 def request_operation(host, action, project, profile, *, operation_id=None, **arguments):
+    check_operation(action)
     feature_network.capability()
     operation_id = contract_uuid(operation_id or str(uuid.uuid4()))
-    require(action in ("activate", "restart", "stop", "down"), "capability_unavailable", f"Feature operation requires {LATER}.")
     with host.lock("host"):
         registry, entry = host.require_identity(project, profile)
         directory = host.paths.state / "feature-operations" / operation_id

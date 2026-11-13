@@ -404,7 +404,7 @@ def _check_feature_request(registry, request, action):
     topology = request.get("topology")
     requested = (isinstance(profile, dict) and profile.get("schema") == FEATURE_PROFILE_SCHEMA
                  or isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA)
-    supported = {"bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "down", "status", "logs", "sync", "config-keys"}
+    supported = {"bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "status", "logs", "sync", "config-keys"}
     if requested and action not in supported:
         from feature_lifecycle import refuse
         refuse(action)

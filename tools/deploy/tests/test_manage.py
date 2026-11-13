@@ -251,6 +251,24 @@ class ManagerTests(unittest.TestCase):
                         self.assertEqual("logs_too_large", error.exception.code)
                         self.assertNotIn(output[:100], error.exception.detail)
 
+    def test_feature_maintenance_refuses_both_directions_without_mutation(self):
+        from test_host_capabilities import declaration, profile
+        from topology import validate_topology
+        value = profile()
+        self.profile.update(schema=3, placement=value["placement"], listeners=value["listeners"])
+        self.entry["topology"] = validate_topology(declaration())
+        self.host.write_registry(registry(self.entry))
+        before = self.host.paths.registry.read_bytes()
+        for action in ("down", "up"):
+            with self.subTest(action=action), patch.object(self.host, "run") as run, \
+                    patch.object(self.host, "save_state") as save, self.assertRaises(DeployError) as raised:
+                manager.execute(self.host, action, {**self.request, "confirm": True})
+            self.assertEqual(raised.exception.code, "capability_unavailable")
+            self.assertIn("post-preview", raised.exception.detail)
+            run.assert_not_called()
+            save.assert_not_called()
+            self.assertEqual(self.host.paths.registry.read_bytes(), before)
+
     def test_maintenance_requires_confirmation_and_rejects_up_parameters(self):
         with patch.object(self.host, "run") as run:
             for action in ("down", "up"):

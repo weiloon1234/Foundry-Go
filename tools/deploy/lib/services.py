@@ -13,7 +13,7 @@ import time
 
 from contracts import (Deployment, RuntimeResolution, UnitIdentity, canonical_digest,
                        contract_digest, contract_path, contract_uuid, instance_paths,
-                       marker, record_document, require, unit_name)
+                       marker, record_document, require)
 from topology import (ArgumentKind, BuiltinRole, ExecutableRole, parse_profile,
                       parse_topology)
 
@@ -64,8 +64,8 @@ class UnitInventory:
         require(all(spec.declaration_sha256 == canonical_digest(declarations[name])
                     for name, spec in self.specs.items()),
                 "service_inventory", "Resolved unit policy differs from its declared role.")
-        self.units = {role: unit_name(name, role) if isinstance(value, BuiltinRole)
-                      else f"foundry-app-{name}-{role}@1.service" for role, value in self.roles.items()}
+        from topology import role_unit_name
+        self.units = {role: role_unit_name(name, value) for role, value in self.roles.items()}
         self.start_order(placed)
 
     def start_order(self, selected):
@@ -286,7 +286,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
                    for key, value in role.environment]
     environment += [(key, contract_path(secret_paths[key], absolute=True)) for key, _ in role.secret_files]
     replacements = {"MARKER": marker(entry), "ROLE": name, "ACCOUNT": inventory.name,
-                    "AFTER": f"{boot} {after}", "BASE": systemd_word(paths.base),
+                    "AFTER": f"{boot} {after}", "BASE": contract_path(paths.base, absolute=True),
                     "WRITABLE": " ".join(systemd_word(p) for p in (paths.state, paths.base + "/invocations")),
                     "ADMIT": hooks["admit"], "PREPARE": hooks["prepare"], "DISPATCH": hooks["dispatch"],
                     "CLEANUP": hooks["cleanup"], "RESTART": role.restart.policy,

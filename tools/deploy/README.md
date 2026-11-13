@@ -170,10 +170,9 @@ Existing profiles without `uploads` keep their proxy behavior. See
 
 ### Generation-12 feature preview
 
-This checkout contains the preview owners but does not yet activate features:
-shared registry/profile/topology reader dispatch still rejects the feature schemas,
-and lane C's network integration is absent. Both integration gates must be filled
-before running the end-to-end scenario below; no frozen declaration changes are needed.
+Shared registry/profile/topology readers dispatch through the frozen feature
+parsers. Activation still requires lane C's network integration before the
+end-to-end scenario below can run; no frozen declaration changes are needed.
 
 The preview uses the frozen topology-2, profile-3 and archive-2 contracts. Single
 instance custom services receive typed argv, hardened units, local probes,
@@ -209,7 +208,7 @@ The preview explicitly refuses with `capability_unavailable` naming the later
 release:
 
 - Feature rollback, including feature-to-legacy rollback.
-- Configuration changes, key rotation, configuration/maintenance holds and `up`.
+- Configuration changes, key rotation, configuration holds and both `down`/`up`.
 - Named lifecycle operations and interrupted-operation reconciliation/recovery.
 - Custom-service secret intake and bundle ABIs without package-version evidence.
 - Helper-bundle pruning: automatic retention returns a capability diagnostic and
@@ -217,10 +216,12 @@ release:
   reaching a bound refuses further starts until proven-exit cleanup ships.
 - Host reports/capacity operations involving features until their owners integrate.
 
-Preview `down` closes ingress and stops/disables the whole instance. It is a
-permanent stop in this preview, not a recoverable maintenance hold. Public opening
-is refused before host mutation unless lane C implements all three functions in
-`listeners.py`, reached only through `lib/feature_network.py`:
+Feature `down` and `up` both refuse before mutation. The current whole-instance
+transition cannot preserve `maintenance: serve` roles while proving partial closure
+and safely resuming only stopped roles. Policy-aware maintenance must implement
+both directions before either is enabled; legacy maintenance is unchanged.
+Public opening is refused before host mutation unless lane C implements all three
+functions in `listeners.py`, reached only through `lib/feature_network.py`:
 
 | Function | Handoff |
 | --- | --- |
@@ -236,7 +237,8 @@ observer. Independent executor cleanup and selective retention remain later work
 The opt-in real-systemd scenario uses a newly built ordinary deploy-acceptance
 archive. It adds one artifact-backed relay and a declared package, verifies the
 HTTP app reaches the relay through the Go binding loader, restarts the instance,
-and verifies maintenance stops it. After lane C is merged, run:
+and verifies that both maintenance operations refuse without stopping it. After
+lane C is merged, run:
 
 ```sh
 python3 tools/deploy/tests/build_acceptance.py --architecture arm64 --archive-file /tmp/b24-archive-path
