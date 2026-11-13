@@ -77,10 +77,10 @@ func CountNode(node SelectNode) SelectNode {
 	return node
 }
 
-func Quoted(name string) string { return `"` + name + `"` }
+func Quoted(name string) string { return `"` + strings.ReplaceAll(name, `"`, `""`) + `"` }
 
 func QuotedTable(table string) string {
-	return Quoted(strings.ReplaceAll(table, ".", `"."`))
+	return strings.ReplaceAll(Quoted(table), ".", `"."`)
 }
 
 func Qualified(field FieldRef) string { return QuotedTable(field.Table) + "." + Quoted(field.Column) }

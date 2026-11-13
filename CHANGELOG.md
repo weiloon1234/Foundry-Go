@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Added: typed per-expression text collation with `expr.Collation`, `CollationC`,
+  `CollationUnicode`, `ICUCollation`, and the four `Collate` variants, preserving
+  named string types and codecs in ordering, comparisons and text filters.
+  Applications can set `features.reports.config.text_collation` once for text
+  column sorts and exports. Empty keeps database ordering; explicit expression
+  collations take precedence, and stable tie-breaker orders stay unchanged.
+
 ## v0.27.0 — 2026-11-13
 
 - Added: typed `http.CSPAllowlist`, `CSPPresetCloudflareWebAnalytics`, and

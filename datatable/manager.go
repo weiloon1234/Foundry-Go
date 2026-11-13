@@ -9,6 +9,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/contract"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/database/orm"
+	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/i18n"
@@ -56,14 +57,17 @@ type Dependencies struct {
 type Config struct {
 	// TimeZone is the default export presentation zone. Empty means UTC for a
 	// direct manager, or inherits the application timezone during assembly.
-	TimeZone     temporal.ZoneName
-	Schema       string
-	MaxActive    int
-	Timeout      time.Duration
-	MaxPageSize  int
-	MaxOffset    int
-	MaxRowBytes  int
-	MaxPageBytes int
+	TimeZone temporal.ZoneName
+	// TextCollation applies to text column sorts unless their expression has an
+	// explicit collation. Empty keeps the database default. Stable orders are unchanged.
+	TextCollation expr.Collation
+	Schema        string
+	MaxActive     int
+	Timeout       time.Duration
+	MaxPageSize   int
+	MaxOffset     int
+	MaxRowBytes   int
+	MaxPageBytes  int
 	// MaxExports bounds concurrent export generation (query, formatting and
 	// file writing). A slot is released once the artifact is complete.
 	MaxExports int
@@ -92,8 +96,13 @@ func DefaultConfig() Config {
 	}
 }
 
-// Validate checks limits, schema, and timezone without acquiring resources.
+// Validate checks limits, schema, timezone, and collation without acquiring resources.
 func (c Config) Validate() error {
+	if c.TextCollation != "" {
+		if err := c.TextCollation.Validate(); err != nil {
+			return err
+		}
+	}
 	if len(c.TimeZone) > maxTimeZoneBytes {
 		return invalid("invalid export timezone")
 	}

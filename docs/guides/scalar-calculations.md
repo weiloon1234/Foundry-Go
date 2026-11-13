@@ -49,6 +49,24 @@ Nullable variants such as `LowerNullable`, `ConcatNullable` and `SubstringNullab
 
 Negative literal substring counts fail query compilation before executor access, including for a zero-row limit. `SubstringAt` accepts integer expressions, so negative counts and values outside SQL integer bounds are database errors. Construction-time validation cannot know arbitrary row values.
 
+## Per-expression collation
+
+`Collate(input, collation)` chooses the PostgreSQL language order for a text expression. It preserves the input's named string type and codec because the value itself does not change. `CollateNullable` also preserves SQL NULL. `CollateValue` and `CollateNullableValue` accept selected expressions, including aggregate and window results.
+
+[Compiled example](../../tests/fixtures/consumer/scalarqueries/collation_test.go):
+
+<!-- compiled-source: tests/fixtures/consumer/scalarqueries/collation_test.go#collated-ordering -->
+```go
+name := expr.Collate(expr.Value(orm.TextExpr(f.Name)), expr.CollationUnicode)
+query := expr.OrderBy(f.Query(), expr.Asc(name))
+```
+
+`CollationC` (`"C"`) uses byte order and is always present. `CollationUnicode` (`"und-x-icu"`) uses language-neutral Unicode ordering on ICU-enabled PostgreSQL. `ICUCollation("en-US")` names the predefined `"en-US-x-icu"` collation imported at initdb. Applications can use `expr.Collation("custom_name")` for collations created by their SQL migrations. No cluster locale change or schema builder is needed.
+
+Collated expressions compose with `Asc`/`Desc`, `AscValue`/`DescValue`, `OrderValue`, text filters, and `datatable.SortBy(expr.AsSelected(name))`. They render as `(<expression> COLLATE "<name>")`. Names are double-quoted identifiers resolved through `search_path`; embedded quotes are escaped, and a dot is part of the name rather than a schema separator. Comparison and pattern behavior follows the chosen PostgreSQL collation; collation does not itself make equality case-insensitive.
+
+Names must be non-empty valid UTF-8, at most 63 bytes, with no NUL or control characters. ICU tags allow only ASCII letters, digits and hyphens; an empty or invalid tag produces an invalid collation. Invalid collations fail query build with `fault.Invalid`, before database access. There is no existence check at startup: a valid name unavailable on the server returns an ordinary database error at execution. Column-level `COLLATE` and `CREATE COLLATION` remain ordinary SQL migration statements.
+
 ## Selected values and comparisons
 
 The `...Value` counterparts compose selected expressions, including ordinary aggregates and window outputs. For example, `expr.MultiplyValue(expr.AsSelected(count), expr.AsSelected(expr.ParamOf(count, 2)))` calculates a scaled count. Nullable counterparts retain nullable results. These APIs do not convert selected expressions into row predicates.

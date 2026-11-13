@@ -2,6 +2,8 @@ package querycore
 
 import (
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/database/codec"
 	"github.com/weiloon1234/Foundry-Go/fault"
@@ -89,6 +91,7 @@ const (
 	JsonArrayLengthOperation
 	SphericalDistanceOperation
 	TrigramSimilarityOperation
+	CollateOperation
 )
 
 // Operation names and arities are private, closed compiler metadata. Public
@@ -101,6 +104,8 @@ type OperationSpec struct {
 
 func (op ScalarOperation) Spec() (OperationSpec, bool) {
 	switch op {
+	case CollateOperation:
+		return OperationSpec{"", 1, 1, false}, true
 	case TrigramSimilarityOperation:
 		return OperationSpec{"public.similarity", 2, 2, false}, true
 	case SphericalDistanceOperation:
@@ -160,6 +165,7 @@ type OperationNode struct {
 	Kind      ScalarOperation
 	Arguments []OperationArgument
 	Result    codec.ParameterType
+	Collation string
 	Err       error
 }
 
@@ -167,6 +173,14 @@ func (OperationNode) ValueNode() {}
 
 func NumericRepresentation(kind codec.ParameterType) bool {
 	return kind == codec.TypeInteger || kind == codec.TypeDecimal || kind == codec.TypeFloat
+}
+
+// ValidateCollationName is shared by expression compilation and service configuration.
+func ValidateCollationName(name string) error {
+	if name == "" || len(name) > 63 || !utf8.ValidString(name) || strings.ContainsFunc(name, unicode.IsControl) {
+		return safeerror.NewFault(fault.Invalid, "invalid collation name")
+	}
+	return nil
 }
 
 func (n OperationNode) Validate() error {
@@ -187,6 +201,12 @@ func (n OperationNode) Validate() error {
 		if _, err := ParameterSQLType(a.Kind); err != nil {
 			return err
 		}
+	}
+	if n.Kind == CollateOperation {
+		if n.Result != codec.TypeText || n.Arguments[0].Kind != codec.TypeText {
+			return safeerror.NewFault(fault.Invalid, "collation requires a text operand and result")
+		}
+		return ValidateCollationName(n.Collation)
 	}
 	if n.Kind == TrigramSimilarityOperation {
 		if n.Result != codec.TypeFloat || n.Arguments[0].Kind != codec.TypeText || n.Arguments[1].Kind != codec.TypeText {
@@ -311,6 +331,13 @@ func (c *Compiler) OperationSQL(n OperationNode, grouped map[FieldRef]bool, grou
 	}()
 	if err := n.Validate(); err != nil {
 		return "", err
+	}
+	if n.Kind == CollateOperation {
+		input, err := c.SelectedExpression(n.Arguments[0].Value, grouped, grouping)
+		if err != nil {
+			return "", err
+		}
+		return "(" + input + " COLLATE " + Quoted(n.Collation) + ")", nil
 	}
 	if sql, collapsed, err := c.JsonTextScalarSQL(n, grouped, grouping); collapsed || err != nil {
 		return sql, err

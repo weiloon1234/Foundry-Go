@@ -7,6 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/expr"
 	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/i18n"
+	"github.com/weiloon1234/Foundry-Go/internal/sqlowner"
 	"github.com/weiloon1234/Foundry-Go/validation"
 	"github.com/weiloon1234/Foundry-Go/value"
 )
@@ -87,7 +88,7 @@ type filterDeclaration[S any] struct {
 type columnDeclaration[S, R any] struct {
 	name       string
 	label      i18n.MessageKey
-	order      func(Direction) expr.ProjectionOrder[S]
+	order      func(Direction, expr.Collation) expr.ProjectionOrder[S]
 	filter     *filterDeclaration[S]
 	searchable bool
 	cellInfo   *FilterInfo
@@ -96,7 +97,7 @@ type columnDeclaration[S, R any] struct {
 }
 
 type columnExecution[S, R any] struct {
-	order  func(Direction) expr.ProjectionOrder[S]
+	order  func(Direction, expr.Collation) expr.ProjectionOrder[S]
 	filter func(Operator, []string) (condition[S], error)
 	cell   func(context.Context, R, Presentation) (exportCell, error)
 }
@@ -107,7 +108,7 @@ type columnExecution[S, R any] struct {
 // Example: datatable.SortBy(expr.AsSelected(name))
 type ColumnOption[S, V any] struct {
 	kind   optionKind
-	order  func(Direction) expr.ProjectionOrder[S]
+	order  func(Direction, expr.Collation) expr.ProjectionOrder[S]
 	source FilterSource[S, V]
 	cell   Cell[V]
 }
@@ -125,11 +126,12 @@ const (
 //
 // Example: datatable.DefineColumn[UserScope](w.Username, key, datatable.SortBy(expr.AsSelected(name)))
 func SortBy[S, V any](expression expr.Selected[S, V]) ColumnOption[S, V] {
-	return ColumnOption[S, V]{kind: optionSortBy, order: func(direction Direction) expr.ProjectionOrder[S] {
+	return ColumnOption[S, V]{kind: optionSortBy, order: func(direction Direction, collation expr.Collation) expr.ProjectionOrder[S] {
+		selected := expr.FoundryDefaultCollation(expression, collation, sqlowner.Expressions())
 		if direction == Descending {
-			return expr.DescValue(expression)
+			return expr.DescValue(selected)
 		}
-		return expr.AscValue(expression)
+		return expr.AscValue(selected)
 	}}
 }
 

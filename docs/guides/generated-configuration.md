@@ -22,6 +22,17 @@ Declare an exported Go settings struct with `//foundry:config`. Concrete nested
 structs form groups. `config:"name"` selects the external name; absent/empty names
 use snake case. Field names remain ordinary autocompletable Go fields.
 
+The built-in application setting `Settings.Features.Reports.Config.TextCollation`
+therefore uses `features.reports.config.text_collation`. Its type is
+`expr.Collation`; omitted or empty values retain database-default ordering.
+Set it to `"und-x-icu"` for Unicode text sorting across the application's data
+tables. `SettingsConfigKeys().Features.Reports.Config.TextCollation.Set(expr.CollationUnicode)`
+provides the equivalent typed override. Non-empty names use the same validation
+as [per-expression collations](scalar-calculations.md#per-expression-collation),
+and enabled reports validate configuration before acquiring runtime resources.
+The [datatable sorting guide](datatable.md) describes explicit column overrides
+and unchanged stable orders.
+
 <!-- compiled-source: tests/fixtures/consumer/startupconfig/settings.go#deployment-settings -->
 ```go
 type HTTPSettings struct {

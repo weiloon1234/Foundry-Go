@@ -397,6 +397,27 @@ sort columns fail. Client sorts replace the default sort, then the table appends
 its mandatory `Stable` orders. The author must supply a unique final key for the
 actual result, including joined or grouped rows.
 
+Set `application.Settings.Features.Reports.Config.TextCollation` once to choose
+the order for every text column sort in that application's manager. For example,
+`expr.CollationUnicode` uses language-neutral Unicode ordering, or
+`expr.ICUCollation("en-US")` chooses English ordering. The config-file spelling is
+`features.reports.config.text_collation`:
+
+```toml
+[features.reports.config]
+text_collation = "und-x-icu"
+```
+
+The default is empty, preserving database ordering. The manager applies this
+setting to requested column sorts, `DefaultSort`, and exports using each sort
+expression's database type metadata. Numeric expressions remain numeric even
+when the DTO encodes them as JSON strings. An explicit
+`SortBy(expr.AsSelected(expr.Collate(name, expr.CollationC)))` takes precedence;
+the manager does not wrap that value with its default. `Spec.Stable` orders remain
+unchanged. There is no per-table override; use an explicit collation on the sort
+expression when needed. See [per-expression collation](scalar-calculations.md#per-expression-collation)
+for supported names, validation and database availability.
+
 The source must be unpaginated. `ReorderUnwindowed` replaces outer ordering and
 rejects outer LIMIT/OFFSET and DISTINCT ON because they change result selection.
 Materialize a DISTINCT ON result before reporting on its completed rows. Inner

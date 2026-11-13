@@ -69,7 +69,7 @@ func (d *tableDefinition[S, R, A]) prepare(request Request, config Config) (prep
 		sorts = d.metadata.info.DefaultSort
 	}
 	for _, sort := range sorts {
-		result.orders = append(result.orders, d.columns[d.metadata.byColumn[sort.Column]].order(sort.Direction))
+		result.orders = append(result.orders, d.columns[d.metadata.byColumn[sort.Column]].order(sort.Direction, config.TextCollation))
 	}
 	result.orders = append(result.orders, d.stable...)
 	return result, nil
