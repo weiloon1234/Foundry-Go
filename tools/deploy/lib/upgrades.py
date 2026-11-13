@@ -30,7 +30,7 @@ UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
 REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", "lib/upgrades.py",
                             "lib/provision.py", "lib/recover.py", "lib/release.py", "lib/runtime_config.py",
                             "lib/capacity.py", "lib/journal.py", "lib/maintenance.py",
-                            "lib/topology.py", "lib/report.py", "server/manage.py",
+                            "lib/topology.py", "lib/uploads.py", "lib/report.py", "server/manage.py",
                             "server/report.py", "server/launcher.py", "lib/packages.py",
                             "lib/postgres.py", "lib/redis_acl.py", "lib/edge.py",
                             "lib/certificates.py", "lib/backup.py", "lib/cloudflare-ranges.json",
@@ -41,7 +41,7 @@ REQUIRED_FILES = frozenset({"protocol.json", "lib/contracts.py", "lib/host.py", 
                             "server/templates/foundry-backup.service",
                             "server/templates/foundry-backup.timer",
                             "server/templates/nginx-http.conf", "server/templates/nginx-https.conf",
-                            "server/templates/nginx-proxy.conf", "server/templates/nginx-upgrade.conf"})
+                            "server/templates/nginx-proxy.conf", "server/templates/nginx-upload.conf", "server/templates/nginx-upgrade.conf"})
 
 
 def _hash(value: object) -> str:

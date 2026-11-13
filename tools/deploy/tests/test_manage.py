@@ -42,11 +42,11 @@ class ManagerTests(unittest.TestCase):
             run.assert_not_called()
 
 
-    def test_generation_nine_client_can_deploy_on_generation_ten_host(self):
+    def test_generation_nine_client_can_deploy_on_current_host(self):
         import release
         value = self.host.read_registry()
         value['tools'] = upgrades._active_record(TOOLS, upgrades.tool_bundle(TOOLS)[2], None)
-        self.assertEqual(10, value['tools']['generation'])
+        self.assertEqual(11, value['tools']['generation'])
         self.host.write_registry(value)
         request = {**self.request, 'client': {**self.request['client'], 'generation': 9},
                    'archive': '/staged/app.tar.gz', 'archive_sha256': 'a' * 64}

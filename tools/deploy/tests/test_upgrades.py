@@ -261,23 +261,25 @@ class UpgradeTests(unittest.TestCase):
             upgrades.check_client(self.host, request, "hello")
         self.assertEqual({"minimum": 1, "maximum": 9}, upgrades.hello(self.host)["client_generation"])
 
-    def test_generation_nine_upgrades_to_ten_and_includes_maintenance_module(self):
+    def test_generation_nine_upgrades_to_current_and_includes_upload_module(self):
         actual = Path(__file__).resolve().parents[1]
         metadata = upgrades.protocol(actual)
-        self.assertEqual(10, metadata["generation"])
+        self.assertEqual(11, metadata["generation"])
         self.assertEqual(9, metadata["minimum_host_generation"])
         self.assertEqual(1, metadata["minimum_client_generation"])
         _, files, _ = upgrades.tool_bundle(actual)
         self.assertIn(actual / "lib/maintenance.py", files)
+        self.assertIn(actual / "lib/uploads.py", files)
+        self.assertIn(actual / "server/templates/nginx-upload.conf", files)
         self.install()
-        self.metadata['generation'] = 10
+        self.metadata['generation'] = metadata['generation']
         (self.source / 'protocol.json').write_text(json.dumps(self.metadata))
-        (self.source / "lib/maintenance.py").write_text("# generation ten module\n")
+        (self.source / "lib/maintenance.py").write_text("# current generation module\n")
         plan = upgrades.plan_upgrade(self.host, self.source)
         result = upgrades.apply_upgrade(self.host, self.source, plan["plan_token"], str(uuid.uuid4()))
         self.assertEqual("succeeded", result["outcome"])
-        self.assertEqual(10, self.host.read_registry()["tools"]["generation"])
-        self.assertEqual({"minimum": 1, "maximum": 10}, upgrades.hello(self.host)["client_generation"])
+        self.assertEqual(11, self.host.read_registry()["tools"]["generation"])
+        self.assertEqual({"minimum": 1, "maximum": 11}, upgrades.hello(self.host)["client_generation"])
 
     def test_generation_eight_refuses_planning_and_installation_before_writes(self):
         self.install()

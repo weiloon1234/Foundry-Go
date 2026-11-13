@@ -22,6 +22,7 @@ type Multipart[B any] struct {
 	indexes   map[string]int
 	text      Query[B]
 	directory string
+	pool      *UploadPool
 	err       error
 }
 
@@ -69,6 +70,9 @@ func ValidateMultipart[B any](d Multipart[B]) error {
 	}
 	if strings.IndexByte(d.directory, 0) >= 0 || d.directory != "" && !filepath.IsAbs(d.directory) {
 		return safeerror.NewFault(fault.Invalid, "upload temporary directory must be an absolute server path")
+	}
+	if d.pool != nil && d.directory != d.pool.pool.Directory() {
+		return safeerror.NewFault(fault.Invalid, "multipart directory differs from its admission pool")
 	}
 	return validateBodyQuery(d.text)
 }

@@ -24,7 +24,7 @@ from contracts import (DeployError, HOST_PATHS, LAYOUT_VERSION, SCHEMA, VERSION_
                        check_path, digest, dump_env, now,
                        parse_env, parse_json, read_json, require, valid_timestamp, valid_uuid, instance_paths,
                        reserve_runtime_storage, select_runtime_storage)
-from runtime_config import (ENCRYPTION_KEYS, MAX_CONFIGURATION_CHANGES, PIPELINE_KEYS, validate_runtime_environment,
+from runtime_config import (ENCRYPTION_KEYS, MAX_CONFIGURATION_CHANGES, PIPELINE_KEYS, pipeline_keys, validate_runtime_environment,
                             candidate_values, rotation_changes, validate_configuration_changes, _read_value_file)
 from topology import instance_units, selected_units
 from host import OperationTimeout, wall_clock_budget
@@ -1246,8 +1246,8 @@ def require_configuration_keys(host, entry, release, env_file, keys):
 
 
 def config_set(host, project, profile, changes):
-    validate_configuration_changes(changes)
     _, entry = host.require_identity(project, profile)
+    validate_configuration_changes(changes, entry)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):
         registry, entry = host.require_identity(project, profile)
         return _config_set(host, registry, entry, changes)

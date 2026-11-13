@@ -64,6 +64,9 @@ func New(settings Settings, opts ...Option) *Builder {
 	schema, err := SettingsConfigSchema()
 	if err == nil {
 		b.state.settings, _, err = schema.Load(settings, config.Inputs[Settings]{Validate: func(s Settings) error {
+			if err := s.HTTP.Uploads.Validate(); err != nil {
+				return err
+			}
 			return s.HTTP.CSPAllowlist.Validate()
 		}})
 	}

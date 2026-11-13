@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/weiloon1234/Foundry-Go/contract"
+	"github.com/weiloon1234/Foundry-Go/fault"
 	"github.com/weiloon1234/Foundry-Go/internal/callback"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 	"github.com/weiloon1234/Foundry-Go/internal/upload"
@@ -61,10 +62,26 @@ func multipartRead[B any](d Multipart[B], w stdhttp.ResponseWriter, r *stdhttp.R
 	if r.Body == nil || r.Body == stdhttp.NoBody {
 		return *new(B), nil, BadRequest.WithCause(nil)
 	}
+	var admitted *requestUpload
+	if d.pool != nil {
+		var ok bool
+		admitted, ok = ctx.Value(uploadReservationKey{}).(*requestUpload)
+		if !ok || admitted.route.pool != d.pool || admitted.route.bytes != limits.Multipart.Bytes {
+			rejectUnreadBody(w, r)
+			return *new(B), nil, InternalError.WithCause(safeerror.NewFault(fault.Invalid, "multipart capture has no matching reservation"))
+		}
+	}
 	config := upload.Config{TempDirectory: d.directory, MaxBytes: limits.Multipart.Bytes, MaxFileBytes: limits.Multipart.FileBytes, MaxFiles: limits.Multipart.Files, MaxReaders: limits.Multipart.Readers}
 	batch, err := upload.New(ctx, config)
 	if err != nil {
 		return *new(B), nil, InternalError.WithCause(err)
+	}
+	if admitted != nil {
+		if err := admitted.reservation.Attach(batch); err != nil {
+			_ = batch.Close()
+			rejectUnreadBody(w, r)
+			return *new(B), nil, InternalError.WithCause(err)
+		}
 	}
 	close := batch.Close
 	source := &multipartSource{source: stdhttp.MaxBytesReader(w, r.Body, limits.Multipart.Bytes)}
