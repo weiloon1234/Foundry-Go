@@ -120,3 +120,85 @@ Opt-in only admits a custom HTTP prerequisite to the planned role set; lane A mu
 still enforce isolation. Built-in worker/scheduler dependencies always refuse,
 and safe custom roles outside HTTP's prerequisite closure remain stopped. Unknown
 declaration fields remain errors; omitted defaults do not rewrite source digests.
+
+## Container acceptance hook (integration only)
+
+`acceptance_feature_recovery.py` runs after `acceptance_feature.py` on its same
+source host. It deploys two fixture-only state-policy variants, checks real full
+backup receipts, and inspects a retained restore drill while all workloads are
+stopped. It disables HTTP and enables relay directly in systemd before the final
+backup; the archived selection must reflect that change. The second host must
+recover the exact source declaration, packages, artifact bytes and data, start
+relay only, and serve the relay response over IPv4 and IPv6 from a separate peer
+network namespace. The namespace uses the existing preview peer/source CIDRs and
+new target addresses `203.0.113.11` and `2001:db8:42::11`. It performs no DNS writes.
+
+These phases deliberately fail until the dispatcher lifts and lane A seams above
+are integrated. The existing preview must also use the integrated maintenance
+expectations if lane A has lifted its down/up refusals. Recovery does not bypass
+that earlier scenario. No container acceptance has been executed in lane C.
+
+Apply these runner edits at integration; lane C has not changed the runner,
+container helpers or images:
+
+1. Move the existing `recovery_target()` definition above the `if
+   ((feature_preview)); then` block. Keep its legacy invocations in place.
+2. Immediately after its existing target package-index/upgrade command, add:
+
+   ```bash
+   if ((feature_preview)); then
+     docker exec "$recovery_host" apt-get install -y --no-install-recommends ufw iptables nftables >"$logs/$recovery_mode-ufw.log" 2>&1
+   fi
+   ```
+
+   UFW and its inspection tools are disposable peer/firewall setup. Keep jq and pgBackRest absent from the
+   base image: the scenario asserts that recovery installs them. Retain the
+   helper's root-only staged tools, CA trust, private archive copy and
+   `recovery_hosts` cleanup registration.
+3. Replace only the helper's final `phase_on` command with:
+
+   ```bash
+   phase_on "$recovery_host" "recover-$recovery_mode" \
+     "/var/lib/foundry-acceptance-f4a/staged-tools/tests/${3:-acceptance_recover.py}" "$recovery_mode"
+   ```
+
+4. Replace the feature-preview branch with these exact hook lines:
+
+   ```bash
+   if ((feature_preview)); then
+     phase feature-preview /verification/deploy/tests/acceptance_feature.py --archive /var/lib/foundry-acceptance-f4a/input.tar.gz
+     phase feature-recovery-source /verification/deploy/tests/acceptance_feature_recovery.py source
+     foreign_verified=1
+     phase foreign-verify /verification/deploy/tests/acceptance_foreign.py verify
+     mkdir -m 700 "$logs/.private-recovery"
+     docker cp "$host:/var/lib/foundry-acceptance-f4a/recover-export/." "$logs/.private-recovery/" >"$logs/feature-recover-export.log" 2>&1
+     [[ "$(docker inspect --format '{{.State.Running}}' "$host")" == true ]] || { echo 'Source must still be running for the unconfirmed takeover check' >&2; exit 1; }
+     recovery_target "$takeover" target-plan acceptance_feature_recovery.py
+     docker stop --time 150 "$host" >"$logs/feature-recover-stop-source.log" 2>&1
+     [[ "$(docker inspect --format '{{.State.Running}}' "$host")" == false ]] || { echo 'Source must be stopped before takeover' >&2; exit 1; }
+     phase_on "$takeover" feature-recovery-takeover \
+       /var/lib/foundry-acceptance-f4a/staged-tools/tests/acceptance_feature_recovery.py takeover --old-server-stopped
+     rm -rf "$logs/.private-recovery"
+     echo 'PASS feature preview, backup, restore drill and replacement takeover'
+     exit 0
+   fi
+   ```
+
+`target-plan` invokes the real dispatcher and deliberately submits
+`old_server_gone=False`. It requires `old_server_confirmation` and unchanged
+packages, sockets and registry before saving the operation-bound plan privately.
+Only the runner's successful stop and inspection authorize the second invocation.
+Takeover wraps the real preparation/activation callbacks solely to assert stopped
+units, closed peer ingress and restored table hashes at the phase boundaries,
+and to supply the existing synthetic certificate CA; it delegates every lifecycle
+effect to lane A. An age private identity never leaves the source. Decrypted
+exports remain in the harness's existing private directory and disposable hosts.
+
+After integration, use the existing opt-in command with an absolute acceptance
+archive and framework worktree (adjust Ubuntu/architecture to the archive):
+
+```bash
+tools/deploy/tests/run_acceptance.sh --ubuntu 24.04 --platform linux/arm64 \
+  --fresh --feature-preview --archive /absolute/path/deploy-acceptance.tar.gz \
+  --framework-root /absolute/path/Foundry-Go
+```
