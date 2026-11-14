@@ -55,6 +55,8 @@ GENERATION_12_FILES = frozenset({"lib/feature_lifecycle.py", "lib/feature_networ
                                "server/templates/foundry-edge-boot.conf", "server/templates/nginx-http-admission.conf",
                                "server/templates/nginx-stream.conf", "server/templates/nginx-tcp-tls.conf"})
 REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES
+REHEARSAL_FILES = frozenset({"local/containers.py", "local/rehearsal.py", "local/rehearsal_host.py",
+    "local/rehearsal_probe.py", "local/host.Dockerfile", "local/acceptance.Dockerfile"})
 
 
 def required_files(generation: int) -> frozenset[str]:
@@ -90,6 +92,10 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
     source = check_path(Path(tools_dir), "directory")
     files = sorted([source / "protocol.json", *source.glob("lib/*.py"), *source.glob("lib/*.json"),
                     *source.glob("server/*.py"), *source.glob("server/templates/*")])
+    # Older generation-12 bundles predate local rehearsal. When present, its
+    # complete shipped implementation participates in the ordinary bundle digest.
+    if any((source / name).exists() for name in REHEARSAL_FILES):
+        files = sorted([*files, *(source / name for name in REHEARSAL_FILES)])
     require(len(files) <= 512, "tools_too_large", "The tool bundle has too many files.")
     inventory, total = [], 0
     for path in files:
@@ -107,7 +113,7 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
 
 
 def tool_bundle(tools_dir: Path) -> tuple[Path, list[Path], str]:
-    """Inventory bounded regular host files; digest covers canonical paths, sizes, modes and bytes."""
+    """Inventory host and shipped rehearsal files; digest covers paths, sizes, modes and bytes."""
     source, files, inventory = _inventory(tools_dir)
     protocol(source)
     return source, files, _hash({"schema": 1, "files": inventory})

@@ -447,10 +447,10 @@ class UpgradeTests(unittest.TestCase):
             self.assertIn('must already run generation 9 tools', caught.exception.detail)
             self.assertEqual(before, self.host.read_registry())
 
-    def test_candidate_python_inventory_contains_only_runtime_modules(self):
+    def test_candidate_python_inventory_contains_only_runtime_and_shipped_rehearsal_modules(self):
         source = Path(__file__).resolve().parents[1]
         _, files, _ = upgrades.tool_bundle(source)
-        expected = {name for name in upgrades.REQUIRED_FILES if name.endswith('.py')}
+        expected = {name for name in upgrades.REQUIRED_FILES | upgrades.REHEARSAL_FILES if name.endswith('.py')}
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
     def test_old_bundle_generations_do_not_require_artifacts(self):

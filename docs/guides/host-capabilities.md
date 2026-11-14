@@ -513,3 +513,94 @@ router. Do not add Docker port publishing or DNAT over a Foundry-owned port in t
 same observed namespace. Test reachability from a peer namespace or another
 machine, not from the host loopback; verify permitted traffic reaches the relay
 through nginx stream and that stop closes it.
+
+## Rehearse locally
+
+Use an explicit application profile such as `acceptance-local`. Set
+`runtime_environment` to `testing`, use an `acceptance*` environment name and a
+`.acceptance.invalid` domain, and assign a non-null `host.host_id` UUID. Preserve
+that UUID when building the archive. Set `edge_origin_lockdown` to `false` for the
+isolated network. The container adopts this host identity. Rehearsal never contacts
+the profile's SSH address or changes the profile or `.deploy/settings.json`.
+
+Run from the application repository with Docker available:
+
+```sh
+ENVIRONMENT=acceptance-local go tool foundry deploy rehearse \
+  --archive /absolute/path/to/app.tar.gz --ubuntu 24.04
+```
+
+Omit `--archive` to use the normal application builder for the selected profile.
+The archive must match the project's identity, topology, environment and target
+architecture. Feature archives must embed the exact selected profile. A production
+archive is refused; rebuild it for the acceptance profile instead of rewriting it.
+Use a native amd64 or arm64 Docker engine matching that profile. Ubuntu 24.04 and
+26.04 are supported; emulated runs are refused.
+
+For public TCP, give every listener an external DNS-only hostname beneath
+`.acceptance.invalid`. Use one host address per family across the profile, within
+`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`, or `2001:db8::/32`.
+The container receives those addresses on a private dual-stack network. Each IPv4
+subnet is `/24`; each IPv6 subnet is `/64`. For example, a host at `203.0.113.10`
+and a source CIDR of `203.0.113.20/32` lets rehearsal probe both allowed and denied
+sources. A source CIDR covering the entire subnet has no denied peer; evidence
+marks that check unavailable. It does not count an unavailable check as passed.
+
+Rehearsal creates a local DNS server, synthetic CA and S3 stand-in with fresh
+credentials. It runs production `bootstrap-plan`, `bootstrap-apply` and `activate`,
+then production readiness and report collection. Separate containers check TCP
+closure before activation, permitted TCP/TLS access after activation, source
+denials, closure after stop, and access after restart. A final stop precedes
+cleanup. TLS probes verify the synthetic CA and listener hostname. UDP sockets
+are inventoried without claiming public UDP acceptance.
+
+Package preparation and bootstrap use a separate provisioning network. Before
+activation, rehearsal disconnects that network and switches DNS to the local
+server, which has no upstream resolver. Runtime has no route to production
+endpoints. No Docker host ports are published. The privileged systemd host runs
+trusted application code; it is not an untrusted-code sandbox.
+
+For an application with external storage, explicitly bind every cloud disk to
+the stand-in. Supply a private file, mode `0600`, with this shape:
+
+```json
+{
+  "environment": "acceptance-local",
+  "configuration": {},
+  "storage_disks": ["uploads"]
+}
+```
+
+`storage_disks` names the application's declared R2 or S3-compatible disks.
+Rehearsal preserves their other settings and supplies isolated test buckets and
+credentials. `configuration` supplies literal application configuration values
+through the production bootstrap interface. Use rehearsal-only values; host file
+references are refused. Missing cloud-disk bindings stop before container creation.
+Other external dependencies have no automatic stand-in: applications requiring
+them fail configuration or readiness on the isolated network.
+
+```sh
+chmod 600 /absolute/private/rehearsal-bindings.json
+ENVIRONMENT=acceptance-local go tool foundry deploy rehearse \
+  --archive /absolute/path/to/app.tar.gz --ubuntu 26.04 \
+  --bindings /absolute/private/rehearsal-bindings.json \
+  --output /absolute/path/to/new-evidence-directory --cpus 4 --memory-gib 8
+```
+
+The output directory must be new. Defaults are two CPUs and 4 GiB of memory;
+supported limits are 1–32 CPUs and 2–64 GiB. `evidence.json` records archive, tool,
+image, topology and profile digests, the package plan, resource limits, allocated
+ports and unit observations in reports, probe results, and phase outcomes.
+`resources.json` records the exact Docker names and run ID. Only resources bearing
+that run's ownership label are removed. Successful cleanup removes private files
+and keeps evidence. Cleanup failures preserve private files and fail the run.
+`--keep-failed` retains a failed run explicitly and prints its identity and evidence
+directory for inspection; it does not retain successful runs.
+
+Synthetic tests do not establish real DNS-01, provider policy, global DNS cutover,
+cloud firewall behavior, sustained capacity or business recovery. Production
+refusals remain refusals. In particular, release-carried bundle activation awaits
+the service bundle integration described [above](#release-carried-artifacts).
+The framework acceptance runner uses the same shipped host images, CA setup and
+systemd container helpers; its fixture-specific scenarios and private module proxy
+remain separate from application rehearsal.

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added: `foundry deploy rehearse` runs an application's own acceptance archive
+  through production bootstrap, activation, readiness, report, stop and restart
+  in disposable Ubuntu containers. Separate peers check public TCP/TLS and source
+  denials. Runtime networking is isolated, certificates and credentials are
+  synthetic, and evidence records ownership and cleanup. Rehearsal shares shipped
+  container setup with the framework acceptance runner; container execution remains
+  pending operator verification on Ubuntu 24.04 and 26.04.
+
 - Added: release-carried platform artifacts use a typed release source beneath
   `deploy/artifacts/`, optionally produced by an explicit build argument vector.
   The archive builder records SHA-256 in the release inventory without a URL or

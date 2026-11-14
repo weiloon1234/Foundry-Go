@@ -4,7 +4,7 @@
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 RUN apt-get update -qq \
-    && apt-get install -y --no-install-recommends age rclone pgbackrest e2fsprogs util-linux ufw iptables nftables \
+    && apt-get install -y --no-install-recommends age rclone pgbackrest e2fsprogs util-linux ufw iptables nftables dnsmasq-base \
     && rm -rf /var/lib/apt/lists/*
 # Some Ubuntu image builds provide a package-autostart policy. Retain it as
 # evidence outside the active path before this image becomes a fixture host.

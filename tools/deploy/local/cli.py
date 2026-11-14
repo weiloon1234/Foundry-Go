@@ -27,6 +27,7 @@ if sys.version_info < (3, 11):
 TOOLS_ROOT = Path(__file__).resolve().parents[1]
 ROOT: Path | None = None
 sys.path.insert(0, str(TOOLS_ROOT / "lib"))
+sys.path.insert(0, str(TOOLS_ROOT / "local"))
 from edge import edge_findings
 import journal
 import maintenance
@@ -42,6 +43,7 @@ COMMANDS = {
     "bootstrap": "inspect and prepare a project/environment on a server",
     "deploy": "interactive deployment, status, rollback, capacity and configuration",
     "release": "build a local Docker release without contacting a server",
+    "rehearse": "exercise an acceptance archive in disposable local containers",
 }
 ACTIONS = ("capacity", "deploy", "status", "rollback", "restart", "stop", "down", "up", "logs", "shell", "config", "keys rotate", "reconcile",
            "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run",
@@ -1282,6 +1284,13 @@ def main():
     parser.add_argument("--app-root", help="application directory")
     for option in ("environment", "action", "role", "lines", "follow", "target", "expected-current", "operation"):
         parser.add_argument("--" + option)
+    parser.add_argument("--archive", type=Path)
+    parser.add_argument("--ubuntu", choices=("24.04", "26.04"))
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--bindings", type=Path)
+    parser.add_argument("--keep-failed", action="store_true")
+    parser.add_argument("--cpus", type=int)
+    parser.add_argument("--memory-gib", type=int)
     parser.add_argument("command", choices=[*COMMANDS, "help"], nargs="?", default="help")
     arguments = parser.parse_args()
     if arguments.command == "help":
@@ -1296,6 +1305,17 @@ def main():
             os.environ[option.upper()] = value
     ROOT = resolve_app_root(arguments.app_root)
     mode = arguments.command
+    if mode == "rehearse":
+        from rehearsal import rehearse
+        with lock(ROOT / ".deploy" / "operation.lock"):
+            result = rehearse(ROOT, os.environ.get("ENVIRONMENT"), arguments.archive, ubuntu=arguments.ubuntu or "24.04",
+                output=arguments.output, bindings=arguments.bindings, keep_failed=arguments.keep_failed,
+                cpus=arguments.cpus if arguments.cpus is not None else 2,
+                memory_gib=arguments.memory_gib if arguments.memory_gib is not None else 4, builder=build)
+            display({"evidence": str(result / "evidence.json")})
+        return
+    if any(getattr(arguments, name) is not None for name in ("archive", "ubuntu", "output", "bindings", "cpus", "memory_gib")) or arguments.keep_failed:
+        parser.error("container rehearsal options require the rehearse command")
     if mode != "deploy":
         log_parameters(mode)
     with lock(ROOT / ".deploy" / "operation.lock"):
