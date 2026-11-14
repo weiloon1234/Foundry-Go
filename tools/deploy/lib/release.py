@@ -42,7 +42,7 @@ def valid_version(value):
     return isinstance(value, str) and VERSION_PATTERN.fullmatch(value) is not None
 
 
-def validate_manifest(manifest, entry):
+def validate_manifest(manifest, entry, *, reviewed=False):
     require(isinstance(manifest, dict), "invalid_release", "Release manifest must be an object.")
     feature = manifest.get("schema") == 2
     require(feature == (entry["profile"].get("schema") == 3), "capability_unavailable",
@@ -52,7 +52,7 @@ def validate_manifest(manifest, entry):
         from contracts import ReleaseDeclaration
         declaration = ReleaseDeclaration.parse(manifest.get("deployment"))
         require(json.loads(declaration.profile_json) == entry["profile"] and
-                ("topology" not in entry or declaration.topology_sha256 == entry["topology"]["sha256"]),
+                (reviewed or "topology" not in entry or declaration.topology_sha256 == entry["topology"]["sha256"]),
                 "release_identity", "Feature release declarations differ from the registered profile/topology.")
     expected = {"schema": 2 if feature else SCHEMA, "layout_version": LAYOUT_VERSION, "project_id": entry["project_id"],
                 "instance_id": entry["profile"]["instance_id"], "instance": entry["name"], "environment": entry["environment"],
@@ -67,7 +67,7 @@ def validate_manifest(manifest, entry):
                 and isinstance(manifest.get("source_sha256"), str)
                 and re.fullmatch(r"[a-f0-9]{64}", manifest["source_sha256"]),
                 "production_source", "Production requires a clean committed HEAD archive and source provenance.")
-    if "topology_sha256" in manifest and "topology" in entry:
+    if not reviewed and "topology_sha256" in manifest and "topology" in entry:
         require(manifest["topology_sha256"] == entry["topology"]["sha256"], "release_topology",
                 "Release topology differs from the bootstrapped role declaration.")
     files = manifest.get("files")
@@ -106,7 +106,7 @@ def write_runtime_descriptor(host, entry, release_path):
                                  "work_dir": paths["data"]}, sort_keys=True) + "\n", mode=0o644)
 
 
-def unpack_archive(host, archive, destination, entry, checksum, *, expansion_budget=None, manifest_check=None):
+def unpack_archive(host, archive, destination, entry, checksum, *, expansion_budget=None, manifest_check=None, reviewed=False):
     """Inspect every header before writing; no links, devices or extraction API."""
     check_path(archive, "file")
     require(archive.stat().st_size <= MAX_ARCHIVE_BYTES and isinstance(checksum, str)
@@ -141,7 +141,7 @@ def unpack_archive(host, archive, destination, entry, checksum, *, expansion_bud
                 else:
                     require(feature or name in (".", "config", "public", "private-source-maps") or name.startswith(("public/", "private-source-maps/")), "unsafe_archive", "Unexpected release directory.")
                 members.append((item, name))
-            manifest = validate_manifest(manifest, entry)
+            manifest = validate_manifest(manifest, entry, reviewed=reviewed)
             actual = {name for item, name in members if item.isfile() and name != "manifest.json"}
             require(actual == set(manifest["files"]), "release_inventory", "Archive files differ from the manifest.")
             if feature:
@@ -183,8 +183,8 @@ def release_path(host, entry, version):
     return check_path(host.paths.opt(entry["name"]) / "releases" / version, "directory")
 
 
-def verified_release(host, entry, manifest):
-    validate_manifest(manifest, entry)
+def verified_release(host, entry, manifest, *, reviewed=False):
+    validate_manifest(manifest, entry, reviewed=reviewed)
     path = release_path(host, entry, manifest["version"])
     require(read_json(path / "manifest.json") == manifest
             and all(digest(check_path(path / name, "file")) == checksum for name, checksum in manifest["files"].items()),
@@ -1302,8 +1302,8 @@ def require_configuration_keys(host, entry, release, env_file, keys):
 
 def config_set(host, project, profile, changes):
     if profile.get("schema") == 3:
-        from feature_lifecycle import refuse
-        refuse("configuration changes")
+        from feature_lifecycle import configuration_request
+        return configuration_request(host, project, profile, changes)
     _, entry = host.require_identity(project, profile)
     validate_configuration_changes(changes, entry)
     with host.lock("host"), host.lock(entry["profile"]["instance_id"]):

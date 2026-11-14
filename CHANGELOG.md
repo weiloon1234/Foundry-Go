@@ -8,7 +8,20 @@
   `After=` ordering, and the exposure coordinator verifies readiness before opening
   traffic. The next privileged instance action migrates a committed v0.31.0
   preview by enabling its running units without starting stopped units. Status
-  includes the migration receipt. Selective network transitions remain gated.
+  includes the migration receipt.
+
+- Added: service-secret delivery through bootstrap's private configuration intake,
+  hidden prompts, `FOUNDRY_SECRET_CONFIG_FILE` and SSH stdin. Declared `_FILE`
+  variables, path arguments and per-start render references receive root-owned
+  mode-0640 snapshots. Unknown names and collisions refuse; values and their
+  hashes stay out of public plans/state, argv, unit files and release configs.
+- Added: release review with immutable private intents and digest-bound plans
+  before activation. Service-secret configuration revisions restart only affected
+  enabled, running services, preserve stopped services and unchanged exposure,
+  and archive configuration through the existing backup owner. Scoped withdrawal
+  records ingress separately from verified backend closure and limits validation
+  permits to the proven unit/address set. Opt-in network scenarios cover retained
+  live TCP/TLS sessions during selective withdrawal and reopening.
 
 ## v0.31.0 — 2026-11-14
 

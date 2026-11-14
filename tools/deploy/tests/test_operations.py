@@ -198,7 +198,7 @@ class OperationTests(unittest.TestCase):
         self.assertEqual(first, self.pin)
         self.assertEqual(second, first)
 
-    def test_activate_previous_selection_refuses_before_owner_staging_or_host_effects(self):
+    def test_unreviewed_activation_refuses_before_owner_staging_or_host_effects(self):
         previous = self.inventory.deployment.release
         current = "20261114T000000Z-abcdef12"
         self.state.update(current={"version": current}, previous={"version": previous}, last_attempt=None)
@@ -214,8 +214,7 @@ class OperationTests(unittest.TestCase):
             with self.assertRaises(c.DeployError) as raised:
                 lifecycle.request_operation(self.host, "activate", {}, self.entry["profile"], operation_id=OPERATION,
                                             archive=str(archive), archive_sha256=DIGEST)
-            self.assertEqual(raised.exception.code, "capability_unavailable")
-            self.assertEqual(raised.exception.detail, "Feature rollback requires " + lifecycle.LATER + ".")
+            self.assertEqual(raised.exception.code, "release_plan_required")
             prepare.assert_not_called()
             run.assert_not_called()
         self.assertFalse(operations.directory(self.host, OPERATION).exists())

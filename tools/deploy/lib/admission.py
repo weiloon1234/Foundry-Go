@@ -209,6 +209,59 @@ class AdmissionStore:
         with self._lock():
             self._write(self.runtime / "boot.json", evidence)
 
+    def retain_units(self, old, candidate, names, operation_id):
+        """Freeze unchanged per-role origins before selecting a partial transition."""
+        from contracts import canonical_digest
+        selected, resolution = self._selection()
+        require(selected.admission.disposition is AdmissionDisposition.COMMITTED and resolution == old.resolution,
+                "admission_retained", "Only committed units can be retained.")
+        attempts = self._operations()
+        require(attempts[selected.admission.operation_id]["outcome"] in ("succeeded", "reconciled")
+                and all(key == operation_id or value["outcome"] in TERMINAL_OUTCOMES
+                        for key, value in attempts.items()), "admission_journal", "Retained selection has unresolved operations.")
+        previous = self._retained_records(resolution)
+        closure = read_owned(self.host, self.runtime / "boot.json", ClosureEvidence.parse)
+        result = {}
+        for name in sorted(names):
+            require(old.specs[name] == candidate.specs[name]
+                    and tuple(e for e in old.resolution.endpoints if e.role == name) ==
+                        tuple(e for e in candidate.resolution.endpoints if e.role == name)
+                    and tuple(e.sha256 for e in old.resolution.environments if e.role == name) ==
+                        tuple(e.sha256 for e in candidate.resolution.environments if e.role == name),
+                    "admission_retained", "Retained effective inputs changed.")
+            prior = previous.get(name)
+            require(old.specs[name].identity in closure.units or prior is not None,
+                    "admission_retained", "Retained closure evidence is missing.")
+            evidence = closure if old.specs[name].identity in closure.units else ClosureEvidence.parse(prior["closure"])
+            require(evidence.boot_id == boot_id(self.host) and evidence.stage is ClosureStage.APPLICATION_CLOSED,
+                    "admission_retained", "Retained units need current-boot closure.")
+            result[name] = {"resolution_id": prior["resolution_id"] if prior else resolution.id,
+                            "unit_spec_sha256": canonical_digest(record_document(old.specs[name])),
+                            "closure": record_document(evidence)}
+        path = self.durable / "retained" / (candidate.resolution.id + ".json")
+        protected_directory(self.host, path.parent, 0o700)
+        require(not path.exists(), "admission_retained", "Retained origins are immutable.")
+        atomic_json(path, {"deployment_sha256": candidate.resolution.deployment_sha256, "roles": result}, mode=0o600)
+
+    def _retained_records(self, resolution):
+        path = protected_path(self.host, self.durable / "retained" / (resolution.id + ".json"), "file")
+        if not path.exists():
+            return {}
+        record = read_owned(self.host, path, lambda value: value)
+        require(record.get("deployment_sha256") == resolution.deployment_sha256
+                and isinstance(record.get("roles"), dict) and set(record["roles"]) <= set(resolution.roles),
+                "admission_retained", "Retained origins differ from the selected deployment.")
+        return record["roles"]
+
+    def retained_invocation(self, invocation, resolution):
+        record = self._retained_records(resolution).get(invocation.unit.role)
+        if record is None:
+            return None
+        require(record["resolution_id"] == invocation.resolution_id
+                and record["unit_spec_sha256"] == invocation.unit_spec_sha256,
+                "admission_retained", "Invocation differs from its retained effective inputs.")
+        return ClosureEvidence.parse(record["closure"])
+
     def issue_permit(self, permit, evidence):
         permit = ValidationPermit.parse(record_document(permit))
         evidence = ClosureEvidence.parse(record_document(evidence))
@@ -274,27 +327,29 @@ class AdmissionStore:
 
     def _authorize(self, invocation, permit_id):
         selection, resolution = self._selection()
-        self.require_cleanup_clear(selection.admission.operation_id if permit_id is not None else None)
+        retained = self.retained_invocation(invocation, resolution)
+        self.require_cleanup_clear(selection.admission.operation_id if permit_id is not None or retained is not None else None)
         unit = invocation.unit
         require(invocation.boot_id == boot_id(self.host) and unit.instance_id == self.instance_id and
-                invocation.resolution_id == resolution.id and unit.role in resolution.roles and
+                (invocation.resolution_id == resolution.id or retained is not None) and unit.role in resolution.roles and
                 unit.role not in selection.maintenance_holds,
                 "admission_denied", "Start identity is stale, unselected or held.")
         evidence = read_owned(self.host, self.runtime / "boot.json", ClosureEvidence.parse)
+        if unit not in evidence.units and retained is not None:
+            evidence = retained
         require(evidence.boot_id == invocation.boot_id and evidence.stage is ClosureStage.APPLICATION_CLOSED and
-                evidence.candidate_resolution_id == resolution.id and unit in evidence.units and
-                set(resolution.endpoints) <= set(evidence.endpoints) and
-                set(resolution.roles) <= {u.role for u in evidence.units
-                                         if u.instance_id == self.instance_id},
-                "admission_boot_required", "Whole-instance boot preparation is missing or stale.")
-        if selection.admission.disposition is AdmissionDisposition.COMMITTED:
+                (evidence.candidate_resolution_id == resolution.id or evidence == retained) and unit in evidence.units and
+                {e for e in resolution.endpoints if e.role == unit.role} <= set(evidence.endpoints),
+                "admission_boot_required", "Scoped boot preparation is missing or stale.")
+        if selection.admission.disposition is AdmissionDisposition.COMMITTED or retained is not None:
             from services import enabled_units
             from topology import instance_units
             entry = self.host.read_registry()["instances"][unit.instance_id]
             units = instance_units(entry)
             require(permit_id is None and unit.role in enabled_units(self.host, {unit.role: units[unit.role]}),
                     "admission_denied", "Committed starts must be enabled.")
-            self._completed(selection)
+            if selection.admission.disposition is AdmissionDisposition.COMMITTED:
+                self._completed(selection)
         else:
             directory = self.runtime / "permits" / contract_uuid(permit_id)
             permit = read_owned(self.host, directory / "permit.json", ValidationPermit.parse)

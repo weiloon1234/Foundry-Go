@@ -91,7 +91,7 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertIn("post-preview", value["pruning_error"]["detail"])
 
     def test_preview_refusals_name_later_release(self):
-        for action in ("rollback", "config-set", "down", "up", "keys-rotate", "recover-apply"):
+        for action in ("rollback", "down", "up", "keys-rotate", "recover-apply"):
             with self.subTest(action=action), self.assertRaises(c.DeployError) as raised:
                 upgrades._check_feature_request(None, {"profile": {"schema": 3}}, action)
             self.assertEqual(raised.exception.code, "capability_unavailable")
@@ -227,6 +227,7 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(services, "wait_ready", side_effect=lambda host, inv, name, deadline:
                                             events.append("ready:" + name) or True))
             stack.enter_context(patch.object(lifecycle, "stop_units", side_effect=lambda *_: events.append("stopped")))
+            stack.enter_context(patch.object(network, "withdraw", return_value=None))
             stack.enter_context(patch.object(network, "close", side_effect=lambda *_: (events.append("closed"), evidence)[1]))
             stack.enter_context(patch.object(network, "open_public", side_effect=lambda *_: events.append("opened")))
             stack.enter_context(patch.object(runtime_config, "effective_environment_path", return_value=Path("/effective.env")))

@@ -262,6 +262,7 @@ class FeatureWiringTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
+        self.enterContext(patch.object(listeners, "observe_dns", side_effect=lambda binding: c.DNSObservation(binding.hostname, tuple(binding.public_addresses), c.now(), "recursive")))
         self.host = WiringHost(Path(temporary.name))
         self.project, self.profile, _ = fixture()
         self.archive = self.host.paths.root / "feature.tar.gz"
@@ -299,21 +300,23 @@ class FeatureWiringTests(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, public=False):
+    def build_archive(self, *, public=False, secrets=False, independent=False):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
-            {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["jq"],
-             "bindings": {"relay": {"endpoint": {"role": "relay", "listener": "api", "scheme": "http"}},
+            {"name": "http", "kind": "builtin", "requires": [] if independent else ["relay"], "packages": ["jq"],
+             "bindings": {**({} if independent else {"relay": {"endpoint": {"role": "relay", "listener": "api", "scheme": "http"}}}),
                           "checksum": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}}},
             {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
              "arguments": [{"listener_address": "api"}, {"listener_port": "api"}],
+             **({"secret_files": {"TOKEN_FILE": "relay-token"}} if secrets else {}),
              "listeners": {"api": ({"transport": "tcp", "bind": "public", "tls": "none", "authentication": True}
                                     if public else {"transport": "tcp", "bind": "loopback"})},
              "readiness": {"kind": "http", "listener": "api", "path": "/ready", "status": 200},
              "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
              "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64},
              "maintenance": "stop", "state": {"kind": "disposable"}}],
+            **({"secrets": {"relay-token": {"prompt": "Relay token"}}} if secrets else {}),
             "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
                 "platforms": {"linux-arm64": {"url": "https://example.invalid/relay", "sha256": checksum}}}}})
         self.profile.update(schema=3, placement={"http": 1, "relay": 1}, listeners={})
@@ -348,7 +351,91 @@ class FeatureWiringTests(unittest.TestCase):
                 stream.addfile(item, io.BytesIO(data))
 
     def request(self, action, **kwargs):
+        if action == "activate" and "plan_token" not in kwargs:
+            kwargs.setdefault("operation_id", str(uuid.uuid4()))
+            reviewed = self.request("release-plan", **kwargs)
+            self.assertTrue(reviewed["ok"])
+            kwargs["plan_token"] = reviewed["plan_token"]
         return manager.execute(self.host, action, {**self.envelope, "project": self.project, "profile": self.profile, **kwargs})
+
+    def test_service_secret_rotation_retains_http_and_private_values(self):
+        import runtime_config
+        self.build_archive(secrets=True, independent=True)
+        key = "FOUNDRY_SERVICE_SECRET__RELAY_TOKEN"
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.assertFalse(plan["observations"]["required_service_secrets"][0]["present"])
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"],
+                     confirm=True, secrets={"configuration": {key: "initial-canary"}})
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, before, before_launch = lifecycle.load(self.host, entry)
+        http = self.host.running[before.units["http"]]
+        self.host.started.clear()
+        with patch.object(release.backup, "archive_keys") as archive:
+            self.request("config-set", secrets={"configuration": {key: "replacement-canary"}}, confirm=True)
+        archive.assert_called_once()
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, selected, after, launch = lifecycle.load(self.host, entry)
+        self.assertEqual(self.host.started, ["relay"])
+        self.assertEqual(self.host.running[before.units["http"]], http)
+        self.assertEqual(before.specs["http"], after.specs["http"])
+        self.assertEqual(selected.admission.disposition, c.AdmissionDisposition.COMMITTED)
+        self.assertEqual(entry["configuration_revision"], 2)
+        self.assertNotEqual(before_launch["secret_paths"]["relay"], launch["secret_paths"]["relay"])
+        self.assertEqual(runtime_config._read_value_file(self.host, entry, launch["secret_paths"]["relay"]["TOKEN_FILE"]), "replacement-canary")
+        public = json.dumps(self.request("status"))
+        self.assertNotIn("replacement-canary", public)
+        self.assertNotIn(hashlib.sha256(b"replacement-canary\n").hexdigest(), public)
+        self.assertNotIn("replacement-canary", json.dumps(self.host.commands))
+
+    def test_release_review_collects_new_secret_before_selection(self):
+        import runtime_config
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.build_archive(secrets=True)
+        operation = str(uuid.uuid4())
+        arguments = {"archive": str(self.archive), "archive_sha256": c.digest(self.archive), "operation_id": operation}
+        draft = self.request("release-plan", **arguments)
+        self.assertFalse(draft["ok"])
+        self.assertEqual(self.host.started, [])
+        key = "FOUNDRY_SERVICE_SECRET__RELAY_TOKEN"
+        reviewed = self.request("release-plan", **arguments, secrets={"configuration": {key: "review-canary"}})
+        _, entry = self.host.require_identity(self.project, self.profile)
+        self.assertEqual(runtime_config.service_secret_snapshot(self.host, entry), {})
+        self.assertNotIn("review-canary", json.dumps(reviewed))
+        with patch.object(release.backup, "archive_keys"):
+            result = self.request("activate", **arguments, plan_token=reviewed["plan_token"])
+        self.assertTrue(result["ok"])
+        _, entry = self.host.require_identity(self.project, self.profile)
+        self.assertEqual(entry["configuration_revision"], 2)
+        self.assertEqual(set(runtime_config.service_secret_snapshot(self.host, entry)), {"relay-token"})
+
+    def test_review_rejects_changed_enablement_before_stopping(self):
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"], confirm=True)
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        arguments = {"archive": str(self.archive), "archive_sha256": c.digest(self.archive), "operation_id": str(uuid.uuid4())}
+        reviewed = self.request("release-plan", **arguments)
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, inventory, _ = lifecycle.load(self.host, entry)
+        self.host.enabled.remove(inventory.units["http"])
+        before = dict(self.host.running)
+        with self.assertRaises(c.DeployError) as error:
+            self.request("activate", **arguments, plan_token=reviewed["plan_token"])
+        self.assertEqual(error.exception.code, "stale_plan")
+        self.assertEqual(self.host.running, before)
+
+    def test_rotation_preserves_enabled_but_stopped_service(self):
+        self.test_service_secret_rotation_retains_http_and_private_values()
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, inventory, _ = lifecycle.load(self.host, entry)
+        self.host.run(["systemctl", "stop", inventory.units["relay"]])
+        self.host.started.clear()
+        with patch.object(release.backup, "archive_keys"):
+            result = self.request("config-set", secrets={"configuration": {"FOUNDRY_SERVICE_SECRET__RELAY_TOKEN": "next-canary"}}, confirm=True)
+        self.assertEqual(self.host.started, [])
+        self.assertEqual(result["status"], "degraded")
+        self.assertIn(inventory.units["relay"], self.host.enabled)
 
     def test_plan_apply_activate_report_logs_restart_and_boot_use_current_owners(self):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())

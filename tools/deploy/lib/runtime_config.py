@@ -244,6 +244,58 @@ def read_service_secret_intent(host, entry, identifier, topology, profile):
     return dict(paths)
 
 
+def stage_configuration_revision(host, entry, changes, topology, profile):
+    """Use the existing configuration aliases/keyring rules before lifecycle effects."""
+    from admission import protected_directory
+    from contracts import digest
+    validate_configuration_changes(changes, {**entry, "topology": topology.projection()})
+    application, service = configuration_parts(changes, topology=topology)
+    current = validate_runtime_environment(host, entry)
+    values = candidate_values(host, entry, current, application)
+    paths = stage_service_secrets(host, entry, topology, service)
+    identifier = str(uuid.uuid4())
+    directory = host.paths.instance_config(entry["name"])
+    candidate = directory / ("revision-" + identifier + ".env")
+    host.owned_write(candidate, dump_env(values), 0o640, group=entry["name"])
+    root = directory / "configuration-intents"
+    protected_directory(host, root, 0o700)
+    require(len(list(root.iterdir())) < 128, "configuration_reconciliation", "Reconcile retained configuration intents.")
+    record = {"schema": 1, "id": identifier, "instance_id": entry["profile"]["instance_id"],
+              "revision": entry["configuration_revision"] + 1, "path": str(candidate), "sha256": digest(candidate),
+              "previous_sha256": digest(directory / "app.env"), "paths": paths,
+              "secret_sha256": {name: digest(Path(path)) for name, path in paths.items()},
+              "application_keys": list(application), "service_keys": list(service)}
+    host.owned_write(root / (identifier + ".json"), _json(record) + "\n", 0o600)
+    return identifier
+
+
+def read_configuration_revision(host, entry, identifier):
+    from admission import read_owned
+    from contracts import contract_uuid, digest
+    directory = host.paths.instance_config(entry["name"])
+    record = read_owned(host, directory / "configuration-intents" / (contract_uuid(identifier) + ".json"), lambda value: value)
+    require(record.get("schema") == 1 and record.get("id") == identifier
+            and record.get("instance_id") == entry["profile"]["instance_id"]
+            and record.get("revision") == entry["configuration_revision"] + 1
+            and digest(directory / "app.env") == record.get("previous_sha256"),
+            "stale_plan", "Configuration changed after private review.")
+    content = _read_value_file(host, entry, record["path"])
+    require(digest(Path(record["path"])) == record["sha256"], "stale_plan", "Private configuration intent changed.")
+    for name, path in record["paths"].items():
+        _read_value_file(host, entry, path)
+        require(digest(Path(path)) == record["secret_sha256"][name], "stale_plan", "Private service snapshot changed.")
+    return record, parse_env(content)
+
+
+def publish_configuration_revision(host, registry, entry, intent):
+    """Caller journals configuration publication first; an interrupted write stays pending."""
+    record, values = read_configuration_revision(host, entry, intent)
+    select_service_secrets(host, entry, record["paths"])
+    host.owned_write(host.paths.instance_config(entry["name"]) / "app.env", dump_env(values), 0o640, group=entry["name"])
+    entry["configuration_revision"] = record["revision"]
+    host.journal(registry, entry)
+
+
 def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
     require(type(postgres_port) is int and POSTGRES_PORT <= postgres_port <= POSTGRES_PORT + 99,
             "postgres_identity", "Invalid allocated Foundry PostgreSQL port.")
@@ -710,7 +762,8 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
                  "size": member.size, "kind": member.kind}) for member in members}
     require(len(inventory) == len(members), "service_preparation", "Duplicate configuration inventory members.")
     with store.preparation(invocation, permit_id=permit_id) as resolution:
-        prepare_unit_paths(host, role, spec, resolution, views=views)
+        from dataclasses import replace
+        prepare_unit_paths(host, role, spec, replace(resolution, id=invocation.resolution_id), views=views)
         base = _service_directory(host, host.paths.p(paths.base))
         invocations = _service_directory(host, base / "invocations")
         view = invocations / invocation.process.invocation_id
@@ -799,13 +852,13 @@ def _http_address(endpoint):
     return f"{address}:{endpoint.port}"
 
 
-def effective_environments(host, entry, resolution_id, roles, endpoints):
+def effective_environments(host, entry, resolution_id, roles, endpoints, *, values=None):
     """Snapshot current private settings; HTTP allocation changes only this projection."""
     from admission import protected_directory
     from contracts import EffectiveEnvironment, atomic_write, contract_uuid, digest, parse_env
     contract_uuid(resolution_id)
     source = host.paths.instance_config(entry["name"]) / "app.env"
-    values = parse_env(check_path(source, "file").read_text())
+    values = dict(values) if values is not None else parse_env(check_path(source, "file").read_text())
     http = next((e for e in endpoints if e.role == "http" and e.listener == "http"), None)
     require(http is not None, "runtime_resolution", "The HTTP runtime allocation is missing.")
     values["APP__HTTP__SERVER__ADDRESS"] = _http_address(http)
@@ -822,10 +875,20 @@ def effective_environments(host, entry, resolution_id, roles, endpoints):
     return tuple(result)
 
 
-def effective_environment_path(host, entry, resolution, role="http"):
+def effective_environment_path(host, entry, resolution, role="http", *, candidate=False):
     from contracts import digest, require_current_private_configuration
-    require_current_private_configuration(resolution, entry["configuration_revision"])
     selected = next((e for e in resolution.environments if e.role == role), None)
+    if candidate:
+        require(resolution.private_revision in (entry["configuration_revision"], entry["configuration_revision"] + 1),
+                "runtime_resolution_conflict", "Candidate configuration revision is stale.")
+    elif resolution.private_revision != entry["configuration_revision"]:
+        from admission import AdmissionStore
+        _, current = AdmissionStore(host, entry["profile"]["instance_id"])._selection()
+        require_current_private_configuration(current, entry["configuration_revision"])
+        require(selected is not None and any(e.role == role and e.sha256 == selected.sha256 for e in current.environments), "runtime_resolution_conflict",
+                "A retained role no longer has identical private configuration.")
+    else:
+        require_current_private_configuration(resolution, entry["configuration_revision"])
     require(selected is not None, "runtime_resolution", "Role has no effective environment.")
     path = check_path(host.paths.instance_config(entry["name"]) / selected.path, "file")
     require(path.exists() and digest(path) == selected.sha256,
@@ -833,14 +896,14 @@ def effective_environment_path(host, entry, resolution, role="http"):
     return path
 
 
-def write_binding_descriptor(host, entry, deployment, resolution, spec):
+def write_binding_descriptor(host, entry, deployment, resolution, spec, *, candidate=False):
     """Final app-facing descriptor: schema 2 embeds the frozen RoleBindings record."""
     from dataclasses import asdict
     from contracts import atomic_json, canonical_digest, record_document
     from admission import protected_directory
     require(spec in deployment.units and resolution.deployment_sha256 == canonical_digest(record_document(deployment)),
             "runtime_resolution", "Bindings belong to another selected deployment.")
-    env = effective_environment_path(host, entry, resolution, spec.identity.role)
+    env = effective_environment_path(host, entry, resolution, spec.identity.role, candidate=candidate)
     absolute = lambda path: "/" + path.relative_to(host.paths.root).as_posix()
     path = host.paths.opt(entry["name"]) / "runtime" / resolution.id / (spec.identity.role + ".json")
     protected_directory(host, path.parent)

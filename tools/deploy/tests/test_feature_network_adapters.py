@@ -56,6 +56,8 @@ class FeatureAdapterTests(unittest.TestCase):
         return 100 + list(self.current.units.values()).index(unit)
 
     def command(self, args, **kwargs):
+        if args[:2] == ["systemctl", "is-enabled"]:
+            return subprocess.CompletedProcess(args, 0, "enabled\n", "")
         self.assertEqual(args[:2], ["systemctl", "show"])
         unit = args[2]
         values = {"Id": unit, "LoadState": "loaded", "ActiveState": "active" if self.running else "inactive",
@@ -96,7 +98,7 @@ class FeatureAdapterTests(unittest.TestCase):
         public = tuple(listeners.ObservedSocket(cl.socket, (91,)) for cl in listeners.public_claims(self.current.profile))
         # Unrelated host HTTP and other app sockets must not be mistaken for this instance's listeners.
         self.sockets.return_value = (*private, *public, listeners.ObservedSocket(listeners.SocketIdentity("tcp", 4, "0.0.0.0", 80), (91,)))
-        self.enterContext(patch.object(self.services, "wait_ready", return_value=True))
+        self.enterContext(patch.object(self.services, "wait_ready_set", return_value=True))
         self.enterContext(patch.object(certificates, "ensure_hostnames"))
         self.enterContext(patch.object(edge, "open_runtime", side_effect=lambda *a, **kw: (kw["authorize"](), kw["authorize"]())))
         self.enterContext(patch.object(firewall, "open_runtime", side_effect=lambda *a, **kw: (kw["authorize"](), kw["authorize"]())))

@@ -1,8 +1,9 @@
 # B24 release 1 lifecycle handoff
 
-This reference records the lane A interfaces and the network changes needed for
-service-only secret rotation, rollback, and maintenance. These operations remain
-capability-gated until their complete transitions are implemented.
+This reference records lane A's private configuration and unit-graph interfaces.
+Service-secret review, delivery and rotation are implemented. Rollback,
+application configuration changes, maintenance and recovery integration remain
+in progress. The live network scenarios are opt-in and have not run locally.
 
 ## Lane A interfaces available in this worktree
 
@@ -40,50 +41,31 @@ ordering. The boot exposure coordinator runs after the workload units and verifi
 the enabled set. It does not start workloads. Declared prerequisites do not add
 systemd `Wants=` or `Requires=` dependencies.
 
-## Network changes required from lane C
+## Scoped network operations
 
-The current `listeners.feature_close` requires all of these conditions:
+Lane A now owns the lifecycle adapters in `listeners.py`; the earlier network
+lane is complete. Current backup/recovery lane C does not edit the adapters.
 
-- The affected-unit set equals every candidate unit.
-- The old and candidate unit maps are identical.
-- The candidate private revision equals the current registry revision.
-- Every candidate endpoint is unused after all units exit.
+- `feature_allocate(..., retained=...)` preserves unchanged endpoints and allocates
+  fresh affected backends around live and retained references.
+- `feature_withdraw` records only `ingress_withdrawn` for the affected old/candidate
+  address union. Unchanged unit identities and runtime routes are fingerprinted.
+- `feature_close` additionally proves affected backend exit and reference isolation.
+  The whole-instance call shape remains supported. Validation permits cannot
+  exceed the affected unit/address evidence.
+- `feature_open` verifies selected process identities and readiness, then changes
+  only the affected exposure. Unchanged processes and routes must remain identical.
+  Configuration revisions preserve enabled services that were deliberately stopped.
 
-`listeners.feature_open` requires every declared role to be enabled and running.
-Those conditions prevent selective rotation, maintenance with retained roles,
-role removal, and rollback to a legacy release.
+`feature_plan.plan` collects new declared service secrets before activation.
+`runtime_config` retains immutable private intents, current secret selection and
+configuration revisions. Public plans carry opaque intent IDs and redacted key
+names; secret values and their hashes remain private.
 
-The required behavior follows the design's reviewed transitions and retained-role
-closure contract:
+`acceptance_network.py` contains opt-in TCP and TLS scenarios for selective
+withdrawal, an unchanged established connection and selective reopening. These
+network scenarios do not fabricate application/cgroup closure evidence.
 
-1. `feature_allocate` preserves unaffected endpoints for a service-scoped edit.
-   HTTP keeps its allocation when its effective inputs are unchanged. An affected
-   backend receives a fresh allocation when old references prevent safe reuse.
-2. `feature_close` accepts the explicit `HostTransition.affected_units`, including
-   retired units. It withdraws affected ingress before stop, then proves affected
-   backend exit and old-reference isolation. Ingress withdrawal alone never grants
-   a validation permit.
-3. Closure evidence binds the unchanged retained units through
-   `ClosureEvidence.retained_units_sha256`. Retained units keep their processes,
-   endpoints, and effective inputs. Their sockets do not count as unexpected
-   candidate listeners.
-4. The current private revision in `HostTransition` identifies the pre-transition
-   revision. A configuration candidate can reference the next revision. Lane A
-   validates and journals private publication before admission. The network owner
-   does not restore credentials or require old and candidate revisions to match.
-5. `feature_open` verifies the complete enabled, unheld set using actual systemd
-   enablement. Disabled or held roles remain closed. A retained admitted process
-   can use its prior invocation record only when lane A proves its effective
-   inputs are unchanged.
-6. Old and candidate inventories can differ. Closure covers removed units and
-   listeners. Retained legacy rollback keeps sticky admission and capable-client
-   requirements while using the target's legacy application projection.
-
-Lane C continues to own firewall and nginx writes. Lane A owns private intents,
-configuration publication, retained-invocation admission, maintenance markers,
-unit installation, and transition completion. No secret values or secret-derived
-hashes cross into public plans or network observations.
-
-The topology-2, profile-3, and application binding contracts remain unchanged.
-Any additive internal network call parameters need agreement before the selective
-lifecycle callers are connected.
+The topology-2, profile-3, frozen deployment records and application binding API
+remain unchanged. Retained unit origins are recorded privately; new resolutions
+materialize their own environments and compare credential digests only privately.

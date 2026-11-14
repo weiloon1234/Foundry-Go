@@ -559,6 +559,9 @@ def bootstrap(project, profile, settings, fresh):
             atomic_json(pending_path, bootstrap_marker(project, profile, binding), mode=0o600)
             save_profile(profile)
             secrets = bootstrap_secrets(fresh or pending_binding is not None or binding != inspected.get("host_id"))
+            configuration = collect_service_secrets(plan.get("observations", {}).get("required_service_secrets", []), secrets.get("configuration"))
+            if configuration:
+                secrets["configuration"] = configuration
             result = ssh.request("bootstrap-apply", {**request, "confirm": True, "plan_token": plan.get("plan_token"),
                                                     "secrets": secrets}, remote)
             if result.get("host_id") != binding:
@@ -1210,11 +1213,23 @@ def deploy(project, profile, settings):
             archive = select_archive(project, profile)
             manifest = read_json(archive.parent / "manifest.json")
             say(json.dumps({key: manifest[key] for key in ("version", "commit", "tree_state", "architecture", "instance")}, indent=2))
-            confirm("Activate this completed release, including its pending forward migrations")
             with ssh.temporary() as remote:
                 destination = remote + "/app.tar.gz"
                 ssh.upload(archive, destination)
-                display(ssh.request("activate", {**request, "archive": destination, "archive_sha256": digest(archive)}))
+                activation = {**request, "archive": destination, "archive_sha256": digest(archive)}
+                if profile.get("schema") == 3:
+                    activation["operation_id"] = operation_uuid(os.environ.get("OPERATION") or str(uuid.uuid4()))
+                    plan = ssh.request("release-plan", activation)
+                    if not plan["ok"]:
+                        supplied = secret_input("config", "Service secret configuration JSON", structured=True, required=False)
+                        configuration = collect_service_secrets(plan["required_service_secrets"], supplied)
+                        plan = ssh.request("release-plan", {**activation, "secrets": {"configuration": configuration}})
+                    display(plan)
+                    if not plan["ok"]:
+                        raise LocalError("Release review is incomplete")
+                    activation["plan_token"] = plan["plan_token"]
+                confirm("Activate this completed release, including its pending forward migrations")
+                display(ssh.request("activate", {**activation, "confirm": True}))
                 remember_releases(profile, ssh.request("status", request))
         elif action == "config":
             say(json.dumps(ssh.request("config-keys", request), indent=2))

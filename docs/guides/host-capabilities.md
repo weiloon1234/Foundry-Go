@@ -34,21 +34,43 @@ that is a capability milestone, not a promised framework version or date.
 | Refused in the preview | Consequence |
 | --- | --- |
 | Rollback to a previous feature release or to legacy; activation of a previously selected, noncurrent release | Deploy a new release instead; selection history survives retention. |
-| Configuration changes, configuration holds and key rotation | Choose initial configuration at bootstrap. Do not use configuration updates to change a selected feature instance. |
+| Application configuration changes, configuration holds and key rotation | Service-secret rotation is supported through `config`; other configuration operations remain gated. |
 | Maintenance holds, both `down` and `up` | Both refuse before mutation. Declaring `maintenance: serve` does not enable partial maintenance. Use whole-instance `stop` and `restart` when full downtime is acceptable. |
 | Changed reprovisioning of a selected instance | Changes to its profile, package requirements or owned network/boot files refuse. Unchanged re-bootstrap is supported. |
 | Newly required packages at activation | Bootstrap installs packages; deployment cannot silently add missing packages. |
 | Named lifecycle operations | Start/restart/stop the complete enabled instance. Selecting a role for logs is supported. |
 | Interrupted-operation reconciliation and recovery | Do not assume an interrupted operation rolled back. Inspect status and retained cleanup evidence. Unresolved cleanup blocks later starts. |
-| Custom-service secret intake | A parsed `secret_files` declaration is not executable preview support. Keep secrets out of literal argv, public environment and artifact URLs. |
 | Bundle ABI without package-version evidence | Bundle consumers must use package executables with one matching observed service package version. An artifact executable cannot supply this preview proof. |
 | Feature release/artifact pruning and helper-bundle pruning | Explicit feature pruning refuses. Automatic helper retention keeps every helper bundle and upgrade journal with a capability diagnostic. Invocation/view limits still apply; reaching a limit refuses further starts. |
 | Host capacity changes involving features; backup configuration/run, restore drill and recovery operations for feature instances | These owners are not integrated with feature lifecycle yet. Legacy neighbors retain their existing supported operations. |
 
 The server feature-operation allowlist is `bootstrap-plan`, `bootstrap-apply`,
-`activate`, `restart`, `stop`, `status`, `logs`, `sync`, `config-keys` and `report`.
+`release-plan`, `activate`, `restart`, `stop`, `status`, `logs`, `sync`, `config-keys`,
+`config-set` and `report`.
 Host tool upgrades have their own upgrade protocol. Other feature mutations are
 not implied by a command appearing in the legacy deployment guide.
+
+Service secrets use the existing private configuration intake. Declare names in
+`secrets` and map service `_FILE` variables through `secret_files`; explicit
+`secret_file` arguments and per-start configuration references also receive paths.
+Supply `FOUNDRY_SERVICE_SECRET__<UPPERCASE_NAME>` keys through hidden input or
+`FOUNDRY_SECRET_CONFIG_FILE`. Hyphens in names become underscores. SSH sends values
+on stdin. Unknown names, namespace collisions and simultaneous value/`_FILE`
+forms are rejected. Files are root-owned, mode 0640, with the instance group.
+
+Deploy stages the archive and obtains a `release-plan` before confirmation. Newly
+required secrets are collected and snapshotted privately during review, before
+any service stops. The plan binds an operation UUID, archive and deployment,
+current configuration revision, allocations, enablement and host/network
+observations; changed inputs invalidate it. Public plans expose opaque intent IDs
+and redacted key names, never values or their hashes.
+
+`ACTION=config` rotates service secrets through a configuration revision and the
+existing private backup owner. It restarts affected enabled, running services and
+any consumers whose endpoint bindings change. Unchanged services retain their
+processes and exposure; deliberately stopped services stay stopped. An interrupted
+publication remains pending for reconciliation. Do not infer that old credentials
+were restored from an unsuccessful operation.
 
 Current tools keep feature workload units enabled after startup and read systemd
 enablement for committed admission, restart selection, and reporting. Systemd
@@ -60,8 +82,7 @@ start a disabled unit.
 The next privileged instance action migrates a committed v0.31.0 preview by
 enabling its running units without starting anything. It does not enable stopped
 units. `ACTION=status` includes the migration receipt. A pending deployment must
-be reconciled before that migration. Selective network operations remain subject
-to the refusals above.
+be reconciled before that migration. Selective secret rotations preserve unchanged units and their exposure.
 
 | Declaration outside release 1 | Later capability |
 | --- | --- |
@@ -258,7 +279,7 @@ paths under `deploy/bin/`.
   binding and supplies an executable path, bundle path or endpoint URL. `config`
   names a declared configuration. `state_path` and `runtime_path` contain relative
   paths; `config_root`, `data_root` and `copy_number` use the value `self` (the
-  only copy is 1). `secret_file` is parsed but secret intake refuses in preview.
+  only copy is 1). `secret_file` supplies a private file path, never secret bytes.
   Maximum 128 arguments, 32 KiB combined values, 4096 bytes per literal.
 - **Listeners:** only TCP; `bind` is `loopback` or `public`. Loopback listeners
   omit `tls` and `authentication`. Public listeners require `tls: "edge"` or

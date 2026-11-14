@@ -1,4 +1,4 @@
-"""Lane A checkpoint 3897443a records and unedited owner modules, for tests only."""
+"""Frozen records exercised against the current admission and network owners."""
 from contextlib import contextmanager
 from dataclasses import replace
 import importlib.util
@@ -18,15 +18,10 @@ ROOT = Path(__file__).parent / "network_fixtures/lane_a_3897443a"
 
 @contextmanager
 def owners():
-    modules = {}
-    for name in ("admission", "services", "feature_network"):
-        spec = importlib.util.spec_from_file_location(name, ROOT / (name + ".py"))
-        module = importlib.util.module_from_spec(spec)
-        with patch.dict(sys.modules, {**modules, name: module}):
-            spec.loader.exec_module(module)
-        modules[name] = module
-    with patch.dict(sys.modules, modules):
-        yield modules["admission"], modules["services"], modules["feature_network"]
+    import admission
+    import services
+    import feature_network
+    yield admission, services, feature_network
 
 
 def attempt(outcome="running", phase="health"):

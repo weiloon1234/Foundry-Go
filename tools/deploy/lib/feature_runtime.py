@@ -61,9 +61,9 @@ def run(action, pin, launch):
         (boot if action == "boot" else open_boot)(host, entry, inventory)
         return 0
     store = admission.AdmissionStore(host, spec.identity.instance_id)
-    selection, _ = store._selection()
+    selection, current_resolution = store._selection()
     permit_id = None
-    if selection.admission.disposition.value == "pending":
+    if selection.admission.disposition.value == "pending" and store.retained_invocation(invocation, current_resolution) is None:
         permit_id = admission.protected_path(host, store.runtime / "active-permit", "file").read_text()
     if action == "admit":
         store.admit(invocation, permit_id=permit_id)
@@ -91,6 +91,8 @@ def run(action, pin, launch):
                                   architecture=inventory.profile.architecture, artifact_roots=roots, payloads=declaration.artifacts)
     release = host.paths.opt(entry["name"]) / "releases" / inventory.deployment.release
     if isinstance(role, ExecutableRole):
+        for path in launch["secret_paths"].get(spec.identity.role, {}).values():
+            runtime_config._read_value_file(host, entry, path)
         runtime_config.prepare_service(host, store, invocation, role, spec, release, declaration.inventory,
                                        views=views, secret_paths=launch["secret_paths"].get(spec.identity.role, {}),
                                        uid=entry["allocations"]["uid"], gid=entry["allocations"]["gid"], permit_id=permit_id)

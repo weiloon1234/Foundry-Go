@@ -23,6 +23,8 @@ import select
 import time
 import os
 from pathlib import Path
+from dataclasses import replace
+import copy
 import socket
 import subprocess
 import sys
@@ -294,7 +296,7 @@ with stream:
 '''
 
 
-def preview_documents(mode, instance_id):
+def preview_documents(mode, instance_id, *, selective=False):
     """Fixture declarations only: no release, admission or lane A implementation."""
     topology = t.parse_topology({"schema": 2, "roles": [
         {"name": "http", "kind": "builtin"},
@@ -312,6 +314,16 @@ def preview_documents(mode, instance_id):
         "edge_origin_lockdown": False, "placement": {"http": 1, "relay": 1},
         "listeners": {"relay.ingress": {"ports": [8554], "source_cidrs": [PEER_ADDRESSES[0] + "/32", PEER_ADDRESSES[1] + "/128"],
             "dns": {"mode": "external", "hostname": "preview.acceptance.invalid", "public_addresses": list(ADDRESSES), "proxied": False}}}}, topology)
+    if selective:
+        raw, placed = topology.projection(), profile.projection()
+        auxiliary = copy.deepcopy(raw["roles"][1])
+        auxiliary["name"] = "auxiliary"
+        raw["roles"].append(auxiliary)
+        placed["placement"]["auxiliary"] = 1
+        placed["listeners"]["auxiliary.ingress"] = copy.deepcopy(placed["listeners"]["relay.ingress"])
+        placed["listeners"]["auxiliary.ingress"]["ports"] = [8555]
+        topology = t.parse_topology(raw)
+        profile = t.parse_profile(placed, topology)
     return topology, profile
 
 
@@ -319,8 +331,8 @@ def preview_resolution(topology, profile, endpoints):
     identity = str(uuid.uuid4())
     digest = c.canonical_digest({"fixture": "network preview", "topology": topology.sha256})
     value = {"schema": 1, "id": identity, "deployment_sha256": digest, "private_revision": 1,
-        "roles": ["http", "relay"], "endpoints": [dict(role=e.role, listener=e.listener, address=e.address, port=e.port) for e in endpoints],
-        "environments": [{"role": role, "path": f"runtime/{identity}/{role}/app.env", "sha256": digest} for role in ("http", "relay")],
+        "roles": [name for name, count in profile.placement if count], "endpoints": [dict(role=e.role, listener=e.listener, address=e.address, port=e.port) for e in endpoints],
+        "environments": [{"role": role, "path": f"runtime/{identity}/{role}/app.env", "sha256": digest} for role, count in profile.placement if count],
         "bindings_sha256": digest, "readiness_sha256": digest, "nginx_sha256": digest}
     resolution = c.RuntimeResolution.parse(value)
     value["nginx_sha256"] = c.canonical_digest(edge.stream_projection(profile, resolution, "preview.acceptance.invalid", topology=topology))
@@ -378,7 +390,7 @@ class NetworkPreviewAcceptance(unittest.TestCase):
     def setUp(self):
         self.instance_id = str(uuid.uuid4())
         self.mode = "edge" if self._testMethodName.endswith("tls") else "none"
-        self.topology, self.profile = preview_documents(self.mode, self.instance_id)
+        self.topology, self.profile = preview_documents(self.mode, self.instance_id, selective="selective" in self._testMethodName)
         self.claims = listeners.public_claims(self.profile)
         self.backends, self.probes = [], []
         self.selected = None
@@ -388,7 +400,7 @@ class NetworkPreviewAcceptance(unittest.TestCase):
                               "server {\n    listen 127.0.0.1:8080;\n    location / { return 503; }\n}\n"))
         before = firewall.observe(self.host, self.instance_id, self.claims, integrated=False)
         firewall.install_closed(self.host, self.instance_id, self.claims, reviewed_sha256=before.sha256)
-        edge.withdraw(self.host, self.instance_id, ("relay",))
+        edge.withdraw(self.host, self.instance_id, tuple(name for name, count in self.profile.placement if count and name != "http"))
         self.old = self.allocate()
         self.candidate = self.allocate(reserved=self.old.endpoints)
 
@@ -403,7 +415,7 @@ class NetworkPreviewAcceptance(unittest.TestCase):
             backend.close()
         firewall.withdraw(self.host, self.instance_id, self.claims)
         self.host.run(["systemctl", "start", "nginx"], timeout=30)
-        edge.withdraw(self.host, self.instance_id, ("relay",))
+        edge.withdraw(self.host, self.instance_id, tuple(name for name, count in self.profile.placement if count and name != "http"))
         if hasattr(self, "http_site"):
             self.http_site.unlink(missing_ok=True)
             self.host.run(["nginx", "-t", "-q"])
@@ -413,12 +425,12 @@ class NetworkPreviewAcceptance(unittest.TestCase):
         references = edge.retain_global_references(self.host)
         reserved_claims = tuple(listeners.ListenerClaim(self.instance_id, e.role, e.listener, 1,
                                listeners.SocketIdentity("tcp", 4, e.address, e.port), "application") for e in reserved)
-        endpoints = listeners.allocate_private(self.instance_id, (("http", "http"), ("relay", "ingress")),
+        endpoints = listeners.allocate_private(self.instance_id, (("http", "http"), *((name, "ingress") for name, count in self.profile.placement if count and name != "http")),
                      reserved_claims, (*listeners.observe_sockets(self.host), *(listeners.ObservedSocket(s, ()) for s in references)))
         return preview_resolution(self.topology, self.profile, endpoints)
 
-    def backend(self, resolution):
-        endpoint = next(e for e in resolution.endpoints if e.role == "relay")
+    def backend(self, resolution, role="relay"):
+        endpoint = next(e for e in resolution.endpoints if e.role == role)
         backend = EchoBackend(endpoint, None)
         self.backends.append(backend)
         return backend
@@ -464,7 +476,7 @@ class NetworkPreviewAcceptance(unittest.TestCase):
     def closed_evidence(self):
         retained_http = self.http_site.read_bytes()
         fw = firewall.withdraw(self.host, self.instance_id, self.claims)
-        ng = edge.withdraw(self.host, self.instance_id, ("relay",))
+        ng = edge.withdraw(self.host, self.instance_id, tuple(name for name, count in self.profile.placement if count and name != "http"))
         self.assertEqual(self.http_site.read_bytes(), retained_http)
         old = self.selected or self.old
         candidate = self.candidate if old.id == self.old.id else self.allocate(reserved=old.endpoints)
@@ -493,6 +505,64 @@ class NetworkPreviewAcceptance(unittest.TestCase):
 
     def test_default_deny_open_and_withdraw_tls(self):
         self.opening_case()
+
+    def test_selective_withdrawal_preserves_live_service_and_exposure(self):
+        self.backend(self.old)
+        auxiliary = self.backend(self.old, "auxiliary")
+        closed = firewall.observe(self.host, self.instance_id, self.claims)
+        edge.open_runtime(self.host, self.profile, self.old, self.lineage, ("relay", "auxiliary"),
+                          topology=self.topology, authorize=lambda: True)
+        firewall.open_runtime(self.host, self.instance_id, self.claims, self.profile.listeners,
+                              closed_sha256=closed.sha256, authorize=lambda: True)
+        process = subprocess.Popen(self.probe_command(ADDRESSES[0]), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        self.probes.append(process)
+        def exchange(message):
+            process.stdin.write(message + "\n")
+            process.stdin.flush()
+            self.assertTrue(select.select([process.stdout], [], [], 5)[0])
+            self.assertEqual(process.stdout.readline(), message + "\n")
+        self.assertTrue(select.select([process.stdout], [], [], 5)[0])
+        self.assertEqual(process.stdout.readline(), "READY\n")
+        exchange("before-selective-withdrawal")
+        retained = tuple(c for c in self.claims if c.role == "relay")
+        affected = tuple(c for c in self.claims if c.role == "auxiliary")
+        root = self.host.paths.p(edge.RUNTIME + "/" + self.instance_id)
+        route = root / "stream-relay.ingress.conf"
+        before = route.read_bytes()
+        fw = firewall.withdraw(self.host, self.instance_id, affected, retained_claims=retained, bindings=self.profile.listeners)
+        ng = edge.withdraw(self.host, self.instance_id, ("auxiliary",))
+        self.assertEqual(route.read_bytes(), before)
+        exchange("after-selective-withdrawal")
+        self.reachable(True)
+        for address in ADDRESSES:
+            command = self.probe_command(address, tcp_only=True)
+            command[command.index("8554")] = "8555"
+            result = self.host.run(command, input="closed\n", timeout=8, check=False)
+            self.assertNotIn("READY", result.stdout)
+        candidate = replace(self.candidate, endpoints=tuple(e for e in self.old.endpoints if e.role != "auxiliary") +
+                            tuple(e for e in self.candidate.endpoints if e.role == "auxiliary"))
+        evidence = listeners.ingress_evidence(str(uuid.uuid4()), firewall.boot_id(self.host), self.old, candidate,
+                    (c.UnitIdentity(self.instance_id, "auxiliary", 1),), hashlib.sha256(before).hexdigest(), fw, ng, claims=affected)
+        self.assertEqual({u.role for u in evidence.units}, {"auxiliary"})
+        self.assertEqual({e.role for e in evidence.endpoints}, {"auxiliary"})
+        self.assertEqual(evidence.stage, c.ClosureStage.INGRESS_WITHDRAWN)
+        with self.assertRaises(c.DeployError):
+            listeners.complete_closure(evidence, candidate, backend_exit_sha256=None,
+                                       reserved=candidate.endpoints, old_references=edge.upstream_references(self.host))
+        auxiliary.close()
+        exchange("after-affected-backend-exit")
+        self.backend(candidate, "auxiliary")
+        closed = firewall.observe(self.host, self.instance_id, affected, retained_claims=retained, bindings=self.profile.listeners)
+        edge.open_runtime(self.host, self.profile, candidate, self.lineage, ("auxiliary",), topology=self.topology, authorize=lambda: True)
+        firewall.open_runtime(self.host, self.instance_id, affected, self.profile.listeners,
+                              closed_sha256=closed.sha256, authorize=lambda: True, retained_claims=retained)
+        self.assertEqual(route.read_bytes(), before)
+        exchange("after-selective-opening")
+        self.reachable(True)
+
+    def test_selective_withdrawal_tls(self):
+        self.test_selective_withdrawal_preserves_live_service_and_exposure()
 
     def test_stale_session_is_ingress_withdrawn_not_application_closed(self):
         old = self.backend(self.old)

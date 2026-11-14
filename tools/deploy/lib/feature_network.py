@@ -1,7 +1,6 @@
-"""Lane A's narrow network handoff. Missing lane C support always fails closed.
+"""Network adapter boundary for scoped and whole-instance lifecycle operations.
 
-Lane C supplies feature_allocate, feature_close and feature_open in listeners.py.
-No caller may invent closure or treat an intended firewall change as observation.
+No caller may treat ingress withdrawal as complete application closure.
 """
 import importlib
 from dataclasses import replace
@@ -182,14 +181,15 @@ def capability():
             raise
         owner = None
     require(owner is not None and all(callable(getattr(owner, name, None)) for name in
-            ("feature_allocate", "feature_close", "feature_open")),
+            ("feature_allocate", "feature_withdraw", "feature_close", "feature_open")),
             "capability_unavailable", "Public activation requires the B24 lane C preview network integration release.")
     return owner
 
 
-def allocate(host, entry, topology, profile, operation_id):
+def allocate(host, entry, topology, profile, operation_id, *, retained=None):
     """Return (tuple[AllocatedEndpoint], nginx projection SHA256), without effects."""
-    endpoints, projection = capability().feature_allocate(host, entry, topology, profile, operation_id)
+    endpoints, projection = capability().feature_allocate(host, entry, topology, profile, operation_id,
+                                                         **({"retained": retained} if retained else {}))
     from dataclasses import asdict
     endpoints = tuple(AllocatedEndpoint.parse(asdict(endpoint)) for endpoint in endpoints)
     return endpoints, contract_digest(projection)
@@ -202,19 +202,19 @@ def close(host, entry, transition, resolution, units):
     evidence = ClosureEvidence.parse(record_document(evidence))
     require(evidence.stage is ClosureStage.APPLICATION_CLOSED and evidence.operation_id == transition.operation_id
             and evidence.candidate_resolution_id == resolution.id
-            and set(transition.affected_units) <= set(evidence.units)
-            and set(resolution.endpoints) <= set(evidence.endpoints),
+            and set(transition.affected_units) == set(evidence.units)
+            and {e for e in resolution.endpoints if e.role in {u.role for u in transition.affected_units}} <= set(evidence.endpoints),
             "admission_closed_required", "Network owner did not prove complete closure for this transition.")
     return evidence
 
 
 def withdraw(host, entry, transition, resolution, units):
-    """Cleanup calls the idempotent close owner before stopping live workloads.
+    """Withdraw new ingress before stopping live workloads.
 
     The final close call must still prove complete closure after verified exit.
     An ingress-only observation never authorizes a start or completed cleanup.
     """
-    return capability().feature_close(host, entry, transition, resolution, units)
+    return capability().feature_withdraw(host, entry, transition, resolution, units)
 
 
 def open_public(host, entry, resolution, evidence):

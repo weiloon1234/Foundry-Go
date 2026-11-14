@@ -407,8 +407,6 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
         capability()
         parsed = parse_topology({k: v for k, v in topology.items() if k != "sha256"})
         placed = parse_profile(bound, parsed)
-        from feature_lifecycle import validate_preview
-        validate_preview(parsed)
     observations = {"packages": packages.inspect(host, package_topology(parsed), placed) if feature else packages.inspect(host), "postgresql": postgres.inspect(host, registry),
                     "redis": redis_acl.inspect(host, registry), "certificate": certificates.inspect(host, entry)}
     if "uploads" in profile:
@@ -426,6 +424,10 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
         findings.append({"kind": "change", "code": "feature_network_prerequisites",
                          "detail": "Install the stream include, closed HTTP gate and pre-nginx boot coordinator; new nginx uses its pristine reviewed package configuration. Public TCP adoption reloads UFW and closes other feature runtime allows; they require their own healthy restart to reopen.",
                          "persistent_projection": observations["network"]["persistent_projection"]})
+    if feature:
+        from runtime_config import service_secret_requirements, service_secret_snapshot
+        observations["required_service_secrets"] = service_secret_requirements(parsed, placed,
+            service_secret_snapshot(host, entry) if existing else {})
     upgrade = upgrades.tools_upgrade(host, registry, tools_dir)
     if upgrade and upgrade["from_digest"] is not None:
         findings.append({"kind": "stop", "code": "host_upgrade_required", "detail": "Apply a separate reviewed tool upgrade first."})

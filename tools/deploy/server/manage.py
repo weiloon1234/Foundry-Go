@@ -16,7 +16,7 @@ import journal
 import maintenance
 
 ACTIONS = ("capacity-plan", "capacity-apply", "hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect",
-           "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "activate", "status", "rollback", "restart",
+           "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "release-plan", "activate", "status", "rollback", "restart",
            "stop", "down", "up", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate", "backup-configure", "backup-run",
            "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report")
 
@@ -38,7 +38,7 @@ def execute(host, action, request):
     arguments = {"recover-plan": recovery_fields,
                  "recover-apply": recovery_fields | {"archive", "plan_token", "old_server_gone"}, "bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
                  "restart": {"role"}, "stop": {"role"}, "logs": {"role", "lines"}, "down": maintenance.FIELDS,
-                 "activate": {"archive", "archive_sha256"}, "config-set": {"values", "secrets"},
+                 "activate": {"archive", "archive_sha256", "plan_token"}, "release-plan": {"archive", "archive_sha256", "secrets"}, "config-set": {"values", "secrets"},
                  "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current"},
                  "backup-keys-rotate": {"secrets"}, "backup-recipients-rotate": {"secrets"},
                  "dns-token-rotate": {"secrets"}, "backup-configure": {"secrets"}, "backup-run": {"kind"},
@@ -105,9 +105,15 @@ def execute(host, action, request):
         with host.lock("host"), host.lock(profile["instance_id"]):
             registry, entry = host.require_identity(project, profile)
             enablement_migration = feature_lifecycle.migrate_enablement(host, registry, entry)
+    if action == "release-plan":
+        import feature_plan
+        private = request.get("secrets", {})
+        require(isinstance(private, dict) and set(private) <= {"configuration"}, "invalid_secrets", "Invalid release private input.")
+        return feature_plan.plan(host, project, profile, request["archive"], request["archive_sha256"],
+                                 request.get("operation_id"), private.get("configuration"))
     if feature_lifecycle.is_feature(entry) and action in ("activate", "restart", "stop", "down", "up"):
         feature_lifecycle.check_operation(action)
-        arguments = {key: request[key] for key in ("archive", "archive_sha256", "role") if key in request}
+        arguments = {key: request[key] for key in ("archive", "archive_sha256", "plan_token", "role") if key in request}
         return feature_lifecycle.request_operation(host, action, project, profile,
                    operation_id=request.get("operation_id"), **arguments)
     if action in ("capacity-plan", "capacity-apply"):
@@ -185,6 +191,9 @@ def execute(host, action, request):
         return release.keys_rotate(host, project, profile, request.get("operation_id"), private.get("encryption"))
     if action == "config-keys":
         values = parse_env(check_path(host.paths.instance_config(entry["name"]) / "app.env", "file").read_text())
+        if feature_lifecycle.is_feature(entry):
+            from topology import parse_topology, service_secret_keys
+            values.update({key: "[redacted]" for key in service_secret_keys(dict(parse_topology(entry["topology"], registered=True).secrets))})
         return {"keys": sorted(values), "locked_keys": sorted(release.pipeline_keys(entry)), "configuration_revision": entry["configuration_revision"]}
     if action == "logs":
         # Explicit operator action. Logs are never included in the host report.
