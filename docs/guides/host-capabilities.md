@@ -683,6 +683,14 @@ error lists changed key names, never values, and records those names in the
 private operation directory's `stale-plan.json`. Review a fresh plan after
 resolving the reported changes.
 
+Failed executor and cleanup commands have separate private journals in that
+operation directory: `operation-commands.json` and
+`operation-cleanup-commands.json`. These record command names, systemctl
+subcommands, unit names and exit status; they omit other arguments, stdout and
+stderr. A failure during initial validation can be retried with a fresh review
+only after cleanup proves workload and listener closure and verifies that
+publication never began. Uncertain or later failures still require reconciliation.
+
 Both iptables-legacy and the supported iptables-nft/UFW layout are observed. The
 network owner inventories `filter`, `nat`, `raw` and `mangle`, including live and
 persisted rules. Docker DNS or masquerade rules in NAT `OUTPUT`/`POSTROUTING` can

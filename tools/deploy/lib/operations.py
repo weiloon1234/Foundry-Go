@@ -200,7 +200,19 @@ def cleanup(host, request, pin):
             closed = False
         if stopped and closed:
             store.record_boot_closure(evidence)
-            store.cleanup_status(operation, pin["invocation_id"], "complete" if applied else "closed")
+            root = directory(host, operation)
+            initial = root / "initial-validation.json"
+            reconciled = applied
+            if (initial.exists() and not (root / "validated.json").exists()
+                    and "deployment_selection" not in entry and release.current_version(host, entry) is None):
+                before = admission.read_owned(host, initial, lambda v: v)
+                require(before["current"] is None and before["configuration_revision"] == entry["configuration_revision"],
+                        "operation_cleanup", "Initial validation changed persistent configuration.")
+                state.update({key: before[key] for key in ("status", "current", "previous")})
+                release.finish(host, entry, state, "failed", "feature_validation_failed")
+                store.record_operation(state["last_attempt"])
+                reconciled = True
+            store.cleanup_status(operation, pin["invocation_id"], "complete" if reconciled else "closed")
         # Closed workloads do not reconcile an interrupted deploy. The cleanup
         # record remains unresolved and blocks every later start.
         return 0 if stopped and closed else 1
@@ -212,26 +224,27 @@ def run(action, pin):
     root = directory(host, pin["operation_id"])
     request = admission.read_owned(host, root / "request.json", lambda v: v)
     require(canonical_digest(request) == pin["request_sha256"], "operation_owner", "Pinned request has changed.")
-    if action == "operation-cleanup":
-        return cleanup(host, request, pin)
-    verify_executor(host, request, pin)
-    store = admission.AdmissionStore(host, pin["instance_id"])
-    store.require_cleanup_clear(pin["operation_id"])
-    store.cleanup_status(pin["operation_id"], pin["invocation_id"], "armed")
-    try:
-        if request["action"] == "recover-activate":
-            import feature_recovery
-            result = feature_recovery.execute(host, request, pin)
-        else:
-            result = feature_lifecycle.execute(host, request, pin=pin)
-    except (DeployError, OSError) as error:
-        result = {"error": {"code": error.code if isinstance(error, DeployError) else "filesystem_failed",
-                            "detail": error.detail if isinstance(error, DeployError) else "Inspect the owned operation journal."}}
-    atomic_json(root / "result.json", result, mode=0o600)
-    if result.get("ok") is True:
-        atomic_json(root / "complete.json", {"schema": 1, "operation_id": pin["operation_id"],
-                    "invocation_id": pin["invocation_id"], "result_sha256": canonical_digest(result)}, mode=0o600)
-    return 0 if result.get("ok") is True else 1
+    with host.command_journal(root / (action + "-commands.json")):
+        if action == "operation-cleanup":
+            return cleanup(host, request, pin)
+        verify_executor(host, request, pin)
+        store = admission.AdmissionStore(host, pin["instance_id"])
+        store.require_cleanup_clear(pin["operation_id"])
+        store.cleanup_status(pin["operation_id"], pin["invocation_id"], "armed")
+        try:
+            if request["action"] == "recover-activate":
+                import feature_recovery
+                result = feature_recovery.execute(host, request, pin)
+            else:
+                result = feature_lifecycle.execute(host, request, pin=pin)
+        except (DeployError, OSError) as error:
+            result = {"error": {"code": error.code if isinstance(error, DeployError) else "filesystem_failed",
+                                "detail": error.detail if isinstance(error, DeployError) else "Inspect the owned operation journal."}}
+        atomic_json(root / "result.json", result, mode=0o600)
+        if result.get("ok") is True:
+            atomic_json(root / "complete.json", {"schema": 1, "operation_id": pin["operation_id"],
+                        "invocation_id": pin["invocation_id"], "result_sha256": canonical_digest(result)}, mode=0o600)
+        return 0 if result.get("ok") is True else 1
 
 
 def launch(host, request, owner):

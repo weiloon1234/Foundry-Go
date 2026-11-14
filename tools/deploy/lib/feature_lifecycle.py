@@ -313,17 +313,11 @@ def stop_units(host, inventory, names=None):
     names = set(inventory.roles) if names is None else set(names)
     for name in inventory.stop_order(names):
         unit = inventory.units[name]
-        host.run(["systemctl", "stop", unit], timeout=100)
-        observed = host.run(["systemctl", "show", unit, "--property=MainPID,ControlPID,ControlGroup,ActiveState,Job", "--no-pager"])
-        values = dict(line.split("=", 1) for line in observed.stdout.splitlines() if "=" in line)
-        require(values.get("MainPID") == "0" and values.get("ControlPID") == "0" and
-                values.get("ActiveState") in ("inactive", "failed") and values.get("Job") in ("", "0"),
-                "feature_stop_unverified", "Selected unit exit remains unverified.")
-        group = values.get("ControlGroup", "")
-        if group:
-            path = host.paths.p("/sys/fs/cgroup" + group)
-            require(path.is_dir() and all(not file.read_text().strip() for file in path.rglob("cgroup.procs")),
-                    "feature_stop_unverified", "Selected unit still owns workload processes.")
+        # StopUnit fails for a candidate that has never been installed. Query
+        # that case explicitly; never interpret a failed stop as proof of exit.
+        if services.unit_state(host, unit)["LoadState"] != "not-found":
+            host.run(["systemctl", "stop", unit], timeout=100)
+        services.stopped_unit(host, unit)
 
 
 def start_units(host, inventory, names, deadline):
@@ -449,6 +443,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     evidence = feature_network.close(host, entry, request, inventory.resolution, units)
     store.record_boot_closure(evidence)
     store._write(store.durable / "transition.json", replace(request, closure_id=evidence.id))
+    atomic_json(operations.directory(host, attempt["operation_id"]) / "validated.json", {"operation_id": attempt["operation_id"]}, mode=0o600)
     feature_maintenance.clear_markers(host, inventory, maintenance_intent["holds"])
     feature_maintenance.clear_markers(host, previous, maintenance_intent["holds"])
     http = next(e for e in inventory.resolution.endpoints if e.role == "http" and e.listener == "http")
@@ -762,6 +757,10 @@ def execute(host, request, *, pin=None):
                 release.native_runtime(host, entry)
                 release.protect_maps(host, entry, release_path)
                 patterns = release.release_redis_inventory(host, entry, release_path, env_file=env)
+                if "deployment_selection" not in entry and prior_current is None:
+                    atomic_json(operations.directory(host, request["operation_id"]) / "initial-validation.json",
+                                {"status": prior_status, "current": prior_current, "previous": prior_previous,
+                                 "configuration_revision": entry["configuration_revision"]}, mode=0o600)
                 attempt = release.begin(host, entry, state, "rollback" if review["restoring"] else "deploy", manifest["version"], metadata={"operation_id": request["operation_id"]})
             store = admission.AdmissionStore(host, profile["instance_id"])
             store.record_operation(attempt)

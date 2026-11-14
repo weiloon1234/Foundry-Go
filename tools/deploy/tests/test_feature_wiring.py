@@ -69,6 +69,7 @@ class WiringHost(Host):
         self.sequence = 100
         self.running = {}
         self.enabled = set()
+        self.failed = set()
         self.public_profile = None
         self.firewall_live = {}
         self.starting = None
@@ -205,9 +206,14 @@ class WiringHost(Host):
             code = code or cleanup
         elif args[0] == "systemctl":
             action = args[1]
-            unit = args[2] if len(args) > 2 else ""
+            unit = next((arg for arg in args[2:] if not arg.startswith("-")), "")
+            loaded = (unit in self.running or unit in ("nginx", "nginx.service") and self.nginx
+                      or self.paths.p("/etc/systemd/system/" + unit).is_file())
             if action == "is-active":
-                code = 0 if self.nginx else 3
+                active = self.nginx if unit in ("nginx", "nginx.service") else unit in self.running
+                output, code = ("active", 0) if active else ("failed" if unit in self.failed else "inactive", 3 if loaded else 4)
+            elif action == "is-failed":
+                output, code = ("failed", 0) if unit in self.failed else ("active" if unit in self.running else "inactive", 1 if loaded else 4)
             elif action == "enable" and "--now" in args and args[-1] == "nginx":
                 assert not self.paths.p("/etc/systemd/system/nginx.service").is_symlink()
                 self.nginx = True
@@ -216,12 +222,13 @@ class WiringHost(Host):
             elif action == "disable":
                 self.enabled.difference_update(args[2:])
             elif action == "is-enabled":
-                output, code = ("enabled", 0) if unit in self.enabled else ("disabled", 1)
+                output, code = ("enabled", 0) if unit in self.enabled else (("disabled", 1) if loaded else ("not-found", 4))
             elif action == "reload":
                 self.worker += 1
             elif action == "start" and unit.startswith("foundry-"):
                 self.start(unit)
             elif action == "stop":
+                code = 0 if loaded else 5
                 record = self.running.pop(unit, None)
                 if record:
                     self.proc(record[0].pid, record[0].invocation_id, alive=False)
@@ -234,7 +241,7 @@ class WiringHost(Host):
                         values[directive] = "{ argv[]=" + " ".join(operations.command(phase, pin["operation_id"], pin["bundle_sha256"])) + " ; }"
                 else:
                     current = self.running.get(unit)
-                    values = {"Id": unit, "LoadState": "loaded", "ActiveState": "active" if current else "inactive",
+                    values = {"Id": unit, "LoadState": "loaded" if loaded else "not-found", "ActiveState": "active" if current else "inactive",
                               "SubState": "running" if current else "dead", "MainPID": str(current[0].pid) if current else "0",
                               "ControlPID": "0", "Job": "0", "ControlGroup": "/system.slice/" + unit if current else "",
                               "NRestarts": "0", "InvocationID": current[0].invocation_id if current else ""}
@@ -275,7 +282,8 @@ class WiringHost(Host):
             output = json.dumps(upgrades._prune_bundles(self))
         elif args[0] not in ("chown", "chmod"):
             raise AssertionError(args)
-        return subprocess.CompletedProcess(args, code, output, "")
+        result = subprocess.CompletedProcess(args, code, output, "")
+        return self.check_result(result, check=kwargs.get("check", True))
 
 
 class FeatureWiringFixture(unittest.TestCase):
@@ -382,6 +390,57 @@ class FeatureWiringFixture(unittest.TestCase):
 
 
 class FeatureWiringTests(FeatureWiringFixture):
+    def test_systemctl_status_codes_and_check_semantics(self):
+        self.host.owned_write(self.host.paths.p("/etc/systemd/system/foundry-absent.service"), "[Service]\nExecStart=/bin/true\n")
+        for action, output, code in (("is-enabled", "disabled", 1), ("is-active", "inactive", 3),
+                                     ("is-failed", "inactive", 1)):
+            args = ["systemctl", action, "foundry-absent.service"]
+            result = self.host.run(args, check=False)
+            self.assertEqual((result.stdout, result.returncode), (output, code))
+            with self.assertRaises(c.DeployError):
+                self.host.run(args)
+        self.host.failed.add("foundry-absent.service")
+        self.assertEqual(self.host.run(["systemctl", "is-failed", "foundry-absent.service"]).stdout, "failed")
+        for action in ("is-enabled", "is-active", "is-failed"):
+            self.assertEqual(self.host.run(["systemctl", action, "missing.service"], check=False).returncode, 4)
+
+    def test_initial_validation_failure_cleans_up_and_allows_fresh_review(self):
+        self.build_archive(public=True)
+        self.configure_firewall()
+        bootstrap = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(),
+                     plan_token=bootstrap["plan_token"], confirm=True)
+        operation = str(uuid.uuid4())
+        run = self.host.run
+        failed = False
+        def fail_observation(args, **kwargs):
+            nonlocal failed
+            if not failed and args[:2] == ["systemctl", "show"] and "--property=Id,LoadState,ActiveState,MainPID,ControlPID,ControlGroup,Job" in args:
+                failed = True
+                return self.host.check_result(subprocess.CompletedProcess(args, 1, "secret-output", "secret-error"),
+                                              check=kwargs.get("check", True))
+            return run(args, **kwargs)
+        with patch.object(self.host, "run", side_effect=fail_observation), self.assertRaises(c.DeployError):
+            self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive), operation_id=operation)
+        self.assertTrue(failed)
+        self.assertEqual(self.host.started, [])
+        root = operations.directory(self.host, operation)
+        commands = c.read_json(root / "operation-commands.json")
+        self.assertEqual(len(commands), 1)
+        self.assertEqual(commands[0]["command"], "systemctl")
+        self.assertEqual(commands[0]["subcommand"], "show")
+        self.assertEqual(commands[0]["exit_status"], 1)
+        self.assertEqual(len(commands[0]["units"]), 1)
+        self.assertNotIn("secret-", json.dumps(commands))
+        self.assertEqual((root / "operation-commands.json").stat().st_mode & 0o777, 0o600)
+        self.assertTrue((root / "cleanup-closure.json").exists())
+        _, entry = self.host.require_identity(self.project, self.profile)
+        store = admission.AdmissionStore(self.host, self.profile["instance_id"])
+        store.require_cleanup_clear()
+        self.assertEqual(self.host.load_state(entry)["last_attempt"]["outcome"], "failed")
+        self.assertEqual(c.read_json(store.durable / "cleanup" / (operation + ".json"))["status"], "complete")
+        self.assertTrue(self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))["ok"])
+
     def executor_review(self, concurrent=False, preexisting=False):
         self.build_archive(public=True)
         self.configure_firewall()

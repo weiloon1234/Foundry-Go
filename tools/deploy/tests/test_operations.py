@@ -59,6 +59,12 @@ class OperationTests(unittest.TestCase):
 
     def test_executor_death_after_open_withdraws_stops_and_blocks_every_later_start(self):
         stage = self.context()
+        # Initial-deployment validation intent cannot authorize retry once
+        # publication may have begun, even if the executor dies before journaling it.
+        root = operations.directory(self.host, OPERATION)
+        c.atomic_json(root / "initial-validation.json", {"status": "ready", "current": None, "previous": None,
+                      "configuration_revision": 7}, mode=0o600)
+        c.atomic_json(root / "validated.json", {"operation_id": OPERATION}, mode=0o600)
         # Simulate death after opening (or after commit but before completion receipt).
         self.state["last_attempt"] = attempt("succeeded")
         self.store.cleanup_status(OPERATION, INVOCATION, "armed")
@@ -104,13 +110,30 @@ class OperationTests(unittest.TestCase):
         group = self.host.paths.p("/sys/fs/cgroup/unit/child")
         group.mkdir(parents=True)
         (group / "cgroup.procs").write_text("23\n")
-        observed = "MainPID=0\nControlPID=0\nControlGroup=/unit\nActiveState=inactive\nJob=0\n"
+        observed = "Id=" + self.inventory.units["relay"] + "\nLoadState=loaded\nMainPID=0\nControlPID=0\nControlGroup=/unit\nActiveState=inactive\nJob=0\n"
         with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, observed, "")):
             with self.assertRaises(c.DeployError) as raised:
                 lifecycle.stop_units(self.host, self.inventory, ("relay",))
             self.assertEqual(raised.exception.code, "feature_stop_unverified")
             (group / "cgroup.procs").write_text("")
             lifecycle.stop_units(self.host, self.inventory, ("relay",))
+
+    def test_missing_unit_requires_complete_empty_runtime_evidence(self):
+        unit = self.inventory.units["relay"]
+        empty = {"Id": unit, "LoadState": "not-found", "ActiveState": "inactive", "MainPID": "0",
+                 "ControlPID": "0", "ControlGroup": "", "Job": "0"}
+        for change in ({"MainPID": "12"}, {"ControlPID": "12"}, {"Job": "12"},
+                       {"ControlGroup": "/system.slice/stray.service"}, {"Id": "foreign.service"},
+                       {"LoadState": "error"}, {"ControlGroup": None}):
+            values = {**empty, **change}
+            output = "\n".join(k + "=" + v for k, v in values.items() if v is not None)
+            with self.subTest(change=change), patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, output, "")), \
+                    self.assertRaises(c.DeployError):
+                lifecycle.stop_units(self.host, self.inventory, ("relay",))
+        output = "\n".join(k + "=" + v for k, v in empty.items())
+        with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, output, "")) as run:
+            lifecycle.stop_units(self.host, self.inventory, ("relay",))
+        self.assertTrue(all(call.args[0][:2] == ["systemctl", "show"] for call in run.call_args_list))
 
     def test_success_requires_all_durable_completion_records_and_removes_only_its_staging(self):
         stage = self.context()

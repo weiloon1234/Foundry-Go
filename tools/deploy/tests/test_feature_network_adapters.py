@@ -248,8 +248,12 @@ class FeatureAdapterTests(unittest.TestCase):
         self.withdraw.side_effect = observe_intent_then_withdraw
         self.assertIs(self.close().stage, c.ClosureStage.APPLICATION_CLOSED)
 
+    def test_not_yet_installed_units_can_prove_closure_without_runtime_state(self):
+        self.manager_override = {"LoadState": "not-found"}
+        self.assertIs(self.close().stage, c.ClosureStage.APPLICATION_CLOSED)
+
     def test_jobs_control_processes_and_cgroup_descendants_refuse_closure(self):
-        for override in ({"Job": "17"}, {"ControlPID": "8"}, {"MainPID": "9"}, {"LoadState": "not-found"}, {"ActiveState": "activating"}):
+        for override in ({"Job": "17"}, {"ControlPID": "8"}, {"MainPID": "9"}, {"LoadState": "not-found", "ControlGroup": "/system.slice/missing.service"}, {"ActiveState": "activating"}):
             self.manager_override = override
             with self.subTest(override=override), self.assertRaises(c.DeployError):
                 self.close()

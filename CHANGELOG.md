@@ -2,6 +2,12 @@
 
 ## v0.32.0 — 2026-11-14
 
+- Fixed: first feature activation and cleanup handle units that have not yet been
+  installed by proving empty runtime state before skipping their stop. Initial
+  validation failures permit a fresh review only after cleanup proves closure and
+  confirms publication never began. Private operation command journals record
+  command names, systemctl subcommands, units and exit status without arguments,
+  stdout or stderr content.
 - Fixed: reviewed feature activation excludes only its verified operation executor
   from the systemd activation comparison, so starting the executor does not
   invalidate its own release plan. Concurrent host changes still refuse with

@@ -4,6 +4,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 import fcntl
 import os
+import re
 import signal
 from pathlib import Path
 import stat
@@ -153,9 +154,40 @@ class Host:
             result = subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
         except (OSError, subprocess.TimeoutExpired):
             raise DeployError("command_unavailable", "Required host command failed to start or exceeded its deadline.") from None
+        return self.check_result(result, check=check)
+
+    @contextmanager
+    def command_journal(self, path):
+        previous = getattr(self, "_command_journal", None)
+        self._command_journal = path
+        try:
+            yield
+        finally:
+            self._command_journal = previous
+
+    def check_result(self, result, *, check=True):
         if check and result.returncode:
-            # Commands may include credentials or emit secrets on errors.
-            raise DeployError("command_failed", f"Host operation failed ({Path(args[0]).name}); inspect it privately on the host.")
+            command = Path(result.args[0]).name
+            path = getattr(self, "_command_journal", None)
+            if path is not None:
+                # Arbitrary argv, output and environment can contain credentials.
+                # Only systemctl's known verb/unit operands have diagnostic value.
+                subcommand, units = None, []
+                verbs = {"show", "start", "stop", "restart", "reload", "enable", "disable",
+                         "is-enabled", "is-active", "is-failed", "reset-failed", "daemon-reload",
+                         "list-units", "list-unit-files"}
+                if command == "systemctl" and len(result.args) > 1 and result.args[1] in verbs:
+                    subcommand = result.args[1]
+                    operands = iter(result.args[2:])
+                    for argument in operands:
+                        if argument in ("-p", "--property", "--state", "--type"):
+                            next(operands, None)
+                        elif not argument.startswith("-") and re.fullmatch(r"[A-Za-z0-9_:.@\\-]{1,255}", argument):
+                            units.append(argument)
+                records = read_json(path) if path.exists() else []
+                atomic_json(path, [*records, {"command": command, "subcommand": subcommand,
+                            "units": units, "exit_status": result.returncode}][-64:], mode=0o600)
+            raise DeployError("command_failed", f"Host operation failed ({command}); inspect it privately on the host.")
         return result
 
     def check_control_directory(self, path):

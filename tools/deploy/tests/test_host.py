@@ -1,5 +1,7 @@
 """Host command cancellation owns descendants as well as the immediate child."""
 import io
+import json
+import tempfile
 from pathlib import Path
 import signal
 import socket
@@ -50,6 +52,31 @@ class DNSResolverTests(unittest.TestCase):
 class HostCommandTests(unittest.TestCase):
     def process(self):
         return Mock(pid=91234, returncode=0, stdout=io.StringIO(), stderr=io.StringIO(), stdin=None)
+
+    def test_failed_command_journal_records_only_safe_metadata(self):
+        with tempfile.TemporaryDirectory() as root:
+            host = Host()
+            path = Path(root).resolve() / "commands.json"
+            cases = [(["/usr/bin/systemctl", "show", "foundry-test.service", "-p", "secret-property",
+                       "--property=private-value"], "show", ["foundry-test.service"]),
+                     (["/usr/bin/runuser", "secret-argument"], None, [])]
+            with host.command_journal(path):
+                for args, subcommand, units in cases:
+                    process = self.process()
+                    process.returncode = 5
+                    process.communicate.return_value = ("secret-stdout", "secret-stderr")
+                    with patch("host.subprocess.Popen", return_value=process), self.assertRaises(DeployError):
+                        host.run(args, input="secret-input", env={"SECRET": "secret-value"})
+                    record = json.loads(path.read_text())[-1]
+                    self.assertEqual(record, {"command": Path(args[0]).name, "subcommand": subcommand,
+                                              "units": units, "exit_status": 5})
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertNotIn("secret", path.read_text())
+                before = path.read_bytes()
+                host.check_result(subprocess.CompletedProcess(["systemctl", "is-enabled", "foundry-test.service"],
+                                  1, "disabled", ""), check=False)
+                self.assertEqual(path.read_bytes(), before)
+            self.assertIsNone(host._command_journal)
 
     def test_timeout_kills_descendant_process_group_before_returning_error(self):
         process = self.process()

@@ -29,10 +29,43 @@ def enabled_units(host, units, timeout=5):
         status = observed.stdout.strip()
         require(status in {"enabled", "enabled-runtime", "disabled"},
                 "service_enablement", "Cannot establish declared role enablement.")
+        require(observed.returncode == (1 if status == "disabled" else 0),
+                "service_enablement", "Cannot establish declared role enablement.")
         if status in {"enabled", "enabled-runtime"}:
-            require(observed.returncode == 0, "service_enablement", "Cannot establish declared role enablement.")
             result.append(role)
     return tuple(result)
+
+
+def unit_state(host, unit):
+    observed = host.run(["systemctl", "show", unit,
+        "--property=Id,LoadState,ActiveState,MainPID,ControlPID,ControlGroup,Job", "--no-pager"], timeout=5)
+    values = dict(line.split("=", 1) for line in observed.stdout.splitlines() if "=" in line)
+    require(values.get("Id") == unit and values.get("LoadState") in ("loaded", "not-found"),
+            "feature_stop_unverified", "Selected unit load state is unverified.")
+    return values
+
+
+def stopped_unit(host, unit):
+    """Missing unit files prove exit only with complete empty runtime evidence."""
+    import admission
+    values = unit_state(host, unit)
+    require(values.get("MainPID") == values.get("ControlPID") == "0"
+            and values.get("ActiveState") in ("inactive", "failed") and values.get("Job") in ("", "0"),
+            "feature_stop_unverified", "Selected unit exit remains unverified.")
+    group = values.get("ControlGroup")
+    require(group is not None and (values["LoadState"] != "not-found" or
+            values["ActiveState"] == "inactive" and group == ""),
+            "feature_stop_unverified", "Missing unit still has runtime state.")
+    if group:
+        require(group.startswith("/") and group != "/" and ".." not in group.split("/"),
+                "feature_stop_unverified", "Invalid service cgroup.")
+        root = admission.protected_path(host, host.paths.p("/sys/fs/cgroup" + group), "directory")
+        paths = list(root.rglob("cgroup.procs"))
+        require(root.is_dir() and paths and len(paths) <= 4096,
+                "feature_stop_unverified", "Cgroup observation is incomplete.")
+        require(all(not admission.protected_path(host, path, "file").read_text().strip() for path in paths),
+                "feature_stop_unverified", "Selected unit still owns workload processes.")
+    return values
 
 
 def systemd_word(value, *, command=False):

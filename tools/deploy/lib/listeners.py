@@ -404,28 +404,17 @@ def _feature_exit(host, inventory, units):
     """Observe systemd jobs, control processes, the full cgroup and admitted helpers."""
     admission, _ = _feature_owners()
     from contracts import HelperInvocation
+    from services import stopped_unit
     def manager(unit):
-        output = host.run(["systemctl", "show", unit, "--property=Id,LoadState,ActiveState,MainPID,ControlPID,ControlGroup,Job",
-                           "--no-pager"], timeout=5).stdout
-        values = dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
-        require(values.get("Id") == unit and values.get("LoadState") == "loaded"
-                and values.get("ActiveState") in ("inactive", "failed")
-                and values.get("MainPID") == values.get("ControlPID") == "0" and values.get("Job") in ("", "0"),
-                "network_backend_alive", "Workload, control-process or queued-job exit is unproven.")
-        return values
+        try:
+            return stopped_unit(host, unit)
+        except DeployError as error:
+            if error.code != "feature_stop_unverified":
+                raise
+            raise DeployError("network_backend_alive", "Workload, control-process or queued-job exit is unproven.") from None
     observations = {}
     for role, unit in units.items():
         before = manager(unit)
-        group = before.get("ControlGroup")
-        require(group is not None, "network_backend_alive", "Missing cgroup observation.")
-        if group:
-            require(group.startswith("/") and group != "/" and ".." not in group.split("/"), "network_backend_alive", "Invalid service cgroup.")
-            root = admission.protected_path(host, host.paths.p("/sys/fs/cgroup" + group), "directory")
-            paths = list(root.rglob("cgroup.procs"))
-            require(root.is_dir() and paths and len(paths) <= 4096, "network_backend_alive", "Cgroup observation is incomplete.")
-            for path in paths:
-                require(not admission.protected_path(host, path, "file").read_text().strip(),
-                        "network_backend_alive", "Workload descendants remain alive.")
         require(manager(unit) == before, "network_backend_alive", "Unit state changed during exit observation.")
         observations[role] = before
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
