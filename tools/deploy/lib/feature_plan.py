@@ -155,7 +155,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
         return public
 
 
-def reviewed(host, registry, entry, request):
+def reviewed(host, registry, entry, request, *, pin=None):
     """Reobserve under both locks, before marking pending or withdrawing ingress."""
     path = operations.directory(host, contract_uuid(request["operation_id"])) / "release-plan.json"
     require(path.exists(), "release_plan_required", "Review the release plan before activation.")
@@ -174,9 +174,21 @@ def reviewed(host, registry, entry, request):
     topology = parse_topology(launch["topology"])
     profile = parse_profile(launch["profile"], topology)
     current = observations(host, registry, entry, topology, profile)
-    require({k: v for k, v in current.items() if k != "dns"} ==
-            {k: v for k, v in public["observations"].items() if k != "dns"},
-            "stale_plan", "Host, enabled units, network, or configuration changed after release review.")
+    expected = public["observations"]
+    if pin is not None:
+        operations.verify_executor(host, request, pin)
+        # systemd-run creates this exact transient service after request review.
+        # Only its pinned executor may omit it, and never if it existed at review.
+        unit = "foundry-operation-" + request["operation_id"] + ".service"
+        if unit not in expected["packages"]["activation"]:
+            current["packages"]["activation"].pop(unit, None)
+    changed = sorted(key for key in current.keys() | expected.keys()
+                     if key != "dns" and (key not in current or key not in expected or current[key] != expected[key]))
+    if changed:
+        atomic_json(path.with_name("stale-plan.json"), {"observation_keys": changed}, mode=0o600)
+    require(not changed, "stale_plan",
+            "Host, enabled units, network, or configuration changed after release review. "
+            "Changed observation keys: " + ", ".join(changed) + ".")
     runtime_config.read_service_secret_intent(host, entry, public["private_intent_id"], topology, profile)
     configuration = public["configuration_intent_id"]
     if configuration:

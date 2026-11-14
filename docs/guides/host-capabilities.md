@@ -1,7 +1,7 @@
 # Host capabilities
 
-B24 release 1 deploys an application and single-instance custom services on a
-generation-13 Foundry host. It installs declared distribution packages, verifies
+Foundry-Go v0.32.0 completes B24 release 1: deploy an application and
+single-instance custom services on a generation-13 Foundry host. It installs declared distribution packages, verifies
 pinned artifacts, prepares service-local configuration and bundle views, and
 starts roles through admission in readiness order. Applications receive typed
 bindings to private endpoints and executables. Public TCP uses nginx stream and
@@ -10,44 +10,47 @@ boot admission, reports, logs and whole-instance stop are integrated.
 
 This guide describes topology schema 2 and profile schema 3. Existing topology-1
 applications and generation 9–12 hosts keep their existing behavior. Upgrade tools
-before using release 1 capabilities. Generation-12 previews remain supported by
-their installed tools. Enablement adoption and release 1 transitions set a sticky
-generation-13 client floor, including after application rollback. The app-facing declarations and binding API
-are intended to remain stable as later tool-side lifecycle support arrives.
+before using release 1 capabilities. The v0.31.0 generation-12 preview remains
+supported by its installed tools. Enablement adoption and release 1 transitions set a sticky
+generation-13 client floor, including after application rollback. The application
+declarations and binding API are unchanged from v0.31.0.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
 
 <a id="agent-entry"></a>
 ## Agent entry
 
-- [Check preview limitations](#recipe-preview)
+- [Check release 1 capabilities and limitations](#recipe-preview)
 - [Declare the app and relay](#recipe-declarations)
 - [Load application bindings](#recipe-bindings)
 - [Prepare and operate the host](#recipe-host)
 
 <a id="recipe-preview"></a>
-## Preview boundary
+## Release 1 capabilities and limitations
 
 Feature execution fails explicitly when an unsupported operation is requested.
-It does not fall back to the legacy lifecycle. The following lifecycle refusals
-use `capability_unavailable` and name **the post-preview B24 lifecycle release**;
-that is a capability milestone, not a promised framework version or date.
+It does not fall back to the legacy lifecycle. Release 1 lifts the v0.31.0
+refusals for service-secret intake/delivery, configuration changes and holds,
+rollback to feature or legacy releases, release reactivation, maintenance down/up,
+backup configuration/run, restore drills and replacement-host recovery. The
+following limitations remain; unsupported lifecycle operations return
+`capability_unavailable`.
 
-| Refused in the preview | Consequence |
+| Remaining limitation | Consequence |
 | --- | --- |
-| Encryption key rotation | The dedicated `keys rotate` action remains gated for feature instances. Generic edits cannot change the keyring contract. |
+| Encryption key rotation | The dedicated `keys rotate` action remains unsupported for feature instances. Generic edits cannot change the keyring contract. |
 | Changed reprovisioning of a selected instance | Changes to its profile, package requirements or owned network/boot files refuse. Unchanged re-bootstrap is supported. |
 | Newly required packages at activation | Bootstrap installs packages; deployment cannot silently add missing packages. |
 | Named lifecycle operations | Start/restart/stop the complete enabled instance. Selecting a role for logs is supported. |
-| Interrupted-operation reconciliation and recovery | Do not assume an interrupted operation rolled back. Inspect status and retained cleanup evidence. Unresolved cleanup blocks later starts. |
-| Bundle ABI without package-version evidence | Bundle consumers must use package executables with one matching observed service package version. An artifact executable cannot supply this preview proof. |
+| Automatic reconciliation of interrupted lifecycle operations | Do not assume an interrupted operation rolled back. Inspect status and retained cleanup evidence. Unresolved cleanup blocks later starts. |
+| Bundle ABI without package-version evidence | Bundle consumers must use package executables with one matching observed service package version. An artifact executable cannot supply this ABI proof. |
 | Feature release/artifact pruning and helper-bundle pruning | Explicit feature pruning refuses. Automatic helper retention keeps every helper bundle and upgrade journal with a capability diagnostic. Invocation/view limits still apply; reaching a limit refuses further starts. |
-| Host capacity changes involving features | The capacity owner is not integrated with feature lifecycle yet. Legacy neighbors retain their existing supported operations. |
+| Host capacity changes involving features | Capacity changes are unsupported for feature instances. Legacy neighbors retain their existing supported operations. |
 
 The server feature-operation allowlist is `bootstrap-plan`, `bootstrap-apply`,
 `release-plan`, `activate`, `rollback`, `restart`, `stop`, `status`, `logs`, `sync`, `config-keys`,
 `config-set`, `down`, `up`, `backup-configure`, `backup-run`, `restore-drill`,
-`recover-plan`, `recover-apply` and `report`. Backup credential rotation remains gated.
+`recover-plan`, `recover-apply` and `report`. Backup credential rotation remains unsupported.
 Host tool upgrades have their own upgrade protocol. Other feature mutations are
 not implied by a command appearing in the legacy deployment guide.
 
@@ -103,7 +106,7 @@ capable-client requirements. Service secrets remain private for later roll-forwa
 Current tools keep feature workload units enabled after startup and read systemd
 enablement for committed admission, restart selection, and reporting. Systemd
 starts enabled units at boot with the declared `After=` ordering. The exposure
-coordinator verifies the complete enabled set before opening traffic. A declared
+coordinator verifies the enabled, unheld set before opening traffic. A declared
 `requires` dependency does not add systemd `Wants=` or `Requires=` links that could
 start a disabled unit.
 
@@ -121,8 +124,8 @@ launch origin does not grant permission to start.
 | --- | --- |
 | Wrappers, role instance counts above one, ordinals other than one | B24 release 2 |
 | PROXY protocol | B24 release 2 |
-| Managed application DNS records | B24 release 2; preview DNS is external only |
-| UDP listeners | Later network capability; the parser does not promise a numbered release |
+| Managed application DNS records | B24 release 2; release 1 DNS is external only |
+| UDP listeners | Planned for B24 release 2; unsupported in release 1 |
 | Artifact formats other than `file` and `tar.gz` | Unsupported format; no later numbered release is promised |
 
 These declaration failures use schema/capability validation errors rather than
@@ -188,12 +191,11 @@ DNS-only A/AAAA instructions. `external_pending` and `external_observed` are
 separate from host readiness. Recursive answers never prove provider ownership or
 complete traffic cutover, and the tool makes no application DNS writes.
 
-Generation 13 integrates `prepare_recovery`, `activate_recovery` and
-`recovery_ready`. Preparation verifies the original archive/commit, installs its
+Replacement recovery verifies the original archive/commit, installs its
 packages and artifacts, proves the graph stopped with ingress closed, and restores
 exact archived enablement and maintenance holds. Activation never migrates or
 seeds restored data. It validates the schema and current credentials, then starts
-the reviewed graph through the pinned admission and independent cleanup owner.
+the selected graph with admission checks and independent failed-start cleanup.
 An empty enabled set stays stopped. Repeated completion checks freshly verify
 release/configuration identity, process admission, private health and exposure.
 An interrupted activation keeps its cleanup obligations and refuses blind replay.
@@ -219,7 +221,7 @@ callback interfaces and the opt-in container acceptance scenario.
 | `deploy/environments/production.json` | Schema-3 host/instance identity, placement, public ports, source CIDRs, external DNS intent and existing environment settings. |
 | `deploy/files/` | Nonsecret configuration templates referenced by topology. |
 | Application source | Binding consumption, HTTP authorization callback and business authorization. |
-| Operator's DNS provider | External DNS records; the preview reports intent but does not create application records. |
+| Operator's DNS provider | External DNS records; release 1 reports intent but does not create application records. |
 
 The application release builder includes the topology and verified artifact
 payloads. Operators supply placement and exposure policy in the profile. Do not
@@ -379,13 +381,13 @@ paths under `deploy/bin/`.
   members. `file` exports exactly one executable; `tar.gz` can also export
   `bundles`, a map of names to relative directories. Optional `modules` names
   members beneath those directories. Bundles require `provenance` with
-  `source_revision`, `build_inputs`, `license` and `service_abi` strings; the
-  preview requires `service_abi` to match the observed consuming package version.
+  `source_revision`, `build_inputs`, `license` and `service_abi` strings; release 1
+  requires `service_abi` to match the observed consuming package version.
 - **Bundle views:** a role's `artifact_mounts` maps local names to
   `{"artifact":"assets","bundle":"templates","area":"config","path":"templates"}`
   (or area `data`). A binding `{"bundle":"<mount-name>"}` or argv
   `{"bundle":"<mount-name>"}` selects its protected service-local view. These are
-  not arbitrary host mounts. The preview ABI restriction above applies.
+  not arbitrary host mounts. The package-version ABI restriction above applies.
 - **Argv:** `arguments` is a list of single-tag objects, each one argument; it is
   not a shell command. `literal` does not interpolate variables. `listener_address`
   and `listener_port` refer to that role's listener. `binding` names a declared
@@ -506,7 +508,7 @@ in a `tar.gz` file, declare the library in `modules`, and export that directory
 through `bundles`. The normal Linux architecture checks, bundle ABI evidence,
 expansion bounds, and immutable publication still apply.
 Change `version` when the bytes change. This source does not permit replacing an
-already published artifact version or bypassing the preview's package-service ABI
+already published artifact version or bypassing the package-service ABI
 requirement. A platform cannot combine `source` with `url` or a handwritten
 `sha256`.
 
@@ -603,11 +605,13 @@ role descriptor. Neither loader downloads artifacts nor replaces host verificati
 
 Use the application's pinned framework tool and the thin Make targets from the
 [deployment invocation guide](deployment.md#recipe-deploy). Feature topology
-requires generation 13 for release 1 operations. Use the host's existing profile
+requires generation 13 for release 1 operations. Update the application's
+Foundry-Go pin to v0.32.0 or later. Use the host's existing profile
 to review and apply the forward-only tool upgrade. A deployed generation-12 preview
 keeps its schema-3 profile for `tools-plan`, `tools-apply` and `upgrade-resume`.
-For a legacy host, upgrade before adopting schema 3. A fresh host gets the pinned
-generation-13 tools during bootstrap.
+For a legacy host, upgrade before adopting schema 3. Direct upgrades require at
+least generation 9; older hosts must reach that generation first. A fresh host gets
+the pinned generation-13 tools during bootstrap.
 
 ```sh
 ENVIRONMENT=production ACTION=tools-plan make deploy
@@ -660,8 +664,8 @@ reply does not establish whether the operation completed.
 Create external DNS-only A/AAAA records for the listener hostname, pointing at the
 intended reachable addresses. Raw TCP is not HTTP: do not enable a provider's HTTP
 proxy on this name. `proxied: false` records that requirement; DNS answers alone
-cannot prove the provider configuration or a completed global cutover. The
-preview does not create, update or delete these application records. Certificate
+cannot prove the provider configuration or a completed global cutover. Release 1
+does not create, update or delete these application records. Certificate
 DNS challenges remain the separate existing certificate owner's responsibility.
 
 Bootstrap and release plans and network reports show the required records and
@@ -671,6 +675,13 @@ could be collected). A first deployment does not require the hostname to resolve
 DNS is informational: changed answers do not invalidate a reviewed release plan,
 and neither readiness nor public exposure depends on them. Recovery retains failed
 observations explicitly and leaves external cutover pending.
+
+Release activation rechecks the reviewed host observations inside its owned
+executor. Only that verified executor's newly created systemd unit is excluded;
+other activation changes still invalidate the plan. A `stale_plan` observation
+error lists changed key names, never values, and records those names in the
+private operation directory's `stale-plan.json`. Review a fresh plan after
+resolving the reported changes.
 
 Both iptables-legacy and the supported iptables-nft/UFW layout are observed. The
 network owner inventories `filter`, `nat`, `raw` and `mangle`, including live and
@@ -683,7 +694,7 @@ NAT support does not mean arbitrary Docker firewall configurations are accepted.
 
 The addresses in `public_addresses` must belong to the namespace where Foundry
 runs. A Docker host's published address is not automatically an address inside a
-container. The preview neither publishes Docker ports nor configures an upstream
+container. Foundry neither publishes Docker ports nor configures an upstream
 router. Do not add Docker port publishing or DNAT over a Foundry-owned port in the
 same observed namespace. Test reachability from a peer namespace or another
 machine, not from the host loopback; verify permitted traffic reaches the relay

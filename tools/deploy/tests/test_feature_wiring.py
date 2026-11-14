@@ -38,6 +38,7 @@ from host import Host, Paths
 import listeners
 import operations
 import packages
+from packages import _activation_snapshot as actual_activation_snapshot
 import provision
 import release
 import report
@@ -381,6 +382,70 @@ class FeatureWiringFixture(unittest.TestCase):
 
 
 class FeatureWiringTests(FeatureWiringFixture):
+    def executor_review(self, concurrent=False, preexisting=False):
+        self.build_archive(public=True)
+        self.configure_firewall()
+        bootstrap = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(),
+                     plan_token=bootstrap["plan_token"], confirm=True)
+        operation = str(uuid.uuid4())
+        arguments = {"archive": str(self.archive), "archive_sha256": c.digest(self.archive),
+                     "operation_id": operation}
+        # Exercise the real package snapshot adapter and both review calls. The
+        # kernel fake exposes the transient service only once systemd-run owns it.
+        machine_run = self.host.run
+        def run(args, **kwargs):
+            pin = getattr(self.host, "operation_pin", None)
+            rows = {}
+            if pin is not None or preexisting:
+                record = {"LoadState": "loaded", "ActiveState": "active" if pin else "inactive",
+                          "SubState": "running" if pin else "dead", "MainPID": "321" if pin else "0",
+                          "UnitFileState": "transient", "FragmentPath": "private-canary"}
+                rows["foundry-operation-" + operation + ".service"] = record
+                if concurrent and pin is not None:
+                    rows["foundry-operation-" + str(uuid.UUID(int=123)) + ".service"] = record
+            output = None
+            if args[:2] == ["systemctl", "list-unit-files"]:
+                output = ""
+            elif args[:2] == ["systemctl", "list-units"]:
+                output = "\n".join(rows)
+            elif args[:2] == ["systemctl", "show"] and "-p" in args:
+                output = "\n\n".join("Id=" + name + "\n" + "\n".join(k + "=" + v for k, v in rows[name].items())
+                                      for name in args[2:args.index("--no-pager")])
+            if output is not None:
+                return subprocess.CompletedProcess(args, 0, output, "")
+            return machine_run(args, **kwargs)
+        import feature_plan
+        with patch.object(self.host, "run", side_effect=run), \
+                patch.object(packages, "_activation_snapshot", wraps=actual_activation_snapshot), \
+                patch.object(feature_plan, "reviewed", wraps=feature_plan.reviewed) as checks:
+            plan = self.request("release-plan", **arguments)
+            if concurrent or preexisting:
+                with self.assertRaises(c.DeployError) as error:
+                    self.request("activate", **arguments, plan_token=plan["plan_token"])
+                self.assertEqual(error.exception.code, "stale_plan")
+                self.assertIn("packages", error.exception.detail)
+                self.assertNotIn("private-canary", error.exception.detail)
+                root = operations.directory(self.host, operation)
+                diagnostic = c.read_json(root / "stale-plan.json")
+                self.assertEqual(diagnostic, {"observation_keys": ["packages"]})
+                self.assertEqual(c.read_json(root / "result.json")["error"]["detail"], error.exception.detail)
+                self.assertEqual(self.host.started, [])
+            else:
+                self.assertTrue(self.request("activate", **arguments, plan_token=plan["plan_token"])["ok"])
+            self.assertEqual(checks.call_count, 2)
+            self.assertNotIn("pin", checks.call_args_list[0].kwargs)
+            self.assertEqual(checks.call_args_list[1].kwargs["pin"], self.host.operation_pin)
+
+    def test_executor_review_accepts_only_its_own_transient_unit(self):
+        self.executor_review()
+
+    def test_executor_review_rejects_concurrent_activation_with_names_only(self):
+        self.executor_review(concurrent=True)
+
+    def test_executor_review_does_not_hide_changes_to_a_preexisting_unit(self):
+        self.executor_review(preexisting=True)
+
     def test_first_public_release_plans_without_dns_and_dns_changes_do_not_gate_apply(self):
         import socket
         self.build_archive(public=True)

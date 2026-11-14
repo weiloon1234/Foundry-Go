@@ -755,7 +755,7 @@ def execute(host, request, *, pin=None):
                                         metadata={"operation_id": request["operation_id"]})
             else:
                 import feature_plan
-                manifest, inventory, launch, configuration, review = feature_plan.reviewed(host, registry, entry, request)
+                manifest, inventory, launch, configuration, review = feature_plan.reviewed(host, registry, entry, request, pin=pin)
                 request = {**request, "configuration_intent": configuration}
                 release_path = release.release_path(host, entry, manifest["version"])
                 env = runtime_config.effective_environment_path(host, entry, inventory.resolution, candidate=True)

@@ -1,150 +1,132 @@
 # Changelog
 
-## Unreleased
+## v0.32.0 — 2026-11-14
 
+- Fixed: reviewed feature activation excludes only its verified operation executor
+  from the systemd activation comparison, so starting the executor does not
+  invalidate its own release plan. Concurrent host changes still refuse with
+  `stale_plan`; the error and private operation journal list changed observation
+  key names without values.
+- Added: B24 release 1 completes the v0.31.0 host capabilities preview while
+  retaining topology schema 2, profile schema 3 and the application binding API.
+  Feature instances now support service-secret intake and delivery, configuration
+  revisions and holds, rollback to feature or legacy releases, reactivation of
+  previously selected releases, maintenance down/up, backup configuration/run,
+  restore drills and replacement-host recovery. These operations no longer refuse
+  solely because the instance declares custom services.
+- Added: service secrets through hidden bootstrap/configuration prompts,
+  `FOUNDRY_SECRET_CONFIG_FILE` for automation and SSH stdin. Declared `_FILE`
+  variables, explicit file-path arguments and per-start configuration references
+  receive root-owned mode-0640 snapshots readable by the instance group. Required
+  values are collected during release planning before services stop. Unknown names
+  and namespace collisions refuse; secret values never enter argv, unit files,
+  release configuration, logs or public state. `ACTION=config` rotates secrets
+  through configuration revisions, restarting only affected enabled, running
+  services and preserving stopped services, unchanged processes and exposure.
+- Changed: systemd enablement is the authority for feature startup, restart and
+  reporting. Units stay enabled after deployment and start at boot with declared
+  `After=` ordering; public traffic opens only after the enabled, unheld set passes
+  readiness. `requires` does not create `Wants=`/`Requires=` links that start disabled
+  units. After upgrading a committed v0.31.0 instance, the next privileged instance
+  action enables only its currently running units without starting anything or
+  enabling stopped units. `ACTION=status` reports this migration. Deliberate stop
+  and disable choices remain honored.
+- Added: target-owned, credential-preserving rollback and release reactivation.
+  Every activated legacy or feature release retains its validated topology and
+  profile, keyed by archive and topology digests. Older targets can supply
+  `ROLLBACK_TOPOLOGY_FILE`; its hash must match the target's `topology_sha256`.
+  Missing or mismatched declarations refuse before stopping services, and the
+  current topology is never a substitute. Rollback keeps current credentials and
+  the complete keyring, never restores old secret snapshots, and neither reverses
+  migrations nor runs seeders. It preserves surviving enablement and restores
+  removed roles only with recorded enablement evidence; worker configuration comes
+  from the target release. Targets without a recorded archive digest retain their
+  imported declaration under the retained manifest digest instead.
+- Added: application configuration revisions with private file aliases,
+  `config:inspect`/`config:check`, storage validation and Redis grant reconciliation.
+  A published configuration whose startup fails is `failed_applied`; affected
+  workloads remain held until cleanup proves closure and corrective configuration
+  or compatible rollback passes readiness. Rollback uses the hold's recorded
+  running set, and failed recovery of that set keeps the hold. Unknown publication
+  or cleanup outcomes remain unresolved rather than implying restored credentials.
+- Added: maintenance `down`/`up` with persistent per-copy holds that survive deploy,
+  restart and reboot without changing systemd enablement. Down closes and stops
+  only `maintenance: "stop"` roles; HTTP and continuing roles retain their processes
+  and exposure. Up restores previously running copies that remain declared and
+  enabled. Every `requires` prerequisite and endpoint-binding provider of HTTP or
+  another continuing role must also continue; executable bindings name installed
+  files and create no maintenance prerequisite. `continue` is accepted alongside
+  `serve`. Shared `artisan down`/`up` changes reconcile on subsequent operations;
+  unavailable shared state never clears holds. Restore drills and other no-start
+  operations reconcile only downward or do nothing. Changing a held role to
+  continue requires successful restoration or retention of its hold.
+- Added: release-carried platform artifacts beneath `deploy/artifacts/`, optionally
+  produced by an explicit build argument vector. The builder records payload
+  SHA-256 in the release inventory without requiring a download URL. Immutable
+  publication, bundle exports, platform verification and package-version ABI
+  checks still apply. Missing, linked, overlapping or stale build outputs refuse;
+  existing HTTPS artifact declarations are unchanged.
+- Added: `ENVIRONMENT=acceptance-local go tool foundry deploy rehearse` exercises
+  any application's own acceptance profile and archive through bootstrap,
+  activation, readiness, reports, stop and restart in disposable Ubuntu 24.04 or
+  26.04 containers. Supply `--archive /absolute/path/to/app.tar.gz` or let the normal
+  builder create it. Native amd64/arm64 execution uses isolated runtime networking,
+  synthetic credentials and certificates, and separate TCP/TLS/source-denial peers.
+  Evidence records outcomes and cleanup; `--keep-failed` retains failed runs for
+  inspection. External storage requires explicit stand-in bindings, and other
+  production dependencies are not reachable during runtime.
+- Added: feature backups include encrypted deployment declarations and current
+  service-secret snapshots, with live systemd enablement and maintenance holds.
+  Receipts distinguish successful supported components from complete instance
+  coverage. Disposable state is excluded; local-unprotected state blocks complete
+  coverage and takeover. External state can declare `recovery_owner`, naming the
+  party responsible without claiming Foundry copied or restored it. Omitted owners
+  retain incomplete-coverage findings. Database restore drills use an isolated
+  PostgreSQL Unix socket, start no custom services and expose no network listeners;
+  they do not claim application or external-state recovery.
+- Added: replacement-host takeover of the exact archived release, with explicit
+  public-address bindings, confirmed old-server stop and private readiness before
+  public opening. It preserves actual enablement and holds, including an empty
+  enabled set, and validates restored schema and credentials without migration or
+  seeding. Successful takeover persists the effective replacement profile while
+  retaining the original declaration as source evidence, including in later
+  backups. External DNS instructions follow private health; host readiness and
+  traffic cutover remain separate. Interrupted activation retains cleanup
+  obligations and refuses blind replay.
+- Added: custom HTTP prerequisites may declare `recovery_rehearsal_safe: true`
+  for backup-recovery rehearsal; the default is false. Only HTTP and its safe
+  prerequisite closure run. Custom roles receive `IPAddressDeny=any` and
+  `IPAddressAllow=localhost`, with effective policy and attached cgroup BPF filters
+  verified before execution. Unproven isolation or an unsafe prerequisite refuses;
+  other roles stay stopped and public listeners remain closed. HTTP and legacy
+  rehearsal behavior is unchanged. Both new topology fields preserve existing
+  declaration digests when omitted.
 - Fixed: missing or slow external DNS no longer aborts feature release planning.
-  Plans and reports show required A/AAAA records with explicit resolved,
-  unresolved or unavailable observations. Resolver subprocesses are bounded and
-  reaped; artifact downloads share that boundary while retaining fail-closed
-  origin checks. Informational DNS changes do not gate release application,
-  readiness or exposure, and recovery preserves failed lookup observations.
-
-- Fixed: restore drills and other operations that must not start workloads use
-  down-only maintenance reconciliation, preserving holds after external
-  `artisan up` and changed maintenance policies. Schema-3 generation-12 preview
-  profiles can plan, apply and resume generation-13 host tool upgrades while
-  retaining the existing compatibility and upgrade-owner checks.
-
-- Fixed: deployment and rollback reviews during maintenance expect public rules
-  only for enabled, unheld roles. A policy change from stop to continue restores
-  the previously running enabled copy and verifies readiness; independent cleanup
-  reinstates its hold on failure. An unavailable shared maintenance store preserves
-  existing holds and markers until a successful observation permits reconciliation.
-
-- Added: generation-13 feature recovery preparation, pinned activation and fresh
-  readiness checks, including exact archived enablement/holds and empty selections.
-  Recovery preserves source declarations alongside effective replacement profiles,
-  validates schema and current credentials without migration/seeding, and retains
-  independent cleanup obligations on failed starts. The client forwards reviewed
-  public bindings and persists the accepted takeover profile. Feature backup,
-  restore-drill and recovery dispatcher refusals are lifted; the acceptance runner
-  now includes feature backup and replacement takeover after the preview scenario.
-- Added: opted-in custom recovery-rehearsal dependencies receive loopback-only
-  systemd IP filtering, with effective-property and attached cgroup BPF checks
-  before execution. Unsafe prerequisites and unproven isolation refuse. HTTP and
-  legacy rehearsal behaviour are unchanged.
-- Fixed: backups after takeover validate runtime inventory against the archived
-  effective profile while retaining the original release declaration. Service
-  bundle views accept release-carried artifacts with exact payload/platform checks.
-
-- Changed: deploy generation 13 owns B24 release 1 lifecycle behaviour and its
-  cumulative runtime/rehearsal inventory. Generation-12 bundles remain loadable;
-  release 1 operations require an upgraded host/client and retain a sticky
-  generation-13 floor after enablement adoption or release selection.
-
-- Added: maintenance graph validation treats endpoint bindings and `requires` as
-  prerequisites of continuing roles and names invalid consumer/provider bindings.
-  Executable bindings refer to installed files and create no maintenance edge.
-  `maintenance: "continue"` is accepted alongside the existing `serve` spelling.
-  Feature maintenance requests retain a client operation UUID for safe replay.
-
-- Fixed: reviewed rollback restores the configuration hold's intended running set
-  and validates startup before clearing the hold. Failed validation keeps the hold.
-  Restored workers resolve their connection from the target release and its current
-  private environment, including when the current release has no worker.
-
-- Fixed: selective configuration transitions keep boot coordinators consistent
-  with per-role generation records. Pending continuity requires the exact existing
-  live admitted workload; automatic replacement invocations need a scoped permit.
-  A later whole-instance restart uses normal validation allowances even when a
-  unit retains an earlier launch origin.
-
-- Added: feature maintenance down/up with journaled persistent per-copy systemd
-  hold markers, selective exposure closure and actual enablement preservation.
-  HTTP and continuing roles retain their processes; held copies remain stopped
-  through deploy, restart and reboot. Up honors deliberate disablement, validates
-  readiness and reports failure without claiming to restore the application pause.
-  Privileged instance actions reconcile direct artisan maintenance changes;
-  unavailable shared state never clears holds. Reports distinguish held copies
-  and still-admitting services, and an opt-in systemd contract covers hold markers.
-
-- Changed: feature units retain systemd enablement after startup. Committed start
-  admission and role reporting read systemd enablement; stored enabled-role sets
-  are audit projections. Systemd starts enabled workloads at boot with declared
-  `After=` ordering, and the exposure coordinator verifies readiness before opening
-  traffic. The next privileged instance action migrates a committed v0.31.0
-  preview by enabling its running units without starting stopped units. Status
-  includes the migration receipt.
-
-- Added: service-secret delivery through bootstrap's private configuration intake,
-  hidden prompts, `FOUNDRY_SECRET_CONFIG_FILE` and SSH stdin. Declared `_FILE`
-  variables, path arguments and per-start render references receive root-owned
-  mode-0640 snapshots. Unknown names and collisions refuse; values and their
-  hashes stay out of public plans/state, argv, unit files and release configs.
-- Added: release review with immutable private intents and digest-bound plans
-  before activation. Service-secret configuration revisions restart only affected
-  enabled, running services, preserve stopped services and unchanged exposure,
-  and archive configuration through the existing backup owner. Scoped withdrawal
-  records ingress separately from verified backend closure and limits validation
-  permits to the proven unit/address set. Opt-in network scenarios cover retained
-  live TCP/TLS sessions during selective withdrawal and reopening.
-
-- Added: target-owned release declarations persisted for legacy and feature
-  activations. Older rollback targets accept an explicit topology only when its
-  digest matches the target manifest; the current declaration is never a fallback.
-- Added: reviewed feature and legacy rollback, and reactivation of prior releases,
-  preserving current credentials/keyrings with fresh safe backend allocations.
-  Surviving enablement and recorded removed-role enablement are preserved; missing
-  removed-role evidence leaves those roles disabled. Legacy targets keep feature
-  admission while receiving their legacy runtime descriptor.
-- Added: application configuration revisions, private aliases, storage and Redis
-  validation, and failed-applied configuration holds. Independent cleanup must
-  prove closure before corrective configuration can proceed; ordinary starts
-  cannot bypass a held revision.
-- Fixed: feature recovery restores configuration-owner access for `app.env`,
-  `_FILE` values and current service secrets before runtime/storage validation.
-  Private intake records and unreferenced historical snapshots remain private.
-  Backups now record live systemd enablement; takeover preserves disabled roles
-  and maintenance holds instead of starting every placed role.
-- Added: feature backup owner support for encrypted selected deployment and
-  service-secret snapshots, selection-bound reconciliation, and receipts that
-  distinguish supported components from complete instance coverage. Disposable,
-  external and local-unprotected service state have explicit coverage outcomes.
-  Restore drills record that they start no custom services and expose no ports.
-- Added: replacement-host recovery validation for exact source descriptors,
-  explicit token-bound public address overrides, external DNS observations and
-  DNS-only change instructions after confirmed stop and private health. Unsafe
-  HTTP rehearsal dependencies and unprotected local-state takeover refuse by role.
-  Generation 13 supplies the closed preparation, activation and readiness interfaces.
-- Added: typed external-state `recovery_owner` labels and the custom-role boolean
-  `recovery_rehearsal_safe`. Receipts retain the declared external owner, and
-  rehearsal plans admit only opted-in custom HTTP prerequisites. Omitted fields
-  preserve existing declaration digests and conservative defaults. The recovery
-  handoff records dispatcher integration and lane A's required isolation checks.
-
-- Fixed: local rehearsal handles SIGTERM through owned-resource cleanup, restores
-  the previous signal handler, and reports retained resources and the run directory
-  while preserving `--keep-failed`.
-
-- Fixed: acceptance recovery targets start systemd without installing Foundry CA
-  resources before the empty-host preflight. Synthetic CA installation remains
-  deferred until recovery's application phase.
-
-- Added: `foundry deploy rehearse` runs an application's own acceptance archive
-  through production bootstrap, activation, readiness, report, stop and restart
-  in disposable Ubuntu containers. Separate peers check public TCP/TLS and source
-  denials. Runtime networking is isolated, certificates and credentials are
-  synthetic, and evidence records ownership and cleanup. Rehearsal shares shipped
-  container setup with the framework acceptance runner; container execution remains
-  pending operator verification on Ubuntu 24.04 and 26.04.
-
-- Added: release-carried platform artifacts use a typed release source beneath
-  `deploy/artifacts/`, optionally produced by an explicit build argument vector.
-  The archive builder records SHA-256 in the release inventory without a URL or
-  download. Existing artifact verification, immutable publication, bundle exports,
-  and ABI evidence apply. Service bundle views retain payload digest and platform verification.
-  Missing, linked, overlapping, or stale build outputs refuse. Existing HTTPS
-  artifact declarations are unchanged.
+  Plans and reports show required A/AAAA records with `resolved`, `unresolved` or
+  `unavailable` observations. Lookups have a two-second deadline and timed-out
+  resolver processes are reaped. DNS answers do not determine readiness or exposure,
+  and changed answers do not invalidate a release plan. Selective configuration
+  transitions also retain valid boot identities and require fresh admission for
+  replacement processes; whole-instance restart remains supported afterward.
+- Changed: release 1 operations require deploy tool generation 13. Generation-12
+  hosts keep working with their installed tools until upgraded. Update the
+  application's Foundry-Go pin to v0.32.0. From a generation 9–12 host, run
+  `ACTION=tools-plan make deploy`, then
+  `ACTION=tools-apply PLAN_TOKEN='<token>' OPERATION='<stable-uuid-v4>' make deploy`
+  using its existing profile; generation-12 feature instances keep schema 3.
+  Older hosts must first reach generation 9. Use `ACTION=upgrade-resume` with the
+  same operation UUID after interruption. Fresh bootstrap installs generation 13;
+  enablement adoption or a release-1 transition sets a generation-13 client floor
+  that application rollback cannot lower.
+- Changed: multiple service copies and wrappers, managed application DNS,
+  PROXY protocol and UDP listeners remain outside release 1 and are planned for
+  B24 release 2. Encryption/backup credential rotation, named lifecycle operations,
+  changed reprovisioning, newly required packages at activation, feature pruning,
+  host capacity changes involving features and automatic interrupted-operation
+  reconciliation remain unsupported. Bundle consumers still require matching
+  package-version ABI evidence; artifact formats remain `file` and `tar.gz`.
+  See the [host capabilities guide](docs/guides/host-capabilities.md) for declarations,
+  prerequisites, upgrade commands and recovery limits.
 
 ## v0.31.0 — 2026-11-14
 
