@@ -2,6 +2,8 @@
 
 ## v0.32.0 — 2026-11-14
 
+- Fixed: the deployment acceptance application registers standard maintenance
+  commands and shares maintenance state through its main Redis connection.
 - Fixed: deployment and independent cleanup stop active services even when their
   unit files have been removed. A missing unit skips stop only after complete exit
   proof; every attempted stop still requires verified process and cgroup exit.
