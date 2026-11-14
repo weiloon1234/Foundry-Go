@@ -289,8 +289,11 @@ class SystemdContractTests(unittest.TestCase):
         host = Host(Paths(self.root))
         from test_contracts import fixture, registry
         from topology import instance_units
-        _, _, entry = fixture(project_slug='probe-' + self.prefix[-12:])
+        from contracts import identity
+        project, _, entry = fixture(project_slug='probe-' + self.prefix[-12:])
         entry['profile']['instance_id'] = INSTANCE
+        # Database and Redis allocations derive from the instance ID.
+        entry['allocations'].update(identity(project, entry['profile'])['allocations'])
         host.write_registry(registry(entry))
         self.admission_unit = instance_units(entry)['http'].removesuffix('.service')
         store = admission.AdmissionStore(host, INSTANCE)
