@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import signal
 import sys
 import tarfile
 import tempfile
@@ -223,7 +224,13 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
         "phases": [], "external_checks": {"production_dns_acme": "unavailable", "cloud_firewalls": "unavailable",
         "global_dns_cutover": "manual", "public_udp": "unavailable"}}
     platform, failed = "linux/" + profile["architecture"], True
+    def terminated(_signal, _frame):
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        raise KeyboardInterrupt
+
+    previous_sigterm = signal.getsignal(signal.SIGTERM)
     try:
+        signal.signal(signal.SIGTERM, terminated)
         from upgrades import tool_bundle
         source, files, bundle_digest = tool_bundle(ASSETS.parent)
         tools = private / "tools"
@@ -309,16 +316,24 @@ def rehearse(root, environment, archive, *, ubuntu="24.04", output=None, binding
         evidence["error"] = error.code if isinstance(error, DeployError) else "rehearsal_failed"
         raise DeployError("rehearsal_failed", "Rehearsal stopped; see the run's evidence.json.") from None
     finally:
-        if failed and keep_failed:
-            evidence["retained"] = True
-        else:
-            cleanup = resources.cleanup()
-            evidence["cleanup_failures"] = cleanup
-            if not cleanup:
-                shutil.rmtree(private)
+        try:
+            # A repeated termination must not interrupt owned-resource cleanup.
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            if failed and keep_failed:
+                evidence["retained"] = True
+                evidence["retained_resources"] = [name for kind, name in resources.items]
             else:
-                evidence["status"] = "failed"
-        (directory / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
-        print("Rehearsal run " + resources.token + ": " + str(directory), file=sys.stderr)
+                cleanup = resources.cleanup()
+                evidence["cleanup_failures"] = cleanup
+                evidence["retained_resources"] = cleanup
+                if not cleanup:
+                    shutil.rmtree(private)
+                else:
+                    evidence["status"] = "failed"
+            (directory / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
+            print("Rehearsal run " + resources.token + ": " + str(directory), file=sys.stderr)
+            print("Retained resources: " + (", ".join(evidence["retained_resources"]) or "none"), file=sys.stderr)
+        finally:
+            signal.signal(signal.SIGTERM, previous_sigterm)
     require(evidence["status"] == "passed", "rehearsal_cleanup", "Rehearsal cleanup is incomplete; inspect resources.json.")
     return directory

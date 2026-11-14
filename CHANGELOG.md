@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed: local rehearsal handles SIGTERM through owned-resource cleanup, restores
+  the previous signal handler, and reports retained resources and the run directory
+  while preserving `--keep-failed`.
+
 - Fixed: acceptance recovery targets start systemd without installing Foundry CA
   resources before the empty-host preflight. Synthetic CA installation remains
   deferred until recovery's application phase.

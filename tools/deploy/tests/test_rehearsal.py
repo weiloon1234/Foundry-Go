@@ -2,6 +2,7 @@
 import copy
 import json
 import os
+import signal
 from pathlib import Path
 import subprocess
 import sys
@@ -204,6 +205,36 @@ class RehearsalTests(unittest.TestCase):
             self.assertEqual(evidence["phases"][0]["error"], "test_refusal")
             self.assertEqual((output / "private").exists(), keep)
             self.assertEqual(cleanup.call_count, 0 if keep else 1)
+
+    def test_sigterm_during_phase_cleans_up_and_restores_handler(self):
+        archive, _, _, _ = self.application()
+        previous = Mock()
+        original = signal.signal(signal.SIGTERM, previous)
+        self.addCleanup(signal.signal, signal.SIGTERM, original)
+        def terminate(*args):
+            signal.raise_signal(signal.SIGTERM)
+            return {"ok": True}
+        for keep, remaining in ((False, []), (True, []), (False, ["owned-host"])):
+            with self.subTest(keep=keep, remaining=remaining):
+                output = self.root / ("terminated-" + str(keep) + str(bool(remaining)))
+                with patch.object(rehearsal, "run", return_value=subprocess.CompletedProcess([], 0, "amd64", "")), \
+                        patch.object(rehearsal, "create_ca", side_effect=self.ca), patch.object(rehearsal, "create_host"), \
+                        patch.object(rehearsal, "boot_host"), patch.object(rehearsal, "phase", side_effect=terminate), \
+                        patch.object(containers.Resources, "cleanup", return_value=remaining) as cleanup, \
+                        patch.object(rehearsal, "print") as report, self.assertRaises(DeployError):
+                    rehearsal.rehearse(self.root, "acceptance-local", archive, output=output, keep_failed=keep)
+                previous.assert_not_called()
+                self.assertIs(signal.getsignal(signal.SIGTERM), previous)
+                self.assertEqual(cleanup.call_count, 0 if keep else 1)
+                evidence = read_json(output / "evidence.json")
+                self.assertEqual(evidence["status"], "failed")
+                retained = [name for kind, name in read_json(output / "resources.json")["resources"]] if keep else remaining
+                self.assertEqual(evidence["retained_resources"], retained)
+                self.assertEqual((output / "private").exists(), keep or bool(remaining))
+                messages = "\n".join(call.args[0] for call in report.call_args_list)
+                self.assertIn(str(output), messages)
+                for name in retained:
+                    self.assertIn(name, messages)
 
     def test_cli_rehearsal_bypasses_settings_and_ssh(self):
         archive, _, _, _ = self.application()
