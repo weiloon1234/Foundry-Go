@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -17,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import artifacts
 from contracts import (ARCHIVE_SCHEMA, FEATURE_PROFILE_SCHEMA, TOPOLOGY_SCHEMA, PayloadMember,
                        ReleaseDeclaration, check_path, read_json, require)
-from topology import ExecutableRole, parse_profile, parse_topology
+from topology import ExecutableRole, ReleaseArtifactPlatform, parse_profile, parse_topology
 
 
 def public_env(request, destination):
@@ -65,6 +66,22 @@ def collect_build_inputs(request):
             "packages_sha256": hashlib.sha256(packages.encode("utf-8")).hexdigest()}
 
 
+def build_artifact(arguments, work, environment):
+    """Own the build command's process group until completion or cancellation."""
+    process = subprocess.Popen(list(arguments), cwd=work, env=environment, start_new_session=True,
+                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        result = process.wait(timeout=1200)
+    except BaseException:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+        raise
+    require(result == 0, "build_source", "Release artifact build failed; inspect the application build command.")
+
+
 def prepare(request, work, stage):
     """Copy/build only explicitly declared sources from the frozen snapshot."""
     work, stage = Path(work), Path(stage)
@@ -98,7 +115,45 @@ def prepare(request, work, stage):
         target.parent.mkdir(parents=True, exist_ok=True)
         with source_path.open("rb") as incoming, target.open("xb") as outgoing:
             shutil.copyfileobj(incoming, outgoing, artifacts.CHUNK)
-    return {**request, "topology": json.loads(topology.canonical_json)}
+    carried, sources = {}, set()
+    budget = artifacts.ExpansionBudget()
+    for name, artifact in topology.artifacts:
+        pin = dict(artifact.platforms)[platform]
+        if not isinstance(pin, ReleaseArtifactPlatform):
+            continue
+        source = pin.source
+        artifacts._safe_path(source.path)
+        require(source.path not in sources, "build_source", "Release artifacts must have distinct source files.")
+        sources.add(source.path)
+        source_path = check_path(work / source.path, "file")
+        if source.build:
+            require(not source_path.exists(), "build_source", "A built artifact output must not already exist.")
+            environment = {**os.environ, "GOOS": "linux", "GOARCH": profile.architecture,
+                           "ARCHITECTURE": profile.architecture}
+            build_artifact(source.build, work, environment)
+        source_path = check_path(work / source.path, "file")
+        require(source_path.is_file() and source_path.stat().st_nlink == 1,
+                "build_source", "Release artifact source must be one regular file without links.")
+        before = source_path.stat()
+        from release import MAX_ARCHIVE_BYTES
+        require(0 < before.st_size <= MAX_ARCHIVE_BYTES, "artifact_size", "Release artifact exceeds its size bound.")
+        path = f"deploy/artifacts/{name}/release-input"
+        budget.charge(path, before.st_size)
+        target = check_path(stage / path, "file")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        checksum, size = hashlib.sha256(), 0
+        with source_path.open("rb") as incoming, target.open("xb") as outgoing:
+            while block := incoming.read(artifacts.CHUNK):
+                size += len(block)
+                require(size <= before.st_size, "build_source", "Release artifact changed during acquisition.")
+                checksum.update(block)
+                outgoing.write(block)
+        after = source_path.stat()
+        require(size == before.st_size and (before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+                == (after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns),
+                "build_source", "Release artifact changed during acquisition.")
+        carried[name] = {"path": path, "sha256": checksum.hexdigest()}
+    return {**request, "topology": json.loads(topology.canonical_json), "release_artifacts": carried}
 
 
 def _feature_inputs(request, stage, budget):
@@ -116,14 +171,31 @@ def _feature_inputs(request, stage, budget):
         exports[name] = path
     for name, artifact in topology.artifacts:
         pin = dict(artifact.platforms)[platform]
-        path = f"deploy/artifacts/{name}/{pin.sha256}." + ("tar.gz" if artifact.format == "tar.gz" else "bin")
+        carried = isinstance(pin, ReleaseArtifactPlatform)
+        if carried:
+            acquired = request.get("release_artifacts", {}).get(name)
+            require(isinstance(acquired, dict) and acquired.get("path") == f"deploy/artifacts/{name}/release-input",
+                    "build_source", "Release artifact was not acquired from the frozen build tree.")
+            from contracts import contract_digest
+            checksum = contract_digest(acquired.get("sha256"))
+        else:
+            checksum = pin.sha256
+        path = f"deploy/artifacts/{name}/{checksum}." + ("tar.gz" if artifact.format == "tar.gz" else "bin")
         destination = check_path(stage / path, "file")
         destination.parent.mkdir(parents=True, exist_ok=True)
         # Never trust a preexisting staged payload or silently acquire a new pin.
-        origins[name] = [asdict(origin) for origin in artifacts.download(pin, destination, budget=budget, budget_path=path)]
-        members = artifacts.inspect_payload(artifact, platform, destination, budget)
+        if carried:
+            source = check_path(stage / acquired["path"], "file")
+            require(source.is_file() and source.stat().st_nlink == 1 and not destination.exists(),
+                    "build_source", "Release artifact source is missing or overlaps staged content.")
+            budget.charge(path, source.stat().st_size)
+            source.rename(destination)
+            origins[name] = []
+        else:
+            origins[name] = [asdict(origin) for origin in artifacts.download(pin, destination, budget=budget, budget_path=path)]
+        members = artifacts.inspect_payload(artifact, platform, destination, budget, sha256=checksum)
         payloads.append({"artifact": name, "platform": platform, "path": path,
-                         "sha256": pin.sha256, "members": [asdict(member) for member in members]})
+                         "sha256": checksum, "members": [asdict(member) for member in members]})
     kinds = artifacts.declared_release_files(topology, exports.values(), (payload["path"] for payload in payloads))
     return topology, profile, kinds, exports, payloads, origins
 

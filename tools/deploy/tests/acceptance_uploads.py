@@ -481,7 +481,12 @@ class Scenarios:
                     identifiers.append(rejected)
                     time.sleep(1)
                     assert not self.held(rejected), pool + " limit is not wired to its runtime owner"
-                    result = future.result(timeout=15)
+                    # The rejected request still sends its whole body first (attachment
+                    # admission follows capture), so allow time for 128 MiB on a busy host.
+                    try:
+                        result = future.result(timeout=120)
+                    except concurrent.futures.TimeoutError:
+                        raise AssertionError(pool + " overload produced no response within 120 seconds") from None
                     assert result["status"] == 503, "Saturated owner did not reject overload"
                 if pool != "staging":
                     assert not list(self.receipts.glob(rejected + ".put-*")), "Rejected request entered storage"

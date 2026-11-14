@@ -14,6 +14,7 @@ FIXTURE = DEPLOY.parents[1] / 'tests/fixtures/deploy-acceptance'
 
 
 MODULE = 'github.com/weiloon1234/Foundry-Go'
+ENVIRONMENTS = ('acceptance', 'acceptance-lab')
 
 
 def prepare_candidate(cli, workspace):
@@ -64,7 +65,24 @@ def acceptance_execute(execute, snapshot, proxy):
     return run
 
 
-def build_fixture(architecture, archive_file):
+def fixture_profile(cli, architecture, environment):
+    if environment not in ENVIRONMENTS:
+        raise ValueError('Select an explicit fixture acceptance profile')
+    project = cli.validate_project(cli.read_json(FIXTURE / 'deploy/project.json'))
+    profile = cli.read_json(FIXTURE / 'deploy/environments' / (environment + '.json'))
+    if environment == 'acceptance-lab' and profile['architecture'] != architecture:
+        raise ValueError('Rehearsal architecture must match its explicit fixture profile')
+    profile['architecture'] = architecture
+    profile = cli.validate_profile(profile, project)
+    if profile['runtime_environment'] != 'testing' or profile['environment'] != environment:
+        raise ValueError('The fixture builder accepts only its disposable acceptance profiles')
+    if environment == 'acceptance-lab':
+        from rehearsal import acceptance_profile
+        acceptance_profile(project, profile, cli.read_json(FIXTURE / 'deploy/topology.json'))
+    return project, profile
+
+
+def build_fixture(architecture, archive_file, environment='acceptance'):
     archive_file = Path(archive_file).expanduser().absolute()
     if archive_file.exists() or archive_file.is_symlink():
         raise ValueError('Use a new archive path file; existing files are never overwritten')
@@ -74,12 +92,7 @@ def build_fixture(architecture, archive_file):
     cli = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cli)
     cli.ROOT = cli.resolve_app_root(str(FIXTURE))
-    project = cli.validate_project(cli.read_json(FIXTURE / 'deploy/project.json'))
-    profile = cli.read_json(FIXTURE / 'deploy/environments/acceptance.json')
-    profile['architecture'] = architecture
-    profile = cli.validate_profile(profile, project)
-    if profile['runtime_environment'] != 'testing' or profile['environment'] != 'acceptance':
-        raise ValueError('The fixture builder accepts only its disposable acceptance profile')
+    project, profile = fixture_profile(cli, architecture, environment)
     with cli.lock(FIXTURE / '.deploy/operation.lock'):
         workspace = DEPLOY.parents[1] / '.cache/deploy-acceptance' / str(uuid.uuid4())
         workspace.mkdir(parents=True, mode=0o700)
@@ -97,10 +110,11 @@ def build_fixture(architecture, archive_file):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--architecture', choices=('arm64', 'amd64'), default='arm64')
+    parser.add_argument('--environment', choices=ENVIRONMENTS, default='acceptance')
     parser.add_argument('--archive-file', required=True, type=Path,
                         help='New file in which to retain the completed archive path')
     arguments = parser.parse_args()
-    build_fixture(arguments.architecture, arguments.archive_file)
+    build_fixture(arguments.architecture, arguments.archive_file, arguments.environment)
 
 
 if __name__ == '__main__':

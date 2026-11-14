@@ -6,14 +6,21 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from topology import parse_profile, parse_topology
+from topology import ArtifactPlatform, ReleaseArtifactSource, parse_profile, parse_topology
 
 
 class HostCapabilitiesGuideTests(unittest.TestCase):
     def test_worked_example_has_placeable_roles_and_private_callback_bindings(self):
         guide = Path(__file__).resolve().parents[3] / "docs/guides/host-capabilities.md"
         documents = [json.loads(value) for value in re.findall(r"```json\n(.*?)\n```", guide.read_text(), re.S)]
-        topology_document, profile_document = documents
+        topology_document, = (document for document in documents if document.get("schema") == 2)
+        profile_document, = (document for document in documents if document.get("schema") == 3)
+        platform_document, = (document for document in documents if "linux-arm64" in document)
+        source_document, = (document for document in documents if "build" in document)
+        self.assertEqual(ArtifactPlatform.parse(platform_document["linux-arm64"]).source.path,
+                         source_document["path"])
+        self.assertEqual(ReleaseArtifactSource.parse({"release": source_document}).build,
+                         ("sh", "deploy/build-obs-extension.sh"))
         topology = parse_topology(topology_document)
         profile = parse_profile(profile_document, topology)
         self.assertEqual(profile.projection()["placement"], {"http": 1, "relay": 1})

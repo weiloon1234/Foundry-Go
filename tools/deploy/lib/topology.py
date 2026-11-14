@@ -336,12 +336,44 @@ class StatePolicy:
 
 
 @dataclass(frozen=True)
+class ReleaseArtifactSource:
+    path: str
+    build: tuple[str, ...]
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("release",))
+        source = value["release"]
+        contract_object(source, ("path",), ("build",))
+        path = contract_path(source["path"])
+        require(path.startswith("deploy/artifacts/"), "invalid_topology",
+                "Release artifact sources belong under deploy/artifacts/.")
+        build = contract_list(source["build"], contract_text, minimum=1, maximum=64) if "build" in source else ()
+        return cls(path, build)
+
+
+@dataclass(frozen=True)
+class ReleaseArtifactPlatform:
+    source: ReleaseArtifactSource
+
+    def accepts_digest(self, checksum):
+        # The release inventory, rather than a remote download pin, owns this digest.
+        return contract_digest(checksum) == checksum
+
+
+@dataclass(frozen=True)
 class ArtifactPlatform:
     url: str
     sha256: str
 
+    def accepts_digest(self, checksum):
+        return self.sha256 == checksum
+
     @classmethod
     def parse(cls, value):
+        if isinstance(value, dict) and "source" in value:
+            contract_object(value, ("source",))
+            return ReleaseArtifactPlatform(ReleaseArtifactSource.parse(value["source"]))
         contract_object(value, ("url", "sha256"))
         url = contract_text(value["url"], limit=2048)
         try:
@@ -379,7 +411,7 @@ class ArtifactProvenance:
 class Artifact:
     version: str
     format: str
-    platforms: tuple[tuple[str, ArtifactPlatform], ...]
+    platforms: tuple[tuple[str, ArtifactPlatform | ReleaseArtifactPlatform], ...]
     executables: tuple[tuple[str, str], ...]
     bundles: tuple[tuple[str, str], ...]
     modules: tuple[str, ...]

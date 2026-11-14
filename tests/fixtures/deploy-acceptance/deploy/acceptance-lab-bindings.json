@@ -1,0 +1,5 @@
+{
+  "environment": "acceptance-lab",
+  "configuration": {},
+  "storage_disks": ["attachments"]
+}
