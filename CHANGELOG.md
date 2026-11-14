@@ -2,35 +2,6 @@
 
 ## v0.32.0 — 2026-11-14
 
-- Fixed: feature backups archive the selected runtime environment instead of the
-  bootstrap environment. Recovery checks the HTTP allocation against the archived
-  resolution and preserves feature ports through replacement-host setup; legacy
-  allocation bounds are unchanged.
-- Fixed: feature and legacy HTTP readiness accept maintenance rejection only while
-  the shared record is confirmed down. Continuing custom services retain their
-  declared probes, held services are excluded, and up clears the shared pause
-  before normal readiness. Reports distinguish maintenance rejection from other
-  HTTP failures.
-- Fixed: feature runtime environments derive scheduler enablement from placed
-  roles, overriding release defaults when no scheduler is placed. Legacy
-  environment rendering is unchanged. Acceptance maintenance commands reuse the
-  application's schedule declarations when the scheduler is enabled.
-- Fixed: the deployment acceptance application registers standard maintenance
-  commands and shares maintenance state through its main Redis connection.
-- Fixed: deployment and independent cleanup stop active services even when their
-  unit files have been removed. A missing unit skips stop only after complete exit
-  proof; every attempted stop still requires verified process and cgroup exit.
-- Fixed: first feature activation and cleanup handle units that have not yet been
-  installed by proving empty runtime state before skipping their stop. Initial
-  validation failures permit a fresh review only after cleanup proves closure and
-  confirms publication never began. Private operation command journals record
-  command names, systemctl subcommands, units and exit status without arguments,
-  stdout or stderr content.
-- Fixed: reviewed feature activation excludes only its verified operation executor
-  from the systemd activation comparison, so starting the executor does not
-  invalidate its own release plan. Concurrent host changes still refuse with
-  `stale_plan`; the error and private operation journal list changed observation
-  key names without values.
 - Added: B24 release 1 completes the v0.31.0 host capabilities preview while
   retaining topology schema 2, profile schema 3 and the application binding API.
   Feature instances now support service-secret intake and delivery, configuration
@@ -47,14 +18,6 @@
   release configuration, logs or public state. `ACTION=config` rotates secrets
   through configuration revisions, restarting only affected enabled, running
   services and preserving stopped services, unchanged processes and exposure.
-- Changed: systemd enablement is the authority for feature startup, restart and
-  reporting. Units stay enabled after deployment and start at boot with declared
-  `After=` ordering; public traffic opens only after the enabled, unheld set passes
-  readiness. `requires` does not create `Wants=`/`Requires=` links that start disabled
-  units. After upgrading a committed v0.31.0 instance, the next privileged instance
-  action enables only its currently running units without starting anything or
-  enabling stopped units. `ACTION=status` reports this migration. Deliberate stop
-  and disable choices remain honored.
 - Added: target-owned, credential-preserving rollback and release reactivation.
   Every activated legacy or feature release retains its validated topology and
   profile, keyed by archive and topology digests. Older targets can supply
@@ -125,13 +88,14 @@
   other roles stay stopped and public listeners remain closed. HTTP and legacy
   rehearsal behavior is unchanged. Both new topology fields preserve existing
   declaration digests when omitted.
-- Fixed: missing or slow external DNS no longer aborts feature release planning.
-  Plans and reports show required A/AAAA records with `resolved`, `unresolved` or
-  `unavailable` observations. Lookups have a two-second deadline and timed-out
-  resolver processes are reaped. DNS answers do not determine readiness or exposure,
-  and changed answers do not invalidate a release plan. Selective configuration
-  transitions also retain valid boot identities and require fresh admission for
-  replacement processes; whole-instance restart remains supported afterward.
+- Changed: systemd enablement is the authority for feature startup, restart and
+  reporting. Units stay enabled after deployment and start at boot with declared
+  `After=` ordering; public traffic opens only after the enabled, unheld set passes
+  readiness. `requires` does not create `Wants=`/`Requires=` links that start disabled
+  units. After upgrading a committed v0.31.0 instance, the next privileged instance
+  action enables only its currently running units without starting anything or
+  enabling stopped units. `ACTION=status` reports this migration. Deliberate stop
+  and disable choices remain honored.
 - Changed: release 1 operations require deploy tool generation 13. Generation-12
   hosts keep working with their installed tools until upgraded. Update the
   application's Foundry-Go pin to v0.32.0. From a generation 9–12 host, run
@@ -151,6 +115,40 @@
   package-version ABI evidence; artifact formats remain `file` and `tar.gz`.
   See the [host capabilities guide](docs/guides/host-capabilities.md) for declarations,
   prerequisites, upgrade commands and recovery limits.
+- Fixed: feature backups archive the selected runtime environment instead of the
+  bootstrap environment. Recovery checks the HTTP allocation against the archived
+  resolution and preserves feature ports through replacement-host setup; legacy
+  allocation bounds are unchanged.
+- Fixed: feature and legacy HTTP readiness accept maintenance rejection only while
+  the shared record is confirmed down. Continuing custom services retain their
+  declared probes, held services are excluded, and up clears the shared pause
+  before normal readiness. Reports distinguish maintenance rejection from other
+  HTTP failures.
+- Fixed: feature runtime environments derive scheduler enablement from placed
+  roles, overriding release defaults when no scheduler is placed. Legacy
+  environment rendering is unchanged. Acceptance maintenance commands reuse the
+  application's schedule declarations when the scheduler is enabled.
+- Fixed: deployment and independent cleanup stop active services even when their
+  unit files have been removed. A missing unit skips stop only after complete exit
+  proof; every attempted stop still requires verified process and cgroup exit.
+- Fixed: first feature activation and cleanup handle units that have not yet been
+  installed by proving empty runtime state before skipping their stop. Initial
+  validation failures permit a fresh review only after cleanup proves closure and
+  confirms publication never began. Private operation command journals record
+  command names, systemctl subcommands, units and exit status without arguments,
+  stdout or stderr content.
+- Fixed: reviewed feature activation excludes only its verified operation executor
+  from the systemd activation comparison, so starting the executor does not
+  invalidate its own release plan. Concurrent host changes still refuse with
+  `stale_plan`; the error and private operation journal list changed observation
+  key names without values.
+- Fixed: missing or slow external DNS no longer aborts feature release planning.
+  Plans and reports show required A/AAAA records with `resolved`, `unresolved` or
+  `unavailable` observations. Lookups have a two-second deadline and timed-out
+  resolver processes are reaped. DNS answers do not determine readiness or exposure,
+  and changed answers do not invalidate a release plan. Selective configuration
+  transitions also retain valid boot identities and require fresh admission for
+  replacement processes; whole-instance restart remains supported afterward.
 
 ## v0.31.0 — 2026-11-14
 
