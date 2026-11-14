@@ -136,7 +136,10 @@ silently dropping fields. In particular, plain TCP **is** supported: declare
 
 The backup owner archives PostgreSQL and the age-encrypted configuration tree.
 Feature archives also retain the selected deployment, resolution, selection and
-release declaration in `recovery/instance.json`. Declared service-secret snapshots
+release declaration in `recovery/instance.json`. The canonical archived `app.env`
+comes from the selected runtime resolution, including its effective HTTP allocation.
+Recovery requires the environment, allocation metadata and resolution to agree;
+the bootstrap environment does not override the selected port. Declared service-secret snapshots
 must follow the configuration owner's contract beneath the instance configuration
 tree: current values are root-owned 0640 for the isolated instance group, and the
 secret index stays 0600. Recovery restores this access before runtime and storage

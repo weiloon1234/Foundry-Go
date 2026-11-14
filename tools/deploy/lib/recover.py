@@ -231,7 +231,8 @@ def archive_configuration(project, profile, files, topology):
                     "recovery_members", "Duplicate recovery configuration sources disagree.")
     address = values.get("APP__HTTP__SERVER__ADDRESS", "")
     match = re.fullmatch(r"127\.0\.0\.1:([0-9]+)", address)
-    require(match is not None and PORT_FIRST <= int(match[1]) <= PORT_LAST,
+    # Feature ports are checked against the validated archived resolution below.
+    require(match is not None and (profile.get("schema") == 3 or PORT_FIRST <= int(match[1]) <= PORT_LAST),
             "recovery_members", "Recovered HTTP allocation must be a Foundry localhost port.")
     port = int(match[1])
     topology = validate_topology(topology, registered="sha256" in topology)

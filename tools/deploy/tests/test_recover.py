@@ -94,9 +94,33 @@ class RecoveryTests(unittest.TestCase):
             self.plan()
         self.assertEqual(error.exception.code, "recovery_descriptor_missing")
 
+    def test_feature_archive_requires_environment_metadata_and_resolution_to_agree(self):
+        _, metadata = self.feature(http_port=18000)
+        prefix = "instances/" + self.entry["name"] + "/"
+        values = recover.parse_env(self.files[prefix + "app.env"].decode())
+        values["APP__HTTP__SERVER__ADDRESS"] = "127.0.0.1:18001"
+        self.files[prefix + "app.env"] = dump_env(values).encode()
+        with self.assertRaises(DeployError) as error:
+            recover.archive_configuration(self.project, self.profile, self.files, self.entry["topology"])
+        self.assertEqual(error.exception.code, "recovery_identity")
+        metadata["allocations"]["http_port"] = 18001
+        self.files["recovery/instance.json"] = json.dumps(metadata).encode()
+        with self.assertRaises(DeployError) as error:
+            recover.archive_configuration(self.project, self.profile, self.files, self.entry["topology"])
+        self.assertEqual(error.exception.code, "backup_deployment_mismatch")
+
+    def test_legacy_archive_keeps_legacy_http_port_bounds(self):
+        prefix = "instances/" + self.entry["name"] + "/"
+        values = recover.parse_env(self.files[prefix + "app.env"].decode())
+        values["APP__HTTP__SERVER__ADDRESS"] = "127.0.0.1:18000"
+        self.files[prefix + "app.env"] = dump_env(values).encode()
+        with self.assertRaises(DeployError) as error:
+            recover.archive_configuration(self.project, self.profile, self.files, self.entry["topology"])
+        self.assertEqual(error.exception.code, "recovery_members")
+
     def test_feature_restoration_sets_runtime_access_before_real_readers(self):
         from test_contracts import storage_fixture
-        _, metadata = self.feature(secret=True)
+        _, metadata = self.feature(secret=True, http_port=18000)
         prefix = "instances/" + self.entry["name"] + "/"
         self.files[prefix + "service-secrets/revision-6/token"] = b"historical-secret-canary"
         canonical = backup.instance_paths(self.entry["name"])["configuration"] + "/"

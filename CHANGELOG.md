@@ -2,6 +2,10 @@
 
 ## v0.32.0 — 2026-11-14
 
+- Fixed: feature backups archive the selected runtime environment instead of the
+  bootstrap environment. Recovery checks the HTTP allocation against the archived
+  resolution and preserves feature ports through replacement-host setup; legacy
+  allocation bounds are unchanged.
 - Fixed: feature and legacy HTTP readiness accept maintenance rejection only while
   the shared record is confirmed down. Continuing custom services retain their
   declared probes, held services are excluded, and up clears the shared pause

@@ -79,6 +79,9 @@ def parse_feature_snapshot(value, entry):
             and set(selection.maintenance_holds) <= inventory.roles.keys(),
             "backup_deployment_mismatch", "Recovery descriptor differs from the selected deployment or configuration.")
     inventory.start_order(selection.enabled_roles)
+    http = next(e for e in inventory.resolution.endpoints if e.role == "http" and e.listener == "http")
+    require(entry["allocations"].get("http_port") == http.port,
+            "backup_deployment_mismatch", "Recovery HTTP allocation differs from the selected runtime resolution.")
     paths = value["secret_paths"]
     roles = {name: role for name, role in inventory.roles.items() if isinstance(role, ExecutableRole)}
     require(isinstance(paths, dict) and set(paths) == set(roles),
@@ -426,6 +429,15 @@ def _archive_files(host, entry):
         check_path(path)
         if path.is_file():
             files["instances/" + entry["name"] + "/" + str(path.relative_to(directory))] = path
+    from feature_lifecycle import is_feature, load
+    if is_feature(entry):
+        require("deployment_selection" in entry, "backup_deployment_missing",
+                "Select a feature deployment before archiving recovery material.")
+        _, _, inventory, _ = load(host, entry)
+        # Recovery's canonical environment must describe the selected allocation,
+        # not the bootstrap port retained in the base configuration file.
+        files["instances/" + entry["name"] + "/app.env"] = runtime_config.effective_environment_path(
+            host, entry, inventory.resolution)
     for key, value in parse_env(files["instances/" + entry["name"] + "/app.env"].read_text()).items():
         if key.endswith("_FILE") and value:
             require(value.startswith("/") and ".." not in Path(value).parts,

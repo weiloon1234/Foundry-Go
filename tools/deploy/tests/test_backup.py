@@ -24,7 +24,7 @@ RECIPIENT = "age1" + "a" * 58
 
 
 def feature_fixture(*, state="disposable", secret=False, http_dependency=False, public=False,
-                    recovery_owner=None, rehearsal_safe=None, background_dependency=False):
+                    recovery_owner=None, rehearsal_safe=None, background_dependency=False, http_port=None):
     import contracts as c
     import services
     import topology as t
@@ -58,6 +58,9 @@ def feature_fixture(*, state="disposable", secret=False, http_dependency=False, 
                          units=tuple(replace(unit, declaration_sha256=c.canonical_digest(role))
                                      for unit, role in zip(inventory.deployment.units, topology.projection()["roles"])))
     resolution = replace(inventory.resolution, deployment_sha256=c.canonical_digest(c.record_document(deployment)))
+    if http_port is not None:
+        resolution = replace(resolution, endpoints=tuple(
+            replace(e, port=http_port) if e.role == "http" and e.listener == "http" else e for e in resolution.endpoints))
     inventory = services.UnitInventory(entry["name"], topology, t.parse_profile(placed, topology), deployment, resolution)
     selected = selection()
     selected["enabled_roles"] = list(inventory.roles)
@@ -66,6 +69,7 @@ def feature_fixture(*, state="disposable", secret=False, http_dependency=False, 
                  deployment_selection=selected, host_id=placed["host"]["host_id"])
     project = {"schema": 1, "id": entry["project_id"], "slug": entry["allocations"]["namespace"]["application"]}
     entry["allocations"].update(c.identity(project, placed)["allocations"])
+    entry["allocations"]["http_port"] = next(e.port for e in resolution.endpoints if e.role == "http" and e.listener == "http")
     declaration = c.ReleaseDeclaration.parse({"schema": 2, "topology": topology.projection(), "profile": placed,
         "topology_sha256": topology.sha256, "inventory": [asdict(m) for m in members] + [
             {"path": "deploy/bin/relay-server", "sha256": "b" * 64, "size": 1, "kind": "application"}],
@@ -107,6 +111,10 @@ class BackupTests(unittest.TestCase):
         import feature_lifecycle
         import contracts as c
         inventory, entry, snapshot = feature_fixture(secret=True)
+        resolution = replace(inventory.resolution, environments=backup.runtime_config.effective_environments(
+            self.host, entry, inventory.resolution.id, inventory.resolution.roles, inventory.resolution.endpoints))
+        inventory = backup.services.UnitInventory(entry["name"], inventory.topology, inventory.profile, inventory.deployment, resolution)
+        snapshot["resolution"] = c.record_document(resolution)
         snapshot["selection"]["maintenance_holds"] = ["relay"]
         backup._write_private(self.host, backup._instance_settings_path(self.host, entry),
                               {"instance_id": entry["profile"]["instance_id"], "age_recipients": [RECIPIENT]})

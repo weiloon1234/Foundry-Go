@@ -421,7 +421,8 @@ def validate_registry(value):
         fields(allocations, "account uid gid http_port database database_role redis_user namespace paths", "allocations")
         require(entry.get("host_id") == value["host_id"] == entry["profile"]["host"]["host_id"], "invalid_registry", "Instance host binding mismatch.")
         port = allocations["http_port"]
-        if "deployment_selection" in entry:
+        if entry["profile"].get("schema") == 3 or "deployment_selection" in entry:
+            # Recovery restores a feature allocation before selecting target units.
             AllocatedEndpoint.parse({"role": "http", "listener": "http", "address": "127.0.0.1", "port": port})
         else:
             require(type(port) is int and PORT_FIRST <= port <= PORT_LAST, "invalid_registry", "Invalid HTTP allocation.")

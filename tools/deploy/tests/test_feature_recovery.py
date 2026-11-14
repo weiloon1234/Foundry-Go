@@ -26,6 +26,51 @@ from topology import parse_profile
 
 
 class FeatureRecoveryTests(wiring.FeatureWiringFixture):
+    def test_feature_key_archive_round_trips_effective_http_allocation(self):
+        import backup
+        import recover
+        from test_backup import RECIPIENT
+        plan = self.request('bootstrap-plan', topology=self.topology.projection())
+        self.request('bootstrap-apply', topology=self.topology.projection(), plan_token=plan['plan_token'], confirm=True)
+        _, entry = self.host.require_identity(self.project, self.profile)
+        base = self.host.paths.instance_config(entry['name']) / 'app.env'
+        original = base.read_bytes()
+        self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, inventory, _ = lifecycle.load(self.host, entry)
+        endpoint = next(e for e in inventory.resolution.endpoints if e.role == 'http' and e.listener == 'http')
+        self.assertEqual(entry['allocations']['http_port'], endpoint.port)
+        self.assertNotEqual(c.parse_env(original.decode())['APP__HTTP__SERVER__ADDRESS'], f'127.0.0.1:{endpoint.port}')
+        backup._write_private(self.host, self.host.paths.p(backup.REPOSITORY), {
+            'endpoint': 'https://backup.example.invalid', 'region': 'auto', 'bucket': 'backup-fixture',
+            'access_key_id': 'fixture-access', 'secret_access_key': 'fixture-secret', 'cipher_pass': 'c' * 43,
+            'host_id': entry['host_id'], 'cluster_token': 'fixture-cluster'})
+        backup._write_private(self.host, backup._instance_settings_path(self.host, entry),
+                              {'instance_id': self.profile['instance_id'], 'age_recipients': [RECIPIENT]})
+        captured = {}
+        def encrypt(host, plain, encrypted, recipients):
+            captured.update(recover.read_archive(plain))
+            encrypted.write_bytes(b'fixture-encrypted')
+        # Fake-host runtime files use the temporary root in absolute _FILE paths.
+        def paths(name):
+            return {**c.instance_paths(name), 'configuration': str(self.host.paths.instance_config(name))}
+        host_path = self.host.paths.p
+        def rooted(path):
+            return Path(path) if Path(path).is_relative_to(self.host.paths.root) else host_path(path)
+        with patch.object(backup, 'encrypt_archive', side_effect=encrypt), \
+                patch.object(backup, 'upload_archive'), patch.object(backup, 'verify_archive'), \
+                patch.object(backup, 'instance_paths', side_effect=paths), \
+                patch.object(recover, 'instance_paths', side_effect=paths), \
+                patch.object(self.host.paths, 'p', side_effect=rooted):
+            receipt = backup.archive_keys(self.host, entry)
+            recovered = recover.archive_configuration(self.project, self.profile, captured, entry['topology'])
+        self.assertEqual(receipt['status'], 'complete')
+        self.assertEqual(recovered['http_port'], endpoint.port)
+        self.assertEqual(recovered['feature'].resolution, inventory.resolution)
+        self.assertEqual(recovered['metadata']['allocations']['http_port'], endpoint.port)
+        self.assertEqual(base.read_bytes(), original)
+
+
     def target(self, *, running=('http', 'relay'), holds=(), mode='takeover', public=False):
         self.build_archive(independent=True, secrets=True, public=public, rehearsal_safe=mode == 'rehearsal')
         if mode == 'rehearsal':
