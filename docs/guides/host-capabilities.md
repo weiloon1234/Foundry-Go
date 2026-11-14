@@ -664,6 +664,14 @@ cannot prove the provider configuration or a completed global cutover. The
 preview does not create, update or delete these application records. Certificate
 DNS challenges remain the separate existing certificate owner's responsibility.
 
+Bootstrap and release plans and network reports show the required records and
+the recursive lookup state: `resolved`, `unresolved` (resolution failed), or
+`unavailable` (the two-second lookup deadline expired or no usable observation
+could be collected). A first deployment does not require the hostname to resolve.
+DNS is informational: changed answers do not invalidate a reviewed release plan,
+and neither readiness nor public exposure depends on them. Recovery retains failed
+observations explicitly and leaves external cutover pending.
+
 Both iptables-legacy and the supported iptables-nft/UFW layout are observed. The
 network owner inventories `filter`, `nat`, `raw` and `mangle`, including live and
 persisted rules. Docker DNS or masquerade rules in NAT `OUTPUT`/`POSTROUTING` can

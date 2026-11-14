@@ -1011,15 +1011,19 @@ class DNSObservation:
     addresses: tuple[str, ...]
     observed_at: str
     source: str
+    state: str = "resolved"
 
     @classmethod
     def parse(cls, value):
-        contract_object(value, ("hostname", "addresses", "observed_at", "source"))
+        contract_object(value, ("hostname", "addresses", "observed_at", "source"), ("state",))
         require(valid_timestamp(value["observed_at"]) and value["source"] in ("authoritative", "recursive"),
                 "invalid_contract", "Invalid external DNS observation; it is not provider ownership evidence.")
         addresses = contract_list(value["addresses"], public_address, maximum=16)
         require(len(set(addresses)) == len(addresses), "invalid_contract", "Duplicate DNS answers.")
-        return cls(dns_hostname(value["hostname"]), addresses, value["observed_at"], value["source"])
+        state = value.get("state", "resolved")
+        require(state in ("resolved", "unresolved", "unavailable") and (state == "resolved" or not addresses),
+                "invalid_contract", "Unobserved DNS cannot claim resolved addresses.")
+        return cls(dns_hostname(value["hostname"]), addresses, value["observed_at"], value["source"], state)
 
 
 @dataclass(frozen=True)
@@ -1046,7 +1050,7 @@ class RecoveryPublicBinding:
         require(all(o.hostname in {l.hostname for l in listeners} for o in observations),
                 "invalid_contract", "DNS observation belongs to an undeclared listener hostname.")
         require(v["dns_cutover"] != "external_observed" or all(
-            any(o.hostname == l.hostname and set(o.addresses) == set(l.replacement_addresses) for o in observations)
+            any(o.state == "resolved" and o.hostname == l.hostname and set(o.addresses) == set(l.replacement_addresses) for o in observations)
             for l in listeners), "invalid_contract", "External DNS has not been observed at the replacement addresses.")
         return cls(*(contract_uuid(v[k]) for k in ("operation_id", "source_instance_id", "source_host_id", "target_host_id")),
                    contract_digest(v["deployment_sha256"]), listeners, v["dns_cutover"], observations)
@@ -1354,6 +1358,8 @@ def record_document(record):
                 result = {"schema": RECORD_SCHEMA, **result}
             if isinstance(value, RecoveryListenerBinding):
                 result.update(transport="tcp", dns_mode="external")
+            if isinstance(value, DNSObservation) and value.state == "resolved":
+                result.pop("state")  # Preserve existing resolved-observation wire records.
             return result
         if isinstance(value, Enum):
             return value.value

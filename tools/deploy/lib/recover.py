@@ -113,9 +113,10 @@ def _dns_result(host, journal):
         try:
             observations.append(observe_dns(listener))
         except (DeployError, OSError):
-            pass
+            from contracts import DNSObservation
+            observations.append(DNSObservation(listener.hostname, (), now(), "recursive", "unavailable"))
     observations = tuple(observations)
-    matched = all(any(o.hostname == item.hostname and set(o.addresses) == set(item.replacement_addresses)
+    matched = all(any(o.state == "resolved" and o.hostname == item.hostname and set(o.addresses) == set(item.replacement_addresses)
                       for o in observations) for item in binding.listeners)
     observed = replace(binding, observations=observations,
                        dns_cutover="external_observed" if matched else "external_pending")

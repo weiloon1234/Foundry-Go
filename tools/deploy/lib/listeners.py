@@ -7,10 +7,10 @@ This module does not select deployments, grant permits or write admission state.
 from dataclasses import asdict, dataclass, replace
 import ipaddress
 import re
-import socket
+import subprocess
 import uuid
 
-from contracts import (AllocatedEndpoint, ClosureEvidence, ClosureStage, DNSObservation,
+from contracts import (AllocatedEndpoint, ClosureEvidence, ClosureStage, DNSObservation, DeployError,
                        canonical_digest, contract_uuid, now, record_document, require)
 
 
@@ -226,7 +226,10 @@ def external_dns(binding, observation=None, *, provider_dns_only=None):
             "provider_dns_only": provider_dns_only,
             "observed_at": observation.observed_at if observation else None,
             "source": observation.source if observation else None,
-            "addresses_match": set(observation.addresses) == set(binding.public_addresses) if observation else None,
+            "state": observation.state if observation else "unavailable",
+            "addresses": list(observation.addresses) if observation and observation.state == "resolved" else None,
+            "addresses_match": set(observation.addresses) == set(binding.public_addresses)
+                               if observation and observation.state == "resolved" else None,
             "cutover": "pending_external_dns",
             "instructions": [{"name": binding.hostname, "type": "A" if ipaddress.ip_address(a).version == 4 else "AAAA",
                               "address": a, "proxied": False} for a in binding.public_addresses]}
@@ -234,12 +237,18 @@ def external_dns(binding, observation=None, *, provider_dns_only=None):
 
 def observe_dns(binding):
     """Bounded recursive lookup; no provider credentials or provider ownership claim."""
-    from host import wall_clock_budget
-    with wall_clock_budget(5):
-        answers = socket.getaddrinfo(binding.hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
-    addresses = tuple(sorted({str(ipaddress.ip_address(answer[4][0])) for answer in answers}))
-    return DNSObservation.parse({"hostname": binding.hostname, "addresses": list(addresses),
-                                 "observed_at": now(), "source": "recursive"})
+    from host import OperationTimeout, resolve_addresses
+    try:
+        addresses = sorted({str(ipaddress.ip_address(a)) for a in resolve_addresses(binding.hostname, 2)})
+        return DNSObservation.parse({"hostname": binding.hostname, "addresses": addresses,
+            "observed_at": now(), "source": "recursive", "state": "resolved" if addresses else "unresolved"})
+    except OperationTimeout:
+        raise  # Retain an enclosing report/operation deadline.
+    except OSError:
+        state = "unresolved"
+    except (subprocess.SubprocessError, DeployError, ValueError):
+        state = "unavailable"
+    return DNSObservation(binding.hostname, (), now(), "recursive", state)
 
 
 def _feature_owners():

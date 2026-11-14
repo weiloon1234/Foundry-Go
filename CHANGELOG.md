@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fixed: missing or slow external DNS no longer aborts feature release planning.
+  Plans and reports show required A/AAAA records with explicit resolved,
+  unresolved or unavailable observations. Resolver subprocesses are bounded and
+  reaped; artifact downloads share that boundary while retaining fail-closed
+  origin checks. Informational DNS changes do not gate release application,
+  readiness or exposure, and recovery preserves failed lookup observations.
+
 - Fixed: restore drills and other operations that must not start workloads use
   down-only maintenance reconciliation, preserving holds after external
   `artisan up` and changed maintenance policies. Schema-3 generation-12 preview

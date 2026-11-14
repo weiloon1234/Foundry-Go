@@ -434,6 +434,10 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
     digest_input = {"host": snapshot, "profile": bound, "topology": topology, "project": project,
                     "revision": registry["revision"], "observations": observations, "bundle": upgrades.tool_bundle(tools_dir)[2]}
     token = hashlib.sha256(json.dumps(digest_input, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if feature:
+        import listeners
+        # Informational DNS is outside the approved host-effect preconditions.
+        observations["dns"] = [listeners.external_dns(binding, listeners.observe_dns(binding)) for _, binding in placed.listeners]
     return {"ok": not upgrade or upgrade["from_digest"] is None, "host": snapshot, "host_id": host_id, "entry": entry,
             "findings": findings, "observations": observations, "plan_token": token}
 

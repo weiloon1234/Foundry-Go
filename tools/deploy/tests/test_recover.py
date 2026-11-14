@@ -285,6 +285,7 @@ class RecoveryTests(unittest.TestCase):
         with patch.object(listeners, "observe_dns", side_effect=OSError("unavailable")):
             result = recover._dns_result(self.host, journal)
         self.assertEqual(result["dns_cutover"], "external_pending")
+        self.assertEqual(result["dns_recovery"]["observations"][0]["state"], "unavailable")
         self.assertEqual(result["remaining_manual_steps"], ["Set DNS-only A relay.example.org: replace 203.0.113.10 with 203.0.113.20."])
         observation = DNSObservation("relay.example.org", ("203.0.113.20",), backup.now(), "recursive")
         with patch.object(listeners, "observe_dns", return_value=observation):

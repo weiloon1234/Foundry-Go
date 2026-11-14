@@ -32,8 +32,7 @@ def observations(host, registry, entry, topology, profile):
             "maintenance": feature_maintenance.live(host, entry), "maintenance_hold": feature_maintenance.record(host, entry),
             "current_resolution": entry.get("deployment_selection", {}).get("selected_resolution_id"),
             "packages": package, "network": network, "enabled": enabled, "units": units,
-            "dns": [{"hostname": observation.hostname, "addresses": list(observation.addresses)}
-                    for _, binding in profile.listeners for observation in [listeners.observe_dns(binding)]]}
+            "dns": [listeners.external_dns(binding, listeners.observe_dns(binding)) for _, binding in profile.listeners]}
 
 
 
@@ -174,7 +173,9 @@ def reviewed(host, registry, entry, request):
                 "stale_plan", "Release archive changed after review.")
     topology = parse_topology(launch["topology"])
     profile = parse_profile(launch["profile"], topology)
-    require(observations(host, registry, entry, topology, profile) == public["observations"],
+    current = observations(host, registry, entry, topology, profile)
+    require({k: v for k, v in current.items() if k != "dns"} ==
+            {k: v for k, v in public["observations"].items() if k != "dns"},
             "stale_plan", "Host, enabled units, network, or configuration changed after release review.")
     runtime_config.read_service_secret_intent(host, entry, public["private_intent_id"], topology, profile)
     configuration = public["configuration_intent_id"]

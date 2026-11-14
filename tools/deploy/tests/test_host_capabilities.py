@@ -491,6 +491,15 @@ class CapabilityRecordTests(unittest.TestCase):
                     "replacement_addresses": ["203.0.113.20"], "source_binding_sha256": DIGEST}]}
         parsed = c.RecoveryPublicBinding.parse(value)
         self.assertEqual(parsed.listeners[0].replacement_addresses, ("203.0.113.20",))
+        observation = {"hostname": "relay.example.org", "addresses": ["203.0.113.20"],
+                       "observed_at": c.now(), "source": "recursive"}
+        observed = {**value, "observations": [observation], "dns_cutover": "external_observed"}
+        self.assertEqual(c.record_document(c.RecoveryPublicBinding.parse(observed)), observed)
+        for state in ("unresolved", "unavailable"):
+            missing = {**value, "observations": [{**observation, "addresses": [], "state": state}]}
+            self.assertEqual(c.record_document(c.RecoveryPublicBinding.parse(missing)), missing)
+            with self.assertRaises(c.DeployError):
+                c.RecoveryPublicBinding.parse({**missing, "dns_cutover": "external_observed"})
         for mutate in (lambda v: v.update(dns_cutover="managed_complete"),
                        lambda v: v.update(dns_cutover="external_observed"),
                        lambda v: v["listeners"][0].update(replacement_addresses=["2001:db8::1"]),

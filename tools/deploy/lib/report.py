@@ -652,6 +652,10 @@ def declared_network(host, profile, *, topology, entry=None, resolution=None, cl
     dns = [listeners.external_dns(binding, answers.get(binding.hostname)) for _, binding in profile.listeners]
     for value in dns:
         findings.append({"code": "external_dns_proxy_mode_unverified", "hostname": value["hostname"]})
+        if value["state"] != "resolved":
+            finding = {"code": "external_dns_observation_" + value["state"], "hostname": value["hostname"]}
+            if finding not in findings:
+                findings.append(finding)
         if value["addresses_match"] is False:
             findings.append({"code": "external_dns_drift", "hostname": value["hostname"]})
     for name, binding in profile.listeners:

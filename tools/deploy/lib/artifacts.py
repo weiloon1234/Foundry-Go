@@ -22,7 +22,6 @@ import gzip
 import hashlib
 import http.client
 import ipaddress
-import json
 import os
 from pathlib import Path
 import shutil
@@ -149,18 +148,6 @@ def _url(value):
     return parsed
 
 
-def _resolve(hostname, timeout):
-    # Bound libc DNS as well as socket I/O. A stuck resolver cannot retain a
-    # background thread after the download returns. No proxy libraries are used.
-    script = ("import json,socket,sys; "
-              "rows=socket.getaddrinfo(sys.argv[1],443,type=socket.SOCK_STREAM); "
-              "sys.exit(2) if len(rows)>64 else print(json.dumps([r[4][0] for r in rows]))")
-    result = subprocess.run([sys.executable, "-c", script, hostname], stdout=subprocess.PIPE,
-                            stderr=subprocess.DEVNULL, timeout=timeout, check=True)
-    require(len(result.stdout) <= 16384, "artifact_origin", "Download DNS result is too large.")
-    return json.loads(result.stdout)
-
-
 class _PinnedHTTPS(http.client.HTTPSConnection):
     def __init__(self, hostname, address, timeout):
         super().__init__(hostname, port=443, timeout=timeout, context=ssl.create_default_context())
@@ -209,7 +196,8 @@ def _download(pin, destination, *, max_bytes, seconds, resolver, connection_fact
     max_bytes = MAX_ARCHIVE_BYTES if max_bytes is None else max_bytes
     require(type(max_bytes) is int and 0 < max_bytes <= MAX_ARCHIVE_BYTES,
             "artifact_size", "Download size limit exceeds the supported archive limit.")
-    resolver = resolver or _resolve
+    from host import resolve_addresses
+    resolver = resolver or resolve_addresses
     connection_factory = connection_factory or _PinnedHTTPS
     destination = check_path(destination, "file")
     require(not destination.exists(), "artifact_conflict", "Artifact destination already exists.")

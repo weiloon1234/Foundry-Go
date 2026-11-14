@@ -25,6 +25,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import admission
+from listeners import observe_dns as actual_observe_dns
 import artifacts
 import certificates
 import contracts as c
@@ -380,6 +381,32 @@ class FeatureWiringFixture(unittest.TestCase):
 
 
 class FeatureWiringTests(FeatureWiringFixture):
+    def test_first_public_release_plans_without_dns_and_dns_changes_do_not_gate_apply(self):
+        import socket
+        self.build_archive(public=True)
+        self.configure_firewall()
+        with patch.object(listeners, 'observe_dns', wraps=actual_observe_dns), \
+                patch('host.resolve_addresses', side_effect=socket.gaierror(-2, 'missing')):
+            bootstrap = self.request('bootstrap-plan', topology=self.topology.projection())
+        self.assertEqual(bootstrap['observations']['dns'][0]['state'], 'unresolved')
+        with patch.object(listeners, 'observe_dns', wraps=actual_observe_dns), \
+                patch('host.resolve_addresses', side_effect=subprocess.TimeoutExpired('resolver', 2)):
+            self.request('bootstrap-apply', topology=self.topology.projection(), plan_token=bootstrap['plan_token'], confirm=True)
+        operation = str(uuid.uuid4())
+        with patch.object(listeners, 'observe_dns', wraps=actual_observe_dns), \
+                patch('host.resolve_addresses', side_effect=socket.gaierror(-2, 'missing')):
+            plan = self.request('release-plan', archive=str(self.archive), archive_sha256=c.digest(self.archive), operation_id=operation)
+        self.assertTrue(plan['ok'])
+        self.assertEqual(plan['observations']['dns'][0]['state'], 'unresolved')
+        self.assertEqual(plan['observations']['dns'][0]['instructions'],
+                         [{'name': self.profile['listeners']['relay.api']['dns']['hostname'],
+                           'type': 'A', 'address': '203.0.113.10', 'proxied': False}])
+        with patch.object(listeners, 'observe_dns', wraps=actual_observe_dns), \
+                patch('host.resolve_addresses', return_value=['203.0.113.77']):
+            result = self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive),
+                                  operation_id=operation, plan_token=plan['plan_token'])
+        self.assertTrue(result['ok'])
+
     def test_service_secret_rotation_retains_http_and_private_values(self):
         import runtime_config
         self.build_archive(secrets=True, independent=True)

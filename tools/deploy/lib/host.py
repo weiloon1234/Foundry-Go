@@ -8,10 +8,12 @@ import signal
 from pathlib import Path
 import stat
 import subprocess
+import socket
+import sys
 import time
 
 from contracts import (DeployError, INSTANCE_STATUSES, PREFIX, SCHEMA, HOST_PATHS, atomic_write, atomic_json, check_path,
-                       identity, instance_paths, now, read_json, require, validate_attempt,
+                       identity, instance_paths, now, parse_json, read_json, require, validate_attempt,
                        validate_registry, valid_timestamp, valid_uuid)
 
 # Mutations queue behind one running deployment, backup or renewal. A deploy holds the
@@ -21,6 +23,26 @@ LOCK_WAIT_SECONDS = 600
 
 class OperationTimeout(TimeoutError):
     """Interrupt blocking reads as well as checks between probes."""
+
+
+def resolve_addresses(hostname, timeout):
+    """Own libc resolution in a child that is killed and reaped on timeout."""
+    script = """import json, socket, sys
+try:
+    rows = socket.getaddrinfo(sys.argv[1], None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+except OSError:
+    sys.exit(3)
+if len(rows) > 64:
+    sys.exit(2)
+print(json.dumps([r[4][0] for r in rows]))
+"""
+    result = subprocess.run([sys.executable, '-I', '-c', script, hostname], stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, timeout=timeout, check=False)
+    if result.returncode == 3:
+        raise socket.gaierror('DNS resolution failed')
+    result.check_returncode()
+    require(len(result.stdout) <= 16384, 'dns_result', 'DNS result exceeds its observation bound.')
+    return parse_json(result.stdout)
 
 
 def _late_alarm(signum, frame):
