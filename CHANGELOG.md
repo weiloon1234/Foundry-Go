@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Added: feature backup owner support for encrypted selected deployment and
+  service-secret snapshots, selection-bound reconciliation, and receipts that
+  distinguish supported components from complete instance coverage. Disposable,
+  external and local-unprotected service state have explicit coverage outcomes.
+  Restore drills record that they start no custom services and expose no ports.
+- Added: replacement-host recovery validation for exact source descriptors,
+  explicit token-bound public address overrides, external DNS observations and
+  DNS-only change instructions after confirmed stop and private health. Unsafe
+  HTTP rehearsal dependencies and unprotected local-state takeover refuse by role.
+  Public feature dispatch remains gated. Recovery also awaits lane A's closed
+  preparation, activation and readiness interfaces; external recovery-owner and
+  rehearsal-safe topology contracts remain pending.
+
 ## v0.31.0 — 2026-11-14
 
 - Added: generation-12 host capabilities preview with topology schema 2 and

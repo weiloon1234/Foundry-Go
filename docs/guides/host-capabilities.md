@@ -43,7 +43,8 @@ that is a capability milestone, not a promised framework version or date.
 | Custom-service secret intake | A parsed `secret_files` declaration is not executable preview support. Keep secrets out of literal argv, public environment and artifact URLs. |
 | Bundle ABI without package-version evidence | Bundle consumers must use package executables with one matching observed service package version. An artifact executable cannot supply this preview proof. |
 | Feature release/artifact pruning and helper-bundle pruning | Explicit feature pruning refuses. Automatic helper retention keeps every helper bundle and upgrade journal with a capability diagnostic. Invocation/view limits still apply; reaching a limit refuses further starts. |
-| Host capacity changes involving features; backup configuration/run, restore drill and recovery operations for feature instances | These owners are not integrated with feature lifecycle yet. Legacy neighbors retain their existing supported operations. |
+| Host capacity changes involving features | The capacity owner is not integrated with feature lifecycle yet. Legacy neighbors retain their existing supported operations. |
+| Backup configuration/run, restore drill and recovery operations for feature instances | The request dispatcher still refuses these operations. Backup and drill owners support feature records; recovery requires the lane A interfaces described below before dispatch can be enabled. |
 
 The server feature-operation allowlist is `bootstrap-plan`, `bootstrap-apply`,
 `activate`, `restart`, `stop`, `status`, `logs`, `sync`, `config-keys` and `report`.
@@ -61,6 +62,74 @@ not implied by a command appearing in the legacy deployment guide.
 These declaration failures use schema/capability validation errors rather than
 silently dropping fields. In particular, plain TCP **is** supported: declare
 `tls: "none"` explicitly and acknowledge application authentication.
+
+## Backup and replacement-host recovery integration
+
+The backup owner archives PostgreSQL and the age-encrypted configuration tree.
+Feature archives also retain the selected deployment, resolution, selection and
+release declaration in `recovery/instance.json`. Declared service-secret snapshots
+must exist as root-owned 0600 files beneath the instance configuration tree.
+The archive reader checks their paths and the descriptor's identities. Immutable
+configuration sources, binaries and artifacts still come from the retained release
+archive. Keep that exact archive available off-host.
+
+A bundle's `status: complete` means its supported backup components succeeded.
+`coverage.complete_instance_coverage` separately describes service-state coverage:
+
+- `disposable` state is excluded and does not block coverage.
+- `local-unprotected` produces `service_state_unprotected`, naming the role, and
+  blocks complete coverage. Takeover refuses these roles until an explicit local
+  state restoration contract exists. Acknowledging the state policy is not proof
+  of restoration.
+- `external` records an unknown recovery owner and
+  `service_state_external_owner_required`. The current `StatePolicy` cannot name
+  that owner, so complete coverage remains false. No external state is copied.
+
+Configuration-only receipts never claim complete instance coverage. Database
+restore drills use an isolated PostgreSQL Unix socket, start no custom services,
+and open no TCP or UDP listener. Their verification does not claim service-state
+recovery, key decryption or application invariants.
+
+Recovery rehearsal selects HTTP and its prerequisite closure. Custom roles outside
+that closure remain stopped. An unsafe prerequisite refuses with
+`recovery_rehearsal_dependency` and its role name. The current topology parser has
+no `recovery_rehearsal_safe` field; no custom HTTP prerequisite is admitted yet.
+Future admission must also prove private listeners and restricted external access.
+
+The recovery owner accepts the existing typed `RecoveryPublicBinding` through its
+`recovery_public_binding` argument. It requires every source public listener,
+unchanged hostname, port, transport and address families, explicit new addresses,
+the source binding digest, source and target identities, deployment digest and
+operation UUID. Rehearsal rejects this argument. The source descriptor remains
+immutable; the effective replacement profile is separate, token-bound evidence.
+After confirmed old-server stop and private takeover health, recovery emits exact
+DNS-only A/AAAA instructions. `external_pending` and `external_observed` are
+separate from host readiness. Recursive answers never prove provider ownership or
+complete traffic cutover, and the tool makes no application DNS writes.
+
+The following integration remains refused in this lane:
+
+- `upgrades._check_feature_request` must admit backup configuration/run and drills
+  before those public commands reach their owners. Recovery must continue through
+  the capability checks in `recover.plan`.
+- `manage.py` and the client must pass the reviewed `recovery_public_binding` to
+  plan and apply, then persist the explicit successful takeover `profile_update`.
+- Lane A must supply `feature_lifecycle.prepare_recovery(host, registry, entry,
+  journal, snapshot, archive, checksum, tools_dir)`. It must verify the exact
+  release declaration and commit, install its packages and artifacts, restore
+  runtime permissions, and prepare units with public admission closed. Feature
+  configuration is initially restored root-private, including historical secret
+  snapshots; the adapter must assign access through the configuration owner. It must
+  leave roles stopped and retain resumable operation evidence.
+- `activate_recovery(host, registry, entry, journal)` must use that prepared
+  selection, start only `journal["intent"]["recovery_roles"]` in dependency order,
+  and return its release version. Takeover reaches this seam only after the
+  old-server-stopped confirmation. Rehearsal must enforce network isolation and
+  keep every other role stopped. Failure cleanup belongs to this lifecycle owner.
+- `recovery_ready(host, entry, journal)` must return `True` only for the exact
+  selected release with current private health and the required admission or
+  rehearsal isolation evidence. These three functions are required together;
+  recovery refuses before provisioning if any is missing.
 
 <a id="recipe-declarations"></a>
 ## Declaration ownership

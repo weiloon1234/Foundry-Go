@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import hashlib
+import copy
+from dataclasses import replace
 import io
+import ipaddress
 import json
 from pathlib import Path
 import re
@@ -17,15 +20,116 @@ import provision
 import redis_acl
 import release
 import upgrades
-from contracts import (DeployError, PORT_FIRST, PORT_LAST, POSTGRES_PORT,
+from contracts import (DeployError, PORT_FIRST, PORT_LAST, POSTGRES_PORT, RecoveryPublicBinding,
+                       canonical_digest, record_document,
                        check_path, digest, dump_env, identity, instance_paths, now, parse_env,
                        parse_json, read_json, require, select_runtime_storage, valid_uuid,
                        validate_profile, validate_project)
 from runtime_config import read_credentials, validate_runtime_environment, _read_value_file
-from topology import validate_topology
+from topology import ExecutableRole, parse_profile, parse_topology, validate_topology
 
 JOURNAL = "/var/lib/foundry-recovery/operation.json"
 PHASES = ("preflight", "resources", "database", "application", "release", "backup", "timers", "complete")
+
+
+def replacement_binding(value, metadata, profile, operation_id, mode):
+    """Bind an explicit address-only override to the archived descriptor and operation."""
+    source = metadata["profile"]
+    listeners = source["listeners"]
+    require(mode != "rehearsal" or value is None, "recovery_public_binding",
+            "A recovery rehearsal cannot accept public cutover bindings.")
+    if mode == "rehearsal" or not listeners:
+        require(value is None, "recovery_public_binding", "This recovery has no public listener override.")
+        return None
+    require(value is not None, "recovery_public_binding", "Supply explicit replacement addresses for every public listener.")
+    binding = RecoveryPublicBinding.parse(value)
+    require(binding.operation_id == operation_id and binding.source_instance_id == source["instance_id"]
+            and binding.source_host_id == metadata["host_id"] == source["host"]["host_id"]
+            and binding.target_host_id == profile["host"]["host_id"]
+            and binding.deployment_sha256 == canonical_digest(metadata["feature_recovery"]["deployment"])
+            and {item.name for item in binding.listeners} == set(listeners)
+            and binding.dns_cutover == "external_pending",
+            "recovery_public_binding", "Replacement binding differs from the source selection, target or operation.")
+    hostnames = {}
+    for item in binding.listeners:
+        original = listeners[item.name]
+        require(item.hostname == original["dns"]["hostname"] and item.ports == tuple(original["ports"])
+                and set(item.old_addresses) == set(original["dns"]["public_addresses"])
+                and item.source_binding_sha256 == canonical_digest(original)
+                and not set(item.old_addresses) & set(item.replacement_addresses),
+                "recovery_public_binding", "Replacement bindings must preserve listener identity and use new addresses.")
+        addresses = (frozenset(item.old_addresses), frozenset(item.replacement_addresses))
+        require(item.hostname not in hostnames or hostnames[item.hostname] == addresses,
+                "recovery_public_binding", "Listeners sharing a hostname must request the same DNS records.")
+        hostnames[item.hostname] = addresses
+    return binding
+
+
+def effective_profile(profile, binding):
+    value = copy.deepcopy(profile)
+    if binding is not None:
+        for item in binding.listeners:
+            value["listeners"][item.name]["dns"]["public_addresses"] = list(item.replacement_addresses)
+    return value
+
+
+def rehearsal_roles(inventory):
+    selected = {"http"} | inventory.prerequisites({"http"})
+    for name in sorted(selected - {"http"}):
+        role = inventory.roles[name]
+        # The typed declaration must own opt-in. v0.31.0 has no such field.
+        require(isinstance(role, ExecutableRole) and getattr(role, "recovery_rehearsal_safe", False) is True,
+                "recovery_rehearsal_dependency", f"HTTP recovery rehearsal requires unsafe dependency {name}; it remains stopped.")
+    return inventory.start_order(selected)
+
+
+def _feature_owner():
+    """Lane A must implement closed preparation, admitted activation and private health."""
+    import feature_lifecycle
+    for name in ("prepare_recovery", "activate_recovery", "recovery_ready"):
+        require(callable(getattr(feature_lifecycle, name, None)), "capability_unavailable",
+                f"Feature recovery requires lane A feature_lifecycle.{name}; no replacement services were started.")
+    return feature_lifecycle
+
+
+def _dns_result(host, journal):
+    """Read DNS only after private takeover health; observations never prove traffic cutover."""
+    from listeners import observe_dns
+    raw = journal["intent"].get("recovery_public_binding")
+    if raw is None:
+        return {}
+    require(journal["intent"]["mode"] == "takeover" and journal.get("old_server_stopped_confirmed_at")
+            and journal.get("private_takeover_healthy_at"), "recovery_dns_not_ready",
+            "DNS instructions require old-server-stopped confirmation and private takeover health.")
+    binding = RecoveryPublicBinding.parse(raw)
+    profile = parse_profile(journal["intent"]["effective_profile"], parse_topology(journal["intent"]["topology"], registered=True))
+    observations = []
+    for _, listener in profile.listeners:
+        try:
+            observations.append(observe_dns(listener))
+        except (DeployError, OSError):
+            pass
+    observations = tuple(observations)
+    matched = all(any(o.hostname == item.hostname and set(o.addresses) == set(item.replacement_addresses)
+                      for o in observations) for item in binding.listeners)
+    observed = replace(binding, observations=observations,
+                       dns_cutover="external_observed" if matched else "external_pending")
+    instructions = []
+    for item in binding.listeners:
+        for family, kind in ((4, "A"), (6, "AAAA")):
+            old = sorted(a for a in item.old_addresses if ipaddress.ip_address(a).version == family)
+            new = sorted(a for a in item.replacement_addresses if ipaddress.ip_address(a).version == family)
+            if new:
+                instruction = f"Set DNS-only {kind} {item.hostname}: replace {', '.join(old)} with {', '.join(new)}."
+                if instruction not in instructions:
+                    instructions.append(instruction)
+    journal["dns_recovery"] = record_document(observed)
+    if matched:
+        journal.setdefault("dns_matched_at", now())
+    _save(host, journal)
+    return {"dns_cutover": observed.dns_cutover, "dns_recovery": journal["dns_recovery"],
+            "dns_matched_at": journal.get("dns_matched_at"), "traffic_cutover": "operator_verification_required",
+            "remaining_manual_steps": instructions}
 
 
 def read_archive(path):
@@ -85,6 +189,11 @@ def archive_configuration(project, profile, files, topology):
     required = {"recovery/pgbackrest-repository.json", *[prefix + name for name in
                 ("app.env", "secrets.json", "bootstrap-secrets.json", "backup.json")]}
     require(required <= files.keys(), "recovery_members", "Recovery archive lacks required repository, environment, credentials or backup intake members.")
+    for name, content in files.items():
+        if name.startswith(referenced):
+            member = prefix + name.removeprefix(referenced)
+            require(member not in files or files[member] == content,
+                    "recovery_members", "Duplicate recovery configuration sources disagree.")
     credentials = parse_json(files[prefix + "secrets.json"])
     intake = parse_json(files[prefix + "bootstrap-secrets.json"])
     settings = parse_json(files[prefix + "backup.json"])
@@ -136,8 +245,20 @@ def archive_configuration(project, profile, files, topology):
                 and allocation.get("http_port") == port and not {"uid", "gid"} & allocation.keys(),
                 "recovery_identity", "Recovery metadata allocations differ from the preserved instance.")
         source_profile = metadata["profile"]
-        require(all(source_profile.get(key) == value for key, value in profile.items() if key != "host"),
+        require({key: value for key, value in source_profile.items() if key != "host"}
+                == {key: value for key, value in profile.items() if key != "host"},
                 "recovery_identity", "Use the archived instance profile when recovering this instance.")
+    feature = None
+    if profile.get("schema") == 3 or topology.get("schema") == 2:
+        require(metadata is not None and "feature_recovery" in metadata,
+                "recovery_descriptor_missing", "Feature recovery requires its archived selected deployment descriptor.")
+        feature = backup.parse_feature_snapshot(metadata["feature_recovery"], metadata)
+        require(metadata.get("release_commit") is not None, "recovery_descriptor_missing",
+                "Feature recovery requires the archived running release identity.")
+        for paths in metadata["feature_recovery"]["secret_paths"].values():
+            for path in paths.values():
+                require(prefix + path.removeprefix(config + "/") in files,
+                        "recovery_members", "A selected service secret snapshot is missing.")
     connections = parse_json(values.get("APP__SERVICES__DATABASE__CONNECTIONS", "{}"))
     primary = connections.get("primary", {}).get("primary", {})
     pg_port = primary.get("port")
@@ -146,7 +267,7 @@ def archive_configuration(project, profile, files, topology):
             and primary.get("user") == expected["allocations"]["database_role"],
             "recovery_identity", "Recovered database connection differs from the instance allocation.")
     return {"repository": repository, "values": values, "topology": topology, "http_port": port,
-            "postgres_port": pg_port, "metadata": metadata, "prefix": prefix}
+            "postgres_port": pg_port, "metadata": metadata, "prefix": prefix, "feature": feature}
 
 
 def _load(host):
@@ -186,7 +307,7 @@ def _empty(host, name, *, resume_preflight=False, applying=False):
 
 
 def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode, operation_id,
-         archive_sha256, target_time=None, applying=False):
+         archive_sha256, target_time=None, applying=False, recovery_public_binding=None):
     validate_project(project)
     validate_profile(profile, project)
     require(mode in {"rehearsal", "takeover"}, "recovery_mode", "RECOVER_MODE must explicitly select rehearsal or takeover.")
@@ -199,6 +320,19 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
     require(all(b"AGE-SECRET-KEY-" not in value for value in files.values()),
             "recovery_archive", "Never send an age private identity to a recovery host.")
     recovered = archive_configuration(project, profile, files, topology)
+    feature = recovered["feature"]
+    binding = None
+    roles = ()
+    if feature is not None:
+        binding = replacement_binding(recovery_public_binding, recovered["metadata"], profile, operation_id, mode)
+        coverage = backup.service_coverage(feature)
+        unprotected = [s["role"] for s in coverage["service_state"] if s["kind"] == "local-unprotected"]
+        require(mode != "takeover" or not unprotected, "service_state_unprotected",
+                "Takeover requires explicit restoration evidence for local state: " + ", ".join(unprotected))
+        roles = rehearsal_roles(feature) if mode == "rehearsal" else feature.start_order(feature.roles)
+        _feature_owner()
+    else:
+        require(recovery_public_binding is None, "recovery_public_binding", "Legacy recovery has no custom public binding override.")
     require(profile["host"]["host_id"] != recovered["repository"]["host_id"],
             "recovery_identity", "Replacement host must have a new UUID.")
     major = packages.ubuntu_major(host)
@@ -208,6 +342,10 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
               "operation_id": operation_id, "archive_sha256": archive_sha256,
               "recovery_sha256": digest(Path(recovery_archive)), "target_time": target_time,
               "major": major, "bundle": upgrades.tool_bundle(tools_dir)[2]}
+    if feature is not None:
+        intent.update(recovery_public_binding=record_document(binding) if binding else None,
+                      effective_profile=effective_profile(profile, binding), recovery_roles=list(roles),
+                      deployment_sha256=canonical_digest(recovered["metadata"]["feature_recovery"]["deployment"]))
     journal = _load(host)
     if not journal:
         require(not host.paths.p(JOURNAL).parent.exists(), "recovery_conflict", "An unclaimed recovery directory already exists.")
@@ -234,13 +372,19 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
     else:
         _empty(host, identity(project, profile)["name"], applying=applying)
     token = hashlib.sha256(json.dumps(intent, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    return {"ok": True, "plan_token": token, "host_id": profile["host"]["host_id"], "mode": mode,
+    result = {"ok": True, "plan_token": token, "host_id": profile["host"]["host_id"], "mode": mode,
             "postgres_major": major, "phase": journal["phase"] if journal else "preflight",
             "steps": list(PHASES if mode == "takeover" else PHASES[:5] + ("complete",)),
             "notice": "Apply first installs pgBackRest (and required package dependencies), then verifies the repository. "
                       "If verification fails, only that package transaction and refusal journal remain; recreate the server.",
             "remaining_manual_steps": ["Point DNS at the new server."] if mode == "takeover" else [],
             "_intent": intent, "_recovered": recovered}
+    if feature is not None:
+        result.update(coverage=coverage, recovery_roles=list(roles),
+                      recovery_public_binding=intent["recovery_public_binding"],
+                      remaining_manual_steps=["DNS instructions follow confirmed old-server stop and private takeover health."]
+                      if binding else [])
+    return result
 
 
 def public_plan(value):
@@ -293,7 +437,7 @@ def _verify_repository(host, journal, recovered):
 
 def _resources(host, journal, recovered, files, tools_dir):
     intent = journal["intent"]
-    project, profile = intent["project"], intent["profile"]
+    project, profile = intent["project"], intent.get("effective_profile", intent["profile"])
     registry = host.read_registry(missing=True)
     if registry is None:
         registry = provision.new_registry(profile["host"]["host_id"], tools_dir)
@@ -327,6 +471,7 @@ def _resources(host, journal, recovered, files, tools_dir):
     host.owned_write(destination / "secrets.json", files[recovered["prefix"] + "secrets.json"], mode=0o600)
     provision._prepare_instance(host, registry, entry)
     canonical = instance_paths(entry["name"])["configuration"]
+    snapshot = (recovered["metadata"] or {}).get("feature_recovery")
     for name, content in files.items():
         relative = None
         if name.startswith(recovered["prefix"]):
@@ -337,8 +482,18 @@ def _resources(host, journal, recovered, files, tools_dir):
             target = check_path(destination / relative, "file")
             for parent in reversed(target.relative_to(destination).parents[:-1]):
                 provision._mkdir(host, destination / parent, 0o750, "root", entry["name"])
-            private = target.name in {"secrets.json", "bootstrap-secrets.json", "backup.json", "certificate.json"}
+            private = snapshot is not None or target.name in {"secrets.json", "bootstrap-secrets.json", "backup.json", "certificate.json"}
             host.owned_write(target, content, mode=0o600 if private else 0o640, group="root" if private else entry["name"])
+    if snapshot is not None:
+        path = host.paths.p(JOURNAL).parent / "source-deployment.json"
+        if path.exists():
+            require(read_json(backup._private(host, path)) == snapshot, "recovery_descriptor_changed",
+                    "The immutable source descriptor differs from the recovery archive.")
+        else:
+            backup._write_private(host, path, snapshot)
+        entry["recovery_public_binding"] = intent["recovery_public_binding"]
+        entry["recovered_from"]["deployment_sha256"] = intent["deployment_sha256"]
+        host.journal(registry, entry)
     if intent["mode"] == "rehearsal":
         values = dict(recovered["values"], APP__SCHEDULER__ENABLED="false")
         values.pop("APP__SCHEDULER__ENABLED_FILE", None)
@@ -351,6 +506,13 @@ def _ready(host, journal):
     registry = host.read_registry()
     entry = registry["instances"][journal["intent"]["profile"]["instance_id"]]
     postgres.inspect(host, registry)
+    if "deployment_sha256" in journal["intent"]:
+        require(_feature_owner().recovery_ready(host, entry, journal) is True,
+                "readiness_failed", "Recovered feature services have not passed private readiness and isolation checks.")
+        if journal["intent"]["mode"] == "takeover":
+            journal["private_takeover_healthy_at"] = now()
+            _save(host, journal)
+        return
     validate_runtime_environment(host, entry)
     state = host.load_state(entry)
     require((state.get("current") or {}).get("version") == journal["release"]["version"],
@@ -361,24 +523,29 @@ def _ready(host, journal):
 
 
 def apply(host, project, profile, tools_dir, *, plan_token, recovery_archive, topology, mode,
-          operation_id, archive, archive_sha256, target_time=None, old_server_gone=False):
+          operation_id, archive, archive_sha256, target_time=None, old_server_gone=False, recovery_public_binding=None):
     require(mode != "takeover" or old_server_gone is True, "old_server_confirmation",
             "Stop the old server first: two servers archiving to one repository corrupt recovery. Confirm it is gone.")
     with host.lock("host"):
         approved = plan(host, project, profile, tools_dir, recovery_archive=recovery_archive, topology=topology,
                         mode=mode, operation_id=operation_id, archive_sha256=archive_sha256,
-                        target_time=target_time, applying=True)
+                        target_time=target_time, applying=True, recovery_public_binding=recovery_public_binding)
         require(isinstance(plan_token, str) and secrets.compare_digest(plan_token, approved["plan_token"]),
                 "plan_changed", "Review a fresh recovery plan; its inputs have changed.")
         journal = _load(host)
         if journal is None:
             journal = {"intent": approved["_intent"], "phase": "preflight", "completed": [], "created_at": now(),
                        "cluster_token": secrets.token_hex(32), "backup_id": str(uuid.uuid4())}
+            if mode == "takeover":
+                journal["old_server_stopped_confirmed_at"] = now()
             _save(host, journal)
         recovered = approved["_recovered"]
         files = read_archive(Path(recovery_archive))
         if journal["phase"] == "complete":
             _ready(host, journal)
+            if journal["intent"].get("recovery_public_binding") is not None:
+                journal["result"].update(_dns_result(host, journal))
+                _save(host, journal)
             return journal["result"]
         for phase in PHASES[:-1]:
             if phase in journal["completed"]:
@@ -401,14 +568,24 @@ def apply(host, project, profile, tools_dir, *, plan_token, recovery_archive, to
                     provision._step(host, registry, entry, "configuration")
                     redis_acl.prepare(host, registry)
                     redis_acl.provision(host, registry, entry, read_credentials(host, entry))
-                    provision._install_unit(host, registry, entry, tools_dir, http_only=mode == "rehearsal")
+                    if recovered.get("feature") is not None:
+                        _feature_owner().prepare_recovery(host, registry, entry, journal,
+                                                          recovered["metadata"]["feature_recovery"],
+                                                          archive, archive_sha256, tools_dir)
+                    else:
+                        provision._install_unit(host, registry, entry, tools_dir, http_only=mode == "rehearsal")
                     provision._step(host, registry, entry, "unit")
-                    if mode == "takeover":
+                    if mode == "takeover" and recovered.get("feature") is None:
                         provision._install_site(host, registry, entry, tools_dir)
                         provision._step(host, registry, entry, "site")
                 elif phase == "release":
-                    journal["release"] = release.activate_recovered(host, registry, entry, archive, archive_sha256,
-                                                                   http_only=mode == "rehearsal")
+                    if recovered.get("feature") is not None:
+                        journal["release"] = _feature_owner().activate_recovery(host, registry, entry, journal)
+                        require(journal["release"].get("version") == recovered["feature"].deployment.release,
+                                "recovery_release_changed", "Recovered feature release differs from its archived descriptor.")
+                    else:
+                        journal["release"] = release.activate_recovered(host, registry, entry, archive, archive_sha256,
+                                                                       http_only=mode == "rehearsal")
                 elif phase == "backup" and mode == "takeover":
                     _ready(host, journal)
                     journal["backup"] = backup.run_backup(host, entry, journal["backup_id"], "full")
@@ -427,6 +604,12 @@ def apply(host, project, profile, tools_dir, *, plan_token, recovery_archive, to
                   "operation_id": operation_id, **journal["release"], "backup": journal.get("backup"),
                   "remaining_manual_steps": ["Point DNS at the new server."] if mode == "takeover" else [],
                   "profile_update": "Commit the updated local host.address and host.host_id." if mode == "takeover" else "Local profile unchanged; recreate this server to take over."}
+        if recovered.get("feature") is not None:
+            result["coverage"] = backup.service_coverage(recovered["feature"])
+            result["host_ready"] = True
+            if mode == "takeover":
+                result["profile_update"] = copy.deepcopy(journal["intent"]["effective_profile"])
+                result.update(_dns_result(host, journal))
         journal.update(phase="complete", result=result, completed_at=now())
         _save(host, journal)
         return result
