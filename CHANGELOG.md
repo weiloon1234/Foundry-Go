@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: generation-14 admission accepts registered request topologies and verifies
+  their checksums during bootstrap planning, release planning, and activation.
 - Fixed: INI configuration templates reject backslashes in substituted values,
   preventing line continuation from consuming the following setting.
 - Added: per-start secret configuration templates for INI, YAML, JSON, and text.

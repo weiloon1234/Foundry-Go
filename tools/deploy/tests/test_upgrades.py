@@ -106,6 +106,46 @@ class UpgradeTests(unittest.TestCase):
         with self.host.lock("host"):
             return upgrades.install_tools(self.host, self.host.read_registry(), self.source, **kwargs)
 
+    def test_check_client_accepts_registered_and_unregistered_feature_topologies(self):
+        from test_host_capabilities import declaration
+        from topology import validate_topology
+        self.host.registry["tools"]["generation"] = 14
+        for templates, public_listeners in ((False, False), (True, False), (False, True), (True, True)):
+            raw = declaration()
+            if templates:
+                raw["roles"][1]["configs"] = {"settings": {
+                    "source": "deploy/files/config", "mode": "rendered-template", "format": "ini"}}
+            if public_listeners:
+                raw["roles"][0]["bindings"] = {
+                    "public": {"public_listener": {"role": "relay", "listener": "ingress"}}}
+            for topology in (raw, validate_topology(raw)):
+                request = {"protocol": self.metadata["protocol"], "client": {"generation": 14},
+                           "topology": topology}
+                for action in ("bootstrap-plan", "release-plan", "activate"):
+                    with self.subTest(templates=templates, public_listeners=public_listeners,
+                                      registered="sha256" in topology, action=action):
+                        upgrades.check_client(self.host, request, action)
+
+    def test_check_client_registered_topologies_preserve_hash_and_generation_checks(self):
+        from test_host_capabilities import declaration
+        from topology import validate_topology
+        raw = declaration()
+        raw["roles"][1]["configs"] = {"settings": {
+            "source": "deploy/files/config", "mode": "rendered-template", "format": "ini"}}
+        topology = validate_topology(raw)
+        for action in ("bootstrap-plan", "release-plan", "activate"):
+            for host_generation, client_generation, digest, code in (
+                    (14, 14, "0" * 64, "invalid_topology"),
+                    (13, 14, topology["sha256"], "host_upgrade_required"),
+                    (14, 13, topology["sha256"], "instance_capability_required")):
+                self.host.registry["tools"]["generation"] = host_generation
+                request = {"protocol": self.metadata["protocol"], "client": {"generation": client_generation},
+                           "topology": {**topology, "sha256": digest}}
+                with self.subTest(action=action, code=code):
+                    with self.assertRaises(DeployError) as caught:
+                        upgrades.check_client(self.host, request, action)
+                    self.assertEqual(caught.exception.code, code)
+
     def test_fresh_install_is_immutable_and_unchanged_retry_keeps_revision(self):
         self.assertEqual("succeeded", self.install()["outcome"])
         destination = self.host.paths.tools / "tools" / self.digest

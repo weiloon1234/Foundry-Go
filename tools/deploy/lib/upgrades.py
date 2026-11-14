@@ -492,7 +492,7 @@ def _check_feature_request(registry, request, action):
                 "host_upgrade_required", "Upgrade this generation-12 host to generation 13 before B24 release 1 operations.")
         if isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA:
             from topology import parse_topology
-            parsed_topology = parse_topology(topology)
+            parsed_topology = parse_topology(topology, registered="sha256" in topology)
             minimum = feature_generation(parsed_topology, {})
             require(request.get("client", {}).get("generation", 0) >= minimum,
                     "instance_capability_required", f"These declarations require deploy client generation {minimum}.")
