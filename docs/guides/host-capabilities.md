@@ -40,7 +40,8 @@ that is a capability milestone, not a promised framework version or date.
 | Interrupted-operation reconciliation and recovery | Do not assume an interrupted operation rolled back. Inspect status and retained cleanup evidence. Unresolved cleanup blocks later starts. |
 | Bundle ABI without package-version evidence | Bundle consumers must use package executables with one matching observed service package version. An artifact executable cannot supply this preview proof. |
 | Feature release/artifact pruning and helper-bundle pruning | Explicit feature pruning refuses. Automatic helper retention keeps every helper bundle and upgrade journal with a capability diagnostic. Invocation/view limits still apply; reaching a limit refuses further starts. |
-| Host capacity changes involving features; backup configuration/run, restore drill and recovery operations for feature instances | These owners are not integrated with feature lifecycle yet. Legacy neighbors retain their existing supported operations. |
+| Host capacity changes involving features | The capacity owner is not integrated with feature lifecycle yet. Legacy neighbors retain their existing supported operations. |
+| Backup configuration/run, restore drill and recovery operations for feature instances | The request dispatcher still refuses these operations. Backup and drill owners support feature records; recovery requires the lane A interfaces described below before dispatch can be enabled. |
 
 The server feature-operation allowlist is `bootstrap-plan`, `bootstrap-apply`,
 `release-plan`, `activate`, `rollback`, `restart`, `stop`, `status`, `logs`, `sync`, `config-keys`,
@@ -125,6 +126,65 @@ launch origin does not grant permission to start.
 These declaration failures use schema/capability validation errors rather than
 silently dropping fields. In particular, plain TCP **is** supported: declare
 `tls: "none"` explicitly and acknowledge application authentication.
+
+## Backup and replacement-host recovery integration
+
+The backup owner archives PostgreSQL and the age-encrypted configuration tree.
+Feature archives also retain the selected deployment, resolution, selection and
+release declaration in `recovery/instance.json`. Declared service-secret snapshots
+must follow the configuration owner's contract beneath the instance configuration
+tree: current values are root-owned 0640 for the isolated instance group, and the
+secret index stays 0600. Recovery restores this access before runtime and storage
+readers run, while leaving unreferenced historical snapshots private.
+The archive reader checks their paths and the descriptor's identities. Immutable
+configuration sources, binaries and artifacts still come from the retained release
+archive. Keep that exact archive available off-host.
+
+Backups record systemd's actual enabled roles, rather than the registry's cached
+observation. Takeover preserves that enabled set and applicable maintenance holds;
+held roles and their dependents stay stopped. An empty enabled set stays stopped.
+
+A bundle's `status: complete` means its supported backup components succeeded.
+`coverage.complete_instance_coverage` separately describes service-state coverage:
+
+- `disposable` state is excluded and does not block coverage.
+- `local-unprotected` produces `service_state_unprotected`, naming the role, and
+  blocks complete coverage. Takeover refuses these roles until an explicit local
+  state restoration contract exists. Acknowledging the state policy is not proof
+  of restoration.
+- `external` records its declared `recovery_owner`. Naming the owner delegates
+  recovery of that state; it does not claim Foundry copied or restored it. Older
+  declarations without an owner retain `service_state_external_owner_required`
+  and cannot claim complete coverage.
+
+Configuration-only receipts never claim complete instance coverage. Database
+restore drills use an isolated PostgreSQL Unix socket, start no custom services,
+and open no TCP or UDP listener. Their verification does not claim service-state
+recovery, key decryption or application invariants.
+
+Recovery rehearsal selects HTTP and its prerequisite closure. Custom roles outside
+that closure remain stopped. An unsafe prerequisite refuses with
+`recovery_rehearsal_dependency` and its role name. A custom HTTP prerequisite must
+declare `recovery_rehearsal_safe: true`; the default is false. Built-in background
+dependencies remain refused. Lane A must also prove private listeners and
+restricted external access before starting the selected rehearsal roles.
+
+The recovery owner accepts the existing typed `RecoveryPublicBinding` through its
+`recovery_public_binding` argument. It requires every source public listener,
+unchanged hostname, port, transport and address families, explicit new addresses,
+the source binding digest, source and target identities, deployment digest and
+operation UUID. Rehearsal rejects this argument. The source descriptor remains
+immutable; the effective replacement profile is separate, token-bound evidence.
+After confirmed old-server stop and private takeover health, recovery emits exact
+DNS-only A/AAAA instructions. `external_pending` and `external_observed` are
+separate from host readiness. Recursive answers never prove provider ownership or
+complete traffic cutover, and the tool makes no application DNS writes.
+
+Public dispatch remains gated until integration. Recovery additionally requires
+lane A's `prepare_recovery`, `activate_recovery` and `recovery_ready` callbacks;
+it refuses before provisioning if any is missing. The
+[recovery handoff](../../tools/deploy/tests/RECOVERY_HANDOFF.md) owns the exact
+dispatcher changes, callback signatures, call order and evidence requirements.
 
 <a id="recipe-declarations"></a>
 ## Declaration ownership
@@ -329,7 +389,13 @@ paths under `deploy/bin/`.
   declarations cannot inject systemd directives or a shell wrapper.
 - **State:** required `kind` is `disposable`, `external`, or `local-unprotected`.
   The last additionally requires `acknowledged: true`; the others omit it.
+  Only `external` accepts `recovery_owner`, a public label of at most 256 UTF-8
+  bytes, with no controls or surrounding whitespace. Omission preserves older
+  declarations but blocks a complete-coverage claim. Null and empty labels refuse.
   This declaration does not turn service-local state into a backup guarantee.
+- **Recovery rehearsal:** custom executable roles may declare the strict boolean
+  `recovery_rehearsal_safe`, default false. It allows planning an HTTP prerequisite
+  under isolation; it neither starts unrelated roles nor authorizes public exposure.
 - **Maintenance:** `continue` or `stop`; the existing `serve` spelling remains
   accepted for compatibility. HTTP continues by default; other feature roles stop.
   HTTP must continue. Every `requires` prerequisite and endpoint-binding provider

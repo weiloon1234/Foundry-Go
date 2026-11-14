@@ -7,6 +7,7 @@ no secret, key, or secret-derived digest is included in a command argument.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import replace
 import configparser
 import fcntl
 from datetime import datetime, timezone
@@ -32,11 +33,16 @@ from urllib.parse import urlsplit
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from contracts import (BACKUP_POLICY, BACKUP_JITTER_SECONDS, DeployError, POSTGRES_PORT, check_path, instance_paths,
-                       normalize_backup_repository, now, parse_env, read_json, require, valid_uuid)
+from contracts import (BACKUP_POLICY, BACKUP_JITTER_SECONDS, DeployError, POSTGRES_PORT,
+                       Deployment, DeploymentSelection, ReleaseDeclaration, RuntimeResolution,
+                       canonical_digest, check_path, contract_object, instance_paths,
+                       normalize_backup_repository, now, parse_env, read_json, record_document, require, valid_uuid)
 from host import Host
 import packages
 import postgres
+import runtime_config
+import services
+from topology import ExecutableRole, parse_profile, parse_topology
 
 STANZA = "foundry"
 # A week of WAL can replay for a long time on a small host.
@@ -49,6 +55,119 @@ WORK = postgres.CLUSTER_HOME + "/pgbackrest"
 REPOSITORY = "/etc/foundry/backup/repository.json"
 BACKUP_LABEL = r"[0-9]{8}-[0-9]{6}F(?:_[0-9]{8}-[0-9]{6}[DI])?"
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
+
+
+def parse_feature_snapshot(value, entry):
+    """Validate the archived selection using the runtime's existing typed owners."""
+    contract_object(value, ("deployment", "resolution", "selection", "declaration", "secret_paths"), ("service_secret_files",))
+    declaration = ReleaseDeclaration.parse(value["declaration"])
+    topology = parse_topology(declaration.topology_json)
+    profile = parse_profile(declaration.profile_json, topology)
+    inventory = services.UnitInventory(entry["name"], topology, profile,
+                                      Deployment.parse(value["deployment"]), RuntimeResolution.parse(value["resolution"]))
+    selection = DeploymentSelection.parse(value["selection"])
+    registered = parse_topology(entry["topology"], registered="sha256" in entry["topology"])
+    require(profile.projection() == entry["profile"] and topology.sha256 == registered.sha256
+            and selection.instance_id == profile.instance_id
+            and selection.selected_resolution_id == inventory.resolution.id
+            and selection.admission.deployment_sha256 == canonical_digest(value["deployment"])
+            and selection.admission.private_revision == inventory.resolution.private_revision == entry["configuration_revision"]
+            and value["selection"] == entry.get("deployment_selection")
+            and set(selection.enabled_roles) <= inventory.roles.keys()
+            and set(selection.maintenance_holds) <= inventory.roles.keys(),
+            "backup_deployment_mismatch", "Recovery descriptor differs from the selected deployment or configuration.")
+    inventory.start_order(selection.enabled_roles)
+    paths = value["secret_paths"]
+    roles = {name: role for name, role in inventory.roles.items() if isinstance(role, ExecutableRole)}
+    require(isinstance(paths, dict) and set(paths) == set(roles),
+            "backup_service_secrets", "Recovery requires the selected role secret snapshot paths from lane A.")
+    configuration = instance_paths(entry["name"])["configuration"] + "/"
+    for name, role in roles.items():
+        require(isinstance(paths[name], dict) and set(paths[name]) == {key for key, _ in role.secret_files},
+                "backup_service_secrets", f"Recovery requires the selected secret snapshots for role {name}.")
+        require(all(isinstance(path, str) and path.startswith(configuration)
+                    and ".." not in Path(path).parts and str(Path(path)) == path for path in paths[name].values()),
+                "backup_service_secrets", f"Role {name} secret snapshots must be inside the encrypted configuration tree.")
+    secret_files = value.get("service_secret_files", [])
+    require(isinstance(secret_files, list) and len(secret_files) <= 128
+            and all(isinstance(path, str) and path.startswith(configuration)
+                    and ".." not in Path(path).parts and str(Path(path)) == path for path in secret_files)
+            and len(set(secret_files)) == len(secret_files),
+            "backup_service_secrets", "Invalid configuration-owner service secret file inventory.")
+    return inventory
+
+
+def service_coverage(inventory):
+    states, findings = [], []
+    for name, role in inventory.roles.items():
+        if not isinstance(role, ExecutableRole):
+            continue
+        state = {"role": name, "kind": role.state.kind}
+        if role.state.kind == "local-unprotected":
+            findings.append({"code": "service_state_unprotected", "role": name})
+        elif role.state.kind == "external":
+            state["recovery_owner"] = role.state.recovery_owner
+            if role.state.recovery_owner is None:
+                findings.append({"code": "service_state_external_owner_required", "role": name})
+        states.append(state)
+    return {"supported_components": ["postgresql", "encrypted_configuration", "selected_deployment"],
+            "complete_instance_coverage": not findings, "service_state": states, "findings": findings}
+
+
+def _feature_snapshot(host, entry, files):
+    from feature_lifecycle import is_feature, load
+    if not is_feature(entry):
+        return None
+    require("deployment_selection" in entry, "backup_deployment_missing",
+            "Select a feature deployment before archiving recovery material.")
+    _, selection, inventory, launch = load(host, entry)
+    require(record_document(selection) == entry.get("deployment_selection"),
+            "backup_deployment_mismatch", "Registry and selected deployment differ.")
+    enabled_units = getattr(services, "enabled_units", None)
+    require(callable(enabled_units), "capability_unavailable", "Feature backup requires lane A services.enabled_units.")
+    selection = replace(selection, enabled_roles=enabled_units(host, inventory.units))
+    value = {"deployment": record_document(inventory.deployment), "resolution": record_document(inventory.resolution),
+             "selection": record_document(selection), "declaration": launch["declaration"],
+             "secret_paths": launch["secret_paths"]}
+    snapshot_entry = {**entry, "deployment_selection": value["selection"]}
+    parse_feature_snapshot(value, snapshot_entry)
+    require((host.load_state(entry).get("current") or {}).get("version") == inventory.deployment.release,
+            "backup_deployment_mismatch", "Running release differs from the selected recovery descriptor.")
+    canonical = instance_paths(entry["name"])["configuration"] + "/"
+    prefix = "instances/" + entry["name"] + "/"
+    snapshot_paths = getattr(runtime_config, "service_secret_snapshot_paths", None)
+    index = host.paths.instance_config(entry["name"]) / "service-secrets.json"
+    require(callable(snapshot_paths) or (not index.exists() and not any(value["secret_paths"].values())),
+            "capability_unavailable", "Feature secret backup requires lane A runtime_config.service_secret_snapshot_paths.")
+    current_files = []
+    for path in snapshot_paths(host, entry) if callable(snapshot_paths) else ():
+        path = check_path(Path(path), "file")
+        require(path.is_relative_to(host.paths.instance_config(entry["name"])),
+                "backup_service_secrets", "Service secret snapshots must remain inside the configuration tree.")
+        relative = path.relative_to(host.paths.instance_config(entry["name"])).as_posix()
+        require(prefix + relative in files, "backup_service_secrets", "A current service secret snapshot is missing from the archive.")
+        if path == index:
+            _private(host, path)
+        else:
+            runtime_config._read_value_file(host, entry, str(path))
+            current_files.append(canonical + relative)
+    value["service_secret_files"] = sorted(current_files)
+    for paths in value["secret_paths"].values():
+        for path in paths.values():
+            member = prefix + path.removeprefix(canonical)
+            require(member in files, "backup_service_secrets", "A selected service secret snapshot is missing from the configuration archive.")
+            require(path in current_files, "backup_service_secrets", "Selected service secrets differ from the current configuration-owner snapshot.")
+            runtime_config._read_value_file(host, entry, str(files[member]))
+    parse_feature_snapshot(value, snapshot_entry)
+    return value
+
+
+def _selection_binding(entry):
+    from feature_lifecycle import is_feature
+    if not is_feature(entry):
+        return None
+    require("deployment_selection" in entry, "backup_deployment_missing", "Select a feature deployment before backup.")
+    return canonical_digest(record_document(DeploymentSelection.parse(entry["deployment_selection"])))
 
 
 def require_writable(host):
@@ -332,6 +451,10 @@ def archive_keys(host: Host, entry: dict) -> dict:
     _repository_settings(host)
     files, size = _archive_files(host, entry)
     metadata = copy.deepcopy(entry)
+    snapshot = _feature_snapshot(host, entry, files)
+    if snapshot is not None:
+        metadata["feature_recovery"] = snapshot
+        metadata["deployment_selection"] = snapshot["selection"]
     for name in ("uid", "gid"):
         metadata["allocations"].pop(name, None)
     metadata["release_commit"] = (host.load_state(entry).get("current") or {}).get("commit")
@@ -362,6 +485,11 @@ def archive_keys(host: Host, entry: dict) -> dict:
         # is not a completion receipt and a timeout never becomes success.
         verify_archive(host, encrypted, key)
     receipt = {"object_key": key, "completed_at": now(), "status": "complete"}
+    if snapshot is not None:
+        receipt["deployment_sha256"] = canonical_digest(snapshot["deployment"])
+        receipt["coverage"] = service_coverage(parse_feature_snapshot(snapshot, metadata))
+        receipt["coverage"].update(supported_components=["encrypted_configuration", "selected_deployment"],
+                                   complete_instance_coverage=False)
     _record(host, entry, "keys", receipt)
     return receipt
 
@@ -437,10 +565,13 @@ def _component(host, path, journal, name, action, *, reconcile=False):
 def _complete(host, entry, backup_id, database, *, restore_point=None, reconcile=False):
     path = _operation_path(host, entry, backup_id)
     journal = read_json(_private(host, path)) if path.exists() else {
-        "operation_id": backup_id, "configuration_revision": entry["configuration_revision"], "components": {}}
+        "operation_id": backup_id, "configuration_revision": entry["configuration_revision"],
+        "selection_sha256": _selection_binding(entry), "components": {}}
     require(not journal.get("abandoned_at"), "backup_abandoned", "This bundle was abandoned; select a new operation UUID.")
     require(journal.get("configuration_revision") == entry["configuration_revision"],
             "backup_operation_conflict", "The runtime revision changed; start a new bundle and retain this operation's evidence.")
+    require(journal.get("selection_sha256") == _selection_binding(entry),
+            "backup_operation_conflict", "The selected deployment changed; retain this bundle and start a new operation.")
     journal["components"]["database"] = database
     _write_private(host, path, journal)
     keys = _component(host, path, journal, "keys", lambda: archive_keys(host, entry), reconcile=reconcile)
@@ -449,6 +580,13 @@ def _complete(host, entry, backup_id, database, *, restore_point=None, reconcile
                "key_archive": keys, "configuration_revision": entry["configuration_revision"],
                "kind": journal.get("kind", "scheduled"), "fresh_at": database["completed_at"],
                "completed_at": now(), "status": "complete"}
+    if _selection_binding(entry) is not None:
+        require("coverage" in keys and "deployment_sha256" in keys,
+                "backup_deployment_missing", "The encrypted archive lacks feature recovery coverage evidence.")
+        coverage = copy.deepcopy(keys["coverage"])
+        coverage.update(supported_components=["postgresql", "encrypted_configuration", "selected_deployment"],
+                        complete_instance_coverage=not coverage["findings"])
+        receipt.update(coverage=coverage, deployment_sha256=keys["deployment_sha256"])
     if restore_point:
         receipt["restore_point"] = restore_point
     _write_private(host, _receipt_path(host, entry, backup_id), receipt)
@@ -468,10 +606,13 @@ def _run_bundle(host, entry, operation, kind, *, reconcile=False, database_label
         path = _operation_path(host, entry, operation)
         if not path.exists():
             _write_private(host, path, {"operation_id": operation, "kind": kind, "started_at": now(),
-                "configuration_revision": entry["configuration_revision"], "components": {}})
+                "configuration_revision": entry["configuration_revision"],
+                "selection_sha256": _selection_binding(entry), "components": {}})
         else:
             require(read_json(_private(host, path)).get("configuration_revision") == entry["configuration_revision"],
                     "backup_operation_conflict", "The runtime revision changed; preserve this operation and start a new bundle.")
+        require(read_json(_private(host, path)).get("selection_sha256") == _selection_binding(entry),
+                "backup_operation_conflict", "The selected deployment changed; preserve this operation and start a new bundle.")
         journal = _database_phase(host, path, operation, kind, reconcile=reconcile, database_label=database_label)
         point = None
         database = journal["components"]["database"]
@@ -721,7 +862,9 @@ def restore_drill(host: Host, entry: dict, backup_id: str, *, target_time: str |
                 "backup_drill_verification", "The isolated database did not pass catalog verification.")
         result.update(status="complete", completed_at=now(), elapsed_seconds=round(time.monotonic() - start, 3),
                       verification={"recovery_paused_at_target": True, "database_catalog": True,
-                                    "key_decryption": "operator_required", "domain_invariants": "application_required"},
+                                    "key_decryption": "operator_required", "domain_invariants": "application_required",
+                                    "custom_services_started": False, "network_listeners": False,
+                                    "complete_instance_coverage": False},
                       retained=retain,
                       postgres={"host": str(socket), "port": 55433, "user": postgres.cluster_owner(),
                                 "database": entry["allocations"]["database"], "sslmode": "disable"})
@@ -1101,7 +1244,8 @@ def _scheduled_bundle(host, registry, operation, kind, *, reconcile=False, datab
                         child = _operation_path(host, entry, bundle_id)
                         if not child.exists():
                             _write_private(host, child, {"operation_id": bundle_id, "schedule_operation": operation,
-                                "configuration_revision": entry["configuration_revision"], "components": {}})
+                                "configuration_revision": entry["configuration_revision"],
+                                "selection_sha256": _selection_binding(entry), "components": {}})
                         _complete(host, entry, bundle_id, journal["components"]["database"], reconcile=reconcile)
                     else:
                         _record(host, entry, "database", read_json(_private(host, _receipt_path(host, entry, bundle_id))))

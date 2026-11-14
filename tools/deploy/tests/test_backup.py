@@ -1,5 +1,7 @@
 """Backup failure boundaries use private fixture files and mocked host commands."""
 import json
+import copy
+from dataclasses import asdict, replace
 import time
 from pathlib import Path
 import re
@@ -21,7 +23,171 @@ LABEL = "20261101-020000F"
 RECIPIENT = "age1" + "a" * 58
 
 
+def feature_fixture(*, state="disposable", secret=False, http_dependency=False, public=False,
+                    recovery_owner=None, rehearsal_safe=None, background_dependency=False):
+    import contracts as c
+    import services
+    import topology as t
+    from test_services import inventory_fixture
+    from test_host_capabilities import declaration, profile, selection
+    inventory, entry, members = inventory_fixture()
+    raw = inventory.topology.projection()
+    raw.pop("sha256", None)
+    relay = raw["roles"][1]
+    relay["state"] = {"kind": state, **({"acknowledged": True} if state == "local-unprotected" else {})}
+    if recovery_owner is not None:
+        relay["state"]["recovery_owner"] = recovery_owner
+    if rehearsal_safe is not None:
+        relay["recovery_rehearsal_safe"] = rehearsal_safe
+    if secret:
+        raw["secrets"] = {"relay-token": {"prompt": "Relay token"}}
+        relay["secret_files"] = {"TOKEN_FILE": "relay-token"}
+    if http_dependency:
+        raw["roles"][0]["requires"] = ["relay"]
+        relay["requires"] = []
+    if background_dependency:
+        relay["requires"] = ["worker"]
+        raw["roles"][2]["requires"] = []
+    placed = inventory.profile.projection()
+    if public:
+        relay["listeners"]["ingress"] = declaration()["roles"][1]["listeners"]["ingress"]
+        placed["listeners"] = profile()["listeners"]
+    topology = t.parse_topology(raw)
+    deployment = replace(inventory.deployment, topology_sha256=topology.sha256,
+                         profile_sha256=c.canonical_digest(placed),
+                         units=tuple(replace(unit, declaration_sha256=c.canonical_digest(role))
+                                     for unit, role in zip(inventory.deployment.units, topology.projection()["roles"])))
+    resolution = replace(inventory.resolution, deployment_sha256=c.canonical_digest(c.record_document(deployment)))
+    inventory = services.UnitInventory(entry["name"], topology, t.parse_profile(placed, topology), deployment, resolution)
+    selected = selection()
+    selected["enabled_roles"] = list(inventory.roles)
+    selected["admission"].update(deployment_sha256=resolution.deployment_sha256, disposition="committed")
+    entry.update(profile=placed, topology=t.validate_topology(topology.projection()), configuration_revision=7,
+                 deployment_selection=selected, host_id=placed["host"]["host_id"])
+    project = {"schema": 1, "id": entry["project_id"], "slug": entry["allocations"]["namespace"]["application"]}
+    entry["allocations"].update(c.identity(project, placed)["allocations"])
+    declaration = c.ReleaseDeclaration.parse({"schema": 2, "topology": topology.projection(), "profile": placed,
+        "topology_sha256": topology.sha256, "inventory": [asdict(m) for m in members] + [
+            {"path": "deploy/bin/relay-server", "sha256": "b" * 64, "size": 1, "kind": "application"}],
+        "artifacts": [], "application_executables": {"relay-server": "deploy/bin/relay-server"}})
+    paths = {"relay": {"TOKEN_FILE": backup.instance_paths(entry["name"])["configuration"] + "/service-secrets/revision-7/token"} if secret else {}}
+    snapshot = {"deployment": c.record_document(deployment), "resolution": c.record_document(resolution),
+                "selection": selected, "declaration": declaration.projection(), "secret_paths": paths}
+    return inventory, entry, snapshot
+
+
 class BackupTests(unittest.TestCase):
+    def test_external_state_receipt_names_declared_recovery_owner(self):
+        inventory, entry, snapshot = feature_fixture(state="external", recovery_owner="media-operations")
+        parsed = backup.parse_feature_snapshot(snapshot, entry)
+        self.assertEqual(parsed.roles["relay"].state.recovery_owner, "media-operations")
+        coverage = backup.service_coverage(inventory)
+        self.assertEqual(coverage["service_state"], [{"role": "relay", "kind": "external", "recovery_owner": "media-operations"}])
+        self.assertTrue(coverage["complete_instance_coverage"])
+        self.assertEqual(coverage["findings"], [])
+        keys = {"status": "complete", "coverage": coverage, "deployment_sha256": backup.canonical_digest(snapshot["deployment"])}
+        with patch.object(backup, "archive_keys", return_value=keys):
+            receipt = backup._complete(self.host, entry, str(uuid.uuid4()), {"pgbackrest_label": LABEL, "completed_at": now()})
+        self.assertEqual(receipt["coverage"]["service_state"], coverage["service_state"])
+
+    def test_feature_coverage_distinguishes_supported_components_and_local_state(self):
+        for kind, complete, code in (("disposable", True, None),
+                                     ("external", False, "service_state_external_owner_required"),
+                                     ("local-unprotected", False, "service_state_unprotected")):
+            inventory, entry, snapshot = feature_fixture(state=kind)
+            self.assertEqual(backup.parse_feature_snapshot(snapshot, entry).deployment, inventory.deployment)
+            coverage = backup.service_coverage(inventory)
+            self.assertEqual(coverage["complete_instance_coverage"], complete)
+            self.assertIn("selected_deployment", coverage["supported_components"])
+            self.assertEqual(coverage["findings"], [{"code": code, "role": "relay"}] if code else [])
+            if kind == "external":
+                self.assertIsNone(coverage["service_state"][0]["recovery_owner"])
+
+    def test_feature_archive_contains_exact_descriptor_and_private_service_snapshot(self):
+        import feature_lifecycle
+        import contracts as c
+        inventory, entry, snapshot = feature_fixture(secret=True)
+        snapshot["selection"]["maintenance_holds"] = ["relay"]
+        backup._write_private(self.host, backup._instance_settings_path(self.host, entry),
+                              {"instance_id": entry["profile"]["instance_id"], "age_recipients": [RECIPIENT]})
+        secret = self.host.paths.p(snapshot["secret_paths"]["relay"]["TOKEN_FILE"])
+        self.host.owned_write(secret, "private-service-canary\n", mode=0o640, group=entry["name"])
+        retained = secret.with_name("retained")
+        self.host.owned_write(retained, "retained-service-canary\n", mode=0o640, group=entry["name"])
+        index = self.host.paths.instance_config(entry["name"]) / "service-secrets.json"
+        backup._write_private(self.host, index, {"private": "index-canary"})
+        captured = {}
+        def command(args, **kwargs):
+            if args[0] == "age":
+                with tarfile.open(args[-1]) as archive:
+                    captured.update({m.name: archive.extractfile(m).read() for m in archive})
+            return self.run_command(args, **kwargs)
+        self.host.run = command
+        loaded = (None, c.DeploymentSelection.parse(snapshot["selection"]), inventory, snapshot)
+        with patch.object(feature_lifecycle, "load", return_value=loaded), patch.object(backup, "_record"), \
+                patch.object(backup.services, "enabled_units", return_value=("http",), create=True) as enabled, \
+                patch.object(backup.runtime_config, "service_secret_snapshot_paths", return_value=(index, secret, retained), create=True) as secret_files, \
+                patch.object(self.host, "load_state", return_value={"current": {"version": inventory.deployment.release, "commit": "a" * 40}}):
+            receipt = backup.archive_keys(self.host, entry)
+        enabled.assert_called_once_with(self.host, inventory.units)
+        secret_files.assert_called_once_with(self.host, entry)
+        metadata = json.loads(captured["recovery/instance.json"])
+        expected = copy.deepcopy(snapshot)
+        expected["selection"]["enabled_roles"] = ["http"]
+        canonical = backup.instance_paths(entry["name"])["configuration"] + "/service-secrets/revision-7/"
+        expected["service_secret_files"] = [canonical + "retained", canonical + "token"]
+        self.assertEqual(metadata["feature_recovery"], expected)
+        self.assertEqual(metadata["deployment_selection"], expected["selection"])
+        self.assertEqual(entry["deployment_selection"]["enabled_roles"], list(inventory.roles))
+        backup.parse_feature_snapshot(metadata["feature_recovery"], metadata)
+        self.assertIn("private-service-canary", captured["instances/" + entry["name"] + "/service-secrets/revision-7/token"].decode())
+        self.assertNotIn("private-service-canary", json.dumps(receipt))
+        self.assertNotIn("private-service-canary", json.dumps(self.commands))
+        self.assertEqual(receipt["deployment_sha256"], c.canonical_digest(snapshot["deployment"]))
+
+    def test_unknown_live_enablement_refuses_archive_without_using_registry_cache(self):
+        import feature_lifecycle
+        inventory, entry, snapshot = feature_fixture()
+        selected = backup.DeploymentSelection.parse(snapshot["selection"])
+        with patch.object(feature_lifecycle, "load", return_value=(None, selected, inventory, snapshot)), \
+                patch.object(backup.services, "enabled_units", side_effect=DeployError("service_enablement", "Unknown"), create=True), \
+                self.assertRaises(DeployError) as error:
+            backup._feature_snapshot(self.host, entry, {})
+        self.assertEqual(error.exception.code, "service_enablement")
+
+    def test_feature_snapshot_rejects_selection_drift_and_secret_path_escape(self):
+        _, entry, snapshot = feature_fixture(secret=True)
+        for mutate in (lambda v: v["selection"].update(selected_resolution_id=str(uuid.uuid4())),
+                       lambda v: v["secret_paths"]["relay"].update(TOKEN_FILE="/etc/foreign/token"),
+                       lambda v: v["secret_paths"].update(relay={}),
+                       lambda v: v["resolution"].update(private_revision=8)):
+            bad = copy.deepcopy(snapshot)
+            mutate(bad)
+            with self.assertRaises(DeployError):
+                backup.parse_feature_snapshot(bad, entry)
+
+    def test_feature_bundle_success_retains_incomplete_coverage(self):
+        inventory, entry, snapshot = feature_fixture(state="local-unprotected")
+        operation = str(uuid.uuid4())
+        keys = {"status": "complete", "coverage": backup.service_coverage(inventory),
+                "deployment_sha256": backup.canonical_digest(snapshot["deployment"])}
+        point = {"pgbackrest_label": LABEL, "completed_at": now()}
+        with patch.object(backup, "archive_keys", return_value=keys):
+            receipt = backup._complete(self.host, entry, operation, point)
+        self.assertEqual(receipt["status"], "complete")
+        self.assertFalse(receipt["coverage"]["complete_instance_coverage"])
+        self.assertEqual(receipt["coverage"]["findings"], [{"code": "service_state_unprotected", "role": "relay"}])
+
+    def test_reconciliation_refuses_changed_selection_before_database_work(self):
+        _, entry, _ = feature_fixture()
+        operation = str(uuid.uuid4())
+        backup._write_private(self.host, backup._operation_path(self.host, entry, operation),
+                              {"configuration_revision": 7, "selection_sha256": "a" * 64, "components": {}})
+        with patch.object(backup, "_database_phase") as database, self.assertRaises(DeployError) as error:
+            backup._run_bundle(self.host, entry, operation, "full", reconcile=True)
+        self.assertEqual(error.exception.code, "backup_operation_conflict")
+        database.assert_not_called()
+
     def test_restore_target_is_canonical_for_postgresql(self):
         for supplied in ("2026-11-02T07:55:00Z", "2026-11-02 07:55:00+00", "2026-11-02 15:55:00+08:00"):
             self.assertEqual("2026-11-02 07:55:00+00:00", backup._restore_target(supplied))
@@ -333,6 +499,17 @@ class BackupTests(unittest.TestCase):
         self.assertNotIn("foreign", automatic)
         self.assertNotIn("private-secret", json.dumps(result))
         self.assertEqual(self.host.load_state(self.entry)["backup"]["restore_drill"]["status"], "complete")
+
+    def test_feature_drill_starts_only_the_isolated_postgresql_unit(self):
+        _, self.entry, _ = feature_fixture()
+        self.test_restore_is_new_private_cluster_and_records_timing()
+        starts = [args for args, _ in self.commands if args[:2] == ["systemctl", "start"]]
+        self.assertEqual(len(starts), 1)
+        self.assertRegex(starts[0][2], r"^foundry-restore-[a-f0-9]+\.service$")
+        verification = self.host.load_state(self.entry)["backup"]["restore_drill"]["verification"]
+        self.assertFalse(verification["custom_services_started"])
+        self.assertFalse(verification["network_listeners"])
+        self.assertFalse(verification["complete_instance_coverage"])
 
     def test_drill_reports_an_exited_postgresql_at_once(self):
         cluster = self.cluster()
