@@ -62,6 +62,7 @@ class WiringHost(Host):
         self.worker = 90
         self.sequence = 100
         self.running = {}
+        self.enabled = set()
         self.public_profile = None
         self.firewall_live = {}
         self.starting = None
@@ -198,6 +199,12 @@ class WiringHost(Host):
             elif action == "enable" and "--now" in args and args[-1] == "nginx":
                 assert not self.paths.p("/etc/systemd/system/nginx.service").is_symlink()
                 self.nginx = True
+            elif action == "enable":
+                self.enabled.update(args[2:])
+            elif action == "disable":
+                self.enabled.difference_update(args[2:])
+            elif action == "is-enabled":
+                output, code = ("enabled", 0) if unit in self.enabled else ("disabled", 1)
             elif action == "reload":
                 self.worker += 1
             elif action == "start" and unit.startswith("foundry-"):
@@ -393,6 +400,9 @@ class FeatureWiringTests(unittest.TestCase):
         self.host.owned_write(self.host.paths.p("/proc/sys/kernel/random/boot_id"), str(uuid.uuid4()))
         feature_network.prepare_boot(self.host)
         lifecycle.boot(self.host, entry, inventory)
+        # systemd schedules enabled workloads after the boot closure unit.
+        for name in inventory.start_order(services.enabled_units(self.host, inventory.units)):
+            self.host.start(inventory.units[name])
         lifecycle.open_boot(self.host, entry, inventory)
         self.assertEqual(self.host.started[-2:], ["relay", "http"])
         boot_unit = self.host.paths.p("/etc/systemd/system/foundry-admission-" + self.profile["instance_id"] + ".service")

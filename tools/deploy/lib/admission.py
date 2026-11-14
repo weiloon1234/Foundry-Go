@@ -288,7 +288,11 @@ class AdmissionStore:
                                          if u.instance_id == self.instance_id},
                 "admission_boot_required", "Whole-instance boot preparation is missing or stale.")
         if selection.admission.disposition is AdmissionDisposition.COMMITTED:
-            require(permit_id is None and unit.role in selection.enabled_roles,
+            from services import enabled_units
+            from topology import instance_units
+            entry = self.host.read_registry()["instances"][unit.instance_id]
+            units = instance_units(entry)
+            require(permit_id is None and unit.role in enabled_units(self.host, {unit.role: units[unit.role]}),
                     "admission_denied", "Committed starts must be enabled.")
             self._completed(selection)
         else:

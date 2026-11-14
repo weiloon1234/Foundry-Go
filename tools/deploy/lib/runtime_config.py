@@ -79,6 +79,25 @@ PIPELINE_KEYS = frozenset(_FIELDS) - {"PROJECT__NAME"} | {"DEVELOPER__RELEASE"} 
 MAX_CONFIGURATION_CHANGES = 16
 
 
+def configuration_parts(changes, entry=None, *, topology=None):
+    from topology import SERVICE_SECRET_PREFIX, parse_topology, service_secret_keys
+    topology = topology or (parse_topology(entry["topology"], registered="sha256" in entry["topology"])
+                            if entry and "topology" in entry else None)
+    names = service_secret_keys(dict(topology.secrets)) if topology else {}
+    application, service = {}, {}
+    for key, value in changes.items():
+        if isinstance(key, str) and key.startswith(SERVICE_SECRET_PREFIX):
+            require(key in names or key.endswith("_FILE") and key[:-5] in names,
+                    "unknown_configuration", "Unknown declared service secret.")
+            service[key] = value
+        else:
+            application[key] = value
+    logical = [key if key in names else key[:-5] for key in service]
+    require(len(logical) == len(set(logical)), "invalid_configuration",
+            "A service secret and its _FILE alias cannot both be supplied.")
+    return application, service
+
+
 def pipeline_keys(entry=None):
     return PIPELINE_KEYS | (uploads.RUNTIME_KEYS if entry and "uploads" in entry["profile"] else frozenset())
 
@@ -86,7 +105,8 @@ def pipeline_keys(entry=None):
 def validate_configuration_changes(changes, entry=None):
     require(isinstance(changes, dict) and 0 < len(changes) <= MAX_CONFIGURATION_CHANGES,
             "invalid_configuration", "Name between one and sixteen configuration keys to change together.")
-    for key in changes:
+    application, _ = configuration_parts(changes, entry)
+    for key in application:
         require(isinstance(key, str) and re.fullmatch(r"[A-Z][A-Z0-9_]*", key),
                 "invalid_configuration", "Configuration key name is invalid.")
         logical = key.removesuffix("_FILE")
@@ -94,6 +114,134 @@ def validate_configuration_changes(changes, entry=None):
                 and not key.startswith(("DEPLOY_", "FOUNDRY_", "VITE_")),
                 "owned_configuration", "Identity, infrastructure and seed credentials cannot be edited by generic configuration commands.")
     dump_env({key: value for key, value in changes.items() if value is not None})
+
+
+def service_secret_snapshot(host, entry):
+    """Current private paths; never include this record in a public response."""
+    from admission import read_owned
+    path = host.paths.instance_config(entry["name"]) / "service-secrets.json"
+    if not check_path(path, "file").exists():
+        return {}
+    require(stat.S_IMODE(path.stat().st_mode) == 0o600,
+            "configuration_ownership", "The service secret index must remain private.")
+    value = read_owned(host, path, lambda value: value)
+    require(isinstance(value, dict) and set(value) == {"schema", "instance_id", "paths"}
+            and value["schema"] == 1 and value["instance_id"] == entry["profile"]["instance_id"]
+            and isinstance(value["paths"], dict) and len(value["paths"]) <= 128,
+            "service_secret", "Invalid private service secret snapshot.")
+    from topology import service_secret_keys
+    service_secret_keys(value["paths"])
+    for path in value["paths"].values():
+        _read_value_file(host, entry, path)
+    return dict(value["paths"])
+
+
+def stage_service_secrets(host, entry, topology, changes, *, required=True):
+    """Snapshot inputs without selecting them; callers hold host then instance locks."""
+    from topology import service_secret_keys
+    _, changes = configuration_parts(changes, topology=topology)
+    names = service_secret_keys(dict(topology.secrets))
+    paths = service_secret_snapshot(host, entry)
+    for key, value in changes.items():
+        indirect = key not in names
+        name = names[key[:-5] if indirect else key]
+        if value is None:
+            paths.pop(name, None)
+            continue
+        content = _read_value_file(host, entry, value) if indirect else value
+        require(isinstance(content, str) and 0 < len(content.encode("utf-8")) <= MAX_VALUE_BYTES
+                and "\x00" not in content, "invalid_configuration", "Service secret value is invalid.")
+        if name in paths and _read_value_file(host, entry, paths[name]) == content:
+            continue
+        path = host.paths.instance_config(entry["name"]) / ("service-" + uuid.uuid4().hex + ".secret")
+        host.owned_write(path, content + "\n", 0o640, group=entry["name"])
+        paths[name] = str(path)
+    if required:
+        service_secret_paths(host, entry, topology, paths=paths)
+    return paths
+
+
+def select_service_secrets(host, entry, paths):
+    """Publish the private selection as part of a configuration revision."""
+    for path in paths.values():
+        _read_value_file(host, entry, path)
+    host.owned_write(host.paths.instance_config(entry["name"]) / "service-secrets.json",
+                     _json({"schema": 1, "instance_id": entry["profile"]["instance_id"], "paths": paths}) + "\n", 0o600)
+
+
+def service_secret_paths(host, entry, topology, *, paths=None, profile=None):
+    """Resolve only each placed service's declared file interfaces, never values."""
+    from topology import ExecutableRole
+    paths = service_secret_snapshot(host, entry) if paths is None else paths
+    placement = dict(profile.placement) if profile else entry["profile"].get("placement", {})
+    result = {}
+    for role in topology.roles:
+        name = role.common.name
+        if not isinstance(role, ExecutableRole) or placement.get(name, 1) == 0:
+            continue
+        result[name] = {}
+        for variable, secret in role.secret_files:
+            require(secret in paths, "service_secret_missing", "Supply required service secrets before reviewing the release plan.")
+            _read_value_file(host, entry, paths[secret])
+            result[name][variable] = paths[secret]
+    return result
+
+
+def service_secret_snapshot_paths(host, entry):
+    """Backup/recovery interface: exact current service-secret files, including retained names."""
+    paths = service_secret_snapshot(host, entry)
+    index = host.paths.instance_config(entry["name"]) / "service-secrets.json"
+    return tuple([index, *(Path(path) for path in sorted(set(paths.values())))]) if index.exists() else ()
+
+
+def service_secret_requirements(topology, profile, paths):
+    from topology import ExecutableRole, service_secret_keys
+    placement = dict(profile.placement)
+    required = {secret for role in topology.roles if isinstance(role, ExecutableRole)
+                and placement[role.common.name] for _, secret in role.secret_files}
+    keys = service_secret_keys(dict(topology.secrets))
+    prompts = dict(topology.secrets)
+    return [{"key": key, "prompt": prompts[name], "present": name in paths, "redacted": True}
+            for key, name in keys.items() if name in required]
+
+
+def stage_service_secret_intent(host, entry, topology, profile, changes):
+    """Private, immutable review input. The public plan receives only its opaque ID."""
+    from admission import protected_directory
+    from contracts import digest
+    paths = stage_service_secrets(host, entry, topology, changes, required=False)
+    service_secret_paths(host, entry, topology, paths=paths, profile=profile)
+    root = host.paths.instance_config(entry["name"]) / "service-secret-intents"
+    protected_directory(host, root, 0o700)
+    require(len(list(root.iterdir())) < 128, "service_secret_intents", "Retained private intents require reconciliation.")
+    identifier = str(uuid.uuid4())
+    record = {"schema": 1, "id": identifier, "instance_id": entry["profile"]["instance_id"],
+              "private_revision": entry["configuration_revision"], "topology_sha256": topology.sha256,
+              "paths": paths, "sha256": {name: digest(Path(path)) for name, path in paths.items()}}
+    host.owned_write(root / (identifier + ".json"), _json(record) + "\n", 0o600)
+    return identifier
+
+
+def read_service_secret_intent(host, entry, identifier, topology, profile):
+    from admission import read_owned
+    from contracts import contract_uuid, digest
+    path = host.paths.instance_config(entry["name"]) / "service-secret-intents" / (contract_uuid(identifier) + ".json")
+    record = read_owned(host, path, lambda value: value)
+    require(stat.S_IMODE(path.stat().st_mode) == 0o600,
+            "configuration_ownership", "Private configuration intents require mode 0600.")
+    require(record.get("schema") == 1 and record.get("id") == identifier
+            and record.get("instance_id") == entry["profile"]["instance_id"]
+            and record.get("private_revision") == entry["configuration_revision"]
+            and record.get("topology_sha256") == topology.sha256,
+            "stale_plan", "Private configuration intent no longer matches the reviewed transition.")
+    paths = record["paths"]
+    require(isinstance(paths, dict) and len(paths) <= 128, "service_secret", "Invalid private snapshot paths.")
+    for value in paths.values():
+        _read_value_file(host, entry, value)
+    service_secret_paths(host, entry, topology, paths=paths, profile=profile)
+    require({name: digest(check_path(Path(value), "file")) for name, value in paths.items()} == record["sha256"],
+            "stale_plan", "Private configuration snapshot changed after review.")
+    return dict(paths)
 
 
 def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
@@ -116,7 +264,8 @@ def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
         values["APP__SERVICES__STORAGE__DISKS"] = _json(storage["disks"])
         values[CLEANUP_GRACE_KEY] = DEFAULT_CLEANUP_GRACE
     # Initial application settings (such as first-deploy seed credentials) apply last.
-    values.update(credentials.get("configuration") or {})
+    application, _ = configuration_parts(credentials.get("configuration") or {}, entry)
+    values.update(application)
     return values
 
 

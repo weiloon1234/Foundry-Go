@@ -232,13 +232,9 @@ class OperationTests(unittest.TestCase):
         selected = replace(selected, enabled_roles=tuple(self.inventory.roles),
                            admission=replace(selected.admission, disposition=c.AdmissionDisposition.COMMITTED))
         self.store._write(self.store.runtime / "boot.json", c.ClosureEvidence.parse(closure()))
-        deadlines = []
-        def ready(host, entry, inventory, name, deadline):
-            deadlines.append(deadline)
-            return True
         with patch.object(admission.AdmissionStore, "_selection", return_value=(selected, self.inventory.resolution)), \
-                patch.object(admission.AdmissionStore, "_completed"), patch.object(self.host, "run"), \
-                patch.object(lifecycle, "ready", side_effect=ready), \
+                patch.object(admission.AdmissionStore, "_completed"), patch.object(self.host, "run") as commands, \
+                patch.object(services, "enabled_units", return_value=tuple(self.inventory.roles)), \
                 patch.object(services, "wait_ready_set", return_value=False) as whole, \
                 patch.object(network, "open_public") as opening:
             with self.assertRaises(c.DeployError) as raised:
@@ -246,4 +242,4 @@ class OperationTests(unittest.TestCase):
             self.assertEqual(raised.exception.code, "readiness_failed")
             opening.assert_not_called()
             self.assertEqual(whole.call_args.args[2], selected.enabled_roles)
-            self.assertEqual(deadlines, [whole.call_args.args[3]] * 3)
+            commands.assert_not_called()

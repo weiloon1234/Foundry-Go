@@ -485,19 +485,8 @@ def prepare_worker(host, entry, candidate=None):
 
 def enabled_roles(host, entry, timeout=5):
     """Read the systemd enablement that owns which declared roles should run."""
-    if "deployment_selection" in entry:
-        from feature_lifecycle import load
-        return list(load(host, entry)[1].enabled_roles)
-    result = []
-    for role, unit in instance_units(entry).items():
-        observed = host.run(["systemctl", "is-enabled", unit], check=False, timeout=timeout)
-        status = observed.stdout.strip()
-        require(status in {"enabled", "enabled-runtime", "disabled"},
-                "service_enablement", "Cannot establish declared role enablement.")
-        if status in {"enabled", "enabled-runtime"}:
-            require(observed.returncode == 0, "service_enablement", "Cannot establish declared role enablement.")
-            result.append(role)
-    return result
+    from services import enabled_units
+    return list(enabled_units(host, instance_units(entry), timeout))
 
 
 def role_status(entry, roles, complete="healthy"):

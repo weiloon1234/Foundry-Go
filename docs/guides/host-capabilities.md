@@ -50,6 +50,19 @@ The server feature-operation allowlist is `bootstrap-plan`, `bootstrap-apply`,
 Host tool upgrades have their own upgrade protocol. Other feature mutations are
 not implied by a command appearing in the legacy deployment guide.
 
+Current tools keep feature workload units enabled after startup and read systemd
+enablement for committed admission, restart selection, and reporting. Systemd
+starts enabled units at boot with the declared `After=` ordering. The exposure
+coordinator verifies the complete enabled set before opening traffic. A declared
+`requires` dependency does not add systemd `Wants=` or `Requires=` links that could
+start a disabled unit.
+
+The next privileged instance action migrates a committed v0.31.0 preview by
+enabling its running units without starting anything. It does not enable stopped
+units. `ACTION=status` includes the migration receipt. A pending deployment must
+be reconciled before that migration. Selective network operations remain subject
+to the refusals above.
+
 | Declaration outside release 1 | Later capability |
 | --- | --- |
 | Wrappers, role instance counts above one, ordinals other than one | B24 release 2 |

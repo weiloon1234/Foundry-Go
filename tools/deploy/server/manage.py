@@ -100,6 +100,11 @@ def execute(host, action, request):
         return {"profile": entry["profile"], "topology": entry["topology"]}
     _, entry = host.require_identity(project, profile)
     import feature_lifecycle
+    enablement_migration = None
+    if feature_lifecycle.is_feature(entry):
+        with host.lock("host"), host.lock(profile["instance_id"]):
+            registry, entry = host.require_identity(project, profile)
+            enablement_migration = feature_lifecycle.migrate_enablement(host, registry, entry)
     if feature_lifecycle.is_feature(entry) and action in ("activate", "restart", "stop", "down", "up"):
         feature_lifecycle.check_operation(action)
         arguments = {key: request[key] for key in ("archive", "archive_sha256", "role") if key in request}
@@ -195,7 +200,8 @@ def execute(host, action, request):
         version = release.current_version(host, entry)
         live = maintenance.status(host, entry, release.release_path(host, entry, version)) if version else None
         return {"instance": entry, "state": state, "maintenance": live,
-                "live_version": version, "services": release.services(host, entry)}
+                "live_version": version, "services": release.services(host, entry),
+                **({"enablement_migration": enablement_migration} if enablement_migration else {})}
     if action in ("down", "up"):
         require(request.get("confirm") is True, "confirmation_required", "Confirm the maintenance change.")
         extra = maintenance.arguments(action, {key: request[key] for key in maintenance.FIELDS if key in request})

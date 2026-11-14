@@ -307,6 +307,15 @@ class ServicePreparationTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.host = Host(Paths(temporary.name))
         self.inventory, self.entry, self.members = inventory_fixture()
+        import subprocess
+        entry = {**self.entry, "topology": t.validate_topology(self.inventory.topology.projection()),
+                 "profile": self.inventory.profile.projection()}
+        registry = patch.object(self.host, "read_registry", return_value={"instances": {INSTANCE: entry}})
+        registry.start()
+        self.addCleanup(registry.stop)
+        command = patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, "enabled", ""))
+        command.start()
+        self.addCleanup(command.stop)
         self.store = admission.AdmissionStore(self.host, INSTANCE)
         boot = self.host.paths.p("/proc/sys/kernel/random/boot_id")
         boot.parent.mkdir(parents=True)

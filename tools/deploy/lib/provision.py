@@ -252,6 +252,12 @@ def _provision_environment(host, registry, entry, credentials):
     elif "configuration" in entry["provisioning"]["completed_steps"]:
         raise DeployError("configuration_missing", "Server-owned runtime configuration is missing; restore it explicitly.")
     if "configuration" not in entry["provisioning"]["completed_steps"]:
+        from runtime_config import stage_service_secrets, select_service_secrets
+        from topology import parse_topology
+        topology = parse_topology(entry["topology"], registered="sha256" in entry["topology"])
+        if topology.schema == 2:
+            paths = stage_service_secrets(host, entry, topology, credentials.get("configuration") or {})
+            select_service_secrets(host, entry, paths)
         values = runtime_environment(entry, credentials, postgres_port=registry["shared"]["postgresql"]["port"])
         reserve_runtime_storage(registry, entry, values, lambda value: _read_value_file(host, entry, value))
         _journal(host, registry, entry)

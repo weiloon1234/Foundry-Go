@@ -21,6 +21,20 @@ RUNTIME_ENTRY = "/usr/local/lib/foundry/runtime-v1"
 TEMPLATES = Path(__file__).resolve().parents[1] / "server/templates"
 
 
+def enabled_units(host, units, timeout=5):
+    """Systemd owns deliberate enablement; journals are only observations."""
+    result = []
+    for role, unit in units.items():
+        observed = host.run(["systemctl", "is-enabled", unit], check=False, timeout=timeout)
+        status = observed.stdout.strip()
+        require(status in {"enabled", "enabled-runtime", "disabled"},
+                "service_enablement", "Cannot establish declared role enablement.")
+        if status in {"enabled", "enabled-runtime"}:
+            require(observed.returncode == 0, "service_enablement", "Cannot establish declared role enablement.")
+            result.append(role)
+    return tuple(result)
+
+
 def systemd_word(value, *, command=False):
     """One literal systemd word. Dollar expansion applies only to command argv."""
     require(isinstance(value, str) and all(ord(c) >= 32 and ord(c) != 127 for c in value),

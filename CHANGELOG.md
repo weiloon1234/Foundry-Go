@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Changed: feature units retain systemd enablement after startup. Committed start
+  admission and role reporting read systemd enablement; stored enabled-role sets
+  are audit projections. Systemd starts enabled workloads at boot with declared
+  `After=` ordering, and the exposure coordinator verifies readiness before opening
+  traffic. The next privileged instance action migrates a committed v0.31.0
+  preview by enabling its running units without starting stopped units. Status
+  includes the migration receipt. Selective network transitions remain gated.
+
 ## v0.31.0 — 2026-11-14
 
 - Added: generation-12 host capabilities preview with topology schema 2 and

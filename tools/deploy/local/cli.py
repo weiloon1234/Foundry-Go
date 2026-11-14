@@ -82,9 +82,14 @@ def secret_input(name, label, *, structured=False, required=True):
     if filename:
         try:
             source = Path(filename).expanduser()
-            if not source.is_file() or source.stat().st_size > 1024 * 1024:
+            fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, "rb") as stream:
+                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                    raise LocalError("secret input must be a regular file of at most 1 MiB")
+                content = stream.read(1024 * 1024 + 1)
+            if len(content) > 1024 * 1024:
                 raise LocalError("secret input must be a regular file of at most 1 MiB")
-            value = source.read_text(encoding="utf-8").strip()
+            value = content.decode("utf-8").strip()
         except (OSError, UnicodeError) as error:
             raise LocalError("cannot read private " + name + " input") from error
     elif required:
@@ -140,6 +145,22 @@ def bootstrap_secrets(required, *, backup_only=False):
             raise LocalError("initial configuration requires 1–16 string keys and values")
         result["configuration"] = configuration
     return result
+
+
+def collect_service_secrets(requirements, configuration=None):
+    """Use the existing hidden/config-file intake; return only the private request body."""
+    changes = {} if configuration is None else dict(configuration)
+    for requirement in requirements:
+        key = requirement["key"]
+        if requirement["present"] or key in changes or key + "_FILE" in changes:
+            continue
+        if not sys.stdin.isatty():
+            raise LocalError("Supply required service secrets through FOUNDRY_SECRET_CONFIG_FILE: " + key)
+        value = ask(requirement["prompt"] + " (" + key + ")", secret=True)
+        if not value:
+            raise LocalError("A required service secret is empty: " + key)
+        changes[key] = value
+    return changes
 
 
 def operation_uuid(value):

@@ -64,6 +64,41 @@ def load(host, entry):
     return store, selection, inventory, launch
 
 
+def migrate_enablement(host, registry, entry):
+    """Adopt running preview units once, under host then instance locks; never start one."""
+    import release
+    store = admission.AdmissionStore(host, entry["profile"]["instance_id"])
+    path = store.durable / "enablement.json"
+    if path.exists():
+        return admission.read_owned(host, path, lambda value: value)
+    if "deployment_selection" not in entry:
+        return None
+    store, selection, inventory, launch = load(host, entry)
+    if selection.admission.disposition is not AdmissionDisposition.COMMITTED:
+        return {"state": "pending", "detail": "Preview enablement migration awaits a committed deployment."}
+    store.require_cleanup_clear()
+    enabled = set(services.enabled_units(host, inventory.units))
+    running = []
+    for name, unit in inventory.units.items():
+        observed = release.service(host, unit)
+        require(observed["ActiveState"] in ("active", "inactive", "failed"),
+                "service_enablement", "Wait for stable workloads before preview enablement migration.")
+        if observed["ActiveState"] == "active":
+            require(release._matches_executable(observed, host.paths.p(inventory.specs[name].executable)),
+                    "service_enablement", "Running preview unit differs from its selected executable.")
+            running.append(name)
+    intent = {"schema": 1, "authority": "systemd", "state": "prepared", "enabled": sorted(enabled),
+              "adopt_running": sorted(set(running) - enabled), "starts": []}
+    admission.protected_directory(host, path.parent, 0o700)
+    atomic_json(path.with_name("enablement-intent.json"), intent, mode=0o600)
+    install_units(host, registry, entry, inventory, launch, Path(__file__).resolve().parents[1])
+    if intent["adopt_running"]:
+        host.run(["systemctl", "enable", *(inventory.units[name] for name in intent["adopt_running"])])
+    result = {**intent, "state": "complete", "enabled": list(services.enabled_units(host, inventory.units))}
+    atomic_json(path, result, mode=0o600)
+    return result
+
+
 def network_report(host, entry, host_claims):
     from contracts import ClosureEvidence
     from report import declared_network
@@ -244,7 +279,8 @@ def install_units(host, registry, entry, inventory, launch, tools_dir):
     host.run(["systemctl", "daemon-reload"])
     opener = "foundry-admission-open-" + spec.identity.instance_id + ".service"
     content = content.replace("Description=", "Description=Open ").replace("RemainAfterExit=yes", "RemainAfterExit=no")
-    content = content.replace('"boot"', '"open"').replace("After=network-online.target ufw.service nginx.service", "After=" + boot_unit)
+    content = content.replace('"boot"', '"open"').replace("After=network-online.target ufw.service nginx.service",
+              "After=" + boot_unit + " " + " ".join(inventory.units.values()))
     content = content.replace("Requires=nginx.service", "Requires=nginx.service " + boot_unit)
     provision._owned_write(host, host.paths.p("/etc/systemd/system/" + opener), content)
     host.run(["systemctl", "daemon-reload"])
@@ -268,6 +304,22 @@ def stop_units(host, inventory, names=None):
                     "feature_stop_unverified", "Selected unit still owns workload processes.")
 
 
+def start_units(host, inventory, names, deadline):
+    """Takeover/lifecycle interface: start an explicit enabled graph without enabling it."""
+    names = set(names)
+    enabled = services.enabled_units(host, inventory.units)
+    require(names <= set(enabled), "service_enablement", "Cannot start a deliberately disabled role.")
+    order = inventory.start_order(enabled)
+    for prerequisite in inventory.prerequisites(names) - names:
+        require(services.wait_ready(host, inventory, prerequisite, deadline),
+                "service_prerequisite", "A retained prerequisite is unavailable.")
+    for name in order:
+        if name in names:
+            require(time.monotonic() < deadline, "service_deadline", "Startup exhausted its shared deadline.")
+            host.run(["systemctl", "start", inventory.units[name]], timeout=max(.001, deadline - time.monotonic()))
+            require(services.wait_ready(host, inventory, name, deadline), "readiness_failed", "Selected role failed readiness.")
+
+
 def ready(host, entry, inventory, name, deadline):
     return services.wait_ready(host, inventory, name, deadline)
 
@@ -282,11 +334,14 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     import release
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
     old = entry.get("deployment_selection", {}).get("selected_resolution_id", inventory.resolution.id)
+    enabled = (tuple(inventory.roles) if "deployment_selection" not in entry
+               else services.enabled_units(host, inventory.units))
+    inventory.start_order(enabled)
     selected = DeploymentSelection(inventory.profile.instance_id, 12, tuple(sorted(FEATURE_CAPABILITIES)),
                  inventory.resolution.id, None if old == inventory.resolution.id else old,
                  AdmissionRecord(inventory.profile.instance_id, inventory.resolution.id, inventory.resolution.deployment_sha256,
                                  entry["configuration_revision"], attempt["operation_id"], AdmissionDisposition.PENDING),
-                 tuple(inventory.roles), ())
+                 tuple(enabled), ())
     request = transition_request(entry, inventory, attempt["operation_id"])
     operations.bind_transition(host, entry, inventory, request)
     store.record_operation(attempt)
@@ -323,6 +378,8 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
         selected = replace(selected, enabled_roles=())
         store._write(store.durable / "selection.json", selected)
     else:
+        if enabled:
+            host.run(["systemctl", "enable", *(inventory.units[name] for name in enabled)])
         attempt.update(phase="health")
         host.save_state(entry, state)
         store.record_operation(attempt)
@@ -331,20 +388,20 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
         store.issue_permit(permit, evidence)
         atomic_write(store.runtime / "active-permit", permit.id, mode=0o600)
         deadline = time.monotonic() + release.READINESS_SECONDS
-        inventory.start_in_order(inventory.roles, deadline,
-            lambda name, until: host.run(["systemctl", "start", inventory.units[name]], timeout=max(.001, until - time.monotonic())),
-            lambda name, until: ready(host, entry, inventory, name, until))
-        # The boot coordinator starts the enabled selection in readiness order.
-        # Workload units themselves must not race that coordinator at boot.
-        host.run(["systemctl", "disable", *inventory.units.values()])
-        require(services.wait_ready_set(host, inventory, selected.enabled_roles, deadline),
+        start_units(host, inventory, enabled, deadline)
+        require(not enabled or services.wait_ready_set(host, inventory, enabled, deadline),
                 "readiness_failed", "The complete enabled set did not remain ready before public opening.")
-        feature_network.open_public(host, entry, inventory.resolution, evidence)
-    state["status"] = "stopped" if stop_only else "healthy"
+        if enabled:
+            feature_network.open_public(host, entry, inventory.resolution, evidence)
+    state["status"] = "stopped" if stop_only or not enabled else (
+        "healthy" if set(enabled) == set(inventory.roles) else "degraded")
     release.finish(host, entry, state, "succeeded")
     store.record_operation(state["last_attempt"])
     store.commit()
     entry["deployment_selection"] = record_document(store._selection()[0])
+    enablement = store.durable / "enablement.json"
+    if not enablement.exists():
+        atomic_json(enablement, {"schema": 1, "authority": "systemd", "state": "complete"}, mode=0o600)
     host.journal(registry, entry)
 
 
@@ -378,14 +435,13 @@ def open_boot(host, entry, inventory):
                 "admission_pending", "A pending operation requires reconciliation before boot startup.")
         store.require_cleanup_clear()
         store._completed(selection)
-        if not selection.enabled_roles:
+        enabled = services.enabled_units(host, inventory.units)
+        inventory.start_order(enabled)
+        if not enabled:
             return
         evidence = admission.read_owned(host, store.runtime / "boot.json", ClosureEvidence.parse)
         deadline = time.monotonic() + release.READINESS_SECONDS
-        inventory.start_in_order(selection.enabled_roles, deadline,
-            lambda name, until: host.run(["systemctl", "start", inventory.units[name]], timeout=max(.001, until - time.monotonic())),
-            lambda name, until: ready(host, entry, inventory, name, until))
-        require(services.wait_ready_set(host, inventory, selection.enabled_roles, deadline),
+        require(services.wait_ready_set(host, inventory, enabled, deadline),
                 "readiness_failed", "The complete enabled set did not remain ready before boot opening.")
         feature_network.open_public(host, entry, resolution, evidence)
 
@@ -403,6 +459,7 @@ def execute(host, request, *, pin=None):
         require(is_feature(entry) and registry["tools"]["generation"] >= 12,
                 "capability_unavailable", "Feature execution requires the generation-12 preview release.")
         state = host.load_state(entry)
+        migrate_enablement(host, registry, entry)
         admission.AdmissionStore(host, profile["instance_id"]).require_cleanup_clear(request["operation_id"])
         release.require_idle(state)
         inventory, attempt = None, None

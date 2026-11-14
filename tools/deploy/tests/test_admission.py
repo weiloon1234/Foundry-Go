@@ -1,6 +1,7 @@
 """Persistent start authority with filesystem/process evidence, no host actions."""
 from dataclasses import replace
 import os
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -42,6 +43,16 @@ class AdmissionTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(temporary.cleanup)
         self.host = Host(Paths(temporary.name))
+        from test_contracts import fixture
+        entry = fixture()[2]
+        self.enabled = True
+        registry = patch.object(self.host, "read_registry", return_value={"instances": {INSTANCE: entry}})
+        registry.start()
+        self.addCleanup(registry.stop)
+        command = patch.object(self.host, "run", side_effect=lambda args, **kw:
+            subprocess.CompletedProcess(args, 0 if self.enabled else 1, "enabled" if self.enabled else "disabled", ""))
+        command.start()
+        self.addCleanup(command.stop)
         self.store = admission.AdmissionStore(self.host, INSTANCE)
         boot = self.host.paths.p("/proc/sys/kernel/random/boot_id")
         boot.parent.mkdir(parents=True)
@@ -195,11 +206,16 @@ class AdmissionTests(unittest.TestCase):
         self.assert_denied(lambda: self.store.admit(helper(invocation="f" * 32)), "admission_journal")
         self.store.record_operation(attempt("failed", operation=PERMIT))
         self.assertEqual(self.resolution, self.store.admit(helper(invocation="f" * 32)))
-        for update in ({"enabled_roles": []}, {"maintenance_holds": ["http"]}):
-            raw = c.record_document(self.store._selection()[0])
-            raw.update(update)
-            c.atomic_json(self.store.durable / "selection.json", raw, mode=0o600)
-            self.assert_denied(lambda: self.store.admit(helper()))
+        raw = c.record_document(self.store._selection()[0])
+        raw["enabled_roles"] = []
+        c.atomic_json(self.store.durable / "selection.json", raw, mode=0o600)
+        self.assertEqual(self.resolution, self.store.admit(helper()))
+        self.enabled = False
+        self.assert_denied(lambda: self.store.admit(helper()), "admission_denied")
+        self.enabled = True
+        raw["maintenance_holds"] = ["http"]
+        c.atomic_json(self.store.durable / "selection.json", raw, mode=0o600)
+        self.assert_denied(lambda: self.store.admit(helper()), "admission_denied")
 
     def test_commit_does_not_infer_completion_from_pointer_or_health(self):
         self.assert_denied(self.store.commit, "admission_journal")

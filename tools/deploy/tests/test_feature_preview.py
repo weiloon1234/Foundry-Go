@@ -223,6 +223,9 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(self.host, "journal"))
             stack.enter_context(patch.object(self.host, "save_state"))
             stack.enter_context(patch.object(self.host, "run", side_effect=lambda argv, **kw: events.append(argv[1] + ":" + argv[2])))
+            stack.enter_context(patch.object(services, "enabled_units", return_value=tuple(self.inventory.roles)))
+            stack.enter_context(patch.object(services, "wait_ready", side_effect=lambda host, inv, name, deadline:
+                                            events.append("ready:" + name) or True))
             stack.enter_context(patch.object(lifecycle, "stop_units", side_effect=lambda *_: events.append("stopped")))
             stack.enter_context(patch.object(network, "close", side_effect=lambda *_: (events.append("closed"), evidence)[1]))
             stack.enter_context(patch.object(network, "open_public", side_effect=lambda *_: events.append("opened")))

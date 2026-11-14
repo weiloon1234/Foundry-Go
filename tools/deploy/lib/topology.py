@@ -136,6 +136,8 @@ def _secret_file_name(value):
     """Secret argv references name the same environment key as secret_files."""
     require(isinstance(value, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{0,119}_FILE", value),
             "invalid_topology", "Secret environment references require _FILE names.")
+    require(not value.startswith(("FOUNDRY_", "DEPLOY_", "APP__", "LD_", "PYTHON")),
+            "invalid_topology", "Secret file variables cannot override framework or loader settings.")
     return value
 
 
@@ -221,7 +223,8 @@ class ConfigFile:
                     "invalid_topology", "Invalid JSON pointer.")
             argument = Argument.parse(raw)
             require(argument.kind in (ArgumentKind.LISTENER_ADDRESS, ArgumentKind.LISTENER_PORT,
-                                      ArgumentKind.BUNDLE, ArgumentKind.BINDING, ArgumentKind.COPY_NUMBER),
+                                      ArgumentKind.BUNDLE, ArgumentKind.BINDING, ArgumentKind.COPY_NUMBER,
+                                      ArgumentKind.SECRET_FILE),
                     "invalid_topology", "Config fields require typed nonsecret bindings.")
             result.append((pointer, argument))
         pointers = [p for p, _ in result]
@@ -503,6 +506,8 @@ def _role(value):
                     and k not in ("PATH", "HOME", "USER", "LOGNAME", "SHELL") for k in environment),
             "invalid_topology", "Environment must be bounded explicit nonsecret settings; use secret_files for secrets.")
     env = tuple((k, Argument.parse(v)) for k, v in sorted(environment.items()))
+    require(not any(key.removesuffix("_FILE") in environment for key in secrets),
+            "invalid_topology", "A service secret file cannot also have a value environment variable.")
     require(all(a.kind is not ArgumentKind.SECRET_FILE for _, a in env),
             "invalid_topology", "Secret paths require the secret_files owner.")
     return ExecutableRole(shared, parse_executable(value["executable"]), args, configs,
@@ -527,6 +532,22 @@ class Topology:
         return json.loads(self.canonical_json)
 
 
+SERVICE_SECRET_PREFIX = "FOUNDRY_SERVICE_SECRET__"
+
+
+def service_secret_keys(names):
+    """Map declaration names to the reserved private configuration namespace."""
+    result, aliases = {}, set()
+    for name in sorted(names):
+        contract_name(name)
+        key = SERVICE_SECRET_PREFIX + name.upper().replace("-", "_")
+        require(key not in aliases and key + "_FILE" not in aliases,
+                "invalid_topology", "Service secret names collide in the configuration namespace.")
+        result[key] = name
+        aliases.update((key, key + "_FILE"))
+    return result
+
+
 def parse_topology(document, *, registered=False) -> Topology:
     value = contract_document(document)
     require(isinstance(value, dict) and type(value.get("schema")) is int,
@@ -545,9 +566,10 @@ def parse_topology(document, *, registered=False) -> Topology:
     artifacts = contract_map(value.get("artifacts", {}), Artifact.parse, maximum=MAX_ARTIFACTS)
     binaries = contract_map(value.get("application_executables", {}), ApplicationBinary.parse, maximum=64)
     def secret(v):
-        contract_object(v, ("prompt",))
-        return contract_text(v["prompt"], limit=256)
+        contract_object(v, (), ("prompt",))
+        return contract_text(v.get("prompt", "Service secret"), limit=256)
     secrets = contract_map(value.get("secrets", {}), secret, maximum=128)
+    service_secret_keys(dict(secrets))
     graph = {r.common.name: r.common.requires for r in roles}
     visited, visiting = set(), set()
     def visit(name):
