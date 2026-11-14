@@ -208,6 +208,20 @@ class RecoveryTests(unittest.TestCase):
                 self.assertEqual(approved["recovery_maintenance_holds"], effective_holds)
                 self.assertEqual(approved["_intent"]["recovery_maintenance_holds"], effective_holds)
 
+    def test_takeover_plan_orders_archived_enabled_roles_by_readiness(self):
+        _, metadata = self.feature(http_dependency=True)
+        selected = metadata["feature_recovery"]["selection"]
+        selected.update(enabled_roles=["http", "relay"], maintenance_holds=[])
+        metadata["deployment_selection"] = selected
+        self.files["recovery/instance.json"] = json.dumps(metadata).encode()
+        self.write_archive()
+        approved = self.plan(mode="takeover")
+        self.assertTrue(approved["ok"])
+        self.assertEqual(approved["recovery_roles"], ["relay", "http"])
+        self.assertEqual(approved["recovery_enabled_roles"], ["relay", "http"])
+        self.assertEqual(approved["recovery_maintenance_holds"], [])
+        self.assertEqual(selected["enabled_roles"], ["http", "relay"])
+
     def test_feature_restore_rejects_conflicting_secret_alias_and_omitted_profile_policy(self):
         self.feature(secret=True)
         canonical = backup.instance_paths(self.entry["name"])["configuration"]

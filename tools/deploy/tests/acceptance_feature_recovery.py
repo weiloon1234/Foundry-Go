@@ -245,7 +245,9 @@ def target_plan():
     packages = run(["dpkg-query", "-W", "-f=${binary:Package}\t${Version}\t${db:Status-Status}\n"]).stdout
     sockets = {row.socket for row in listeners.observe_sockets(host)}
     plan = manage.execute(host, "recover-plan", payload)
-    assert plan["ok"] and plan["recovery_roles"] == plan["recovery_enabled_roles"] == ["relay", "socket-provider"]
+    # Plan roles follow readiness order, so the Unix provider precedes its consumer.
+    assert plan["ok"] and plan["recovery_roles"] == plan["recovery_enabled_roles"] == ["socket-provider", "relay"], {
+        key: plan[key] for key in ("ok", "recovery_roles", "recovery_enabled_roles")}
     assert plan["recovery_maintenance_holds"] == []
     assert plan["recovery_public_binding"]["deployment_sha256"] == source["receipt"]["deployment_sha256"]
     apply = {**payload, "archive": str(EXPORT / "release.tar.gz"), "plan_token": plan["plan_token"]}
@@ -260,7 +262,7 @@ def target_plan():
     assert run(["dpkg-query", "-W", "-f=${binary:Package}\t${Version}\t${db:Status-Status}\n"]).stdout == packages
     assert {row.socket for row in listeners.observe_sockets(host)} == sockets, "Unconfirmed takeover opened a port"
     atomic_json(EXPORT / "apply.json", apply, mode=0o600)
-    print("PASS feature target plan: relay enabled, HTTP disabled, unconfirmed takeover refused without provisioning or listeners", flush=True)
+    print("PASS feature target plan: socket-provider before relay, HTTP disabled, unconfirmed takeover refused without provisioning or listeners", flush=True)
 
 
 def target_peer(host, cleanup):
