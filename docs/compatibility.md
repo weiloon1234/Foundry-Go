@@ -13,6 +13,21 @@ Generation leaves handwritten comments unchanged. Retired source-edit journals
 fail with a typed `generate.RetiredJournalError` and retain staging; reconcile them
 with the generator that created them before upgrading.
 
+## Unix endpoint bindings — v0.34.0
+
+Unix listeners require deploy-tool generation 15 on both client and host. The
+instance floor remains 15 after rollback or recovery. Existing TCP/HTTP endpoint
+records keep their wire shape; Unix records carry `directory`, `name` and `path`
+instead of `address` and `port`. Runtime resolutions include `unix_endpoints` only
+when used. Upgrade application consumers before declaring a Unix binding for them;
+older strict descriptor readers reject the new scheme. `deployment.Endpoint` adds
+Unix fields and `Network()` while preserving TCP addressing and URLs. Use keyed
+struct literals when constructing endpoint values.
+
+Socket files are runtime-only. Recovery restores declarations and prepares new
+socket paths; it never restores sockets from backup. See the
+[Unix listener guide](guides/host-capabilities.md#unix-socket-listeners).
+
 ## Maintenance commands and deploy tools
 
 The server writes `config/deploy-runtime.json` into each unpacked release.

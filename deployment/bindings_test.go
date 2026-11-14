@@ -162,3 +162,37 @@ func TestPublicListenerBindingsRejectMalformedValues(t *testing.T) {
 		}
 	}
 }
+
+func unixBindingDocument() string {
+	directory := "/run/foundry/services/00000000-0000-4000-8000-000000000001/sockets"
+	return strings.Replace(bindingDocument(), `"address":"127.0.0.1","port":8201},"scheme":"http"`,
+		`"directory":"`+directory+`","name":"wl0","path":"`+directory+`/wl0"},"scheme":"unix"`, 1)
+}
+
+func TestUnixEndpointBindings(t *testing.T) {
+	bindings, err := ReadBindings(writeBindingDocument(t, unixBindingDocument()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint, err := bindings.Endpoint("relay")
+	if err != nil || endpoint.Network() != "unix" || endpoint.Scheme != Unix || endpoint.Name != "wl0" || endpoint.Path != endpoint.Directory+"/wl0" || endpoint.Address.IsValid() || endpoint.Port != 0 {
+		t.Fatal(endpoint, err)
+	}
+	address := endpoint.URL()
+	if address.String() != "unix://"+endpoint.Path {
+		t.Fatal(address)
+	}
+	for _, invalid := range []string{
+		strings.Replace(unixBindingDocument(), `"name":"wl0"`, `"name":"../wl0"`, 1),
+		strings.Replace(unixBindingDocument(), `"name":"wl0"`, `"name":"other"`, 1),
+		strings.Replace(unixBindingDocument(), `"scheme":"unix"`, `"scheme":"http"`, 1),
+		strings.Replace(unixBindingDocument(), `"scheme":"unix"`, `"scheme":"udp"`, 1),
+		strings.Replace(unixBindingDocument(), `"name":"wl0"`, `"address":"127.0.0.1","port":8201,"name":"wl0"`, 1),
+		strings.ReplaceAll(unixBindingDocument(), "/sockets", "/runtime"),
+		strings.ReplaceAll(unixBindingDocument(), "/services/00000000-0000-4000-8000-000000000001/", "/services/00000000-0000-4000-8000-000000000002/"),
+	} {
+		if _, err := ReadBindings(writeBindingDocument(t, invalid)); !errors.Is(err, fault.Invalid) {
+			t.Fatal("invalid Unix endpoint accepted", err)
+		}
+	}
+}

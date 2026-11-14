@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- Added: private Unix-socket listeners and bounded connection readiness for custom
+  roles. Providers and consumers share a per-instance mode-0700 runtime directory
+  through explicit `ReadWritePaths`. Every admitted start verifies its ownership;
+  provider preparation removes only declared stale sockets and refuses other file
+  types or live sockets. Existing sandbox restrictions remain in place.
+- Added: `unix` endpoint bindings, explicit provider/consumer socket directory, name
+  and path references in argv and environment, and typed `deployment.Endpoint`
+  access through `Network()`, `Path`, `Directory` and `Name`. Unix consumers declare
+  provider ordering and participate in maintenance prerequisite validation. TCP
+  endpoints retain their existing addressing. Unix sockets never enter public
+  exposure or backups; recovery restores declarations and recreates runtime paths.
+- Deploy tools: generation 15, required by Unix declarations, with a sticky floor
+  across rollback and recovery. Added a Wayland compositor/consumer example and
+  container acceptance for socket ownership, connectivity and stale-socket restart.
+
 ## v0.33.0 — 2026-11-14
 
 - Added: secret configuration templates from release files for daemons that read

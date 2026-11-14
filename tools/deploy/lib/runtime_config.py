@@ -738,7 +738,7 @@ def prepare_bundle_views(host, views):
         _service_directory(host, host.paths.p(view.destination))
 
 
-def prepare_unit_paths(host, role, spec, resolution, *, views=()):
+def prepare_unit_paths(host, role, spec, resolution, *, views=(), socket_account=None):
     """Inert staging before unit load (and boot): all namespace paths already exist."""
     from services import ServicePaths, validate_views
     require(role.common.name == spec.identity.role and role.common.name in resolution.roles,
@@ -748,6 +748,10 @@ def prepare_unit_paths(host, role, spec, resolution, *, views=()):
     for path in (paths.base, paths.base + "/invocations", paths.base + "/view/config",
                  paths.base + "/view/data", paths.state):
         _service_directory(host, host.paths.p(path))
+    import unix_sockets
+    if unix_sockets.uses_sockets(role):
+        require(socket_account is not None, "service_account", "Socket preparation requires the instance account.")
+        unix_sockets.prepare(host, role, spec.identity, *socket_account)
     prepare_bundle_views(host, views)
     return paths
 
@@ -782,7 +786,7 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
     require(len(inventory) == len(members), "service_preparation", "Duplicate configuration inventory members.")
     with store.preparation(invocation, permit_id=permit_id) as resolution:
         from dataclasses import replace
-        prepare_unit_paths(host, role, spec, replace(resolution, id=invocation.resolution_id), views=views)
+        prepare_unit_paths(host, role, spec, replace(resolution, id=invocation.resolution_id), views=views, socket_account=(uid, gid))
         base = _service_directory(host, host.paths.p(paths.base))
         invocations = _service_directory(host, base / "invocations")
         view = invocations / invocation.process.invocation_id
@@ -825,7 +829,7 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
                 require(binding is not None, "service_config_template", "Template executable binding is unresolved.")
                 return binding.path
             binding = next((b for b in spec.bindings.endpoints if b.name == name), None)
-            require(binding is not None, "service_config_template", "Template endpoint binding is unresolved.")
+            require(binding is not None and binding.scheme != "unix", "service_config_template", "Template TCP/HTTP endpoint binding is unresolved.")
             if field == "address":
                 return binding.endpoint.address
             if field == "port":

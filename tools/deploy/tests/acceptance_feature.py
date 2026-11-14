@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in generation-14 templates and bindings in the disposable harness.
+"""Opt-in generation-15 Unix sockets, templates and bindings in the disposable harness.
 
 Use the ordinary deploy-acceptance archive. The artifact is a second, pinned copy
 of that fixture's Linux artisan binary; no artifact network download is needed.
@@ -130,6 +130,30 @@ def assert_secret_template(host, inventory, entry, secret):
     return config.resolve()
 
 
+def assert_unix_binding(host, inventory, entry):
+    import stat
+    import time
+    endpoint = inventory.specs["relay"].bindings.endpoints[0].endpoint
+    info = Path(endpoint.directory).lstat()
+    assert stat.S_ISDIR(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o700
+    assert (info.st_uid, info.st_gid) == (entry["allocations"]["uid"], entry["allocations"]["gid"])
+    assert stat.S_ISSOCK(Path(endpoint.path).lstat().st_mode)
+    assert services.wait_ready(host, inventory, "socket-provider", time.monotonic() + 15)
+    # Run as the consumer account using its delivered descriptor, not a guessed path.
+    from runtime_config import write_binding_descriptor
+    descriptor = write_binding_descriptor(host, entry, inventory.deployment, inventory.resolution, inventory.specs["relay"])
+    probe = ("import json,socket,sys; d=json.load(open(sys.argv[1])); "
+             "b=next(b for b in d['bindings']['endpoints'] if b['name']=='socket'); "
+             "s=socket.socket(socket.AF_UNIX); s.settimeout(3); s.connect(b['endpoint']['path']); "
+             "s.sendall(b'ping'); assert s.recv(32)==b'unix-ready'")
+    host.run(["runuser", "-u", entry["name"], "--", "python3", "-I", "-c", probe, str(descriptor)])
+    for role in ("relay", "socket-provider"):
+        unit = run(["systemctl", "cat", inventory.units[role]]).stdout
+        assert endpoint.directory in next(line for line in unit.splitlines() if line.startswith("ReadWritePaths="))
+        assert "PrivateTmp=yes" in unit and "ProtectSystem=strict" in unit
+    return endpoint
+
+
 def feature_archive(source, destination, host_id):
     with tarfile.open(source, "r:gz") as incoming:
         files = {item.name: incoming.extractfile(item).read() for item in incoming if item.isfile()}
@@ -137,7 +161,7 @@ def feature_archive(source, destination, host_id):
     project = {"schema": 1, "id": manifest["project_id"], "slug": manifest["instance"].removesuffix("-" + manifest["environment"])}
     profile = read_json(Path("/verification/foundry-go/tests/fixtures/deploy-acceptance/deploy/environments/acceptance.json"))
     profile.update(schema=3, architecture=manifest["architecture"], instance_id=manifest["instance_id"],
-                   placement={"http": 1, "relay": 1}, listeners={})
+                   placement={"http": 1, "relay": 1, "socket-provider": 1}, listeners={})
     # Synthetic certificates are issued only for the disposable acceptance zone.
     profile["domain"] = f"{project['slug']}-{profile['environment']}.acceptance.invalid"
     profile["host"]["host_id"] = host_id
@@ -153,7 +177,12 @@ def feature_archive(source, destination, host_id):
                       "relay_public": {"public_listener": {"role": "relay", "listener": "control"}},
                       "checksum": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}}},
         {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
-         "arguments": [{"literal": "feature:relay"}, {"listener_address": "control"}, {"listener_port": "control"}],
+         "arguments": [{"literal": "feature:relay"}, {"listener_address": "control"}, {"listener_port": "control"},
+                       {"binding_socket_path": "socket"}],
+         "requires": ["socket-provider"],
+         "bindings": {"socket": {"endpoint": {"role": "socket-provider", "listener": "control", "scheme": "unix"}}},
+         "environment": {"XDG_RUNTIME_DIR": {"binding_socket_directory": "socket"},
+                         "WAYLAND_DISPLAY": {"binding_socket_name": "socket"}},
          "secret_files": {"TOKEN_FILE": "relay-template-token"},
          "configs": {"private": {"source": "deploy/files/relay.yaml", "mode": "rendered-template",
                                  "format": "yaml", "path": "relay.yaml", "directory_environment": "XDG_CONFIG_HOME"}},
@@ -161,6 +190,15 @@ def feature_archive(source, destination, host_id):
          "readiness": {"kind": "http", "listener": "control", "path": "/ready", "status": 200, "body": "feature-relay-ready"},
          "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
          "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64},
+         "maintenance": "continue", "state": {"kind": "disposable"}},
+        {"name": "socket-provider", "kind": "executable",
+         "executable": {"artifact": "relay", "entry": "server"},
+         "arguments": [{"literal": "feature:unix"}, {"listener_socket_path": "control"}],
+         "environment": {"XDG_RUNTIME_DIR": {"listener_socket_directory": "control"}},
+         "listeners": {"control": {"transport": "unix", "socket": "fixture.sock"}},
+         "readiness": {"kind": "unix", "listener": "control", "timeout_seconds": 15},
+         "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
+         "limits": {"memory_bytes": 67108864, "cpu_percent": 100, "tasks": 16},
          "maintenance": "continue", "state": {"kind": "disposable"}}],
         "secrets": {"relay-template-token": {"prompt": "Relay template token"}},
         "artifacts": {"relay": {"version": "fixture-1", "format": "file", "executables": {"server": "relay"},
@@ -228,6 +266,12 @@ def main():
         assert_public_listener_binding(inventory, profile)
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", unit]).stdout.strip() == "active"
+        endpoint = assert_unix_binding(host, inventory, entry)
+        # Hold the old inode open across restart so its replacement cannot reuse it.
+        import os
+        old_socket = os.open(endpoint.path, os.O_PATH | os.O_NOFOLLOW)
+        cleanup.callback(os.close, old_socket)
+        old_inode = os.fstat(old_socket).st_ino
         first_config = assert_secret_template(host, inventory, entry, secret)
         # The fixture loads both private and public bindings before HTTP readiness.
         import time
@@ -244,6 +288,8 @@ def main():
         _, _, inventory, _ = load(host, entry)
         assert_public_listener_binding(inventory, profile)
         assert assert_secret_template(host, inventory, entry, secret) != first_config, "Restart reused a prepared template"
+        assert_unix_binding(host, inventory, entry)
+        assert Path(endpoint.path).stat().st_ino != old_inode, "Restart did not replace the stale provider socket"
         public_observation(host, topology, profile, inventory=inventory, opened=True)
         for operation in ("down", "up"):
             changed = action(operation, request(project, profile, confirm=True, operation_id=str(uuid.uuid4())))
@@ -256,7 +302,7 @@ def main():
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", "--quiet", unit], check=False).returncode != 0
         public_observation(host, topology, profile)
-        print("PASS host capabilities: package, artifact, admission, private template, private/public app bindings, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
+        print("PASS host capabilities: package, artifact, admission, private template, private/public/Unix app bindings, stale-socket restart, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
 
 
 if __name__ == "__main__":

@@ -27,6 +27,7 @@ from topology import parse_profile
 
 class FeatureRecoveryTests(wiring.FeatureWiringFixture):
     def test_feature_key_archive_round_trips_effective_http_allocation(self):
+        self.build_archive(unix=True)
         import backup
         import recover
         from test_backup import RECIPIENT
@@ -47,6 +48,8 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
             'host_id': entry['host_id'], 'cluster_token': 'fixture-cluster'})
         backup._write_private(self.host, backup._instance_settings_path(self.host, entry),
                               {'instance_id': self.profile['instance_id'], 'age_recipients': [RECIPIENT]})
+        runtime_marker = self.host.paths.p(inventory.resolution.unix_endpoints[0].directory) / 'runtime-only'
+        runtime_marker.write_text('not-backup-data')
         captured = {}
         def encrypt(host, plain, encrypted, recipients):
             captured.update(recover.read_archive(plain))
@@ -65,14 +68,17 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
             receipt = backup.archive_keys(self.host, entry)
             recovered = recover.archive_configuration(self.project, self.profile, captured, entry['topology'])
         self.assertEqual(receipt['status'], 'complete')
+        self.assertEqual(recovered['feature'].resolution.unix_endpoints, inventory.resolution.unix_endpoints)
+        self.assertTrue(runtime_marker.exists())
+        self.assertFalse(any('/run/' in name or name.endswith('runtime-only') for name in captured))
         self.assertEqual(recovered['http_port'], endpoint.port)
         self.assertEqual(recovered['feature'].resolution, inventory.resolution)
         self.assertEqual(recovered['metadata']['allocations']['http_port'], endpoint.port)
         self.assertEqual(base.read_bytes(), original)
 
 
-    def target(self, *, running=('http', 'relay'), holds=(), mode='takeover', public=False, public_binding=False, scheduler=False):
-        self.build_archive(independent=True, secrets=True, public=public, public_binding=public_binding,
+    def target(self, *, unix=False, running=('http', 'relay'), holds=(), mode='takeover', public=False, public_binding=False, scheduler=False):
+        self.build_archive(unix=unix, independent=True, secrets=True, public=public, public_binding=public_binding,
                            rehearsal_safe=mode == 'rehearsal', scheduler=scheduler)
         if mode == 'rehearsal':
             self.build_archive(secrets=True, rehearsal_safe=True, scheduler=scheduler)
@@ -144,6 +150,21 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
         lifecycle.prepare_recovery(self.host, registry, entry, self.journal, self.snapshot,
                                    self.archive, c.digest(self.archive), wiring.TOOLS)
         self.journal['completed'].append('application')
+
+    def test_unix_recovery_restores_declarations_and_recreates_runtime_directory(self):
+        registry, entry = self.target(unix=True)
+        directory = self.host.paths.p(c.socket_directory(self.profile['instance_id']))
+        self.assertFalse(directory.exists())
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            _, selection, inventory, launch = lifecycle.load(self.host, entry)
+            self.assertEqual(selection.minimum_generation, 15)
+            self.assertEqual(launch['declaration'], self.snapshot['declaration'])
+            self.assertEqual(inventory.resolution.unix_endpoints, c.RuntimeResolution.parse(self.snapshot['resolution']).unix_endpoints)
+            lifecycle.activate_recovery(self.host, registry, entry, self.journal)
+            self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(self.host.started[-2:], ['relay', 'http'])
 
     def test_recovery_preserves_archived_template_floor_after_application_rollback(self):
         registry, entry = self.target()

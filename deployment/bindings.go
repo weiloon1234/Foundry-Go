@@ -62,6 +62,8 @@ const (
 	HTTP EndpointScheme = "http"
 	// TCP addresses a private TCP listener.
 	TCP EndpointScheme = "tcp"
+	// Unix addresses a private Unix-domain stream socket.
+	Unix EndpointScheme = "unix"
 )
 
 // Unit identifies a single placed service. Ordinals above one require a later capability.
@@ -88,16 +90,33 @@ type Endpoint struct {
 	Role RoleName
 	// Listener identifies the producer's listener.
 	Listener ListenerName
-	// Scheme selects HTTP or TCP addressing.
+	// Scheme selects HTTP, TCP or Unix addressing.
 	Scheme EndpointScheme
 	// Address is the allocated loopback address.
 	Address netip.Addr
 	// Port is the allocated private port, not the public edge port.
 	Port uint16
+	// Path is the full Unix socket path; it is empty for TCP and HTTP endpoints.
+	Path string
+	// Directory is the shared instance socket directory for Unix endpoints.
+	Directory string
+	// Name is the Unix socket file name within Directory.
+	Name string
 }
 
-// URL returns the endpoint scheme and host with its port, without a path.
+// Network returns the network accepted by net.Dialer: "unix" or "tcp".
+func (e Endpoint) Network() string {
+	if e.Scheme == Unix {
+		return "unix"
+	}
+	return "tcp"
+}
+
+// URL returns the endpoint URL, including the socket path for Unix endpoints.
 func (e Endpoint) URL() url.URL {
+	if e.Scheme == Unix {
+		return url.URL{Scheme: string(Unix), Path: e.Path}
+	}
 	return url.URL{Scheme: string(e.Scheme), Host: net.JoinHostPort(e.Address.String(), strconv.Itoa(int(e.Port)))}
 }
 
@@ -220,10 +239,13 @@ type executableWire struct {
 type endpointWire struct {
 	Name     string `json:"name"`
 	Endpoint struct {
-		Role     string `json:"role"`
-		Listener string `json:"listener"`
-		Address  string `json:"address"`
-		Port     int    `json:"port"`
+		Role      string  `json:"role"`
+		Listener  string  `json:"listener"`
+		Address   *string `json:"address"`
+		Port      *int    `json:"port"`
+		Directory *string `json:"directory"`
+		Name      *string `json:"name"`
+		Path      *string `json:"path"`
 	} `json:"endpoint"`
 	Scheme string `json:"scheme"`
 }
@@ -261,6 +283,7 @@ type featureDescriptor struct {
 	} `json:"bindings"`
 }
 
+var socketIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$`)
 var bindingIdentifier = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 var digestIdentifier = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var instanceIdentifier = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$`)
@@ -350,13 +373,30 @@ func (w featureDescriptor) bindings() (Bindings, error) {
 		b.executables[BindingName(v.Name)] = Executable{v.Path, SHA256(v.SHA256)}
 	}
 	for _, v := range w.Bindings.Endpoints {
-		address, err := netip.ParseAddr(v.Endpoint.Address)
-		if !unique(v.Name) || err != nil || (address.String() != "127.0.0.1" && address.String() != "::1") ||
-			!bindingIdentifier.MatchString(v.Endpoint.Role) || !bindingIdentifier.MatchString(v.Endpoint.Listener) ||
-			v.Endpoint.Port < 1024 || v.Endpoint.Port > 65535 || (v.Scheme != string(HTTP) && v.Scheme != string(TCP)) {
+		if !unique(v.Name) || !bindingIdentifier.MatchString(v.Endpoint.Role) || !bindingIdentifier.MatchString(v.Endpoint.Listener) {
 			return Bindings{}, invalidBindings()
 		}
-		b.endpoints[BindingName(v.Name)] = Endpoint{RoleName(v.Endpoint.Role), ListenerName(v.Endpoint.Listener), EndpointScheme(v.Scheme), address, uint16(v.Endpoint.Port)}
+		endpoint := Endpoint{Role: RoleName(v.Endpoint.Role), Listener: ListenerName(v.Endpoint.Listener), Scheme: EndpointScheme(v.Scheme)}
+		if endpoint.Scheme == Unix {
+			directory := "/run/foundry/services/" + w.Unit.Instance + "/sockets"
+			if v.Endpoint.Address != nil || v.Endpoint.Port != nil || v.Endpoint.Directory == nil || v.Endpoint.Name == nil || v.Endpoint.Path == nil ||
+				*v.Endpoint.Directory != directory || !socketIdentifier.MatchString(*v.Endpoint.Name) ||
+				*v.Endpoint.Path != directory+"/"+*v.Endpoint.Name || len(*v.Endpoint.Path) > 107 {
+				return Bindings{}, invalidBindings()
+			}
+			endpoint.Path, endpoint.Directory, endpoint.Name = *v.Endpoint.Path, directory, *v.Endpoint.Name
+		} else {
+			if v.Endpoint.Address == nil || v.Endpoint.Port == nil || v.Endpoint.Directory != nil || v.Endpoint.Name != nil || v.Endpoint.Path != nil ||
+				*v.Endpoint.Port < 1024 || *v.Endpoint.Port > 65535 || (endpoint.Scheme != HTTP && endpoint.Scheme != TCP) {
+				return Bindings{}, invalidBindings()
+			}
+			address, err := netip.ParseAddr(*v.Endpoint.Address)
+			if err != nil || (address.String() != "127.0.0.1" && address.String() != "::1") {
+				return Bindings{}, invalidBindings()
+			}
+			endpoint.Address, endpoint.Port = address, uint16(*v.Endpoint.Port)
+		}
+		b.endpoints[BindingName(v.Name)] = endpoint
 	}
 	for _, v := range w.Bindings.Bundles {
 		if !unique(v.Name) || !absolutePath(v.Path) || !digestIdentifier.MatchString(v.SHA256) {

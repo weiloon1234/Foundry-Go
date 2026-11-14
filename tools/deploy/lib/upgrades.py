@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
-                       FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION,
+                       FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION, FEATURE_UNIX_GENERATION,
                        TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
@@ -60,7 +60,8 @@ REHEARSAL_FILES = frozenset({"local/containers.py", "local/rehearsal.py", "local
 GENERATION_13_FILES = REHEARSAL_FILES | frozenset({"lib/feature_plan.py", "lib/feature_maintenance.py",
     "lib/recovery_rehearsal.py", "lib/operation_lock.py", "lib/feature_recovery.py"})
 GENERATION_14_FILES = frozenset({"lib/config_templates.py"})
-REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES
+GENERATION_15_FILES = frozenset({"lib/unix_sockets.py"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES | GENERATION_14_FILES | GENERATION_15_FILES
 
 
 def required_files(generation: int) -> frozenset[str]:
@@ -73,6 +74,8 @@ def required_files(generation: int) -> frozenset[str]:
         required |= GENERATION_13_FILES
     if generation >= 14:
         required |= GENERATION_14_FILES
+    if generation >= 15:
+        required |= GENERATION_15_FILES
     return required
 
 
@@ -423,7 +426,10 @@ def feature_generation(topology, entry):
                     for _, config in role.configs)
     public_listeners = any(isinstance(binding, PublicListenerReference) for role in topology.roles
                            for _, binding in role.common.bindings)
+    unix = any(listener.transport == "unix" for role in topology.roles if isinstance(role, ExecutableRole)
+               for _, listener in role.listeners)
     return max(FEATURE_LIFECYCLE_GENERATION, FEATURE_DELIVERY_GENERATION if templates or public_listeners else 0,
+               FEATURE_UNIX_GENERATION if unix else 0,
                entry.get("deployment_selection", {}).get("minimum_generation", 0))
 
 
@@ -444,7 +450,7 @@ def check_target_capabilities(host, request, action):
     registry = host.read_registry(missing=True)
     installed = registry if registry is not None else {"tools": protocol()}
     generation = request.get("client", {}).get("generation", 0)
-    if type(generation) is int and generation >= FEATURE_DELIVERY_GENERATION and installed["tools"]["generation"] >= FEATURE_DELIVERY_GENERATION:
+    if type(generation) is int and generation >= FEATURE_UNIX_GENERATION and installed["tools"]["generation"] >= FEATURE_UNIX_GENERATION:
         return
     from topology import parse_topology
     if action in {"recover-plan", "recover-apply"}:

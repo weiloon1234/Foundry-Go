@@ -196,8 +196,12 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
     environments = runtime_config.effective_environments(host, entry, resolution_id,
                    roles, endpoints, values=values)
     # Resolution-independent placeholders are replaced before any record is published.
+    from contracts import UnixEndpoint
+    unix = tuple(UnixEndpoint.for_listener(profile.instance_id, role.common.name, name, listener.socket)
+                 for role in topology.roles if isinstance(role, ExecutableRole) and role.common.name in roles
+                 for name, listener in role.listeners if listener.transport == "unix")
     seed = RuntimeResolution(resolution_id, "0" * 64, revision or entry["configuration_revision"], roles,
-                             endpoints, environments, "0" * 64, "0" * 64, nginx)
+                             endpoints, environments, "0" * 64, "0" * 64, nginx, unix)
     specs = []
     secrets = runtime_config.service_secret_paths(host, entry, topology, paths=private_paths, profile=profile)
     raw_roles = {role["name"]: role for role in topology.projection()["roles"]}
@@ -218,7 +222,7 @@ def resolve(host, entry, manifest, declaration, release_path, roots, operation_i
                 path, checksum = executable(host, binding.executable, declaration, release_path, roots)
                 executable_bindings.append(ResolvedExecutableBinding(binding_name, path, checksum))
             elif isinstance(binding, EndpointBinding):
-                endpoint = next((e for e in endpoints if (e.role, e.listener) == (binding.role, binding.listener)), None)
+                endpoint = next((e for e in (*endpoints, *unix) if (e.role, e.listener) == (binding.role, binding.listener)), None)
                 require(endpoint is not None, "service_binding", "Declared endpoint is unallocated.")
                 endpoint_bindings.append(ResolvedEndpointBinding(binding_name, endpoint, binding.scheme))
             elif isinstance(binding, PublicListenerReference):
@@ -301,7 +305,8 @@ def install_units(host, registry, entry, inventory, launch, tools_dir):
         paths = services.ServicePaths.for_unit(spec.identity, source.resolution.id)
         views = services.bundle_views(role, paths, source.topology, source.profile.architecture,
                                       source_launch["artifact_roots"], declaration.artifacts)
-        runtime_config.prepare_unit_paths(host, role, spec, source.resolution, views=views)
+        runtime_config.prepare_unit_paths(host, role, spec, source.resolution, views=views,
+                                          socket_account=(entry["allocations"]["uid"], entry["allocations"]["gid"]))
         content = services.render_unit(source, name, entry, checksum, views=views,
                                        secret_paths=source_launch["secret_paths"].get(name, {}))
         provision._owned_write(host, host.paths.p("/etc/systemd/system/" + inventory.units[name]), content)
@@ -585,7 +590,8 @@ def boot(host, entry, inventory):
             paths = services.ServicePaths.for_unit(spec.identity, origin)
             views = services.bundle_views(role, paths, source.topology, source.profile.architecture,
                                           launch["artifact_roots"], declaration.artifacts)
-            runtime_config.prepare_unit_paths(host, role, spec, source.resolution, views=views)
+            runtime_config.prepare_unit_paths(host, role, spec, source.resolution, views=views,
+                                          socket_account=(entry["allocations"]["uid"], entry["allocations"]["gid"]))
 
 
 def open_boot(host, entry, inventory):

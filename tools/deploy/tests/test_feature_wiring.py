@@ -253,7 +253,12 @@ class WiringHost(Host):
                 raise AssertionError(args)
         elif args[0] == "ss":
             rows = []
-            if "-u" not in args:
+            if "-Hxlpn" in args:
+                for process, inventory, role in self.running.values():
+                    for endpoint in inventory.resolution.unix_endpoints:
+                        if endpoint.role == role:
+                            rows.append(f'u_str LISTEN 0 128 {endpoint.path} 123 * 0 users:(("app",pid={process.pid},fd=3))')
+            elif "-u" not in args:
                 family = 6 if "-6" in args else 4
                 if self.public_profile:
                     for claim in listeners.public_claims(self.public_profile):
@@ -327,6 +332,8 @@ class FeatureWiringFixture(unittest.TestCase):
         self.enterContext(patch.object(feature_runtime, "os", runtime_os))
 
     def probe(self, role, resolution, deadline, *, paused=False):
+        if services.readiness_probe(role) and services.readiness_probe(role).kind == "unix":
+            return True  # Socket I/O is the fake-host boundary; real Unix probes have separate coverage.
         down = getattr(self.host, "maintenance_down", False)
         response = Mock()
         response.status = 503 if down and role.common.name == "http" else 200
@@ -340,7 +347,7 @@ class FeatureWiringFixture(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -365,6 +372,14 @@ class FeatureWiringFixture(unittest.TestCase):
             **({"secrets": {"relay-token": {"prompt": "Relay token"}}} if secrets else {}),
             "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
                 "platforms": {"linux-arm64": {"url": "https://example.invalid/relay", "sha256": checksum}}}}})
+        if unix:
+            raw = self.topology.projection()
+            raw['roles'][0]['requires'] = ['relay']
+            raw['roles'][0]['bindings']['relay'] = {'endpoint': {'role': 'relay', 'listener': 'api', 'scheme': 'unix'}}
+            raw['roles'][1].update(listeners={'api': {'transport': 'unix', 'socket': 'wl0'}},
+                readiness={'kind': 'unix', 'listener': 'api'}, arguments=[{'listener_socket_path': 'api'}],
+                environment={'XDG_RUNTIME_DIR': {'listener_socket_directory': 'api'}}, maintenance='continue')
+            self.topology = parse_topology(raw)
         self.profile.update(schema=3, placement={"http": 1, "relay": 1, **({"worker": 1} if worker else {}),
                                               **({"scheduler": 1} if scheduler else {})}, listeners={})
         if public:
@@ -409,6 +424,31 @@ class FeatureWiringFixture(unittest.TestCase):
 
 
 class FeatureWiringTests(FeatureWiringFixture):
+    def test_unix_lifecycle_prepares_descriptors_and_builtin_write_access(self):
+        self.build_archive(unix=True)
+        plan = self.request('bootstrap-plan', topology=self.topology.projection())
+        self.request('bootstrap-apply', topology=self.topology.projection(), plan_token=plan['plan_token'], confirm=True)
+        self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, selection, inventory, launch = lifecycle.load(self.host, entry)
+        self.assertEqual(selection.minimum_generation, 15)
+        endpoint, = inventory.resolution.unix_endpoints
+        self.assertEqual([e.role for e in inventory.resolution.endpoints], ['http'])
+        descriptor = c.read_json(self.host.paths.p(launch['descriptors']['http']))
+        self.assertEqual(descriptor['bindings']['endpoints'][0]['endpoint'], asdict(endpoint))
+        self.assertEqual(descriptor['bindings']['endpoints'][0]['scheme'], 'unix')
+        directory = self.host.paths.p(endpoint.directory)
+        self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(directory.stat().st_uid, entry['allocations']['uid'])
+        for name in inventory.roles:
+            text = self.host.paths.p('/etc/systemd/system/' + inventory.units[name]).read_text()
+            self.assertIn(endpoint.directory, text)
+        self.request('restart')
+        self.assertEqual(self.host.started[-2:], ['relay', 'http'])
+        self.request('stop')
+        self.assertFalse(self.host.running)
+
+
     def test_systemctl_status_codes_and_check_semantics(self):
         self.host.owned_write(self.host.paths.p("/etc/systemd/system/foundry-absent.service"), "[Service]\nExecStart=/bin/true\n")
         for action, output, code in (("is-enabled", "disabled", 1), ("is-active", "inactive", 3),
