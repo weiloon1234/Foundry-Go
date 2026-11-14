@@ -676,13 +676,13 @@ def _process(host, pid):
 
 def service(host, unit, timeout=5):
     found = host.run(["systemctl", "show", unit,
-                      "--property=LoadState,ActiveState,SubState,MainPID,NRestarts,ControlGroup", "--no-pager"],
+                      "--property=LoadState,ActiveState,SubState,MainPID,NRestarts,ControlGroup,InvocationID", "--no-pager"],
                      check=False, timeout=timeout)
     if found.returncode:
         raise DeployError("service_inspection", "Required service could not be inspected.")
     values = dict(line.split("=", 1) for line in found.stdout.splitlines() if "=" in line)
     result = {"unit": unit, **{key: values.get(key) for key in
-              ("LoadState", "ActiveState", "SubState", "MainPID", "NRestarts", "ControlGroup")}}
+              ("LoadState", "ActiveState", "SubState", "MainPID", "NRestarts", "ControlGroup", "InvocationID")}}
     process = _process(host, result["MainPID"])
     result.update(exe=process["exe"] if process else None, process=process)
     return result

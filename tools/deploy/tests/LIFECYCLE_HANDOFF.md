@@ -67,8 +67,13 @@ withdrawal, an unchanged established connection and selective reopening. These
 network scenarios do not fabricate application/cgroup closure evidence.
 
 The topology-2, profile-3, frozen deployment records and application binding API
-remain unchanged. Retained unit origins are recorded privately; new resolutions
-materialize their own environments and compare credential digests only privately.
+remain unchanged. Retained unit origins and exact live invocation receipts are
+recorded privately. An origin can remain valid after its workload exits, but it
+cannot authorize continuity during a pending transition. A replacement invocation
+must consume the normal scoped permit. Boot coordinators pin the recorded HTTP
+generation, then validate and load the selected whole-instance inventory.
+New resolutions materialize their own environments and compare credential digests
+only privately.
 
 ## Target-owned release declarations and configuration holds
 
@@ -88,13 +93,14 @@ A published configuration that fails readiness leaves a private configuration ho
 and pending admission. Independent cleanup proves closure before corrective config
 or a reviewed release can proceed. Ordinary starts and restart cannot clear it.
 
-## Maintenance work awaiting the endpoint-binding decision
+## Maintenance work awaiting executable-provider mapping
 
 `feature_maintenance` owns persistent per-copy marker paths, the saved enabled and
 running selection, and live shared-store reconciliation. Its graph check currently
-rejects a continuing endpoint consumer whose provider stops. The frozen declaration
-contract does not make endpoint bindings `requires` edges; that additional check
-is pending the operator's decision and item 3 is not complete.
+rejects a continuing endpoint consumer whose provider stops. The operator accepted
+that rule and requires actionable diagnostics naming consumer, binding and provider.
+Executable bindings identify an executable reference, not a provider role. Mapping
+those references to provider roles is awaiting clarification; item 3 is not complete.
 
 The graph lifecycle and renderers carry maintenance holds without changing actual
 enablement. Independent failed-up cleanup preserves unchanged invocation origins,

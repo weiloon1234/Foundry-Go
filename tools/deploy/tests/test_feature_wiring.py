@@ -11,6 +11,9 @@ import os
 from pathlib import Path
 import subprocess
 import shutil
+import shlex
+import importlib.util
+from types import SimpleNamespace
 import sys
 import tarfile
 import tempfile
@@ -88,12 +91,18 @@ class WiringHost(Host):
     def start(self, unit):
         registry = self.read_registry()
         entry = next(iter(registry["instances"].values()))
-        _, selection, inventory, launch = lifecycle.load(self, entry)
-        role = next(role for role, name in inventory.units.items() if name == unit)
+        _, selection, selected, _ = lifecycle.load(self, entry)
+        role = next(role for role, name in selected.units.items() if name == unit)
+        text = self.paths.p("/etc/systemd/system/" + unit).read_text()
+        arguments = shlex.split(next(line.split("=", 1)[1].lstrip("+") for line in text.splitlines() if line.startswith("ExecCondition=")))
+        phase, instance, declared_role, ordinal, resolution, bundle, spec = arguments[-7:]
+        generation = c.read_json(admission.AdmissionStore(self, instance).durable / "generations" / (spec + "-" + bundle + ".json"))
+        assert generation["resolution_id"] == resolution and generation["unit"] == {"instance_id": instance, "role": role, "ordinal": 1}
+        inventory, launch = lifecycle.load_resolution(self, entry, resolution)
         self.sequence += 2
         invocation = format(self.sequence, "032x")
         process = self.proc(self.sequence, invocation)
-        pin = c.HelperInvocation(admission.boot_id(self), inventory.specs[role].identity, process, registry["tools"]["bundle_sha256"],
+        pin = c.HelperInvocation(admission.boot_id(self), inventory.specs[role].identity, process, bundle,
                                 c.canonical_digest(c.record_document(inventory.specs[role])), inventory.resolution.id, 1, None)
         self.owned_write(self.paths.p("/proc/self/cgroup"), "0::/system.slice/" + unit)
         for action in ("admit", "prepare"):
@@ -394,6 +403,70 @@ class FeatureWiringTests(unittest.TestCase):
         self.assertNotIn("replacement-canary", public)
         self.assertNotIn(hashlib.sha256(b"replacement-canary\n").hexdigest(), public)
         self.assertNotIn("replacement-canary", json.dumps(self.host.commands))
+
+    def run_coordinator(self, unit):
+        # Exercise runtime-v1's actual generation/pinning boundary, with only its
+        # machine paths and root ownership mapped to this test-owned filesystem.
+        module_spec = importlib.util.spec_from_file_location("test_runtime_coordinator", TOOLS / "server/runtime_v1.py")
+        runtime = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(runtime)
+        content = self.host.paths.p("/etc/systemd/system/" + unit).read_text()
+        arguments = shlex.split(next(line.split("=", 1)[1] for line in content.splitlines() if line.startswith("ExecStart=")))[-7:]
+        self.host.owned_write(self.host.paths.p("/proc/self/cgroup"), "0::/system.slice/" + unit)
+        self.host.owned_write(self.host.paths.p("/proc/self/stat"), "22 (coordinator) " + " ".join(["S"] + ["0"] * 18 + ["42"]))
+        def mapped(value):
+            path = Path(value)
+            return self.host.paths.p(str(path)) if path.is_absolute() and not path.is_relative_to(self.host.paths.root) else path
+        with patch.object(runtime, "ROOT", self.host.paths.p("/usr/local/lib/foundry")), \
+                patch.object(runtime, "STATE", self.host.paths.state / "admission"), \
+                patch.object(runtime, "PINS", self.host.paths.p("/run/foundry/runtime-pins")), \
+                patch.object(runtime, "Path", side_effect=mapped), \
+                patch.object(runtime, "owned", side_effect=lambda path: admission.protected_path(self.host, path, "file" if path.is_file() else "directory")), \
+                patch.object(runtime, "pin_directory", side_effect=lambda path: admission.protected_directory(self.host, path)), \
+                patch.object(runtime, "os", SimpleNamespace(**{**vars(os), "geteuid": lambda: 0})), \
+                patch.dict(os.environ, INVOCATION_ID=uuid.uuid4().hex):
+            self.assertEqual(runtime.main(arguments), 0)
+
+    def test_reboot_after_selective_rotation_uses_per_role_generations(self):
+        self.test_service_secret_rotation_retains_http_and_private_values()
+        _, entry = self.host.require_identity(self.project, self.profile)
+        store, _, inventory, _ = lifecycle.load(self.host, entry)
+        lifecycle.stop_units(self.host, inventory)
+        self.host.owned_write(self.host.paths.p("/proc/sys/kernel/random/boot_id"), str(uuid.uuid4()))
+        feature_network.prepare_boot(self.host)
+        self.run_coordinator("foundry-admission-" + self.profile["instance_id"] + ".service")
+        for name in inventory.start_order(services.enabled_units(self.host, inventory.units)):
+            self.host.start(inventory.units[name])
+        self.run_coordinator("foundry-admission-open-" + self.profile["instance_id"] + ".service")
+        self.assertEqual(set(self.host.running), set(inventory.units.values()))
+        self.assertTrue(services.wait_ready_set(self.host, inventory, inventory.roles, time.monotonic() + 1))
+
+    def test_retained_automatic_restart_is_refused_during_pending_rotation(self):
+        self.test_service_secret_rotation_retains_http_and_private_values()
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, _, inventory, _ = lifecycle.load(self.host, entry)
+        withdraw = feature_network.withdraw
+        attempted = []
+        def observe_pending(*args, **kwargs):
+            result = withdraw(*args, **kwargs)
+            before = self.host.running[inventory.units["http"]]
+            with self.assertRaises(c.DeployError):
+                self.host.start(inventory.units["http"])
+            self.assertEqual(self.host.running[inventory.units["http"]], before)
+            attempted.append(True)
+            return result
+        with patch.object(feature_network, "withdraw", side_effect=observe_pending), patch.object(release.backup, "archive_keys"):
+            self.request("config-set", secrets={"configuration": {"FOUNDRY_SERVICE_SECRET__RELAY_TOKEN": "pending-canary"}}, confirm=True)
+        self.assertTrue(attempted)
+
+    def test_whole_restart_after_selective_rotation_uses_normal_validation_permits(self):
+        self.test_service_secret_rotation_retains_http_and_private_values()
+        before = len(self.host.started)
+        result = self.request("restart", operation_id=str(uuid.uuid4()))
+        self.assertTrue(result["ok"])
+        self.assertEqual(set(self.host.started[before:]), {"http", "relay"})
+        _, entry = self.host.require_identity(self.project, self.profile)
+        self.assertEqual(lifecycle.load(self.host, entry)[1].admission.disposition, c.AdmissionDisposition.COMMITTED)
 
     def test_release_review_collects_new_secret_before_selection(self):
         import runtime_config

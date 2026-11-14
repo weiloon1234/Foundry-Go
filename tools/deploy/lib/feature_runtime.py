@@ -57,14 +57,21 @@ def run(action, pin, launch):
         # Preview deliberately retains invocation evidence and all referenced bundles.
         return 0
     if action in ("boot", "open"):
-        from feature_lifecycle import boot, open_boot
-        (boot if action == "boot" else open_boot)(host, entry, inventory)
+        from feature_lifecycle import boot, open_boot, load
+        store, _, current, _ = load(host, entry)
+        require(current.specs[spec.identity.role] == spec and
+                (invocation.resolution_id == current.resolution.id or
+                 store.retained_origin(invocation, current.resolution) is not None),
+                "feature_runtime_selection", "Coordinator generation differs from the selected role origin.")
+        (boot if action == "boot" else open_boot)(host, entry, current)
         return 0
     store = admission.AdmissionStore(host, spec.identity.instance_id)
     selection, current_resolution = store._selection()
     permit_id = None
     if selection.admission.disposition.value == "pending" and store.retained_invocation(invocation, current_resolution) is None:
-        permit_id = admission.protected_path(host, store.runtime / "active-permit", "file").read_text()
+        permit_path = admission.protected_path(host, store.runtime / "active-permit", "file")
+        require(permit_path.exists(), "admission_denied", "Pending starts require an explicit validation allowance.")
+        permit_id = permit_path.read_text()
     if action == "admit":
         store.admit(invocation, permit_id=permit_id)
         return 0

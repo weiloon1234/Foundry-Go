@@ -67,6 +67,21 @@ class AdmissionTests(unittest.TestCase):
         self.store.begin(self.selection, self.resolution)
         self.store.record_boot_closure(self.closure)
 
+    def test_retained_continuity_requires_exact_existing_live_workload(self):
+        from dataclasses import replace
+        invocation = replace(helper(), process=self.executor)
+        record = {"resolution_id": invocation.resolution_id, "unit_spec_sha256": invocation.unit_spec_sha256,
+                  "invocation": c.record_document(invocation), "closure": c.record_document(self.closure)}
+        self.store._write(self.store._receipt(invocation), invocation)
+        with patch.object(self.store, "_retained_records", return_value={"http": record}):
+            self.assertEqual(self.store.retained_invocation(invocation, self.resolution), self.closure)
+            other = replace(invocation, process=replace(self.executor, invocation_id="e" * 32))
+            self.assertIsNone(self.store.retained_invocation(other, self.resolution))
+            path = self.host.paths.p("/proc/20/stat")
+            path.write_text(path.read_text().replace(") S ", ") Z "))
+            self.assertIsNone(self.store.retained_invocation(invocation, self.resolution))
+            self.assertEqual(self.store.retained_origin(invocation, self.resolution), self.closure)
+
     def test_protected_directories_have_explicit_modes_despite_private_umask(self):
         target = self.host.paths.p("/run/prepared/nested/config")
         private = self.host.paths.p("/run/evidence/private")

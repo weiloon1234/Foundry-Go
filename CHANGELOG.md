@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed: selective configuration transitions keep boot coordinators consistent
+  with per-role generation records. Pending continuity requires the exact existing
+  live admitted workload; automatic replacement invocations need a scoped permit.
+  A later whole-instance restart uses normal validation allowances even when a
+  unit retains an earlier launch origin.
+
 - Added: feature maintenance down/up with journaled persistent per-copy systemd
   hold markers, selective exposure closure and actual enablement preservation.
   HTTP and continuing roles retain their processes; held copies remain stopped

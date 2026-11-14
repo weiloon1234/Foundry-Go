@@ -242,7 +242,20 @@ class AdmissionStore:
             evidence = closure if old.specs[name].identity in closure.units else ClosureEvidence.parse(prior["closure"])
             require(evidence.boot_id == boot_id(self.host) and evidence.stage is ClosureStage.APPLICATION_CLOSED,
                     "admission_retained", "Retained units need current-boot closure.")
+            from release import service
+            observed = service(self.host, old.units[name])
+            invocation = None
+            if observed["ActiveState"] == "active":
+                invocation_id = observed.get("InvocationID", "")
+                receipt = self.runtime / "admitted" / name / (invocation_id + ".json")
+                current = read_owned(self.host, receipt, HelperInvocation.parse)
+                require(current.unit == old.specs[name].identity
+                        and current.unit_spec_sha256 == canonical_digest(record_document(old.specs[name]))
+                        and str(current.process.pid) == observed["MainPID"] and executor_alive(self.host, current.process),
+                        "admission_retained", "Retained workload has no matching live admitted invocation.")
+                invocation = record_document(current)
             result[name] = {"resolution_id": prior["resolution_id"] if prior else resolution.id,
+                            "invocation": invocation,
                             "unit_spec_sha256": canonical_digest(record_document(old.specs[name])),
                             "closure": record_document(evidence)}
         path = self.durable / "retained" / (candidate.resolution.id + ".json")
@@ -260,14 +273,23 @@ class AdmissionStore:
                 "admission_retained", "Retained origins differ from the selected deployment.")
         return record["roles"]
 
-    def retained_invocation(self, invocation, resolution):
+    def retained_origin(self, invocation, resolution):
         record = self._retained_records(resolution).get(invocation.unit.role)
-        if record is None:
+        if (record is None or record["resolution_id"] != invocation.resolution_id
+                or record["unit_spec_sha256"] != invocation.unit_spec_sha256):
             return None
-        require(record["resolution_id"] == invocation.resolution_id
-                and record["unit_spec_sha256"] == invocation.unit_spec_sha256,
-                "admission_retained", "Invocation differs from its retained effective inputs.")
         return ClosureEvidence.parse(record["closure"])
+
+    def retained_invocation(self, invocation, resolution):
+        """Pending continuity belongs to one existing workload, never to a role name."""
+        record = self._retained_records(resolution).get(invocation.unit.role)
+        if record is None or record.get("invocation") != record_document(invocation):
+            return None
+        receipt = self._receipt(invocation)
+        if (not receipt.exists() or read_owned(self.host, receipt, HelperInvocation.parse) != invocation
+                or not executor_alive(self.host, invocation.process)):
+            return None
+        return self.retained_origin(invocation, resolution)
 
     def issue_permit(self, permit, evidence):
         permit = ValidationPermit.parse(record_document(permit))
@@ -336,20 +358,22 @@ class AdmissionStore:
         selection, resolution = self._selection()
         require(permit_id is not None or not (self.durable / "configuration-hold.json").exists(),
                 "configuration_held", "Current private configuration is held pending a validated correction.")
-        retained = self.retained_invocation(invocation, resolution)
+        origin = self.retained_origin(invocation, resolution)
+        retained = self.retained_invocation(invocation, resolution) if permit_id is None else None
         self.require_cleanup_clear(selection.admission.operation_id if permit_id is not None or retained is not None else None)
         unit = invocation.unit
         from feature_maintenance import marker_path
         require(not self.host.paths.p(marker_path(unit)).exists(), "maintenance_held", "This copy is held for maintenance.")
         require(invocation.boot_id == boot_id(self.host) and unit.instance_id == self.instance_id and
-                (invocation.resolution_id == resolution.id or retained is not None) and unit.role in resolution.roles and
+                (invocation.resolution_id == resolution.id or origin is not None) and unit.role in resolution.roles and
                 unit.role not in selection.maintenance_holds,
                 "admission_denied", "Start identity is stale, unselected or held.")
         evidence = read_owned(self.host, self.runtime / "boot.json", ClosureEvidence.parse)
-        if unit not in evidence.units and retained is not None:
-            evidence = retained
+        continuation = origin if selection.admission.disposition is AdmissionDisposition.COMMITTED else retained
+        if unit not in evidence.units and continuation is not None:
+            evidence = continuation
         require(evidence.boot_id == invocation.boot_id and evidence.stage is ClosureStage.APPLICATION_CLOSED and
-                (evidence.candidate_resolution_id == resolution.id or evidence == retained) and unit in evidence.units and
+                (evidence.candidate_resolution_id == resolution.id or evidence == continuation) and unit in evidence.units and
                 {e for e in resolution.endpoints if e.role == unit.role} <= set(evidence.endpoints),
                 "admission_boot_required", "Scoped boot preparation is missing or stale.")
         if selection.admission.disposition is AdmissionDisposition.COMMITTED or retained is not None:

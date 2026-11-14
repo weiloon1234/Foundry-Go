@@ -107,7 +107,12 @@ start a disabled unit.
 The next privileged instance action migrates a committed v0.31.0 preview by
 enabling its running units without starting anything. It does not enable stopped
 units. `ACTION=status` includes the migration receipt. A pending deployment must
-be reconciled before that migration. Selective secret rotations preserve unchanged units and their exposure.
+be reconciled before that migration. Selective secret rotations preserve unchanged
+units and their exposure. Boot coordinators validate their per-role generation and
+load the current whole-instance selection. During a pending transition, retention
+allows only the exact existing live workload to continue. A replacement invocation
+needs a validation permit covering its unit and addresses; retaining an earlier
+launch origin does not grant permission to start.
 
 | Declaration outside release 1 | Later capability |
 | --- | --- |

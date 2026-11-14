@@ -251,7 +251,7 @@ def save_launch(host, entry, inventory, declaration, roots, secret_paths):
     return launch
 
 
-def install_units(host, registry, entry, inventory, launch, tools_dir, *, names=None):
+def install_units(host, registry, entry, inventory, launch, tools_dir):
     import provision
     import upgrades
     checksum = upgrades.tool_bundle(tools_dir)[2]
@@ -259,26 +259,31 @@ def install_units(host, registry, entry, inventory, launch, tools_dir, *, names=
     operations.install_runtime(host, tools_dir)
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
     from release import runtime_declaration
-    declaration = runtime_declaration(launch["declaration"])
     provision._unit_checks(host, entry)
+    origins = store._retained_records(inventory.resolution)
+    generations = {}
     for name, spec in inventory.specs.items():
-        if names is not None and name not in names:
-            continue
-        role = inventory.roles[name]
-        paths = services.ServicePaths.for_unit(spec.identity, inventory.resolution.id)
-        views = services.bundle_views(role, paths, inventory.topology, inventory.profile.architecture,
-                                      launch["artifact_roots"], declaration.artifacts)
-        runtime_config.prepare_unit_paths(host, role, spec, inventory.resolution, views=views)
-        content = services.render_unit(inventory, name, entry, checksum, views=views,
-                                       secret_paths=launch["secret_paths"].get(name, {}))
+        source, source_launch = inventory, launch
+        if name in origins:
+            source, source_launch = load_resolution(host, entry, origins[name]["resolution_id"])
+            require(source.specs[name] == spec, "admission_retained", "Retained generation differs from its selected specification.")
         generation = store.durable / "generations" / (canonical_digest(record_document(spec)) + "-" + checksum + ".json")
         admission.protected_directory(host, generation.parent, 0o700)
-        atomic_json(generation, {"unit": asdict(spec.identity), "resolution_id": inventory.resolution.id,
-                    "launch_file": entry["allocations"]["paths"]["application"] + "/runtime/" + inventory.resolution.id + "/launch.json"}, mode=0o600)
+        generations[name] = {"unit": asdict(spec.identity), "resolution_id": source.resolution.id,
+                            "launch_file": entry["allocations"]["paths"]["application"] + "/runtime/" + source.resolution.id + "/launch.json"}
+        atomic_json(generation, generations[name], mode=0o600)
+        declaration = runtime_declaration(source_launch["declaration"])
+        role = source.roles[name]
+        paths = services.ServicePaths.for_unit(spec.identity, source.resolution.id)
+        views = services.bundle_views(role, paths, source.topology, source.profile.architecture,
+                                      source_launch["artifact_roots"], declaration.artifacts)
+        runtime_config.prepare_unit_paths(host, role, spec, source.resolution, views=views)
+        content = services.render_unit(source, name, entry, checksum, views=views,
+                                       secret_paths=source_launch["secret_paths"].get(name, {}))
         provision._owned_write(host, host.paths.p("/etc/systemd/system/" + inventory.units[name]), content)
     spec = inventory.specs["http"]
     command = services.command_line(["/usr/bin/python3", "-I", services.RUNTIME_ENTRY, "boot", spec.identity.instance_id,
-                                    "http", "1", inventory.resolution.id, checksum, canonical_digest(record_document(spec))])
+                                    "http", "1", generations["http"]["resolution_id"], checksum, canonical_digest(record_document(spec))])
     content = (Path(tools_dir) / "server/templates/admission.service").read_text()
     content = content.replace("@MARKER@", marker(entry)).replace("@BOOT@", command)
     boot_unit = "foundry-admission-" + spec.identity.instance_id + ".service"
@@ -447,7 +452,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     for name in set(previous.roles) - set(inventory.roles):
         host.run(["systemctl", "disable", previous.units[name]])
     if launch is not None:
-        install_units(host, registry, entry, inventory, launch, Path(__file__).resolve().parents[1], names=names)
+        install_units(host, registry, entry, inventory, launch, Path(__file__).resolve().parents[1])
     path = release.release_path(host, entry, inventory.deployment.release)
     env = runtime_config.effective_environment_path(host, entry, inventory.resolution)
     if attempt["action"] == "deploy":
