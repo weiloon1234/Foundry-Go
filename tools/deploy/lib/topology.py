@@ -204,14 +204,28 @@ class ConfigFile:
     source: str
     mode: str
     bindings: tuple[tuple[str, Argument], ...]
+    format: str | None = None
+    path: str = "value"
+    directory_environment: str | None = None
 
     @classmethod
     def parse(cls, value):
-        contract_object(value, ("source", "mode"), ("bindings",))
+        contract_object(value, ("source", "mode"), ("bindings", "format", "path", "directory_environment"))
         source = contract_path(value["source"])
         require(source.startswith("deploy/files/"), "invalid_topology", "Config sources belong under deploy/files/.")
-        require(value["mode"] in ("immutable", "seed-once", "recreate", "rendered-json"),
+        require(value["mode"] in ("immutable", "seed-once", "recreate", "rendered-json", "rendered-template"),
                 "invalid_topology", "Unknown configuration mode.")
+        format = value.get("format")
+        require(("format" not in value and value["mode"] != "rendered-template") or
+                (format in ("ini", "yaml", "json", "text") and value["mode"] in ("rendered-template", "recreate")),
+                "invalid_topology", "Templates require a format and rendered-template/recreate mode; seed-once is not safe for rotation.")
+        path = contract_path(value.get("path", "value"))
+        directory_environment = value.get("directory_environment")
+        require(("directory_environment" not in value or directory_environment in ("HOME", "XDG_CONFIG_HOME"))
+                and (not {"path", "directory_environment"}.intersection(value) or format is not None),
+                "invalid_topology", "Template directories may supply only HOME or XDG_CONFIG_HOME.")
+        require(format is None or "bindings" not in value, "invalid_topology",
+                "Templates use placeholders, not JSON pointer bindings.")
         bindings = value.get("bindings", {})
         require(isinstance(bindings, dict) and len(bindings) <= 128
                 and (not bindings or value["mode"] in ("rendered-json", "recreate")),
@@ -230,7 +244,7 @@ class ConfigFile:
         pointers = [p for p, _ in result]
         require(not any(b.startswith(a + "/") for a in pointers for b in pointers if a != b),
                 "invalid_topology", "Configuration pointers overlap.")
-        return cls(source, value["mode"], tuple(result))
+        return cls(source, value["mode"], tuple(result), format, path, directory_environment)
 
 
 @dataclass(frozen=True)

@@ -144,6 +144,13 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
                                    self.archive, c.digest(self.archive), wiring.TOOLS)
         self.journal['completed'].append('application')
 
+    def test_recovery_preserves_archived_template_floor_after_application_rollback(self):
+        registry, entry = self.target()
+        self.snapshot['selection']['minimum_generation'] = 14
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            self.assertEqual(lifecycle.load(self.host, entry)[1].minimum_generation, 14)
+
     def test_takeover_exact_release_enablement_private_health_and_fresh_replay(self):
         registry, entry = self.target(running=('relay',), public=True)
         with self.host.lock('host'):

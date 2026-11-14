@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Added: per-start secret configuration templates for INI, YAML, JSON, and text.
+  `rendered-template` creates root-owned mode-0640 output; `recreate` with a
+  declared format supplies an instance-owned mode-0600 working copy on every
+  admitted start. Relative destinations and framework-owned HOME/XDG_CONFIG_HOME
+  settings support daemons that rewrite their configuration. Placeholders resolve
+  declared service secrets and endpoint/executable bindings only in value positions.
+  Unsafe encodings and persistent `seed-once` templates refuse. Existing private
+  secret intake and rotation remain authoritative. This capability requires deploy
+  generation 14 and retains that client floor after application rollback.
+
 ## v0.32.0 — 2026-11-14
 
 - Added: B24 release 1 completes the v0.31.0 host capabilities preview while

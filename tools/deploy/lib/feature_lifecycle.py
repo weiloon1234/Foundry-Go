@@ -391,6 +391,8 @@ def transition_enablement(host, entry, inventory, *, restoring=False):
 def transition(host, registry, entry, inventory, state, attempt, *, stop_only=False,
                names=None, configuration=None, launch=None, review=None, maintenance_request=None):
     import release
+    from upgrades import check_feature_generation
+    minimum_generation = check_feature_generation(registry, inventory.topology, entry)
     store = admission.AdmissionStore(host, inventory.profile.instance_id)
     old = entry.get("deployment_selection", {}).get("selected_resolution_id", inventory.resolution.id)
     previous = load(host, entry)[2] if "deployment_selection" in entry else inventory
@@ -421,7 +423,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     inventory.start_order(running)
     attempt["running_roles"] = sorted(running)
     host.save_state(entry, state)
-    selected = DeploymentSelection(inventory.profile.instance_id, FEATURE_LIFECYCLE_GENERATION, tuple(sorted(FEATURE_CAPABILITIES)),
+    selected = DeploymentSelection(inventory.profile.instance_id, minimum_generation, tuple(sorted(FEATURE_CAPABILITIES)),
                  inventory.resolution.id, None if old == inventory.resolution.id else old,
                  AdmissionRecord(inventory.profile.instance_id, inventory.resolution.id, inventory.resolution.deployment_sha256,
                                  inventory.resolution.private_revision, attempt["operation_id"], AdmissionDisposition.PENDING),

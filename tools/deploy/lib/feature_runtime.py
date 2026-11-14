@@ -108,7 +108,7 @@ def run(action, pin, launch):
             runtime_config._read_value_file(host, entry, path)
         runtime_config.prepare_service(host, store, invocation, role, spec, release, declaration.inventory,
                                        views=views, secret_paths=launch["secret_paths"].get(spec.identity.role, {}),
-                                       uid=entry["allocations"]["uid"], gid=entry["allocations"]["gid"], permit_id=permit_id)
+                                       uid=entry["allocations"]["uid"], gid=entry["allocations"]["gid"], permit_id=permit_id, entry=entry)
     with store.preparation(invocation, permit_id=permit_id):
         runtime_config.effective_environment_path(host, entry, inventory.resolution, spec.identity.role)
         admission.protected_directory(host, view)
@@ -125,6 +125,7 @@ def run(action, pin, launch):
                         "service_environment", "Custom environment cannot override framework runtime identity.")
                 environment[key] = services.resolve_argument(value, role, spec, inventory.resolution, paths, views, secrets)
             environment.update({key: secrets[key] for key, _ in role.secret_files})
+            environment.update(services.config_environment(role, paths))
         from contracts import atomic_json
         atomic_json(dispatch, {"invocation": record_document(invocation), "argv": [spec.executable, *spec.arguments],
                                "environment": environment}, mode=0o644)

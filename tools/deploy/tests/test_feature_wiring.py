@@ -340,7 +340,7 @@ class FeatureWiringFixture(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, public=False, secrets=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, public=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -350,6 +350,8 @@ class FeatureWiringFixture(unittest.TestCase):
             {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
              "arguments": [{"listener_address": "api"}, {"listener_port": "api"}],
              **({"secret_files": {"TOKEN_FILE": "relay-token"}} if secrets else {}),
+             **({"configs": {"private": {"source": "deploy/files/private.yaml", "mode": "rendered-template",
+                    "format": "yaml", "path": "relay.yaml", "directory_environment": "XDG_CONFIG_HOME"}}} if templates else {}),
              **({"recovery_rehearsal_safe": True} if rehearsal_safe else {}),
              "listeners": {"api": ({"transport": "tcp", "bind": "public", "tls": "none", "authentication": True}
                                     if public else {"transport": "tcp", "bind": "loopback"})},
@@ -375,6 +377,8 @@ class FeatureWiringFixture(unittest.TestCase):
         self.version = version
         files = {"artisan": binary, "config/deploy.toml": b'[project]\n[app.worker]\nconnection = "target-queue"\n', "public/index.html": b"fixture",
                  "private-source-maps/" + self.version + "/a.map": b"{}", path: binary}
+        if templates:
+            files["deploy/files/private.yaml"] = b"token: {{secret.TOKEN_FILE}}\n"
         kinds = artifacts.declared_release_files(self.topology, (), (path,))
         declaration = c.ReleaseDeclaration.parse({"schema": 2, "topology": self.topology.projection(), "profile": self.profile,
             "topology_sha256": self.topology.sha256, "application_executables": {},
@@ -544,6 +548,50 @@ class FeatureWiringTests(FeatureWiringFixture):
             result = self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive),
                                   operation_id=operation, plan_token=plan['plan_token'])
         self.assertTrue(result['ok'])
+
+    def test_secret_template_rotation_restart_and_rollback_keep_private_output_and_floor(self):
+        self.build_archive(secrets=True, independent=True)
+        key = "FOUNDRY_SERVICE_SECRET__RELAY_TOKEN"
+        plan = self.request("bootstrap-plan", topology=self.topology.projection())
+        self.request("bootstrap-apply", topology=self.topology.projection(), plan_token=plan["plan_token"],
+                     confirm=True, secrets={"configuration": {key: "initial-canary"}})
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        old_version = self.version
+        self.build_archive(secrets=True, templates=True, independent=True, version="20261114T010000Z-abcdef13")
+        self.request("activate", archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        def selected_template(expected):
+            _, entry = self.host.require_identity(self.project, self.profile)
+            _, selected, inventory, launch = lifecycle.load(self.host, entry)
+            self.assertEqual(selected.minimum_generation, 14)
+            paths = services.ServicePaths.for_unit(inventory.specs["relay"].identity, inventory.resolution.id)
+            path = self.host.paths.p(paths.config("private", "rendered-template", "relay.yaml"))
+            self.assertEqual(json.loads(path.read_text().removeprefix("token: ")), expected)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o640)
+            view = (self.host.paths.p(paths.base) / "current").resolve()
+            dispatch = c.read_json(view / "dispatch.json")
+            self.assertEqual(dispatch["environment"]["XDG_CONFIG_HOME"], paths.base + "/current/config/private")
+            for public in (json.dumps(dispatch), json.dumps(launch), json.dumps(self.host.read_registry()),
+                           json.dumps(self.request("status")), json.dumps(self.host.commands),
+                           self.host.paths.p("/etc/systemd/system/" + inventory.units["relay"]).read_text()):
+                self.assertNotIn(expected, public)
+            return path.resolve(), inventory
+        first, before = selected_template("initial-canary")
+        http = self.host.running[before.units["http"]]
+        self.host.started.clear()
+        with patch.object(release.backup, "archive_keys"):
+            self.request("config-set", secrets={"configuration": {key: 'replacement-canary"#;]雪'}}, confirm=True)
+        second, _ = selected_template('replacement-canary"#;]雪')
+        self.assertNotEqual(first, second)
+        self.assertEqual(self.host.started, ["relay"])
+        self.assertEqual(self.host.running[before.units["http"]], http)
+        self.request("restart", operation_id=str(uuid.uuid4()))
+        third, _ = selected_template('replacement-canary"#;]雪')
+        self.assertNotEqual(second, third)
+        self.rollback_target(old_version)
+        _, entry = self.host.require_identity(self.project, self.profile)
+        self.assertEqual(entry["deployment_selection"]["minimum_generation"], 14)
+        with self.assertRaisesRegex(c.DeployError, "generation 14"):
+            upgrades.check_instance_capabilities(entry, 13)
 
     def test_service_secret_rotation_retains_http_and_private_values(self):
         import runtime_config
@@ -1089,7 +1137,7 @@ class FeatureWiringTests(FeatureWiringFixture):
             self.assertEqual(error.exception.code, expected)
         self.assertNotIn(["ufw", "reload"], self.host.commands)
 
-    def test_deployed_generation_12_profile_can_plan_apply_and_resume_generation_13_upgrade(self):
+    def test_deployed_generation_12_profile_can_plan_apply_and_resume_current_upgrade(self):
         from contextlib import ExitStack
         import runtime_config
         source = self.host.paths.root / 'preview-tools'
@@ -1123,7 +1171,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         operation = str(uuid.uuid4())
         result = self.request('tools-apply', plan_token=plan['plan_token'], operation_id=operation)
         self.assertEqual(result['outcome'], 'succeeded')
-        self.assertEqual(self.host.read_registry()['tools']['generation'], 13)
+        self.assertEqual(self.host.read_registry()['tools']['generation'], upgrades.protocol()['generation'])
         self.assertEqual(self.host.running, before)
         self.assertFalse(set(inventory.units.values()) & self.host.enabled)
         self.assertEqual(self.request('upgrade-resume', plan_token=plan['plan_token'],

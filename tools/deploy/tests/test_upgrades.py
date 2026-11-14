@@ -461,8 +461,9 @@ class UpgradeTests(unittest.TestCase):
                 upgrades.tool_bundle(self.source)
 
     def test_inventory_requirements_are_cumulative_by_inspected_bundle_generation(self):
-        additions = upgrades.GENERATION_11_FILES | upgrades.GENERATION_12_FILES | upgrades.GENERATION_13_FILES
-        for generation in (9, 10, 11, 12, 13):
+        additions = (upgrades.GENERATION_11_FILES | upgrades.GENERATION_12_FILES |
+                     upgrades.GENERATION_13_FILES | upgrades.GENERATION_14_FILES)
+        for generation in (9, 10, 11, 12, 13, 14):
             with self.subTest(generation=generation):
                 for name in additions:
                     (self.source / name).unlink(missing_ok=True)
