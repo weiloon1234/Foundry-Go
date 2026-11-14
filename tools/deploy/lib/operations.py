@@ -9,6 +9,7 @@ from contracts import (AdmissionDisposition, Deployment, DeployError, HostTransi
                        atomic_json, canonical_digest, contract_uuid, record_document, require)
 from host import Host
 import services
+import operation_lock
 from topology import parse_profile, parse_topology
 
 
@@ -125,7 +126,7 @@ def cleanup(host, request, pin):
     import feature_network
     import release
     operation = pin["operation_id"]
-    with host.lock("host"), host.lock(pin["instance_id"]):
+    with operation_lock.acquire(host, request, cleanup=True), host.lock(pin["instance_id"]):
         registry = host.read_registry()
         entry = registry["instances"][pin["instance_id"]]
         require(release.legacy_profile(entry["profile"]) == release.legacy_profile(request["profile"]),
@@ -215,7 +216,11 @@ def run(action, pin):
     store.require_cleanup_clear(pin["operation_id"])
     store.cleanup_status(pin["operation_id"], pin["invocation_id"], "armed")
     try:
-        result = feature_lifecycle.execute(host, request, pin=pin)
+        if request["action"] == "recover-activate":
+            import feature_recovery
+            result = feature_recovery.execute(host, request, pin)
+        else:
+            result = feature_lifecycle.execute(host, request, pin=pin)
     except (DeployError, OSError) as error:
         result = {"error": {"code": error.code if isinstance(error, DeployError) else "filesystem_failed",
                             "detail": error.detail if isinstance(error, DeployError) else "Inspect the owned operation journal."}}
@@ -224,3 +229,21 @@ def run(action, pin):
         atomic_json(root / "complete.json", {"schema": 1, "operation_id": pin["operation_id"],
                     "invocation_id": pin["invocation_id"], "result_sha256": canonical_digest(result)}, mode=0o600)
     return 0 if result.get("ok") is True else 1
+
+
+def launch(host, request, owner):
+    operation_id = request["operation_id"]
+    root = directory(host, operation_id)
+    store = admission.AdmissionStore(host, request["profile"]["instance_id"])
+    unit = "foundry-operation-" + operation_id
+    cleanup = services.command_line(command("operation-cleanup", operation_id, owner["bundle_sha256"]))
+    result = host.run(["systemd-run", "--quiet", "--wait", "--collect", "--unit", unit,
+              "--property=Type=exec", "--property=Restart=no", "--property=KillMode=control-group",
+              "--property=TimeoutStopSec=3600", "--property=RuntimeMaxSec=1800", "--property=ExecStopPost=" + cleanup,
+              *command("operation", operation_id, owner["bundle_sha256"])], timeout=5400, check=False)
+    receipt = admission.read_owned(host, root / "result.json", lambda value: value)
+    if "error" in receipt:
+        raise DeployError(receipt["error"]["code"], receipt["error"]["detail"])
+    store.require_cleanup_clear()
+    require(result.returncode == 0, "feature_operation_failed", "Operation exit differs from its receipt; inspect the journal.")
+    return receipt

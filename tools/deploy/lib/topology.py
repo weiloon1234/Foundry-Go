@@ -317,15 +317,22 @@ class ResourceLimits:
 class StatePolicy:
     kind: str
     acknowledged: bool
+    recovery_owner: str | None = None
 
     @classmethod
     def parse(cls, value):
-        contract_object(value, ("kind",), ("acknowledged",))
+        contract_object(value, ("kind",), ("acknowledged", "recovery_owner"))
         require(value["kind"] in ("disposable", "external", "local-unprotected"), "invalid_topology", "Invalid service state policy.")
         require((value["kind"] == "local-unprotected" and value.get("acknowledged") is True)
                 or (value["kind"] != "local-unprotected" and "acknowledged" not in value),
                 "invalid_topology", "Unprotected local state requires an explicit acknowledgement.")
-        return cls(value["kind"], value.get("acknowledged", False))
+        owner = None
+        if "recovery_owner" in value:
+            require(value["kind"] == "external", "invalid_topology", "Only external state names a recovery owner.")
+            owner = contract_text(value["recovery_owner"], limit=256)
+            require(owner == owner.strip() and bool(owner.strip()),
+                    "invalid_topology", "External recovery owners must be nonblank public labels without surrounding whitespace.")
+        return cls(value["kind"], value.get("acknowledged", False), owner)
 
 
 @dataclass(frozen=True)
@@ -465,6 +472,7 @@ class ExecutableRole:
     limits: ResourceLimits
     state: StatePolicy
     environment: tuple[tuple[str, Argument], ...]
+    recovery_rehearsal_safe: bool = False
 
 
 Role = Union[BuiltinRole, ExecutableRole]
@@ -475,7 +483,8 @@ def _role(value):
     require(not set(value).intersection(("wrapper", "instances", "proxy_protocol")),
             "unsupported_capability", "Wrappers and numbered services require a later capability.")
     common = ("packages", "requires", "bindings", "maintenance", "artifact_mounts")
-    custom = ("executable", "arguments", "configs", "secret_files", "listeners", "readiness", "restart", "limits", "state", "environment")
+    custom = ("executable", "arguments", "configs", "secret_files", "listeners", "readiness", "restart", "limits", "state", "environment",
+              "recovery_rehearsal_safe")
     contract_object(value, ("name", "kind"), common + custom)
     name = contract_name(value["name"])
     require(value["kind"] in ("builtin", "executable"), "invalid_topology", "Unknown role kind.")
@@ -492,6 +501,8 @@ def _role(value):
         require(not set(value).intersection(custom), "invalid_topology", "Built-in runtime commands cannot be overridden.")
         return BuiltinRole(shared)
     contract_object(value, ("name", "kind", "executable", "readiness", "restart", "limits", "state"), common + custom)
+    rehearsal_safe = value.get("recovery_rehearsal_safe", False)
+    require(type(rehearsal_safe) is bool, "invalid_topology", "Recovery rehearsal safety requires an explicit boolean.")
     configs = contract_map(value.get("configs", {}), ConfigFile.parse, maximum=64)
     listeners = contract_map(value.get("listeners", {}), Listener.parse, maximum=MAX_LISTENERS)
     args = contract_list(value.get("arguments", []), Argument.parse, maximum=128)
@@ -514,7 +525,7 @@ def _role(value):
                           tuple((_secret_file_name(k), contract_name(v)) for k, v in sorted(secrets.items())), listeners,
                           Probe.parse(value["readiness"]), RestartPolicy.parse(value["restart"]),
                           ResourceLimits.parse(value["limits"]), StatePolicy.parse(value["state"]),
-                          env)
+                          env, rehearsal_safe)
 
 
 @dataclass(frozen=True)

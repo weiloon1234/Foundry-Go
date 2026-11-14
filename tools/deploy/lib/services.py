@@ -314,7 +314,11 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
                     "ENVIRONMENT": "\n".join("Environment=" + systemd_word(key + "=" + value) for key, value in environment),
                     "MOUNTS": mounts}
     content = (TEMPLATES / "custom.service").read_text()
-    return re.sub(r"@([A-Z]+)@", lambda match: replacements[match[1]], content).replace("[Unit]\n", "[Unit]\n" + condition)
+    content = re.sub(r"@([A-Z]+)@", lambda match: replacements[match[1]], content).replace("[Unit]\n", "[Unit]\n" + condition)
+    import rehearsal
+    if rehearsal.active(entry) and role.recovery_rehearsal_safe:
+        content = content.replace("[Service]\n", "[Service]\n" + rehearsal.FILTER)
+    return content
 
 
 def readiness_probe(role, paused=False):

@@ -104,7 +104,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
         if not rollback:
             target_path = target
         topology = parse_topology(declaration.topology_json)
-        candidate_profile = parse_profile(declaration.profile_json, topology)
+        candidate_profile = parse_profile(release.target_declaration(host, entry, manifest)["profile"], topology)
         import feature_maintenance
         feature_maintenance.stopped_roles(topology)
         application, changes = runtime_config.configuration_parts(configuration or {}, topology=topology)
@@ -124,7 +124,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
         else:
             values = runtime_config.validate_runtime_environment(host, entry)
         inventory, secret_paths = lifecycle.resolve(host, entry, manifest, declaration, target_path, roots, operation_id,
-            private_paths=paths, values=values,
+            private_paths=paths, values=values, profile=candidate_profile.projection(),
             revision=entry["configuration_revision"] + bool(configuration_intent))
         launch = lifecycle.save_launch(host, entry, inventory, declaration, roots, secret_paths)
         env = runtime_config.effective_environment_path(host, entry, inventory.resolution, candidate=True)

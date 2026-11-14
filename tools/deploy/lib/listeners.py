@@ -296,6 +296,9 @@ def _feature_projection(entry, topology, profile, endpoints):
     from provision import _template
     from topology import validate_topology
     import edge
+    import rehearsal
+    if rehearsal.active(entry):
+        return rehearsal.projection(entry, endpoints)
     endpoint = next(e for e in endpoints if (e.role, e.listener) == ("http", "http"))
     require(endpoint.address == "127.0.0.1", "network_projection", "The owned HTTP renderer requires IPv4 loopback.")
     view = {**entry, "profile": profile.projection(), "allocations": {**entry["allocations"], "http_port": endpoint.port},
@@ -349,7 +352,8 @@ def feature_allocate(host, entry, topology, profile, operation_id, *, retained=N
     registry, history = _feature_history(host)
     from report import claim_inventory
     observed = observe_sockets(host)
-    requested = public_claims(profile)
+    import rehearsal
+    requested = () if rehearsal.active(entry) else public_claims(profile)
     other = tuple(c for c in claim_inventory(registry) if c.instance_id != profile.instance_id)
     other += tuple(c for _, inv in history if inv.profile.instance_id != profile.instance_id for c in public_claims(inv.profile))
     owned = {c.socket for _, inv in history if inv.profile.instance_id == profile.instance_id for c in public_claims(inv.profile)}
@@ -488,6 +492,9 @@ def feature_withdraw(host, entry, transition, resolution, units):
     """Record scoped ingress withdrawal without claiming backend exit."""
     import edge
     import firewall
+    import rehearsal
+    if rehearsal.active(entry):
+        return rehearsal.withdraw(host, entry, transition, resolution, units)
     import json
     from contracts import DeployError
     transition, inventory, old, scoped, retained = _transition_scope(host, entry, transition, resolution, units)
@@ -552,6 +559,9 @@ def feature_withdraw(host, entry, transition, resolution, units):
 def feature_close(host, entry, transition, resolution, units):
     """Prove scoped backend exit and reference isolation after withdrawing ingress."""
     import edge
+    import rehearsal
+    if rehearsal.active(entry):
+        return rehearsal.close(host, entry, transition, resolution, units)
     import time
     evidence = feature_withdraw(host, entry, transition, resolution, units)
     transition, inventory, old, scoped, retained = _transition_scope(host, entry, transition, resolution, units)
@@ -588,6 +598,10 @@ def feature_close(host, entry, transition, resolution, units):
 def feature_open(host, entry, resolution, evidence):
     """Verify the enabled, unheld graph and open only the proven affected scope."""
     import edge
+    import rehearsal
+    if rehearsal.active(entry):
+        rehearsal.observe(host, entry, _feature_inventory(host, entry, resolution.id))
+        return
     import firewall
     import certificates
     import time

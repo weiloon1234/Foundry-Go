@@ -90,7 +90,8 @@ def plan(host, topology, profile, package_plan, *, entry=None):
     import listeners
     from contracts import check_path, digest
     listeners.public_policies(profile, topology)
-    claims = listeners.public_claims(profile)
+    import rehearsal
+    claims = () if entry is not None and rehearsal.active(entry) else listeners.public_claims(profile)
     result = {"firewall": None, "persistent_projection": {}}
     if claims:
         selected = entry is not None and "deployment_selection" in entry
@@ -132,7 +133,8 @@ def prepare(host, entry, review, tools_dir, bundle):
     from topology import parse_profile, parse_topology
     topology = parse_topology(entry["topology"], registered=True)
     profile = parse_profile(entry["profile"], topology)
-    claims = listeners.public_claims(profile)
+    import rehearsal
+    claims = () if rehearsal.active(entry) else listeners.public_claims(profile)
     boot = checked_boot_files(host, tools_dir, bundle)
     operations.check_runtime(host, tools_dir)
     main = check_path(host.paths.p("/etc/nginx/nginx.conf"), "file")

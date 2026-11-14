@@ -161,9 +161,9 @@ def executable(host, reference, declaration, release_path, roots):
 
 
 def resolve(host, entry, manifest, declaration, release_path, roots, operation_id, *,
-            private_paths=None, values=None, revision=None, previous=None, affected=None):
+            private_paths=None, values=None, revision=None, previous=None, affected=None, profile=None):
     topology = parse_topology(declaration.topology_json)
-    profile = parse_profile(declaration.profile_json, topology)
+    profile = parse_profile(profile if profile is not None else declaration.profile_json, topology)
     affected = set(affected) if affected is not None else {role.common.name for role in topology.roles}
     if previous is not None:
         # Endpoint consumers have changed effective inputs when their provider moves.
@@ -602,7 +602,7 @@ def configuration_candidate(host, entry, state, request):
     _, _, previous, prior_launch = load(host, entry)
     record, values = runtime_config.read_configuration_revision(host, entry, request["configuration_intent"])
     manifest = state["current"]
-    path = release.verified_release(host, entry, manifest)
+    path = release.verified_release(host, entry, manifest, reviewed=True)
     declaration = release.runtime_declaration(prior_launch["declaration"])
     paths = runtime_config.service_secret_paths(host, entry, previous.topology, paths=record["paths"], profile=previous.profile)
     affected = {name for name in previous.roles if paths.get(name, {}) != prior_launch["secret_paths"].get(name, {})}
@@ -610,7 +610,8 @@ def configuration_candidate(host, entry, state, request):
         affected.update(previous.roles)
     require(affected, "invalid_configuration", "Configuration intent has no changed effective inputs.")
     inventory, paths = resolve(host, entry, manifest, declaration, path, prior_launch["artifact_roots"], request["operation_id"],
-        private_paths=record["paths"], values=values, revision=record["revision"], previous=previous, affected=affected)
+        private_paths=record["paths"], values=values, revision=record["revision"], previous=previous, affected=affected,
+        profile=previous.profile.projection())
     launch = save_launch(host, entry, inventory, declaration, prior_launch["artifact_roots"], paths)
     env = runtime_config.effective_environment_path(host, entry, inventory.resolution, candidate=True)
     release.app(host, entry, path, "config:check", env_file=env)
@@ -631,10 +632,14 @@ def configuration_candidate(host, entry, state, request):
     return inventory, launch, affected, attempt
 
 
-def prepare_release(host, entry, state, request):
+def prepare_release(host, entry, state, request, *, recovery_declaration=None):
     import release
     archive = check_path(Path(request["archive"]), "file")
-    release.unpack_archive(host, archive, None, entry, request["archive_sha256"], reviewed=True)
+    manifest = release.unpack_archive(host, archive, None, entry, request["archive_sha256"], reviewed=True)
+    if recovery_declaration is not None:
+        require(manifest["deployment"] == recovery_declaration and
+                manifest["commit"] == entry["recovered_from"]["release_commit"],
+                "recovery_release_changed", "Recovery requires the exact archived declaration and release commit.")
     stage_root = operations.staging(host, entry, request["operation_id"])
     admission.protected_directory(host, stage_root, 0o700)
     staging = stage_root / "release"
@@ -643,7 +648,8 @@ def prepare_release(host, entry, state, request):
                                       expansion_budget=budget, reviewed=True)
     declaration = ReleaseDeclaration.parse(manifest["deployment"])
     topology = parse_topology(declaration.topology_json)
-    profile_record = parse_profile(declaration.profile_json, topology)
+    profile_record = parse_profile(entry["profile"] if recovery_declaration is not None else
+        release.target_declaration(host, entry, manifest)["profile"], topology)
     feature_maintenance.stopped_roles(topology)
     require(release.legacy_profile(profile_record.projection()) == release.legacy_profile(entry["profile"]),
             "release_identity", "Reviewed releases cannot change the instance host or infrastructure profile.")
@@ -814,15 +820,4 @@ def request_operation(host, action, project, profile, *, operation_id=None, **ar
             import feature_plan
             feature_plan.reviewed(host, registry, entry, request)
         owner = operations.prepare(host, registry, entry, request)
-    unit = "foundry-operation-" + operation_id
-    cleanup = services.command_line(operations.command("operation-cleanup", operation_id, owner["bundle_sha256"]))
-    result = host.run(["systemd-run", "--quiet", "--wait", "--collect", "--unit", unit,
-              "--property=Type=exec", "--property=Restart=no", "--property=KillMode=control-group",
-              "--property=TimeoutStopSec=3600", "--property=RuntimeMaxSec=1800", "--property=ExecStopPost=" + cleanup,
-              *operations.command("operation", operation_id, owner["bundle_sha256"])], timeout=5400, check=False)
-    receipt = admission.read_owned(host, directory / "result.json", lambda value: value)
-    if "error" in receipt:
-        raise DeployError(receipt["error"]["code"], receipt["error"]["detail"])
-    store.require_cleanup_clear()
-    require(result.returncode == 0, "feature_operation_failed", "Operation exit differs from its receipt; inspect the journal.")
-    return receipt
+    return operations.launch(host, request, owner)

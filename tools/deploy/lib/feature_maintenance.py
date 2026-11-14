@@ -57,7 +57,7 @@ def candidate(host, entry, state, request):
     declaration = release.runtime_declaration(launch["declaration"])
     inventory, paths = lifecycle.resolve(host, entry, state["current"], declaration,
         release.release_path(host, entry, previous.deployment.release), launch["artifact_roots"], request["operation_id"],
-        previous=previous, affected=affected)
+        previous=previous, affected=affected, profile=previous.profile.projection())
     launch = lifecycle.save_launch(host, entry, inventory, declaration, launch["artifact_roots"], paths)
     return inventory, launch, affected
 
