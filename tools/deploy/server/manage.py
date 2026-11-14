@@ -9,14 +9,14 @@ import sys
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
-from contracts import DeployError, MAX_JSON, check_path, identity, now, parse_env, parse_json, read_json, require
+from contracts import DeployError, FEATURE_LIFECYCLE_GENERATION, MAX_JSON, check_path, identity, now, parse_env, parse_json, read_json, require
 from topology import instance_units, selected_units
 from host import Host
 import journal
 import maintenance
 
 ACTIONS = ("capacity-plan", "capacity-apply", "hello", "sync", "tools-plan", "tools-apply", "upgrade-resume", "inspect",
-           "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "activate", "status", "rollback", "restart",
+           "bootstrap-plan", "bootstrap-apply", "recover-plan", "recover-apply", "release-plan", "activate", "status", "rollback", "restart",
            "stop", "down", "up", "backup-keys-rotate", "backup-recipients-rotate", "dns-token-rotate", "backup-configure", "backup-run",
            "restore-drill", "logs", "config-keys", "config-set", "keys-rotate", "reconcile", "report")
 
@@ -34,12 +34,12 @@ def execute(host, action, request):
     if action == "hello":
         return upgrades.hello(host)
     common = {"protocol", "client", "project", "profile", "operation_id", "confirm"}
-    recovery_fields = {"topology", "mode", "recovery_archive", "archive_sha256", "target_time"}
+    recovery_fields = {"topology", "mode", "recovery_archive", "archive_sha256", "target_time", "recovery_public_binding"}
     arguments = {"recover-plan": recovery_fields,
                  "recover-apply": recovery_fields | {"archive", "plan_token", "old_server_gone"}, "bootstrap-plan": {"topology"}, "bootstrap-apply": {"topology", "plan_token", "secrets"},
                  "restart": {"role"}, "stop": {"role"}, "logs": {"role", "lines"}, "down": maintenance.FIELDS,
-                 "activate": {"archive", "archive_sha256"}, "config-set": {"values", "secrets"},
-                 "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current"},
+                 "activate": {"archive", "archive_sha256", "plan_token"}, "release-plan": {"archive", "archive_sha256", "secrets", "target", "expected_current", "topology"}, "config-set": {"values", "secrets"},
+                 "keys-rotate": {"secrets"}, "rollback": {"target", "expected_current", "plan_token"},
                  "backup-keys-rotate": {"secrets"}, "backup-recipients-rotate": {"secrets"},
                  "dns-token-rotate": {"secrets"}, "backup-configure": {"secrets"}, "backup-run": {"kind"},
                  "restore-drill": {"backup_id", "target_time", "target_inclusive", "retain"},
@@ -67,7 +67,7 @@ def execute(host, action, request):
     identity(project, profile)
     if action in ("recover-plan", "recover-apply"):
         import recover
-        arguments = {key: request.get(key) for key in ("topology", "mode", "operation_id", "archive_sha256", "target_time")}
+        arguments = {key: request.get(key) for key in ("topology", "mode", "operation_id", "archive_sha256", "target_time", "recovery_public_binding")}
         require(isinstance(request.get("recovery_archive"), str), "recovery_members", "A staged private recovery archive is required.")
         arguments["recovery_archive"] = request["recovery_archive"]
         source = Path(__file__).resolve().parents[1]
@@ -100,9 +100,34 @@ def execute(host, action, request):
         return {"profile": entry["profile"], "topology": entry["topology"]}
     _, entry = host.require_identity(project, profile)
     import feature_lifecycle
-    if feature_lifecycle.is_feature(entry) and action in ("activate", "restart", "stop", "down", "up"):
+    enablement_migration = None
+    if feature_lifecycle.is_feature(entry) and request.get("client", {}).get("generation", 0) >= FEATURE_LIFECYCLE_GENERATION:
+        with host.lock("host"), host.lock(profile["instance_id"]):
+            registry, entry = host.require_identity(project, profile)
+            enablement_migration = feature_lifecycle.migrate_enablement(host, registry, entry)
+        if action not in ("down", "up", "activate", "rollback"):
+            import feature_maintenance
+            feature_maintenance.reconcile(host, project, profile,
+                allow_start=action in ("status", "restart", "config-set", "keys-rotate"))
+            _, entry = host.require_identity(project, profile)
+    if action == "release-plan":
+        if not feature_lifecycle.is_feature(entry):
+            require(request.get("target") is not None, "invalid_request", "Legacy release plans select an explicit rollback target.")
+            return release.legacy_rollback_plan(host, project, profile, request["target"], request.get("expected_current"),
+                                                request.get("operation_id"), request.get("topology"))
+        import feature_plan
+        private = request.get("secrets", {})
+        require(isinstance(private, dict) and set(private) <= {"configuration"}, "invalid_secrets", "Invalid release private input.")
+        return feature_plan.plan(host, project, profile, request.get("archive"), request.get("archive_sha256"),
+                                 request.get("operation_id"), private.get("configuration"), target=request.get("target"),
+                                 expected_current=request.get("expected_current"), supplied_topology=request.get("topology"))
+    if feature_lifecycle.is_feature(entry) and action in ("activate", "rollback", "restart", "stop", "down", "up"):
         feature_lifecycle.check_operation(action)
-        arguments = {key: request[key] for key in ("archive", "archive_sha256", "role") if key in request}
+        arguments = {key: request[key] for key in ("archive", "archive_sha256", "plan_token", "role", "target", "expected_current") if key in request}
+        if action in ("down", "up"):
+            require(request.get("confirm") is True, "confirmation_required", "Confirm the maintenance change.")
+            arguments["maintenance"] = {key: request[key] for key in maintenance.FIELDS if key in request}
+            maintenance.arguments(action, arguments["maintenance"])
         return feature_lifecycle.request_operation(host, action, project, profile,
                    operation_id=request.get("operation_id"), **arguments)
     if action in ("capacity-plan", "capacity-apply"):
@@ -162,7 +187,7 @@ def execute(host, action, request):
                                 operation_id=request.get("operation_id"))
     if action == "rollback":
         return release.rollback(host, project, profile, request.get("target"),
-                                request.get("expected_current"), request.get("operation_id"))
+                                request.get("expected_current"), request.get("operation_id"), request.get("plan_token"))
     if action == "reconcile":
         require(request.get("confirm") is True, "confirmation_required", "Inspect status and confirm reconciliation first.")
         return release.reconcile(host, project, profile)
@@ -180,6 +205,9 @@ def execute(host, action, request):
         return release.keys_rotate(host, project, profile, request.get("operation_id"), private.get("encryption"))
     if action == "config-keys":
         values = parse_env(check_path(host.paths.instance_config(entry["name"]) / "app.env", "file").read_text())
+        if feature_lifecycle.is_feature(entry):
+            from topology import parse_topology, service_secret_keys
+            values.update({key: "[redacted]" for key in service_secret_keys(dict(parse_topology(entry["topology"], registered=True).secrets))})
         return {"keys": sorted(values), "locked_keys": sorted(release.pipeline_keys(entry)), "configuration_revision": entry["configuration_revision"]}
     if action == "logs":
         # Explicit operator action. Logs are never included in the host report.
@@ -195,7 +223,8 @@ def execute(host, action, request):
         version = release.current_version(host, entry)
         live = maintenance.status(host, entry, release.release_path(host, entry, version)) if version else None
         return {"instance": entry, "state": state, "maintenance": live,
-                "live_version": version, "services": release.services(host, entry)}
+                "live_version": version, "services": release.services(host, entry),
+                **({"enablement_migration": enablement_migration} if enablement_migration else {})}
     if action in ("down", "up"):
         require(request.get("confirm") is True, "confirmation_required", "Confirm the maintenance change.")
         extra = maintenance.arguments(action, {key: request[key] for key in maintenance.FIELDS if key in request})

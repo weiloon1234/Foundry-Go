@@ -58,10 +58,12 @@ fi
 framework=$(cd "$framework" && pwd -P)
 archive=$(cd "$(dirname "$archive")" && pwd -P)/$(basename "$archive")
 tests="$framework/tools/deploy/tests"
+local_tools="$framework/tools/deploy/local"
+containers="$local_tools/containers.py"
 if ((upgrade)); then
   [[ -f "$tests/acceptance_upgrade.py" ]] || { echo 'Missing upgrade acceptance driver' >&2; exit 2; }
 fi
-for required in host.Dockerfile acceptance.Dockerfile acceptance_host.py acceptance_nginx.py acceptance_foreign.py acceptance_roles.py acceptance_backup.py acceptance_recover.py acceptance_edge.py acceptance_support.py acceptance_http.py acceptance_diagnostics.py acceptance_phase.py acceptance_uploads.py; do
+for required in acceptance_host.py acceptance_nginx.py acceptance_foreign.py acceptance_roles.py acceptance_backup.py acceptance_recover.py acceptance_edge.py acceptance_support.py acceptance_http.py acceptance_diagnostics.py acceptance_phase.py acceptance_uploads.py; do
   [[ -f "$tests/$required" ]] || { echo "Missing integrated fixture: $required" >&2; exit 2; }
 done
 if [[ -n "${ACCEPTANCE_LOG_DIR:-}" ]]; then
@@ -79,7 +81,7 @@ s3=foundry-s3-$token
 volume=foundry-s3-data-$token
 image=foundry-acceptance-host:$token
 base_image=foundry-acceptance-base:$token
-s3_image=versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316
+s3_image=$(python3 "$containers" s3-image)
 env_file=$logs/.private-env
 certs=$logs/.private-tls
 mkdir -m 700 "$certs"
@@ -152,49 +154,17 @@ ACCEPTANCE_BACKUP_BUCKET=backup-$token
 ACCEPTANCE_SCHEDULE_MESSAGE=${ACCEPTANCE_SCHEDULE_MESSAGE:-acceptance schedule completed}
 ACCEPTANCE_SECRET_CONFIG_KEYS=${ACCEPTANCE_SECRET_CONFIG_KEYS:-}
 EOF
-# A private disposable CA signs both the S3 stand-in endpoint and synthetic site
-# lineages. pgBackRest/rclone/app clients use the normal host trust store.
-# Explicit CA extensions: LibreSSL adds none by default, and strict X.509
-# verifiers (Python 3.13+ on Ubuntu 26.04) require CA:TRUE and key identifiers.
-cat >"$certs/ca.cnf" <<'CA_CONFIG'
-[req]
-distinguished_name = dn
-x509_extensions = v3_ca
-prompt = no
-[dn]
-CN = Foundry-acceptance-CA
-[v3_ca]
-basicConstraints = critical,CA:TRUE
-keyUsage = critical,keyCertSign,cRLSign
-subjectKeyIdentifier = hash
-authorityKeyIdentifier = keyid:always
-CA_CONFIG
-openssl req -x509 -newkey rsa:2048 -nodes -days 2 -sha256 -config "$certs/ca.cnf" \
-  -keyout "$certs/ca.key" -out "$certs/ca.crt" >"$logs/tls-setup.log" 2>&1
-openssl req -new -newkey rsa:2048 -nodes -subj /CN=s3 \
-  -keyout "$certs/private.key" -out "$certs/s3.csr" >>"$logs/tls-setup.log" 2>&1
-cat >"$certs/s3.ext" <<'EOF'
-basicConstraints=critical,CA:FALSE
-keyUsage=critical,digitalSignature,keyEncipherment
-extendedKeyUsage=serverAuth
-subjectAltName=DNS:s3
-subjectKeyIdentifier=hash
-authorityKeyIdentifier=keyid,issuer
-EOF
-openssl x509 -req -in "$certs/s3.csr" -CA "$certs/ca.crt" -CAkey "$certs/ca.key" \
-  -CAcreateserial -days 2 -sha256 -extfile "$certs/s3.ext" -out "$certs/public.crt" \
-  >>"$logs/tls-setup.log" 2>&1
-chmod 600 "$certs/ca.key" "$certs/private.key"
+python3 "$containers" ca "$certs" >"$logs/tls-setup.log" 2>&1
 printf 'ubuntu=%s\nplatform=%s\nmode=%s\nupgrade=%s\ns3=%s\n' "$ubuntu" "$platform" "$mode" "$upgrade" "$s3_image" >"$logs/run.txt"
 echo "Acceptance logs: $logs"
 if [[ "$platform" == linux/amd64 ]]; then
   echo 'linux/amd64 uses emulation on arm64 hosts; expect substantially slower startup and execution.'
 fi
-docker build --platform "$platform" -f "$tests/host.Dockerfile" \
-  --build-arg "UBUNTU_VERSION=$ubuntu" -t "$base_image" "$tests" >"$logs/build-base.log" 2>&1
+docker build --platform "$platform" -f "$local_tools/host.Dockerfile" \
+  --build-arg "UBUNTU_VERSION=$ubuntu" -t "$base_image" "$local_tools" >"$logs/build-base.log" 2>&1
 base_created=1
-docker build --platform "$platform" -f "$tests/acceptance.Dockerfile" \
-  --build-arg "BASE_IMAGE=$base_image" -t "$image" "$tests" >"$logs/build.log" 2>&1
+docker build --platform "$platform" -f "$local_tools/acceptance.Dockerfile" \
+  --build-arg "BASE_IMAGE=$base_image" -t "$image" "$local_tools" >"$logs/build.log" 2>&1
 image_created=1
 docker network create "$network" >"$logs/network.log" 2>&1
 network_created=1
@@ -212,29 +182,14 @@ mkdir -m 700 "$certs/s3"
 cp "$certs/public.crt" "$certs/private.key" "$certs/s3/"
 docker cp "$certs/s3" "$s3:/certs" >"$logs/s3-tls-copy.log" 2>&1
 docker start "$s3" >"$logs/s3-start.log" 2>&1
-docker create --platform "$platform" --name "$host" --network "$network" \
-  --privileged --cgroupns=private --memory=4g --cpus=2 \
-  --tmpfs /run --tmpfs /run/lock --tmpfs /tmp \
+python3 "$containers" create-host --platform "$platform" --name "$host" --network "$network" \
   --mount "type=bind,source=$framework/tools/deploy,target=/verification/deploy,readonly" \
   --mount "type=bind,source=$framework,target=/verification/foundry-go,readonly" \
   ${old_tools_mount[@]+"${old_tools_mount[@]}"} \
-  "$image" >"$logs/host-create.log" 2>&1
+  --image "$image" >"$logs/host-create.log" 2>&1
 host_created=1
-docker start "$host" >"$logs/host-start.log" 2>&1
-# PID 1 needs a moment to create its private bus; systemctl fails until then.
-for _ in $(seq 60); do
-  docker exec "$host" test -S /run/systemd/private 2>/dev/null && break
-  sleep 1
-done
-docker exec "$host" systemctl start multi-user.target >"$logs/systemd.log" 2>&1
-docker exec "$host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a /etc/foundry/acceptance-ca
-docker cp "$certs/ca.crt" "$host:/etc/foundry/acceptance-ca/ca.crt" >"$logs/host-tls-copy.log" 2>&1
-docker cp "$certs/ca.key" "$host:/etc/foundry/acceptance-ca/ca.key" >>"$logs/host-tls-copy.log" 2>&1
-docker exec "$host" chown -R root:root /etc/foundry/acceptance-ca
-docker exec "$host" chmod 600 /etc/foundry/acceptance-ca/ca.key /etc/foundry/acceptance-ca/ca.crt
-docker exec "$host" cp /etc/foundry/acceptance-ca/ca.crt /usr/local/share/ca-certificates/foundry-acceptance.crt
-docker exec "$host" chmod 644 /usr/local/share/ca-certificates/foundry-acceptance.crt
-docker exec "$host" update-ca-certificates >"$logs/host-trust.log" 2>&1
+python3 "$containers" boot "$host" "$certs" >"$logs/host-start.log" 2>&1
+docker exec "$host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a
 docker cp "$archive" "$host:/var/lib/foundry-acceptance-f4a/input.tar.gz" >"$logs/archive-copy.log" 2>&1
 docker exec --env-file "$env_file" -i "$host" python3 - >"$logs/s3-ready.log" 2>&1 <<'PY'
 import sys, time
@@ -279,10 +234,50 @@ phase() {
 docker exec "$host" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade' >"$logs/package-index.log" 2>&1
 phase foreign-baseline /verification/deploy/tests/acceptance_foreign.py baseline --mode "$mode"
 baseline_done=1
+recovery_target() {
+  recovery_host=$1
+  recovery_mode=$2
+  python3 "$containers" create-host --platform "$platform" --name "$recovery_host" --network "$network" \
+    --mount "type=bind,source=$framework/tools/deploy,target=/verification/deploy,readonly" \
+    --image "$base_image" >"$logs/$recovery_mode-create.log" 2>&1
+  recovery_hosts+=("$recovery_host")
+  # Recovery installs the synthetic CA only after production's empty-host preflight.
+  python3 "$containers" start-host "$recovery_host" >"$logs/$recovery_mode-start.log" 2>&1
+  # Same image-only policy handling as acceptance.Dockerfile, before the target
+  # is presented to production recovery. Production never replaces this file.
+  docker exec "$recovery_host" sh -c 'if [ -e /usr/sbin/policy-rc.d ]; then mv /usr/sbin/policy-rc.d /usr/sbin/policy-rc.d.acceptance-image; fi'
+  docker exec "$recovery_host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a/recover-export
+  docker cp "$logs/.private-recovery/." "$recovery_host:/var/lib/foundry-acceptance-f4a/recover-export/" >"$logs/$recovery_mode-copy.log" 2>&1
+  docker cp "$certs/ca.crt" "$recovery_host:/var/lib/foundry-acceptance-f4a/ca.crt" >>"$logs/$recovery_mode-copy.log" 2>&1
+  docker cp "$certs/ca.key" "$recovery_host:/var/lib/foundry-acceptance-f4a/ca.key" >>"$logs/$recovery_mode-copy.log" 2>&1
+  docker exec "$recovery_host" cp /var/lib/foundry-acceptance-f4a/ca.crt /usr/local/share/ca-certificates/acceptance-root.crt
+  docker exec "$recovery_host" chmod 644 /usr/local/share/ca-certificates/acceptance-root.crt
+  docker exec "$recovery_host" chmod 600 /var/lib/foundry-acceptance-f4a/ca.key
+  docker exec "$recovery_host" update-ca-certificates >"$logs/$recovery_mode-trust.log" 2>&1
+  docker exec "$recovery_host" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade' >"$logs/$recovery_mode-packages.log" 2>&1
+  if ((feature_preview)); then
+    docker exec "$recovery_host" apt-get install -y --no-install-recommends ufw iptables nftables >"$logs/$recovery_mode-ufw.log" 2>&1
+  fi
+  # Real recovery runs from a root-only staged bundle that service accounts can't read.
+  docker exec "$recovery_host" sh -c 'umask 077; mkdir /var/lib/foundry-acceptance-f4a/staged-tools; cp -R /verification/deploy/. /var/lib/foundry-acceptance-f4a/staged-tools/'
+  phase_on "$recovery_host" "recover-$recovery_mode" "/var/lib/foundry-acceptance-f4a/staged-tools/tests/${3:-acceptance_recover.py}" "$recovery_mode"
+}
+
 if ((feature_preview)); then
   phase feature-preview /verification/deploy/tests/acceptance_feature.py --archive /var/lib/foundry-acceptance-f4a/input.tar.gz
+  phase feature-recovery-source /verification/deploy/tests/acceptance_feature_recovery.py source
+  foreign_verified=1
   phase foreign-verify /verification/deploy/tests/acceptance_foreign.py verify
-  echo 'PASS feature preview scenario'
+  mkdir -m 700 "$logs/.private-recovery"
+  docker cp "$host:/var/lib/foundry-acceptance-f4a/recover-export/." "$logs/.private-recovery/" >"$logs/feature-recover-export.log" 2>&1
+  [[ "$(docker inspect --format '{{.State.Running}}' "$host")" == true ]] || { echo 'Source must still be running for the unconfirmed takeover check' >&2; exit 1; }
+  recovery_target "$takeover" target-plan acceptance_feature_recovery.py
+  docker stop --time 150 "$host" >"$logs/feature-recover-stop-source.log" 2>&1
+  [[ "$(docker inspect --format '{{.State.Running}}' "$host")" == false ]] || { echo 'Source must be stopped before takeover' >&2; exit 1; }
+  phase_on "$takeover" feature-recovery-takeover \
+    /var/lib/foundry-acceptance-f4a/staged-tools/tests/acceptance_feature_recovery.py takeover --old-server-stopped
+  rm -rf "$logs/.private-recovery"
+  echo 'PASS feature preview, backup, restore drill and replacement takeover'
   exit 0
 fi
 host_phase=()
@@ -313,37 +308,6 @@ phase foreign-verify /verification/deploy/tests/acceptance_foreign.py verify
 phase recover-source /verification/deploy/tests/acceptance_recover.py source
 mkdir -m 700 "$logs/.private-recovery"
 docker cp "$host:/var/lib/foundry-acceptance-f4a/recover-export/." "$logs/.private-recovery/" >"$logs/recover-export.log" 2>&1
-recovery_target() {
-  recovery_host=$1
-  recovery_mode=$2
-  docker create --platform "$platform" --name "$recovery_host" --network "$network" \
-    --privileged --cgroupns=private --memory=4g --cpus=2 \
-    --tmpfs /run --tmpfs /run/lock --tmpfs /tmp \
-    --mount "type=bind,source=$framework/tools/deploy,target=/verification/deploy,readonly" \
-    "$base_image" >"$logs/$recovery_mode-create.log" 2>&1
-  recovery_hosts+=("$recovery_host")
-  docker start "$recovery_host" >"$logs/$recovery_mode-start.log" 2>&1
-  for _ in $(seq 60); do
-    docker exec "$recovery_host" test -S /run/systemd/private 2>/dev/null && break
-    sleep 1
-  done
-  docker exec "$recovery_host" systemctl start multi-user.target >"$logs/$recovery_mode-systemd.log" 2>&1
-  # Same image-only policy handling as acceptance.Dockerfile, before the target
-  # is presented to production recovery. Production never replaces this file.
-  docker exec "$recovery_host" sh -c 'if [ -e /usr/sbin/policy-rc.d ]; then mv /usr/sbin/policy-rc.d /usr/sbin/policy-rc.d.acceptance-image; fi'
-  docker exec "$recovery_host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a/recover-export
-  docker cp "$logs/.private-recovery/." "$recovery_host:/var/lib/foundry-acceptance-f4a/recover-export/" >"$logs/$recovery_mode-copy.log" 2>&1
-  docker cp "$certs/ca.crt" "$recovery_host:/var/lib/foundry-acceptance-f4a/ca.crt" >>"$logs/$recovery_mode-copy.log" 2>&1
-  docker cp "$certs/ca.key" "$recovery_host:/var/lib/foundry-acceptance-f4a/ca.key" >>"$logs/$recovery_mode-copy.log" 2>&1
-  docker exec "$recovery_host" cp /var/lib/foundry-acceptance-f4a/ca.crt /usr/local/share/ca-certificates/acceptance-root.crt
-  docker exec "$recovery_host" chmod 644 /usr/local/share/ca-certificates/acceptance-root.crt
-  docker exec "$recovery_host" chmod 600 /var/lib/foundry-acceptance-f4a/ca.key
-  docker exec "$recovery_host" update-ca-certificates >"$logs/$recovery_mode-trust.log" 2>&1
-  docker exec "$recovery_host" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade' >"$logs/$recovery_mode-packages.log" 2>&1
-  # Real recovery runs from a root-only staged bundle that service accounts can't read.
-  docker exec "$recovery_host" sh -c 'umask 077; mkdir /var/lib/foundry-acceptance-f4a/staged-tools; cp -R /verification/deploy/. /var/lib/foundry-acceptance-f4a/staged-tools/'
-  phase_on "$recovery_host" "recover-$recovery_mode" /var/lib/foundry-acceptance-f4a/staged-tools/tests/acceptance_recover.py "$recovery_mode"
-}
 recovery_target "$rehearsal" rehearsal
 phase recover-repository-unchanged /verification/deploy/tests/acceptance_recover.py unchanged
 docker stop --time 150 "$host" >"$logs/recover-stop-source.log" 2>&1

@@ -2,11 +2,12 @@
 from dataclasses import asdict
 import json
 import hashlib
+import os
 from pathlib import Path
 import shutil
 import subprocess
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from test_build_inputs import BuildInputTests
 from test_local import metadata
@@ -14,7 +15,7 @@ from test_host_capabilities import declaration, profile
 from test_artifacts import bundle_fixture, elf, PUBLIC, URL
 import artifacts
 from contracts import DeployError, ReleaseDeclaration
-from topology import parse_topology
+from topology import ArtifactPlatform, parse_topology
 from host import Host, Paths
 
 
@@ -185,3 +186,150 @@ class FeatureBuildTests(unittest.TestCase):
         shutil.rmtree(stage / "deploy/bin")
         with patch.object(metadata.subprocess, "run"), self.assertRaises(DeployError):
             metadata.prepare(request, work, stage)
+
+    def carried(self, *, build=False):
+        request, stage, content = self.feature()
+        source = {"path": "deploy/artifacts/linux-amd64/extension.tar.gz"}
+        if build:
+            source["build"] = ["sh", "deploy/build-extension.sh"]
+        request["topology"]["artifacts"]["extension"]["platforms"] = {
+            "linux-amd64": {"source": {"release": source}}}
+        work = self.root / "source"
+        (work / "deploy/files").mkdir(parents=True)
+        (work / "deploy/files/relay.json").write_bytes((stage / "deploy/files/relay.json").read_bytes())
+        (work / "deploy/topology.json").write_text(json.dumps(request["topology"]))
+        path = work / source["path"]
+        path.parent.mkdir(parents=True)
+        if not build:
+            path.write_bytes(content)
+        shutil.rmtree(stage / "deploy")
+        return request, stage, content, work, path
+
+    def compiler(self, args, **kwargs):
+        self.assertEqual(args[0], "go")
+        Path(args[args.index("-o") + 1]).write_bytes(elf())
+        return subprocess.CompletedProcess(args, 0)
+
+    def test_release_carried_bundle_uses_inventory_and_existing_publication(self):
+        request, stage, content, work, path = self.carried()
+        with patch.object(metadata.subprocess, "run", side_effect=self.compiler):
+            request = metadata.prepare(request, work, stage)
+        with patch.object(metadata, "collect_build_inputs", return_value={}), \
+                patch.object(artifacts, "download", side_effect=AssertionError("must not download")):
+            archive = metadata.package(request, stage, self.root / "output")
+        manifest = json.loads((archive.parent / "manifest.json").read_text())
+        deployment = ReleaseDeclaration.parse(manifest["deployment"])
+        self.assertEqual(deployment.topology_sha256, parse_topology(request["topology"]).sha256)
+        self.assertEqual(manifest["artifact_origins"], {"extension": []})
+        payload, = deployment.artifacts
+        self.assertEqual(payload.sha256, hashlib.sha256(content).hexdigest())
+        self.assertFalse((stage / "deploy/artifacts/extension/release-input").exists())
+        prepared, = self.verify(deployment, stage, artifacts.ExpansionBudget())
+        host = Host(Paths(self.root / "host"))
+        host.paths.opt("sample-test").mkdir(parents=True)
+        with self.assertRaises(DeployError):
+            artifacts.publish(host, "sample-test", prepared, history=(), observed_service_abi="wrong")
+        tree = artifacts.publish(host, "sample-test", prepared, history=(), observed_service_abi="service-1")
+        reference = artifacts.ArtifactReference(payload.artifact, prepared.artifact.version, payload.platform, payload.sha256)
+        view = artifacts.bundle_export(reference, prepared.artifact, tree, "plugin", payload.members,
+                                       observed_service_abi="service-1", uid=os.getuid())
+        self.assertTrue(view.source.is_dir())
+        with self.assertRaises(DeployError):
+            artifacts.validate_history((artifacts.ArtifactReference(payload.artifact, prepared.artifact.version,
+                                       payload.platform, "a" * 64),), (reference,))
+        (stage / payload.path).write_bytes(content + b"tampered")
+        with self.assertRaises(DeployError):
+            self.verify(deployment, stage, artifacts.ExpansionBudget())
+
+    def test_release_artifact_build_uses_selected_architecture(self):
+        request, stage, content, work, path = self.carried(build=True)
+        def build(args, cwd, environment):
+            self.assertEqual(args, ("sh", "deploy/build-extension.sh"))
+            self.assertEqual(cwd, work)
+            self.assertEqual(environment["ARCHITECTURE"], "amd64")
+            self.assertEqual(environment["GOARCH"], "amd64")
+            path.write_bytes(content)
+        with patch.object(metadata.subprocess, "run", side_effect=self.compiler), \
+                patch.object(metadata, "build_artifact", side_effect=build):
+            prepared = metadata.prepare(request, work, stage)
+        self.assertEqual(prepared["release_artifacts"]["extension"]["sha256"], hashlib.sha256(content).hexdigest())
+
+    def test_release_artifact_refuses_missing_linked_or_preexisting_build_output(self):
+        request, stage, _, work, path = self.carried(build=True)
+        for kind in ("missing", "symlink", "hardlink", "preexisting"):
+            with self.subTest(kind=kind):
+                shutil.rmtree(stage / "deploy", ignore_errors=True)
+                path.unlink(missing_ok=True)
+                target = work / "deploy/files/relay.json"
+                def build(*args):
+                    if kind == "symlink":
+                        path.symlink_to(target)
+                    elif kind == "hardlink":
+                        os.link(target, path)
+                if kind == "preexisting":
+                    path.write_bytes(b"stale")
+                with patch.object(metadata.subprocess, "run", side_effect=self.compiler), \
+                        patch.object(metadata, "build_artifact", side_effect=build), self.assertRaises(DeployError):
+                    metadata.prepare(request, work, stage)
+
+    def test_release_source_is_explicit_and_unambiguous(self):
+        good = {"source": {"release": {"path": "deploy/artifacts/linux-arm64/plugin.tar.gz"}}}
+        self.assertEqual(ArtifactPlatform.parse(good).source.path, good["source"]["release"]["path"])
+        bad = [
+            {**good, "url": URL}, {**good, "sha256": "0" * 64},
+            {"source": {"release": {"path": "../plugin.tar.gz"}}},
+            {"source": {"release": {"path": "deploy/artifacts/plugin", "build": []}}},
+            {"source": {"release": {"path": "deploy/artifacts/plugin", "build": "make"}}},
+            {"source": {"release": {"path": "deploy/artifacts/plugin"}, "url": URL}},
+        ]
+        for value in bad:
+            with self.subTest(value=value), self.assertRaises(DeployError):
+                ArtifactPlatform.parse(value)
+
+    def test_release_carried_inventory_digest_is_required(self):
+        request, stage, content, work, path = self.carried()
+        with patch.object(metadata.subprocess, "run", side_effect=self.compiler):
+            prepared = metadata.prepare(request, work, stage)
+        artifact = dict(parse_topology(request["topology"]).artifacts)["extension"]
+        with self.assertRaises(DeployError):
+            artifacts.inspect_payload(artifact, "linux-amd64", path, artifacts.ExpansionBudget())
+        staged = stage / prepared["release_artifacts"]["extension"]["path"]
+        staged.write_bytes(content + b"changed")
+        with patch.object(metadata, "collect_build_inputs", return_value={}), self.assertRaises(DeployError):
+            metadata.package(prepared, stage, self.root / "output")
+
+    def test_release_carried_duplicate_sources_refuse(self):
+        request, stage, _, work, _ = self.carried()
+        request["topology"]["artifacts"]["second"] = request["topology"]["artifacts"]["extension"]
+        (work / "deploy/topology.json").write_text(json.dumps(request["topology"]))
+        with patch.object(metadata.subprocess, "run", side_effect=self.compiler), self.assertRaises(DeployError):
+            metadata.prepare(request, work, stage)
+
+    def test_release_carried_file_keeps_architecture_validation(self):
+        request, stage, _, work, path = self.carried()
+        request["topology"]["artifacts"]["extension"] = {
+            "version": "1", "format": "file", "executables": {"tool": "tool"},
+            "platforms": request["topology"]["artifacts"]["extension"]["platforms"]}
+        role = request["topology"]["roles"][1]
+        role.pop("artifact_mounts")
+        role.pop("bindings")
+        path.write_bytes(elf("linux-arm64"))
+        (work / "deploy/topology.json").write_text(json.dumps(request["topology"]))
+        with patch.object(metadata.subprocess, "run", side_effect=self.compiler):
+            prepared = metadata.prepare(request, work, stage)
+        with self.assertRaises(DeployError) as error:
+            metadata.package(prepared, stage, self.root / "output")
+        self.assertEqual(error.exception.code, "artifact_architecture")
+
+    def test_artifact_build_failure_and_timeout_refuse(self):
+        process = Mock(pid=1234)
+        with patch.object(metadata.subprocess, "Popen", return_value=process) as popen:
+            process.wait.return_value = 1
+            with self.assertRaises(DeployError):
+                metadata.build_artifact(("sh", "build.sh"), self.root, {})
+            self.assertTrue(popen.call_args.kwargs["start_new_session"])
+            process.wait.side_effect = [subprocess.TimeoutExpired("build", 1200), -9]
+            with patch.object(metadata.os, "killpg") as kill, self.assertRaises(subprocess.TimeoutExpired):
+                metadata.build_artifact(("sh", "build.sh"), self.root, {})
+            kill.assert_called_once_with(1234, metadata.signal.SIGKILL)
+            self.assertEqual(process.wait.call_args.args, ())

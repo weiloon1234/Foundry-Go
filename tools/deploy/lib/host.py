@@ -4,14 +4,17 @@ from __future__ import annotations
 from contextlib import contextmanager
 import fcntl
 import os
+import re
 import signal
 from pathlib import Path
 import stat
 import subprocess
+import socket
+import sys
 import time
 
 from contracts import (DeployError, INSTANCE_STATUSES, PREFIX, SCHEMA, HOST_PATHS, atomic_write, atomic_json, check_path,
-                       identity, instance_paths, now, read_json, require, validate_attempt,
+                       identity, instance_paths, now, parse_json, read_json, require, validate_attempt,
                        validate_registry, valid_timestamp, valid_uuid)
 
 # Mutations queue behind one running deployment, backup or renewal. A deploy holds the
@@ -21,6 +24,26 @@ LOCK_WAIT_SECONDS = 600
 
 class OperationTimeout(TimeoutError):
     """Interrupt blocking reads as well as checks between probes."""
+
+
+def resolve_addresses(hostname, timeout):
+    """Own libc resolution in a child that is killed and reaped on timeout."""
+    script = """import json, socket, sys
+try:
+    rows = socket.getaddrinfo(sys.argv[1], None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+except OSError:
+    sys.exit(3)
+if len(rows) > 64:
+    sys.exit(2)
+print(json.dumps([r[4][0] for r in rows]))
+"""
+    result = subprocess.run([sys.executable, '-I', '-c', script, hostname], stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, timeout=timeout, check=False)
+    if result.returncode == 3:
+        raise socket.gaierror('DNS resolution failed')
+    result.check_returncode()
+    require(len(result.stdout) <= 16384, 'dns_result', 'DNS result exceeds its observation bound.')
+    return parse_json(result.stdout)
 
 
 def _late_alarm(signum, frame):
@@ -131,9 +154,40 @@ class Host:
             result = subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
         except (OSError, subprocess.TimeoutExpired):
             raise DeployError("command_unavailable", "Required host command failed to start or exceeded its deadline.") from None
+        return self.check_result(result, check=check)
+
+    @contextmanager
+    def command_journal(self, path):
+        previous = getattr(self, "_command_journal", None)
+        self._command_journal = path
+        try:
+            yield
+        finally:
+            self._command_journal = previous
+
+    def check_result(self, result, *, check=True):
         if check and result.returncode:
-            # Commands may include credentials or emit secrets on errors.
-            raise DeployError("command_failed", f"Host operation failed ({Path(args[0]).name}); inspect it privately on the host.")
+            command = Path(result.args[0]).name
+            path = getattr(self, "_command_journal", None)
+            if path is not None:
+                # Arbitrary argv, output and environment can contain credentials.
+                # Only systemctl's known verb/unit operands have diagnostic value.
+                subcommand, units = None, []
+                verbs = {"show", "start", "stop", "restart", "reload", "enable", "disable",
+                         "is-enabled", "is-active", "is-failed", "reset-failed", "daemon-reload",
+                         "list-units", "list-unit-files"}
+                if command == "systemctl" and len(result.args) > 1 and result.args[1] in verbs:
+                    subcommand = result.args[1]
+                    operands = iter(result.args[2:])
+                    for argument in operands:
+                        if argument in ("-p", "--property", "--state", "--type"):
+                            next(operands, None)
+                        elif not argument.startswith("-") and re.fullmatch(r"[A-Za-z0-9_:.@\\-]{1,255}", argument):
+                            units.append(argument)
+                records = read_json(path) if path.exists() else []
+                atomic_json(path, [*records, {"command": command, "subcommand": subcommand,
+                            "units": units, "exit_status": result.returncode}][-64:], mode=0o600)
+            raise DeployError("command_failed", f"Host operation failed ({command}); inspect it privately on the host.")
         return result
 
     def check_control_directory(self, path):
@@ -247,7 +301,7 @@ class Host:
         for key in ("current", "previous"):
             if state[key] is not None:
                 try:
-                    validate_manifest(state[key], entry)
+                    validate_manifest(state[key], entry, reviewed=entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry)
                 except (DeployError, TypeError):
                     raise DeployError(code, detail) from None
         if state["last_attempt"] is not None:

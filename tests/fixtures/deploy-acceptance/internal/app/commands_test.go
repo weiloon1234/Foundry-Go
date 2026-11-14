@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -36,6 +37,13 @@ func TestRedisKeysDefaultsToDeploymentJSON(t *testing.T) {
 	settings, _, err := fixtureconfig.Load(path, "")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if settings.App.Maintenance.Store != "maintenance" {
+		t.Fatal("deployment must select the shared maintenance store")
+	}
+	store := settings.App.Services.Cache.Stores[settings.App.Maintenance.Store]
+	if store.Driver != infrastructure.RedisCache || store.Redis != "main" {
+		t.Fatal("maintenance must use the main Redis connection")
 	}
 	expected, err := Builder(settings, work.NewReceipts(t.TempDir())).RedisKeys()
 	if err != nil {
@@ -146,5 +154,52 @@ func TestArchiveConfigurationAndRealDeclarations(t *testing.T) {
 	}
 	if err := shutdown(built); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMaintenanceCommandsShareStateAcrossInvocations(t *testing.T) {
+	for _, schedulerEnabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(schedulerEnabled), func(t *testing.T) {
+			testMaintenanceCommandsShareState(t, schedulerEnabled)
+		})
+	}
+}
+
+func testMaintenanceCommandsShareState(t *testing.T, schedulerEnabled bool) {
+	path := filepath.Join(t.TempDir(), "maintenance.toml")
+	configuration := fmt.Sprintf(`[app.scheduler]
+enabled = %t
+[app.services.coordination]
+enabled = true
+driver = "memory"
+[app.services.cache]
+default = "maintenance"
+[app.maintenance]
+store = "maintenance"
+[app.services.cache.stores.maintenance]
+driver = "file"
+[app.services.cache.stores.maintenance.file]
+root = %q
+`, schedulerEnabled, t.TempDir())
+	if err := os.WriteFile(path, []byte(configuration), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []struct {
+		command string
+		down    bool
+	}{{"maintenance:status", false}, {"down", true}, {"maintenance:status", true}, {"up", false}, {"maintenance:status", false}} {
+		var out, stderr bytes.Buffer
+		if err := Run(t.Context(), []string{step.command, "--format", "json", "--config", path}, cli.Streams{In: strings.NewReader(""), Out: &out, Err: &stderr}); err != nil {
+			t.Fatalf("%s: %v", step.command, err)
+		}
+		var state struct {
+			Down bool `json:"down"`
+		}
+		if err := json.Unmarshal(out.Bytes(), &state); err != nil {
+			t.Fatalf("%s: %v", step.command, err)
+		}
+		if state.Down != step.down {
+			t.Fatalf("%s: down=%v, want %v", step.command, state.Down, step.down)
+		}
 	}
 }

@@ -1,7 +1,6 @@
-"""Lane A's narrow network handoff. Missing lane C support always fails closed.
+"""Network adapter boundary for scoped and whole-instance lifecycle operations.
 
-Lane C supplies feature_allocate, feature_close and feature_open in listeners.py.
-No caller may invent closure or treat an intended firewall change as observation.
+No caller may treat ingress withdrawal as complete application closure.
 """
 import importlib
 from dataclasses import replace
@@ -91,7 +90,8 @@ def plan(host, topology, profile, package_plan, *, entry=None):
     import listeners
     from contracts import check_path, digest
     listeners.public_policies(profile, topology)
-    claims = listeners.public_claims(profile)
+    import recovery_rehearsal
+    claims = () if entry is not None and recovery_rehearsal.active(entry) else listeners.public_claims(profile)
     result = {"firewall": None, "persistent_projection": {}}
     if claims:
         selected = entry is not None and "deployment_selection" in entry
@@ -103,8 +103,15 @@ def plan(host, topology, profile, package_plan, *, entry=None):
                     and selection.admission.disposition is AdmissionDisposition.COMMITTED
                     and inventory.topology == topology and inventory.profile == profile,
                     "network_selection", "Bootstrap inspection requires the committed selected declarations.")
-            observation = firewall.observe(host, profile.instance_id, claims, integrated=True,
-                                           bindings=inventory.profile.listeners, opened=bool(selection.enabled_roles))
+            import feature_maintenance
+            import services
+            held = feature_maintenance.active_holds(host, entry, inventory)
+            exposed = set(services.enabled_units(host, inventory.units)) - held
+            opened = tuple(c for c in claims if c.role in exposed)
+            closed = tuple(c for c in claims if c.role not in exposed)
+            observation = firewall.observe(host, profile.instance_id, closed or opened, integrated=True,
+                                           bindings=inventory.profile.listeners, opened=not closed,
+                                           retained_claims=opened if closed else ())
         else:
             observation = firewall.observe(host, profile.instance_id, claims, integrated=False)
             for family, name in ((4, "/etc/ufw/before.rules"), (6, "/etc/ufw/before6.rules")):
@@ -133,7 +140,8 @@ def prepare(host, entry, review, tools_dir, bundle):
     from topology import parse_profile, parse_topology
     topology = parse_topology(entry["topology"], registered=True)
     profile = parse_profile(entry["profile"], topology)
-    claims = listeners.public_claims(profile)
+    import recovery_rehearsal
+    claims = () if recovery_rehearsal.active(entry) else listeners.public_claims(profile)
     boot = checked_boot_files(host, tools_dir, bundle)
     operations.check_runtime(host, tools_dir)
     main = check_path(host.paths.p("/etc/nginx/nginx.conf"), "file")
@@ -182,14 +190,15 @@ def capability():
             raise
         owner = None
     require(owner is not None and all(callable(getattr(owner, name, None)) for name in
-            ("feature_allocate", "feature_close", "feature_open")),
+            ("feature_allocate", "feature_withdraw", "feature_close", "feature_open")),
             "capability_unavailable", "Public activation requires the B24 lane C preview network integration release.")
     return owner
 
 
-def allocate(host, entry, topology, profile, operation_id):
+def allocate(host, entry, topology, profile, operation_id, *, retained=None):
     """Return (tuple[AllocatedEndpoint], nginx projection SHA256), without effects."""
-    endpoints, projection = capability().feature_allocate(host, entry, topology, profile, operation_id)
+    endpoints, projection = capability().feature_allocate(host, entry, topology, profile, operation_id,
+                                                         **({"retained": retained} if retained else {}))
     from dataclasses import asdict
     endpoints = tuple(AllocatedEndpoint.parse(asdict(endpoint)) for endpoint in endpoints)
     return endpoints, contract_digest(projection)
@@ -202,21 +211,22 @@ def close(host, entry, transition, resolution, units):
     evidence = ClosureEvidence.parse(record_document(evidence))
     require(evidence.stage is ClosureStage.APPLICATION_CLOSED and evidence.operation_id == transition.operation_id
             and evidence.candidate_resolution_id == resolution.id
-            and set(transition.affected_units) <= set(evidence.units)
-            and set(resolution.endpoints) <= set(evidence.endpoints),
+            and set(transition.affected_units) == set(evidence.units)
+            and {e for e in resolution.endpoints if e.role in {u.role for u in transition.affected_units}} <= set(evidence.endpoints),
             "admission_closed_required", "Network owner did not prove complete closure for this transition.")
     return evidence
 
 
 def withdraw(host, entry, transition, resolution, units):
-    """Cleanup calls the idempotent close owner before stopping live workloads.
+    """Withdraw new ingress before stopping live workloads.
 
     The final close call must still prove complete closure after verified exit.
     An ingress-only observation never authorizes a start or completed cleanup.
     """
-    return capability().feature_close(host, entry, transition, resolution, units)
+    return capability().feature_withdraw(host, entry, transition, resolution, units)
 
 
-def open_public(host, entry, resolution, evidence):
-    require(capability().feature_open(host, entry, resolution, evidence) is True,
+def open_public(host, entry, resolution, evidence, *, deadline=None):
+    require(capability().feature_open(host, entry, resolution, evidence,
+            **({"deadline": deadline} if deadline is not None else {})) is True,
             "public_opening_unverified", "Network owner did not verify public opening for the selected resolution.")

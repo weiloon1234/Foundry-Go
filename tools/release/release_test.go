@@ -490,10 +490,14 @@ func TestDeploymentBundleAssets(t *testing.T) {
 		"server/templates/nginx-upgrade.conf",
 		"server/templates/nginx-upload.conf",
 		"local/Makefile.example",
+		"local/containers.py",
+		"local/rehearsal.py",
+		"local/rehearsal_host.py",
+		"local/rehearsal_probe.py",
 		"lib/cloudflare-ranges.json",
 		"docker/builder.Dockerfile",
-		"tests/host.Dockerfile",
-		"tests/acceptance.Dockerfile",
+		"local/host.Dockerfile",
+		"local/acceptance.Dockerfile",
 	} {
 		if !present["tools/deploy/"+name] {
 			t.Errorf("deployment bundle asset omitted: %s", name)

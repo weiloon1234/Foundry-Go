@@ -1,7 +1,7 @@
-# Host capabilities preview
+# Host capabilities
 
-The B24 preview deploys an application and single-instance custom services on a
-generation-12 Foundry host. It installs declared distribution packages, verifies
+Foundry-Go v0.32.0 completes B24 release 1: deploy an application and
+single-instance custom services on a generation-13 Foundry host. It installs declared distribution packages, verifies
 pinned artifacts, prepares service-local configuration and bundle views, and
 starts roles through admission in readiness order. Applications receive typed
 bindings to private endpoints and executables. Public TCP uses nginx stream and
@@ -9,58 +9,210 @@ source-filtered UFW rules; opening follows whole-set health verification. Restar
 boot admission, reports, logs and whole-instance stop are integrated.
 
 This guide describes topology schema 2 and profile schema 3. Existing topology-1
-applications and generation 9–11 hosts keep their existing behavior. Upgrade tools
-before enabling these declarations. The app-facing declarations and binding API
-are intended to remain stable as later tool-side lifecycle support arrives.
+applications and generation 9–12 hosts keep their existing behavior. Upgrade tools
+before using release 1 capabilities. The v0.31.0 generation-12 preview remains
+supported by its installed tools. Enablement adoption and release 1 transitions set a sticky
+generation-13 client floor, including after application rollback. The application
+declarations and binding API are unchanged from v0.31.0.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
 
 <a id="agent-entry"></a>
 ## Agent entry
 
-- [Check preview limitations](#recipe-preview)
+- [Check release 1 capabilities and limitations](#recipe-preview)
 - [Declare the app and relay](#recipe-declarations)
 - [Load application bindings](#recipe-bindings)
 - [Prepare and operate the host](#recipe-host)
 
 <a id="recipe-preview"></a>
-## Preview boundary
+## Release 1 capabilities and limitations
 
 Feature execution fails explicitly when an unsupported operation is requested.
-It does not fall back to the legacy lifecycle. The following lifecycle refusals
-use `capability_unavailable` and name **the post-preview B24 lifecycle release**;
-that is a capability milestone, not a promised framework version or date.
+It does not fall back to the legacy lifecycle. Release 1 lifts the v0.31.0
+refusals for service-secret intake/delivery, configuration changes and holds,
+rollback to feature or legacy releases, release reactivation, maintenance down/up,
+backup configuration/run, restore drills and replacement-host recovery. The
+following limitations remain; unsupported lifecycle operations return
+`capability_unavailable`.
 
-| Refused in the preview | Consequence |
+| Remaining limitation | Consequence |
 | --- | --- |
-| Rollback to a previous feature release or to legacy; activation of a previously selected, noncurrent release | Deploy a new release instead; selection history survives retention. |
-| Configuration changes, configuration holds and key rotation | Choose initial configuration at bootstrap. Do not use configuration updates to change a selected feature instance. |
-| Maintenance holds, both `down` and `up` | Both refuse before mutation. Declaring `maintenance: serve` does not enable partial maintenance. Use whole-instance `stop` and `restart` when full downtime is acceptable. |
+| Encryption key rotation | The dedicated `keys rotate` action remains unsupported for feature instances. Generic edits cannot change the keyring contract. |
 | Changed reprovisioning of a selected instance | Changes to its profile, package requirements or owned network/boot files refuse. Unchanged re-bootstrap is supported. |
 | Newly required packages at activation | Bootstrap installs packages; deployment cannot silently add missing packages. |
 | Named lifecycle operations | Start/restart/stop the complete enabled instance. Selecting a role for logs is supported. |
-| Interrupted-operation reconciliation and recovery | Do not assume an interrupted operation rolled back. Inspect status and retained cleanup evidence. Unresolved cleanup blocks later starts. |
-| Custom-service secret intake | A parsed `secret_files` declaration is not executable preview support. Keep secrets out of literal argv, public environment and artifact URLs. |
-| Bundle ABI without package-version evidence | Bundle consumers must use package executables with one matching observed service package version. An artifact executable cannot supply this preview proof. |
+| Automatic reconciliation of interrupted lifecycle operations | Do not assume an interrupted operation rolled back. Inspect status and retained cleanup evidence. Unresolved cleanup blocks later starts. |
+| Bundle ABI without package-version evidence | Bundle consumers must use package executables with one matching observed service package version. An artifact executable cannot supply this ABI proof. |
 | Feature release/artifact pruning and helper-bundle pruning | Explicit feature pruning refuses. Automatic helper retention keeps every helper bundle and upgrade journal with a capability diagnostic. Invocation/view limits still apply; reaching a limit refuses further starts. |
-| Host capacity changes involving features; backup configuration/run, restore drill and recovery operations for feature instances | These owners are not integrated with feature lifecycle yet. Legacy neighbors retain their existing supported operations. |
+| Host capacity changes involving features | Capacity changes are unsupported for feature instances. Legacy neighbors retain their existing supported operations. |
 
 The server feature-operation allowlist is `bootstrap-plan`, `bootstrap-apply`,
-`activate`, `restart`, `stop`, `status`, `logs`, `sync`, `config-keys` and `report`.
+`release-plan`, `activate`, `rollback`, `restart`, `stop`, `status`, `logs`, `sync`, `config-keys`,
+`config-set`, `down`, `up`, `backup-configure`, `backup-run`, `restore-drill`,
+`recover-plan`, `recover-apply` and `report`. Backup credential rotation remains unsupported.
 Host tool upgrades have their own upgrade protocol. Other feature mutations are
 not implied by a command appearing in the legacy deployment guide.
+
+Service secrets use the existing private configuration intake. Declare names in
+`secrets` and map service `_FILE` variables through `secret_files`; explicit
+`secret_file` arguments and per-start configuration references also receive paths.
+Supply `FOUNDRY_SERVICE_SECRET__<UPPERCASE_NAME>` keys through hidden input or
+`FOUNDRY_SECRET_CONFIG_FILE`. Hyphens in names become underscores. SSH sends values
+on stdin. Unknown names, namespace collisions and simultaneous value/`_FILE`
+forms are rejected. Files are root-owned, mode 0640, with the instance group.
+
+Deploy stages the archive and obtains a `release-plan` before confirmation. Newly
+required secrets are collected and snapshotted privately during review, before
+any service stops. The plan binds an operation UUID, archive and deployment,
+current configuration revision, allocations, enablement and host/network
+observations; changed inputs invalidate it. Public plans expose opaque intent IDs
+and redacted key names, never values or their hashes.
+
+`ACTION=config` rotates service secrets through a configuration revision and the
+existing private backup owner. It restarts affected enabled, running services and
+any consumers whose endpoint bindings change. Unchanged services retain their
+processes and exposure; deliberately stopped services stay stopped. An interrupted
+publication remains pending for reconciliation. Do not infer that old credentials
+were restored from an unsuccessful operation.
+
+Rollback and reactivation validate the target release against **current** private
+configuration and the complete current keyring before withdrawing ingress. They
+never restore a historical secret snapshot, migrate backwards or run seeders.
+Fresh runtime allocations keep old nginx references away from the target code.
+Surviving roles retain actual systemd enablement. Removed roles retain enablement
+evidence for later rollback; without that evidence they remain disabled, along
+with dependent roles, and the plan reports the resulting selection.
+
+Every newly activated release retains its complete validated topology and profile
+under the release state owner, keyed by archive digest and topology digest.
+Rollback uses that target-owned record. For older releases, provide
+`ROLLBACK_TOPOLOGY_FILE=/path/to/topology.json` when planning rollback. The server
+requires its digest to match the target manifest's `topology_sha256`; it never
+uses the current topology as a substitute. If the original archive digest was
+never recorded, the imported declaration is explicitly keyed by retained manifest
+digest, without claiming an archive digest. Missing or mismatched declarations
+refuse before stopping services.
+
+Application configuration changes use the application's `config:inspect` and
+`config:check`, including private file aliases, storage validation and Redis grant
+reconciliation. A known published revision whose startup fails is `failed_applied`.
+After independent cleanup proves closure, a corrective revision can proceed;
+ordinary starts remain held meanwhile. Unknown publication or cleanup outcomes
+still require reconciliation. Rollback to legacy uses its schema-1 runtime
+descriptor and current credentials while retaining sticky feature admission and
+capable-client requirements. Service secrets remain private for later roll-forward.
+
+Current tools keep feature workload units enabled after startup and read systemd
+enablement for committed admission, restart selection, and reporting. Systemd
+starts enabled units at boot with the declared `After=` ordering. The exposure
+coordinator verifies the enabled, unheld set before opening traffic. A declared
+`requires` dependency does not add systemd `Wants=` or `Requires=` links that could
+start a disabled unit.
+
+The next privileged instance action migrates a committed v0.31.0 preview by
+enabling its running units without starting anything. It does not enable stopped
+units. `ACTION=status` includes the migration receipt. A pending deployment must
+be reconciled before that migration. Selective secret rotations preserve unchanged
+units and their exposure. Boot coordinators validate their per-role generation and
+load the current whole-instance selection. During a pending transition, retention
+allows only the exact existing live workload to continue. A replacement invocation
+needs a validation permit covering its unit and addresses; retaining an earlier
+launch origin does not grant permission to start.
 
 | Declaration outside release 1 | Later capability |
 | --- | --- |
 | Wrappers, role instance counts above one, ordinals other than one | B24 release 2 |
 | PROXY protocol | B24 release 2 |
-| Managed application DNS records | B24 release 2; preview DNS is external only |
-| UDP listeners | Later network capability; the parser does not promise a numbered release |
+| Managed application DNS records | B24 release 2; release 1 DNS is external only |
+| UDP listeners | Planned for B24 release 2; unsupported in release 1 |
 | Artifact formats other than `file` and `tar.gz` | Unsupported format; no later numbered release is promised |
 
 These declaration failures use schema/capability validation errors rather than
 silently dropping fields. In particular, plain TCP **is** supported: declare
 `tls: "none"` explicitly and acknowledge application authentication.
+
+## Backup and replacement-host recovery
+
+The backup owner archives PostgreSQL and the age-encrypted configuration tree.
+Feature archives also retain the selected deployment, resolution, selection and
+release declaration in `recovery/instance.json`. The canonical archived `app.env`
+comes from the selected runtime resolution, including its effective HTTP allocation.
+Recovery requires the environment, allocation metadata and resolution to agree;
+the bootstrap environment does not override the selected port. Declared service-secret snapshots
+must follow the configuration owner's contract beneath the instance configuration
+tree: current values are root-owned 0640 for the isolated instance group, and the
+secret index stays 0600. Recovery restores this access before runtime and storage
+readers run, while leaving unreferenced historical snapshots private.
+The archive reader checks their paths and the descriptor's identities. Immutable
+configuration sources, binaries and artifacts still come from the retained release
+archive. Keep that exact archive available off-host.
+
+Backups record systemd's actual enabled roles, rather than the registry's cached
+observation. Takeover preserves that enabled set and applicable maintenance holds;
+held roles and their dependents stay stopped. An empty enabled set stays stopped.
+
+A bundle's `status: complete` means its supported backup components succeeded.
+`coverage.complete_instance_coverage` separately describes service-state coverage:
+
+- `disposable` state is excluded and does not block coverage.
+- `local-unprotected` produces `service_state_unprotected`, naming the role, and
+  blocks complete coverage. Takeover refuses these roles until an explicit local
+  state restoration contract exists. Acknowledging the state policy is not proof
+  of restoration.
+- `external` records its declared `recovery_owner`. Naming the owner delegates
+  recovery of that state; it does not claim Foundry copied or restored it. Older
+  declarations without an owner retain `service_state_external_owner_required`
+  and cannot claim complete coverage.
+
+Configuration-only receipts never claim complete instance coverage. Database
+restore drills use an isolated PostgreSQL Unix socket, start no custom services,
+and open no TCP or UDP listener. Their verification does not claim service-state
+recovery, key decryption or application invariants.
+
+Recovery rehearsal selects HTTP and its prerequisite closure. Custom roles outside
+that closure remain stopped. An unsafe prerequisite refuses with
+`recovery_rehearsal_dependency` and its role name. A custom HTTP prerequisite must
+declare `recovery_rehearsal_safe: true`; the default is false. Built-in background
+dependencies remain refused. Each selected custom role receives systemd
+`IPAddressDeny=any` and `IPAddressAllow=localhost`. Its fixed runtime helper reads
+back the effective unit policy and verifies attached ingress and egress cgroup BPF
+programs before dispatch. Missing support, permissions or matching policy refuses
+with `rehearsal_isolation`. Only IPv4/IPv6 loopback is allowed; public routes stay
+closed. HTTP retains its existing rehearsal behaviour, and legacy rehearsal is
+unchanged. The systemd policy follows the
+[IP filtering contract](https://www.freedesktop.org/software/systemd/man/255/systemd.resource-control.html#IPAddressAllow=).
+
+The recovery owner accepts the existing typed `RecoveryPublicBinding` through its
+`recovery_public_binding` argument. It requires every source public listener,
+unchanged hostname, port, transport and address families, explicit new addresses,
+the source binding digest, source and target identities, deployment digest and
+operation UUID. Rehearsal rejects this argument. The source descriptor remains
+immutable; the effective replacement profile is separate, token-bound evidence.
+After confirmed old-server stop and private takeover health, recovery emits exact
+DNS-only A/AAAA instructions. `external_pending` and `external_observed` are
+separate from host readiness. Recursive answers never prove provider ownership or
+complete traffic cutover, and the tool makes no application DNS writes.
+
+Replacement recovery verifies the original archive/commit, installs its
+packages and artifacts, proves the graph stopped with ingress closed, and restores
+exact archived enablement and maintenance holds. Activation never migrates or
+seeds restored data. It validates the schema and current credentials, then starts
+the selected graph with admission checks and independent failed-start cleanup.
+An empty enabled set stays stopped. Repeated completion checks freshly verify
+release/configuration identity, process admission, private health and exposure.
+An interrupted activation keeps its cleanup obligations and refuses blind replay.
+
+For feature takeover with public listeners, set
+`FOUNDRY_RECOVERY_PUBLIC_BINDING_FILE` to a JSON file containing the complete
+`RecoveryPublicBinding` above. The client uses its operation and target-host UUIDs,
+validates it against the archived metadata, and sends the identical object to plan
+and apply. Resume with the same file and inputs. Successful takeover persists the
+server's validated effective `profile_update`; rehearsal never saves a profile.
+The original declaration stays in the archive, including after later backups.
+
+The [recovery handoff](../../tools/deploy/tests/RECOVERY_HANDOFF.md) describes the
+callback interfaces and the opt-in container acceptance scenario.
 
 <a id="recipe-declarations"></a>
 ## Declaration ownership
@@ -72,7 +224,7 @@ silently dropping fields. In particular, plain TCP **is** supported: declare
 | `deploy/environments/production.json` | Schema-3 host/instance identity, placement, public ports, source CIDRs, external DNS intent and existing environment settings. |
 | `deploy/files/` | Nonsecret configuration templates referenced by topology. |
 | Application source | Binding consumption, HTTP authorization callback and business authorization. |
-| Operator's DNS provider | External DNS records; the preview reports intent but does not create application records. |
+| Operator's DNS provider | External DNS records; release 1 reports intent but does not create application records. |
 
 The application release builder includes the topology and verified artifact
 payloads. Operators supply placement and exposure policy in the profile. Do not
@@ -109,7 +261,7 @@ callback, because the app starts after the relay.
       "kind": "builtin",
       "packages": ["jq"],
       "requires": ["relay"],
-      "maintenance": "serve",
+      "maintenance": "continue",
       "bindings": {
         "relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
         "json": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}
@@ -138,7 +290,7 @@ callback, because the app starts after the relay.
       "readiness": {"kind": "http", "listener": "control", "path": "/ready", "status": 200, "timeout_seconds": 30},
       "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5, "window_seconds": 60, "stop_seconds": 30},
       "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64, "file_descriptors": 1024},
-      "maintenance": "stop",
+      "maintenance": "continue",
       "state": {"kind": "disposable"}
     }
   ],
@@ -226,26 +378,26 @@ paths under `deploy/bin/`.
   package defaults remain fenced unless their owner explicitly hands them off.
 - **Artifacts:** `version` is a single path component. `platforms` maps
   `linux-amd64` and/or `linux-arm64` to an HTTPS `url` and 64-hex `sha256` of the
-  download. URLs cannot carry credentials, query strings or fragments. Declare
+  download, or a [release source](#release-carried-artifacts). URLs cannot carry credentials, query strings or fragments. Declare
   the selected profile platform for every artifact. An artifact version cannot
   be reused with changed bytes. `executables` maps export names to relative
   members. `file` exports exactly one executable; `tar.gz` can also export
   `bundles`, a map of names to relative directories. Optional `modules` names
   members beneath those directories. Bundles require `provenance` with
-  `source_revision`, `build_inputs`, `license` and `service_abi` strings; the
-  preview requires `service_abi` to match the observed consuming package version.
+  `source_revision`, `build_inputs`, `license` and `service_abi` strings; release 1
+  requires `service_abi` to match the observed consuming package version.
 - **Bundle views:** a role's `artifact_mounts` maps local names to
   `{"artifact":"assets","bundle":"templates","area":"config","path":"templates"}`
   (or area `data`). A binding `{"bundle":"<mount-name>"}` or argv
   `{"bundle":"<mount-name>"}` selects its protected service-local view. These are
-  not arbitrary host mounts. The preview ABI restriction above applies.
+  not arbitrary host mounts. The package-version ABI restriction above applies.
 - **Argv:** `arguments` is a list of single-tag objects, each one argument; it is
   not a shell command. `literal` does not interpolate variables. `listener_address`
   and `listener_port` refer to that role's listener. `binding` names a declared
   binding and supplies an executable path, bundle path or endpoint URL. `config`
   names a declared configuration. `state_path` and `runtime_path` contain relative
   paths; `config_root`, `data_root` and `copy_number` use the value `self` (the
-  only copy is 1). `secret_file` is parsed but secret intake refuses in preview.
+  only copy is 1). `secret_file` supplies a private file path, never secret bytes.
   Maximum 128 arguments, 32 KiB combined values, 4096 bytes per literal.
 - **Listeners:** only TCP; `bind` is `loopback` or `public`. Loopback listeners
   omit `tls` and `authentication`. Public listeners require `tls: "edge"` or
@@ -265,9 +417,28 @@ paths under `deploy/bin/`.
   declarations cannot inject systemd directives or a shell wrapper.
 - **State:** required `kind` is `disposable`, `external`, or `local-unprotected`.
   The last additionally requires `acknowledged: true`; the others omit it.
+  Only `external` accepts `recovery_owner`, a public label of at most 256 UTF-8
+  bytes, with no controls or surrounding whitespace. Omission preserves older
+  declarations but blocks a complete-coverage claim. Null and empty labels refuse.
   This declaration does not turn service-local state into a backup guarantee.
-- **Maintenance:** `serve` or `stop`; default `serve` for HTTP, `stop` otherwise.
-  This records intended later behavior; both preview maintenance actions refuse.
+- **Recovery rehearsal:** custom executable roles may declare the strict boolean
+  `recovery_rehearsal_safe`, default false. It allows planning an HTTP prerequisite
+  under isolation; it neither starts unrelated roles nor authorizes public exposure.
+- **Maintenance:** `continue` or `stop`; the existing `serve` spelling remains
+  accepted for compatibility. HTTP continues by default; other feature roles stop.
+  HTTP must continue. Every `requires` prerequisite and endpoint-binding provider
+  of a continuing role must also continue. Invalid graphs name the consumer,
+  provider and binding before deployment. Endpoint bindings do not add startup
+  ordering or implicitly start a disabled provider.
+  Executable bindings never create maintenance prerequisites: they name installed
+  files (a package path, an artifact entry or an application executable), and
+  stopping a role for maintenance does not remove or change those files.
+  Feature `down` closes exposure and stops only roles declared `stop`; HTTP and
+  continuing services retain their processes and exposure. Root-owned persistent
+  per-copy markers prevent held units from starting after reboot or automatic
+  restart. Actual systemd enablement remains unchanged. `up` restores the remembered
+  running copies that are still declared and enabled; a deliberate disable wins.
+  Legacy built-in worker/scheduler application pause behavior remains unchanged.
 - **Dependencies:** `requires` names role prerequisites and must be acyclic.
   Defaults are `[]`, except scheduler/worker default to `["http"]`. Enabled roles
   require enabled prerequisites. Executable and endpoint bindings resolve values;
@@ -285,6 +456,70 @@ Only `recreate` and `rendered-json` accept `bindings`, a map from JSON pointers 
 typed listener address/port, bundle, binding or copy-number values. Do not insert
 secrets here. Custom `environment` is an explicit map of nonsecret typed argv
 values; reserved process/application names and `_FILE` names are rejected.
+
+### Release-carried artifacts
+
+Archive build and artifact verification support this source. Bundle activation
+is not yet complete: `services.bundle_views()` still requires a topology download
+pin. It needs to accept the release inventory digest before a release-carried
+bundle can be mounted by a service.
+
+For an artifact that belongs to the application repository, replace the platform's
+`url` and `sha256` fields with a typed `source` object:
+
+```json
+{
+  "linux-arm64": {
+    "source": {
+      "release": {
+        "path": "deploy/artifacts/linux-arm64/obs-extension.tar.gz"
+      }
+    }
+  }
+}
+```
+
+The path names one file beneath `deploy/artifacts/` in the frozen application
+snapshot. Declare a separate platform entry for each supported architecture.
+The builder copies that exact file, computes SHA-256, and records the digest in
+`deployment.artifacts` and the release file inventory. It performs no download.
+The source declaration stays unchanged, so the bootstrap topology hash remains
+stable. The release inventory identifies the acquired bytes.
+
+To produce the file inside the archive builder, add an argument vector to the
+`release` object:
+
+```json
+{
+  "path": "deploy/artifacts/linux-arm64/obs-extension.tar.gz",
+  "build": ["sh", "deploy/build-obs-extension.sh"]
+}
+```
+
+The command runs once for the selected platform from the writable snapshot root,
+after the application build and before artifact acquisition. It receives
+`ARCHITECTURE`, `GOOS=linux`, `GOARCH`, and the builder's target `CC`. It has a
+20-minute deadline. Arguments undergo no shell expansion. Keep the build script
+and its inputs in the repository; ignored or excluded files are not build inputs.
+The output must not exist before this command runs. A nonzero exit, missing file,
+symlink, hard link, duplicate source path, or source change during copying fails
+the build. The builder does not search directories or expand globs.
+
+Keep the artifact's existing `format`, exports, modules, and provenance fields.
+For example, package an OBS shared library and shader beneath a bundle directory
+in a `tar.gz` file, declare the library in `modules`, and export that directory
+through `bundles`. The normal Linux architecture checks, bundle ABI evidence,
+expansion bounds, and immutable publication still apply.
+Change `version` when the bytes change. This source does not permit replacing an
+already published artifact version or bypassing the package-service ABI
+requirement. A platform cannot combine `source` with `url` or a handwritten
+`sha256`.
+
+Build with the application's usual entry point:
+
+```sh
+ENVIRONMENT=acceptance-local ACTION=build make release
+```
 
 ### Profile field reference
 
@@ -373,10 +608,13 @@ role descriptor. Neither loader downloads artifacts nor replaces host verificati
 
 Use the application's pinned framework tool and the thin Make targets from the
 [deployment invocation guide](deployment.md#recipe-deploy). Feature topology
-requires generation 12. On an already bound older host, use its existing legacy
-profile to review and apply the forward-only tool upgrade **before** switching
-the consumer to schema 3. Do not use a feature profile to request an older host's
-upgrade. A fresh host gets the pinned generation-12 tools during bootstrap.
+requires generation 13 for release 1 operations. Update the application's
+Foundry-Go pin to v0.32.0 or later. Use the host's existing profile
+to review and apply the forward-only tool upgrade. A deployed generation-12 preview
+keeps its schema-3 profile for `tools-plan`, `tools-apply` and `upgrade-resume`.
+For a legacy host, upgrade before adopting schema 3. Direct upgrades require at
+least generation 9; older hosts must reach that generation first. A fresh host gets
+the pinned generation-13 tools during bootstrap.
 
 ```sh
 ENVIRONMENT=production ACTION=tools-plan make deploy
@@ -385,7 +623,7 @@ ENVIRONMENT=production ACTION=tools-apply PLAN_TOKEN='<reviewed-token>' OPERATIO
 
 Keep the operation UUID for a tool-upgrade resume. Review the plan; the apply
 command asks for confirmation. Tool generation is independent of the framework's
-semantic version: verify the selected bundle reports generation 12, rather than
+semantic version: verify the selected bundle reports generation 13, rather than
 assuming a version label establishes support.
 
 Before bootstrap, prepare the existing SSH, PostgreSQL/Redis and HTTP certificate
@@ -429,9 +667,32 @@ reply does not establish whether the operation completed.
 Create external DNS-only A/AAAA records for the listener hostname, pointing at the
 intended reachable addresses. Raw TCP is not HTTP: do not enable a provider's HTTP
 proxy on this name. `proxied: false` records that requirement; DNS answers alone
-cannot prove the provider configuration or a completed global cutover. The
-preview does not create, update or delete these application records. Certificate
+cannot prove the provider configuration or a completed global cutover. Release 1
+does not create, update or delete these application records. Certificate
 DNS challenges remain the separate existing certificate owner's responsibility.
+
+Bootstrap and release plans and network reports show the required records and
+the recursive lookup state: `resolved`, `unresolved` (resolution failed), or
+`unavailable` (the two-second lookup deadline expired or no usable observation
+could be collected). A first deployment does not require the hostname to resolve.
+DNS is informational: changed answers do not invalidate a reviewed release plan,
+and neither readiness nor public exposure depends on them. Recovery retains failed
+observations explicitly and leaves external cutover pending.
+
+Release activation rechecks the reviewed host observations inside its owned
+executor. Only that verified executor's newly created systemd unit is excluded;
+other activation changes still invalidate the plan. A `stale_plan` observation
+error lists changed key names, never values, and records those names in the
+private operation directory's `stale-plan.json`. Review a fresh plan after
+resolving the reported changes.
+
+Failed executor and cleanup commands have separate private journals in that
+operation directory: `operation-commands.json` and
+`operation-cleanup-commands.json`. These record command names, systemctl
+subcommands, unit names and exit status; they omit other arguments, stdout and
+stderr. A failure during initial validation can be retried with a fresh review
+only after cleanup proves workload and listener closure and verifies that
+publication never began. Uncertain or later failures still require reconciliation.
 
 Both iptables-legacy and the supported iptables-nft/UFW layout are observed. The
 network owner inventories `filter`, `nat`, `raw` and `mangle`, including live and
@@ -444,8 +705,135 @@ NAT support does not mean arbitrary Docker firewall configurations are accepted.
 
 The addresses in `public_addresses` must belong to the namespace where Foundry
 runs. A Docker host's published address is not automatically an address inside a
-container. The preview neither publishes Docker ports nor configures an upstream
+container. Foundry neither publishes Docker ports nor configures an upstream
 router. Do not add Docker port publishing or DNAT over a Foundry-owned port in the
 same observed namespace. Test reachability from a peer namespace or another
 machine, not from the host loopback; verify permitted traffic reaches the relay
 through nginx stream and that stop closes it.
+
+### Maintenance holds and shared application state
+
+While the shared record is confirmed down, HTTP readiness checks accept the
+framework's 503 maintenance response as `status: "maintenance"`. Process identity,
+listener ownership and stability checks still apply. Continuing custom roles
+keep their declared probes; held roles are not probed. An unavailable shared
+record or a different HTTP failure does not establish maintenance readiness.
+`up` lifts the shared pause before requiring normal HTTP readiness.
+
+Use deploy `down` for immediate fencing of supervised service listeners. Direct
+`artisan down` and maintenance changes from another host only update the shared
+application record. The next privileged instance action reconciles that record
+through the owned lifecycle operation. A host report identifies stopped-policy
+services that are still admitting while the shared record is down.
+
+Restore drills, backups, logs, configuration-key inspection, release planning and
+stop may reconcile toward down or do nothing; they never restore held workloads
+or open their listeners as a reconciliation side effect. After an external
+`artisan up`, use deploy `up` or `status` to restore those copies separately.
+
+Held copies are reported separately from failed or unexpectedly inactive services.
+HTTP uses its maintenance liveness contract while paused. Deploy, configuration,
+restart and boot retain persistent holds; an unavailable shared store never clears
+them. `up` removes markers only under pending admission after closure is proven.
+If readiness then fails, the operation reports failure and closes the affected
+services; it does not claim the application pause was restored. After cleanup
+proves closure, an explicit `up` can retry the held selection.
+
+Release and rollback plans expect public exposure only for enabled copies without
+active holds. Changing a held role to `maintenance: "continue"` restores it if it
+was running before maintenance and remains enabled; the transition must pass its
+readiness checks. Failed startup reinstates the hold through independent cleanup.
+If the shared store cannot be observed, a declaration change cannot remove an
+existing marker. A later successful observation reconciles the policy. A deliberate
+disable still prevents restoration.
+
+## Rehearse locally
+
+Use an explicit application profile such as `acceptance-local`. Set
+`runtime_environment` to `testing`, use an `acceptance*` environment name and a
+`.acceptance.invalid` domain, and assign a non-null `host.host_id` UUID. Preserve
+that UUID when building the archive. Set `edge_origin_lockdown` to `false` for the
+isolated network. The container adopts this host identity. Rehearsal never contacts
+the profile's SSH address or changes the profile or `.deploy/settings.json`.
+
+Run from the application repository with Docker available:
+
+```sh
+ENVIRONMENT=acceptance-local go tool foundry deploy rehearse \
+  --archive /absolute/path/to/app.tar.gz --ubuntu 24.04
+```
+
+Omit `--archive` to use the normal application builder for the selected profile.
+The archive must match the project's identity, topology, environment and target
+architecture. Feature archives must embed the exact selected profile. A production
+archive is refused; rebuild it for the acceptance profile instead of rewriting it.
+Use a native amd64 or arm64 Docker engine matching that profile. Ubuntu 24.04 and
+26.04 are supported; emulated runs are refused.
+
+For public TCP, give every listener an external DNS-only hostname beneath
+`.acceptance.invalid`. Use one host address per family across the profile, within
+`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`, or `2001:db8::/32`.
+The container receives those addresses on a private dual-stack network. Each IPv4
+subnet is `/24`; each IPv6 subnet is `/64`. For example, a host at `203.0.113.10`
+and a source CIDR of `203.0.113.20/32` lets rehearsal probe both allowed and denied
+sources. A source CIDR covering the entire subnet has no denied peer; evidence
+marks that check unavailable. It does not count an unavailable check as passed.
+
+Rehearsal creates a local DNS server, synthetic CA and S3 stand-in with fresh
+credentials. It runs production `bootstrap-plan`, `bootstrap-apply` and `activate`,
+then production readiness and report collection. Separate containers check TCP
+closure before activation, permitted TCP/TLS access after activation, source
+denials, closure after stop, and access after restart. A final stop precedes
+cleanup. TLS probes verify the synthetic CA and listener hostname. UDP sockets
+are inventoried without claiming public UDP acceptance.
+
+Package preparation and bootstrap use a separate provisioning network. Before
+activation, rehearsal disconnects that network and switches DNS to the local
+server, which has no upstream resolver. Runtime has no route to production
+endpoints. No Docker host ports are published. The privileged systemd host runs
+trusted application code; it is not an untrusted-code sandbox.
+
+For an application with external storage, explicitly bind every cloud disk to
+the stand-in. Supply a private file, mode `0600`, with this shape:
+
+```json
+{
+  "environment": "acceptance-local",
+  "configuration": {},
+  "storage_disks": ["uploads"]
+}
+```
+
+`storage_disks` names the application's declared R2 or S3-compatible disks.
+Rehearsal preserves their other settings and supplies isolated test buckets and
+credentials. `configuration` supplies literal application configuration values
+through the production bootstrap interface. Use rehearsal-only values; host file
+references are refused. Missing cloud-disk bindings stop before container creation.
+Other external dependencies have no automatic stand-in: applications requiring
+them fail configuration or readiness on the isolated network.
+
+```sh
+chmod 600 /absolute/private/rehearsal-bindings.json
+ENVIRONMENT=acceptance-local go tool foundry deploy rehearse \
+  --archive /absolute/path/to/app.tar.gz --ubuntu 26.04 \
+  --bindings /absolute/private/rehearsal-bindings.json \
+  --output /absolute/path/to/new-evidence-directory --cpus 4 --memory-gib 8
+```
+
+The output directory must be new. Defaults are two CPUs and 4 GiB of memory;
+supported limits are 1–32 CPUs and 2–64 GiB. `evidence.json` records archive, tool,
+image, topology and profile digests, the package plan, resource limits, allocated
+ports and unit observations in reports, probe results, and phase outcomes.
+`resources.json` records the exact Docker names and run ID. Only resources bearing
+that run's ownership label are removed. Successful cleanup removes private files
+and keeps evidence. Cleanup failures preserve private files and fail the run.
+`--keep-failed` retains a failed run explicitly and prints its identity and evidence
+directory for inspection; it does not retain successful runs.
+
+Synthetic tests do not establish real DNS-01, provider policy, global DNS cutover,
+cloud firewall behavior, sustained capacity or business recovery. Production
+refusals remain refusals. Release-carried bundles use the same verified service
+views as HTTPS artifacts.
+The framework acceptance runner uses the same shipped host images, CA setup and
+systemd container helpers; its fixture-specific scenarios and private module proxy
+remain separate from application rehearsal.

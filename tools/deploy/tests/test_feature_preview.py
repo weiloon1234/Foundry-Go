@@ -30,7 +30,7 @@ class FeaturePreviewTests(unittest.TestCase):
     def test_effective_environment_preserves_secrets_and_selects_exact_http_port(self):
         root = self.host.paths.instance_config(self.entry["name"])
         root.mkdir(parents=True)
-        original = 'APP__HTTP__SERVER__ADDRESS=127.0.0.1:8100\nPRIVATE=keep-current\nKEY_FILE=/etc/secret\n'
+        original = 'APP__HTTP__SERVER__ADDRESS=127.0.0.1:8100\nPRIVATE=keep-current\nKEY_FILE=/etc/secret\nAPP__SCHEDULER__ENABLED=true\nAPP__SCHEDULER__ENABLED_FILE=/old/scheduler\n'
         (root / "app.env").write_text(original)
         endpoints = (c.AllocatedEndpoint("http", "http", "127.0.0.1", 8200),)
         with patch.object(runtime_config, "validate_runtime_environment"):
@@ -38,6 +38,8 @@ class FeaturePreviewTests(unittest.TestCase):
         resolution = replace(self.inventory.resolution, environments=environments)
         path = runtime_config.effective_environment_path(self.host, self.entry, resolution)
         values = c.parse_env(path.read_text())
+        self.assertEqual(values["APP__SCHEDULER__ENABLED"], "false")
+        self.assertNotIn("APP__SCHEDULER__ENABLED_FILE", values)
         self.assertEqual(values["PRIVATE"], "keep-current")
         self.assertEqual(values["KEY_FILE"], "/etc/secret")
         self.assertEqual(values["APP__HTTP__SERVER__ADDRESS"], "127.0.0.1:8200")
@@ -91,11 +93,22 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertIn("post-preview", value["pruning_error"]["detail"])
 
     def test_preview_refusals_name_later_release(self):
-        for action in ("rollback", "config-set", "down", "up", "keys-rotate", "recover-apply"):
+        for action in ("keys-rotate", "backup-keys-rotate"):
             with self.subTest(action=action), self.assertRaises(c.DeployError) as raised:
                 upgrades._check_feature_request(None, {"profile": {"schema": 3}}, action)
             self.assertEqual(raised.exception.code, "capability_unavailable")
             self.assertIn("post-preview", raised.exception.detail)
+
+    def test_recovery_and_backup_dispatch_require_generation_13(self):
+        for action in ("backup-configure", "backup-run", "restore-drill", "recover-plan", "recover-apply"):
+            for generation in (12, 13):
+                request = {"profile": {"schema": 3}, "client": {"generation": generation}}
+                if generation == 12:
+                    with self.subTest(action=action), self.assertRaises(c.DeployError) as raised:
+                        upgrades._check_feature_request(None, request, action)
+                    self.assertEqual(raised.exception.code, "instance_capability_required")
+                else:
+                    upgrades._check_feature_request(None, request, action)
 
     def test_new_runtime_owners_are_required_generation_12_files(self):
         required = upgrades.required_files(12)
@@ -223,7 +236,11 @@ class FeaturePreviewTests(unittest.TestCase):
             stack.enter_context(patch.object(self.host, "journal"))
             stack.enter_context(patch.object(self.host, "save_state"))
             stack.enter_context(patch.object(self.host, "run", side_effect=lambda argv, **kw: events.append(argv[1] + ":" + argv[2])))
+            stack.enter_context(patch.object(services, "enabled_units", return_value=tuple(self.inventory.roles)))
+            stack.enter_context(patch.object(services, "wait_ready", side_effect=lambda host, inv, name, deadline:
+                                            events.append("ready:" + name) or True))
             stack.enter_context(patch.object(lifecycle, "stop_units", side_effect=lambda *_: events.append("stopped")))
+            stack.enter_context(patch.object(network, "withdraw", return_value=None))
             stack.enter_context(patch.object(network, "close", side_effect=lambda *_: (events.append("closed"), evidence)[1]))
             stack.enter_context(patch.object(network, "open_public", side_effect=lambda *_: events.append("opened")))
             stack.enter_context(patch.object(runtime_config, "effective_environment_path", return_value=Path("/effective.env")))
@@ -244,28 +261,23 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertIn("runtime-v1", content)
         self.assertIn("ExecCondition=+", content)
 
-    def test_legacy_maintenance_adapter_cannot_bypass_feature_gate(self):
+    def test_feature_maintenance_uses_existing_bounded_application_response(self):
         import maintenance
         import release
+        import subprocess
         entry = {**self.entry, "topology": {"schema": 2}}
         for action in ("down", "up"):
-            with self.subTest(action=action), patch.object(release, "app") as app, self.assertRaises(c.DeployError) as raised:
-                maintenance.run(self.host, entry, Path("/unused"), action, ())
-            app.assert_not_called()
-            self.assertEqual(raised.exception.code, "capability_unavailable")
+            result = subprocess.CompletedProcess([], 0, json.dumps({"down": action == "down"}), "")
+            with self.subTest(action=action), patch.object(release, "app", return_value=result) as app:
+                self.assertEqual(maintenance.run(self.host, entry, Path("/unused"), action, ()),
+                                 {"down": action == "down"})
+            self.assertEqual(app.call_args.args[3], action)
 
-    def test_both_maintenance_operations_refuse_before_any_host_effect(self):
+    def test_maintenance_requires_pinned_executor_before_host_effects(self):
         for action in ("down", "up"):
-            for invoke in (lambda: lifecycle.request_operation(self.host, action, {}, {}),
-                           lambda: lifecycle.execute(self.host, {"action": action})):
-                with self.subTest(action=action), patch.object(network, "capability") as network_check, \
-                        patch.object(self.host, "run") as run, patch.object(self.host, "lock") as lock, \
-                        self.assertRaises(c.DeployError) as raised:
-                    invoke()
-                self.assertEqual(raised.exception.code, "capability_unavailable")
-                self.assertIn("maintenance down/up", raised.exception.detail)
-                self.assertIn("post-preview", raised.exception.detail)
-                network_check.assert_not_called()
-                run.assert_not_called()
-                lock.assert_not_called()
-                self.assertFalse(self.host.paths.state.exists())
+            with self.subTest(action=action), patch.object(self.host, "run") as run, \
+                    patch.object(self.host, "lock") as lock, self.assertRaises(c.DeployError) as raised:
+                lifecycle.execute(self.host, {"action": action, "project": {}, "profile": self.entry["profile"]})
+            self.assertEqual(raised.exception.code, "capability_unavailable")
+            run.assert_not_called()
+            lock.assert_not_called()

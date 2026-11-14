@@ -9,7 +9,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
@@ -29,6 +29,339 @@ LABEL = "20261101-020000F"
 
 
 class RecoveryTests(unittest.TestCase):
+    def feature(self, **options):
+        from test_backup import feature_fixture
+        inventory, entry, snapshot = feature_fixture(**options)
+        self.project["id"] = entry["project_id"]
+        self.repository["host_id"] = entry["host_id"]
+        self.files["recovery/pgbackrest-repository.json"] = json.dumps(self.repository).encode()
+        self.old_profile = entry["profile"]
+        self.profile = copy.deepcopy(self.old_profile)
+        self.profile["host"].update(address="replacement.example.invalid", host_id=str(uuid.uuid4()))
+        self.entry = entry
+        metadata = copy.deepcopy(entry)
+        for key in ("uid", "gid"):
+            metadata["allocations"].pop(key)
+        metadata.update(feature_recovery=snapshot, release_commit="a" * 40)
+        self.files["recovery/instance.json"] = json.dumps(metadata).encode()
+        prefix = "instances/" + entry["name"] + "/"
+        for name in ("secrets.json", "bootstrap-secrets.json", "backup.json"):
+            value = json.loads(self.files[prefix + name])
+            value["instance_id"] = self.profile["instance_id"]
+            self.files[prefix + name] = json.dumps(value).encode()
+        self.files[prefix + "app.env"] = dump_env(runtime_environment(
+            entry, json.loads(self.files[prefix + "secrets.json"]))).encode()
+        for paths in snapshot["secret_paths"].values():
+            for path in paths.values():
+                canonical = backup.instance_paths(entry["name"])["configuration"] + "/"
+                self.files[prefix + path.removeprefix(canonical)] = b"private-service-canary"
+        self.arguments["topology"] = entry["topology"]
+        self.write_archive()
+        return inventory, metadata
+
+    def binding(self, metadata):
+        source = metadata["profile"]["listeners"]["relay.ingress"]
+        return {"schema": 1, "operation_id": self.operation, "source_instance_id": self.profile["instance_id"],
+                "source_host_id": metadata["host_id"], "target_host_id": self.profile["host"]["host_id"],
+                "deployment_sha256": backup.canonical_digest(metadata["feature_recovery"]["deployment"]),
+                "dns_cutover": "external_pending", "observations": [], "listeners": [{
+                    "name": "relay.ingress", "hostname": source["dns"]["hostname"], "transport": "tcp", "ports": source["ports"],
+                    "dns_mode": "external", "old_addresses": source["dns"]["public_addresses"],
+                    "replacement_addresses": ["203.0.113.20"], "source_binding_sha256": backup.canonical_digest(source)}]}
+
+    def test_feature_missing_lifecycle_refuses_before_host_effects(self):
+        self.feature(secret=True)
+        with patch("feature_lifecycle.prepare_recovery", None), patch.object(self.host, "run") as run, self.assertRaises(DeployError) as error:
+            self.plan()
+        self.assertEqual(error.exception.code, "capability_unavailable")
+        self.assertIn("feature_lifecycle.prepare_recovery", error.exception.detail)
+        run.assert_not_called()
+        self.assertIsNone(recover._load(self.host))
+
+    def test_feature_archive_requires_descriptor_and_all_secret_snapshots(self):
+        self.feature(secret=True)
+        prefix = "instances/" + self.entry["name"] + "/service-secrets/revision-7/token"
+        self.files.pop(prefix)
+        self.write_archive()
+        with self.assertRaises(DeployError) as error:
+            self.plan()
+        self.assertEqual(error.exception.code, "recovery_members")
+        metadata = json.loads(self.files["recovery/instance.json"])
+        metadata.pop("feature_recovery")
+        self.files["recovery/instance.json"] = json.dumps(metadata).encode()
+        self.write_archive()
+        with self.assertRaises(DeployError) as error:
+            self.plan()
+        self.assertEqual(error.exception.code, "recovery_descriptor_missing")
+
+    def test_feature_archive_requires_environment_metadata_and_resolution_to_agree(self):
+        _, metadata = self.feature(http_port=18000)
+        prefix = "instances/" + self.entry["name"] + "/"
+        values = recover.parse_env(self.files[prefix + "app.env"].decode())
+        values["APP__HTTP__SERVER__ADDRESS"] = "127.0.0.1:18001"
+        self.files[prefix + "app.env"] = dump_env(values).encode()
+        with self.assertRaises(DeployError) as error:
+            recover.archive_configuration(self.project, self.profile, self.files, self.entry["topology"])
+        self.assertEqual(error.exception.code, "recovery_identity")
+        metadata["allocations"]["http_port"] = 18001
+        self.files["recovery/instance.json"] = json.dumps(metadata).encode()
+        with self.assertRaises(DeployError) as error:
+            recover.archive_configuration(self.project, self.profile, self.files, self.entry["topology"])
+        self.assertEqual(error.exception.code, "backup_deployment_mismatch")
+
+    def test_legacy_archive_keeps_legacy_http_port_bounds(self):
+        prefix = "instances/" + self.entry["name"] + "/"
+        values = recover.parse_env(self.files[prefix + "app.env"].decode())
+        values["APP__HTTP__SERVER__ADDRESS"] = "127.0.0.1:18000"
+        self.files[prefix + "app.env"] = dump_env(values).encode()
+        with self.assertRaises(DeployError) as error:
+            recover.archive_configuration(self.project, self.profile, self.files, self.entry["topology"])
+        self.assertEqual(error.exception.code, "recovery_members")
+
+    def test_feature_restoration_sets_runtime_access_before_real_readers(self):
+        from test_contracts import storage_fixture
+        _, metadata = self.feature(secret=True, http_port=18000)
+        prefix = "instances/" + self.entry["name"] + "/"
+        self.files[prefix + "service-secrets/revision-6/token"] = b"historical-secret-canary"
+        canonical = backup.instance_paths(self.entry["name"])["configuration"] + "/"
+        values = recover.parse_env(self.files[prefix + "app.env"].decode())
+        storage = storage_fixture()
+        for key, name, content in (("APP__SERVICES__CREDENTIALS_FILE", "storage-credentials.secret", storage["credentials"]),
+                                   ("APP__SERVICES__STORAGE__DISKS_FILE", "storage-disks.secret", storage["disks"])):
+            values[key] = canonical + name
+            self.files[prefix + name] = json.dumps(content).encode()
+        self.files[prefix + "app.env"] = dump_env(values).encode()
+        self.write_archive()
+        with patch.object(recover, "_feature_owner", return_value=Mock()):
+            approved = self.plan(mode="takeover")
+        journal = {"intent": approved["_intent"], "source": {"label": LABEL}}
+        with patch.object(recover.upgrades, "install_tools"), patch.object(recover.packages, "install_missing"), \
+                patch.object(recover.provision, "_prepare_instance"):
+            recover._resources(self.host, journal, approved["_recovered"], self.files, TOOLS)
+        restored_entry = self.host.read_registry()["instances"][self.profile["instance_id"]]
+        self.assertEqual(recover.validate_runtime_environment(self.host, restored_entry), values)
+        self.assertIn("uploads", restored_entry["storage_bindings"])
+        directory = self.host.paths.instance_config(self.entry["name"])
+        for name, mode in (("app.env", 0o640), ("service-secrets/revision-7/token", 0o640),
+                           ("storage-credentials.secret", 0o640), ("storage-disks.secret", 0o640),
+                           ("service-secrets/revision-6/token", 0o600), ("secrets.json", 0o600),
+                           ("bootstrap-secrets.json", 0o600), ("backup.json", 0o600)):
+            self.assertEqual((directory / name).stat().st_mode & 0o777, mode)
+            self.assertEqual((directory / name).read_bytes(), self.files[prefix + name])
+        source = self.host.paths.p(recover.JOURNAL).parent / "source-deployment.json"
+        self.assertEqual(read_json(source), metadata["feature_recovery"])
+        self.assertEqual(source.stat().st_mode & 0o777, 0o600)
+        self.assertFalse(any(args[:2] == ["systemctl", "start"] for args, _ in self.commands))
+
+    def test_runtime_references_cannot_widen_access_to_private_intake(self):
+        self.feature()
+        canonical = backup.instance_paths(self.entry["name"])["configuration"] + "/"
+        recovered = {"metadata": None, "values": {"VALUE_FILE": canonical + "bootstrap-secrets.json"}}
+        with patch.object(self.host, "owned_write") as write, self.assertRaises(DeployError) as error:
+            recover._restore_runtime_access(self.host, self.entry, recovered)
+        self.assertEqual(error.exception.code, "recovery_members")
+        write.assert_not_called()
+
+    def test_restored_service_secret_owner_reads_retained_values_but_private_index(self):
+        _, metadata = self.feature(secret=True)
+        canonical = backup.instance_paths(self.entry["name"])["configuration"] + "/"
+        prefix = "instances/" + self.entry["name"] + "/"
+        current = canonical + "service-secrets/revision-7/token"
+        retained = canonical + "service-secrets/revision-7/retained"
+        metadata["feature_recovery"]["service_secret_files"] = [current, retained]
+        self.files["recovery/instance.json"] = json.dumps(metadata).encode()
+        self.files[prefix + "service-secrets/revision-7/retained"] = b"retained-secret"
+        self.files[prefix + "service-secrets.json"] = json.dumps({"schema": 1, "instance_id": self.profile["instance_id"],
+                                                                "paths": {"token": current, "retained": retained}}).encode()
+        self.write_archive()
+        with patch.object(recover, "_feature_owner", return_value=Mock()):
+            approved = self.plan(mode="takeover")
+        journal = {"intent": approved["_intent"], "source": {"label": LABEL}}
+        def snapshot_paths(host, entry):
+            index = host.paths.instance_config(entry["name"]) / "service-secrets.json"
+            self.assertEqual(index.stat().st_mode & 0o777, 0o600)
+            paths = tuple(host.paths.p(path) for path in read_json(index)["paths"].values())
+            for path in paths:
+                recover._read_value_file(host, entry, str(path))
+            return (index, *paths)
+        with patch.object(recover.upgrades, "install_tools"), patch.object(recover.packages, "install_missing"), \
+                patch.object(recover.provision, "_prepare_instance"), \
+                patch.object(recover.runtime_config, "service_secret_snapshot_paths", side_effect=snapshot_paths, create=True) as owner:
+            recover._resources(self.host, journal, approved["_recovered"], self.files, TOOLS)
+        owner.assert_called_once()
+
+    def test_takeover_preserves_archived_enablement_and_maintenance_holds(self):
+        _, metadata = self.feature()
+        for enabled, held, started, effective_holds in ((["http"], [], ["http"], []),
+                                                       ([], [], [], []),
+                                                       (["http", "relay", "worker"], ["relay"], ["http"], ["relay", "worker"])):
+            with self.subTest(enabled=enabled, holds=held):
+                selected = metadata["feature_recovery"]["selection"]
+                selected.update(enabled_roles=enabled, maintenance_holds=held)
+                metadata["deployment_selection"] = selected
+                self.files["recovery/instance.json"] = json.dumps(metadata).encode()
+                self.write_archive()
+                with patch.object(recover, "_feature_owner", return_value=Mock()):
+                    approved = self.plan(mode="takeover")
+                self.assertEqual(approved["recovery_enabled_roles"], enabled)
+                self.assertEqual(approved["recovery_roles"], started)
+                self.assertEqual(approved["recovery_maintenance_holds"], effective_holds)
+                self.assertEqual(approved["_intent"]["recovery_maintenance_holds"], effective_holds)
+
+    def test_feature_restore_rejects_conflicting_secret_alias_and_omitted_profile_policy(self):
+        self.feature(secret=True)
+        canonical = backup.instance_paths(self.entry["name"])["configuration"]
+        alias = "files/" + canonical.lstrip("/") + "/service-secrets/revision-7/token"
+        self.files[alias] = b"different-secret"
+        self.write_archive()
+        with self.assertRaises(DeployError) as error:
+            self.plan()
+        self.assertEqual(error.exception.code, "recovery_members")
+        self.files.pop(alias)
+        self.write_archive()
+        self.profile.pop("public_env")
+        with self.assertRaises(DeployError):
+            self.plan()
+
+    def test_unprotected_takeover_and_unsafe_rehearsal_name_dependency_before_effects(self):
+        self.feature(state="local-unprotected", http_dependency=True)
+        with patch.object(self.host, "run") as run:
+            for mode, code in (("takeover", "service_state_unprotected"),
+                               ("rehearsal", "recovery_rehearsal_dependency")):
+                with self.subTest(mode=mode), self.assertRaises(DeployError) as error:
+                    self.plan(mode=mode)
+                self.assertEqual(error.exception.code, code)
+                self.assertIn("relay", error.exception.detail)
+            run.assert_not_called()
+
+    def test_rehearsal_selects_only_http_and_rejects_public_cutover_binding(self):
+        inventory, metadata = self.feature(public=True)
+        self.assertEqual(recover.rehearsal_roles(inventory), ("http",))
+        with self.assertRaises(DeployError) as error:
+            self.plan(recovery_public_binding=self.binding(metadata))
+        self.assertEqual(error.exception.code, "recovery_public_binding")
+
+    def test_safe_http_dependency_is_selected_but_still_requires_lane_a_isolation(self):
+        inventory, _ = self.feature(http_dependency=True, rehearsal_safe=True, public=True)
+        self.assertEqual(recover.rehearsal_roles(inventory), ("relay", "http"))
+        with patch("feature_lifecycle.prepare_recovery", None), patch.object(self.host, "run") as run, self.assertRaises(DeployError) as error:
+            self.plan()
+        self.assertEqual(error.exception.code, "capability_unavailable")
+        run.assert_not_called()
+        with patch.object(recover, "_feature_owner", return_value=Mock()):
+            approved = self.plan()
+        self.assertEqual(approved["recovery_roles"], ["relay", "http"])
+        self.assertIsNone(approved["recovery_public_binding"])
+
+    def test_safe_custom_role_does_not_admit_background_dependency_or_unneeded_role(self):
+        from test_backup import feature_fixture
+        inventory, _, _ = feature_fixture(http_dependency=True, rehearsal_safe=True, background_dependency=True)
+        with self.assertRaises(DeployError) as error:
+            recover.rehearsal_roles(inventory)
+        self.assertEqual(error.exception.code, "recovery_rehearsal_dependency")
+        self.assertIn("worker", error.exception.detail)
+        inventory, _, _ = feature_fixture(rehearsal_safe=True)
+        self.assertEqual(recover.rehearsal_roles(inventory), ("http",))
+        inventory, _, _ = feature_fixture(http_dependency=True, rehearsal_safe=False)
+        with self.assertRaises(DeployError) as error:
+            recover.rehearsal_roles(inventory)
+        self.assertIn("relay", error.exception.detail)
+
+    def test_public_override_is_explicit_bound_and_does_not_rewrite_source(self):
+        _, metadata = self.feature(public=True)
+        binding = self.binding(metadata)
+        for mutate in (lambda v: v.update(operation_id=str(uuid.uuid4())),
+                       lambda v: v.update(deployment_sha256="b" * 64),
+                       lambda v: v.update(target_host_id=metadata["host_id"]),
+                       lambda v: v["listeners"][0].update(replacement_addresses=["203.0.113.10"]),
+                       lambda v: v["listeners"][0].update(replacement_addresses=["2001:db8::1"]),
+                       lambda v: v["listeners"][0].update(hostname="other.example.org"),
+                       lambda v: v["listeners"][0].update(ports=[9444]),
+                       lambda v: v["listeners"][0].update(source_binding_sha256="b" * 64),
+                       lambda v: v["listeners"][0].update(executable="/bin/other")):
+            bad = copy.deepcopy(binding)
+            mutate(bad)
+            with self.assertRaises(DeployError):
+                recover.replacement_binding(bad, metadata, self.profile, self.operation, "takeover")
+        source = copy.deepcopy(metadata)
+        parsed = recover.replacement_binding(binding, metadata, self.profile, self.operation, "takeover")
+        effective = recover.effective_profile(self.profile, parsed)
+        self.assertEqual(effective["listeners"]["relay.ingress"]["dns"]["public_addresses"], ["203.0.113.20"])
+        self.assertEqual(metadata, source)
+        self.assertEqual(self.profile["listeners"], metadata["profile"]["listeners"])
+
+    def test_replacement_addresses_are_token_bound_and_dns_remains_separate(self):
+        import listeners
+        from contracts import DNSObservation
+        _, metadata = self.feature(public=True)
+        binding = self.binding(metadata)
+        with patch.object(recover, "_feature_owner", return_value=Mock()):
+            first = self.plan(mode="takeover", recovery_public_binding=binding)
+            changed = copy.deepcopy(binding)
+            changed["listeners"][0]["replacement_addresses"] = ["203.0.113.21"]
+            second = self.plan(mode="takeover", recovery_public_binding=changed)
+        self.assertNotEqual(first["plan_token"], second["plan_token"])
+        journal = {"intent": first["_intent"]}
+        with self.assertRaises(DeployError) as error:
+            recover._dns_result(self.host, journal)
+        self.assertEqual(error.exception.code, "recovery_dns_not_ready")
+        journal.update(old_server_stopped_confirmed_at=backup.now(), private_takeover_healthy_at=backup.now())
+        with patch.object(listeners, "observe_dns", side_effect=OSError("unavailable")):
+            result = recover._dns_result(self.host, journal)
+        self.assertEqual(result["dns_cutover"], "external_pending")
+        self.assertEqual(result["dns_recovery"]["observations"][0]["state"], "unavailable")
+        self.assertEqual(result["remaining_manual_steps"], ["Set DNS-only A relay.example.org: replace 203.0.113.10 with 203.0.113.20."])
+        observation = DNSObservation("relay.example.org", ("203.0.113.20",), backup.now(), "recursive")
+        with patch.object(listeners, "observe_dns", return_value=observation):
+            result = recover._dns_result(self.host, journal)
+        self.assertEqual(result["dns_cutover"], "external_observed")
+        self.assertEqual(result["traffic_cutover"], "operator_verification_required")
+        self.assertIsNotNone(result["dns_matched_at"])
+
+    def test_feature_takeover_hands_exact_snapshot_to_closed_prepare_before_activation(self):
+        inventory, metadata = self.feature(secret=True)
+        owner = Mock()
+        events = []
+        def prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_dir):
+            self.assertEqual(snapshot, metadata["feature_recovery"])
+            self.assertIn("old_server_stopped_confirmed_at", journal)
+            self.assertEqual(journal["intent"]["recovery_roles"], list(inventory.start_order(inventory.roles)))
+            events.append("prepare")
+        def activate(host, registry, entry, journal):
+            self.assertIn("application", journal["completed"])
+            events.append("activate")
+            return {"version": inventory.deployment.release}
+        owner.prepare_recovery.side_effect = prepare
+        owner.activate_recovery.side_effect = activate
+        owner.recovery_ready.return_value = True
+        def resources(host, journal, recovered, files, tools_dir):
+            entry = copy.deepcopy(self.entry)
+            entry.update(profile=self.profile, host_id=self.profile["host"]["host_id"],
+                         recovered_from={"mode": "takeover", "operation_id": self.operation})
+            host.write_registry(registry(entry))
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(recover, "_feature_owner", return_value=owner))
+            approved = self.plan(mode="takeover")
+            stack.enter_context(patch.object(recover, "_verify_repository"))
+            stack.enter_context(patch.object(recover, "_resources", side_effect=resources))
+            for module, name in ((postgres, "recover_cluster"), (postgres, "inspect"), (backup, "_backrest"),
+                                 (recover, "validate_runtime_environment"), (recover, "read_credentials"),
+                                 (recover.redis_acl, "prepare"), (recover.redis_acl, "provision"),
+                                 (backup, "run_backup"), (backup, "_install_timers")):
+                stack.enter_context(patch.object(module, name, return_value={}))
+            legacy = stack.enter_context(patch.object(recover.release, "activate_recovered"))
+            units = stack.enter_context(patch.object(recover.provision, "_install_unit"))
+            with self.assertRaises(DeployError) as error:
+                self.apply(approved, mode="takeover")
+            self.assertEqual(error.exception.code, "old_server_confirmation")
+            owner.prepare_recovery.assert_not_called()
+            result = self.apply(approved, mode="takeover", old_server_gone=True)
+        self.assertEqual(events, ["prepare", "activate"])
+        self.assertEqual(result["version"], inventory.deployment.release)
+        self.assertTrue(result["host_ready"])
+        legacy.assert_not_called()
+        units.assert_not_called()
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -454,10 +787,19 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(self.host.read_registry()["instances"][self.profile["instance_id"]]["provisioning"]["state"], "rehearsal")
 
     def test_local_profile_changes_only_after_takeover_success_and_resume_reuses_identity(self):
+        self.local_recovery_resume()
+
+    def test_feature_local_binding_forwarding_and_effective_profile_persistence(self):
+        self.local_recovery_resume(feature=True)
+
+    def local_recovery_resume(self, *, feature=False):
         import contextlib
         import os
         from test_local import cli
-        for mode in ("rehearsal", "takeover"):
+        if feature:
+            _, metadata = self.feature(public=True)
+            binding = self.binding(metadata)
+        for mode in (("takeover",) if feature else ("rehearsal", "takeover")):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 directory = Path(temporary).resolve()
                 folder = directory / "decrypted"
@@ -487,7 +829,9 @@ class RecoveryTests(unittest.TestCase):
                             self.failed = True
                             raise cli.LocalError("connection lost; outcome unknown")
                         return {"ok": True, "mode": mode, "host_id": request["profile"]["host"]["host_id"],
-                                "operation_id": request["operation_id"]}
+                                "operation_id": request["operation_id"],
+                                **({"profile_update": recover.effective_profile(request["profile"],
+                                     recover.RecoveryPublicBinding.parse(request["recovery_public_binding"]))} if feature else {})}
                 remote = Remote()
                 stack.enter_context(patch.object(cli, "ROOT", directory))
                 ssh = stack.enter_context(patch.object(cli, "SSH", return_value=remote))
@@ -498,6 +842,10 @@ class RecoveryTests(unittest.TestCase):
                 stack.enter_context(patch.object(cli, "say"))
                 stack.enter_context(patch.dict(os.environ, {"RECOVER_HOST": "replacement.example.invalid", "RECOVER_MODE": mode,
                     "FOUNDRY_RECOVERY_DIR": str(folder), "CONFIRM": "yes", "CONFIRM_OLD_SERVER_GONE": "yes"}, clear=True))
+                if feature:
+                    binding_file = directory / "binding.json"
+                    binding_file.write_text(json.dumps(binding))
+                    stack.enter_context(patch.dict(os.environ, {"FOUNDRY_RECOVERY_PUBLIC_BINDING_FILE": str(binding_file)}))
                 with self.assertRaises(cli.LocalError):
                     cli.recover(self.project, profile, {"hosts": {}})
                 self.assertEqual(profile, original)
@@ -513,6 +861,13 @@ class RecoveryTests(unittest.TestCase):
                     self.assertEqual(profile["host"]["address"], "replacement.example.invalid")
                     self.assertNotEqual(profile["host"]["host_id"], original["host"]["host_id"])
                     save.assert_called_once_with(profile)
+                    if feature:
+                        for _, sent in requests:
+                            self.assertEqual(sent["recovery_public_binding"], binding)
+                            self.assertEqual(sent["operation_id"], binding["operation_id"])
+                        self.assertEqual(profile["host"]["host_id"], binding["target_host_id"])
+                        self.assertEqual(profile["listeners"]["relay.ingress"]["dns"]["public_addresses"], ["203.0.113.20"])
+                        self.assertEqual(metadata["profile"], original)
                 else:
                     self.assertEqual(profile, original)
                     save.assert_not_called()

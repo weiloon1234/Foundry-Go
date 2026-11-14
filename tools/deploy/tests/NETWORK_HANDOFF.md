@@ -474,7 +474,7 @@ as does the existing deployment harness. No alternatives switch is performed.
 set -e
 for version in 24.04 26.04; do
   docker build --build-arg UBUNTU_VERSION="$version" \
-    -f tools/deploy/tests/host.Dockerfile \
+    -f tools/deploy/local/host.Dockerfile \
     -t "foundry-network-base:$version" tools/deploy/tests
   docker build --build-arg BASE_IMAGE="foundry-network-base:$version" \
     -f tools/deploy/tests/network-preview.Dockerfile \

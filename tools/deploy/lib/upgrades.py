@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
-                       FEATURE_CAPABILITIES, TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
+                       FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
@@ -54,7 +54,11 @@ GENERATION_12_FILES = frozenset({"lib/feature_lifecycle.py", "lib/feature_networ
                                "lib/firewall.py", "lib/listeners.py", "server/templates/firewall-runtime.rules",
                                "server/templates/foundry-edge-boot.conf", "server/templates/nginx-http-admission.conf",
                                "server/templates/nginx-stream.conf", "server/templates/nginx-tcp-tls.conf"})
-REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES
+REHEARSAL_FILES = frozenset({"local/containers.py", "local/rehearsal.py", "local/rehearsal_host.py",
+    "local/rehearsal_probe.py", "local/host.Dockerfile", "local/acceptance.Dockerfile"})
+GENERATION_13_FILES = REHEARSAL_FILES | frozenset({"lib/feature_plan.py", "lib/feature_maintenance.py",
+    "lib/recovery_rehearsal.py", "lib/operation_lock.py", "lib/feature_recovery.py"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES
 
 
 def required_files(generation: int) -> frozenset[str]:
@@ -63,6 +67,8 @@ def required_files(generation: int) -> frozenset[str]:
         required |= GENERATION_11_FILES
     if generation >= 12:
         required |= GENERATION_12_FILES
+    if generation >= 13:
+        required |= GENERATION_13_FILES
     return required
 
 
@@ -90,6 +96,10 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
     source = check_path(Path(tools_dir), "directory")
     files = sorted([source / "protocol.json", *source.glob("lib/*.py"), *source.glob("lib/*.json"),
                     *source.glob("server/*.py"), *source.glob("server/templates/*")])
+    # Older generation-12 bundles predate local rehearsal. When present, its
+    # complete shipped implementation participates in the ordinary bundle digest.
+    if any((source / name).exists() for name in REHEARSAL_FILES):
+        files = sorted([*files, *(source / name for name in REHEARSAL_FILES)])
     require(len(files) <= 512, "tools_too_large", "The tool bundle has too many files.")
     inventory, total = [], 0
     for path in files:
@@ -107,7 +117,7 @@ def _inventory(tools_dir: Path) -> tuple[Path, list[Path], list[dict]]:
 
 
 def tool_bundle(tools_dir: Path) -> tuple[Path, list[Path], str]:
-    """Inventory bounded regular host files; digest covers canonical paths, sizes, modes and bytes."""
+    """Inventory host and shipped rehearsal files; digest covers paths, sizes, modes and bytes."""
     source, files, inventory = _inventory(tools_dir)
     protocol(source)
     return source, files, _hash({"schema": 1, "files": inventory})
@@ -407,8 +417,17 @@ def _check_feature_request(registry, request, action):
     topology = request.get("topology")
     requested = (isinstance(profile, dict) and profile.get("schema") == FEATURE_PROFILE_SCHEMA
                  or isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA)
-    supported = {"bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "status", "logs", "sync", "config-keys", "report"}
-    if requested and action not in supported:
+    supported = {"backup-configure", "backup-run", "restore-drill", "recover-plan", "recover-apply", "down", "up", "rollback", "release-plan", "config-set", "bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "status", "logs", "sync", "config-keys", "report"}
+    feature = requested or registry is not None and any(
+        (entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry)
+        and (profile is None or entry["profile"]["instance_id"] == profile.get("instance_id"))
+        for entry in registry["instances"].values())
+    if feature and action in (supported - READ_ACTIONS) | {"recover-plan"}:
+        require(request.get("client", {}).get("generation", 0) >= FEATURE_LIFECYCLE_GENERATION,
+                "instance_capability_required", "B24 release 1 operations require deploy client generation 13.")
+        require(registry is None or registry["tools"]["generation"] >= FEATURE_LIFECYCLE_GENERATION,
+                "host_upgrade_required", "Upgrade this generation-12 host to generation 13 before B24 release 1 operations.")
+    if requested and action not in supported | UPGRADE_ACTIONS | {"tools-plan"}:
         from feature_lifecycle import refuse
         refuse(action)
     if not registry:

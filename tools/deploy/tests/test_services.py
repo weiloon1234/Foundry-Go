@@ -212,6 +212,48 @@ class ServiceInventoryTests(unittest.TestCase):
             self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() + 1))
         self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() - 1))
 
+    def test_paused_http_uses_liveness_without_weakening_normal_readiness(self):
+        role = self.inventory.roles["http"]
+        connection = MagicMock()
+        response = connection.getresponse.return_value
+        response.status, response.read.return_value = 200, b'{"status":"ok"}'
+        with patch.object(services.http.client, "HTTPConnection", return_value=connection):
+            self.assertTrue(services.probe(role, self.inventory.resolution, time.monotonic() + 1, paused=True))
+            self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/live"))
+            self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() + 1))
+            self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/ready"))
+
+    def test_maintenance_response_requires_shared_pause_and_builtin_http(self):
+        connection = MagicMock()
+        response = connection.getresponse.return_value
+        response.read.return_value = b'{"outcome":"rejected"}'
+        with patch.object(services.http.client, "HTTPConnection", return_value=connection):
+            for status in (503, 500, 302):
+                response.status = status
+                self.assertEqual(services.probe(self.inventory.roles["http"], self.inventory.resolution,
+                                               time.monotonic() + 1, paused=True), status == 503)
+                self.assertFalse(services.probe(self.inventory.roles["http"], self.inventory.resolution, time.monotonic() + 1))
+                self.assertFalse(services.probe(self.inventory.roles["relay"], self.inventory.resolution,
+                                                time.monotonic() + 1, paused=True))
+
+    def test_release_carried_bundle_keeps_payload_digest_and_platform_checks(self):
+        raw = declaration()
+        raw["artifacts"] = {"extension": bundle()}
+        raw["artifacts"]["extension"]["platforms"]["linux-arm64"] = {
+            "source": {"release": {"path": "deploy/artifacts/extension.tar.gz"}}}
+        raw["roles"][1]["artifact_mounts"] = {"plugin": {"artifact": "extension", "bundle": "plugin",
+                                                          "area": "config", "path": "plugins/extension"}}
+        topology = t.parse_topology(raw)
+        role = topology.roles[1]
+        paths = services.ServicePaths.for_unit(c.UnitIdentity(INSTANCE, "relay", 1), CURRENT)
+        payload = c.ArtifactPayload("extension", "linux-arm64", "deploy/artifacts/extension.tar.gz", OTHER,
+                                   (c.PayloadMember("plugin/extension.so", DIGEST, 6, "module"),))
+        roots = {"extension": ("/opt/foundry/pinned", OTHER)}
+        self.assertEqual(services.bundle_views(role, paths, topology, "arm64", roots, (payload,))[0].artifact_sha256, OTHER)
+        for bad in (replace(payload, sha256=DIGEST), replace(payload, platform="linux-amd64")):
+            with self.assertRaises(c.DeployError):
+                services.bundle_views(role, paths, topology, "arm64", roots, (bad,))
+
     def test_bundle_views_select_exact_architecture_and_confined_export(self):
         raw = declaration()
         raw["artifacts"] = {"extension": bundle()}
@@ -291,7 +333,8 @@ class ServiceInventoryTests(unittest.TestCase):
                         if role.common.name == "worker":
                             dependent_probed = True
                         return not (failure == "probe" and dependent_probed and role.common.name == "http")
-                    with patch.object(release, "service", side_effect=inspect), \
+                    with patch.object(host, "read_registry", return_value={"instances": {}}), \
+                            patch.object(release, "service", side_effect=inspect), \
                             patch.object(release, "_matches_executable", return_value=True), \
                             patch.object(release, "STABILITY_SECONDS", .02), \
                             patch.object(services, "readiness_probe", return_value=None), \
@@ -307,6 +350,15 @@ class ServicePreparationTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.host = Host(Paths(temporary.name))
         self.inventory, self.entry, self.members = inventory_fixture()
+        import subprocess
+        entry = {**self.entry, "topology": t.validate_topology(self.inventory.topology.projection()),
+                 "profile": self.inventory.profile.projection()}
+        registry = patch.object(self.host, "read_registry", return_value={"instances": {INSTANCE: entry}})
+        registry.start()
+        self.addCleanup(registry.stop)
+        command = patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, "enabled", ""))
+        command.start()
+        self.addCleanup(command.stop)
         self.store = admission.AdmissionStore(self.host, INSTANCE)
         boot = self.host.paths.p("/proc/sys/kernel/random/boot_id")
         boot.parent.mkdir(parents=True)

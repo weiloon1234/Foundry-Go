@@ -73,6 +73,31 @@ func Run(ctx context.Context, arguments []string, streams cli.Streams) error {
 	}
 	builder := Builder(settings, receipts)
 	switch args[0] {
+	case "down", "up", "maintenance:status":
+		declarations, err := application.MaintenanceCommands()
+		if err != nil {
+			return err
+		}
+		registry, err := cli.New(declarations...)
+		if err != nil {
+			return err
+		}
+		invocation, err := registry.Parse(args, streams.Err)
+		if err != nil {
+			return err
+		}
+		settings.App.HTTP.Enabled = false
+		builder = application.New(settings.App)
+		if settings.App.Scheduler.Enabled {
+			builder.Schedules(scheduleDeclarations)
+		}
+		commands := cli.Module("fixture.cli", foundation.NewKey[*cli.Registry]("fixture.commands"),
+			registry, invocation, streams, application.MaintenanceProvider)
+		built, err := builder.Register(commands).Build(ctx)
+		if err != nil {
+			return err
+		}
+		return built.Run(ctx, foundation.CLI)
 	case "config:inspect":
 		if len(args) != 1 {
 			return fmt.Errorf("config:inspect takes no command flags")

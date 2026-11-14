@@ -9,6 +9,7 @@ from contracts import (AdmissionDisposition, Deployment, DeployError, HostTransi
                        atomic_json, canonical_digest, contract_uuid, record_document, require)
 from host import Host
 import services
+import operation_lock
 from topology import parse_profile, parse_topology
 
 
@@ -98,10 +99,12 @@ def completion(host, entry, pin):
     store, selected, _, _ = feature_lifecycle.load(host, entry)
     state = host.load_state(entry)
     attempt = state.get("last_attempt") or {}
+    no_graph_change = (attempt.get("maintenance_action") in ("down", "up")
+                       and not (root / "transition.json").exists())
     return (receipt == {"schema": 1, "operation_id": pin["operation_id"], "invocation_id": pin["invocation_id"],
                         "result_sha256": canonical_digest(result)} and result.get("ok") is True and
             selected.admission.disposition is AdmissionDisposition.COMMITTED and
-            selected.admission.operation_id == pin["operation_id"] and
+            (selected.admission.operation_id == pin["operation_id"] or no_graph_change) and
             entry.get("deployment_selection") == record_document(selected) and
             attempt.get("operation_id") == pin["operation_id"] and attempt.get("outcome") == "succeeded" and
             store._operations()[pin["operation_id"]]["outcome"] == "succeeded")
@@ -123,8 +126,12 @@ def cleanup(host, request, pin):
     import feature_network
     import release
     operation = pin["operation_id"]
-    with host.lock("host"), host.lock(pin["instance_id"]):
-        registry, entry = host.require_identity(request["project"], request["profile"])
+    with operation_lock.acquire(host, request, cleanup=True), host.lock(pin["instance_id"]):
+        registry = host.read_registry()
+        entry = registry["instances"][pin["instance_id"]]
+        require(release.legacy_profile(entry["profile"]) == release.legacy_profile(request["profile"]),
+                "operation_identity", "Operation infrastructure identity changed.")
+        registry, entry = host.require_identity(request["project"], entry["profile"])
         store = admission.AdmissionStore(host, pin["instance_id"])
         try:
             complete = completion(host, entry, pin)
@@ -139,7 +146,14 @@ def cleanup(host, request, pin):
         store.cleanup_status(operation, pin["invocation_id"], "pending")
         state = host.load_state(entry)
         attempt = state.get("last_attempt") or {}
-        if attempt.get("operation_id") == operation:
+        applied = attempt.get("operation_id") == operation and (
+            attempt.get("outcome") == "failed_applied" or
+            attempt.get("outcome") == "failed" and attempt.get("maintenance_action") in ("down", "up"))
+        context = directory(host, operation) / "transition.json"
+        if not context.exists() and (attempt.get("operation_id") != operation or attempt.get("outcome") == "failed"):
+            store.cleanup_status(operation, pin["invocation_id"], "complete")
+            return 0
+        if attempt.get("operation_id") == operation and not applied:
             state["status"] = "unknown"
             release.finish(host, entry, state, "needs_reconciliation", "operation_cleanup_pending")
             store.record_operation(state["last_attempt"])
@@ -154,28 +168,51 @@ def cleanup(host, request, pin):
         topology = parse_topology(value["topology"])
         inventory = services.UnitInventory(entry["name"], topology, parse_profile(value["profile"], topology),
                                            Deployment.parse(value["deployment"]), RuntimeResolution.parse(value["resolution"]))
+        affected = {unit.role for unit in transition.affected_units}
         require(transition.operation_id == operation and transition.instance_id == pin["instance_id"] and
                 transition.candidate_resolution_id == inventory.resolution.id and
-                set(transition.affected_units) == {s.identity for s in inventory.specs.values()},
+                all(unit.instance_id == pin["instance_id"] for unit in transition.affected_units),
                 "operation_cleanup", "Cleanup workload scope differs from its pinned transition.")
+        from feature_lifecycle import load_resolution
+        old = inventory if transition.old_resolution_id == inventory.resolution.id else load_resolution(host, entry, transition.old_resolution_id)[0]
+        import feature_maintenance
+        if feature_maintenance.restore_failed_holds(host, entry, inventory, old, operation):
+            host.journal(registry, entry)
+        units = {**old.units, **inventory.units}
+        require(affected <= units.keys(), "operation_cleanup", "Unknown affected cleanup unit.")
         try:
-            feature_network.withdraw(host, entry, transition, inventory.resolution, inventory.units)
+            feature_network.withdraw(host, entry, transition, inventory.resolution, units)
         except Exception:
             pass  # Still stop every workload; only the final close can prove closure.
         stopped = True
-        for name in inventory.stop_order(inventory.roles):
+        order = tuple(dict.fromkeys((*inventory.stop_order(affected & inventory.roles.keys()),
+                                    *old.stop_order(affected & old.roles.keys()))))
+        for name in order:
             try:
-                feature_lifecycle.stop_units(host, inventory, (name,))
+                feature_lifecycle.stop_units(host, inventory if name in inventory.roles else old, (name,))
             except Exception:
                 stopped = False
         try:
-            evidence = feature_network.close(host, entry, transition, inventory.resolution, inventory.units)
+            evidence = feature_network.close(host, entry, transition, inventory.resolution, units)
             closed = True
             atomic_json(directory(host, operation) / "cleanup-closure.json", record_document(evidence), mode=0o600)
         except Exception:
             closed = False
         if stopped and closed:
-            store.cleanup_status(operation, pin["invocation_id"], "closed")
+            store.record_boot_closure(evidence)
+            root = directory(host, operation)
+            initial = root / "initial-validation.json"
+            reconciled = applied
+            if (initial.exists() and not (root / "validated.json").exists()
+                    and "deployment_selection" not in entry and release.current_version(host, entry) is None):
+                before = admission.read_owned(host, initial, lambda v: v)
+                require(before["current"] is None and before["configuration_revision"] == entry["configuration_revision"],
+                        "operation_cleanup", "Initial validation changed persistent configuration.")
+                state.update({key: before[key] for key in ("status", "current", "previous")})
+                release.finish(host, entry, state, "failed", "feature_validation_failed")
+                store.record_operation(state["last_attempt"])
+                reconciled = True
+            store.cleanup_status(operation, pin["invocation_id"], "complete" if reconciled else "closed")
         # Closed workloads do not reconcile an interrupted deploy. The cleanup
         # record remains unresolved and blocks every later start.
         return 0 if stopped and closed else 1
@@ -187,19 +224,42 @@ def run(action, pin):
     root = directory(host, pin["operation_id"])
     request = admission.read_owned(host, root / "request.json", lambda v: v)
     require(canonical_digest(request) == pin["request_sha256"], "operation_owner", "Pinned request has changed.")
-    if action == "operation-cleanup":
-        return cleanup(host, request, pin)
-    verify_executor(host, request, pin)
-    store = admission.AdmissionStore(host, pin["instance_id"])
-    store.require_cleanup_clear(pin["operation_id"])
-    store.cleanup_status(pin["operation_id"], pin["invocation_id"], "armed")
-    try:
-        result = feature_lifecycle.execute(host, request, pin=pin)
-    except (DeployError, OSError) as error:
-        result = {"error": {"code": error.code if isinstance(error, DeployError) else "filesystem_failed",
-                            "detail": error.detail if isinstance(error, DeployError) else "Inspect the owned operation journal."}}
-    atomic_json(root / "result.json", result, mode=0o600)
-    if result.get("ok") is True:
-        atomic_json(root / "complete.json", {"schema": 1, "operation_id": pin["operation_id"],
-                    "invocation_id": pin["invocation_id"], "result_sha256": canonical_digest(result)}, mode=0o600)
-    return 0 if result.get("ok") is True else 1
+    with host.command_journal(root / (action + "-commands.json")):
+        if action == "operation-cleanup":
+            return cleanup(host, request, pin)
+        verify_executor(host, request, pin)
+        store = admission.AdmissionStore(host, pin["instance_id"])
+        store.require_cleanup_clear(pin["operation_id"])
+        store.cleanup_status(pin["operation_id"], pin["invocation_id"], "armed")
+        try:
+            if request["action"] == "recover-activate":
+                import feature_recovery
+                result = feature_recovery.execute(host, request, pin)
+            else:
+                result = feature_lifecycle.execute(host, request, pin=pin)
+        except (DeployError, OSError) as error:
+            result = {"error": {"code": error.code if isinstance(error, DeployError) else "filesystem_failed",
+                                "detail": error.detail if isinstance(error, DeployError) else "Inspect the owned operation journal."}}
+        atomic_json(root / "result.json", result, mode=0o600)
+        if result.get("ok") is True:
+            atomic_json(root / "complete.json", {"schema": 1, "operation_id": pin["operation_id"],
+                        "invocation_id": pin["invocation_id"], "result_sha256": canonical_digest(result)}, mode=0o600)
+        return 0 if result.get("ok") is True else 1
+
+
+def launch(host, request, owner):
+    operation_id = request["operation_id"]
+    root = directory(host, operation_id)
+    store = admission.AdmissionStore(host, request["profile"]["instance_id"])
+    unit = "foundry-operation-" + operation_id
+    cleanup = services.command_line(command("operation-cleanup", operation_id, owner["bundle_sha256"]))
+    result = host.run(["systemd-run", "--quiet", "--wait", "--collect", "--unit", unit,
+              "--property=Type=exec", "--property=Restart=no", "--property=KillMode=control-group",
+              "--property=TimeoutStopSec=3600", "--property=RuntimeMaxSec=1800", "--property=ExecStopPost=" + cleanup,
+              *command("operation", operation_id, owner["bundle_sha256"])], timeout=5400, check=False)
+    receipt = admission.read_owned(host, root / "result.json", lambda value: value)
+    if "error" in receipt:
+        raise DeployError(receipt["error"]["code"], receipt["error"]["detail"])
+    store.require_cleanup_clear()
+    require(result.returncode == 0, "feature_operation_failed", "Operation exit differs from its receipt; inspect the journal.")
+    return receipt

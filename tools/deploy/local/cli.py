@@ -27,6 +27,7 @@ if sys.version_info < (3, 11):
 TOOLS_ROOT = Path(__file__).resolve().parents[1]
 ROOT: Path | None = None
 sys.path.insert(0, str(TOOLS_ROOT / "lib"))
+sys.path.insert(0, str(TOOLS_ROOT / "local"))
 from edge import edge_findings
 import journal
 import maintenance
@@ -42,6 +43,7 @@ COMMANDS = {
     "bootstrap": "inspect and prepare a project/environment on a server",
     "deploy": "interactive deployment, status, rollback, capacity and configuration",
     "release": "build a local Docker release without contacting a server",
+    "rehearse": "exercise an acceptance archive in disposable local containers",
 }
 ACTIONS = ("capacity", "deploy", "status", "rollback", "restart", "stop", "down", "up", "logs", "shell", "config", "keys rotate", "reconcile",
            "report", "sync", "tools-plan", "tools-apply", "upgrade-resume", "backup-configure", "backup-run",
@@ -82,9 +84,14 @@ def secret_input(name, label, *, structured=False, required=True):
     if filename:
         try:
             source = Path(filename).expanduser()
-            if not source.is_file() or source.stat().st_size > 1024 * 1024:
+            fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, "rb") as stream:
+                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                    raise LocalError("secret input must be a regular file of at most 1 MiB")
+                content = stream.read(1024 * 1024 + 1)
+            if len(content) > 1024 * 1024:
                 raise LocalError("secret input must be a regular file of at most 1 MiB")
-            value = source.read_text(encoding="utf-8").strip()
+            value = content.decode("utf-8").strip()
         except (OSError, UnicodeError) as error:
             raise LocalError("cannot read private " + name + " input") from error
     elif required:
@@ -140,6 +147,22 @@ def bootstrap_secrets(required, *, backup_only=False):
             raise LocalError("initial configuration requires 1–16 string keys and values")
         result["configuration"] = configuration
     return result
+
+
+def collect_service_secrets(requirements, configuration=None):
+    """Use the existing hidden/config-file intake; return only the private request body."""
+    changes = {} if configuration is None else dict(configuration)
+    for requirement in requirements:
+        key = requirement["key"]
+        if requirement["present"] or key in changes or key + "_FILE" in changes:
+            continue
+        if not sys.stdin.isatty():
+            raise LocalError("Supply required service secrets through FOUNDRY_SECRET_CONFIG_FILE: " + key)
+        value = ask(requirement["prompt"] + " (" + key + ")", secret=True)
+        if not value:
+            raise LocalError("A required service secret is empty: " + key)
+        changes[key] = value
+    return changes
 
 
 def operation_uuid(value):
@@ -538,6 +561,9 @@ def bootstrap(project, profile, settings, fresh):
             atomic_json(pending_path, bootstrap_marker(project, profile, binding), mode=0o600)
             save_profile(profile)
             secrets = bootstrap_secrets(fresh or pending_binding is not None or binding != inspected.get("host_id"))
+            configuration = collect_service_secrets(plan.get("observations", {}).get("required_service_secrets", []), secrets.get("configuration"))
+            if configuration:
+                secrets["configuration"] = configuration
             result = ssh.request("bootstrap-apply", {**request, "confirm": True, "plan_token": plan.get("plan_token"),
                                                     "secrets": secrets}, remote)
             if result.get("host_id") != binding:
@@ -549,12 +575,22 @@ def bootstrap(project, profile, settings, fresh):
 def recover(project, profile, settings):
     import copy
     import recover as recovery
+    from contracts import record_document
     mode, address = os.environ.get("RECOVER_MODE"), os.environ.get("RECOVER_HOST")
     directory = os.environ.get("FOUNDRY_RECOVERY_DIR")
     if mode not in {"rehearsal", "takeover"} or not address or not directory:
         raise LocalError("recover requires RECOVER_HOST, RECOVER_MODE=rehearsal|takeover and FOUNDRY_RECOVERY_DIR")
     if not profile["host"]["host_id"]:
         raise LocalError("recover requires the existing instance profile and its old host identity")
+    binding = None
+    binding_file = os.environ.get("FOUNDRY_RECOVERY_PUBLIC_BINDING_FILE")
+    if binding_file:
+        from contracts import RecoveryPublicBinding
+        if mode != "takeover":
+            raise LocalError("recovery rehearsal rejects public binding overrides")
+        binding = RecoveryPublicBinding.parse(read_json(check_path(Path(binding_file), "file")))
+        if os.environ.get("OPERATION") and operation_uuid(os.environ["OPERATION"]) != binding.operation_id:
+            raise LocalError("OPERATION differs from the public binding's operation_id")
     target = os.environ.get("TARGET_TIME") or None
     if target:
         target = recovery.backup._restore_target(target)
@@ -575,22 +611,28 @@ def recover(project, profile, settings):
             selected = select_archive(project, profile)
         intent = {"project_id": project["id"], "instance_id": profile["instance_id"], "mode": mode,
                   "address": address, "target_time": target, "archive_sha256": digest(selected),
-                  "recovery_sha256": digest(private_archive)}
+                  "recovery_sha256": digest(private_archive),
+                  **({"recovery_public_binding": record_document(binding)} if binding is not None else {})}
         if record:
             if record.get("intent") != intent:
                 raise LocalError(f"this differs from the recovery recorded in {pending}. Repeat its inputs to resume it, "
                                  "or delete that file only if you are abandoning it and recreating the server")
         else:
-            record = {"intent": intent, "operation_id": operation_uuid(os.environ["OPERATION"]) if os.environ.get("OPERATION") else str(uuid.uuid4()),
-                      "host_id": str(uuid.uuid4()), "release_archive": str(selected.absolute())}
+            record = {"intent": intent, "operation_id": binding.operation_id if binding else operation_uuid(os.environ["OPERATION"]) if os.environ.get("OPERATION") else str(uuid.uuid4()),
+                      "host_id": binding.target_host_id if binding else str(uuid.uuid4()), "release_archive": str(selected.absolute())}
         replacement = copy.deepcopy(profile)
         replacement["host"].update(address=address, host_id=record["host_id"])
         validate_profile(replacement, project)
+        accepted = recovery.replacement_binding(record_document(binding) if binding else None,
+            recovered["metadata"], replacement, record["operation_id"], mode) if recovered.get("feature") is not None else None
+        if binding is not None and accepted is None:
+            raise LocalError("legacy recovery rejects public binding overrides")
         if not pending.exists():
             atomic_json(pending, record, mode=0o600)
         request = {"project": project, "profile": replacement, "operation_id": record["operation_id"],
                    "mode": mode, "topology": recovered["topology"], "target_time": target,
-                   "archive_sha256": intent["archive_sha256"]}
+                   "archive_sha256": intent["archive_sha256"],
+                   **({"recovery_public_binding": record_document(accepted)} if accepted else {})}
         say("Recovery operation: " + record["operation_id"] + "; repeat the same command to resume.")
         with closing(SSH(replacement, settings, first_contact=True)) as ssh, ssh.staged_tools() as remote:
             ssh.upload(private_archive, remote + "/recovery.tar")
@@ -613,9 +655,17 @@ def recover(project, profile, settings):
                     or result.get("mode") != mode or result.get("operation_id") != record["operation_id"]):
                 raise LocalError("recovery returned an unexpected identity; inspect its journal before retrying")
             if mode == "takeover":
-                profile["host"].update(address=address, host_id=record["host_id"])
+                if recovered.get("feature") is not None:
+                    updated = result.get("profile_update")
+                    if updated != recovery.effective_profile(replacement, accepted):
+                        raise LocalError("takeover profile differs from the reviewed effective binding; inspect the server")
+                    validate_profile(updated, project)
+                    profile.clear()
+                    profile.update(updated)
+                else:
+                    profile["host"].update(address=address, host_id=record["host_id"])
                 save_profile(profile)
-                say("Updated local profile host.address and host.host_id; commit that profile change. Point DNS at the new server.")
+                say("Updated local profile with the accepted replacement host and public addresses; commit that profile change.")
             pending.unlink()
             display(result)
 
@@ -1175,6 +1225,9 @@ def deploy(project, profile, settings):
             confirm(f"{action} for {instance_name(project, profile)}")
             display(ssh.request(action, {**request, **arguments, "confirm": True}))
             return
+        if action in ("deploy", "rollback") and profile.get("schema") == 3:
+            canonical = ssh.request("sync", request)
+            request["profile"] = canonical["profile"]
         status = ssh.request("status", request)
         remember_releases(profile, status)
         if action == "status":
@@ -1183,17 +1236,35 @@ def deploy(project, profile, settings):
             say(json.dumps(status, indent=2))
             name = instance_name(project, profile)
             confirm(f"Put {name} into maintenance mode" if action == "down" else f"Bring {name} out of maintenance mode")
+            if "deployment_selection" in status.get("instance", {}):
+                request["operation_id"] = operation_id(profile, action, parameters)
             display(ssh.request(action, {**request, **parameters, "confirm": True}))
         elif action == "deploy":
             say(f"Build and activate {instance_name(project, profile)} on {profile['host']['address']}; pending forward migrations and seeders run during activation.")
             archive = select_archive(project, profile)
             manifest = read_json(archive.parent / "manifest.json")
             say(json.dumps({key: manifest[key] for key in ("version", "commit", "tree_state", "architecture", "instance")}, indent=2))
-            confirm("Activate this completed release, including its pending forward migrations")
             with ssh.temporary() as remote:
                 destination = remote + "/app.tar.gz"
                 ssh.upload(archive, destination)
-                display(ssh.request("activate", {**request, "archive": destination, "archive_sha256": digest(archive)}))
+                activation = {**request, "archive": destination, "archive_sha256": digest(archive)}
+                if profile.get("schema") == 3 or "deployment_selection" in status.get("instance", {}):
+                    activation["operation_id"] = operation_uuid(os.environ.get("OPERATION") or str(uuid.uuid4()))
+                    plan = ssh.request("release-plan", activation)
+                    if not plan["ok"]:
+                        supplied = secret_input("config", "Service secret configuration JSON", structured=True, required=False)
+                        configuration = collect_service_secrets(plan["required_service_secrets"], supplied)
+                        plan = ssh.request("release-plan", {**activation, "secrets": {"configuration": configuration}})
+                    display(plan)
+                    if not plan["ok"]:
+                        raise LocalError("Release review is incomplete")
+                    activation["plan_token"] = plan["plan_token"]
+                confirm("Activate this completed release, including its pending forward migrations")
+                result = ssh.request("activate", {**activation, "confirm": True})
+                display(result)
+                if result.get("profile_update"):
+                    save_profile(result["profile_update"])
+                    request["profile"] = result["profile_update"]
                 remember_releases(profile, ssh.request("status", request))
         elif action == "config":
             say(json.dumps(ssh.request("config-keys", request), indent=2))
@@ -1246,9 +1317,20 @@ def deploy(project, profile, settings):
                 raise LocalError("rollback requires exact TARGET and EXPECTED_CURRENT release versions")
             arguments = {"target": target, "expected_current": expected}
             say(json.dumps(arguments, indent=2))
-            confirm(f"Roll back {instance_name(project, profile)} to this target")
             operation = operation_id(profile, "rollback", arguments)
-            display(ssh.request("rollback", {**request, **arguments, "operation_id": operation, "confirm": True}))
+            if "deployment_selection" in status.get("instance", {}) or os.environ.get("ROLLBACK_TOPOLOGY_FILE"):
+                review_request = {**request, **arguments, "operation_id": operation}
+                if os.environ.get("ROLLBACK_TOPOLOGY_FILE"):
+                    review_request["topology"] = read_json(Path(os.environ["ROLLBACK_TOPOLOGY_FILE"]))
+                plan = ssh.request("release-plan", review_request)
+                display(plan)
+                arguments["plan_token"] = plan["plan_token"]
+            confirm(f"Roll back {instance_name(project, profile)} to this target")
+            result = ssh.request("rollback", {**request, **arguments, "operation_id": operation, "confirm": True})
+            display(result)
+            if result.get("profile_update"):
+                save_profile(result["profile_update"])
+                request["profile"] = result["profile_update"]
             remember_releases(profile, ssh.request("status", request))
         elif action == "logs":
             result = ssh.request("logs", {**request, "role": role, "lines": logs["lines"]})
@@ -1282,6 +1364,13 @@ def main():
     parser.add_argument("--app-root", help="application directory")
     for option in ("environment", "action", "role", "lines", "follow", "target", "expected-current", "operation"):
         parser.add_argument("--" + option)
+    parser.add_argument("--archive", type=Path)
+    parser.add_argument("--ubuntu", choices=("24.04", "26.04"))
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--bindings", type=Path)
+    parser.add_argument("--keep-failed", action="store_true")
+    parser.add_argument("--cpus", type=int)
+    parser.add_argument("--memory-gib", type=int)
     parser.add_argument("command", choices=[*COMMANDS, "help"], nargs="?", default="help")
     arguments = parser.parse_args()
     if arguments.command == "help":
@@ -1296,6 +1385,17 @@ def main():
             os.environ[option.upper()] = value
     ROOT = resolve_app_root(arguments.app_root)
     mode = arguments.command
+    if mode == "rehearse":
+        from rehearsal import rehearse
+        with lock(ROOT / ".deploy" / "operation.lock"):
+            result = rehearse(ROOT, os.environ.get("ENVIRONMENT"), arguments.archive, ubuntu=arguments.ubuntu or "24.04",
+                output=arguments.output, bindings=arguments.bindings, keep_failed=arguments.keep_failed,
+                cpus=arguments.cpus if arguments.cpus is not None else 2,
+                memory_gib=arguments.memory_gib if arguments.memory_gib is not None else 4, builder=build)
+            display({"evidence": str(result / "evidence.json")})
+        return
+    if any(getattr(arguments, name) is not None for name in ("archive", "ubuntu", "output", "bindings", "cpus", "memory_gib")) or arguments.keep_failed:
+        parser.error("container rehearsal options require the rehearse command")
     if mode != "deploy":
         log_parameters(mode)
     with lock(ROOT / ".deploy" / "operation.lock"):

@@ -216,7 +216,10 @@ class SystemdContractTests(unittest.TestCase):
             stream.write(content)
         unit = instance or name
         self.units.append(unit)
-        if '@' in unit:
+        slices = [line.removeprefix('Slice=') for line in content.splitlines() if line.startswith('Slice=')]
+        if slices:
+            self.slices.update(slices)
+        elif '@' in unit:
             escaped = self.host.run(['systemd-escape', '--', unit.split('@')[0]]).stdout.strip()
             self.slices.add('system-' + escaped + '.slice')
         self.host.run(['systemctl', 'daemon-reload'], timeout=10)
@@ -225,8 +228,8 @@ class SystemdContractTests(unittest.TestCase):
     def command(self, mode, directory=None):
         return f'/usr/bin/python3 -I {SCRIPT} --probe {mode} {directory or self.root}'
 
-    def service(self, suffix, *, command='/usr/bin/sleep infinity', options='', template=False):
-        name = self.prefix + '-' + suffix
+    def service(self, suffix, *, command='/usr/bin/sleep infinity', options='', template=False, name=None):
+        name = name or self.prefix + '-' + suffix
         unit = name + ('@instance-one.service' if template else '.service')
         return self.write_unit(name + ('@.service' if template else '.service'),
                                '[Unit]\nDescription=Foundry contract probe\n'
@@ -236,6 +239,38 @@ class SystemdContractTests(unittest.TestCase):
                                '[Install]\nWantedBy=multi-user.target\n',
                                instance=unit)
 
+
+    def test_persistent_hold_survives_reload_without_changing_enablement(self):
+        marker = self.root / "maintenance.hold"
+        marker.write_text("held")
+        unit = self.write_unit(self.prefix + '-hold.service',
+            '[Unit]\nConditionPathExists=!' + str(marker) + '\n'
+            '[Service]\nType=exec\nExecStart=/usr/bin/sleep infinity\n'
+            '[Install]\nWantedBy=multi-user.target\n')
+        self.host.run(['systemctl', 'enable', '--runtime', unit])
+        self.host.run(['systemctl', 'start', unit])
+        self.assertEqual(self.show(unit)['ActiveState'], 'inactive')
+        self.host.run(['systemctl', 'daemon-reload'])
+        self.host.run(['systemctl', 'start', unit])
+        self.assertEqual(self.show(unit)['ActiveState'], 'inactive')
+        self.assertEqual(self.host.run(['systemctl', 'is-enabled', unit]).stdout.strip(), 'enabled-runtime')
+        marker.unlink()
+        self.host.run(['systemctl', 'start', unit])
+        self.assertEqual(self.show(unit)['ActiveState'], 'active')
+
+    def test_rehearsal_requires_effective_loopback_filters_and_attached_bpf(self):
+        from types import SimpleNamespace
+        import recovery_rehearsal
+        unit = self.service('rehearsal-filter', options=recovery_rehearsal.FILTER)
+        self.host.run(['systemctl', 'start', unit])
+        inventory = SimpleNamespace(units={'relay': unit})
+        proof = recovery_rehearsal.isolation(self.host, inventory, 'relay')
+        self.assertTrue(all(proof['programs']))
+        unfiltered = self.service('rehearsal-unfiltered')
+        self.host.run(['systemctl', 'start', unfiltered])
+        with self.assertRaises(DeployError) as raised:
+            recovery_rehearsal.isolation(self.host, SimpleNamespace(units={'relay': unfiltered}), 'relay')
+        self.assertEqual(raised.exception.code, 'rehearsal_isolation')
 
     def assert_code(self, code, action):
         with self.assertRaises(DeployError) as raised:
@@ -252,6 +287,12 @@ class SystemdContractTests(unittest.TestCase):
         from test_host_capabilities import INSTANCE, DIGEST, OTHER, CURRENT, selection, resolution, closure
         (self.root / 'proc').symlink_to('/proc')
         host = Host(Paths(self.root))
+        from test_contracts import fixture, registry
+        from topology import instance_units
+        _, _, entry = fixture(project_slug='probe-' + self.prefix[-12:])
+        entry['profile']['instance_id'] = INSTANCE
+        host.write_registry(registry(entry))
+        self.admission_unit = instance_units(entry)['http'].removesuffix('.service')
         store = admission.AdmissionStore(host, INSTANCE)
         store.record_operation(attempt())
         store.begin(DeploymentSelection.parse(selection()), RuntimeResolution.parse(resolution()))
@@ -264,14 +305,15 @@ class SystemdContractTests(unittest.TestCase):
     def test_pending_gate_prevents_preparation_and_committed_restart_admits_new_invocation(self):
         from test_admission import attempt
         store, _ = self.admission_fixture()
-        unit = self.service('admission', command=self.command('restart'), options=
+        unit = self.service('admission', name=self.admission_unit, command=self.command('restart'), options=
                             f'ExecCondition={self.command("admission")}\nExecStartPre={self.command("preparation")}\n'
-                            'Restart=on-failure\nRestartSec=50ms')
+                            f'Restart=on-failure\nRestartSec=50ms\nSlice={self.prefix}.slice')
         self.host.run(['systemctl', 'start', unit])
         self.assertFalse((self.root / 'starts').exists())
         self.assertFalse(list(self.root.glob('prepared-*')))
         store.record_operation(attempt('succeeded'))
         store.commit()
+        self.host.run(['systemctl', 'enable', '--runtime', unit])
         self.host.run(['systemctl', 'start', unit])
         self.wait_for(lambda: (self.root / 'starts').exists() and (self.root / 'starts').read_text() == '2')
         self.assertEqual(2, len(list(self.root.glob('prepared-*'))))

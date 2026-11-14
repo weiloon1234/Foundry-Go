@@ -10,7 +10,9 @@ the candidate in the upgrade phase. It is not a starter application.
 The topology declares HTTP, one Redis worker consuming `first` and `second`, and
 a scheduler that logs `acceptance schedule completed` every ten seconds. The
 configuration declares private R2 attachments, PostgreSQL migrations and a seeder,
-a Redis coordination child, and the `portal-runtime` cache child. The container
+a Redis coordination child, and the `portal-runtime` and `maintenance` cache
+children. The standard `down`, `up` and `maintenance:status` commands use the shared
+Redis maintenance store across HTTP, worker and scheduler processes. The container
 bootstrap supplies credentials and rewrites the R2 disk to its private TLS S3
 stand-in. No credentials are stored in this fixture.
 

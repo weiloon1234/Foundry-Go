@@ -88,6 +88,74 @@ def closure():
 
 
 class CapabilityTopologyTests(unittest.TestCase):
+    def test_external_recovery_owner_is_typed_frozen_and_preserved(self):
+        raw = declaration()
+        raw["roles"][1]["state"] = {"kind": "external", "recovery_owner": "Media operations / object-store recovery"}
+        parsed = t.parse_topology(raw)
+        state = parsed.roles[1].state
+        self.assertEqual(state.recovery_owner, "Media operations / object-store recovery")
+        self.assertFalse(state.acknowledged)
+        self.assertEqual(parsed.projection(), raw)
+        self.assertEqual(t.parse_topology({**parsed.projection(), "sha256": parsed.sha256}, registered=True), parsed)
+        with self.assertRaises(FrozenInstanceError):
+            state.recovery_owner = "another owner"
+        raw["roles"][1]["state"]["recovery_owner"] = "another owner"
+        self.assertNotEqual(t.parse_topology(raw).sha256, parsed.sha256)
+        self.assertEqual(state.recovery_owner, "Media operations / object-store recovery")
+
+    def test_external_recovery_owner_is_bounded_and_external_only(self):
+        for owner in (None, True, 42, {}, [], "", " ", " owner", "owner ", "owner\nsecret", "x" * 257,
+                      "é" * 129, "\ud800"):
+            with self.subTest(owner=repr(owner)), self.assertRaises(c.DeployError):
+                t.StatePolicy.parse({"kind": "external", "recovery_owner": owner})
+        for state in ({"kind": "disposable"}, {"kind": "local-unprotected", "acknowledged": True}):
+            with self.subTest(state=state), self.assertRaises(c.DeployError):
+                t.StatePolicy.parse({**state, "recovery_owner": "media-operations"})
+        for state in ({"kind": "external", "recovery_owner": "media-operations", "unknown": True},
+                      {"kind": "external", "recovery_owner": "media-operations", "acknowledged": True}):
+            with self.assertRaises(c.DeployError):
+                t.StatePolicy.parse(state)
+        self.assertEqual(t.StatePolicy.parse({"kind": "external", "recovery_owner": "x" * 256}).recovery_owner, "x" * 256)
+
+    def test_recovery_fields_default_without_rewriting_archived_declarations(self):
+        raw = declaration()
+        raw["roles"][1]["state"] = {"kind": "external"}
+        parsed = t.parse_topology(raw)
+        self.assertIsNone(parsed.roles[1].state.recovery_owner)
+        self.assertFalse(parsed.roles[1].recovery_rehearsal_safe)
+        self.assertEqual(parsed.projection(), raw)
+        self.assertEqual(parsed.sha256, c.canonical_digest(raw))
+
+    def test_rehearsal_safety_is_strict_boolean_custom_role_opt_in(self):
+        raw = declaration()
+        original = t.parse_topology(raw)
+        for value in (False, True):
+            raw["roles"][1]["recovery_rehearsal_safe"] = value
+            parsed = t.parse_topology(raw)
+            self.assertIs(parsed.roles[1].recovery_rehearsal_safe, value)
+            self.assertEqual(parsed.projection(), raw)
+            self.assertNotEqual(parsed.sha256, original.sha256)
+            self.assertEqual(t.parse_topology({**parsed.projection(), "sha256": parsed.sha256}, registered=True), parsed)
+            with self.assertRaises(FrozenInstanceError):
+                parsed.roles[1].recovery_rehearsal_safe = not value
+        for value in (None, 0, 1, "true", "false", [], {}):
+            raw["roles"][1]["recovery_rehearsal_safe"] = value
+            with self.subTest(value=value), self.assertRaises(c.DeployError):
+                t.parse_topology(raw)
+        for name in ("http", "worker", "scheduler"):
+            for value in (False, True):
+                builtin = {"schema": 2, "roles": [{"name": "http", "kind": "builtin"}]}
+                if name != "http":
+                    builtin["roles"].append({"name": name, "kind": "builtin"})
+                builtin["roles"][-1]["recovery_rehearsal_safe"] = value
+                with self.subTest(name=name, value=value), self.assertRaises(c.DeployError):
+                    t.parse_topology(builtin)
+        raw = declaration()
+        raw["roles"][1]["recovery_rehearsal_safe"] = True
+        raw["roles"][1]["recovery_rehearsal_safee"] = True
+        with self.assertRaises(c.DeployError):
+            t.parse_topology(raw)
+
     def test_secret_file_arguments_use_declared_environment_keys(self):
         raw = declaration()
         raw["secrets"] = {"token": {"prompt": "Service token"}}
@@ -423,6 +491,15 @@ class CapabilityRecordTests(unittest.TestCase):
                     "replacement_addresses": ["203.0.113.20"], "source_binding_sha256": DIGEST}]}
         parsed = c.RecoveryPublicBinding.parse(value)
         self.assertEqual(parsed.listeners[0].replacement_addresses, ("203.0.113.20",))
+        observation = {"hostname": "relay.example.org", "addresses": ["203.0.113.20"],
+                       "observed_at": c.now(), "source": "recursive"}
+        observed = {**value, "observations": [observation], "dns_cutover": "external_observed"}
+        self.assertEqual(c.record_document(c.RecoveryPublicBinding.parse(observed)), observed)
+        for state in ("unresolved", "unavailable"):
+            missing = {**value, "observations": [{**observation, "addresses": [], "state": state}]}
+            self.assertEqual(c.record_document(c.RecoveryPublicBinding.parse(missing)), missing)
+            with self.assertRaises(c.DeployError):
+                c.RecoveryPublicBinding.parse({**missing, "dns_cutover": "external_observed"})
         for mutate in (lambda v: v.update(dns_cutover="managed_complete"),
                        lambda v: v.update(dns_cutover="external_observed"),
                        lambda v: v["listeners"][0].update(replacement_addresses=["2001:db8::1"]),
@@ -495,7 +572,7 @@ class CapabilityCompatibilityTests(unittest.TestCase):
             with self.assertRaises(c.DeployError) as caught:
                 upgrades.check_instance_capabilities(feature, generation)
             self.assertEqual(caught.exception.code, "instance_capability_required")
-        for action in ("status", "restart", "config-set", "rollback"):
+        for action in ("status", "restart", "config-set", "keys-rotate"):
             with patch("upgrades.protocol", return_value={"protocol": {"major": 2, "minor": 0}, "generation": 99,
                                                        "minimum_client_generation": 1}):
                 request = {"profile": legacy["profile"], "client": {"generation": 9}, "protocol": {"major": 2, "minor": 0}}
@@ -507,8 +584,26 @@ class CapabilityCompatibilityTests(unittest.TestCase):
         # gates and the network owner still control feature execution.
         upgrades.check_instance_capabilities(feature, upgrades.protocol()["generation"])
         with self.assertRaises(c.DeployError) as caught:
-            upgrades._check_feature_request(mixed, {"profile": feature["profile"], "client": {"generation": 12}}, "rollback")
+            upgrades._check_feature_request(mixed, {"profile": feature["profile"], "client": {"generation": upgrades.protocol()["generation"]}}, "keys-rotate")
         self.assertEqual(caught.exception.code, "capability_unavailable")
+
+    def test_release_one_requires_upgrade_and_preserves_sticky_floor(self):
+        _, _, feature = fixture()
+        feature["deployment_selection"] = {**selection(feature["profile"]["instance_id"]), "minimum_generation": 12}
+        host = registry(feature)
+        host["tools"]["generation"] = 12
+        request = {"profile": feature["profile"], "client": {"generation": 13}}
+        upgrades._check_feature_request(host, {**request, "client": {"generation": 12}}, "status")
+        with self.assertRaises(c.DeployError) as caught:
+            upgrades._check_feature_request(host, request, "down")
+        self.assertEqual(caught.exception.code, "host_upgrade_required")
+        host["tools"]["generation"] = 13
+        upgrades._check_feature_request(host, request, "down")
+        with self.assertRaises(c.DeployError):
+            upgrades._check_feature_request(host, {**request, "client": {"generation": 12}}, "down")
+        feature["deployment_selection"]["minimum_generation"] = 13
+        with self.assertRaises(c.DeployError):
+            upgrades.check_instance_capabilities(feature, 12)
 
     def test_source_protocol_fixtures_preserve_upgrade_floors(self):
         # Captured 2.0 envelope shape of all supported source generations. These

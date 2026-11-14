@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import socket
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
@@ -14,6 +15,7 @@ import contracts as c
 import edge
 import firewall
 import listeners
+import host as host_module
 import report
 import topology as t
 from host import Host, Paths
@@ -58,6 +60,45 @@ def live_rules(open_rules=(), family=4):
 
 
 class SocketTests(unittest.TestCase):
+    def test_dns_lookup_failure_is_explicit_and_nonfatal(self):
+        binding = network_profile().listeners[0][1]
+        for error in (socket.gaierror(-2, 'not found'), OSError('resolver failed')):
+            with self.subTest(error=type(error).__name__), patch.object(host_module, 'resolve_addresses', side_effect=error):
+                result = listeners.external_dns(binding, listeners.observe_dns(binding))
+            self.assertEqual(result['state'], 'unresolved')
+            self.assertIsNone(result['addresses_match'])
+            self.assertEqual(len(result['instructions']), 2)
+
+    def test_dns_timeout_is_unavailable_and_retains_required_records(self):
+        binding = network_profile().listeners[0][1]
+        with patch.object(host_module, 'resolve_addresses', side_effect=subprocess.TimeoutExpired('resolver', 2)) as resolve:
+            observation = listeners.observe_dns(binding)
+        resolve.assert_called_once_with(binding.hostname, 2)
+        result = listeners.external_dns(binding, observation)
+        self.assertEqual(result['state'], 'unavailable')
+        self.assertIsNone(result['addresses_match'])
+        self.assertIsNone(result['addresses'])
+        self.assertEqual([i['address'] for i in result['instructions']], list(binding.public_addresses))
+
+    def test_dns_resolved_addresses_are_observation_not_exposure_permission(self):
+        binding = network_profile().listeners[0][1]
+        with patch.object(host_module, 'resolve_addresses', return_value=[*binding.public_addresses, binding.public_addresses[0]]):
+            result = listeners.external_dns(binding, listeners.observe_dns(binding))
+        self.assertEqual(result['state'], 'resolved')
+        self.assertTrue(result['addresses_match'])
+        self.assertEqual(set(result['addresses']), set(binding.public_addresses))
+        self.assertEqual(result['cutover'], 'pending_external_dns')
+        self.assertIsNone(result['provider_dns_only'])
+
+    def test_report_shows_unresolved_dns_and_required_records(self):
+        with patch.object(host_module, 'resolve_addresses', side_effect=socket.gaierror(-2, 'missing')), \
+                patch.object(listeners, 'observe_sockets', return_value=()), \
+                patch.object(listeners, 'process_members', return_value=frozenset()), patch.object(firewall, 'observe'):
+            result = report.declared_network(Mock(), network_profile(), topology=network_topology())
+        self.assertEqual(result['dns'][0]['state'], 'unresolved')
+        self.assertEqual([i['type'] for i in result['dns'][0]['instructions']], ['A', 'AAAA'])
+        self.assertIn({'code': 'external_dns_observation_unresolved', 'hostname': result['dns'][0]['hostname']}, result['findings'])
+
     def test_protocol_family_address_and_wildcards_are_not_port_only(self):
         tcp = listeners.SocketIdentity("tcp", 4, "203.0.113.10", 9443)
         self.assertFalse(listeners.conflicts(tcp, replace(tcp, transport="udp")))

@@ -38,15 +38,17 @@ func Builder(settings fixtureconfig.Settings, receipts *work.Receipts) *applicat
 		}}}}, nil
 	})
 	if settings.App.Scheduler.Enabled {
-		builder.Schedules(func(services application.Services) ([]schedule.Declaration, error) {
-			tick, err := schedule.Every("acceptance.tick", 10*time.Second, func(ctx context.Context, _ schedule.Invocation) error {
-				services.Logger.InfoContext(ctx, "acceptance schedule completed")
-				return nil
-			})
-			return []schedule.Declaration{tick}, err
-		})
+		builder.Schedules(scheduleDeclarations)
 	}
 	return builder
+}
+
+func scheduleDeclarations(services application.Services) ([]schedule.Declaration, error) {
+	tick, err := schedule.Every("acceptance.tick", 10*time.Second, func(ctx context.Context, _ schedule.Invocation) error {
+		services.Logger.InfoContext(ctx, "acceptance schedule completed")
+		return nil
+	})
+	return []schedule.Declaration{tick}, err
 }
 
 func readiness(ctx context.Context, mode string, receipts *work.Receipts) error {

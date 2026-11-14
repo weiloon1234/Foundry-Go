@@ -1,0 +1,14 @@
+{
+  "schema": 2,
+  "environment": "acceptance-lab",
+  "instance_id": "29f0acb9-f9c1-4be6-b13d-01f5ff2e673d",
+  "host": {"address": "acceptance-lab.acceptance.invalid", "port": 22, "host_id": "e2a319e1-a587-4e6e-9d32-fbf2b7bf3894"},
+  "runtime_environment": "testing",
+  "domain": "acceptance-lab.acceptance.invalid",
+  "certbot_email": "acceptance@example.invalid",
+  "architecture": "arm64",
+  "public_env": {},
+  "edge_origin_lockdown": false,
+  "retention": {"server_releases": 5, "local_releases": 3, "pre_migration_dumps": 7},
+  "backup_policy": {"interval_hours": 24, "full_retention_days": 35, "pitr_days": 28}
+}

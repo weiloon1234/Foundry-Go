@@ -13,6 +13,7 @@ import secrets
 import stat
 import uuid
 import uploads
+import recovery_rehearsal
 
 from contracts import (CLEANUP_GRACE_KEY, DEFAULT_CLEANUP_GRACE, DeployError, POSTGRES_PORT, REDIS_PORT, check_path,
                        dump_env, instance_paths, normalize_backup_repository, normalize_storage_disks, parse_env,
@@ -79,14 +80,42 @@ PIPELINE_KEYS = frozenset(_FIELDS) - {"PROJECT__NAME"} | {"DEVELOPER__RELEASE"} 
 MAX_CONFIGURATION_CHANGES = 16
 
 
+def configuration_parts(changes, entry=None, *, topology=None):
+    from topology import SERVICE_SECRET_PREFIX, parse_topology, service_secret_keys
+    topology = topology or (parse_topology(entry["topology"], registered="sha256" in entry["topology"])
+                            if entry and "topology" in entry else None)
+    names = service_secret_keys(dict(topology.secrets)) if topology else {}
+    application, service = {}, {}
+    for key, value in changes.items():
+        if isinstance(key, str) and key.startswith(SERVICE_SECRET_PREFIX):
+            require(key in names or key.endswith("_FILE") and key[:-5] in names,
+                    "unknown_configuration", "Unknown declared service secret.")
+            service[key] = value
+        else:
+            application[key] = value
+    logical = [key if key in names else key[:-5] for key in service]
+    require(len(logical) == len(set(logical)), "invalid_configuration",
+            "A service secret and its _FILE alias cannot both be supplied.")
+    return application, service
+
+
+SCHEDULER_ENABLED = "APP__SCHEDULER__ENABLED"
+
+
+def scheduler_environment(roles, *, rehearsal=False):
+    return {SCHEDULER_ENABLED: "true" if "scheduler" in roles and not rehearsal else "false"}
+
+
 def pipeline_keys(entry=None):
-    return PIPELINE_KEYS | (uploads.RUNTIME_KEYS if entry and "uploads" in entry["profile"] else frozenset())
+    scheduler = {SCHEDULER_ENABLED} if entry and entry["profile"].get("schema") == 3 else frozenset()
+    return PIPELINE_KEYS | scheduler | (uploads.RUNTIME_KEYS if entry and "uploads" in entry["profile"] else frozenset())
 
 
 def validate_configuration_changes(changes, entry=None):
     require(isinstance(changes, dict) and 0 < len(changes) <= MAX_CONFIGURATION_CHANGES,
             "invalid_configuration", "Name between one and sixteen configuration keys to change together.")
-    for key in changes:
+    application, _ = configuration_parts(changes, entry)
+    for key in application:
         require(isinstance(key, str) and re.fullmatch(r"[A-Z][A-Z0-9_]*", key),
                 "invalid_configuration", "Configuration key name is invalid.")
         logical = key.removesuffix("_FILE")
@@ -94,6 +123,186 @@ def validate_configuration_changes(changes, entry=None):
                 and not key.startswith(("DEPLOY_", "FOUNDRY_", "VITE_")),
                 "owned_configuration", "Identity, infrastructure and seed credentials cannot be edited by generic configuration commands.")
     dump_env({key: value for key, value in changes.items() if value is not None})
+
+
+def service_secret_snapshot(host, entry):
+    """Current private paths; never include this record in a public response."""
+    from admission import read_owned
+    path = host.paths.instance_config(entry["name"]) / "service-secrets.json"
+    if not check_path(path, "file").exists():
+        return {}
+    require(stat.S_IMODE(path.stat().st_mode) == 0o600,
+            "configuration_ownership", "The service secret index must remain private.")
+    value = read_owned(host, path, lambda value: value)
+    require(isinstance(value, dict) and set(value) == {"schema", "instance_id", "paths"}
+            and value["schema"] == 1 and value["instance_id"] == entry["profile"]["instance_id"]
+            and isinstance(value["paths"], dict) and len(value["paths"]) <= 128,
+            "service_secret", "Invalid private service secret snapshot.")
+    from topology import service_secret_keys
+    service_secret_keys(value["paths"])
+    for path in value["paths"].values():
+        _read_value_file(host, entry, path)
+    return dict(value["paths"])
+
+
+def stage_service_secrets(host, entry, topology, changes, *, required=True):
+    """Snapshot inputs without selecting them; callers hold host then instance locks."""
+    from topology import service_secret_keys
+    _, changes = configuration_parts(changes, topology=topology)
+    names = service_secret_keys(dict(topology.secrets))
+    paths = service_secret_snapshot(host, entry)
+    for key, value in changes.items():
+        indirect = key not in names
+        name = names[key[:-5] if indirect else key]
+        if value is None:
+            paths.pop(name, None)
+            continue
+        content = _read_value_file(host, entry, value) if indirect else value
+        require(isinstance(content, str) and 0 < len(content.encode("utf-8")) <= MAX_VALUE_BYTES
+                and "\x00" not in content, "invalid_configuration", "Service secret value is invalid.")
+        if name in paths and _read_value_file(host, entry, paths[name]) == content:
+            continue
+        path = host.paths.instance_config(entry["name"]) / ("service-" + uuid.uuid4().hex + ".secret")
+        host.owned_write(path, content + "\n", 0o640, group=entry["name"])
+        paths[name] = str(path)
+    if required:
+        service_secret_paths(host, entry, topology, paths=paths)
+    return paths
+
+
+def select_service_secrets(host, entry, paths):
+    """Publish the private selection as part of a configuration revision."""
+    for path in paths.values():
+        _read_value_file(host, entry, path)
+    host.owned_write(host.paths.instance_config(entry["name"]) / "service-secrets.json",
+                     _json({"schema": 1, "instance_id": entry["profile"]["instance_id"], "paths": paths}) + "\n", 0o600)
+
+
+def service_secret_paths(host, entry, topology, *, paths=None, profile=None):
+    """Resolve only each placed service's declared file interfaces, never values."""
+    from topology import ExecutableRole
+    paths = service_secret_snapshot(host, entry) if paths is None else paths
+    placement = dict(profile.placement) if profile else entry["profile"].get("placement", {})
+    result = {}
+    for role in topology.roles:
+        name = role.common.name
+        if not isinstance(role, ExecutableRole) or placement.get(name, 1) == 0:
+            continue
+        result[name] = {}
+        for variable, secret in role.secret_files:
+            require(secret in paths, "service_secret_missing", "Supply required service secrets before reviewing the release plan.")
+            _read_value_file(host, entry, paths[secret])
+            result[name][variable] = paths[secret]
+    return result
+
+
+def service_secret_snapshot_paths(host, entry):
+    """Backup/recovery interface: exact current service-secret files, including retained names."""
+    paths = service_secret_snapshot(host, entry)
+    index = host.paths.instance_config(entry["name"]) / "service-secrets.json"
+    return tuple([index, *(Path(path) for path in sorted(set(paths.values())))]) if index.exists() else ()
+
+
+def service_secret_requirements(topology, profile, paths):
+    from topology import ExecutableRole, service_secret_keys
+    placement = dict(profile.placement)
+    required = {secret for role in topology.roles if isinstance(role, ExecutableRole)
+                and placement[role.common.name] for _, secret in role.secret_files}
+    keys = service_secret_keys(dict(topology.secrets))
+    prompts = dict(topology.secrets)
+    return [{"key": key, "prompt": prompts[name], "present": name in paths, "redacted": True}
+            for key, name in keys.items() if name in required]
+
+
+def stage_service_secret_intent(host, entry, topology, profile, changes):
+    """Private, immutable review input. The public plan receives only its opaque ID."""
+    from admission import protected_directory
+    from contracts import digest
+    paths = stage_service_secrets(host, entry, topology, changes, required=False)
+    service_secret_paths(host, entry, topology, paths=paths, profile=profile)
+    root = host.paths.instance_config(entry["name"]) / "service-secret-intents"
+    protected_directory(host, root, 0o700)
+    require(len(list(root.iterdir())) < 128, "service_secret_intents", "Retained private intents require reconciliation.")
+    identifier = str(uuid.uuid4())
+    record = {"schema": 1, "id": identifier, "instance_id": entry["profile"]["instance_id"],
+              "private_revision": entry["configuration_revision"], "topology_sha256": topology.sha256,
+              "paths": paths, "sha256": {name: digest(Path(path)) for name, path in paths.items()}}
+    host.owned_write(root / (identifier + ".json"), _json(record) + "\n", 0o600)
+    return identifier
+
+
+def read_service_secret_intent(host, entry, identifier, topology, profile):
+    from admission import read_owned
+    from contracts import contract_uuid, digest
+    path = host.paths.instance_config(entry["name"]) / "service-secret-intents" / (contract_uuid(identifier) + ".json")
+    record = read_owned(host, path, lambda value: value)
+    require(stat.S_IMODE(path.stat().st_mode) == 0o600,
+            "configuration_ownership", "Private configuration intents require mode 0600.")
+    require(record.get("schema") == 1 and record.get("id") == identifier
+            and record.get("instance_id") == entry["profile"]["instance_id"]
+            and record.get("private_revision") == entry["configuration_revision"]
+            and record.get("topology_sha256") == topology.sha256,
+            "stale_plan", "Private configuration intent no longer matches the reviewed transition.")
+    paths = record["paths"]
+    require(isinstance(paths, dict) and len(paths) <= 128, "service_secret", "Invalid private snapshot paths.")
+    for value in paths.values():
+        _read_value_file(host, entry, value)
+    service_secret_paths(host, entry, topology, paths=paths, profile=profile)
+    require({name: digest(check_path(Path(value), "file")) for name, value in paths.items()} == record["sha256"],
+            "stale_plan", "Private configuration snapshot changed after review.")
+    return dict(paths)
+
+
+def stage_configuration_revision(host, entry, changes, topology, profile):
+    """Use the existing configuration aliases/keyring rules before lifecycle effects."""
+    from admission import protected_directory
+    from contracts import digest
+    validate_configuration_changes(changes, {**entry, "topology": topology.projection()})
+    application, service = configuration_parts(changes, topology=topology)
+    current = validate_runtime_environment(host, entry)
+    values = candidate_values(host, entry, current, application)
+    paths = stage_service_secrets(host, entry, topology, service)
+    identifier = str(uuid.uuid4())
+    directory = host.paths.instance_config(entry["name"])
+    candidate = directory / ("revision-" + identifier + ".env")
+    host.owned_write(candidate, dump_env(values), 0o640, group=entry["name"])
+    root = directory / "configuration-intents"
+    protected_directory(host, root, 0o700)
+    require(len(list(root.iterdir())) < 128, "configuration_reconciliation", "Reconcile retained configuration intents.")
+    record = {"schema": 1, "id": identifier, "instance_id": entry["profile"]["instance_id"],
+              "revision": entry["configuration_revision"] + 1, "path": str(candidate), "sha256": digest(candidate),
+              "previous_sha256": digest(directory / "app.env"), "paths": paths,
+              "secret_sha256": {name: digest(Path(path)) for name, path in paths.items()},
+              "application_keys": list(application), "service_keys": list(service)}
+    host.owned_write(root / (identifier + ".json"), _json(record) + "\n", 0o600)
+    return identifier
+
+
+def read_configuration_revision(host, entry, identifier):
+    from admission import read_owned
+    from contracts import contract_uuid, digest
+    directory = host.paths.instance_config(entry["name"])
+    record = read_owned(host, directory / "configuration-intents" / (contract_uuid(identifier) + ".json"), lambda value: value)
+    require(record.get("schema") == 1 and record.get("id") == identifier
+            and record.get("instance_id") == entry["profile"]["instance_id"]
+            and record.get("revision") == entry["configuration_revision"] + 1
+            and digest(directory / "app.env") == record.get("previous_sha256"),
+            "stale_plan", "Configuration changed after private review.")
+    content = _read_value_file(host, entry, record["path"])
+    require(digest(Path(record["path"])) == record["sha256"], "stale_plan", "Private configuration intent changed.")
+    for name, path in record["paths"].items():
+        _read_value_file(host, entry, path)
+        require(digest(Path(path)) == record["secret_sha256"][name], "stale_plan", "Private service snapshot changed.")
+    return record, parse_env(content)
+
+
+def publish_configuration_revision(host, registry, entry, intent):
+    """Caller journals configuration publication first; an interrupted write stays pending."""
+    record, values = read_configuration_revision(host, entry, intent)
+    select_service_secrets(host, entry, record["paths"])
+    host.owned_write(host.paths.instance_config(entry["name"]) / "app.env", dump_env(values), 0o640, group=entry["name"])
+    entry["configuration_revision"] = record["revision"]
+    host.journal(registry, entry)
 
 
 def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
@@ -116,7 +325,12 @@ def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
         values["APP__SERVICES__STORAGE__DISKS"] = _json(storage["disks"])
         values[CLEANUP_GRACE_KEY] = DEFAULT_CLEANUP_GRACE
     # Initial application settings (such as first-deploy seed credentials) apply last.
-    values.update(credentials.get("configuration") or {})
+    application, _ = configuration_parts(credentials.get("configuration") or {}, entry)
+    values.update(application)
+    if entry["profile"].get("schema") == 3:
+        values.pop(SCHEDULER_ENABLED + "_FILE", None)
+        values.update(scheduler_environment((name for name, count in entry["profile"]["placement"].items() if count),
+                                           rehearsal=recovery_rehearsal.active(entry)))
     return values
 
 
@@ -400,7 +614,7 @@ def validate_runtime_environment(host, entry):
     credentials = read_credentials(host, entry)
     path = check_path(host.paths.instance_config(entry["name"]) / "app.env", "file")
     resolution = None
-    if entry.get("topology", {}).get("schema") == 2 and "deployment_selection" in entry:
+    if "deployment_selection" in entry:
         from admission import AdmissionStore
         _, resolution = AdmissionStore(host, entry["profile"]["instance_id"])._selection()
         path = effective_environment_path(host, entry, resolution)
@@ -418,11 +632,17 @@ def validate_runtime_environment(host, entry):
     require(host.paths.root != Path("/") or "postgresql" in registry["shared"],
             "postgres_identity", "The Foundry PostgreSQL allocation is missing.")
     expected = runtime_environment(entry, credentials, postgres_port=postgres_port)
+    rehearsal = recovery_rehearsal.active(entry)
     if resolution is not None:
         http = next(e for e in resolution.endpoints if e.role == "http" and e.listener == "http")
         require(http.port == entry["allocations"]["http_port"], "runtime_resolution_conflict",
                 "HTTP registry projection differs from the selected runtime resolution.")
         expected["APP__HTTP__SERVER__ADDRESS"] = _http_address(http)
+        expected.update(scheduler_environment(resolution.roles, rehearsal=rehearsal))
+    if not rehearsal and SCHEDULER_ENABLED not in values:
+        # Generation-12 environments omitted this derived setting. Validate their
+        # existing fields; the next immutable environment supplies the setting.
+        expected.pop(SCHEDULER_ENABLED, None)
     owned_keys = pipeline_keys(entry)
     if any(values.get(key) != value for key, value in expected.items() if key in owned_keys):
         raise DeployError("configuration_identity", "Pipeline-owned runtime configuration differs from registered identity/credentials.")
@@ -561,7 +781,8 @@ def prepare_service(host, store, invocation, role, spec, release_root, members, 
                  "size": member.size, "kind": member.kind}) for member in members}
     require(len(inventory) == len(members), "service_preparation", "Duplicate configuration inventory members.")
     with store.preparation(invocation, permit_id=permit_id) as resolution:
-        prepare_unit_paths(host, role, spec, resolution, views=views)
+        from dataclasses import replace
+        prepare_unit_paths(host, role, spec, replace(resolution, id=invocation.resolution_id), views=views)
         base = _service_directory(host, host.paths.p(paths.base))
         invocations = _service_directory(host, base / "invocations")
         view = invocations / invocation.process.invocation_id
@@ -650,16 +871,18 @@ def _http_address(endpoint):
     return f"{address}:{endpoint.port}"
 
 
-def effective_environments(host, entry, resolution_id, roles, endpoints):
-    """Snapshot current private settings; HTTP allocation changes only this projection."""
+def effective_environments(host, entry, resolution_id, roles, endpoints, *, values=None):
+    """Snapshot private settings with the selected HTTP allocation and role placement."""
     from admission import protected_directory
     from contracts import EffectiveEnvironment, atomic_write, contract_uuid, digest, parse_env
     contract_uuid(resolution_id)
     source = host.paths.instance_config(entry["name"]) / "app.env"
-    values = parse_env(check_path(source, "file").read_text())
+    values = dict(values) if values is not None else parse_env(check_path(source, "file").read_text())
     http = next((e for e in endpoints if e.role == "http" and e.listener == "http"), None)
     require(http is not None, "runtime_resolution", "The HTTP runtime allocation is missing.")
     values["APP__HTTP__SERVER__ADDRESS"] = _http_address(http)
+    values.pop(SCHEDULER_ENABLED + "_FILE", None)
+    values.update(scheduler_environment(roles, rehearsal=recovery_rehearsal.active(entry)))
     payload = dump_env(values)
     result = []
     for role in roles:
@@ -673,10 +896,20 @@ def effective_environments(host, entry, resolution_id, roles, endpoints):
     return tuple(result)
 
 
-def effective_environment_path(host, entry, resolution, role="http"):
+def effective_environment_path(host, entry, resolution, role="http", *, candidate=False):
     from contracts import digest, require_current_private_configuration
-    require_current_private_configuration(resolution, entry["configuration_revision"])
     selected = next((e for e in resolution.environments if e.role == role), None)
+    if candidate:
+        require(resolution.private_revision in (entry["configuration_revision"], entry["configuration_revision"] + 1),
+                "runtime_resolution_conflict", "Candidate configuration revision is stale.")
+    elif resolution.private_revision != entry["configuration_revision"]:
+        from admission import AdmissionStore
+        _, current = AdmissionStore(host, entry["profile"]["instance_id"])._selection()
+        require_current_private_configuration(current, entry["configuration_revision"])
+        require(selected is not None and any(e.role == role and e.sha256 == selected.sha256 for e in current.environments), "runtime_resolution_conflict",
+                "A retained role no longer has identical private configuration.")
+    else:
+        require_current_private_configuration(resolution, entry["configuration_revision"])
     require(selected is not None, "runtime_resolution", "Role has no effective environment.")
     path = check_path(host.paths.instance_config(entry["name"]) / selected.path, "file")
     require(path.exists() and digest(path) == selected.sha256,
@@ -684,14 +917,14 @@ def effective_environment_path(host, entry, resolution, role="http"):
     return path
 
 
-def write_binding_descriptor(host, entry, deployment, resolution, spec):
+def write_binding_descriptor(host, entry, deployment, resolution, spec, *, candidate=False):
     """Final app-facing descriptor: schema 2 embeds the frozen RoleBindings record."""
     from dataclasses import asdict
     from contracts import atomic_json, canonical_digest, record_document
     from admission import protected_directory
     require(spec in deployment.units and resolution.deployment_sha256 == canonical_digest(record_document(deployment)),
             "runtime_resolution", "Bindings belong to another selected deployment.")
-    env = effective_environment_path(host, entry, resolution, spec.identity.role)
+    env = effective_environment_path(host, entry, resolution, spec.identity.role, candidate=candidate)
     absolute = lambda path: "/" + path.relative_to(host.paths.root).as_posix()
     path = host.paths.opt(entry["name"]) / "runtime" / resolution.id / (spec.identity.role + ".json")
     protected_directory(host, path.parent)
@@ -700,6 +933,9 @@ def write_binding_descriptor(host, entry, deployment, resolution, spec):
                   "release": entry["allocations"]["paths"]["application"] + "/releases/" + deployment.release,
                   "deployment_sha256": resolution.deployment_sha256, "unit": asdict(spec.identity),
                   "bindings": record_document(spec.bindings)}
+    if deployment.archive_schema == 1:
+        descriptor = {key: descriptor[key] for key in ("instance", "user", "env_file", "work_dir")}
+        descriptor["schema"] = 1
     if path.exists():
         require(read_json(path) == descriptor, "runtime_resolution_conflict", "An immutable role descriptor already differs.")
     atomic_json(path, descriptor, mode=0o644)

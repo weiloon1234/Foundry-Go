@@ -136,6 +136,8 @@ def _secret_file_name(value):
     """Secret argv references name the same environment key as secret_files."""
     require(isinstance(value, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{0,119}_FILE", value),
             "invalid_topology", "Secret environment references require _FILE names.")
+    require(not value.startswith(("FOUNDRY_", "DEPLOY_", "APP__", "LD_", "PYTHON")),
+            "invalid_topology", "Secret file variables cannot override framework or loader settings.")
     return value
 
 
@@ -221,7 +223,8 @@ class ConfigFile:
                     "invalid_topology", "Invalid JSON pointer.")
             argument = Argument.parse(raw)
             require(argument.kind in (ArgumentKind.LISTENER_ADDRESS, ArgumentKind.LISTENER_PORT,
-                                      ArgumentKind.BUNDLE, ArgumentKind.BINDING, ArgumentKind.COPY_NUMBER),
+                                      ArgumentKind.BUNDLE, ArgumentKind.BINDING, ArgumentKind.COPY_NUMBER,
+                                      ArgumentKind.SECRET_FILE),
                     "invalid_topology", "Config fields require typed nonsecret bindings.")
             result.append((pointer, argument))
         pointers = [p for p, _ in result]
@@ -314,15 +317,48 @@ class ResourceLimits:
 class StatePolicy:
     kind: str
     acknowledged: bool
+    recovery_owner: str | None = None
 
     @classmethod
     def parse(cls, value):
-        contract_object(value, ("kind",), ("acknowledged",))
+        contract_object(value, ("kind",), ("acknowledged", "recovery_owner"))
         require(value["kind"] in ("disposable", "external", "local-unprotected"), "invalid_topology", "Invalid service state policy.")
         require((value["kind"] == "local-unprotected" and value.get("acknowledged") is True)
                 or (value["kind"] != "local-unprotected" and "acknowledged" not in value),
                 "invalid_topology", "Unprotected local state requires an explicit acknowledgement.")
-        return cls(value["kind"], value.get("acknowledged", False))
+        owner = None
+        if "recovery_owner" in value:
+            require(value["kind"] == "external", "invalid_topology", "Only external state names a recovery owner.")
+            owner = contract_text(value["recovery_owner"], limit=256)
+            require(owner == owner.strip() and bool(owner.strip()),
+                    "invalid_topology", "External recovery owners must be nonblank public labels without surrounding whitespace.")
+        return cls(value["kind"], value.get("acknowledged", False), owner)
+
+
+@dataclass(frozen=True)
+class ReleaseArtifactSource:
+    path: str
+    build: tuple[str, ...]
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("release",))
+        source = value["release"]
+        contract_object(source, ("path",), ("build",))
+        path = contract_path(source["path"])
+        require(path.startswith("deploy/artifacts/"), "invalid_topology",
+                "Release artifact sources belong under deploy/artifacts/.")
+        build = contract_list(source["build"], contract_text, minimum=1, maximum=64) if "build" in source else ()
+        return cls(path, build)
+
+
+@dataclass(frozen=True)
+class ReleaseArtifactPlatform:
+    source: ReleaseArtifactSource
+
+    def accepts_digest(self, checksum):
+        # The release inventory, rather than a remote download pin, owns this digest.
+        return contract_digest(checksum) == checksum
 
 
 @dataclass(frozen=True)
@@ -330,8 +366,14 @@ class ArtifactPlatform:
     url: str
     sha256: str
 
+    def accepts_digest(self, checksum):
+        return self.sha256 == checksum
+
     @classmethod
     def parse(cls, value):
+        if isinstance(value, dict) and "source" in value:
+            contract_object(value, ("source",))
+            return ReleaseArtifactPlatform(ReleaseArtifactSource.parse(value["source"]))
         contract_object(value, ("url", "sha256"))
         url = contract_text(value["url"], limit=2048)
         try:
@@ -369,7 +411,7 @@ class ArtifactProvenance:
 class Artifact:
     version: str
     format: str
-    platforms: tuple[tuple[str, ArtifactPlatform], ...]
+    platforms: tuple[tuple[str, ArtifactPlatform | ReleaseArtifactPlatform], ...]
     executables: tuple[tuple[str, str], ...]
     bundles: tuple[tuple[str, str], ...]
     modules: tuple[str, ...]
@@ -462,6 +504,7 @@ class ExecutableRole:
     limits: ResourceLimits
     state: StatePolicy
     environment: tuple[tuple[str, Argument], ...]
+    recovery_rehearsal_safe: bool = False
 
 
 Role = Union[BuiltinRole, ExecutableRole]
@@ -472,7 +515,8 @@ def _role(value):
     require(not set(value).intersection(("wrapper", "instances", "proxy_protocol")),
             "unsupported_capability", "Wrappers and numbered services require a later capability.")
     common = ("packages", "requires", "bindings", "maintenance", "artifact_mounts")
-    custom = ("executable", "arguments", "configs", "secret_files", "listeners", "readiness", "restart", "limits", "state", "environment")
+    custom = ("executable", "arguments", "configs", "secret_files", "listeners", "readiness", "restart", "limits", "state", "environment",
+              "recovery_rehearsal_safe")
     contract_object(value, ("name", "kind"), common + custom)
     name = contract_name(value["name"])
     require(value["kind"] in ("builtin", "executable"), "invalid_topology", "Unknown role kind.")
@@ -482,13 +526,15 @@ def _role(value):
     require(len(packages) == len(set(packages)), "invalid_topology", "Duplicate package requirements.")
     requires = contract_names(value.get("requires", ["http"] if name in ("scheduler", "worker") else []))
     maintenance = value.get("maintenance", "serve" if name == "http" else "stop")
-    require(maintenance in ("serve", "stop"), "invalid_topology", "Invalid maintenance policy.")
+    require(maintenance in ("continue", "serve", "stop"), "invalid_topology", "Invalid maintenance policy.")
     shared = RoleCommon(name, packages, requires, contract_map(value.get("bindings", {}), parse_binding, maximum=128), maintenance,
                         contract_map(value.get("artifact_mounts", {}), ArtifactMount.parse, maximum=64))
     if builtin:
         require(not set(value).intersection(custom), "invalid_topology", "Built-in runtime commands cannot be overridden.")
         return BuiltinRole(shared)
     contract_object(value, ("name", "kind", "executable", "readiness", "restart", "limits", "state"), common + custom)
+    rehearsal_safe = value.get("recovery_rehearsal_safe", False)
+    require(type(rehearsal_safe) is bool, "invalid_topology", "Recovery rehearsal safety requires an explicit boolean.")
     configs = contract_map(value.get("configs", {}), ConfigFile.parse, maximum=64)
     listeners = contract_map(value.get("listeners", {}), Listener.parse, maximum=MAX_LISTENERS)
     args = contract_list(value.get("arguments", []), Argument.parse, maximum=128)
@@ -503,13 +549,15 @@ def _role(value):
                     and k not in ("PATH", "HOME", "USER", "LOGNAME", "SHELL") for k in environment),
             "invalid_topology", "Environment must be bounded explicit nonsecret settings; use secret_files for secrets.")
     env = tuple((k, Argument.parse(v)) for k, v in sorted(environment.items()))
+    require(not any(key.removesuffix("_FILE") in environment for key in secrets),
+            "invalid_topology", "A service secret file cannot also have a value environment variable.")
     require(all(a.kind is not ArgumentKind.SECRET_FILE for _, a in env),
             "invalid_topology", "Secret paths require the secret_files owner.")
     return ExecutableRole(shared, parse_executable(value["executable"]), args, configs,
                           tuple((_secret_file_name(k), contract_name(v)) for k, v in sorted(secrets.items())), listeners,
                           Probe.parse(value["readiness"]), RestartPolicy.parse(value["restart"]),
                           ResourceLimits.parse(value["limits"]), StatePolicy.parse(value["state"]),
-                          env)
+                          env, rehearsal_safe)
 
 
 @dataclass(frozen=True)
@@ -525,6 +573,22 @@ class Topology:
     def projection(self):
         """Owned wire snapshot; the immutable parsed declaration remains authoritative."""
         return json.loads(self.canonical_json)
+
+
+SERVICE_SECRET_PREFIX = "FOUNDRY_SERVICE_SECRET__"
+
+
+def service_secret_keys(names):
+    """Map declaration names to the reserved private configuration namespace."""
+    result, aliases = {}, set()
+    for name in sorted(names):
+        contract_name(name)
+        key = SERVICE_SECRET_PREFIX + name.upper().replace("-", "_")
+        require(key not in aliases and key + "_FILE" not in aliases,
+                "invalid_topology", "Service secret names collide in the configuration namespace.")
+        result[key] = name
+        aliases.update((key, key + "_FILE"))
+    return result
 
 
 def parse_topology(document, *, registered=False) -> Topology:
@@ -545,9 +609,10 @@ def parse_topology(document, *, registered=False) -> Topology:
     artifacts = contract_map(value.get("artifacts", {}), Artifact.parse, maximum=MAX_ARTIFACTS)
     binaries = contract_map(value.get("application_executables", {}), ApplicationBinary.parse, maximum=64)
     def secret(v):
-        contract_object(v, ("prompt",))
-        return contract_text(v["prompt"], limit=256)
+        contract_object(v, (), ("prompt",))
+        return contract_text(v.get("prompt", "Service secret"), limit=256)
     secrets = contract_map(value.get("secrets", {}), secret, maximum=128)
+    service_secret_keys(dict(secrets))
     graph = {r.common.name: r.common.requires for r in roles}
     visited, visiting = set(), set()
     def visit(name):

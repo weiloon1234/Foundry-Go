@@ -59,6 +59,14 @@ redis = "main"
 [app.services.cache]
 default = "portal-runtime"
 
+# Share maintenance admission across HTTP, worker and scheduler processes.
+[app.maintenance]
+store = "maintenance"
+
+[app.services.cache.stores.maintenance]
+driver = "redis"
+redis = "main"
+
 [app.services.cache.stores.portal-runtime]
 driver = "redis"
 redis = "main"

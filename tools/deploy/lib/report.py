@@ -410,6 +410,19 @@ def instance_report(host, entry, deadline, problems, *, host_claims=()):
     topology = {role: {"unit": unit, "state": checked(problems, "service_check_unavailable", instance_id, service, host, unit, deadline)}
                 for role, unit in instance_units(entry).items() if role != "http" and not rehearsal}
     topology["http"] = {"unit": expected_unit, "state": unit_status}
+    held = set()
+    if "deployment_selection" in entry:
+        from feature_maintenance import record
+        holds = checked(problems, "maintenance_hold_unavailable", instance_id, record, host, entry)
+        held = set(holds["holds"]) if holds else set()
+        enabled = checked(problems, "service_enablement_unavailable", instance_id,
+                          enabled_roles, host, entry, remaining(deadline))
+        for role, item in topology.items():
+            item["held"] = role in held
+            item["maintenance"] = next(value.get("maintenance", "serve" if role == "http" else "stop")
+                                       for value in entry["topology"]["roles"] if value["name"] == role)
+            if enabled is not None:
+                item["enabled"] = role in enabled
     ready = None if recorded_status == "never_deployed" and not state.get("current") else checked(problems, "readiness_check_unavailable", instance_id, readiness, entry["allocations"]["http_port"], deadline)
     live_maintenance = None
     if os.geteuid() == 0:
@@ -421,7 +434,11 @@ def instance_report(host, entry, deadline, problems, *, host_claims=()):
         problem(problems, "maintenance_probe_unavailable", instance_id,
                 detail="Run the report as root to distinguish maintenance from an outage.")
     if ready is not None and live_maintenance and live_maintenance["down"]:
-        ready = {**ready, "status": "maintenance"}
+        ready = maintenance.classify_readiness(ready, live_maintenance)
+        for role, item in topology.items():
+            if item.get("maintenance") == "stop" and item["state"] and item["state"]["active"] == "active":
+                problem(problems, "maintenance_still_admitting", instance_id,
+                        detail=f"{role} still runs while the shared record is down; use deploy down for immediate fencing.")
     cert = None
     if not rehearsal:
         cert = checked(problems, "certificate_check_unavailable", instance_id, certificate, profile.get("domain"), deadline)
@@ -445,21 +462,21 @@ def instance_report(host, entry, deadline, problems, *, host_claims=()):
         if enabled is not None:
             for role, item in topology.items():
                 item["enabled"] = role in enabled
-                if role in enabled and item["state"] and item["state"]["active"] == "inactive":
+                if role in enabled and role not in held and item["state"] and item["state"]["active"] == "inactive":
                     action = f"ACTION=stop ROLE={role}" if recorded_status == "degraded" else "ACTION=stop"
                     problem(problems, "stopped_role_enabled", instance_id,
                             detail=f"{role} ({item['unit']}) is inactive but enabled and will start on reboot. Run {action} again to keep it stopped.")
     if recorded_status == "degraded":
         problem(problems, "instance_degraded", instance_id)
     if state.get("current") and not rehearsal and recorded_status != "stopped":
-        for item in topology.values():
-            if item["state"] and item["state"]["active"] == "inactive":
+        for role, item in topology.items():
+            if role not in held and item["state"] and item["state"]["active"] == "inactive":
                 problem(problems, "role_inactive", instance_id)
     current, previous = release(state.get("current")), release(state.get("previous"))
     consistent = True
     if recorded_status in {"healthy", "rolled_back"} and (not current or not ready or (not ready["ready"] and ready.get("status") != "maintenance") or not unit_status or unit_status["active"] != "active"):
         consistent = False
-    if recorded_status in {"healthy", "rolled_back"} and any(not item["state"] or item["state"]["active"] != "active" for item in topology.values()):
+    if recorded_status in {"healthy", "rolled_back"} and any(not item["state"] or item["state"]["active"] != "active" for role, item in topology.items() if role not in held):
         consistent = False
     if recorded_status == "never_deployed" and (current or (unit_status and unit_status["active"] not in {"inactive", "failed"})):
         consistent = False
@@ -635,6 +652,10 @@ def declared_network(host, profile, *, topology, entry=None, resolution=None, cl
     dns = [listeners.external_dns(binding, answers.get(binding.hostname)) for _, binding in profile.listeners]
     for value in dns:
         findings.append({"code": "external_dns_proxy_mode_unverified", "hostname": value["hostname"]})
+        if value["state"] != "resolved":
+            finding = {"code": "external_dns_observation_" + value["state"], "hostname": value["hostname"]}
+            if finding not in findings:
+                findings.append(finding)
         if value["addresses_match"] is False:
             findings.append({"code": "external_dns_drift", "hostname": value["hostname"]})
     for name, binding in profile.listeners:

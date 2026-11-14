@@ -17,7 +17,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-const deployUsage = "usage: foundry deploy [--dir application] [--go go] [--python python3] bootstrap|deploy|release|help [--environment name] [--action name] ..."
+const deployUsage = "usage: foundry deploy [--dir application] [--go go] [--python python3] bootstrap|deploy|release|rehearse|help [--environment name] [--action name] ..."
 
 type deployOptions struct {
 	dir, goBinary, python string

@@ -22,7 +22,6 @@ import gzip
 import hashlib
 import http.client
 import ipaddress
-import json
 import os
 from pathlib import Path
 import shutil
@@ -149,18 +148,6 @@ def _url(value):
     return parsed
 
 
-def _resolve(hostname, timeout):
-    # Bound libc DNS as well as socket I/O. A stuck resolver cannot retain a
-    # background thread after the download returns. No proxy libraries are used.
-    script = ("import json,socket,sys; "
-              "rows=socket.getaddrinfo(sys.argv[1],443,type=socket.SOCK_STREAM); "
-              "sys.exit(2) if len(rows)>64 else print(json.dumps([r[4][0] for r in rows]))")
-    result = subprocess.run([sys.executable, "-c", script, hostname], stdout=subprocess.PIPE,
-                            stderr=subprocess.DEVNULL, timeout=timeout, check=True)
-    require(len(result.stdout) <= 16384, "artifact_origin", "Download DNS result is too large.")
-    return json.loads(result.stdout)
-
-
 class _PinnedHTTPS(http.client.HTTPSConnection):
     def __init__(self, hostname, address, timeout):
         super().__init__(hostname, port=443, timeout=timeout, context=ssl.create_default_context())
@@ -209,7 +196,8 @@ def _download(pin, destination, *, max_bytes, seconds, resolver, connection_fact
     max_bytes = MAX_ARCHIVE_BYTES if max_bytes is None else max_bytes
     require(type(max_bytes) is int and 0 < max_bytes <= MAX_ARCHIVE_BYTES,
             "artifact_size", "Download size limit exceeds the supported archive limit.")
-    resolver = resolver or _resolve
+    from host import resolve_addresses
+    resolver = resolver or resolve_addresses
     connection_factory = connection_factory or _PinnedHTTPS
     destination = check_path(destination, "file")
     require(not destination.exists(), "artifact_conflict", "Artifact destination already exists.")
@@ -372,7 +360,7 @@ class _ArtifactTarInfo(tarfile.TarInfo):
 
 
 def inspect_payload(artifact: Artifact, platform: str, payload: Path, budget: ExpansionBudget,
-                    *, destination: Path | None = None) -> tuple[PayloadMember, ...]:
+                    *, destination: Path | None = None, sha256=None) -> tuple[PayloadMember, ...]:
     """Verify the compressed pin before parsing, optionally extract into a new tree.
 
     Output owns no symlinks, writable code or implicit exports. Data archives are
@@ -381,8 +369,11 @@ def inspect_payload(artifact: Artifact, platform: str, payload: Path, budget: Ex
     from release import MAX_ARCHIVE_BYTES
     pin = dict(artifact.platforms).get(platform)
     require(pin is not None, "artifact_architecture", "Artifact has no target architecture pin.")
+    checksum = sha256 if sha256 is not None else getattr(pin, "sha256", None)
+    require(checksum is not None and pin.accepts_digest(checksum),
+            "artifact_checksum", "Artifact requires its release inventory digest.")
     payload = check_path(payload, "file")
-    require(payload.stat().st_size <= MAX_ARCHIVE_BYTES and digest(payload) == pin.sha256,
+    require(payload.stat().st_size <= MAX_ARCHIVE_BYTES and digest(payload) == checksum,
             "artifact_checksum", "Artifact payload differs from its pin.")
     if destination is not None:
         destination = check_path(destination, "directory")
@@ -526,9 +517,9 @@ class PreparedArtifact:
 def prepare_payload(artifact: Artifact, payload: ArtifactPayload, source: Path,
                     budget: ExpansionBudget, destination: Path) -> PreparedArtifact:
     """Verify and extract a payload once into new caller-owned staging."""
-    members = inspect_payload(artifact, payload.platform, source, budget, destination=destination)
+    members = inspect_payload(artifact, payload.platform, source, budget, destination=destination, sha256=payload.sha256)
     try:
-        require(payload.sha256 == dict(artifact.platforms)[payload.platform].sha256
+        require(dict(artifact.platforms)[payload.platform].accepts_digest(payload.sha256)
                 and members == tuple(sorted(payload.members, key=lambda m: m.path)),
                 "artifact_inventory", "Extracted artifact differs from its release inventory.")
         return PreparedArtifact(artifact, payload, destination)
@@ -674,7 +665,7 @@ def publish(host, instance: str, prepared: PreparedArtifact, *, history: tuple[A
     contract_name(instance)
     validate_history((reference,), history)
     validate_abi(artifact, observed_service_abi)
-    require(dict(artifact.platforms)[payload.platform].sha256 == payload.sha256,
+    require(dict(artifact.platforms)[payload.platform].accepts_digest(payload.sha256),
             "artifact_checksum", "Artifact reference differs from its pin.")
     base = host.paths.opt(instance) / "artifacts"
     host.check_control_directory(base.parent)
@@ -739,7 +730,7 @@ def bundle_export(reference: ArtifactReference, artifact: Artifact, tree: Path, 
     validate_abi(artifact, observed_service_abi)
     require(tree.as_posix().endswith("/artifacts/" + reference.relative_path()),
             "artifact_reference", "Bundle source is not its canonical immutable artifact tree.")
-    require(reference.version == artifact.version and reference.sha256 == dict(artifact.platforms)[reference.platform].sha256
+    require(reference.version == artifact.version and dict(artifact.platforms)[reference.platform].accepts_digest(reference.sha256)
             and bundle in dict(artifact.bundles), "artifact_reference", "Unknown bundle export or version.")
     verify_tree(tree, members, uid=uid)
     source = check_path(tree / dict(artifact.bundles)[bundle], "directory")

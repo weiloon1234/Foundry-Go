@@ -30,6 +30,7 @@ class OperationTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.host = Host(Paths(Path(temporary.name).resolve()))
+        self.host.owned_write(self.host.paths.p("/proc/sys/kernel/random/boot_id"), BOOT)
         self.inventory, self.entry, _ = inventory_fixture()
         self.entry["configuration_revision"] = 7
         self.request = {"schema": 1, "operation_id": OPERATION, "action": "restart", "project": {},
@@ -50,6 +51,7 @@ class OperationTests(unittest.TestCase):
         return stage
 
     def cleanup_dependencies(self, stack):
+        stack.enter_context(patch.object(self.host, "read_registry", return_value=self.registry))
         stack.enter_context(patch.object(self.host, "require_identity", return_value=(self.registry, self.entry)))
         stack.enter_context(patch.object(self.host, "load_state", return_value=self.state))
         stack.enter_context(patch.object(self.host, "save_state"))
@@ -57,6 +59,12 @@ class OperationTests(unittest.TestCase):
 
     def test_executor_death_after_open_withdraws_stops_and_blocks_every_later_start(self):
         stage = self.context()
+        # Initial-deployment validation intent cannot authorize retry once
+        # publication may have begun, even if the executor dies before journaling it.
+        root = operations.directory(self.host, OPERATION)
+        c.atomic_json(root / "initial-validation.json", {"status": "ready", "current": None, "previous": None,
+                      "configuration_revision": 7}, mode=0o600)
+        c.atomic_json(root / "validated.json", {"operation_id": OPERATION}, mode=0o600)
         # Simulate death after opening (or after commit but before completion receipt).
         self.state["last_attempt"] = attempt("succeeded")
         self.store.cleanup_status(OPERATION, INVOCATION, "armed")
@@ -102,13 +110,69 @@ class OperationTests(unittest.TestCase):
         group = self.host.paths.p("/sys/fs/cgroup/unit/child")
         group.mkdir(parents=True)
         (group / "cgroup.procs").write_text("23\n")
-        observed = "MainPID=0\nControlPID=0\nControlGroup=/unit\nActiveState=inactive\nJob=0\n"
+        observed = "Id=" + self.inventory.units["relay"] + "\nLoadState=loaded\nMainPID=0\nControlPID=0\nControlGroup=/unit\nActiveState=inactive\nJob=0\n"
         with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, observed, "")):
             with self.assertRaises(c.DeployError) as raised:
                 lifecycle.stop_units(self.host, self.inventory, ("relay",))
             self.assertEqual(raised.exception.code, "feature_stop_unverified")
             (group / "cgroup.procs").write_text("")
             lifecycle.stop_units(self.host, self.inventory, ("relay",))
+
+    def stop_removed_unit(self, *, cleanup=False):
+        names = self.inventory.stop_order(self.inventory.roles) if cleanup else ("relay",)
+        running = {self.inventory.units[name] for name in names}
+        stopped = []
+        def command(args, **kwargs):
+            unit = args[2]
+            if args[1] == "stop":
+                stopped.append(unit)
+                running.discard(unit)
+                return subprocess.CompletedProcess(args, 0, "", "")
+            self.assertEqual(args[:2], ["systemctl", "show"])
+            active = unit in running
+            values = {"Id": unit, "LoadState": "not-found", "ActiveState": "active" if active else "inactive",
+                      "MainPID": "23" if active else "0", "ControlPID": "0", "Job": "0",
+                      "ControlGroup": "/system.slice/" + unit if active else ""}
+            return subprocess.CompletedProcess(args, 0, "\n".join(k + "=" + v for k, v in values.items()), "")
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(self.host, "run", side_effect=command))
+            if cleanup:
+                self.context()
+                self.cleanup_dependencies(stack)
+                stack.enter_context(patch.object(network, "withdraw"))
+                def prove_closed(*args):
+                    self.assertFalse(running)
+                    return c.ClosureEvidence.parse(closure())
+                stack.enter_context(patch.object(network, "close", side_effect=prove_closed))
+                self.assertEqual(operations.cleanup(self.host, self.request, self.pin), 0)
+                self.assertEqual(c.read_json(self.store.durable / "cleanup" / (OPERATION + ".json"))["status"], "closed")
+            else:
+                lifecycle.stop_units(self.host, self.inventory, names)
+        self.assertFalse(running)
+        self.assertEqual(stopped, [self.inventory.units[name] for name in names])
+
+    def test_stops_active_unit_after_its_file_was_removed(self):
+        self.stop_removed_unit()
+
+    def test_independent_cleanup_stops_active_units_with_removed_files(self):
+        self.stop_removed_unit(cleanup=True)
+
+    def test_missing_unit_requires_complete_empty_runtime_evidence(self):
+        unit = self.inventory.units["relay"]
+        empty = {"Id": unit, "LoadState": "not-found", "ActiveState": "inactive", "MainPID": "0",
+                 "ControlPID": "0", "ControlGroup": "", "Job": "0"}
+        for change in ({"MainPID": "12"}, {"ControlPID": "12"}, {"Job": "12"},
+                       {"ControlGroup": "/system.slice/stray.service"}, {"Id": "foreign.service"},
+                       {"LoadState": "error"}, {"ControlGroup": None}):
+            values = {**empty, **change}
+            output = "\n".join(k + "=" + v for k, v in values.items() if v is not None)
+            with self.subTest(change=change), patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, output, "")), \
+                    self.assertRaises(c.DeployError):
+                lifecycle.stop_units(self.host, self.inventory, ("relay",))
+        output = "\n".join(k + "=" + v for k, v in empty.items())
+        with patch.object(self.host, "run", return_value=subprocess.CompletedProcess([], 0, output, "")) as run:
+            lifecycle.stop_units(self.host, self.inventory, ("relay",))
+        self.assertTrue(all(call.args[0][:2] == ["systemctl", "show"] for call in run.call_args_list))
 
     def test_success_requires_all_durable_completion_records_and_removes_only_its_staging(self):
         stage = self.context()
@@ -198,7 +262,7 @@ class OperationTests(unittest.TestCase):
         self.assertEqual(first, self.pin)
         self.assertEqual(second, first)
 
-    def test_activate_previous_selection_refuses_before_owner_staging_or_host_effects(self):
+    def test_unreviewed_activation_refuses_before_owner_staging_or_host_effects(self):
         previous = self.inventory.deployment.release
         current = "20261114T000000Z-abcdef12"
         self.state.update(current={"version": current}, previous={"version": previous}, last_attempt=None)
@@ -214,31 +278,20 @@ class OperationTests(unittest.TestCase):
             with self.assertRaises(c.DeployError) as raised:
                 lifecycle.request_operation(self.host, "activate", {}, self.entry["profile"], operation_id=OPERATION,
                                             archive=str(archive), archive_sha256=DIGEST)
-            self.assertEqual(raised.exception.code, "capability_unavailable")
-            self.assertEqual(raised.exception.detail, "Feature rollback requires " + lifecycle.LATER + ".")
+            self.assertEqual(raised.exception.code, "release_plan_required")
             prepare.assert_not_called()
             run.assert_not_called()
         self.assertFalse(operations.directory(self.host, OPERATION).exists())
         self.assertFalse(operations.staging(self.host, self.entry, OPERATION).exists())
-        lifecycle.record_selection(self.host, self.entry, self.state, previous)
-        self.state["previous"] = None
-        self.state["history"] = []
-        with self.assertRaises(c.DeployError):
-            lifecycle.check_activation(self.host, self.entry, self.state, {"version": previous})
-        lifecycle.check_activation(self.host, self.entry, self.state, {"version": current})
 
     def test_boot_refuses_opening_when_a_prerequisite_becomes_unhealthy(self):
         selected = c.DeploymentSelection.parse(selection())
         selected = replace(selected, enabled_roles=tuple(self.inventory.roles),
                            admission=replace(selected.admission, disposition=c.AdmissionDisposition.COMMITTED))
         self.store._write(self.store.runtime / "boot.json", c.ClosureEvidence.parse(closure()))
-        deadlines = []
-        def ready(host, entry, inventory, name, deadline):
-            deadlines.append(deadline)
-            return True
         with patch.object(admission.AdmissionStore, "_selection", return_value=(selected, self.inventory.resolution)), \
-                patch.object(admission.AdmissionStore, "_completed"), patch.object(self.host, "run"), \
-                patch.object(lifecycle, "ready", side_effect=ready), \
+                patch.object(admission.AdmissionStore, "_completed"), patch.object(self.host, "run") as commands, \
+                patch.object(services, "enabled_units", return_value=tuple(self.inventory.roles)), \
                 patch.object(services, "wait_ready_set", return_value=False) as whole, \
                 patch.object(network, "open_public") as opening:
             with self.assertRaises(c.DeployError) as raised:
@@ -246,4 +299,4 @@ class OperationTests(unittest.TestCase):
             self.assertEqual(raised.exception.code, "readiness_failed")
             opening.assert_not_called()
             self.assertEqual(whole.call_args.args[2], selected.enabled_roles)
-            self.assertEqual(deadlines, [whole.call_args.args[3]] * 3)
+            commands.assert_not_called()

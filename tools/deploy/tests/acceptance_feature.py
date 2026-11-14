@@ -122,7 +122,7 @@ def feature_archive(source, destination, host_id):
          "readiness": {"kind": "http", "listener": "control", "path": "/ready", "status": 200, "body": "feature-relay-ready"},
          "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
          "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64},
-         "maintenance": "stop", "state": {"kind": "disposable"}}],
+         "maintenance": "continue", "state": {"kind": "disposable"}}],
         "artifacts": {"relay": {"version": "fixture-1", "format": "file", "executables": {"server": "relay"},
             "platforms": {platform: {"url": "https://acceptance.invalid/relay", "sha256": checksum}}}}})
     profile = parse_profile(profile, topology).projection()
@@ -174,8 +174,11 @@ def main():
         peer_reachable(host, opened=False)
         shared.prepare(host, (project, profile), private)
         public_observation(host, topology, profile)
-        result = action("activate", request(project, profile, archive=str(archive), archive_sha256=digest(archive), operation_id=str(uuid.uuid4())))
-        assert result["ok"] and result["preview"]
+        activation = request(project, profile, archive=str(archive), archive_sha256=digest(archive), operation_id=str(uuid.uuid4()))
+        review = action("release-plan", activation)
+        assert review["ok"]
+        result = action("activate", {**activation, "plan_token": review["plan_token"]})
+        assert result["ok"]
         from feature_lifecycle import load
         _, entry = host.require_identity(project, profile)
         _, _, inventory, _ = load(host, entry)
@@ -197,8 +200,8 @@ def main():
         _, _, inventory, _ = load(host, entry)
         public_observation(host, topology, profile, inventory=inventory, opened=True)
         for operation in ("down", "up"):
-            refused = run([LAUNCHER, operation], input=json.dumps(request(project, profile)), check=False)
-            assert json.loads(refused.stdout)["error"]["code"] == "capability_unavailable"
+            changed = action(operation, request(project, profile, confirm=True, operation_id=str(uuid.uuid4())))
+            assert changed["maintenance"]["down"] is (operation == "down")
             for unit in inventory.units.values():
                 assert run(["systemctl", "is-active", unit]).stdout.strip() == "active"
             assert run(["systemctl", "show", inventory.units["relay"], "-p", "InvocationID", "--value"]).stdout == second
@@ -207,7 +210,7 @@ def main():
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", "--quiet", unit], check=False).returncode != 0
         public_observation(host, topology, profile)
-        print("PASS feature preview: package, artifact, admission, app binding, public TCP via nginx stream, report, restart, symmetric maintenance refusal and stop closure")
+        print("PASS feature preview: package, artifact, admission, app binding, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
 
 
 if __name__ == "__main__":

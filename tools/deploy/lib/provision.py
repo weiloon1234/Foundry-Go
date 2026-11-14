@@ -252,6 +252,12 @@ def _provision_environment(host, registry, entry, credentials):
     elif "configuration" in entry["provisioning"]["completed_steps"]:
         raise DeployError("configuration_missing", "Server-owned runtime configuration is missing; restore it explicitly.")
     if "configuration" not in entry["provisioning"]["completed_steps"]:
+        from runtime_config import stage_service_secrets, select_service_secrets
+        from topology import parse_topology
+        topology = parse_topology(entry["topology"], registered="sha256" in entry["topology"])
+        if topology.schema == 2:
+            paths = stage_service_secrets(host, entry, topology, credentials.get("configuration") or {})
+            select_service_secrets(host, entry, paths)
         values = runtime_environment(entry, credentials, postgres_port=registry["shared"]["postgresql"]["port"])
         reserve_runtime_storage(registry, entry, values, lambda value: _read_value_file(host, entry, value))
         _journal(host, registry, entry)
@@ -401,8 +407,6 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
         capability()
         parsed = parse_topology({k: v for k, v in topology.items() if k != "sha256"})
         placed = parse_profile(bound, parsed)
-        from feature_lifecycle import validate_preview
-        validate_preview(parsed)
     observations = {"packages": packages.inspect(host, package_topology(parsed), placed) if feature else packages.inspect(host), "postgresql": postgres.inspect(host, registry),
                     "redis": redis_acl.inspect(host, registry), "certificate": certificates.inspect(host, entry)}
     if "uploads" in profile:
@@ -420,12 +424,20 @@ def bootstrap_plan(host, project, profile, tools_dir=None, *, topology):
         findings.append({"kind": "change", "code": "feature_network_prerequisites",
                          "detail": "Install the stream include, closed HTTP gate and pre-nginx boot coordinator; new nginx uses its pristine reviewed package configuration. Public TCP adoption reloads UFW and closes other feature runtime allows; they require their own healthy restart to reopen.",
                          "persistent_projection": observations["network"]["persistent_projection"]})
+    if feature:
+        from runtime_config import service_secret_requirements, service_secret_snapshot
+        observations["required_service_secrets"] = service_secret_requirements(parsed, placed,
+            service_secret_snapshot(host, entry) if existing else {})
     upgrade = upgrades.tools_upgrade(host, registry, tools_dir)
     if upgrade and upgrade["from_digest"] is not None:
         findings.append({"kind": "stop", "code": "host_upgrade_required", "detail": "Apply a separate reviewed tool upgrade first."})
     digest_input = {"host": snapshot, "profile": bound, "topology": topology, "project": project,
                     "revision": registry["revision"], "observations": observations, "bundle": upgrades.tool_bundle(tools_dir)[2]}
     token = hashlib.sha256(json.dumps(digest_input, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if feature:
+        import listeners
+        # Informational DNS is outside the approved host-effect preconditions.
+        observations["dns"] = [listeners.external_dns(binding, listeners.observe_dns(binding)) for _, binding in placed.listeners]
     return {"ok": not upgrade or upgrade["from_digest"] is None, "host": snapshot, "host_id": host_id, "entry": entry,
             "findings": findings, "observations": observations, "plan_token": token}
 
