@@ -97,9 +97,9 @@ def service_coverage(inventory):
         if role.state.kind == "local-unprotected":
             findings.append({"code": "service_state_unprotected", "role": name})
         elif role.state.kind == "external":
-            # The v0.31.0 StatePolicy has no recovery-owner field. Never invent an owner.
-            state["recovery_owner"] = None
-            findings.append({"code": "service_state_external_owner_required", "role": name})
+            state["recovery_owner"] = role.state.recovery_owner
+            if role.state.recovery_owner is None:
+                findings.append({"code": "service_state_external_owner_required", "role": name})
         states.append(state)
     return {"supported_components": ["postgresql", "encrypted_configuration", "selected_deployment"],
             "complete_instance_coverage": not findings, "service_state": states, "findings": findings}

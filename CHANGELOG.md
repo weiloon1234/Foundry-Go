@@ -12,8 +12,12 @@
   DNS-only change instructions after confirmed stop and private health. Unsafe
   HTTP rehearsal dependencies and unprotected local-state takeover refuse by role.
   Public feature dispatch remains gated. Recovery also awaits lane A's closed
-  preparation, activation and readiness interfaces; external recovery-owner and
-  rehearsal-safe topology contracts remain pending.
+  preparation, activation and readiness interfaces.
+- Added: typed external-state `recovery_owner` labels and the custom-role boolean
+  `recovery_rehearsal_safe`. Receipts retain the declared external owner, and
+  rehearsal plans admit only opted-in custom HTTP prerequisites. Omitted fields
+  preserve existing declaration digests and conservative defaults. The recovery
+  handoff records dispatcher integration and lane A's required isolation checks.
 
 ## v0.31.0 — 2026-11-14
 

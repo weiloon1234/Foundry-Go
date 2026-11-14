@@ -23,7 +23,8 @@ LABEL = "20261101-020000F"
 RECIPIENT = "age1" + "a" * 58
 
 
-def feature_fixture(*, state="disposable", secret=False, http_dependency=False, public=False):
+def feature_fixture(*, state="disposable", secret=False, http_dependency=False, public=False,
+                    recovery_owner=None, rehearsal_safe=None, background_dependency=False):
     import contracts as c
     import services
     import topology as t
@@ -34,12 +35,19 @@ def feature_fixture(*, state="disposable", secret=False, http_dependency=False, 
     raw.pop("sha256", None)
     relay = raw["roles"][1]
     relay["state"] = {"kind": state, **({"acknowledged": True} if state == "local-unprotected" else {})}
+    if recovery_owner is not None:
+        relay["state"]["recovery_owner"] = recovery_owner
+    if rehearsal_safe is not None:
+        relay["recovery_rehearsal_safe"] = rehearsal_safe
     if secret:
         raw["secrets"] = {"relay-token": {"prompt": "Relay token"}}
         relay["secret_files"] = {"TOKEN_FILE": "relay-token"}
     if http_dependency:
         raw["roles"][0]["requires"] = ["relay"]
         relay["requires"] = []
+    if background_dependency:
+        relay["requires"] = ["worker"]
+        raw["roles"][2]["requires"] = []
     placed = inventory.profile.projection()
     if public:
         relay["listeners"]["ingress"] = declaration()["roles"][1]["listeners"]["ingress"]
@@ -69,6 +77,19 @@ def feature_fixture(*, state="disposable", secret=False, http_dependency=False, 
 
 
 class BackupTests(unittest.TestCase):
+    def test_external_state_receipt_names_declared_recovery_owner(self):
+        inventory, entry, snapshot = feature_fixture(state="external", recovery_owner="media-operations")
+        parsed = backup.parse_feature_snapshot(snapshot, entry)
+        self.assertEqual(parsed.roles["relay"].state.recovery_owner, "media-operations")
+        coverage = backup.service_coverage(inventory)
+        self.assertEqual(coverage["service_state"], [{"role": "relay", "kind": "external", "recovery_owner": "media-operations"}])
+        self.assertTrue(coverage["complete_instance_coverage"])
+        self.assertEqual(coverage["findings"], [])
+        keys = {"status": "complete", "coverage": coverage, "deployment_sha256": backup.canonical_digest(snapshot["deployment"])}
+        with patch.object(backup, "archive_keys", return_value=keys):
+            receipt = backup._complete(self.host, entry, str(uuid.uuid4()), {"pgbackrest_label": LABEL, "completed_at": now()})
+        self.assertEqual(receipt["coverage"]["service_state"], coverage["service_state"])
+
     def test_feature_coverage_distinguishes_supported_components_and_local_state(self):
         for kind, complete, code in (("disposable", True, None),
                                      ("external", False, "service_state_external_owner_required"),

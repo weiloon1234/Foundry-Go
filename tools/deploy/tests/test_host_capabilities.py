@@ -88,6 +88,74 @@ def closure():
 
 
 class CapabilityTopologyTests(unittest.TestCase):
+    def test_external_recovery_owner_is_typed_frozen_and_preserved(self):
+        raw = declaration()
+        raw["roles"][1]["state"] = {"kind": "external", "recovery_owner": "Media operations / object-store recovery"}
+        parsed = t.parse_topology(raw)
+        state = parsed.roles[1].state
+        self.assertEqual(state.recovery_owner, "Media operations / object-store recovery")
+        self.assertFalse(state.acknowledged)
+        self.assertEqual(parsed.projection(), raw)
+        self.assertEqual(t.parse_topology({**parsed.projection(), "sha256": parsed.sha256}, registered=True), parsed)
+        with self.assertRaises(FrozenInstanceError):
+            state.recovery_owner = "another owner"
+        raw["roles"][1]["state"]["recovery_owner"] = "another owner"
+        self.assertNotEqual(t.parse_topology(raw).sha256, parsed.sha256)
+        self.assertEqual(state.recovery_owner, "Media operations / object-store recovery")
+
+    def test_external_recovery_owner_is_bounded_and_external_only(self):
+        for owner in (None, True, 42, {}, [], "", " ", " owner", "owner ", "owner\nsecret", "x" * 257,
+                      "é" * 129, "\ud800"):
+            with self.subTest(owner=repr(owner)), self.assertRaises(c.DeployError):
+                t.StatePolicy.parse({"kind": "external", "recovery_owner": owner})
+        for state in ({"kind": "disposable"}, {"kind": "local-unprotected", "acknowledged": True}):
+            with self.subTest(state=state), self.assertRaises(c.DeployError):
+                t.StatePolicy.parse({**state, "recovery_owner": "media-operations"})
+        for state in ({"kind": "external", "recovery_owner": "media-operations", "unknown": True},
+                      {"kind": "external", "recovery_owner": "media-operations", "acknowledged": True}):
+            with self.assertRaises(c.DeployError):
+                t.StatePolicy.parse(state)
+        self.assertEqual(t.StatePolicy.parse({"kind": "external", "recovery_owner": "x" * 256}).recovery_owner, "x" * 256)
+
+    def test_recovery_fields_default_without_rewriting_archived_declarations(self):
+        raw = declaration()
+        raw["roles"][1]["state"] = {"kind": "external"}
+        parsed = t.parse_topology(raw)
+        self.assertIsNone(parsed.roles[1].state.recovery_owner)
+        self.assertFalse(parsed.roles[1].recovery_rehearsal_safe)
+        self.assertEqual(parsed.projection(), raw)
+        self.assertEqual(parsed.sha256, c.canonical_digest(raw))
+
+    def test_rehearsal_safety_is_strict_boolean_custom_role_opt_in(self):
+        raw = declaration()
+        original = t.parse_topology(raw)
+        for value in (False, True):
+            raw["roles"][1]["recovery_rehearsal_safe"] = value
+            parsed = t.parse_topology(raw)
+            self.assertIs(parsed.roles[1].recovery_rehearsal_safe, value)
+            self.assertEqual(parsed.projection(), raw)
+            self.assertNotEqual(parsed.sha256, original.sha256)
+            self.assertEqual(t.parse_topology({**parsed.projection(), "sha256": parsed.sha256}, registered=True), parsed)
+            with self.assertRaises(FrozenInstanceError):
+                parsed.roles[1].recovery_rehearsal_safe = not value
+        for value in (None, 0, 1, "true", "false", [], {}):
+            raw["roles"][1]["recovery_rehearsal_safe"] = value
+            with self.subTest(value=value), self.assertRaises(c.DeployError):
+                t.parse_topology(raw)
+        for name in ("http", "worker", "scheduler"):
+            for value in (False, True):
+                builtin = {"schema": 2, "roles": [{"name": "http", "kind": "builtin"}]}
+                if name != "http":
+                    builtin["roles"].append({"name": name, "kind": "builtin"})
+                builtin["roles"][-1]["recovery_rehearsal_safe"] = value
+                with self.subTest(name=name, value=value), self.assertRaises(c.DeployError):
+                    t.parse_topology(builtin)
+        raw = declaration()
+        raw["roles"][1]["recovery_rehearsal_safe"] = True
+        raw["roles"][1]["recovery_rehearsal_safee"] = True
+        with self.assertRaises(c.DeployError):
+            t.parse_topology(raw)
+
     def test_secret_file_arguments_use_declared_environment_keys(self):
         raw = declaration()
         raw["secrets"] = {"token": {"prompt": "Service token"}}

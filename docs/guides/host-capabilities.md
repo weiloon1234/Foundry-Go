@@ -81,9 +81,10 @@ A bundle's `status: complete` means its supported backup components succeeded.
   blocks complete coverage. Takeover refuses these roles until an explicit local
   state restoration contract exists. Acknowledging the state policy is not proof
   of restoration.
-- `external` records an unknown recovery owner and
-  `service_state_external_owner_required`. The current `StatePolicy` cannot name
-  that owner, so complete coverage remains false. No external state is copied.
+- `external` records its declared `recovery_owner`. Naming the owner delegates
+  recovery of that state; it does not claim Foundry copied or restored it. Older
+  declarations without an owner retain `service_state_external_owner_required`
+  and cannot claim complete coverage.
 
 Configuration-only receipts never claim complete instance coverage. Database
 restore drills use an isolated PostgreSQL Unix socket, start no custom services,
@@ -92,9 +93,10 @@ recovery, key decryption or application invariants.
 
 Recovery rehearsal selects HTTP and its prerequisite closure. Custom roles outside
 that closure remain stopped. An unsafe prerequisite refuses with
-`recovery_rehearsal_dependency` and its role name. The current topology parser has
-no `recovery_rehearsal_safe` field; no custom HTTP prerequisite is admitted yet.
-Future admission must also prove private listeners and restricted external access.
+`recovery_rehearsal_dependency` and its role name. A custom HTTP prerequisite must
+declare `recovery_rehearsal_safe: true`; the default is false. Built-in background
+dependencies remain refused. Lane A must also prove private listeners and
+restricted external access before starting the selected rehearsal roles.
 
 The recovery owner accepts the existing typed `RecoveryPublicBinding` through its
 `recovery_public_binding` argument. It requires every source public listener,
@@ -107,29 +109,11 @@ DNS-only A/AAAA instructions. `external_pending` and `external_observed` are
 separate from host readiness. Recursive answers never prove provider ownership or
 complete traffic cutover, and the tool makes no application DNS writes.
 
-The following integration remains refused in this lane:
-
-- `upgrades._check_feature_request` must admit backup configuration/run and drills
-  before those public commands reach their owners. Recovery must continue through
-  the capability checks in `recover.plan`.
-- `manage.py` and the client must pass the reviewed `recovery_public_binding` to
-  plan and apply, then persist the explicit successful takeover `profile_update`.
-- Lane A must supply `feature_lifecycle.prepare_recovery(host, registry, entry,
-  journal, snapshot, archive, checksum, tools_dir)`. It must verify the exact
-  release declaration and commit, install its packages and artifacts, restore
-  runtime permissions, and prepare units with public admission closed. Feature
-  configuration is initially restored root-private, including historical secret
-  snapshots; the adapter must assign access through the configuration owner. It must
-  leave roles stopped and retain resumable operation evidence.
-- `activate_recovery(host, registry, entry, journal)` must use that prepared
-  selection, start only `journal["intent"]["recovery_roles"]` in dependency order,
-  and return its release version. Takeover reaches this seam only after the
-  old-server-stopped confirmation. Rehearsal must enforce network isolation and
-  keep every other role stopped. Failure cleanup belongs to this lifecycle owner.
-- `recovery_ready(host, entry, journal)` must return `True` only for the exact
-  selected release with current private health and the required admission or
-  rehearsal isolation evidence. These three functions are required together;
-  recovery refuses before provisioning if any is missing.
+Public dispatch remains gated until integration. Recovery additionally requires
+lane A's `prepare_recovery`, `activate_recovery` and `recovery_ready` callbacks;
+it refuses before provisioning if any is missing. The
+[recovery handoff](../../tools/deploy/tests/RECOVERY_HANDOFF.md) owns the exact
+dispatcher changes, callback signatures, call order and evidence requirements.
 
 <a id="recipe-declarations"></a>
 ## Declaration ownership
@@ -334,7 +318,13 @@ paths under `deploy/bin/`.
   declarations cannot inject systemd directives or a shell wrapper.
 - **State:** required `kind` is `disposable`, `external`, or `local-unprotected`.
   The last additionally requires `acknowledged: true`; the others omit it.
+  Only `external` accepts `recovery_owner`, a public label of at most 256 UTF-8
+  bytes, with no controls or surrounding whitespace. Omission preserves older
+  declarations but blocks a complete-coverage claim. Null and empty labels refuse.
   This declaration does not turn service-local state into a backup guarantee.
+- **Recovery rehearsal:** custom executable roles may declare the strict boolean
+  `recovery_rehearsal_safe`, default false. It allows planning an HTTP prerequisite
+  under isolation; it neither starts unrelated roles nor authorizes public exposure.
 - **Maintenance:** `serve` or `stop`; default `serve` for HTTP, `stop` otherwise.
   This records intended later behavior; both preview maintenance actions refuse.
 - **Dependencies:** `requires` names role prerequisites and must be acyclic.

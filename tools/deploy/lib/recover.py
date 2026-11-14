@@ -77,8 +77,7 @@ def rehearsal_roles(inventory):
     selected = {"http"} | inventory.prerequisites({"http"})
     for name in sorted(selected - {"http"}):
         role = inventory.roles[name]
-        # The typed declaration must own opt-in. v0.31.0 has no such field.
-        require(isinstance(role, ExecutableRole) and getattr(role, "recovery_rehearsal_safe", False) is True,
+        require(isinstance(role, ExecutableRole) and role.recovery_rehearsal_safe,
                 "recovery_rehearsal_dependency", f"HTTP recovery rehearsal requires unsafe dependency {name}; it remains stopped.")
     return inventory.start_order(selected)
 

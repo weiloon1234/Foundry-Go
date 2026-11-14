@@ -147,6 +147,32 @@ class RecoveryTests(unittest.TestCase):
             self.plan(recovery_public_binding=self.binding(metadata))
         self.assertEqual(error.exception.code, "recovery_public_binding")
 
+    def test_safe_http_dependency_is_selected_but_still_requires_lane_a_isolation(self):
+        inventory, _ = self.feature(http_dependency=True, rehearsal_safe=True, public=True)
+        self.assertEqual(recover.rehearsal_roles(inventory), ("relay", "http"))
+        with patch.object(self.host, "run") as run, self.assertRaises(DeployError) as error:
+            self.plan()
+        self.assertEqual(error.exception.code, "capability_unavailable")
+        run.assert_not_called()
+        with patch.object(recover, "_feature_owner", return_value=Mock()):
+            approved = self.plan()
+        self.assertEqual(approved["recovery_roles"], ["relay", "http"])
+        self.assertIsNone(approved["recovery_public_binding"])
+
+    def test_safe_custom_role_does_not_admit_background_dependency_or_unneeded_role(self):
+        from test_backup import feature_fixture
+        inventory, _, _ = feature_fixture(http_dependency=True, rehearsal_safe=True, background_dependency=True)
+        with self.assertRaises(DeployError) as error:
+            recover.rehearsal_roles(inventory)
+        self.assertEqual(error.exception.code, "recovery_rehearsal_dependency")
+        self.assertIn("worker", error.exception.detail)
+        inventory, _, _ = feature_fixture(rehearsal_safe=True)
+        self.assertEqual(recover.rehearsal_roles(inventory), ("http",))
+        inventory, _, _ = feature_fixture(http_dependency=True, rehearsal_safe=False)
+        with self.assertRaises(DeployError) as error:
+            recover.rehearsal_roles(inventory)
+        self.assertIn("relay", error.exception.detail)
+
     def test_public_override_is_explicit_bound_and_does_not_rewrite_source(self):
         _, metadata = self.feature(public=True)
         binding = self.binding(metadata)
