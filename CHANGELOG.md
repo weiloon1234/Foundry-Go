@@ -11,6 +11,12 @@
   Unsafe encodings and persistent `seed-once` templates refuse. Existing private
   secret intake and rotation remain authoritative. This capability requires deploy
   generation 14 and retains that client floor after application rollback.
+- Added: public listener bindings through `public_listener` role/listener declarations
+  and `deployment.Bindings.PublicListener`. Applications receive the profile-owned
+  hostname, public port and addresses with topology-owned TLS mode and transport.
+  Bindings reject private or unplaced listeners, retain immutable startup snapshots,
+  and restart consumers when changed. Requires deploy tool generation 14. Existing
+  bindings and descriptors without public listener bindings remain compatible.
 
 ## v0.32.0 — 2026-11-14
 

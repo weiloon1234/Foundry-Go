@@ -29,6 +29,8 @@ class HostCapabilitiesGuideTests(unittest.TestCase):
         self.assertEqual(roles["http"]["packages"], ["jq"])
         self.assertEqual(roles["http"]["bindings"]["json"],
                          {"executable": {"package": "jq", "path": "/usr/bin/jq"}})
+        self.assertEqual(roles["http"]["bindings"]["relay_public"],
+                         {"public_listener": {"role": "relay", "listener": "ingress"}})
         self.assertEqual(roles["relay"]["requires"], [])
         self.assertEqual(roles["relay"]["bindings"]["authorization"]["endpoint"],
                          {"role": "http", "listener": "http", "scheme": "http"})

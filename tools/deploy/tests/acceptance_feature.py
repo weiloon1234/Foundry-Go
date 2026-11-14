@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in host-capability scenario inside the existing disposable harness.
+"""Opt-in generation-14 templates and bindings in the disposable harness.
 
 Use the ordinary deploy-acceptance archive. The artifact is a second, pinned copy
 of that fixture's Linux artisan binary; no artifact network download is needed.
@@ -98,6 +98,13 @@ def assert_listener_report(result, entry):
                    for f in value["findings"])
 
 
+def assert_public_listener_binding(inventory, profile):
+    public, = inventory.specs["http"].bindings.public_listeners
+    assert (public.name, public.role, public.listener, public.hostname, public.port, public.tls, public.transport,
+            public.public_addresses) == ("relay_public", "relay", "control", "relay." + profile["domain"],
+                                         PORT, "none", "tcp", tuple(network.ADDRESSES))
+
+
 def assert_secret_template(host, inventory, entry, secret):
     paths = services.ServicePaths.for_unit(inventory.specs["relay"].identity, inventory.resolution.id)
     config = Path(paths.config("private", "rendered-template", "relay.yaml"))
@@ -143,6 +150,7 @@ def feature_archive(source, destination, host_id):
     topology = parse_topology({"schema": 2, "roles": [
         {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["jq"],
          "bindings": {"relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
+                      "relay_public": {"public_listener": {"role": "relay", "listener": "control"}},
                       "checksum": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}}},
         {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
          "arguments": [{"literal": "feature:relay"}, {"listener_address": "control"}, {"listener_port": "control"}],
@@ -217,11 +225,11 @@ def main():
         from feature_lifecycle import load
         _, entry = host.require_identity(project, profile)
         _, _, inventory, _ = load(host, entry)
+        assert_public_listener_binding(inventory, profile)
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", unit]).stdout.strip() == "active"
         first_config = assert_secret_template(host, inventory, entry, secret)
-        # HTTP readiness calls the relay using deployment.LoadBindings, proving app delivery.
-        import services
+        # The fixture loads both private and public bindings before HTTP readiness.
         import time
         assert services.wait_ready(host, inventory, "http", time.monotonic() + 90)
         public_observation(host, topology, profile, inventory=inventory, opened=True)
@@ -234,6 +242,7 @@ def main():
         assert services.wait_ready(host, inventory, "http", time.monotonic() + 90)
         _, entry = host.require_identity(project, profile)
         _, _, inventory, _ = load(host, entry)
+        assert_public_listener_binding(inventory, profile)
         assert assert_secret_template(host, inventory, entry, secret) != first_config, "Restart reused a prepared template"
         public_observation(host, topology, profile, inventory=inventory, opened=True)
         for operation in ("down", "up"):
@@ -247,7 +256,7 @@ def main():
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", "--quiet", unit], check=False).returncode != 0
         public_observation(host, topology, profile)
-        print("PASS host capabilities: package, artifact, admission, private template, app binding, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
+        print("PASS host capabilities: package, artifact, admission, private template, private/public app bindings, public TCP via nginx stream, report, restart, maintenance continuity and stop closure")
 
 
 if __name__ == "__main__":

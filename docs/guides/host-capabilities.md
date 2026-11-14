@@ -13,9 +13,10 @@ applications and generation 9–12 hosts keep their existing behavior. Upgrade t
 before using release 1 capabilities. The v0.31.0 generation-12 preview remains
 supported by its installed tools. Enablement adoption and release 1 transitions set a sticky
 generation-13 client floor, including after application rollback. The application
-binding API is unchanged from v0.31.0. Configuration templates require generation
-14 and set a sticky generation-14 client floor, including after rollback to a
-release without templates.
+declarations and existing binding API remain compatible. Configuration templates
+and public listener bindings, added in v0.33.0, require generation 14 and set a
+sticky generation-14 client floor, including after rollback to a release without
+either capability.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
 
@@ -268,6 +269,7 @@ callback, because the app starts after the relay.
       "maintenance": "continue",
       "bindings": {
         "relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
+        "relay_public": {"public_listener": {"role": "relay", "listener": "ingress"}},
         "json": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}
       }
     },
@@ -452,6 +454,9 @@ paths under `deploy/bin/`.
   an artifact/application executable reference under `executable`, or a bundle
   reference. Endpoint schemes are `http` and `tcp`; builtin HTTP's listener name
   is `http`. An enabled consumer cannot bind an unplaced endpoint producer.
+  `{"public_listener":{"role":"relay","listener":"ingress"}}` supplies a
+  public listener record through the runtime descriptor. It has no implicit argv
+  or environment conversion and requires generation 14.
 
 Custom `configs` map names to `source` under `deploy/files/` and `mode`:
 `immutable`, `seed-once`, `recreate`, `rendered-json`, or `rendered-template`. Per-start preparation
@@ -703,14 +708,16 @@ and deployment digest, plus schema-1 role bindings. Do not write or discover thi
 file yourself. It is invocation-specific; private HTTP allocation is selected
 with the journaled effective environment, not guessed from the profile.
 
-This consumer fixture loads the two HTTP-role bindings from the worked example:
+This consumer fixture loads the three HTTP-role bindings from the worked example:
 
 <!-- compiled-source: tests/fixtures/consumer/hostcapabilities/bindings.go#host-capability-bindings -->
 ```go
-// RelayDependencies contains the private control endpoint and tool used by the app.
+// RelayDependencies contains the relay addresses and tool used by the app.
 type RelayDependencies struct {
 	// Control addresses the relay's private HTTP control listener.
 	Control deployment.Endpoint
+	// Public describes the relay's profile-selected public listener.
+	Public deployment.PublicListener
 	// JSON is the package-owned jq executable for JSON processing.
 	JSON deployment.Executable
 }
@@ -730,7 +737,11 @@ func LoadRelayDependencies() (dependencies RelayDependencies, present bool, err 
 	if err != nil {
 		return RelayDependencies{}, true, err
 	}
-	return RelayDependencies{Control: control, JSON: jsonTool}, true, nil
+	public, err := bindings.PublicListener("relay_public")
+	if err != nil {
+		return RelayDependencies{}, true, err
+	}
+	return RelayDependencies{Control: control, Public: public, JSON: jsonTool}, true, nil
 }
 ```
 
@@ -740,6 +751,26 @@ the URL API. `JSON.Path` is an absolute verified path, not a PATH lookup;
 execute it with an argument vector when the application needs jq for JSON processing.
 `Executable` also carries `SHA256`. `Bundle(name)` returns a `BundleDirectory`
 with its service-local `Path` and `SHA256`.
+
+`PublicListener(name)` returns the declared role and listener, profile-owned
+`Hostname`, public `Port`, and `PublicAddresses`, plus topology-owned `TLS` and
+`Transport`. TLS is `deployment.TLSEdge` or `deployment.TLSNone`; transport is
+`deployment.TCPTransport`. The application chooses its protocol scheme, such as
+`rtsp`, and constructs a URL with `net.JoinHostPort` and `net/url`.
+The binding contains no secrets and does not assert current readiness or grant
+access. Authentication remains the listener's application responsibility.
+
+The listener must be public and placed. The binding does not add a startup
+prerequisite; declare `requires` when startup must wait for its provider.
+Public listener records are delivered through the runtime descriptor, not scalar
+argv, environment, or rendered-config binding references. Each lookup returns
+an owned address slice. The process retains its startup snapshot, and changed
+bindings restart consumers through the existing deployment lifecycle.
+
+Role-binding schema 1 adds an optional `public_listeners` collection. The writer
+omits it when empty, preserving descriptors and digests for existing bindings.
+A v0.32.0 binary can read a new descriptor that has no public listener bindings.
+Upgrade the consuming binary before declaring a public listener binding.
 
 `LoadBindings` returns `present == false` without error only when the environment
 selector is absent. An explicitly invalid selector or malformed descriptor is an
@@ -756,7 +787,8 @@ role descriptor. Neither loader downloads artifacts nor replaces host verificati
 Use the application's pinned framework tool and the thin Make targets from the
 [deployment invocation guide](deployment.md#recipe-deploy). Feature topology
 requires generation 13 for release 1 operations and generation 14 for configuration
-templates. Use a Foundry-Go pin containing the required tool generation. Use the host's existing profile
+templates or public listener bindings. Use a Foundry-Go pin containing the required
+tool generation. Use the host's existing profile
 to review and apply the forward-only tool upgrade. A deployed generation-12 preview
 keeps its schema-3 profile for `tools-plan`, `tools-apply` and `upgrade-resume`.
 For a legacy host, upgrade before adopting schema 3. Direct upgrades require at
@@ -771,7 +803,7 @@ ENVIRONMENT=production ACTION=tools-apply PLAN_TOKEN='<reviewed-token>' OPERATIO
 Keep the operation UUID for a tool-upgrade resume. Review the plan; the apply
 command asks for confirmation. Tool generation is independent of the framework's
 semantic version: verify the selected bundle reports at least generation 13, or
-generation 14 when using templates, rather than
+generation 14 when using templates or public listener bindings, rather than
 assuming a version label establishes support.
 
 Before bootstrap, prepare the existing SSH, PostgreSQL/Redis and HTTP certificate

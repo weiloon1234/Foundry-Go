@@ -65,6 +65,7 @@ def execute(host, action, request):
         return inspect_host(host)
     project, profile = request.get("project"), request.get("profile")
     identity(project, profile)
+    upgrades.check_target_capabilities(host, request, action)
     if action in ("recover-plan", "recover-apply"):
         import recover
         arguments = {key: request.get(key) for key in ("topology", "mode", "operation_id", "archive_sha256", "target_time", "recovery_public_binding")}

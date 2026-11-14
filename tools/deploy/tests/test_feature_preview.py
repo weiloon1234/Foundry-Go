@@ -148,6 +148,8 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertEqual(placed["schema"], 3)
         self.assertEqual([p.artifact for p in declaration.artifacts], ["relay"])
         self.assertEqual(dict(topology.roles[0].common.bindings)["relay"].role, "relay")
+        public = dict(topology.roles[0].common.bindings)["relay_public"]
+        self.assertEqual((public.role, public.listener), ("relay", "control"))
         from topology import parse_profile
         import listeners
         policy = dict(topology.roles[1].listeners)["control"]

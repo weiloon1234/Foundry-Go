@@ -175,6 +175,12 @@ class EndpointBinding:
 
 
 @dataclass(frozen=True)
+class PublicListenerReference:
+    role: str
+    listener: str
+
+
+@dataclass(frozen=True)
 class ExecutableBinding:
     executable: Executable
 
@@ -184,7 +190,7 @@ class BundleDirectoryBinding:
     mount: str
 
 
-Binding = Union[EndpointBinding, ExecutableBinding, BundleDirectoryBinding]
+Binding = Union[EndpointBinding, ExecutableBinding, BundleDirectoryBinding, PublicListenerReference]
 
 
 def parse_binding(value) -> Binding:
@@ -193,6 +199,9 @@ def parse_binding(value) -> Binding:
         return BundleDirectoryBinding(contract_name(value["bundle"]))
     if "executable" in value:
         return ExecutableBinding(parse_executable(value["executable"]))
+    if "public_listener" in value:
+        listener = contract_object(value["public_listener"], ("role", "listener"))
+        return PublicListenerReference(contract_name(listener["role"]), contract_name(listener["listener"]))
     contract_object(value, ("endpoint",))
     endpoint = contract_object(value["endpoint"], ("role", "listener", "scheme"))
     require(endpoint["scheme"] in ("tcp", "http"), "unsupported_capability", "Unsupported private endpoint scheme.")
@@ -665,6 +674,9 @@ def parse_topology(document, *, registered=False) -> Topology:
                 target = role_map.get(binding.role)
                 listeners = dict(target.listeners) if isinstance(target, ExecutableRole) else {"http": None} if binding.role == "http" else {}
                 require(binding.listener in listeners, "invalid_topology", "Unknown endpoint listener.")
+                if isinstance(binding, PublicListenerReference):
+                    require(isinstance(target, ExecutableRole) and listeners[binding.listener].bind == "public",
+                            "invalid_topology", "Public listener bindings require a declared public listener.")
         destinations = [(m.area, m.path) for m in mounts.values()]
         if isinstance(role, ExecutableRole):
             destinations += [("config", name) for name, _ in role.configs]
@@ -684,6 +696,9 @@ def parse_topology(document, *, registered=False) -> Topology:
                        ArgumentKind.SECRET_FILE: dict(role.secret_files), ArgumentKind.BINDING: dict(role.common.bindings)}
             require(argument.kind not in targets or argument.value in targets[argument.kind],
                     "invalid_topology", "Unknown role argument/config reference.")
+            require(argument.kind is not ArgumentKind.BINDING or
+                    not isinstance(dict(role.common.bindings)[argument.value], PublicListenerReference),
+                    "invalid_topology", "Public listener records are available through the runtime descriptor, not scalar binding arguments.")
     projection = {k: v for k, v in value.items() if k != "sha256"}
     checksum = canonical_digest(projection)
     require(not registered or value["sha256"] == checksum, "invalid_topology", "Topology checksum mismatch.")
@@ -771,9 +786,9 @@ def parse_profile(document, topology: Topology, project=None) -> DeploymentProfi
         for role in topology.roles:
             require(not counts[role.common.name] or all(counts[d] for d in role.common.requires),
                     "invalid_profile", "Placed role prerequisites must be placed.")
-            require(not counts[role.common.name] or all(not isinstance(b, EndpointBinding) or counts[b.role]
+            require(not counts[role.common.name] or all(not isinstance(b, (EndpointBinding, PublicListenerReference)) or counts[b.role]
                                                        for _, b in role.common.bindings),
-                    "invalid_profile", "A placed consumer cannot bind an unplaced endpoint.")
+                    "invalid_profile", "A placed consumer cannot bind an unplaced listener.")
         raw = value["listeners"]
         expected = {r.common.name + "." + n for r in topology.roles if isinstance(r, ExecutableRole)
                     and counts[r.common.name] for n, l in r.listeners if l.bind == "public"}
