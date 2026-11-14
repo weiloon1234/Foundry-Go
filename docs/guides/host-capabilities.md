@@ -16,7 +16,9 @@ generation-13 client floor, including after application rollback. The applicatio
 declarations and existing binding API remain compatible. Configuration templates
 and public listener bindings, added in v0.33.0, require generation 14 and set a
 sticky generation-14 client floor, including after rollback to a release without
-either capability.
+either capability. Unix listeners and endpoint bindings require generation 15 and
+set a sticky generation-15 floor. Upgrade both the host tools and deploy client
+before using them.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
 
@@ -25,6 +27,7 @@ identity, HTTP certificates and the ordinary application release layout.
 
 - [Check release 1 capabilities and limitations](#recipe-preview)
 - [Declare the app and relay](#recipe-declarations)
+- [Connect a Wayland compositor and consumer](#recipe-unix-sockets)
 - [Load application bindings](#recipe-bindings)
 - [Prepare and operate the host](#recipe-host)
 
@@ -400,19 +403,23 @@ paths under `deploy/bin/`.
 - **Argv:** `arguments` is a list of single-tag objects, each one argument; it is
   not a shell command. `literal` does not interpolate variables. `listener_address`
   and `listener_port` refer to that role's listener. `binding` names a declared
-  binding and supplies an executable path, bundle path or endpoint URL. `config`
+  binding and supplies an executable path, bundle path, TCP/HTTP endpoint URL or Unix
+  socket path. `config`
   names a declared configuration. `state_path` and `runtime_path` contain relative
   paths; `config_root`, `data_root` and `copy_number` use the value `self` (the
   only copy is 1). `secret_file` supplies a private file path, never secret bytes.
   Maximum 128 arguments, 32 KiB combined values, 4096 bytes per literal.
-- **Listeners:** only TCP; `bind` is `loopback` or `public`. Loopback listeners
+- **Listeners:** TCP uses `bind: "loopback"` or `"public"`. Loopback listeners
   omit `tls` and `authentication`. Public listeners require `tls: "edge"` or
   `"none"` and `authentication: true`. A public declaration still uses a private
-  service backend. Its public address is owned by the profile and nginx.
-- **Readiness:** one local `tcp` or `http` probe naming a declared listener.
+  service backend. Its public address is owned by the profile and nginx. Unix
+  listeners use `{"transport":"unix","socket":"wl0"}` and are always private;
+  they have no `bind`, `tls` or `authentication` fields or profile listener entry.
+- **Readiness:** one local `tcp`, `http` or `unix` probe naming a declared listener
+  of the matching transport. Unix readiness connects to its declared path socket.
   `timeout_seconds` is 1–300 (default 30). HTTP requires a local `path` without
   query/fragment and a 200–299 `status`; optional `body` is at most 1024 bytes.
-  TCP probes have no HTTP fields. Command and remote probes are not supported.
+  TCP and Unix probes have no HTTP fields. Command and remote probes are not supported.
   Opening also checks the complete enabled set's identities, probes and stability.
 - **Restart:** required `policy` (`on-failure`, `always`, `no`), `delay_seconds`
   (1–300), and `burst` (1–20). Optional `window_seconds` is 1–3600 (default 60);
@@ -448,11 +455,12 @@ paths under `deploy/bin/`.
 - **Dependencies:** `requires` names role prerequisites and must be acyclic.
   Defaults are `[]`, except scheduler/worker default to `["http"]`. Enabled roles
   require enabled prerequisites. Executable and endpoint bindings resolve values;
-  they do not implicitly start a service or add a dependency edge.
+  they do not implicitly start a service or add a dependency edge. Unix endpoint
+  consumers must explicitly include the provider in `requires`.
 - **Bindings:** each name selects `{"endpoint":{"role":"relay","listener":"control","scheme":"http"}}`,
   `{"executable":{"package":"jq","path":"/usr/bin/jq"}}`,
   an artifact/application executable reference under `executable`, or a bundle
-  reference. Endpoint schemes are `http` and `tcp`; builtin HTTP's listener name
+  reference. Endpoint schemes are `http`, `tcp` and `unix`; builtin HTTP's listener name
   is `http`. An enabled consumer cannot bind an unplaced endpoint producer.
   `{"public_listener":{"role":"relay","listener":"ingress"}}` supplies a
   public listener record through the runtime descriptor. It has no implicit argv
@@ -465,6 +473,106 @@ Only `recreate` and `rendered-json` accept `bindings`, a map from JSON pointers 
 typed listener address/port, bundle, binding or copy-number values. Do not insert
 secrets here. Custom `environment` is an explicit map of nonsecret typed argv
 values; reserved process/application names and `_FILE` names are rejected.
+
+<a id="recipe-unix-sockets"></a>
+### Unix socket listeners
+
+To connect a headless Wayland compositor to a consumer such as OBS, add this role
+to your topology's `roles` and set `placement.compositor` to `1` in the profile.
+Keep the required builtin `http` role. The executable package must be available
+on the host's distribution; bootstrap installs declared packages.
+
+```json
+{
+  "name": "compositor",
+  "kind": "executable",
+  "packages": ["weston"],
+  "executable": {"package": "weston", "path": "/usr/bin/weston"},
+  "arguments": [
+    {"literal": "--backend=headless"},
+    {"literal": "--renderer=pixman"},
+    {"literal": "--socket"},
+    {"listener_socket_name": "wl0"}
+  ],
+  "environment": {"XDG_RUNTIME_DIR": {"listener_socket_directory": "wl0"}},
+  "listeners": {"wl0": {"transport": "unix", "socket": "wl0"}},
+  "readiness": {"kind": "unix", "listener": "wl0", "timeout_seconds": 30},
+  "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
+  "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64},
+  "maintenance": "continue",
+  "state": {"kind": "disposable"}
+}
+```
+
+Add these fields to the consuming role, retaining its executable, arguments,
+configuration, readiness, restart, limits and state declarations. Merge existing
+`requires`, `bindings` and `environment` entries. For OBS, prepare its own settings
+and control listener separately; this binding supplies its Wayland connection.
+
+```json
+{
+  "requires": ["compositor"],
+  "bindings": {
+    "display": {"endpoint": {"role": "compositor", "listener": "wl0", "scheme": "unix"}}
+  },
+  "environment": {
+    "QT_QPA_PLATFORM": {"literal": "wayland"},
+    "XDG_RUNTIME_DIR": {"binding_socket_directory": "display"},
+    "WAYLAND_DISPLAY": {"binding_socket_name": "display"}
+  }
+}
+```
+
+Both processes run as the instance account. The framework owns
+`/run/foundry/services/<instance UUID>/sockets`; its protected parent prevents the
+application from replacing that directory. The directory belongs to the instance
+account with mode `0700`. Unit staging creates the mount target, and every admitted
+start creates or verifies the directory before dispatch. Only roles providing or
+binding a Unix listener receive its `ReadWritePaths` entry, including builtin
+consumers. `PrivateTmp`, `ProtectSystem` and address-family restrictions stay in
+place. Roles in an instance share an account and are not isolated from each other.
+
+The following references work in argv and explicit nonsecret environment entries:
+
+| Provider reference (value is listener name) | Consumer reference (value is binding name) | Result |
+| --- | --- | --- |
+| `listener_socket_directory` | `binding_socket_directory` | Shared socket directory |
+| `listener_socket_name` | `binding_socket_name` | Socket file name, such as `wl0` |
+| `listener_socket_path` | `binding_socket_path` | Full absolute socket path |
+
+Socket names contain 1–32 ASCII letters, digits, dots, underscores or hyphens,
+starting with a letter or digit. Names must be unique across the instance's roles.
+Paths, abstract sockets, slashes, traversal and public Unix bindings are refused.
+Unix listeners allocate no TCP ports and create no firewall or nginx rules.
+`listener_address` and `listener_port` remain TCP-only.
+
+Before starting a provider, preparation examines only its declared socket names
+without following links. It removes a socket only after a bounded connection
+attempt reports connection refused. A live socket, uncertain liveness, a regular
+file, a directory or a symlink fails the start and is retained for inspection.
+Other names are untouched. Both readiness and stale-socket liveness run in a
+bounded helper as the instance account. Root reads the helper source from the
+verified bundle and passes it to the isolated Python process, so the instance
+account does not need access to the bundle directory. The helper opens the directory
+and socket leaf without following symlinks, then connects to the pinned socket inode. Readiness
+also checks the connected peer's UID and unit cgroup, holding a kernel peer pidfd
+to reject exit or PID reuse during inspection. Missing kernel support or uncertain
+peer identity fails readiness; there is no privileged connection fallback. The
+existing process identity, listener ownership and stability checks still apply.
+Tool-driven startup waits for the provider before starting its dependent; boot
+ordering and automatic restarts retain the existing dependency semantics.
+
+`deployment.Bindings.Endpoint` returns a Unix endpoint with `Scheme == deployment.Unix`,
+`Network() == "unix"`, `Path`, `Directory` and `Name`; `Address` and `Port` are zero.
+Its `URL()` is `unix:///...`. Existing TCP/HTTP endpoints retain their address,
+port and URL behavior. See the compiled consumer source in
+[`hostcapabilities/unix.go`](../../tests/fixtures/consumer/hostcapabilities/unix.go).
+
+Unix endpoint bindings count as maintenance prerequisites. A continuing consumer
+cannot depend on a provider declared to stop. Backups retain the declarations and
+binding records, but never archive the runtime socket directory or its contents.
+Recovery prepares a fresh directory and starts providers through the same readiness
+path. The generation-15 floor survives rollback and recovery.
 
 ### Secret configuration templates
 

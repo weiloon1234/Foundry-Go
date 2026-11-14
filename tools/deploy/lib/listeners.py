@@ -389,7 +389,7 @@ def feature_allocate(host, entry, topology, profile, operation_id, *, retained=N
     roles = [("http", "http")]
     placed = dict(profile.placement)
     roles.extend((role.common.name, name) for role in topology.roles if isinstance(role, ExecutableRole)
-                 and placed[role.common.name] for name, _ in role.listeners)
+                 and placed[role.common.name] for name, listener in role.listeners if listener.transport == "tcp")
     retained = tuple(retained or ())
     require(all((e.role, e.listener) in roles for e in retained)
             and len({(e.role, e.listener) for e in retained}) == len(retained),
@@ -456,6 +456,7 @@ def _transition_scope(host, entry, transition, resolution, units):
     for name in retained:
         require(old.specs[name] == inventory.specs[name]
                 and tuple(e for e in old.resolution.endpoints if e.role == name) == tuple(e for e in resolution.endpoints if e.role == name)
+                and tuple(e for e in old.resolution.unix_endpoints if e.role == name) == tuple(e for e in resolution.unix_endpoints if e.role == name)
                 and tuple(e.sha256 for e in old.resolution.environments if e.role == name) == tuple(e.sha256 for e in resolution.environments if e.role == name)
                 and tuple(c for c in public_claims(old.profile) if c.role == name) == tuple(c for c in public_claims(inventory.profile) if c.role == name)
                 and {k: v for k, v in old.profile.listeners if k.split(".")[0] == name} ==

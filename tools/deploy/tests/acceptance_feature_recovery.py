@@ -87,7 +87,7 @@ def assert_coverage(receipt, *, protected):
     assert set(coverage["supported_components"]) == {"postgresql", "encrypted_configuration", "selected_deployment"}
     assert coverage["complete_instance_coverage"] is protected
     state = "disposable" if protected else "local-unprotected"
-    assert coverage["service_state"] == [{"role": "relay", "kind": state}]
+    assert coverage["service_state"] == [{"role": "relay", "kind": state}, {"role": "socket-provider", "kind": "disposable"}]
     expected = [] if protected else [{"code": "service_state_unprotected", "role": "relay"}]
     assert coverage["findings"] == keys["coverage"]["findings"] == expected
 
@@ -176,10 +176,10 @@ def source():
             else:
                 selected = archive
         # Out-of-band systemd changes deliberately leave cached selection alone.
-        # HTTP depends on relay; relay alone is a valid enabled graph.
+        # HTTP depends on relay; retain relay and its Unix provider as the enabled graph.
         run(["systemctl", "disable", inventory.units["http"]])
-        run(["systemctl", "enable", inventory.units["relay"]])
-        assert set(services.enabled_units(host, inventory.units)) == {"relay"}
+        run(["systemctl", "enable", inventory.units["relay"], inventory.units["socket-provider"]])
+        assert set(services.enabled_units(host, inventory.units)) == {"relay", "socket-provider"}
         run(["systemctl", "disable", "--now", "foundry-backup-full-cluster.timer", "foundry-backup-diff-cluster.timer"])
         for unit in ("foundry-backup-full-cluster.service", "foundry-backup-diff-cluster.service"):
             assert run(["systemctl", "show", unit, "-p", "ActiveState", "--value"]).stdout.strip() == "inactive"
@@ -204,10 +204,13 @@ def source():
         recovered = recover.archive_configuration(project, profile, files, entry["topology"])
         metadata = recovered["metadata"]
         archived = metadata["feature_recovery"]
-        assert archived["selection"]["enabled_roles"] == ["relay"], "Backup ignored live systemd enablement"
+        assert archived["selection"]["enabled_roles"] == ["relay", "socket-provider"], "Backup ignored live systemd enablement"
         assert archived["selection"]["maintenance_holds"] == [], "Fixture must not start with a maintenance hold"
         assert canonical_digest(archived["deployment"]) == receipt["deployment_sha256"]
         assert archived["declaration"] == read_manifest(selected)["deployment"]
+        assert archived["selection"]["minimum_generation"] == 15
+        assert archived["resolution"]["unix_endpoints"]
+        assert not any("/run/" in name or name.endswith(".sock") for name in files), "Runtime sockets entered backup"
         shutil.copyfile(selected, EXPORT / "release.tar.gz")
         atomic_json(EXPORT / "source.json", {"project": project, "profile": profile, "topology": entry["topology"],
                     "snapshot": snapshot, "table": table, "receipt": receipt}, mode=0o600)
@@ -242,7 +245,9 @@ def target_plan():
     packages = run(["dpkg-query", "-W", "-f=${binary:Package}\t${Version}\t${db:Status-Status}\n"]).stdout
     sockets = {row.socket for row in listeners.observe_sockets(host)}
     plan = manage.execute(host, "recover-plan", payload)
-    assert plan["ok"] and plan["recovery_roles"] == plan["recovery_enabled_roles"] == ["relay"]
+    # Plan roles follow readiness order, so the Unix provider precedes its consumer.
+    assert plan["ok"] and plan["recovery_roles"] == plan["recovery_enabled_roles"] == ["socket-provider", "relay"], {
+        key: plan[key] for key in ("ok", "recovery_roles", "recovery_enabled_roles")}
     assert plan["recovery_maintenance_holds"] == []
     assert plan["recovery_public_binding"]["deployment_sha256"] == source["receipt"]["deployment_sha256"]
     apply = {**payload, "archive": str(EXPORT / "release.tar.gz"), "plan_token": plan["plan_token"]}
@@ -257,7 +262,7 @@ def target_plan():
     assert run(["dpkg-query", "-W", "-f=${binary:Package}\t${Version}\t${db:Status-Status}\n"]).stdout == packages
     assert {row.socket for row in listeners.observe_sockets(host)} == sockets, "Unconfirmed takeover opened a port"
     atomic_json(EXPORT / "apply.json", apply, mode=0o600)
-    print("PASS feature target plan: relay enabled, HTTP disabled, unconfirmed takeover refused without provisioning or listeners", flush=True)
+    print("PASS feature target plan: socket-provider before relay, HTTP disabled, unconfirmed takeover refused without provisioning or listeners", flush=True)
 
 
 def target_peer(host, cleanup):
@@ -304,7 +309,7 @@ def takeover():
                 (directory / name).chmod(0o600)
             result = prepare(host, registry, entry, journal, snapshot, *args)
             stopped_units(archived_inventory)
-            assert set(services.enabled_units(host, archived_inventory.units)) == {"relay"}
+            assert set(services.enabled_units(host, archived_inventory.units)) == {"relay", "socket-provider"}
             probe_target(host, opened=False)
             prepared.append(True)
             return result
@@ -326,7 +331,7 @@ def takeover():
         _, selection, inventory, launch = feature_lifecycle.load(host, entry)
         assert launch["declaration"] == metadata["feature_recovery"]["declaration"]
         assert read_json(Path(recover.JOURNAL).with_name("source-deployment.json")) == metadata["feature_recovery"]
-        assert set(services.enabled_units(host, inventory.units)) == {"relay"} and selection.maintenance_holds == ()
+        assert set(services.enabled_units(host, inventory.units)) == {"relay", "socket-provider"} and selection.maintenance_holds == ()
         assert run(["systemctl", "is-active", inventory.units["relay"]]).stdout.strip() == "active"
         disabled = run(["systemctl", "show", inventory.units["http"], "-p", "ActiveState", "-p", "MainPID",
                         "-p", "ExecMainStartTimestampMonotonic"]).stdout
@@ -340,6 +345,7 @@ def takeover():
         relay = next(unit for unit in metadata["feature_recovery"]["deployment"]["units"] if unit["identity"]["role"] == "relay")
         assert inventory.specs["relay"].executable_sha256 == relay["executable_sha256"]
         assert services.wait_ready(host, inventory, "relay", time.monotonic() + 90)
+        feature.assert_unix_binding(host, inventory, entry)
         placed = parse_profile(profile, inventory.topology)
         expected = edge.stream_projection(placed, inventory.resolution, None, topology=inventory.topology)
         assert expected

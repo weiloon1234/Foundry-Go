@@ -76,7 +76,7 @@ from contracts import (ARCHIVE_SCHEMA, FEATURE_PROFILE_SCHEMA, MAX_ARTIFACTS, MA
                        TOPOLOGY_SCHEMA, PROFILE_SCHEMA, canonical_digest, contract_digest, contract_document,
                        contract_int, contract_list, contract_map, contract_name, contract_names,
                        contract_object, contract_path, contract_text, dns_hostname, public_address,
-                       validate_profile)
+                       validate_profile, socket_name)
 
 
 @dataclass(frozen=True)
@@ -122,6 +122,12 @@ class ArgumentKind(str, Enum):
     CONFIG = "config"
     LISTENER_PORT = "listener_port"
     LISTENER_ADDRESS = "listener_address"
+    LISTENER_SOCKET_DIRECTORY = "listener_socket_directory"
+    LISTENER_SOCKET_NAME = "listener_socket_name"
+    LISTENER_SOCKET_PATH = "listener_socket_path"
+    BINDING_SOCKET_DIRECTORY = "binding_socket_directory"
+    BINDING_SOCKET_NAME = "binding_socket_name"
+    BINDING_SOCKET_PATH = "binding_socket_path"
     BUNDLE = "bundle"
     COPY_NUMBER = "copy_number"
     STATE_PATH = "state_path"
@@ -130,6 +136,12 @@ class ArgumentKind(str, Enum):
     BINDING = "binding"
     CONFIG_ROOT = "config_root"
     DATA_ROOT = "data_root"
+
+
+LISTENER_SOCKET_ARGUMENTS = frozenset({ArgumentKind.LISTENER_SOCKET_DIRECTORY, ArgumentKind.LISTENER_SOCKET_NAME,
+                                       ArgumentKind.LISTENER_SOCKET_PATH})
+BINDING_SOCKET_ARGUMENTS = frozenset({ArgumentKind.BINDING_SOCKET_DIRECTORY, ArgumentKind.BINDING_SOCKET_NAME,
+                                      ArgumentKind.BINDING_SOCKET_PATH})
 
 
 def _secret_file_name(value):
@@ -204,7 +216,7 @@ def parse_binding(value) -> Binding:
         return PublicListenerReference(contract_name(listener["role"]), contract_name(listener["listener"]))
     contract_object(value, ("endpoint",))
     endpoint = contract_object(value["endpoint"], ("role", "listener", "scheme"))
-    require(endpoint["scheme"] in ("tcp", "http"), "unsupported_capability", "Unsupported private endpoint scheme.")
+    require(endpoint["scheme"] in ("tcp", "http", "unix"), "unsupported_capability", "Unsupported private endpoint scheme.")
     return EndpointBinding(contract_name(endpoint["role"]), contract_name(endpoint["listener"]), endpoint["scheme"])
 
 
@@ -262,11 +274,15 @@ class Listener:
     bind: str
     tls: str | None
     authentication: bool
+    socket: str | None = None
 
     @classmethod
     def parse(cls, value):
         require(not isinstance(value, dict) or "proxy_protocol" not in value,
                 "unsupported_capability", "PROXY protocol requires a later capability.")
+        if isinstance(value, dict) and value.get("transport") == "unix":
+            contract_object(value, ("transport", "socket"))
+            return cls("unix", "private", None, False, socket_name(value["socket"]))
         contract_object(value, ("transport", "bind"), ("tls", "authentication"))
         require(value["transport"] == "tcp", "unsupported_capability", "UDP listeners require a later capability.")
         require(value["bind"] in ("loopback", "public"), "invalid_topology", "Invalid listener intent.")
@@ -291,7 +307,7 @@ class Probe:
     @classmethod
     def parse(cls, value):
         contract_object(value, ("kind", "listener"), ("timeout_seconds", "path", "status", "body"))
-        require(value["kind"] in ("tcp", "http"), "invalid_topology", "Only local TCP/HTTP readiness is supported.")
+        require(value["kind"] in ("tcp", "http", "unix"), "invalid_topology", "Only local TCP/HTTP/Unix readiness is supported.")
         if value["kind"] == "http":
             path = contract_text(value.get("path"))
             require(path.startswith("/") and not path.startswith("//") and not any(c in path for c in "?#\\"),
@@ -299,7 +315,7 @@ class Probe:
             status = contract_int(value.get("status"), 200, 299)
             body = contract_text(value["body"], limit=1024) if "body" in value else None
         else:
-            require(not set(value).intersection(("path", "status", "body")), "invalid_topology", "TCP probes have no HTTP fields.")
+            require(not set(value).intersection(("path", "status", "body")), "invalid_topology", "Socket probes have no HTTP fields.")
             path, status, body = None, None, None
         return cls(value["kind"], contract_name(value["listener"]),
                    contract_int(value.get("timeout_seconds", 30), 1, 300), path, status, body)
@@ -651,6 +667,9 @@ def parse_topology(document, *, registered=False) -> Topology:
         visit(name)
     require(sum(len(r.listeners) for r in roles if isinstance(r, ExecutableRole)) <= MAX_LISTENERS,
             "invalid_topology", "Too many listeners.")
+    sockets = [listener.socket for role in roles if isinstance(role, ExecutableRole)
+               for _, listener in role.listeners if listener.transport == "unix"]
+    require(len(sockets) == len(set(sockets)), "invalid_topology", "Unix socket names must be unique within the instance.")
     role_map, artifact_map, binary_map = {r.common.name: r for r in roles}, dict(artifacts), dict(binaries)
     def executable(reference, role):
         if isinstance(reference, PackageExecutable):
@@ -677,6 +696,11 @@ def parse_topology(document, *, registered=False) -> Topology:
                 if isinstance(binding, PublicListenerReference):
                     require(isinstance(target, ExecutableRole) and listeners[binding.listener].bind == "public",
                             "invalid_topology", "Public listener bindings require a declared public listener.")
+                else:
+                    unix = listeners[binding.listener] is not None and listeners[binding.listener].transport == "unix"
+                    require((binding.scheme == "unix") == unix, "invalid_topology", "Endpoint scheme must match the listener transport.")
+                    require(not unix or binding.role in role.common.requires,
+                            "invalid_topology", "Unix endpoint consumers must require their provider role.")
         destinations = [(m.area, m.path) for m in mounts.values()]
         if isinstance(role, ExecutableRole):
             destinations += [("config", name) for name, _ in role.configs]
@@ -688,9 +712,21 @@ def parse_topology(document, *, registered=False) -> Topology:
         executable(role.executable, role)
         listeners, configs = dict(role.listeners), dict(role.configs)
         require(role.readiness.listener in listeners, "invalid_topology", "Readiness requires a declared listener.")
+        require((role.readiness.kind == "unix") == (listeners[role.readiness.listener].transport == "unix"),
+                "invalid_topology", "Readiness kind must match the listener transport.")
         require(all(secret in dict(secrets) for _, secret in role.secret_files), "invalid_topology", "Unknown secret reference.")
         references = list(role.arguments) + [a for _, a in role.environment] + [a for c in configs.values() for _, a in c.bindings]
         for argument in references:
+            if argument.kind in LISTENER_SOCKET_ARGUMENTS:
+                require(argument.value in listeners and listeners[argument.value].transport == "unix",
+                        "invalid_topology", "Socket references require a Unix listener.")
+            if argument.kind in BINDING_SOCKET_ARGUMENTS:
+                binding = dict(role.common.bindings).get(argument.value)
+                require(isinstance(binding, EndpointBinding) and binding.scheme == "unix",
+                        "invalid_topology", "Socket binding references require a Unix endpoint.")
+            if argument.kind in (ArgumentKind.LISTENER_PORT, ArgumentKind.LISTENER_ADDRESS):
+                require(argument.value in listeners and listeners[argument.value].transport == "tcp",
+                        "invalid_topology", "Address and port references require a TCP listener.")
             targets = {ArgumentKind.CONFIG: configs, ArgumentKind.LISTENER_PORT: listeners,
                        ArgumentKind.LISTENER_ADDRESS: listeners, ArgumentKind.BUNDLE: mounts,
                        ArgumentKind.SECRET_FILE: dict(role.secret_files), ArgumentKind.BINDING: dict(role.common.bindings)}

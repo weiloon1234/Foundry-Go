@@ -203,14 +203,14 @@ class ServiceInventoryTests(unittest.TestCase):
         response = connection.getresponse.return_value
         response.status = 302
         with patch.object(services.http.client, "HTTPConnection", return_value=connection) as client:
-            self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() + 1))
+            self.assertFalse(services.probe(Host(), self.inventory, role.common.name, time.monotonic() + 1))
             self.assertEqual(client.call_args.args, ("127.0.0.1", 8201))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/ready"))
             response.status, response.read.return_value = 200, b"ok"
-            self.assertTrue(services.probe(role, self.inventory.resolution, time.monotonic() + 1))
+            self.assertTrue(services.probe(Host(), self.inventory, role.common.name, time.monotonic() + 1))
             response.read.return_value = b"x" * 65537
-            self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() + 1))
-        self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() - 1))
+            self.assertFalse(services.probe(Host(), self.inventory, role.common.name, time.monotonic() + 1))
+        self.assertFalse(services.probe(Host(), self.inventory, role.common.name, time.monotonic() - 1))
 
     def test_paused_http_uses_liveness_without_weakening_normal_readiness(self):
         role = self.inventory.roles["http"]
@@ -218,9 +218,9 @@ class ServiceInventoryTests(unittest.TestCase):
         response = connection.getresponse.return_value
         response.status, response.read.return_value = 200, b'{"status":"ok"}'
         with patch.object(services.http.client, "HTTPConnection", return_value=connection):
-            self.assertTrue(services.probe(role, self.inventory.resolution, time.monotonic() + 1, paused=True))
+            self.assertTrue(services.probe(Host(), self.inventory, role.common.name, time.monotonic() + 1, paused=True))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/live"))
-            self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() + 1))
+            self.assertFalse(services.probe(Host(), self.inventory, role.common.name, time.monotonic() + 1))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/ready"))
 
     def test_maintenance_response_requires_shared_pause_and_builtin_http(self):
@@ -230,10 +230,10 @@ class ServiceInventoryTests(unittest.TestCase):
         with patch.object(services.http.client, "HTTPConnection", return_value=connection):
             for status in (503, 500, 302):
                 response.status = status
-                self.assertEqual(services.probe(self.inventory.roles["http"], self.inventory.resolution,
+                self.assertEqual(services.probe(Host(), self.inventory, "http",
                                                time.monotonic() + 1, paused=True), status == 503)
-                self.assertFalse(services.probe(self.inventory.roles["http"], self.inventory.resolution, time.monotonic() + 1))
-                self.assertFalse(services.probe(self.inventory.roles["relay"], self.inventory.resolution,
+                self.assertFalse(services.probe(Host(), self.inventory, "http", time.monotonic() + 1))
+                self.assertFalse(services.probe(Host(), self.inventory, "relay",
                                                 time.monotonic() + 1, paused=True))
 
     def test_release_carried_bundle_keeps_payload_digest_and_platform_checks(self):
@@ -328,7 +328,8 @@ class ServiceInventoryTests(unittest.TestCase):
                             if failure == "restart":
                                 return {**observed, "NRestarts": "1"}
                         return observed
-                    def probe(role, resolution, deadline):
+                    def probe(host, inventory, name, deadline):
+                        role = inventory.roles[name]
                         nonlocal dependent_probed
                         if role.common.name == "worker":
                             dependent_probed = True

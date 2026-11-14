@@ -7,6 +7,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,8 +17,13 @@ import (
 
 // featureRelay is the disposable custom service embedded in the fixture artifact.
 func featureRelay(ctx context.Context, args []string) error {
-	if len(args) != 2 {
-		return fmt.Errorf("feature relay requires an address and port")
+	if len(args) != 2 && len(args) != 3 {
+		return fmt.Errorf("feature relay requires an address, port and optional Unix path")
+	}
+	if len(args) == 3 {
+		if err := featureUnixBinding(ctx, args[2]); err != nil {
+			return err
+		}
 	}
 	listener, err := net.Listen("tcp", net.JoinHostPort(args[0], args[1]))
 	if err != nil {
@@ -86,4 +93,61 @@ func featureBindingProbe() (func(context.Context) error, error) {
 		}
 		return nil
 	}, nil
+}
+
+func featureUnix(ctx context.Context, args []string) error {
+	if len(args) != 1 || filepath.Dir(args[0]) != os.Getenv("XDG_RUNTIME_DIR") {
+		return fmt.Errorf("Unix provider requires its delivered socket path and directory")
+	}
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Net: "unix", Name: args[0]})
+	if err != nil {
+		return err
+	}
+	listener.SetUnlinkOnClose(false) // Restart must remove this declared stale socket.
+	defer listener.Close()
+	stop := context.AfterFunc(ctx, func() { _ = listener.Close() })
+	defer stop()
+	for {
+		connection, err := listener.Accept()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		_ = connection.SetDeadline(time.Now().Add(2 * time.Second))
+		var request [4]byte
+		if _, err := io.ReadFull(connection, request[:]); err == nil && string(request[:]) == "ping" {
+			_, _ = io.WriteString(connection, "unix-ready")
+		}
+		_ = connection.Close()
+	}
+}
+
+func featureUnixBinding(ctx context.Context, path string) error {
+	bindings, present, err := deployment.LoadBindings()
+	if err != nil || !present {
+		return fmt.Errorf("Unix consumer requires its runtime descriptor")
+	}
+	endpoint, err := bindings.Endpoint("socket")
+	if err != nil || endpoint.Network() != "unix" || endpoint.Path != path ||
+		endpoint.Directory != os.Getenv("XDG_RUNTIME_DIR") || endpoint.Name != os.Getenv("WAYLAND_DISPLAY") {
+		return fmt.Errorf("Unix descriptor, argv and environment disagree")
+	}
+	connection, err := (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, endpoint.Network(), endpoint.Path)
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	if err := connection.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(connection, "ping"); err != nil {
+		return err
+	}
+	var response [10]byte
+	if _, err := io.ReadFull(connection, response[:]); err != nil || string(response[:]) != "unix-ready" {
+		return fmt.Errorf("Unix binding did not reach its provider")
+	}
+	return nil
 }

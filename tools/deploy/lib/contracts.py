@@ -589,6 +589,7 @@ FEATURE_CAPABILITIES = frozenset({"topology-v2", "profile-v3", "release-v2"})
 FEATURE_INTRODUCTION_GENERATION = 12
 FEATURE_LIFECYCLE_GENERATION = 13
 FEATURE_DELIVERY_GENERATION = 14
+FEATURE_UNIX_GENERATION = 15
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
 
 
@@ -708,6 +709,42 @@ class AllocatedEndpoint:
                    value["address"], contract_int(value["port"], 1024, 65535))
 
 
+def socket_name(value):
+    require(isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,31}", value),
+            "invalid_contract", "Socket names require 1–32 ASCII letters, digits, dots, underscores or hyphens, starting with a letter or digit.")
+    return value
+
+
+def socket_directory(instance_id):
+    return f"/run/foundry/services/{contract_uuid(instance_id)}/sockets"
+
+
+@dataclass(frozen=True)
+class UnixEndpoint:
+    role: str
+    listener: str
+    directory: str
+    name: str
+    path: str
+
+    @classmethod
+    def for_listener(cls, instance_id, role, listener, name):
+        directory = socket_directory(instance_id)
+        return cls.parse({"role": role, "listener": listener, "directory": directory,
+                          "name": name, "path": directory + "/" + name})
+
+    @classmethod
+    def parse(cls, value):
+        contract_object(value, ("role", "listener", "directory", "name", "path"))
+        directory = contract_path(value["directory"], absolute=True)
+        require(directory == socket_directory(Path(directory).parent.name),
+                "invalid_contract", "Unix endpoints belong to the instance socket directory.")
+        name = socket_name(value["name"])
+        require(value["path"] == directory + "/" + name and len(value["path"].encode()) <= 107,
+                "invalid_contract", "Invalid Unix endpoint path.")
+        return cls(contract_name(value["role"]), contract_name(value["listener"]), directory, name, value["path"])
+
+
 @dataclass(frozen=True)
 class EffectiveEnvironment:
     role: str
@@ -739,14 +776,20 @@ class RuntimeResolution:
     bindings_sha256: str
     readiness_sha256: str
     nginx_sha256: str
+    unix_endpoints: tuple[UnixEndpoint, ...] = ()
 
     @classmethod
     def parse(cls, value):
         v = _record(value, ("id", "deployment_sha256", "private_revision", "roles", "endpoints",
-                            "environments", "bindings_sha256", "readiness_sha256", "nginx_sha256"))
+                            "environments", "bindings_sha256", "readiness_sha256", "nginx_sha256"), ("unix_endpoints",))
         roles = contract_names(v["roles"])
         require("http" in roles, "invalid_contract", "HTTP remains required.")
         endpoints = contract_list(v["endpoints"], AllocatedEndpoint.parse, maximum=MAX_LISTENERS)
+        unix = contract_list(v.get("unix_endpoints", []), UnixEndpoint.parse, maximum=MAX_LISTENERS)
+        require(all(e.role in roles for e in unix) and len({e.path for e in unix}) == len(unix)
+                and len({(e.role, e.listener) for e in (*endpoints, *unix)}) == len(endpoints) + len(unix)
+                and len({e.directory for e in unix}) <= 1,
+                "invalid_contract", "Unix endpoints must have unique names and listeners in one instance directory.")
         envs = contract_list(v["environments"], EffectiveEnvironment.parse, maximum=MAX_ROLES)
         require(all(e.role in roles for e in endpoints) and {e.role for e in envs} == set(roles)
                 and len(envs) == len(roles) and len({e.path for e in envs}) == len(envs)
@@ -759,7 +802,7 @@ class RuntimeResolution:
                 "invalid_contract", "Environment path belongs to another resolution.")
         return cls(identity, contract_digest(v["deployment_sha256"]), contract_int(v["private_revision"]),
                    roles, endpoints, envs, *(contract_digest(v[k]) for k in
-                                            ("bindings_sha256", "readiness_sha256", "nginx_sha256")))
+                                            ("bindings_sha256", "readiness_sha256", "nginx_sha256")), unix)
 
 
 def require_current_private_configuration(target: RuntimeResolution, current_revision: int):
@@ -1074,14 +1117,15 @@ class ResolvedExecutableBinding:
 @dataclass(frozen=True)
 class ResolvedEndpointBinding:
     name: str
-    endpoint: AllocatedEndpoint
+    endpoint: AllocatedEndpoint | UnixEndpoint
     scheme: str
 
     @classmethod
     def parse(cls, value):
         contract_object(value, ("name", "endpoint", "scheme"))
-        require(value["scheme"] in ("http", "tcp"), "invalid_contract", "Invalid endpoint scheme.")
-        return cls(contract_name(value["name"]), AllocatedEndpoint.parse(value["endpoint"]), value["scheme"])
+        require(value["scheme"] in ("http", "tcp", "unix"), "invalid_contract", "Invalid endpoint scheme.")
+        endpoint = UnixEndpoint if value["scheme"] == "unix" else AllocatedEndpoint
+        return cls(contract_name(value["name"]), endpoint.parse(value["endpoint"]), value["scheme"])
 
 
 @dataclass(frozen=True)
@@ -1375,11 +1419,13 @@ def record_document(record):
     versioned = (RuntimeResolution, AdmissionRecord, ClosureEvidence, ValidationPermit, HelperInvocation,
                  BundleReferences, DeploymentSelection, RecoveryPublicBinding, RoleBindings, UnitSpec,
                  HostTransition, Deployment, UnitGenerationReference, CleanupObligation)
-    nested = (UnitIdentity, AllocatedEndpoint, EffectiveEnvironment, ProcessIdentity, RecoveryListenerBinding, DNSObservation,
+    nested = (UnitIdentity, AllocatedEndpoint, UnixEndpoint, EffectiveEnvironment, ProcessIdentity, RecoveryListenerBinding, DNSObservation,
               ResolvedExecutableBinding, ResolvedEndpointBinding, ResolvedBundleBinding, ResolvedPublicListenerBinding)
     def encode(value):
         if type(value) in versioned + nested:
             result = {f.name: encode(getattr(value, f.name)) for f in dataclass_fields(value)}
+            if isinstance(value, RuntimeResolution) and not value.unix_endpoints:
+                result.pop("unix_endpoints")
             if isinstance(value, RoleBindings) and not value.public_listeners:
                 result.pop("public_listeners")  # Preserve descriptors and digests for existing binaries.
             if type(value) in versioned:

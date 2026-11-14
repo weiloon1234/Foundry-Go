@@ -45,6 +45,7 @@ import report
 import services
 from services import probe as actual_probe
 import upgrades
+import unix_sockets
 from topology import parse_profile, parse_topology
 from test_artifacts import elf
 from test_contracts import fixture
@@ -190,7 +191,7 @@ class WiringHost(Host):
         elif args[0] == "useradd":
             name = args[-1]
             comment = args[args.index("--comment") + 1]
-            self.account = f"{name}:x:{os.getuid() + self.account_sequence}:{os.getgid() + self.account_sequence}:{comment}:{c.instance_paths(name)['data']}:/usr/sbin/nologin"
+            self.account = f"{name}:x:{max(1, os.getuid()) + self.account_sequence}:{max(1, os.getgid()) + self.account_sequence}:{comment}:{c.instance_paths(name)['data']}:/usr/sbin/nologin"
             self.account_sequence += 1
         elif args[0] == "nginx":
             if "-T" in args:
@@ -249,11 +250,19 @@ class WiringHost(Host):
                     if unit == self.starting:
                         values.update(ActiveState="activating", SubState="start-post")
                 output = "\n".join(k + "=" + v for k, v in values.items())
+                if "--value" in args:
+                    assert args[-2:] == ["--property=ControlGroup", "--value"]
+                    output = values["ControlGroup"]
             elif action not in ("disable", "daemon-reload", "enable", "reset-failed"):
                 raise AssertionError(args)
         elif args[0] == "ss":
             rows = []
-            if "-u" not in args:
+            if "-Hxlpn" in args:
+                for process, inventory, role in self.running.values():
+                    for endpoint in inventory.resolution.unix_endpoints:
+                        if endpoint.role == role:
+                            rows.append(f'u_str LISTEN 0 128 {endpoint.path} 123 * 0 users:(("app",pid={process.pid},fd=3))')
+            elif "-u" not in args:
                 family = 6 if "-6" in args else 4
                 if self.public_profile:
                     for claim in listeners.public_claims(self.public_profile):
@@ -266,7 +275,23 @@ class WiringHost(Host):
                             rows.append(f'LISTEN 0 128 {endpoint.address}:{endpoint.port} 0.0.0.0:* users:(("app",pid={process.pid},fd=3))')
             output = "\n".join(rows)
         elif args[0] == "runuser":
-            if "redis:keys" in args:
+            if Path(args[4]).name == "python3":
+                if args[5] == release.service_script(self):
+                    assert args[6] in ("copy-runtime-maps", "prune-runtime-maps")
+                else:
+                    assert args[4:7] == ["/usr/bin/python3", "-I", "-c"], "Instance probes must not open files from the tool bundle"
+                    assert args[7] == Path(unix_sockets.__file__).with_name("unix_socket_probe.py").read_text(encoding="utf-8")
+                    uid, gid, directory, name, seconds, group, device, inode, mode = args[8:]
+                    assert mode == "readiness" and (device, inode) == ("0", "0")
+                    assert 0 < float(seconds) == kwargs["timeout"] <= 5
+                    entry = next(entry for entry in self.read_registry()["instances"].values() if entry["name"] == args[2])
+                    assert (int(uid), int(gid)) == (entry["allocations"]["uid"], entry["allocations"]["gid"])
+                    code = unix_sockets.Result.READY if any(
+                        group == "/system.slice/" + unit and endpoint.role == role and endpoint.name == name
+                        and str(self.paths.p(endpoint.directory)) == directory
+                        for unit, (_, inventory, role) in self.running.items()
+                        for endpoint in inventory.resolution.unix_endpoints) else unix_sockets.Result.UNSAFE
+            elif "redis:keys" in args:
                 output = "[]"
             elif "config:inspect" in args:
                 output = json.dumps([{"Name": "app.test.token", "Source": "environment", "Secret": True}])
@@ -326,7 +351,13 @@ class FeatureWiringFixture(unittest.TestCase):
         runtime_os.geteuid.return_value = 0
         self.enterContext(patch.object(feature_runtime, "os", runtime_os))
 
-    def probe(self, role, resolution, deadline, *, paused=False):
+    def probe(self, host, inventory, name, deadline, *, paused=False):
+        role = inventory.roles[name]
+        if services.readiness_probe(role) and services.readiness_probe(role).kind == "unix":
+            entry = host.read_registry()["instances"][inventory.profile.instance_id]
+            account = SimpleNamespace(pw_name=entry["name"], pw_gid=entry["allocations"]["gid"])
+            with patch.object(unix_sockets.pwd, "getpwuid", return_value=account):
+                return actual_probe(host, inventory, name, deadline, paused=paused)
         down = getattr(self.host, "maintenance_down", False)
         response = Mock()
         response.status = 503 if down and role.common.name == "http" else 200
@@ -335,12 +366,12 @@ class FeatureWiringFixture(unittest.TestCase):
         connection = Mock()
         connection.getresponse.return_value = response
         with patch.object(services.http.client, "HTTPConnection", return_value=connection):
-            return actual_probe(role, resolution, deadline, paused=paused)
+            return actual_probe(host, inventory, name, deadline, paused=paused)
 
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, unix=False, public=False, public_binding=False, secrets=False, templates=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -365,6 +396,14 @@ class FeatureWiringFixture(unittest.TestCase):
             **({"secrets": {"relay-token": {"prompt": "Relay token"}}} if secrets else {}),
             "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
                 "platforms": {"linux-arm64": {"url": "https://example.invalid/relay", "sha256": checksum}}}}})
+        if unix:
+            raw = self.topology.projection()
+            raw['roles'][0]['requires'] = ['relay']
+            raw['roles'][0]['bindings']['relay'] = {'endpoint': {'role': 'relay', 'listener': 'api', 'scheme': 'unix'}}
+            raw['roles'][1].update(listeners={'api': {'transport': 'unix', 'socket': 'wl0'}},
+                readiness={'kind': 'unix', 'listener': 'api'}, arguments=[{'listener_socket_path': 'api'}],
+                environment={'XDG_RUNTIME_DIR': {'listener_socket_directory': 'api'}}, maintenance='continue')
+            self.topology = parse_topology(raw)
         self.profile.update(schema=3, placement={"http": 1, "relay": 1, **({"worker": 1} if worker else {}),
                                               **({"scheduler": 1} if scheduler else {})}, listeners={})
         if public:
@@ -409,6 +448,31 @@ class FeatureWiringFixture(unittest.TestCase):
 
 
 class FeatureWiringTests(FeatureWiringFixture):
+    def test_unix_lifecycle_prepares_descriptors_and_builtin_write_access(self):
+        self.build_archive(unix=True)
+        plan = self.request('bootstrap-plan', topology=self.topology.projection())
+        self.request('bootstrap-apply', topology=self.topology.projection(), plan_token=plan['plan_token'], confirm=True)
+        self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive))
+        _, entry = self.host.require_identity(self.project, self.profile)
+        _, selection, inventory, launch = lifecycle.load(self.host, entry)
+        self.assertEqual(selection.minimum_generation, 15)
+        endpoint, = inventory.resolution.unix_endpoints
+        self.assertEqual([e.role for e in inventory.resolution.endpoints], ['http'])
+        descriptor = c.read_json(self.host.paths.p(launch['descriptors']['http']))
+        self.assertEqual(descriptor['bindings']['endpoints'][0]['endpoint'], asdict(endpoint))
+        self.assertEqual(descriptor['bindings']['endpoints'][0]['scheme'], 'unix')
+        directory = self.host.paths.p(endpoint.directory)
+        self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(directory.stat().st_uid, entry['allocations']['uid'])
+        for name in inventory.roles:
+            text = self.host.paths.p('/etc/systemd/system/' + inventory.units[name]).read_text()
+            self.assertIn(endpoint.directory, text)
+        self.request('restart')
+        self.assertEqual(self.host.started[-2:], ['relay', 'http'])
+        self.request('stop')
+        self.assertFalse(self.host.running)
+
+
     def test_systemctl_status_codes_and_check_semantics(self):
         self.host.owned_write(self.host.paths.p("/etc/systemd/system/foundry-absent.service"), "[Service]\nExecStart=/bin/true\n")
         for action, output, code in (("is-enabled", "disabled", 1), ("is-active", "inactive", 3),

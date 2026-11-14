@@ -110,6 +110,9 @@ def run(action, pin, launch):
                                        views=views, secret_paths=launch["secret_paths"].get(spec.identity.role, {}),
                                        uid=entry["allocations"]["uid"], gid=entry["allocations"]["gid"], permit_id=permit_id, entry=entry)
     with store.preparation(invocation, permit_id=permit_id):
+        import unix_sockets
+        unix_sockets.prepare(host, role, spec.identity, entry["allocations"]["uid"], entry["allocations"]["gid"],
+                             remove_stale=not dispatch.exists())
         runtime_config.effective_environment_path(host, entry, inventory.resolution, spec.identity.role)
         admission.protected_directory(host, view)
         require(digest(check_path(host.paths.p(spec.executable), "file")) == spec.executable_sha256,

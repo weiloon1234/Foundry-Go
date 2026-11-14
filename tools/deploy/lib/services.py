@@ -113,6 +113,16 @@ class UnitInventory:
                 "service_inventory", "Resolved unit policy differs from its declared role.")
         from topology import role_unit_name
         self.units = {role: role_unit_name(name, value) for role, value in self.roles.items()}
+        from contracts import UnixEndpoint
+        expected_unix = tuple(UnixEndpoint.for_listener(profile.instance_id, role.common.name, listener_name, listener.socket)
+                              for role in self.roles.values() if isinstance(role, ExecutableRole)
+                              for listener_name, listener in role.listeners if listener.transport == "unix")
+        require(set(resolution.unix_endpoints) == set(expected_unix),
+                "service_inventory", "Unix endpoints differ from their instance declarations.")
+        for spec in self.specs.values():
+            for binding in spec.bindings.endpoints:
+                if binding.scheme == "unix":
+                    require(binding.endpoint in expected_unix, "service_inventory", "Unix binding differs from its provider declaration.")
         self.start_order(placed)
 
     def start_order(self, selected):
@@ -292,6 +302,19 @@ def resolve_argument(argument, role, spec, resolution, paths, views, secret_path
         endpoint = next((e for e in resolution.endpoints if e.role == role.common.name and e.listener == value), None)
         require(endpoint is not None, "service_listener", "Declared listener has no selected allocation.")
         return str(endpoint.port) if kind is ArgumentKind.LISTENER_PORT else endpoint.address
+    from topology import LISTENER_SOCKET_ARGUMENTS, BINDING_SOCKET_ARGUMENTS
+    if kind in LISTENER_SOCKET_ARGUMENTS | BINDING_SOCKET_ARGUMENTS:
+        if kind in LISTENER_SOCKET_ARGUMENTS:
+            endpoint = next((e for e in resolution.unix_endpoints if e.role == role.common.name and e.listener == value), None)
+        else:
+            binding = next((b for b in spec.bindings.endpoints if b.name == value and b.scheme == "unix"), None)
+            endpoint = binding.endpoint if binding else None
+        require(endpoint is not None, "service_binding", "Declared Unix socket reference is unresolved.")
+        if kind in (ArgumentKind.LISTENER_SOCKET_DIRECTORY, ArgumentKind.BINDING_SOCKET_DIRECTORY):
+            return endpoint.directory
+        if kind in (ArgumentKind.LISTENER_SOCKET_NAME, ArgumentKind.BINDING_SOCKET_NAME):
+            return endpoint.name
+        return endpoint.path
     if kind is ArgumentKind.BUNDLE:
         return next(view.destination for view in views if view.name == value)
     if kind is ArgumentKind.SECRET_FILE:
@@ -303,6 +326,8 @@ def resolve_argument(argument, role, spec, resolution, paths, views, secret_path
                 return binding.path
         endpoint = next((b for b in spec.bindings.endpoints if b.name == value), None)
         require(endpoint is not None, "service_binding", "Declared binding is unresolved.")
+        if endpoint.scheme == "unix":
+            return endpoint.endpoint.path
         address = endpoint.endpoint.address
         return f"{endpoint.scheme}://{'[' + address + ']' if ':' in address else address}:{endpoint.endpoint.port}"
     if kind is ArgumentKind.COPY_NUMBER:
@@ -334,6 +359,9 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     after = " ".join(inventory.units[n] for n in role.common.requires)
     boot = f"foundry-admission-{spec.identity.instance_id}.service"
     mounts = "\n".join("BindReadOnlyPaths=" + systemd_word(view.source + ":" + view.destination) for view in views)
+    from unix_sockets import uses_sockets
+    from contracts import socket_directory
+    socket_paths = (socket_directory(spec.identity.instance_id),) if uses_sockets(role) else ()
     if isinstance(role, BuiltinRole):
         # Keep the existing built-in policies, including B26 upload write paths.
         from provision import _template
@@ -348,6 +376,8 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
                                   "\nExecStartPre=+" + hooks["prepare"] + "\nExecStartPost=+" + hooks["running"] +
                                   "\nExecStopPost=+" + hooks["cleanup"] + "\n")
         content = content.replace("[Unit]\n", f"[Unit]\n{condition}After={boot} {after}\n")
+        if socket_paths:
+            content = content.replace("[Service]\n", "[Service]\nReadWritePaths=" + systemd_word(socket_paths[0]) + "\n")
         if mounts:
             content = content.replace("[Service]\n", "[Service]\n" + mounts + "\n")
         return content
@@ -360,7 +390,7 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
     environment += list(config_environment(role, paths).items())
     replacements = {"MARKER": marker(entry), "ROLE": name, "ACCOUNT": inventory.name,
                     "AFTER": f"{boot} {after}", "BASE": contract_path(paths.base, absolute=True),
-                    "WRITABLE": " ".join(systemd_word(p) for p in (paths.state, paths.base + "/invocations")),
+                    "WRITABLE": " ".join(systemd_word(p) for p in (paths.state, paths.base + "/invocations", *socket_paths)),
                     "ADMIT": hooks["admit"], "PREPARE": hooks["prepare"], "DISPATCH": hooks["dispatch"],
                     "CLEANUP": hooks["cleanup"], "RUNNING": hooks["running"], "RESTART": role.restart.policy,
                     "DELAY": str(role.restart.delay_seconds), "BURST": str(role.restart.burst),
@@ -384,7 +414,8 @@ def readiness_probe(role, paused=False):
     return Probe("http", "http", 90, "/health/live" if paused else "/health/ready", 200, None) if role.common.name == "http" else None
 
 
-def probe(role, resolution, deadline, *, paused=False):
+def probe(host, inventory, name, deadline, *, paused=False):
+    role = inventory.roles[name]
     from host import OperationTimeout, wall_clock_budget
     contract = readiness_probe(role, paused)
     if contract is None:
@@ -394,21 +425,27 @@ def probe(role, resolution, deadline, *, paused=False):
         return False
     try:
         with wall_clock_budget(remaining):
-            return _probe(role, resolution, deadline, paused=paused)
+            return _probe(host, inventory, name, deadline, paused=paused)
     except OperationTimeout:
         return False
 
 
-def _probe(role, resolution, deadline, *, paused=False):
+def _probe(host, inventory, name, deadline, *, paused=False):
     """One bounded local probe. Identity/stability checks remain required around it."""
+    role, resolution = inventory.roles[name], inventory.resolution
     contract = readiness_probe(role, paused)
-    endpoint = next((e for e in resolution.endpoints if e.role == role.common.name and
+    endpoint = next((e for e in (*resolution.endpoints, *resolution.unix_endpoints) if e.role == role.common.name and
                      e.listener == contract.listener), None)
     require(endpoint is not None, "service_listener", "Readiness allocation is missing.")
     remaining = min(contract.timeout_seconds, deadline - time.monotonic())
     if remaining <= 0:
         return False
     try:
+        if contract.kind == "unix":
+            import unix_sockets
+            entry = host.read_registry()["instances"][inventory.profile.instance_id]
+            return unix_sockets.ready(host, endpoint, entry["allocations"]["uid"], entry["allocations"]["gid"],
+                                      inventory.units[name], min(deadline, time.monotonic() + remaining))
         if contract.kind == "tcp":
             with socket.create_connection((endpoint.address, endpoint.port), timeout=remaining):
                 return True
@@ -472,8 +509,12 @@ def wait_ready_set(host, inventory, names, deadline):
         executable = protected_path(host, host.paths.p(spec.executable), "file")
         require(executable.exists() and executable.stat().st_mode & 0o111 and digest(executable) == spec.executable_sha256,
                 "service_executable", "Selected executable fingerprint has drifted.")
-        endpoint = next((e for e in inventory.resolution.endpoints if e.role == name and contract and e.listener == contract.listener), None)
-        local = (f"[{endpoint.address}]:{endpoint.port}" if ":" in endpoint.address else f"{endpoint.address}:{endpoint.port}") if endpoint else None
+        endpoint = next((e for e in (*inventory.resolution.endpoints, *inventory.resolution.unix_endpoints)
+                         if e.role == name and contract and e.listener == contract.listener), None)
+        local = None
+        if endpoint:
+            local = endpoint.path if contract.kind == "unix" else (
+                f"[{endpoint.address}]:{endpoint.port}" if ":" in endpoint.address else f"{endpoint.address}:{endpoint.port}")
         checks[name] = (role, executable, endpoint, local)
         if contract:
             deadline = min(deadline, time.monotonic() + contract.timeout_seconds)
@@ -496,13 +537,14 @@ def wait_ready_set(host, inventory, names, deadline):
                     observed_tokens[name] = current
                     ready = _matches_executable(observed, executable)
                     if ready and endpoint:
-                        listeners = host.run(["ss", "-Hltpn", f"sport = :{endpoint.port}"], check=False,
-                                             timeout=min(5, deadline - time.monotonic()))
+                        unix = readiness_probe(role).kind == "unix"
+                        command = ["ss", "-Hxlpn"] if unix else ["ss", "-Hltpn", f"sport = :{endpoint.port}"]
+                        listeners = host.run(command, check=False, timeout=min(5, deadline - time.monotonic()))
                         ready = listeners.returncode == 0 and any(
-                            len(line.split()) >= 5 and line.split()[3] == local and
+                            len(line.split()) >= (8 if unix else 5) and line.split()[4 if unix else 3] == local and
                             f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
-                    healthy = ready and (probe(role, inventory.resolution, deadline, paused=True) if paused and name == "http"
-                                         else probe(role, inventory.resolution, deadline)) and healthy
+                    healthy = ready and (probe(host, inventory, name, deadline, paused=True) if paused and name == "http"
+                                         else probe(host, inventory, name, deadline)) and healthy
                 # Recheck the entire set after the last probe, including prerequisites
                 # observed before a slow dependent. A changed identity resets nothing.
                 if healthy:
