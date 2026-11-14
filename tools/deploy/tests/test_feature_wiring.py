@@ -340,13 +340,14 @@ class FeatureWiringFixture(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, public=False, secrets=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, public=False, public_binding=False, secrets=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
             {"name": "http", "kind": "builtin", "requires": [] if independent else ["relay"], "packages": ["jq"],
              "bindings": {**({} if independent and not endpoint_binding else {"relay": {"endpoint": {"role": "relay", "listener": "api", "scheme": "http"}}}),
-                          "checksum": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}}},
+                          "checksum": {"executable": {"package": "jq", "path": "/usr/bin/jq"}},
+                          **({"relay_public": {"public_listener": {"role": "relay", "listener": "api"}}} if public_binding else {})}},
             {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
              "arguments": [{"listener_address": "api"}, {"listener_port": "api"}],
              **({"secret_files": {"TOKEN_FILE": "relay-token"}} if secrets else {}),

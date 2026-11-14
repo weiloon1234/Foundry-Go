@@ -13,7 +13,8 @@ applications and generation 9–12 hosts keep their existing behavior. Upgrade t
 before using release 1 capabilities. The v0.31.0 generation-12 preview remains
 supported by its installed tools. Enablement adoption and release 1 transitions set a sticky
 generation-13 client floor, including after application rollback. The application
-declarations and binding API are unchanged from v0.31.0.
+declarations and existing binding API remain compatible. Public listener bindings,
+added in v0.33.0, require deploy tool generation 14.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
 
@@ -264,6 +265,7 @@ callback, because the app starts after the relay.
       "maintenance": "continue",
       "bindings": {
         "relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
+        "relay_public": {"public_listener": {"role": "relay", "listener": "ingress"}},
         "json": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}
       }
     },
@@ -556,14 +558,16 @@ and deployment digest, plus schema-1 role bindings. Do not write or discover thi
 file yourself. It is invocation-specific; private HTTP allocation is selected
 with the journaled effective environment, not guessed from the profile.
 
-This consumer fixture loads the two HTTP-role bindings from the worked example:
+This consumer fixture loads the three HTTP-role bindings from the worked example:
 
 <!-- compiled-source: tests/fixtures/consumer/hostcapabilities/bindings.go#host-capability-bindings -->
 ```go
-// RelayDependencies contains the private control endpoint and tool used by the app.
+// RelayDependencies contains the relay addresses and tool used by the app.
 type RelayDependencies struct {
 	// Control addresses the relay's private HTTP control listener.
 	Control deployment.Endpoint
+	// Public describes the relay's profile-selected public listener.
+	Public deployment.PublicListener
 	// JSON is the package-owned jq executable for JSON processing.
 	JSON deployment.Executable
 }
@@ -583,7 +587,11 @@ func LoadRelayDependencies() (dependencies RelayDependencies, present bool, err 
 	if err != nil {
 		return RelayDependencies{}, true, err
 	}
-	return RelayDependencies{Control: control, JSON: jsonTool}, true, nil
+	public, err := bindings.PublicListener("relay_public")
+	if err != nil {
+		return RelayDependencies{}, true, err
+	}
+	return RelayDependencies{Control: control, Public: public, JSON: jsonTool}, true, nil
 }
 ```
 
@@ -593,6 +601,26 @@ the URL API. `JSON.Path` is an absolute verified path, not a PATH lookup;
 execute it with an argument vector when the application needs jq for JSON processing.
 `Executable` also carries `SHA256`. `Bundle(name)` returns a `BundleDirectory`
 with its service-local `Path` and `SHA256`.
+
+`PublicListener(name)` returns the declared role and listener, profile-owned
+`Hostname`, public `Port`, and `PublicAddresses`, plus topology-owned `TLS` and
+`Transport`. TLS is `deployment.TLSEdge` or `deployment.TLSNone`; transport is
+`deployment.TCPTransport`. The application chooses its protocol scheme, such as
+`rtsp`, and constructs a URL with `net.JoinHostPort` and `net/url`.
+The binding contains no secrets and does not assert current readiness or grant
+access. Authentication remains the listener's application responsibility.
+
+The listener must be public and placed. The binding does not add a startup
+prerequisite; declare `requires` when startup must wait for its provider.
+Public listener records are delivered through the runtime descriptor, not scalar
+argv, environment, or rendered-config binding references. Each lookup returns
+an owned address slice. The process retains its startup snapshot, and changed
+bindings restart consumers through the existing deployment lifecycle.
+
+Role-binding schema 1 adds an optional `public_listeners` collection. The writer
+omits it when empty, preserving descriptors and digests for existing bindings.
+A v0.32.0 binary can read a new descriptor that has no public listener bindings.
+Upgrade the consuming binary before declaring a public listener binding.
 
 `LoadBindings` returns `present == false` without error only when the environment
 selector is absent. An explicitly invalid selector or malformed descriptor is an

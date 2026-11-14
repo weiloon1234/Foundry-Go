@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in generation-12 preview scenario inside the existing disposable harness.
+"""Opt-in generation-14 binding scenario inside the existing disposable harness.
 
 Use the ordinary deploy-acceptance archive. The artifact is a second, pinned copy
 of that fixture's Linux artisan binary; no artifact network download is needed.
@@ -115,6 +115,7 @@ def feature_archive(source, destination, host_id):
     topology = parse_topology({"schema": 2, "roles": [
         {"name": "http", "kind": "builtin", "requires": ["relay"], "packages": ["jq"],
          "bindings": {"relay": {"endpoint": {"role": "relay", "listener": "control", "scheme": "http"}},
+                      "relay_public": {"public_listener": {"role": "relay", "listener": "control"}},
                       "checksum": {"executable": {"package": "jq", "path": "/usr/bin/jq"}}}},
         {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
          "arguments": [{"literal": "feature:relay"}, {"listener_address": "control"}, {"listener_port": "control"}],
@@ -182,6 +183,10 @@ def main():
         from feature_lifecycle import load
         _, entry = host.require_identity(project, profile)
         _, _, inventory, _ = load(host, entry)
+        public, = inventory.specs["http"].bindings.public_listeners
+        assert (public.name, public.role, public.listener, public.hostname, public.port, public.tls, public.transport,
+                public.public_addresses) == ("relay_public", "relay", "control", "relay." + profile["domain"],
+                                             PORT, "none", "tcp", tuple(network.ADDRESSES))
         for unit in inventory.units.values():
             assert run(["systemctl", "is-active", unit]).stdout.strip() == "active"
         # HTTP readiness calls the relay using deployment.LoadBindings, proving app delivery.

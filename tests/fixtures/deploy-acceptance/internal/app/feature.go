@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/weiloon1234/Foundry-Go/deployment"
@@ -59,6 +60,12 @@ func featureBindingProbe() (func(context.Context) error, error) {
 	tool, err := bindings.Executable("checksum")
 	if err != nil || tool.Path == "" {
 		return nil, fmt.Errorf("checksum binding unavailable")
+	}
+	public, err := bindings.PublicListener("relay_public")
+	if err != nil || public.Role != "relay" || public.Listener != "control" || public.Port != 8554 ||
+		public.TLS != deployment.TLSNone || public.Transport != deployment.TCPTransport ||
+		!strings.HasPrefix(public.Hostname, "relay.") || !strings.HasSuffix(public.Hostname, ".acceptance.invalid") || len(public.PublicAddresses) != 2 {
+		return nil, fmt.Errorf("public relay binding unavailable or incorrect")
 	}
 	target := endpoint.URL()
 	target.Path = "/ready"

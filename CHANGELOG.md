@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Added: public listener bindings through `public_listener` role/listener declarations
+  and `deployment.Bindings.PublicListener`. Applications receive the profile-owned
+  hostname, public port and addresses with topology-owned TLS mode and transport.
+  Bindings reject private or unplaced listeners, retain immutable startup snapshots,
+  and restart consumers when changed. Requires deploy tool generation 14. Existing
+  bindings and descriptors without public listener bindings remain compatible.
+
 ## v0.32.0 — 2026-11-14
 
 - Added: B24 release 1 completes the v0.31.0 host capabilities preview while

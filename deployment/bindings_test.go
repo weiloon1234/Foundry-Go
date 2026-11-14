@@ -101,3 +101,64 @@ func TestBindingsRejectInvalidAndPrivateData(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func publicBindingDocument() string {
+	return strings.Replace(bindingDocument(), `"bundles":[`, `"public_listeners":[{"name":"relay_public","role":"relay","listener":"ingress","hostname":"relay.example.org","port":8554,"tls":"none","transport":"tcp","public_addresses":["203.0.113.10","2001:db8::10"]}],"bundles":[`, 1)
+}
+
+func TestPublicListenerBindingsSnapshot(t *testing.T) {
+	for _, mode := range []TLSMode{TLSNone, TLSEdge} {
+		path := writeBindingDocument(t, strings.Replace(publicBindingDocument(), `"tls":"none"`, `"tls":"`+string(mode)+`"`, 1))
+		bindings, err := ReadBindings(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		public, err := bindings.PublicListener("relay_public")
+		if err != nil || public.Role != "relay" || public.Listener != "ingress" || public.Hostname != "relay.example.org" ||
+			public.Port != 8554 || public.TLS != mode || public.Transport != TCPTransport || len(public.PublicAddresses) != 2 {
+			t.Fatal(public, err)
+		}
+		public.PublicAddresses[0] = public.PublicAddresses[1]
+		public.Hostname = "changed.example.org"
+		if err := os.WriteFile(path, []byte("invalid"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		again, err := bindings.PublicListener("relay_public")
+		if err != nil || again.Hostname != "relay.example.org" || again.PublicAddresses[0].String() != "203.0.113.10" {
+			t.Fatal("caller or file changed the snapshot", again, err)
+		}
+	}
+	legacy, err := ReadBindings(writeBindingDocument(t, bindingDocument()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bindings := range []Bindings{{}, legacy} {
+		if _, err := bindings.PublicListener("relay_public"); !errors.Is(err, fault.Missing) {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestPublicListenerBindingsRejectMalformedValues(t *testing.T) {
+	for _, change := range [][2]string{
+		{`"name":"relay_public"`, `"name":"relay"`},
+		{`"role":"relay","listener":"ingress"`, `"role":"bad/role","listener":"ingress"`},
+		{`"listener":"ingress"`, `"listener":"bad/name"`},
+		{`"hostname":"relay.example.org"`, `"hostname":"https://relay.example.org"`},
+		{`"hostname":"relay.example.org"`, `"hostname":"Relay.example.org"`},
+		{`"hostname":"relay.example.org"`, `"hostname":"relay.example.org."`},
+		{`"port":8554`, `"port":0`}, {`"port":8554`, `"port":65536`},
+		{`"tls":"none"`, `"tls":"passthrough"`}, {`"transport":"tcp"`, `"transport":"udp"`},
+		{`["203.0.113.10","2001:db8::10"]`, `[]`},
+		{`["203.0.113.10","2001:db8::10"]`, `null`},
+		{`"203.0.113.10"`, `"127.0.0.1"`}, {`"203.0.113.10"`, `"0.0.0.0"`},
+		{`"203.0.113.10"`, `"169.254.1.1"`}, {`"203.0.113.10"`, `"224.0.0.1"`},
+		{`"203.0.113.10"`, `"::ffff:203.0.113.10"`}, {`"2001:db8::10"`, `"203.0.113.10"`},
+		{`"2001:db8::10"`, `"2001:db8::10%eth0"`},
+	} {
+		data := strings.Replace(publicBindingDocument(), change[0], change[1], 1)
+		if _, err := ReadBindings(writeBindingDocument(t, data)); !errors.Is(err, fault.Invalid) {
+			t.Fatalf("accepted %s: %v", change[1], err)
+		}
+	}
+}

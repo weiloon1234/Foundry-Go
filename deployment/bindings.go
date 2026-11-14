@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -39,6 +40,22 @@ type SHA256 string
 
 // EndpointScheme identifies the protocol used to address a private endpoint.
 type EndpointScheme string
+
+// ListenerTransport identifies a declared listener's network transport.
+type ListenerTransport string
+
+// TCPTransport carries a public listener over TCP.
+const TCPTransport ListenerTransport = "tcp"
+
+// TLSMode identifies where a public listener terminates TLS.
+type TLSMode string
+
+const (
+	// TLSEdge terminates TLS at the deployment's public edge.
+	TLSEdge TLSMode = "edge"
+	// TLSNone exposes the listener without TLS termination.
+	TLSNone TLSMode = "none"
+)
 
 const (
 	// HTTP addresses a private HTTP listener.
@@ -84,6 +101,25 @@ func (e Endpoint) URL() url.URL {
 	return url.URL{Scheme: string(e.Scheme), Host: net.JoinHostPort(e.Address.String(), strconv.Itoa(int(e.Port)))}
 }
 
+// PublicListener is the declared public face of a placed listener.
+// It is immutable for this invocation; it does not attest to current readiness.
+type PublicListener struct {
+	// Role identifies the role that owns the listener.
+	Role RoleName
+	// Listener identifies the declared listener within its role.
+	Listener ListenerName
+	// Hostname is the public DNS hostname selected by the profile.
+	Hostname string
+	// Port is the public port selected by the profile.
+	Port uint16
+	// TLS is the TLS mode declared by the topology.
+	TLS TLSMode
+	// Transport is the network transport declared by the topology.
+	Transport ListenerTransport
+	// PublicAddresses contains the profile's explicit public addresses, not a DNS lookup.
+	PublicAddresses []netip.Addr
+}
+
 // BundleDirectory is the protected service-local view, not the artifact's host path.
 type BundleDirectory struct {
 	// Path is the absolute path of the protected directory view.
@@ -95,11 +131,12 @@ type BundleDirectory struct {
 // Bindings is an immutable startup snapshot. Pass concrete values to business handlers.
 // Its zero value has no bindings; a missing name returns fault.Missing.
 type Bindings struct {
-	unit        Unit
-	deployment  SHA256
-	executables map[BindingName]Executable
-	endpoints   map[BindingName]Endpoint
-	bundles     map[BindingName]BundleDirectory
+	unit            Unit
+	deployment      SHA256
+	executables     map[BindingName]Executable
+	endpoints       map[BindingName]Endpoint
+	bundles         map[BindingName]BundleDirectory
+	publicListeners map[BindingName]PublicListener
 }
 
 // Unit returns the identity of the role invocation that owns these bindings.
@@ -125,6 +162,17 @@ func (b Bindings) Endpoint(name BindingName) (Endpoint, error) {
 	if !ok {
 		return Endpoint{}, safeerror.NewFault(fault.Missing, "deployment endpoint binding is missing")
 	}
+	return value, nil
+}
+
+// PublicListener returns the named public listener with an owned address snapshot.
+// A missing name returns an error classified as fault.Missing.
+func (b Bindings) PublicListener(name BindingName) (PublicListener, error) {
+	value, ok := b.publicListeners[name]
+	if !ok {
+		return PublicListener{}, safeerror.NewFault(fault.Missing, "deployment public listener binding is missing")
+	}
+	value.PublicAddresses = slices.Clone(value.PublicAddresses)
 	return value, nil
 }
 
@@ -184,6 +232,16 @@ type bundleWire struct {
 	Path   string `json:"path"`
 	SHA256 string `json:"artifact_sha256"`
 }
+type publicListenerWire struct {
+	Name            string            `json:"name"`
+	Role            string            `json:"role"`
+	Listener        string            `json:"listener"`
+	Hostname        string            `json:"hostname"`
+	Port            int               `json:"port"`
+	TLS             TLSMode           `json:"tls"`
+	Transport       ListenerTransport `json:"transport"`
+	PublicAddresses []string          `json:"public_addresses"`
+}
 type featureDescriptor struct {
 	Schema     int      `json:"schema"`
 	Instance   string   `json:"instance"`
@@ -194,17 +252,32 @@ type featureDescriptor struct {
 	Deployment string   `json:"deployment_sha256"`
 	Unit       unitWire `json:"unit"`
 	Bindings   struct {
-		Schema      int              `json:"schema"`
-		Role        string           `json:"role"`
-		Executables []executableWire `json:"executables"`
-		Endpoints   []endpointWire   `json:"endpoints"`
-		Bundles     []bundleWire     `json:"bundles"`
+		Schema          int                  `json:"schema"`
+		Role            string               `json:"role"`
+		Executables     []executableWire     `json:"executables"`
+		Endpoints       []endpointWire       `json:"endpoints"`
+		Bundles         []bundleWire         `json:"bundles"`
+		PublicListeners []publicListenerWire `json:"public_listeners,omitempty"`
 	} `json:"bindings"`
 }
 
 var bindingIdentifier = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 var digestIdentifier = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var instanceIdentifier = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$`)
+var hostnameLabel = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
+
+func publicHostname(hostname string) bool {
+	labels := strings.Split(hostname, ".")
+	if len(hostname) > 253 || len(labels) < 2 {
+		return false
+	}
+	for _, label := range labels {
+		if !hostnameLabel.MatchString(label) {
+			return false
+		}
+	}
+	return true
+}
 
 func absolutePath(path string) bool {
 	return len(path) <= 1024 && filepath.IsAbs(path) && filepath.Clean(path) == path && path != "/" &&
@@ -256,11 +329,12 @@ func (w featureDescriptor) bindings() (Bindings, error) {
 	if !digestIdentifier.MatchString(w.Deployment) || !instanceIdentifier.MatchString(w.Unit.Instance) ||
 		!bindingIdentifier.MatchString(w.Unit.Role) || w.Unit.Ordinal != 1 || w.Bindings.Schema != 1 ||
 		w.Bindings.Role != w.Unit.Role || len(w.Bindings.Executables) > 128 || len(w.Bindings.Endpoints) > 128 || len(w.Bindings.Bundles) > 64 ||
-		w.Bindings.Executables == nil || w.Bindings.Endpoints == nil || w.Bindings.Bundles == nil {
+		w.Bindings.Executables == nil || w.Bindings.Endpoints == nil || w.Bindings.Bundles == nil || len(w.Bindings.PublicListeners) > 128 {
 		return Bindings{}, invalidBindings()
 	}
 	b := Bindings{unit: Unit{InstanceID(w.Unit.Instance), RoleName(w.Unit.Role), 1}, deployment: SHA256(w.Deployment),
-		executables: make(map[BindingName]Executable), endpoints: make(map[BindingName]Endpoint), bundles: make(map[BindingName]BundleDirectory)}
+		executables: make(map[BindingName]Executable), endpoints: make(map[BindingName]Endpoint), bundles: make(map[BindingName]BundleDirectory),
+		publicListeners: make(map[BindingName]PublicListener)}
 	names := make(map[string]bool)
 	unique := func(name string) bool {
 		if !bindingIdentifier.MatchString(name) || names[name] {
@@ -289,6 +363,24 @@ func (w featureDescriptor) bindings() (Bindings, error) {
 			return Bindings{}, invalidBindings()
 		}
 		b.bundles[BindingName(v.Name)] = BundleDirectory{v.Path, SHA256(v.SHA256)}
+	}
+	for _, v := range w.Bindings.PublicListeners {
+		if !unique(v.Name) || !bindingIdentifier.MatchString(v.Role) || !bindingIdentifier.MatchString(v.Listener) ||
+			!publicHostname(v.Hostname) || v.Port < 1 || v.Port > 65535 || (v.TLS != TLSEdge && v.TLS != TLSNone) ||
+			v.Transport != TCPTransport || len(v.PublicAddresses) < 1 || len(v.PublicAddresses) > 16 {
+			return Bindings{}, invalidBindings()
+		}
+		addresses := make([]netip.Addr, 0, len(v.PublicAddresses))
+		for _, raw := range v.PublicAddresses {
+			address, err := netip.ParseAddr(raw)
+			if err != nil || address.String() != raw || address.Zone() != "" || address.Is4In6() ||
+				address.IsUnspecified() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsMulticast() || slices.Contains(addresses, address) {
+				return Bindings{}, invalidBindings()
+			}
+			addresses = append(addresses, address)
+		}
+		b.publicListeners[BindingName(v.Name)] = PublicListener{Role: RoleName(v.Role), Listener: ListenerName(v.Listener),
+			Hostname: v.Hostname, Port: uint16(v.Port), TLS: v.TLS, Transport: v.Transport, PublicAddresses: addresses}
 	}
 	return b, nil
 }
