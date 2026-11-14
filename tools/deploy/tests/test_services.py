@@ -223,6 +223,24 @@ class ServiceInventoryTests(unittest.TestCase):
             self.assertFalse(services.probe(role, self.inventory.resolution, time.monotonic() + 1))
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/health/ready"))
 
+    def test_release_carried_bundle_keeps_payload_digest_and_platform_checks(self):
+        raw = declaration()
+        raw["artifacts"] = {"extension": bundle()}
+        raw["artifacts"]["extension"]["platforms"]["linux-arm64"] = {
+            "source": {"release": {"path": "deploy/artifacts/extension.tar.gz"}}}
+        raw["roles"][1]["artifact_mounts"] = {"plugin": {"artifact": "extension", "bundle": "plugin",
+                                                          "area": "config", "path": "plugins/extension"}}
+        topology = t.parse_topology(raw)
+        role = topology.roles[1]
+        paths = services.ServicePaths.for_unit(c.UnitIdentity(INSTANCE, "relay", 1), CURRENT)
+        payload = c.ArtifactPayload("extension", "linux-arm64", "deploy/artifacts/extension.tar.gz", OTHER,
+                                   (c.PayloadMember("plugin/extension.so", DIGEST, 6, "module"),))
+        roots = {"extension": ("/opt/foundry/pinned", OTHER)}
+        self.assertEqual(services.bundle_views(role, paths, topology, "arm64", roots, (payload,))[0].artifact_sha256, OTHER)
+        for bad in (replace(payload, sha256=DIGEST), replace(payload, platform="linux-amd64")):
+            with self.assertRaises(c.DeployError):
+                services.bundle_views(role, paths, topology, "arm64", roots, (bad,))
+
     def test_bundle_views_select_exact_architecture_and_confined_export(self):
         raw = declaration()
         raw["artifacts"] = {"extension": bundle()}

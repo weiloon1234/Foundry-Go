@@ -258,7 +258,9 @@ class ManagerTests(unittest.TestCase):
         value = profile()
         self.profile.update(schema=3, placement=value["placement"], listeners=value["listeners"])
         self.entry["topology"] = validate_topology(declaration())
-        self.host.write_registry(registry(self.entry))
+        registered = registry(self.entry)
+        registered["tools"]["generation"] = upgrades.protocol()["generation"]
+        self.host.write_registry(registered)
         for action in ("down", "up"):
             parameters = {"retry": 30} if action == "down" else {}
             with self.subTest(action=action), patch.object(feature_lifecycle, "request_operation", return_value={"ok": True}) as owner:

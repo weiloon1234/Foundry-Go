@@ -1,0 +1,181 @@
+"""Recovery seams exercise real owners; machine I/O stays inside WiringHost."""
+from contextlib import nullcontext
+from dataclasses import replace
+import copy
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+import uuid
+
+import test_feature_wiring as wiring
+import admission
+import contracts as c
+import feature_lifecycle as lifecycle
+import feature_recovery
+import operation_lock
+import operations
+import recovery_rehearsal
+import release
+import runtime_config
+import services
+from topology import parse_profile
+
+
+class FeatureRecoveryTests(wiring.FeatureWiringFixture):
+    def target(self, *, running=('http', 'relay'), holds=(), mode='takeover', public=False):
+        self.build_archive(independent=True, secrets=True, public=public, rehearsal_safe=mode == 'rehearsal')
+        if mode == 'rehearsal':
+            self.build_archive(secrets=True, rehearsal_safe=True)
+        if public:
+            wiring.FeatureWiringTests.configure_firewall(self)
+        private = {'configuration': {'FOUNDRY_SERVICE_SECRET__RELAY_TOKEN': 'recovery-secret-canary'}}
+        plan = self.request('bootstrap-plan', topology=self.topology.projection())
+        self.request('bootstrap-apply', topology=self.topology.projection(), plan_token=plan['plan_token'], confirm=True, secrets=private)
+        self.request('activate', archive=str(self.archive), archive_sha256=c.digest(self.archive), confirm=True)
+        registry, entry = self.host.require_identity(self.project, self.profile)
+        _, selected, inventory, launch = lifecycle.load(self.host, entry)
+        selected = replace(selected, enabled_roles=tuple(running), maintenance_holds=tuple(holds))
+        snapshot = {'deployment': c.record_document(inventory.deployment), 'resolution': c.record_document(inventory.resolution),
+                    'selection': c.record_document(selected), 'declaration': launch['declaration'], 'secret_paths': launch['secret_paths']}
+        source_profile = copy.deepcopy(self.profile)
+        configuration = self.host.paths.instance_config(entry['name'])
+        self.source_host = self.host
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.host = wiring.WiringHost(Path(temporary.name))
+        self.profile = copy.deepcopy(source_profile)
+        self.profile['host'].update(host_id=str(uuid.uuid4()), address='replacement.example.test')
+        if public:
+            for listener in self.profile['listeners'].values():
+                listener['dns']['public_addresses'] = ['203.0.113.11', '2001:db8:42::11']
+            wiring.FeatureWiringTests.configure_firewall(self)
+        self.profile = parse_profile(self.profile, self.topology).projection()
+        self.envelope = wiring.upgrades.protocol_metadata(wiring.TOOLS)
+        # Model the already completed resources phase with the normal owners.
+        plan = self.request('bootstrap-plan', topology=self.topology.projection())
+        self.request('bootstrap-apply', topology=self.topology.projection(), plan_token=plan['plan_token'], confirm=True, secrets=private)
+        registry, entry = self.host.require_identity(self.project, self.profile)
+        shutil.copytree(configuration, self.host.paths.instance_config(entry['name']), dirs_exist_ok=True)
+        # Physical roots are the fake filesystem boundary; real hosts both use /.
+        for file in self.host.paths.instance_config(entry['name']).rglob('*'):
+            if file.is_file() and file.suffix in ('.json', '.env'):
+                file.write_bytes(file.read_bytes().replace(str(self.source_host.paths.root).encode(), str(self.host.paths.root).encode()))
+        operation = str(uuid.uuid4())
+        entry['configuration_revision'] = inventory.resolution.private_revision
+        entry['recovered_from'] = {'operation_id': operation, 'mode': mode, 'release_commit': 'abcdef12'}
+        entry['provisioning']['state'] = 'rehearsal' if mode == 'rehearsal' else 'preparing'
+        self.host.journal(registry, entry)
+        if mode == 'rehearsal':
+            self.host.paths.p('/etc/nginx/sites-enabled/foundry-' + entry['name'] + '.conf').unlink()
+        self.journal = {'intent': {'project': self.project, 'profile': self.profile, 'source_profile': source_profile,
+            'effective_profile': self.profile, 'topology': entry['topology'], 'mode': mode, 'operation_id': operation,
+            'archive_sha256': c.digest(self.archive), 'bundle': registry['tools']['bundle_sha256'],
+            'recovery_enabled_roles': list(running), 'recovery_roles': sorted(set(running) - set(holds)),
+            'recovery_maintenance_holds': list(holds), 'deployment_sha256': c.canonical_digest(snapshot['deployment'])},
+            'completed': ['resources', 'database'], 'old_server_stopped_confirmed_at': c.now() if mode == 'takeover' else None}
+        self.snapshot = snapshot
+        # The fake systemd executor runs in this process. The real FD transport is
+        # separately exercised; keep the existing caller lock for simulated units.
+        original = operation_lock.acquire
+        self.enterContext(patch.object(operation_lock, 'lend', side_effect=lambda *_: nullcontext()))
+        self.enterContext(patch.object(operation_lock, 'acquire', side_effect=lambda h, r, **kw:
+            nullcontext() if r['action'] == 'recover-activate' else original(h, r, **kw)))
+        self.enterContext(patch.object(operations, 'Host', return_value=self.host))
+        self.enterContext(patch.object(wiring.feature_runtime, 'Host', return_value=self.host))
+        return registry, entry
+
+    def prepare(self, registry, entry):
+        lifecycle.prepare_recovery(self.host, registry, entry, self.journal, self.snapshot,
+                                   self.archive, c.digest(self.archive), wiring.TOOLS)
+        self.journal['completed'].append('application')
+
+    def test_takeover_exact_release_enablement_private_health_and_fresh_replay(self):
+        registry, entry = self.target(running=('relay',), public=True)
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            _, selection, inventory, launch = lifecycle.load(self.host, entry)
+            self.assertEqual(services.enabled_units(self.host, inventory.units), ('relay',))
+            self.assertFalse(self.host.running)
+            self.assertEqual(launch['declaration'], self.snapshot['declaration'])
+            self.assertNotEqual(launch['profile'], launch['declaration']['profile'])
+            result = lifecycle.activate_recovery(self.host, registry, entry, self.journal)
+            self.assertEqual(result, {'version': inventory.deployment.release})
+            self.assertEqual(set(self.host.running), {inventory.units['relay']})
+            self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
+            before = list(self.host.started)
+            self.assertEqual(lifecycle.activate_recovery(self.host, registry, entry, self.journal), result)
+            self.assertEqual(self.host.started, before)
+            self.host.run(['systemctl', 'stop', inventory.units['relay']])
+            with self.assertRaises(c.DeployError):
+                lifecycle.recovery_ready(self.host, entry, self.journal)
+        self.assertFalse(any('migrate' in command or 'db:seed' in command for command in self.host.commands))
+
+    def test_empty_selection_stays_stopped_and_closed(self):
+        registry, entry = self.target(running=())
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            lifecycle.activate_recovery(self.host, registry, entry, self.journal)
+            self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
+        self.assertEqual(self.host.started, [])
+        self.assertFalse(self.host.running)
+
+    def test_preparation_replay_keeps_resolution_and_holds(self):
+        registry, entry = self.target(holds=('relay',))
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            _, selected, inventory, _ = lifecycle.load(self.host, entry)
+            self.prepare(registry, entry)
+            self.assertEqual(lifecycle.load(self.host, entry)[1], selected)
+            lifecycle.activate_recovery(self.host, registry, entry, self.journal)
+            self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
+            self.assertEqual(set(self.host.running), {inventory.units['http']})
+
+    def test_wrong_source_release_refuses_before_packages_or_units(self):
+        registry, entry = self.target()
+        self.snapshot['declaration'] = copy.deepcopy(self.snapshot['declaration'])
+        self.snapshot['declaration']['profile']['host']['address'] = 'wrong.example.test'
+        before = list(self.host.commands)
+        with self.host.lock('host'), self.assertRaises(c.DeployError):
+            self.prepare(registry, entry)
+        self.assertEqual(self.host.commands, before)
+
+    def test_failed_private_health_closes_all_work_and_never_repeats_startup(self):
+        registry, entry = self.target()
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            with patch.object(services, 'wait_ready', return_value=False), self.assertRaises(c.DeployError):
+                lifecycle.activate_recovery(self.host, registry, entry, self.journal)
+            self.assertFalse(self.host.running)
+            before = list(self.host.started)
+            with self.assertRaises(c.DeployError):
+                lifecycle.activate_recovery(self.host, registry, entry, self.journal)
+            self.assertEqual(self.host.started, before)
+            with self.assertRaises(c.DeployError):
+                lifecycle.recovery_ready(self.host, entry, self.journal)
+
+    def test_rehearsal_filters_only_custom_roles_and_keeps_ingress_closed(self):
+        registry, entry = self.target(mode='rehearsal')
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            _, _, inventory, _ = lifecycle.load(self.host, entry)
+            for role in ('http', 'relay'):
+                content = self.host.paths.p('/etc/systemd/system/' + inventory.units[role]).read_text()
+                self.assertEqual('IPAddressDeny=any' in content, role == 'relay')
+                self.assertEqual('IPAddressAllow=localhost' in content, role == 'relay')
+            with patch.object(recovery_rehearsal, 'isolation', return_value={'proven': True}):
+                lifecycle.activate_recovery(self.host, registry, entry, self.journal)
+                self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
+            self.assertFalse(self.host.paths.p('/run/foundry/nginx/' + inventory.profile.instance_id + '/http-open.conf').exists())
+
+    def test_unproven_rehearsal_never_dispatches_custom_executable(self):
+        registry, entry = self.target(mode='rehearsal')
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            with patch.object(recovery_rehearsal, 'isolation', side_effect=c.DeployError('rehearsal_isolation', 'Unsupported BPF')):
+                with self.assertRaises(c.DeployError):
+                    lifecycle.activate_recovery(self.host, registry, entry, self.journal)
+            self.assertFalse(self.host.running)

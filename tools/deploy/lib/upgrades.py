@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
 from contracts import (HOST_PATHS, MAX_JSON, DeployError, atomic_json, atomic_write, check_path,
                        now, parse_json, read_json, require, valid_uuid, DeploymentSelection,
-                       FEATURE_CAPABILITIES, TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
+                       FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, TOPOLOGY_SCHEMA, FEATURE_PROFILE_SCHEMA, ARCHIVE_SCHEMA)
 
 READ_ACTIONS = frozenset({"hello", "inspect", "status", "report", "logs", "config-keys", "sync", "tools-plan", "recover-plan", "capacity-plan"})
 UPGRADE_ACTIONS = frozenset({"tools-apply", "upgrade-resume"})
@@ -54,9 +54,11 @@ GENERATION_12_FILES = frozenset({"lib/feature_lifecycle.py", "lib/feature_networ
                                "lib/firewall.py", "lib/listeners.py", "server/templates/firewall-runtime.rules",
                                "server/templates/foundry-edge-boot.conf", "server/templates/nginx-http-admission.conf",
                                "server/templates/nginx-stream.conf", "server/templates/nginx-tcp-tls.conf"})
-REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES
 REHEARSAL_FILES = frozenset({"local/containers.py", "local/rehearsal.py", "local/rehearsal_host.py",
     "local/rehearsal_probe.py", "local/host.Dockerfile", "local/acceptance.Dockerfile"})
+GENERATION_13_FILES = REHEARSAL_FILES | frozenset({"lib/feature_plan.py", "lib/feature_maintenance.py",
+    "lib/recovery_rehearsal.py", "lib/operation_lock.py", "lib/feature_recovery.py"})
+REQUIRED_FILES = BASE_REQUIRED_FILES | GENERATION_11_FILES | GENERATION_12_FILES | GENERATION_13_FILES
 
 
 def required_files(generation: int) -> frozenset[str]:
@@ -65,6 +67,8 @@ def required_files(generation: int) -> frozenset[str]:
         required |= GENERATION_11_FILES
     if generation >= 12:
         required |= GENERATION_12_FILES
+    if generation >= 13:
+        required |= GENERATION_13_FILES
     return required
 
 
@@ -413,7 +417,16 @@ def _check_feature_request(registry, request, action):
     topology = request.get("topology")
     requested = (isinstance(profile, dict) and profile.get("schema") == FEATURE_PROFILE_SCHEMA
                  or isinstance(topology, dict) and topology.get("schema") == TOPOLOGY_SCHEMA)
-    supported = {"down", "up", "rollback", "release-plan", "config-set", "bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "status", "logs", "sync", "config-keys", "report"}
+    supported = {"backup-configure", "backup-run", "restore-drill", "recover-plan", "recover-apply", "down", "up", "rollback", "release-plan", "config-set", "bootstrap-plan", "bootstrap-apply", "activate", "restart", "stop", "status", "logs", "sync", "config-keys", "report"}
+    feature = requested or registry is not None and any(
+        (entry.get("topology", {}).get("schema") == 2 or "deployment_selection" in entry)
+        and (profile is None or entry["profile"]["instance_id"] == profile.get("instance_id"))
+        for entry in registry["instances"].values())
+    if feature and action in (supported - READ_ACTIONS) | {"recover-plan"}:
+        require(request.get("client", {}).get("generation", 0) >= FEATURE_LIFECYCLE_GENERATION,
+                "instance_capability_required", "B24 release 1 operations require deploy client generation 13.")
+        require(registry is None or registry["tools"]["generation"] >= FEATURE_LIFECYCLE_GENERATION,
+                "host_upgrade_required", "Upgrade this generation-12 host to generation 13 before B24 release 1 operations.")
     if requested and action not in supported:
         from feature_lifecycle import refuse
         refuse(action)

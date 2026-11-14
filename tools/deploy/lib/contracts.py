@@ -586,6 +586,7 @@ RECORD_SCHEMA = 1
 FEATURE_CAPABILITIES = frozenset({"topology-v2", "profile-v3", "release-v2"})
 # Historical capability floor, independent of the currently selected tool generation.
 FEATURE_INTRODUCTION_GENERATION = 12
+FEATURE_LIFECYCLE_GENERATION = 13
 MAX_ROLES, MAX_ARTIFACTS, MAX_LISTENERS = 32, 32, 256
 
 

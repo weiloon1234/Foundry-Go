@@ -2,7 +2,7 @@
 import os
 
 import admission
-from contracts import HOST_PATHS, atomic_json, atomic_write, require
+from contracts import HOST_PATHS, atomic_json, atomic_write, record_document, require
 from topology import EndpointBinding
 
 
@@ -38,6 +38,15 @@ def record(host, entry):
     return admission.read_owned(host, path, lambda value: value) if path.exists() else None
 
 
+def active_holds(host, entry, inventory):
+    saved = record(host, entry)
+    held = set(saved["holds"]) if saved else set()
+    held.update(entry.get("deployment_selection", {}).get("maintenance_holds", ()))
+    held.update(name for name, spec in inventory.specs.items()
+                if admission.protected_path(host, host.paths.p(marker_path(spec.identity)), "file").exists())
+    return held
+
+
 def live(host, entry):
     import maintenance
     import release
@@ -66,23 +75,55 @@ def selection(host, entry, inventory, enabled, running, action):
     """Compute intent without changing shared pause, markers, or processes."""
     saved = record(host, entry)
     observed = live(host, entry)
+    prior_holds = active_holds(host, entry, inventory)
     if action in ("down", "up"):
         down = action == "down"
     else:
-        down = (observed is not None and observed["down"]) or bool(saved and saved["holds"])
+        down = observed["down"] if observed is not None else bool(prior_holds)
     holds = (stopped_roles(inventory.topology) & inventory.roles.keys()) if down else set()
+    if observed is None and action not in ("down", "up"):
+        # Preserve even removed copies in the private journal until shared state
+        # is observed. The selected graph carries only its declared holds.
+        holds |= prior_holds
     prior_running = set(saved["running"]) if saved and saved["holds"] else set(running)
     if down and saved and saved["holds"]:
         prior_running |= set(enabled) - set(saved["enabled"])
     if action == "up":
         # A deliberate disable always wins over the remembered pre-down selection.
         running = (set(running) | prior_running) & set(enabled) & inventory.roles.keys()
+    elif observed is not None or action == "down":
+        running = set(running) | ((prior_holds - holds) & prior_running & set(enabled) & inventory.roles.keys())
     running = set(running) - holds
     while any(not set(inventory.roles[name].common.requires) <= running for name in running):
         running = {name for name in running if set(inventory.roles[name].common.requires) <= running}
+    holds |= (prior_holds & set(enabled) & inventory.roles.keys()) - running
     value = {"operation_id": None, "holds": sorted(holds), "enabled": sorted(enabled),
-             "running": sorted(prior_running | (set(running) if down else set()))}
-    return holds, running, value
+             "running": sorted(prior_running | (set(running) if down else set())),
+             "restore_holds": sorted(prior_holds - holds)}
+    return holds & inventory.roles.keys(), running, value
+
+
+def restore_failed_holds(host, entry, inventory, previous, operation):
+    """Independent cleanup retains released holds if startup never completed."""
+    from dataclasses import replace
+    import operations
+    path = operations.directory(host, operation) / "maintenance-intent.json"
+    if not path.exists():
+        return False
+    intent = admission.read_owned(host, path, lambda value: value)
+    released = set(intent.get("restore_holds", ()))
+    if not released:
+        return False
+    holds = set(intent["holds"]) | released
+    publish_markers(host, previous, holds)
+    publish_markers(host, inventory, holds)
+    store = admission.AdmissionStore(host, inventory.profile.instance_id)
+    atomic_json(store.durable / "maintenance.json", {**intent, "holds": sorted(holds)}, mode=0o600)
+    selected, resolution = store._selection()
+    selected = replace(selected, maintenance_holds=tuple(sorted(holds & set(resolution.roles))))
+    store._write(store.durable / "selection.json", selected)
+    entry["deployment_selection"] = record_document(selected)
+    return True
 
 
 def publish_markers(host, inventory, holds):
@@ -135,7 +176,7 @@ def reconcile(host, project, profile):
         saved = record(host, entry)
         _, _, inventory, _ = lifecycle.load(host, entry)
         expected = stopped_roles(inventory.topology) & inventory.roles.keys() if observed["down"] else set()
-        actual = set(saved["holds"]) if saved else set()
+        actual = set(saved["holds"]) & inventory.roles.keys() if saved else set()
         if actual == expected:
             return
     lifecycle.request_operation(host, "down" if observed["down"] else "up", project, profile, maintenance_reconcile=True)

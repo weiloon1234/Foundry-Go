@@ -1,7 +1,7 @@
-# Host capabilities preview
+# Host capabilities
 
-The B24 preview deploys an application and single-instance custom services on a
-generation-12 Foundry host. It installs declared distribution packages, verifies
+B24 release 1 deploys an application and single-instance custom services on a
+generation-13 Foundry host. It installs declared distribution packages, verifies
 pinned artifacts, prepares service-local configuration and bundle views, and
 starts roles through admission in readiness order. Applications receive typed
 bindings to private endpoints and executables. Public TCP uses nginx stream and
@@ -9,8 +9,10 @@ source-filtered UFW rules; opening follows whole-set health verification. Restar
 boot admission, reports, logs and whole-instance stop are integrated.
 
 This guide describes topology schema 2 and profile schema 3. Existing topology-1
-applications and generation 9–11 hosts keep their existing behavior. Upgrade tools
-before enabling these declarations. The app-facing declarations and binding API
+applications and generation 9–12 hosts keep their existing behavior. Upgrade tools
+before using release 1 capabilities. Generation-12 previews remain supported by
+their installed tools. Enablement adoption and release 1 transitions set a sticky
+generation-13 client floor, including after application rollback. The app-facing declarations and binding API
 are intended to remain stable as later tool-side lifecycle support arrives.
 See the [deployment guide](deployment.md) for SSH setup, credentials, project
 identity, HTTP certificates and the ordinary application release layout.
@@ -41,11 +43,11 @@ that is a capability milestone, not a promised framework version or date.
 | Bundle ABI without package-version evidence | Bundle consumers must use package executables with one matching observed service package version. An artifact executable cannot supply this preview proof. |
 | Feature release/artifact pruning and helper-bundle pruning | Explicit feature pruning refuses. Automatic helper retention keeps every helper bundle and upgrade journal with a capability diagnostic. Invocation/view limits still apply; reaching a limit refuses further starts. |
 | Host capacity changes involving features | The capacity owner is not integrated with feature lifecycle yet. Legacy neighbors retain their existing supported operations. |
-| Backup configuration/run, restore drill and recovery operations for feature instances | The request dispatcher still refuses these operations. Backup and drill owners support feature records; recovery requires the lane A interfaces described below before dispatch can be enabled. |
 
 The server feature-operation allowlist is `bootstrap-plan`, `bootstrap-apply`,
 `release-plan`, `activate`, `rollback`, `restart`, `stop`, `status`, `logs`, `sync`, `config-keys`,
-`config-set`, `down`, `up` and `report`.
+`config-set`, `down`, `up`, `backup-configure`, `backup-run`, `restore-drill`,
+`recover-plan`, `recover-apply` and `report`. Backup credential rotation remains gated.
 Host tool upgrades have their own upgrade protocol. Other feature mutations are
 not implied by a command appearing in the legacy deployment guide.
 
@@ -127,7 +129,7 @@ These declaration failures use schema/capability validation errors rather than
 silently dropping fields. In particular, plain TCP **is** supported: declare
 `tls: "none"` explicitly and acknowledge application authentication.
 
-## Backup and replacement-host recovery integration
+## Backup and replacement-host recovery
 
 The backup owner archives PostgreSQL and the age-encrypted configuration tree.
 Feature archives also retain the selected deployment, resolution, selection and
@@ -166,8 +168,14 @@ Recovery rehearsal selects HTTP and its prerequisite closure. Custom roles outsi
 that closure remain stopped. An unsafe prerequisite refuses with
 `recovery_rehearsal_dependency` and its role name. A custom HTTP prerequisite must
 declare `recovery_rehearsal_safe: true`; the default is false. Built-in background
-dependencies remain refused. Lane A must also prove private listeners and
-restricted external access before starting the selected rehearsal roles.
+dependencies remain refused. Each selected custom role receives systemd
+`IPAddressDeny=any` and `IPAddressAllow=localhost`. Its fixed runtime helper reads
+back the effective unit policy and verifies attached ingress and egress cgroup BPF
+programs before dispatch. Missing support, permissions or matching policy refuses
+with `rehearsal_isolation`. Only IPv4/IPv6 loopback is allowed; public routes stay
+closed. HTTP retains its existing rehearsal behaviour, and legacy rehearsal is
+unchanged. The systemd policy follows the
+[IP filtering contract](https://www.freedesktop.org/software/systemd/man/255/systemd.resource-control.html#IPAddressAllow=).
 
 The recovery owner accepts the existing typed `RecoveryPublicBinding` through its
 `recovery_public_binding` argument. It requires every source public listener,
@@ -180,11 +188,26 @@ DNS-only A/AAAA instructions. `external_pending` and `external_observed` are
 separate from host readiness. Recursive answers never prove provider ownership or
 complete traffic cutover, and the tool makes no application DNS writes.
 
-Public dispatch remains gated until integration. Recovery additionally requires
-lane A's `prepare_recovery`, `activate_recovery` and `recovery_ready` callbacks;
-it refuses before provisioning if any is missing. The
-[recovery handoff](../../tools/deploy/tests/RECOVERY_HANDOFF.md) owns the exact
-dispatcher changes, callback signatures, call order and evidence requirements.
+Generation 13 integrates `prepare_recovery`, `activate_recovery` and
+`recovery_ready`. Preparation verifies the original archive/commit, installs its
+packages and artifacts, proves the graph stopped with ingress closed, and restores
+exact archived enablement and maintenance holds. Activation never migrates or
+seeds restored data. It validates the schema and current credentials, then starts
+the reviewed graph through the pinned admission and independent cleanup owner.
+An empty enabled set stays stopped. Repeated completion checks freshly verify
+release/configuration identity, process admission, private health and exposure.
+An interrupted activation keeps its cleanup obligations and refuses blind replay.
+
+For feature takeover with public listeners, set
+`FOUNDRY_RECOVERY_PUBLIC_BINDING_FILE` to a JSON file containing the complete
+`RecoveryPublicBinding` above. The client uses its operation and target-host UUIDs,
+validates it against the archived metadata, and sends the identical object to plan
+and apply. Resume with the same file and inputs. Successful takeover persists the
+server's validated effective `profile_update`; rehearsal never saves a profile.
+The original declaration stays in the archive, including after later backups.
+
+The [recovery handoff](../../tools/deploy/tests/RECOVERY_HANDOFF.md) describes the
+callback interfaces and the opt-in container acceptance scenario.
 
 <a id="recipe-declarations"></a>
 ## Declaration ownership
@@ -580,10 +603,10 @@ role descriptor. Neither loader downloads artifacts nor replaces host verificati
 
 Use the application's pinned framework tool and the thin Make targets from the
 [deployment invocation guide](deployment.md#recipe-deploy). Feature topology
-requires generation 12. On an already bound older host, use its existing legacy
+requires generation 13 for release 1 operations. On an already bound older host, use its existing
 profile to review and apply the forward-only tool upgrade **before** switching
 the consumer to schema 3. Do not use a feature profile to request an older host's
-upgrade. A fresh host gets the pinned generation-12 tools during bootstrap.
+upgrade. A fresh host gets the pinned generation-13 tools during bootstrap.
 
 ```sh
 ENVIRONMENT=production ACTION=tools-plan make deploy
@@ -592,7 +615,7 @@ ENVIRONMENT=production ACTION=tools-apply PLAN_TOKEN='<reviewed-token>' OPERATIO
 
 Keep the operation UUID for a tool-upgrade resume. Review the plan; the apply
 command asks for confirmation. Tool generation is independent of the framework's
-semantic version: verify the selected bundle reports generation 12, rather than
+semantic version: verify the selected bundle reports generation 13, rather than
 assuming a version label establishes support.
 
 Before bootstrap, prepare the existing SSH, PostgreSQL/Redis and HTTP certificate
@@ -672,6 +695,14 @@ them. `up` removes markers only under pending admission after closure is proven.
 If readiness then fails, the operation reports failure and closes the affected
 services; it does not claim the application pause was restored. After cleanup
 proves closure, an explicit `up` can retry the held selection.
+
+Release and rollback plans expect public exposure only for enabled copies without
+active holds. Changing a held role to `maintenance: "continue"` restores it if it
+was running before maintenance and remains enabled; the transition must pass its
+readiness checks. Failed startup reinstates the hold through independent cleanup.
+If the shared store cannot be observed, a declaration change cannot remove an
+existing marker. A later successful observation reconciles the policy. A deliberate
+disable still prevents restoration.
 
 ## Rehearse locally
 
@@ -758,8 +789,8 @@ directory for inspection; it does not retain successful runs.
 
 Synthetic tests do not establish real DNS-01, provider policy, global DNS cutover,
 cloud firewall behavior, sustained capacity or business recovery. Production
-refusals remain refusals. In particular, release-carried bundle activation awaits
-the service bundle integration described [above](#release-carried-artifacts).
+refusals remain refusals. Release-carried bundles use the same verified service
+views as HTTPS artifacts.
 The framework acceptance runner uses the same shipped host images, CA setup and
 systemd container helpers; its fixture-specific scenarios and private module proxy
 remain separate from application rehearsal.

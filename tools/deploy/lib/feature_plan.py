@@ -136,6 +136,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                     "rollback_schema", "Target release is incompatible with the current database schema.")
         observed = observations(host, registry, entry, topology, candidate_profile)
         enabled, running, removed = lifecycle.transition_enablement(host, entry, inventory, restoring=restoring)
+        holds, maintenance_running, _ = feature_maintenance.selection(host, entry, inventory, enabled, running, None)
         # Values and credential-derived digests exist only in the private records.
         public = {"ok": True, "operation_id": operation_id, "archive_sha256": checksum,
                   "deployment_sha256": inventory.resolution.deployment_sha256,
@@ -147,6 +148,7 @@ def plan(host, project, profile, archive, checksum, operation_id, configuration=
                   "maintenance_policy": {name: "stop" if role.common.maintenance == "stop" else "continue"
                                          for name, role in inventory.roles.items()},
                   "restoring": restoring, "enabled_roles": list(enabled), "running_roles": list(running),
+                  "maintenance_holds": sorted(holds), "maintenance_running_roles": sorted(maintenance_running),
                   "removed_enablement": removed}
         public["plan_token"] = canonical_digest(public)
         admission.protected_directory(host, path.parent, 0o700)

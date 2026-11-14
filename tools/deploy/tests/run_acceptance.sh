@@ -234,10 +234,50 @@ phase() {
 docker exec "$host" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade' >"$logs/package-index.log" 2>&1
 phase foreign-baseline /verification/deploy/tests/acceptance_foreign.py baseline --mode "$mode"
 baseline_done=1
+recovery_target() {
+  recovery_host=$1
+  recovery_mode=$2
+  python3 "$containers" create-host --platform "$platform" --name "$recovery_host" --network "$network" \
+    --mount "type=bind,source=$framework/tools/deploy,target=/verification/deploy,readonly" \
+    --image "$base_image" >"$logs/$recovery_mode-create.log" 2>&1
+  recovery_hosts+=("$recovery_host")
+  # Recovery installs the synthetic CA only after production's empty-host preflight.
+  python3 "$containers" start-host "$recovery_host" >"$logs/$recovery_mode-start.log" 2>&1
+  # Same image-only policy handling as acceptance.Dockerfile, before the target
+  # is presented to production recovery. Production never replaces this file.
+  docker exec "$recovery_host" sh -c 'if [ -e /usr/sbin/policy-rc.d ]; then mv /usr/sbin/policy-rc.d /usr/sbin/policy-rc.d.acceptance-image; fi'
+  docker exec "$recovery_host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a/recover-export
+  docker cp "$logs/.private-recovery/." "$recovery_host:/var/lib/foundry-acceptance-f4a/recover-export/" >"$logs/$recovery_mode-copy.log" 2>&1
+  docker cp "$certs/ca.crt" "$recovery_host:/var/lib/foundry-acceptance-f4a/ca.crt" >>"$logs/$recovery_mode-copy.log" 2>&1
+  docker cp "$certs/ca.key" "$recovery_host:/var/lib/foundry-acceptance-f4a/ca.key" >>"$logs/$recovery_mode-copy.log" 2>&1
+  docker exec "$recovery_host" cp /var/lib/foundry-acceptance-f4a/ca.crt /usr/local/share/ca-certificates/acceptance-root.crt
+  docker exec "$recovery_host" chmod 644 /usr/local/share/ca-certificates/acceptance-root.crt
+  docker exec "$recovery_host" chmod 600 /var/lib/foundry-acceptance-f4a/ca.key
+  docker exec "$recovery_host" update-ca-certificates >"$logs/$recovery_mode-trust.log" 2>&1
+  docker exec "$recovery_host" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade' >"$logs/$recovery_mode-packages.log" 2>&1
+  if ((feature_preview)); then
+    docker exec "$recovery_host" apt-get install -y --no-install-recommends ufw iptables nftables >"$logs/$recovery_mode-ufw.log" 2>&1
+  fi
+  # Real recovery runs from a root-only staged bundle that service accounts can't read.
+  docker exec "$recovery_host" sh -c 'umask 077; mkdir /var/lib/foundry-acceptance-f4a/staged-tools; cp -R /verification/deploy/. /var/lib/foundry-acceptance-f4a/staged-tools/'
+  phase_on "$recovery_host" "recover-$recovery_mode" "/var/lib/foundry-acceptance-f4a/staged-tools/tests/${3:-acceptance_recover.py}" "$recovery_mode"
+}
+
 if ((feature_preview)); then
   phase feature-preview /verification/deploy/tests/acceptance_feature.py --archive /var/lib/foundry-acceptance-f4a/input.tar.gz
+  phase feature-recovery-source /verification/deploy/tests/acceptance_feature_recovery.py source
+  foreign_verified=1
   phase foreign-verify /verification/deploy/tests/acceptance_foreign.py verify
-  echo 'PASS feature preview scenario'
+  mkdir -m 700 "$logs/.private-recovery"
+  docker cp "$host:/var/lib/foundry-acceptance-f4a/recover-export/." "$logs/.private-recovery/" >"$logs/feature-recover-export.log" 2>&1
+  [[ "$(docker inspect --format '{{.State.Running}}' "$host")" == true ]] || { echo 'Source must still be running for the unconfirmed takeover check' >&2; exit 1; }
+  recovery_target "$takeover" target-plan acceptance_feature_recovery.py
+  docker stop --time 150 "$host" >"$logs/feature-recover-stop-source.log" 2>&1
+  [[ "$(docker inspect --format '{{.State.Running}}' "$host")" == false ]] || { echo 'Source must be stopped before takeover' >&2; exit 1; }
+  phase_on "$takeover" feature-recovery-takeover \
+    /var/lib/foundry-acceptance-f4a/staged-tools/tests/acceptance_feature_recovery.py takeover --old-server-stopped
+  rm -rf "$logs/.private-recovery"
+  echo 'PASS feature preview, backup, restore drill and replacement takeover'
   exit 0
 fi
 host_phase=()
@@ -268,31 +308,6 @@ phase foreign-verify /verification/deploy/tests/acceptance_foreign.py verify
 phase recover-source /verification/deploy/tests/acceptance_recover.py source
 mkdir -m 700 "$logs/.private-recovery"
 docker cp "$host:/var/lib/foundry-acceptance-f4a/recover-export/." "$logs/.private-recovery/" >"$logs/recover-export.log" 2>&1
-recovery_target() {
-  recovery_host=$1
-  recovery_mode=$2
-  python3 "$containers" create-host --platform "$platform" --name "$recovery_host" --network "$network" \
-    --mount "type=bind,source=$framework/tools/deploy,target=/verification/deploy,readonly" \
-    --image "$base_image" >"$logs/$recovery_mode-create.log" 2>&1
-  recovery_hosts+=("$recovery_host")
-  # Recovery installs the synthetic CA only after production's empty-host preflight.
-  python3 "$containers" start-host "$recovery_host" >"$logs/$recovery_mode-start.log" 2>&1
-  # Same image-only policy handling as acceptance.Dockerfile, before the target
-  # is presented to production recovery. Production never replaces this file.
-  docker exec "$recovery_host" sh -c 'if [ -e /usr/sbin/policy-rc.d ]; then mv /usr/sbin/policy-rc.d /usr/sbin/policy-rc.d.acceptance-image; fi'
-  docker exec "$recovery_host" mkdir -m 700 -p /var/lib/foundry-acceptance-f4a/recover-export
-  docker cp "$logs/.private-recovery/." "$recovery_host:/var/lib/foundry-acceptance-f4a/recover-export/" >"$logs/$recovery_mode-copy.log" 2>&1
-  docker cp "$certs/ca.crt" "$recovery_host:/var/lib/foundry-acceptance-f4a/ca.crt" >>"$logs/$recovery_mode-copy.log" 2>&1
-  docker cp "$certs/ca.key" "$recovery_host:/var/lib/foundry-acceptance-f4a/ca.key" >>"$logs/$recovery_mode-copy.log" 2>&1
-  docker exec "$recovery_host" cp /var/lib/foundry-acceptance-f4a/ca.crt /usr/local/share/ca-certificates/acceptance-root.crt
-  docker exec "$recovery_host" chmod 644 /usr/local/share/ca-certificates/acceptance-root.crt
-  docker exec "$recovery_host" chmod 600 /var/lib/foundry-acceptance-f4a/ca.key
-  docker exec "$recovery_host" update-ca-certificates >"$logs/$recovery_mode-trust.log" 2>&1
-  docker exec "$recovery_host" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade' >"$logs/$recovery_mode-packages.log" 2>&1
-  # Real recovery runs from a root-only staged bundle that service accounts can't read.
-  docker exec "$recovery_host" sh -c 'umask 077; mkdir /var/lib/foundry-acceptance-f4a/staged-tools; cp -R /verification/deploy/. /var/lib/foundry-acceptance-f4a/staged-tools/'
-  phase_on "$recovery_host" "recover-$recovery_mode" /var/lib/foundry-acceptance-f4a/staged-tools/tests/acceptance_recover.py "$recovery_mode"
-}
 recovery_target "$rehearsal" rehearsal
 phase recover-repository-unchanged /verification/deploy/tests/acceptance_recover.py unchanged
 docker stop --time 150 "$host" >"$logs/recover-stop-source.log" 2>&1

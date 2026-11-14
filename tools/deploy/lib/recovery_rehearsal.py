@@ -7,7 +7,7 @@ import platform
 import uuid
 
 import admission
-from contracts import (ClosureEvidence, ClosureStage, canonical_digest, now, record_document, require)
+from contracts import (ClosureEvidence, ClosureStage, DeployError, canonical_digest, now, require)
 from topology import EndpointBinding, ExecutableRole
 
 FILTER = 'IPAddressDeny=any\nIPAddressAllow=localhost\n'
@@ -24,9 +24,9 @@ def roles(topology, placed):
         if name in selected:
             return
         role = declarations[name]
-        require(name in placed, 'recovery_dependency', f'Rehearsal dependency {name} is not placed on this host.')
+        require(name in placed, 'recovery_rehearsal_dependency', f'Rehearsal dependency {name} is not placed on this host.')
         require(name == 'http' or isinstance(role, ExecutableRole) and role.recovery_rehearsal_safe,
-                'recovery_dependency', f'HTTP rehearsal requires unsafe dependency {name}; declare an eligible custom role recovery_rehearsal_safe or remove the dependency.')
+                'recovery_rehearsal_dependency', f'HTTP rehearsal requires unsafe dependency {name}; declare an eligible custom role recovery_rehearsal_safe or remove the dependency.')
         selected.add(name)
         for dependency in role.common.requires:
             visit(dependency)
@@ -55,7 +55,10 @@ def attached_programs(host, group):
                     ('prog_ids', ctypes.c_uint64), ('prog_cnt', ctypes.c_uint32)]
     libc = ctypes.CDLL(None, use_errno=True)
     result = []
-    fd = os.open(host.paths.p('/sys/fs/cgroup' + group), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        fd = os.open(host.paths.p('/sys/fs/cgroup' + group), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        raise DeployError('rehearsal_isolation', 'Cannot inspect the unit cgroup for BPF IP filtering; rehearsal refused.') from None
     try:
         for direction in (0, 1):
             ids = (ctypes.c_uint32 * 64)()
@@ -77,6 +80,8 @@ def isolation(host, inventory, name):
             set(values.get('IPAddressAllow', '').split()) == {'127.0.0.0/8', '::1/128'} and
             values.get('DropInPaths') == '', 'rehearsal_isolation',
             f'Role {name} lacks the exact loaded loopback-only IP filtering policy; rehearsal refused.')
+    require(values.get('ControlGroup', '').endswith('/' + inventory.units[name]),
+            'rehearsal_isolation', f'Role {name} has no matching live unit cgroup; rehearsal refused.')
     return {'properties': values, 'programs': attached_programs(host, values.get('ControlGroup', ''))}
 
 

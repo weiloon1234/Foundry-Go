@@ -296,9 +296,9 @@ def _feature_projection(entry, topology, profile, endpoints):
     from provision import _template
     from topology import validate_topology
     import edge
-    import rehearsal
-    if rehearsal.active(entry):
-        return rehearsal.projection(entry, endpoints)
+    import recovery_rehearsal
+    if recovery_rehearsal.active(entry):
+        return recovery_rehearsal.projection(entry, endpoints)
     endpoint = next(e for e in endpoints if (e.role, e.listener) == ("http", "http"))
     require(endpoint.address == "127.0.0.1", "network_projection", "The owned HTTP renderer requires IPv4 loopback.")
     view = {**entry, "profile": profile.projection(), "allocations": {**entry["allocations"], "http_port": endpoint.port},
@@ -352,8 +352,8 @@ def feature_allocate(host, entry, topology, profile, operation_id, *, retained=N
     registry, history = _feature_history(host)
     from report import claim_inventory
     observed = observe_sockets(host)
-    import rehearsal
-    requested = () if rehearsal.active(entry) else public_claims(profile)
+    import recovery_rehearsal
+    requested = () if recovery_rehearsal.active(entry) else public_claims(profile)
     other = tuple(c for c in claim_inventory(registry) if c.instance_id != profile.instance_id)
     other += tuple(c for _, inv in history if inv.profile.instance_id != profile.instance_id for c in public_claims(inv.profile))
     owned = {c.socket for _, inv in history if inv.profile.instance_id == profile.instance_id for c in public_claims(inv.profile)}
@@ -492,9 +492,9 @@ def feature_withdraw(host, entry, transition, resolution, units):
     """Record scoped ingress withdrawal without claiming backend exit."""
     import edge
     import firewall
-    import rehearsal
-    if rehearsal.active(entry):
-        return rehearsal.withdraw(host, entry, transition, resolution, units)
+    import recovery_rehearsal
+    if recovery_rehearsal.active(entry):
+        return recovery_rehearsal.withdraw(host, entry, transition, resolution, units)
     import json
     from contracts import DeployError
     transition, inventory, old, scoped, retained = _transition_scope(host, entry, transition, resolution, units)
@@ -559,9 +559,9 @@ def feature_withdraw(host, entry, transition, resolution, units):
 def feature_close(host, entry, transition, resolution, units):
     """Prove scoped backend exit and reference isolation after withdrawing ingress."""
     import edge
-    import rehearsal
-    if rehearsal.active(entry):
-        return rehearsal.close(host, entry, transition, resolution, units)
+    import recovery_rehearsal
+    if recovery_rehearsal.active(entry):
+        return recovery_rehearsal.close(host, entry, transition, resolution, units)
     import time
     evidence = feature_withdraw(host, entry, transition, resolution, units)
     transition, inventory, old, scoped, retained = _transition_scope(host, entry, transition, resolution, units)
@@ -595,18 +595,19 @@ def feature_close(host, entry, transition, resolution, units):
     return complete_closure(evidence, resolution, backend_exit_sha256=proof, reserved=candidate, old_references=references)
 
 
-def feature_open(host, entry, resolution, evidence):
+def feature_open(host, entry, resolution, evidence, *, deadline=None):
     """Verify the enabled, unheld graph and open only the proven affected scope."""
     import edge
-    import rehearsal
-    if rehearsal.active(entry):
-        rehearsal.observe(host, entry, _feature_inventory(host, entry, resolution.id))
-        return
+    import recovery_rehearsal
+    if recovery_rehearsal.active(entry):
+        recovery_rehearsal.observe(host, entry, _feature_inventory(host, entry, resolution.id))
+        return True
     import firewall
     import certificates
     import time
     from contracts import AdmissionDisposition, HelperInvocation, RuntimeResolution
     from release import READINESS_SECONDS
+    deadline = time.monotonic() + READINESS_SECONDS if deadline is None else deadline
     resolution = RuntimeResolution.parse(record_document(resolution))
     evidence = ClosureEvidence.parse(record_document(evidence))
     admission, services = _feature_owners()
@@ -637,7 +638,6 @@ def feature_open(host, entry, resolution, evidence):
     retained_claims = tuple(c for c in public_claims(inventory.profile) if c.role in exposed)
     claims = tuple(c for c in public_claims(inventory.profile) if c.role in opening)
     def authorize():
-        deadline = time.monotonic() + READINESS_SECONDS
         selection, selected = store._selection()
         require(selected == resolution and selection.admission.operation_id == evidence.operation_id
                 and configured_enabled == set(services.enabled_units(host, inventory.units)) - set(selection.maintenance_holds)
@@ -703,3 +703,32 @@ def feature_open(host, entry, resolution, evidence):
         finally:
             edge.withdraw(host, inventory.profile.instance_id, opening)
         raise
+
+
+def feature_observe_open(host, entry, inventory, running):
+    """Read-only recovery postcondition: exact routes, firewall and public owners."""
+    import edge
+    import firewall
+    running = set(running)
+    projection = _feature_projection(entry, inventory.topology, inventory.profile, inventory.resolution.endpoints)
+    require(canonical_digest(projection) == inventory.resolution.nginx_sha256,
+            'network_projection', 'Recovered network projection differs from its resolution.')
+    expected = {name: value for name, value in projection.items() if name != 'http'
+                and any(name.startswith('stream-' + role + '.') for role in running)}
+    if 'http' in running:
+        expected['http-open.conf'] = '"" 1;\n'
+    edge.observe_projection(host, inventory.profile.instance_id, inventory.roles, expected=expected)
+    _feature_http(host, entry, inventory, (), closed='http' not in running, write=False)
+    claims = public_claims(inventory.profile)
+    opened = tuple(c for c in claims if c.role in running)
+    closed = tuple(c for c in claims if c.role not in running)
+    if closed:
+        firewall.observe(host, inventory.profile.instance_id, closed, bindings=inventory.profile.listeners, retained_claims=opened)
+    else:
+        firewall.observe(host, inventory.profile.instance_id, opened, bindings=inventory.profile.listeners, opened=bool(opened))
+    if opened:
+        observed = tuple(s for s in observe_sockets(host) if any(conflicts(c.socket, s.socket) for c in opened))
+        require({c.socket for c in opened} <= {s.socket for s in observed} and
+                not ownership_findings(opened, observed, {'nginx': process_members(host, 'nginx.service')}, edge_verified=True),
+                'public_opening_unverified', 'Recovered public listeners differ from their owned exposure.')
+    return True

@@ -71,7 +71,7 @@ class RecoveryTests(unittest.TestCase):
 
     def test_feature_missing_lifecycle_refuses_before_host_effects(self):
         self.feature(secret=True)
-        with patch.object(self.host, "run") as run, self.assertRaises(DeployError) as error:
+        with patch("feature_lifecycle.prepare_recovery", None), patch.object(self.host, "run") as run, self.assertRaises(DeployError) as error:
             self.plan()
         self.assertEqual(error.exception.code, "capability_unavailable")
         self.assertIn("feature_lifecycle.prepare_recovery", error.exception.detail)
@@ -220,7 +220,7 @@ class RecoveryTests(unittest.TestCase):
     def test_safe_http_dependency_is_selected_but_still_requires_lane_a_isolation(self):
         inventory, _ = self.feature(http_dependency=True, rehearsal_safe=True, public=True)
         self.assertEqual(recover.rehearsal_roles(inventory), ("relay", "http"))
-        with patch.object(self.host, "run") as run, self.assertRaises(DeployError) as error:
+        with patch("feature_lifecycle.prepare_recovery", None), patch.object(self.host, "run") as run, self.assertRaises(DeployError) as error:
             self.plan()
         self.assertEqual(error.exception.code, "capability_unavailable")
         run.assert_not_called()
@@ -762,10 +762,19 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(self.host.read_registry()["instances"][self.profile["instance_id"]]["provisioning"]["state"], "rehearsal")
 
     def test_local_profile_changes_only_after_takeover_success_and_resume_reuses_identity(self):
+        self.local_recovery_resume()
+
+    def test_feature_local_binding_forwarding_and_effective_profile_persistence(self):
+        self.local_recovery_resume(feature=True)
+
+    def local_recovery_resume(self, *, feature=False):
         import contextlib
         import os
         from test_local import cli
-        for mode in ("rehearsal", "takeover"):
+        if feature:
+            _, metadata = self.feature(public=True)
+            binding = self.binding(metadata)
+        for mode in (("takeover",) if feature else ("rehearsal", "takeover")):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 directory = Path(temporary).resolve()
                 folder = directory / "decrypted"
@@ -795,7 +804,9 @@ class RecoveryTests(unittest.TestCase):
                             self.failed = True
                             raise cli.LocalError("connection lost; outcome unknown")
                         return {"ok": True, "mode": mode, "host_id": request["profile"]["host"]["host_id"],
-                                "operation_id": request["operation_id"]}
+                                "operation_id": request["operation_id"],
+                                **({"profile_update": recover.effective_profile(request["profile"],
+                                     recover.RecoveryPublicBinding.parse(request["recovery_public_binding"]))} if feature else {})}
                 remote = Remote()
                 stack.enter_context(patch.object(cli, "ROOT", directory))
                 ssh = stack.enter_context(patch.object(cli, "SSH", return_value=remote))
@@ -806,6 +817,10 @@ class RecoveryTests(unittest.TestCase):
                 stack.enter_context(patch.object(cli, "say"))
                 stack.enter_context(patch.dict(os.environ, {"RECOVER_HOST": "replacement.example.invalid", "RECOVER_MODE": mode,
                     "FOUNDRY_RECOVERY_DIR": str(folder), "CONFIRM": "yes", "CONFIRM_OLD_SERVER_GONE": "yes"}, clear=True))
+                if feature:
+                    binding_file = directory / "binding.json"
+                    binding_file.write_text(json.dumps(binding))
+                    stack.enter_context(patch.dict(os.environ, {"FOUNDRY_RECOVERY_PUBLIC_BINDING_FILE": str(binding_file)}))
                 with self.assertRaises(cli.LocalError):
                     cli.recover(self.project, profile, {"hosts": {}})
                 self.assertEqual(profile, original)
@@ -821,6 +836,13 @@ class RecoveryTests(unittest.TestCase):
                     self.assertEqual(profile["host"]["address"], "replacement.example.invalid")
                     self.assertNotEqual(profile["host"]["host_id"], original["host"]["host_id"])
                     save.assert_called_once_with(profile)
+                    if feature:
+                        for _, sent in requests:
+                            self.assertEqual(sent["recovery_public_binding"], binding)
+                            self.assertEqual(sent["operation_id"], binding["operation_id"])
+                        self.assertEqual(profile["host"]["host_id"], binding["target_host_id"])
+                        self.assertEqual(profile["listeners"]["relay.ingress"]["dns"]["public_addresses"], ["203.0.113.20"])
+                        self.assertEqual(metadata["profile"], original)
                 else:
                     self.assertEqual(profile, original)
                     save.assert_not_called()

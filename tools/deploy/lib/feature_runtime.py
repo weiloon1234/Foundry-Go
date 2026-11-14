@@ -65,11 +65,11 @@ def run(action, pin, launch):
                 "feature_runtime_selection", "Coordinator generation differs from the selected role origin.")
         (boot if action == "boot" else open_boot)(host, entry, current)
         return 0
-    import rehearsal
-    if rehearsal.active(entry) and isinstance(role, ExecutableRole):
+    import recovery_rehearsal
+    if recovery_rehearsal.active(entry) and isinstance(role, ExecutableRole):
         require(role.recovery_rehearsal_safe, "recovery_dependency",
                 f"Unsafe role {spec.identity.role} cannot run in a recovery rehearsal.")
-        rehearsal.isolation(host, inventory, spec.identity.role)
+        recovery_rehearsal.isolation(host, inventory, spec.identity.role)
     store = admission.AdmissionStore(host, spec.identity.instance_id)
     selection, current_resolution = store._selection()
     permit_id = None

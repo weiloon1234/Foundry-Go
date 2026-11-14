@@ -75,11 +75,8 @@ def effective_profile(profile, binding):
 
 
 def rehearsal_roles(inventory):
-    selected = {"http"} | inventory.prerequisites({"http"})
-    for name in sorted(selected - {"http"}):
-        role = inventory.roles[name]
-        require(isinstance(role, ExecutableRole) and role.recovery_rehearsal_safe,
-                "recovery_rehearsal_dependency", f"HTTP recovery rehearsal requires unsafe dependency {name}; it remains stopped.")
+    from recovery_rehearsal import roles
+    selected = roles(inventory.topology, inventory.roles)
     return inventory.start_order(selected)
 
 
@@ -359,7 +356,7 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
               "recovery_sha256": digest(Path(recovery_archive)), "target_time": target_time,
               "major": major, "bundle": upgrades.tool_bundle(tools_dir)[2]}
     if feature is not None:
-        intent.update(recovery_public_binding=record_document(binding) if binding else None,
+        intent.update(source_profile=copy.deepcopy(recovered["metadata"]["profile"]), recovery_public_binding=record_document(binding) if binding else None,
                       effective_profile=effective_profile(profile, binding), recovery_roles=list(roles),
                       recovery_enabled_roles=list(enabled), recovery_maintenance_holds=list(holds),
                       deployment_sha256=canonical_digest(recovered["metadata"]["feature_recovery"]["deployment"]))

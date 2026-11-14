@@ -450,7 +450,7 @@ class UpgradeTests(unittest.TestCase):
     def test_candidate_python_inventory_contains_only_runtime_and_shipped_rehearsal_modules(self):
         source = Path(__file__).resolve().parents[1]
         _, files, _ = upgrades.tool_bundle(source)
-        expected = {name for name in upgrades.REQUIRED_FILES | upgrades.REHEARSAL_FILES if name.endswith('.py')} | {'lib/feature_plan.py', 'lib/feature_maintenance.py'}
+        expected = {name for name in upgrades.REQUIRED_FILES | upgrades.REHEARSAL_FILES if name.endswith('.py')}
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
 
     def test_old_bundle_generations_do_not_require_artifacts(self):
@@ -461,8 +461,8 @@ class UpgradeTests(unittest.TestCase):
                 upgrades.tool_bundle(self.source)
 
     def test_inventory_requirements_are_cumulative_by_inspected_bundle_generation(self):
-        additions = upgrades.GENERATION_11_FILES | upgrades.GENERATION_12_FILES
-        for generation in (9, 10, 11, 12):
+        additions = upgrades.GENERATION_11_FILES | upgrades.GENERATION_12_FILES | upgrades.GENERATION_13_FILES
+        for generation in (9, 10, 11, 12, 13):
             with self.subTest(generation=generation):
                 for name in additions:
                     (self.source / name).unlink(missing_ok=True)

@@ -258,6 +258,20 @@ class SystemdContractTests(unittest.TestCase):
         self.host.run(['systemctl', 'start', unit])
         self.assertEqual(self.show(unit)['ActiveState'], 'active')
 
+    def test_rehearsal_requires_effective_loopback_filters_and_attached_bpf(self):
+        from types import SimpleNamespace
+        import recovery_rehearsal
+        unit = self.service('rehearsal-filter', options=recovery_rehearsal.FILTER)
+        self.host.run(['systemctl', 'start', unit])
+        inventory = SimpleNamespace(units={'relay': unit})
+        proof = recovery_rehearsal.isolation(self.host, inventory, 'relay')
+        self.assertTrue(all(proof['programs']))
+        unfiltered = self.service('rehearsal-unfiltered')
+        self.host.run(['systemctl', 'start', unfiltered])
+        with self.assertRaises(DeployError) as raised:
+            recovery_rehearsal.isolation(self.host, SimpleNamespace(units={'relay': unfiltered}), 'relay')
+        self.assertEqual(raised.exception.code, 'rehearsal_isolation')
+
     def assert_code(self, code, action):
         with self.assertRaises(DeployError) as raised:
             action()

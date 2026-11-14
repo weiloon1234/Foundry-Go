@@ -62,7 +62,9 @@ def parse_feature_snapshot(value, entry):
     contract_object(value, ("deployment", "resolution", "selection", "declaration", "secret_paths"), ("service_secret_files",))
     declaration = ReleaseDeclaration.parse(value["declaration"])
     topology = parse_topology(declaration.topology_json)
-    profile = parse_profile(declaration.profile_json, topology)
+    # The immutable declaration describes the release's source host. Archived
+    # metadata owns the effective runtime profile, including accepted takeover bindings.
+    profile = parse_profile(entry["profile"], topology)
     inventory = services.UnitInventory(entry["name"], topology, profile,
                                       Deployment.parse(value["deployment"]), RuntimeResolution.parse(value["resolution"]))
     selection = DeploymentSelection.parse(value["selection"])

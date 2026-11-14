@@ -575,12 +575,22 @@ def bootstrap(project, profile, settings, fresh):
 def recover(project, profile, settings):
     import copy
     import recover as recovery
+    from contracts import record_document
     mode, address = os.environ.get("RECOVER_MODE"), os.environ.get("RECOVER_HOST")
     directory = os.environ.get("FOUNDRY_RECOVERY_DIR")
     if mode not in {"rehearsal", "takeover"} or not address or not directory:
         raise LocalError("recover requires RECOVER_HOST, RECOVER_MODE=rehearsal|takeover and FOUNDRY_RECOVERY_DIR")
     if not profile["host"]["host_id"]:
         raise LocalError("recover requires the existing instance profile and its old host identity")
+    binding = None
+    binding_file = os.environ.get("FOUNDRY_RECOVERY_PUBLIC_BINDING_FILE")
+    if binding_file:
+        from contracts import RecoveryPublicBinding
+        if mode != "takeover":
+            raise LocalError("recovery rehearsal rejects public binding overrides")
+        binding = RecoveryPublicBinding.parse(read_json(check_path(Path(binding_file), "file")))
+        if os.environ.get("OPERATION") and operation_uuid(os.environ["OPERATION"]) != binding.operation_id:
+            raise LocalError("OPERATION differs from the public binding's operation_id")
     target = os.environ.get("TARGET_TIME") or None
     if target:
         target = recovery.backup._restore_target(target)
@@ -601,22 +611,28 @@ def recover(project, profile, settings):
             selected = select_archive(project, profile)
         intent = {"project_id": project["id"], "instance_id": profile["instance_id"], "mode": mode,
                   "address": address, "target_time": target, "archive_sha256": digest(selected),
-                  "recovery_sha256": digest(private_archive)}
+                  "recovery_sha256": digest(private_archive),
+                  **({"recovery_public_binding": record_document(binding)} if binding is not None else {})}
         if record:
             if record.get("intent") != intent:
                 raise LocalError(f"this differs from the recovery recorded in {pending}. Repeat its inputs to resume it, "
                                  "or delete that file only if you are abandoning it and recreating the server")
         else:
-            record = {"intent": intent, "operation_id": operation_uuid(os.environ["OPERATION"]) if os.environ.get("OPERATION") else str(uuid.uuid4()),
-                      "host_id": str(uuid.uuid4()), "release_archive": str(selected.absolute())}
+            record = {"intent": intent, "operation_id": binding.operation_id if binding else operation_uuid(os.environ["OPERATION"]) if os.environ.get("OPERATION") else str(uuid.uuid4()),
+                      "host_id": binding.target_host_id if binding else str(uuid.uuid4()), "release_archive": str(selected.absolute())}
         replacement = copy.deepcopy(profile)
         replacement["host"].update(address=address, host_id=record["host_id"])
         validate_profile(replacement, project)
+        accepted = recovery.replacement_binding(record_document(binding) if binding else None,
+            recovered["metadata"], replacement, record["operation_id"], mode) if recovered.get("feature") is not None else None
+        if binding is not None and accepted is None:
+            raise LocalError("legacy recovery rejects public binding overrides")
         if not pending.exists():
             atomic_json(pending, record, mode=0o600)
         request = {"project": project, "profile": replacement, "operation_id": record["operation_id"],
                    "mode": mode, "topology": recovered["topology"], "target_time": target,
-                   "archive_sha256": intent["archive_sha256"]}
+                   "archive_sha256": intent["archive_sha256"],
+                   **({"recovery_public_binding": record_document(accepted)} if accepted else {})}
         say("Recovery operation: " + record["operation_id"] + "; repeat the same command to resume.")
         with closing(SSH(replacement, settings, first_contact=True)) as ssh, ssh.staged_tools() as remote:
             ssh.upload(private_archive, remote + "/recovery.tar")
@@ -639,9 +655,17 @@ def recover(project, profile, settings):
                     or result.get("mode") != mode or result.get("operation_id") != record["operation_id"]):
                 raise LocalError("recovery returned an unexpected identity; inspect its journal before retrying")
             if mode == "takeover":
-                profile["host"].update(address=address, host_id=record["host_id"])
+                if recovered.get("feature") is not None:
+                    updated = result.get("profile_update")
+                    if updated != recovery.effective_profile(replacement, accepted):
+                        raise LocalError("takeover profile differs from the reviewed effective binding; inspect the server")
+                    validate_profile(updated, project)
+                    profile.clear()
+                    profile.update(updated)
+                else:
+                    profile["host"].update(address=address, host_id=record["host_id"])
                 save_profile(profile)
-                say("Updated local profile host.address and host.host_id; commit that profile change. Point DNS at the new server.")
+                say("Updated local profile with the accepted replacement host and public addresses; commit that profile change.")
             pending.unlink()
             display(result)
 

@@ -15,7 +15,7 @@ import operations
 import runtime_config
 import services
 from contracts import (AdmissionDisposition, AdmissionRecord, Deployment,
-                       DeploymentSelection, DeployError, FEATURE_CAPABILITIES, HostTransition,
+                       DeploymentSelection, DeployError, FEATURE_CAPABILITIES, FEATURE_LIFECYCLE_GENERATION, HostTransition,
                        ProcessIdentity, ReleaseDeclaration, ResolvedBundleBinding, ResolvedEndpointBinding,
                        ResolvedExecutableBinding, RoleBindings, RuntimeResolution, UnitIdentity, UnitSpec,
                        ValidationPermit, atomic_json, atomic_write, canonical_digest, check_path, contract_uuid,
@@ -63,14 +63,23 @@ def migrate_enablement(host, registry, entry):
     import release
     store = admission.AdmissionStore(host, entry["profile"]["instance_id"])
     path = store.durable / "enablement.json"
-    if path.exists():
-        return admission.read_owned(host, path, lambda value: value)
     if "deployment_selection" not in entry:
         return None
+    if path.exists() and entry["deployment_selection"]["minimum_generation"] >= FEATURE_LIFECYCLE_GENERATION:
+        return admission.read_owned(host, path, lambda value: value)
     store, selection, inventory, launch = load(host, entry)
     if selection.admission.disposition is not AdmissionDisposition.COMMITTED:
         return {"state": "pending", "detail": "Preview enablement migration awaits a committed deployment."}
+    require(registry["tools"]["generation"] >= FEATURE_LIFECYCLE_GENERATION,
+            "host_upgrade_required", "Enablement adoption requires deploy generation 13.")
     store.require_cleanup_clear()
+    if selection.minimum_generation < FEATURE_LIFECYCLE_GENERATION:
+        selection = replace(selection, minimum_generation=FEATURE_LIFECYCLE_GENERATION)
+        store._write(store.durable / "selection.json", selection)
+        entry["deployment_selection"] = record_document(selection)
+        host.journal(registry, entry)
+    if path.exists():
+        return admission.read_owned(host, path, lambda value: value)
     enabled = set(services.enabled_units(host, inventory.units))
     running = []
     for name, unit in inventory.units.items():
@@ -405,10 +414,13 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
         host, entry, inventory, enabled, running, maintenance_request["action"] if maintenance_request else None)
     maintenance_intent["operation_id"] = attempt["operation_id"]
     running = set(running)
+    if review is not None:
+        require(sorted(holds) == review["maintenance_holds"] and sorted(running) == review["maintenance_running_roles"],
+                "stale_plan", "Maintenance holds or restored running roles changed after review.")
     inventory.start_order(running)
     attempt["running_roles"] = sorted(running)
     host.save_state(entry, state)
-    selected = DeploymentSelection(inventory.profile.instance_id, 12, tuple(sorted(FEATURE_CAPABILITIES)),
+    selected = DeploymentSelection(inventory.profile.instance_id, FEATURE_LIFECYCLE_GENERATION, tuple(sorted(FEATURE_CAPABILITIES)),
                  inventory.resolution.id, None if old == inventory.resolution.id else old,
                  AdmissionRecord(inventory.profile.instance_id, inventory.resolution.id, inventory.resolution.deployment_sha256,
                                  inventory.resolution.private_revision, attempt["operation_id"], AdmissionDisposition.PENDING),
@@ -425,7 +437,7 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     # Intent precedes the shared command, marker publication and every stop.
     atomic_json(operations.directory(host, attempt["operation_id"]) / "maintenance-intent.json", maintenance_intent, mode=0o600)
     maintenance_result = feature_maintenance.shared_change(host, entry, maintenance_request) if maintenance_request else {}
-    if holds:
+    if maintenance_intent["holds"]:
         atomic_json(store.durable / "maintenance.json", maintenance_intent, mode=0o600)
     feature_maintenance.publish_markers(host, inventory, holds)
     store.begin(selected, inventory.resolution)
@@ -436,7 +448,8 @@ def transition(host, registry, entry, inventory, state, attempt, *, stop_only=Fa
     evidence = feature_network.close(host, entry, request, inventory.resolution, units)
     store.record_boot_closure(evidence)
     store._write(store.durable / "transition.json", replace(request, closure_id=evidence.id))
-    feature_maintenance.clear_markers(host, inventory, holds)
+    feature_maintenance.clear_markers(host, inventory, maintenance_intent["holds"])
+    feature_maintenance.clear_markers(host, previous, maintenance_intent["holds"])
     http = next(e for e in inventory.resolution.endpoints if e.role == "http" and e.listener == "http")
     entry["deployment_selection"] = record_document(selected)
     entry["topology"] = {**inventory.topology.projection(), "sha256": inventory.topology.sha256}
@@ -706,8 +719,8 @@ def execute(host, request, *, pin=None):
     feature_network.capability()
     with host.lock("host"), host.lock(profile["instance_id"]):
         registry, entry = host.require_identity(project, profile)
-        require(is_feature(entry) and registry["tools"]["generation"] >= 12,
-                "capability_unavailable", "Feature execution requires the generation-12 preview release.")
+        require(is_feature(entry) and registry["tools"]["generation"] >= FEATURE_LIFECYCLE_GENERATION,
+                "capability_unavailable", "Feature execution requires the generation-13 lifecycle release.")
         state = host.load_state(entry)
         migrate_enablement(host, registry, entry)
         admission.AdmissionStore(host, profile["instance_id"]).require_cleanup_clear(request["operation_id"])
@@ -821,3 +834,18 @@ def request_operation(host, action, project, profile, *, operation_id=None, **ar
             feature_plan.reviewed(host, registry, entry, request)
         owner = operations.prepare(host, registry, entry, request)
     return operations.launch(host, request, owner)
+
+
+def prepare_recovery(host, registry, entry, journal, snapshot, archive, checksum, tools_dir):
+    from feature_recovery import prepare
+    return prepare(host, registry, entry, journal, snapshot, archive, checksum, tools_dir)
+
+
+def activate_recovery(host, registry, entry, journal):
+    from feature_recovery import activate
+    return activate(host, registry, entry, journal)
+
+
+def recovery_ready(host, entry, journal):
+    from feature_recovery import ready
+    return ready(host, entry, journal)

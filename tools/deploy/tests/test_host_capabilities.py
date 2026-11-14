@@ -575,8 +575,26 @@ class CapabilityCompatibilityTests(unittest.TestCase):
         # gates and the network owner still control feature execution.
         upgrades.check_instance_capabilities(feature, upgrades.protocol()["generation"])
         with self.assertRaises(c.DeployError) as caught:
-            upgrades._check_feature_request(mixed, {"profile": feature["profile"], "client": {"generation": 12}}, "keys-rotate")
+            upgrades._check_feature_request(mixed, {"profile": feature["profile"], "client": {"generation": upgrades.protocol()["generation"]}}, "keys-rotate")
         self.assertEqual(caught.exception.code, "capability_unavailable")
+
+    def test_release_one_requires_upgrade_and_preserves_sticky_floor(self):
+        _, _, feature = fixture()
+        feature["deployment_selection"] = {**selection(feature["profile"]["instance_id"]), "minimum_generation": 12}
+        host = registry(feature)
+        host["tools"]["generation"] = 12
+        request = {"profile": feature["profile"], "client": {"generation": 13}}
+        upgrades._check_feature_request(host, {**request, "client": {"generation": 12}}, "status")
+        with self.assertRaises(c.DeployError) as caught:
+            upgrades._check_feature_request(host, request, "down")
+        self.assertEqual(caught.exception.code, "host_upgrade_required")
+        host["tools"]["generation"] = 13
+        upgrades._check_feature_request(host, request, "down")
+        with self.assertRaises(c.DeployError):
+            upgrades._check_feature_request(host, {**request, "client": {"generation": 12}}, "down")
+        feature["deployment_selection"]["minimum_generation"] = 13
+        with self.assertRaises(c.DeployError):
+            upgrades.check_instance_capabilities(feature, 12)
 
     def test_source_protocol_fixtures_preserve_upgrade_floors(self):
         # Captured 2.0 envelope shape of all supported source generations. These

@@ -96,7 +96,7 @@ def acquire(host, request, *, cleanup=False):
                     received.extend(descriptors)
             require(payload == b'host-lock-v1' and flags == 0 and len(received) == 1,
                     'operation_owner', 'Invalid host lock handoff.')
-    except OSError:
+    except (OSError, DeployError):
         for fd in received:
             os.close(fd)
         if not cleanup:

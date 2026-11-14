@@ -49,20 +49,31 @@ class FeatureEnablementTests(unittest.TestCase):
                 patch.object(release, "_matches_executable", return_value=True), \
                 patch.object(release, "service", side_effect=lambda host, unit:
                     {"ActiveState": "active" if unit in {self.inventory.units[n] for n in self.running} else "inactive"}):
-            result = lifecycle.migrate_enablement(self.host, {}, self.entry)
+            result = lifecycle.migrate_enablement(self.host, {"tools": {"generation": 13}}, self.entry)
             self.assertEqual(result["adopt_running"], ["http", "relay"])
             self.assertEqual(result["starts"], [])
             self.assertEqual(self.enabled, {self.inventory.units[n] for n in self.running})
             install.assert_called_once()
             count = len(self.commands)
-            self.assertEqual(lifecycle.migrate_enablement(self.host, {}, self.entry), result)
+            self.assertEqual(lifecycle.migrate_enablement(self.host, {"tools": {"generation": 13}}, self.entry), result)
             self.assertEqual(len(self.commands), count)
         self.assertFalse(any(args[:2] in (["systemctl", "start"], ["systemctl", "restart"]) for args in self.commands))
+
+    def test_enablement_adoption_sets_sticky_release_one_floor(self):
+        selected = replace(self.selected, minimum_generation=12)
+        with patch.object(lifecycle, "load", return_value=(self.store, selected, self.inventory, {})), \
+                patch.object(lifecycle, "install_units"), patch.object(self.host, "journal") as journal, \
+                patch.object(release, "_matches_executable", return_value=True), \
+                patch.object(release, "service", return_value={"ActiveState": "inactive"}):
+            lifecycle.migrate_enablement(self.host, {"tools": {"generation": 13}}, self.entry)
+        self.assertEqual(self.entry["deployment_selection"]["minimum_generation"], 13)
+        self.assertEqual(c.read_json(self.store.durable / "selection.json")["minimum_generation"], 13)
+        journal.assert_called_once()
 
     def test_pending_preview_migration_does_not_enable_or_start_anything(self):
         pending = c.DeploymentSelection.parse(selection())
         with patch.object(lifecycle, "load", return_value=(self.store, pending, self.inventory, {})):
-            result = lifecycle.migrate_enablement(self.host, {}, self.entry)
+            result = lifecycle.migrate_enablement(self.host, {"tools": {"generation": 13}}, self.entry)
         self.assertEqual(result["state"], "pending")
         self.assertEqual(self.commands, [])
 

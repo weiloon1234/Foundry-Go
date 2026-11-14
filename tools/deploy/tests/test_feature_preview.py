@@ -91,11 +91,22 @@ class FeaturePreviewTests(unittest.TestCase):
         self.assertIn("post-preview", value["pruning_error"]["detail"])
 
     def test_preview_refusals_name_later_release(self):
-        for action in ("keys-rotate", "recover-apply"):
+        for action in ("keys-rotate", "backup-keys-rotate"):
             with self.subTest(action=action), self.assertRaises(c.DeployError) as raised:
                 upgrades._check_feature_request(None, {"profile": {"schema": 3}}, action)
             self.assertEqual(raised.exception.code, "capability_unavailable")
             self.assertIn("post-preview", raised.exception.detail)
+
+    def test_recovery_and_backup_dispatch_require_generation_13(self):
+        for action in ("backup-configure", "backup-run", "restore-drill", "recover-plan", "recover-apply"):
+            for generation in (12, 13):
+                request = {"profile": {"schema": 3}, "client": {"generation": generation}}
+                if generation == 12:
+                    with self.subTest(action=action), self.assertRaises(c.DeployError) as raised:
+                        upgrades._check_feature_request(None, request, action)
+                    self.assertEqual(raised.exception.code, "instance_capability_required")
+                else:
+                    upgrades._check_feature_request(None, request, action)
 
     def test_new_runtime_owners_are_required_generation_12_files(self):
         required = upgrades.required_files(12)

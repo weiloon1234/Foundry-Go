@@ -145,6 +145,38 @@ class BackupTests(unittest.TestCase):
         self.assertNotIn("private-service-canary", json.dumps(self.commands))
         self.assertEqual(receipt["deployment_sha256"], c.canonical_digest(snapshot["deployment"]))
 
+    def test_backup_after_takeover_keeps_source_declaration_and_effective_profile(self):
+        import contracts as c
+        import feature_lifecycle
+        import services
+        from topology import parse_profile
+        inventory, entry, snapshot = feature_fixture(public=True)
+        source = copy.deepcopy(snapshot["declaration"])
+        profile = copy.deepcopy(entry["profile"])
+        profile["host"].update(host_id=str(uuid.uuid4()), address="replacement.example.test")
+        for binding in profile["listeners"].values():
+            binding["dns"]["public_addresses"] = ["203.0.113.11", "2001:db8:42::11"]
+        deployment = replace(inventory.deployment, profile_sha256=c.canonical_digest(profile))
+        resolution = replace(inventory.resolution, deployment_sha256=c.canonical_digest(c.record_document(deployment)))
+        inventory = services.UnitInventory(entry["name"], inventory.topology, parse_profile(profile, inventory.topology), deployment, resolution)
+        snapshot.update(deployment=c.record_document(deployment), resolution=c.record_document(resolution))
+        snapshot["selection"]["admission"]["deployment_sha256"] = resolution.deployment_sha256
+        entry.update(profile=profile, host_id=profile["host"]["host_id"], deployment_selection=snapshot["selection"])
+        selected = c.DeploymentSelection.parse(snapshot["selection"])
+        with patch.object(feature_lifecycle, "load", return_value=(None, selected, inventory, snapshot)), \
+                patch.object(services, "enabled_units", return_value=tuple(inventory.roles)), \
+                patch.object(backup.runtime_config, "service_secret_snapshot_paths", return_value=()), \
+                patch.object(self.host, "load_state", return_value={"current": {"version": deployment.release}}):
+            saved = backup._feature_snapshot(self.host, entry, {})
+        self.assertEqual(saved["declaration"], source)
+        parsed = backup.parse_feature_snapshot(saved, entry)
+        self.assertEqual(parsed.profile.projection(), profile)
+        self.assertNotEqual(parsed.profile.projection(), source["profile"])
+        changed = copy.deepcopy(entry)
+        changed["profile"]["host"]["host_id"] = str(uuid.uuid4())
+        with self.assertRaises(DeployError):
+            backup.parse_feature_snapshot(saved, changed)
+
     def test_unknown_live_enablement_refuses_archive_without_using_registry_cache(self):
         import feature_lifecycle
         inventory, entry, snapshot = feature_fixture()

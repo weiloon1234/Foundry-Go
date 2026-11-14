@@ -175,6 +175,9 @@ def cleanup(host, request, pin):
                 "operation_cleanup", "Cleanup workload scope differs from its pinned transition.")
         from feature_lifecycle import load_resolution
         old = inventory if transition.old_resolution_id == inventory.resolution.id else load_resolution(host, entry, transition.old_resolution_id)[0]
+        import feature_maintenance
+        if feature_maintenance.restore_failed_holds(host, entry, inventory, old, operation):
+            host.journal(registry, entry)
         units = {**old.units, **inventory.units}
         require(affected <= units.keys(), "operation_cleanup", "Unknown affected cleanup unit.")
         try:

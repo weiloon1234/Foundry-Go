@@ -317,7 +317,7 @@ class ContainerOwnershipTests(unittest.TestCase):
 
     def test_recovery_targets_start_without_installing_foundry_resources(self):
         runner = Path(__file__).with_name("run_acceptance.sh").read_text()
-        setup = runner[runner.index("recovery_target() {"):runner.index('recovery_target "$rehearsal" rehearsal')]
+        setup = runner[runner.index("recovery_target() {"):].split("\n}\n", 1)[0] + "\n}\n"
         for mode in ("rehearsal", "takeover"):
             with self.subTest(mode=mode):
                 subprocess.run(["bash", "-c", """
@@ -325,6 +325,7 @@ set -eu
 logs=$1
 containers=$2
 mode=$3
+feature_preview=0
 platform=linux/arm64
 network=owned-network
 framework=/fixture

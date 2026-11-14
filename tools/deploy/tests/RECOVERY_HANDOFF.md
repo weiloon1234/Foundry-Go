@@ -1,7 +1,9 @@
 # B24 release 1: lane C recovery handoff
 
-Backup and recovery use the existing typed deployment records. This lane does not
-change the dispatcher or lane A files. Native tests cover archived configuration,
+Backup and recovery use the existing typed deployment records. Integration now
+provides the three callbacks in `feature_lifecycle`, backed by `feature_recovery`,
+and lifts the five dispatcher refusals below at generation 13. The runner hooks
+below are installed. Native tests cover archived configuration,
 coverage, plan binding and orchestration with simulated lifecycle callbacks;
 they do not establish real-host recovery or network isolation.
 
@@ -72,6 +74,21 @@ after interruption before its phase completion was saved. Reconcile its durable
 intent and observed effects; never blindly repeat uncertain work. Lane A owns
 failed-start cleanup, withdrawal, process-exit proof and retained obligations.
 
+The recovery caller lends its existing host flock to the pinned systemd executor
+and independent cleanup through authenticated `SCM_RIGHTS` descriptor transfer;
+instance work retains host-then-instance lock order. An unresolved activation
+refuses blind replay. Completed replay reobserves runtime identities and readiness.
+The original declaration stays source evidence; `intent.source_profile` records
+the source runtime's effective profile, including a prior takeover's overrides.
+
+Custom rehearsal prerequisites use `recovery_rehearsal` (distinct from the local
+container rehearsal module). Every start requires exact loaded
+`IPAddressDeny=any` / `IPAddressAllow=localhost` properties and attached ingress
+and egress cgroup BPF programs. A missing proof refuses before custom execution.
+HTTP and legacy rehearsal keep their existing behavior. Native tests cover the
+real lock descriptor transport, policy refusal, and simulated lifecycle paths.
+Live systemd and container acceptance remain opt-in and have not run here.
+
 ## Evidence and remaining refusals
 
 Backup reads `services.enabled_units(host, inventory.units)` at archive time,
@@ -133,13 +150,11 @@ relay only, and serve the relay response over IPv4 and IPv6 from a separate peer
 network namespace. The namespace uses the existing preview peer/source CIDRs and
 new target addresses `203.0.113.11` and `2001:db8:42::11`. It performs no DNS writes.
 
-These phases deliberately fail until the dispatcher lifts and lane A seams above
-are integrated. The existing preview must also use the integrated maintenance
+These phases exercise the integrated dispatcher and lifecycle seams above. The existing preview must also use the integrated maintenance
 expectations if lane A has lifted its down/up refusals. Recovery does not bypass
 that earlier scenario. No container acceptance has been executed in lane C.
 
-Apply these runner edits at integration; lane C has not changed the runner,
-container helpers or images:
+The integrated runner contains these hooks:
 
 1. Move the existing `recovery_target()` definition above the `if
    ((feature_preview)); then` block. Keep its legacy invocations in place.

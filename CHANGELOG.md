@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- Fixed: deployment and rollback reviews during maintenance expect public rules
+  only for enabled, unheld roles. A policy change from stop to continue restores
+  the previously running enabled copy and verifies readiness; independent cleanup
+  reinstates its hold on failure. An unavailable shared maintenance store preserves
+  existing holds and markers until a successful observation permits reconciliation.
+
+- Added: generation-13 feature recovery preparation, pinned activation and fresh
+  readiness checks, including exact archived enablement/holds and empty selections.
+  Recovery preserves source declarations alongside effective replacement profiles,
+  validates schema and current credentials without migration/seeding, and retains
+  independent cleanup obligations on failed starts. The client forwards reviewed
+  public bindings and persists the accepted takeover profile. Feature backup,
+  restore-drill and recovery dispatcher refusals are lifted; the acceptance runner
+  now includes feature backup and replacement takeover after the preview scenario.
+- Added: opted-in custom recovery-rehearsal dependencies receive loopback-only
+  systemd IP filtering, with effective-property and attached cgroup BPF checks
+  before execution. Unsafe prerequisites and unproven isolation refuse. HTTP and
+  legacy rehearsal behaviour are unchanged.
+- Fixed: backups after takeover validate runtime inventory against the archived
+  effective profile while retaining the original release declaration. Service
+  bundle views accept release-carried artifacts with exact payload/platform checks.
+
+- Changed: deploy generation 13 owns B24 release 1 lifecycle behaviour and its
+  cumulative runtime/rehearsal inventory. Generation-12 bundles remain loadable;
+  release 1 operations require an upgraded host/client and retain a sticky
+  generation-13 floor after enablement adoption or release selection.
+
 - Added: maintenance graph validation treats endpoint bindings and `requires` as
   prerequisites of continuing roles and names invalid consumer/provider bindings.
   Executable bindings refer to installed files and create no maintenance edge.
@@ -75,8 +102,7 @@
   explicit token-bound public address overrides, external DNS observations and
   DNS-only change instructions after confirmed stop and private health. Unsafe
   HTTP rehearsal dependencies and unprotected local-state takeover refuse by role.
-  Public feature dispatch remains gated. Recovery also awaits lane A's closed
-  preparation, activation and readiness interfaces.
+  Generation 13 supplies the closed preparation, activation and readiness interfaces.
 - Added: typed external-state `recovery_owner` labels and the custom-role boolean
   `recovery_rehearsal_safe`. Receipts retain the declared external owner, and
   rehearsal plans admit only opted-in custom HTTP prerequisites. Omitted fields
@@ -103,7 +129,7 @@
   `deploy/artifacts/`, optionally produced by an explicit build argument vector.
   The archive builder records SHA-256 in the release inventory without a URL or
   download. Existing artifact verification, immutable publication, bundle exports,
-  and ABI evidence apply. Service bundle activation integration remains incomplete.
+  and ABI evidence apply. Service bundle views retain payload digest and platform verification.
   Missing, linked, overlapping, or stale build outputs refuse. Existing HTTPS
   artifact declarations are unchanged.
 

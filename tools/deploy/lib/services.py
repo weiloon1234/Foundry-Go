@@ -191,7 +191,7 @@ def bundle_views(role, paths, topology, architecture, artifact_roots, payloads):
         root, checksum = artifact_roots[mount.artifact]
         contract_path(root, absolute=True)
         contract_digest(checksum)
-        require(checksum == dict(artifact.platforms)["linux-" + architecture].sha256,
+        require(dict(artifact.platforms)["linux-" + architecture].accepts_digest(checksum),
                 "service_bundle", "Bundle source is not a declared artifact pin.")
         payload = next((p for p in payloads if p.artifact == mount.artifact), None)
         require(payload is not None and payload.sha256 == checksum and payload.platform == "linux-" + architecture,
@@ -315,9 +315,9 @@ def render_unit(inventory, name, entry, bundle_sha256, *, views=(), secret_paths
                     "MOUNTS": mounts}
     content = (TEMPLATES / "custom.service").read_text()
     content = re.sub(r"@([A-Z]+)@", lambda match: replacements[match[1]], content).replace("[Unit]\n", "[Unit]\n" + condition)
-    import rehearsal
-    if rehearsal.active(entry) and role.recovery_rehearsal_safe:
-        content = content.replace("[Service]\n", "[Service]\n" + rehearsal.FILTER)
+    import recovery_rehearsal
+    if recovery_rehearsal.active(entry) and role.recovery_rehearsal_safe:
+        content = content.replace("[Service]\n", "[Service]\n" + recovery_rehearsal.FILTER)
     return content
 
 

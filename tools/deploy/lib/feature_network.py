@@ -90,8 +90,8 @@ def plan(host, topology, profile, package_plan, *, entry=None):
     import listeners
     from contracts import check_path, digest
     listeners.public_policies(profile, topology)
-    import rehearsal
-    claims = () if entry is not None and rehearsal.active(entry) else listeners.public_claims(profile)
+    import recovery_rehearsal
+    claims = () if entry is not None and recovery_rehearsal.active(entry) else listeners.public_claims(profile)
     result = {"firewall": None, "persistent_projection": {}}
     if claims:
         selected = entry is not None and "deployment_selection" in entry
@@ -103,8 +103,15 @@ def plan(host, topology, profile, package_plan, *, entry=None):
                     and selection.admission.disposition is AdmissionDisposition.COMMITTED
                     and inventory.topology == topology and inventory.profile == profile,
                     "network_selection", "Bootstrap inspection requires the committed selected declarations.")
-            observation = firewall.observe(host, profile.instance_id, claims, integrated=True,
-                                           bindings=inventory.profile.listeners, opened=bool(selection.enabled_roles))
+            import feature_maintenance
+            import services
+            held = feature_maintenance.active_holds(host, entry, inventory)
+            exposed = set(services.enabled_units(host, inventory.units)) - held
+            opened = tuple(c for c in claims if c.role in exposed)
+            closed = tuple(c for c in claims if c.role not in exposed)
+            observation = firewall.observe(host, profile.instance_id, closed or opened, integrated=True,
+                                           bindings=inventory.profile.listeners, opened=not closed,
+                                           retained_claims=opened if closed else ())
         else:
             observation = firewall.observe(host, profile.instance_id, claims, integrated=False)
             for family, name in ((4, "/etc/ufw/before.rules"), (6, "/etc/ufw/before6.rules")):
@@ -133,8 +140,8 @@ def prepare(host, entry, review, tools_dir, bundle):
     from topology import parse_profile, parse_topology
     topology = parse_topology(entry["topology"], registered=True)
     profile = parse_profile(entry["profile"], topology)
-    import rehearsal
-    claims = () if rehearsal.active(entry) else listeners.public_claims(profile)
+    import recovery_rehearsal
+    claims = () if recovery_rehearsal.active(entry) else listeners.public_claims(profile)
     boot = checked_boot_files(host, tools_dir, bundle)
     operations.check_runtime(host, tools_dir)
     main = check_path(host.paths.p("/etc/nginx/nginx.conf"), "file")
@@ -219,6 +226,7 @@ def withdraw(host, entry, transition, resolution, units):
     return capability().feature_withdraw(host, entry, transition, resolution, units)
 
 
-def open_public(host, entry, resolution, evidence):
-    require(capability().feature_open(host, entry, resolution, evidence) is True,
+def open_public(host, entry, resolution, evidence, *, deadline=None):
+    require(capability().feature_open(host, entry, resolution, evidence,
+            **({"deadline": deadline} if deadline is not None else {})) is True,
             "public_opening_unverified", "Network owner did not verify public opening for the selected resolution.")

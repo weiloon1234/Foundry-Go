@@ -5,6 +5,7 @@ and HTTP responses are fixtures; all public lane B/C calls retain their signatur
 """
 from dataclasses import asdict
 import hashlib
+import ipaddress
 import io
 import json
 import os
@@ -242,15 +243,16 @@ class WiringHost(Host):
                 raise AssertionError(args)
         elif args[0] == "ss":
             rows = []
-            if "-6" not in args and "-u" not in args:
+            if "-u" not in args:
+                family = 6 if "-6" in args else 4
                 if self.public_profile:
                     for claim in listeners.public_claims(self.public_profile):
                         path = self.paths.p(edge.RUNTIME + "/" + claim.instance_id + "/stream-" + claim.role + "." + claim.listener + ".conf")
-                        if path.exists():
+                        if path.exists() and claim.socket.family == family:
                             rows.append(f'LISTEN 0 128 {claim.socket.address}:{claim.socket.port} 0.0.0.0:* users:(("nginx",pid={self.worker},fd=3))')
                 for process, inventory, role in self.running.values():
                     for endpoint in inventory.resolution.endpoints:
-                        if endpoint.role == role:
+                        if endpoint.role == role and ipaddress.ip_address(endpoint.address).version == family:
                             rows.append(f'LISTEN 0 128 {endpoint.address}:{endpoint.port} 0.0.0.0:* users:(("app",pid={process.pid},fd=3))')
             output = "\n".join(rows)
         elif args[0] == "runuser":
@@ -274,7 +276,7 @@ class WiringHost(Host):
         return subprocess.CompletedProcess(args, code, output, "")
 
 
-class FeatureWiringTests(unittest.TestCase):
+class FeatureWiringFixture(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -316,7 +318,7 @@ class FeatureWiringTests(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, public=False, secrets=False, independent=False, worker=False, endpoint_binding=False, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, public=False, secrets=False, independent=False, worker=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -326,12 +328,13 @@ class FeatureWiringTests(unittest.TestCase):
             {"name": "relay", "kind": "executable", "executable": {"artifact": "relay", "entry": "server"},
              "arguments": [{"listener_address": "api"}, {"listener_port": "api"}],
              **({"secret_files": {"TOKEN_FILE": "relay-token"}} if secrets else {}),
+             **({"recovery_rehearsal_safe": True} if rehearsal_safe else {}),
              "listeners": {"api": ({"transport": "tcp", "bind": "public", "tls": "none", "authentication": True}
                                     if public else {"transport": "tcp", "bind": "loopback"})},
              "readiness": {"kind": "http", "listener": "api", "path": "/ready", "status": 200},
              "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
              "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64},
-             "maintenance": "stop" if independent else "serve", "state": {"kind": "disposable"}},
+             "maintenance": maintenance or ("stop" if independent else "serve"), "state": {"kind": "disposable"}},
             *([{"name": "worker", "kind": "builtin"}] if worker else [])],
             **({"secrets": {"relay-token": {"prompt": "Relay token"}}} if secrets else {}),
             "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
@@ -375,6 +378,8 @@ class FeatureWiringTests(unittest.TestCase):
             kwargs["plan_token"] = reviewed["plan_token"]
         return manager.execute(self.host, action, {**self.envelope, "project": self.project, "profile": self.profile, **kwargs})
 
+
+class FeatureWiringTests(FeatureWiringFixture):
     def test_service_secret_rotation_retains_http_and_private_values(self):
         import runtime_config
         self.build_archive(secrets=True, independent=True)

@@ -2,8 +2,8 @@
 
 This reference records lane A's private configuration and unit-graph interfaces.
 Service-secret review, delivery, rotation, target-owned rollback and application
-configuration revisions and maintenance are implemented. Recovery integration remains
-in progress. The live network scenarios are opt-in and have not run locally.
+configuration revisions, maintenance and generation-13 recovery are implemented.
+The recovery callback and isolation contracts are in [RECOVERY_HANDOFF.md](RECOVERY_HANDOFF.md). The live network scenarios are opt-in and have not run locally.
 
 ## Lane A interfaces available in this worktree
 
