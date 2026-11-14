@@ -1,32 +1,48 @@
 # Changelog
 
-## Unreleased
+## v0.34.0 — 2026-11-15
 
-- Fixed: Unix readiness and stale-socket helpers receive their verified source
-  before dropping privileges, so root-only tool staging directories no longer
-  prevent takeover readiness or socket cleanup.
-
-- Fixed: Unix readiness and stale-socket checks now connect through a bounded
-  helper running as the instance account. The helper pins socket leaves without
-  following symlinks and validates connected peers by UID and unit cgroup,
-  retaining a peer pidfd to reject exit/PID reuse during inspection. Cross-instance
-  symlink substitutions cannot borrow root's filesystem access. Stale cleanup
-  retains directory-relative no-follow inspection and unlinking.
-
-- Added: private Unix-socket listeners and bounded connection readiness for custom
-  roles. Providers and consumers share a per-instance mode-0700 runtime directory
-  through explicit `ReadWritePaths`. Every admitted start verifies its ownership;
-  provider preparation removes only declared stale sockets and refuses other file
-  types or live sockets. Existing sandbox restrictions remain in place.
-- Added: `unix` endpoint bindings, explicit provider/consumer socket directory, name
-  and path references in argv and environment, and typed `deployment.Endpoint`
-  access through `Network()`, `Path`, `Directory` and `Name`. Unix consumers declare
-  provider ordering and participate in maintenance prerequisite validation. TCP
-  endpoints retain their existing addressing. Unix sockets never enter public
-  exposure or backups; recovery restores declarations and recreates runtime paths.
-- Deploy tools: generation 15, required by Unix declarations, with a sticky floor
-  across rollback and recovery. Added a Wayland compositor/consumer example and
-  container acceptance for socket ownership, connectivity and stale-socket restart.
+- Added: private Unix-socket listeners for custom roles, declared with
+  `"transport": "unix"` and a socket file name. Providers and consumers share
+  `/run/foundry/services/<instance UUID>/sockets`, owned by the instance account
+  with mode `0700`. Every admitted start creates or verifies the directory.
+  Before a provider starts, preparation removes only its declared socket files
+  that refuse connections; live sockets, uncertain liveness, symlinks and other
+  file types refuse the start and remain for inspection. Other names are
+  untouched. Participating roles receive directory access through `ReadWritePaths`
+  with existing sandbox restrictions intact. Unix listeners have no public
+  exposure, firewall rules or nginx routes. Sockets are runtime-only and excluded
+  from backups; recovery restores their declarations and recreates the directory.
+- Added: bounded `unix` readiness for declared listeners. Connection probes run
+  as the instance account, refuse symlink substitutions, and verify the connected
+  peer's UID and membership in the provider unit's cgroup before reporting ready.
+  Peer exit or PID reuse during verification cannot establish readiness.
+  Readiness and stale-socket checks work even when the instance account cannot
+  read the tool bundle directory. Consumers wait for their providers in dependency
+  order, including during recovery.
+- Added: explicit socket references in argv and nonsecret environment entries.
+  Providers use `listener_socket_directory`, `listener_socket_name` and
+  `listener_socket_path`; consumers use `binding_socket_directory`,
+  `binding_socket_name` and `binding_socket_path`. These supply the shared
+  directory, socket file name and full path without application-side path assembly.
+- Added: the `unix` endpoint binding scheme and Unix endpoints through
+  `deployment.Bindings.Endpoint`. `deployment.Endpoint` exposes
+  `Scheme == deployment.Unix`, `Network() == "unix"`, `Path`, `Directory` and
+  `Name`; `URL()` returns a `unix:///...` URL. Unix endpoint bindings require
+  provider ordering and count as maintenance prerequisites.
+- Changed: Unix declarations require deploy tool generation 15 on both the
+  client and host. Update the application's Foundry-Go pin to v0.34.0. From a
+  generation 9–14 host, run `ACTION=tools-plan make deploy`, then
+  `ACTION=tools-apply PLAN_TOKEN='<token>' OPERATION='<stable-uuid-v4>' make deploy`
+  using its existing profile. Older hosts must first reach generation 9.
+  Use `ACTION=upgrade-resume` with the same operation UUID after interruption.
+  Fresh bootstrap installs generation 15. Selecting Unix capabilities retains
+  a generation-15 client requirement across rollback and recovery.
+- Changed: existing applications and declarations require no changes. TCP and
+  HTTP listeners, bindings and endpoint APIs retain their behavior when Unix
+  capabilities are omitted. Hosts keep working with their installed tools until
+  upgraded. See the [host capabilities guide](docs/guides/host-capabilities.md)
+  for a Wayland compositor and consumer example.
 
 ## v0.33.0 — 2026-11-14
 
