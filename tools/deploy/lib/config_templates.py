@@ -149,10 +149,10 @@ def render(data, format, resolve, *, limit):
                 else:
                     value = substitute(value)
                     if format == "ini":
-                        # Raw INI has no portable quote/comment escaping. Refuse
-                        # dialect-dependent values instead of changing the secret.
+                        # Raw INI has no portable quote/comment escaping, and a
+                        # backslash can continue the line into the next setting.
                         _require(value == value.strip() and not _controls(value)
-                                 and not any(c in value for c in "\"'#;"))
+                                 and not any(c in value for c in "\\\"'#;"))
                     else:
                         value = _yaml_string(value)
                     line = prefix + value + ending

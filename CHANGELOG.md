@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: INI configuration templates reject backslashes in substituted values,
+  preventing line continuation from consuming the following setting.
 - Added: per-start secret configuration templates for INI, YAML, JSON, and text.
   `rendered-template` creates root-owned mode-0640 output; `recreate` with a
   declared format supplies an instance-owned mode-0600 working copy on every

@@ -58,6 +58,34 @@ class TemplateEncodingTests(unittest.TestCase):
             with self.subTest(control=repr(control)), self.assertRaises(c.DeployError):
                 self.render("text", "{{secret.TOKEN_FILE}}", "x" + control + "y")
 
+    def test_ini_refuses_backslashes_before_another_assignment(self):
+        source = "[auth]\npassword={{secret.TOKEN_FILE}}\nrequired=true\n"
+        for value in ("\\", "password\\", "path\\component", "double\\\\"):
+            with self.subTest(value=value), self.assertRaises(c.DeployError):
+                self.render("ini", source, value)
+
+    def test_yaml_backslashes_cannot_fold_the_following_assignment(self):
+        source = "password: {{secret.TOKEN_FILE}}\nrequired: true\n"
+        for value in ("\\", "password\\", "\\\nrequired: false", "\\\r\nrequired: false", "\\\u2028required: false"):
+            with self.subTest(value=repr(value)):
+                output = self.render("yaml", source, value)
+                lines = output.splitlines()
+                self.assertEqual(len(lines), 2)
+                self.assertEqual(lines[1], "required: true")
+                self.assertTrue(lines[0].endswith('"'))
+                self.assertEqual(json.loads(lines[0].removeprefix("password: ")), value)
+        self.assertEqual(self.render("yaml", source, "\\"), 'password: "\\\\"\nrequired: true\n')
+
+    def test_text_trailing_backslash_has_no_newline_to_continue(self):
+        for value in ("\\", "password\\"):
+            with self.subTest(value=value):
+                self.assertEqual(self.render("text", "{{secret.TOKEN_FILE}}", value), value)
+                with self.assertRaises(c.DeployError):
+                    self.render("text", "{{secret.TOKEN_FILE}}\nrequired=true", value)
+        for ending in ("\n", "\r\n", "\x85", "\u2028", "\u2029"):
+            with self.subTest(ending=repr(ending)), self.assertRaises(c.DeployError):
+                self.render("text", "{{secret.TOKEN_FILE}}", "\\" + ending + "required=false")
+
     def test_invalid_positions_and_unsupported_yaml_context_fail_before_resolution(self):
         cases = {"json": ['{"{{secret.TOKEN_FILE}}":1}', '{"x":{{secret.TOKEN_FILE}}}',
                           '{"x":"{{unknown}}"}', '{"x":"{{secret.TOKEN_FILE}}", "x":2}'],

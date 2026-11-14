@@ -505,9 +505,9 @@ suffixes:
 | Format | Template syntax and encoding |
 | --- | --- |
 | `json` | Valid JSON with placeholders inside string values, for example `{"password":"{{secret.TOKEN_FILE}}"}`. Keys cannot contain placeholders. Output uses JSON string escaping. |
-| `yaml` | Single-line block mappings and sequences with plain identifier keys. Put placeholders in unquoted values. Output uses double-quoted scalars with escaped controls and line separators, preserving other Unicode as UTF-8. Static quoted scalars and JSON flow values are accepted; multiline scalars, multiline quotes, tags, anchors, aliases, directives, and complex keys are refused. |
-| `ini` | Section headers and `key=value` assignments. Placeholders belong only after `=`. Output is a raw value. CR, LF, NUL, other controls, Unicode line separators, surrounding whitespace, quotes, `#`, and `;` are refused because portable INI escaping cannot preserve them reliably. `]` and ordinary Unicode remain literal values. |
-| `text` | The entire file is one value. Controls and Unicode line separators are refused, including a final newline. |
+| `yaml` | Single-line block mappings and sequences with plain identifier keys. Put placeholders in unquoted values. Output uses double-quoted scalars with escaped backslashes, controls, and line separators, preserving other Unicode as UTF-8. The closing quote precedes the line ending, preventing continuation into the next setting. Static quoted scalars and JSON flow values are accepted; multiline scalars, multiline quotes, tags, anchors, aliases, directives, and complex keys are refused. |
+| `ini` | Section headers and `key=value` assignments. Placeholders belong only after `=`. Output is a raw value. CR, LF, NUL, other controls, Unicode line separators, surrounding whitespace, backslashes, quotes, `#`, and `;` are refused because portable INI escaping cannot preserve them reliably. A trailing backslash can consume the next assignment as a continuation. `]` and ordinary Unicode remain literal values. |
+| `text` | The entire file is one value. Controls and Unicode line separators are refused, including a final newline. No newline is appended, so a trailing backslash has no following line to continue. |
 
 For example, a YAML value can combine `{{binding.api.url}}` with a literal path.
 Encoding protects the configuration format; it does not percent-encode URL query
