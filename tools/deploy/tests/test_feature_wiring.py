@@ -340,7 +340,7 @@ class FeatureWiringFixture(unittest.TestCase):
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}
 
-    def build_archive(self, *, public=False, secrets=False, independent=False, worker=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
+    def build_archive(self, *, public=False, secrets=False, independent=False, worker=False, scheduler=False, endpoint_binding=False, rehearsal_safe=False, maintenance=None, version="20261114T000000Z-abcdef12"):
         binary = elf("linux-arm64")
         checksum = hashlib.sha256(binary).hexdigest()
         self.topology = parse_topology({"schema": 2, "roles": [
@@ -357,11 +357,13 @@ class FeatureWiringFixture(unittest.TestCase):
              "restart": {"policy": "on-failure", "delay_seconds": 5, "burst": 5},
              "limits": {"memory_bytes": 268435456, "cpu_percent": 100, "tasks": 64},
              "maintenance": maintenance or ("stop" if independent else "serve"), "state": {"kind": "disposable"}},
-            *([{"name": "worker", "kind": "builtin"}] if worker else [])],
+            *([{"name": "worker", "kind": "builtin"}] if worker else []),
+            *([{"name": "scheduler", "kind": "builtin"}] if scheduler else [])],
             **({"secrets": {"relay-token": {"prompt": "Relay token"}}} if secrets else {}),
             "artifacts": {"relay": {"version": "1", "format": "file", "executables": {"server": "relay"},
                 "platforms": {"linux-arm64": {"url": "https://example.invalid/relay", "sha256": checksum}}}}})
-        self.profile.update(schema=3, placement={"http": 1, "relay": 1, **({"worker": 1} if worker else {})}, listeners={})
+        self.profile.update(schema=3, placement={"http": 1, "relay": 1, **({"worker": 1} if worker else {}),
+                                              **({"scheduler": 1} if scheduler else {})}, listeners={})
         if public:
             from test_host_capabilities import profile
             self.profile["listeners"] = {"relay.api": profile()["listeners"]["relay.ingress"]}
@@ -1089,6 +1091,7 @@ class FeatureWiringTests(FeatureWiringFixture):
 
     def test_deployed_generation_12_profile_can_plan_apply_and_resume_generation_13_upgrade(self):
         from contextlib import ExitStack
+        import runtime_config
         source = self.host.paths.root / 'preview-tools'
         shutil.copytree(TOOLS, source, ignore=shutil.ignore_patterns('__pycache__'))
         metadata = c.read_json(source / 'protocol.json')
@@ -1097,6 +1100,7 @@ class FeatureWiringTests(FeatureWiringFixture):
         # Construct deployed preview state using its prior capability floor and
         # immutable generation-12 bundle. The upgrade uses current guards unchanged.
         with ExitStack() as stack:
+            stack.enter_context(patch.object(runtime_config, 'scheduler_environment', return_value={}))
             for module in (lifecycle, upgrades):
                 stack.enter_context(patch.object(module, 'FEATURE_LIFECYCLE_GENERATION', 12))
             for module, path in ((lifecycle, 'lib/feature_lifecycle.py'), (upgrades, 'lib/upgrades.py'),
@@ -1124,6 +1128,22 @@ class FeatureWiringTests(FeatureWiringFixture):
         self.assertFalse(set(inventory.units.values()) & self.host.enabled)
         self.assertEqual(self.request('upgrade-resume', plan_token=plan['plan_token'],
                                      operation_id=operation)['outcome'], 'unchanged')
+        old_environment = runtime_config.effective_environment_path(self.host, entry, inventory.resolution)
+        self.assertNotIn(runtime_config.SCHEDULER_ENABLED, c.parse_env(old_environment.read_text()))
+        reviewed = self.request('release-plan', archive=str(self.archive), archive_sha256=c.digest(self.archive),
+                                operation_id=str(uuid.uuid4()))
+        self.assertTrue(reviewed['ok'])
+        _, entry = self.host.require_identity(self.project, self.profile)
+        candidate, _ = lifecycle.load_resolution(self.host, entry, reviewed['candidate_resolution'])
+        candidate_env = runtime_config.effective_environment_path(self.host, entry, candidate.resolution, candidate=True)
+        self.assertEqual(c.parse_env(candidate_env.read_text())[runtime_config.SCHEDULER_ENABLED], 'false')
+        self.assertNotIn(runtime_config.SCHEDULER_ENABLED, c.parse_env(old_environment.read_text()))
+        with patch.object(release.backup, 'archive_keys'):
+            self.request('config-set', secrets={'configuration': {'APP__TEST__TOKEN': 'preview-upgrade'}}, confirm=True)
+        _, entry = self.host.require_identity(self.project, self.profile)
+        values = runtime_config.validate_runtime_environment(self.host, entry)
+        self.assertEqual(values[runtime_config.SCHEDULER_ENABLED], 'false')
+        self.assertEqual(values['APP__TEST__TOKEN'], 'preview-upgrade')
 
     def test_second_bootstrap_after_tool_upgrade_retains_verified_boot_pin(self):
         plan = self.request("bootstrap-plan", topology=self.topology.projection())

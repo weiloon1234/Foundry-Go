@@ -13,6 +13,7 @@ import secrets
 import stat
 import uuid
 import uploads
+import recovery_rehearsal
 
 from contracts import (CLEANUP_GRACE_KEY, DEFAULT_CLEANUP_GRACE, DeployError, POSTGRES_PORT, REDIS_PORT, check_path,
                        dump_env, instance_paths, normalize_backup_repository, normalize_storage_disks, parse_env,
@@ -101,8 +102,8 @@ def configuration_parts(changes, entry=None, *, topology=None):
 SCHEDULER_ENABLED = "APP__SCHEDULER__ENABLED"
 
 
-def scheduler_environment(roles):
-    return {SCHEDULER_ENABLED: "true" if "scheduler" in roles else "false"}
+def scheduler_environment(roles, *, rehearsal=False):
+    return {SCHEDULER_ENABLED: "true" if "scheduler" in roles and not rehearsal else "false"}
 
 
 def pipeline_keys(entry=None):
@@ -328,7 +329,8 @@ def runtime_environment(entry, credentials, *, postgres_port=POSTGRES_PORT):
     values.update(application)
     if entry["profile"].get("schema") == 3:
         values.pop(SCHEDULER_ENABLED + "_FILE", None)
-        values.update(scheduler_environment(name for name, count in entry["profile"]["placement"].items() if count))
+        values.update(scheduler_environment((name for name, count in entry["profile"]["placement"].items() if count),
+                                           rehearsal=recovery_rehearsal.active(entry)))
     return values
 
 
@@ -630,12 +632,17 @@ def validate_runtime_environment(host, entry):
     require(host.paths.root != Path("/") or "postgresql" in registry["shared"],
             "postgres_identity", "The Foundry PostgreSQL allocation is missing.")
     expected = runtime_environment(entry, credentials, postgres_port=postgres_port)
+    rehearsal = recovery_rehearsal.active(entry)
     if resolution is not None:
         http = next(e for e in resolution.endpoints if e.role == "http" and e.listener == "http")
         require(http.port == entry["allocations"]["http_port"], "runtime_resolution_conflict",
                 "HTTP registry projection differs from the selected runtime resolution.")
         expected["APP__HTTP__SERVER__ADDRESS"] = _http_address(http)
-        expected.update(scheduler_environment(resolution.roles))
+        expected.update(scheduler_environment(resolution.roles, rehearsal=rehearsal))
+    if not rehearsal and SCHEDULER_ENABLED not in values:
+        # Generation-12 environments omitted this derived setting. Validate their
+        # existing fields; the next immutable environment supplies the setting.
+        expected.pop(SCHEDULER_ENABLED, None)
     owned_keys = pipeline_keys(entry)
     if any(values.get(key) != value for key, value in expected.items() if key in owned_keys):
         raise DeployError("configuration_identity", "Pipeline-owned runtime configuration differs from registered identity/credentials.")
@@ -875,7 +882,7 @@ def effective_environments(host, entry, resolution_id, roles, endpoints, *, valu
     require(http is not None, "runtime_resolution", "The HTTP runtime allocation is missing.")
     values["APP__HTTP__SERVER__ADDRESS"] = _http_address(http)
     values.pop(SCHEDULER_ENABLED + "_FILE", None)
-    values.update(scheduler_environment(roles))
+    values.update(scheduler_environment(roles, rehearsal=recovery_rehearsal.active(entry)))
     payload = dump_env(values)
     result = []
     for role in roles:

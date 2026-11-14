@@ -71,10 +71,10 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
         self.assertEqual(base.read_bytes(), original)
 
 
-    def target(self, *, running=('http', 'relay'), holds=(), mode='takeover', public=False):
-        self.build_archive(independent=True, secrets=True, public=public, rehearsal_safe=mode == 'rehearsal')
+    def target(self, *, running=('http', 'relay'), holds=(), mode='takeover', public=False, scheduler=False):
+        self.build_archive(independent=True, secrets=True, public=public, rehearsal_safe=mode == 'rehearsal', scheduler=scheduler)
         if mode == 'rehearsal':
-            self.build_archive(secrets=True, rehearsal_safe=True)
+            self.build_archive(secrets=True, rehearsal_safe=True, scheduler=scheduler)
         if public:
             wiring.FeatureWiringTests.configure_firewall(self)
         private = {'configuration': {'FOUNDRY_SERVICE_SECRET__RELAY_TOKEN': 'recovery-secret-canary'}}
@@ -116,6 +116,12 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
         self.host.journal(registry, entry)
         if mode == 'rehearsal':
             self.host.paths.p('/etc/nginx/sites-enabled/foundry-' + entry['name'] + '.conf').unlink()
+            # The recovery resources owner disables background work before application validation.
+            environment = self.host.paths.instance_config(entry['name']) / 'app.env'
+            values = c.parse_env(environment.read_text())
+            values[runtime_config.SCHEDULER_ENABLED] = 'false'
+            values.pop(runtime_config.SCHEDULER_ENABLED + '_FILE', None)
+            self.host.owned_write(environment, c.dump_env(values), mode=0o640, group=entry['name'])
         self.journal = {'intent': {'project': self.project, 'profile': self.profile, 'source_profile': source_profile,
             'effective_profile': self.profile, 'topology': entry['topology'], 'mode': mode, 'operation_id': operation,
             'archive_sha256': c.digest(self.archive), 'bundle': registry['tools']['bundle_sha256'],
@@ -224,3 +230,33 @@ class FeatureRecoveryTests(wiring.FeatureWiringFixture):
                 with self.assertRaises(c.DeployError):
                     lifecycle.activate_recovery(self.host, registry, entry, self.journal)
             self.assertFalse(self.host.running)
+
+    def test_rehearsal_with_placed_scheduler_keeps_background_disabled(self):
+        registry, entry = self.target(mode='rehearsal', scheduler=True)
+        self.assertEqual(entry['profile']['placement']['scheduler'], 1)
+        values = runtime_config.validate_runtime_environment(self.host, entry)
+        self.assertEqual(values[runtime_config.SCHEDULER_ENABLED], 'false')
+        normal = {**entry, 'recovered_from': {**entry['recovered_from'], 'mode': 'takeover'}}
+        with self.assertRaises(c.DeployError) as error:
+            runtime_config.validate_runtime_environment(self.host, normal)
+        self.assertEqual(error.exception.code, 'configuration_identity')
+        environment = self.host.paths.instance_config(entry['name']) / 'app.env'
+        for setting in ('true', None):
+            invalid = dict(values)
+            invalid.pop(runtime_config.SCHEDULER_ENABLED)
+            if setting is not None:
+                invalid[runtime_config.SCHEDULER_ENABLED] = setting
+            self.host.owned_write(environment, c.dump_env(invalid), mode=0o640, group=entry['name'])
+            with self.subTest(setting=setting), self.assertRaises(c.DeployError) as error:
+                runtime_config.validate_runtime_environment(self.host, entry)
+            self.assertEqual(error.exception.code, 'configuration_identity')
+        self.host.owned_write(environment, c.dump_env(values), mode=0o640, group=entry['name'])
+        with self.host.lock('host'):
+            self.prepare(registry, entry)
+            _, _, inventory, _ = lifecycle.load(self.host, entry)
+            self.assertEqual(runtime_config.validate_runtime_environment(self.host, entry)[runtime_config.SCHEDULER_ENABLED], 'false')
+            with patch.object(recovery_rehearsal, 'isolation', return_value={'proven': True}):
+                lifecycle.activate_recovery(self.host, registry, entry, self.journal)
+                self.assertTrue(lifecycle.recovery_ready(self.host, entry, self.journal))
+            self.assertNotIn(inventory.units['scheduler'], self.host.running)
+            self.assertNotIn(inventory.units['scheduler'], self.host.enabled)
