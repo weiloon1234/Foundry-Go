@@ -12,7 +12,7 @@ In `upgrades._check_feature_request`, add exactly these actions to `supported`:
 Both the requested-profile/topology check and registered-instance check use that
 set. Keep generation checks, rehearsal write restrictions, confirmation and plan
 token checks. Recovery must retain `recover._feature_owner`'s refusal until all
-three lane A functions below exist. Backup credential rotations are separate
+three recovery callbacks and the `start_units`/`stop_units` seams below exist. Backup credential rotations are separate
 actions and are not included in this lift.
 
 Add `recovery_public_binding` to `manage.py`'s `recovery_fields` and the arguments
@@ -39,14 +39,19 @@ configuration and PostgreSQL, and prepares Redis before these calls:
    the source descriptor/profile for archive validation and the separate effective
    target profile for host/address resolution. Install the selected packages and
    artifacts through their existing owners with package daemons suppressed.
-   Restore runtime file access through the configuration owner, prepare the unit
-   graph and closed ingress, and leave every role stopped. Never migrate or seed
+   Prepare the unit graph and closed ingress, then call
+   `stop_units(host, inventory)` to stop and prove exit of every workload.
+   Restore systemd enablement to exactly `recovery_enabled_roles`, and carry
+   `recovery_maintenance_holds` into the target admission selection. Neither
+   enablement nor holds may default to every placed role. Never migrate or seed
    restored data. Persist resumable preparation evidence under this operation.
 2. `feature_lifecycle.activate_recovery(host, registry, entry, journal)` runs in
    the `release` phase, after `application` is recorded complete. Prove the restored
    schema matches the selected release, restore current credential/Redis bindings,
-   and start exactly `recovery_roles` in dependency order through existing
-   admission and cleanup owners. A timeout never proves callback exit. Return
+   and call `start_units(host, inventory, journal["intent"]["recovery_roles"], deadline)`
+   through existing admission and cleanup owners. This seam checks live systemd
+   enablement and does not enable units. Use one bounded deadline. A timeout never
+   proves callback exit. Return
    `{"version": <archived deployment release>}`; a different version refuses.
    Takeover must prove private health before public admission. Rehearsal starts
    HTTP and only its opted-in custom prerequisite closure, with private listeners,
@@ -57,7 +62,9 @@ configuration and PostgreSQL, and prepares Redis before these calls:
    process identities and private health, plus takeover admission or rehearsal
    isolation. `recover._ready` calls it before the takeover backup, before timers,
    before final success, and on completed-operation replay. False, exceptions or
-   incomplete observations block completion. A historical receipt is insufficient.
+   incomplete observations block completion. A recovered empty enabled set must
+   remain stopped with ingress closed; do not require or start HTTP to manufacture
+   health. A historical receipt is insufficient.
 
 The caller retains the host lock. Lane A must serialize any instance-owned work
 using the existing host-then-instance lock order. Each callback can be re-entered
@@ -67,12 +74,29 @@ failed-start cleanup, withdrawal, process-exit proof and retained obligations.
 
 ## Evidence and remaining refusals
 
-`snapshot` contains `deployment`, `resolution`, `selection`, `declaration` and
-`secret_paths`. The latter maps role to declared `_FILE` name to absolute immutable
-snapshot path beneath the instance configuration tree. Backup requires each selected
-secret snapshot to be a root-owned 0600 regular file and archives the whole tree.
-Recovery initially restores all feature configuration root-private, including old
-secret revisions. Lane A assigns access only to the intended runtime readers.
+Backup reads `services.enabled_units(host, inventory.units)` at archive time,
+replaces only the archived selection's enabled-role observation, and preserves its
+holds. The registry's cached enablement is never the backup authority. Takeover
+keeps that enabled set, suppresses held roles and their dependents, and starts only
+the remaining declared roles. Both enabled roles and effective holds are token-bound.
+
+`snapshot` contains `deployment`, `resolution`, `selection`, `declaration`,
+`secret_paths` and `service_secret_files`. `secret_paths` maps role to declared
+`_FILE` name to immutable path. Backup calls
+`runtime_config.service_secret_snapshot_paths(host, entry)` to inventory current
+secret values, including retained names. `service_secret_files` records those
+value paths; the index stays private. The configuration owner validates values
+as root-owned 0640 files for the isolated instance group; `service-secrets.json`
+stays root-owned 0600. Missing owner seams refuse instead of guessing paths.
+
+Recovery restores configuration privately, then verifies the isolated group with
+`runtime_config._instance_group` and publishes only `app.env`, its `_FILE` values
+and current service-secret values with their required 0640 access. It uses
+`_read_value_file` and `service_secret_snapshot_paths` to validate restored access
+before storage selection and `validate_runtime_environment`. Private intake/index
+files and unreferenced historical snapshots stay 0600. Preparation therefore
+receives already-readable runtime configuration; it does not repair these readers
+after they have run. Lane A owns permissions for regenerated runtime environments.
 The original snapshot is retained privately beside the recovery journal as
 `source-deployment.json`; it is evidence, not permission to replay old admission.
 

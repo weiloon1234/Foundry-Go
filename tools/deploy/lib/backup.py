@@ -7,6 +7,7 @@ no secret, key, or secret-derived digest is included in a command argument.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import replace
 import configparser
 import fcntl
 from datetime import datetime, timezone
@@ -39,6 +40,8 @@ from contracts import (BACKUP_POLICY, BACKUP_JITTER_SECONDS, DeployError, POSTGR
 from host import Host
 import packages
 import postgres
+import runtime_config
+import services
 from topology import ExecutableRole, parse_profile, parse_topology
 
 STANZA = "foundry"
@@ -56,8 +59,7 @@ MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 
 def parse_feature_snapshot(value, entry):
     """Validate the archived selection using the runtime's existing typed owners."""
-    import services
-    contract_object(value, ("deployment", "resolution", "selection", "declaration", "secret_paths"))
+    contract_object(value, ("deployment", "resolution", "selection", "declaration", "secret_paths"), ("service_secret_files",))
     declaration = ReleaseDeclaration.parse(value["declaration"])
     topology = parse_topology(declaration.topology_json)
     profile = parse_profile(declaration.profile_json, topology)
@@ -71,7 +73,8 @@ def parse_feature_snapshot(value, entry):
             and selection.admission.deployment_sha256 == canonical_digest(value["deployment"])
             and selection.admission.private_revision == inventory.resolution.private_revision == entry["configuration_revision"]
             and value["selection"] == entry.get("deployment_selection")
-            and set(selection.enabled_roles) <= inventory.roles.keys(),
+            and set(selection.enabled_roles) <= inventory.roles.keys()
+            and set(selection.maintenance_holds) <= inventory.roles.keys(),
             "backup_deployment_mismatch", "Recovery descriptor differs from the selected deployment or configuration.")
     inventory.start_order(selection.enabled_roles)
     paths = value["secret_paths"]
@@ -85,6 +88,12 @@ def parse_feature_snapshot(value, entry):
         require(all(isinstance(path, str) and path.startswith(configuration)
                     and ".." not in Path(path).parts and str(Path(path)) == path for path in paths[name].values()),
                 "backup_service_secrets", f"Role {name} secret snapshots must be inside the encrypted configuration tree.")
+    secret_files = value.get("service_secret_files", [])
+    require(isinstance(secret_files, list) and len(secret_files) <= 128
+            and all(isinstance(path, str) and path.startswith(configuration)
+                    and ".." not in Path(path).parts and str(Path(path)) == path for path in secret_files)
+            and len(set(secret_files)) == len(secret_files),
+            "backup_service_secrets", "Invalid configuration-owner service secret file inventory.")
     return inventory
 
 
@@ -112,19 +121,44 @@ def _feature_snapshot(host, entry, files):
     require("deployment_selection" in entry, "backup_deployment_missing",
             "Select a feature deployment before archiving recovery material.")
     _, selection, inventory, launch = load(host, entry)
+    require(record_document(selection) == entry.get("deployment_selection"),
+            "backup_deployment_mismatch", "Registry and selected deployment differ.")
+    enabled_units = getattr(services, "enabled_units", None)
+    require(callable(enabled_units), "capability_unavailable", "Feature backup requires lane A services.enabled_units.")
+    selection = replace(selection, enabled_roles=enabled_units(host, inventory.units))
     value = {"deployment": record_document(inventory.deployment), "resolution": record_document(inventory.resolution),
              "selection": record_document(selection), "declaration": launch["declaration"],
              "secret_paths": launch["secret_paths"]}
-    parse_feature_snapshot(value, entry)
+    snapshot_entry = {**entry, "deployment_selection": value["selection"]}
+    parse_feature_snapshot(value, snapshot_entry)
     require((host.load_state(entry).get("current") or {}).get("version") == inventory.deployment.release,
             "backup_deployment_mismatch", "Running release differs from the selected recovery descriptor.")
     canonical = instance_paths(entry["name"])["configuration"] + "/"
     prefix = "instances/" + entry["name"] + "/"
+    snapshot_paths = getattr(runtime_config, "service_secret_snapshot_paths", None)
+    index = host.paths.instance_config(entry["name"]) / "service-secrets.json"
+    require(callable(snapshot_paths) or (not index.exists() and not any(value["secret_paths"].values())),
+            "capability_unavailable", "Feature secret backup requires lane A runtime_config.service_secret_snapshot_paths.")
+    current_files = []
+    for path in snapshot_paths(host, entry) if callable(snapshot_paths) else ():
+        path = check_path(Path(path), "file")
+        require(path.is_relative_to(host.paths.instance_config(entry["name"])),
+                "backup_service_secrets", "Service secret snapshots must remain inside the configuration tree.")
+        relative = path.relative_to(host.paths.instance_config(entry["name"])).as_posix()
+        require(prefix + relative in files, "backup_service_secrets", "A current service secret snapshot is missing from the archive.")
+        if path == index:
+            _private(host, path)
+        else:
+            runtime_config._read_value_file(host, entry, str(path))
+            current_files.append(canonical + relative)
+    value["service_secret_files"] = sorted(current_files)
     for paths in value["secret_paths"].values():
         for path in paths.values():
             member = prefix + path.removeprefix(canonical)
             require(member in files, "backup_service_secrets", "A selected service secret snapshot is missing from the configuration archive.")
-            _private(host, files[member])
+            require(path in current_files, "backup_service_secrets", "Selected service secrets differ from the current configuration-owner snapshot.")
+            runtime_config._read_value_file(host, entry, str(files[member]))
+    parse_feature_snapshot(value, snapshot_entry)
     return value
 
 
@@ -420,6 +454,7 @@ def archive_keys(host: Host, entry: dict) -> dict:
     snapshot = _feature_snapshot(host, entry, files)
     if snapshot is not None:
         metadata["feature_recovery"] = snapshot
+        metadata["deployment_selection"] = snapshot["selection"]
     for name in ("uid", "gid"):
         metadata["allocations"].pop(name, None)
     metadata["release_commit"] = (host.load_state(entry).get("current") or {}).get("commit")
@@ -452,7 +487,7 @@ def archive_keys(host: Host, entry: dict) -> dict:
     receipt = {"object_key": key, "completed_at": now(), "status": "complete"}
     if snapshot is not None:
         receipt["deployment_sha256"] = canonical_digest(snapshot["deployment"])
-        receipt["coverage"] = service_coverage(parse_feature_snapshot(snapshot, entry))
+        receipt["coverage"] = service_coverage(parse_feature_snapshot(snapshot, metadata))
         receipt["coverage"].update(supported_components=["encrypted_configuration", "selected_deployment"],
                                    complete_instance_coverage=False)
     _record(host, entry, "keys", receipt)

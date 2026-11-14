@@ -94,25 +94,95 @@ class RecoveryTests(unittest.TestCase):
             self.plan()
         self.assertEqual(error.exception.code, "recovery_descriptor_missing")
 
-    def test_feature_restoration_keeps_current_and_historical_configuration_private(self):
+    def test_feature_restoration_sets_runtime_access_before_real_readers(self):
+        from test_contracts import storage_fixture
         _, metadata = self.feature(secret=True)
         prefix = "instances/" + self.entry["name"] + "/"
         self.files[prefix + "service-secrets/revision-6/token"] = b"historical-secret-canary"
+        canonical = backup.instance_paths(self.entry["name"])["configuration"] + "/"
+        values = recover.parse_env(self.files[prefix + "app.env"].decode())
+        storage = storage_fixture()
+        for key, name, content in (("APP__SERVICES__CREDENTIALS_FILE", "storage-credentials.secret", storage["credentials"]),
+                                   ("APP__SERVICES__STORAGE__DISKS_FILE", "storage-disks.secret", storage["disks"])):
+            values[key] = canonical + name
+            self.files[prefix + name] = json.dumps(content).encode()
+        self.files[prefix + "app.env"] = dump_env(values).encode()
         self.write_archive()
         with patch.object(recover, "_feature_owner", return_value=Mock()):
             approved = self.plan(mode="takeover")
         journal = {"intent": approved["_intent"], "source": {"label": LABEL}}
         with patch.object(recover.upgrades, "install_tools"), patch.object(recover.packages, "install_missing"), \
-                patch.object(recover.provision, "_prepare_instance"), patch.object(recover, "select_runtime_storage"):
+                patch.object(recover.provision, "_prepare_instance"):
             recover._resources(self.host, journal, approved["_recovered"], self.files, TOOLS)
+        restored_entry = self.host.read_registry()["instances"][self.profile["instance_id"]]
+        self.assertEqual(recover.validate_runtime_environment(self.host, restored_entry), values)
+        self.assertIn("uploads", restored_entry["storage_bindings"])
         directory = self.host.paths.instance_config(self.entry["name"])
-        for name in ("app.env", "service-secrets/revision-7/token", "service-secrets/revision-6/token"):
-            self.assertEqual((directory / name).stat().st_mode & 0o777, 0o600)
+        for name, mode in (("app.env", 0o640), ("service-secrets/revision-7/token", 0o640),
+                           ("storage-credentials.secret", 0o640), ("storage-disks.secret", 0o640),
+                           ("service-secrets/revision-6/token", 0o600), ("secrets.json", 0o600),
+                           ("bootstrap-secrets.json", 0o600), ("backup.json", 0o600)):
+            self.assertEqual((directory / name).stat().st_mode & 0o777, mode)
             self.assertEqual((directory / name).read_bytes(), self.files[prefix + name])
         source = self.host.paths.p(recover.JOURNAL).parent / "source-deployment.json"
         self.assertEqual(read_json(source), metadata["feature_recovery"])
         self.assertEqual(source.stat().st_mode & 0o777, 0o600)
         self.assertFalse(any(args[:2] == ["systemctl", "start"] for args, _ in self.commands))
+
+    def test_runtime_references_cannot_widen_access_to_private_intake(self):
+        self.feature()
+        canonical = backup.instance_paths(self.entry["name"])["configuration"] + "/"
+        recovered = {"metadata": None, "values": {"VALUE_FILE": canonical + "bootstrap-secrets.json"}}
+        with patch.object(self.host, "owned_write") as write, self.assertRaises(DeployError) as error:
+            recover._restore_runtime_access(self.host, self.entry, recovered)
+        self.assertEqual(error.exception.code, "recovery_members")
+        write.assert_not_called()
+
+    def test_restored_service_secret_owner_reads_retained_values_but_private_index(self):
+        _, metadata = self.feature(secret=True)
+        canonical = backup.instance_paths(self.entry["name"])["configuration"] + "/"
+        prefix = "instances/" + self.entry["name"] + "/"
+        current = canonical + "service-secrets/revision-7/token"
+        retained = canonical + "service-secrets/revision-7/retained"
+        metadata["feature_recovery"]["service_secret_files"] = [current, retained]
+        self.files["recovery/instance.json"] = json.dumps(metadata).encode()
+        self.files[prefix + "service-secrets/revision-7/retained"] = b"retained-secret"
+        self.files[prefix + "service-secrets.json"] = json.dumps({"schema": 1, "instance_id": self.profile["instance_id"],
+                                                                "paths": {"token": current, "retained": retained}}).encode()
+        self.write_archive()
+        with patch.object(recover, "_feature_owner", return_value=Mock()):
+            approved = self.plan(mode="takeover")
+        journal = {"intent": approved["_intent"], "source": {"label": LABEL}}
+        def snapshot_paths(host, entry):
+            index = host.paths.instance_config(entry["name"]) / "service-secrets.json"
+            self.assertEqual(index.stat().st_mode & 0o777, 0o600)
+            paths = tuple(host.paths.p(path) for path in read_json(index)["paths"].values())
+            for path in paths:
+                recover._read_value_file(host, entry, str(path))
+            return (index, *paths)
+        with patch.object(recover.upgrades, "install_tools"), patch.object(recover.packages, "install_missing"), \
+                patch.object(recover.provision, "_prepare_instance"), \
+                patch.object(recover.runtime_config, "service_secret_snapshot_paths", side_effect=snapshot_paths, create=True) as owner:
+            recover._resources(self.host, journal, approved["_recovered"], self.files, TOOLS)
+        owner.assert_called_once()
+
+    def test_takeover_preserves_archived_enablement_and_maintenance_holds(self):
+        _, metadata = self.feature()
+        for enabled, held, started, effective_holds in ((["http"], [], ["http"], []),
+                                                       ([], [], [], []),
+                                                       (["http", "relay", "worker"], ["relay"], ["http"], ["relay", "worker"])):
+            with self.subTest(enabled=enabled, holds=held):
+                selected = metadata["feature_recovery"]["selection"]
+                selected.update(enabled_roles=enabled, maintenance_holds=held)
+                metadata["deployment_selection"] = selected
+                self.files["recovery/instance.json"] = json.dumps(metadata).encode()
+                self.write_archive()
+                with patch.object(recover, "_feature_owner", return_value=Mock()):
+                    approved = self.plan(mode="takeover")
+                self.assertEqual(approved["recovery_enabled_roles"], enabled)
+                self.assertEqual(approved["recovery_roles"], started)
+                self.assertEqual(approved["recovery_maintenance_holds"], effective_holds)
+                self.assertEqual(approved["_intent"]["recovery_maintenance_holds"], effective_holds)
 
     def test_feature_restore_rejects_conflicting_secret_alias_and_omitted_profile_policy(self):
         self.feature(secret=True)

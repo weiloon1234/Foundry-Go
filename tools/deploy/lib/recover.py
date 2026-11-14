@@ -19,8 +19,9 @@ import postgres
 import provision
 import redis_acl
 import release
+import runtime_config
 import upgrades
-from contracts import (DeployError, PORT_FIRST, PORT_LAST, POSTGRES_PORT, RecoveryPublicBinding,
+from contracts import (DeployError, DeploymentSelection, PORT_FIRST, PORT_LAST, POSTGRES_PORT, RecoveryPublicBinding,
                        canonical_digest, record_document,
                        check_path, digest, dump_env, identity, instance_paths, now, parse_env,
                        parse_json, read_json, require, select_runtime_storage, valid_uuid,
@@ -82,10 +83,18 @@ def rehearsal_roles(inventory):
     return inventory.start_order(selected)
 
 
+def takeover_selection(inventory, snapshot):
+    selection = DeploymentSelection.parse(snapshot["selection"])
+    enabled = set(selection.enabled_roles) & inventory.roles.keys()
+    holds = set(selection.maintenance_holds) & inventory.roles.keys()
+    holds.update(name for name in enabled if inventory.prerequisites({name}) & set(selection.maintenance_holds))
+    return inventory.start_order(enabled), tuple(sorted(holds)), inventory.start_order(enabled - holds)
+
+
 def _feature_owner():
     """Lane A must implement closed preparation, admitted activation and private health."""
     import feature_lifecycle
-    for name in ("prepare_recovery", "activate_recovery", "recovery_ready"):
+    for name in ("prepare_recovery", "activate_recovery", "recovery_ready", "start_units", "stop_units"):
         require(callable(getattr(feature_lifecycle, name, None)), "capability_unavailable",
                 f"Feature recovery requires lane A feature_lifecycle.{name}; no replacement services were started.")
     return feature_lifecycle
@@ -258,6 +267,9 @@ def archive_configuration(project, profile, files, topology):
             for path in paths.values():
                 require(prefix + path.removeprefix(config + "/") in files,
                         "recovery_members", "A selected service secret snapshot is missing.")
+        require(all(prefix + path.removeprefix(config + "/") in files
+                    for path in metadata["feature_recovery"].get("service_secret_files", [])),
+                "recovery_members", "A current configuration-owner service secret snapshot is missing.")
     connections = parse_json(values.get("APP__SERVICES__DATABASE__CONNECTIONS", "{}"))
     primary = connections.get("primary", {}).get("primary", {})
     pg_port = primary.get("port")
@@ -322,13 +334,18 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
     feature = recovered["feature"]
     binding = None
     roles = ()
+    enabled, holds = (), ()
     if feature is not None:
         binding = replacement_binding(recovery_public_binding, recovered["metadata"], profile, operation_id, mode)
         coverage = backup.service_coverage(feature)
         unprotected = [s["role"] for s in coverage["service_state"] if s["kind"] == "local-unprotected"]
         require(mode != "takeover" or not unprotected, "service_state_unprotected",
                 "Takeover requires explicit restoration evidence for local state: " + ", ".join(unprotected))
-        roles = rehearsal_roles(feature) if mode == "rehearsal" else feature.start_order(feature.roles)
+        if mode == "rehearsal":
+            roles = rehearsal_roles(feature)
+            enabled = roles
+        else:
+            enabled, holds, roles = takeover_selection(feature, recovered["metadata"]["feature_recovery"])
         _feature_owner()
     else:
         require(recovery_public_binding is None, "recovery_public_binding", "Legacy recovery has no custom public binding override.")
@@ -344,6 +361,7 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
     if feature is not None:
         intent.update(recovery_public_binding=record_document(binding) if binding else None,
                       effective_profile=effective_profile(profile, binding), recovery_roles=list(roles),
+                      recovery_enabled_roles=list(enabled), recovery_maintenance_holds=list(holds),
                       deployment_sha256=canonical_digest(recovered["metadata"]["feature_recovery"]["deployment"]))
     journal = _load(host)
     if not journal:
@@ -380,6 +398,7 @@ def plan(host, project, profile, tools_dir, *, recovery_archive, topology, mode,
             "_intent": intent, "_recovered": recovered}
     if feature is not None:
         result.update(coverage=coverage, recovery_roles=list(roles),
+                      recovery_enabled_roles=list(enabled), recovery_maintenance_holds=list(holds),
                       recovery_public_binding=intent["recovery_public_binding"],
                       remaining_manual_steps=["DNS instructions follow confirmed old-server stop and private takeover health."]
                       if binding else [])
@@ -432,6 +451,35 @@ def _verify_repository(host, journal, recovered):
         raise
     finally:
         path.unlink(missing_ok=True)
+
+
+def _restore_runtime_access(host, entry, recovered):
+    """Restore only declared runtime readers through the configuration ownership checks."""
+    directory = host.paths.instance_config(entry["name"])
+    canonical = instance_paths(entry["name"])["configuration"] + "/"
+    paths = {value for key, value in recovered["values"].items() if key.endswith("_FILE") and value}
+    snapshot = (recovered["metadata"] or {}).get("feature_recovery")
+    if snapshot is not None:
+        paths.update(snapshot.get("service_secret_files", []))
+        paths.update(path for role in snapshot["secret_paths"].values() for path in role.values())
+    private_names = {"secrets.json", "bootstrap-secrets.json", "backup.json", "certificate.json", "service-secrets.json"}
+    require(all(path.startswith(canonical) and ".." not in Path(path).parts
+                and Path(path).name not in private_names for path in paths),
+            "recovery_members", "A runtime file reference cannot grant access to private configuration records.")
+    group = runtime_config._instance_group(host, entry)
+    for path in sorted(paths):
+        target = check_path(directory / path.removeprefix(canonical), "file")
+        host.owned_write(target, target.read_bytes(), mode=0o640, group=entry["name"] if group is None else group)
+        _read_value_file(host, entry, str(target))
+    target = check_path(directory / "app.env", "file")
+    host.owned_write(target, target.read_bytes(), mode=0o640, group=entry["name"] if group is None else group)
+    if snapshot is not None and (directory / "service-secrets.json").exists():
+        snapshot_paths = getattr(runtime_config, "service_secret_snapshot_paths", None)
+        require(callable(snapshot_paths), "capability_unavailable",
+                "Feature secret recovery requires lane A runtime_config.service_secret_snapshot_paths.")
+        observed = {Path(path) for path in snapshot_paths(host, entry)} - {directory / "service-secrets.json"}
+        require(observed == {host.paths.p(path) for path in snapshot.get("service_secret_files", [])},
+                "recovery_members", "Restored service secret inventory differs from its configuration-owner snapshot.")
 
 
 def _resources(host, journal, recovered, files, tools_dir):
@@ -497,7 +545,8 @@ def _resources(host, journal, recovered, files, tools_dir):
         values = dict(recovered["values"], APP__SCHEDULER__ENABLED="false")
         values.pop("APP__SCHEDULER__ENABLED_FILE", None)
         host.owned_write(destination / "app.env", dump_env(values), mode=0o640, group=entry["name"])
-    select_runtime_storage(registry, entry, recovered["values"], lambda value: _read_value_file(host, entry, value))
+    _restore_runtime_access(host, entry, recovered)
+    select_runtime_storage(registry, entry, recovered["values"], lambda value: _read_value_file(host, entry, str(host.paths.p(value))))
     provision._step(host, registry, entry, "bootstrap_secrets")
 
 

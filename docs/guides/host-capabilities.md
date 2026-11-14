@@ -68,10 +68,17 @@ silently dropping fields. In particular, plain TCP **is** supported: declare
 The backup owner archives PostgreSQL and the age-encrypted configuration tree.
 Feature archives also retain the selected deployment, resolution, selection and
 release declaration in `recovery/instance.json`. Declared service-secret snapshots
-must exist as root-owned 0600 files beneath the instance configuration tree.
+must follow the configuration owner's contract beneath the instance configuration
+tree: current values are root-owned 0640 for the isolated instance group, and the
+secret index stays 0600. Recovery restores this access before runtime and storage
+readers run, while leaving unreferenced historical snapshots private.
 The archive reader checks their paths and the descriptor's identities. Immutable
 configuration sources, binaries and artifacts still come from the retained release
 archive. Keep that exact archive available off-host.
+
+Backups record systemd's actual enabled roles, rather than the registry's cached
+observation. Takeover preserves that enabled set and applicable maintenance holds;
+held roles and their dependents stay stopped. An empty enabled set stays stopped.
 
 A bundle's `status: complete` means its supported backup components succeeded.
 `coverage.complete_instance_coverage` separately describes service-state coverage:

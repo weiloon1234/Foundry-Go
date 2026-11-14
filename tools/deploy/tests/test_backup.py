@@ -107,10 +107,15 @@ class BackupTests(unittest.TestCase):
         import feature_lifecycle
         import contracts as c
         inventory, entry, snapshot = feature_fixture(secret=True)
+        snapshot["selection"]["maintenance_holds"] = ["relay"]
         backup._write_private(self.host, backup._instance_settings_path(self.host, entry),
                               {"instance_id": entry["profile"]["instance_id"], "age_recipients": [RECIPIENT]})
         secret = self.host.paths.p(snapshot["secret_paths"]["relay"]["TOKEN_FILE"])
-        backup._write_private(self.host, secret, {"value": "private-service-canary"})
+        self.host.owned_write(secret, "private-service-canary\n", mode=0o640, group=entry["name"])
+        retained = secret.with_name("retained")
+        self.host.owned_write(retained, "retained-service-canary\n", mode=0o640, group=entry["name"])
+        index = self.host.paths.instance_config(entry["name"]) / "service-secrets.json"
+        backup._write_private(self.host, index, {"private": "index-canary"})
         captured = {}
         def command(args, **kwargs):
             if args[0] == "age":
@@ -120,14 +125,35 @@ class BackupTests(unittest.TestCase):
         self.host.run = command
         loaded = (None, c.DeploymentSelection.parse(snapshot["selection"]), inventory, snapshot)
         with patch.object(feature_lifecycle, "load", return_value=loaded), patch.object(backup, "_record"), \
+                patch.object(backup.services, "enabled_units", return_value=("http",), create=True) as enabled, \
+                patch.object(backup.runtime_config, "service_secret_snapshot_paths", return_value=(index, secret, retained), create=True) as secret_files, \
                 patch.object(self.host, "load_state", return_value={"current": {"version": inventory.deployment.release, "commit": "a" * 40}}):
             receipt = backup.archive_keys(self.host, entry)
+        enabled.assert_called_once_with(self.host, inventory.units)
+        secret_files.assert_called_once_with(self.host, entry)
         metadata = json.loads(captured["recovery/instance.json"])
-        self.assertEqual(metadata["feature_recovery"], snapshot)
+        expected = copy.deepcopy(snapshot)
+        expected["selection"]["enabled_roles"] = ["http"]
+        canonical = backup.instance_paths(entry["name"])["configuration"] + "/service-secrets/revision-7/"
+        expected["service_secret_files"] = [canonical + "retained", canonical + "token"]
+        self.assertEqual(metadata["feature_recovery"], expected)
+        self.assertEqual(metadata["deployment_selection"], expected["selection"])
+        self.assertEqual(entry["deployment_selection"]["enabled_roles"], list(inventory.roles))
+        backup.parse_feature_snapshot(metadata["feature_recovery"], metadata)
         self.assertIn("private-service-canary", captured["instances/" + entry["name"] + "/service-secrets/revision-7/token"].decode())
         self.assertNotIn("private-service-canary", json.dumps(receipt))
         self.assertNotIn("private-service-canary", json.dumps(self.commands))
         self.assertEqual(receipt["deployment_sha256"], c.canonical_digest(snapshot["deployment"]))
+
+    def test_unknown_live_enablement_refuses_archive_without_using_registry_cache(self):
+        import feature_lifecycle
+        inventory, entry, snapshot = feature_fixture()
+        selected = backup.DeploymentSelection.parse(snapshot["selection"])
+        with patch.object(feature_lifecycle, "load", return_value=(None, selected, inventory, snapshot)), \
+                patch.object(backup.services, "enabled_units", side_effect=DeployError("service_enablement", "Unknown"), create=True), \
+                self.assertRaises(DeployError) as error:
+            backup._feature_snapshot(self.host, entry, {})
+        self.assertEqual(error.exception.code, "service_enablement")
 
     def test_feature_snapshot_rejects_selection_drift_and_secret_path_escape(self):
         _, entry, snapshot = feature_fixture(secret=True)

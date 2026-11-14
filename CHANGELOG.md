@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed: feature recovery restores configuration-owner access for `app.env`,
+  `_FILE` values and current service secrets before runtime/storage validation.
+  Private intake records and unreferenced historical snapshots remain private.
+  Backups now record live systemd enablement; takeover preserves disabled roles
+  and maintenance holds instead of starting every placed role.
 - Added: feature backup owner support for encrypted selected deployment and
   service-secret snapshots, selection-bound reconciliation, and receipts that
   distinguish supported components from complete instance coverage. Disposable,
