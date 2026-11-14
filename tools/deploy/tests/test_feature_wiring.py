@@ -331,7 +331,8 @@ class FeatureWiringFixture(unittest.TestCase):
         runtime_os.geteuid.return_value = 0
         self.enterContext(patch.object(feature_runtime, "os", runtime_os))
 
-    def probe(self, role, resolution, deadline, *, paused=False):
+    def probe(self, host, inventory, name, deadline, *, paused=False):
+        role = inventory.roles[name]
         if services.readiness_probe(role) and services.readiness_probe(role).kind == "unix":
             return True  # Socket I/O is the fake-host boundary; real Unix probes have separate coverage.
         down = getattr(self.host, "maintenance_down", False)
@@ -342,7 +343,7 @@ class FeatureWiringFixture(unittest.TestCase):
         connection = Mock()
         connection.getresponse.return_value = response
         with patch.object(services.http.client, "HTTPConnection", return_value=connection):
-            return actual_probe(role, resolution, deadline, paused=paused)
+            return actual_probe(host, inventory, name, deadline, paused=paused)
 
     def prepare_postgres(self, host, registry, **kwargs):
         registry["shared"]["postgresql"] = {"unit": "postgresql@16-foundry.service", "port": 55432}

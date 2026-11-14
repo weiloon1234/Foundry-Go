@@ -1,6 +1,8 @@
 """Unix declaration, preparation and delivery contracts without containers."""
 from dataclasses import replace
 import copy
+import pwd
+import subprocess
 import os
 from pathlib import Path
 import socket
@@ -9,6 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
@@ -18,6 +21,7 @@ from host import Host, Paths
 import services
 import topology as t
 import unix_sockets
+from unix_socket_probe import Result
 import upgrades
 from test_services import inventory_fixture
 from test_host_capabilities import DIGEST, INSTANCE, CURRENT
@@ -165,6 +169,20 @@ class UnixPreparationTests(unittest.TestCase):
         self.directory = self.host.paths.p(c.socket_directory(INSTANCE))
         self.path = self.directory / 'wl0'
         self.prepare()
+        self.entry['allocations'].update(uid=os.getuid(), gid=os.getgid())
+        self.enterContext(patch.object(self.host, 'read_registry', return_value={
+            'instances': {INSTANCE: self.entry}}))
+        self.commands = []
+        run = self.host.run
+        def command(args, **kwargs):
+            self.commands.append((args, kwargs))
+            if args[0] == 'systemctl':
+                return subprocess.CompletedProcess(args, 0, '/system.slice/provider.service\n', '')
+            # Native tests run the fixed child under the already unprivileged test
+            # account. The production privilege-drop command is asserted separately.
+            assert args[:5] == ['runuser', '-u', pwd.getpwuid(os.getuid()).pw_name, '--', '/usr/bin/python3']
+            return run([sys.executable, *args[5:]], **kwargs)
+        self.enterContext(patch.object(self.host, 'run', side_effect=command))
 
     def prepare(self, role=None, *, remove_stale=False):
         unix_sockets.prepare(self.host, role or self.role, self.identity, os.getuid(), os.getgid(), remove_stale=remove_stale)
@@ -185,18 +203,18 @@ class UnixPreparationTests(unittest.TestCase):
         (self.directory / 'notes').write_text('keep')
         self.prepare(self.inventory.roles['http'], remove_stale=True)
         self.assertTrue(self.path.exists())
-        self.prepare(remove_stale=True)
+        with patch.object(unix_sockets, '_run_probe', return_value=Result.STALE) as probe:
+            self.prepare(remove_stale=True)
+            self.assertEqual(probe.call_args.args[:4], (self.host, self.directory, 'wl0', os.getuid()))
         self.assertFalse(self.path.exists())
         self.assertTrue((self.directory / 'other').exists())
         self.assertEqual((self.directory / 'notes').read_text(), 'keep')
         self.prepare(remove_stale=True)
-        server = self.socket(listening=True)
-        with self.assertRaisesRegex(c.DeployError, 'still accepting'):
-            self.prepare(remove_stale=True)
-        self.assertTrue(self.path.exists())
-        server.close()
-        self.prepare(remove_stale=True)
         self.socket(listening=True)
+        for result in (Result.LIVE, Result.UNSAFE, Result.READY):
+            with patch.object(unix_sockets, '_run_probe', return_value=result), self.assertRaises(c.DeployError):
+                self.prepare(remove_stale=True)
+            self.assertTrue(self.path.exists())
 
     def test_non_socket_leaves_and_directory_links_are_never_removed(self):
         target = self.directory / 'target'
@@ -228,16 +246,85 @@ class UnixPreparationTests(unittest.TestCase):
         with self.assertRaises(c.DeployError):
             unix_sockets.prepare(self.host, self.role, self.identity, os.getuid() + 1, os.getgid())
 
-    def test_real_unix_readiness_connects_and_respects_deadline(self):
-        endpoint = replace(self.inventory.resolution.unix_endpoints[0], path=str(self.path))
-        resolution = replace(self.inventory.resolution, unix_endpoints=(endpoint,))
-        self.assertFalse(services.probe(self.role, resolution, time.monotonic() + 1))
-        self.socket().close()
-        self.assertFalse(services.probe(self.role, resolution, time.monotonic() + 1))
-        self.prepare(remove_stale=True)
+    def test_readiness_refuses_symlink_to_another_instance_socket(self):
+        other_directory = self.host.paths.p(c.socket_directory('00000000-0000-4000-8000-000000000002'))
+        other_directory.mkdir(parents=True, mode=0o700)
+        other = socket.socket(socket.AF_UNIX)
+        self.addCleanup(other.close)
+        other.bind(str(other_directory / 'victim'))
+        other.listen(4)
+        # Retain the provider's original bound name just as ss does.
         self.socket(listening=True)
-        self.assertTrue(services.probe(self.role, resolution, time.monotonic() + 1))
-        self.assertFalse(services.probe(self.role, resolution, time.monotonic() - 1))
+        self.path.unlink()
+        self.path.symlink_to(other_directory / 'victim')
+        self.assertFalse(services.probe(self.host, self.inventory, "relay", time.monotonic() + 1))
+        other.settimeout(.05)
+        with self.assertRaises(TimeoutError):
+            other.accept()
+
+    def test_readiness_uses_bounded_account_helper_and_fails_closed(self):
+        for result, ready in ((Result.READY, True), (Result.UNSAFE, False), (Result.STALE, False), (Result.LIVE, False)):
+            with patch.object(unix_sockets, '_run_probe', return_value=result) as probe:
+                self.assertEqual(services.probe(self.host, self.inventory, 'relay', time.monotonic() + 1), ready)
+                args = probe.call_args.args
+                self.assertEqual(args[:5], (self.host, self.directory, 'wl0', os.getuid(), os.getgid()))
+                self.assertTrue(0 < args[5] <= 1)
+                self.assertEqual(probe.call_args.kwargs['group'], '/system.slice/provider.service')
+        with patch.object(unix_sockets, '_run_probe') as probe:
+            self.assertFalse(services.probe(self.host, self.inventory, 'relay', time.monotonic() - 1))
+            probe.assert_not_called()
+
+    def test_stale_cleanup_refuses_foreign_symlink_before_probe_and_after_liveness(self):
+        other_directory = self.host.paths.p(c.socket_directory('00000000-0000-4000-8000-000000000002'))
+        other_directory.mkdir(parents=True, mode=0o700)
+        other = socket.socket(socket.AF_UNIX)
+        self.addCleanup(other.close)
+        other.bind(str(other_directory / 'victim'))
+        other.listen(4)
+        target = other_directory / 'victim'
+        self.path.symlink_to(target)
+        with patch.object(unix_sockets, '_run_probe') as probe, self.assertRaises(c.DeployError):
+            self.prepare(remove_stale=True)
+        probe.assert_not_called()
+        self.assertTrue(self.path.is_symlink())
+        self.path.unlink()
+        self.socket().close()
+        run_probe = unix_sockets._run_probe
+        def swap(*args, **kwargs):
+            self.path.unlink()
+            self.path.symlink_to(target)
+            return run_probe(*args, **kwargs)
+        with patch.object(unix_sockets, '_run_probe', side_effect=swap), self.assertRaises(c.DeployError):
+            self.prepare(remove_stale=True)
+        self.assertTrue(self.path.is_symlink())
+        self.path.unlink()
+        self.socket().close()
+        def swap_after(*args, **kwargs):
+            self.path.unlink()
+            self.path.symlink_to(target)
+            return Result.STALE
+        with patch.object(unix_sockets, '_run_probe', side_effect=swap_after), self.assertRaises(c.DeployError):
+            self.prepare(remove_stale=True)
+        self.assertTrue(self.path.is_symlink())
+        self.assertTrue(target.is_socket())
+        other.settimeout(.05)
+        with self.assertRaises(TimeoutError):
+            other.accept()
+
+    def test_helper_command_drops_identity_and_retains_deadline(self):
+        account = type('Account', (), {'pw_name': 'instance-user', 'pw_gid': 1235})()
+        with patch.object(unix_sockets.pwd, 'getpwuid', return_value=account), \
+                patch.object(self.host, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')) as run:
+            result = unix_sockets._run_probe(self.host, self.directory, 'wl0', 1234, 1235, .25,
+                                            group='/system.slice/provider.service')
+        self.assertEqual(result, Result.READY)
+        args = run.call_args.args[0]
+        self.assertEqual(args[:6], ['runuser', '-u', 'instance-user', '--', '/usr/bin/python3', '-I'])
+        self.assertEqual(Path(args[6]).name, 'unix_socket_probe.py')
+        self.assertEqual(args[7:9], ['1234', '1235'])
+        self.assertEqual(run.call_args.kwargs, {'timeout': .25, 'check': False})
+        with patch.object(self.host, 'run', side_effect=c.DeployError('command_unavailable', 'timeout')):
+            self.assertEqual(unix_sockets._run_probe(self.host, self.directory, 'wl0', os.getuid(), os.getgid(), .01), Result.UNSAFE)
 
 
 if __name__ == '__main__':

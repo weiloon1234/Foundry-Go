@@ -1,11 +1,12 @@
 """Instance-owned runtime sockets under protected framework ancestry."""
-import errno
 import os
 from pathlib import Path
-import socket
+import pwd
+import time
 import stat
 
-from contracts import require, socket_directory
+from contracts import DeployError, require, socket_directory
+from unix_socket_probe import Result
 from topology import ExecutableRole, EndpointBinding
 
 
@@ -47,27 +48,54 @@ def prepare(host, role, identity, uid, gid, *, remove_stale=False):
                 for _, listener in role.listeners:
                     if listener.transport != "unix":
                         continue
-                    _remove_stale(fd, path, listener.socket)
+                    _remove_stale(host, fd, path, listener.socket, uid, gid)
         finally:
             os.close(fd)
     finally:
         os.close(parent)
 
 
-def _remove_stale(directory_fd, directory, name):
+def _run_probe(host, directory, name, uid, gid, timeout, *, group="", expected=None):
+    """Host.run owns the bounded child process group, including cancellation."""
+    try:
+        account = pwd.getpwuid(uid)
+        if uid <= 0 or gid <= 0 or account.pw_gid != gid or timeout <= 0:
+            return Result.UNSAFE
+        result = host.run(["runuser", "-u", account.pw_name, "--", "/usr/bin/python3", "-I",
+                           str(Path(__file__).with_name("unix_socket_probe.py")), str(uid), str(gid),
+                           str(directory), name, str(timeout), group,
+                           *(str(n) for n in (expected or (0, 0))), "stale" if expected is not None else "readiness"],
+                          timeout=timeout, check=False)
+        return Result(result.returncode) if not result.stdout and not result.stderr else Result.UNSAFE
+    except (DeployError, OSError, KeyError, ValueError):
+        return Result.UNSAFE
+
+
+def ready(host, endpoint, uid, gid, unit, deadline):
+    try:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        observed = host.run(["systemctl", "show", unit, "--property=ControlGroup", "--value"],
+                            check=False, timeout=min(5, remaining))
+        group = observed.stdout.strip()
+        if observed.returncode or not group.startswith("/") or group == "/" or ".." in group.split("/"):
+            return False
+        return _run_probe(host, host.paths.p(endpoint.directory), endpoint.name, uid, gid,
+                          min(5, deadline - time.monotonic()), group=group) == Result.READY
+    except (DeployError, OSError):
+        return False
+
+
+def _remove_stale(host, directory_fd, directory, name, uid, gid):
     try:
         info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
     except FileNotFoundError:
         return
     require(stat.S_ISSOCK(info.st_mode), "service_socket_type", "Declared socket path is occupied by a non-socket; retain it for inspection.")
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-        connection.settimeout(1)
-        try:
-            connection.connect(str(directory / name))
-        except OSError as error:
-            require(error.errno == errno.ECONNREFUSED, "service_socket_busy", "Socket liveness is uncertain; retain it for inspection.")
-        else:
-            require(False, "service_socket_busy", "Declared socket is still accepting connections.")
+    result = _run_probe(host, directory, name, uid, gid, 1, expected=(info.st_dev, info.st_ino))
+    require(result != Result.LIVE, "service_socket_busy", "Declared socket is still accepting connections.")
+    require(result == Result.STALE, "service_socket_busy", "Socket liveness is uncertain; retain it for inspection.")
     current = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
     require(stat.S_ISSOCK(current.st_mode) and (info.st_dev, info.st_ino) == (current.st_dev, current.st_ino),
             "service_socket_changed", "Socket changed during preparation; retain it for inspection.")

@@ -36,9 +36,9 @@ class MaintenanceTransitionTests(wiring.FeatureWiringFixture):
     def test_http_maintenance_response_preserves_holds_until_up(self):
         checked = []
         original = self.probe
-        def observe(role, resolution, deadline, **kwargs):
-            checked.append((role.common.name, getattr(self.host, 'maintenance_down', False)))
-            return original(role, resolution, deadline, **kwargs)
+        def observe(host, inventory, name, deadline, **kwargs):
+            checked.append((name, getattr(self.host, 'maintenance_down', False)))
+            return original(host, inventory, name, deadline, **kwargs)
         with patch.object(wiring.release, "READINESS_SECONDS", .3), patch.object(services, 'probe', side_effect=observe):
             entry, inventory = self.held()
             self.assertTrue(self.host.maintenance_down)

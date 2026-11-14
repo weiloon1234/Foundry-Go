@@ -491,7 +491,25 @@ class UpgradeTests(unittest.TestCase):
         source = Path(__file__).resolve().parents[1]
         _, files, _ = upgrades.tool_bundle(source)
         expected = {name for name in upgrades.REQUIRED_FILES | upgrades.REHEARSAL_FILES if name.endswith('.py')}
+        expected.add('lib/unix_socket_probe.py')
         self.assertEqual(expected, {path.relative_to(source).as_posix() for path in files if path.suffix == '.py'})
+
+    def test_generation_fifteen_before_socket_probe_helper_can_upgrade(self):
+        # The security patch adds a helper within generation 15. Already installed
+        # bundles must still validate so they can receive that patch.
+        (self.source / 'lib/unix_socket_probe.py').unlink(missing_ok=True)
+        (self.source / 'protocol.json').write_text(json.dumps({**self.metadata, 'generation': 15}))
+        self.digest = upgrades.tool_bundle(self.source)[2]
+        self.host.registry['tools'] = upgrades._active_record(self.source, self.digest, None)
+        self.install()
+        candidate = Path(__file__).resolve().parents[1]
+        plan = upgrades.plan_upgrade(self.host, candidate)
+        self.assertIn('lib/unix_socket_probe.py', plan['upgrade']['changed_paths'])
+        result = upgrades.apply_upgrade(self.host, candidate, plan['plan_token'], str(uuid.uuid4()))
+        self.assertEqual(result['outcome'], 'succeeded')
+        installed = upgrades._installed(self.host, self.host.read_registry()['tools'])
+        self.assertEqual((installed / 'lib/unix_socket_probe.py').read_bytes(),
+                         (candidate / 'lib/unix_socket_probe.py').read_bytes())
 
     def test_old_bundle_generations_do_not_require_artifacts(self):
         (self.source / "lib/artifacts.py").unlink()

@@ -414,7 +414,8 @@ def readiness_probe(role, paused=False):
     return Probe("http", "http", 90, "/health/live" if paused else "/health/ready", 200, None) if role.common.name == "http" else None
 
 
-def probe(role, resolution, deadline, *, paused=False):
+def probe(host, inventory, name, deadline, *, paused=False):
+    role = inventory.roles[name]
     from host import OperationTimeout, wall_clock_budget
     contract = readiness_probe(role, paused)
     if contract is None:
@@ -424,13 +425,14 @@ def probe(role, resolution, deadline, *, paused=False):
         return False
     try:
         with wall_clock_budget(remaining):
-            return _probe(role, resolution, deadline, paused=paused)
+            return _probe(host, inventory, name, deadline, paused=paused)
     except OperationTimeout:
         return False
 
 
-def _probe(role, resolution, deadline, *, paused=False):
+def _probe(host, inventory, name, deadline, *, paused=False):
     """One bounded local probe. Identity/stability checks remain required around it."""
+    role, resolution = inventory.roles[name], inventory.resolution
     contract = readiness_probe(role, paused)
     endpoint = next((e for e in (*resolution.endpoints, *resolution.unix_endpoints) if e.role == role.common.name and
                      e.listener == contract.listener), None)
@@ -440,10 +442,10 @@ def _probe(role, resolution, deadline, *, paused=False):
         return False
     try:
         if contract.kind == "unix":
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-                connection.settimeout(remaining)
-                connection.connect(endpoint.path)
-                return True
+            import unix_sockets
+            entry = host.read_registry()["instances"][inventory.profile.instance_id]
+            return unix_sockets.ready(host, endpoint, entry["allocations"]["uid"], entry["allocations"]["gid"],
+                                      inventory.units[name], min(deadline, time.monotonic() + remaining))
         if contract.kind == "tcp":
             with socket.create_connection((endpoint.address, endpoint.port), timeout=remaining):
                 return True
@@ -541,8 +543,8 @@ def wait_ready_set(host, inventory, names, deadline):
                         ready = listeners.returncode == 0 and any(
                             len(line.split()) >= (8 if unix else 5) and line.split()[4 if unix else 3] == local and
                             f"pid={observed['MainPID']}," in line for line in listeners.stdout.splitlines())
-                    healthy = ready and (probe(role, inventory.resolution, deadline, paused=True) if paused and name == "http"
-                                         else probe(role, inventory.resolution, deadline)) and healthy
+                    healthy = ready and (probe(host, inventory, name, deadline, paused=True) if paused and name == "http"
+                                         else probe(host, inventory, name, deadline)) and healthy
                 # Recheck the entire set after the last probe, including prerequisites
                 # observed before a slow dependent. A changed identity resets nothing.
                 if healthy:

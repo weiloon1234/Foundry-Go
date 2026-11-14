@@ -550,8 +550,13 @@ Before starting a provider, preparation examines only its declared socket names
 without following links. It removes a socket only after a bounded connection
 attempt reports connection refused. A live socket, uncertain liveness, a regular
 file, a directory or a symlink fails the start and is retained for inspection.
-Other names are untouched. Readiness requires a successful Unix stream connection
-and the existing process identity, listener ownership and stability checks.
+Other names are untouched. Both readiness and stale-socket liveness run in a
+bounded helper as the instance account. The helper opens the directory and socket
+leaf without following symlinks, then connects to the pinned socket inode. Readiness
+also checks the connected peer's UID and unit cgroup, holding a kernel peer pidfd
+to reject exit or PID reuse during inspection. Missing kernel support or uncertain
+peer identity fails readiness; there is no privileged connection fallback. The
+existing process identity, listener ownership and stability checks still apply.
 Tool-driven startup waits for the provider before starting its dependent; boot
 ordering and automatic restarts retain the existing dependency semantics.
 

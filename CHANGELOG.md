@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fixed: Unix readiness and stale-socket checks now connect through a bounded
+  helper running as the instance account. The helper pins socket leaves without
+  following symlinks and validates connected peers by UID and unit cgroup,
+  retaining a peer pidfd to reject exit/PID reuse during inspection. Cross-instance
+  symlink substitutions cannot borrow root's filesystem access. Stale cleanup
+  retains directory-relative no-follow inspection and unlinking.
+
 - Added: private Unix-socket listeners and bounded connection readiness for custom
   roles. Providers and consumers share a per-instance mode-0700 runtime directory
   through explicit `ReadWritePaths`. Every admitted start verifies its ownership;
