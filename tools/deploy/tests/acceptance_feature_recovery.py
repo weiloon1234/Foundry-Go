@@ -161,7 +161,11 @@ def source():
             archive = shared.WORK / ("feature-" + state + ".tar.gz")
             version = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + uuid.uuid4().hex
             state_archive(original, archive, state, version)
-            assert action("activate", request(project, profile, archive=str(archive), archive_sha256=digest(archive)), timeout=1800)["version"] == version
+            activation = request(project, profile, archive=str(archive), archive_sha256=digest(archive),
+                                 operation_id=str(uuid.uuid4()))
+            review = action("release-plan", activation)
+            assert review["ok"]
+            assert action("activate", {**activation, "plan_token": review["plan_token"]}, timeout=1800)["version"] == version
             action("stop", request(project, profile))
             _, entry = host.require_identity(project, profile)
             _, _, inventory, _ = feature_lifecycle.load(host, entry)
