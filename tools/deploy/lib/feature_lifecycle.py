@@ -315,8 +315,14 @@ def stop_units(host, inventory, names=None):
         unit = inventory.units[name]
         # StopUnit fails for a candidate that has never been installed. Query
         # that case explicitly; never interpret a failed stop as proof of exit.
-        if services.unit_state(host, unit)["LoadState"] != "not-found":
-            host.run(["systemctl", "stop", unit], timeout=100)
+        if services.unit_state(host, unit)["LoadState"] == "not-found":
+            try:
+                services.stopped_unit(host, unit)
+            except (DeployError, OSError):
+                pass  # A removed unit file does not imply the service has exited.
+            else:
+                continue
+        host.run(["systemctl", "stop", unit], timeout=100)
         services.stopped_unit(host, unit)
 
 

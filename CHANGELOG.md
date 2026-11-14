@@ -2,6 +2,9 @@
 
 ## v0.32.0 — 2026-11-14
 
+- Fixed: deployment and independent cleanup stop active services even when their
+  unit files have been removed. A missing unit skips stop only after complete exit
+  proof; every attempted stop still requires verified process and cgroup exit.
 - Fixed: first feature activation and cleanup handle units that have not yet been
   installed by proving empty runtime state before skipping their stop. Initial
   validation failures permit a fresh review only after cleanup proves closure and

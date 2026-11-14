@@ -118,6 +118,45 @@ class OperationTests(unittest.TestCase):
             (group / "cgroup.procs").write_text("")
             lifecycle.stop_units(self.host, self.inventory, ("relay",))
 
+    def stop_removed_unit(self, *, cleanup=False):
+        names = self.inventory.stop_order(self.inventory.roles) if cleanup else ("relay",)
+        running = {self.inventory.units[name] for name in names}
+        stopped = []
+        def command(args, **kwargs):
+            unit = args[2]
+            if args[1] == "stop":
+                stopped.append(unit)
+                running.discard(unit)
+                return subprocess.CompletedProcess(args, 0, "", "")
+            self.assertEqual(args[:2], ["systemctl", "show"])
+            active = unit in running
+            values = {"Id": unit, "LoadState": "not-found", "ActiveState": "active" if active else "inactive",
+                      "MainPID": "23" if active else "0", "ControlPID": "0", "Job": "0",
+                      "ControlGroup": "/system.slice/" + unit if active else ""}
+            return subprocess.CompletedProcess(args, 0, "\n".join(k + "=" + v for k, v in values.items()), "")
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(self.host, "run", side_effect=command))
+            if cleanup:
+                self.context()
+                self.cleanup_dependencies(stack)
+                stack.enter_context(patch.object(network, "withdraw"))
+                def prove_closed(*args):
+                    self.assertFalse(running)
+                    return c.ClosureEvidence.parse(closure())
+                stack.enter_context(patch.object(network, "close", side_effect=prove_closed))
+                self.assertEqual(operations.cleanup(self.host, self.request, self.pin), 0)
+                self.assertEqual(c.read_json(self.store.durable / "cleanup" / (OPERATION + ".json"))["status"], "closed")
+            else:
+                lifecycle.stop_units(self.host, self.inventory, names)
+        self.assertFalse(running)
+        self.assertEqual(stopped, [self.inventory.units[name] for name in names])
+
+    def test_stops_active_unit_after_its_file_was_removed(self):
+        self.stop_removed_unit()
+
+    def test_independent_cleanup_stops_active_units_with_removed_files(self):
+        self.stop_removed_unit(cleanup=True)
+
     def test_missing_unit_requires_complete_empty_runtime_evidence(self):
         unit = self.inventory.units["relay"]
         empty = {"Id": unit, "LoadState": "not-found", "ActiveState": "inactive", "MainPID": "0",
